@@ -14,7 +14,6 @@ season filtering. All commands support @mentions and linked accounts.
 
 import logging
 from datetime import datetime
-from typing import Optional
 
 import discord
 from discord.ext import commands
@@ -100,7 +99,7 @@ class StatsCog(commands.Cog, name="Stats"):
     @is_public_channel()
     @commands.cooldown(1, 10, commands.BucketType.user)
     @commands.command(name="check_achievements", aliases=["check_achivements", "check_achievement"])
-    async def check_achievements_cmd(self, ctx, *, player_name: Optional[str] = None):
+    async def check_achievements_cmd(self, ctx, *, player_name: str | None = None):
         """🏆 Check your achievement progress
 
         Usage:
@@ -318,9 +317,10 @@ class StatsCog(commands.Cog, name="Stats"):
             try:
                 import matplotlib
                 matplotlib.use("Agg")  # Non-GUI backend
+                from pathlib import Path
+
                 import matplotlib.pyplot as plt
                 import numpy as np
-                from pathlib import Path
             except Exception as e:
                 logger.warning(
                     "matplotlib/numpy unavailable for compare - using text-only fallback: %s",
@@ -760,7 +760,7 @@ class StatsCog(commands.Cog, name="Stats"):
 
             # Season kills leader
             # Note: season_filter is a trusted SQL fragment from SeasonManager, not user input
-            season_query = """
+            season_query = f"""
                 SELECT
                     (SELECT player_name FROM player_comprehensive_stats
                      WHERE player_guid = p.player_guid
@@ -778,7 +778,7 @@ class StatsCog(commands.Cog, name="Stats"):
                 HAVING COUNT(DISTINCT p.round_id) > 5
                 ORDER BY total_kills DESC
                 LIMIT 1
-            """.format(season_filter=season_filter)  # nosec B608 - season_filter from trusted SeasonManager
+            """  # nosec B608 - season_filter from trusted SeasonManager
 
             season_leader = await self.bot.db_adapter.fetch_one(season_query)
 

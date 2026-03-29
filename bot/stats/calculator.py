@@ -7,7 +7,6 @@ eliminating duplicate code across parsers, cogs, and database modules.
 All methods are NULL-safe and handle edge cases (zero division, None values).
 """
 
-from typing import Optional, Union
 
 
 class StatsCalculator:
@@ -18,7 +17,7 @@ class StatsCalculator:
     """
 
     @staticmethod
-    def calculate_dpm(damage: Optional[int], time_seconds: Optional[Union[int, float]],
+    def calculate_dpm(damage: int | None, time_seconds: int | float | None,
                       default: float = 0.0) -> float:
         """
         Calculate Damage Per Minute (DPM).
@@ -49,7 +48,7 @@ class StatsCalculator:
             return default
 
     @staticmethod
-    def calculate_kd(kills: Optional[int], deaths: Optional[int],
+    def calculate_kd(kills: int | None, deaths: int | None,
                      default: float = 0.0) -> float:
         """
         Calculate Kill/Death ratio (K/D).
@@ -82,7 +81,7 @@ class StatsCalculator:
             return default
 
     @staticmethod
-    def calculate_accuracy(hits: Optional[int], shots: Optional[int],
+    def calculate_accuracy(hits: int | None, shots: int | None,
                           as_percentage: bool = True, default: float = 0.0) -> float:
         """
         Calculate weapon accuracy.
@@ -115,7 +114,7 @@ class StatsCalculator:
             return default
 
     @staticmethod
-    def calculate_efficiency(kills: Optional[int], deaths: Optional[int],
+    def calculate_efficiency(kills: int | None, deaths: int | None,
                            as_percentage: bool = True, default: float = 0.0) -> float:
         """
         Calculate efficiency score (kills vs total engagements).
@@ -155,7 +154,7 @@ class StatsCalculator:
             return default
 
     @staticmethod
-    def calculate_headshot_accuracy(headshot_hits: Optional[int], total_hits: Optional[int],
+    def calculate_headshot_accuracy(headshot_hits: int | None, total_hits: int | None,
                                     default: float = 0.0) -> float:
         """
         Calculate headshot accuracy (what % of hits landed on the head).
@@ -184,7 +183,7 @@ class StatsCalculator:
             return default
 
     @staticmethod
-    def calculate_headshot_kill_rate(headshot_kills: Optional[int], total_kills: Optional[int],
+    def calculate_headshot_kill_rate(headshot_kills: int | None, total_kills: int | None,
                                     default: float = 0.0) -> float:
         """
         Calculate headshot kill rate (what % of kills were headshot kills).
@@ -218,7 +217,7 @@ class StatsCalculator:
     calculate_headshot_percentage = calculate_headshot_accuracy
 
     @staticmethod
-    def calculate_adr(damage_given: Optional[int], rounds_played: Optional[int],
+    def calculate_adr(damage_given: int | None, rounds_played: int | None,
                       default: float = 0.0) -> float:
         """
         Calculate Average Damage per Round (ADR).
@@ -249,7 +248,7 @@ class StatsCalculator:
             return default
 
     @staticmethod
-    def calculate_kpr(kills: Optional[int], rounds_played: Optional[int],
+    def calculate_kpr(kills: int | None, rounds_played: int | None,
                       default: float = 0.0) -> float:
         """
         Calculate Kills Per Round (KPR).
@@ -280,7 +279,7 @@ class StatsCalculator:
             return default
 
     @staticmethod
-    def calculate_dpr(deaths: Optional[int], rounds_played: Optional[int],
+    def calculate_dpr(deaths: int | None, rounds_played: int | None,
                       default: float = 0.0) -> float:
         """
         Calculate Deaths Per Round (DPR). Lower is better.
@@ -311,8 +310,8 @@ class StatsCalculator:
             return default
 
     @staticmethod
-    def safe_divide(numerator: Optional[Union[int, float]],
-                   denominator: Optional[Union[int, float]],
+    def safe_divide(numerator: int | float | None,
+                   denominator: int | float | None,
                    default: float = 0.0) -> float:
         """
         Safe division with NULL and zero handling.
@@ -343,8 +342,8 @@ class StatsCalculator:
             return default
 
     @staticmethod
-    def safe_percentage(part: Optional[Union[int, float]],
-                       total: Optional[Union[int, float]],
+    def safe_percentage(part: int | float | None,
+                       total: int | float | None,
                        default: float = 0.0) -> float:
         """
         Calculate percentage with NULL and zero handling.

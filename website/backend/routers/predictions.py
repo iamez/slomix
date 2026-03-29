@@ -1,7 +1,9 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
+
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
-import logging
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

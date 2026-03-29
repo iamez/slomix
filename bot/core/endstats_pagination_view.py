@@ -10,11 +10,11 @@ Specialized pagination for endstats pages with:
 
 from __future__ import annotations
 
-import discord
-from discord.ui import View, Button
-from discord import ButtonStyle, Interaction
-from typing import List
 import logging
+
+import discord
+from discord import ButtonStyle, Interaction
+from discord.ui import Button, View
 
 logger = logging.getLogger("bot.core.endstats_pagination_view")
 
@@ -25,8 +25,8 @@ class EndstatsPaginationView(View):
     def __init__(
         self,
         ctx,
-        map_pages: List[discord.Embed],
-        round_pages: List[discord.Embed],
+        map_pages: list[discord.Embed],
+        round_pages: list[discord.Embed],
         timeout: int = 180,
     ):
         super().__init__(timeout=timeout)
@@ -38,7 +38,7 @@ class EndstatsPaginationView(View):
         self.message = None
         self._update_buttons()
 
-    def _get_pages(self) -> List[discord.Embed]:
+    def _get_pages(self) -> list[discord.Embed]:
         return self.map_pages if self.mode == "map" else self.round_pages
 
     def _update_buttons(self):

@@ -9,15 +9,18 @@ This service generates 5 themed graph images:
 5. DPM Timeline - Performance evolution over rounds
 """
 
-import io
 import inspect
+import io
 import logging
-import numpy as np
+
 import matplotlib
+import numpy as np
+
 matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+from typing import Any
+
 import matplotlib.patches as mpatches
-from typing import Any, Dict, List, Optional, Tuple
+import matplotlib.pyplot as plt
 
 from bot.core.frag_potential import FragPotentialCalculator
 
@@ -104,7 +107,7 @@ class SessionGraphGenerator:
         except Exception:
             return default
 
-    async def _call_service_method(self, method_name: str, *args, **kwargs) -> Tuple[bool, Any]:
+    async def _call_service_method(self, method_name: str, *args, **kwargs) -> tuple[bool, Any]:
         """Call timing shadow service method if it exists."""
         if not self.timing_shadow_service:
             return False, None
@@ -116,9 +119,9 @@ class SessionGraphGenerator:
             result = await result
         return True, result
 
-    def _normalize_round_factor_payload(self, payload: Any) -> Dict[int, float]:
+    def _normalize_round_factor_payload(self, payload: Any) -> dict[int, float]:
         """Normalize service payload into round_id->factor mapping."""
-        factors: Dict[int, float] = {}
+        factors: dict[int, float] = {}
         if payload is None:
             return factors
 
@@ -159,9 +162,9 @@ class SessionGraphGenerator:
                     factors[rid] = max(0.0, min(2.0, fval))
         return factors
 
-    async def _get_round_timing_shadow(self, session_ids: List[int]) -> Dict[str, Any]:
+    async def _get_round_timing_shadow(self, session_ids: list[int]) -> dict[str, Any]:
         """Build round-level timing correction factors from shadow/comparison service."""
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "factors": {},
             "rounds_total": len(session_ids or []),
             "rounds_with_telemetry": 0,
@@ -260,9 +263,9 @@ class SessionGraphGenerator:
         result["source"] = "compat_fetch"
         return result
 
-    async def _get_session_timing_dual_by_guid(self, session_ids: List[int]) -> Dict[str, Any]:
+    async def _get_session_timing_dual_by_guid(self, session_ids: list[int]) -> dict[str, Any]:
         """Build per-player old/new timing aggregates for graph dual-mode."""
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "players": {},
             "meta": {
                 "rounds_total": len(session_ids or []),
@@ -277,7 +280,7 @@ class SessionGraphGenerator:
 
         called, shadow_result = await self._call_service_method("compare_session", session_ids)
         if called and shadow_result is not None:
-            players: Dict[str, Dict[str, Any]] = {}
+            players: dict[str, dict[str, Any]] = {}
             round_diagnostics = tuple(getattr(shadow_result, "round_diagnostics", ()) or ())
             rounds_total = len(round_diagnostics)
             rounds_with_telemetry = sum(
@@ -423,11 +426,11 @@ class SessionGraphGenerator:
     async def generate_performance_graphs(
         self,
         latest_date: str,
-        session_ids: List,
+        session_ids: list,
         session_ids_str: str
-    ) -> Tuple[Optional[io.BytesIO], Optional[io.BytesIO],
-               Optional[io.BytesIO], Optional[io.BytesIO],
-               Optional[io.BytesIO]]:
+    ) -> tuple[io.BytesIO | None, io.BytesIO | None,
+               io.BytesIO | None, io.BytesIO | None,
+               io.BytesIO | None]:
         """
         Generate FIVE beautiful graph images:
 
@@ -539,7 +542,7 @@ class SessionGraphGenerator:
 
             # Shadow timing payload for dual-mode graphs
             dual_shadow_note = ""
-            dual_players: Dict[str, Dict[str, Any]] = {}
+            dual_players: dict[str, dict[str, Any]] = {}
             if self.show_timing_dual:
                 dual_payload = await self._get_session_timing_dual_by_guid(session_ids)
                 dual_players = dual_payload.get("players", {}) or {}
@@ -1135,10 +1138,10 @@ class SessionGraphGenerator:
     async def _generate_timeline_graph(
         self,
         latest_date: str,
-        session_ids: List,
+        session_ids: list,
         session_ids_str: str,
-        top_player_names: List[str]
-    ) -> Optional[io.BytesIO]:
+        top_player_names: list[str]
+    ) -> io.BytesIO | None:
         """
         Generate Performance Timeline showing DPM evolution
         across all rounds (Map1-R1, Map1-R2, Map2-R1, Map2-R2, etc.)
@@ -1187,7 +1190,7 @@ class SessionGraphGenerator:
             # Calculate DPM per player per round
             player_timelines = {}
             for name in top_player_names:
-                player_timelines[name] = {rid: None for rid in round_order}
+                player_timelines[name] = dict.fromkeys(round_order)
 
             for row in all_rounds:
                 name = row[0]

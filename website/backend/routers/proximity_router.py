@@ -1,12 +1,14 @@
 import asyncio
-import time
-import math
 import json
-from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any, Tuple
+import math
+import time
 from collections import defaultdict
+from datetime import datetime, timedelta
 from itertools import combinations
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Request
+
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
@@ -30,7 +32,7 @@ def _proximity_stub_meta(range_days: int) -> dict:
     }
 
 
-def _parse_iso_date(value: Optional[str]) -> Optional[Any]:
+def _parse_iso_date(value: str | None) -> Any | None:
     if value is None:
         return None
     raw = str(value).strip()
@@ -47,17 +49,17 @@ def _parse_iso_date(value: Optional[str]) -> Optional[Any]:
 
 def _build_proximity_where_clause(
     range_days: int,
-    session_date: Optional[str],
-    map_name: Optional[str],
-    round_number: Optional[int],
-    round_start_unix: Optional[int],
-    alias: Optional[str] = None,
-    player_guid: Optional[str] = None,
-    player_guid_columns: Optional[List[str]] = None,
-) -> Tuple[str, List[Any], Dict[str, Any]]:
+    session_date: str | None,
+    map_name: str | None,
+    round_number: int | None,
+    round_start_unix: int | None,
+    alias: str | None = None,
+    player_guid: str | None = None,
+    player_guid_columns: list[str] | None = None,
+) -> tuple[str, list[Any], dict[str, Any]]:
     prefix = f"{alias}." if alias else ""
-    params: List[Any] = []
-    clauses: List[str] = []
+    params: list[Any] = []
+    clauses: list[str] = []
 
     parsed_session_date = _parse_iso_date(session_date)
     normalized_map = (map_name or "").strip() or None
@@ -134,7 +136,7 @@ async def _table_column_exists(db: DatabaseAdapter, table_name: str, column_name
         return False
 
 
-def _iter_attackers(attackers_raw: Any) -> List[Dict[str, Any]]:
+def _iter_attackers(attackers_raw: Any) -> list[dict[str, Any]]:
     parsed = _parse_json_field(attackers_raw)
     if isinstance(parsed, list):
         return [item for item in parsed if isinstance(item, dict)]
@@ -160,8 +162,8 @@ def _short_guid(guid: str) -> str:
 
 def _resolve_name_for_guid(
     guid: str,
-    guid_name_map: Optional[Dict[str, str]] = None,
-    local_map: Optional[Dict[str, str]] = None,
+    guid_name_map: dict[str, str] | None = None,
+    local_map: dict[str, str] | None = None,
 ) -> str:
     token = str(guid or "").strip()
     if not token:
@@ -177,7 +179,7 @@ async def _load_scoped_guid_name_map(
     db: DatabaseAdapter,
     where_sql: str,
     params: tuple,
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """
     Build guid -> display name mapping for the active scope.
     Uses player_track (same scope columns as combat_engagement).
@@ -200,18 +202,18 @@ async def _load_scoped_guid_name_map(
 
 
 def _compute_scoped_duos(
-    engagement_rows: List[Any],
+    engagement_rows: list[Any],
     limit: int,
-    guid_name_map: Optional[Dict[str, str]] = None,
-) -> List[Dict[str, Any]]:
-    pair_stats: Dict[Tuple[str, str], Dict[str, float]] = {}
+    guid_name_map: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    pair_stats: dict[tuple[str, str], dict[str, float]] = {}
 
     for row in engagement_rows:
         attackers_raw, participants_raw, crossfire_delay_ms, outcome = row
         attackers = _iter_attackers(attackers_raw)
 
-        guid_to_name: Dict[str, str] = {}
-        fallback_names: List[str] = []
+        guid_to_name: dict[str, str] = {}
+        fallback_names: list[str] = []
         for attacker in attackers:
             guid = str(attacker.get("guid") or "").strip()
             name = str(attacker.get("name") or guid or "").strip()
@@ -222,8 +224,8 @@ def _compute_scoped_duos(
                 guid_to_name[guid] = name
 
         participants = _parse_json_field(participants_raw) or []
-        names: List[str] = []
-        participant_guids: List[str] = []
+        names: list[str] = []
+        participant_guids: list[str] = []
         if isinstance(participants, list) and participants:
             for guid in participants:
                 guid_str = str(guid or "").strip()
@@ -284,11 +286,11 @@ def _compute_scoped_duos(
 
 
 def _compute_scoped_teamplay(
-    engagement_rows: List[Any],
+    engagement_rows: list[Any],
     limit: int,
-    guid_name_map: Optional[Dict[str, str]] = None,
-) -> Dict[str, List[Dict[str, Any]]]:
-    stats: Dict[str, Dict[str, Any]] = defaultdict(
+    guid_name_map: dict[str, str] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    stats: dict[str, dict[str, Any]] = defaultdict(
         lambda: {
             "guid": None,
             "name": "Unknown",
@@ -302,7 +304,7 @@ def _compute_scoped_teamplay(
         }
     )
 
-    def ensure_player(guid: Optional[str], name: Optional[str]) -> str:
+    def ensure_player(guid: str | None, name: str | None) -> str:
         key = (guid or name or "unknown").strip() or "unknown"
         entry = stats[key]
         entry["guid"] = guid or key
@@ -470,7 +472,7 @@ def _parse_json_field(value: Any) -> Any:
     return None
 
 
-def _compute_strafe_metrics(path: List[Dict[str, Any]], min_step: float = 5.0, angle_threshold_deg: float = 40.0) -> Dict[str, Any]:
+def _compute_strafe_metrics(path: list[dict[str, Any]], min_step: float = 5.0, angle_threshold_deg: float = 40.0) -> dict[str, Any]:
     """
     Compute simple strafe/dodge metrics from a list of points with time,x,y.
     Returns turn events with timestamps for visualization.
@@ -501,7 +503,7 @@ def _compute_strafe_metrics(path: List[Dict[str, Any]], min_step: float = 5.0, a
 
     angle_threshold = math.radians(angle_threshold_deg)
     total_distance = 0.0
-    headings: List[Dict[str, Any]] = []
+    headings: list[dict[str, Any]] = []
 
     for idx in range(1, len(points)):
         p1 = points[idx - 1]
@@ -601,10 +603,10 @@ async def get_proximity_dashboard(
     request: Request,
     sections: str = "all",
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -733,7 +735,7 @@ async def get_proximity_scopes(
             (since,),
         )
 
-        sessions_by_date: Dict[str, Dict[str, Any]] = {}
+        sessions_by_date: dict[str, dict[str, Any]] = {}
         for row in rows:
             session_date_val = row[0]
             map_name_val = str(row[1] or "unknown")
@@ -780,7 +782,7 @@ async def get_proximity_scopes(
                 if first is None or round_start_val < first:
                     map_entry["_first_round_start"] = round_start_val
 
-        sessions: List[Dict[str, Any]] = []
+        sessions: list[dict[str, Any]] = []
         for session in sorted(
             sessions_by_date.values(),
             key=lambda item: item["session_date"],
@@ -863,10 +865,10 @@ async def get_proximity_scopes(
 @router.get("/proximity/summary")
 async def get_proximity_summary(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -1025,11 +1027,11 @@ async def get_proximity_summary(
 @router.get("/proximity/engagements")
 async def get_proximity_engagements(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
-    player_guid: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    player_guid: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -1087,11 +1089,11 @@ async def get_proximity_engagements(
 @router.get("/proximity/hotzones")
 async def get_proximity_hotzones(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
-    player_guid: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    player_guid: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -1199,11 +1201,11 @@ async def get_proximity_hotzones(
 async def get_proximity_duos(
     range_days: int = 30,
     limit: int = 10,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
-    player_guid: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    player_guid: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -1260,11 +1262,11 @@ async def get_proximity_duos(
 async def get_proximity_movers(
     range_days: int = 30,
     limit: int = 5,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
-    player_guid: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    player_guid: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -1382,10 +1384,10 @@ async def get_proximity_movers(
 @router.get("/proximity/classes")
 async def get_proximity_classes(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -1453,11 +1455,11 @@ async def get_proximity_classes(
 async def get_proximity_reactions(
     range_days: int = 30,
     limit: int = 5,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
-    player_guid: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    player_guid: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -1626,10 +1628,10 @@ async def get_proximity_reactions(
 async def get_proximity_teamplay(
     range_days: int = 30,
     limit: int = 5,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -1695,10 +1697,10 @@ async def get_proximity_teamplay(
 @router.get("/proximity/trades/summary")
 async def get_proximity_trades_summary(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -1774,10 +1776,10 @@ async def get_proximity_trades_summary(
 @router.get("/proximity/trades/player-stats")
 async def get_proximity_trades_player_stats(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -1891,10 +1893,10 @@ async def get_proximity_trades_player_stats(
 async def get_proximity_trade_events(
     range_days: int = 30,
     limit: int = 50,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -2020,11 +2022,11 @@ async def get_proximity_trade_events(
 @router.get("/proximity/spawn-timing")
 async def get_proximity_spawn_timing(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
-    player_guid: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    player_guid: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Spawn timing efficiency leaderboard and team averages."""
@@ -2088,10 +2090,10 @@ async def get_proximity_spawn_timing(
 @router.get("/proximity/cohesion")
 async def get_proximity_cohesion(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Team cohesion: dispersion summary, timeline, and buddy pairs."""
@@ -2166,11 +2168,11 @@ async def get_proximity_cohesion(
 @router.get("/proximity/crossfire-angles")
 async def get_proximity_crossfire_angles(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
-    player_guid: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    player_guid: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Crossfire opportunity analysis: utilization rate, angle buckets, top duos."""
@@ -2254,11 +2256,11 @@ async def get_proximity_crossfire_angles(
 @router.get("/proximity/pushes")
 async def get_proximity_pushes(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
-    player_guid: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    player_guid: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Team push analysis: per-team summary and quality distribution."""
@@ -2325,11 +2327,11 @@ async def get_proximity_pushes(
 @router.get("/proximity/lua-trades")
 async def get_proximity_lua_trades(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
-    player_guid: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    player_guid: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Lua-detected trade kill analysis."""
@@ -2412,10 +2414,10 @@ async def get_proximity_lua_trades(
 async def get_proximity_events(
     range_days: int = 30,
     limit: int = 250,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -3182,8 +3184,8 @@ async def get_proximity_round_team_comparison(
 @router.get("/proximity/weapon-accuracy")
 async def get_proximity_weapon_accuracy(
     range_days: int = 30,
-    player_guid: Optional[str] = None,
-    map_name: Optional[str] = None,
+    player_guid: str | None = None,
+    map_name: str | None = None,
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -3262,11 +3264,11 @@ async def get_proximity_weapon_accuracy(
 @router.get("/proximity/revives")
 async def get_proximity_revives(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
-    player_guid: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    player_guid: str | None = None,
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -3343,7 +3345,7 @@ async def get_proximity_revives(
 
 @router.get("/proximity/session-scores")
 async def get_proximity_session_scores(
-    session_date: Optional[str] = None,
+    session_date: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Per-session composite proximity combat scores (0-100) across 7 categories."""
@@ -3370,10 +3372,10 @@ async def get_proximity_leaderboards(
     category: str = "power",
     range_days: int = 30,
     limit: int = 10,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Multi-category proximity leaderboards. Supports scope filtering."""
@@ -3408,7 +3410,7 @@ async def get_proximity_leaderboards(
             # Composite radar score — batch queries (7 queries total, not per-player)
             # 1. Engagement stats + names per player
             eng_rows = await db.fetch_all(
-                """
+                f"""
                 SELECT target_guid, MAX(target_name) AS name,
                        COUNT(*) AS total,
                        SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes
@@ -3418,53 +3420,53 @@ async def get_proximity_leaderboards(
                 HAVING COUNT(*) >= 5
                 ORDER BY COUNT(*) DESC
                 LIMIT 100
-                """.format(scope_where=scope_where),
+                """,
                 scope_params,
             )
             if not eng_rows:
                 return {"status": "ok", "category": "power", "entries": []}
 
             guid_set = {r[0] for r in eng_rows}
-            eng_map: Dict[str, dict] = {}
+            eng_map: dict[str, dict] = {}
             for r in eng_rows:
                 eng_map[r[0]] = {"name": r[1] or r[0][:8], "total": int(r[2] or 0), "escapes": int(r[3] or 0)}
 
             # 2. Movement (aggression axis)
             move_rows = await db.fetch_all(
-                """
+                f"""
                 SELECT player_guid,
                        ROUND(AVG(sprint_percentage)::numeric, 1) AS sp,
                        ROUND(AVG(avg_speed)::numeric, 1) AS spd
                 FROM player_track
                 WHERE {scope_where}
                 GROUP BY player_guid
-                """.format(scope_where=scope_where),
+                """,
                 scope_params,
             )
-            move_map: Dict[str, Tuple[float, float]] = {}
+            move_map: dict[str, tuple[float, float]] = {}
             for r in (move_rows or []):
                 if r[0] in guid_set:
                     move_map[r[0]] = (float(r[1] or 0), float(r[2] or 0))
 
             # 3. Dodge reaction (awareness axis)
             dodge_rows = await db.fetch_all(
-                """
+                f"""
                 SELECT target_guid,
                        ROUND(AVG(dodge_reaction_ms)::numeric, 0) AS avg_dodge
                 FROM proximity_reaction_metric
                 WHERE dodge_reaction_ms IS NOT NULL AND {scope_where}
                 GROUP BY target_guid
-                """.format(scope_where=scope_where),
+                """,
                 scope_params,
             )
-            dodge_map: Dict[str, int] = {}
+            dodge_map: dict[str, int] = {}
             for r in (dodge_rows or []):
                 if r[0] in guid_set:
                     dodge_map[r[0]] = int(r[1] or 5000)
 
             # 4. Crossfire participation (teamplay axis)
             cf_rows = await db.fetch_all(
-                """
+                f"""
                 SELECT guid, SUM(cnt) AS total FROM (
                     SELECT teammate1_guid AS guid, COUNT(*) AS cnt
                     FROM proximity_crossfire_opportunity
@@ -3476,58 +3478,58 @@ async def get_proximity_leaderboards(
                     WHERE was_executed = true AND {scope_where}
                     GROUP BY teammate2_guid
                 ) sub GROUP BY guid
-                """.format(scope_where=scope_where),
+                """,
                 scope_params,
             )
-            cf_map: Dict[str, int] = {}
+            cf_map: dict[str, int] = {}
             for r in (cf_rows or []):
                 if r[0] in guid_set:
                     cf_map[r[0]] = int(r[1] or 0)
 
             # 5. Trade kills (teamplay axis)
             trade_rows = await db.fetch_all(
-                """
+                f"""
                 SELECT trader_guid, COUNT(*) AS cnt
                 FROM proximity_lua_trade_kill
                 WHERE {scope_where}
                 GROUP BY trader_guid
-                """.format(scope_where=scope_where),
+                """,
                 scope_params,
             )
-            trade_map: Dict[str, int] = {}
+            trade_map: dict[str, int] = {}
             for r in (trade_rows or []):
                 if r[0] in guid_set:
                     trade_map[r[0]] = int(r[1] or 0)
 
             # 6. Spawn timing (timing axis)
             timing_rows = await db.fetch_all(
-                """
+                f"""
                 SELECT killer_guid,
                        ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,
                        COUNT(*) AS cnt
                 FROM proximity_spawn_timing
                 WHERE {scope_where}
                 GROUP BY killer_guid
-                """.format(scope_where=scope_where),
+                """,
                 scope_params,
             )
-            timing_map: Dict[str, Tuple[float, int]] = {}
+            timing_map: dict[str, tuple[float, int]] = {}
             for r in (timing_rows or []):
                 if r[0] in guid_set:
                     timing_map[r[0]] = (float(r[1] or 0), int(r[2] or 0))
 
             # 7. Return fire (mechanical axis)
             rf_rows = await db.fetch_all(
-                """
+                f"""
                 SELECT target_guid,
                        ROUND(AVG(return_fire_ms)::numeric, 0) AS avg_rf
                 FROM proximity_reaction_metric
                 WHERE return_fire_ms IS NOT NULL AND {scope_where}
                 GROUP BY target_guid
-                """.format(scope_where=scope_where),
+                """,
                 scope_params,
             )
-            rf_map: Dict[str, int] = {}
+            rf_map: dict[str, int] = {}
             for r in (rf_rows or []):
                 if r[0] in guid_set:
                     rf_map[r[0]] = int(r[1] or 3000)
@@ -3568,7 +3570,7 @@ async def get_proximity_leaderboards(
         elif category == "spawn":
             scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
-                """
+                f"""
                 SELECT killer_guid, MAX(killer_name) AS name,
                        COUNT(*) AS timed_kills,
                        ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,
@@ -3579,7 +3581,7 @@ async def get_proximity_leaderboards(
                 HAVING COUNT(*) >= 3
                 ORDER BY avg_score DESC
                 LIMIT ${next_idx}
-                """.format(scope_where=scope_where, next_idx=next_idx),
+                """,
                 scope_params + (safe_limit,),
             )
             return {
@@ -3594,7 +3596,7 @@ async def get_proximity_leaderboards(
         elif category == "crossfire":
             scope_where, scope_params, next_idx = _lb_scope(table_alias="c", has_round_number=True)
             rows = await db.fetch_all(
-                """
+                f"""
                 SELECT guid, name, SUM(cnt) AS total, ROUND(AVG(avg_angle)::numeric, 1) AS avg_angle
                 FROM (
                     SELECT c.teammate1_guid AS guid,
@@ -3623,7 +3625,7 @@ async def get_proximity_leaderboards(
                 ) sub GROUP BY guid, name
                 ORDER BY total DESC
                 LIMIT ${next_idx}
-                """.format(scope_where=scope_where, next_idx=next_idx),
+                """,
                 scope_params + (safe_limit,),
             )
             return {
@@ -3638,7 +3640,7 @@ async def get_proximity_leaderboards(
         elif category == "trades":
             scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
-                """
+                f"""
                 SELECT trader_guid, MAX(trader_name) AS name,
                        COUNT(*) AS trades,
                        ROUND(AVG(delta_ms)::numeric, 0) AS avg_reaction
@@ -3648,7 +3650,7 @@ async def get_proximity_leaderboards(
                 HAVING COUNT(*) >= 2
                 ORDER BY trades DESC
                 LIMIT ${next_idx}
-                """.format(scope_where=scope_where, next_idx=next_idx),
+                """,
                 scope_params + (safe_limit,),
             )
             return {
@@ -3663,7 +3665,7 @@ async def get_proximity_leaderboards(
         elif category == "reactions":
             scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
-                """
+                f"""
                 SELECT target_guid, MAX(target_name) AS name,
                        ROUND(AVG(return_fire_ms)::numeric, 0) AS avg_rf,
                        COUNT(*) AS samples
@@ -3673,7 +3675,7 @@ async def get_proximity_leaderboards(
                 HAVING COUNT(*) >= 3
                 ORDER BY avg_rf ASC
                 LIMIT ${next_idx}
-                """.format(scope_where=scope_where, next_idx=next_idx),
+                """,
                 scope_params + (safe_limit,),
             )
             return {
@@ -3688,7 +3690,7 @@ async def get_proximity_leaderboards(
         elif category == "survivors":
             scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
-                """
+                f"""
                 SELECT target_guid, MAX(target_name) AS name,
                        ROUND(SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END)::numeric * 100
                              / NULLIF(COUNT(*), 0), 1) AS escape_pct,
@@ -3700,7 +3702,7 @@ async def get_proximity_leaderboards(
                 HAVING COUNT(*) >= 5
                 ORDER BY escape_pct DESC
                 LIMIT ${next_idx}
-                """.format(scope_where=scope_where, next_idx=next_idx),
+                """,
                 scope_params + (safe_limit,),
             )
             return {
@@ -3715,7 +3717,7 @@ async def get_proximity_leaderboards(
         elif category == "movement":
             scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
-                """
+                f"""
                 SELECT player_guid, MAX(player_name) AS name,
                        ROUND(AVG(avg_speed)::numeric, 1) AS avg_speed,
                        ROUND(AVG(sprint_percentage)::numeric, 1) AS sprint_pct,
@@ -3727,7 +3729,7 @@ async def get_proximity_leaderboards(
                 HAVING COUNT(*) >= 3
                 ORDER BY avg_speed DESC
                 LIMIT ${next_idx}
-                """.format(scope_where=scope_where, next_idx=next_idx),
+                """,
                 scope_params + (safe_limit,),
             )
             return {
@@ -3743,7 +3745,7 @@ async def get_proximity_leaderboards(
         elif category == "focus_fire":
             scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)
             rows = await db.fetch_all(
-                """
+                f"""
                 SELECT target_guid, MAX(target_name) AS name,
                        COUNT(*) AS times_focused,
                        ROUND(AVG(focus_score)::numeric, 3) AS avg_score,
@@ -3755,7 +3757,7 @@ async def get_proximity_leaderboards(
                 HAVING COUNT(*) >= 2
                 ORDER BY avg_score DESC
                 LIMIT ${next_idx}
-                """.format(scope_where=scope_where, next_idx=next_idx),
+                """,
                 scope_params + (safe_limit,),
             )
             return {
@@ -3782,11 +3784,11 @@ async def get_proximity_leaderboards(
 @router.get("/proximity/kill-outcomes")
 async def get_proximity_kill_outcomes(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
-    player_guid: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    player_guid: str | None = None,
     limit: int = 200,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -3877,9 +3879,9 @@ async def get_proximity_kill_outcomes(
 @router.get("/proximity/kill-outcomes/player-stats")
 async def get_proximity_kill_outcomes_player_stats(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    player_guid: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    player_guid: str | None = None,
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -3980,12 +3982,12 @@ async def get_proximity_kill_outcomes_player_stats(
 @router.get("/proximity/hit-regions")
 async def get_proximity_hit_regions(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
-    player_guid: Optional[str] = None,
-    weapon_id: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    player_guid: str | None = None,
+    weapon_id: int | None = None,
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -4049,8 +4051,8 @@ async def get_proximity_hit_regions(
 async def get_proximity_hit_regions_by_weapon(
     range_days: int = 30,
     player_guid: str = "",
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Per-weapon hit region breakdown for a specific player."""
@@ -4106,8 +4108,8 @@ async def get_proximity_hit_regions_by_weapon(
 @router.get("/proximity/hit-regions/headshot-rates")
 async def get_proximity_hit_regions_headshot_rates(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -4161,14 +4163,14 @@ async def get_proximity_hit_regions_headshot_rates(
 @router.get("/proximity/combat-positions/heatmap")
 async def get_proximity_combat_positions_heatmap(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    weapon_id: Optional[int] = None,
-    victim_class: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    weapon_id: int | None = None,
+    victim_class: str | None = None,
     perspective: str = "kills",
-    team: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    team: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Combat position heatmap — grid-binned kill/death positions for map overlay."""
@@ -4238,10 +4240,10 @@ async def get_proximity_combat_positions_heatmap(
 @router.get("/proximity/combat-positions/kill-lines")
 async def get_proximity_combat_positions_kill_lines(
     range_days: int = 30,
-    map_name: Optional[str] = None,
-    weapon_id: Optional[int] = None,
-    attacker_guid: Optional[str] = None,
-    session_date: Optional[str] = None,
+    map_name: str | None = None,
+    weapon_id: int | None = None,
+    attacker_guid: str | None = None,
+    session_date: str | None = None,
     limit: int = 100,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -4300,9 +4302,9 @@ async def get_proximity_combat_positions_kill_lines(
 @router.get("/proximity/combat-positions/danger-zones")
 async def get_proximity_combat_positions_danger_zones(
     range_days: int = 30,
-    map_name: Optional[str] = None,
-    victim_class: Optional[str] = None,
-    session_date: Optional[str] = None,
+    map_name: str | None = None,
+    victim_class: str | None = None,
+    session_date: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Danger zones — grid-binned death positions ranked by death count with class breakdown."""
@@ -4383,9 +4385,9 @@ async def get_proximity_combat_positions_danger_zones(
 @router.get("/proximity/movement-stats")
 async def get_proximity_movement_stats(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    player_guid: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    player_guid: str | None = None,
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -4481,7 +4483,7 @@ async def get_proximity_movement_stats(
 async def get_prox_scores(
     request: Request,
     range_days: int = 30,
-    player_guid: Optional[str] = None,
+    player_guid: str | None = None,
     limit: int = 50,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -4518,10 +4520,10 @@ async def get_prox_scores_formula():
 @router.get("/proximity/carrier-events")
 async def get_proximity_carrier_events(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     limit: int = 10,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -4652,10 +4654,10 @@ async def get_proximity_carrier_events(
 @router.get("/proximity/carrier-kills")
 async def get_proximity_carrier_kills(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     limit: int = 10,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -4723,10 +4725,10 @@ async def get_proximity_carrier_kills(
 @router.get("/proximity/carrier-returns")
 async def get_proximity_carrier_returns(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     limit: int = 10,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -4813,10 +4815,10 @@ async def get_proximity_carrier_returns(
 @router.get("/proximity/vehicle-progress")
 async def get_proximity_vehicle_progress(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Vehicle progress intelligence — Phase 2"""
@@ -4867,10 +4869,10 @@ async def get_proximity_vehicle_progress(
 @router.get("/proximity/escort-credits")
 async def get_proximity_escort_credits(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     limit: int = 10,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -4932,10 +4934,10 @@ async def get_proximity_escort_credits(
 @router.get("/proximity/construction-events")
 async def get_proximity_construction_events(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     limit: int = 10,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -5012,10 +5014,10 @@ async def get_proximity_construction_events(
 @router.get("/proximity/objective-runs")
 async def get_proximity_objective_runs(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Objective run intelligence — engineer runs with path clearing attribution"""
@@ -5135,10 +5137,10 @@ async def get_proximity_objective_runs(
 @router.get("/proximity/focus-fire")
 async def get_proximity_focus_fire(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -5231,10 +5233,10 @@ async def get_proximity_focus_fire(
 @router.get("/proximity/objective-focus")
 async def get_proximity_objective_focus(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
-    round_number: Optional[int] = None,
-    round_start_unix: Optional[int] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -5334,8 +5336,8 @@ async def get_proximity_objective_focus(
 @router.get("/proximity/support-summary")
 async def get_proximity_support_summary(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Support summary — medic support uptime per round."""
@@ -5419,8 +5421,8 @@ async def get_proximity_support_summary(
 @router.get("/proximity/combat-position-stats")
 async def get_proximity_combat_position_stats(
     range_days: int = 30,
-    session_date: Optional[str] = None,
-    map_name: Optional[str] = None,
+    session_date: str | None = None,
+    map_name: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Combat position aggregate stats — kill distances, class matchups."""

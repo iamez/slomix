@@ -30,23 +30,21 @@ Enhanced Features:
 - Custom display names for linked players
 """
 
-import asyncio
 import logging
 from datetime import datetime
-from typing import Optional, List, Dict
 
 import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
 from bot.core.database_adapter import ensure_player_name_alias
-from bot.core.utils import escape_like_pattern_for_query, sanitize_error_message
 
 # Import pagination view for interactive button navigation
 from bot.core.pagination_view import PaginationView
-from bot.stats import StatsCalculator
+from bot.core.utils import escape_like_pattern_for_query, sanitize_error_message
 from bot.services.player_display_name_service import PlayerDisplayNameService
 from bot.services.player_formatter import PlayerFormatter
+from bot.stats import StatsCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +71,7 @@ class LinkCog(commands.Cog, name="Link"):
         self.pending_link_selections = {}
         logger.info("🔗 LinkCog loaded")
 
-    def _store_link_selection(self, discord_id: int, message_id: int, options: List[Dict]):
+    def _store_link_selection(self, discord_id: int, message_id: int, options: list[dict]):
         """Store pending link selection (in-memory, experimental)."""
         if not self.enable_link_selection_state:
             return
@@ -84,7 +82,7 @@ class LinkCog(commands.Cog, name="Link"):
             "expires_at": expires_at,
         }
 
-    def _get_link_selection(self, discord_id: int) -> Optional[Dict]:
+    def _get_link_selection(self, discord_id: int) -> dict | None:
         """Get pending link selection if valid."""
         pending = self.pending_link_selections.get(discord_id)
         if not pending:
@@ -99,7 +97,7 @@ class LinkCog(commands.Cog, name="Link"):
         if discord_id in self.pending_link_selections:
             del self.pending_link_selections[discord_id]
 
-    async def _apply_link_selection(self, ctx, discord_id: int, selected: Dict):
+    async def _apply_link_selection(self, ctx, discord_id: int, selected: dict):
         """Apply a selected link option (shared by reactions and !select)."""
         existing = await self.bot.db_adapter.fetch_one(
             """
@@ -150,7 +148,7 @@ class LinkCog(commands.Cog, name="Link"):
 
     @is_public_channel()
     @commands.command(name="list_players", aliases=["players", "lp"])
-    async def list_players(self, ctx, filter_type: Optional[str] = None, page: int = 1):
+    async def list_players(self, ctx, filter_type: str | None = None, page: int = 1):
         """
         👥 List all players with pagination.
 
@@ -538,7 +536,7 @@ class LinkCog(commands.Cog, name="Link"):
     @is_public_channel()
     @commands.cooldown(1, 10, commands.BucketType.user)
     @commands.command(name="link")
-    async def link(self, ctx, target: Optional[str] = None, *, guid: Optional[str] = None):
+    async def link(self, ctx, target: str | None = None, *, guid: str | None = None):
         """
         🔗 Link your Discord account to your in-game profile.
 
@@ -793,7 +791,7 @@ class LinkCog(commands.Cog, name="Link"):
                     f"✅ Self-link: {ctx.author} linked to {selected['name']} (GUID: {selected['guid']})"
                 )
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 await message.clear_reactions()
                 self._clear_link_selection(discord_id)
                 await ctx.send(
@@ -940,7 +938,7 @@ class LinkCog(commands.Cog, name="Link"):
                     await message.clear_reactions()
                     await ctx.send("❌ Link cancelled.")
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 await message.clear_reactions()
                 await ctx.send("⏱️ Confirmation timed out.")
 
@@ -1092,7 +1090,7 @@ class LinkCog(commands.Cog, name="Link"):
 
                     logger.info(f"✅ Name link: {ctx.author} linked to {selected['name']} (GUID: {selected['guid']})")
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     await message.clear_reactions()
                     self._clear_link_selection(discord_id)
                     await ctx.send("⏱️ Selection timed out.")
@@ -1312,7 +1310,7 @@ class LinkCog(commands.Cog, name="Link"):
                     await message.clear_reactions()
                     await ctx.send("❌ Admin link cancelled.")
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 await message.clear_reactions()
                 await ctx.send("⏱️ Admin link confirmation timed out.")
 
@@ -1378,7 +1376,7 @@ class LinkCog(commands.Cog, name="Link"):
 
     @is_public_channel()
     @commands.command(name="select")
-    async def select_option(self, ctx, selection: Optional[int] = None):
+    async def select_option(self, ctx, selection: int | None = None):
         """
         🔢 Select an option from a link prompt (alternative to reactions).
 

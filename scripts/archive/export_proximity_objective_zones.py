@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
-import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ def main() -> int:
     out = {
         "meta": {
             "source": str(source_path),
-            "map_count": len({k for k in zone_maps.keys() if k == k.lower()}),
+            "map_count": len({k for k in zone_maps if k == k.lower()}),
             "objective_count": total,
             "default_radius": int(args.radius),
         },

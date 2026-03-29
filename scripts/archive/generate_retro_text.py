@@ -1,15 +1,16 @@
-import sys
 import os
 import pathlib
+import sys
 
 # Ensure project root on sys.path
 ROOT = str(pathlib.Path(__file__).resolve().parents[1])
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+import logging
+
 from bot.retro_text_stats import generate_text_stats
 
-import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 

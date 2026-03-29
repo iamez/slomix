@@ -15,8 +15,8 @@ across the entire session regardless of which side they play on.
 import json
 import logging
 import os
-from typing import Dict, List, Tuple, Optional, Set, Any
 from collections import defaultdict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ class TeamManager:
             """
         )
 
-    async def _get_session_teams_columns(self) -> Set[str]:
+    async def _get_session_teams_columns(self) -> set[str]:
         """
         Fetch session_teams column names (cached).
         """
@@ -96,11 +96,11 @@ class TeamManager:
 
     @staticmethod
     def _session_scope_clause(
-        columns: Set[str],
+        columns: set[str],
         session_date: str,
-        gaming_session_id: Optional[int],
+        gaming_session_id: int | None,
         table_alias: str = ""
-    ) -> Tuple[str, Tuple]:
+    ) -> tuple[str, tuple]:
         """
         Build a session filter that prefers gaming_session_id when available.
         """
@@ -110,7 +110,7 @@ class TeamManager:
         return f"{prefix}session_start_date LIKE ?", (f"{session_date}%",)
 
     @staticmethod
-    def _session_teams_conflict_clause(columns: Set[str]) -> str:
+    def _session_teams_conflict_clause(columns: set[str]) -> str:
         """
         Return ON CONFLICT clause compatible with current session_teams schema.
         """
@@ -119,7 +119,7 @@ class TeamManager:
         return "ON CONFLICT (session_start_date, map_name, team_name)"
 
     @staticmethod
-    def _session_delete_query(columns: Set[str], gaming_session_id: Optional[int], map_all_only: bool) -> str:
+    def _session_delete_query(columns: set[str], gaming_session_id: int | None, map_all_only: bool) -> str:
         """Return a safe, static DELETE query for session_teams scope."""
         if "gaming_session_id" in columns and gaming_session_id is not None:
             return (
@@ -134,7 +134,7 @@ class TeamManager:
         )
 
     @staticmethod
-    def _decode_json_array(value) -> List[Any]:
+    def _decode_json_array(value) -> list[Any]:
         """
         Normalize JSON/JSONB values that may arrive as strings or native lists.
         """
@@ -312,7 +312,7 @@ class TeamManager:
         round_id: int,
         session_date: str,
         gaming_session_id: int
-    ) -> Dict[str, List[str]]:
+    ) -> dict[str, list[str]]:
         """
         Update teams with any new players from a round.
 
@@ -448,8 +448,8 @@ class TeamManager:
     async def detect_session_teams(
         self,
         session_date: str,
-        gaming_session_id: Optional[int] = None
-    ) -> Dict[str, Dict]:
+        gaming_session_id: int | None = None
+    ) -> dict[str, dict]:
         """
         Automatically detect persistent teams for a session.
 
@@ -659,13 +659,13 @@ class TeamManager:
         # Build result with confidence scores
         teams = {
             'Team A': {
-                'guids': sorted(list(persistent_team1)),
+                'guids': sorted(persistent_team1),
                 'names': sorted([player_names[g] for g in persistent_team1]),
                 'count': len(persistent_team1),
                 'detection_confidence': confidence
             },
             'Team B': {
-                'guids': sorted(list(persistent_team2)),
+                'guids': sorted(persistent_team2),
                 'names': sorted([player_names[g] for g in persistent_team2]),
                 'count': len(persistent_team2),
                 'detection_confidence': confidence
@@ -682,9 +682,9 @@ class TeamManager:
     async def store_session_teams(
         self,
         session_date: str,
-        teams: Dict[str, Dict],
+        teams: dict[str, dict],
         auto_assign_names: bool = True,
-        gaming_session_id: Optional[int] = None,
+        gaming_session_id: int | None = None,
     ) -> bool:
         """
         Store detected teams in the session_teams table.
@@ -770,8 +770,8 @@ class TeamManager:
         self,
         session_date: str,
         auto_detect: bool = True,
-        gaming_session_id: Optional[int] = None,
-    ) -> Dict[str, Dict]:
+        gaming_session_id: int | None = None,
+    ) -> dict[str, dict]:
         """
         Get teams for a session (from DB or auto-detect).
 
@@ -863,8 +863,8 @@ class TeamManager:
     async def detect_lineup_changes(
         self,
         session_date: str,
-        previous_session_date: Optional[str] = None
-    ) -> Dict[str, Any]:
+        previous_session_date: str | None = None
+    ) -> dict[str, Any]:
         """
         Detect lineup changes between sessions.
 
@@ -977,7 +977,7 @@ class TeamManager:
         session_date: str,
         team_a_name: str,
         team_b_name: str,
-        gaming_session_id: Optional[int] = None,
+        gaming_session_id: int | None = None,
     ) -> bool:
         """
         Set custom names for teams (e.g., "Lakers" vs "Mavericks").
@@ -1022,8 +1022,8 @@ class TeamManager:
     async def get_map_performance(
         self,
         session_date: str,
-        gaming_session_id: Optional[int] = None,
-    ) -> Dict[str, Dict]:
+        gaming_session_id: int | None = None,
+    ) -> dict[str, dict]:
         """
         Get team performance per map for a session.
 
@@ -1123,7 +1123,7 @@ class TeamManager:
             team_a_name = scoring_result.get('team_a_name', 'Team A')
             team_b_name = scoring_result.get('team_b_name', 'Team B')
 
-            map_perf: Dict[str, Dict] = {}
+            map_perf: dict[str, dict] = {}
             for map_result in scoring_result['maps']:
                 map_name = map_result.get('map', 'Unknown')
                 if map_name not in map_perf:
@@ -1144,7 +1144,7 @@ class TeamManager:
     # TEAM POOL & RANDOM ASSIGNMENT
     # =========================================================================
 
-    async def get_team_pool(self, active_only: bool = True) -> List[Dict]:
+    async def get_team_pool(self, active_only: bool = True) -> list[dict]:
         """
         Get available team names from the pool.
 
@@ -1166,7 +1166,7 @@ class TeamManager:
             for name, display_name, color in rows
         ]
 
-    async def get_team_color(self, team_name: str) -> Optional[int]:
+    async def get_team_color(self, team_name: str) -> int | None:
         """
         Get Discord embed color for a team name.
 
@@ -1186,8 +1186,8 @@ class TeamManager:
         self,
         session_date: str,
         force: bool = False,
-        gaming_session_id: Optional[int] = None,
-    ) -> Tuple[str, str]:
+        gaming_session_id: int | None = None,
+    ) -> tuple[str, str]:
         """
         Randomly assign team names from the pool to a session.
 
@@ -1288,8 +1288,8 @@ class TeamManager:
     async def add_team_to_pool(
         self,
         name: str,
-        display_name: Optional[str] = None,
-        color: Optional[int] = None
+        display_name: str | None = None,
+        color: int | None = None
     ) -> bool:
         """
         Add a new team to the pool.
@@ -1327,7 +1327,7 @@ class TeamManager:
         self,
         team_name: str,
         days_back: int = 90
-    ) -> Dict:
+    ) -> dict:
         """
         Get win/loss record for a team by name.
 
@@ -1426,7 +1426,7 @@ class TeamManager:
         team_a: str,
         team_b: str,
         days_back: int = 365
-    ) -> Dict:
+    ) -> dict:
         """
         Get head-to-head record between two teams.
 

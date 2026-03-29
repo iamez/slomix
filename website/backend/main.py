@@ -1,17 +1,17 @@
-import sys
-import os
 import asyncio
+import os
+import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-from dotenv import load_dotenv
 
 try:
     from prometheus_fastapi_instrumentator import Instrumentator
@@ -25,6 +25,7 @@ sys.path.append(project_root)
 try:
     from slowapi import _rate_limit_exceeded_handler
     from slowapi.errors import RateLimitExceeded
+
     from website.backend.rate_limit import limiter
     HAS_SLOWAPI = True
 except ImportError:  # pragma: no cover - optional in minimal installs
@@ -38,13 +39,13 @@ else:
     load_dotenv(os.path.join(project_root, ".env"))
 
 # Setup logging (must happen before other imports that use logging)
-from website.backend.logging_config import setup_logging, get_app_logger
+from website.backend.env_utils import getenv_int
+from website.backend.logging_config import get_app_logger, setup_logging
 from website.backend.middleware import (
-    RequestLoggingMiddleware,
     HTTPCacheMiddleware,
     RateLimitMiddleware,
+    RequestLoggingMiddleware,
 )
-from website.backend.env_utils import getenv_int
 
 # Configure logging from environment
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -58,16 +59,33 @@ setup_logging(
 
 logger = get_app_logger(__name__)
 
-from website.backend.routers import auth, predictions, greatshot, greatshot_topshots, uploads, availability, planning, proximity_router, diagnostics_router, sessions_router, players_router, records_router, skill_router, storytelling_router, rivalries_router, replay_router
-from website.backend.dependencies import init_db_pool, close_db_pool, get_db_pool
-from website.backend.services.greatshot_store import get_greatshot_storage
+from greatshot.config import CONFIG as GREATSHOT_CONFIG
+from website.backend.dependencies import close_db_pool, get_db_pool, init_db_pool
+from website.backend.routers import (
+    auth,
+    availability,
+    diagnostics_router,
+    greatshot,
+    greatshot_topshots,
+    planning,
+    players_router,
+    predictions,
+    proximity_router,
+    records_router,
+    replay_router,
+    rivalries_router,
+    sessions_router,
+    skill_router,
+    storytelling_router,
+    uploads,
+)
 from website.backend.services.greatshot_jobs import (
     GreatshotJobService,
     get_greatshot_job_service,
     set_greatshot_job_service,
 )
+from website.backend.services.greatshot_store import get_greatshot_storage
 from website.backend.services.http_cache_backend import create_cache_backend_from_env
-from greatshot.config import CONFIG as GREATSHOT_CONFIG
 
 # Configuration from environment
 WEBSITE_PORT = getenv_int("WEBSITE_PORT", 7000)
@@ -307,6 +325,7 @@ async def greatshot_spa_entry(demo_id: str | None = None):
 async def share_redirect(upload_id: str):
     """Redirect /share/{id} to the SPA upload detail view."""
     import re as _re
+
     from fastapi.responses import RedirectResponse
     if not _re.match(r'^[a-zA-Z0-9_-]+$', upload_id):
         raise HTTPException(status_code=400, detail="Invalid upload ID")

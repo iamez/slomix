@@ -16,12 +16,12 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger("bot.core.round_linker")
 
 
-def _parse_round_datetime(round_date: Optional[str], round_time: Optional[str]) -> Optional[datetime]:
+def _parse_round_datetime(round_date: str | None, round_time: str | None) -> datetime | None:
     if not round_date or not round_time:
         return None
 
@@ -40,11 +40,11 @@ async def resolve_round_id(
     map_name: str,
     round_number: int,
     *,
-    target_dt: Optional[datetime] = None,
-    round_date: Optional[str] = None,
-    round_time: Optional[str] = None,
+    target_dt: datetime | None = None,
+    round_date: str | None = None,
+    round_time: str | None = None,
     window_minutes: int = 45,
-) -> Optional[int]:
+) -> int | None:
     """
     Resolve round_id using map + round_number + nearest time.
 
@@ -67,11 +67,11 @@ async def resolve_round_id_with_reason(
     map_name: str,
     round_number: int,
     *,
-    target_dt: Optional[datetime] = None,
-    round_date: Optional[str] = None,
-    round_time: Optional[str] = None,
+    target_dt: datetime | None = None,
+    round_date: str | None = None,
+    round_time: str | None = None,
     window_minutes: int = 45,
-) -> Tuple[Optional[int], Dict[str, Any]]:
+) -> tuple[int | None, dict[str, Any]]:
     """
     Resolve round_id and return structured diagnostics.
 
@@ -86,7 +86,7 @@ async def resolve_round_id_with_reason(
     8. round_time
     9. window_minutes
     """
-    diag: Dict[str, Any] = {
+    diag: dict[str, Any] = {
         "reason_code": "unknown",
         "candidate_count": 0,
         "parsed_candidate_count": 0,
@@ -116,7 +116,7 @@ async def resolve_round_id_with_reason(
         round_date = target_dt.strftime("%Y-%m-%d")
         diag["round_date"] = round_date
 
-    params: Tuple = (map_name, round_number)
+    params: tuple = (map_name, round_number)
     base_query = """
         SELECT id, round_date, round_time, created_at, round_start_unix
         FROM rounds

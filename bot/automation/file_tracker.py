@@ -14,7 +14,6 @@ import hashlib
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Optional, Set, Tuple
 
 from bot.automation.ssh_handler import SSHHandler
 
@@ -46,7 +45,7 @@ def get_file_size(file_path: str) -> int:
 class FileTracker:
     """Tracks processed stats files to avoid duplicate imports"""
 
-    def __init__(self, db_adapter, config, bot_startup_time: datetime, processed_files: Set[str]):
+    def __init__(self, db_adapter, config, bot_startup_time: datetime, processed_files: set[str]):
         """
         Initialize file tracker
 
@@ -223,8 +222,8 @@ class FileTracker:
             return False
 
     async def mark_processed(
-        self, filename: str, success: bool = True, error_msg: Optional[str] = None,
-        file_path: Optional[str] = None
+        self, filename: str, success: bool = True, error_msg: str | None = None,
+        file_path: str | None = None
     ) -> None:
         """
         Mark a file as processed in the processed_files table
@@ -271,7 +270,7 @@ class FileTracker:
         except Exception as e:
             logger.error(f"Error marking file as processed: {e}")
 
-    async def verify_file_integrity(self, filename: str, file_path: str) -> Tuple[bool, str]:
+    async def verify_file_integrity(self, filename: str, file_path: str) -> tuple[bool, str]:
         """
         Verify file integrity by comparing current hash to stored hash.
 

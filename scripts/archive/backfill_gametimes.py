@@ -9,6 +9,7 @@ Usage:
 import argparse
 import asyncio
 import json
+import logging
 import os
 import re
 from datetime import datetime
@@ -18,7 +19,6 @@ from bot.core.database_adapter import create_adapter
 from bot.core.round_contract import normalize_end_reason, normalize_side_value
 from bot.core.round_linker import resolve_round_id
 
-import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -356,7 +356,7 @@ async def main() -> None:
     for filename in files:
         path = os.path.join(local_dir, filename)
         try:
-            with open(path, "r", encoding="utf-8") as handle:
+            with open(path, encoding="utf-8") as handle:
                 gametime_data = json.load(handle)
         except Exception as e:
             print(f"[backfill] Failed to read {filename}: {e}")

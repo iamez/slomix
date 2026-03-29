@@ -17,7 +17,6 @@ import logging
 import os
 import posixpath
 import re
-from typing import Dict, List, Optional
 
 logger = logging.getLogger("bot.automation.ssh")
 
@@ -99,7 +98,7 @@ class SSHHandler:
         return basename
 
     @staticmethod
-    def parse_gamestats_filename(filename: str) -> Optional[Dict]:
+    def parse_gamestats_filename(filename: str) -> dict | None:
         """
         Parse gamestats filename to extract metadata
 
@@ -133,10 +132,10 @@ class SSHHandler:
 
     @staticmethod
     async def list_remote_files(
-        ssh_config: Dict,
-        extensions: Optional[List[str]] = None,
-        exclude_suffixes: Optional[List[str]] = None,
-    ) -> List[str]:
+        ssh_config: dict,
+        extensions: list[str] | None = None,
+        exclude_suffixes: list[str] | None = None,
+    ) -> list[str]:
         """
         List remote files on SSH server with extension filtering.
 
@@ -163,7 +162,7 @@ class SSHHandler:
             )
             return files
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("❌ SSH list files timed out after 30 seconds")
             raise SSHConnectionError("SSH list files timed out after 30 seconds")
 
@@ -173,10 +172,10 @@ class SSHHandler:
 
     @staticmethod
     def _list_files_sync(
-        ssh_config: Dict,
-        extensions: Optional[List[str]],
-        exclude_suffixes: Optional[List[str]],
-    ) -> List[str]:
+        ssh_config: dict,
+        extensions: list[str] | None,
+        exclude_suffixes: list[str] | None,
+    ) -> list[str]:
         """Synchronous SSH file listing"""
         import paramiko
 
@@ -232,8 +231,8 @@ class SSHHandler:
 
     @staticmethod
     async def download_file(
-        ssh_config: Dict, filename: str, local_dir: str = "local_stats"
-    ) -> Optional[str]:
+        ssh_config: dict, filename: str, local_dir: str = "local_stats"
+    ) -> str | None:
         """
         Download a single file from remote server
 
@@ -266,7 +265,7 @@ class SSHHandler:
             return None
 
     @staticmethod
-    def _download_file_sync(ssh_config: Dict, filename: str, local_dir: str) -> str:
+    def _download_file_sync(ssh_config: dict, filename: str, local_dir: str) -> str:
         """Synchronous SSH file download with timeout protection"""
         import paramiko
 

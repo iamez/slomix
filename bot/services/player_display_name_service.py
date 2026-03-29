@@ -12,7 +12,6 @@ Players must be linked (discord_id) to set custom names.
 """
 
 import logging
-from typing import Dict, List, Tuple
 from datetime import datetime
 
 logger = logging.getLogger("bot.services.player_display_name_service")
@@ -90,7 +89,7 @@ class PlayerDisplayNameService:
             logger.error(f"Error getting display name for {player_guid}: {e}", exc_info=True)
             return "Unknown Player"
 
-    async def get_display_names_batch(self, player_guids: List[str]) -> Dict[str, str]:
+    async def get_display_names_batch(self, player_guids: list[str]) -> dict[str, str]:
         """
         Get display names for multiple players efficiently.
 
@@ -178,7 +177,7 @@ class PlayerDisplayNameService:
         self,
         discord_id: int,
         display_name: str
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """
         Set a custom display name for a linked player.
 
@@ -230,7 +229,7 @@ class PlayerDisplayNameService:
         self,
         discord_id: int,
         alias_name: str
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """
         Set display name to one of player's aliases.
 
@@ -291,7 +290,7 @@ class PlayerDisplayNameService:
             logger.error(f"Error setting alias display name: {e}", exc_info=True)
             return False, f"Error setting display name: {e}"
 
-    async def reset_display_name(self, discord_id: int) -> Tuple[bool, str]:
+    async def reset_display_name(self, discord_id: int) -> tuple[bool, str]:
         """
         Reset display name to auto (most recent alias).
 
@@ -332,7 +331,7 @@ class PlayerDisplayNameService:
             logger.error(f"Error resetting display name: {e}", exc_info=True)
             return False, f"Error resetting display name: {e}"
 
-    async def get_player_aliases(self, discord_id: int) -> Tuple[bool, List[Tuple[str, int, str]]]:
+    async def get_player_aliases(self, discord_id: int) -> tuple[bool, list[tuple[str, int, str]]]:
         """
         Get all aliases for a linked player.
 

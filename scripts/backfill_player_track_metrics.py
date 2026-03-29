@@ -12,6 +12,7 @@ import argparse
 import json
 import math
 import os
+
 import psycopg2
 
 DB_PARAMS = {
@@ -103,10 +104,7 @@ def main():
 
                 if not path:
                     # No path data — set zeros
-                    metrics = {k: 0.0 for k in [
-                        "peak_speed", "stance_standing_sec", "stance_crouching_sec",
-                        "stance_prone_sec", "sprint_sec", "post_spawn_distance",
-                    ]}
+                    metrics = dict.fromkeys(["peak_speed", "stance_standing_sec", "stance_crouching_sec", "stance_prone_sec", "sprint_sec", "post_spawn_distance"], 0.0)
                 else:
                     metrics = compute_metrics(path)
 

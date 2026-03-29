@@ -7,7 +7,6 @@ Implements the Repository Pattern to separate data access from business logic.
 
 import logging
 from datetime import datetime
-from typing import Set
 
 logger = logging.getLogger("bot.repositories.file_repository")
 
@@ -26,7 +25,7 @@ class FileRepository:
         self.db_adapter = db_adapter
         self.config = config
 
-    async def get_processed_filenames(self) -> Set[str]:
+    async def get_processed_filenames(self) -> set[str]:
         """
         Get all successfully processed filenames from database.
 
@@ -49,7 +48,7 @@ class FileRepository:
             logger.error(f"Error loading processed filenames: {e}")
             return set()
 
-    async def get_newly_processed_filenames(self, since: datetime) -> Set[str]:
+    async def get_newly_processed_filenames(self, since: datetime) -> set[str]:
         """
         Get filenames processed since a given timestamp (incremental delta).
 

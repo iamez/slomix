@@ -186,8 +186,8 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
                     WHERE session_start_date = ? AND map_name = 'ALL' AND team_name = ?
                     """,
                     (
-                        json.dumps(sorted(list(guids))),
-                        json.dumps(sorted(list(names))),
+                        json.dumps(sorted(guids)),
+                        json.dumps(sorted(names)),
                         round_date,
                         team_name,
                     )

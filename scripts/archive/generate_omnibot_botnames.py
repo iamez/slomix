@@ -12,14 +12,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import os
 import re
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable
 
 import asyncpg
 
-import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ def sanitize_name(raw: str, max_len: int) -> str:
     return cleaned
 
 
-async def fetch_recent_aliases(limit: int) -> List[str]:
+async def fetch_recent_aliases(limit: int) -> list[str]:
     host = os.getenv("POSTGRES_HOST")
     port = int(os.getenv("POSTGRES_PORT", "5432"))
     database = os.getenv("POSTGRES_DATABASE")
@@ -111,7 +111,7 @@ async def fetch_recent_aliases(limit: int) -> List[str]:
         await conn.close()
 
 
-def dedupe(items: Iterable[str]) -> List[str]:
+def dedupe(items: Iterable[str]) -> list[str]:
     seen = set()
     result = []
     for item in items:
@@ -123,7 +123,7 @@ def dedupe(items: Iterable[str]) -> List[str]:
     return result
 
 
-def assign_names(names: List[str]) -> tuple[dict[str, List[str]], dict[str, List[str]]]:
+def assign_names(names: list[str]) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     axis = {cls: [] for cls, _ in CLASSES}
     allies = {cls: [] for cls, _ in CLASSES}
     axis_idx = 0
@@ -142,7 +142,7 @@ def assign_names(names: List[str]) -> tuple[dict[str, List[str]], dict[str, List
     return axis, allies
 
 
-def ensure_class_coverage(axis: dict[str, List[str]], allies: dict[str, List[str]], fallback: List[str]) -> None:
+def ensure_class_coverage(axis: dict[str, list[str]], allies: dict[str, list[str]], fallback: list[str]) -> None:
     fallback_iter = iter(fallback)
     for cls, _ in CLASSES:
         if not axis[cls]:
@@ -155,7 +155,7 @@ def gm_escape(name: str) -> str:
     return name.replace("\\", "").replace('"', "")
 
 
-def render_botnames(axis: dict[str, List[str]], allies: dict[str, List[str]], prefix: str, extra: List[str]) -> str:
+def render_botnames(axis: dict[str, list[str]], allies: dict[str, list[str]], prefix: str, extra: list[str]) -> str:
     lines = []
     lines.append("/////////////////////////////////////////////////////////////////////")
     lines.append("// initialize the team tables")

@@ -50,7 +50,7 @@ class ContactHandleCrypto:
         self._fernet = Fernet(key.encode("ascii"))
 
     @classmethod
-    def from_env(cls) -> "ContactHandleCrypto":
+    def from_env(cls) -> ContactHandleCrypto:
         return cls(enabled=True, reason="")
 
     def encrypt(self, plaintext: str | None) -> str | None:

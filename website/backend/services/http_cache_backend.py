@@ -6,7 +6,7 @@ import asyncio
 import json
 import os
 import time
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
 
 from website.backend.logging_config import get_app_logger
 
@@ -33,7 +33,7 @@ class CacheBackend(Protocol):
         """Return the current cache namespace."""
         ...  # noqa: WPS428 — Protocol stub
 
-    async def get(self, namespace: str, key: str) -> Optional[dict[str, Any]]:
+    async def get(self, namespace: str, key: str) -> dict[str, Any] | None:
         """Retrieve a cached value."""
         ...  # noqa: WPS428 — Protocol stub
 
@@ -61,7 +61,7 @@ class MemoryCacheBackend:
     async def get_namespace(self) -> str:
         return self._namespace
 
-    async def get(self, namespace: str, key: str) -> Optional[dict[str, Any]]:
+    async def get(self, namespace: str, key: str) -> dict[str, Any] | None:
         now = time.time()
         full_key = f"{namespace}:{key}"
         async with self._lock:
@@ -91,7 +91,7 @@ class RedisCacheBackend:
     def __init__(self, redis_url: str, namespace_key: str = "slomix:api_cache:namespace") -> None:
         self.redis_url = redis_url
         self.namespace_key = namespace_key
-        self._client: Optional[Redis] = None
+        self._client: Redis | None = None
 
     async def connect(self) -> None:
         if Redis is None:
@@ -113,7 +113,7 @@ class RedisCacheBackend:
             return "1"
         return namespace
 
-    async def get(self, namespace: str, key: str) -> Optional[dict[str, Any]]:
+    async def get(self, namespace: str, key: str) -> dict[str, Any] | None:
         client = self._require_client()
         payload = await client.get(self._cache_key(namespace, key))
         if payload is None:
@@ -162,7 +162,7 @@ class ResilientCacheBackend:
     async def get_namespace(self) -> str:
         return await self.active.get_namespace()
 
-    async def get(self, namespace: str, key: str) -> Optional[dict[str, Any]]:
+    async def get(self, namespace: str, key: str) -> dict[str, Any] | None:
         return await self.active.get(namespace, key)
 
     async def set(self, namespace: str, key: str, value: dict[str, Any], ttl: int) -> None:

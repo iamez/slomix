@@ -15,7 +15,6 @@ Both commands use the bot's StatsCache for improved performance.
 
 import logging
 from datetime import datetime
-from typing import Optional
 
 import discord
 from discord.ext import commands
@@ -24,8 +23,8 @@ from bot.core.checks import is_public_channel
 from bot.core.database_adapter import ensure_player_name_alias
 from bot.core.lazy_pagination_view import LazyPaginationView
 from bot.core.utils import escape_like_pattern_for_query, sanitize_error_message
-from bot.stats import StatsCalculator
 from bot.services.player_formatter import PlayerFormatter
+from bot.stats import StatsCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -446,7 +445,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
             total_pages = max(1, (total_players + 9) // 10)  # 10 per page
 
             # Create page fetcher - reuses existing leaderboard logic
-            async def get_page(page_num: int) -> Optional[discord.Embed]:
+            async def get_page(page_num: int) -> discord.Embed | None:
                 """Fetch a single leaderboard page
 
                 Note: page_num is 0-indexed from LazyPaginationView

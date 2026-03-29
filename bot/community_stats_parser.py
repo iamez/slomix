@@ -9,16 +9,16 @@ import logging
 import os
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import discord
 
-from bot.stats import StatsCalculator
 from bot.core.round_contract import (
+    derive_stopwatch_contract,
     normalize_side_value,
     score_confidence_state,
-    derive_stopwatch_contract,
 )
+from bot.stats import StatsCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ C0RNP0RN3_WEAPONS = {
 }
 
 
-def _parse_side_fields(header_parts: List[str]) -> tuple[int, int, Dict[str, Any]]:
+def _parse_side_fields(header_parts: list[str]) -> tuple[int, int, dict[str, Any]]:
     """
     Parse defender/winner side fields and return diagnostics for fallback reasons.
 
@@ -238,7 +238,7 @@ class C0RNP0RN3StatsParser:
 
         return f"{indicator} {kills}K/{deaths}D ({kd:.2f})"
 
-    def create_stylish_round_embed(self, stats_data: Dict[str, Any]):
+    def create_stylish_round_embed(self, stats_data: dict[str, Any]):
         """Create a compact icon-based Discord embed for round results (matches !last_session style)"""
 
         map_name = stats_data.get('map_name', 'Unknown')
@@ -351,7 +351,7 @@ class C0RNP0RN3StatsParser:
 
         return embed
 
-    def create_detailed_player_stats(self, player: Dict[str, Any]) -> str:
+    def create_detailed_player_stats(self, player: dict[str, Any]) -> str:
         """Create detailed player stats in the beloved format"""
 
         name = player['name']
@@ -398,7 +398,7 @@ class C0RNP0RN3StatsParser:
         stats_text += "-" * 60
         return stats_text
 
-    def parse_stats_file(self, file_path: str) -> Dict[str, Any]:
+    def parse_stats_file(self, file_path: str) -> dict[str, Any]:
         """Parse c0rnp0rn3.lua stats file with Round 2 differential calculation"""
         try:
             # Check if this is a Round 2 file and needs differential calculation
@@ -416,7 +416,7 @@ class C0RNP0RN3StatsParser:
         filename = os.path.basename(file_path)
         return "-round-2.txt" in filename
 
-    def find_corresponding_round_1_file(self, round_2_file_path: str) -> Optional[str]:
+    def find_corresponding_round_1_file(self, round_2_file_path: str) -> str | None:
         """
         Find the corresponding Round 1 file for a Round 2 file
 
@@ -528,7 +528,7 @@ class C0RNP0RN3StatsParser:
 
         return best_r1_file
 
-    def parse_round_2_with_differential(self, round_2_file_path: str) -> Dict[str, Any]:
+    def parse_round_2_with_differential(self, round_2_file_path: str) -> dict[str, Any]:
         """
         Parse Round 2 file with differential calculation to get Round 2-only stats
 
@@ -609,16 +609,16 @@ class C0RNP0RN3StatsParser:
 
     def _detect_player_counter_reset(
         self,
-        r1_player: Dict[str, Any],
-        r2_player: Dict[str, Any],
-    ) -> List[str]:
+        r1_player: dict[str, Any],
+        r2_player: dict[str, Any],
+    ) -> list[str]:
         """
         Detect per-player non-cumulative R2 counters.
 
         In cumulative mode, R2 values should never be lower than R1 for the same player.
         If they drop, assume this player reset/reconnected and use safe R2-raw fallback.
         """
-        dropped_fields: List[str] = []
+        dropped_fields: list[str] = []
 
         r1_obj = r1_player.get('objective_stats', {}) or {}
         r2_obj = r2_player.get('objective_stats', {}) or {}
@@ -655,8 +655,8 @@ class C0RNP0RN3StatsParser:
         return dropped_fields
 
     def calculate_round_2_differential(
-        self, round_1_data: Dict[str, Any], round_2_cumulative_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, round_1_data: dict[str, Any], round_2_cumulative_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """Calculate Round 2-only stats by subtracting Round 1 from Round 2 cumulative"""
 
         # Create player lookup for Round 1 stats (keyed by GUID, not name)
@@ -965,10 +965,10 @@ class C0RNP0RN3StatsParser:
             'differential_calculation': True,  # Flag to indicate this was calculated
         }
 
-    def parse_regular_stats_file(self, file_path: str) -> Dict[str, Any]:
+    def parse_regular_stats_file(self, file_path: str) -> dict[str, Any]:
         """Parse c0rnp0rn3.lua stats file (original implementation)"""
         try:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(file_path, encoding='utf-8', errors='ignore') as f:
                 lines = f.readlines()
 
             if len(lines) < 2:
@@ -1112,7 +1112,7 @@ class C0RNP0RN3StatsParser:
             logger.error(f"Error parsing stats file {file_path}: {e}")
             return self._get_error_result(f"exception: {str(e)}")
 
-    def parse_player_line(self, line: str) -> Optional[Dict[str, Any]]:
+    def parse_player_line(self, line: str) -> dict[str, Any] | None:
         """Parse a single player line using c0rnp0rn3.lua format"""
         try:
             # Split by backslash for basic info: guid\name\rounds\team\stats
@@ -1328,7 +1328,7 @@ class C0RNP0RN3StatsParser:
             logger.warning(f"Error parsing player line: {e}")
             return None
 
-    def calculate_mvp(self, players: List[Dict[str, Any]]) -> Optional[str]:
+    def calculate_mvp(self, players: list[dict[str, Any]]) -> str | None:
         """Calculate MVP based on K/D ratio, efficiency, and damage"""
         if not players:
             return None
@@ -1379,7 +1379,7 @@ class C0RNP0RN3StatsParser:
         except (ValueError, TypeError):
             return "Unknown"
 
-    def _get_error_result(self, error_type: str) -> Dict[str, Any]:
+    def _get_error_result(self, error_type: str) -> dict[str, Any]:
         """Return standardized error result"""
         return {
             'success': False,

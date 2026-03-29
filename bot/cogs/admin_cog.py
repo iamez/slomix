@@ -19,12 +19,11 @@ NOTE: Other commands moved to specialized cogs:
 """
 
 import logging
-from typing import Optional
 
 # import aiosqlite  # Removed - using database adapter
 from discord.ext import commands
 
-from bot.core.checks import is_owner, is_admin, is_moderator
+from bot.core.checks import is_admin, is_moderator, is_owner
 from bot.core.utils import sanitize_error_message
 
 logger = logging.getLogger(__name__)
@@ -101,7 +100,7 @@ class AdminCog(commands.Cog, name="Admin"):
 
     @is_moderator()
     @commands.command(name="weapon_diag")
-    async def weapon_diag(self, ctx, round_id: Optional[int] = None):
+    async def weapon_diag(self, ctx, round_id: int | None = None):
         """🧪 Diagnostic: show weapon stats aggregates for a session."""
         try:
             if round_id is None:

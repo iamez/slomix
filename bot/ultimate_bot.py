@@ -11,7 +11,6 @@ import re
 import sys
 import time
 from datetime import datetime, timedelta
-from typing import Optional
 
 import discord
 from discord.ext import commands, tasks
@@ -20,26 +19,26 @@ from discord.ext import commands, tasks
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import extracted core classes
-from bot.core import StatsCache, SeasonManager, AchievementSystem
-from bot.core.utils import sanitize_error_message, validate_stats_filename
-from bot.core.round_contract import (
-    normalize_end_reason,
-    normalize_side_value,
-    score_confidence_state,
-    derive_stopwatch_contract,
-)
+from bot.automation import FileTracker, SSHHandler
+from bot.config import load_config
+from bot.core import AchievementSystem, SeasonManager, StatsCache
 
 # Import database adapter and config for PostgreSQL migration
 from bot.core.database_adapter import create_adapter
-from bot.config import load_config
-from bot.automation import SSHHandler, FileTracker
-from bot.services.voice_session_service import VoiceSessionService
-from bot.services.round_publisher_service import RoundPublisherService
-from bot.services.timing_debug_service import TimingDebugService
-from bot.services.timing_comparison_service import TimingComparisonService
-from bot.services.webhook_round_metadata_service import WebhookRoundMetadataService
+from bot.core.round_contract import (
+    derive_stopwatch_contract,
+    normalize_end_reason,
+    normalize_side_value,
+    score_confidence_state,
+)
 from bot.core.team_manager import TeamManager
+from bot.core.utils import sanitize_error_message, validate_stats_filename
 from bot.repositories import FileRepository
+from bot.services.round_publisher_service import RoundPublisherService
+from bot.services.timing_comparison_service import TimingComparisonService
+from bot.services.timing_debug_service import TimingDebugService
+from bot.services.voice_session_service import VoiceSessionService
+from bot.services.webhook_round_metadata_service import WebhookRoundMetadataService
 
 # WebSocket client for push-based file notifications (optional)
 try:
@@ -60,12 +59,7 @@ except ImportError:  # nosec B110
 # ==================== COMPREHENSIVE LOGGING SETUP ====================
 
 # Import our custom logging configuration
-from bot.logging_config import (
-    setup_logging,
-    log_command_execution,
-    log_performance_warning,
-    get_logger
-)
+from bot.logging_config import get_logger, log_command_execution, log_performance_warning, setup_logging
 
 # Setup comprehensive logging system
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -529,7 +523,7 @@ class UltimateETLegacyBot(commands.Bot):
         if not os.path.exists(index_path):
             return
         try:
-            with open(index_path, "r", encoding="utf-8") as handle:
+            with open(index_path, encoding="utf-8") as handle:
                 for line in handle:
                     filename = line.strip()
                     if filename:
@@ -775,7 +769,7 @@ class UltimateETLegacyBot(commands.Bot):
 
         # 🤖 AUTOMATION: Initialize automation services
         try:
-            from bot.services.automation import SSHMonitor, HealthMonitor, MetricsLogger, DatabaseMaintenance
+            from bot.services.automation import DatabaseMaintenance, HealthMonitor, MetricsLogger, SSHMonitor
 
             # Get configuration from already-parsed channel config
             admin_channel_id = self.admin_channel_id
@@ -805,7 +799,7 @@ class UltimateETLegacyBot(commands.Bot):
             await self.metrics.initialize_metrics_db()
             self.ssh_monitor = SSHMonitor(self)
             self.health_monitor = HealthMonitor(self, admin_channel_id, self.metrics)
-            backup_path: Optional[str] = None
+            backup_path: str | None = None
             if db_type in ("sqlite", "sqlite3"):
                 backup_candidate = self.db_path or self.config.sqlite_db_path
                 if backup_candidate and os.path.exists(backup_candidate):
@@ -991,8 +985,9 @@ class UltimateETLegacyBot(commands.Bot):
         Returns:
             List of filenames in remote directory
         """
-        import paramiko
         import shlex
+
+        import paramiko
 
         def _list_files_sync():
             ssh = None
@@ -1067,8 +1062,9 @@ class UltimateETLegacyBot(commands.Bot):
             # This ensures proper transaction handling and constraint checks
             db_type = str(getattr(self.config, "database_type", "")).strip().lower()
             if db_type in {"postgres", "postgresql"}:
-                from postgresql_database_manager import PostgreSQLDatabaseManager
                 from pathlib import Path
+
+                from postgresql_database_manager import PostgreSQLDatabaseManager
 
                 # Create database manager instance and share the bot's existing pool
                 db_manager = PostgreSQLDatabaseManager()
@@ -1217,6 +1213,7 @@ class UltimateETLegacyBot(commands.Bot):
         """
         try:
             from datetime import datetime
+
             from bot.core.round_linker import resolve_round_id_with_reason
 
             map_name = metadata.get('map_name') or metadata.get('map')
@@ -3943,7 +3940,7 @@ class UltimateETLegacyBot(commands.Bot):
         Process a gametimes JSON fallback file (Lua webhook payload stored locally).
         """
         try:
-            with open(local_path, "r", encoding="utf-8") as handle:
+            with open(local_path, encoding="utf-8") as handle:
                 gametime_data = json.load(handle)
         except Exception as e:
             webhook_logger.error(f"❌ Failed to read gametime file {filename}: {e}")

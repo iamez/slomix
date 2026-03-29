@@ -5,13 +5,16 @@
 
 from datetime import datetime
 
+from bot.core.round_linker import resolve_round_id_with_reason  # noqa: F401 (monkeypatched in tests)
 from scripts.archive.backfill_gametimes import (
     _build_round_metadata_from_map as _build_round_metadata_from_map_archive,
+)
+from scripts.archive.backfill_gametimes import (
     _fields_to_metadata_map,
     _has_round_id,
     _parse_lua_version_from_footer,
 )
-from bot.core.round_linker import resolve_round_id_with_reason  # noqa: F401 (monkeypatched in tests)
+
 
 def _build_round_metadata_from_map(metadata: dict, footer_text=None) -> dict:
     """Wrapper around the archive version that normalizes round 0 → 2."""

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger('bot.services.round_linkage_anomaly')
 
@@ -47,7 +47,7 @@ def _row_get(row: Any, index: int, key: str, default: Any = None) -> Any:
         return default
 
 
-def _normalize_thresholds(thresholds: Dict[str, Any] | None) -> Dict[str, Any]:
+def _normalize_thresholds(thresholds: dict[str, Any] | None) -> dict[str, Any]:
     merged = dict(DEFAULT_THRESHOLDS)
     if thresholds:
         for key, value in thresholds.items():
@@ -67,7 +67,7 @@ def _normalize_thresholds(thresholds: Dict[str, Any] | None) -> Dict[str, Any]:
     return merged
 
 
-def _build_breach(metric: str, value: Any, threshold: Any) -> Dict[str, Any]:
+def _build_breach(metric: str, value: Any, threshold: Any) -> dict[str, Any]:
     return {
         "metric": metric,
         "value": value,
@@ -79,13 +79,13 @@ async def assess_round_linkage_anomalies(
     db,
     *,
     sample_limit: int = 20,
-    thresholds: Dict[str, Any] | None = None,
-) -> Dict[str, Any]:
+    thresholds: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     sample_limit = max(1, min(int(sample_limit or 20), 200))
     limits = _normalize_thresholds(thresholds)
     logger.debug("Anomaly detection started (sample_limit=%d)", sample_limit)
 
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "status": "ok",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "thresholds": limits,

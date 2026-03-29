@@ -10,10 +10,9 @@ Predicts match outcomes based on:
 Phase 3: Competitive Analytics
 """
 
-import logging
 import json
+import logging
 import os
-from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -52,10 +51,10 @@ class PredictionEngine:
 
     async def predict_match(
         self,
-        team_a_guids: List[str],
-        team_b_guids: List[str],
-        map_name: Optional[str] = None
-    ) -> Dict:
+        team_a_guids: list[str],
+        team_b_guids: list[str],
+        map_name: str | None = None
+    ) -> dict:
         """
         Generate match prediction with confidence scoring.
 
@@ -130,11 +129,11 @@ class PredictionEngine:
 
     async def store_prediction(
         self,
-        prediction: Dict,
-        split_data: Dict,
+        prediction: dict,
+        split_data: dict,
         session_date: str,
-        discord_channel_id: Optional[int] = None,
-        discord_message_id: Optional[int] = None
+        discord_channel_id: int | None = None,
+        discord_message_id: int | None = None
     ) -> int:
         """
         Store prediction in database for accuracy tracking.
@@ -344,9 +343,9 @@ class PredictionEngine:
 
     async def _analyze_head_to_head(
         self,
-        team_a_guids: List[str],
-        team_b_guids: List[str]
-    ) -> Dict:
+        team_a_guids: list[str],
+        team_b_guids: list[str]
+    ) -> dict:
         """
         Analyze historical head-to-head matchups between these lineups.
 
@@ -380,7 +379,7 @@ class PredictionEngine:
             use_results_lookup = os.getenv(
                 "ENABLE_H2H_RESULTS_LOOKUP", "false"
             ).lower() == "true"
-            results_cache: Dict[str, Optional[Dict]] = {}
+            results_cache: dict[str, dict | None] = {}
 
             # Find sessions with significant overlap
             # Group by session_date to match teams
@@ -475,8 +474,8 @@ class PredictionEngine:
         session_date: str,
         team_a_set: set,
         team_b_set: set,
-        cache: Dict[str, Optional[str]],
-    ) -> Optional[str]:
+        cache: dict[str, str | None],
+    ) -> str | None:
         """
         Resolve winner for a session_date using session_results (if available).
 
@@ -537,16 +536,16 @@ class PredictionEngine:
 
     async def _analyze_recent_form(
         self,
-        team_a_guids: List[str],
-        team_b_guids: List[str]
-    ) -> Dict:
+        team_a_guids: list[str],
+        team_b_guids: list[str]
+    ) -> dict:
         """
         Analyze recent form using average DPM over last 30 days.
 
         Returns score: >0.5 = Team A has better recent form
         """
         try:
-            async def _team_avg_dpm(guids: List[str]) -> float:
+            async def _team_avg_dpm(guids: list[str]) -> float:
                 if not guids:
                     return 0.0
                 placeholders = ','.join([f'${i+1}' for i in range(len(guids))])
@@ -601,10 +600,10 @@ class PredictionEngine:
 
     async def _analyze_map_performance(
         self,
-        team_a_guids: List[str],
-        team_b_guids: List[str],
-        map_name: Optional[str]
-    ) -> Dict:
+        team_a_guids: list[str],
+        team_b_guids: list[str],
+        map_name: str | None
+    ) -> dict:
         """
         Analyze map-specific DPM performance.
 
@@ -618,7 +617,7 @@ class PredictionEngine:
             }
 
         try:
-            async def _team_map_dpm(guids: List[str]) -> float:
+            async def _team_map_dpm(guids: list[str]) -> float:
                 if not guids:
                     return 0.0
                 placeholders = ','.join([f'${i+1}' for i in range(len(guids))])
@@ -667,9 +666,9 @@ class PredictionEngine:
 
     async def _analyze_substitution_impact(
         self,
-        team_a_guids: List[str],
-        team_b_guids: List[str]
-    ) -> Dict:
+        team_a_guids: list[str],
+        team_b_guids: list[str]
+    ) -> dict:
         """
         Analyze impact of roster changes compared to typical lineups.
 
@@ -687,10 +686,10 @@ class PredictionEngine:
 
     def _calculate_confidence(
         self,
-        h2h: Dict,
-        form: Dict,
-        map_perf: Dict,
-        subs: Dict
+        h2h: dict,
+        form: dict,
+        map_perf: dict,
+        subs: dict
     ) -> float:
         """
         Calculate overall prediction confidence (0-1).
@@ -721,10 +720,10 @@ class PredictionEngine:
 
     def _generate_key_insight(
         self,
-        h2h: Dict,
-        form: Dict,
-        map_perf: Dict,
-        subs: Dict
+        h2h: dict,
+        form: dict,
+        map_perf: dict,
+        subs: dict
     ) -> str:
         """Generate the most important insight for display."""
         insights = []

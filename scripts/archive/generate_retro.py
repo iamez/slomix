@@ -1,20 +1,23 @@
-import sys
 import os
+import sys
 
 # Use Agg backend for headless image generation
 import matplotlib
+
 matplotlib.use("Agg")
 
 # Ensure project root is on sys.path so `import bot` works even if Python
 # is executed from elsewhere or in a different environment.
 import pathlib
+
 ROOT = str(pathlib.Path(__file__).resolve().parents[1])
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+import logging
+
 from bot.retro_viz import create_round_visualization
 
-import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 

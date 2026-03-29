@@ -11,8 +11,8 @@ Safety:
   - Only processes files that have no existing endstats for the correct round
   - Resolves player GUIDs from player_aliases
 """
-import asyncio
 import argparse
+import asyncio
 import logging
 import os
 import sys

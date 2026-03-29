@@ -14,11 +14,10 @@ Usage:
 from __future__ import annotations
 
 import glob
+import logging
 import os
 import sys
-from typing import Dict, Optional, Tuple
 
-import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 
-def _find_round_pair(search_dirs) -> Optional[Tuple[str, str]]:
+def _find_round_pair(search_dirs) -> tuple[str, str] | None:
     files = []
     for d in search_dirs:
         pattern = os.path.join(d, "*-round-*.txt")
@@ -40,7 +39,7 @@ def _find_round_pair(search_dirs) -> Optional[Tuple[str, str]]:
             files.append(path)
 
     # Group by base (everything before "-round-")
-    groups: Dict[str, Dict[str, str]] = {}
+    groups: dict[str, dict[str, str]] = {}
     for path in files:
         base, tail = path.rsplit("-round-", 1)
         round_str = tail.split(".", 1)[0]
@@ -57,7 +56,7 @@ def _find_round_pair(search_dirs) -> Optional[Tuple[str, str]]:
     return groups[best_base]["1"], groups[best_base]["2"]
 
 
-def _parse_stats_file(path: str) -> Dict[str, object]:
+def _parse_stats_file(path: str) -> dict[str, object]:
     # Try primary parser first
     try:
         from bot.community_stats_parser import C0RNP0RN3StatsParser
@@ -108,7 +107,7 @@ def _time_to_seconds(time_str: str) -> int:
         return 0
 
 
-def _run_scoring(round1: Dict[str, object], round2: Dict[str, object]) -> None:
+def _run_scoring(round1: dict[str, object], round2: dict[str, object]) -> None:
     from bot.services.stopwatch_scoring_service import StopwatchScoringService
 
     scorer = StopwatchScoringService(db_adapter=None)

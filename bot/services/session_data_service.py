@@ -12,7 +12,6 @@ import json
 import logging
 from collections import defaultdict
 from itertools import combinations
-from typing import Dict, List, Optional, Tuple
 
 try:
     from tools.stopwatch_scoring import StopwatchScoring
@@ -36,7 +35,7 @@ class SessionDataService:
         self.db_adapter = db_adapter
         self.db_path = db_path
 
-    async def get_latest_session_date(self) -> Optional[str]:
+    async def get_latest_session_date(self) -> str | None:
         """
         Get the most recent gaming session date from database.
 
@@ -63,7 +62,7 @@ class SessionDataService:
 
     async def fetch_session_data(
         self, latest_date: str
-    ) -> Tuple[Optional[List], Optional[List], Optional[str], int]:
+    ) -> tuple[list | None, list | None, str | None, int]:
         """
         Fetch session data for the MOST RECENT gaming session.
 
@@ -133,7 +132,7 @@ class SessionDataService:
 
     async def fetch_session_data_by_date(
         self, target_date: str
-    ) -> Tuple[Optional[List], Optional[List], Optional[str], int]:
+    ) -> tuple[list | None, list | None, str | None, int]:
         """
         Fetch session data for a specific date.
 
@@ -207,7 +206,7 @@ class SessionDataService:
 
         return sessions, session_ids, session_ids_str, player_count
 
-    async def get_hardcoded_teams(self, session_ids: List[int]) -> Optional[Dict]:
+    async def get_hardcoded_teams(self, session_ids: list[int]) -> dict | None:
         """
         Get hardcoded team assignments from session_teams table
 
@@ -237,7 +236,7 @@ class SessionDataService:
             gaming_session_ids = [row[0] for row in gsid_result if row and row[0] is not None]
 
             rows = []
-            dates: List[str] = []
+            dates: list[str] = []
             if gaming_session_ids:
                 gsid_placeholders = ",".join("?" * len(gaming_session_ids))
                 rows = await self.db_adapter.fetch_all(
@@ -331,8 +330,8 @@ class SessionDataService:
             return None
 
     async def calculate_team_scores(
-        self, session_ids: List[int]
-    ) -> Tuple[str, str, int, int, Optional[Dict]]:
+        self, session_ids: list[int]
+    ) -> tuple[str, str, int, int, dict | None]:
         """
         Calculate Stopwatch team scores using StopwatchScoring
 
@@ -354,7 +353,7 @@ class SessionDataService:
         if scoring_result:
             # Get team names (exclude 'maps' and 'total_maps' keys)
             team_names = [
-                k for k in scoring_result.keys() if k not in ["maps", "total_maps"]
+                k for k in scoring_result if k not in ["maps", "total_maps"]
             ]
             if len(team_names) >= 2:
                 team_1_name = team_names[0]
@@ -372,7 +371,7 @@ class SessionDataService:
         return "Team 1", "Team 2", 0, 0, None
 
     async def build_team_mappings(
-        self, session_ids: List, session_ids_str: str, hardcoded_teams: Optional[Dict]
+        self, session_ids: list, session_ids_str: str, hardcoded_teams: dict | None
     ):
         """
         Build team mappings from hardcoded teams or auto-detect
@@ -543,9 +542,9 @@ class SessionDataService:
 
     async def get_team_mvps(
         self,
-        session_ids: List,
+        session_ids: list,
         session_ids_str: str,
-        hardcoded_teams: Optional[Dict],
+        hardcoded_teams: dict | None,
         team_1_name: str,
         team_2_name: str,
     ):
