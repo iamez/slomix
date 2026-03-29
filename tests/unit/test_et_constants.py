@@ -1,13 +1,11 @@
 """Tests for website/backend/utils/et_constants.py."""
 
-import pytest
 
 from website.backend.utils.et_constants import (
     KILL_MOD_NAMES,
     strip_et_colors,
     weapon_name,
 )
-
 
 # --- strip_et_colors ---
 

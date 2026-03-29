@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from greatshot.scanner.api import _extract_player_stats
 from greatshot.contracts.types import DemoEvent
+from greatshot.scanner.api import _extract_player_stats
 
 
 def test_extract_player_stats_supports_aliases_and_tpm_fields():

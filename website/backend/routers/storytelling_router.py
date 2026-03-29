@@ -25,8 +25,8 @@ from website.backend.services.storytelling_service import (
     PUSH_QUALITY_THRESHOLD,
     SPAWN_TIMING_BONUS,
     StorytellingService,
-    _strip_et_colors,
 )
+from website.backend.utils.et_constants import strip_et_colors
 
 router = APIRouter()
 logger = get_app_logger("api.storytelling")
@@ -117,7 +117,7 @@ async def get_kill_impact_details(
             "round_start_unix": r[2],
             "map_name": r[3],
             "victim_guid": r[4],
-            "victim_name": _strip_et_colors(r[5] or r[4][:8]),
+            "victim_name": strip_et_colors(r[5] or r[4][:8]),
             "base_impact": float(r[6]),
             "carrier_multiplier": float(r[7]),
             "push_multiplier": float(r[8]),
@@ -145,7 +145,7 @@ async def get_kill_impact_details(
             "SELECT MAX(killer_name) FROM storytelling_kill_impact WHERE session_date = $1 AND killer_guid = $2",
             (sd, player_guid)
         )
-        player_name = _strip_et_colors((name_row[0] if name_row else "") or player_guid[:8])
+        player_name = strip_et_colors((name_row[0] if name_row else "") or player_guid[:8])
 
     return {
         "status": "ok",

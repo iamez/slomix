@@ -4,7 +4,6 @@ import json
 from types import SimpleNamespace
 
 import pytest
-
 from fastapi.dependencies import utils as fastapi_dep_utils
 
 # Greatshot router registers upload endpoints at import time, which triggers
