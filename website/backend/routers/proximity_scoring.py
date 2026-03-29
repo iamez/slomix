@@ -589,9 +589,9 @@ async def get_proximity_revives(
             params.append(player_guid.strip())
             clauses.append(f"medic_guid = ${len(params)}")
 
-        # Apply range_days filter
+        # Apply range_days filter (proximity_revive has created_at, not session_date)
         params.append(range_days)
-        clauses.append(f"session_date >= CURRENT_DATE - ${len(params)} * INTERVAL '1 day'")
+        clauses.append(f"created_at >= CURRENT_DATE - ${len(params)} * INTERVAL '1 day'")
 
         where_sql = "WHERE " + " AND ".join(clauses)
         medic_filter = "medic_guid IS NOT NULL AND medic_guid != ''"
