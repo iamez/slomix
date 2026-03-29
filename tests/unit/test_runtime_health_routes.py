@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from website.backend.routers import players_router, records_awards, records_router
+from website.backend.routers import players_router, records_awards
 
 
 def _normalize_sql(query: str) -> str:
