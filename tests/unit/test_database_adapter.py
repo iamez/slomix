@@ -10,6 +10,7 @@ Tests for PostgreSQL database operations including:
 """
 
 import pytest
+
 from bot.core.database_adapter import PostgreSQLAdapter
 
 

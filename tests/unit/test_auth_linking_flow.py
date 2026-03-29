@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
 import httpx
+import pytest
 from fastapi import FastAPI, Request
 from starlette.middleware.sessions import SessionMiddleware
 

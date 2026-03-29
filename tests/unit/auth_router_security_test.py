@@ -1,7 +1,7 @@
 from urllib.parse import parse_qs, urlsplit
 
-import pytest
 import httpx
+import pytest
 from fastapi import FastAPI, Request
 
 pytest.importorskip("itsdangerous")

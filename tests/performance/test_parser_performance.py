@@ -6,12 +6,12 @@ within acceptable time bounds. Uses real fixture files to
 measure parsing speed.
 """
 
-import pytest
 import time
 from pathlib import Path
 
-from bot.community_stats_parser import C0RNP0RN3StatsParser
+import pytest
 
+from bot.community_stats_parser import C0RNP0RN3StatsParser
 
 FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "sample_stats_files"
 LOCAL_STATS_DIR = Path(__file__).parent.parent.parent / "bot" / "local_stats"

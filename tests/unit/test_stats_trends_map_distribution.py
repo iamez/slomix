@@ -37,7 +37,7 @@ async def test_stats_trends_schema_and_map_distribution_normalization():
 
     payload = await api_router.get_stats_trends(days=14, db=db)
 
-    assert set(["dates", "rounds", "active_players", "kills", "map_distribution"]).issubset(payload.keys())
+    assert {"dates", "rounds", "active_players", "kills", "map_distribution"}.issubset(payload.keys())
     assert isinstance(payload["dates"], list)
     assert len(payload["dates"]) == 15
     assert payload["map_distribution"] == {"etl_supply": 6, "etl_oasis": 1}

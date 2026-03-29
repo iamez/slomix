@@ -1,10 +1,8 @@
 """Tests for pure functions in rivalries_service.py."""
 
-import pytest
 
-from website.backend.services.rivalries_service import _classify, MIN_ENCOUNTERS
+from website.backend.services.rivalries_service import MIN_ENCOUNTERS, _classify
 from website.backend.utils.et_constants import strip_et_colors, weapon_name
-
 
 # --- _classify ---
 

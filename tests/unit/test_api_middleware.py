@@ -1,9 +1,9 @@
-import pytest
-
 import time
 from collections import deque
-from fastapi import FastAPI
+
 import httpx
+import pytest
+from fastapi import FastAPI
 from starlette.requests import Request
 from starlette.responses import Response, StreamingResponse
 
