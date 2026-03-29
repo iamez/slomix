@@ -1332,7 +1332,11 @@ class StorytellingService:
                    SUM(CASE WHEN is_carrier_kill THEN 1 ELSE 0 END) as carrier_kills,
                    SUM(CASE WHEN is_during_push THEN 1 ELSE 0 END) as push_kills,
                    SUM(CASE WHEN is_crossfire THEN 1 ELSE 0 END) as crossfire_kills,
-                   ROUND(AVG(total_impact)::numeric, 2) as avg_impact
+                   ROUND(AVG(total_impact)::numeric, 2) as avg_impact,
+                   SUM(CASE WHEN COALESCE(health_multiplier, 1) > 1 THEN 1 ELSE 0 END) as clutch_kills,
+                   SUM(CASE WHEN COALESCE(alive_multiplier, 1) >= 2 THEN 1 ELSE 0 END) as solo_clutch_kills,
+                   SUM(CASE WHEN COALESCE(alive_multiplier, 1) > 1 AND COALESCE(alive_multiplier, 1) < 2 THEN 1 ELSE 0 END) as outnumbered_kills,
+                   SUM(CASE WHEN COALESCE(reinf_multiplier, 1) > 1 THEN 1 ELSE 0 END) as spawn_denial_kills
             FROM storytelling_kill_impact
             WHERE session_date = $1
             GROUP BY killer_guid
@@ -1346,6 +1350,10 @@ class StorytellingService:
                 "total_kis": float(r[2] or 0), "kills": int(r[3] or 0),
                 "carrier_kills": int(r[4] or 0), "push_kills": int(r[5] or 0),
                 "crossfire_kills": int(r[6] or 0), "avg_impact": float(r[7] or 0),
+                "clutch_kills": int(r[8] or 0),
+                "solo_clutch_kills": int(r[9] or 0),
+                "outnumbered_kills": int(r[10] or 0),
+                "spawn_denial_kills": int(r[11] or 0),
             }
             for r in (rows or [])
         ]

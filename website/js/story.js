@@ -412,6 +412,22 @@ function renderPlayerCards(players) {
         if (p.time_dead_pct != null) infoRow.appendChild(_el('span', null, `Dead: ${(p.time_dead_pct * 100).toFixed(0)}%`));
         card.appendChild(infoRow);
 
+        // Oksii multiplier badges
+        const oksiiRow = _el('div', 'flex flex-wrap gap-1 mt-2');
+        const badge = (label, count, cls) => {
+            if (!count) return null;
+            return _el('span', `inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold ${cls}`, `${label} ${count}`);
+        };
+        const clutchBadge = badge('\u2764\uFE0F Clutch', p.clutch_kills, 'bg-red-500/20 text-red-400 border border-red-500/30');
+        const soloBadge = badge('\u{1F451} Solo', p.solo_clutch_kills, 'bg-amber-500/20 text-amber-400 border border-amber-500/30');
+        const outnumBadge = badge('\u{1F4AA} Outnum', p.outnumbered_kills, 'bg-purple-500/20 text-purple-400 border border-purple-500/30');
+        const denyBadge = badge('\u23F1 Deny', p.spawn_denial_kills, 'bg-teal-500/20 text-teal-400 border border-teal-500/30');
+        if (clutchBadge) oksiiRow.appendChild(clutchBadge);
+        if (soloBadge) oksiiRow.appendChild(soloBadge);
+        if (outnumBadge) oksiiRow.appendChild(outnumBadge);
+        if (denyBadge) oksiiRow.appendChild(denyBadge);
+        if (oksiiRow.children.length > 0) card.appendChild(oksiiRow);
+
         // Footer
         card.appendChild(_el('div', 'flex justify-between mt-1 text-[9px] text-slate-600',
             _el('span', null, `Avg impact: ${(p.avg_impact ?? 0).toFixed(2)}`),
