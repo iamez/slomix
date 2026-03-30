@@ -88,7 +88,7 @@ class SessionManagementCog(commands.Cog, name="Session Management"):
                 await ctx.send(
                     f"❌ Error starting session: {sanitize_error_message(e)}")
             except Exception:  # nosec B110
-                pass  # Discord send failed, already logged above
+                logger.warning("Failed to send error message to Discord (original error already logged)", exc_info=True)
 
     @is_admin()
     @commands.command(name="session_end")

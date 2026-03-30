@@ -50,7 +50,7 @@ class StatsCog(commands.Cog, name="Stats"):
             try:
                 await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
             except Exception:  # nosec B110
-                pass  # Alias is optional
+                logger.debug("Failed to set up player_name alias (optional)", exc_info=True)
             await self.bot.db_adapter.execute("SELECT 1")
 
             db_latency = (time.time() - start_time) * 1000
@@ -115,7 +115,7 @@ class StatsCog(commands.Cog, name="Stats"):
             try:
                 await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
             except Exception:  # nosec B110
-                pass  # Alias is optional
+                logger.debug("Failed to set up player_name alias (optional)", exc_info=True)
 
             # Handle @mention
             if ctx.message.mentions:
@@ -335,7 +335,7 @@ class StatsCog(commands.Cog, name="Stats"):
             try:
                 await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
             except Exception:  # nosec B110
-                pass  # Alias is optional
+                logger.debug("Failed to set up player_name alias (optional)", exc_info=True)
 
             # Helper: get stats when we already have a GUID
             async def get_player_stats_by_guid(player_guid, display_name):
@@ -698,7 +698,7 @@ class StatsCog(commands.Cog, name="Stats"):
             try:
                 output_path.unlink()
             except Exception:  # nosec B110
-                pass  # Cleanup failure is non-critical
+                logger.debug("Failed to clean up comparison chart file", exc_info=True)
 
             logger.info(
                 f"📊 Comparison generated: {p1_stats['name']} vs {p2_stats['name']}"
@@ -755,7 +755,7 @@ class StatsCog(commands.Cog, name="Stats"):
             try:
                 await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
             except Exception:  # nosec B110
-                pass  # Alias is optional
+                logger.debug("Failed to set up player_name alias (optional)", exc_info=True)
             season_filter = self.season_manager.get_season_sql_filter()
 
             # Season kills leader

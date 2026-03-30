@@ -17,7 +17,7 @@ import logging
 import os
 import re
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import discord
@@ -392,13 +392,13 @@ class ProximityCog(commands.Cog, name="Proximity"):
                 round_start_unix = row[2] if isinstance(row, (list, tuple)) else row.get('round_start_unix') or row['round_start_unix']
                 session_date = row[3] if isinstance(row, (list, tuple)) else row.get('session_date') or row['session_date']
 
-                # Build target_dt from unix timestamp if available
+                # Build target_dt from unix timestamp if available.
+                # Use fromtimestamp() WITHOUT tz to get LOCAL naive datetime,
+                # matching the round_linker's candidate convention.
                 target_dt = None
                 if round_start_unix:
                     try:
-                        target_dt = datetime.fromtimestamp(
-                            int(round_start_unix), tz=timezone.utc
-                        ).replace(tzinfo=None)
+                        target_dt = datetime.fromtimestamp(int(round_start_unix))
                     except (ValueError, TypeError, OSError):
                         pass  # Invalid timestamp format; fall back to date-based resolution
 

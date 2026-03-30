@@ -62,6 +62,14 @@ DISTANCE_LONG_RANGE = 1.2           # Kill at >800u (sniper pick)
 DISTANCE_NORMAL = 1.0               # 100-800u
 DISTANCE_MELEE = 0.9                # <100u (knife/close)
 
+# Oksii adoption multipliers
+LOW_HEALTH_THRESHOLD = 30           # HP threshold for clutch kill
+LOW_HEALTH_MULTIPLIER = 1.3         # Kill with <30 HP = clutch
+SOLO_CLUTCH_THRESHOLD = 3           # Enemies alive for solo clutch
+SOLO_CLUTCH_MULTIPLIER = 2.0        # 1v3+ kill
+OUTNUMBERED_MULTIPLIER = 1.5        # Kill while outnumbered
+REINF_PENALTY_THRESHOLD = 0.75      # victim_reinf > 75% of spawn interval = bonus
+
 # ── Team Synergy Score constants ────────────────────────────────
 SYNERGY_WEIGHTS = {
     'crossfire': 0.25,
@@ -140,12 +148,14 @@ class StorytellingService:
         crossfires = await self._load_crossfires(sd)
         spawn_timings = await self._load_spawn_timings(sd)
         victim_classes = await self._load_victim_classes(sd)
+        combat_positions = await self._load_combat_positions(sd)
 
         # 3. Score each kill
         scored = []
         for kill in kills:
             impact = self._score_kill(kill, carrier_kills, carrier_returns,
-                                      pushes, crossfires, spawn_timings, victim_classes)
+                                      pushes, crossfires, spawn_timings, victim_classes,
+                                      combat_positions)
             scored.append(impact)
 
         # 4. Store in DB (delete old, batch insert new)
@@ -160,6 +170,8 @@ class StorytellingService:
                     s['map_name'], s['killer_guid'], s['killer_name'], s['victim_guid'], s['victim_name'],
                     s['base_impact'], s['carrier_multiplier'], s['push_multiplier'], s['crossfire_multiplier'],
                     s['spawn_multiplier'], s['outcome_multiplier'], s['class_multiplier'], s['distance_multiplier'],
+                    s['health_multiplier'], s['alive_multiplier'], s['reinf_multiplier'],
+                    s['killer_health'], s['axis_alive'], s['allies_alive'], s['victim_reinf'],
                     s['total_impact'], s['is_carrier_kill'], s['is_during_push'], s['is_crossfire'],
                     s['is_objective_area'], s['kill_time_ms'],
                 )
@@ -171,16 +183,18 @@ class StorytellingService:
                  killer_guid, killer_name, victim_guid, victim_name,
                  base_impact, carrier_multiplier, push_multiplier, crossfire_multiplier,
                  spawn_multiplier, outcome_multiplier, class_multiplier, distance_multiplier,
+                 health_multiplier, alive_multiplier, reinf_multiplier,
+                 killer_health, axis_alive, allies_alive, victim_reinf,
                  total_impact, is_carrier_kill, is_during_push, is_crossfire, is_objective_area,
                  kill_time_ms)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
             """, batch)
 
         logger.info("KIS computed for %s: %d kills scored", sd, len(scored))
         return {"status": "computed", "kills_scored": len(scored)}
 
     def _score_kill(self, kill, carrier_kills, carrier_returns, pushes, crossfires,
-                    spawn_timings, victim_classes):
+                    spawn_timings, victim_classes, combat_positions=None):
         """Score a single kill with all context multipliers."""
         ko_id = kill[0]
         session_date = kill[1]
@@ -243,11 +257,11 @@ class StorytellingService:
         # Spawn timing bonus (1.0 + score, range 1.0-2.0)
         spawn_mult = 1.0
         if round_key in spawn_timings:
-            best_score = 0.0
-            for st_guid, st_time, st_score in spawn_timings[round_key]:
-                if st_guid == killer_guid and abs(st_time - kill_time) <= 2000:
-                    best_score = st_score
-                    break
+            best_score = max(
+                (st_data[2] for st_data in spawn_timings[round_key]
+                 if st_data[0] == killer_guid and abs(st_data[1] - kill_time) <= 2000),
+                default=0.0,
+            )
             spawn_mult = 1.0 + best_score
 
         # Kill outcome multiplier
@@ -264,9 +278,62 @@ class StorytellingService:
         # TODO: Implement when per-kill distance data available
         dist_mult = DISTANCE_NORMAL
 
+        # Oksii adoption: health multiplier (clutch kill with low HP)
+        health_mult = 1.0
+        # Oksii adoption: alive count multiplier (outnumbered/solo clutch)
+        alive_mult = 1.0
+        # Oksii adoption: reinforcement timing multiplier
+        reinf_mult = 1.0
+
+        cp = None
+        cp_key = (killer_guid, round_start_unix, round_number, kill_time)
+        if combat_positions:
+            cp = combat_positions.get(cp_key)
+            if cp:
+                # Health multiplier
+                if cp['killer_health'] > 0 and cp['killer_health'] < LOW_HEALTH_THRESHOLD:
+                    health_mult = LOW_HEALTH_MULTIPLIER
+
+                # Alive multiplier — dynamic threshold: max(1, team_size // 3)
+                atk_team = cp['attacker_team'].upper()
+                if atk_team in ('AXIS', '1'):
+                    my_alive = cp['axis_alive']
+                    enemy_alive = cp['allies_alive']
+                else:
+                    my_alive = cp['allies_alive']
+                    enemy_alive = cp['axis_alive']
+
+                team_size = my_alive + enemy_alive  # approximate total players
+                outnumbered_threshold = max(1, team_size // 3) if team_size > 0 else 2
+
+                if my_alive == 1 and enemy_alive >= SOLO_CLUTCH_THRESHOLD:
+                    alive_mult = SOLO_CLUTCH_MULTIPLIER
+                elif my_alive > 0 and (enemy_alive - my_alive) >= outnumbered_threshold:
+                    alive_mult = OUTNUMBERED_MULTIPLIER
+
+        # Reinforcement timing multiplier (Oksii adoption)
+        # Only apply if victim has a long wait until respawn relative to spawn interval
+        victim_reinf_stored = 0.0
+        if round_key in spawn_timings:
+            for st_data in spawn_timings[round_key]:
+                if st_data[0] == killer_guid and abs(st_data[1] - kill_time) <= 2000:
+                    # Check if we have reinf data (extended tuple)
+                    if len(st_data) > 4:
+                        victim_reinf_val = st_data[4]  # victim_reinf seconds
+                        victim_reinf_stored = float(victim_reinf_val)
+                        enemy_spawn_interval_val = st_data[3]  # enemy_spawn_interval ms
+                        spawn_interval_s = enemy_spawn_interval_val / 1000.0 if enemy_spawn_interval_val > 0 else 30
+                        if spawn_interval_s > 0 and victim_reinf_val > (spawn_interval_s * REINF_PENALTY_THRESHOLD):
+                            reinf_mult = 1.2
+                    break
+
         # Total impact = product of all multipliers
-        total = (1.0 * carrier_mult * push_mult * cf_mult
-                 * spawn_mult * outcome_mult * class_mult * dist_mult)
+        raw = (1.0 * carrier_mult * push_mult * cf_mult
+               * spawn_mult * outcome_mult * class_mult * dist_mult
+               * health_mult * alive_mult * reinf_mult)
+        # Soft cap: linear compression above 5.0 (25% above threshold)
+        # Preserves ordering while preventing outlier dominance
+        total = raw if raw <= 5.0 else 5.0 + (raw - 5.0) * 0.25
 
         return {
             'kill_outcome_id': ko_id,
@@ -286,6 +353,13 @@ class StorytellingService:
             'outcome_multiplier': outcome_mult,
             'class_multiplier': class_mult,
             'distance_multiplier': dist_mult,
+            'health_multiplier': round(health_mult, 2),
+            'alive_multiplier': round(alive_mult, 2),
+            'reinf_multiplier': round(reinf_mult, 2),
+            'killer_health': cp['killer_health'] if cp else 0,
+            'axis_alive': cp['axis_alive'] if cp else 0,
+            'allies_alive': cp['allies_alive'] if cp else 0,
+            'victim_reinf': victim_reinf_stored,
             'total_impact': round(total, 2),
             'is_carrier_kill': is_carrier,
             'is_during_push': is_push,
@@ -344,14 +418,19 @@ class StorytellingService:
         return result
 
     async def _load_spawn_timings(self, session_date):
-        """Load spawn timings indexed by (round_start_unix, round_number) as (guid, kill_time, score) tuples."""
+        """Load spawn timings indexed by (round_start_unix, round_number).
+
+        Each entry is a tuple of (guid, kill_time, score, enemy_spawn_interval, victim_reinf).
+        """
         rows = await self.db.fetch_all(
-            "SELECT killer_guid, kill_time, spawn_timing_score, round_start_unix, round_number "
+            "SELECT killer_guid, kill_time, spawn_timing_score, round_start_unix, round_number, "
+            "enemy_spawn_interval, victim_reinf "
             "FROM proximity_spawn_timing WHERE session_date = $1", (session_date,))
         result = {}
         for r in (rows or []):
             key = (r[3], r[4])
-            result.setdefault(key, []).append((r[0], r[1], float(r[2] or 0.5)))
+            result.setdefault(key, []).append(
+                (r[0], r[1], float(r[2] or 0.5), r[5] or 0, float(r[6] or 0)))
         return result
 
     async def _load_victim_classes(self, session_date):
@@ -364,6 +443,25 @@ class StorytellingService:
             key = (r[0], r[1], r[2])
             if key not in result:
                 result[key] = r[3] or ''
+        return result
+
+    async def _load_combat_positions(self, sd: date) -> dict:
+        """Load combat position data indexed by (killer_guid, round_start_unix, round_number, kill_time)."""
+        rows = await self.db.fetch_all(
+            "SELECT attacker_guid, round_start_unix, round_number, event_time, "
+            "killer_health, axis_alive, allies_alive, attacker_team "
+            "FROM proximity_combat_position "
+            "WHERE session_date = $1 AND event_type = 'kill'",
+            (sd,))
+        result = {}
+        for r in (rows or []):
+            key = (r[0], r[1], r[2], r[3])  # (killer_guid, round_start_unix, round_number, event_time)
+            result[key] = {
+                'killer_health': r[4] or 0,
+                'axis_alive': r[5] or 0,
+                'allies_alive': r[6] or 0,
+                'attacker_team': r[7] or '',
+            }
         return result
 
     # ── Match Moments Detection ──
@@ -510,21 +608,24 @@ class StorytellingService:
             "SELECT round_start_unix, round_number, pickup_time FROM proximity_carrier_event "
             "WHERE session_date = $1", (sd,))
         for r in (rows or []):
-            result.setdefault((r[0], r[1]), []).append(r[2] or 0)
+            if r[2] and r[2] > 0:
+                result.setdefault((r[0], r[1]), []).append(r[2])
 
         # Objective runs (plants, constructions, defuses)
         rows = await self.db.fetch_all(
             "SELECT round_start_unix, round_number, action_time FROM proximity_objective_run "
             "WHERE session_date = $1", (sd,))
         for r in (rows or []):
-            result.setdefault((r[0], r[1]), []).append(r[2] or 0)
+            if r[2] and r[2] > 0:
+                result.setdefault((r[0], r[1]), []).append(r[2])
 
         # Construction events
         rows = await self.db.fetch_all(
             "SELECT round_start_unix, round_number, event_time FROM proximity_construction_event "
             "WHERE session_date = $1", (sd,))
         for r in (rows or []):
-            result.setdefault((r[0], r[1]), []).append(r[2] or 0)
+            if r[2] and r[2] > 0:
+                result.setdefault((r[0], r[1]), []).append(r[2])
 
         return result
 
@@ -1233,7 +1334,11 @@ class StorytellingService:
                    SUM(CASE WHEN is_carrier_kill THEN 1 ELSE 0 END) as carrier_kills,
                    SUM(CASE WHEN is_during_push THEN 1 ELSE 0 END) as push_kills,
                    SUM(CASE WHEN is_crossfire THEN 1 ELSE 0 END) as crossfire_kills,
-                   ROUND(AVG(total_impact)::numeric, 2) as avg_impact
+                   ROUND(AVG(total_impact)::numeric, 2) as avg_impact,
+                   SUM(CASE WHEN COALESCE(health_multiplier, 1) > 1 THEN 1 ELSE 0 END) as clutch_kills,
+                   SUM(CASE WHEN COALESCE(alive_multiplier, 1) >= 2 THEN 1 ELSE 0 END) as solo_clutch_kills,
+                   SUM(CASE WHEN COALESCE(alive_multiplier, 1) > 1 AND COALESCE(alive_multiplier, 1) < 2 THEN 1 ELSE 0 END) as outnumbered_kills,
+                   SUM(CASE WHEN COALESCE(reinf_multiplier, 1) > 1 THEN 1 ELSE 0 END) as spawn_denial_kills
             FROM storytelling_kill_impact
             WHERE session_date = $1
             GROUP BY killer_guid
@@ -1247,6 +1352,10 @@ class StorytellingService:
                 "total_kis": float(r[2] or 0), "kills": int(r[3] or 0),
                 "carrier_kills": int(r[4] or 0), "push_kills": int(r[5] or 0),
                 "crossfire_kills": int(r[6] or 0), "avg_impact": float(r[7] or 0),
+                "clutch_kills": int(r[8] or 0),
+                "solo_clutch_kills": int(r[9] or 0),
+                "outnumbered_kills": int(r[10] or 0),
+                "spawn_denial_kills": int(r[11] or 0),
             }
             for r in (rows or [])
         ]
@@ -2219,7 +2328,7 @@ class StorytellingService:
         worse_composite = 0.0
         best_axis_name = ""
         best_axis_val = 0.0
-        teams = synergy.get("teams", {})
+        teams = synergy.get("groups", {})
         if teams:
             composites = {t: d.get("composite", 0) for t, d in teams.items()}
             if composites:

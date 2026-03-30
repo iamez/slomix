@@ -286,7 +286,7 @@ class ServerControl(commands.Cog):
                         player_count = len(player_lines)
                         player_info = f"\n**Players:** {player_count} online"
                     except Exception:  # nosec B110
-                        pass  # RCON status check is optional
+                        logger.debug("RCON status check failed (optional)", exc_info=True)
 
                 embed = discord.Embed(
                     title="✅ Server Online",
@@ -577,17 +577,17 @@ class ServerControl(commands.Cog):
                 try:
                     sftp.close()
                 except Exception:  # nosec B110 - best-effort cleanup
-                    pass
+                    logger.debug("Failed to close SFTP connection during cleanup", exc_info=True)
             if ssh:
                 try:
                     ssh.close()
                 except Exception:  # nosec B110 - best-effort cleanup
-                    pass
+                    logger.debug("Failed to close SSH connection during cleanup", exc_info=True)
             if temp_path and os.path.exists(temp_path):
                 try:
                     os.remove(temp_path)
                 except Exception:  # nosec B110 - best-effort cleanup
-                    pass
+                    logger.debug("Failed to remove temp file %s during cleanup", temp_path, exc_info=True)
 
     @commands.command(name='map_change', aliases=['changemap', 'map'])
     @is_admin()

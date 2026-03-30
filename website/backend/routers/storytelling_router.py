@@ -19,10 +19,16 @@ from website.backend.services.storytelling_service import (
     DISTANCE_LONG_RANGE,
     DISTANCE_MELEE,
     DISTANCE_NORMAL,
+    LOW_HEALTH_MULTIPLIER,
+    LOW_HEALTH_THRESHOLD,
     OUTCOME_GIBBED,
     OUTCOME_REVIVED,
     OUTCOME_TAPPED,
+    OUTNUMBERED_MULTIPLIER,
     PUSH_QUALITY_THRESHOLD,
+    REINF_PENALTY_THRESHOLD,
+    SOLO_CLUTCH_MULTIPLIER,
+    SOLO_CLUTCH_THRESHOLD,
     SPAWN_TIMING_BONUS,
     StorytellingService,
 )
@@ -103,7 +109,10 @@ async def get_kill_impact_details(
                base_impact, carrier_multiplier, push_multiplier, crossfire_multiplier,
                spawn_multiplier, outcome_multiplier, class_multiplier, distance_multiplier,
                total_impact, is_carrier_kill, is_during_push, is_crossfire,
-               is_objective_area, kill_time_ms
+               is_objective_area, kill_time_ms,
+               COALESCE(health_multiplier, 1.0), COALESCE(alive_multiplier, 1.0),
+               COALESCE(reinf_multiplier, 1.0), COALESCE(killer_health, 0),
+               COALESCE(axis_alive, 0), COALESCE(allies_alive, 0)
         FROM storytelling_kill_impact
         WHERE session_date = $1 AND killer_guid = $2
         ORDER BY total_impact DESC
@@ -132,6 +141,12 @@ async def get_kill_impact_details(
             "is_crossfire": r[17],
             "is_objective_area": r[18],
             "kill_time_ms": r[19],
+            "health_multiplier": float(r[20]),
+            "alive_multiplier": float(r[21]),
+            "reinf_multiplier": float(r[22]),
+            "killer_health": r[23],
+            "axis_alive": r[24],
+            "allies_alive": r[25],
         })
 
     # Summary stats
@@ -211,7 +226,29 @@ async def get_kis_formula():
             "normal": {"value": DISTANCE_NORMAL, "threshold": "100-800u"},
             "melee": {"value": DISTANCE_MELEE, "threshold": "<100u"},
         },
-        "formula": "total_impact = base(1.0) × carrier × push × crossfire × spawn × outcome × class × distance",
+        "oksii_multipliers": {
+            "health": {
+                "value": LOW_HEALTH_MULTIPLIER,
+                "threshold": f"<{LOW_HEALTH_THRESHOLD} HP",
+                "description": "Clutch kill with low health",
+            },
+            "alive": {
+                "solo_clutch": {"value": SOLO_CLUTCH_MULTIPLIER, "threshold": f"1v{SOLO_CLUTCH_THRESHOLD}+"},
+                "outnumbered": {"value": OUTNUMBERED_MULTIPLIER, "threshold": "dynamic: max(1, team_size//3)"},
+                "description": "Kill while outnumbered or solo clutch",
+            },
+            "reinforcement": {
+                "value": 1.2,
+                "threshold": f"victim_reinf > {REINF_PENALTY_THRESHOLD*100:.0f}% of spawn interval",
+                "description": "Kill denying long respawn time",
+            },
+        },
+        "soft_cap": {
+            "threshold": 5.0,
+            "compression": 0.25,
+            "description": "Above 5.0: total = 5.0 + (raw - 5.0) × 0.25. Max ~8.5",
+        },
+        "formula": "total_impact = soft_cap(base × carrier × push × crossfire × spawn × outcome × class × distance × health × alive × reinf)",
     }
 
 

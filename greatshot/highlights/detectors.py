@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Iterable
 
 from greatshot.config import HIGHLIGHT_DEFAULTS
 from greatshot.contracts.types import Highlight
 
 
-def _build_kill_sequence(segment: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _build_kill_sequence(segment: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Build a structured kill sequence from a list of kill events."""
     return [
         {
@@ -22,7 +22,7 @@ def _build_kill_sequence(segment: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     ]
 
 
-def _build_enriched_meta(segment: List[Dict[str, Any]], base_meta: Dict[str, Any]) -> Dict[str, Any]:
+def _build_enriched_meta(segment: list[dict[str, Any]], base_meta: dict[str, Any]) -> dict[str, Any]:
     """Enrich a highlight meta dict with kill_sequence, victims, weapons, and timing gaps."""
     meta = dict(base_meta)
 
@@ -53,7 +53,7 @@ def _build_enriched_meta(segment: List[Dict[str, Any]], base_meta: Dict[str, Any
     return meta
 
 
-def _kill_events(events: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _kill_events(events: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     kills = []
     for event in events:
         if event.get("type") != "kill":
@@ -69,7 +69,7 @@ def _kill_events(events: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return kills
 
 
-def _event_window_signature(highlight: Highlight) -> Tuple[str, str, int, int]:
+def _event_window_signature(highlight: Highlight) -> tuple[str, str, int, int]:
     return (
         highlight.highlight_type,
         highlight.player,
@@ -78,12 +78,12 @@ def _event_window_signature(highlight: Highlight) -> Tuple[str, str, int, int]:
     )
 
 
-def _detect_multi_kills(kills: List[Dict[str, Any]], cfg: Dict[str, int]) -> List[Highlight]:
-    by_player: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+def _detect_multi_kills(kills: list[dict[str, Any]], cfg: dict[str, int]) -> list[Highlight]:
+    by_player: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for event in kills:
         by_player[event["attacker"]].append(event)
 
-    highlights: List[Highlight] = []
+    highlights: list[Highlight] = []
 
     windows = [
         (cfg["multi_kill_window_ms"], cfg["multi_kill_min"], "multi_kill"),
@@ -126,11 +126,11 @@ def _detect_multi_kills(kills: List[Dict[str, Any]], cfg: Dict[str, int]) -> Lis
     return highlights
 
 
-def _detect_sprees(kills: List[Dict[str, Any]], cfg: Dict[str, int]) -> List[Highlight]:
-    spree_count: Dict[str, int] = defaultdict(int)
-    spree_start: Dict[str, int] = {}
-    spree_events: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-    highlights: List[Highlight] = []
+def _detect_sprees(kills: list[dict[str, Any]], cfg: dict[str, int]) -> list[Highlight]:
+    spree_count: dict[str, int] = defaultdict(int)
+    spree_start: dict[str, int] = {}
+    spree_events: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    highlights: list[Highlight] = []
 
     for event in kills:
         attacker = event["attacker"]
@@ -165,13 +165,13 @@ def _detect_sprees(kills: List[Dict[str, Any]], cfg: Dict[str, int]) -> List[Hig
     return highlights
 
 
-def _detect_quick_headshots(kills: List[Dict[str, Any]], cfg: Dict[str, int]) -> List[Highlight]:
-    by_player: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+def _detect_quick_headshots(kills: list[dict[str, Any]], cfg: dict[str, int]) -> list[Highlight]:
+    by_player: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for event in kills:
         if event.get("hit_region") == "head":
             by_player[event["attacker"]].append(event)
 
-    highlights: List[Highlight] = []
+    highlights: list[Highlight] = []
     window_ms = cfg["quick_headshot_window_ms"]
 
     for player, headshots in by_player.items():
@@ -212,10 +212,10 @@ def _detect_quick_headshots(kills: List[Dict[str, Any]], cfg: Dict[str, int]) ->
 
 
 def detect_highlights(
-    events: Iterable[Dict[str, Any]],
-    thresholds: Dict[str, int] | None = None,
-    player_stats: Optional[Dict[str, Dict[str, Any]]] = None,
-) -> List[Highlight]:
+    events: Iterable[dict[str, Any]],
+    thresholds: dict[str, int] | None = None,
+    player_stats: dict[str, dict[str, Any]] | None = None,
+) -> list[Highlight]:
     cfg = dict(HIGHLIGHT_DEFAULTS)
     if thresholds:
         cfg.update({k: int(v) for k, v in thresholds.items()})
@@ -224,7 +224,7 @@ def detect_highlights(
     if not kills:
         return []
 
-    candidates: List[Highlight] = []
+    candidates: list[Highlight] = []
     candidates.extend(_detect_multi_kills(kills, cfg))
     candidates.extend(_detect_sprees(kills, cfg))
     candidates.extend(_detect_quick_headshots(kills, cfg))
@@ -244,7 +244,7 @@ def detect_highlights(
                     "accuracy": ps.get("accuracy"),
                 }
 
-    deduped: Dict[Tuple[str, str, int, int], Highlight] = {}
+    deduped: dict[tuple[str, str, int, int], Highlight] = {}
     for item in candidates:
         key = _event_window_signature(item)
         current = deduped.get(key)

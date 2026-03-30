@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from proximity.parser.parser import Attacker, Engagement, ProximityParserV4
-from website.backend.routers import proximity_router as api_router
+from website.backend.routers import proximity_player as api_router
 
 
 def _normalize_sql(query: str) -> str:
