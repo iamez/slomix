@@ -63,7 +63,7 @@ async def get_match_details(match_id: str, db: DatabaseAdapter = Depends(get_db)
     time_limit = round_row[8] if len(round_row) > 8 else None
 
     # Convert winner_team int to string
-    winner = "Allies" if winner_team == 1 else "Axis" if winner_team == 2 else "Draw"
+    winner = "Axis" if winner_team == 1 else "Allies" if winner_team == 2 else "Draw"
 
     # Get player stats for this specific round
     # Use DISTINCT ON to deduplicate players (in case of multiple entries per player)

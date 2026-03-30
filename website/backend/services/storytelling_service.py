@@ -313,12 +313,14 @@ class StorytellingService:
 
         # Reinforcement timing multiplier (Oksii adoption)
         # Only apply if victim has a long wait until respawn relative to spawn interval
+        victim_reinf_stored = 0.0
         if round_key in spawn_timings:
             for st_data in spawn_timings[round_key]:
                 if st_data[0] == killer_guid and abs(st_data[1] - kill_time) <= 2000:
                     # Check if we have reinf data (extended tuple)
                     if len(st_data) > 4:
                         victim_reinf_val = st_data[4]  # victim_reinf seconds
+                        victim_reinf_stored = float(victim_reinf_val)
                         enemy_spawn_interval_val = st_data[3]  # enemy_spawn_interval ms
                         spawn_interval_s = enemy_spawn_interval_val / 1000.0 if enemy_spawn_interval_val > 0 else 30
                         if spawn_interval_s > 0 and victim_reinf_val > (spawn_interval_s * REINF_PENALTY_THRESHOLD):
@@ -357,7 +359,7 @@ class StorytellingService:
             'killer_health': cp['killer_health'] if cp else 0,
             'axis_alive': cp['axis_alive'] if cp else 0,
             'allies_alive': cp['allies_alive'] if cp else 0,
-            'victim_reinf': 0.0,
+            'victim_reinf': victim_reinf_stored,
             'total_impact': round(total, 2),
             'is_carrier_kill': is_carrier,
             'is_during_push': is_push,
