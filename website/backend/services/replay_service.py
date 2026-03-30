@@ -80,9 +80,16 @@ async def get_round_timeline(db, round_id: int) -> dict:
                ko.outcome, ko.outcome_time, ko.delta_ms,
                ko.gibber_guid, ko.gibber_name,
                ko.reviver_guid, ko.reviver_name,
-               ski.total_impact
+               ski.total_impact,
+               cp.attacker_x, cp.attacker_y,
+               cp.victim_x, cp.victim_y
         FROM proximity_kill_outcome ko
         LEFT JOIN storytelling_kill_impact ski ON ski.kill_outcome_id = ko.id
+        LEFT JOIN proximity_combat_position cp
+          ON cp.round_id = ko.round_id
+          AND cp.event_time = ko.kill_time
+          AND cp.attacker_guid = ko.killer_guid
+          AND cp.victim_guid = ko.victim_guid
         WHERE ko.round_id = $1
         ORDER BY ko.kill_time
     """, (round_id,))
@@ -117,6 +124,10 @@ async def get_round_timeline(db, round_id: int) -> dict:
                 "kill_mod": kill_mod,
                 "outcome": outcome,
                 "delta_ms": delta_ms,
+                "killer_x": _safe_float(r[14]),
+                "killer_y": _safe_float(r[15]),
+                "victim_x": _safe_float(r[16]),
+                "victim_y": _safe_float(r[17]),
             },
         })
 
@@ -340,10 +351,13 @@ async def get_round_timeline(db, round_id: int) -> dict:
 
     # ---- Round metadata ----
     meta = await db.fetch_one("""
-        SELECT map_name, MAX(death_time_ms) AS duration_ms
-        FROM player_track
-        WHERE round_id = $1
-        GROUP BY map_name
+        SELECT pt.map_name, MAX(pt.death_time_ms) AS duration_ms
+        FROM player_track pt
+        JOIN rounds r ON r.round_date::date = pt.session_date
+                     AND r.round_number = pt.round_number
+                     AND r.map_name = pt.map_name
+        WHERE r.id = $1
+        GROUP BY pt.map_name
         LIMIT 1
     """, (round_id,))
 
@@ -366,11 +380,14 @@ async def get_round_timeline(db, round_id: int) -> dict:
 async def get_player_positions(db, round_id: int, time_ms: int) -> dict:
     """Get all player positions at a specific time T using player_track.path JSONB."""
     tracks = await db.fetch_all("""
-        SELECT player_guid, player_name, team, player_class,
-               spawn_time_ms, death_time_ms, path, map_name
-        FROM player_track
-        WHERE round_id = $1
-        ORDER BY player_guid, spawn_time_ms
+        SELECT pt.player_guid, pt.player_name, pt.team, pt.player_class,
+               pt.spawn_time_ms, pt.death_time_ms, pt.path, pt.map_name
+        FROM player_track pt
+        JOIN rounds r ON r.round_date::date = pt.session_date
+                     AND r.round_number = pt.round_number
+                     AND r.map_name = pt.map_name
+        WHERE r.id = $1
+        ORDER BY pt.player_guid, pt.spawn_time_ms
     """, (round_id,))
 
     # Group tracks by player
@@ -445,13 +462,16 @@ async def get_player_positions(db, round_id: int, time_ms: int) -> dict:
 async def get_player_paths(db, round_id: int, from_ms: int, to_ms: int) -> dict:
     """Get player movement paths for a time window (for trail rendering)."""
     tracks = await db.fetch_all("""
-        SELECT player_guid, player_name, team, player_class,
-               spawn_time_ms, death_time_ms, path, map_name
-        FROM player_track
-        WHERE round_id = $1
-          AND spawn_time_ms <= $3
-          AND (death_time_ms >= $2 OR death_time_ms IS NULL)
-        ORDER BY player_guid, spawn_time_ms
+        SELECT pt.player_guid, pt.player_name, pt.team, pt.player_class,
+               pt.spawn_time_ms, pt.death_time_ms, pt.path, pt.map_name
+        FROM player_track pt
+        JOIN rounds r ON r.round_date::date = pt.session_date
+                     AND r.round_number = pt.round_number
+                     AND r.map_name = pt.map_name
+        WHERE r.id = $1
+          AND pt.spawn_time_ms <= $3
+          AND (pt.death_time_ms >= $2 OR pt.death_time_ms IS NULL)
+        ORDER BY pt.player_guid, pt.spawn_time_ms
     """, (round_id, from_ms, to_ms))
 
     map_name = None
