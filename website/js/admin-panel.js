@@ -3065,62 +3065,80 @@ function renderFullMap() {
     const container = document.getElementById('admin-full-map-content');
     if (!container || container.dataset.rendered === 'true') return;
 
-    const collapsedGroups = loadFullMapCollapsed();
+    // ── Simplified 6-block pipeline (replaces 100+ node atlas) ──
+    const BLOCKS = [
+        { id: 'gameserver', icon: '\u{1F3AE}', label: 'Game Server', color: '#f43f5e',
+          items: ['ET:Legacy server (puran.hehe.si:27960)', 'Up to 20 players per match', 'Maps: supply, adlernest, goldrush, oasis, ...'] },
+        { id: 'lua', icon: '\u{1F4DD}', label: 'Lua Scripts', color: '#f59e0b',
+          items: ['c0rnp0rn7.lua \u2014 Round stats (56 fields)', 'proximity_tracker.lua v6.01 \u2014 Positions + kills', 'stats_discord_webhook.lua v1.6.2 \u2014 Notifications'] },
+        { id: 'transport', icon: '\u{1F4E1}', label: 'Data Transport', color: '#06b6d4',
+          items: ['SSH Monitor \u2014 Downloads files every 60s', 'File Tracker \u2014 SHA256 dedup', 'Webhook Receiver \u2014 Lua timing pings'] },
+        { id: 'processing', icon: '\u2699\uFE0F', label: 'Bot Processing', color: '#10b981',
+          items: ['Stats Parser \u2014 56 fields, R2 differential', 'Round Linker \u2014 Matches R1+R2', 'Session Aggregator \u2014 60-min gap grouping', 'Proximity Parser \u2014 Engagements + objectives'] },
+        { id: 'storage', icon: '\u{1F5C4}\uFE0F', label: 'Database', color: '#8b5cf6',
+          items: ['PostgreSQL \u2014 69 tables', 'Redis \u2014 Cache + sessions', 'player_comprehensive_stats \u2014 56+ columns'] },
+        { id: 'output', icon: '\u{1F310}', label: 'Output', color: '#3b82f6',
+          items: ['Discord Bot \u2014 80+ commands, 18 Cogs', 'Website \u2014 FastAPI + legacy frontend', 'Replay, Stats, Leaderboards, Storytelling'] },
+    ];
 
-    const renderNode = (node, groupId, extraClass = '') => {
-        const nodeClass = [extraClass, node.className].filter(Boolean).join(' ');
-        return `
-        <div class="reactor-node mini-node rounded-xl ${nodeClass}" data-node="${escapeHtml(node.id)}" data-node-tag="${escapeHtml(node.tag || '')}" data-node-group="${escapeHtml(groupId)}" data-full-map="true" data-auto-status="${escapeHtml(node.autoStatus || 'blue')}">
-            <div class="flex items-center gap-2">
-                <span class="status-light" data-status="${escapeHtml(node.autoStatus || 'blue')}" data-mode="auto"></span>
-                <div class="text-[11px] font-semibold text-white">${escapeHtml(node.label)}</div>
-                ${node.tag ? `<span class="node-tag px-2 py-0.5 rounded-full">${escapeHtml(node.tag)}</span>` : ''}
-            </div>
-            ${node.subtitle ? `<div class="text-[10px] text-slate-500 mt-1">${escapeHtml(node.subtitle)}</div>` : ''}
-        </div>
-    `;
-    };
+    let selectedId = null;
 
-    container.innerHTML = FULL_MAP_GROUPS.map((group) => {
-        const isCollapsed = collapsedGroups.has(group.id);
-        if (group.layout === 'core') {
-            return `
-                <div class="full-map-group core-topology ${isCollapsed ? 'collapsed' : ''}" data-group="${escapeHtml(group.id)}">
-                    <div class="full-map-header">
-                        <div class="full-map-title">${escapeHtml(group.title)}</div>
-                        <button class="full-map-toggle" data-group-toggle="${escapeHtml(group.id)}">
-                            ${isCollapsed ? 'Expand' : 'Collapse'}
+    function render() {
+        container.innerHTML = `
+            <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;padding:16px 0;">
+                ${BLOCKS.map((b, i) => `
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <button class="atlas-block" data-block="${b.id}" style="
+                            background:rgba(15,23,42,0.6);border:1px solid ${selectedId === b.id ? b.color : 'rgba(255,255,255,0.08)'};
+                            border-radius:12px;padding:16px 20px;cursor:pointer;text-align:center;min-width:120px;
+                            transition:border-color 0.2s,background 0.2s;
+                            ${selectedId === b.id ? `background:rgba(255,255,255,0.04);box-shadow:0 0 12px ${b.color}20;` : ''}
+                        ">
+                            <div style="font-size:28px;margin-bottom:4px;">${b.icon}</div>
+                            <div style="font-size:11px;font-weight:700;color:${b.color};text-transform:uppercase;letter-spacing:0.08em;">${escapeHtml(b.label)}</div>
                         </button>
+                        ${i < BLOCKS.length - 1 ? '<span style="color:#475569;font-size:20px;">\u2192</span>' : ''}
                     </div>
-                    <div class="core-topology-grid full-map-nodes">
-                        ${group.nodes.map((node) => renderNode(node, group.id, 'core-topology-node')).join('')}
-                    </div>
-                    <div class="core-topology-caption">Left: game servers generate stats. Center: PostgreSQL stores truth. Right: bot + website read and publish.</div>
-                </div>
-            `;
-        }
-
-        return `
-            <div class="full-map-group ${isCollapsed ? 'collapsed' : ''}" data-group="${escapeHtml(group.id)}">
-                <div class="full-map-header">
-                    <div class="full-map-title">${escapeHtml(group.title)}</div>
-                    <button class="full-map-toggle" data-group-toggle="${escapeHtml(group.id)}">
-                        ${isCollapsed ? 'Expand' : 'Collapse'}
-                    </button>
-                </div>
-                <div class="space-y-2 full-map-nodes">
-                    ${group.nodes.map((node) => renderNode(node, group.id)).join('')}
-                </div>
+                `).join('')}
             </div>
+            ${selectedId ? (() => {
+                const b = BLOCKS.find(x => x.id === selectedId);
+                if (!b) return '';
+                return `
+                    <div style="margin:12px auto 0;max-width:500px;background:rgba(15,23,42,0.5);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <span style="font-size:20px;">${b.icon}</span>
+                                <span style="font-size:13px;font-weight:700;color:${b.color};">${escapeHtml(b.label)}</span>
+                            </div>
+                            <button class="atlas-close" style="color:#64748b;cursor:pointer;font-size:12px;background:none;border:none;">\u2715 Close</button>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:8px;">
+                            ${b.items.map(item => `
+                                <div style="display:flex;align-items:center;gap:8px;background:rgba(15,23,42,0.4);border:1px solid rgba(255,255,255,0.05);border-radius:8px;padding:8px 12px;">
+                                    <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0;"></span>
+                                    <span style="font-size:12px;color:#cbd5e1;">${escapeHtml(item)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            })() : '<div style="text-align:center;color:#475569;font-size:12px;padding:16px;">Click a block to see details</div>'}
         `;
-    }).join('');
 
+        // Bind clicks
+        container.querySelectorAll('.atlas-block').forEach(btn => {
+            btn.addEventListener('click', () => {
+                selectedId = selectedId === btn.dataset.block ? null : btn.dataset.block;
+                render();
+            });
+        });
+        const closeBtn = container.querySelector('.atlas-close');
+        if (closeBtn) closeBtn.addEventListener('click', () => { selectedId = null; render(); });
+    }
+
+    render();
     container.dataset.rendered = 'true';
-    rebuildStatusElementCache();
-
-    syncFullMapStageSize();
-    updateFullMapSearchIndex();
-    bindFullMapGroupToggles();
 }
 
 function renderLuaMap() {

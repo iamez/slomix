@@ -450,11 +450,162 @@ function MonitoringPanel({ monitoring }: { monitoring: DiagnosticsResponse['moni
   );
 }
 
+// ── System Atlas (simplified flow) ──────────────────────────────────────────
+
+interface AtlasBlock {
+  id: string;
+  label: string;
+  icon: string;
+  color: string;
+  border: string;
+  items: Array<{ name: string; desc: string }>;
+}
+
+const ATLAS_BLOCKS: AtlasBlock[] = [
+  {
+    id: 'gameserver', label: 'Game Server', icon: '\u{1F3AE}',
+    color: 'text-rose-400', border: 'border-rose-500/30',
+    items: [
+      { name: 'ET:Legacy Server', desc: 'puran.hehe.si:27960' },
+      { name: 'Maps', desc: 'supply, adlernest, goldrush, oasis, ...' },
+      { name: 'Players', desc: 'Up to 20 players per match' },
+    ],
+  },
+  {
+    id: 'lua', label: 'Lua Scripts', icon: '\u{1F4DD}',
+    color: 'text-amber-400', border: 'border-amber-500/30',
+    items: [
+      { name: 'c0rnp0rn7.lua', desc: 'Round stats files (56 fields per player)' },
+      { name: 'proximity_tracker.lua', desc: 'Player positions, kills, objectives (v6.01)' },
+      { name: 'stats_discord_webhook.lua', desc: 'Real-time round notifications (v1.6.2)' },
+    ],
+  },
+  {
+    id: 'transport', label: 'Data Transport', icon: '\u{1F4E1}',
+    color: 'text-cyan-400', border: 'border-cyan-500/30',
+    items: [
+      { name: 'SSH Monitor', desc: 'Downloads new files every 60s' },
+      { name: 'File Tracker', desc: 'SHA256 dedup, prevents re-imports' },
+      { name: 'Webhook Receiver', desc: 'HTTP endpoint for Lua timing pings' },
+    ],
+  },
+  {
+    id: 'processing', label: 'Bot Processing', icon: '\u{2699}\u{FE0F}',
+    color: 'text-emerald-400', border: 'border-emerald-500/30',
+    items: [
+      { name: 'Stats Parser', desc: 'Parses 56 fields, R2 differential calc' },
+      { name: 'Round Linker', desc: 'Matches R1+R2 into complete matches' },
+      { name: 'Session Aggregator', desc: 'Groups matches into sessions (60-min gap)' },
+      { name: 'Proximity Parser', desc: 'Processes positions, engagements, objectives' },
+    ],
+  },
+  {
+    id: 'storage', label: 'Database', icon: '\u{1F5C4}\u{FE0F}',
+    color: 'text-purple-400', border: 'border-purple-500/30',
+    items: [
+      { name: 'PostgreSQL', desc: '69 tables, 56+ columns in player stats' },
+      { name: 'Redis', desc: 'Cache layer, session data' },
+    ],
+  },
+  {
+    id: 'output', label: 'Output', icon: '\u{1F310}',
+    color: 'text-blue-400', border: 'border-blue-500/30',
+    items: [
+      { name: 'Discord Bot', desc: '80+ commands, 18 Cogs' },
+      { name: 'Website', desc: 'FastAPI + React, replay, stats, leaderboards' },
+      { name: 'Storytelling', desc: 'KIS scoring, archetypes, momentum' },
+    ],
+  },
+];
+
+function SystemAtlas({ diag }: { diag: DiagnosticsResponse | undefined }) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const block = ATLAS_BLOCKS.find((b) => b.id === selected);
+
+  return (
+    <div>
+      {/* Pipeline flow */}
+      <GlassPanel>
+        <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-5">System Data Flow</div>
+        <div className="flex flex-col md:flex-row items-stretch gap-2">
+          {ATLAS_BLOCKS.map((b, i) => (
+            <div key={b.id} className="flex items-center gap-2 flex-1">
+              <button
+                onClick={() => setSelected(selected === b.id ? null : b.id)}
+                className={`flex-1 rounded-xl border p-4 transition cursor-pointer text-center hover:bg-white/5 ${
+                  selected === b.id
+                    ? `${b.border} bg-white/5 ring-1 ring-white/20`
+                    : 'border-white/10 bg-slate-950/40'
+                }`}
+              >
+                <div className="text-2xl mb-1">{b.icon}</div>
+                <div className={`text-[11px] font-bold uppercase tracking-wider ${b.color}`}>{b.label}</div>
+              </button>
+              {i < ATLAS_BLOCKS.length - 1 && (
+                <span className="text-slate-600 text-lg hidden md:block">{'\u2192'}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      </GlassPanel>
+
+      {/* Detail panel */}
+      {block && (
+        <div className="mt-3">
+          <GlassCard>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{block.icon}</span>
+                <span className={`text-sm font-bold ${block.color}`}>{block.label}</span>
+              </div>
+              <button
+                onClick={() => setSelected(null)}
+                className="text-slate-500 hover:text-white text-xs transition"
+              >
+                {'\u2715'} Close
+              </button>
+            </div>
+            <div className="space-y-2">
+              {block.items.map((item) => (
+                <div key={item.name} className="flex items-start gap-3 rounded-lg border border-white/5 bg-slate-950/30 px-3 py-2">
+                  <StatusDot color="green" />
+                  <div>
+                    <div className="text-xs font-bold text-white">{item.name}</div>
+                    <div className="text-[11px] text-slate-400">{item.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Show relevant diagnostics data for selected block */}
+            {block.id === 'storage' && diag?.tables && (
+              <div className="mt-3 pt-3 border-t border-white/5">
+                <div className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Table Stats</div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {diag.tables.filter((t) => t.row_count && t.row_count > 0).slice(0, 9).map((t) => (
+                    <div key={t.name} className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-300 font-mono truncate">{t.name}</span>
+                      <span className="text-slate-500 tabular-nums ml-2">{fmtNum(t.row_count)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </GlassCard>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ────────────────────────────────────────────────────────────────
+
+type AdminTab = 'health' | 'atlas';
 
 export default function Admin() {
   const { data: auth } = useAuthMe();
   const [refreshKey, setRefreshKey] = useState(0);
+  const [tab, setTab] = useState<AdminTab>('health');
 
   const { data: diag, isLoading: diagLoading } = useQuery<DiagnosticsResponse>({
     queryKey: ['diagnostics', refreshKey],
@@ -489,12 +640,21 @@ export default function Admin() {
 
   if (diagLoading) return <Skeleton variant="card" count={4} />;
 
+  const tabCls = (t: AdminTab) =>
+    `px-4 py-2 text-xs font-bold rounded-lg transition ${
+      tab === t ? 'bg-white/10 text-white border border-white/20' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+    }`;
+
   return (
     <div className="page-shell">
       <PageHeader title="System Overview" subtitle="Real-time diagnostics, architecture, and operational health." eyebrow="Admin" />
 
-      {/* Refresh button */}
-      <div className="flex items-center justify-end mb-4">
+      {/* Tab bar + Refresh */}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-1">
+          <button className={tabCls('health')} onClick={() => setTab('health')}>Health</button>
+          <button className={tabCls('atlas')} onClick={() => setTab('atlas')}>Atlas</button>
+        </div>
         <button
           onClick={handleRefresh}
           className="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/10 text-slate-300 hover:border-cyan-500/40 hover:text-white transition"
@@ -503,34 +663,21 @@ export default function Admin() {
         </button>
       </div>
 
-      {/* Health Banner */}
-      <HealthBanner diag={diag} apiStatus={apiStatus} />
+      {tab === 'health' && (
+        <>
+          <HealthBanner diag={diag} apiStatus={apiStatus} />
+          <div className="mt-4"><AlertsPanel issues={diag?.issues ?? []} warnings={diag?.warnings ?? []} /></div>
+          <div className="mt-4"><QuickStats tables={diag?.tables ?? []} /></div>
+          <div className="mt-4"><ArchitecturePipeline /></div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+            <TimeMetrics time={diag?.time ?? {}} />
+            <MonitoringPanel monitoring={diag?.monitoring ?? {}} />
+          </div>
+          <div className="mt-4"><TablesOverview tables={diag?.tables ?? []} /></div>
+        </>
+      )}
 
-      {/* Alerts */}
-      <div className="mt-4">
-        <AlertsPanel issues={diag?.issues ?? []} warnings={diag?.warnings ?? []} />
-      </div>
-
-      {/* Quick Stats */}
-      <div className="mt-4">
-        <QuickStats tables={diag?.tables ?? []} />
-      </div>
-
-      {/* Architecture Pipeline */}
-      <div className="mt-4">
-        <ArchitecturePipeline />
-      </div>
-
-      {/* Time Metrics + Monitoring */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-        <TimeMetrics time={diag?.time ?? {}} />
-        <MonitoringPanel monitoring={diag?.monitoring ?? {}} />
-      </div>
-
-      {/* Database Tables */}
-      <div className="mt-4">
-        <TablesOverview tables={diag?.tables ?? []} />
-      </div>
+      {tab === 'atlas' && <SystemAtlas diag={diag} />}
     </div>
   );
 }
