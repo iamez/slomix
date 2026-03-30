@@ -12,6 +12,59 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.6.0] — 2026-03-30: Mandelbrot RCA v2.0 Audit, Oksii Adoption & God File Splits
+
+**Full P0-P3 vibe coding audit, Oksii stats adoption (KIS v2 + BOX scoring), storytelling improvements, and 2 god file decompositions — 18 commits, 240 files, 476 tests passing.**
+
+*18 commits across bot, website, proximity, Lua, parser, and test suites. Ruff 0 errors, 101 new unit tests.*
+
+#### Mandelbrot RCA v2.0 Audit — Code Quality
+- **Ruff expansion**: 8 rule sets (E/F/W/I/UP/B/S/T20/SIM/C4), 2257→0 errors with auto-fix and per-file ignores
+- **Silent exceptions audit**: 23 `except: pass` + 5 silent returns replaced with `logger.debug()`/`logger.warning()` and `exc_info=True`
+- **print→logger**: All production `print()` calls replaced with structured logging
+- **pytest-asyncio**: Version fixed (1.3.0→0.24.0)
+- **mypy**: Configuration added (non-blocking, informative baseline)
+- **Shared constants**: Extracted `KILL_MOD_NAMES`, `_strip_et_colors()`, `_weapon_name()` → `website/backend/utils/et_constants.py`
+- **Memory leak fix**: `_compute_locks` unbounded dict → `BoundedLockDict` (max 64, LRU eviction)
+
+#### Oksii Adoption — Lua + Parser + KIS v2
+- **Lua v6.01**: New `countAlivePerTeam()` function, combat positions extended with `killer_health`, `axis_alive`, `allies_alive`; spawn timing extended with `killer_reinf`, `victim_reinf`
+- **Parser**: Backward-compatible `len(parts) > N` checks for new CSV columns, `_table_has_column` DB guards before INSERT
+- **KIS v2 multipliers**: Health (1.3x at <30HP), alive (dynamic threshold based on player count), reinf (relative to interval)
+- **KIS soft cap**: `5.0 + (raw - 5.0) * 0.25` prevents inflation (range 1.0-~8.5, was unbounded at 19.19)
+- **DB migration 033**: New columns on `proximity_combat_position`, `proximity_spawn_timing`, `storytelling_kill_impact` + new `session_round_scores` table
+
+#### BOX Scoring Service — NEW
+- **Oksii-style stopwatch scoring** (`box_scoring_service.py`, 268 lines): +2 map win, +1 double fullhold, provisional R1 scoring
+- **On-demand API**: Session-based BOX score calculation with round-by-round breakdown
+
+#### Storytelling Improvements — Legacy Website
+- **Narrative section**: Auto-generated session summary with MVP, archetype, defining moment
+- **Momentum chart**: Chart.js per-round Axis vs Allies scoring curves
+- **KIS breakdown fix**: Proportional distribution instead of heuristic — numbers now sum correctly
+- **Player info row**: DPM, denied playtime/min, dead% added to player cards
+- **Oksii multiplier badges**: Clutch, Solo, Outnum, Deny badges on story player cards
+
+#### God File Decompositions
+- **proximity_router.py**: 5,515→35 lines (thin aggregator + 13 sub-routers, max 709 lines each)
+- **records_router.py**: 3,172→27 lines (thin aggregator + 9 sub-routers, max 751 lines each)
+
+#### Testing
+- **101 new unit tests**: Storytelling service (51), skill rating (28), BOX scoring (22)
+- **Total**: 476 passing, 45 skipped, 0 failed
+- **End-to-end verified**: Bots generated 33 rounds, 2781 combat positions with Oksii data (99.8% coverage)
+
+#### Bug Fixes
+- **Round linker timezone**: UTC vs local naive datetime caused 7200s offset on CEST server — broke 45-min match window
+- **Revives endpoint**: `session_date` column doesn't exist → `created_at`
+- **Kill-outcomes LIMIT**: f-string SQL → parameterized query
+- **Kill-outcomes types**: Missing `int | None` annotations caused FastAPI to skip validation
+- **Storytelling synergy key**: `synergy.get("teams")` → `synergy.get("groups")` (key mismatch)
+- **Storytelling router import**: Broken import fixed (storytelling_service)
+- **NULL objective times**: Filter `if r[2] and r[2] > 0` prevents crash on incomplete data
+
+---
+
 ## [1.5.0] — 2026-03-28: Round Replay Timeline, Momentum Chart & Codacy Zero
 
 **Visual round analysis with event replay, momentum tracking, session narratives, expanded moment detectors, and full Codacy compliance — 53 commits, 58 issues resolved to zero.**
