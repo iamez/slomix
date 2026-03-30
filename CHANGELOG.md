@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.1.2](https://github.com/iamez/slomix/compare/v1.1.1...v1.1.2) (2026-03-29)
+
+
+### Bug Fixes
+
+* replace silent except:pass with debug logging in pagination views ([1ec85d3](https://github.com/iamez/slomix/commit/1ec85d3108c0647fc2ffc3fec25b1a96372de745))
+* storytelling_router broken import + ruff auto-fix tests ([b07de49](https://github.com/iamez/slomix/commit/b07de4940d9ab5d6eeaf1b0afada8a7c9589a31d))
+
 ## [1.1.1](https://github.com/iamez/slomix/compare/v1.1.0...v1.1.1) (2026-03-28)
 
 
