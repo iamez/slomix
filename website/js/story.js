@@ -282,7 +282,7 @@ function renderMomentum(data) {
         wrapper.appendChild(_el('div', 'text-xs text-slate-400 font-semibold mb-2', label));
 
         const canvas = document.createElement('canvas');
-        canvas.height = 140;
+        wrapper.style.overflow = 'hidden';
         wrapper.appendChild(canvas);
         grid.appendChild(wrapper);
 
@@ -319,7 +319,8 @@ function renderMomentum(data) {
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false,
+                maintainAspectRatio: true,
+                aspectRatio: 2.5,
                 plugins: {
                     legend: {
                         display: true,
