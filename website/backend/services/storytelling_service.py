@@ -2103,7 +2103,11 @@ class StorytellingService:
             guid_teams.setdefault(g, []).append(faction)
         guid_majority: dict[str, str] = {}
         for g, teams in guid_teams.items():
-            guid_majority[g] = 'AXIS' if teams.count('AXIS') >= teams.count('ALLIES') else 'ALLIES'
+            if teams.count('AXIS') > teams.count('ALLIES'):
+                guid_majority[g] = 'AXIS'
+            elif teams.count('ALLIES') > teams.count('AXIS'):
+                guid_majority[g] = 'ALLIES'
+            # tied → skip, lookup returns None
 
         # Build short→long for PCS 8-char to proximity 32-char
         all_guids = set()
@@ -2112,7 +2116,7 @@ class StorytellingService:
             all_guids.add(k[5])
         short_to_long = {g[:8]: g for g in all_guids}
 
-        def _get_team(guid: str, rn: int) -> str:
+        def _get_team(guid: str, rn: int) -> str | None:
             """Resolve team for a GUID in a round. Try PCS 8-char lookup, then majority."""
             t = rtm.get((guid[:8], rn)) or rtm.get((guid, rn))
             if t:
@@ -2121,7 +2125,7 @@ class StorytellingService:
             t = rtm.get((long[:8], rn))
             if t:
                 return t
-            return guid_majority.get(guid[:8]) or guid_majority.get(guid) or 'AXIS'
+            return guid_majority.get(guid[:8]) or guid_majority.get(guid)
 
         # 3. Get objective events: carrier pickups/secured
         carrier_events = await self.db.fetch_all("""
@@ -2149,6 +2153,8 @@ class StorytellingService:
             kill_time_ms = k[3] or 0
             killer_guid = k[4]
             killer_team = _get_team(killer_guid, rn)
+            if killer_team is None:
+                continue
             rounds_data[key]["kills"].append({
                 "t_ms": kill_time_ms,
                 "team": killer_team,
@@ -2160,7 +2166,9 @@ class StorytellingService:
             key = (rn, start_unix)
             if key not in rounds_data:
                 rounds_data[key] = {"map_name": ce[2], "kills": [], "objectives": []}
-            team = ce[3] or 'AXIS'
+            team = ce[3]
+            if not team:
+                continue
             pickup_ms = (ce[4] or 0)
             outcome = ce[5] or ''
             bonus = 15 if outcome != 'secured' else 30
@@ -2176,7 +2184,9 @@ class StorytellingService:
             key = (rn, start_unix)
             if key not in rounds_data:
                 rounds_data[key] = {"map_name": ce[2], "kills": [], "objectives": []}
-            team = ce[3] or 'AXIS'
+            team = ce[3]
+            if not team:
+                continue
             event_time_ms = (ce[4] or 0)
             rounds_data[key]["objectives"].append({
                 "t_ms": event_time_ms,
@@ -2190,7 +2200,7 @@ class StorytellingService:
         KILL_IMPACT = 5.0
         result_rounds = []
 
-        for (rn, start_unix), rd in sorted(rounds_data.items()):
+        for (rn, start_unix), rd in sorted(rounds_data.items(), key=lambda x: (x[0][1], x[0][0])):
             # Find max time in this round
             all_times = [k["t_ms"] for k in rd["kills"]]
             all_times += [o["t_ms"] for o in rd["objectives"]]
