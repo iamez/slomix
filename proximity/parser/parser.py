@@ -20,15 +20,14 @@ v4.2 Output Format:
   return_fire_ms;dodge_reaction_ms;support_reaction_ms;start_time;end_time;duration
 """
 
-import os
 import json
 import logging
+import os
 import re
 from bisect import bisect_left
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple
-from pathlib import Path
 from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
 
 PROXIMITY_FILENAME_ROUND_RE = re.compile(r"-round-(\d+)_engagements\.txt$", re.IGNORECASE)
 GAMETIME_FILENAME_RE = re.compile(r"^gametime-(?P<map>.+)-R(?P<round>\d+)-(?P<ts>\d+)\.json$")
@@ -44,7 +43,7 @@ class Attacker:
     first_hit: int
     last_hit: int
     got_kill: bool
-    weapons: Dict[int, int] = field(default_factory=dict)
+    weapons: dict[int, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -58,12 +57,12 @@ class Engagement:
     target_team: str
     outcome: str  # 'killed', 'escaped', 'round_end', 'teamkill', 'selfkill', 'fallen', 'world'
     total_damage: int
-    killer_guid: Optional[str]
-    killer_name: Optional[str]
+    killer_guid: str | None
+    killer_name: str | None
     num_attackers: int
     is_crossfire: bool
-    crossfire_delay: Optional[int]
-    crossfire_participants: List[str]
+    crossfire_delay: int | None
+    crossfire_participants: list[str]
     start_x: float
     start_y: float
     start_z: float
@@ -71,8 +70,8 @@ class Engagement:
     end_y: float
     end_z: float
     distance_traveled: float
-    position_path: List[Dict]
-    attackers: Dict[str, Attacker]
+    position_path: list[dict]
+    attackers: dict[str, Attacker]
 
 
 @dataclass
@@ -98,11 +97,11 @@ class PlayerTrack:
     team: str
     player_class: str   # SOLDIER, MEDIC, ENGINEER, FIELDOPS, COVERTOPS
     spawn_time: int
-    death_time: Optional[int]
-    first_move_time: Optional[int]  # When player first moved after spawn
-    death_type: Optional[str]  # v4.1: killed|selfkill|fallen|world|teamkill|round_end|disconnect|unknown
+    death_time: int | None
+    first_move_time: int | None  # When player first moved after spawn
+    death_type: str | None  # v4.1: killed|selfkill|fallen|world|teamkill|round_end|disconnect|unknown
     sample_count: int
-    path: List[PathPoint] = field(default_factory=list)
+    path: list[PathPoint] = field(default_factory=list)
 
     @property
     def duration_ms(self) -> int:
@@ -112,7 +111,7 @@ class PlayerTrack:
         return 0
 
     @property
-    def time_to_first_move_ms(self) -> Optional[int]:
+    def time_to_first_move_ms(self) -> int | None:
         """Time from spawn until first movement"""
         if self.first_move_time and self.spawn_time:
             return self.first_move_time - self.spawn_time
@@ -206,9 +205,9 @@ class ReactionMetric:
     target_class: str
     outcome: str
     num_attackers: int
-    return_fire_ms: Optional[int]
-    dodge_reaction_ms: Optional[int]
-    support_reaction_ms: Optional[int]
+    return_fire_ms: int | None
+    dodge_reaction_ms: int | None
+    support_reaction_ms: int | None
     start_time_ms: int
     end_time_ms: int
     duration_ms: int
@@ -226,6 +225,8 @@ class SpawnTimingEvent:
     enemy_spawn_interval: int
     time_to_next_spawn: int
     spawn_timing_score: float
+    killer_reinf: float = 0.0
+    victim_reinf: float = 0.0
 
 
 @dataclass
@@ -238,8 +239,8 @@ class TeamCohesionSnapshot:
     dispersion: float
     max_spread: float
     straggler_count: int
-    buddy_pair_guids: Optional[str]
-    buddy_distance: Optional[float]
+    buddy_pair_guids: str | None
+    buddy_distance: float | None
 
 
 @dataclass
@@ -371,6 +372,9 @@ class CombatPosition:
     victim_z: int
     weapon: int
     mod: int
+    killer_health: int = 0
+    axis_alive: int = 0
+    allies_alive: int = 0
 
 
 @dataclass
@@ -503,37 +507,37 @@ class ProximityParserV4:
         self.logger = logging.getLogger(__name__)
 
         # Parsed data
-        self.engagements: List[Engagement] = []
-        self.player_tracks: List[PlayerTrack] = []  # v4: Full player tracks
-        self.reaction_metrics: List[ReactionMetric] = []
-        self.kill_heatmap: List[Dict] = []
-        self.movement_heatmap: List[Dict] = []
-        self.trade_events: List[Dict] = []
-        self.support_summary: Optional[Dict] = None
+        self.engagements: list[Engagement] = []
+        self.player_tracks: list[PlayerTrack] = []  # v4: Full player tracks
+        self.reaction_metrics: list[ReactionMetric] = []
+        self.kill_heatmap: list[dict] = []
+        self.movement_heatmap: list[dict] = []
+        self.trade_events: list[dict] = []
+        self.support_summary: dict | None = None
         # v5 teamplay data
-        self.spawn_timing_events: List[SpawnTimingEvent] = []
-        self.team_cohesion_snapshots: List[TeamCohesionSnapshot] = []
-        self.crossfire_opportunities: List[CrossfireOpportunity] = []
-        self.team_pushes: List[TeamPush] = []
-        self.lua_trade_kills: List[LuaTradeKill] = []
-        self.revive_events: List[ReviveEvent] = []
-        self.weapon_accuracy: List[WeaponAccuracy] = []
-        self.focus_fire_events: List[FocusFireEvent] = []
-        self.kill_outcomes: List[KillOutcome] = []
-        self.hit_regions: List[HitRegionEvent] = []
-        self.combat_positions: List[CombatPosition] = []
+        self.spawn_timing_events: list[SpawnTimingEvent] = []
+        self.team_cohesion_snapshots: list[TeamCohesionSnapshot] = []
+        self.crossfire_opportunities: list[CrossfireOpportunity] = []
+        self.team_pushes: list[TeamPush] = []
+        self.lua_trade_kills: list[LuaTradeKill] = []
+        self.revive_events: list[ReviveEvent] = []
+        self.weapon_accuracy: list[WeaponAccuracy] = []
+        self.focus_fire_events: list[FocusFireEvent] = []
+        self.kill_outcomes: list[KillOutcome] = []
+        self.hit_regions: list[HitRegionEvent] = []
+        self.combat_positions: list[CombatPosition] = []
         # v6 carrier intelligence
-        self.carrier_events: List[CarrierEvent] = []
-        self.carrier_kills: List[CarrierKill] = []
+        self.carrier_events: list[CarrierEvent] = []
+        self.carrier_kills: list[CarrierKill] = []
         # v6 phases 1.5-4
-        self.carrier_returns: List[CarrierReturn] = []
-        self.vehicle_progress: List[VehicleProgress] = []
-        self.escort_credits: List[EscortCredit] = []
-        self.construction_events: List[ConstructionEvent] = []
-        self.objective_runs: List[ObjectiveRun] = []
+        self.carrier_returns: list[CarrierReturn] = []
+        self.vehicle_progress: list[VehicleProgress] = []
+        self.escort_credits: list[EscortCredit] = []
+        self.construction_events: list[ConstructionEvent] = []
+        self.objective_runs: list[ObjectiveRun] = []
         self.metadata = self._metadata_defaults()
-        self._schema_cache: Dict[tuple, bool] = {}
-        self._round_link_context: Dict[str, Optional[object]] = {
+        self._schema_cache: dict[tuple, bool] = {}
+        self._round_link_context: dict[str, object | None] = {
             "round_id": None,
             "round_link_source": "unresolved",
             "round_link_reason": "not_resolved",
@@ -541,7 +545,7 @@ class ProximityParserV4:
         }
 
     @staticmethod
-    def _metadata_defaults() -> Dict:
+    def _metadata_defaults() -> dict:
         return {
             'map_name': '',
             'round_num': 0,
@@ -558,7 +562,7 @@ class ProximityParserV4:
         }
 
     @staticmethod
-    def _extract_round_from_filename(filepath: str) -> Optional[int]:
+    def _extract_round_from_filename(filepath: str) -> int | None:
         match = PROXIMITY_FILENAME_ROUND_RE.search(os.path.basename(filepath))
         if not match:
             return None
@@ -568,7 +572,7 @@ class ProximityParserV4:
             return None
         return value if value > 0 else None
 
-    def _extract_round_from_gametime(self, map_name: str, round_end_unix: int) -> Optional[int]:
+    def _extract_round_from_gametime(self, map_name: str, round_end_unix: int) -> int | None:
         if not map_name or round_end_unix <= 0:
             return None
 
@@ -625,8 +629,8 @@ class ProximityParserV4:
 
         self.metadata['round_num'] = normalized_round
         self.metadata['round_num_source'] = source
-    
-    def find_files(self, session_date: str = None) -> List[str]:
+
+    def find_files(self, session_date: str = None) -> list[str]:
         """Find v3 engagement files"""
         files = []
         try:
@@ -639,7 +643,7 @@ class ProximityParserV4:
         except Exception as e:
             self.logger.error(f"Error finding files: {e}")
         return sorted(files)
-    
+
     def parse_file(self, filepath: str) -> bool:
         """Parse an engagement file (v3 or v4 format)"""
         self.metadata = self._metadata_defaults()
@@ -673,7 +677,7 @@ class ProximityParserV4:
         section = 'header'
 
         try:
-            with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
+            with open(filepath, encoding='utf-8', errors='replace') as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -905,7 +909,7 @@ class ProximityParserV4:
         Keeps per-source timestamps (R1/R2 are physically distinct rounds) while
         linking all rows to a stable round_id for cross-source joins.
         """
-        context: Dict[str, Optional[object]] = {
+        context: dict[str, object | None] = {
             "round_id": None,
             "round_link_source": "unresolved",
             "round_link_reason": "not_resolved",
@@ -993,7 +997,7 @@ class ProximityParserV4:
                 (diag or {}).get("best_diff_seconds"),
             )
 
-    async def _append_round_link_columns(self, table: str, columns: List[str], values: List[object]) -> None:
+    async def _append_round_link_columns(self, table: str, columns: list[str], values: list[object]) -> None:
         context = self._round_link_context or {}
         if await self._table_has_column(table, "round_id"):
             columns.append("round_id")
@@ -1008,8 +1012,8 @@ class ProximityParserV4:
             columns.append("round_linked_at")
             values.append(context.get("round_linked_at"))
 
-    async def _round_link_update_clauses(self, table: str) -> List[str]:
-        clauses: List[str] = []
+    async def _round_link_update_clauses(self, table: str) -> list[str]:
+        clauses: list[str] = []
         if await self._table_has_column(table, "round_id"):
             clauses.append(f"round_id = COALESCE(EXCLUDED.round_id, {table}.round_id)")
         if await self._table_has_column(table, "round_link_source"):
@@ -1025,7 +1029,7 @@ class ProximityParserV4:
                 f"round_linked_at = COALESCE(EXCLUDED.round_linked_at, {table}.round_linked_at)"
             )
         return clauses
-    
+
     def _parse_engagement_line(self, line: str):
         """Parse engagement data line (semicolon-delimited)"""
         # Keep attacker payload intact: it contains weapon pairs separated by ';'
@@ -1034,13 +1038,13 @@ class ProximityParserV4:
         if len(parts) < 24:
             self.logger.warning(f"Invalid engagement line: {line[:50]}...")
             return
-        
+
         try:
             # Parse crossfire participants
             cf_participants = []
             if parts[14]:
                 cf_participants = parts[14].split(',')
-            
+
             # Parse position path
             position_path = []
             if parts[22]:
@@ -1054,7 +1058,7 @@ class ProximityParserV4:
                             'z': float(pos_parts[3]),
                             'event': pos_parts[4]
                         })
-            
+
             # Parse attackers
             attackers = {}
             if parts[23]:
@@ -1069,7 +1073,7 @@ class ProximityParserV4:
                                     w_id, w_count = wp.split(':')
                                     if w_id and w_count:
                                         weapons[int(w_id)] = int(w_count)
-                        
+
                         attacker = Attacker(
                             guid=att_parts[0],
                             name=att_parts[1],
@@ -1082,7 +1086,7 @@ class ProximityParserV4:
                             weapons=weapons
                         )
                         attackers[attacker.guid] = attacker
-            
+
             engagement = Engagement(
                 id=int(parts[0]),
                 start_time=int(parts[1]),
@@ -1109,9 +1113,9 @@ class ProximityParserV4:
                 position_path=position_path,
                 attackers=attackers
             )
-            
+
             self.engagements.append(engagement)
-            
+
         except (ValueError, IndexError) as e:
             self.logger.warning(f"Error parsing engagement: {e}")
 
@@ -1199,7 +1203,7 @@ class ProximityParserV4:
                 })
             except ValueError as exc:
                 self.logger.debug("Skipping invalid kill heatmap entry: %s (%s)", line, exc)
-    
+
     def _parse_movement_heatmap_line(self, line: str):
         """Parse movement heatmap line"""
         parts = line.split(';')
@@ -1233,7 +1237,7 @@ class ProximityParserV4:
                 self.logger.debug("Skipping invalid objective focus entry: %s (%s)", line, exc)
 
     @staticmethod
-    def _parse_optional_int(value: str) -> Optional[int]:
+    def _parse_optional_int(value: str) -> int | None:
         text = str(value or '').strip()
         if not text:
             return None
@@ -1273,7 +1277,7 @@ class ProximityParserV4:
             )
         except ValueError as exc:
             self.logger.debug("Skipping invalid reaction metric entry: %s (%s)", line[:120], exc)
-    
+
     async def import_file(self, filepath: str, session_date) -> bool:
         """Parse and import to database
 
@@ -1391,7 +1395,7 @@ class ProximityParserV4:
         except Exception as e:
             self.logger.error(f"Import error: {e}")
             return False
-    
+
     async def _check_processed_file(self, filename: str) -> bool:
         """Check if file was already imported and aggregates applied."""
         if not await self._table_has_column('proximity_processed_files', 'filename'):
@@ -1570,20 +1574,20 @@ class ProximityParserV4:
 
     async def _update_player_stats(self):
         """Update player_teamplay_stats from engagements"""
-        
+
         # Aggregate stats per player
         player_stats = {}
-        
+
         for eng in self.engagements:
             # Target stats (defensive)
             tg = eng.target_guid
             if tg not in player_stats:
                 player_stats[tg] = self._new_player_stats(eng.target_name)
-            
+
             ps = player_stats[tg]
             ps['times_targeted'] += 1
             ps['total_damage_taken'] += eng.total_damage
-            
+
             if eng.num_attackers >= 2:
                 ps['times_focused'] += 1
                 if eng.outcome == 'escaped':
@@ -1595,35 +1599,35 @@ class ProximityParserV4:
                     ps['solo_escapes'] += 1
                 elif eng.outcome == 'killed':
                     ps['solo_deaths'] += 1
-            
+
             ps['escape_distances'].append(eng.distance_traveled)
             ps['engagement_durations'].append(eng.duration)
-            
+
             # Attacker stats (offensive)
             for guid, attacker in eng.attackers.items():
                 if guid not in player_stats:
                     player_stats[guid] = self._new_player_stats(attacker.name)
-                
+
                 ps = player_stats[guid]
                 ps['name'] = attacker.name  # Update name
-                
+
                 if eng.is_crossfire and guid in eng.crossfire_participants:
                     ps['crossfire_participations'] += 1
                     ps['crossfire_damage'] += attacker.damage
-                    
+
                     if eng.outcome == 'killed':
                         ps['crossfire_kills'] += 1
                         if attacker.got_kill:
                             ps['crossfire_final_blows'] += 1
-                    
+
                     if eng.crossfire_delay:
                         ps['crossfire_delays'].append(eng.crossfire_delay)
-                
+
                 elif eng.num_attackers == 1:
                     ps['solo_engagements'] += 1
                     if attacker.got_kill:
                         ps['solo_kills'] += 1
-        
+
         # Upsert to database
         for guid, stats in player_stats.items():
             avg_escape = sum(stats['escape_distances']) / len(stats['escape_distances']) \
@@ -1632,7 +1636,7 @@ class ProximityParserV4:
                 if stats['engagement_durations'] else None
             avg_crossfire_delay = sum(stats['crossfire_delays']) / len(stats['crossfire_delays']) \
                 if stats['crossfire_delays'] else None
-            
+
             query = """
                 INSERT INTO player_teamplay_stats (
                     player_guid, player_name,
@@ -1725,7 +1729,7 @@ class ProximityParserV4:
                     total_damage_taken = player_teamplay_stats.total_damage_taken + EXCLUDED.total_damage_taken,
                     last_updated = CURRENT_TIMESTAMP
             """
-            
+
             await self.db_adapter.execute(query, (
                 guid, stats['name'],
                 stats['crossfire_participations'], stats['crossfire_kills'],
@@ -1737,8 +1741,8 @@ class ProximityParserV4:
                 stats['solo_escapes'], stats['solo_deaths'],
                 avg_escape, avg_duration, stats['total_damage_taken']
             ))
-    
-    def _new_player_stats(self, name: str) -> Dict:
+
+    def _new_player_stats(self, name: str) -> dict:
         """Create empty player stats dict"""
         return {
             'name': name,
@@ -1759,16 +1763,16 @@ class ProximityParserV4:
             'escape_distances': [],
             'engagement_durations': []
         }
-    
+
     async def _update_crossfire_pairs(self):
         """Update crossfire_pairs table for duo tracking"""
-        
+
         pairs = {}  # (guid1, guid2) -> stats
-        
+
         for eng in self.engagements:
             if not eng.is_crossfire or len(eng.crossfire_participants) < 2:
                 continue
-            
+
             # Create pairs from all participants
             participants = eng.crossfire_participants
             for i in range(len(participants)):
@@ -1776,7 +1780,7 @@ class ProximityParserV4:
                     # Sort GUIDs for consistency
                     g1, g2 = sorted([participants[i], participants[j]])
                     key = (g1, g2)
-                    
+
                     if key not in pairs:
                         pairs[key] = {
                             'name1': None,
@@ -1786,30 +1790,30 @@ class ProximityParserV4:
                             'total_damage': 0,
                             'delays': []
                         }
-                    
+
                     # Get names from attackers
                     if g1 in eng.attackers:
                         pairs[key]['name1'] = eng.attackers[g1].name
                     if g2 in eng.attackers:
                         pairs[key]['name2'] = eng.attackers[g2].name
-                    
+
                     pairs[key]['crossfire_count'] += 1
                     if eng.outcome == 'killed':
                         pairs[key]['crossfire_kills'] += 1
-                    
+
                     # Sum damage from both
                     if g1 in eng.attackers:
                         pairs[key]['total_damage'] += eng.attackers[g1].damage
                     if g2 in eng.attackers:
                         pairs[key]['total_damage'] += eng.attackers[g2].damage
-                    
+
                     if eng.crossfire_delay:
                         pairs[key]['delays'].append(eng.crossfire_delay)
-        
+
         # Upsert pairs
         for (g1, g2), stats in pairs.items():
             avg_delay = sum(stats['delays']) / len(stats['delays']) if stats['delays'] else None
-            
+
             query = """
                 INSERT INTO crossfire_pairs (
                     player1_guid, player1_name, player2_guid, player2_name,
@@ -1845,17 +1849,17 @@ class ProximityParserV4:
                     games_together = crossfire_pairs.games_together + 1,
                     last_played = CURRENT_TIMESTAMP
             """
-            
+
             await self.db_adapter.execute(query, (
                 g1, stats['name1'], g2, stats['name2'],
                 stats['crossfire_count'], stats['crossfire_kills'],
                 stats['total_damage'], avg_delay
             ))
-    
+
     async def _import_heatmaps(self):
         """Import heatmap data"""
         map_name = self.metadata['map_name']
-        
+
         # Kill heatmap
         for cell in self.kill_heatmap:
             query = """
@@ -1878,7 +1882,7 @@ class ProximityParserV4:
                 map_name, cell['grid_x'], cell['grid_y'],
                 total, cell['axis_kills'], cell['allies_kills']
             ))
-        
+
         # Movement heatmap
         for cell in self.movement_heatmap:
             query = """
@@ -1913,6 +1917,8 @@ class ProximityParserV4:
                 enemy_spawn_interval=int(parts[7]),
                 time_to_next_spawn=int(parts[8]),
                 spawn_timing_score=float(parts[9]),
+                killer_reinf=float(parts[10]) if len(parts) > 10 else 0.0,
+                victim_reinf=float(parts[11]) if len(parts) > 11 else 0.0,
             ))
         except (ValueError, IndexError) as e:
             self.logger.debug(f"Skip spawn_timing line: {e}")
@@ -2192,6 +2198,9 @@ class ProximityParserV4:
                 victim_z=int(parts[15]),
                 weapon=int(parts[16]),
                 mod=int(parts[17]),
+                killer_health=int(parts[18]) if len(parts) > 18 else 0,
+                axis_alive=int(parts[19]) if len(parts) > 19 else 0,
+                allies_alive=int(parts[20]) if len(parts) > 20 else 0,
             ))
         except (ValueError, IndexError) as e:
             self.logger.debug(f"Skip combat_position line: {e}")
@@ -2390,6 +2399,10 @@ class ProximityParserV4:
                 cp.victim_x, cp.victim_y, cp.victim_z,
                 cp.weapon, cp.mod,
             ]
+            # Oksii adoption fields (optional — backward compatible)
+            if await self._table_has_column('proximity_combat_position', 'killer_health'):
+                columns.extend(["killer_health", "axis_alive", "allies_alive"])
+                values.extend([cp.killer_health, cp.axis_alive, cp.allies_alive])
             if supports_round_end:
                 columns.insert(3, "round_end_unix")
                 values.insert(3, self.metadata.get('round_end_unix', 0))
@@ -2733,6 +2746,10 @@ class ProximityParserV4:
             if supports_round_end:
                 columns.insert(3, "round_end_unix")
                 values.insert(3, self.metadata.get('round_end_unix', 0))
+            # Oksii adoption fields (optional — backward compatible)
+            if await self._table_has_column('proximity_spawn_timing', 'killer_reinf'):
+                columns.extend(["killer_reinf", "victim_reinf"])
+                values.extend([evt.killer_reinf, evt.victim_reinf])
             await self._append_round_link_columns("proximity_spawn_timing", columns, values)
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""
@@ -2968,7 +2985,7 @@ class ProximityParserV4:
             """
             await self.db_adapter.execute(query, tuple(values))
 
-    def _distance2d(self, a: Tuple[float, float, float], b: Tuple[float, float, float]) -> float:
+    def _distance2d(self, a: tuple[float, float, float], b: tuple[float, float, float]) -> float:
         dx = (a[0] or 0) - (b[0] or 0)
         dy = (a[1] or 0) - (b[1] or 0)
         return (dx * dx + dy * dy) ** 0.5
@@ -2978,8 +2995,8 @@ class ProximityParserV4:
         track: PlayerTrack,
         target_time: int,
         max_delta_ms: int,
-        point_times: Optional[List[int]] = None,
-    ) -> Optional[PathPoint]:
+        point_times: list[int] | None = None,
+    ) -> PathPoint | None:
         if not track.path:
             return None
         if point_times and len(point_times) == len(track.path):
@@ -3015,13 +3032,13 @@ class ProximityParserV4:
             return None
         return closest
 
-    def _track_for_time(self, tracks: List[PlayerTrack], target_time: int) -> Optional[PlayerTrack]:
+    def _track_for_time(self, tracks: list[PlayerTrack], target_time: int) -> PlayerTrack | None:
         for track in tracks:
             if track.spawn_time <= target_time and (track.death_time is None or track.death_time >= target_time):
                 return track
         return None
 
-    def _merge_intervals(self, intervals: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+    def _merge_intervals(self, intervals: list[tuple[int, int]]) -> list[tuple[int, int]]:
         if not intervals:
             return []
         intervals_sorted = sorted(intervals, key=lambda x: x[0])
@@ -3034,7 +3051,7 @@ class ProximityParserV4:
                 merged.append((start, end))
         return merged
 
-    def _is_in_combat(self, intervals: List[Tuple[int, int]], time_ms: int) -> bool:
+    def _is_in_combat(self, intervals: list[tuple[int, int]], time_ms: int) -> bool:
         if not intervals:
             return False
         left = 0
@@ -3051,7 +3068,7 @@ class ProximityParserV4:
             return True
         return False
 
-    def _compute_support_uptime(self) -> Optional[Dict]:
+    def _compute_support_uptime(self) -> dict | None:
         if not self.player_tracks:
             return None
 
@@ -3062,7 +3079,7 @@ class ProximityParserV4:
             200, int(os.getenv("PROXIMITY_SUPPORT_MAX_SAMPLES_PER_TRACK", "1200"))
         )
 
-        combat_intervals_by_guid: Dict[str, List[Tuple[int, int]]] = {}
+        combat_intervals_by_guid: dict[str, list[tuple[int, int]]] = {}
 
         for eng in self.engagements:
             if eng.start_time and eng.end_time:
@@ -3079,8 +3096,8 @@ class ProximityParserV4:
             combat_intervals_by_guid[guid] = self._merge_intervals(intervals)
 
         tracks = list(self.player_tracks)
-        teammates_by_team: Dict[str, List[PlayerTrack]] = {}
-        path_times_by_track_id: Dict[int, List[int]] = {}
+        teammates_by_team: dict[str, list[PlayerTrack]] = {}
+        path_times_by_track_id: dict[int, list[int]] = {}
         for track in tracks:
             teammates_by_team.setdefault(track.team, []).append(track)
             if track.path:
@@ -3153,13 +3170,13 @@ class ProximityParserV4:
         max_pos_delta = int(os.getenv("PROXIMITY_TRADE_POS_DELTA_MS", "1500"))
         isolation_dist = float(os.getenv("PROXIMITY_ISOLATION_DIST", "1200"))
 
-        tracks_by_guid: Dict[str, List[PlayerTrack]] = {}
+        tracks_by_guid: dict[str, list[PlayerTrack]] = {}
         for track in self.player_tracks:
             tracks_by_guid.setdefault(track.guid, []).append(track)
         for guid in tracks_by_guid:
             tracks_by_guid[guid].sort(key=lambda t: t.spawn_time)
 
-        engagements_by_target: Dict[str, List[Engagement]] = {}
+        engagements_by_target: dict[str, list[Engagement]] = {}
         for eng in self.engagements:
             engagements_by_target.setdefault(eng.target_guid, []).append(eng)
         for engs in engagements_by_target.values():
@@ -3197,8 +3214,8 @@ class ProximityParserV4:
                         "delta_ms": abs(point.time - death_time),
                     })
 
-            attempts_map: Dict[str, Dict] = {}
-            successes_map: Dict[str, Dict] = {}
+            attempts_map: dict[str, dict] = {}
+            successes_map: dict[str, dict] = {}
 
             killer_engagements = engagements_by_target.get(eng.killer_guid, [])
             for k_eng in killer_engagements:
@@ -3452,8 +3469,8 @@ class ProximityParserV4:
                 computed_at = CURRENT_TIMESTAMP{extra_updates}
         """
         await self.db_adapter.execute(query, tuple(values))
-    
-    def get_stats(self) -> Dict:
+
+    def get_stats(self) -> dict:
         """Get summary of parsed data"""
         crossfire_count = sum(1 for e in self.engagements if e.is_crossfire)
         kills = sum(1 for e in self.engagements if e.outcome == 'killed')
@@ -3527,7 +3544,7 @@ if __name__ == "__main__":
     parser.parse_file(filepath)
 
     stats = parser.get_stats()
-    print(f"\n=== STATS ===")
+    print("\n=== STATS ===")
     print(f"Map: {stats['map']}, Round: {stats['round']}")
     print(f"Engagements: {stats['total_engagements']}")
     print(f"  Crossfire: {stats['crossfire_engagements']}")
@@ -3537,14 +3554,14 @@ if __name__ == "__main__":
 
     # v4 track stats
     if stats['total_tracks'] > 0:
-        print(f"\n=== PLAYER TRACKS (v4) ===")
+        print("\n=== PLAYER TRACKS (v4) ===")
         print(f"Total tracks: {stats['total_tracks']}")
         print(f"Total samples: {stats['total_samples']}")
         print(f"Total distance: {stats['total_distance']:.1f} units")
         print(f"Avg life time: {stats['avg_life_ms']:.0f}ms")
 
     if parser.engagements:
-        print(f"\n=== SAMPLE ENGAGEMENT ===")
+        print("\n=== SAMPLE ENGAGEMENT ===")
         e = parser.engagements[0]
         print(f"ID: {e.id}, Target: {e.target_name}")
         print(f"Outcome: {e.outcome}, Duration: {e.duration}ms")
@@ -3553,7 +3570,7 @@ if __name__ == "__main__":
         print(f"Position path: {len(e.position_path)} points")
 
     if parser.player_tracks:
-        print(f"\n=== SAMPLE TRACK ===")
+        print("\n=== SAMPLE TRACK ===")
         t = parser.player_tracks[0]
         print(f"Player: {t.name} ({t.player_class})")
         print(f"Team: {t.team}")

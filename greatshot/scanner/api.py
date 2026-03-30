@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Iterable
 
 from greatshot.config import CONFIG
 from greatshot.contracts.profiles.profile_detector import detect_profile
@@ -14,7 +14,7 @@ from greatshot.scanner.adapters import run_udt_json_parser
 from greatshot.scanner.errors import DemoScanError, UnsupportedDemoError
 
 
-def sniff_demo_header_bytes(header_bytes: bytes) -> Dict[str, int]:
+def sniff_demo_header_bytes(header_bytes: bytes) -> dict[str, int]:
     """
     Basic ET-family demo sniffing.
 
@@ -47,11 +47,11 @@ def _canonical_name(value: Any, fallback: str = "unknown") -> str:
 
 
 def _normalize_players(
-    game_states: Iterable[Dict[str, Any]],
-    player_stats: Iterable[Dict[str, Any]],
+    game_states: Iterable[dict[str, Any]],
+    player_stats: Iterable[dict[str, Any]],
     profile,
-) -> List[Dict[str, Any]]:
-    players: Dict[int, Dict[str, Any]] = {}
+) -> list[dict[str, Any]]:
+    players: dict[int, dict[str, Any]] = {}
 
     for state in game_states:
         for row in state.get("players", []) or []:
@@ -119,7 +119,7 @@ def _normalize_players(
         if team and team != "unknown":
             item["teams"].add(team)
 
-    normalized: List[Dict[str, Any]] = []
+    normalized: list[dict[str, Any]] = []
     for _, item in sorted(players.items(), key=lambda pair: pair[0]):
         normalized.append(
             {
@@ -139,11 +139,11 @@ def _normalize_players(
 
 
 def _normalize_timeline(
-    raw_chat: Iterable[Dict[str, Any]],
-    raw_obits: Iterable[Dict[str, Any]],
+    raw_chat: Iterable[dict[str, Any]],
+    raw_obits: Iterable[dict[str, Any]],
     profile,
-) -> List[DemoEvent]:
-    timeline: List[DemoEvent] = []
+) -> list[DemoEvent]:
+    timeline: list[DemoEvent] = []
 
     for chat in raw_chat:
         t_ms = int(chat.get("serverTime") or 0)
@@ -202,9 +202,9 @@ def _normalize_timeline(
 
 
 def _extract_player_stats(
-    match_stats: List[Dict[str, Any]],
-    timeline: List[DemoEvent],
-) -> Dict[str, Dict[str, Any]]:
+    match_stats: list[dict[str, Any]],
+    timeline: list[DemoEvent],
+) -> dict[str, dict[str, Any]]:
     """Extract per-player performance stats from matchStats and timeline events."""
     def _coerce_int(value: Any) -> int | None:
         if value is None or value == "":
@@ -222,7 +222,7 @@ def _extract_player_stats(
         except (TypeError, ValueError):
             return None
 
-    def _pick_number(row: Dict[str, Any], keys: tuple[str, ...], as_float: bool = False):
+    def _pick_number(row: dict[str, Any], keys: tuple[str, ...], as_float: bool = False):
         for key in keys:
             if key not in row:
                 continue
@@ -231,7 +231,7 @@ def _extract_player_stats(
                 return value
         return None
 
-    def _extract_time_fields(row: Dict[str, Any]) -> tuple[float | None, int | None]:
+    def _extract_time_fields(row: dict[str, Any]) -> tuple[float | None, int | None]:
         minutes_val = _pick_number(row, ("time_played_minutes", "timePlayedMinutes"), as_float=True)
         if minutes_val is not None and minutes_val >= 0:
             seconds_val = int(round(minutes_val * 60.0))
@@ -248,7 +248,7 @@ def _extract_player_stats(
 
         return None, None
 
-    stats: Dict[str, Dict[str, Any]] = {}
+    stats: dict[str, dict[str, Any]] = {}
 
     # Seed from matchStats playerStats (UDT may include kills/deaths/etc.)
     primary = match_stats[0] if match_stats else {}
@@ -300,9 +300,9 @@ def _extract_player_stats(
             entry["tpm"] = round(minutes, 2)
 
     # Compute from timeline to fill gaps or override zero values
-    kills_by: Dict[str, int] = defaultdict(int)
-    deaths_by: Dict[str, int] = defaultdict(int)
-    headshots_by: Dict[str, int] = defaultdict(int)
+    kills_by: dict[str, int] = defaultdict(int)
+    deaths_by: dict[str, int] = defaultdict(int)
+    headshots_by: dict[str, int] = defaultdict(int)
     for event in timeline:
         if event.type != "kill":
             continue
@@ -339,12 +339,12 @@ def _extract_player_stats(
     return stats
 
 
-def _summarize_stats(timeline: Iterable[DemoEvent], players: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _summarize_stats(timeline: Iterable[DemoEvent], players: list[dict[str, Any]]) -> dict[str, Any]:
     timeline = list(timeline)
     kill_count = 0
     headshot_count = 0
     chat_count = 0
-    kills_by_player: Dict[str, int] = defaultdict(int)
+    kills_by_player: dict[str, int] = defaultdict(int)
 
     for event in timeline:
         if event.type == "kill":
@@ -373,7 +373,7 @@ def _summarize_stats(timeline: Iterable[DemoEvent], players: List[Dict[str, Any]
 
 def analyze_demo(
     demo_path: str | Path,
-    scanner_options: Dict[str, Any] | None = None,
+    scanner_options: dict[str, Any] | None = None,
 ) -> AnalysisResult:
     opts = scanner_options or {}
     demo_path = Path(demo_path)
@@ -419,7 +419,7 @@ def analyze_demo(
     )
 
     timeline = _normalize_timeline(chat, obituaries, profile)
-    warnings: List[str] = []
+    warnings: list[str] = []
     if len(timeline) > max_events:
         warnings.append(
             f"Timeline truncated to {max_events} events (received {len(timeline)})."

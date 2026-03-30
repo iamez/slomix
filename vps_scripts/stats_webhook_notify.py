@@ -22,20 +22,20 @@ Configuration:
 - STATE_FILE: Tracks processed files across restarts
 """
 
+import hashlib
+import json
+import logging
 import os
 import sys
-import json
-import time
-import logging
-import hashlib
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
 # Try to import watchdog (file system monitor)
 try:
-    from watchdog.observers import Observer
     from watchdog.events import FileSystemEventHandler
+    from watchdog.observers import Observer
     WATCHDOG_AVAILABLE = True
 except ImportError:
     WATCHDOG_AVAILABLE = False
@@ -115,7 +115,7 @@ def load_state() -> dict:
     global _state_dirty_count, _state_last_flush_unix
     try:
         if os.path.exists(STATE_FILE):
-            with open(STATE_FILE, 'r') as f:
+            with open(STATE_FILE) as f:
                 loaded = json.load(f)
                 if not isinstance(loaded, dict):
                     loaded = {}
@@ -357,26 +357,26 @@ def send_discord_notification(filename: str, filepath: str):
 
 class StatsFileHandler(FileSystemEventHandler):
     """Handles file system events for stats directory."""
-    
+
     def __init__(self, state: dict):
         self.state = state
         super().__init__()
-    
+
     def on_created(self, event):
         """Handle new file creation."""
         if event.is_directory:
             return
-        
+
         filepath = event.src_path
         filename = os.path.basename(filepath)
-        
+
         logger.info(f"📁 File detected: {filename}")
-        
+
         # Validate stats file
         if not is_valid_stats_file(filepath):
             logger.debug(f"⏭️ Skipping non-stats file: {filename}")
             return
-        
+
         # Atomically check processed + claim in-flight (prevents race condition)
         with _state_lock:
             if filename in self.state.get("processed_files", []):
@@ -483,37 +483,37 @@ def main():
     logger.info("=" * 60)
     logger.info("🚀 ET:Legacy Stats Webhook Notifier Starting")
     logger.info("=" * 60)
-    
+
     # Validate configuration
     if not DISCORD_WEBHOOK_URL:
         logger.error("❌ DISCORD_WEBHOOK_URL not set!")
         logger.error("   Set via environment variable or edit this script")
         sys.exit(1)
-    
+
     if not os.path.exists(STATS_PATH):
         logger.error(f"❌ Stats directory not found: {STATS_PATH}")
         sys.exit(1)
-    
+
     logger.info(f"📂 Watching: {STATS_PATH}")
     logger.info(f"📋 State file: {STATE_FILE}")
     logger.info(f"🔗 Webhook configured: {DISCORD_WEBHOOK_URL[:50]}...")
-    
+
     # Load state
     state = load_state()
     processed_count = len(state.get("processed_files", []))
     logger.info(f"📊 Loaded state: {processed_count} files previously processed")
-    
+
     # Scan for existing unprocessed files
     scan_existing_files(state, STATS_PATH)
-    
+
     # Set up file watcher
     event_handler = StatsFileHandler(state)
     observer = Observer()
     observer.schedule(event_handler, STATS_PATH, recursive=False)
-    
+
     logger.info("👀 Starting file watcher...")
     observer.start()
-    
+
     try:
         logger.info("✅ Webhook notifier running. Press Ctrl+C to stop.")
         while True:

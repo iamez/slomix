@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable
+from typing import Any, Iterable
 
 
 def _fmt_ms(ms: int | None, offset_ms: int = 0) -> str:
@@ -18,7 +18,7 @@ def _fmt_ms(ms: int | None, offset_ms: int = 0) -> str:
     return f"{minutes:02d}:{seconds:02d}"
 
 
-def _lines_for_players(players: Iterable[Dict[str, Any]], offset_ms: int = 0) -> list[str]:
+def _lines_for_players(players: Iterable[dict[str, Any]], offset_ms: int = 0) -> list[str]:
     lines: list[str] = []
     for player in players:
         name = player.get("name") or "unknown"
@@ -28,7 +28,7 @@ def _lines_for_players(players: Iterable[Dict[str, Any]], offset_ms: int = 0) ->
     return lines
 
 
-def build_text_report(analysis: Dict[str, Any]) -> str:
+def build_text_report(analysis: dict[str, Any]) -> str:
     metadata = analysis.get("metadata", {})
     stats = analysis.get("stats", {})
     players = analysis.get("players", [])

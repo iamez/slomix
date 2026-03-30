@@ -1143,7 +1143,7 @@ class AvailabilityPollCog(commands.Cog, name="AvailabilityPoll"):
                     (self.scheduler_lock_key,),
                 )
             except Exception:
-                pass  # Advisory unlock best-effort; lock expires on disconnect
+                logger.debug("Advisory unlock failed (best-effort; lock expires on disconnect)", exc_info=True)
 
     def _is_reminder_due(self, now: datetime) -> bool:
         try:

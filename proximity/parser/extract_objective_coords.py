@@ -17,7 +17,6 @@ from collections import defaultdict, deque
 from pathlib import Path
 from typing import Any
 
-
 KV_RE = re.compile(r'"([^"]*)"\s+"([^"]*)"')
 
 
@@ -97,7 +96,7 @@ def load_map_filter(map_template: str) -> set[str]:
         payload = json.load(handle)
 
     maps = payload.get("maps", {})
-    return {str(name).lower() for name in maps.keys()}
+    return {str(name).lower() for name in maps}
 
 
 def parse_origin(origin: str) -> tuple[float, float, float] | None:

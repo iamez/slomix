@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Extract and convert ET:Legacy game assets (TGA→PNG) from pk3 files."""
 
-import zipfile
 import io
 import sys
+import zipfile
 from pathlib import Path
+
 from PIL import Image
 
 ETMAIN = Path(__file__).parent.parent / "etmain"

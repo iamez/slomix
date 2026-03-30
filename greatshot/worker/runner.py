@@ -6,8 +6,7 @@ import json
 import threading
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Dict, Optional
-
+from typing import Any
 
 from greatshot.scanner.api import analyze_demo
 from greatshot.scanner.report import build_text_report
@@ -20,9 +19,9 @@ class AnalysisCancelledError(RuntimeError):
 def run_analysis_job(
     demo_path: str | Path,
     output_dir: str | Path,
-    scanner_options: Dict[str, Any] | None = None,
-    cancel_event: Optional[threading.Event] = None,
-) -> Dict[str, Any]:
+    scanner_options: dict[str, Any] | None = None,
+    cancel_event: threading.Event | None = None,
+) -> dict[str, Any]:
     """Run demo analysis, optionally checking *cancel_event* for early exit.
 
     When *cancel_event* is set, the function raises ``AnalysisCancelledError``

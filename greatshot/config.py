@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass
@@ -24,11 +23,11 @@ class GreatshotConfig:
     analysis_queue_workers: int = 1
     render_queue_workers: int = 1
 
-    udt_json_bin: Optional[str] = None
-    udt_cutter_bin: Optional[str] = None
-    etlegacy_client_path: Optional[str] = None
+    udt_json_bin: str | None = None
+    udt_cutter_bin: str | None = None
+    etlegacy_client_path: str | None = None
     ffmpeg_path: str = "ffmpeg"
-    render_command: Optional[str] = None
+    render_command: str | None = None
 
 
 def _env(name: str, legacy_name: str | None = None, default: str | None = None) -> str | None:

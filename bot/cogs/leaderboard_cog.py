@@ -62,12 +62,12 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
             try:
                 await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
             except Exception:  # nosec B110
-                pass  # Alias is optional
+                logger.debug("Failed to set up player_name alias (optional)", exc_info=True)
             # Enable SQL diagnostics for troubleshooting
             try:
                 await self._enable_sql_diag()
             except Exception:  # nosec B110
-                pass  # Diagnostics are optional
+                logger.debug("Failed to enable SQL diagnostics (optional)", exc_info=True)
 
             # === SCENARIO 1: @MENTION - Look up linked Discord user ===
             if ctx.message.mentions:

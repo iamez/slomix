@@ -133,7 +133,19 @@ async function loadStoryData() {
         renderPlayerCards(storyState.players);
         renderKISBreakdown(storyState.players);
 
-        // Fetch moments + team synergy in parallel (non-blocking)
+        // Fetch narrative, momentum, moments, synergy, win-contribution in parallel (non-blocking)
+        fetchJSON(
+            `${API_BASE}/storytelling/narrative?session_date=${encodeURIComponent(storyState.sessionDate)}`
+        ).then(narData => {
+            if (loadId === storyLoadId) renderNarrative(narData);
+        }).catch(() => renderNarrative(null));
+
+        fetchJSON(
+            `${API_BASE}/storytelling/momentum?session_date=${encodeURIComponent(storyState.sessionDate)}`
+        ).then(momtData => {
+            if (loadId === storyLoadId) renderMomentum(momtData);
+        }).catch(() => renderMomentum(null));
+
         fetchJSON(
             `${API_BASE}/storytelling/moments?session_date=${encodeURIComponent(storyState.sessionDate)}&limit=10`
         ).then(momData => {
@@ -167,6 +179,10 @@ function renderLoading() {
     if (subtitle) subtitle.textContent = '';
     if (statsRow) statsRow.textContent = '';
 
+    const narrative = document.getElementById('story-narrative');
+    if (narrative) narrative.textContent = '';
+    const momentum = document.getElementById('story-momentum');
+    if (momentum) momentum.textContent = '';
     const moments = document.getElementById('story-moments');
     if (moments) moments.textContent = '';
     const players = document.getElementById('story-players');
@@ -198,7 +214,7 @@ function renderEmpty(message) {
             _el('div', 'text-slate-400 text-sm', message)
         ));
     }
-    for (const id of ['story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution']) {
+    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution']) {
         const el = document.getElementById(id);
         if (el) el.textContent = '';
     }
@@ -227,6 +243,113 @@ function renderStoryHero(sessionDate, players) {
         statsRow.appendChild(stat('Players', String(players.length), 'text-white'));
         statsRow.appendChild(stat('MVP', topPlayer ? stripEtColors(topPlayer.name) : '-', 'text-amber-400'));
     }
+}
+
+function renderNarrative(data) {
+    const container = document.getElementById('story-narrative');
+    if (!container) return;
+    container.textContent = '';
+
+    const text = data?.narrative;
+    if (!text) return;
+
+    const card = _el('div', 'rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4');
+    const content = _el('div', 'text-sm text-slate-400 italic leading-relaxed', text);
+    content.style.opacity = '0.8';
+    card.appendChild(content);
+    container.appendChild(card);
+}
+
+function renderMomentum(data) {
+    const container = document.getElementById('story-momentum');
+    if (!container) return;
+    container.textContent = '';
+
+    const rounds = Array.isArray(data?.rounds) ? data.rounds : [];
+    if (rounds.length === 0) return;
+
+    const heading = _el('h3', 'text-sm font-bold text-amber-400 tracking-widest uppercase mb-3', 'Momentum');
+    container.appendChild(heading);
+
+    const grid = _el('div', 'grid grid-cols-1 sm:grid-cols-2 gap-4');
+
+    rounds.forEach((round, idx) => {
+        const points = Array.isArray(round.points) ? round.points : [];
+        if (points.length === 0) return;
+
+        const wrapper = _el('div', 'rounded-xl border border-white/[0.08] bg-white/[0.03] p-4');
+        const label = `R${round.round_number || idx + 1} ${round.map_name || ''}`;
+        wrapper.appendChild(_el('div', 'text-xs text-slate-400 font-semibold mb-2', label));
+
+        const canvas = document.createElement('canvas');
+        wrapper.style.overflow = 'hidden';
+        wrapper.appendChild(canvas);
+        grid.appendChild(wrapper);
+
+        const labels = points.map(pt => Math.round((pt.t_ms || 0) / 1000));
+        const axisData = points.map(pt => pt.axis ?? 0);
+        const alliesData = points.map(pt => pt.allies ?? 0);
+
+        new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Axis',
+                        data: axisData,
+                        borderColor: 'rgba(239, 68, 68, 0.8)',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        tension: 0.3,
+                        fill: false,
+                    },
+                    {
+                        label: 'Allies',
+                        data: alliesData,
+                        borderColor: 'rgba(59, 130, 246, 0.8)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        tension: 0.3,
+                        fill: false,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2.5,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            color: 'rgba(148, 163, 184, 0.7)',
+                            font: { size: 10 },
+                            boxWidth: 12,
+                            padding: 8,
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Time (s)', color: 'rgba(148, 163, 184, 0.5)', font: { size: 9 } },
+                        ticks: { color: 'rgba(148, 163, 184, 0.4)', font: { size: 9 }, maxTicksLimit: 8 },
+                        grid: { color: 'rgba(255,255,255,0.04)' },
+                    },
+                    y: {
+                        title: { display: true, text: 'Momentum', color: 'rgba(148, 163, 184, 0.5)', font: { size: 9 } },
+                        ticks: { color: 'rgba(148, 163, 184, 0.4)', font: { size: 9 } },
+                        grid: { color: 'rgba(255,255,255,0.04)' },
+                    },
+                },
+            },
+        });
+    });
+
+    container.appendChild(grid);
 }
 
 function renderPlayerCards(players) {
@@ -283,6 +406,29 @@ function renderPlayerCards(players) {
         barContainer.appendChild(seg('bg-cyan-500/80', crossfireBar));
         card.appendChild(barContainer);
 
+        // DPM + denied time + dead % info row
+        const infoRow = _el('div', 'flex justify-between mt-2 text-[10px] text-slate-500');
+        if (p.dpm) infoRow.appendChild(_el('span', null, `DPM: ${(p.dpm).toFixed(0)}`));
+        if (p.denied_time) infoRow.appendChild(_el('span', null, `Denied: ${Math.round(p.denied_time / 60)}m`));
+        if (p.time_dead_pct != null) infoRow.appendChild(_el('span', null, `Dead: ${(p.time_dead_pct * 100).toFixed(0)}%`));
+        card.appendChild(infoRow);
+
+        // Oksii multiplier badges
+        const oksiiRow = _el('div', 'flex flex-wrap gap-1 mt-2');
+        const badge = (label, count, cls) => {
+            if (!count) return null;
+            return _el('span', `inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold ${cls}`, `${label} ${count}`);
+        };
+        const clutchBadge = badge('\u2764\uFE0F Clutch', p.clutch_kills, 'bg-red-500/20 text-red-400 border border-red-500/30');
+        const soloBadge = badge('\u{1F451} Solo', p.solo_clutch_kills, 'bg-amber-500/20 text-amber-400 border border-amber-500/30');
+        const outnumBadge = badge('\u{1F4AA} Outnum', p.outnumbered_kills, 'bg-purple-500/20 text-purple-400 border border-purple-500/30');
+        const denyBadge = badge('\u23F1 Deny', p.spawn_denial_kills, 'bg-teal-500/20 text-teal-400 border border-teal-500/30');
+        if (clutchBadge) oksiiRow.appendChild(clutchBadge);
+        if (soloBadge) oksiiRow.appendChild(soloBadge);
+        if (outnumBadge) oksiiRow.appendChild(outnumBadge);
+        if (denyBadge) oksiiRow.appendChild(denyBadge);
+        if (oksiiRow.children.length > 0) card.appendChild(oksiiRow);
+
         // Footer
         card.appendChild(_el('div', 'flex justify-between mt-1 text-[9px] text-slate-600',
             _el('span', null, `Avg impact: ${(p.avg_impact ?? 0).toFixed(2)}`),
@@ -320,13 +466,15 @@ function renderKISBreakdown(players) {
 
     // Bars
     top.forEach(p => {
-        // NOTE: Segment widths are approximations based on kill counts x avg_impact.
-        // Actual per-kill multipliers vary; this is a visualization heuristic only.
-        const carrierKIS = p.carrier_kills * (p.avg_impact || 1);
-        const pushKIS = p.push_kills * (p.avg_impact || 1) * 0.8;
-        const crossfireKIS = p.crossfire_kills * (p.avg_impact || 1) * 0.7;
-        const segmentTotal = carrierKIS + pushKIS + crossfireKIS;
-        const baseKIS = Math.max(0, (p.total_kis ?? 0) - segmentTotal);
+        // Proportional KIS distribution based on actual context kill counts
+        const contextKills = p.carrier_kills + p.push_kills + p.crossfire_kills;
+        const contextRatio = p.kills > 0 ? contextKills / p.kills : 0;
+        const contextKIS = (p.total_kis ?? 0) * contextRatio;
+        const totalContext = (p.carrier_kills + p.push_kills + p.crossfire_kills) || 1;
+        const carrierKIS = contextKIS * (p.carrier_kills / totalContext);
+        const pushKIS = contextKIS * (p.push_kills / totalContext);
+        const crossfireKIS = contextKIS * (p.crossfire_kills / totalContext);
+        const baseKIS = Math.max(0, (p.total_kis ?? 0) - contextKIS);
         const pct = (v) => ((v / maxKIS) * 100).toFixed(1);
         const safeName = stripEtColors(p.name);
 

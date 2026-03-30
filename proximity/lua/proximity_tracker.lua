@@ -921,6 +921,22 @@ local function getAliveTeamMembers(team_num)
     return members
 end
 
+-- Oksii adoption: alive count per team (lightweight, no position data)
+local function countAlivePerTeam()
+    local axis_alive = 0
+    local allies_alive = 0
+    local max_clients = get_max_clients()
+    for cn = 0, max_clients - 1 do
+        if isPlayerActive(cn) and isPlayerAlive(cn) then
+            local team = getPlayerTeamNum(cn)
+            if team == 1 then axis_alive = axis_alive + 1
+            elseif team == 2 then allies_alive = allies_alive + 1
+            end
+        end
+    end
+    return axis_alive, allies_alive
+end
+
 local function getAliveEnemies(team_num)
     local enemy_team = (team_num == 1) and 2 or 1
     return getAliveTeamMembers(enemy_team)
@@ -1485,6 +1501,17 @@ local function recordSpawnTiming(killer_slot, victim_slot, kill_time)
     local time_to_next, score = calculateSpawnTimingScore(kill_time, victim_team_num)
     local interval = victim_team_num == 1 and tracker.spawn.axis_interval or tracker.spawn.allies_interval
 
+    -- Oksii adoption: raw reinforcement seconds for both teams
+    local killer_team_num = getPlayerTeamNum(killer_slot)
+    local killer_interval = killer_team_num == 1 and tracker.spawn.axis_interval or tracker.spawn.allies_interval
+    local killer_reinf_ms = 0
+    if killer_interval > 0 then
+        local elapsed = kill_time - (tracker.round.start_time or 0)
+        local reinf_offset = (killer_team_num == 1) and (tracker.spawn.axis_offset or 0) or (tracker.spawn.allies_offset or 0)
+        killer_reinf_ms = killer_interval - ((reinf_offset + elapsed) % killer_interval)
+    end
+    local victim_reinf_ms = time_to_next  -- already calculated above
+
     table.insert(tracker.spawn.kill_timings, {
         killer_guid = getPlayerGUID(killer_slot),
         killer_name = getPlayerName(killer_slot),
@@ -1496,6 +1523,8 @@ local function recordSpawnTiming(killer_slot, victim_slot, kill_time)
         enemy_spawn_interval = interval,
         time_to_next_spawn = round(time_to_next, 0),
         spawn_timing_score = round(score, 3),
+        killer_reinf = round(killer_reinf_ms / 1000, 1),
+        victim_reinf = round(victim_reinf_ms / 1000, 1),
     })
 
     if config.debug then
@@ -2903,13 +2932,15 @@ local function outputDataInner()
     if isFeatureEnabled("spawn_timing") and #tracker.spawn.kill_timings > 0 then
         local st_header = "\n# SPAWN_TIMING\n" ..
             "# killer_guid;killer_name;killer_team;victim_guid;victim_name;victim_team;" ..
-            "kill_time;enemy_spawn_interval;time_to_next_spawn;spawn_timing_score\n"
+            "kill_time;enemy_spawn_interval;time_to_next_spawn;spawn_timing_score;" ..
+            "killer_reinf;victim_reinf\n"
         et.trap_FS_Write(st_header, string.len(st_header), fd)
         for _, t in ipairs(tracker.spawn.kill_timings) do
-            local line = string.format("%s;%s;%s;%s;%s;%s;%d;%d;%d;%.3f\n",
+            local line = string.format("%s;%s;%s;%s;%s;%s;%d;%d;%d;%.3f;%.1f;%.1f\n",
                 t.killer_guid, t.killer_name, t.killer_team,
                 t.victim_guid, t.victim_name, t.victim_team,
-                t.kill_time, t.enemy_spawn_interval, t.time_to_next_spawn, t.spawn_timing_score)
+                t.kill_time, t.enemy_spawn_interval, t.time_to_next_spawn, t.spawn_timing_score,
+                t.killer_reinf or 0, t.victim_reinf or 0)
             et.trap_FS_Write(line, string.len(line), fd)
         end
     end
@@ -3088,15 +3119,16 @@ local function outputDataInner()
         local cp_header = "\n# COMBAT_POSITIONS\n" ..
             "# time;event;atk_guid;atk_name;atk_team;atk_class;" ..
             "vic_guid;vic_name;vic_team;vic_class;" ..
-            "ax;ay;az;vx;vy;vz;weapon;mod\n"
+            "ax;ay;az;vx;vy;vz;weapon;mod;killer_health;axis_alive;allies_alive\n"
         et.trap_FS_Write(cp_header, string.len(cp_header), fd)
         for _, cp in ipairs(tracker.combat_positions) do
-            local line = string.format("%d;%s;%s;%s;%s;%s;%s;%s;%s;%s;%d;%d;%d;%d;%d;%d;%d;%d\n",
+            local line = string.format("%d;%s;%s;%s;%s;%s;%s;%s;%s;%s;%d;%d;%d;%d;%d;%d;%d;%d;%d;%d;%d\n",
                 cp.time, cp.event_type,
                 cp.attacker_guid, cp.attacker_name, cp.attacker_team, cp.attacker_class,
                 cp.victim_guid, cp.victim_name, cp.victim_team, cp.victim_class,
                 cp.ax, cp.ay, cp.az, cp.vx, cp.vy, cp.vz,
-                cp.weapon, cp.mod)
+                cp.weapon, cp.mod,
+                cp.killer_health or 0, cp.axis_alive or 0, cp.allies_alive or 0)
             et.trap_FS_Write(line, string.len(line), fd)
         end
     end
@@ -3762,6 +3794,8 @@ function et_Obituary(victim, killer, meansOfDeath)
             local killer_pos = getPlayerPos(killer)
             if killer_pos and death_pos then
                 local cp_weapon = MOD_TO_WEAPON[meansOfDeath] or (safe_gentity_get(killer, "ps.weapon") or 0)
+                local cp_killer_health = tonumber(safe_gentity_get(killer, "health")) or 0
+                local cp_axis_alive, cp_allies_alive = countAlivePerTeam()
                 table.insert(tracker.combat_positions, {
                     time = now,
                     event_type = "kill",
@@ -3781,6 +3815,9 @@ function et_Obituary(victim, killer, meansOfDeath)
                     vz = round(death_pos.z, 0),
                     weapon = cp_weapon,
                     mod = meansOfDeath or 0,
+                    killer_health = cp_killer_health,
+                    axis_alive = cp_axis_alive,
+                    allies_alive = cp_allies_alive,
                 })
             end
         end

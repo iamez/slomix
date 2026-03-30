@@ -382,7 +382,7 @@ async def download_upload(
                 (upload_id,),
             )
         except Exception:
-            pass
+            logger.debug("Failed to increment download count for upload_id=%s", upload_id, exc_info=True)
 
     # For MP4, allow inline playback with Range request support for seeking
     if extension.lower() == ".mp4" and not force_download:
