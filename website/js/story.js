@@ -260,6 +260,76 @@ function renderNarrative(data) {
     container.appendChild(card);
 }
 
+let _momentumChart = null;
+
+function _createMomentumChart(canvas, round, idx) {
+    const points = Array.isArray(round.points) ? round.points : [];
+    if (points.length === 0) return null;
+
+    const labels = points.map(pt => Math.round((pt.t_ms || 0) / 1000));
+    const axisData = points.map(pt => pt.axis ?? 0);
+    const alliesData = points.map(pt => pt.allies ?? 0);
+
+    return new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Axis',
+                    data: axisData,
+                    borderColor: 'rgba(239, 68, 68, 0.8)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    tension: 0.3,
+                    fill: false,
+                },
+                {
+                    label: 'Allies',
+                    data: alliesData,
+                    borderColor: 'rgba(59, 130, 246, 0.8)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    tension: 0.3,
+                    fill: false,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        color: 'rgba(148, 163, 184, 0.7)',
+                        font: { size: 10 },
+                        boxWidth: 12,
+                        padding: 8,
+                    },
+                },
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Time (s)', color: 'rgba(148, 163, 184, 0.5)', font: { size: 9 } },
+                    ticks: { color: 'rgba(148, 163, 184, 0.4)', font: { size: 9 }, maxTicksLimit: 8 },
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                },
+                y: {
+                    min: 0,
+                    max: 100,
+                    title: { display: true, text: 'Momentum', color: 'rgba(148, 163, 184, 0.5)', font: { size: 9 } },
+                    ticks: { color: 'rgba(148, 163, 184, 0.4)', font: { size: 9 } },
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                },
+            },
+        },
+    });
+}
+
 function renderMomentum(data) {
     const container = document.getElementById('story-momentum');
     if (!container) return;
@@ -271,85 +341,54 @@ function renderMomentum(data) {
     const heading = _el('h3', 'text-sm font-bold text-amber-400 tracking-widest uppercase mb-3', 'Momentum');
     container.appendChild(heading);
 
-    const grid = _el('div', 'grid grid-cols-1 sm:grid-cols-2 gap-4');
-
-    rounds.forEach((round, idx) => {
-        const points = Array.isArray(round.points) ? round.points : [];
-        if (points.length === 0) return;
-
-        const wrapper = _el('div', 'rounded-xl border border-white/[0.08] bg-white/[0.03] p-4');
-        const label = `R${round.round_number || idx + 1} ${round.map_name || ''}`;
-        wrapper.appendChild(_el('div', 'text-xs text-slate-400 font-semibold mb-2', label));
-
-        const canvas = document.createElement('canvas');
-        wrapper.style.overflow = 'hidden';
-        wrapper.appendChild(canvas);
-        grid.appendChild(wrapper);
-
-        const labels = points.map(pt => Math.round((pt.t_ms || 0) / 1000));
-        const axisData = points.map(pt => pt.axis ?? 0);
-        const alliesData = points.map(pt => pt.allies ?? 0);
-
-        new Chart(canvas, {
-            type: 'line',
-            data: {
-                labels,
-                datasets: [
-                    {
-                        label: 'Axis',
-                        data: axisData,
-                        borderColor: 'rgba(239, 68, 68, 0.8)',
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                        borderWidth: 1.5,
-                        pointRadius: 0,
-                        tension: 0.3,
-                        fill: false,
-                    },
-                    {
-                        label: 'Allies',
-                        data: alliesData,
-                        borderColor: 'rgba(59, 130, 246, 0.8)',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        borderWidth: 1.5,
-                        pointRadius: 0,
-                        tension: 0.3,
-                        fill: false,
-                    },
-                ],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                aspectRatio: 2.5,
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        labels: {
-                            color: 'rgba(148, 163, 184, 0.7)',
-                            font: { size: 10 },
-                            boxWidth: 12,
-                            padding: 8,
-                        },
-                    },
-                },
-                scales: {
-                    x: {
-                        title: { display: true, text: 'Time (s)', color: 'rgba(148, 163, 184, 0.5)', font: { size: 9 } },
-                        ticks: { color: 'rgba(148, 163, 184, 0.4)', font: { size: 9 }, maxTicksLimit: 8 },
-                        grid: { color: 'rgba(255,255,255,0.04)' },
-                    },
-                    y: {
-                        title: { display: true, text: 'Momentum', color: 'rgba(148, 163, 184, 0.5)', font: { size: 9 } },
-                        ticks: { color: 'rgba(148, 163, 184, 0.4)', font: { size: 9 } },
-                        grid: { color: 'rgba(255,255,255,0.04)' },
-                    },
-                },
-            },
+    // Tab bar (hidden if only 1 round)
+    if (rounds.length > 1) {
+        const tabBar = _el('div', 'flex gap-1 mb-3 overflow-x-auto');
+        rounds.forEach((round, idx) => {
+            const label = `R${round.round_number || idx + 1} ${round.map_name || ''}`;
+            const btn = _el('button', '', label);
+            btn.dataset.roundIdx = idx;
+            btn.className = idx === 0
+                ? 'px-3 py-1 text-xs rounded-lg bg-white/10 text-white border border-white/20 whitespace-nowrap'
+                : 'px-3 py-1 text-xs rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 whitespace-nowrap';
+            tabBar.appendChild(btn);
         });
-    });
 
-    container.appendChild(grid);
+        tabBar.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-round-idx]');
+            if (!btn) return;
+            const idx = parseInt(btn.dataset.roundIdx, 10);
+
+            // Update tab styles
+            tabBar.querySelectorAll('button').forEach(b => {
+                b.className = 'px-3 py-1 text-xs rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5 whitespace-nowrap';
+            });
+            btn.className = 'px-3 py-1 text-xs rounded-lg bg-white/10 text-white border border-white/20 whitespace-nowrap';
+
+            // Recreate chart
+            if (_momentumChart) { _momentumChart.destroy(); _momentumChart = null; }
+            const canvas = document.createElement('canvas');
+            const wrapper = container.querySelector('.momentum-chart-wrapper');
+            wrapper.textContent = '';
+            wrapper.style.height = '200px';
+            wrapper.appendChild(canvas);
+            _momentumChart = _createMomentumChart(canvas, rounds[idx], idx);
+        });
+
+        container.appendChild(tabBar);
+    }
+
+    // Chart wrapper with single canvas — fixed 200px height
+    const wrapper = _el('div', 'rounded-xl border border-white/[0.08] bg-white/[0.03] p-4 momentum-chart-wrapper');
+    wrapper.style.overflow = 'hidden';
+    wrapper.style.height = '200px';
+    const canvas = document.createElement('canvas');
+    wrapper.appendChild(canvas);
+    container.appendChild(wrapper);
+
+    // Render first round
+    if (_momentumChart) { _momentumChart.destroy(); _momentumChart = null; }
+    _momentumChart = _createMomentumChart(canvas, rounds[0], 0);
 }
 
 function renderPlayerCards(players) {
