@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Slomix - ET:Legacy Discord Bot
 
-**Version**: 1.0.8 | **Language**: Python 3.11+ | **Discord.py**: 2.6.4 (pinned)
+**Version**: 1.1.2 | **Language**: Python 3.11+ | **Discord.py**: 2.6.4 (pinned)
 **Database**: PostgreSQL 17 (production) / 14 (dev) | **Status**: Production-Ready
 
 ---
@@ -193,6 +193,20 @@ AUTOMATION_ENABLED=true
 - **Fixed**: 20+ error masking issues (silent exceptions, empty catches), retry loop bug, parser file restore
 - **Key fix**: `file_tracker.py` now respects `success=FALSE` entries (was causing infinite retry loops)
 
+### Mandelbrot RCA v2.0 Audit + Oksii Adoption (Mar 29-30)
+- **Ruff**: Expanded to 8 rule sets (E/F/W/I/UP/B/S/T20/SIM/C4), 2257→0 errors
+- **Silent exceptions**: 23 `except: pass` + 5 silent returns → proper logging
+- **Shared constants**: `website/backend/utils/et_constants.py` (KILL_MOD_NAMES, color strip, weapon names)
+- **Memory leak**: `_compute_locks` → BoundedLockDict (max 64, LRU)
+- **Oksii adoption**: Lua v6.01 with killer_health, alive_count, reinf timing
+- **KIS v2**: 3 multipliers (health, alive, reinf) + soft cap at 5.0
+- **BOX scoring**: `website/backend/services/box_scoring_service.py` (Oksii-style stopwatch)
+- **Migration**: `migrations/033_add_oksii_adoption_fields.sql`
+- **Storytelling**: Narrative, momentum chart, KIS fix, Oksii badges on legacy website
+- **God file splits**: `proximity_router.py` (5515→13 sub-routers), `records_router.py` (3172→9 sub-routers)
+- **Tests**: 101 new unit tests (476 total), end-to-end verified with bots (33 rounds, 2781 positions)
+- **Bug fixes**: Round linker timezone (UTC vs local), revives endpoint, kill-outcomes params
+
 ---
 
 ## Common Pitfalls
@@ -231,15 +245,17 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 
 ---
 
-## System Status (Version 1.0.8)
+## System Status (Version 1.1.2)
 
-- Parser: 100% functional, R2 differential validated
-- Database: PostgreSQL (68 tables), no corruption
+- Parser: 100% functional, R2 differential validated, Oksii fields backward-compatible
+- Database: PostgreSQL (69 tables), no corruption
 - Bot: 80+ commands across 18 Cogs, all functional
-- Website: Upload library, availability polls, greatshot, system overview
+- Website: Upload library, availability polls, greatshot, storytelling, skill rating, BOX scoring
 - Automation: SSH monitoring, voice detection, Lua webhook (v1.6.2)
+- Lua: v6.01 with Oksii adoption (killer_health, alive_count, reinf timing)
+- Code quality: Ruff 0 errors, 476 tests, mypy configured
 - Production Ready: Fully tested and validated
 
 ---
 
-**Version**: 1.0.9 | **Last Updated**: 2026-03-26 | **Schema Version**: 2.1
+**Version**: 1.1.2 | **Last Updated**: 2026-03-30 | **Schema Version**: 2.2
