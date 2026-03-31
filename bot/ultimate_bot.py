@@ -1633,6 +1633,23 @@ class UltimateETLegacyBot(commands.Bot):
             except (TypeError, ValueError):
                 target_unix = 0
 
+            # Fallback: derive target_unix from round_date + round_time when Lua
+            # metadata is missing (e.g. bot restart lost in-memory webhook data).
+            # The rounds table ALWAYS has round_date+round_time from the filename.
+            if not target_unix:
+                round_row = await self.db_adapter.fetch_one(
+                    "SELECT round_date, round_time FROM rounds WHERE id = ?",
+                    (round_id,),
+                )
+                if round_row:
+                    from bot.core.round_linker import _parse_round_datetime
+                    dt = _parse_round_datetime(
+                        round_row[0] if isinstance(round_row, (list, tuple)) else round_row.get('round_date'),
+                        round_row[1] if isinstance(round_row, (list, tuple)) else round_row.get('round_time'),
+                    )
+                    if dt:
+                        target_unix = int(dt.timestamp())
+
             if not target_unix:
                 return
 
