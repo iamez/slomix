@@ -163,6 +163,12 @@ async function loadStoryData() {
         ).then(pwcData => {
             if (loadId === storyLoadId) renderWinContribution(pwcData);
         }).catch(() => renderWinContribution(null));
+
+        fetchJSON(
+            `${API_BASE}/skill/composite?session_date=${encodeURIComponent(storyState.sessionDate)}`
+        ).then(compData => {
+            if (loadId === storyLoadId) renderAdvancedMetrics(compData);
+        }).catch(() => renderAdvancedMetrics(null));
     } catch (err) {
         console.error('Story data load failed:', err);
         renderEmpty('Failed to load Smart Stats');
@@ -196,6 +202,8 @@ function renderLoading() {
     if (synergy) synergy.textContent = '';
     const pwc = document.getElementById('story-win-contribution');
     if (pwc) pwc.textContent = '';
+    const adv = document.getElementById('story-advanced-metrics');
+    if (adv) adv.textContent = '';
 }
 
 function renderEmpty(message) {
@@ -487,14 +495,17 @@ function renderKISBreakdown(players) {
     const maxKIS = Math.max(...top.map(p => p.total_kis), 1);
 
     const SEGMENTS = [
-        { key: 'base',      label: 'Base',      color: 'bg-slate-500' },
-        { key: 'carrier',   label: 'Carrier',   color: 'bg-rose-500' },
-        { key: 'push',      label: 'Push',       color: 'bg-amber-500' },
-        { key: 'crossfire', label: 'Crossfire',  color: 'bg-cyan-500' },
+        { key: 'base',        label: 'Base',         color: 'bg-slate-500' },
+        { key: 'carrier',     label: 'Carrier',      color: 'bg-rose-500' },
+        { key: 'push',        label: 'Push',         color: 'bg-amber-500' },
+        { key: 'crossfire',   label: 'Crossfire',    color: 'bg-cyan-500' },
+        { key: 'clutch',      label: 'Clutch',       color: 'bg-purple-500' },
+        { key: 'spawn',       label: 'Spawn Denial', color: 'bg-emerald-500' },
+        { key: 'outnumbered', label: 'Outnumbered',  color: 'bg-orange-500' },
     ];
 
     // Legend
-    const legendRow = _el('div', 'flex gap-4 mb-4');
+    const legendRow = _el('div', 'flex flex-wrap gap-3 mb-4');
     SEGMENTS.forEach(s => {
         legendRow.appendChild(_el('span', 'inline-flex items-center gap-1.5 text-[10px] text-slate-400',
             _el('span', `w-2.5 h-2.5 rounded-sm ${s.color}`),
@@ -505,33 +516,75 @@ function renderKISBreakdown(players) {
 
     // Bars
     top.forEach(p => {
-        // Proportional KIS distribution based on actual context kill counts
-        const contextKills = p.carrier_kills + p.push_kills + p.crossfire_kills;
-        const contextRatio = p.kills > 0 ? contextKills / p.kills : 0;
-        const contextKIS = (p.total_kis ?? 0) * contextRatio;
-        const totalContext = (p.carrier_kills + p.push_kills + p.crossfire_kills) || 1;
-        const carrierKIS = contextKIS * (p.carrier_kills / totalContext);
-        const pushKIS = contextKIS * (p.push_kills / totalContext);
-        const crossfireKIS = contextKIS * (p.crossfire_kills / totalContext);
-        const baseKIS = Math.max(0, (p.total_kis ?? 0) - contextKIS);
+        const carrierK = p.carrier_kills || 0;
+        const pushK = p.push_kills || 0;
+        const crossfireK = p.crossfire_kills || 0;
+        const clutchK = p.clutch_kills || 0;
+        const spawnK = p.spawn_denial_kills || 0;
+        const outnumberedK = p.outnumbered_kills || 0;
+
+        // Waterfall KIS distribution — handles overlapping kill categories
+        const totalKIS = p.total_kis ?? 0;
+        const k = Math.max(p.kills, 1);
+        const rawSeg = (count) => totalKIS * (count / k);
+        const rawSum = rawSeg(carrierK) + rawSeg(pushK) + rawSeg(crossfireK) + rawSeg(clutchK) + rawSeg(spawnK) + rawSeg(outnumberedK);
+        const scale = rawSum > totalKIS ? totalKIS / rawSum : 1;
+        const segKIS = (count) => rawSeg(count) * scale;
+        const baseKIS = Math.max(0, totalKIS - rawSum * scale);
         const pct = (v) => ((v / maxKIS) * 100).toFixed(1);
         const safeName = stripEtColors(p.name);
 
-        const row = _el('div', 'flex items-center gap-3 mb-1.5');
+        const row = _el('div', 'mb-3');
+
+        // Main bar row
+        const barRow = _el('div', 'flex items-center gap-3');
 
         const nameDiv = _el('div', 'w-24 text-xs text-slate-400 truncate text-right', safeName);
         nameDiv.title = safeName;
-        row.appendChild(nameDiv);
+        barRow.appendChild(nameDiv);
 
         const barTrack = _el('div', 'flex-1 h-5 rounded bg-slate-800/50 overflow-hidden flex');
         const addSeg = (cls, val) => { const s = _el('div', `${cls} h-full`); s.style.width = `${pct(val)}%`; barTrack.appendChild(s); };
         addSeg(`${SEGMENTS[0].color}/60`, baseKIS);
-        addSeg(`${SEGMENTS[1].color}/80`, carrierKIS);
-        addSeg(`${SEGMENTS[2].color}/80`, pushKIS);
-        addSeg(`${SEGMENTS[3].color}/80`, crossfireKIS);
-        row.appendChild(barTrack);
+        addSeg(`${SEGMENTS[1].color}/80`, segKIS(carrierK));
+        addSeg(`${SEGMENTS[2].color}/80`, segKIS(pushK));
+        addSeg(`${SEGMENTS[3].color}/80`, segKIS(crossfireK));
+        addSeg(`${SEGMENTS[4].color}/80`, segKIS(clutchK));
+        addSeg(`${SEGMENTS[5].color}/80`, segKIS(spawnK));
+        addSeg(`${SEGMENTS[6].color}/80`, segKIS(outnumberedK));
+        barRow.appendChild(barTrack);
 
-        row.appendChild(_el('div', 'w-12 text-xs text-slate-400 text-right font-mono', (p.total_kis ?? 0).toFixed(1)));
+        barRow.appendChild(_el('div', 'w-12 text-xs text-slate-400 text-right font-mono', (p.total_kis ?? 0).toFixed(1)));
+        row.appendChild(barRow);
+
+        // Mini badge row (archetype + avg impact + context highlights)
+        const badgeRow = _el('div', 'flex items-center gap-2 ml-[calc(6rem+0.75rem)] mt-1');
+
+        // Archetype badge
+        const arch = getArchetype(p);
+        const archDef = ARCHETYPES[arch];
+        const archColors = ARCHETYPE_COLORS[archDef.color] || ARCHETYPE_COLORS.slate;
+        badgeRow.appendChild(_el('span',
+            `inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold ${archColors.bg} ${archColors.text} ${archColors.border} border`,
+            `${archDef.icon} ${archDef.label}`
+        ));
+
+        // Avg impact
+        if (p.avg_impact) {
+            badgeRow.appendChild(_el('span', 'text-[9px] text-slate-500 font-mono', `avg ${p.avg_impact.toFixed(2)}`));
+        }
+
+        // Solo clutch highlight
+        if (p.solo_clutch_kills > 0) {
+            badgeRow.appendChild(_el('span', 'text-[9px] text-purple-400 font-bold', `${p.solo_clutch_kills} solo clutch`));
+        }
+
+        // Outnumbered highlight
+        if (outnumberedK > 0) {
+            badgeRow.appendChild(_el('span', 'text-[9px] text-orange-400 font-bold', `${outnumberedK} outnumbered`));
+        }
+
+        row.appendChild(badgeRow);
         container.appendChild(row);
     });
 }
@@ -700,6 +753,9 @@ const PWC_COMPONENTS = [
     { key: 'objectives', label: 'Objectives', color: 'bg-blue-500' },
     { key: 'revives',    label: 'Revives',    color: 'bg-emerald-500' },
     { key: 'survival',   label: 'Survival',   color: 'bg-cyan-500' },
+    { key: 'crossfire',  label: 'Crossfire',  color: 'bg-purple-500' },
+    { key: 'trade',      label: 'Trades',     color: 'bg-orange-500' },
+    { key: 'clutch',     label: 'Clutch',     color: 'bg-pink-500' },
 ];
 
 function renderWinContribution(data) {
@@ -804,6 +860,86 @@ function renderWinContribution(data) {
         row.appendChild(dotsContainer);
 
         container.appendChild(row);
+    });
+}
+
+// ── Advanced Metrics Panel (TIR, CI, KPI, SDS, CP) ────────────────────────
+
+const COMPOSITE_METRICS = [
+    { key: 'tir', label: 'Team Impact',      icon: '\u{1F91D}', color: 'cyan',    desc: 'Crossfire + trade coordination' },
+    { key: 'ci',  label: 'Clutch Index',      icon: '\u{1F4AA}', color: 'rose',    desc: 'Low HP & outnumbered kills' },
+    { key: 'kpi', label: 'Kill Permanence',   icon: '\u{1F480}', color: 'purple',  desc: 'Gib rate (permanent kills)' },
+    { key: 'sds', label: 'Spawn Denial',      icon: '\u{23F1}\uFE0F', color: 'amber',   desc: 'Timing + denied playtime' },
+    { key: 'cp',  label: 'Combat Presence',   icon: '\u{1F6E1}\uFE0F', color: 'emerald', desc: 'Survival + focus escape' },
+];
+
+function renderAdvancedMetrics(data) {
+    const container = document.getElementById('story-advanced-metrics');
+    if (!container) return;
+    container.textContent = '';
+
+    if (!data?.players?.length) {
+        container.appendChild(_el('div', 'text-center text-slate-500 py-8 text-sm', 'No advanced metrics data'));
+        return;
+    }
+
+    // Section header
+    const header = _el('div', 'flex items-center gap-3 mb-4');
+    header.appendChild(_el('div', 'w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white text-sm font-bold', 'v2'));
+    const headerText = _el('div', '');
+    headerText.appendChild(_el('h3', 'text-lg font-bold text-white', 'Advanced Metrics'));
+    headerText.appendChild(_el('p', 'text-xs text-slate-400', 'ET Rating v2 — proximity-derived composite scores'));
+    header.appendChild(headerText);
+    container.appendChild(header);
+
+    // Player rows
+    data.players.forEach(player => {
+        const card = _el('div', 'glass-card rounded-xl p-4 mb-3');
+
+        // Player name row
+        const nameRow = _el('div', 'flex items-center justify-between mb-3');
+        nameRow.appendChild(_el('span', 'text-sm font-bold text-white', stripEtColors(player.player_name)));
+        nameRow.appendChild(_el('span', 'text-xs text-slate-400 font-mono', `${player.kills} kills`));
+        card.appendChild(nameRow);
+
+        // Metrics grid
+        const grid = _el('div', 'grid grid-cols-5 gap-2');
+
+        COMPOSITE_METRICS.forEach(m => {
+            const value = player[m.key] ?? 0;
+            const colorSet = ARCHETYPE_COLORS[m.color] || ARCHETYPE_COLORS.slate;
+
+            const cell = _el('div', 'text-center');
+
+            // Icon + label
+            cell.appendChild(_el('div', 'text-lg mb-1', m.icon));
+            cell.appendChild(_el('div', `text-[10px] font-bold uppercase tracking-wider ${colorSet.text} mb-1`, m.label));
+
+            // Progress bar
+            const barBg = _el('div', 'w-full h-1.5 rounded-full bg-slate-700 mb-1 overflow-hidden');
+            const barFill = _el('div', `h-full rounded-full transition-all duration-500`);
+            barFill.style.width = `${Math.min(100, value)}%`;
+            barFill.style.background = `linear-gradient(90deg, var(--tw-gradient-from, #06b6d4), var(--tw-gradient-to, #3b82f6))`;
+            // Color the bar based on metric color
+            const barColors = {
+                cyan: '#06b6d4', rose: '#f43f5e', purple: '#8b5cf6',
+                amber: '#f59e0b', emerald: '#10b981',
+            };
+            barFill.style.background = barColors[m.color] || '#3b82f6';
+            barBg.appendChild(barFill);
+            cell.appendChild(barBg);
+
+            // Value
+            cell.appendChild(_el('div', `text-sm font-bold font-mono ${colorSet.text}`, value.toFixed(1)));
+
+            // Tooltip
+            cell.title = `${m.label}: ${m.desc} (${value.toFixed(1)}/100)`;
+
+            grid.appendChild(cell);
+        });
+
+        card.appendChild(grid);
+        container.appendChild(card);
     });
 }
 

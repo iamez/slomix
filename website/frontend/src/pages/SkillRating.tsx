@@ -20,6 +20,12 @@ const METRIC_LABELS: Record<string, string> = {
   useful_kill_rate: 'Useful Kills',
   denied_playtime_pm: 'Denied Time',
   accuracy: 'Accuracy',
+  kill_quality: 'Kill Quality',
+  crossfire_rate: 'Crossfire Rate',
+  trade_rate: 'Trade Rate',
+  kill_permanence: 'Kill Permanence',
+  clutch_factor: 'Clutch Factor',
+  spawn_timing_eff: 'Spawn Timing',
 };
 
 const METRIC_ICONS: Record<string, typeof Trophy> = {
@@ -32,7 +38,20 @@ const METRIC_ICONS: Record<string, typeof Trophy> = {
   useful_kill_rate: Trophy,
   denied_playtime_pm: Clock,
   accuracy: Crosshair,
+  kill_quality: Skull,
+  crossfire_rate: Crosshair,
+  trade_rate: Zap,
+  kill_permanence: Target,
+  clutch_factor: Shield,
+  spawn_timing_eff: Clock,
 };
+
+const METRIC_GROUPS: { label: string; keys: string[] }[] = [
+  { label: 'Combat', keys: ['dpm', 'kpr', 'dpr', 'accuracy', 'useful_kill_rate'] },
+  { label: 'Support', keys: ['revive_rate', 'objective_rate', 'survival_rate', 'denied_playtime_pm'] },
+  { label: 'Team Impact', keys: ['crossfire_rate', 'trade_rate', 'spawn_timing_eff'] },
+  { label: 'Clutch & Permanence', keys: ['kill_quality', 'kill_permanence', 'clutch_factor'] },
+];
 
 /* ── Tier helpers ── */
 
@@ -208,16 +227,25 @@ function ExpandedRow({ player }: { player: RatedPlayer }) {
         </div>
 
         {/* Percentile breakdown */}
-        <div className="flex-1 space-y-2">
-          <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Percentile Breakdown</div>
-          {Object.entries(player.components).map(([key, comp]) => (
-            <PercentileBar
-              key={key}
-              metricKey={key}
-              label={METRIC_LABELS[key] || key}
-              value={comp.percentile}
-            />
-          ))}
+        <div className="flex-1 space-y-3">
+          <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Percentile Breakdown</div>
+          {METRIC_GROUPS.map((group) => {
+            const groupMetrics = group.keys.filter((k) => k in player.components);
+            if (groupMetrics.length === 0) return null;
+            return (
+              <div key={group.label} className="space-y-1.5">
+                <div className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider">{group.label}</div>
+                {groupMetrics.map((key) => (
+                  <PercentileBar
+                    key={key}
+                    metricKey={key}
+                    label={METRIC_LABELS[key] || key}
+                    value={player.components[key].percentile}
+                  />
+                ))}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -318,7 +346,7 @@ export default function SkillRating() {
     <div className="page-shell">
       <PageHeader
         title="ET Rating"
-        subtitle="Individual performance rating based on percentile-normalized stats across 9 metrics"
+        subtitle="Individual performance rating based on percentile-normalized stats across 15 metrics (v2)"
         eyebrow="Experimental"
       >
         <button
