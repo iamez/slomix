@@ -301,7 +301,6 @@ async def get_composite_stats(
     rows = await db.fetch_all("""
         WITH session_pcs AS (
             SELECT player_guid, MAX(player_name) as player_name,
-                MAX(clean_name) as clean_name,
                 SUM(kills) as kills, SUM(deaths) as deaths,
                 SUM(gibs) as gibs,
                 AVG(CASE WHEN time_played_seconds > 0
@@ -315,44 +314,29 @@ async def get_composite_stats(
             WHERE round_date = $1
             GROUP BY player_guid
         ),
-        guid_bridge AS (
-            -- Maps proximity 32-char GUIDs → PCS GUIDs:
-            --   humans: LEFT(prox_guid, 8) matches PCS 8-char GUID
-            --   bots:   name-based fallback (slot GUIDs don't truncate to PCS)
-            SELECT DISTINCT ko.killer_guid as prox_guid, pcs.player_guid as pcs_guid
-            FROM (
-                SELECT DISTINCT killer_guid,
-                    regexp_replace(killer_name, '\\^.', '', 'g') as clean_name
-                FROM proximity_kill_outcome
-                WHERE session_date = $1::date
-            ) ko
-            JOIN session_pcs pcs
-              ON LEFT(ko.killer_guid, 8) = pcs.player_guid
-              OR ko.clean_name = pcs.clean_name
-        ),
         session_crossfire AS (
-            SELECT killer_guid as player_guid,
+            SELECT killer_guid_canonical as guid_c,
                 COUNT(*) FILTER (WHERE is_crossfire = true) as crossfire_kills
             FROM storytelling_kill_impact
-            WHERE session_date = $1::date
-            GROUP BY killer_guid
+            WHERE session_date = $1::date AND killer_guid_canonical IS NOT NULL
+            GROUP BY killer_guid_canonical
         ),
         session_trades AS (
-            SELECT trader_guid as player_guid, COUNT(*) as trade_kills
+            SELECT trader_guid_canonical as guid_c, COUNT(*) as trade_kills
             FROM proximity_lua_trade_kill
-            WHERE session_date = $1::date
-            GROUP BY trader_guid
+            WHERE session_date = $1::date AND trader_guid_canonical IS NOT NULL
+            GROUP BY trader_guid_canonical
         ),
         session_permanence AS (
-            SELECT killer_guid as player_guid,
+            SELECT killer_guid_canonical as guid_c,
                 COUNT(*) as total_outcomes,
                 COUNT(*) FILTER (WHERE outcome = 'gibbed') as gibbed_count
             FROM proximity_kill_outcome
-            WHERE session_date = $1::date
-            GROUP BY killer_guid
+            WHERE session_date = $1::date AND killer_guid_canonical IS NOT NULL
+            GROUP BY killer_guid_canonical
         ),
         session_clutch AS (
-            SELECT attacker_guid as player_guid,
+            SELECT attacker_guid_canonical as guid_c,
                 COUNT(*) as total_combat_kills,
                 COUNT(*) FILTER (
                     WHERE (killer_health > 0 AND killer_health < 30)
@@ -361,44 +345,39 @@ async def get_composite_stats(
                 ) as clutch_kills
             FROM proximity_combat_position
             WHERE session_date = $1::date AND event_type = 'kill'
-            GROUP BY attacker_guid
+              AND attacker_guid_canonical IS NOT NULL
+            GROUP BY attacker_guid_canonical
         ),
         session_spawn AS (
-            SELECT killer_guid as player_guid,
+            SELECT killer_guid_canonical as guid_c,
                 AVG(spawn_timing_score) as avg_spawn_score
             FROM proximity_spawn_timing
-            WHERE session_date = $1::date
-            GROUP BY killer_guid
+            WHERE session_date = $1::date AND killer_guid_canonical IS NOT NULL
+            GROUP BY killer_guid_canonical
         )
         SELECT
             pcs.player_guid,
             pcs.player_name,
             pcs.kills,
-            -- TIR components
             COALESCE(sc.crossfire_kills, 0) as crossfire_kills,
             COALESCE(tr.trade_kills, 0) as trade_kills,
-            -- KPI
             COALESCE(perm.gibbed_count, 0) as gibbed_count,
             COALESCE(perm.total_outcomes, 0) as total_outcomes,
-            -- CI
             COALESCE(cl.clutch_kills, 0) as clutch_kills,
             COALESCE(cl.total_combat_kills, 0) as total_combat_kills,
-            -- SDS
             COALESCE(sp.avg_spawn_score, 0) as avg_spawn_score,
             pcs.denied_playtime,
             pcs.time_played_seconds,
-            -- CP
             pcs.survival_rate,
             0 as focus_escapes,
             0 as times_focused,
             pcs.avg_time_dead_pct
         FROM session_pcs pcs
-        LEFT JOIN guid_bridge gb ON gb.pcs_guid = pcs.player_guid
-        LEFT JOIN session_crossfire sc ON sc.player_guid = gb.prox_guid
-        LEFT JOIN session_trades tr ON tr.player_guid = gb.prox_guid
-        LEFT JOIN session_permanence perm ON perm.player_guid = gb.prox_guid
-        LEFT JOIN session_clutch cl ON cl.player_guid = gb.prox_guid
-        LEFT JOIN session_spawn sp ON sp.player_guid = gb.prox_guid
+        LEFT JOIN session_crossfire sc ON sc.guid_c = pcs.player_guid
+        LEFT JOIN session_trades tr ON tr.guid_c = pcs.player_guid
+        LEFT JOIN session_permanence perm ON perm.guid_c = pcs.player_guid
+        LEFT JOIN session_clutch cl ON cl.guid_c = pcs.player_guid
+        LEFT JOIN session_spawn sp ON sp.guid_c = pcs.player_guid
         WHERE pcs.kills > 0
         ORDER BY pcs.kills DESC
     """, (session_date,))

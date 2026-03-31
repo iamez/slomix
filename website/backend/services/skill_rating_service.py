@@ -301,18 +301,16 @@ async def compute_all_ratings(db) -> list[dict]:
         FROM player_comprehensive_stats pcs
 
         LEFT JOIN (
-            -- Bridge: player_teamplay_stats uses 32-char GUIDs, PCS uses 8-char
-            SELECT LEFT(player_guid, 8) as guid8,
+            SELECT player_guid_canonical as guid_c,
                 SUM(crossfire_kills) as crossfire_kills
             FROM player_teamplay_stats
-            GROUP BY LEFT(player_guid, 8)
-        ) pts ON pts.guid8 = pcs.player_guid
+            WHERE player_guid_canonical IS NOT NULL
+            GROUP BY player_guid_canonical
+        ) pts ON pts.guid_c = pcs.player_guid
 
         LEFT JOIN (
             -- Kill Quality Index: gib-weighted outcome average (simplified KIS)
-            -- gibbed=1.3, tapped=1.0, revived=0.5
-            -- Bridge: proximity uses 32-char GUIDs, PCS uses 8-char
-            SELECT LEFT(killer_guid, 8) as guid8,
+            SELECT killer_guid_canonical as guid_c,
                 AVG(CASE outcome
                     WHEN 'gibbed' THEN 1.3
                     WHEN 'tapped_out' THEN 1.0
@@ -320,41 +318,45 @@ async def compute_all_ratings(db) -> list[dict]:
                     ELSE 1.0
                 END) as kill_quality
             FROM proximity_kill_outcome
-            GROUP BY LEFT(killer_guid, 8)
-        ) prox_quality ON prox_quality.guid8 = pcs.player_guid
+            WHERE killer_guid_canonical IS NOT NULL
+            GROUP BY killer_guid_canonical
+        ) prox_quality ON prox_quality.guid_c = pcs.player_guid
 
         LEFT JOIN (
-            SELECT LEFT(trader_guid, 8) as guid8, COUNT(*) as trade_count
+            SELECT trader_guid_canonical as guid_c, COUNT(*) as trade_count
             FROM proximity_lua_trade_kill
-            GROUP BY LEFT(trader_guid, 8)
-        ) prox_trades ON prox_trades.guid8 = pcs.player_guid
+            WHERE trader_guid_canonical IS NOT NULL
+            GROUP BY trader_guid_canonical
+        ) prox_trades ON prox_trades.guid_c = pcs.player_guid
 
         LEFT JOIN (
-            SELECT LEFT(killer_guid, 8) as guid8,
+            SELECT killer_guid_canonical as guid_c,
                 COUNT(*) FILTER (WHERE outcome = 'gibbed')::REAL
                 / NULLIF(COUNT(*), 0) as gib_rate
             FROM proximity_kill_outcome
-            GROUP BY LEFT(killer_guid, 8)
-        ) prox_perm ON prox_perm.guid8 = pcs.player_guid
+            WHERE killer_guid_canonical IS NOT NULL
+            GROUP BY killer_guid_canonical
+        ) prox_perm ON prox_perm.guid_c = pcs.player_guid
 
         LEFT JOIN (
             -- Clutch: kills at low HP (<30) or outnumbered (team disadvantage)
-            SELECT LEFT(attacker_guid, 8) as guid8,
+            SELECT attacker_guid_canonical as guid_c,
                 COUNT(*) FILTER (
                     WHERE (killer_health > 0 AND killer_health < 30)
                        OR (attacker_team = 'AXIS' AND axis_alive < allies_alive)
                        OR (attacker_team = 'ALLIES' AND allies_alive < axis_alive)
                 )::REAL / NULLIF(COUNT(*), 0) as clutch_rate
             FROM proximity_combat_position
-            WHERE event_type = 'kill'
-            GROUP BY LEFT(attacker_guid, 8)
-        ) prox_clutch ON prox_clutch.guid8 = pcs.player_guid
+            WHERE event_type = 'kill' AND attacker_guid_canonical IS NOT NULL
+            GROUP BY attacker_guid_canonical
+        ) prox_clutch ON prox_clutch.guid_c = pcs.player_guid
 
         LEFT JOIN (
-            SELECT LEFT(killer_guid, 8) as guid8, AVG(spawn_timing_score) as avg_timing_score
+            SELECT killer_guid_canonical as guid_c, AVG(spawn_timing_score) as avg_timing_score
             FROM proximity_spawn_timing
-            GROUP BY LEFT(killer_guid, 8)
-        ) prox_spawn ON prox_spawn.guid8 = pcs.player_guid
+            WHERE killer_guid_canonical IS NOT NULL
+            GROUP BY killer_guid_canonical
+        ) prox_spawn ON prox_spawn.guid_c = pcs.player_guid
 
         GROUP BY pcs.player_guid, prox_quality.kill_quality,
                  pts.crossfire_kills, prox_trades.trade_count,
