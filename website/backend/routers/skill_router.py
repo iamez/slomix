@@ -14,6 +14,7 @@ from website.backend.logging_config import get_app_logger
 from website.backend.services.skill_rating_service import (
     CONSTANT,
     MIN_ROUNDS,
+    PROXIMITY_METRICS,
     WEIGHTS,
     compute_and_store_ratings,
     compute_session_map_ratings,
@@ -113,7 +114,7 @@ async def get_skill_leaderboard(
             "min_rounds": MIN_ROUNDS,
             "weights": WEIGHTS,
             "constant": CONSTANT,
-            "version": "1.0",
+            "version": "2.0",
         },
     }
 
@@ -229,9 +230,14 @@ async def get_skill_formula():
     """Return the current rating formula details (transparency)."""
     return {
         "status": "ok",
-        "version": "1.0",
-        "name": "ET Rating (Option C)",
-        "description": "Individual performance rating inspired by HLTV 2.0, Valorant ACS, and PandaSkill research",
+        "version": "2.0",
+        "name": "ET Rating v2",
+        "description": (
+            "Individual performance rating combining PCS stats + proximity analytics. "
+            "Inspired by HLTV 2.0, Valorant ACS, PandaSkill, TrueSkill2, and "
+            "competitive ET stopwatch format (class-based, objective-sequential, respawn). "
+            "Format-agnostic: works in 3v3 (medic/engi/covy) and 6v6 (full roster)."
+        ),
         "formula": "ET_Rating = constant + sum(weight_i * percentile(metric_i))",
         "constant": CONSTANT,
         "weights": WEIGHTS,
@@ -239,14 +245,232 @@ async def get_skill_formula():
         "metrics": {
             "dpm": "Damage per minute (alive time)",
             "kpr": "Kills per round",
-            "dpr": "Deaths per round (penalty - negative weight)",
-            "revive_rate": "Revives given per round (medic value)",
-            "objective_rate": "Objectives completed per round (engineer value)",
+            "dpr": "Deaths per round (penalty — negative weight)",
+            "accuracy": "Weapon accuracy",
+            "revive_rate": "Revives given per round (medic = default class in 3v3)",
             "survival_rate": "Fraction of round time spent alive",
             "useful_kill_rate": "Useful kills / total kills",
+            "objective_rate": "Objectives completed per round",
             "denied_playtime_pm": "Enemy playtime denied per minute",
-            "accuracy": "Weapon accuracy",
+            "kill_quality": "Kill Quality Index — gib-weighted outcome avg (simplified KIS proxy: gibbed=1.3, tapped=1.0, revived=0.5)",
+            "crossfire_rate": "Crossfire kills / total kills — team coordination frequency",
+            "trade_rate": "Trade kills / total kills — avenging teammate deaths within 3s",
+            "kill_permanence": "Gib rate — permanent kills / total kill outcomes",
+            "clutch_factor": "Low HP (<30) or outnumbered kills / total kills",
+            "spawn_timing_eff": "Avg spawn timing score — how well-timed kills are vs enemy respawn waves",
+        },
+        "metric_sources": {
+            "pcs": sorted(m for m in WEIGHTS if m not in PROXIMITY_METRICS),
+            "proximity": sorted(PROXIMITY_METRICS),
         },
         "normalization": "Percentile rank (0.0 = worst, 1.0 = best) against all rated players",
         "range": "0.00 (theoretical min) to ~1.15 (exceptional), avg ~0.55",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Composite Stats — 5 advanced metrics per player per session
+# ---------------------------------------------------------------------------
+
+@router.get("/skill/composite")
+async def get_composite_stats(
+    session_date: str | None = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Composite advanced stats for all players in a session.
+    5 metrics (0-100 scale each):
+      - TIR: Team Impact Rating (crossfire + trade + push coordination)
+      - CI:  Clutch Index (low HP / outnumbered kills)
+      - KPI: Kill Permanence Index (gib rate)
+      - SDS: Spawn Denial Score (spawn timing + denied playtime)
+      - CP:  Combat Presence (survival + focus escape + alive time)
+
+    Query: ?session_date=YYYY-MM-DD (defaults to latest proximity session)
+    """
+    # Resolve session date
+    if not session_date:
+        row = await db.fetch_one(
+            "SELECT MAX(session_date) FROM proximity_kill_outcome"
+        )
+        if not row or not row[0]:
+            return {"status": "ok", "session_date": None, "players": []}
+        session_date = str(row[0])
+
+    # Query per-player aggregates for this session from proximity + PCS
+    rows = await db.fetch_all("""
+        WITH session_pcs AS (
+            SELECT player_guid, MAX(player_name) as player_name,
+                MAX(clean_name) as clean_name,
+                SUM(kills) as kills, SUM(deaths) as deaths,
+                SUM(gibs) as gibs,
+                AVG(CASE WHEN time_played_seconds > 0
+                    THEN (time_played_seconds - COALESCE(
+                        CASE WHEN time_dead_minutes > 0 THEN time_dead_minutes * 60 ELSE 0 END, 0
+                    ))::REAL / time_played_seconds ELSE 0 END) as survival_rate,
+                AVG(COALESCE(time_dead_ratio, 0)) as avg_time_dead_pct,
+                SUM(denied_playtime) as denied_playtime,
+                SUM(time_played_seconds) as time_played_seconds
+            FROM player_comprehensive_stats
+            WHERE round_date = $1
+            GROUP BY player_guid
+        ),
+        guid_bridge AS (
+            -- Maps proximity 32-char GUIDs → PCS GUIDs:
+            --   humans: LEFT(prox_guid, 8) matches PCS 8-char GUID
+            --   bots:   name-based fallback (slot GUIDs don't truncate to PCS)
+            SELECT DISTINCT ko.killer_guid as prox_guid, pcs.player_guid as pcs_guid
+            FROM (
+                SELECT DISTINCT killer_guid,
+                    regexp_replace(killer_name, '\\^.', '', 'g') as clean_name
+                FROM proximity_kill_outcome
+                WHERE session_date = $1::date
+            ) ko
+            JOIN session_pcs pcs
+              ON LEFT(ko.killer_guid, 8) = pcs.player_guid
+              OR ko.clean_name = pcs.clean_name
+        ),
+        session_crossfire AS (
+            SELECT killer_guid as player_guid,
+                COUNT(*) FILTER (WHERE is_crossfire = true) as crossfire_kills
+            FROM storytelling_kill_impact
+            WHERE session_date = $1::date
+            GROUP BY killer_guid
+        ),
+        session_trades AS (
+            SELECT trader_guid as player_guid, COUNT(*) as trade_kills
+            FROM proximity_lua_trade_kill
+            WHERE session_date = $1::date
+            GROUP BY trader_guid
+        ),
+        session_permanence AS (
+            SELECT killer_guid as player_guid,
+                COUNT(*) as total_outcomes,
+                COUNT(*) FILTER (WHERE outcome = 'gibbed') as gibbed_count
+            FROM proximity_kill_outcome
+            WHERE session_date = $1::date
+            GROUP BY killer_guid
+        ),
+        session_clutch AS (
+            SELECT attacker_guid as player_guid,
+                COUNT(*) as total_combat_kills,
+                COUNT(*) FILTER (
+                    WHERE (killer_health > 0 AND killer_health < 30)
+                       OR (attacker_team = 'AXIS' AND axis_alive < allies_alive)
+                       OR (attacker_team = 'ALLIES' AND allies_alive < axis_alive)
+                ) as clutch_kills
+            FROM proximity_combat_position
+            WHERE session_date = $1::date AND event_type = 'kill'
+            GROUP BY attacker_guid
+        ),
+        session_spawn AS (
+            SELECT killer_guid as player_guid,
+                AVG(spawn_timing_score) as avg_spawn_score
+            FROM proximity_spawn_timing
+            WHERE session_date = $1::date
+            GROUP BY killer_guid
+        )
+        SELECT
+            pcs.player_guid,
+            pcs.player_name,
+            pcs.kills,
+            -- TIR components
+            COALESCE(sc.crossfire_kills, 0) as crossfire_kills,
+            COALESCE(tr.trade_kills, 0) as trade_kills,
+            -- KPI
+            COALESCE(perm.gibbed_count, 0) as gibbed_count,
+            COALESCE(perm.total_outcomes, 0) as total_outcomes,
+            -- CI
+            COALESCE(cl.clutch_kills, 0) as clutch_kills,
+            COALESCE(cl.total_combat_kills, 0) as total_combat_kills,
+            -- SDS
+            COALESCE(sp.avg_spawn_score, 0) as avg_spawn_score,
+            pcs.denied_playtime,
+            pcs.time_played_seconds,
+            -- CP
+            pcs.survival_rate,
+            0 as focus_escapes,
+            0 as times_focused,
+            pcs.avg_time_dead_pct
+        FROM session_pcs pcs
+        LEFT JOIN guid_bridge gb ON gb.pcs_guid = pcs.player_guid
+        LEFT JOIN session_crossfire sc ON sc.player_guid = gb.prox_guid
+        LEFT JOIN session_trades tr ON tr.player_guid = gb.prox_guid
+        LEFT JOIN session_permanence perm ON perm.player_guid = gb.prox_guid
+        LEFT JOIN session_clutch cl ON cl.player_guid = gb.prox_guid
+        LEFT JOIN session_spawn sp ON sp.player_guid = gb.prox_guid
+        WHERE pcs.kills > 0
+        ORDER BY pcs.kills DESC
+    """, (session_date,))
+
+    players = []
+    for r in rows:
+        guid, name = r[0], r[1]
+        kills = max(int(r[2]), 1)
+        crossfire_kills, trade_kills = int(r[3]), int(r[4])
+        gibbed, total_outcomes = int(r[5]), int(r[6])
+        clutch_kills, total_combat_kills = int(r[7]), max(int(r[8]), 1)
+        avg_spawn_score = float(r[9])
+        denied_pt, time_played = int(r[10]), max(int(r[11]), 1)
+        survival_rate = float(r[12])
+        focus_escapes, times_focused = int(r[13]), int(r[14])
+        avg_time_dead = float(r[15])
+
+        # TIR: Team Impact Rating (0-100)
+        crossfire_pct = min(1.0, crossfire_kills / kills) if kills else 0
+        trade_pct = min(1.0, trade_kills / kills) if kills else 0
+        tir = round(min(100, (crossfire_pct * 50 + trade_pct * 50) * 100), 1)
+
+        # CI: Clutch Index (0-100)
+        ci = round(min(100, (clutch_kills / max(total_combat_kills, 1)) * 100), 1)
+
+        # KPI: Kill Permanence Index (0-100%)
+        kpi = round((gibbed / total_outcomes * 100) if total_outcomes > 0 else 0, 1)
+
+        # SDS: Spawn Denial Score (0-100)
+        denied_pct = min(1.0, (denied_pt / (time_played / 60.0)) / 10.0) if time_played > 0 else 0
+        sds = round(min(100, (avg_spawn_score * 60 + denied_pct * 40)), 1)
+
+        # CP: Combat Presence (0-100)
+        focus_escape_rate = (focus_escapes / times_focused) if times_focused > 0 else 0.5
+        cp = round(min(100, (
+            survival_rate * 40 +
+            focus_escape_rate * 30 +
+            max(0, 1 - avg_time_dead) * 30
+        ) * 100 / 100), 1)
+
+        players.append({
+            "player_guid": guid,
+            "player_name": name,
+            "kills": kills,
+            "tir": tir,
+            "ci": ci,
+            "kpi": kpi,
+            "sds": sds,
+            "cp": cp,
+            "details": {
+                "crossfire_kills": crossfire_kills,
+                "trade_kills": trade_kills,
+                "clutch_kills": clutch_kills,
+                "gibbed_count": gibbed,
+                "total_outcomes": total_outcomes,
+                "avg_spawn_score": round(avg_spawn_score, 3),
+                "focus_escapes": focus_escapes,
+                "times_focused": times_focused,
+            },
+        })
+
+    return {
+        "status": "ok",
+        "session_date": session_date,
+        "players": players,
+        "meta": {
+            "metrics": {
+                "tir": "Team Impact Rating — crossfire + trade coordination (0-100)",
+                "ci": "Clutch Index — low HP + outnumbered kill rate (0-100)",
+                "kpi": "Kill Permanence Index — gib rate (0-100%)",
+                "sds": "Spawn Denial Score — timing + denied playtime (0-100)",
+                "cp": "Combat Presence — survival + focus escape + alive time (0-100)",
+            },
+        },
     }
