@@ -1905,38 +1905,38 @@ class StorytellingService:
         """, (sd_str,))
 
         # 1b. Fetch proximity data for proximity PWC components
-        # Crossfire kills per player per round (from storytelling_kill_impact)
-        # Bridge: proximity uses 32-char GUIDs, PCS uses 8-char — GROUP BY LEFT(guid, 8)
+        # Crossfire kills per player per round (via guid_canonical)
         xf_rows = await self.db.fetch_all("""
-            SELECT LEFT(killer_guid, 8), round_start_unix, COUNT(*) as xf_kills
+            SELECT killer_guid_canonical, round_start_unix, COUNT(*) as xf_kills
             FROM storytelling_kill_impact
-            WHERE session_date = $1 AND is_crossfire = true
-            GROUP BY LEFT(killer_guid, 8), round_start_unix
+            WHERE session_date = $1 AND is_crossfire = true AND killer_guid_canonical IS NOT NULL
+            GROUP BY killer_guid_canonical, round_start_unix
         """, (sd_date,))
         xf_map: dict[tuple[str, int], int] = {
             (r[0], int(r[1])): int(r[2]) for r in xf_rows
         }
 
-        # Trade kills per player per round
+        # Trade kills per player per round (via guid_canonical)
         tr_rows = await self.db.fetch_all("""
-            SELECT LEFT(trader_guid, 8), round_start_unix, COUNT(*) as tr_kills
+            SELECT trader_guid_canonical, round_start_unix, COUNT(*) as tr_kills
             FROM proximity_lua_trade_kill
-            WHERE session_date = $1
-            GROUP BY LEFT(trader_guid, 8), round_start_unix
+            WHERE session_date = $1 AND trader_guid_canonical IS NOT NULL
+            GROUP BY trader_guid_canonical, round_start_unix
         """, (sd_date,))
         tr_map: dict[tuple[str, int], int] = {
             (r[0], int(r[1])): int(r[2]) for r in tr_rows
         }
 
-        # Clutch kills per player per round (low HP or outnumbered)
+        # Clutch kills per player per round (via guid_canonical)
         cl_rows = await self.db.fetch_all("""
-            SELECT LEFT(attacker_guid, 8), round_start_unix, COUNT(*) as cl_kills
+            SELECT attacker_guid_canonical, round_start_unix, COUNT(*) as cl_kills
             FROM proximity_combat_position
             WHERE session_date = $1 AND event_type = 'kill'
+              AND attacker_guid_canonical IS NOT NULL
               AND ((killer_health > 0 AND killer_health < 30)
                    OR (attacker_team = 'AXIS' AND axis_alive < allies_alive)
                    OR (attacker_team = 'ALLIES' AND allies_alive < axis_alive))
-            GROUP BY LEFT(attacker_guid, 8), round_start_unix
+            GROUP BY attacker_guid_canonical, round_start_unix
         """, (sd_date,))
         cl_map: dict[tuple[str, int], int] = {
             (r[0], int(r[1])): int(r[2]) for r in cl_rows
