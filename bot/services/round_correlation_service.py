@@ -207,6 +207,66 @@ class RoundCorrelationService:
             },
         )
 
+    async def _find_nearby_correlation_id(self, match_id: str, map_name: str,
+                                          window_seconds: int = 30) -> str | None:
+        """Find an existing correlation for the same map within ±window_seconds.
+
+        Lua webhook and stats file produce match_ids that differ by 2-3s.
+        Instead of creating duplicate correlations, merge into the existing one.
+        Prefers correlations that already have round_ids (stats-based).
+        """
+        try:
+            # Parse timestamp from match_id (format: YYYY-MM-DD-HHMMSS)
+            from datetime import timedelta
+            parts = match_id.split('-')
+            if len(parts) < 4:
+                return None
+            ts_str = '-'.join(parts[:3]) + ' ' + parts[3]
+            try:
+                from datetime import datetime as dt_cls
+                target_dt = dt_cls.strptime(ts_str, "%Y-%m-%d %H%M%S")
+            except ValueError:
+                return None
+
+            # Search for nearby correlations on the same map
+            rows = await self.db.fetch_all(
+                """SELECT correlation_id, match_id, r1_round_id
+                   FROM round_correlations
+                   WHERE map_name = ?
+                   ORDER BY created_at DESC
+                   LIMIT 20""",
+                (map_name,),
+            )
+            best_id = None
+            best_diff = timedelta(seconds=window_seconds + 1)
+            for row in (rows or []):
+                cid = row[0] if isinstance(row, (list, tuple)) else row.get('correlation_id')
+                mid = row[1] if isinstance(row, (list, tuple)) else row.get('match_id')
+                has_round = row[2] if isinstance(row, (list, tuple)) else row.get('r1_round_id')
+                if mid == match_id:
+                    return None  # Exact match already exists, use default path
+                try:
+                    cparts = mid.split('-')
+                    cts = '-'.join(cparts[:3]) + ' ' + cparts[3]
+                    candidate_dt = dt_cls.strptime(cts, "%Y-%m-%d %H%M%S")
+                except (ValueError, IndexError):
+                    continue
+                diff = abs(candidate_dt - target_dt)
+                if diff <= timedelta(seconds=window_seconds) and diff < best_diff:
+                    # Prefer correlations with round_ids (stats-based)
+                    if has_round or best_id is None:
+                        best_diff = diff
+                        best_id = cid
+            if best_id:
+                logger.info(
+                    "[CORRELATION] Merging %s:%s into existing %s (diff=%ds)",
+                    match_id, map_name, best_id, int(best_diff.total_seconds()),
+                )
+            return best_id
+        except Exception as e:
+            logger.debug(f"[CORRELATION] Nearby search failed: {e}")
+            return None
+
     async def on_lua_teams_stored(self, match_id: str, round_number: int,
                                   lua_teams_id: int, map_name: str):
         """Called after lua_round_teams INSERT in ultimate_bot.py."""
@@ -222,13 +282,15 @@ class RoundCorrelationService:
         if not await self._allow_live_write():
             return
 
-        correlation_id = f"{match_id}:{map_name}"
+        # Try to merge into nearby existing correlation (Lua vs stats match_id differs by 2-3s)
+        existing_cid = await self._find_nearby_correlation_id(match_id, map_name)
+        correlation_id = existing_cid or f"{match_id}:{map_name}"
         flag_col = f"has_r{round_number}_lua_teams"
         id_col = f"r{round_number}_lua_teams_id"
 
         await self._upsert_correlation(
             correlation_id=correlation_id,
-            match_id=match_id,
+            match_id=existing_cid.split(':')[0] if existing_cid else match_id,
             map_name=map_name,
             updates={
                 flag_col: True,
@@ -251,12 +313,14 @@ class RoundCorrelationService:
         if not await self._allow_live_write():
             return
 
-        correlation_id = f"{match_id}:{map_name}"
+        # Try to merge into nearby existing correlation
+        existing_cid = await self._find_nearby_correlation_id(match_id, map_name)
+        correlation_id = existing_cid or f"{match_id}:{map_name}"
         flag_col = f"has_r{round_number}_gametime"
 
         await self._upsert_correlation(
             correlation_id=correlation_id,
-            match_id=match_id,
+            match_id=existing_cid.split(':')[0] if existing_cid else match_id,
             map_name=map_name,
             updates={flag_col: True},
         )
