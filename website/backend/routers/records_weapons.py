@@ -216,6 +216,7 @@ async def get_weapon_stats_by_player(
     weapon_limit: int = 5,
     player_guid: str | None = None,
     gaming_session_id: int | None = None,
+    session_date: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -235,6 +236,12 @@ async def get_weapon_stats_by_player(
         )
         params.append(gaming_session_id)
         param_idx += 1
+        period = "session"
+    elif session_date:
+        where_clause += f" AND CAST(round_date AS TEXT) = ${param_idx}"
+        params.append(session_date)
+        param_idx += 1
+        period = "session"
     elif period == "7d":
         start_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
         where_clause += f" AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST(${param_idx} AS TEXT)"
@@ -253,9 +260,12 @@ async def get_weapon_stats_by_player(
         param_idx += 1
 
     if player_guid:
-        where_clause += f" AND player_guid = ${param_idx}"
-        params.append(player_guid)
-        param_idx += 1
+        # Handle both 8-char (legacy) and 32-char (canonical) GUIDs
+        guid_clean = player_guid.strip()
+        where_clause += f" AND (player_guid = ${param_idx} OR player_guid = ${param_idx + 1})"
+        params.append(guid_clean)
+        params.append(guid_clean[:8])
+        param_idx += 2
 
     query = f"""
         SELECT
