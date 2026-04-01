@@ -6,6 +6,35 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0](https://github.com/iamez/slomix/compare/v1.2.0...v1.3.0) (2026-04-01)
+
+
+### Features
+
+* **website:** add Useful Kills, Self Kills, Full Self Kills to session stats ([e9a0cc8](https://github.com/iamez/slomix/commit/e9a0cc82734c6a307a9d444437bd65b595a29c77))
+* **website:** ET Rating v2, nav reorganization, KIS/PWC proximity enrichment ([f63c3bb](https://github.com/iamez/slomix/commit/f63c3bba902bc8acd096db2cd36c0321c773b4c1))
+* **website:** replay map visualization with player tracks, kill markers, playback controls ([b9c99d9](https://github.com/iamez/slomix/commit/b9c99d9052659c853275839e7cf84e86361e9405))
+
+
+### Bug Fixes
+
+* address all 8 audit findings from Mandelbrot RCA review ([7f54ac4](https://github.com/iamez/slomix/commit/7f54ac4c1fc36d5c068e479809aff4fecd4522d0))
+* **bot,website:** lua round linker fallback + ET color strip in v6 panels ([4e3754f](https://github.com/iamez/slomix/commit/4e3754f17091af549b7982d9951ca77c56bb110c))
+* **bot:** correlation merge for Lua/stats match_id mismatch + disable dead cog ([25166fe](https://github.com/iamez/slomix/commit/25166feb956d9f52a12724979ab2c0580c9d8425))
+* Codacy object injection — use Map instead of bracket access ([8d3ef81](https://github.com/iamez/slomix/commit/8d3ef81209102cbcd3b7413da52943426a980873))
+* **db:** guid_canonical migration — permanent fix for proximity-PCS GUID mismatch ([f587ba6](https://github.com/iamez/slomix/commit/f587ba6a53f8e977869b89205d04fc56c5b1f5ac))
+* R2 correlation semantic merge + GUID prefix matching ([13d44b1](https://github.com/iamez/slomix/commit/13d44b1128990ac2e0fbb5d39b2d45c185d04d4a))
+* resolve 5 Codacy issues — void arrow returns + object injection ([8bd889b](https://github.com/iamez/slomix/commit/8bd889b086b05e0588de8fa1022d2b9abb026ef5))
+* ruff CI errors — import sort + remove unused fallback_team_dmg ([16c9712](https://github.com/iamez/slomix/commit/16c97127ac00467dbf95bf3e5e542d62240c631f))
+* **website:** add deaths to session weapon mastery + show death-only weapons ([c17b8a8](https://github.com/iamez/slomix/commit/c17b8a8a98ed8d04685d20f05fbcde3d69335113))
+* **website:** add useful_kills + full_selfkills to session detail endpoint ([c7cd672](https://github.com/iamez/slomix/commit/c7cd67256f1fe0a45d7338985f85cbd517fefdb1))
+* **website:** filter 0-kill weapons from weapon mastery table ([c46574a](https://github.com/iamez/slomix/commit/c46574a94203f169eb7f4dc8dd440f912ba97cb6))
+* **website:** momentum chart axis bias, tab UI, max-w container ([06426c1](https://github.com/iamez/slomix/commit/06426c178383bd9656f6e12c0bd44e18aa27609b))
+* **website:** remove dead SQLite fallbacks, fix team_damage + prox_scores ([f2454b9](https://github.com/iamez/slomix/commit/f2454b91dfcb8880ff82c124cccc4dd3f1085400))
+* **website:** session graphs aggregate by player_guid, not player_name ([d37b0c2](https://github.com/iamez/slomix/commit/d37b0c28ba7030f01c0dfef3686df0462408b372))
+* **website:** weapon accuracy uses SUM(hits)/SUM(shots) not AVG(accuracy) ([1b36f7f](https://github.com/iamez/slomix/commit/1b36f7f9bd00d794b484e57ce6c29231fab899e0))
+* **website:** weapon mastery session_date filter + dual GUID matching ([4e09a85](https://github.com/iamez/slomix/commit/4e09a85dbdc84632f827c073fe7171b82b5ddf59))
+
 ## [1.2.0](https://github.com/iamez/slomix/compare/v1.1.2...v1.2.0) (2026-03-30)
 
 
