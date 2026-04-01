@@ -205,6 +205,8 @@ function _normalizePlayerRow(row = {}, source = 'session') {
         accuracy: num(row.accuracy),
         gibs: num(row.gibs),
         self_kills: num(row.self_kills ?? row.selfkills),
+        useful_kills: num(row.useful_kills ?? row.most_useful_kills),
+        full_selfkills: num(row.full_selfkills),
         revives_given: num(row.revives_given),
         times_revived: num(row.times_revived),
         alive_pct: Number.isFinite(num(alivePctRaw, Number.NaN)) ? num(alivePctRaw) : null,

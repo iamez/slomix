@@ -707,6 +707,7 @@ async def get_session_graph_stats(
             p.time_dead_minutes,
             p.denied_playtime,
             p.most_useful_kills,
+            COALESCE(p.full_selfkills, 0),
             p.map_name,
             r.id as round_id,
             p.constructions,
@@ -760,19 +761,20 @@ async def get_session_graph_stats(
         time_dead_minutes = row[15] or 0
         denied_playtime = row[16] or 0
         useful_kills = row[17] or 0
-        map_name = row[18]
-        round_id = row[19]  # unique identifier for deduplication
-        constructions = row[20] or 0
-        objectives_stolen = row[21] or 0
-        dynamites_planted = row[22] or 0
-        dynamites_defused = row[23] or 0
-        useless_kills = row[24] or 0
-        double_kills = row[25] or 0
-        triple_kills = row[26] or 0
-        quad_kills = row[27] or 0
-        mega_kills = row[28] or 0
-        # row[29] = bullets_fired (reserved for accuracy calc)
-        time_played_percent = float(row[30]) if row[30] else 0.0
+        full_selfkills = row[18] or 0
+        map_name = row[19]
+        round_id = row[20]  # unique identifier for deduplication
+        constructions = row[21] or 0
+        objectives_stolen = row[22] or 0
+        dynamites_planted = row[23] or 0
+        dynamites_defused = row[24] or 0
+        useless_kills = row[25] or 0
+        double_kills = row[26] or 0
+        triple_kills = row[27] or 0
+        quad_kills = row[28] or 0
+        mega_kills = row[29] or 0
+        # row[30] = bullets_fired (reserved for accuracy calc)
+        time_played_percent = float(row[31]) if row[31] else 0.0
 
         if name not in player_stats:
             player_stats[name] = {
@@ -795,6 +797,7 @@ async def get_session_graph_stats(
                 "time_dead_minutes": 0,
                 "denied_playtime": 0,
                 "useful_kills": 0,
+                "full_selfkills": 0,
                 "rounds_played": 0,
                 "seen_rounds": set(),  # Track unique round_ids
                 "constructions": 0,
@@ -835,6 +838,7 @@ async def get_session_graph_stats(
         ps["time_dead_minutes"] += time_dead_minutes
         ps["denied_playtime"] += denied_playtime
         ps["useful_kills"] += useful_kills
+        ps["full_selfkills"] += full_selfkills
         ps["constructions"] += constructions
         ps["objectives_stolen"] += objectives_stolen
         ps["dynamites_planted"] += dynamites_planted
@@ -907,6 +911,7 @@ async def get_session_graph_stats(
                     "gibs": stats["gibs"],
                     "headshots": stats["headshots"],
                     "useful_kills": stats["useful_kills"],
+                    "full_selfkills": stats["full_selfkills"],
                     "times_revived": stats["times_revived"],
                     "team_kills": stats["team_kills"],
                     "self_kills": stats["self_kills"],

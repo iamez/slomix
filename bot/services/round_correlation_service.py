@@ -267,6 +267,13 @@ class RoundCorrelationService:
             logger.debug(f"[CORRELATION] Nearby search failed: {e}")
             return None
 
+    def _resolve_correlation_id(self, match_id: str, map_name: str,
+                                existing_cid: str | None) -> tuple[str, str]:
+        """Return (correlation_id, effective_match_id) using a nearby merge when available."""
+        if existing_cid:
+            return existing_cid, existing_cid.split(':')[0]
+        return f"{match_id}:{map_name}", match_id
+
     async def on_lua_teams_stored(self, match_id: str, round_number: int,
                                   lua_teams_id: int, map_name: str):
         """Called after lua_round_teams INSERT in ultimate_bot.py."""
@@ -282,19 +289,16 @@ class RoundCorrelationService:
         if not await self._allow_live_write():
             return
 
-        # Try to merge into nearby existing correlation (Lua vs stats match_id differs by 2-3s)
         existing_cid = await self._find_nearby_correlation_id(match_id, map_name)
-        correlation_id = existing_cid or f"{match_id}:{map_name}"
-        flag_col = f"has_r{round_number}_lua_teams"
-        id_col = f"r{round_number}_lua_teams_id"
+        correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
 
         await self._upsert_correlation(
             correlation_id=correlation_id,
-            match_id=existing_cid.split(':')[0] if existing_cid else match_id,
+            match_id=effective_mid,
             map_name=map_name,
             updates={
-                flag_col: True,
-                id_col: lua_teams_id,
+                f"has_r{round_number}_lua_teams": True,
+                f"r{round_number}_lua_teams_id": lua_teams_id,
             },
         )
 
@@ -313,16 +317,14 @@ class RoundCorrelationService:
         if not await self._allow_live_write():
             return
 
-        # Try to merge into nearby existing correlation
         existing_cid = await self._find_nearby_correlation_id(match_id, map_name)
-        correlation_id = existing_cid or f"{match_id}:{map_name}"
-        flag_col = f"has_r{round_number}_gametime"
+        correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
 
         await self._upsert_correlation(
             correlation_id=correlation_id,
-            match_id=existing_cid.split(':')[0] if existing_cid else match_id,
+            match_id=effective_mid,
             map_name=map_name,
-            updates={flag_col: True},
+            updates={f"has_r{round_number}_gametime": True},
         )
 
     async def on_endstats_processed(self, match_id: str, round_number: int,
