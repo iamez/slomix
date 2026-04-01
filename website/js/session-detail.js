@@ -2079,7 +2079,8 @@ function _renderPlayerPanelContent(playerKey, panelId) {
 
     const noTradeData = !data.asVictim.opps && !data.asAvenger.avenged;
     const timelineId = `sd-player-timeline-${panelId}`;
-    const weapons = Array.isArray(data.weaponPayload?.weapons) ? data.weaponPayload.weapons : [];
+    const weapons = (Array.isArray(data.weaponPayload?.weapons) ? data.weaponPayload.weapons : [])
+        .filter(w => num(w.kills) > 0 || num(w.hits) > 10);  // Hide utility-only weapons (syringe 0K, knife 0K)
     const weaponRows = weapons.map(weapon => {
         const name = escapeHtml((weapon.name || weapon.weapon_name || 'Unknown').replace(/^WS_/, '').replace(/_/g, ' '));
         const kills = num(weapon.kills);
