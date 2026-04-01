@@ -407,8 +407,6 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
         dmg_given = await _fetch_one_with_fallback(dmg_given_query)
         dmg_recv = await _fetch_one_with_fallback(dmg_recv_query)
         team_dmg = await _fetch_one_with_fallback(team_dmg_query)
-        if team_dmg is None:
-            team_dmg = await _fetch_one_with_fallback(fallback_team_dmg)
         revives = await _fetch_one_with_fallback(revives_query)
         deaths = await _fetch_one_with_fallback(deaths_query)
         gibs = await _fetch_one_with_fallback(gibs_query)
