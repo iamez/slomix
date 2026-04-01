@@ -1499,6 +1499,8 @@ async def get_stats_session_detail(
             SUM(p.kills) as total_kills_for_hs,
             SUM(p.gibs) as gibs,
             SUM(p.self_kills) as self_kills,
+            SUM(COALESCE(p.most_useful_kills, 0)) as useful_kills,
+            SUM(COALESCE(p.full_selfkills, 0)) as full_selfkills,
             SUM(p.revives_given) as revives_given,
             SUM(p.times_revived) as times_revived,
             SUM(p.time_played_seconds) as time_played_seconds,
@@ -1544,17 +1546,19 @@ async def get_stats_session_detail(
         # pr[9] = total_kills_for_hs (reserved for future headshot% calc)
         gibs = pr[10] or 0
         self_kills = pr[11] or 0
-        revives_given = pr[12] or 0
-        times_revived = pr[13] or 0
-        time_played_seconds = pr[14] or 0
-        kill_assists = pr[15] or 0
-        time_dead_minutes = float(pr[16]) if pr[16] else 0.0
-        denied_playtime = pr[17] or 0
-        total_hits = pr[18] or 0
-        total_shots = pr[19] or 0
-        weapon_headshots = pr[20] or 0
-        tpp_weighted_sum = float(pr[21]) if pr[21] else 0.0
-        tpp_weight = float(pr[22]) if pr[22] else 0.0
+        useful_kills = pr[12] or 0
+        full_selfkills = pr[13] or 0
+        revives_given = pr[14] or 0
+        times_revived = pr[15] or 0
+        time_played_seconds = pr[16] or 0
+        kill_assists = pr[17] or 0
+        time_dead_minutes = float(pr[18]) if pr[18] else 0.0
+        denied_playtime = pr[19] or 0
+        total_hits = pr[20] or 0
+        total_shots = pr[21] or 0
+        weapon_headshots = pr[22] or 0
+        tpp_weighted_sum = float(pr[23]) if pr[23] else 0.0
+        tpp_weight = float(pr[24]) if pr[24] else 0.0
 
         hs_pct = round((weapon_headshots / total_hits * 100), 1) if total_hits > 0 else 0
         accuracy = round((total_hits / total_shots * 100), 1) if total_shots > 0 else 0
@@ -1590,6 +1594,8 @@ async def get_stats_session_detail(
             "headshot_pct": hs_pct,
             "gibs": gibs,
             "self_kills": self_kills,
+            "useful_kills": useful_kills,
+            "full_selfkills": full_selfkills,
             "revives_given": revives_given,
             "times_revived": times_revived,
             "kill_assists": kill_assists,
