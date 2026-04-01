@@ -219,7 +219,8 @@ class RoundCorrelationService:
            the R1→R2 gap (100-750s) which exceeds any safe timestamp window.
         """
         try:
-            from datetime import timedelta, datetime as dt_cls
+            from datetime import datetime as dt_cls
+            from datetime import timedelta
 
             parts = match_id.split('-')
             if len(parts) < 4:
