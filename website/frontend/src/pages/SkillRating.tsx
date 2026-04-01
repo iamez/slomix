@@ -236,9 +236,8 @@ function ExpandedRow({ player }: { player: RatedPlayer }) {
               <div key={group.label} className="space-y-1.5">
                 <div className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider">{group.label}</div>
                 {groupMetrics.map((key) => {
-                  const comp = Object.prototype.hasOwnProperty.call(player.components, key)
-                    ? (player.components as Record<string, { percentile: number }>)[key]
-                    : null;
+                  const comps = new Map(Object.entries(player.components));
+                  const comp = comps.get(key) as { percentile: number } | undefined;
                   return comp ? (
                     <PercentileBar
                       key={key}
