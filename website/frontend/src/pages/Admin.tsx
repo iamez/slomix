@@ -531,7 +531,7 @@ function SystemAtlas({ diag }: { diag: DiagnosticsResponse | undefined }) {
           {ATLAS_BLOCKS.map((b, i) => (
             <div key={b.id} className="flex items-center gap-2 flex-1">
               <button
-                onClick={() => setSelected(selected === b.id ? null : b.id)}
+                onClick={() => { setSelected(selected === b.id ? null : b.id); }}
                 className={`flex-1 rounded-xl border p-4 transition cursor-pointer text-center hover:bg-white/5 ${
                   selected === b.id
                     ? `${b.border} bg-white/5 ring-1 ring-white/20`
@@ -559,7 +559,7 @@ function SystemAtlas({ diag }: { diag: DiagnosticsResponse | undefined }) {
                 <span className={`text-sm font-bold ${block.color}`}>{block.label}</span>
               </div>
               <button
-                onClick={() => setSelected(null)}
+                onClick={() => { setSelected(null); }}
                 className="text-slate-500 hover:text-white text-xs transition"
               >
                 {'\u2715'} Close
@@ -652,8 +652,8 @@ export default function Admin() {
       {/* Tab bar + Refresh */}
       <div className="flex items-center justify-between">
         <div className="flex gap-1">
-          <button className={tabCls('health')} onClick={() => setTab('health')}>Health</button>
-          <button className={tabCls('atlas')} onClick={() => setTab('atlas')}>Atlas</button>
+          <button className={tabCls('health')} onClick={() => { setTab('health'); }}>Health</button>
+          <button className={tabCls('atlas')} onClick={() => { setTab('atlas'); }}>Atlas</button>
         </div>
         <button
           onClick={handleRefresh}
