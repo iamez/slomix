@@ -34,6 +34,24 @@ const replayState = {
     mapTransforms: null, // loaded once from map_transforms.json
     mapImage: null,      // Image object for current map
     mapReady: false,
+    // Playback
+    playbackSpeed: 1,
+    // Zoom/pan state
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+    isPanning: false,
+    panStartX: 0,
+    panStartY: 0,
+};
+
+// ── Class display ─────────────────────────────────────────────────────────────
+const CLASS_ICONS = {
+    SOLDIER:   'S',
+    MEDIC:     'M',
+    ENGINEER:  'E',
+    FIELDOPS:  'F',
+    COVERTOPS: 'C',
 };
 
 // ── Event display config ───────────────────────────────────────────────────────
@@ -128,6 +146,91 @@ function loadMapImage(mapName) {
         img.onerror = () => resolve(null);
         img.src = `/assets/maps/proximity/${encodeURIComponent(mapName)}.png`;
     });
+}
+
+// ── Zoom / Pan ────────────────────────────────────────────────────────────────
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 4;
+const ZOOM_STEP = 0.3;
+
+function _wireCanvasZoomPan(canvas) {
+    canvas.style.cursor = 'grab';
+
+    canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = CANVAS_W / rect.width;
+        const scaleY = CANVAS_H / rect.height;
+        // Mouse position in canvas coords (before zoom)
+        const mx = (e.clientX - rect.left) * scaleX;
+        const my = (e.clientY - rect.top) * scaleY;
+
+        const oldZoom = replayState.zoom;
+        const dir = e.deltaY < 0 ? 1 : -1;
+        const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, oldZoom + dir * ZOOM_STEP));
+        if (newZoom === oldZoom) return;
+
+        // Adjust pan so the point under the mouse stays fixed
+        replayState.panX = mx - (mx - replayState.panX) * (newZoom / oldZoom);
+        replayState.panY = my - (my - replayState.panY) * (newZoom / oldZoom);
+        replayState.zoom = newZoom;
+        _clampPan();
+        _redraw();
+    }, { passive: false });
+
+    canvas.addEventListener('mousedown', (e) => {
+        if (replayState.zoom <= ZOOM_MIN) return;
+        replayState.isPanning = true;
+        replayState.panStartX = e.clientX;
+        replayState.panStartY = e.clientY;
+        canvas.style.cursor = 'grabbing';
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!replayState.isPanning) return;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = CANVAS_W / rect.width;
+        const scaleY = CANVAS_H / rect.height;
+        const dx = (e.clientX - replayState.panStartX) * scaleX;
+        const dy = (e.clientY - replayState.panStartY) * scaleY;
+        replayState.panX += dx;
+        replayState.panY += dy;
+        replayState.panStartX = e.clientX;
+        replayState.panStartY = e.clientY;
+        _clampPan();
+        _redraw();
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (replayState.isPanning) {
+            replayState.isPanning = false;
+            canvas.style.cursor = replayState.zoom > ZOOM_MIN ? 'grab' : 'default';
+        }
+    });
+
+    // Double-click to reset zoom
+    canvas.addEventListener('dblclick', () => {
+        replayState.zoom = 1;
+        replayState.panX = 0;
+        replayState.panY = 0;
+        canvas.style.cursor = 'default';
+        _redraw();
+    });
+}
+
+function _clampPan() {
+    const z = replayState.zoom;
+    const maxPan = (z - 1) * CANVAS_W / 2;
+    replayState.panX = Math.max(-maxPan, Math.min(maxPan, replayState.panX));
+    replayState.panY = Math.max(-maxPan, Math.min(maxPan, replayState.panY));
+}
+
+function _redraw() {
+    const events = replayState.timeline?.events || [];
+    const idx = replayState.selectedIdx;
+    if (idx >= 0 && idx < events.length) {
+        drawMapAtTime(events[idx].time, idx);
+    }
 }
 
 // ── Main entry ─────────────────────────────────────────────────────────────────
@@ -246,7 +349,62 @@ function renderShell(container) {
     const scrubberPanel = _el('div', 'mt-4 glass-panel rounded-xl border border-white/10 p-3');
     const scrubberRow = _el('div', 'flex items-center gap-3 mb-1');
 
-    const timeCurrent = _el('span', 'text-xs font-mono text-slate-300 w-12', '0:00');
+    // Playback controls: |< < ▶ > >|
+    const btnCls = 'w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition text-sm';
+
+    const btnFirst = _el('button', btnCls, '\u23EE'); // ⏮
+    btnFirst.title = 'First event';
+    btnFirst.addEventListener('click', () => selectEvent(0));
+    scrubberRow.appendChild(btnFirst);
+
+    const btnPrev = _el('button', btnCls, '\u23F4'); // ⏴
+    btnPrev.title = 'Previous event';
+    btnPrev.addEventListener('click', () => {
+        if (replayState.selectedIdx > 0) selectEvent(replayState.selectedIdx - 1);
+    });
+    scrubberRow.appendChild(btnPrev);
+
+    const btnPlay = _el('button', `${btnCls} text-base`, '\u25B6'); // ▶
+    btnPlay.id = 'replay-play-btn';
+    btnPlay.title = 'Play / Pause';
+    btnPlay.addEventListener('click', _togglePlayback);
+    scrubberRow.appendChild(btnPlay);
+
+    const btnNext = _el('button', btnCls, '\u23F5'); // ⏵
+    btnNext.title = 'Next event';
+    btnNext.addEventListener('click', () => {
+        const max = (replayState.timeline?.events || []).length - 1;
+        if (replayState.selectedIdx < max) selectEvent(replayState.selectedIdx + 1);
+    });
+    scrubberRow.appendChild(btnNext);
+
+    const btnLast = _el('button', btnCls, '\u23ED'); // ⏭
+    btnLast.title = 'Last event';
+    btnLast.addEventListener('click', () => {
+        const max = (replayState.timeline?.events || []).length - 1;
+        if (max >= 0) selectEvent(max);
+    });
+    scrubberRow.appendChild(btnLast);
+
+    // Speed selector
+    const speedSelect = document.createElement('select');
+    speedSelect.id = 'replay-speed-select';
+    speedSelect.className = 'bg-slate-800 border border-white/10 text-slate-300 text-[10px] rounded px-1 py-0.5 focus:outline-none focus:border-purple-500/50 w-14';
+    for (const s of [0.5, 1, 1.5, 2, 4]) {
+        const opt = document.createElement('option');
+        opt.value = String(s);
+        opt.textContent = `${s}x`;
+        if (s === 1) opt.selected = true;
+        speedSelect.appendChild(opt);
+    }
+    speedSelect.addEventListener('change', () => {
+        replayState.playbackSpeed = parseFloat(speedSelect.value) || 1;
+        // If currently playing, restart timer with new speed
+        if (_playbackTimer) { _stopPlayback(); _startPlayback(); }
+    });
+    scrubberRow.appendChild(speedSelect);
+
+    const timeCurrent = _el('span', 'text-xs font-mono text-slate-300 w-12 text-right', '0:00');
     timeCurrent.id = 'replay-time-current';
     scrubberRow.appendChild(timeCurrent);
 
@@ -280,10 +438,12 @@ function renderShell(container) {
     // Wire events
     select.addEventListener('change', () => selectRound(parseInt(select.value, 10)));
     scrubberTrack.addEventListener('click', onScrubberClick);
+    _wireCanvasZoomPan(canvas);
 }
 
 // ── Round selection ────────────────────────────────────────────────────────────
 async function selectRound(roundId) {
+    _stopPlayback();
     const loadId = ++replayLoadId;
     replayState.roundId = roundId;
     replayState.timeline = null;
@@ -291,6 +451,9 @@ async function selectRound(roundId) {
     replayState.selectedIdx = -1;
     replayState.mapImage = null;
     replayState.mapReady = false;
+    replayState.zoom = 1;
+    replayState.panX = 0;
+    replayState.panY = 0;
 
     const eventListEl = document.getElementById('replay-event-list');
     if (eventListEl) {
@@ -317,6 +480,14 @@ async function selectRound(roundId) {
         }
 
         replayState.timeline = timeline;
+        // Pre-parse track paths (JSONB may arrive as string)
+        if (tracks?.tracks) {
+            for (const t of tracks.tracks) {
+                if (typeof t.path === 'string') {
+                    try { t.path = JSON.parse(t.path); } catch { t.path = []; }
+                }
+            }
+        }
         replayState.tracks = tracks;
 
         // Load map image
@@ -439,16 +610,24 @@ function drawMapAtTime(timeMs, eventIdx) {
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
 
+    const z = replayState.zoom;
+    const px = replayState.panX;
+    const py = replayState.panY;
+
+    // Apply zoom + pan transform
+    ctx.save();
+    ctx.translate(CANVAS_W / 2 + px, CANVAS_H / 2 + py);
+    ctx.scale(z, z);
+    ctx.translate(-CANVAS_W / 2, -CANVAS_H / 2);
+
     // Draw map background
     if (replayState.mapImage) {
         ctx.drawImage(replayState.mapImage, 0, 0, CANVAS_W, CANVAS_H);
-        // Darken overlay for visibility
         ctx.fillStyle = 'rgba(15, 23, 42, 0.35)';
         ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     } else {
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-        // Grid
         ctx.strokeStyle = 'rgba(255,255,255,0.03)';
         ctx.lineWidth = 1;
         for (let i = 0; i < CANVAS_W; i += 64) {
@@ -472,6 +651,9 @@ function drawMapAtTime(timeMs, eventIdx) {
         drawEventMarker(ctx, events[eventIdx], transform);
     }
 
+    ctx.restore();
+
+    // HUD overlays (drawn without zoom transform)
     // Time overlay
     ctx.fillStyle = 'rgba(15,23,42,0.7)';
     ctx.fillRect(0, 0, 90, 28);
@@ -479,17 +661,112 @@ function drawMapAtTime(timeMs, eventIdx) {
     ctx.font = 'bold 13px JetBrains Mono, monospace';
     ctx.textAlign = 'left';
     ctx.fillText(fmtTime(timeMs), 8, 19);
+
+    // Zoom indicator (only when zoomed in)
+    if (z > 1.05) {
+        const label = `${z.toFixed(1)}x`;
+        ctx.fillStyle = 'rgba(15,23,42,0.7)';
+        ctx.fillRect(CANVAS_W - 55, 0, 55, 24);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '11px JetBrains Mono, monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(label, CANVAS_W - 8, 16);
+    }
+
+    // Kill feed — ET-style (top-left, below time)
+    const killEvents = events.filter(e =>
+        (e.type === 'engagement' || e.type === 'spawn_timing_kill' || e.type === 'trade_kill') && e.time <= timeMs
+    ).slice(-5);
+    if (killEvents.length > 0) {
+        let feedY = 32;
+        ctx.textAlign = 'left';
+        for (const ke of killEvents) {
+            const age = timeMs - ke.time;
+            const alpha = age < 500 ? 1 : Math.max(0.25, 1 - age / 20000);
+            ctx.globalAlpha = alpha;
+
+            // Background strip
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.fillRect(0, feedY - 1, CANVAS_W, 16);
+
+            // Build ET-style kill text
+            let attacker = '', victim = '', weapon = '';
+            if (ke.type === 'engagement') {
+                victim = stripEtColors(ke.victim_name || '???');
+                attacker = '???'; // engagement doesn't have attacker_name directly
+                weapon = '';
+            } else if (ke.type === 'spawn_timing_kill') {
+                attacker = stripEtColors(ke.attacker_name || '???');
+                victim = stripEtColors(ke.victim_name || '???');
+                weapon = '';
+            } else if (ke.type === 'trade_kill') {
+                attacker = stripEtColors(ke.trader_name || '???');
+                victim = stripEtColors(ke.avenged_name || '???');
+                weapon = 'trade';
+            }
+
+            const isAxisVictim = (ke.victim_team || '').toUpperCase() === 'AXIS';
+            const vicColor = isAxisVictim ? '#ef4444' : '#60a5fa';
+            const attColor = isAxisVictim ? '#60a5fa' : '#ef4444';
+            let x = 6;
+
+            // Skull icon
+            ctx.font = '12px sans-serif';
+            ctx.fillStyle = vicColor;
+            ctx.fillText('\u{1F480}', x, feedY + 12);
+            x += 18;
+
+            // "victim was killed by attacker"
+            ctx.font = 'bold 11px Inter, sans-serif';
+            ctx.fillStyle = vicColor;
+            ctx.fillText(victim, x, feedY + 12);
+            x += ctx.measureText(victim).width;
+
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '11px Inter, sans-serif';
+            const midText = ke.type === 'trade_kill' ? ' traded by ' : ' killed by ';
+            ctx.fillText(midText, x, feedY + 12);
+            x += ctx.measureText(midText).width;
+
+            ctx.font = 'bold 11px Inter, sans-serif';
+            ctx.fillStyle = attColor;
+            ctx.fillText(attacker, x, feedY + 12);
+
+            feedY += 16;
+        }
+        ctx.globalAlpha = 1;
+    }
 }
 
 function drawTracks(ctx, tracks, timeMs, transform) {
+    // Group tracks by player GUID — pick best track per player at this time
+    const byGuid = {};
     for (const track of tracks) {
         const path = track.path;
         if (!path || !Array.isArray(path) || path.length === 0) continue;
-
-        // Check if track is alive at this time
+        const guid = track.guid || track.name;
         const spawnT = track.spawn_time || 0;
         const deathT = track.death_time || Infinity;
         const isAlive = timeMs >= spawnT && timeMs <= deathT;
+
+        const prev = byGuid[guid];
+        if (!prev) {
+            byGuid[guid] = { track, isAlive };
+        } else if (isAlive && !prev.isAlive) {
+            // Prefer alive track
+            byGuid[guid] = { track, isAlive };
+        } else if (!isAlive && !prev.isAlive) {
+            // Both dead — pick most recent death
+            const prevDeath = prev.track.death_time || 0;
+            const curDeath = track.death_time || 0;
+            if (curDeath > prevDeath && curDeath <= timeMs) {
+                byGuid[guid] = { track, isAlive };
+            }
+        }
+    }
+
+    for (const { track, isAlive } of Object.values(byGuid)) {
+        const path = track.path;
 
         // Find closest point in path to current time
         let closestPt = null;
@@ -497,7 +774,7 @@ function drawTracks(ctx, tracks, timeMs, transform) {
         const trailPoints = [];
 
         for (const pt of path) {
-            const ptTime = pt.t || pt[0] || 0;
+            const ptTime = pt.time ?? pt.t ?? pt[0] ?? 0;
             const ptX = pt.x ?? pt[1];
             const ptY = pt.y ?? pt[2];
             if (ptX == null || ptY == null) continue;
@@ -508,7 +785,7 @@ function drawTracks(ctx, tracks, timeMs, transform) {
             const delta = Math.abs(ptTime - timeMs);
             if (delta < minDelta) {
                 minDelta = delta;
-                closestPt = { x: ptX, y: ptY };
+                closestPt = { x: ptX, y: ptY, health: pt.health ?? 0 };
             }
         }
 
@@ -518,12 +795,13 @@ function drawTracks(ctx, tracks, timeMs, transform) {
         const teamColor = isAxis ? '#ef4444' : '#3b82f6';
         const deadColor = '#64748b';
         const dotColor = isAlive ? teamColor : deadColor;
+        const playerClass = (track.class || '').toUpperCase();
 
         // Draw trail (last few points)
         const recentTrail = trailPoints.slice(-8);
         if (recentTrail.length > 1) {
             ctx.beginPath();
-            ctx.strokeStyle = dotColor + '40'; // 25% opacity
+            ctx.strokeStyle = dotColor + '40';
             ctx.lineWidth = 1.5;
             for (let i = 0; i < recentTrail.length; i++) {
                 const { cx, cy } = worldToCanvas(recentTrail[i].x, recentTrail[i].y, transform);
@@ -535,39 +813,204 @@ function drawTracks(ctx, tracks, timeMs, transform) {
 
         // Draw player dot
         const { cx, cy } = worldToCanvas(closestPt.x, closestPt.y, transform);
-        ctx.beginPath();
         if (isAlive) {
+            // Outer glow
+            ctx.beginPath();
+            ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+            ctx.fillStyle = dotColor + '20';
+            ctx.fill();
+            // Inner dot
+            ctx.beginPath();
             ctx.arc(cx, cy, 5, 0, Math.PI * 2);
             ctx.fillStyle = dotColor;
             ctx.fill();
             ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 1.5;
+            ctx.lineWidth = 1;
             ctx.stroke();
+
+            // Class icon inside dot
+            const classIcon = CLASS_ICONS[playerClass] || '?';
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 7px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(classIcon, cx, cy);
+
+            // Health bar (below dot)
+            const hp = Math.max(0, Math.min(closestPt.health, 125));
+            const hpPct = hp / 125;
+            const barW = 16, barH = 2, barX = cx - barW / 2, barY = cy + 7;
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(barX, barY, barW, barH);
+            ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : hpPct > 0.25 ? '#eab308' : '#ef4444';
+            ctx.fillRect(barX, barY, barW * hpPct, barH);
         } else {
-            // Dead marker: X
+            // Dead marker: small X
             ctx.strokeStyle = deadColor;
-            ctx.lineWidth = 2;
-            ctx.moveTo(cx - 4, cy - 4); ctx.lineTo(cx + 4, cy + 4);
-            ctx.moveTo(cx + 4, cy - 4); ctx.lineTo(cx - 4, cy + 4);
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(cx - 3, cy - 3); ctx.lineTo(cx + 3, cy + 3);
+            ctx.moveTo(cx + 3, cy - 3); ctx.lineTo(cx - 3, cy + 3);
             ctx.stroke();
         }
 
-        // Player name
+        // Player name (above dot)
         const name = stripEtColors(track.name || '');
         if (name) {
             ctx.fillStyle = isAlive ? '#e2e8f0' : '#64748b';
-            ctx.font = '9px Inter, sans-serif';
+            ctx.font = '8px Inter, sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText(name, cx, cy - 9);
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillText(name, cx, cy - 10);
         }
     }
+}
+
+/**
+ * Find a player's position at a given time from loaded tracks.
+ * Returns { x, y } or null.
+ */
+function _findPlayerPos(playerName, timeMs) {
+    const tracks = replayState.tracks?.tracks;
+    if (!tracks) return null;
+    const clean = stripEtColors(playerName || '');
+    if (!clean) return null;
+
+    for (const track of tracks) {
+        if (stripEtColors(track.name || '') !== clean) continue;
+        const path = track.path;
+        if (!Array.isArray(path) || path.length === 0) continue;
+        const spawnT = track.spawn_time || 0;
+        const deathT = track.death_time || Infinity;
+        if (timeMs < spawnT - 2000 || timeMs > deathT + 2000) continue;
+
+        let best = null, bestDelta = Infinity;
+        for (const pt of path) {
+            const t = pt.time ?? pt.t ?? 0;
+            const d = Math.abs(t - timeMs);
+            if (d < bestDelta) { bestDelta = d; best = pt; }
+            if (t > timeMs) break; // path is sorted
+        }
+        if (best && best.x != null && best.y != null) return { x: best.x, y: best.y };
+    }
+    return null;
 }
 
 function drawEventMarker(ctx, ev, transform) {
     const icon = EVENT_ICONS[ev.type] || '\u2022';
     const { detail } = eventLabel(ev);
+    const evTime = ev.time || 0;
 
-    // Event info overlay at bottom
+    // ── Draw map markers using coordinates or track lookup ──
+    if (transform) {
+        if (ev.type === 'engagement') {
+            // engagement has start_x/y (attacker) and end_x/y (victim) directly
+            const ax = ev.start_x, ay = ev.start_y;
+            const vx = ev.end_x, vy = ev.end_y;
+
+            if (ax != null && ay != null) {
+                const att = worldToCanvas(ax, ay, transform);
+                const vic = (vx != null) ? worldToCanvas(vx, vy, transform) : null;
+
+                // Kill line
+                if (vic) {
+                    ctx.beginPath();
+                    ctx.setLineDash([4, 4]);
+                    ctx.strokeStyle = 'rgba(168,85,247,0.6)';
+                    ctx.lineWidth = 2;
+                    ctx.moveTo(att.cx, att.cy);
+                    ctx.lineTo(vic.cx, vic.cy);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                // Attacker circle (glow + dot)
+                const isAxisVic = (ev.victim_team || '').toUpperCase() === 'AXIS';
+                const attColor = isAxisVic ? '#3b82f6' : '#ef4444';
+                ctx.beginPath(); ctx.arc(att.cx, att.cy, 10, 0, Math.PI * 2);
+                ctx.fillStyle = attColor + '25'; ctx.fill();
+                ctx.beginPath(); ctx.arc(att.cx, att.cy, 6, 0, Math.PI * 2);
+                ctx.fillStyle = attColor; ctx.fill();
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.fillStyle = '#fff'; ctx.font = 'bold 10px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('\u2694', att.cx, att.cy - 12); // crossed swords
+
+                // Victim X
+                if (vic) {
+                    const vicColor = isAxisVic ? '#ef4444' : '#3b82f6';
+                    ctx.strokeStyle = vicColor; ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(vic.cx - 6, vic.cy - 6); ctx.lineTo(vic.cx + 6, vic.cy + 6);
+                    ctx.moveTo(vic.cx + 6, vic.cy - 6); ctx.lineTo(vic.cx - 6, vic.cy + 6);
+                    ctx.stroke();
+                    ctx.fillStyle = '#fff'; ctx.font = '11px sans-serif';
+                    ctx.fillText('\u{1F480}', vic.cx, vic.cy - 10);
+                }
+            }
+
+        } else if (ev.type === 'spawn_timing_kill') {
+            // Lookup attacker + victim positions from tracks
+            const attPos = _findPlayerPos(ev.attacker_name, evTime);
+            const vicPos = _findPlayerPos(ev.victim_name, evTime);
+
+            if (attPos) {
+                const att = worldToCanvas(attPos.x, attPos.y, transform);
+                const vic = vicPos ? worldToCanvas(vicPos.x, vicPos.y, transform) : null;
+
+                if (vic) {
+                    ctx.beginPath(); ctx.setLineDash([3, 3]);
+                    ctx.strokeStyle = 'rgba(6,182,212,0.6)'; ctx.lineWidth = 2;
+                    ctx.moveTo(att.cx, att.cy); ctx.lineTo(vic.cx, vic.cy);
+                    ctx.stroke(); ctx.setLineDash([]);
+                }
+                // Attacker
+                ctx.beginPath(); ctx.arc(att.cx, att.cy, 10, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(6,182,212,0.2)'; ctx.fill();
+                ctx.beginPath(); ctx.arc(att.cx, att.cy, 6, 0, Math.PI * 2);
+                ctx.fillStyle = '#06b6d4'; ctx.fill();
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.fillStyle = '#fff'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('\u{1F489}', att.cx, att.cy - 12); // syringe
+
+                if (vic) {
+                    ctx.strokeStyle = '#f43f5e'; ctx.lineWidth = 3; ctx.beginPath();
+                    ctx.moveTo(vic.cx - 6, vic.cy - 6); ctx.lineTo(vic.cx + 6, vic.cy + 6);
+                    ctx.moveTo(vic.cx + 6, vic.cy - 6); ctx.lineTo(vic.cx - 6, vic.cy + 6);
+                    ctx.stroke();
+                }
+            }
+
+        } else if (ev.type === 'trade_kill') {
+            const traderPos = _findPlayerPos(ev.trader_name, evTime);
+            const avengedPos = _findPlayerPos(ev.avenged_name, evTime);
+
+            if (traderPos) {
+                const t = worldToCanvas(traderPos.x, traderPos.y, transform);
+                const a = avengedPos ? worldToCanvas(avengedPos.x, avengedPos.y, transform) : null;
+
+                if (a) {
+                    ctx.beginPath(); ctx.setLineDash([2, 4]);
+                    ctx.strokeStyle = 'rgba(245,158,11,0.6)'; ctx.lineWidth = 2;
+                    ctx.moveTo(t.cx, t.cy); ctx.lineTo(a.cx, a.cy);
+                    ctx.stroke(); ctx.setLineDash([]);
+                }
+                ctx.beginPath(); ctx.arc(t.cx, t.cy, 10, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(245,158,11,0.2)'; ctx.fill();
+                ctx.beginPath(); ctx.arc(t.cx, t.cy, 6, 0, Math.PI * 2);
+                ctx.fillStyle = '#f59e0b'; ctx.fill();
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.fillStyle = '#fff'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('\u26A1', t.cx, t.cy - 12); // lightning
+            }
+
+        } else if (ev.type === 'team_push') {
+            // No per-player position, but show team cohesion centroid if available
+            // For now, just show a directional indicator in the info box
+        }
+    }
+
+    // ── Event info overlay at bottom ──
     ctx.fillStyle = 'rgba(15,23,42,0.85)';
     const boxY = CANVAS_H - 44;
     ctx.fillRect(0, boxY, CANVAS_W, 44);
@@ -656,4 +1099,45 @@ function onScrubberClick(e) {
         }
     }
     selectEvent(closest);
+}
+
+// ── Playback ──────────────────────────────────────────────────────────────────
+let _playbackTimer = null;
+const BASE_INTERVAL_MS = 1500;
+
+function _togglePlayback() {
+    if (_playbackTimer) {
+        _stopPlayback();
+    } else {
+        _startPlayback();
+    }
+}
+
+function _startPlayback() {
+    const btn = document.getElementById('replay-play-btn');
+    if (btn) btn.textContent = '\u23F8'; // ⏸
+
+    // If at end, restart from beginning
+    const max = (replayState.timeline?.events || []).length - 1;
+    if (replayState.selectedIdx >= max) selectEvent(0);
+
+    const interval = Math.max(100, BASE_INTERVAL_MS / (replayState.playbackSpeed || 1));
+    _playbackTimer = setInterval(() => {
+        const events = replayState.timeline?.events || [];
+        const next = replayState.selectedIdx + 1;
+        if (next >= events.length) {
+            _stopPlayback();
+            return;
+        }
+        selectEvent(next);
+    }, interval);
+}
+
+function _stopPlayback() {
+    if (_playbackTimer) {
+        clearInterval(_playbackTimer);
+        _playbackTimer = null;
+    }
+    const btn = document.getElementById('replay-play-btn');
+    if (btn) btn.textContent = '\u25B6'; // ▶
 }

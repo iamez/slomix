@@ -1214,6 +1214,20 @@
                             class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Retro Viz</button>
                         <button id="link-sessions2" role="menuitem" tabindex="-1" data-click-action="navigateTo('sessions2')"
                             class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold">Sessions 2.0</button>
+                        <div class="my-1 border-t border-white/5"></div>
+                        <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">Advanced</div>
+                        <button id="link-skill-rating" role="menuitem" tabindex="-1" data-click-action="navigateTo('skill-rating')"
+                            class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>ET Rating</button>
+                        <button id="link-rivalries" role="menuitem" tabindex="-1" data-click-action="navigateTo('rivalries')"
+                            class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span>Rivalries</button>
+                        <button id="link-story" role="menuitem" tabindex="-1" data-click-action="navigateTo('story')"
+                            class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>Smart Stats</button>
+                        <button id="link-replay" role="menuitem" tabindex="-1" data-click-action="navigateTo('replay')"
+                            class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-purple-400"></span>Replay</button>
                     </div>
                 </div>
 
@@ -1229,22 +1243,6 @@
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-2">
                     Availability
                     <span id="availability-nav-badge" class="hidden rounded-full bg-brand-amber/20 text-brand-amber px-1.5 py-0.5 text-[10px] font-bold">Link</span>
-                </button>
-                <button id="link-skill-rating" data-click-action="navigateTo('skill-rating')"
-                    class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 transition">
-                    ET Rating
-                </button>
-                <button id="link-rivalries" data-click-action="navigateTo('rivalries')"
-                    class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 transition">
-                    Rivalries
-                </button>
-                <button id="link-story" data-click-action="navigateTo('story')"
-                    class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 transition">
-                    ⚡ Smart Stats
-                </button>
-                <button id="link-replay" data-click-action="navigateTo('replay')"
-                    class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-purple-500/40 text-purple-400 hover:bg-purple-500/10 transition">
-                    🎬 Replay
                 </button>
                 <button id="link-admin" data-click-action="navigateTo('admin')"
                     class="nav-link px-3 py-1 rounded-lg text-xs font-bold border border-brand-amber/40 text-brand-amber hover:bg-brand-amber/10 transition">
@@ -2953,6 +2951,7 @@
 
         <!-- STORY / SMART STATS -->
         <div id="view-story" class="view-section hidden">
+         <div class="max-w-6xl mx-auto px-4 py-8">
           <!-- Hero -->
           <div id="story-hero" class="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-amber-950/20 to-slate-900 p-8 mb-6" style="animation: storyGlow 6s ease-in-out infinite alternate">
             <div class="absolute inset-0 bg-gradient-to-r from-amber-500/5 via-transparent to-amber-500/5 pointer-events-none"></div>
@@ -3005,6 +3004,12 @@
             <div id="story-win-contribution"></div>
           </div>
 
+          <!-- Advanced Metrics (ET Rating v2 composite stats) -->
+          <div class="rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/5 to-blue-500/5 p-6 mt-6">
+            <div id="story-advanced-metrics"></div>
+          </div>
+
+         </div><!-- /max-w-6xl -->
         </div>
 
         <style>
@@ -5817,10 +5822,10 @@
     </script>
 
     <!-- JavaScript (ES6 Modules) -->
-    <script type="module" src="js/app.js?v=20260312-site-recovery2"></script>
-    <script type="module" src="js/inline-actions.js?v=20260312-site-recovery2"></script>
-    <script src="js/diagnostics.js"></script>
-    <script src="js/lucide-init.js"></script>
+    <script type="module" src="js/app.js?v=20260330-v120-deploy"></script>
+    <script type="module" src="js/inline-actions.js?v=20260330-v120-deploy"></script>
+    <script src="js/diagnostics.js?v=20260330-v120-deploy"></script>
+    <script src="js/lucide-init.js?v=20260330-v120-deploy"></script>
 
 </body>
 

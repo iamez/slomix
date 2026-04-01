@@ -62,9 +62,9 @@ async def test_get_weapon_hall_of_fame_normalizes_ws_prefixed_weapons(monkeypatc
 async def test_get_weapon_stats_by_player_groups_by_guid_and_limits():
     db = _FakeDB(
         [
-            ("guid-1", "Alpha", "WS_MP40", 100, 25, 400, 220, 55.0),
-            ("guid-1", "Alpha", "WS_THOMPSON", 80, 18, 350, 190, 54.2),
-            ("guid-2", "Bravo", "WS_LUGER", 30, 9, 140, 70, 50.0),
+            ("guid-1", "Alpha", "WS_MP40", 100, 10, 25, 400, 220, 55.0),
+            ("guid-1", "Alpha", "WS_THOMPSON", 80, 8, 18, 350, 190, 54.2),
+            ("guid-2", "Bravo", "WS_LUGER", 30, 5, 9, 140, 70, 50.0),
         ]
     )
 

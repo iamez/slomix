@@ -74,15 +74,17 @@ async def test_aggregator_defaults_kill_assists_when_column_missing():
 @pytest.mark.asyncio
 async def test_session_graph_stats_exposes_kill_assists_and_updated_frag_formula():
     """Test that the session graph stats query includes kill_assists."""
-    # Build a row matching the FULL query column order (31 columns):
-    # player_name, round_number, kills, deaths, damage_given, damage_received,
-    # time_played_seconds, revives_given, kill_assists, gibs, headshots, accuracy,
-    # team_kills, self_kills, times_revived, time_dead_minutes, denied_playtime,
-    # most_useful_kills, map_name, round_id, constructions, objectives_stolen,
-    # dynamites_planted, dynamites_defused, useless_kills, double_kills,
-    # triple_kills, quad_kills, mega_kills, bullets_fired, time_played_percent
+    # Build a row matching the FULL query column order (33 columns):
+    # player_guid, player_name, round_number, kills, deaths, damage_given,
+    # damage_received, time_played_seconds, revives_given, kill_assists, gibs,
+    # headshots, accuracy, team_kills, self_kills, times_revived,
+    # time_dead_minutes, denied_playtime, most_useful_kills, full_selfkills,
+    # map_name, round_id, constructions, objectives_stolen, dynamites_planted,
+    # dynamites_defused, useless_kills, double_kills, triple_kills,
+    # quad_kills, mega_kills, bullets_fired, time_played_percent
     rows = [
         (
+            "GUID1",       # player_guid
             "Player One",  # player_name
             1,             # round_number
             20,            # kills
@@ -101,6 +103,7 @@ async def test_session_graph_stats_exposes_kill_assists_and_updated_frag_formula
             2.5,           # time_dead_minutes
             120,           # denied_playtime
             6,             # most_useful_kills
+            0,             # full_selfkills
             "supply",      # map_name
             9001,          # round_id
             0,             # constructions

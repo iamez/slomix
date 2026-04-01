@@ -140,7 +140,7 @@ async def get_proximity_dashboard(
             range_days=range_days, session_date=parsed_date, map_name=map_name, db=db),
         "weapon_accuracy": lambda: get_proximity_weapon_accuracy(
             range_days=range_days, map_name=map_name, db=db),
-        "prox_scores": lambda: get_prox_scores(range_days=range_days, db=db),
+        "prox_scores": lambda: get_prox_scores(request=request, range_days=range_days, db=db),
         "prox_formula": get_prox_scores_formula,
     }
 

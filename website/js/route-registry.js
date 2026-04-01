@@ -15,6 +15,10 @@ const STATS_VIEWS = new Set([
     'retro-viz',
     'sessions2',
     'session-detail',
+    'skill-rating',
+    'rivalries',
+    'story',
+    'replay',
 ]);
 
 const VIEW_TO_NAV = Object.freeze({

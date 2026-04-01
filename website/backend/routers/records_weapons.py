@@ -61,7 +61,7 @@ async def get_weapon_stats(
             SUM(headshots) as total_headshots,
             SUM(shots) as total_shots,
             SUM(hits) as total_hits,
-            AVG(accuracy) as avg_accuracy
+            ROUND((SUM(hits)::numeric / NULLIF(SUM(shots), 0)) * 100, 1) as avg_accuracy
         FROM weapon_comprehensive_stats
         {where_clause}
         GROUP BY weapon_name
@@ -168,7 +168,7 @@ async def get_weapon_hall_of_fame(
             SUM(headshots) as headshots,
             SUM(shots) as shots,
             SUM(hits) as hits,
-            AVG(accuracy) as avg_accuracy
+            ROUND((SUM(hits)::numeric / NULLIF(SUM(shots), 0)) * 100, 1) as avg_accuracy
         FROM weapon_comprehensive_stats
         {where_clause}
         GROUP BY weapon_key, player_guid
@@ -216,6 +216,7 @@ async def get_weapon_stats_by_player(
     weapon_limit: int = 5,
     player_guid: str | None = None,
     gaming_session_id: int | None = None,
+    session_date: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -235,6 +236,12 @@ async def get_weapon_stats_by_player(
         )
         params.append(gaming_session_id)
         param_idx += 1
+        period = "session"
+    elif session_date:
+        where_clause += f" AND CAST(round_date AS TEXT) = ${param_idx}"
+        params.append(session_date)
+        param_idx += 1
+        period = "session"
     elif period == "7d":
         start_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
         where_clause += f" AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST(${param_idx} AS TEXT)"
@@ -253,8 +260,10 @@ async def get_weapon_stats_by_player(
         param_idx += 1
 
     if player_guid:
-        where_clause += f" AND player_guid = ${param_idx}"
-        params.append(player_guid)
+        # Match both 8-char (legacy) and 32-char (canonical) GUIDs via prefix
+        guid_prefix = player_guid.strip()[:8]
+        where_clause += f" AND LEFT(player_guid, 8) = ${param_idx}"
+        params.append(guid_prefix)
         param_idx += 1
 
     query = f"""
@@ -263,14 +272,15 @@ async def get_weapon_stats_by_player(
             MAX(player_name) AS player_name,
             weapon_name,
             SUM(kills) AS total_kills,
+            SUM(deaths) AS total_deaths,
             SUM(headshots) AS total_headshots,
             SUM(shots) AS total_shots,
             SUM(hits) AS total_hits,
-            AVG(accuracy) AS avg_accuracy
+            ROUND((SUM(hits)::numeric / NULLIF(SUM(shots), 0)) * 100, 1) AS avg_accuracy
         FROM weapon_comprehensive_stats
         {where_clause}
         GROUP BY player_guid, weapon_name
-        HAVING SUM(kills) > 0 OR SUM(hits) > 0
+        HAVING SUM(kills) > 0 OR SUM(hits) > 0 OR SUM(deaths) > 0
         ORDER BY player_guid, total_kills DESC, total_hits DESC
     """
 
@@ -294,12 +304,11 @@ async def get_weapon_stats_by_player(
             }
 
         kills = int(row[3] or 0)
-        headshots = int(row[4] or 0)
-        shots = int(row[5] or 0)
-        hits = int(row[6] or 0)
-        avg_accuracy = float(row[7] or 0)
-        # Player-level headshot accuracy: headshots / hits * 100
-        # headshots in weapon_comprehensive_stats are headshot HITS, not kills.
+        deaths = int(row[4] or 0)
+        headshots = int(row[5] or 0)
+        shots = int(row[6] or 0)
+        hits = int(row[7] or 0)
+        avg_accuracy = float(row[8] or 0)
         hs_rate = round((headshots / hits) * 100, 1) if hits > 0 else 0.0
 
         players[guid]["total_kills"] += kills
@@ -308,6 +317,7 @@ async def get_weapon_stats_by_player(
                 "name": _clean_weapon_name(row[2]),
                 "weapon_key": _normalize_weapon_key(row[2]),
                 "kills": kills,
+                "deaths": deaths,
                 "headshots": headshots,
                 "hs_rate": min(100.0, hs_rate),
                 "shots": shots,

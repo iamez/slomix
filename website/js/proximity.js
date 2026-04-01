@@ -1977,7 +1977,7 @@ function renderSpawnTimingLeaders(leaders) {
     if (!el) return;
     if (!leaders || !leaders.length) { el.innerHTML = '<em class="text-slate-500">No data</em>'; return; }
     el.innerHTML = '<ol class="list-decimal list-inside text-sm text-slate-300 space-y-1">' + leaders.map(l =>
-        `<li><strong>${escapeHtml(l.name)}</strong> — ${(l.avg_score * 100).toFixed(1)}% (${l.kills} kills, avg denial ${l.avg_denial_ms}ms)</li>`
+        `<li><strong>${escapeHtml(stripEtColors(l.name))}</strong> — ${(l.avg_score * 100).toFixed(1)}% (${l.kills} kills, avg denial ${l.avg_denial_ms}ms)</li>`
     ).join('') + '</ol>';
 }
 
@@ -2091,7 +2091,7 @@ function renderLuaTrades(data) {
     const leadersEl = document.getElementById('lua-trades-leaders');
     if (leadersEl && data.leaders && data.leaders.length) {
         leadersEl.innerHTML = '<ol class="list-decimal list-inside text-sm text-slate-300 space-y-1">' + data.leaders.map(l =>
-            `<li><strong>${escapeHtml(l.name)}</strong> — ${l.trades} trades (avg ${l.avg_reaction_ms}ms, fastest ${l.fastest_ms}ms)</li>`
+            `<li><strong>${escapeHtml(stripEtColors(l.name))}</strong> — ${l.trades} trades (avg ${l.avg_reaction_ms}ms, fastest ${l.fastest_ms}ms)</li>`
         ).join('') + '</ol>';
     } else if (leadersEl) {
         leadersEl.innerHTML = '<em class="text-slate-500">No trade leaders</em>';
@@ -2814,7 +2814,7 @@ function renderCarrierIntel(data) {
             const rank = document.createElement('span');
             rank.className = `font-bold ${i < 3 ? 'text-brand-amber' : 'text-slate-600'}`;
             rank.textContent = `#${i + 1}`;
-            const name = c.name || c.guid?.substring(0, 8) || '?';
+            const name = stripEtColors(c.name || c.guid?.substring(0, 8) || '?');
             const secSpan = document.createElement('span');
             secSpan.className = 'text-brand-emerald';
             secSpan.textContent = c.secures;
@@ -2840,11 +2840,11 @@ function renderCarrierIntel(data) {
             const dur = (e.duration_ms / 1000).toFixed(1);
             const eff = (e.efficiency * 100).toFixed(0);
             let detail = `[${icon}] ${e.outcome} · ${formatNumber(e.carry_distance)}u (${eff}%) · ${dur}s`;
-            if (e.outcome === 'killed' && e.killer_name) detail += ` by ${e.killer_name}`;
+            if (e.outcome === 'killed' && e.killer_name) detail += ` by ${stripEtColors(e.killer_name)}`;
             const row = document.createElement('div');
             row.className = 'flex justify-between text-xs py-0.5';
             const left = document.createElement('span');
-            left.textContent = `${e.carrier_name || '?'} (${e.carrier_team}) on ${e.map_name}`;
+            left.textContent = `${stripEtColors(e.carrier_name || '?')} (${e.carrier_team}) on ${e.map_name}`;
             const right = document.createElement('span');
             right.className = color;
             right.textContent = detail;
@@ -2876,7 +2876,7 @@ function renderCarrierKillers(data) {
         const kills = document.createElement('span');
         kills.className = 'text-brand-rose font-bold';
         kills.textContent = k.carrier_kills;
-        const name = k.name || k.guid?.substring(0, 8) || '?';
+        const name = stripEtColors(k.name || k.guid?.substring(0, 8) || '?');
         row.appendChild(rank);
         row.appendChild(document.createTextNode(` ${name} — `));
         row.appendChild(kills);
@@ -2908,7 +2908,7 @@ function renderFlagReturns(data) {
     const leadersEl = document.getElementById('returns-leaders');
     if (leadersEl && data.returners && data.returners.length > 0) {
         leadersEl.innerHTML = data.returners.map((r, i) => {
-            const name = escapeHtml(r.name || 'Unknown');
+            const name = escapeHtml(stripEtColors(r.name || 'Unknown'));
             const avgDelay = r.avg_delay_ms ? (r.avg_delay_ms / 1000).toFixed(1) + 's' : '--';
             return `<div class="flex justify-between items-center py-0.5 ${i < 3 ? 'text-brand-cyan' : 'text-slate-400'}">
                 <span>#${i + 1} ${name}</span>
@@ -2945,7 +2945,7 @@ function renderEscortLeaders(data) {
     if (!el || !data.escorts || data.escorts.length === 0) return;
 
     el.innerHTML = data.escorts.map((e, i) => {
-        const name = escapeHtml(e.name || 'Unknown');
+        const name = escapeHtml(stripEtColors(e.name || 'Unknown'));
         const dist = e.total_credit_distance ? formatNumber(Math.round(e.total_credit_distance)) + 'u' : '0u';
         const mountedSec = e.total_mounted_ms ? (e.total_mounted_ms / 1000).toFixed(0) + 's mounted' : '';
         const proxSec = e.total_proximity_ms ? (e.total_proximity_ms / 1000).toFixed(0) + 's nearby' : '';
@@ -2965,7 +2965,7 @@ function renderEngineerIntel(data) {
     const leadersEl = document.getElementById('engineer-leaders');
     if (leadersEl && data.engineers && data.engineers.length > 0) {
         leadersEl.innerHTML = data.engineers.map((eng, i) => {
-            const name = escapeHtml(eng.name || 'Unknown');
+            const name = escapeHtml(stripEtColors(eng.name || 'Unknown'));
             const parts = [];
             if (eng.plants > 0) parts.push(`${eng.plants} plant`);
             if (eng.defuses > 0) parts.push(`${eng.defuses} defuse`);
@@ -3043,7 +3043,7 @@ function renderObjectiveRuns(data) {
     if (leadersEl && data.objective_runners && data.objective_runners.length > 0) {
         const rows = data.objective_runners.map(r => `
             <tr class="border-b border-white/5">
-                <td class="py-2 px-2 text-white text-sm">${escapeHtml(r.engineer_name)}</td>
+                <td class="py-2 px-2 text-white text-sm">${escapeHtml(stripEtColors(r.engineer_name))}</td>
                 <td class="py-2 px-2 text-center text-sm">${r.total_runs}</td>
                 <td class="py-2 px-2 text-center text-sm text-emerald-400">${r.solo_runs}</td>
                 <td class="py-2 px-2 text-center text-sm text-blue-400">${r.team_effort_runs}</td>
@@ -3094,8 +3094,8 @@ function renderObjectiveRuns(data) {
                 <div class="flex items-center justify-between py-1.5 border-b border-white/5">
                     <div class="flex items-center gap-2">
                         <span class="text-sm">${icon}</span>
-                        <span class="text-sm text-white">${escapeHtml(r.engineer_name)}</span>
-                        <span class="text-xs text-slate-500">${escapeHtml(r.track_name || '?')}</span>
+                        <span class="text-sm text-white">${escapeHtml(stripEtColors(r.engineer_name))}</span>
+                        <span class="text-xs text-slate-500">${escapeHtml(stripEtColors(r.track_name || '?'))}</span>
                     </div>
                     <div class="flex items-center gap-3">
                         <span class="text-xs ${color} font-medium">${r.run_type}</span>
