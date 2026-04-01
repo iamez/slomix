@@ -272,6 +272,7 @@ async def get_weapon_stats_by_player(
             MAX(player_name) AS player_name,
             weapon_name,
             SUM(kills) AS total_kills,
+            SUM(deaths) AS total_deaths,
             SUM(headshots) AS total_headshots,
             SUM(shots) AS total_shots,
             SUM(hits) AS total_hits,
@@ -279,7 +280,7 @@ async def get_weapon_stats_by_player(
         FROM weapon_comprehensive_stats
         {where_clause}
         GROUP BY player_guid, weapon_name
-        HAVING SUM(kills) > 0 OR SUM(hits) > 0
+        HAVING SUM(kills) > 0 OR SUM(hits) > 0 OR SUM(deaths) > 0
         ORDER BY player_guid, total_kills DESC, total_hits DESC
     """
 
@@ -303,12 +304,11 @@ async def get_weapon_stats_by_player(
             }
 
         kills = int(row[3] or 0)
-        headshots = int(row[4] or 0)
-        shots = int(row[5] or 0)
-        hits = int(row[6] or 0)
-        avg_accuracy = float(row[7] or 0)
-        # Player-level headshot accuracy: headshots / hits * 100
-        # headshots in weapon_comprehensive_stats are headshot HITS, not kills.
+        deaths = int(row[4] or 0)
+        headshots = int(row[5] or 0)
+        shots = int(row[6] or 0)
+        hits = int(row[7] or 0)
+        avg_accuracy = float(row[8] or 0)
         hs_rate = round((headshots / hits) * 100, 1) if hits > 0 else 0.0
 
         players[guid]["total_kills"] += kills
@@ -317,6 +317,7 @@ async def get_weapon_stats_by_player(
                 "name": _clean_weapon_name(row[2]),
                 "weapon_key": _normalize_weapon_key(row[2]),
                 "kills": kills,
+                "deaths": deaths,
                 "headshots": headshots,
                 "hs_rate": min(100.0, hs_rate),
                 "shots": shots,
