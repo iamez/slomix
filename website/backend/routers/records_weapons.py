@@ -260,12 +260,11 @@ async def get_weapon_stats_by_player(
         param_idx += 1
 
     if player_guid:
-        # Handle both 8-char (legacy) and 32-char (canonical) GUIDs
-        guid_clean = player_guid.strip()
-        where_clause += f" AND (player_guid = ${param_idx} OR player_guid = ${param_idx + 1})"
-        params.append(guid_clean)
-        params.append(guid_clean[:8])
-        param_idx += 2
+        # Match both 8-char (legacy) and 32-char (canonical) GUIDs via prefix
+        guid_prefix = player_guid.strip()[:8]
+        where_clause += f" AND LEFT(player_guid, 8) = ${param_idx}"
+        params.append(guid_prefix)
+        param_idx += 1
 
     query = f"""
         SELECT

@@ -208,27 +208,29 @@ class RoundCorrelationService:
         )
 
     async def _find_nearby_correlation_id(self, match_id: str, map_name: str,
+                                          round_number: int = 0,
                                           window_seconds: int = 30) -> str | None:
-        """Find an existing correlation for the same map within ±window_seconds.
+        """Find an existing correlation for the same map to merge into.
 
-        Lua webhook and stats file produce match_ids that differ by 2-3s.
-        Instead of creating duplicate correlations, merge into the existing one.
-        Prefers correlations that already have round_ids (stats-based).
+        Two merge strategies:
+        1. Timestamp proximity (±30s): Lua R1 vs stats match_id differ by 2-3s.
+        2. Semantic R2 match (round_number=2): Find the most recent correlation
+           for this map that has R1 data but is missing R2 Lua data. This handles
+           the R1→R2 gap (100-750s) which exceeds any safe timestamp window.
         """
         try:
-            # Parse timestamp from match_id (format: YYYY-MM-DD-HHMMSS)
-            from datetime import timedelta
+            from datetime import timedelta, datetime as dt_cls
+
             parts = match_id.split('-')
             if len(parts) < 4:
                 return None
             ts_str = '-'.join(parts[:3]) + ' ' + parts[3]
             try:
-                from datetime import datetime as dt_cls
                 target_dt = dt_cls.strptime(ts_str, "%Y-%m-%d %H%M%S")
             except ValueError:
                 return None
 
-            # Search for nearby correlations on the same map
+            # Strategy 1: Timestamp proximity (works for R1 Lua vs stats, ~2-3s diff)
             rows = await self.db.fetch_all(
                 """SELECT correlation_id, match_id, r1_round_id
                    FROM round_correlations
@@ -244,7 +246,7 @@ class RoundCorrelationService:
                 mid = row[1] if isinstance(row, (list, tuple)) else row.get('match_id')
                 has_round = row[2] if isinstance(row, (list, tuple)) else row.get('r1_round_id')
                 if mid == match_id:
-                    return None  # Exact match already exists, use default path
+                    return None  # Exact match already exists
                 try:
                     cparts = mid.split('-')
                     cts = '-'.join(cparts[:3]) + ' ' + cparts[3]
@@ -253,16 +255,51 @@ class RoundCorrelationService:
                     continue
                 diff = abs(candidate_dt - target_dt)
                 if diff <= timedelta(seconds=window_seconds) and diff < best_diff:
-                    # Prefer correlations with round_ids (stats-based)
                     if has_round or best_id is None:
                         best_diff = diff
                         best_id = cid
+
             if best_id:
                 logger.info(
-                    "[CORRELATION] Merging %s:%s into existing %s (diff=%ds)",
+                    "[CORRELATION] Merging %s:%s into existing %s (diff=%ds, strategy=timestamp)",
                     match_id, map_name, best_id, int(best_diff.total_seconds()),
                 )
-            return best_id
+                return best_id
+
+            # Strategy 2: Semantic R2 merge — find the most recent correlation
+            # that has R1 data but no R2 Lua data yet. Only applies when round_number=2.
+            if round_number == 2:
+                r2_rows = await self.db.fetch_all(
+                    """SELECT correlation_id, match_id, r1_round_id
+                       FROM round_correlations
+                       WHERE map_name = ?
+                         AND (has_r1_stats = TRUE OR r1_round_id IS NOT NULL)
+                         AND has_r2_lua_teams = FALSE
+                       ORDER BY created_at DESC
+                       LIMIT 5""",
+                    (map_name,),
+                )
+                for row in (r2_rows or []):
+                    cid = row[0] if isinstance(row, (list, tuple)) else row.get('correlation_id')
+                    mid = row[1] if isinstance(row, (list, tuple)) else row.get('match_id')
+                    if mid == match_id:
+                        return None
+                    try:
+                        cparts = mid.split('-')
+                        cts = '-'.join(cparts[:3]) + ' ' + cparts[3]
+                        candidate_dt = dt_cls.strptime(cts, "%Y-%m-%d %H%M%S")
+                    except (ValueError, IndexError):
+                        continue
+                    diff = target_dt - candidate_dt  # R2 is always AFTER R1
+                    # R2 must be 30s-900s after R1 (halftime + round duration)
+                    if timedelta(seconds=30) <= diff <= timedelta(seconds=900):
+                        logger.info(
+                            "[CORRELATION] Merging R2 %s:%s into %s (diff=%ds, strategy=semantic_r2)",
+                            match_id, map_name, cid, int(diff.total_seconds()),
+                        )
+                        return cid
+
+            return None
         except Exception as e:
             logger.debug(f"[CORRELATION] Nearby search failed: {e}")
             return None
@@ -289,7 +326,7 @@ class RoundCorrelationService:
         if not await self._allow_live_write():
             return
 
-        existing_cid = await self._find_nearby_correlation_id(match_id, map_name)
+        existing_cid = await self._find_nearby_correlation_id(match_id, map_name, round_number)
         correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
 
         await self._upsert_correlation(
@@ -317,7 +354,7 @@ class RoundCorrelationService:
         if not await self._allow_live_write():
             return
 
-        existing_cid = await self._find_nearby_correlation_id(match_id, map_name)
+        existing_cid = await self._find_nearby_correlation_id(match_id, map_name, round_number)
         correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
 
         await self._upsert_correlation(
