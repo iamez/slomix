@@ -1857,9 +1857,9 @@ async function _renderPlayersTab(force = false) {
                         <th class="px-2 py-2 text-right hidden xl:table-cell">HS%</th>
                         <th class="px-2 py-2 text-right hidden xl:table-cell">ACC</th>
                         <th class="px-2 py-2 text-right hidden xl:table-cell">Gibs</th>
-                        <th class="px-2 py-2 text-right hidden xl:table-cell text-teal-300" title="Kills on armed enemies (excludes selfkills and teamkills)">Useful Kills</th>
-                        <th class="px-2 py-2 text-right hidden xl:table-cell text-rose-300" title="/kill command or own explosives">Self Kills</th>
-                        <th class="px-2 py-2 text-right hidden xl:table-cell text-orange-300" title="Self-inflicted gibs (no revive possible)">Full Self Kills</th>
+                        <th class="px-2 py-2 text-right hidden xl:table-cell text-teal-300" title="Useful Kills: kills on armed enemies (excludes selfkills and teamkills)">UK</th>
+                        <th class="px-2 py-2 text-right hidden xl:table-cell text-rose-300" title="Self Kills: /kill command or own explosives">SK</th>
+                        <th class="px-2 py-2 text-right hidden xl:table-cell text-orange-300" title="Full Self Kills: self-inflicted gibs (no revive possible)">FSK</th>
                         <th class="px-2 py-2 text-right hidden xl:table-cell">REV</th>
                         <th class="px-2 py-2 text-right hidden xl:table-cell">Rev'd</th>
                         <th class="px-2 py-2"></th>
