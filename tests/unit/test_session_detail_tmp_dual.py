@@ -41,14 +41,19 @@ async def test_session_detail_returns_dual_alive_pct_fields(monkeypatch):
 
     # Tuple shape follows get_stats_session_detail SELECT order (23 columns):
     # 0:guid, 1:name, 2:kills, 3:deaths, 4:dmg_g, 5:dmg_r, 6:dpm, 7:kd,
-    # 8:headshot_kills, 9:total_kills_for_hs, 10:gibs, 11:self_kills,
-    # 12:revives_given, 13:times_revived, 14:time_played_seconds, 15:kill_assists,
-    # 16:time_dead_minutes, 17:denied_playtime, 18:total_hits, 19:total_shots,
-    # 20:weapon_headshots, 21:tpp_weighted_sum, 22:tpp_weight
+    # 0:player_guid, 1:player_name, 2:kills, 3:deaths, 4:damage_given,
+    # 5:damage_received, 6:dpm, 7:kd, 8:headshot_kills, 9:total_kills_for_hs,
+    # 10:gibs, 11:self_kills, 12:useful_kills, 13:full_selfkills,
+    # 14:revives_given, 15:times_revived, 16:time_played_seconds, 17:kill_assists,
+    # 18:time_dead_minutes, 19:denied_playtime, 20:total_hits, 21:total_shots,
+    # 22:weapon_headshots, 23:tpp_weighted_sum, 24:tpp_weight
     player_rows = [
         (
             "g-alpha", "Alpha",
-            20, 10, 2400, 1800, 240.0, 2.0, 8, 20, 3, 1, 4, 2,
+            20, 10, 2400, 1800, 240.0, 2.0, 8, 20, 3, 1,
+            6,       # useful_kills
+            0,       # full_selfkills
+            4, 2,
             600,     # time_played_seconds (= 10 min)
             5,       # kill_assists
             2.0,     # time_dead_minutes => computed alive% = 100-(2/10*100) = 80.0
@@ -60,7 +65,10 @@ async def test_session_detail_returns_dual_alive_pct_fields(monkeypatch):
         ),
         (
             "g-bravo", "Bravo",
-            18, 9, 2200, 1700, 220.0, 2.0, 6, 18, 2, 1, 3, 2,
+            18, 9, 2200, 1700, 220.0, 2.0, 6, 18, 2, 1,
+            5,       # useful_kills
+            0,       # full_selfkills
+            3, 2,
             600,
             4,
             2.0,     # computed alive% = 80.0
@@ -72,7 +80,10 @@ async def test_session_detail_returns_dual_alive_pct_fields(monkeypatch):
         ),
         (
             "g-charlie", "Charlie",
-            10, 12, 1500, 1900, 150.0, 0.83, 4, 10, 1, 2, 1, 3,
+            10, 12, 1500, 1900, 150.0, 0.83, 4, 10, 1, 2,
+            3,       # useful_kills
+            0,       # full_selfkills
+            1, 3,
             600,
             3,
             1.5,     # computed alive% = 100-(1.5/10*100) = 85.0

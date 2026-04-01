@@ -17,13 +17,14 @@ def _make_row(
     self_kills, times_revived, dead_min, denied, useful, map_name, round_id,
     constructions=0, obj_stolen=0, dyna_planted=0, dyna_defused=0,
     useless=0, double=0, triple=0, quad=0, mega=0, bullets=100, tpp=80.0,
+    full_selfkills=0,
 ):
-    """Build a 31-column tuple matching the get_session_graph_stats SELECT."""
+    """Build a 33-column tuple matching the get_session_graph_stats SELECT."""
     return (
-        name, round_num, kills, deaths, dmg_g, dmg_r, time_secs,
+        guid, name, round_num, kills, deaths, dmg_g, dmg_r, time_secs,
         revives, kill_assists, gibs, headshots, accuracy,
         team_kills, self_kills, times_revived, dead_min, denied,
-        useful, map_name, round_id, constructions, obj_stolen,
+        useful, full_selfkills, map_name, round_id, constructions, obj_stolen,
         dyna_planted, dyna_defused, useless, double, triple, quad, mega,
         bullets, tpp,
     )
