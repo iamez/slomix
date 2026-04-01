@@ -235,14 +235,19 @@ function ExpandedRow({ player }: { player: RatedPlayer }) {
             return (
               <div key={group.label} className="space-y-1.5">
                 <div className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider">{group.label}</div>
-                {groupMetrics.map((key) => (
-                  <PercentileBar
-                    key={key}
-                    metricKey={key}
-                    label={METRIC_LABELS[key] || key}
-                    value={player.components[key].percentile}
-                  />
-                ))}
+                {groupMetrics.map((key) => {
+                  const comp = Object.prototype.hasOwnProperty.call(player.components, key)
+                    ? (player.components as Record<string, { percentile: number }>)[key]
+                    : null;
+                  return comp ? (
+                    <PercentileBar
+                      key={key}
+                      metricKey={key}
+                      label={METRIC_LABELS[key] || key}
+                      value={comp.percentile}
+                    />
+                  ) : null;
+                })}
               </div>
             );
           })}
