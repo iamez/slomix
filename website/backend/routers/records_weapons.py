@@ -61,7 +61,7 @@ async def get_weapon_stats(
             SUM(headshots) as total_headshots,
             SUM(shots) as total_shots,
             SUM(hits) as total_hits,
-            AVG(accuracy) as avg_accuracy
+            ROUND((SUM(hits)::numeric / NULLIF(SUM(shots), 0)) * 100, 1) as avg_accuracy
         FROM weapon_comprehensive_stats
         {where_clause}
         GROUP BY weapon_name
@@ -168,7 +168,7 @@ async def get_weapon_hall_of_fame(
             SUM(headshots) as headshots,
             SUM(shots) as shots,
             SUM(hits) as hits,
-            AVG(accuracy) as avg_accuracy
+            ROUND((SUM(hits)::numeric / NULLIF(SUM(shots), 0)) * 100, 1) as avg_accuracy
         FROM weapon_comprehensive_stats
         {where_clause}
         GROUP BY weapon_key, player_guid
@@ -275,7 +275,7 @@ async def get_weapon_stats_by_player(
             SUM(headshots) AS total_headshots,
             SUM(shots) AS total_shots,
             SUM(hits) AS total_hits,
-            AVG(accuracy) AS avg_accuracy
+            ROUND((SUM(hits)::numeric / NULLIF(SUM(shots), 0)) * 100, 1) AS avg_accuracy
         FROM weapon_comprehensive_stats
         {where_clause}
         GROUP BY player_guid, weapon_name
