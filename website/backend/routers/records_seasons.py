@@ -268,14 +268,6 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
         ORDER BY total_team_damage DESC
         LIMIT 1
     """
-    fallback_team_dmg = """
-        SELECT player_guid, MAX(player_name) as player_name, SUM(team_damage_given) as total_team_damage
-        FROM player_comprehensive_stats
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-        GROUP BY player_guid
-        ORDER BY total_team_damage DESC
-        LIMIT 1
-    """
     revives_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(revives_given) as total_revives
         FROM player_comprehensive_stats
