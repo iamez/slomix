@@ -36,4 +36,7 @@ export const routeCatalog: RouteSummary[] = [
   { viewId: 'availability', label: 'Availability', description: 'Planning and promotion flows', mode: 'modern', migrationWave: 'C', surfaceType: 'write/auth-heavy' },
   { viewId: 'admin', label: 'Admin', description: 'Operational diagnostics and tooling', mode: 'modern', migrationWave: 'C', surfaceType: 'write/auth-heavy' },
   { viewId: 'skill-rating', label: 'ET Rating', description: 'Individual performance skill rating (experimental)', mode: 'modern', migrationWave: 'C', surfaceType: 'read-heavy' },
+  { viewId: 'rivalries', label: 'Rivalries', description: 'Head-to-head rivalry analysis', mode: 'legacy', migrationWave: 'C', surfaceType: 'read-heavy' },
+  { viewId: 'story', label: 'Smart Stats', description: 'AI-narrated session summaries and momentum', mode: 'legacy', migrationWave: 'C', surfaceType: 'read-heavy' },
+  { viewId: 'replay', label: 'Replay', description: 'Round timeline replay viewer', mode: 'legacy', migrationWave: 'C', surfaceType: 'read-heavy' },
 ];

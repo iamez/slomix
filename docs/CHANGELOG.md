@@ -10,6 +10,39 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-04-01: Live Session Audit & Website Data Quality
+
+**Live pipeline audit during 3v3 session + Mandelbrot RCA on every change. 11 commits, website data quality fixes.**
+
+#### Bot — Pipeline Resilience
+- **Round linker fallback**: `_link_lua_round_teams` falls back to `round_date+round_time` when Lua metadata missing (bot restart no longer orphans lua_round_teams entries)
+- **Correlation merge**: Lua webhook + stats file correlations merged via ±30s timestamp proximity (was creating 3 entries per match)
+- **R2 semantic merge**: R2 Lua events matched to existing R1 correlation by round-number awareness (30-900s window), eliminating 53% orphan rate
+- **Dead cog disabled**: Removed synergy_analytics load attempt (`analytics` package never existed, was logging warning on every restart)
+- **Manual backfill**: lua_round_teams 473→10209, 475→10210 linked + enriched with Lua metadata
+
+#### Website — Proximity Page
+- **ET color codes**: `stripEtColors()` added to all 10 v6 render functions (carrier, engineer, objective-runs, flag-returns, escort, lua-trades, spawn-timing)
+- **prox_scores dashboard**: fixed `request` parameter missing from dashboard dispatcher
+
+#### Website — Session Stats (Session 2.0)
+- **Useful Kills / Self Kills / Full Self Kills**: 3 new columns in Players tab (UK/SK/FSK with tooltips) + 2 new charts (Useful Kills ladder + SK/FSK grouped bar)
+- **Session detail endpoint**: added `useful_kills` + `full_selfkills` to `/api/stats/session/{id}/detail` query and response (was returning 0)
+- **Graphs endpoint**: added `full_selfkills` to SELECT + aggregation + response
+- **DPM graph fix**: session graphs aggregate by `player_guid` not `player_name` — fixes name-change mid-session split (e.g. qmr → #allbad*QMAR)
+
+#### Website — Weapon Stats
+- **Accuracy formula**: `SUM(hits)/SUM(shots)*100` replaces broken `AVG(accuracy)` across 3 queries (syringe showed 65.9% instead of correct 83.3%)
+- **Deaths column**: added `SUM(deaths)` to session weapon mastery endpoint + response
+- **Death-only weapons**: `HAVING` expanded to `SUM(deaths) > 0` — shows weapons you were killed by but never fired
+- **session_date filter**: weapon mastery endpoint was silently ignoring `session_date` parameter
+- **GUID matching**: `LEFT(player_guid, 8)` prefix match handles both 8-char legacy and 32-char canonical GUIDs
+
+#### Website — Records/Seasons
+- **Dead SQLite fallback removed**: -165 lines of `sessions` table + `session_date` column queries that caused 17+ errors per page load
+- **team_damage fix**: column renamed `team_damage` → `team_damage_given`
+- **Dead identical fallback removed**: `fallback_team_dmg` was identical copy of `team_dmg_query`
+
 ---
 
 ## [1.6.0] — 2026-03-30: Mandelbrot RCA v2.0 Audit, Oksii Adoption & God File Splits

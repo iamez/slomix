@@ -213,7 +213,7 @@ class TestRowToStats:
     def test_basic_extraction(self):
         row = (0.0, 0.0, 0.0,  # padding
                50.0, 3.0, 2.0, 5.0, 1.0, 0.8, 0.4, 10.0, 0.25)
-        stats = _row_to_stats(row, offset=3)
+        stats = _row_to_stats(row, offset=3, has_proximity=False)
         assert stats["dpm"] == 50.0
         assert stats["kpr"] == 3.0
         assert stats["dpr"] == 2.0
@@ -226,6 +226,6 @@ class TestRowToStats:
 
     def test_zero_offset(self):
         row = (50.0, 3.0, 2.0, 5.0, 1.0, 0.8, 0.4, 10.0, 0.25)
-        stats = _row_to_stats(row, offset=0)
+        stats = _row_to_stats(row, offset=0, has_proximity=False)
         assert stats["dpm"] == 50.0
         assert stats["accuracy"] == 0.25

@@ -18,7 +18,7 @@
 
 @layer components {
   .page-shell {
-    @apply mt-6 space-y-8;
+    @apply max-w-6xl mx-auto px-4 py-8 space-y-8;
   }
 
   .section-kicker {

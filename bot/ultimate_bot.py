@@ -715,16 +715,7 @@ class UltimateETLegacyBot(commands.Bot):
             logger.error(f'Failed to load Analytics Cog: {e}', exc_info=True)
 
         # �🎯 FIVEEYES: Load synergy analytics cog (SAFE - disabled by default)
-        try:
-            await self.load_extension("bot.cogs.synergy_analytics")
-            logger.info(
-                "✅ FIVEEYES synergy analytics cog loaded (disabled by default)"
-            )
-        except Exception as e:
-            logger.warning(f"⚠️  Could not load FIVEEYES cog: {e}")
-            logger.warning(
-                "Bot will continue without synergy analytics features"
-            )
+        # synergy_analytics disabled — analytics package never created
 
         # 🎯 PROXIMITY TRACKER: Load combat engagement analytics (SAFE - disabled by default)
         try:
@@ -1632,6 +1623,23 @@ class UltimateETLegacyBot(commands.Bot):
                 target_unix = int(target_unix)
             except (TypeError, ValueError):
                 target_unix = 0
+
+            # Fallback: derive target_unix from round_date + round_time when Lua
+            # metadata is missing (e.g. bot restart lost in-memory webhook data).
+            # The rounds table ALWAYS has round_date+round_time from the filename.
+            if not target_unix:
+                round_row = await self.db_adapter.fetch_one(
+                    "SELECT round_date, round_time FROM rounds WHERE id = ?",
+                    (round_id,),
+                )
+                if round_row:
+                    from bot.core.round_linker import _parse_round_datetime
+                    dt = _parse_round_datetime(
+                        round_row[0] if isinstance(round_row, (list, tuple)) else round_row.get('round_date'),
+                        round_row[1] if isinstance(round_row, (list, tuple)) else round_row.get('round_time'),
+                    )
+                    if dt:
+                        target_unix = int(dt.timestamp())
 
             if not target_unix:
                 return

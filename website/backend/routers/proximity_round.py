@@ -85,6 +85,10 @@ async def get_proximity_round_timeline(
                 "outcome": r[6],
                 "damage": int(r[7] or 0),
                 "attackers": int(r[8] or 0),
+                "start_x": float(r[11]) if r[11] is not None else None,
+                "start_y": float(r[12]) if r[12] is not None else None,
+                "end_x": float(r[13]) if r[13] is not None else None,
+                "end_y": float(r[14]) if r[14] is not None else None,
             })
         for r in (spawn_events or []):
             events.append({
@@ -139,16 +143,36 @@ async def get_proximity_round_tracks(
 ):
     """Player track paths for animated map view."""
     try:
+        # Try direct round_id match first, then fallback to metadata match
         tracks = await db.fetch_all(
             """
-            SELECT player_guid, MAX(player_name) AS name, team, player_class,
-                   spawn_time, death_time, first_move_time, death_type,
-                   path
-            FROM player_track WHERE round_id = $1
-            ORDER BY spawn_time
+            SELECT pt.player_guid, MAX(pt.player_name) AS name, pt.team, pt.player_class,
+                   pt.spawn_time_ms, pt.death_time_ms, pt.first_move_time_ms, NULL AS death_type,
+                   pt.path
+            FROM player_track pt
+            WHERE pt.round_id = $1
+            GROUP BY pt.player_guid, pt.team, pt.player_class, pt.spawn_time_ms, pt.death_time_ms, pt.first_move_time_ms, pt.path
+            ORDER BY pt.spawn_time_ms
             """,
             (round_id,),
         )
+        if not tracks:
+            # Fallback: match via round metadata (session_date, map_name, round_number)
+            tracks = await db.fetch_all(
+                """
+                SELECT pt.player_guid, MAX(pt.player_name) AS name, pt.team, pt.player_class,
+                       pt.spawn_time_ms, pt.death_time_ms, pt.first_move_time_ms, NULL AS death_type,
+                       pt.path
+                FROM player_track pt
+                JOIN rounds r ON r.id = $1
+                WHERE pt.session_date = r.round_date::date
+                  AND pt.round_number = r.round_number
+                  AND pt.map_name = r.map_name
+                GROUP BY pt.player_guid, pt.team, pt.player_class, pt.spawn_time_ms, pt.death_time_ms, pt.first_move_time_ms, pt.path
+                ORDER BY pt.spawn_time_ms
+                """,
+                (round_id,),
+            )
         if not tracks:
             raise HTTPException(status_code=404, detail="No tracks for round")
 

@@ -207,165 +207,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             (start_str, end_str),
         )
 
-        if rounds_count is None and sessions_count is None:
-            # Fallback for legacy SQLite schema (sessions table)
-            rounds_count = await safe_val(
-                """
-                SELECT COUNT(*)
-                FROM sessions
-                WHERE round_number IN (1, 2)
-                  AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(session_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-                """,
-                (start_str, end_str),
-            )
-            players_count = await safe_val(
-                """
-                SELECT COUNT(DISTINCT player_guid)
-                FROM player_comprehensive_stats
-                WHERE SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(session_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-                """,
-                (start_str, end_str),
-            )
-            sessions_count = await safe_val(
-                """
-                SELECT COUNT(DISTINCT session_id)
-                FROM sessions
-                WHERE SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(session_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-                """,
-                (start_str, end_str),
-            )
-            maps_count = await safe_val(
-                """
-                SELECT COUNT(DISTINCT map_name)
-                FROM sessions
-                WHERE map_name IS NOT NULL
-                  AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(session_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-                """,
-                (start_str, end_str),
-            )
-            kills_total = await safe_val(
-                """
-                SELECT COALESCE(SUM(kills), 0)
-                FROM player_comprehensive_stats
-                WHERE SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(session_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-                """,
-                (start_str, end_str),
-            )
-            active_days = await safe_val(
-                """
-                SELECT COUNT(DISTINCT SUBSTR(CAST(session_date AS TEXT), 1, 10))
-                FROM sessions
-                WHERE SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(session_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-                """,
-                (start_str, end_str),
-            )
-            top_map_row = await safe_one(
-                """
-                SELECT map_name, COUNT(*) as plays
-                FROM sessions
-                WHERE map_name IS NOT NULL
-                  AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(session_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-                GROUP BY map_name
-                ORDER BY plays DESC
-                LIMIT 1
-                """,
-                (start_str, end_str),
-            )
-
-    # If rounds exist but player stats use session_date, retry with session_date
-    if rounds_count and (players_count is None or players_count == 0):
-        players_count = await safe_val(
-            """
-            SELECT COUNT(DISTINCT player_guid)
-            FROM player_comprehensive_stats
-            WHERE SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-            """,
-            (start_str, end_str),
-        )
-
-    if rounds_count and (kills_total is None or kills_total == 0):
-        kills_total = await safe_val(
-            """
-            SELECT COALESCE(SUM(kills), 0)
-            FROM player_comprehensive_stats
-            WHERE SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-            """,
-            (start_str, end_str),
-        )
-
-    # If rounds data is empty, try sessions table as a last resort
-    if (rounds_count or 0) == 0 and (sessions_count or 0) == 0:
-        rounds_count = await safe_val(
-            """
-            SELECT COUNT(*)
-            FROM sessions
-            WHERE round_number IN (1, 2)
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-            """,
-            (start_str, end_str),
-        )
-        players_count = await safe_val(
-            """
-            SELECT COUNT(DISTINCT player_guid)
-            FROM player_comprehensive_stats
-            WHERE SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-            """,
-            (start_str, end_str),
-        )
-        sessions_count = await safe_val(
-            """
-            SELECT COUNT(DISTINCT session_id)
-            FROM sessions
-            WHERE SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-            """,
-            (start_str, end_str),
-        )
-        maps_count = await safe_val(
-            """
-            SELECT COUNT(DISTINCT map_name)
-            FROM sessions
-            WHERE map_name IS NOT NULL
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-            """,
-            (start_str, end_str),
-        )
-        kills_total = await safe_val(
-            """
-            SELECT COALESCE(SUM(kills), 0)
-            FROM player_comprehensive_stats
-            WHERE SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-            """,
-            (start_str, end_str),
-        )
-        active_days = await safe_val(
-            """
-            SELECT COUNT(DISTINCT SUBSTR(CAST(session_date AS TEXT), 1, 10))
-            FROM sessions
-            WHERE SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-            """,
-            (start_str, end_str),
-        )
-        top_map_row = await safe_one(
-            """
-            SELECT map_name, COUNT(*) as plays
-            FROM sessions
-            WHERE map_name IS NOT NULL
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-            GROUP BY map_name
-            ORDER BY plays DESC
-            LIMIT 1
-            """,
-            (start_str, end_str),
-        )
+        # Legacy SQLite fallback removed — PostgreSQL-only (sessions table does not exist)
 
     active_days = active_days or 0
     rounds_count = rounds_count or 0
@@ -420,14 +262,6 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     """
     team_dmg_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(team_damage_given) as total_team_damage
-        FROM player_comprehensive_stats
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
-        GROUP BY player_guid
-        ORDER BY total_team_damage DESC
-        LIMIT 1
-    """
-    fallback_team_dmg = """
-        SELECT player_guid, MAX(player_name) as player_name, SUM(team_damage) as total_team_damage
         FROM player_comprehensive_stats
         WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
@@ -559,17 +393,12 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
             return None
 
     async def _fetch_one_with_fallback(query: str):
-        row = await _fetch_one_with_field(query, "round_date")
-        if row is None:
-            row = await _fetch_one_with_field(query, "session_date")
-        return row
+        return await _fetch_one_with_field(query, "round_date")
 
     async def fetch_leaders():
         dmg_given = await _fetch_one_with_fallback(dmg_given_query)
         dmg_recv = await _fetch_one_with_fallback(dmg_recv_query)
         team_dmg = await _fetch_one_with_fallback(team_dmg_query)
-        if team_dmg is None:
-            team_dmg = await _fetch_one_with_fallback(fallback_team_dmg)
         revives = await _fetch_one_with_fallback(revives_query)
         deaths = await _fetch_one_with_fallback(deaths_query)
         gibs = await _fetch_one_with_fallback(gibs_query)

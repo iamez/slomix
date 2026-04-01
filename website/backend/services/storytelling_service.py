@@ -1856,20 +1856,28 @@ class StorytellingService:
 
     # ── Player Win Contribution (PWC) ────────────────────────────────
 
-    # PWC weights (normal / objectives-absent)
-    _PWC_W_KILLS = 0.30
-    _PWC_W_DAMAGE = 0.15
-    _PWC_W_OBJECTIVES = 0.25
-    _PWC_W_REVIVES = 0.15
-    _PWC_W_SURVIVAL = 0.15
+    # PWC v2 weights: PCS (72%) + proximity (28%)
+    # Inspired by HLTV 2.1, FACEIT RWS, VALORANT ACS
+    _PWC_W_KILLS = 0.22
+    _PWC_W_DAMAGE = 0.10
+    _PWC_W_OBJECTIVES = 0.20
+    _PWC_W_REVIVES = 0.12
+    _PWC_W_SURVIVAL = 0.08
+    _PWC_W_CROSSFIRE = 0.10   # Crossfire kills share (team coordination)
+    _PWC_W_TRADE = 0.10       # Trade kills share (avenging teammates)
+    _PWC_W_CLUTCH = 0.08      # Clutch kills share (low HP / outnumbered)
 
     async def compute_win_contribution(self, session_date: str | date) -> dict:
-        """Compute Player Win Contribution for every player in a session.
+        """Compute Player Win Contribution v2 for every player in a session.
+
+        v2 adds proximity-derived components: crossfire share, trade share,
+        clutch share (28% combined weight, inspired by HLTV 2.1 / FACEIT RWS).
 
         Returns dict with 'mvp', 'players' list (sorted by total_pwc desc),
         and 'session_date'.
         """
         sd_str = _to_date_str(session_date)
+        sd_date = _to_date(session_date)
 
         # 1. Fetch per-player per-round stats from PCS joined with rounds
         rows = await self.db.fetch_all("""
@@ -1885,7 +1893,8 @@ class StorytellingService:
                      + COALESCE(pcs.constructions, 0) AS objectives,
                    pcs.revives_given,
                    pcs.time_played_minutes,
-                   r.id AS round_id
+                   r.id AS round_id,
+                   r.round_start_unix
             FROM player_comprehensive_stats pcs
             JOIN rounds r ON r.id = pcs.round_id
             WHERE pcs.round_date = $1
@@ -1894,6 +1903,44 @@ class StorytellingService:
               AND pcs.time_played_seconds > 0
             ORDER BY r.id, pcs.player_guid
         """, (sd_str,))
+
+        # 1b. Fetch proximity data for proximity PWC components
+        # Crossfire kills per player per round (via guid_canonical)
+        xf_rows = await self.db.fetch_all("""
+            SELECT killer_guid_canonical, round_start_unix, COUNT(*) as xf_kills
+            FROM storytelling_kill_impact
+            WHERE session_date = $1 AND is_crossfire = true AND killer_guid_canonical IS NOT NULL
+            GROUP BY killer_guid_canonical, round_start_unix
+        """, (sd_date,))
+        xf_map: dict[tuple[str, int], int] = {
+            (r[0], int(r[1])): int(r[2]) for r in xf_rows
+        }
+
+        # Trade kills per player per round (via guid_canonical)
+        tr_rows = await self.db.fetch_all("""
+            SELECT trader_guid_canonical, round_start_unix, COUNT(*) as tr_kills
+            FROM proximity_lua_trade_kill
+            WHERE session_date = $1 AND trader_guid_canonical IS NOT NULL
+            GROUP BY trader_guid_canonical, round_start_unix
+        """, (sd_date,))
+        tr_map: dict[tuple[str, int], int] = {
+            (r[0], int(r[1])): int(r[2]) for r in tr_rows
+        }
+
+        # Clutch kills per player per round (via guid_canonical)
+        cl_rows = await self.db.fetch_all("""
+            SELECT attacker_guid_canonical, round_start_unix, COUNT(*) as cl_kills
+            FROM proximity_combat_position
+            WHERE session_date = $1 AND event_type = 'kill'
+              AND attacker_guid_canonical IS NOT NULL
+              AND ((killer_health > 0 AND killer_health < 30)
+                   OR (attacker_team = 'AXIS' AND axis_alive < allies_alive)
+                   OR (attacker_team = 'ALLIES' AND allies_alive < axis_alive))
+            GROUP BY attacker_guid_canonical, round_start_unix
+        """, (sd_date,))
+        cl_map: dict[tuple[str, int], int] = {
+            (r[0], int(r[1])): int(r[2]) for r in cl_rows
+        }
 
         if not rows:
             return {"session_date": sd_str, "mvp": None, "players": []}
@@ -1914,6 +1961,7 @@ class StorytellingService:
             winner_team = round_rows[0][5]  # same for all rows in this round
             map_name = round_rows[0][3]
             round_number = round_rows[0][2]
+            round_start = int(round_rows[0][12] or 0)  # round_start_unix
 
             # Team totals (per team integer: 1=Allies, 2=Axis)
             team_kills: dict[int, int] = defaultdict(int)
@@ -1922,15 +1970,24 @@ class StorytellingService:
             team_revives: dict[int, int] = defaultdict(int)
             team_alive: dict[int, float] = defaultdict(float)
             team_count: dict[int, int] = defaultdict(int)
+            # Proximity team totals
+            team_crossfire: dict[int, int] = defaultdict(int)
+            team_trade: dict[int, int] = defaultdict(int)
+            team_clutch: dict[int, int] = defaultdict(int)
 
             for r in round_rows:
                 t = r[4]  # team
+                guid = r[0]
                 team_kills[t] += int(r[6] or 0)
                 team_damage[t] += int(r[7] or 0)
                 team_objectives[t] += int(r[8] or 0)
                 team_revives[t] += int(r[9] or 0)
                 team_alive[t] += float(r[10] or 0)
                 team_count[t] += 1
+                # Sum proximity per team for this round
+                team_crossfire[t] += xf_map.get((guid, round_start), 0)
+                team_trade[t] += tr_map.get((guid, round_start), 0)
+                team_clutch[t] += cl_map.get((guid, round_start), 0)
 
             # Check if objectives are zero for ALL players in this round
             all_objectives_zero = all(int(r[8] or 0) == 0 for r in round_rows)
@@ -1945,31 +2002,49 @@ class StorytellingService:
                 p_revives = int(r[9] or 0)
                 p_alive = float(r[10] or 0)
 
+                # Proximity per-player counts for this round
+                p_crossfire = xf_map.get((guid, round_start), 0)
+                p_trade = tr_map.get((guid, round_start), 0)
+                p_clutch = cl_map.get((guid, round_start), 0)
+
                 tk = max(team_kills[t], 1)
                 td = max(team_damage[t], 1)
                 to = max(team_objectives[t], 1)
-                tr = max(team_revives[t], 1)
+                trev = max(team_revives[t], 1)
                 team_avg_alive = team_alive[t] / max(team_count[t], 1)
                 ta = max(team_avg_alive, 0.01)
+                txf = max(team_crossfire[t], 1)
+                ttr = max(team_trade[t], 1)
+                tcl = max(team_clutch[t], 1)
 
                 kill_share = p_kills / tk
                 damage_share = p_damage / td
                 obj_share = p_objectives / to
-                revive_share = p_revives / tr
+                revive_share = p_revives / trev
                 survival_share = min(p_alive / ta, 2.0)  # cap at 2x
+                crossfire_share = p_crossfire / txf
+                trade_share = p_trade / ttr
+                clutch_share = p_clutch / tcl
 
+                # PWC v2: PCS (72%) + proximity (28%)
                 if all_objectives_zero:
-                    # Redistribute 0.25 objectives weight: +0.10 kills, +0.10 damage, +0.05 revives
-                    pwc = ((self._PWC_W_KILLS + 0.10) * kill_share
-                           + (self._PWC_W_DAMAGE + 0.10) * damage_share
-                           + (self._PWC_W_REVIVES + 0.05) * revive_share
-                           + self._PWC_W_SURVIVAL * survival_share)
+                    # Redistribute 0.20 objectives across kills/damage/revives
+                    pwc = ((self._PWC_W_KILLS + 0.06) * kill_share
+                           + (self._PWC_W_DAMAGE + 0.03) * damage_share
+                           + (self._PWC_W_REVIVES + 0.03) * revive_share
+                           + (self._PWC_W_SURVIVAL + 0.02) * survival_share
+                           + (self._PWC_W_CROSSFIRE + 0.03) * crossfire_share
+                           + (self._PWC_W_TRADE + 0.03) * trade_share
+                           + self._PWC_W_CLUTCH * clutch_share)
                 else:
                     pwc = (self._PWC_W_KILLS * kill_share
                            + self._PWC_W_DAMAGE * damage_share
                            + self._PWC_W_OBJECTIVES * obj_share
                            + self._PWC_W_REVIVES * revive_share
-                           + self._PWC_W_SURVIVAL * survival_share)
+                           + self._PWC_W_SURVIVAL * survival_share
+                           + self._PWC_W_CROSSFIRE * crossfire_share
+                           + self._PWC_W_TRADE * trade_share
+                           + self._PWC_W_CLUTCH * clutch_share)
 
                 won = (t == winner_team and winner_team in (1, 2))
 
@@ -1986,7 +2061,8 @@ class StorytellingService:
                         "components": {
                             "kills": 0.0, "damage": 0.0,
                             "objectives": 0.0, "revives": 0.0,
-                            "survival": 0.0,
+                            "survival": 0.0, "crossfire": 0.0,
+                            "trade": 0.0, "clutch": 0.0,
                         },
                     }
                 else:
@@ -2005,15 +2081,21 @@ class StorytellingService:
 
                 # Accumulate component contributions for stacked bars
                 if all_objectives_zero:
-                    pd["components"]["kills"] += (self._PWC_W_KILLS + 0.10) * kill_share
-                    pd["components"]["damage"] += (self._PWC_W_DAMAGE + 0.10) * damage_share
-                    pd["components"]["revives"] += (self._PWC_W_REVIVES + 0.05) * revive_share
+                    pd["components"]["kills"] += (self._PWC_W_KILLS + 0.06) * kill_share
+                    pd["components"]["damage"] += (self._PWC_W_DAMAGE + 0.03) * damage_share
+                    pd["components"]["revives"] += (self._PWC_W_REVIVES + 0.03) * revive_share
+                    pd["components"]["survival"] += (self._PWC_W_SURVIVAL + 0.02) * survival_share
+                    pd["components"]["crossfire"] += (self._PWC_W_CROSSFIRE + 0.03) * crossfire_share
+                    pd["components"]["trade"] += (self._PWC_W_TRADE + 0.03) * trade_share
                 else:
                     pd["components"]["kills"] += self._PWC_W_KILLS * kill_share
                     pd["components"]["damage"] += self._PWC_W_DAMAGE * damage_share
                     pd["components"]["objectives"] += self._PWC_W_OBJECTIVES * obj_share
                     pd["components"]["revives"] += self._PWC_W_REVIVES * revive_share
-                pd["components"]["survival"] += self._PWC_W_SURVIVAL * survival_share
+                    pd["components"]["survival"] += self._PWC_W_SURVIVAL * survival_share
+                    pd["components"]["crossfire"] += self._PWC_W_CROSSFIRE * crossfire_share
+                    pd["components"]["trade"] += self._PWC_W_TRADE * trade_share
+                pd["components"]["clutch"] += self._PWC_W_CLUTCH * clutch_share
 
                 pd["per_round"].append({
                     "round_number": round_number,
@@ -2103,7 +2185,11 @@ class StorytellingService:
             guid_teams.setdefault(g, []).append(faction)
         guid_majority: dict[str, str] = {}
         for g, teams in guid_teams.items():
-            guid_majority[g] = 'AXIS' if teams.count('AXIS') >= teams.count('ALLIES') else 'ALLIES'
+            if teams.count('AXIS') > teams.count('ALLIES'):
+                guid_majority[g] = 'AXIS'
+            elif teams.count('ALLIES') > teams.count('AXIS'):
+                guid_majority[g] = 'ALLIES'
+            # tied → skip, lookup returns None
 
         # Build short→long for PCS 8-char to proximity 32-char
         all_guids = set()
@@ -2112,7 +2198,7 @@ class StorytellingService:
             all_guids.add(k[5])
         short_to_long = {g[:8]: g for g in all_guids}
 
-        def _get_team(guid: str, rn: int) -> str:
+        def _get_team(guid: str, rn: int) -> str | None:
             """Resolve team for a GUID in a round. Try PCS 8-char lookup, then majority."""
             t = rtm.get((guid[:8], rn)) or rtm.get((guid, rn))
             if t:
@@ -2121,7 +2207,7 @@ class StorytellingService:
             t = rtm.get((long[:8], rn))
             if t:
                 return t
-            return guid_majority.get(guid[:8]) or guid_majority.get(guid) or 'AXIS'
+            return guid_majority.get(guid[:8]) or guid_majority.get(guid)
 
         # 3. Get objective events: carrier pickups/secured
         carrier_events = await self.db.fetch_all("""
@@ -2149,6 +2235,8 @@ class StorytellingService:
             kill_time_ms = k[3] or 0
             killer_guid = k[4]
             killer_team = _get_team(killer_guid, rn)
+            if killer_team is None:
+                continue
             rounds_data[key]["kills"].append({
                 "t_ms": kill_time_ms,
                 "team": killer_team,
@@ -2160,7 +2248,9 @@ class StorytellingService:
             key = (rn, start_unix)
             if key not in rounds_data:
                 rounds_data[key] = {"map_name": ce[2], "kills": [], "objectives": []}
-            team = ce[3] or 'AXIS'
+            team = ce[3]
+            if not team:
+                continue
             pickup_ms = (ce[4] or 0)
             outcome = ce[5] or ''
             bonus = 15 if outcome != 'secured' else 30
@@ -2176,7 +2266,9 @@ class StorytellingService:
             key = (rn, start_unix)
             if key not in rounds_data:
                 rounds_data[key] = {"map_name": ce[2], "kills": [], "objectives": []}
-            team = ce[3] or 'AXIS'
+            team = ce[3]
+            if not team:
+                continue
             event_time_ms = (ce[4] or 0)
             rounds_data[key]["objectives"].append({
                 "t_ms": event_time_ms,
@@ -2190,7 +2282,7 @@ class StorytellingService:
         KILL_IMPACT = 5.0
         result_rounds = []
 
-        for (rn, start_unix), rd in sorted(rounds_data.items()):
+        for (rn, start_unix), rd in sorted(rounds_data.items(), key=lambda x: (x[0][1], x[0][0])):
             # Find max time in this round
             all_times = [k["t_ms"] for k in rd["kills"]]
             all_times += [o["t_ms"] for o in rd["objectives"]]

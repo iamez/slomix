@@ -205,6 +205,8 @@ function _normalizePlayerRow(row = {}, source = 'session') {
         accuracy: num(row.accuracy),
         gibs: num(row.gibs),
         self_kills: num(row.self_kills ?? row.selfkills),
+        useful_kills: num(row.useful_kills ?? row.most_useful_kills),
+        full_selfkills: num(row.full_selfkills),
         revives_given: num(row.revives_given),
         times_revived: num(row.times_revived),
         alive_pct: Number.isFinite(num(alivePctRaw, Number.NaN)) ? num(alivePctRaw) : null,
@@ -618,6 +620,8 @@ function _normalizeScopedPlayerRow(row = {}) {
         damage_received: damageReceived,
         gibs: num(row.gibs),
         self_kills: num(row.self_kills),
+        useful_kills: num(row.useful_kills ?? row.most_useful_kills),
+        full_selfkills: num(row.full_selfkills),
         revives_given: num(row.revives_given),
         times_revived: num(row.times_revived),
         time_played: timePlayed,
@@ -696,6 +700,8 @@ async function _fetchOverviewMapPlayers(mapIndex) {
                     damage_received: 0,
                     gibs: 0,
                     self_kills: 0,
+                    useful_kills: 0,
+                    full_selfkills: 0,
                     revives_given: 0,
                     times_revived: 0,
                     time_played: 0,
@@ -712,6 +718,8 @@ async function _fetchOverviewMapPlayers(mapIndex) {
             bucket.damage_received += num(player.damage_received);
             bucket.gibs += num(player.gibs);
             bucket.self_kills += num(player.self_kills);
+            bucket.useful_kills += num(player.useful_kills);
+            bucket.full_selfkills += num(player.full_selfkills);
             bucket.revives_given += num(player.revives_given);
             bucket.times_revived += num(player.times_revived);
             bucket.time_played += num(player.time_played);
@@ -735,6 +743,8 @@ async function _fetchOverviewMapPlayers(mapIndex) {
             damage_received: bucket.damage_received,
             gibs: bucket.gibs,
             self_kills: bucket.self_kills,
+            useful_kills: bucket.useful_kills,
+            full_selfkills: bucket.full_selfkills,
             revives_given: bucket.revives_given,
             times_revived: bucket.times_revived,
             time_played: bucket.time_played,
@@ -1407,6 +1417,22 @@ function _renderPlayersAnalyticsSection(players = []) {
                 <div style="height:${ladderHeight}px"><canvas id="sd-players-exchange-chart"></canvas></div>
             </div>
         </div>
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
+            <div class="glass-card rounded-xl p-4">
+                <div class="mb-3">
+                    <div class="text-sm font-bold text-white">Useful Kills</div>
+                    <div class="text-xs text-slate-500">Kills on armed enemies (not selfkills/teamkills).</div>
+                </div>
+                <div style="height:${ladderHeight}px"><canvas id="sd-players-uk-chart"></canvas></div>
+            </div>
+            <div class="glass-card rounded-xl p-4">
+                <div class="mb-3">
+                    <div class="text-sm font-bold text-white">Self Kills / Full Self Kills</div>
+                    <div class="text-xs text-slate-500">SK = /kill or own explosives. FSK = gibbed self (no revive).</div>
+                </div>
+                <div style="height:${ladderHeight}px"><canvas id="sd-players-sk-chart"></canvas></div>
+            </div>
+        </div>
         <div class="glass-card rounded-xl p-4 mb-4">
             <div class="mb-3">
                 <div class="text-sm font-bold text-white">Accuracy vs K/D</div>
@@ -1516,6 +1542,103 @@ function _mountPlayersSummaryCharts(players = []) {
                         },
                         grid: { color: 'rgba(30, 41, 59, 0.9)' },
                         title: { display: true, text: 'Damage', color: '#64748b' },
+                    },
+                    y: {
+                        ticks: { color: '#e2e8f0', font: { size: 11 } },
+                        grid: { display: false },
+                    },
+                },
+            },
+        });
+        _playersSummaryCharts.push(chart);
+    }
+
+    // Useful Kills ladder
+    const ukCanvas = document.getElementById('sd-players-uk-chart');
+    if (ukCanvas) {
+        const ukValues = players.map(player => num(player.useful_kills));
+        const chart = new Chart(ukCanvas.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Useful Kills',
+                    data: ukValues,
+                    backgroundColor: palette.map(color => _chartColor(color, 0.55)),
+                    borderColor: palette,
+                    borderWidth: 1.5,
+                    borderRadius: 6,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: context => `Useful Kills: ${num(context.raw)}`,
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#94a3b8' },
+                        grid: { color: 'rgba(30, 41, 59, 0.9)' },
+                        title: { display: true, text: 'Useful Kills', color: '#64748b' },
+                    },
+                    y: {
+                        ticks: { color: '#e2e8f0', font: { size: 11 } },
+                        grid: { display: false },
+                    },
+                },
+            },
+        });
+        _playersSummaryCharts.push(chart);
+    }
+
+    // Self Kills / Full Self Kills grouped bar
+    const skCanvas = document.getElementById('sd-players-sk-chart');
+    if (skCanvas) {
+        const skValues = players.map(player => num(player.self_kills));
+        const fskValues = players.map(player => num(player.full_selfkills));
+        const chart = new Chart(skCanvas.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Self Kills',
+                        data: skValues,
+                        backgroundColor: _chartColor('#f43f5e', 0.55),
+                        borderColor: '#f43f5e',
+                        borderWidth: 1.5,
+                        borderRadius: 6,
+                    },
+                    {
+                        label: 'Full Self Kills',
+                        data: fskValues,
+                        backgroundColor: _chartColor('#f59e0b', 0.55),
+                        borderColor: '#f59e0b',
+                        borderWidth: 1.5,
+                        borderRadius: 6,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: {
+                    legend: { labels: { color: '#cbd5e1', font: { size: 11 } } },
+                },
+                scales: {
+                    x: {
+                        stacked: false,
+                        ticks: { color: '#94a3b8' },
+                        grid: { color: 'rgba(30, 41, 59, 0.9)' },
+                        title: { display: true, text: 'Count', color: '#64748b' },
                     },
                     y: {
                         ticks: { color: '#e2e8f0', font: { size: 11 } },
@@ -1671,6 +1794,9 @@ async function _renderPlayersTab(force = false) {
                 <td class="px-2 py-2 text-sm font-mono text-slate-400 text-right hidden xl:table-cell">${hsPct}%</td>
                 <td class="px-2 py-2 text-sm font-mono text-slate-400 text-right hidden xl:table-cell">${acc}%</td>
                 <td class="px-2 py-2 text-sm font-mono text-slate-400 text-right hidden xl:table-cell">${num(player.gibs)}</td>
+                <td class="px-2 py-2 text-sm font-mono text-teal-300 text-right hidden xl:table-cell">${num(player.useful_kills)}</td>
+                <td class="px-2 py-2 text-sm font-mono text-rose-300 text-right hidden xl:table-cell">${num(player.self_kills)}</td>
+                <td class="px-2 py-2 text-sm font-mono text-orange-300 text-right hidden xl:table-cell">${num(player.full_selfkills)}</td>
                 <td class="px-2 py-2 text-sm font-mono text-slate-400 text-right hidden xl:table-cell">${num(player.revives_given)}</td>
                 <td class="px-2 py-2 text-sm font-mono text-slate-400 text-right hidden xl:table-cell">${num(player.times_revived)}</td>
                 <td class="px-2 py-2 text-right">
@@ -1681,7 +1807,7 @@ async function _renderPlayersTab(force = false) {
                 </td>
             </tr>
             <tr id="${panelId}" class="hidden">
-                <td colspan="19" class="px-4 py-4 bg-slate-900/40">
+                <td colspan="22" class="px-4 py-4 bg-slate-900/40">
                     <div class="text-slate-500 text-xs text-center py-2">Loading details...</div>
                 </td>
             </tr>`;
@@ -1731,6 +1857,9 @@ async function _renderPlayersTab(force = false) {
                         <th class="px-2 py-2 text-right hidden xl:table-cell">HS%</th>
                         <th class="px-2 py-2 text-right hidden xl:table-cell">ACC</th>
                         <th class="px-2 py-2 text-right hidden xl:table-cell">Gibs</th>
+                        <th class="px-2 py-2 text-right hidden xl:table-cell text-teal-300" title="Useful Kills: kills on armed enemies (excludes selfkills and teamkills)">UK</th>
+                        <th class="px-2 py-2 text-right hidden xl:table-cell text-rose-300" title="Self Kills: /kill command or own explosives">SK</th>
+                        <th class="px-2 py-2 text-right hidden xl:table-cell text-orange-300" title="Full Self Kills: self-inflicted gibs (no revive possible)">FSK</th>
                         <th class="px-2 py-2 text-right hidden xl:table-cell">REV</th>
                         <th class="px-2 py-2 text-right hidden xl:table-cell">Rev'd</th>
                         <th class="px-2 py-2"></th>

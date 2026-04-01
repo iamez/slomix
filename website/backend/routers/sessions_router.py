@@ -689,6 +689,7 @@ async def get_session_graph_stats(
 
     query = f"""
         SELECT DISTINCT
+            p.player_guid,
             p.player_name,
             p.round_number,
             p.kills,
@@ -707,6 +708,7 @@ async def get_session_graph_stats(
             p.time_dead_minutes,
             p.denied_playtime,
             p.most_useful_kills,
+            COALESCE(p.full_selfkills, 0),
             p.map_name,
             r.id as round_id,
             p.constructions,
@@ -742,40 +744,45 @@ async def get_session_graph_stats(
     dpm_timeline = {}  # player -> list of (map_round, dpm)
 
     for row in rows:
-        name = row[0]
-        round_num = row[1]
-        kills = row[2] or 0
-        deaths = row[3] or 0
-        damage_given = row[4] or 0
-        damage_received = row[5] or 0
-        time_played = row[6] or 0
-        revives = row[7] or 0
-        kill_assists = row[8] or 0
-        gibs = row[9] or 0
-        headshots = row[10] or 0
-        accuracy = row[11] or 0
-        team_kills = row[12] or 0
-        self_kills = row[13] or 0
-        times_revived = row[14] or 0
-        time_dead_minutes = row[15] or 0
-        denied_playtime = row[16] or 0
-        useful_kills = row[17] or 0
-        map_name = row[18]
-        round_id = row[19]  # unique identifier for deduplication
-        constructions = row[20] or 0
-        objectives_stolen = row[21] or 0
-        dynamites_planted = row[22] or 0
-        dynamites_defused = row[23] or 0
-        useless_kills = row[24] or 0
-        double_kills = row[25] or 0
-        triple_kills = row[26] or 0
-        quad_kills = row[27] or 0
-        mega_kills = row[28] or 0
-        # row[29] = bullets_fired (reserved for accuracy calc)
-        time_played_percent = float(row[30]) if row[30] else 0.0
+        guid = row[0]
+        name = row[1]
+        round_num = row[2]
+        kills = row[3] or 0
+        deaths = row[4] or 0
+        damage_given = row[5] or 0
+        damage_received = row[6] or 0
+        time_played = row[7] or 0
+        revives = row[8] or 0
+        kill_assists = row[9] or 0
+        gibs = row[10] or 0
+        headshots = row[11] or 0
+        accuracy = row[12] or 0
+        team_kills = row[13] or 0
+        self_kills = row[14] or 0
+        times_revived = row[15] or 0
+        time_dead_minutes = row[16] or 0
+        denied_playtime = row[17] or 0
+        useful_kills = row[18] or 0
+        full_selfkills = row[19] or 0
+        map_name = row[20]
+        round_id = row[21]  # unique identifier for deduplication
+        constructions = row[22] or 0
+        objectives_stolen = row[23] or 0
+        dynamites_planted = row[24] or 0
+        dynamites_defused = row[25] or 0
+        useless_kills = row[26] or 0
+        double_kills = row[27] or 0
+        triple_kills = row[28] or 0
+        quad_kills = row[29] or 0
+        mega_kills = row[30] or 0
+        # row[31] = bullets_fired (reserved for accuracy calc)
+        time_played_percent = float(row[32]) if row[32] else 0.0
 
-        if name not in player_stats:
-            player_stats[name] = {
+        # Aggregate by player_guid (not player_name) to handle name changes mid-session
+        agg_key = guid or name
+        if agg_key not in player_stats:
+            player_stats[agg_key] = {
+                "player_guid": guid,
                 "kills": 0,
                 "deaths": 0,
                 "damage_given": 0,
@@ -795,6 +802,7 @@ async def get_session_graph_stats(
                 "time_dead_minutes": 0,
                 "denied_playtime": 0,
                 "useful_kills": 0,
+                "full_selfkills": 0,
                 "rounds_played": 0,
                 "seen_rounds": set(),  # Track unique round_ids
                 "constructions": 0,
@@ -807,14 +815,17 @@ async def get_session_graph_stats(
                 "quad_kills": 0,
                 "mega_kills": 0,
             }
-            dpm_timeline[name] = []
+            dpm_timeline[agg_key] = []
+
+        # Update display name to latest seen
+        player_stats[agg_key]["display_name"] = name
 
         # Skip if we've already processed this round for this player
-        if round_id in player_stats[name]["seen_rounds"]:
+        if round_id in player_stats[agg_key]["seen_rounds"]:
             continue
-        player_stats[name]["seen_rounds"].add(round_id)
+        player_stats[agg_key]["seen_rounds"].add(round_id)
 
-        ps = player_stats[name]
+        ps = player_stats[agg_key]
         ps["kills"] += kills
         ps["deaths"] += deaths
         ps["damage_given"] += damage_given
@@ -835,6 +846,7 @@ async def get_session_graph_stats(
         ps["time_dead_minutes"] += time_dead_minutes
         ps["denied_playtime"] += denied_playtime
         ps["useful_kills"] += useful_kills
+        ps["full_selfkills"] += full_selfkills
         ps["constructions"] += constructions
         ps["objectives_stolen"] += objectives_stolen
         ps["dynamites_planted"] += dynamites_planted
@@ -850,13 +862,14 @@ async def get_session_graph_stats(
         round_dpm = (damage_given / (time_played / 60)) if time_played > 0 else 0
         # Use shorter map name format for timeline
         short_map = map_name.split("_")[-1][:8] if "_" in map_name else map_name[:8]
-        dpm_timeline[name].append(
+        dpm_timeline[agg_key].append(
             {"label": f"{short_map} R{round_num}", "dpm": round(round_dpm, 1)}
         )
 
     # Calculate derived metrics and build response
     players_data = []
-    for name, stats in player_stats.items():
+    for agg_key, stats in player_stats.items():
+        name = stats.get("display_name", agg_key)
         time_minutes = stats["time_played"] / 60 if stats["time_played"] > 0 else 1
 
         # Basic ratios
@@ -894,6 +907,7 @@ async def get_session_graph_stats(
         players_data.append(
             {
                 "name": name,
+                "guid": stats.get("player_guid", ""),
                 "combat_offense": {
                     "kills": stats["kills"],
                     "deaths": stats["deaths"],
@@ -907,6 +921,7 @@ async def get_session_graph_stats(
                     "gibs": stats["gibs"],
                     "headshots": stats["headshots"],
                     "useful_kills": stats["useful_kills"],
+                    "full_selfkills": stats["full_selfkills"],
                     "times_revived": stats["times_revived"],
                     "team_kills": stats["team_kills"],
                     "self_kills": stats["self_kills"],
@@ -925,7 +940,7 @@ async def get_session_graph_stats(
                     "rounds_played": rounds_played,
                 },
                 "playstyle": playstyle,
-                "dpm_timeline": dpm_timeline[name],
+                "dpm_timeline": dpm_timeline.get(agg_key, []),
             }
         )
 
@@ -1484,6 +1499,8 @@ async def get_stats_session_detail(
             SUM(p.kills) as total_kills_for_hs,
             SUM(p.gibs) as gibs,
             SUM(p.self_kills) as self_kills,
+            SUM(COALESCE(p.most_useful_kills, 0)) as useful_kills,
+            SUM(COALESCE(p.full_selfkills, 0)) as full_selfkills,
             SUM(p.revives_given) as revives_given,
             SUM(p.times_revived) as times_revived,
             SUM(p.time_played_seconds) as time_played_seconds,
@@ -1529,17 +1546,19 @@ async def get_stats_session_detail(
         # pr[9] = total_kills_for_hs (reserved for future headshot% calc)
         gibs = pr[10] or 0
         self_kills = pr[11] or 0
-        revives_given = pr[12] or 0
-        times_revived = pr[13] or 0
-        time_played_seconds = pr[14] or 0
-        kill_assists = pr[15] or 0
-        time_dead_minutes = float(pr[16]) if pr[16] else 0.0
-        denied_playtime = pr[17] or 0
-        total_hits = pr[18] or 0
-        total_shots = pr[19] or 0
-        weapon_headshots = pr[20] or 0
-        tpp_weighted_sum = float(pr[21]) if pr[21] else 0.0
-        tpp_weight = float(pr[22]) if pr[22] else 0.0
+        useful_kills = pr[12] or 0
+        full_selfkills = pr[13] or 0
+        revives_given = pr[14] or 0
+        times_revived = pr[15] or 0
+        time_played_seconds = pr[16] or 0
+        kill_assists = pr[17] or 0
+        time_dead_minutes = float(pr[18]) if pr[18] else 0.0
+        denied_playtime = pr[19] or 0
+        total_hits = pr[20] or 0
+        total_shots = pr[21] or 0
+        weapon_headshots = pr[22] or 0
+        tpp_weighted_sum = float(pr[23]) if pr[23] else 0.0
+        tpp_weight = float(pr[24]) if pr[24] else 0.0
 
         hs_pct = round((weapon_headshots / total_hits * 100), 1) if total_hits > 0 else 0
         accuracy = round((total_hits / total_shots * 100), 1) if total_shots > 0 else 0
@@ -1575,6 +1594,8 @@ async def get_stats_session_detail(
             "headshot_pct": hs_pct,
             "gibs": gibs,
             "self_kills": self_kills,
+            "useful_kills": useful_kills,
+            "full_selfkills": full_selfkills,
             "revives_given": revives_given,
             "times_revived": times_revived,
             "kill_assists": kill_assists,

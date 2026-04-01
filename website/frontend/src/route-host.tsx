@@ -34,6 +34,8 @@ const routeComponents: Record<string, React.LazyExoticComponent<React.ComponentT
   'proximity-teams': lazy(() => import('./pages/ProximityTeams')),
   'skill-rating': lazy(() => import('./pages/SkillRating')),
   story: lazy(() => import('./pages/Story')),
+  rivalries: lazy(() => import('./pages/Rivalries')),
+  replay: lazy(() => import('./pages/Replay')),
 };
 
 const mountedRoots = new WeakMap<HTMLElement, Root>();
