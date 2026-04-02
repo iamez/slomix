@@ -2796,3 +2796,143 @@ class StorytellingService:
             "distance_threshold": DISTANCE_THRESHOLD,
             "players": players,
         }
+
+    # ── Lurker Profile ───────────────────────────────────────────────
+
+    async def compute_lurker_profile(self, session_date: str | date) -> dict:
+        """Compute Lurker Profile: solo time away from teammates.
+
+        Uses player_track.path (200ms samples, spawn-to-death) to calculate
+        how much time each player spends away from teammates.
+        Downsampled to 1s intervals for performance (~20k points vs 100k).
+        """
+        sd = _to_date(session_date)
+        SOLO_RADIUS = 500  # units from nearest teammate = "solo"
+        DOWNSAMPLE_MS = 1000  # 1s intervals for performance
+
+        import math
+        from collections import defaultdict
+
+        track_rows = await self.db.fetch_all("""
+            SELECT player_guid, player_name, team, round_start_unix,
+                   spawn_time_ms, death_time_ms, duration_ms, path
+            FROM player_track
+            WHERE session_date = $1 AND duration_ms > 2000 AND path IS NOT NULL
+            ORDER BY round_start_unix, player_guid
+        """, (sd,))
+
+        if not track_rows:
+            return {"status": "ok", "session_date": str(sd), "players": []}
+
+        # Group tracks by round, downsample paths to 1s
+        round_tracks: dict[int, list] = defaultdict(list)
+        for r in track_rows:
+            rsu = int(r[3] or 0)
+            path_data = r[7]
+            if not path_data:
+                continue
+            if isinstance(path_data, str):
+                import json as _json
+                try:
+                    path_data = _json.loads(path_data)
+                except Exception:
+                    continue
+            points = []
+            last_t = -DOWNSAMPLE_MS
+            for p in path_data:
+                t = int(p.get("time", 0))
+                if t - last_t >= DOWNSAMPLE_MS:
+                    points.append((t, float(p.get("x", 0)), float(p.get("y", 0))))
+                    last_t = t
+            if not points:
+                continue
+            round_tracks[rsu].append({
+                "guid": r[0], "name": r[1], "team": r[2],
+                "duration_ms": int(r[6] or 0), "points": points,
+            })
+
+        # For each track: compute solo time (no teammate within SOLO_RADIUS)
+        player_stats: dict[str, dict] = defaultdict(lambda: {
+            "total_samples": 0, "solo_samples": 0, "alive_ms": 0, "tracks": 0,
+        })
+
+        for rsu, tracks in round_tracks.items():
+            # Pre-index teammate points by time bucket for fast lookup
+            for track in tracks:
+                guid_short = track["guid"][:8]
+                team = track["team"]
+                teammates = [
+                    t for t in tracks
+                    if t["team"] == team and t["guid"][:8] != guid_short
+                ]
+                if not teammates:
+                    # Solo player (no teammates in this life) — all samples are solo
+                    player_stats[guid_short]["solo_samples"] += len(track["points"])
+                    player_stats[guid_short]["total_samples"] += len(track["points"])
+                    player_stats[guid_short]["alive_ms"] += track["duration_ms"]
+                    player_stats[guid_short]["tracks"] += 1
+                    continue
+
+                # Build time-indexed arrays for each teammate (sorted)
+                tm_arrays = [tm["points"] for tm in teammates]
+
+                solo_count = 0
+                for t_ms, px, py in track["points"]:
+                    min_dist = float("inf")
+                    for tm_pts in tm_arrays:
+                        # Binary-ish search: find closest time
+                        best_d = float("inf")
+                        for tt, tx, ty in tm_pts:
+                            if abs(tt - t_ms) <= DOWNSAMPLE_MS * 2:
+                                dx = px - tx
+                                dy = py - ty
+                                d = math.sqrt(dx * dx + dy * dy)
+                                if d < best_d:
+                                    best_d = d
+                            elif tt > t_ms + DOWNSAMPLE_MS * 2:
+                                break
+                        if best_d < min_dist:
+                            min_dist = best_d
+                    if min_dist > SOLO_RADIUS:
+                        solo_count += 1
+
+                player_stats[guid_short]["total_samples"] += len(track["points"])
+                player_stats[guid_short]["solo_samples"] += solo_count
+                player_stats[guid_short]["alive_ms"] += track["duration_ms"]
+                player_stats[guid_short]["tracks"] += 1
+
+        # Resolve names
+        name_rows = await self.db.fetch_all("""
+            SELECT killer_guid_canonical, MAX(killer_name)
+            FROM storytelling_kill_impact
+            WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
+            GROUP BY killer_guid_canonical
+        """, (sd,))
+        name_map = {r[0]: strip_et_colors(r[1] or r[0]) for r in (name_rows or [])}
+
+        players = []
+        for guid, stats in player_stats.items():
+            total = max(stats["total_samples"], 1)
+            solo_pct = (stats["solo_samples"] / total) * 100
+            players.append({
+                "guid_short": guid,
+                "name": name_map.get(guid, f"#{guid}"),
+                "solo_pct": round(solo_pct, 1),
+                "solo_samples": stats["solo_samples"],
+                "total_samples": stats["total_samples"],
+                "alive_ms": stats["alive_ms"],
+                "tracks": stats["tracks"],
+                "solo_time_est_s": round(stats["solo_samples"] * DOWNSAMPLE_MS / 1000, 0),
+            })
+
+        players.sort(key=lambda p: p["solo_pct"], reverse=True)
+
+        return {
+            "status": "ok",
+            "session_date": str(sd),
+            "metric": "lurker_profile",
+            "description": f"Percentage of alive time spent >={SOLO_RADIUS}u from nearest teammate.",
+            "solo_radius": SOLO_RADIUS,
+            "downsample_ms": DOWNSAMPLE_MS,
+            "players": players,
+        }

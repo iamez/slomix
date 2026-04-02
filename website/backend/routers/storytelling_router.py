@@ -342,3 +342,16 @@ async def get_enabler(
     sd = _parse_date(session_date)
     svc = StorytellingService(db)
     return await svc.compute_enabler(sd)
+
+
+@router.get("/storytelling/lurker-profile")
+@limiter.limit("5/minute")
+async def get_lurker_profile(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Lurker Profile: solo time and team separation analysis."""
+    sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    return await svc.compute_lurker_profile(sd)
