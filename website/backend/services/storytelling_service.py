@@ -2650,3 +2650,149 @@ class StorytellingService:
             "window_ms": WINDOW_MS,
             "players": players,
         }
+
+    # ── Enabler Score ────────────────────────────────────────────────
+
+    async def compute_enabler(self, session_date: str | date) -> dict:
+        """Compute Enabler Score: teammate kills near your engagements.
+
+        For each player's engagements, count teammate kills within ±5s
+        and ≤500 game units. Includes crossfire assists and trade assists.
+        """
+        sd = _to_date(session_date)
+        TIME_WINDOW_MS = 5000
+        DISTANCE_THRESHOLD = 500
+
+        # All kills with positions (from engagement end positions)
+        eng_rows = await self.db.fetch_all("""
+            SELECT target_guid, killer_guid, end_x, end_y, end_time_ms,
+                   round_start_unix, num_attackers
+            FROM combat_engagement
+            WHERE session_date = $1 AND outcome = 'killed'
+              AND end_x IS NOT NULL AND end_y IS NOT NULL
+            ORDER BY round_start_unix, end_time_ms
+        """, (sd,))
+
+        if not eng_rows:
+            return {"status": "ok", "session_date": str(sd), "players": []}
+
+        # Build team mapping
+        groups = await self._build_player_groups(sd)
+        g2g = groups["guid_to_group"] if groups else {}
+
+        # guid_canonical lookup
+        team_rows = await self.db.fetch_all("""
+            SELECT DISTINCT killer_guid, killer_guid_canonical
+            FROM storytelling_kill_impact
+            WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
+        """, (sd,))
+        g2short = {r[0]: r[1] for r in (team_rows or [])}
+
+        import math
+
+        # Group kills by round_start_unix
+        from collections import defaultdict
+        round_kills: dict[int, list] = defaultdict(list)
+        for r in eng_rows:
+            rsu = int(r[5] or 0)
+            round_kills[rsu].append({
+                "victim": r[0], "killer": r[1],
+                "x": float(r[2] or 0), "y": float(r[3] or 0),
+                "time": int(r[4] or 0), "attackers": int(r[6] or 1),
+            })
+
+        # For each kill by player X: count same-team kills nearby in time+space
+        player_stats: dict[str, dict] = defaultdict(lambda: {
+            "kills": 0, "enabled_kills": 0,
+            "crossfire_assists": 0, "trade_assists": 0,
+        })
+
+        for rsu, kills in round_kills.items():
+            for i, kill_a in enumerate(kills):
+                killer_short = g2short.get(kill_a["killer"], kill_a["killer"][:8])
+                killer_group = g2g.get(killer_short)
+                if not killer_group:
+                    continue
+                player_stats[killer_short]["kills"] += 1
+
+                # Look for teammate kills near this kill (time + space)
+                for j, kill_b in enumerate(kills):
+                    if i == j:
+                        continue
+                    dt = abs(kill_b["time"] - kill_a["time"])
+                    if dt > TIME_WINDOW_MS:
+                        continue
+                    other_short = g2short.get(kill_b["killer"], kill_b["killer"][:8])
+                    if g2g.get(other_short) != killer_group or other_short == killer_short:
+                        continue
+                    dx = kill_a["x"] - kill_b["x"]
+                    dy = kill_a["y"] - kill_b["y"]
+                    dist = math.sqrt(dx * dx + dy * dy)
+                    if dist <= DISTANCE_THRESHOLD:
+                        player_stats[killer_short]["enabled_kills"] += 1
+                        break  # Count each kill_a as enabling once
+
+        # Add crossfire + trade counts from existing tables
+        xf_rows = await self.db.fetch_all("""
+            SELECT killer_guid_canonical, COUNT(*)
+            FROM storytelling_kill_impact
+            WHERE session_date = $1 AND is_crossfire = true AND killer_guid_canonical IS NOT NULL
+            GROUP BY killer_guid_canonical
+        """, (sd,))
+        for r in (xf_rows or []):
+            if r[0] in player_stats:
+                player_stats[r[0]]["crossfire_assists"] = int(r[1] or 0)
+
+        tr_rows = await self.db.fetch_all("""
+            SELECT trader_guid_canonical, COUNT(*)
+            FROM proximity_lua_trade_kill
+            WHERE session_date = $1 AND trader_guid_canonical IS NOT NULL
+            GROUP BY trader_guid_canonical
+        """, (sd,))
+        for r in (tr_rows or []):
+            if r[0] in player_stats:
+                player_stats[r[0]]["trade_assists"] = int(r[1] or 0)
+
+        # Resolve names + compute score
+        name_rows = await self.db.fetch_all("""
+            SELECT killer_guid_canonical, MAX(killer_name)
+            FROM storytelling_kill_impact
+            WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
+            GROUP BY killer_guid_canonical
+        """, (sd,))
+        name_map = {r[0]: strip_et_colors(r[1] or r[0]) for r in (name_rows or [])}
+
+        # Alive time for normalization
+        alive_rows = await self.db.fetch_all("""
+            SELECT player_guid, SUM(GREATEST(duration_ms, 1)) AS alive_ms
+            FROM player_track WHERE session_date = $1 AND duration_ms > 0
+            GROUP BY player_guid
+        """, (sd,))
+        alive_map = {r[0][:8]: int(r[1] or 1) for r in (alive_rows or [])}
+
+        players = []
+        for guid, stats in player_stats.items():
+            alive_min = alive_map.get(guid, 60000) / 60000
+            total_assists = stats["enabled_kills"] + stats["crossfire_assists"] + stats["trade_assists"]
+            players.append({
+                "guid_short": guid,
+                "name": name_map.get(guid, f"#{guid}"),
+                "enabler_score": round(total_assists / max(alive_min, 0.1), 1),
+                "enabled_kills": stats["enabled_kills"],
+                "crossfire_assists": stats["crossfire_assists"],
+                "trade_assists": stats["trade_assists"],
+                "total_assists": total_assists,
+                "own_kills": stats["kills"],
+            })
+
+        players.sort(key=lambda p: p["enabler_score"], reverse=True)
+
+        return {
+            "status": "ok",
+            "session_date": str(sd),
+            "metric": "enabler",
+            "description": "Teammate kills enabled per minute alive (nearby kills ±5s ≤500u + crossfire + trades).",
+            "time_window_ms": TIME_WINDOW_MS,
+            "distance_threshold": DISTANCE_THRESHOLD,
+            "players": players,
+        }

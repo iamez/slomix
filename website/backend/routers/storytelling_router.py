@@ -329,3 +329,16 @@ async def get_space_created(
     sd = _parse_date(session_date)
     svc = StorytellingService(db)
     return await svc.compute_space_created(sd)
+
+
+@router.get("/storytelling/enabler")
+@limiter.limit("10/minute")
+async def get_enabler(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Enabler Score: teammate kills enabled by your presence/action."""
+    sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    return await svc.compute_enabler(sd)
