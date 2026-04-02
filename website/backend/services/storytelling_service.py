@@ -1764,7 +1764,9 @@ class StorytellingService:
 
         tt: dict[str, int] = {'group_a': 0, 'group_b': 0}
         for r in (trades or []):
-            group = guid_to_group.get(r[0])
+            # Proximity GUIDs are 32-char, stats GUIDs are 8-char prefix
+            guid = r[0][:8] if r[0] and len(r[0]) > 8 else r[0]
+            group = guid_to_group.get(guid)
             if group:
                 tt[group] += int(r[1] or 0)
 
@@ -1841,7 +1843,9 @@ class StorytellingService:
 
         tr: dict[str, int] = {'group_a': 0, 'group_b': 0}
         for r in (revives or []):
-            group = guid_to_group.get(r[0])
+            # Proximity GUIDs are 32-char, stats GUIDs are 8-char prefix
+            guid = r[0][:8] if r[0] and len(r[0]) > 8 else r[0]
+            group = guid_to_group.get(guid)
             if group:
                 tr[group] += int(r[1] or 0)
 
