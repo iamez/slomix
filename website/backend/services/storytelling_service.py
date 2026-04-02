@@ -1896,7 +1896,8 @@ class StorytellingService:
                      + COALESCE(pcs.dynamites_defused, 0)
                      + COALESCE(pcs.constructions, 0) AS objectives,
                    pcs.revives_given,
-                   pcs.time_played_minutes,
+                   GREATEST(pcs.time_played_minutes - COALESCE(pcs.time_dead_minutes, 0), 0.01)
+                     AS time_alive_minutes,
                    r.id AS round_id,
                    r.round_start_unix
             FROM player_comprehensive_stats pcs
