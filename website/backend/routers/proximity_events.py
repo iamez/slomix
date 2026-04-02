@@ -53,7 +53,8 @@ async def get_proximity_events(
                        e.duration_ms, e.distance_traveled, e.num_attackers, e.is_crossfire,
                        COALESCE(r_exact.id, r_fallback.id) AS round_id,
                        COALESCE(r_exact.round_date, r_fallback.round_date) AS round_date,
-                       COALESCE(r_exact.round_time, r_fallback.round_time) AS round_time
+                       COALESCE(r_exact.round_time, r_fallback.round_time) AS round_time,
+                       e.killer_name, e.target_team
                 FROM combat_engagement e
                 LEFT JOIN rounds r_exact
                   ON r_exact.id = e.round_id
@@ -75,7 +76,8 @@ async def get_proximity_events(
                 SELECT e.id,
                        e.session_date, e.round_number, e.map_name, e.target_name, e.outcome,
                        e.duration_ms, e.distance_traveled, e.num_attackers, e.is_crossfire,
-                       r.id AS round_id, r.round_date, r.round_time
+                       r.id AS round_id, r.round_date, r.round_time,
+                       e.killer_name, e.target_team
                 FROM combat_engagement e
                 LEFT JOIN LATERAL (
                     SELECT id, round_date, round_time
@@ -112,8 +114,8 @@ async def get_proximity_events(
                         "map": row[3],
                         "target_name": row[4],
                         "target": row[4],
-                        "attacker_name": "",
-                        "target_team": "",
+                        "attacker_name": row[13] or "",
+                        "target_team": row[14] or "",
                         "attacker_team": "",
                         "outcome": row[5],
                         "reaction_ms": row[6],
