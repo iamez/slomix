@@ -303,3 +303,29 @@ async def get_narrative(
     sd = _parse_date(session_date)
     svc = StorytellingService(db)
     return await svc.generate_narrative(sd)
+
+
+@router.get("/storytelling/gravity")
+@limiter.limit("10/minute")
+async def get_gravity(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Gravity Score: enemy attention attracted per minute alive."""
+    sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    return await svc.compute_gravity(sd)
+
+
+@router.get("/storytelling/space-created")
+@limiter.limit("10/minute")
+async def get_space_created(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Space Created: productive deaths where teammates capitalized."""
+    sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    return await svc.compute_space_created(sd)

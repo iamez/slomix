@@ -2479,3 +2479,174 @@ class StorytellingService:
             "session_date": sd_str,
             "narrative": narrative,
         }
+
+    # ── Gravity Score ────────────────────────────────────────────────
+
+    async def compute_gravity(self, session_date: str | date) -> dict:
+        """Compute Gravity Score: how much enemy attention each player attracts.
+
+        Higher gravity = more enemies focused on you = more space for teammates.
+        Formula: total_attention_ms / alive_time_ms (normalized per minute alive).
+        """
+        sd = _to_date(session_date)
+
+        rows = await self.db.fetch_all("""
+            SELECT target_guid, MAX(target_name) AS name,
+                   COUNT(*) AS engagements,
+                   AVG(num_attackers) AS avg_attackers,
+                   SUM(num_attackers * duration_ms) AS total_attention_ms,
+                   SUM(duration_ms) AS total_engaged_ms
+            FROM combat_engagement
+            WHERE session_date = $1
+            GROUP BY target_guid
+            HAVING COUNT(*) >= 5
+            ORDER BY SUM(num_attackers * duration_ms) DESC
+        """, (sd,))
+
+        alive_rows = await self.db.fetch_all("""
+            SELECT player_guid,
+                   SUM(GREATEST(duration_ms, 1)) AS total_alive_ms,
+                   COUNT(*) AS tracks
+            FROM player_track
+            WHERE session_date = $1 AND duration_ms > 0
+            GROUP BY player_guid
+        """, (sd,))
+        alive_map = {r[0]: int(r[1] or 1) for r in (alive_rows or [])}
+
+        players = []
+        for r in (rows or []):
+            guid = r[0]
+            total_attention = int(r[4] or 0)
+            alive_ms = alive_map.get(guid, 1)
+            # Gravity = attention per minute alive (higher = more hunted)
+            gravity = (total_attention / max(alive_ms, 1)) * 60000
+
+            players.append({
+                "guid": guid,
+                "guid_short": guid[:8],
+                "name": strip_et_colors(r[1] or guid[:8]),
+                "gravity_score": round(gravity, 1),
+                "engagements": int(r[2]),
+                "avg_attackers": round(float(r[3] or 1), 2),
+                "total_attention_ms": total_attention,
+                "total_engaged_ms": int(r[5] or 0),
+                "alive_ms": alive_ms,
+            })
+
+        players.sort(key=lambda p: p["gravity_score"], reverse=True)
+
+        return {
+            "status": "ok",
+            "session_date": str(sd),
+            "metric": "gravity",
+            "description": "Enemy attention attracted per minute alive. Higher = more space created for teammates.",
+            "players": players,
+        }
+
+    # ── Space Created Score ──────────────────────────────────────────
+
+    async def compute_space_created(self, session_date: str | date) -> dict:
+        """Compute Space Created: what happens after your death?
+
+        Productive death = teammate gets a kill or objective within 10s after you die.
+        Formula: (teammate_kills_10s + objective_events_10s * 3) / deaths
+        """
+        sd = _to_date(session_date)
+        WINDOW_MS = 10000  # 10 seconds after death
+
+        # All kills grouped by round for temporal analysis
+        kill_rows = await self.db.fetch_all("""
+            SELECT victim_guid, killer_guid, kill_time, round_number, round_start_unix
+            FROM proximity_kill_outcome
+            WHERE session_date = $1 AND outcome IN ('gibbed', 'tapped_out')
+            ORDER BY round_start_unix, kill_time
+        """, (sd,))
+
+        if not kill_rows:
+            return {"status": "ok", "session_date": str(sd), "players": []}
+
+        # Build team mapping from storytelling_kill_impact (has guid_canonical)
+        team_rows = await self.db.fetch_all("""
+            SELECT DISTINCT killer_guid, killer_guid_canonical
+            FROM storytelling_kill_impact
+            WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
+        """, (sd,))
+        guid_to_short = {r[0]: r[1] for r in (team_rows or [])}
+
+        # Group kills by (round_start_unix) for same-round temporal queries
+        from collections import defaultdict
+        round_kills: dict[int, list] = defaultdict(list)
+        for r in kill_rows:
+            rsu = int(r[4] or 0)
+            round_kills[rsu].append({
+                "victim": r[0], "killer": r[1],
+                "time": int(r[2] or 0), "round": r[3],
+            })
+
+        # Build player groups to know who is teammate
+        groups = await self._build_player_groups(sd)
+        g2g = groups["guid_to_group"] if groups else {}
+
+        # For each death: check if teammates got kills in next 10s
+        player_stats: dict[str, dict] = defaultdict(lambda: {
+            "deaths": 0, "productive": 0, "teammate_kills_after": 0,
+        })
+
+        for rsu, kills in round_kills.items():
+            for i, death in enumerate(kills):
+                victim_short = guid_to_short.get(death["victim"], death["victim"][:8])
+                victim_group = g2g.get(victim_short)
+                if not victim_group:
+                    continue
+
+                player_stats[victim_short]["deaths"] += 1
+
+                # Look for teammate kills in next WINDOW_MS
+                teammate_kills = 0
+                for j in range(i + 1, len(kills)):
+                    k = kills[j]
+                    dt = k["time"] - death["time"]
+                    if dt > WINDOW_MS:
+                        break
+                    if dt < 0:
+                        continue
+                    killer_short = guid_to_short.get(k["killer"], k["killer"][:8])
+                    if g2g.get(killer_short) == victim_group and killer_short != victim_short:
+                        teammate_kills += 1
+
+                if teammate_kills > 0:
+                    player_stats[victim_short]["productive"] += 1
+                    player_stats[victim_short]["teammate_kills_after"] += teammate_kills
+
+        # Resolve names
+        name_rows = await self.db.fetch_all("""
+            SELECT killer_guid_canonical, MAX(killer_name)
+            FROM storytelling_kill_impact
+            WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
+            GROUP BY killer_guid_canonical
+        """, (sd,))
+        name_map = {r[0]: strip_et_colors(r[1] or r[0]) for r in (name_rows or [])}
+
+        players = []
+        for guid, stats in player_stats.items():
+            deaths = max(stats["deaths"], 1)
+            players.append({
+                "guid_short": guid,
+                "name": name_map.get(guid, f"#{guid}"),
+                "space_score": round(stats["productive"] / deaths, 2),
+                "productive_deaths": stats["productive"],
+                "wasted_deaths": stats["deaths"] - stats["productive"],
+                "total_deaths": stats["deaths"],
+                "teammate_kills_after": stats["teammate_kills_after"],
+            })
+
+        players.sort(key=lambda p: p["space_score"], reverse=True)
+
+        return {
+            "status": "ok",
+            "session_date": str(sd),
+            "metric": "space_created",
+            "description": "Fraction of deaths where teammates capitalized within 10s. Higher = more productive deaths.",
+            "window_ms": WINDOW_MS,
+            "players": players,
+        }
