@@ -166,11 +166,21 @@ def _resolve_name_for_guid(
     token = str(guid or "").strip()
     if not token:
         return "unknown"
-    if local_map and token in local_map and local_map[token]:
-        return str(local_map[token])
-    if guid_name_map and token in guid_name_map and guid_name_map[token]:
-        return str(guid_name_map[token])
-    return f"#{_short_guid(token)}"
+    # Try exact match first, then 8-char prefix match (proximity=32-char, stats=8-char)
+    short = token[:8]
+    for m in (local_map, guid_name_map):
+        if not m:
+            continue
+        if token in m and m[token]:
+            return str(m[token])
+        if short in m and m[short]:
+            return str(m[short])
+        # Also try: map has 32-char keys but we got 8-char input
+        if len(token) <= 8:
+            for k, v in m.items():
+                if k[:8] == token and v:
+                    return str(v)
+    return f"#{short}"
 
 
 async def _load_scoped_guid_name_map(
