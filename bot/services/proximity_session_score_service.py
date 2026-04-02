@@ -57,15 +57,17 @@ class ProximitySessionScoreService:
                 FROM combat_engagement WHERE session_date = $1
                 GROUP BY target_guid
                 UNION ALL
-                SELECT unnest(string_to_array(attackers, ',')) AS guid, NULL AS name,
+                SELECT (a->>'guid') AS guid, NULL AS name,
                        0 AS total, 0 AS escapes
-                FROM combat_engagement WHERE session_date = $1
+                FROM combat_engagement, jsonb_array_elements(attackers) AS a
+                WHERE session_date = $1
             ) sub
             GROUP BY guid
             HAVING SUM(total) >= $2 OR guid IN (
-                SELECT unnest(string_to_array(attackers, ','))
-                FROM combat_engagement WHERE session_date = $1
-                GROUP BY unnest(string_to_array(attackers, ','))
+                SELECT a->>'guid'
+                FROM combat_engagement, jsonb_array_elements(attackers) AS a
+                WHERE session_date = $1
+                GROUP BY a->>'guid'
                 HAVING COUNT(*) >= $2
             )
             """,
@@ -143,12 +145,11 @@ class ProximitySessionScoreService:
         try:
             ff_rows = await self.db.fetch_all(
                 """
-                SELECT attacker_guid, MAX(attacker_name),
+                SELECT attacker_guid, NULL AS attacker_name,
                        AVG(focus_score) AS avg_score,
                        COUNT(*) AS events
                 FROM (
                     SELECT unnest(string_to_array(attacker_guids, ',')) AS attacker_guid,
-                           unnest(string_to_array(attacker_names, ',')) AS attacker_name,
                            focus_score
                     FROM proximity_focus_fire
                     WHERE session_date = $1
