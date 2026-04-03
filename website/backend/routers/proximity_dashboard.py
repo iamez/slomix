@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -590,8 +590,8 @@ async def get_proximity_kill_outcomes(
             ],
         }
     except Exception:
-        logger.warning("Proximity kill-outcomes error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity kill-outcomes error")
+        raise HTTPException(status_code=500, detail="Proximity kill-outcomes error")
 
 
 @router.get("/proximity/kill-outcomes/player-stats")
@@ -690,5 +690,5 @@ async def get_proximity_kill_outcomes_player_stats(
             "revive_rate_leaders": as_victim,
         }
     except Exception:
-        logger.warning("Proximity kill-outcomes player-stats error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity kill-outcomes player-stats error")
+        raise HTTPException(status_code=500, detail="Proximity kill-outcomes player-stats error")

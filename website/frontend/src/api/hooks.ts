@@ -583,3 +583,15 @@ export function useStoryNarrative(sessionDate: string | null) {
     staleTime: 60_000,
   });
 }
+
+export function usePlayerNarratives(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['player-narratives', sessionDate],
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getPlayerNarratives(sessionDate);
+    },
+    enabled: !!sessionDate,
+    staleTime: 60_000,
+  });
+}

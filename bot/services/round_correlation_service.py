@@ -44,6 +44,8 @@ class RoundCorrelationService:
         "has_r2_gametime",
         "has_r1_endstats",
         "has_r2_endstats",
+        "has_r1_proximity",
+        "has_r2_proximity",
         "status",
         "completeness_pct",
         "r1_arrived_at",
@@ -390,6 +392,31 @@ class RoundCorrelationService:
             updates={flag_col: True},
         )
 
+    async def on_proximity_imported(self, match_id: str, round_number: int,
+                                    map_name: str):
+        """Called after successful proximity engagement import in proximity_cog.py."""
+        if round_number not in (1, 2):
+            return
+
+        r_label = f"R{round_number}"
+        logger.info(
+            f"[CORRELATION] {map_name} match_id={match_id}: "
+            f"{r_label} proximity arrived"
+        )
+
+        if not await self._allow_live_write():
+            return
+
+        existing_cid = await self._find_nearby_correlation_id(match_id, map_name, round_number)
+        correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
+
+        await self._upsert_correlation(
+            correlation_id=correlation_id,
+            match_id=effective_mid,
+            map_name=map_name,
+            updates={f"has_r{round_number}_proximity": True},
+        )
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -500,7 +527,8 @@ class RoundCorrelationService:
             SELECT has_r1_stats, has_r2_stats,
                    has_r1_lua_teams, has_r2_lua_teams,
                    has_r1_gametime, has_r2_gametime,
-                   has_r1_endstats, has_r2_endstats
+                   has_r1_endstats, has_r2_endstats,
+                   has_r1_proximity, has_r2_proximity
             FROM round_correlations
             WHERE correlation_id = ?
             """,
@@ -512,10 +540,12 @@ class RoundCorrelationService:
         (has_r1_stats, has_r2_stats,
          has_r1_lua, has_r2_lua,
          has_r1_gt, has_r2_gt,
-         has_r1_es, has_r2_es) = row
+         has_r1_es, has_r2_es,
+         has_r1_prox, has_r2_prox) = row
 
         # Core completeness: R1 stats (25%) + R2 stats (25%) = 50% for "complete"
-        # Bonus: lua (10% each), gametime (5% each), endstats (10% each) = up to 50% bonus
+        # Bonus: lua (10% each), gametime (5% each), endstats (10% each),
+        #        proximity (5% each) = up to 60% bonus, capped at 100%
         pct = 0
         if has_r1_stats:
             pct += 25
@@ -533,6 +563,11 @@ class RoundCorrelationService:
             pct += 10
         if has_r2_es:
             pct += 10
+        if has_r1_prox:
+            pct += 5
+        if has_r2_prox:
+            pct += 5
+        pct = min(pct, 100)
 
         # Status determination
         if has_r1_stats and has_r2_stats:

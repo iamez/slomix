@@ -1,6 +1,6 @@
 """Proximity objective endpoints: carrier-events, carrier-kills, carrier-returns, vehicle-progress, escort-credits, construction-events, objective-runs, objective-focus."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -143,8 +143,8 @@ async def get_proximity_carrier_events(
 
         return {"status": "ok", "scope": scope, "carriers": carriers, "events": events, "summary": summary}
     except Exception:
-        logger.error("Carrier events error", exc_info=True)
-        return {"status": "error", "detail": "Internal error", "carriers": [], "events": [], "summary": {}}
+        logger.exception("Carrier events error")
+        raise HTTPException(status_code=500, detail="Carrier events error")
 
 
 @router.get("/proximity/carrier-kills")
@@ -210,8 +210,8 @@ async def get_proximity_carrier_kills(
 
         return {"status": "ok", "killers": killers}
     except Exception:
-        logger.error("Carrier kills error", exc_info=True)
-        return {"status": "error", "detail": "Internal error", "killers": []}
+        logger.exception("Carrier kills error")
+        raise HTTPException(status_code=500, detail="Carrier kills error")
 
 
 @router.get("/proximity/carrier-returns")
@@ -296,8 +296,8 @@ async def get_proximity_carrier_returns(
 
         return {"status": "ok", "scope": scope, "returners": returners, "events": events, "summary": summary}
     except Exception:
-        logger.error("carrier-returns error", exc_info=True)
-        return {"status": "error", "message": "Internal error", "returners": [], "events": [], "summary": {}}
+        logger.exception("carrier-returns error")
+        raise HTTPException(status_code=500, detail="carrier-returns error")
 
 
 @router.get("/proximity/vehicle-progress")
@@ -350,8 +350,8 @@ async def get_proximity_vehicle_progress(
 
         return {"status": "ok", "vehicles": vehicles}
     except Exception:
-        logger.error("vehicle-progress error", exc_info=True)
-        return {"status": "error", "message": "Internal error", "vehicles": []}
+        logger.exception("vehicle-progress error")
+        raise HTTPException(status_code=500, detail="vehicle-progress error")
 
 
 @router.get("/proximity/escort-credits")
@@ -411,8 +411,8 @@ async def get_proximity_escort_credits(
 
         return {"status": "ok", "escorts": escorts}
     except Exception:
-        logger.error("escort-credits error", exc_info=True)
-        return {"status": "error", "message": "Internal error", "escorts": []}
+        logger.exception("escort-credits error")
+        raise HTTPException(status_code=500, detail="escort-credits error")
 
 
 @router.get("/proximity/construction-events")
@@ -487,8 +487,8 @@ async def get_proximity_construction_events(
 
         return {"status": "ok", "engineers": engineers, "events": events}
     except Exception:
-        logger.error("construction-events error", exc_info=True)
-        return {"status": "error", "message": "Internal error", "engineers": [], "events": []}
+        logger.exception("construction-events error")
+        raise HTTPException(status_code=500, detail="construction-events error")
 
 
 @router.get("/proximity/objective-runs")
@@ -606,8 +606,8 @@ async def get_proximity_objective_runs(
 
         return {"status": "ok", "objective_runners": objective_runners, "recent_runs": recent_runs, "summary": summary}
     except Exception:
-        logger.error("objective-runs error", exc_info=True)
-        return {"status": "error", "message": "Internal error", "objective_runners": [], "recent_runs": [], "summary": None}
+        logger.exception("objective-runs error")
+        raise HTTPException(status_code=500, detail="objective-runs error")
 
 
 @router.get("/proximity/objective-focus")
@@ -705,5 +705,5 @@ async def get_proximity_objective_focus(
 
         return {"status": "ok", "summary": summary, "players": players, "objectives": objectives}
     except Exception:
-        logger.error("objective-focus error", exc_info=True)
-        return {"status": "error", "message": "Internal error", "summary": {}, "players": [], "objectives": []}
+        logger.exception("objective-focus error")
+        raise HTTPException(status_code=500, detail="objective-focus error")

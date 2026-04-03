@@ -52,6 +52,7 @@ import type {
   DangerZonesResponse,
   MomentumResponse,
   NarrativeResponse,
+  PlayerNarrativesResponse,
 } from './types';
 
 const API_BASE = '/api';
@@ -441,6 +442,9 @@ export const api = {
 
   getStoryNarrative: (sessionDate: string) =>
     get<NarrativeResponse>(`/storytelling/narrative?session_date=${sessionDate}`),
+
+  getPlayerNarratives: (sessionDate: string) =>
+    get<PlayerNarrativesResponse>(`/storytelling/player-narratives?session_date=${sessionDate}`),
 
   // Auth
   getAuthMe: async (): Promise<AuthUser | null> => {
