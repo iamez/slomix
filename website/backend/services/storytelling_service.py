@@ -1369,6 +1369,7 @@ class StorytellingService:
                 entry["dpm"] = round(ps.get("dpm", 0), 1)
                 entry["denied_time"] = round(ps.get("denied_time", 0))
                 entry["time_dead_pct"] = round(ps.get("time_dead_pct", 0), 2)
+                entry["revives_given"] = ps.get("revives_given", 0)
 
         return kis_entries
 
@@ -2490,11 +2491,13 @@ class StorytellingService:
         """
         sd = _to_date(session_date)
 
-        # Compute all metrics in parallel-ish
-        gravity = await self.compute_gravity(sd)
-        space = await self.compute_space_created(sd)
-        enabler = await self.compute_enabler(sd)
-        lurker = await self.compute_lurker_profile(sd)
+        # Compute all metrics in parallel
+        gravity, space, enabler, lurker = await asyncio.gather(
+            self.compute_gravity(sd),
+            self.compute_space_created(sd),
+            self.compute_enabler(sd),
+            self.compute_lurker_profile(sd),
+        )
 
         # Also get KIS for archetype + kills context
         await self.compute_session_kis(sd)
@@ -2530,6 +2533,18 @@ class StorytellingService:
             below = sum(1 for v in values if v < val)
             return below / max(len(values) - 1, 1)
 
+        # Helper: relative context string ("40% more than average")
+        def _rel_ctx(val: float, values: list[float]) -> str:
+            avg = sum(values) / max(len(values), 1)
+            if avg <= 0 or val <= avg:
+                return ""
+            pct_above = ((val - avg) / avg) * 100
+            if pct_above >= 80:
+                return f" ({pct_above:.0f}% above session avg)"
+            if pct_above >= 30:
+                return f" ({pct_above:.0f}% more than avg)"
+            return ""
+
         for guid in sorted(all_guids):
             g = g_map.get(guid, {})
             s = s_map.get(guid, {})
@@ -2550,6 +2565,13 @@ class StorytellingService:
             archetype = (k.get("archetype", "unknown")).replace("_", " ")
             total_kis = k.get("total_kis", 0)
 
+            # KIS secondary stats
+            clutch_kills = k.get("clutch_kills", 0) + k.get("solo_clutch_kills", 0)
+            outnumbered = k.get("outnumbered_kills", 0)
+            carrier_kills = k.get("carrier_kills", 0)
+            denied_time = k.get("denied_time", 0)
+            revives = k.get("revives_given", 0)
+
             parts = []
 
             # Normalize to percentile rank (0-1) before comparing across metrics
@@ -2560,74 +2582,142 @@ class StorytellingService:
                 ("solo", _pct_rank(solo_pct, raw_vals["solo"])),
             ]
             top_trait = max(traits, key=lambda t: t[1])
+            pct = top_trait[1]  # How dominant is this trait (0.0-1.0)
 
+            # ── Gravity: drew enemy heat ──
             if top_trait[0] == "gravity" and gravity_score > 0:
-                parts.append(
-                    f"{name} ({archetype}): Most hunted player — "
-                    f"avg {avg_attackers:.1f} attackers per engagement. "
-                )
+                ctx = _rel_ctx(gravity_score, raw_vals["gravity"])
+                if pct >= 0.9:
+                    parts.append(
+                        f"{name}: Attention magnet — drew the most heat, "
+                        f"avg {avg_attackers:.1f} enemies per fight{ctx}. "
+                    )
+                elif pct >= 0.6:
+                    parts.append(
+                        f"{name}: Enemy focus target — consistently drew "
+                        f"{avg_attackers:.1f} attackers{ctx}. "
+                    )
+                else:
+                    parts.append(
+                        f"{name}: Drew solid enemy attention "
+                        f"({avg_attackers:.1f} avg attackers). "
+                    )
                 if space_score > 0.3:
                     parts.append(
                         f"{productive}/{total_deaths} deaths were productive "
-                        f"(team capitalized within 10s)."
+                        f"— team capitalized within 10s."
                     )
                 elif enabler_score > 1:
                     parts.append(
-                        f"Created {e.get('total_assists', 0)} teammate kills "
+                        f"Set up {e.get('total_assists', 0)} teammate frags "
                         f"through pressure."
                     )
 
+            # ── Solo: behind enemy lines ──
             elif top_trait[0] == "solo" and solo_pct > 30:
                 solo_s = l.get("solo_time_est_s", 0)
-                parts.append(
-                    f"{name}: Lone wolf — spent {solo_pct:.0f}% of alive time "
-                    f"({solo_s:.0f}s) away from teammates. "
-                )
+                if pct >= 0.9:
+                    parts.append(
+                        f"{name}: Deep lurker — {solo_pct:.0f}% of alive time "
+                        f"behind enemy lines ({solo_s:.0f}s solo). "
+                    )
+                elif pct >= 0.6:
+                    parts.append(
+                        f"{name}: Flanker — operated solo {solo_pct:.0f}% "
+                        f"of the time ({solo_s:.0f}s). "
+                    )
+                else:
+                    parts.append(
+                        f"{name}: Spent {solo_pct:.0f}% of alive time "
+                        f"away from the pack. "
+                    )
                 if enabler_score > 0.5:
                     parts.append(
-                        f"Despite going solo, enabled "
-                        f"{e.get('total_assists', 0)} teammate kills."
+                        f"Despite going solo, set up "
+                        f"{e.get('total_assists', 0)} teammate frags."
                     )
                 elif kills > 0:
                     parts.append(
-                        f"Logged {kills} kills, {total_kis:.0f} KIS as {archetype}."
+                        f"Fragged {kills} ({total_kis:.0f} KIS) as {archetype}."
                     )
 
+            # ── Enabler: made teammates look good ──
             elif top_trait[0] == "enabler" and enabler_score > 0:
-                parts.append(
-                    f"{name}: Team enabler — "
-                    f"{e.get('total_assists', 0)} teammate kills created "
-                    f"({e.get('crossfire_assists', 0)} crossfire, "
-                    f"{e.get('trade_assists', 0)} trades). "
-                )
+                total_assists = e.get("total_assists", 0)
+                ctx = _rel_ctx(enabler_score, raw_vals["enabler"])
+                if pct >= 0.9:
+                    parts.append(
+                        f"{name}: Made teammates look good — "
+                        f"{total_assists} teammate frags created{ctx}. "
+                    )
+                elif pct >= 0.6:
+                    parts.append(
+                        f"{name}: Set up kills for the team — "
+                        f"{total_assists} assists "
+                        f"({e.get('trade_assists', 0)} trades){ctx}. "
+                    )
+                else:
+                    parts.append(
+                        f"{name}: Enabled {total_assists} teammate frags "
+                        f"through positioning. "
+                    )
                 if gravity_score > 0:
                     parts.append(
-                        f"Drew significant enemy attention "
-                        f"(gravity {gravity_score:.0f})."
+                        f"Also drew heat (gravity {gravity_score:.0f})."
                     )
 
+            # ── Space: dying forward ──
             elif top_trait[0] == "space" and space_score > 0:
-                parts.append(
-                    f"{name}: Sacrifice player — "
-                    f"{productive}/{total_deaths} deaths led to "
-                    f"teammate kills within 10s. "
-                )
+                if pct >= 0.9:
+                    parts.append(
+                        f"{name}: Dying forward — "
+                        f"{productive}/{total_deaths} deaths opened space, "
+                        f"team fragged within 10s each time. "
+                    )
+                elif pct >= 0.6:
+                    parts.append(
+                        f"{name}: Created space — "
+                        f"{productive}/{total_deaths} deaths led to "
+                        f"teammate frags. "
+                    )
+                else:
+                    parts.append(
+                        f"{name}: {productive} productive deaths "
+                        f"out of {total_deaths}. "
+                    )
                 if solo_pct > 15:
                     parts.append(
-                        f"Often operated solo ({solo_pct:.0f}% of alive time)."
+                        f"Often solo ({solo_pct:.0f}% of alive time)."
                     )
 
             else:
-                # Fallback: basic stats summary
+                # Fallback: basic stats
                 parts.append(
-                    f"{name} ({archetype}): {kills} kills, "
+                    f"{name} ({archetype}): Fragged {kills}, "
                     f"{total_kis:.0f} KIS."
                 )
+
+            # ── Secondary facts (1-2 extra lines from KIS/PCS data) ──
+            secondary = []
+            if clutch_kills >= 2:
+                secondary.append(f"pulled off {clutch_kills} clutch kills")
+            if outnumbered >= 3:
+                secondary.append(f"{outnumbered} outnumbered frags")
+            if carrier_kills >= 2:
+                secondary.append(f"intercepted {carrier_kills} objective carriers")
+            if denied_time >= 30:
+                secondary.append(f"locked out {denied_time:.0f}s of enemy playtime")
+            if revives >= 3:
+                secondary.append(f"kept the team alive with {revives} revives")
+            if secondary:
+                parts.append(" " + ", ".join(secondary[:2]).capitalize() + ".")
 
             narratives.append({
                 "guid_short": guid,
                 "name": name,
                 "narrative": "".join(parts).strip(),
+                "archetype": archetype,
+                "top_trait": top_trait[0],
                 "metrics": {
                     "gravity": gravity_score,
                     "space_score": space_score,
@@ -2636,6 +2726,10 @@ class StorytellingService:
                     "kills": kills,
                     "total_kis": round(total_kis, 1),
                     "archetype": archetype,
+                    "clutch_kills": clutch_kills,
+                    "carrier_kills": carrier_kills,
+                    "denied_time": denied_time,
+                    "revives": revives,
                 },
             })
 
@@ -2879,6 +2973,8 @@ class StorytellingService:
 
         for rsu, kills in round_kills.items():
             for i, kill_a in enumerate(kills):
+                if not kill_a["killer"]:
+                    continue
                 killer_short = g2short.get(kill_a["killer"], kill_a["killer"][:8])
                 killer_group = g2g.get(killer_short)
                 if not killer_group:
@@ -2896,6 +2992,8 @@ class StorytellingService:
                         break  # Sorted: all further kills are even later
                     if dt < -TIME_WINDOW_MS:
                         continue  # Earlier kill, keep scanning forward
+                    if not kill_b["killer"]:
+                        continue
                     other_short = g2short.get(kill_b["killer"], kill_b["killer"][:8])
                     if g2g.get(other_short) != killer_group or other_short == killer_short:
                         continue
@@ -2947,7 +3045,8 @@ class StorytellingService:
         players = []
         for guid, stats in player_stats.items():
             alive_min = alive_map.get(guid, 60000) / 60000
-            total_assists = stats["enabled_kills"] + stats["crossfire_assists"] + stats["trade_assists"]
+            # crossfire_assists are a spatial subset of enabled_kills — don't double-count
+            total_assists = stats["enabled_kills"] + stats["trade_assists"]
             players.append({
                 "guid_short": guid,
                 "name": name_map.get(guid, f"#{guid}"),

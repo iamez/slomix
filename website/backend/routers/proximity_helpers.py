@@ -166,7 +166,7 @@ def _resolve_name_for_guid(
     token = str(guid or "").strip()
     if not token:
         return "unknown"
-    # Try exact match first, then 8-char prefix match (proximity=32-char, stats=8-char)
+    # Try exact match first, then 8-char prefix (reverse index covers 32→8 and 8→name)
     short = token[:8]
     for m in (local_map, guid_name_map):
         if not m:
@@ -175,11 +175,6 @@ def _resolve_name_for_guid(
             return str(m[token])
         if short in m and m[short]:
             return str(m[short])
-        # Also try: map has 32-char keys but we got 8-char input
-        if len(token) <= 8:
-            for k, v in m.items():
-                if k[:8] == token and v:
-                    return str(v)
     return f"#{short}"
 
 
@@ -199,11 +194,17 @@ async def _load_scoped_guid_name_map(
             "GROUP BY player_guid",
             params,
         )
-        return {
-            str(row[0]): str(row[1])
-            for row in rows
-            if row and row[0] and row[1]
-        }
+        result: dict[str, str] = {}
+        for row in rows:
+            if row and row[0] and row[1]:
+                guid = str(row[0])
+                name = str(row[1])
+                result[guid] = name
+                # Also index by 8-char prefix for cross-format lookups (32→8)
+                short = guid[:8]
+                if short not in result:
+                    result[short] = name
+        return result
     except Exception:
         logger.warning("_load_scoped_guid_name_map failed", exc_info=True)
         return {}
