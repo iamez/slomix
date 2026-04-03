@@ -19,6 +19,11 @@ from website.backend.utils.et_constants import strip_et_colors, weapon_name
 
 logger = get_app_logger("storytelling")
 
+
+def _safe_short(guid: str | None) -> str:
+    """Safe guid[:8] that handles None."""
+    return (guid or "?")[:8]
+
 # Per-session locks to prevent concurrent TOCTOU races on lazy compute
 class _BoundedLockDict:
     """Bounded dict of asyncio.Lock — evicts oldest when full."""
@@ -559,7 +564,7 @@ class StorytellingService:
             if key not in seen or streak > seen[key]["streak"]:
                 seen[key] = {
                     "killer_guid": killer_guid,
-                    "killer_name": strip_et_colors(killer_name or killer_guid[:8]),
+                    "killer_name": strip_et_colors(killer_name or _safe_short(killer_guid)),
                     "kill_time": kill_time,
                     "round_number": round_number,
                     "map_name": map_name,
@@ -647,8 +652,8 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            killer_name = strip_et_colors(r[1] or r[0][:8])
-            returner_name = strip_et_colors(r[4] or r[3][:8])
+            killer_name = strip_et_colors(r[1] or _safe_short(r[0]))
+            returner_name = strip_et_colors(r[4] or _safe_short(r[3]))
             delta_s = round((r[5] - r[2]) / 1000, 1)
             moments.append({
                 "type": "carrier_chain",
@@ -679,7 +684,7 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            name = strip_et_colors(r[1] or r[0][:8])
+            name = strip_et_colors(r[1] or _safe_short(r[0]))
             attackers = int(r[2])
             score = float(r[3])
             stars = 3 if attackers == 3 else (4 if attackers == 4 else 5)
@@ -750,9 +755,9 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            trader_name = strip_et_colors(r[1] or r[0][:8])
-            victim_name = strip_et_colors(r[3] or r[2][:8])
-            avenger_target = strip_et_colors(r[5] or r[4][:8])
+            trader_name = strip_et_colors(r[1] or _safe_short(r[0]))
+            victim_name = strip_et_colors(r[3] or _safe_short(r[2]))
+            avenger_target = strip_et_colors(r[5] or _safe_short(r[4]))
             delta_s = round(int(r[6]) / 1000, 1)
             stars = 4 if delta_s <= 2 else 3
             moments.append({
@@ -786,7 +791,7 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            name = strip_et_colors(r[1] or r[0][:8])
+            name = strip_et_colors(r[1] or _safe_short(r[0]))
             duration_s = round((r[4] or 0) / 1000, 1)
             distance = int(r[6] or 0)
             efficiency = float(r[9] or 0)
@@ -825,7 +830,7 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            name = strip_et_colors(r[1] or r[0][:8])
+            name = strip_et_colors(r[1] or _safe_short(r[0]))
             action = r[2] or 'objective'
             track = r[3] or 'the objective'
             enemies = int(r[4] or 0)
@@ -882,8 +887,8 @@ class StorytellingService:
         """, (sd,))
 
         for r in (carrier_rows or []):
-            carrier_name = strip_et_colors(r[1] or r[0][:8])
-            killer_name = strip_et_colors(r[3] or r[2][:8])
+            carrier_name = strip_et_colors(r[1] or _safe_short(r[0]))
+            killer_name = strip_et_colors(r[3] or _safe_short(r[2]))
             distance = int(r[4] or 0)
             duration_s = round((r[5] or 0) / 1000, 1)
             # 4★ base, 5★ if carrier had traveled far (close to scoring)
@@ -914,7 +919,7 @@ class StorytellingService:
         """, (sd,))
 
         for r in (defuse_rows or []):
-            name = strip_et_colors(r[1] or r[0][:8])
+            name = strip_et_colors(r[1] or _safe_short(r[0]))
             track = r[2] or 'the dynamite'
             enemies = int(r[6] or 0)
             stars = 5 if enemies >= 2 else 4
@@ -1038,10 +1043,10 @@ class StorytellingService:
             rkey = (r[10], r[8])  # (round_start_unix, round_number)
             kills_by_round.setdefault(rkey, []).append({
                 "time": r[0], "killer_guid": r[1],
-                "killer": strip_et_colors(r[2] or r[1][:8]),
+                "killer": strip_et_colors(r[2] or _safe_short(r[1])),
                 "killer_team": r[3],
                 "victim_guid": r[4],
-                "victim": strip_et_colors(r[5] or r[4][:8]),
+                "victim": strip_et_colors(r[5] or _safe_short(r[4])),
                 "victim_team": r[6],
                 "weapon": weapon_name(r[7] or 0),
                 "kill_mod": r[7] or 0,
@@ -1193,10 +1198,10 @@ class StorytellingService:
             pkey = (r[1], r[10], r[8])  # (attacker_guid, round_start_unix, round_number)
             by_player_round.setdefault(pkey, []).append({
                 "time": r[0], "killer_guid": r[1],
-                "killer": strip_et_colors(r[2] or r[1][:8]),
+                "killer": strip_et_colors(r[2] or _safe_short(r[1])),
                 "killer_team": r[3],
                 "victim_guid": r[4],
-                "victim": strip_et_colors(r[5] or r[4][:8]),
+                "victim": strip_et_colors(r[5] or _safe_short(r[4])),
                 "victim_team": r[6],
                 "weapon": weapon_name(r[7] or 0),
                 "kill_mod": r[7] or 0,
@@ -1348,7 +1353,7 @@ class StorytellingService:
 
         kis_entries = [
             {
-                "guid": r[0], "name": strip_et_colors(r[1] or r[0][:8]),
+                "guid": r[0], "name": strip_et_colors(r[1] or _safe_short(r[0])),
                 "total_kis": float(r[2] or 0), "kills": int(r[3] or 0),
                 "carrier_kills": int(r[4] or 0), "push_kills": int(r[5] or 0),
                 "crossfire_kills": int(r[6] or 0), "avg_impact": float(r[7] or 0),

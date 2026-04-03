@@ -9,6 +9,8 @@ Used by both the Discord bot (!psession) and the website API (/proximity/session
 
 import logging
 
+from website.backend.utils.et_constants import strip_et_colors
+
 logger = logging.getLogger(__name__)
 
 # Category weights (must sum to 1.0)
@@ -76,6 +78,8 @@ class ProximitySessionScoreService:
         guid_set = set()
         for r in (eng_rows or []):
             guid, name, total, escapes = r[0], r[1], int(r[2] or 0), int(r[3] or 0)
+            if not guid:
+                continue
             guid_set.add(guid)
             ensure(guid, name)
             escape_rate = (escapes / max(total, 1)) * 100
@@ -289,7 +293,7 @@ class ProximitySessionScoreService:
 
             results.append({
                 "guid": guid,
-                "name": names.get(guid, guid[:8]),
+                "name": strip_et_colors(names.get(guid, (guid or "?")[:8])),
                 "total_score": round(total, 1),
                 "categories": categories,
                 "engagement_count": eng_total,
