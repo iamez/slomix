@@ -2886,12 +2886,16 @@ class StorytellingService:
                 player_stats[killer_short]["kills"] += 1
 
                 # Look for teammate kills near this kill (time + space)
-                for j, kill_b in enumerate(kills):
+                # Kills sorted by time — scan outward, break when too far
+                for j in range(max(0, i - 30), min(len(kills), i + 30)):
                     if i == j:
                         continue
-                    dt = abs(kill_b["time"] - kill_a["time"])
+                    kill_b = kills[j]
+                    dt = kill_b["time"] - kill_a["time"]
                     if dt > TIME_WINDOW_MS:
-                        continue
+                        break  # Sorted: all further kills are even later
+                    if dt < -TIME_WINDOW_MS:
+                        continue  # Earlier kill, keep scanning forward
                     other_short = g2short.get(kill_b["killer"], kill_b["killer"][:8])
                     if g2g.get(other_short) != killer_group or other_short == killer_short:
                         continue
@@ -3050,7 +3054,7 @@ class StorytellingService:
                 for t_ms, px, py in track["points"]:
                     min_dist = float("inf")
                     for tm_pts in tm_arrays:
-                        # Binary-ish search: find closest time
+                        # Linear scan with early exit (points are time-sorted)
                         best_d = float("inf")
                         for tt, tx, ty in tm_pts:
                             if abs(tt - t_ms) <= DOWNSAMPLE_MS * 2:

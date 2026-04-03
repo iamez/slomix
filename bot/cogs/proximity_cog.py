@@ -177,7 +177,7 @@ class ProximityCog(commands.Cog, name="Proximity"):
 
             await correlation_svc.on_proximity_imported(match_id, round_number, map_name)
         except Exception as e:
-            logger.debug(f"Correlation notify failed (non-fatal): {e}")
+            logger.warning(f"Correlation notify failed (non-fatal): {e}")
 
     def _load_objective_coords(self) -> dict:
         template_path = Path("proximity/objective_coords_template.json")
