@@ -1,6 +1,6 @@
 """Proximity support endpoints: support-summary, movement-stats."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -90,8 +90,8 @@ async def get_proximity_support_summary(
 
         return {"status": "ok", "summary": summary, "by_map": by_map, "rounds": rounds}
     except Exception:
-        logger.error("support-summary error", exc_info=True)
-        return {"status": "error", "message": "Internal error", "summary": {}, "by_map": [], "rounds": []}
+        logger.exception("support-summary error")
+        raise HTTPException(status_code=500, detail="support-summary error")
 
 
 @router.get("/proximity/movement-stats")
@@ -184,5 +184,5 @@ async def get_proximity_movement_stats(
             "players": players,
         }
     except Exception:
-        logger.warning("Proximity movement-stats error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity movement-stats error")
+        raise HTTPException(status_code=500, detail="Proximity movement-stats error")

@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -126,8 +126,8 @@ async def get_proximity_player_profile(
             "trades_made": int(trade_stats[0] or 0) if trade_stats else 0,
         }
     except Exception:
-        logger.warning("Proximity endpoint error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity endpoint error")
+        raise HTTPException(status_code=500, detail="Proximity endpoint error")
 
 
 @router.get("/proximity/player/{guid}/radar")
@@ -233,5 +233,5 @@ async def get_proximity_player_radar(
             "composite": round((aggression + awareness + teamplay + timing + mechanical) / 5, 1),
         }
     except Exception:
-        logger.warning("Proximity endpoint error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity endpoint error")
+        raise HTTPException(status_code=500, detail="Proximity endpoint error")
