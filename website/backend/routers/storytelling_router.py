@@ -355,3 +355,16 @@ async def get_lurker_profile(
     sd = _parse_date(session_date)
     svc = StorytellingService(db)
     return await svc.compute_lurker_profile(sd)
+
+
+@router.get("/storytelling/player-narratives")
+@limiter.limit("5/minute")
+async def get_player_narratives(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Per-player micro-narratives: invisible value stories for each player."""
+    sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    return await svc.generate_player_narratives(sd)
