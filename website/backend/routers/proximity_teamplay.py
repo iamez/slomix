@@ -1,6 +1,6 @@
 """Proximity teamplay endpoints: teamplay, spawn-timing, cohesion, crossfire-angles, pushes, lua-trades, focus-fire."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -151,8 +151,8 @@ async def get_proximity_spawn_timing(
             ],
         }
     except Exception:
-        logger.warning("Proximity endpoint error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity endpoint error")
+        raise HTTPException(status_code=500, detail="Proximity endpoint error")
 
 
 @router.get("/proximity/cohesion")
@@ -229,8 +229,8 @@ async def get_proximity_cohesion(
             ],
         }
     except Exception:
-        logger.warning("Proximity endpoint error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity endpoint error")
+        raise HTTPException(status_code=500, detail="Proximity endpoint error")
 
 
 @router.get("/proximity/crossfire-angles")
@@ -317,8 +317,8 @@ async def get_proximity_crossfire_angles(
             ],
         }
     except Exception:
-        logger.warning("Proximity endpoint error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity endpoint error")
+        raise HTTPException(status_code=500, detail="Proximity endpoint error")
 
 
 @router.get("/proximity/pushes")
@@ -388,8 +388,8 @@ async def get_proximity_pushes(
             ],
         }
     except Exception:
-        logger.warning("Proximity endpoint error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity endpoint error")
+        raise HTTPException(status_code=500, detail="Proximity endpoint error")
 
 
 @router.get("/proximity/lua-trades")
@@ -474,8 +474,8 @@ async def get_proximity_lua_trades(
             ],
         }
     except Exception:
-        logger.warning("Proximity endpoint error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity endpoint error")
+        raise HTTPException(status_code=500, detail="Proximity endpoint error")
 
 
 @router.get("/proximity/focus-fire")
@@ -566,5 +566,5 @@ async def get_proximity_focus_fire(
 
         return {"status": "ok", "summary": summary, "targets": targets, "recent": recent}
     except Exception:
-        logger.error("focus-fire error", exc_info=True)
-        return {"status": "error", "message": "Internal error", "summary": {}, "targets": [], "recent": []}
+        logger.exception("focus-fire error")
+        raise HTTPException(status_code=500, detail="focus-fire error")
