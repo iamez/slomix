@@ -2480,6 +2480,159 @@ class StorytellingService:
             "narrative": narrative,
         }
 
+    # ── Player Micro-Narratives ──────────────────────────────────────
+
+    async def generate_player_narratives(self, session_date: str | date) -> dict:
+        """Generate per-player micro-narratives using gravity, space, enabler, lurker.
+
+        Each player gets a 1-2 sentence story describing their invisible value,
+        not just their K/D.
+        """
+        sd = _to_date(session_date)
+
+        # Compute all metrics in parallel-ish
+        gravity = await self.compute_gravity(sd)
+        space = await self.compute_space_created(sd)
+        enabler = await self.compute_enabler(sd)
+        lurker = await self.compute_lurker_profile(sd)
+
+        # Also get KIS for archetype + kills context
+        await self.compute_session_kis(sd)
+        kis_board = await self.get_kis_leaderboard(sd, limit=50)
+
+        # Index by guid_short
+        g_map = {p["guid_short"]: p for p in gravity.get("players", [])}
+        s_map = {p["guid_short"]: p for p in space.get("players", [])}
+        e_map = {p["guid_short"]: p for p in enabler.get("players", [])}
+        l_map = {p["guid_short"]: p for p in lurker.get("players", [])}
+
+        kis_map = {}
+        for p in kis_board:
+            short = p.get("guid", "")[:8]
+            kis_map[short] = p
+
+        # Build narratives
+        narratives = []
+        all_guids = set(g_map) | set(s_map) | set(e_map) | set(l_map)
+
+        for guid in sorted(all_guids):
+            g = g_map.get(guid, {})
+            s = s_map.get(guid, {})
+            e = e_map.get(guid, {})
+            l = l_map.get(guid, {})
+            k = kis_map.get(guid, {})
+
+            name = (g.get("name") or s.get("name") or e.get("name")
+                    or l.get("name") or f"#{guid}")
+            gravity_score = g.get("gravity_score", 0)
+            avg_attackers = g.get("avg_attackers", 1)
+            space_score = s.get("space_score", 0)
+            productive = s.get("productive_deaths", 0)
+            total_deaths = s.get("total_deaths", 0)
+            enabler_score = e.get("enabler_score", 0)
+            solo_pct = l.get("solo_pct", 0)
+            kills = k.get("kills", 0)
+            archetype = (k.get("archetype", "unknown")).replace("_", " ")
+            total_kis = k.get("total_kis", 0)
+
+            parts = []
+
+            # Lead with strongest trait
+            traits = [
+                ("gravity", gravity_score),
+                ("space", space_score),
+                ("enabler", enabler_score),
+                ("solo", solo_pct),
+            ]
+            top_trait = max(traits, key=lambda t: t[1])
+
+            if top_trait[0] == "gravity" and gravity_score > 0:
+                parts.append(
+                    f"{name} ({archetype}): Most hunted player — "
+                    f"avg {avg_attackers:.1f} attackers per engagement. "
+                )
+                if space_score > 0.3:
+                    parts.append(
+                        f"{productive}/{total_deaths} deaths were productive "
+                        f"(team capitalized within 10s)."
+                    )
+                elif enabler_score > 1:
+                    parts.append(
+                        f"Created {e.get('total_assists', 0)} teammate kills "
+                        f"through pressure."
+                    )
+
+            elif top_trait[0] == "solo" and solo_pct > 20:
+                solo_s = l.get("solo_time_est_s", 0)
+                parts.append(
+                    f"{name}: Lone wolf — spent {solo_pct:.0f}% of alive time "
+                    f"({solo_s:.0f}s) away from teammates. "
+                )
+                if enabler_score > 0.5:
+                    parts.append(
+                        f"Despite going solo, enabled "
+                        f"{e.get('total_assists', 0)} teammate kills."
+                    )
+                elif kills > 0:
+                    parts.append(
+                        f"Logged {kills} kills, {total_kis:.0f} KIS as {archetype}."
+                    )
+
+            elif top_trait[0] == "enabler" and enabler_score > 0:
+                parts.append(
+                    f"{name}: Team enabler — "
+                    f"{e.get('total_assists', 0)} teammate kills created "
+                    f"({e.get('crossfire_assists', 0)} crossfire, "
+                    f"{e.get('trade_assists', 0)} trades). "
+                )
+                if gravity_score > 0:
+                    parts.append(
+                        f"Drew significant enemy attention "
+                        f"(gravity {gravity_score:.0f})."
+                    )
+
+            elif top_trait[0] == "space" and space_score > 0:
+                parts.append(
+                    f"{name}: Sacrifice player — "
+                    f"{productive}/{total_deaths} deaths led to "
+                    f"teammate kills within 10s. "
+                )
+                if solo_pct > 15:
+                    parts.append(
+                        f"Often operated solo ({solo_pct:.0f}% of alive time)."
+                    )
+
+            else:
+                # Fallback: basic stats summary
+                parts.append(
+                    f"{name} ({archetype}): {kills} kills, "
+                    f"{total_kis:.0f} KIS."
+                )
+
+            narratives.append({
+                "guid_short": guid,
+                "name": name,
+                "narrative": "".join(parts).strip(),
+                "metrics": {
+                    "gravity": gravity_score,
+                    "space_score": space_score,
+                    "enabler_score": enabler_score,
+                    "solo_pct": solo_pct,
+                    "kills": kills,
+                    "total_kis": round(total_kis, 1),
+                    "archetype": archetype,
+                },
+            })
+
+        # Sort by KIS descending
+        narratives.sort(key=lambda n: n["metrics"].get("total_kis", 0), reverse=True)
+
+        return {
+            "status": "ok",
+            "session_date": str(sd),
+            "player_narratives": narratives,
+        }
+
     # ── Gravity Score ────────────────────────────────────────────────
 
     async def compute_gravity(self, session_date: str | date) -> dict:
