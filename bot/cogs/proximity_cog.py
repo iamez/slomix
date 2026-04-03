@@ -156,6 +156,29 @@ class ProximityCog(commands.Cog, name="Proximity"):
         except ValueError:
             return None
 
+    async def _notify_correlation(self, filename: str) -> None:
+        """Notify the correlation service that proximity data arrived for a round."""
+        try:
+            correlation_svc = getattr(self.bot, 'correlation_service', None)
+            if not correlation_svc:
+                return
+
+            # Parse filename: 2026-04-02-220403-etl_adlernest-round-1_engagements.txt
+            match = re.match(
+                r'^(\d{4}-\d{2}-\d{2}-\d{6})-(.+)-round-(\d+)_engagements\.txt$',
+                filename,
+            )
+            if not match:
+                return
+
+            match_id = match.group(1)    # 2026-04-02-220403
+            map_name = match.group(2)    # etl_adlernest
+            round_number = int(match.group(3))  # 1
+
+            await correlation_svc.on_proximity_imported(match_id, round_number, map_name)
+        except Exception as e:
+            logger.warning(f"Correlation notify failed (non-fatal): {e}")
+
     def _load_objective_coords(self) -> dict:
         template_path = Path("proximity/objective_coords_template.json")
         if not template_path.exists():
@@ -598,6 +621,9 @@ class ProximityCog(commands.Cog, name="Proximity"):
             if success:
                 self._mark_local_processed(filepath.name)
                 self.import_count += 1
+
+                # Notify correlation service that proximity data arrived
+                await self._notify_correlation(filepath.name)
 
                 stats = parser.get_stats()
                 if self.debug_log:

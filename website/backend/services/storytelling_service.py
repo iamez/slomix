@@ -19,6 +19,11 @@ from website.backend.utils.et_constants import strip_et_colors, weapon_name
 
 logger = get_app_logger("storytelling")
 
+
+def _safe_short(guid: str | None) -> str:
+    """Safe guid[:8] that handles None."""
+    return (guid or "?")[:8]
+
 # Per-session locks to prevent concurrent TOCTOU races on lazy compute
 class _BoundedLockDict:
     """Bounded dict of asyncio.Lock — evicts oldest when full."""
@@ -559,7 +564,7 @@ class StorytellingService:
             if key not in seen or streak > seen[key]["streak"]:
                 seen[key] = {
                     "killer_guid": killer_guid,
-                    "killer_name": strip_et_colors(killer_name or killer_guid[:8]),
+                    "killer_name": strip_et_colors(killer_name or _safe_short(killer_guid)),
                     "kill_time": kill_time,
                     "round_number": round_number,
                     "map_name": map_name,
@@ -647,8 +652,8 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            killer_name = strip_et_colors(r[1] or r[0][:8])
-            returner_name = strip_et_colors(r[4] or r[3][:8])
+            killer_name = strip_et_colors(r[1] or _safe_short(r[0]))
+            returner_name = strip_et_colors(r[4] or _safe_short(r[3]))
             delta_s = round((r[5] - r[2]) / 1000, 1)
             moments.append({
                 "type": "carrier_chain",
@@ -679,7 +684,7 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            name = strip_et_colors(r[1] or r[0][:8])
+            name = strip_et_colors(r[1] or _safe_short(r[0]))
             attackers = int(r[2])
             score = float(r[3])
             stars = 3 if attackers == 3 else (4 if attackers == 4 else 5)
@@ -750,9 +755,9 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            trader_name = strip_et_colors(r[1] or r[0][:8])
-            victim_name = strip_et_colors(r[3] or r[2][:8])
-            avenger_target = strip_et_colors(r[5] or r[4][:8])
+            trader_name = strip_et_colors(r[1] or _safe_short(r[0]))
+            victim_name = strip_et_colors(r[3] or _safe_short(r[2]))
+            avenger_target = strip_et_colors(r[5] or _safe_short(r[4]))
             delta_s = round(int(r[6]) / 1000, 1)
             stars = 4 if delta_s <= 2 else 3
             moments.append({
@@ -786,7 +791,7 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            name = strip_et_colors(r[1] or r[0][:8])
+            name = strip_et_colors(r[1] or _safe_short(r[0]))
             duration_s = round((r[4] or 0) / 1000, 1)
             distance = int(r[6] or 0)
             efficiency = float(r[9] or 0)
@@ -825,7 +830,7 @@ class StorytellingService:
 
         moments = []
         for r in (rows or []):
-            name = strip_et_colors(r[1] or r[0][:8])
+            name = strip_et_colors(r[1] or _safe_short(r[0]))
             action = r[2] or 'objective'
             track = r[3] or 'the objective'
             enemies = int(r[4] or 0)
@@ -882,8 +887,8 @@ class StorytellingService:
         """, (sd,))
 
         for r in (carrier_rows or []):
-            carrier_name = strip_et_colors(r[1] or r[0][:8])
-            killer_name = strip_et_colors(r[3] or r[2][:8])
+            carrier_name = strip_et_colors(r[1] or _safe_short(r[0]))
+            killer_name = strip_et_colors(r[3] or _safe_short(r[2]))
             distance = int(r[4] or 0)
             duration_s = round((r[5] or 0) / 1000, 1)
             # 4★ base, 5★ if carrier had traveled far (close to scoring)
@@ -914,7 +919,7 @@ class StorytellingService:
         """, (sd,))
 
         for r in (defuse_rows or []):
-            name = strip_et_colors(r[1] or r[0][:8])
+            name = strip_et_colors(r[1] or _safe_short(r[0]))
             track = r[2] or 'the dynamite'
             enemies = int(r[6] or 0)
             stars = 5 if enemies >= 2 else 4
@@ -1038,10 +1043,10 @@ class StorytellingService:
             rkey = (r[10], r[8])  # (round_start_unix, round_number)
             kills_by_round.setdefault(rkey, []).append({
                 "time": r[0], "killer_guid": r[1],
-                "killer": strip_et_colors(r[2] or r[1][:8]),
+                "killer": strip_et_colors(r[2] or _safe_short(r[1])),
                 "killer_team": r[3],
                 "victim_guid": r[4],
-                "victim": strip_et_colors(r[5] or r[4][:8]),
+                "victim": strip_et_colors(r[5] or _safe_short(r[4])),
                 "victim_team": r[6],
                 "weapon": weapon_name(r[7] or 0),
                 "kill_mod": r[7] or 0,
@@ -1193,10 +1198,10 @@ class StorytellingService:
             pkey = (r[1], r[10], r[8])  # (attacker_guid, round_start_unix, round_number)
             by_player_round.setdefault(pkey, []).append({
                 "time": r[0], "killer_guid": r[1],
-                "killer": strip_et_colors(r[2] or r[1][:8]),
+                "killer": strip_et_colors(r[2] or _safe_short(r[1])),
                 "killer_team": r[3],
                 "victim_guid": r[4],
-                "victim": strip_et_colors(r[5] or r[4][:8]),
+                "victim": strip_et_colors(r[5] or _safe_short(r[4])),
                 "victim_team": r[6],
                 "weapon": weapon_name(r[7] or 0),
                 "kill_mod": r[7] or 0,
@@ -1348,7 +1353,7 @@ class StorytellingService:
 
         kis_entries = [
             {
-                "guid": r[0], "name": strip_et_colors(r[1] or r[0][:8]),
+                "guid": r[0], "name": strip_et_colors(r[1] or _safe_short(r[0])),
                 "total_kis": float(r[2] or 0), "kills": int(r[3] or 0),
                 "carrier_kills": int(r[4] or 0), "push_kills": int(r[5] or 0),
                 "crossfire_kills": int(r[6] or 0), "avg_impact": float(r[7] or 0),
@@ -1369,6 +1374,7 @@ class StorytellingService:
                 entry["dpm"] = round(ps.get("dpm", 0), 1)
                 entry["denied_time"] = round(ps.get("denied_time", 0))
                 entry["time_dead_pct"] = round(ps.get("time_dead_pct", 0), 2)
+                entry["revives_given"] = ps.get("revives_given", 0)
 
         return kis_entries
 
@@ -1764,7 +1770,9 @@ class StorytellingService:
 
         tt: dict[str, int] = {'group_a': 0, 'group_b': 0}
         for r in (trades or []):
-            group = guid_to_group.get(r[0])
+            # Proximity GUIDs are 32-char, stats GUIDs are 8-char prefix
+            guid = r[0][:8] if r[0] and len(r[0]) > 8 else r[0]
+            group = guid_to_group.get(guid)
             if group:
                 tt[group] += int(r[1] or 0)
 
@@ -1841,7 +1849,9 @@ class StorytellingService:
 
         tr: dict[str, int] = {'group_a': 0, 'group_b': 0}
         for r in (revives or []):
-            group = guid_to_group.get(r[0])
+            # Proximity GUIDs are 32-char, stats GUIDs are 8-char prefix
+            guid = r[0][:8] if r[0] and len(r[0]) > 8 else r[0]
+            group = guid_to_group.get(guid)
             if group:
                 tr[group] += int(r[1] or 0)
 
@@ -1892,7 +1902,8 @@ class StorytellingService:
                      + COALESCE(pcs.dynamites_defused, 0)
                      + COALESCE(pcs.constructions, 0) AS objectives,
                    pcs.revives_given,
-                   pcs.time_played_minutes,
+                   GREATEST(pcs.time_played_minutes - COALESCE(pcs.time_dead_minutes, 0), 0.01)
+                     AS time_alive_minutes,
                    r.id AS round_id,
                    r.round_start_unix
             FROM player_comprehensive_stats pcs
@@ -2473,4 +2484,733 @@ class StorytellingService:
             "status": "ok",
             "session_date": sd_str,
             "narrative": narrative,
+        }
+
+    # ── Player Micro-Narratives ──────────────────────────────────────
+
+    async def generate_player_narratives(self, session_date: str | date) -> dict:
+        """Generate per-player micro-narratives using gravity, space, enabler, lurker.
+
+        Each player gets a 1-2 sentence story describing their invisible value,
+        not just their K/D.
+        """
+        sd = _to_date(session_date)
+
+        # Compute all metrics in parallel
+        gravity, space, enabler, lurker = await asyncio.gather(
+            self.compute_gravity(sd),
+            self.compute_space_created(sd),
+            self.compute_enabler(sd),
+            self.compute_lurker_profile(sd),
+        )
+
+        # Also get KIS for archetype + kills context
+        await self.compute_session_kis(sd)
+        kis_board = await self.get_kis_leaderboard(sd, limit=50)
+
+        # Index by guid_short
+        g_map = {p["guid_short"]: p for p in gravity.get("players", [])}
+        s_map = {p["guid_short"]: p for p in space.get("players", [])}
+        e_map = {p["guid_short"]: p for p in enabler.get("players", [])}
+        l_map = {p["guid_short"]: p for p in lurker.get("players", [])}
+
+        kis_map = {}
+        for p in kis_board:
+            short = p.get("guid", "")[:8]
+            kis_map[short] = p
+
+        # Build narratives
+        narratives = []
+        all_guids = set(g_map) | set(s_map) | set(e_map) | set(l_map)
+
+        # Collect raw values for percentile normalization (different scales!)
+        raw_vals: dict[str, list[float]] = {
+            "gravity": [p.get("gravity_score", 0) for p in gravity.get("players", [])],
+            "space": [p.get("space_score", 0) for p in space.get("players", [])],
+            "enabler": [p.get("enabler_score", 0) for p in enabler.get("players", [])],
+            "solo": [p.get("solo_pct", 0) for p in lurker.get("players", [])],
+        }
+
+        def _pct_rank(val: float, values: list[float]) -> float:
+            """Percentile rank of val within values (0.0 to 1.0)."""
+            if not values or max(values) == min(values):
+                return 0.5
+            below = sum(1 for v in values if v < val)
+            return below / max(len(values) - 1, 1)
+
+        # Helper: relative context string ("40% more than average")
+        def _rel_ctx(val: float, values: list[float]) -> str:
+            avg = sum(values) / max(len(values), 1)
+            if avg <= 0 or val <= avg:
+                return ""
+            pct_above = ((val - avg) / avg) * 100
+            if pct_above >= 80:
+                return f" ({pct_above:.0f}% above session avg)"
+            if pct_above >= 30:
+                return f" ({pct_above:.0f}% more than avg)"
+            return ""
+
+        for guid in sorted(all_guids):
+            g = g_map.get(guid, {})
+            s = s_map.get(guid, {})
+            e = e_map.get(guid, {})
+            lk = l_map.get(guid, {})
+            k = kis_map.get(guid, {})
+
+            name = (g.get("name") or s.get("name") or e.get("name")
+                    or lk.get("name") or f"#{guid}")
+            gravity_score = g.get("gravity_score", 0)
+            avg_attackers = g.get("avg_attackers", 1)
+            space_score = s.get("space_score", 0)
+            productive = s.get("productive_deaths", 0)
+            total_deaths = s.get("total_deaths", 0)
+            enabler_score = e.get("enabler_score", 0)
+            solo_pct = lk.get("solo_pct", 0)
+            kills = k.get("kills", 0)
+            archetype = (k.get("archetype", "unknown")).replace("_", " ")
+            total_kis = k.get("total_kis", 0)
+
+            # KIS secondary stats
+            clutch_kills = k.get("clutch_kills", 0) + k.get("solo_clutch_kills", 0)
+            outnumbered = k.get("outnumbered_kills", 0)
+            carrier_kills = k.get("carrier_kills", 0)
+            denied_time = k.get("denied_time", 0)
+            revives = k.get("revives_given", 0)
+
+            parts = []
+
+            # Normalize to percentile rank (0-1) before comparing across metrics
+            traits = [
+                ("gravity", _pct_rank(gravity_score, raw_vals["gravity"])),
+                ("space", _pct_rank(space_score, raw_vals["space"])),
+                ("enabler", _pct_rank(enabler_score, raw_vals["enabler"])),
+                ("solo", _pct_rank(solo_pct, raw_vals["solo"])),
+            ]
+            top_trait = max(traits, key=lambda t: t[1])
+            pct = top_trait[1]  # How dominant is this trait (0.0-1.0)
+
+            # ── Gravity: drew enemy heat ──
+            if top_trait[0] == "gravity" and gravity_score > 0:
+                ctx = _rel_ctx(gravity_score, raw_vals["gravity"])
+                if pct >= 0.9:
+                    parts.append(
+                        f"{name}: Attention magnet — drew the most heat, "
+                        f"avg {avg_attackers:.1f} enemies per fight{ctx}. "
+                    )
+                elif pct >= 0.6:
+                    parts.append(
+                        f"{name}: Enemy focus target — consistently drew "
+                        f"{avg_attackers:.1f} attackers{ctx}. "
+                    )
+                else:
+                    parts.append(
+                        f"{name}: Drew solid enemy attention "
+                        f"({avg_attackers:.1f} avg attackers). "
+                    )
+                if space_score > 0.3:
+                    parts.append(
+                        f"{productive}/{total_deaths} deaths were productive "
+                        f"— team capitalized within 10s."
+                    )
+                elif enabler_score > 1:
+                    parts.append(
+                        f"Set up {e.get('total_assists', 0)} teammate frags "
+                        f"through pressure."
+                    )
+
+            # ── Solo: behind enemy lines ──
+            elif top_trait[0] == "solo" and solo_pct > 30:
+                solo_s = lk.get("solo_time_est_s", 0)
+                if pct >= 0.9:
+                    parts.append(
+                        f"{name}: Deep lurker — {solo_pct:.0f}% of alive time "
+                        f"behind enemy lines ({solo_s:.0f}s solo). "
+                    )
+                elif pct >= 0.6:
+                    parts.append(
+                        f"{name}: Flanker — operated solo {solo_pct:.0f}% "
+                        f"of the time ({solo_s:.0f}s). "
+                    )
+                else:
+                    parts.append(
+                        f"{name}: Spent {solo_pct:.0f}% of alive time "
+                        f"away from the pack. "
+                    )
+                if enabler_score > 0.5:
+                    parts.append(
+                        f"Despite going solo, set up "
+                        f"{e.get('total_assists', 0)} teammate frags."
+                    )
+                elif kills > 0:
+                    parts.append(
+                        f"Fragged {kills} ({total_kis:.0f} KIS) as {archetype}."
+                    )
+
+            # ── Enabler: made teammates look good ──
+            elif top_trait[0] == "enabler" and enabler_score > 0:
+                total_assists = e.get("total_assists", 0)
+                ctx = _rel_ctx(enabler_score, raw_vals["enabler"])
+                if pct >= 0.9:
+                    parts.append(
+                        f"{name}: Made teammates look good — "
+                        f"{total_assists} teammate frags created{ctx}. "
+                    )
+                elif pct >= 0.6:
+                    parts.append(
+                        f"{name}: Set up kills for the team — "
+                        f"{total_assists} assists "
+                        f"({e.get('trade_assists', 0)} trades){ctx}. "
+                    )
+                else:
+                    parts.append(
+                        f"{name}: Enabled {total_assists} teammate frags "
+                        f"through positioning. "
+                    )
+                if gravity_score > 0:
+                    parts.append(
+                        f"Also drew heat (gravity {gravity_score:.0f})."
+                    )
+
+            # ── Space: dying forward ──
+            elif top_trait[0] == "space" and space_score > 0:
+                if pct >= 0.9:
+                    parts.append(
+                        f"{name}: Dying forward — "
+                        f"{productive}/{total_deaths} deaths opened space, "
+                        f"team fragged within 10s each time. "
+                    )
+                elif pct >= 0.6:
+                    parts.append(
+                        f"{name}: Created space — "
+                        f"{productive}/{total_deaths} deaths led to "
+                        f"teammate frags. "
+                    )
+                else:
+                    parts.append(
+                        f"{name}: {productive} productive deaths "
+                        f"out of {total_deaths}. "
+                    )
+                if solo_pct > 15:
+                    parts.append(
+                        f"Often solo ({solo_pct:.0f}% of alive time)."
+                    )
+
+            else:
+                # Fallback: basic stats
+                parts.append(
+                    f"{name} ({archetype}): Fragged {kills}, "
+                    f"{total_kis:.0f} KIS."
+                )
+
+            # ── Secondary facts (1-2 extra lines from KIS/PCS data) ──
+            secondary = []
+            if clutch_kills >= 2:
+                secondary.append(f"pulled off {clutch_kills} clutch kills")
+            if outnumbered >= 3:
+                secondary.append(f"{outnumbered} outnumbered frags")
+            if carrier_kills >= 2:
+                secondary.append(f"intercepted {carrier_kills} objective carriers")
+            if denied_time >= 30:
+                secondary.append(f"locked out {denied_time:.0f}s of enemy playtime")
+            if revives >= 3:
+                secondary.append(f"kept the team alive with {revives} revives")
+            if secondary:
+                parts.append(" " + ", ".join(secondary[:2]).capitalize() + ".")
+
+            narratives.append({
+                "guid_short": guid,
+                "name": name,
+                "narrative": "".join(parts).strip(),
+                "archetype": archetype,
+                "top_trait": top_trait[0],
+                "metrics": {
+                    "gravity": gravity_score,
+                    "space_score": space_score,
+                    "enabler_score": enabler_score,
+                    "solo_pct": solo_pct,
+                    "kills": kills,
+                    "total_kis": round(total_kis, 1),
+                    "archetype": archetype,
+                    "clutch_kills": clutch_kills,
+                    "carrier_kills": carrier_kills,
+                    "denied_time": denied_time,
+                    "revives": revives,
+                },
+            })
+
+        # Sort by KIS descending
+        narratives.sort(key=lambda n: n["metrics"].get("total_kis", 0), reverse=True)
+
+        return {
+            "status": "ok",
+            "session_date": str(sd),
+            "player_narratives": narratives,
+        }
+
+    # ── Gravity Score ────────────────────────────────────────────────
+
+    async def compute_gravity(self, session_date: str | date) -> dict:
+        """Compute Gravity Score: how much enemy attention each player attracts.
+
+        Higher gravity = more enemies focused on you = more space for teammates.
+        Formula: total_attention_ms / alive_time_ms (normalized per minute alive).
+        """
+        sd = _to_date(session_date)
+
+        rows = await self.db.fetch_all("""
+            SELECT target_guid, MAX(target_name) AS name,
+                   COUNT(*) AS engagements,
+                   AVG(num_attackers) AS avg_attackers,
+                   SUM(num_attackers * duration_ms) AS total_attention_ms,
+                   SUM(duration_ms) AS total_engaged_ms
+            FROM combat_engagement
+            WHERE session_date = $1
+            GROUP BY target_guid
+            HAVING COUNT(*) >= 5
+            ORDER BY SUM(num_attackers * duration_ms) DESC
+        """, (sd,))
+
+        alive_rows = await self.db.fetch_all("""
+            SELECT player_guid,
+                   SUM(GREATEST(duration_ms, 1)) AS total_alive_ms,
+                   COUNT(*) AS tracks
+            FROM player_track
+            WHERE session_date = $1 AND duration_ms > 0
+            GROUP BY player_guid
+        """, (sd,))
+        alive_map = {r[0]: int(r[1] or 1) for r in (alive_rows or [])}
+
+        players = []
+        for r in (rows or []):
+            guid = r[0]
+            total_attention = int(r[4] or 0)
+            alive_ms = alive_map.get(guid)
+            if not alive_ms:
+                continue  # Skip players without track data
+            # Gravity = attention per minute alive (higher = more hunted)
+            gravity = (total_attention / max(alive_ms, 1)) * 60000
+
+            players.append({
+                "guid": guid,
+                "guid_short": guid[:8],
+                "name": strip_et_colors(r[1] or guid[:8]),
+                "gravity_score": round(gravity, 1),
+                "engagements": int(r[2]),
+                "avg_attackers": round(float(r[3] or 1), 2),
+                "total_attention_ms": total_attention,
+                "total_engaged_ms": int(r[5] or 0),
+                "alive_ms": alive_ms,
+            })
+
+        players.sort(key=lambda p: p["gravity_score"], reverse=True)
+
+        return {
+            "status": "ok",
+            "session_date": str(sd),
+            "metric": "gravity",
+            "description": "Enemy attention attracted per minute alive. Higher = more space created for teammates.",
+            "players": players,
+        }
+
+    # ── Space Created Score ──────────────────────────────────────────
+
+    async def compute_space_created(self, session_date: str | date) -> dict:
+        """Compute Space Created: what happens after your death?
+
+        Productive death = teammate gets a kill within 10s after you die.
+        Formula: productive_deaths / total_deaths
+        """
+        sd = _to_date(session_date)
+        WINDOW_MS = 10000  # 10 seconds after death
+
+        # All kills grouped by round for temporal analysis
+        kill_rows = await self.db.fetch_all("""
+            SELECT victim_guid, killer_guid, kill_time, round_number, round_start_unix
+            FROM proximity_kill_outcome
+            WHERE session_date = $1 AND outcome IN ('gibbed', 'tapped_out')
+            ORDER BY round_start_unix, kill_time
+        """, (sd,))
+
+        if not kill_rows:
+            return {"status": "ok", "session_date": str(sd), "players": []}
+
+        # Build team mapping from storytelling_kill_impact (has guid_canonical)
+        team_rows = await self.db.fetch_all("""
+            SELECT DISTINCT killer_guid, killer_guid_canonical
+            FROM storytelling_kill_impact
+            WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
+        """, (sd,))
+        guid_to_short = {r[0]: r[1] for r in (team_rows or [])}
+
+        # Group kills by (round_start_unix) for same-round temporal queries
+        from collections import defaultdict
+        round_kills: dict[int, list] = defaultdict(list)
+        for r in kill_rows:
+            rsu = int(r[4] or 0)
+            round_kills[rsu].append({
+                "victim": r[0], "killer": r[1],
+                "time": int(r[2] or 0), "round": r[3],
+            })
+
+        # Build player groups to know who is teammate
+        groups = await self._build_player_groups(sd)
+        g2g = groups["guid_to_group"] if groups else {}
+
+        # For each death: check if teammates got kills in next 10s
+        player_stats: dict[str, dict] = defaultdict(lambda: {
+            "deaths": 0, "productive": 0, "teammate_kills_after": 0,
+        })
+
+        for rsu, kills in round_kills.items():
+            for i, death in enumerate(kills):
+                victim_short = guid_to_short.get(death["victim"], death["victim"][:8])
+                victim_group = g2g.get(victim_short)
+                if not victim_group:
+                    continue
+
+                player_stats[victim_short]["deaths"] += 1
+
+                # Look for teammate kills in next WINDOW_MS
+                teammate_kills = 0
+                for j in range(i + 1, len(kills)):
+                    k = kills[j]
+                    dt = k["time"] - death["time"]
+                    if dt > WINDOW_MS:
+                        break
+                    if dt < 0:
+                        continue
+                    killer_short = guid_to_short.get(k["killer"], k["killer"][:8])
+                    if g2g.get(killer_short) == victim_group and killer_short != victim_short:
+                        teammate_kills += 1
+
+                if teammate_kills > 0:
+                    player_stats[victim_short]["productive"] += 1
+                    player_stats[victim_short]["teammate_kills_after"] += teammate_kills
+
+        # Resolve names
+        name_rows = await self.db.fetch_all("""
+            SELECT killer_guid_canonical, MAX(killer_name)
+            FROM storytelling_kill_impact
+            WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
+            GROUP BY killer_guid_canonical
+        """, (sd,))
+        name_map = {r[0]: strip_et_colors(r[1] or r[0]) for r in (name_rows or [])}
+
+        players = []
+        for guid, stats in player_stats.items():
+            deaths = max(stats["deaths"], 1)
+            players.append({
+                "guid_short": guid,
+                "name": name_map.get(guid, f"#{guid}"),
+                "space_score": round(stats["productive"] / deaths, 2),
+                "productive_deaths": stats["productive"],
+                "wasted_deaths": stats["deaths"] - stats["productive"],
+                "total_deaths": stats["deaths"],
+                "teammate_kills_after": stats["teammate_kills_after"],
+            })
+
+        players.sort(key=lambda p: p["space_score"], reverse=True)
+
+        return {
+            "status": "ok",
+            "session_date": str(sd),
+            "metric": "space_created",
+            "description": "Fraction of deaths where teammates capitalized within 10s. Higher = more productive deaths.",
+            "window_ms": WINDOW_MS,
+            "players": players,
+        }
+
+    # ── Enabler Score ────────────────────────────────────────────────
+
+    async def compute_enabler(self, session_date: str | date) -> dict:
+        """Compute Enabler Score: teammate kills near your engagements.
+
+        For each player's engagements, count teammate kills within ±5s
+        and ≤500 game units. Includes crossfire assists and trade assists.
+        """
+        sd = _to_date(session_date)
+        TIME_WINDOW_MS = 5000
+        DISTANCE_THRESHOLD = 500
+
+        # All kills with positions (from engagement end positions)
+        eng_rows = await self.db.fetch_all("""
+            SELECT target_guid, killer_guid, end_x, end_y, end_time_ms,
+                   round_start_unix, num_attackers
+            FROM combat_engagement
+            WHERE session_date = $1 AND outcome = 'killed'
+              AND end_x IS NOT NULL AND end_y IS NOT NULL
+            ORDER BY round_start_unix, end_time_ms
+        """, (sd,))
+
+        if not eng_rows:
+            return {"status": "ok", "session_date": str(sd), "players": []}
+
+        # Build team mapping
+        groups = await self._build_player_groups(sd)
+        g2g = groups["guid_to_group"] if groups else {}
+
+        # guid_canonical lookup
+        team_rows = await self.db.fetch_all("""
+            SELECT DISTINCT killer_guid, killer_guid_canonical
+            FROM storytelling_kill_impact
+            WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
+        """, (sd,))
+        g2short = {r[0]: r[1] for r in (team_rows or [])}
+
+        import math
+
+        # Group kills by round_start_unix
+        from collections import defaultdict
+        round_kills: dict[int, list] = defaultdict(list)
+        for r in eng_rows:
+            rsu = int(r[5] or 0)
+            round_kills[rsu].append({
+                "victim": r[0], "killer": r[1],
+                "x": float(r[2] or 0), "y": float(r[3] or 0),
+                "time": int(r[4] or 0), "attackers": int(r[6] or 1),
+            })
+
+        # For each kill by player X: count same-team kills nearby in time+space
+        player_stats: dict[str, dict] = defaultdict(lambda: {
+            "kills": 0, "enabled_kills": 0,
+            "crossfire_assists": 0, "trade_assists": 0,
+        })
+
+        for rsu, kills in round_kills.items():
+            for i, kill_a in enumerate(kills):
+                if not kill_a["killer"]:
+                    continue
+                killer_short = g2short.get(kill_a["killer"], kill_a["killer"][:8])
+                killer_group = g2g.get(killer_short)
+                if not killer_group:
+                    continue
+                player_stats[killer_short]["kills"] += 1
+
+                # Look for teammate kills near this kill (time + space)
+                # Kills sorted by time — scan outward, break when too far
+                for j in range(max(0, i - 30), min(len(kills), i + 30)):
+                    if i == j:
+                        continue
+                    kill_b = kills[j]
+                    dt = kill_b["time"] - kill_a["time"]
+                    if dt > TIME_WINDOW_MS:
+                        break  # Sorted: all further kills are even later
+                    if dt < -TIME_WINDOW_MS:
+                        continue  # Earlier kill, keep scanning forward
+                    if not kill_b["killer"]:
+                        continue
+                    other_short = g2short.get(kill_b["killer"], kill_b["killer"][:8])
+                    if g2g.get(other_short) != killer_group or other_short == killer_short:
+                        continue
+                    dx = kill_a["x"] - kill_b["x"]
+                    dy = kill_a["y"] - kill_b["y"]
+                    dist = math.sqrt(dx * dx + dy * dy)
+                    if dist <= DISTANCE_THRESHOLD:
+                        player_stats[killer_short]["enabled_kills"] += 1
+                        break  # Count each kill_a as enabling once
+
+        # Add crossfire + trade counts from existing tables
+        xf_rows = await self.db.fetch_all("""
+            SELECT killer_guid_canonical, COUNT(*)
+            FROM storytelling_kill_impact
+            WHERE session_date = $1 AND is_crossfire = true AND killer_guid_canonical IS NOT NULL
+            GROUP BY killer_guid_canonical
+        """, (sd,))
+        for r in (xf_rows or []):
+            if r[0] in player_stats:
+                player_stats[r[0]]["crossfire_assists"] = int(r[1] or 0)
+
+        tr_rows = await self.db.fetch_all("""
+            SELECT trader_guid_canonical, COUNT(*)
+            FROM proximity_lua_trade_kill
+            WHERE session_date = $1 AND trader_guid_canonical IS NOT NULL
+            GROUP BY trader_guid_canonical
+        """, (sd,))
+        for r in (tr_rows or []):
+            if r[0] in player_stats:
+                player_stats[r[0]]["trade_assists"] = int(r[1] or 0)
+
+        # Resolve names + compute score
+        name_rows = await self.db.fetch_all("""
+            SELECT killer_guid_canonical, MAX(killer_name)
+            FROM storytelling_kill_impact
+            WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
+            GROUP BY killer_guid_canonical
+        """, (sd,))
+        name_map = {r[0]: strip_et_colors(r[1] or r[0]) for r in (name_rows or [])}
+
+        # Alive time for normalization
+        alive_rows = await self.db.fetch_all("""
+            SELECT player_guid, SUM(GREATEST(duration_ms, 1)) AS alive_ms
+            FROM player_track WHERE session_date = $1 AND duration_ms > 0
+            GROUP BY player_guid
+        """, (sd,))
+        alive_map = {r[0][:8]: int(r[1] or 1) for r in (alive_rows or [])}
+
+        players = []
+        for guid, stats in player_stats.items():
+            alive_min = alive_map.get(guid, 60000) / 60000
+            # crossfire_assists are a spatial subset of enabled_kills — don't double-count
+            total_assists = stats["enabled_kills"] + stats["trade_assists"]
+            players.append({
+                "guid_short": guid,
+                "name": name_map.get(guid, f"#{guid}"),
+                "enabler_score": round(total_assists / max(alive_min, 0.1), 1),
+                "enabled_kills": stats["enabled_kills"],
+                "crossfire_assists": stats["crossfire_assists"],
+                "trade_assists": stats["trade_assists"],
+                "total_assists": total_assists,
+                "own_kills": stats["kills"],
+            })
+
+        players.sort(key=lambda p: p["enabler_score"], reverse=True)
+
+        return {
+            "status": "ok",
+            "session_date": str(sd),
+            "metric": "enabler",
+            "description": "Teammate kills enabled per minute alive (nearby kills ±5s ≤500u + crossfire + trades).",
+            "time_window_ms": TIME_WINDOW_MS,
+            "distance_threshold": DISTANCE_THRESHOLD,
+            "players": players,
+        }
+
+    # ── Lurker Profile ───────────────────────────────────────────────
+
+    async def compute_lurker_profile(self, session_date: str | date) -> dict:
+        """Compute Lurker Profile: solo time away from teammates.
+
+        Uses player_track.path (200ms samples, spawn-to-death) to calculate
+        how much time each player spends away from teammates.
+        Downsampled to 1s intervals for performance (~20k points vs 100k).
+        """
+        sd = _to_date(session_date)
+        SOLO_RADIUS = 500  # units from nearest teammate = "solo"
+        DOWNSAMPLE_MS = 1000  # 1s intervals for performance
+
+        import math
+        from collections import defaultdict
+
+        track_rows = await self.db.fetch_all("""
+            SELECT player_guid, player_name, team, round_start_unix,
+                   spawn_time_ms, death_time_ms, duration_ms, path
+            FROM player_track
+            WHERE session_date = $1 AND duration_ms > 2000 AND path IS NOT NULL
+            ORDER BY round_start_unix, player_guid
+        """, (sd,))
+
+        if not track_rows:
+            return {"status": "ok", "session_date": str(sd), "players": []}
+
+        # Group tracks by round, downsample paths to 1s
+        round_tracks: dict[int, list] = defaultdict(list)
+        for r in track_rows:
+            rsu = int(r[3] or 0)
+            path_data = r[7]
+            if not path_data:
+                continue
+            if isinstance(path_data, str):
+                import json as _json
+                try:
+                    path_data = _json.loads(path_data)
+                except Exception:  # noqa: S112 — skip unparseable track paths
+                    continue
+            points = []
+            last_t = -DOWNSAMPLE_MS
+            for p in path_data:
+                t = int(p.get("time", 0))
+                if t - last_t >= DOWNSAMPLE_MS:
+                    points.append((t, float(p.get("x", 0)), float(p.get("y", 0))))
+                    last_t = t
+            if not points:
+                continue
+            round_tracks[rsu].append({
+                "guid": r[0], "name": r[1], "team": r[2],
+                "duration_ms": int(r[6] or 0), "points": points,
+            })
+
+        # For each track: compute solo time (no teammate within SOLO_RADIUS)
+        player_stats: dict[str, dict] = defaultdict(lambda: {
+            "total_samples": 0, "solo_samples": 0, "alive_ms": 0, "tracks": 0,
+        })
+
+        for rsu, tracks in round_tracks.items():
+            # Pre-index teammate points by time bucket for fast lookup
+            for track in tracks:
+                guid_short = track["guid"][:8]
+                team = track["team"]
+                teammates = [
+                    t for t in tracks
+                    if t["team"] == team and t["guid"][:8] != guid_short
+                ]
+                if not teammates:
+                    # Solo player (no teammates in this life) — all samples are solo
+                    player_stats[guid_short]["solo_samples"] += len(track["points"])
+                    player_stats[guid_short]["total_samples"] += len(track["points"])
+                    player_stats[guid_short]["alive_ms"] += track["duration_ms"]
+                    player_stats[guid_short]["tracks"] += 1
+                    continue
+
+                # Build time-indexed arrays for each teammate (sorted)
+                tm_arrays = [tm["points"] for tm in teammates]
+
+                solo_count = 0
+                for t_ms, px, py in track["points"]:
+                    min_dist = float("inf")
+                    for tm_pts in tm_arrays:
+                        # Linear scan with early exit (points are time-sorted)
+                        best_d = float("inf")
+                        for tt, tx, ty in tm_pts:
+                            if abs(tt - t_ms) <= DOWNSAMPLE_MS * 2:
+                                dx = px - tx
+                                dy = py - ty
+                                d = math.sqrt(dx * dx + dy * dy)
+                                if d < best_d:
+                                    best_d = d
+                            elif tt > t_ms + DOWNSAMPLE_MS * 2:
+                                break
+                        if best_d < min_dist:
+                            min_dist = best_d
+                    if min_dist > SOLO_RADIUS:
+                        solo_count += 1
+
+                player_stats[guid_short]["total_samples"] += len(track["points"])
+                player_stats[guid_short]["solo_samples"] += solo_count
+                player_stats[guid_short]["alive_ms"] += track["duration_ms"]
+                player_stats[guid_short]["tracks"] += 1
+
+        # Resolve names
+        name_rows = await self.db.fetch_all("""
+            SELECT killer_guid_canonical, MAX(killer_name)
+            FROM storytelling_kill_impact
+            WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
+            GROUP BY killer_guid_canonical
+        """, (sd,))
+        name_map = {r[0]: strip_et_colors(r[1] or r[0]) for r in (name_rows or [])}
+
+        players = []
+        for guid, stats in player_stats.items():
+            total = max(stats["total_samples"], 1)
+            solo_pct = (stats["solo_samples"] / total) * 100
+            players.append({
+                "guid_short": guid,
+                "name": name_map.get(guid, f"#{guid}"),
+                "solo_pct": round(solo_pct, 1),
+                "solo_samples": stats["solo_samples"],
+                "total_samples": stats["total_samples"],
+                "alive_ms": stats["alive_ms"],
+                "tracks": stats["tracks"],
+                "solo_time_est_s": round(stats["solo_samples"] * DOWNSAMPLE_MS / 1000, 0),
+            })
+
+        players.sort(key=lambda p: p["solo_pct"], reverse=True)
+
+        return {
+            "status": "ok",
+            "session_date": str(sd),
+            "metric": "lurker_profile",
+            "description": f"Percentage of alive time spent >={SOLO_RADIUS}u from nearest teammate.",
+            "solo_radius": SOLO_RADIUS,
+            "downsample_ms": DOWNSAMPLE_MS,
+            "players": players,
         }

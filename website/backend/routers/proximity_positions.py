@@ -79,8 +79,8 @@ async def get_proximity_hit_regions(
             "players": players,
         }
     except Exception:
-        logger.warning("Proximity hit-regions error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity hit-regions error")
+        raise HTTPException(status_code=500, detail="Proximity hit-regions error")
 
 
 @router.get("/proximity/hit-regions/by-weapon")
@@ -137,8 +137,8 @@ async def get_proximity_hit_regions_by_weapon(
             "weapons": weapons,
         }
     except Exception:
-        logger.warning("Proximity hit-regions by-weapon error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity hit-regions by-weapon error")
+        raise HTTPException(status_code=500, detail="Proximity hit-regions by-weapon error")
 
 
 @router.get("/proximity/hit-regions/headshot-rates")
@@ -189,8 +189,8 @@ async def get_proximity_hit_regions_headshot_rates(
             "leaders": leaders,
         }
     except Exception:
-        logger.warning("Proximity hit-regions headshot-rates error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity hit-regions headshot-rates error")
+        raise HTTPException(status_code=500, detail="Proximity hit-regions headshot-rates error")
 
 
 @router.get("/proximity/combat-positions/heatmap")
@@ -266,8 +266,8 @@ async def get_proximity_combat_positions_heatmap(
             ],
         }
     except Exception:
-        logger.warning("Proximity combat-positions heatmap error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity combat-positions heatmap error")
+        raise HTTPException(status_code=500, detail="Proximity combat-positions heatmap error")
 
 
 @router.get("/proximity/combat-positions/kill-lines")
@@ -328,8 +328,8 @@ async def get_proximity_combat_positions_kill_lines(
             ],
         }
     except Exception:
-        logger.warning("Proximity combat-positions kill-lines error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity combat-positions kill-lines error")
+        raise HTTPException(status_code=500, detail="Proximity combat-positions kill-lines error")
 
 
 @router.get("/proximity/combat-positions/danger-zones")
@@ -409,8 +409,8 @@ async def get_proximity_combat_positions_danger_zones(
             "zones": zones,
         }
     except Exception:
-        logger.warning("Proximity combat-positions danger-zones error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity combat-positions danger-zones error")
+        raise HTTPException(status_code=500, detail="Proximity combat-positions danger-zones error")
 
 
 @router.get("/proximity/combat-position-stats")
@@ -507,5 +507,5 @@ async def get_proximity_combat_position_stats(
 
         return {"status": "ok", "summary": summary, "by_class": by_class, "by_map": by_map}
     except Exception:
-        logger.error("combat-position-stats error", exc_info=True)
-        return {"status": "error", "message": "Internal error", "summary": {}, "by_class": [], "by_map": []}
+        logger.exception("combat-position-stats error")
+        raise HTTPException(status_code=500, detail="combat-position-stats error")

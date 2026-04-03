@@ -132,8 +132,8 @@ async def get_proximity_round_timeline(
     except HTTPException:
         raise
     except Exception:
-        logger.warning("Proximity endpoint error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity endpoint error")
+        raise HTTPException(status_code=500, detail="Proximity endpoint error")
 
 
 @router.get("/proximity/round/{round_id}/tracks")
@@ -194,8 +194,8 @@ async def get_proximity_round_tracks(
     except HTTPException:
         raise
     except Exception:
-        logger.warning("Proximity endpoint error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity endpoint error")
+        raise HTTPException(status_code=500, detail="Proximity endpoint error")
 
 
 @router.get("/proximity/round/{round_id}/team-comparison")
@@ -281,5 +281,5 @@ async def get_proximity_round_team_comparison(
             ],
         }
     except Exception:
-        logger.warning("Proximity endpoint error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("Proximity endpoint error")
+        raise HTTPException(status_code=500, detail="Proximity endpoint error")

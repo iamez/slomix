@@ -303,3 +303,68 @@ async def get_narrative(
     sd = _parse_date(session_date)
     svc = StorytellingService(db)
     return await svc.generate_narrative(sd)
+
+
+@router.get("/storytelling/gravity")
+@limiter.limit("10/minute")
+async def get_gravity(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Gravity Score: enemy attention attracted per minute alive."""
+    sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    return await svc.compute_gravity(sd)
+
+
+@router.get("/storytelling/space-created")
+@limiter.limit("10/minute")
+async def get_space_created(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Space Created: productive deaths where teammates capitalized."""
+    sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    return await svc.compute_space_created(sd)
+
+
+@router.get("/storytelling/enabler")
+@limiter.limit("10/minute")
+async def get_enabler(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Enabler Score: teammate kills enabled by your presence/action."""
+    sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    return await svc.compute_enabler(sd)
+
+
+@router.get("/storytelling/lurker-profile")
+@limiter.limit("5/minute")
+async def get_lurker_profile(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Lurker Profile: solo time and team separation analysis."""
+    sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    return await svc.compute_lurker_profile(sd)
+
+
+@router.get("/storytelling/player-narratives")
+@limiter.limit("5/minute")
+async def get_player_narratives(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Per-player micro-narratives: invisible value stories for each player."""
+    sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    return await svc.generate_player_narratives(sd)

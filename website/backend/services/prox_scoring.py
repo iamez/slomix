@@ -241,6 +241,8 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
     players: dict[str, dict] = {}
 
     def _merge(guid: str, name: str, data: dict):
+        if not guid:
+            return
         if guid not in players:
             players[guid] = {"name": name, "engagements": 0, "tracks": 0}
         players[guid].update({k: v for k, v in data.items() if v is not None})

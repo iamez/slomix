@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -30,11 +30,13 @@ async def get_proximity_session_scores(
         if not session_date:
             return {"status": "ok", "session_date": None, "players": []}
 
-        results = await svc.compute_session_scores(session_date)
+        # asyncpg needs date object, not string
+        sd = datetime.strptime(session_date, "%Y-%m-%d").date() if isinstance(session_date, str) else session_date
+        results = await svc.compute_session_scores(sd)
         return {"status": "ok", "session_date": session_date, "players": results}
     except Exception:
-        logger.warning("Proximity endpoint error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("session-scores failed")
+        raise HTTPException(status_code=500, detail="session-scores computation failed")
 
 
 @router.get("/proximity/leaderboards")
@@ -446,8 +448,8 @@ async def get_proximity_leaderboards(
             return {"status": "error", "detail": f"Unknown category: {category}. Valid: power, spawn, crossfire, trades, reactions, survivors, movement, focus_fire"}
 
     except Exception:
-        logger.warning("Proximity endpoint error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("leaderboards failed")
+        raise HTTPException(status_code=500, detail="leaderboards computation failed")
 
 
 @router.get("/proximity/prox-scores")
@@ -474,8 +476,8 @@ async def get_prox_scores(
             "players": results[:limit],
         }
     except Exception:
-        logger.warning("Proximity prox-scores error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("prox-scores failed")
+        raise HTTPException(status_code=500, detail="prox-scores computation failed")
 
 
 @router.get("/proximity/prox-scores/formula")
@@ -561,8 +563,8 @@ async def get_proximity_weapon_accuracy(
             "weapon_breakdown": weapon_breakdown,
         }
     except Exception:
-        logger.warning("Proximity endpoint error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("weapon-accuracy failed")
+        raise HTTPException(status_code=500, detail="weapon-accuracy computation failed")
 
 
 @router.get("/proximity/revives")
@@ -643,5 +645,5 @@ async def get_proximity_revives(
 
         return {"status": "ok", "summary": summary, "leaders": leaders}
     except Exception:
-        logger.warning("Proximity revives endpoint error", exc_info=True)
-        return {"status": "error", "detail": "Internal error"}
+        logger.exception("revives failed")
+        raise HTTPException(status_code=500, detail="revives computation failed")
