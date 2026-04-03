@@ -1415,3 +1415,33 @@ export interface NarrativeResponse {
   session_date: string;
   narrative: string;
 }
+
+// ── Player Narratives ──
+export interface PlayerNarrativeMetrics {
+  gravity: number;
+  space_score: number;
+  enabler_score: number;
+  solo_pct: number;
+  kills: number;
+  total_kis: number;
+  archetype: string;
+  clutch_kills: number;
+  carrier_kills: number;
+  denied_time: number;
+  revives: number;
+}
+
+export interface PlayerNarrative {
+  guid_short: string;
+  name: string;
+  narrative: string;
+  archetype: string;
+  top_trait: string;
+  metrics: PlayerNarrativeMetrics;
+}
+
+export interface PlayerNarrativesResponse {
+  status: string;
+  session_date: string;
+  player_narratives: PlayerNarrative[];
+}
