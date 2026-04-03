@@ -2554,18 +2554,18 @@ class StorytellingService:
             g = g_map.get(guid, {})
             s = s_map.get(guid, {})
             e = e_map.get(guid, {})
-            l = l_map.get(guid, {})
+            lk = l_map.get(guid, {})
             k = kis_map.get(guid, {})
 
             name = (g.get("name") or s.get("name") or e.get("name")
-                    or l.get("name") or f"#{guid}")
+                    or lk.get("name") or f"#{guid}")
             gravity_score = g.get("gravity_score", 0)
             avg_attackers = g.get("avg_attackers", 1)
             space_score = s.get("space_score", 0)
             productive = s.get("productive_deaths", 0)
             total_deaths = s.get("total_deaths", 0)
             enabler_score = e.get("enabler_score", 0)
-            solo_pct = l.get("solo_pct", 0)
+            solo_pct = lk.get("solo_pct", 0)
             kills = k.get("kills", 0)
             archetype = (k.get("archetype", "unknown")).replace("_", " ")
             total_kis = k.get("total_kis", 0)
@@ -2620,7 +2620,7 @@ class StorytellingService:
 
             # ── Solo: behind enemy lines ──
             elif top_trait[0] == "solo" and solo_pct > 30:
-                solo_s = l.get("solo_time_est_s", 0)
+                solo_s = lk.get("solo_time_est_s", 0)
                 if pct >= 0.9:
                     parts.append(
                         f"{name}: Deep lurker — {solo_pct:.0f}% of alive time "
