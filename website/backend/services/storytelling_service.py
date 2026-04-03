@@ -3113,7 +3113,7 @@ class StorytellingService:
                 import json as _json
                 try:
                     path_data = _json.loads(path_data)
-                except Exception:
+                except Exception:  # noqa: S112 — skip unparseable track paths
                     continue
             points = []
             last_t = -DOWNSAMPLE_MS
