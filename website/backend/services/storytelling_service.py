@@ -2515,6 +2515,21 @@ class StorytellingService:
         narratives = []
         all_guids = set(g_map) | set(s_map) | set(e_map) | set(l_map)
 
+        # Collect raw values for percentile normalization (different scales!)
+        raw_vals: dict[str, list[float]] = {
+            "gravity": [p.get("gravity_score", 0) for p in gravity.get("players", [])],
+            "space": [p.get("space_score", 0) for p in space.get("players", [])],
+            "enabler": [p.get("enabler_score", 0) for p in enabler.get("players", [])],
+            "solo": [p.get("solo_pct", 0) for p in lurker.get("players", [])],
+        }
+
+        def _pct_rank(val: float, values: list[float]) -> float:
+            """Percentile rank of val within values (0.0 to 1.0)."""
+            if not values or max(values) == min(values):
+                return 0.5
+            below = sum(1 for v in values if v < val)
+            return below / max(len(values) - 1, 1)
+
         for guid in sorted(all_guids):
             g = g_map.get(guid, {})
             s = s_map.get(guid, {})
@@ -2537,12 +2552,12 @@ class StorytellingService:
 
             parts = []
 
-            # Lead with strongest trait
+            # Normalize to percentile rank (0-1) before comparing across metrics
             traits = [
-                ("gravity", gravity_score),
-                ("space", space_score),
-                ("enabler", enabler_score),
-                ("solo", solo_pct),
+                ("gravity", _pct_rank(gravity_score, raw_vals["gravity"])),
+                ("space", _pct_rank(space_score, raw_vals["space"])),
+                ("enabler", _pct_rank(enabler_score, raw_vals["enabler"])),
+                ("solo", _pct_rank(solo_pct, raw_vals["solo"])),
             ]
             top_trait = max(traits, key=lambda t: t[1])
 
@@ -2562,7 +2577,7 @@ class StorytellingService:
                         f"through pressure."
                     )
 
-            elif top_trait[0] == "solo" and solo_pct > 20:
+            elif top_trait[0] == "solo" and solo_pct > 30:
                 solo_s = l.get("solo_time_est_s", 0)
                 parts.append(
                     f"{name}: Lone wolf — spent {solo_pct:.0f}% of alive time "
@@ -2670,7 +2685,9 @@ class StorytellingService:
         for r in (rows or []):
             guid = r[0]
             total_attention = int(r[4] or 0)
-            alive_ms = alive_map.get(guid, 1)
+            alive_ms = alive_map.get(guid)
+            if not alive_ms:
+                continue  # Skip players without track data
             # Gravity = attention per minute alive (higher = more hunted)
             gravity = (total_attention / max(alive_ms, 1)) * 60000
 
@@ -2701,8 +2718,8 @@ class StorytellingService:
     async def compute_space_created(self, session_date: str | date) -> dict:
         """Compute Space Created: what happens after your death?
 
-        Productive death = teammate gets a kill or objective within 10s after you die.
-        Formula: (teammate_kills_10s + objective_events_10s * 3) / deaths
+        Productive death = teammate gets a kill within 10s after you die.
+        Formula: productive_deaths / total_deaths
         """
         sd = _to_date(session_date)
         WINDOW_MS = 10000  # 10 seconds after death
