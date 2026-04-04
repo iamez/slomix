@@ -6,6 +6,33 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.0](https://github.com/iamez/slomix/compare/v1.3.0...v1.4.0) (2026-04-03)
+
+
+### Features
+
+* **bot:** add proximity tracking to round correlation system ([f701ee8](https://github.com/iamez/slomix/commit/f701ee859648a9625b49559305c869abf045be14))
+* **storytelling:** add enabler score metric ([c569a9e](https://github.com/iamez/slomix/commit/c569a9e331f9338d3d5deb72f6e424d7c9cfcf25))
+* **storytelling:** add gravity and space-created metrics ([2be0deb](https://github.com/iamez/slomix/commit/2be0deb3ca3d0d56c5319104ecf667a600c9ada0))
+* **storytelling:** add lurker profile — solo time from player_track paths ([71edee0](https://github.com/iamez/slomix/commit/71edee0b056a9a71bf26dbae1edf04d12c20c193))
+* **storytelling:** narrative polish + enabler dedup + frontend panel ([cde42dd](https://github.com/iamez/slomix/commit/cde42dd69717409effe75994cae4d224b5f42ad0))
+* **storytelling:** per-player micro-narratives with invisible value metrics ([d8f533e](https://github.com/iamez/slomix/commit/d8f533e116043b79a01293c43d67d4207bf89aef))
+
+
+### Bug Fixes
+
+* **proximity:** events empty attacker fields + survival not differentiating ([a2ed263](https://github.com/iamez/slomix/commit/a2ed26331eec165323203ab4ac5eed4ebb941e9c))
+* **proximity:** GUID name resolution supports both 32-char and 8-char formats ([b9fdbb8](https://github.com/iamez/slomix/commit/b9fdbb81c0d492632df868c43a96e5ca24f21c6c))
+* **proximity:** session-scores broken query + full audit report ([be02df8](https://github.com/iamez/slomix/commit/be02df83148c60804b1a19448eac0253f0dd8570))
+* rename ambiguous variable l → lk (ruff E741) ([ac357a1](https://github.com/iamez/slomix/commit/ac357a11ab519ac46e20ee7bdf3e904e4e10558d))
+* session-scores crash + NULL guid safety + error-swallowing cleanup ([affe541](https://github.com/iamez/slomix/commit/affe5411716ca613ad82b4b97dd73280a9423801))
+* **storytelling:** enabler O(n²) → windowed scan + review polish ([1f1b04b](https://github.com/iamez/slomix/commit/1f1b04b70ca49f5f65676f4288a09de754990fc6))
+* **storytelling:** normalize trait comparison + review fixes ([69d9c45](https://github.com/iamez/slomix/commit/69d9c4597eb52c63806eaf06ff168545540011a1))
+* **storytelling:** synergy trade=0 and medic=0 — GUID format mismatch ([68e4817](https://github.com/iamez/slomix/commit/68e4817427b402a59e0b5b8702c01d0829348450))
+* suppress S112 for track path JSON parse skip ([2df0306](https://github.com/iamez/slomix/commit/2df0306be8f50db1e9a3a862c32f849a3ab4d16a))
+* **tools:** RCON packet encoding — use raw bytes for 0xFF prefix ([eb7d29a](https://github.com/iamez/slomix/commit/eb7d29a9c7d34acb429133b385c5f2bd6feb9a87))
+* **website:** replace 30 error-swallowing blocks with HTTPException(500) ([e1a5ccb](https://github.com/iamez/slomix/commit/e1a5ccb6208c20e38bf4edb8a44fa93ab28cd052))
+
 ## [1.3.0](https://github.com/iamez/slomix/compare/v1.2.0...v1.3.0) (2026-04-01)
 
 
