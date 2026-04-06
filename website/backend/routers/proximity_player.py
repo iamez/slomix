@@ -173,31 +173,40 @@ async def get_proximity_player_radar(
         dodge_score = max(0, 100 - (dodge_ms / 50))  # Lower dodge = better
         awareness = min(100, escape_rate * 0.5 + dodge_score * 0.5)
 
-        # Teamplay: crossfire participation + trade kills (per-session average)
-        cf_row = await db.fetch_one(
-            """
-            SELECT COUNT(*),
-                   COUNT(DISTINCT session_date)
-            FROM proximity_crossfire_opportunity
-            WHERE (teammate1_guid = $1 OR teammate2_guid = $1) AND was_executed = true
-            AND session_date >= $2
-            """, (guid, since),
-        )
-        trade_row = await db.fetch_one(
-            """
-            SELECT COUNT(*),
-                   COUNT(DISTINCT session_date)
-            FROM proximity_lua_trade_kill WHERE trader_guid = $1 AND session_date >= $2
-            """, (guid, since),
-        )
-        cf_total = int(cf_row[0] or 0) if cf_row else 0
-        cf_sessions = max(1, int(cf_row[1] or 1) if cf_row else 1)
-        trade_total = int(trade_row[0] or 0) if trade_row else 0
-        trade_sessions = max(1, int(trade_row[1] or 1) if trade_row else 1)
-        # Per-session rates with saturation at 5 crossfires/session and 3 trades/session
-        cf_per_session = cf_total / cf_sessions
-        trade_per_session = trade_total / trade_sessions
-        teamplay = min(100, (min(cf_per_session / 5, 1) * 50) + (min(trade_per_session / 3, 1) * 50))
+        # Teamplay: reuse percentile-normalized prox_team score (6 metrics).
+        # Only call compute_prox_scores when player has enough engagements (>=10),
+        # otherwise the player gets neutral 0.5 percentiles → meaningless 50.0 score.
+        # total_eng is already computed above (line 169) from combat_engagement.
+        teamplay = None
+        if total_eng >= 10:
+            from website.backend.services.prox_scoring import compute_prox_scores
+            prox_scores = await compute_prox_scores(db, range_days=range_days, player_guid=guid)
+            if prox_scores and prox_scores[0].get("prox_team") is not None:
+                teamplay = prox_scores[0]["prox_team"]
+
+        if teamplay is None:
+            # Fallback: lightweight CF+TR queries with raised thresholds
+            cf_row = await db.fetch_one(
+                """
+                SELECT COUNT(*), COUNT(DISTINCT session_date)
+                FROM proximity_crossfire_opportunity
+                WHERE (teammate1_guid = $1 OR teammate2_guid = $1) AND was_executed = true
+                AND session_date >= $2
+                """, (guid, since),
+            )
+            trade_row = await db.fetch_one(
+                """
+                SELECT COUNT(*), COUNT(DISTINCT session_date)
+                FROM proximity_lua_trade_kill WHERE trader_guid = $1 AND session_date >= $2
+                """, (guid, since),
+            )
+            cf_total = int(cf_row[0] or 0) if cf_row else 0
+            cf_sessions = max(1, int(cf_row[1] or 1) if cf_row else 1)
+            trade_total = int(trade_row[0] or 0) if trade_row else 0
+            trade_sessions = max(1, int(trade_row[1] or 1) if trade_row else 1)
+            cf_per_session = cf_total / cf_sessions
+            trade_per_session = trade_total / trade_sessions
+            teamplay = min(100, (min(cf_per_session / 20, 1) * 50) + (min(trade_per_session / 10, 1) * 50))
 
         # Timing: spawn timing score
         timing_row = await db.fetch_one(
