@@ -1,5 +1,7 @@
 """Proximity scoring endpoints: session-scores, leaderboards, prox-scores, prox-scores/formula, weapon-accuracy, revives."""
 
+import math
+from bisect import bisect_right
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -13,6 +15,20 @@ from website.backend.routers.proximity_helpers import (
 )
 
 router = APIRouter()
+
+
+def _percentile_rank_map(guid_values: dict[str, float]) -> dict[str, float]:
+    """Compute percentile rank (0.0-1.0) for a dict of guid->value.
+
+    Returns empty dict if fewer than 3 players (not enough for meaningful percentiles).
+    Filters out NaN/None values before computation.
+    """
+    clean = {g: v for g, v in guid_values.items() if v is not None and not math.isnan(v)}
+    if len(clean) < 3:
+        return {}
+    sorted_vals = sorted(clean.values())
+    n = len(sorted_vals)
+    return {g: bisect_right(sorted_vals, v) / n for g, v in clean.items()}
 
 
 @router.get("/proximity/session-scores")
@@ -208,6 +224,57 @@ async def get_proximity_leaderboards(
                 if r[0] in guid_set:
                     rf_map[r[0]] = int(r[1] or 3000)
 
+            # 8. Kill permanence (teamplay axis) — fraction of kills that stay dead
+            perm_rows = await db.fetch_all(
+                f"""
+                SELECT killer_guid,
+                       COUNT(*) FILTER (WHERE outcome != 'revived') * 1.0
+                           / NULLIF(COUNT(*), 0) AS permanence
+                FROM proximity_kill_outcome
+                WHERE {scope_where}
+                GROUP BY killer_guid
+                """,
+                scope_params,
+            )
+            perm_map: dict[str, float] = {}
+            for r in (perm_rows or []):
+                if r[0] in guid_set:
+                    perm_map[r[0]] = float(r[1] or 0)
+
+            # 9. Support reaction speed (teamplay axis) — how fast you help teammates
+            support_rows = await db.fetch_all(
+                f"""
+                SELECT target_guid,
+                       ROUND(AVG(support_reaction_ms)::numeric, 0) AS avg_support
+                FROM proximity_reaction_metric
+                WHERE support_reaction_ms IS NOT NULL AND {scope_where}
+                GROUP BY target_guid
+                """,
+                scope_params,
+            )
+            support_map: dict[str, float] = {}
+            for r in (support_rows or []):
+                if r[0] in guid_set:
+                    support_map[r[0]] = float(r[1] or 3000)
+
+            # ── Teamplay: 5-metric percentile normalization ──
+            # Collect raw values across all qualified players
+            tp_cf = {g: float(cf_map.get(g, 0)) for g in eng_map}
+            tp_tr = {g: float(trade_map.get(g, 0)) for g in eng_map}
+            tp_st = {g: timing_map.get(g, (0.0, 0))[0] for g in eng_map}
+            tp_pm = {g: perm_map.get(g, 0.0) for g in eng_map}
+            tp_sp = {g: support_map.get(g, 3000.0) for g in eng_map}
+
+            # Percentile ranks (empty dict if < 3 players)
+            pct_cf = _percentile_rank_map(tp_cf)
+            pct_tr = _percentile_rank_map(tp_tr)
+            pct_st = _percentile_rank_map(tp_st)
+            pct_pm = _percentile_rank_map(tp_pm)
+            # Support speed: lower is better → invert percentile
+            pct_sp_raw = _percentile_rank_map(tp_sp)
+            pct_sp = {g: 1.0 - p for g, p in pct_sp_raw.items()}
+            use_pct = bool(pct_cf)
+
             # Compute composite scores
             results = []
             for g, info in eng_map.items():
@@ -218,9 +285,22 @@ async def get_proximity_leaderboards(
                 d_ms = dodge_map.get(g, 5000)
                 awareness = min(100, esc_rate * 0.5 + max(0, 100 - d_ms / 50) * 0.5)
 
-                cf_c = cf_map.get(g, 0)
-                tr_c = trade_map.get(g, 0)
-                teamplay = min(100, min(cf_c / 5, 1) * 50 + min(tr_c / 3, 1) * 50)
+                # Teamplay: percentile-weighted across 5 ET-specific dimensions
+                if use_pct:
+                    teamplay = (
+                        pct_st.get(g, 0.5) * 0.30    # Spawn Timing Intelligence
+                        + pct_cf.get(g, 0.5) * 0.25  # Crossfire Coordination
+                        + pct_tr.get(g, 0.5) * 0.15  # Trade Responsiveness
+                        + pct_pm.get(g, 0.5) * 0.15  # Kill Permanence
+                        + pct_sp.get(g, 0.5) * 0.15  # Support Speed
+                    ) * 100
+                else:
+                    # Fallback for < 3 players: only CF+TR with raised thresholds.
+                    # Spawn timing, kill permanence, support speed are omitted
+                    # because percentile ranking requires a population to compare against.
+                    cf_c = cf_map.get(g, 0)
+                    tr_c = trade_map.get(g, 0)
+                    teamplay = min(100, min(cf_c / 20, 1) * 50 + min(tr_c / 10, 1) * 50)
 
                 avg_tm, tm_cnt = timing_map.get(g, (0.0, 0))
                 timing = min(100, avg_tm * 100 * min(tm_cnt / 5, 1))
