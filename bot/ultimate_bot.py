@@ -2243,6 +2243,23 @@ class UltimateETLegacyBot(commands.Bot):
                     for team_name, players in new_players['added'].items():
                         logger.info(f"🆕 New players added to {team_name}: {', '.join(players)}")
 
+                # If teams still have default names, assign random pool names.
+                # Guard so sessions that cannot be auto-named do not retry on every round.
+                team_names = list(existing_teams.keys())
+                if set(team_names) == {'Team A', 'Team B'}:
+                    session_key = (session_date, gaming_session_id)
+                    if not hasattr(self, '_auto_name_attempted_sessions'):
+                        self._auto_name_attempted_sessions = set()
+
+                    if session_key not in self._auto_name_attempted_sessions:
+                        self._auto_name_attempted_sessions.add(session_key)
+                        try:
+                            await self.team_manager.assign_random_team_names(
+                                session_date, force=True, gaming_session_id=gaming_session_id
+                            )
+                        except Exception as e:
+                            logger.warning(f"⚠️ Random team name assignment failed: {e}")
+
         except Exception as e:
             logger.warning(f"⚠️ Team tracking failed (non-fatal): {e}")
             # Non-fatal - round was still imported successfully
