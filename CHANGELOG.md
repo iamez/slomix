@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.1](https://github.com/iamez/slomix/compare/v1.4.0...v1.4.1) (2026-04-06)
+
+
+### Bug Fixes
+
+* **proximity:** replace saturated teamplay scoring with 5-metric percentile system ([32f9905](https://github.com/iamez/slomix/commit/32f9905e3c99a4b5712c91018bb4d782831a29b5))
+* **proximity:** replace saturated teamplay with percentile scoring ([d3abf28](https://github.com/iamez/slomix/commit/d3abf287bc36c1d3878a7ee7d3cfcb2ece44fd7c))
+
 ## [1.4.0](https://github.com/iamez/slomix/compare/v1.3.0...v1.4.0) (2026-04-03)
 
 
