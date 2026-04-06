@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.2](https://github.com/iamez/slomix/compare/v1.4.1...v1.4.2) (2026-04-06)
+
+
+### Bug Fixes
+
+* **bot:** assign random team names when _auto_assign_teams pre-creates "Team A/B" ([27443c8](https://github.com/iamez/slomix/commit/27443c879cd07ac38a2510ae1b9a11e2c92764b2))
+* **bot:** guard auto team name assignment against repeated attempts ([44c9516](https://github.com/iamez/slomix/commit/44c9516344e8be215b638fc8c0aaebc6a2e069dd))
+
 ## [1.4.1](https://github.com/iamez/slomix/compare/v1.4.0...v1.4.1) (2026-04-06)
 
 
