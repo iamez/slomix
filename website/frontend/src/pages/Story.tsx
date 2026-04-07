@@ -1,6 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useStoryKillImpact, useStoryMoments, useStoryMomentum, useStoryNarrative, usePlayerNarratives } from '../api/hooks';
+import {
+  useStoryKillImpact, useStoryMoments, useStoryMomentum, useStoryNarrative, usePlayerNarratives,
+  useStoryGravity, useStorySpaceCreated, useStoryEnabler, useStoryLurkerProfile,
+  useStorySynergy, useStoryWinContribution, useStoryBoxScore,
+} from '../api/hooks';
 import type { KillImpactEntry } from '../api/types';
 import { Skeleton } from '../components/Skeleton';
 import { StoryHero } from '../components/story/StoryHero';
@@ -9,6 +13,10 @@ import { MomentCard } from '../components/story/MomentCard';
 import { MomentumChart } from '../components/story/MomentumChart';
 import { NarrativePanel } from '../components/story/NarrativePanel';
 import { PlayerNarrativesPanel } from '../components/story/PlayerNarrativesPanel';
+import { InvisibleValuePanel } from '../components/story/InvisibleValuePanel';
+import { WinContributionPanel } from '../components/story/WinContributionPanel';
+import { TeamSynergyPanel } from '../components/story/TeamSynergyPanel';
+import { BoxScorePanel } from '../components/story/BoxScorePanel';
 import type { PlayerArchetype } from '../components/story/ArchetypeBadge';
 
 const API = '/api';
@@ -77,6 +85,15 @@ export default function Story() {
   const { data: momentumData, isLoading: momentumLoading } = useStoryMomentum(sessionDate);
   const { data: narrativeData, isLoading: narrativeLoading } = useStoryNarrative(sessionDate);
   const { data: playerNarData, isLoading: playerNarLoading } = usePlayerNarratives(sessionDate);
+
+  // New story panels
+  const { data: gravityData, isLoading: gravityLoading } = useStoryGravity(sessionDate);
+  const { data: spaceData, isLoading: spaceLoading } = useStorySpaceCreated(sessionDate);
+  const { data: enablerData, isLoading: enablerLoading } = useStoryEnabler(sessionDate);
+  const { data: lurkerData, isLoading: lurkerLoading } = useStoryLurkerProfile(sessionDate);
+  const { data: synergyData, isLoading: synergyLoading } = useStorySynergy(sessionDate);
+  const { data: pwcData, isLoading: pwcLoading } = useStoryWinContribution(sessionDate);
+  const { data: boxData, isLoading: boxLoading } = useStoryBoxScore(sessionDate);
 
   const entries = useMemo(() => kis?.entries ?? [], [kis]);
   const totalKills = kis?.total_kills ?? 0;
@@ -160,11 +177,39 @@ export default function Story() {
           <MomentumChart rounds={momentumRounds} />
         ) : null}
 
+        {/* BOX Score */}
+        {boxLoading ? (
+          <div className="h-24 rounded-2xl bg-slate-700/20 animate-pulse" />
+        ) : boxData?.maps?.length ? (
+          <BoxScorePanel data={boxData} />
+        ) : null}
+
+        {/* Win Contribution */}
+        {pwcLoading ? (
+          <div className="h-40 rounded-2xl bg-slate-700/20 animate-pulse" />
+        ) : pwcData?.players?.length ? (
+          <WinContributionPanel data={pwcData} />
+        ) : null}
+
         {/* Player Narratives — invisible value stories */}
         {playerNarLoading ? (
           <div className="h-40 rounded-2xl bg-slate-700/20 animate-pulse" />
         ) : playerNarratives.length > 0 ? (
           <PlayerNarrativesPanel narratives={playerNarratives} />
+        ) : null}
+
+        {/* Invisible Value — detailed gravity/space/enabler/lurker */}
+        {(gravityLoading || spaceLoading || enablerLoading || lurkerLoading) ? (
+          <div className="h-48 rounded-2xl bg-slate-700/20 animate-pulse" />
+        ) : (
+          <InvisibleValuePanel gravity={gravityData} space={spaceData} enabler={enablerData} lurker={lurkerData} />
+        )}
+
+        {/* Team Synergy */}
+        {synergyLoading ? (
+          <div className="h-40 rounded-2xl bg-slate-700/20 animate-pulse" />
+        ) : synergyData?.groups ? (
+          <TeamSynergyPanel data={synergyData} />
         ) : null}
 
         {/* Player story cards */}

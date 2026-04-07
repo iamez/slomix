@@ -595,3 +595,87 @@ export function usePlayerNarratives(sessionDate: string | null) {
     staleTime: 60_000,
   });
 }
+
+export function useStoryGravity(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['story-gravity', sessionDate],
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getStoryGravity(sessionDate);
+    },
+    enabled: !!sessionDate,
+    staleTime: 60_000,
+  });
+}
+
+export function useStorySpaceCreated(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['story-space-created', sessionDate],
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getStorySpaceCreated(sessionDate);
+    },
+    enabled: !!sessionDate,
+    staleTime: 60_000,
+  });
+}
+
+export function useStoryEnabler(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['story-enabler', sessionDate],
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getStoryEnabler(sessionDate);
+    },
+    enabled: !!sessionDate,
+    staleTime: 60_000,
+  });
+}
+
+export function useStoryLurkerProfile(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['story-lurker', sessionDate],
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getStoryLurkerProfile(sessionDate);
+    },
+    enabled: !!sessionDate,
+    staleTime: 60_000,
+  });
+}
+
+export function useStorySynergy(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['story-synergy', sessionDate],
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getStorySynergy(sessionDate);
+    },
+    enabled: !!sessionDate,
+    staleTime: 60_000,
+  });
+}
+
+export function useStoryWinContribution(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['story-win-contribution', sessionDate],
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getStoryWinContribution(sessionDate);
+    },
+    enabled: !!sessionDate,
+    staleTime: 60_000,
+  });
+}
+
+export function useStoryBoxScore(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['story-box-score', sessionDate],
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getStoryBoxScore(sessionDate);
+    },
+    enabled: !!sessionDate,
+    staleTime: 60_000,
+  });
+}
