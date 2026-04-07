@@ -2018,24 +2018,25 @@ class StorytellingService:
                 p_trade = tr_map.get((guid, round_start), 0)
                 p_clutch = cl_map.get((guid, round_start), 0)
 
-                tk = max(team_kills[t], 1)
-                td = max(team_damage[t], 1)
-                to = max(team_objectives[t], 1)
-                trev = max(team_revives[t], 1)
+                tk = team_kills[t]
+                td = team_damage[t]
+                to = team_objectives[t]
+                trev = team_revives[t]
                 team_avg_alive = team_alive[t] / max(team_count[t], 1)
-                ta = max(team_avg_alive, 0.01)
-                txf = max(team_crossfire[t], 1)
-                ttr = max(team_trade[t], 1)
-                tcl = max(team_clutch[t], 1)
+                txf = team_crossfire[t]
+                ttr = team_trade[t]
+                tcl = team_clutch[t]
 
-                kill_share = p_kills / tk
-                damage_share = p_damage / td
-                obj_share = p_objectives / to
-                revive_share = p_revives / trev
-                survival_share = min(p_alive / ta, 2.0)  # cap at 2x
-                crossfire_share = p_crossfire / txf
-                trade_share = p_trade / ttr
-                clutch_share = p_clutch / tcl
+                # Share = player / team; 0 when team total is 0
+                # (avoids inflating score to absolute values)
+                kill_share = p_kills / tk if tk > 0 else 0.0
+                damage_share = p_damage / td if td > 0 else 0.0
+                obj_share = p_objectives / to if to > 0 else 0.0
+                revive_share = p_revives / trev if trev > 0 else 0.0
+                survival_share = min(p_alive / team_avg_alive, 2.0) if team_avg_alive > 0.01 else 0.0
+                crossfire_share = p_crossfire / txf if txf > 0 else 0.0
+                trade_share = p_trade / ttr if ttr > 0 else 0.0
+                clutch_share = p_clutch / tcl if tcl > 0 else 0.0
 
                 # PWC v2: PCS (72%) + proximity (28%)
                 if all_objectives_zero:
@@ -2119,14 +2120,30 @@ class StorytellingService:
                     "revives": p_revives,
                 })
 
-        # 4. Compute WIS (Win Impact Score) per player
+        # 4. Compute WIS v2 (Win Impact Score) per player
+        #    WIS = (avg_won - avg_lost) * confidence
+        #    confidence = harmonic_balance of win/loss counts, so unbalanced
+        #    samples (e.g. 1 win + 3 losses) get dampened WIS.
         players_list = []
         for guid, pd in player_data.items():
-            avg_won = pd["won_pwc"] / max(pd["rounds_won"], 1)
-            avg_lost = pd["lost_pwc"] / max(pd["rounds_lost"], 1)
-            wis = avg_won - avg_lost
             total_rounds = pd["rounds_won"] + pd["rounds_lost"]
-            waa = pd["won_pwc"] / max(total_rounds, 1)  # Win-Adjusted Average
+            rw = pd["rounds_won"]
+            rl = pd["rounds_lost"]
+
+            if total_rounds < 2:
+                wis = 0.0  # insufficient data
+            else:
+                avg_won = pd["won_pwc"] / max(rw, 1)
+                avg_lost = pd["lost_pwc"] / max(rl, 1)
+                # Harmonic balance: 1.0 when rw==rl, lower when imbalanced
+                if rw > 0 and rl > 0:
+                    reliability = 2 * rw * rl / (rw + rl)
+                    confidence = min(reliability / (total_rounds / 2), 1.0)
+                else:
+                    confidence = 0.0  # all wins or all losses → no contrast
+                wis = (avg_won - avg_lost) * confidence
+
+            waa = pd["won_pwc"] / max(total_rounds, 1)
 
             players_list.append({
                 "guid": pd["guid"],
@@ -2134,8 +2151,9 @@ class StorytellingService:
                 "total_pwc": round(pd["total_pwc"], 3),
                 "wis": round(wis, 3),
                 "waa": round(waa, 3),
-                "rounds_won": pd["rounds_won"],
-                "rounds_lost": pd["rounds_lost"],
+                "rounds_won": rw,
+                "rounds_lost": rl,
+                "total_rounds": total_rounds,
                 "components": {k: round(v, 3) for k, v in pd["components"].items()},
                 "per_round": pd["per_round"],
             })
@@ -2143,14 +2161,53 @@ class StorytellingService:
         # Sort by total_pwc descending
         players_list.sort(key=lambda p: p["total_pwc"], reverse=True)
 
-        # 5. Session MVP = highest total_pwc across won rounds
+        # 5. Session MVP — Bayesian WAA with minimum round eligibility
+        #    Bayesian prior (C=2) regresses small-sample players toward
+        #    session average, preventing 1-round late-joiners from MVP.
+        #    Eligibility: must have played >=50% of max rounds in session
+        #    and won at least 1 round.
         mvp = None
         if players_list:
-            # MVP by won_pwc (contribution in rounds the team actually won)
-            mvp_candidates = [p for p in players_list if p["rounds_won"] > 0]
+            max_rounds_played = max(
+                p["total_rounds"] for p in players_list
+            )
+            min_rounds_for_mvp = max(2, max_rounds_played // 2)
+
+            # Session average PWC per round (prior for Bayesian)
+            total_session_pwc = sum(p["total_pwc"] for p in players_list)
+            total_session_rounds = sum(p["total_rounds"] for p in players_list)
+            session_avg_pwc = (
+                total_session_pwc / total_session_rounds
+                if total_session_rounds > 0
+                else 0.0
+            )
+
+            _BAYES_C = 2  # phantom rounds — prior weight
+
+            for p in players_list:
+                # Bayesian WAA: shrink toward session average
+                p["waa_bayes"] = round(
+                    (p["waa"] * p["total_rounds"] + _BAYES_C * session_avg_pwc)
+                    / (p["total_rounds"] + _BAYES_C),
+                    3,
+                )
+
+            mvp_candidates = [
+                p for p in players_list
+                if p["rounds_won"] > 0
+                and p["total_rounds"] >= min_rounds_for_mvp
+            ]
             if mvp_candidates:
-                mvp_player = max(mvp_candidates, key=lambda p: float(p["waa"]))
+                mvp_player = max(
+                    mvp_candidates,
+                    key=lambda p: (
+                        float(p["waa_bayes"]),
+                        p["total_pwc"],
+                        p["rounds_won"],
+                    ),
+                )
             else:
+                # Fallback: best total_pwc (list already sorted)
                 mvp_player = players_list[0]
             mvp = {
                 "guid": mvp_player["guid"],

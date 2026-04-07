@@ -53,6 +53,13 @@ import type {
   MomentumResponse,
   NarrativeResponse,
   PlayerNarrativesResponse,
+  GravityResponse,
+  SpaceCreatedResponse,
+  EnablerResponse,
+  LurkerResponse,
+  SynergyResponse,
+  WinContributionResponse,
+  BoxScoreResponse,
 } from './types';
 
 const API_BASE = '/api';
@@ -445,6 +452,27 @@ export const api = {
 
   getPlayerNarratives: (sessionDate: string) =>
     get<PlayerNarrativesResponse>(`/storytelling/player-narratives?session_date=${sessionDate}`),
+
+  getStoryGravity: (sessionDate: string) =>
+    get<GravityResponse>(`/storytelling/gravity?session_date=${sessionDate}`),
+
+  getStorySpaceCreated: (sessionDate: string) =>
+    get<SpaceCreatedResponse>(`/storytelling/space-created?session_date=${sessionDate}`),
+
+  getStoryEnabler: (sessionDate: string) =>
+    get<EnablerResponse>(`/storytelling/enabler?session_date=${sessionDate}`),
+
+  getStoryLurkerProfile: (sessionDate: string) =>
+    get<LurkerResponse>(`/storytelling/lurker-profile?session_date=${sessionDate}`),
+
+  getStorySynergy: (sessionDate: string) =>
+    get<SynergyResponse>(`/storytelling/synergy?session_date=${sessionDate}`),
+
+  getStoryWinContribution: (sessionDate: string) =>
+    get<WinContributionResponse>(`/storytelling/win-contribution?session_date=${sessionDate}`),
+
+  getStoryBoxScore: (sessionDate: string) =>
+    get<BoxScoreResponse>(`/storytelling/box-score?session_date=${sessionDate}`),
 
   // Auth
   getAuthMe: async (): Promise<AuthUser | null> => {

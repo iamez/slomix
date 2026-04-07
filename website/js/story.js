@@ -785,7 +785,8 @@ function renderWinContribution(data) {
             _el('div', 'w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-lg font-black text-black/80', '\u2605'),
             _el('div', null,
                 _el('div', 'text-xs text-amber-400 font-bold tracking-[0.2em] uppercase', 'Session MVP'),
-                _el('div', 'text-lg font-black text-white', mvpName)
+                _el('div', 'text-lg font-black text-white', mvpName),
+                _el('div', 'text-[9px] text-slate-500 mt-0.5', 'Highest avg contribution in winning rounds')
             )
         );
 
@@ -817,17 +818,33 @@ function renderWinContribution(data) {
     header.appendChild(_el('div', 'flex-1', 'Contribution'));
     header.appendChild(_el('div', 'w-12 text-right', 'PWC'));
     header.appendChild(_el('div', 'w-16 text-right', 'WIS'));
+    header.appendChild(_el('div', 'w-10 text-right', 'W/L'));
     container.appendChild(header);
 
     // Per-player stacked bars (top 15)
     const top = players.slice(0, 15);
     const maxPWC = Math.max(...top.map(p => p.total_pwc), 0.01);
 
+    // Sum raw stats per player (for tooltips)
+    function _sumRaw(perRound, key) {
+        return (perRound || []).reduce((s, r) => s + (r[key] || 0), 0);
+    }
+
     top.forEach((p, idx) => {
         const safeName = stripEtColors(p.name);
         const comp = p.components || {};
+        const compTotal = Object.values(comp).reduce((s, v) => s + v, 0) || 1;
         const wisSign = p.wis >= 0 ? '+' : '';
         const rank = idx + 1;
+        const totalRounds = p.total_rounds || (p.rounds_won + p.rounds_lost);
+
+        // Raw stat totals for tooltips
+        const rawTotals = {
+            kills: _sumRaw(p.per_round, 'kills'),
+            damage: _sumRaw(p.per_round, 'damage'),
+            objectives: _sumRaw(p.per_round, 'objectives'),
+            revives: _sumRaw(p.per_round, 'revives'),
+        };
 
         const row = _el('div', 'flex items-center gap-3 mb-2 group');
         row.appendChild(_el('div', 'w-5 text-[10px] text-slate-600 text-right font-mono', String(rank)));
@@ -836,25 +853,41 @@ function renderWinContribution(data) {
         nameDiv.title = safeName;
         row.appendChild(nameDiv);
 
-        // Stacked bar segments
+        // Stacked bar segments with tooltips
         const barContainer = _el('div', 'flex-1 h-5 rounded bg-slate-800/50 overflow-hidden flex');
         PWC_COMPONENTS.forEach(c => {
             const val = comp[c.key] || 0;
             const pct = ((val / maxPWC) * 100).toFixed(1);
+            const compPct = ((val / compTotal) * 100).toFixed(0);
             const s = _el('div', `${c.color}/70 h-full`);
             s.style.width = `${pct}%`;
+            // Tooltip with raw value + percentage of player's PWC
+            let tip = `${c.label}: ${val.toFixed(3)} (${compPct}% of PWC)`;
+            if (rawTotals[c.key] !== undefined) {
+                tip += ` \u2014 ${rawTotals[c.key]} raw`;
+            }
+            s.title = tip;
             barContainer.appendChild(s);
         });
         row.appendChild(barContainer);
 
         row.appendChild(_el('div', 'w-12 text-xs text-slate-400 text-right font-mono', p.total_pwc.toFixed(2)));
-        row.appendChild(_el('div', `w-16 text-[10px] text-right font-mono ${p.wis >= 0 ? 'text-emerald-400' : 'text-red-400'}`, `${wisSign}${p.wis.toFixed(3)}`));
+
+        // WIS with round count for context
+        const wisText = `${wisSign}${p.wis.toFixed(3)}`;
+        const wisEl = _el('div', `w-16 text-[10px] text-right font-mono ${p.wis >= 0 ? 'text-emerald-400' : 'text-red-400'}`, wisText);
+        wisEl.title = `Win Impact Score: avg PWC in wins \u2212 avg PWC in losses (${totalRounds} rounds: W${p.rounds_won} L${p.rounds_lost})`;
+        row.appendChild(wisEl);
+
+        // W/L badge
+        const wlBadge = _el('div', 'w-10 text-[9px] text-slate-500 text-right font-mono', `${p.rounds_won}W${p.rounds_lost}L`);
+        row.appendChild(wlBadge);
 
         // Per-round mini dots
         const dotsContainer = _el('div', 'hidden group-hover:flex items-center gap-0.5 w-20');
         (p.per_round || []).forEach(r => {
             const dot = _el('span', `inline-block w-1.5 h-1.5 rounded-full ${r.won ? 'bg-emerald-400' : 'bg-red-400'}`);
-            dot.title = `R${r.round_number} ${r.map_name} \u2014 PWC ${r.pwc}${r.won ? ' W' : ' L'}`;
+            dot.title = `R${r.round_number} ${r.map_name} \u2014 PWC ${r.pwc}${r.won ? ' W' : ' L'} | K:${r.kills} D:${r.damage} O:${r.objectives} R:${r.revives}`;
             dotsContainer.appendChild(dot);
         });
         row.appendChild(dotsContainer);
