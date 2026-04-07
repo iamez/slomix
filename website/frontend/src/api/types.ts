@@ -1445,3 +1445,177 @@ export interface PlayerNarrativesResponse {
   session_date: string;
   player_narratives: PlayerNarrative[];
 }
+
+// ── Gravity ──
+export interface GravityPlayer {
+  guid: string;
+  guid_short: string;
+  name: string;
+  gravity_score: number;
+  engagements: number;
+  avg_attackers: number;
+  total_attention_ms: number;
+  total_engaged_ms: number;
+  alive_ms: number;
+}
+
+export interface GravityResponse {
+  status: string;
+  session_date: string;
+  metric: string;
+  description: string;
+  players: GravityPlayer[];
+}
+
+// ── Space Created ──
+export interface SpacePlayer {
+  guid_short: string;
+  name: string;
+  space_score: number;
+  productive_deaths: number;
+  wasted_deaths: number;
+  total_deaths: number;
+  teammate_kills_after: number;
+}
+
+export interface SpaceCreatedResponse {
+  status: string;
+  session_date: string;
+  metric: string;
+  description: string;
+  window_ms: number;
+  players: SpacePlayer[];
+}
+
+// ── Enabler ──
+export interface EnablerPlayer {
+  guid_short: string;
+  name: string;
+  enabler_score: number;
+  enabled_kills: number;
+  crossfire_assists: number;
+  trade_assists: number;
+  total_assists: number;
+  own_kills: number;
+}
+
+export interface EnablerResponse {
+  status: string;
+  session_date: string;
+  metric: string;
+  description: string;
+  players: EnablerPlayer[];
+}
+
+// ── Lurker Profile ──
+export interface LurkerPlayer {
+  guid_short: string;
+  name: string;
+  solo_pct: number;
+  solo_samples: number;
+  total_samples: number;
+  alive_ms: number;
+  tracks: number;
+  solo_time_est_s: number;
+}
+
+export interface LurkerResponse {
+  status: string;
+  session_date: string;
+  metric: string;
+  description: string;
+  solo_radius: number;
+  players: LurkerPlayer[];
+}
+
+// ── Team Synergy ──
+export interface SynergyGroup {
+  players: string[];
+  crossfire: number;
+  trade: number;
+  cohesion: number;
+  push: number;
+  medic: number;
+  composite: number;
+}
+
+export interface SynergyResponse {
+  status: string;
+  session_date: string;
+  weights: Record<string, number>;
+  groups: { group_a: SynergyGroup; group_b: SynergyGroup };
+}
+
+// ── Win Contribution (PWC) ──
+export interface PWCComponents {
+  kills: number;
+  damage: number;
+  objectives: number;
+  revives: number;
+  survival: number;
+  crossfire: number;
+  trade: number;
+  clutch: number;
+}
+
+export interface PWCPerRound {
+  round_number: number;
+  map_name: string;
+  pwc: number;
+  won: boolean;
+  kills: number;
+  damage: number;
+  objectives: number;
+  revives: number;
+}
+
+export interface PWCPlayer {
+  guid: string;
+  name: string;
+  total_pwc: number;
+  wis: number;
+  waa: number;
+  rounds_won: number;
+  rounds_lost: number;
+  components: PWCComponents;
+  per_round: PWCPerRound[];
+}
+
+export interface PWCMvp {
+  guid: string;
+  name: string;
+  total_pwc: number;
+  wis: number;
+}
+
+export interface WinContributionResponse {
+  status: string;
+  session_date: string;
+  mvp: PWCMvp | null;
+  players: PWCPlayer[];
+}
+
+// ── BOX Score ──
+export interface BoxScoreMap {
+  map_number: number;
+  map_name: string;
+  alpha_points: number;
+  beta_points: number;
+  winner: string;
+  is_fullhold_draw: boolean;
+  r1_time: number;
+  r2_time: number;
+}
+
+export interface BoxScoreResponse {
+  status: string;
+  gaming_session_id: number;
+  alpha_team: string;
+  beta_team: string;
+  alpha_score: number;
+  beta_score: number;
+  maps_completed: number;
+  winner: string | null;
+  winner_name: string | null;
+  maps: BoxScoreMap[];
+}

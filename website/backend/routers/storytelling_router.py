@@ -368,3 +368,26 @@ async def get_player_narratives(
     sd = _parse_date(session_date)
     svc = StorytellingService(db)
     return await svc.generate_player_narratives(sd)
+
+
+@router.get("/storytelling/box-score")
+@limiter.limit("10/minute")
+async def get_box_score(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """BOX Score: Oksii-style stopwatch match scoring."""
+    sd = _parse_date(session_date)
+    row = await db.fetch_one(
+        "SELECT gaming_session_id FROM rounds WHERE round_date = $1 LIMIT 1",
+        (str(sd),),
+    )
+    if not row:
+        return {"status": "ok", "maps": [], "maps_completed": 0}
+
+    from website.backend.services.box_scoring_service import BOXScoringService
+
+    svc = BOXScoringService(db)
+    score = await svc.calculate_session_score(row[0])
+    return svc.to_api_response(score)
