@@ -169,6 +169,28 @@ async function loadStoryData() {
         ).then(compData => {
             if (loadId === storyLoadId) renderAdvancedMetrics(compData);
         }).catch(() => renderAdvancedMetrics(null));
+
+        // Box Score
+        const enc = encodeURIComponent(storyState.sessionDate);
+        fetchJSON(`${API_BASE}/storytelling/box-score?session_date=${enc}`)
+            .then(d => { if (loadId === storyLoadId) renderBoxScore(d); })
+            .catch(() => renderBoxScore(null));
+
+        // Invisible Value — 4 parallel fetches
+        Promise.allSettled([
+            fetchJSON(`${API_BASE}/storytelling/gravity?session_date=${enc}`),
+            fetchJSON(`${API_BASE}/storytelling/space-created?session_date=${enc}`),
+            fetchJSON(`${API_BASE}/storytelling/enabler?session_date=${enc}`),
+            fetchJSON(`${API_BASE}/storytelling/lurker-profile?session_date=${enc}`),
+        ]).then(([g, s, e, l]) => {
+            if (loadId !== storyLoadId) return;
+            renderInvisibleValue(
+                g.status === 'fulfilled' ? g.value : null,
+                s.status === 'fulfilled' ? s.value : null,
+                e.status === 'fulfilled' ? e.value : null,
+                l.status === 'fulfilled' ? l.value : null
+            );
+        }).catch(() => renderInvisibleValue(null, null, null, null));
     } catch (err) {
         console.error('Story data load failed:', err);
         renderEmpty('Failed to load Smart Stats');
@@ -204,6 +226,10 @@ function renderLoading() {
     if (pwc) pwc.textContent = '';
     const adv = document.getElementById('story-advanced-metrics');
     if (adv) adv.textContent = '';
+    const boxScore = document.getElementById('story-box-score');
+    if (boxScore) boxScore.textContent = '';
+    const invisValue = document.getElementById('story-invisible-value');
+    if (invisValue) invisValue.textContent = '';
 }
 
 function renderEmpty(message) {
@@ -222,7 +248,7 @@ function renderEmpty(message) {
             _el('div', 'text-slate-400 text-sm', message)
         ));
     }
-    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution']) {
+    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution', 'story-box-score', 'story-invisible-value']) {
         const el = document.getElementById(id);
         if (el) el.textContent = '';
     }
@@ -743,6 +769,221 @@ function renderTeamSynergy(data) {
     if (panelA) grid.appendChild(panelA);
     if (panelB) grid.appendChild(panelB);
     container.appendChild(grid);
+}
+
+// ── Helpers for new panels ──────────────────────────────────────
+
+function formatMs(ms) {
+    const s = Math.round((ms || 0) / 1000);
+    const m = Math.floor(s / 60);
+    return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
+}
+
+function _statCell(label, value) {
+    return _el('div', 'rounded-lg bg-white/[0.03] px-2 py-1.5',
+        _el('div', 'text-[10px] text-slate-500 uppercase tracking-wider', label),
+        _el('div', 'text-sm font-bold tabular-nums text-white', String(value))
+    );
+}
+
+// ── BOX Score ───────────────────────────────────────────────────
+
+function renderBoxScore(data) {
+    const container = document.getElementById('story-box-score');
+    if (!container) return;
+    container.textContent = '';
+
+    const maps = Array.isArray(data?.maps) ? data.maps : [];
+    if (maps.length === 0) return;
+
+    function fmtTime(sec) {
+        if (!sec || sec <= 0) return '';
+        const m = Math.floor(sec / 60);
+        const s = Math.round(sec % 60);
+        return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    const alpha = data.alpha_team || 'Alpha';
+    const beta = data.beta_team || 'Beta';
+    const aScore = data.alpha_score || 0;
+    const bScore = data.beta_score || 0;
+
+    // Header
+    const header = _el('div', 'flex items-center gap-3 mb-3');
+    header.appendChild(_el('h3', 'text-xs text-slate-500 uppercase tracking-wider font-bold', 'Box Score'));
+    if (data.winner_name) {
+        const winColor = data.winner === 'alpha' ? 'text-cyan-400' : 'text-rose-400';
+        header.appendChild(_el('span', `text-xs font-bold ${winColor}`, `${data.winner_name} wins`));
+    } else if (aScore === bScore) {
+        header.appendChild(_el('span', 'text-xs font-bold text-amber-400', 'Draw'));
+    }
+    container.appendChild(header);
+
+    // Score card
+    const card = _el('div', 'rounded-xl border border-white/[0.08] bg-white/[0.03] p-5');
+
+    // Score header
+    const scoreRow = _el('div', 'flex items-center justify-center gap-6 mb-4');
+    scoreRow.appendChild(_el('div', 'text-right',
+        _el('div', 'text-xs text-slate-400 uppercase', stripEtColors(alpha)),
+        _el('div', 'text-2xl font-black text-cyan-400 tabular-nums', String(aScore))
+    ));
+    scoreRow.appendChild(_el('div', 'text-slate-600 text-sm', 'vs'));
+    scoreRow.appendChild(_el('div', 'text-left',
+        _el('div', 'text-xs text-slate-400 uppercase', stripEtColors(beta)),
+        _el('div', 'text-2xl font-black text-rose-400 tabular-nums', String(bScore))
+    ));
+    card.appendChild(scoreRow);
+
+    // Map rows
+    const mapList = _el('div', 'space-y-1.5');
+    maps.forEach((m, i) => {
+        const row = _el('div', 'flex items-center gap-3 rounded-lg bg-white/[0.02] px-3 py-2 hover:bg-white/[0.04] transition-colors');
+        row.appendChild(_el('span', 'text-[10px] text-slate-600 w-5', `#${m.map_number || i + 1}`));
+        row.appendChild(_el('span', 'text-xs text-slate-300 flex-1 truncate', m.map_name || ''));
+        row.appendChild(_el('span', 'text-xs font-bold text-cyan-400 tabular-nums w-4 text-right', String(m.alpha_points || 0)));
+        row.appendChild(_el('span', 'text-slate-600 text-[10px]', '-'));
+        row.appendChild(_el('span', 'text-xs font-bold text-rose-400 tabular-nums w-4', String(m.beta_points || 0)));
+
+        // Round times
+        const r1 = fmtTime(m.r1_time);
+        const r2 = fmtTime(m.r2_time);
+        if (r1) {
+            const times = _el('span', 'text-[10px] text-slate-500 tabular-nums', `R1:${r1}`);
+            if (r2) times.textContent += ` R2:${r2}`;
+            row.appendChild(times);
+        }
+
+        // Fullhold badge
+        if (m.is_fullhold_draw) {
+            row.appendChild(_el('span', 'text-[9px] font-bold text-amber-400 bg-amber-400/10 rounded px-1', 'FH'));
+        }
+
+        mapList.appendChild(row);
+    });
+    card.appendChild(mapList);
+    container.appendChild(card);
+}
+
+// ── Invisible Value (Gravity / Space / Enabler / Lurker) ────────
+
+const IV_TABS = [
+    { key: 'gravity', label: 'GRAVITY', color: 'rose',   scoreField: 'gravity_score', scoreFmt: v => v.toFixed(0),
+      cells: p => [['ENG', p.engagements], ['AVG ATK', (p.avg_attackers || 0).toFixed(1)], ['ATTN', formatMs(p.total_attention_ms)]] },
+    { key: 'space',   label: 'SPACE',   color: 'purple', scoreField: 'space_score',   scoreFmt: v => (v * 100).toFixed(0) + '%',
+      cells: p => [['PROD', p.productive_deaths], ['WASTE', p.wasted_deaths], ['TM KILLS', p.teammate_kills_after]] },
+    { key: 'enabler', label: 'ENABLER', color: 'teal',   scoreField: 'enabler_score', scoreFmt: v => v.toFixed(1),
+      cells: p => [['ENABLED', p.enabled_kills], ['CF', p.crossfire_assists], ['TRADE', p.trade_assists]] },
+    { key: 'lurker',  label: 'LURKER',  color: 'cyan',   scoreField: 'solo_pct',      scoreFmt: v => v.toFixed(0) + '%',
+      cells: p => [['SOLO', formatMs((p.solo_time_est_s || 0) * 1000)], ['LIVES', p.tracks], ['ALIVE', formatMs(p.alive_ms)]] },
+];
+
+function renderInvisibleValue(gravity, space, enabler, lurker) {
+    const container = document.getElementById('story-invisible-value');
+    if (!container) return;
+    container.textContent = '';
+
+    const dataMap = { gravity, space, enabler, lurker };
+    const hasData = tab => {
+        const d = dataMap[tab.key];
+        return Array.isArray(d?.players) && d.players.length > 0;
+    };
+
+    if (!IV_TABS.some(hasData)) return;
+
+    // Find first tab with data
+    let activeKey = IV_TABS.find(hasData)?.key || 'gravity';
+
+    // Header
+    const headerRow = _el('div', 'flex items-center gap-3 mb-3');
+    headerRow.appendChild(_el('h3', 'text-xs text-slate-500 uppercase tracking-wider font-bold', 'Invisible Value'));
+    const activeBadge = _el('span', 'text-[10px] font-bold uppercase px-2 py-0.5 rounded-full');
+    headerRow.appendChild(activeBadge);
+    container.appendChild(headerRow);
+
+    // Tab bar
+    const tabBar = _el('div', 'flex gap-1.5 mb-4');
+    const tabButtons = {};
+    IV_TABS.forEach(tab => {
+        const has = hasData(tab);
+        const btn = _el('button',
+            `px-3 py-1.5 rounded-lg text-xs font-bold uppercase border transition-colors ${has ? '' : 'opacity-30 cursor-default'}`,
+            tab.label
+        );
+        if (!has) btn.disabled = true;
+        tabButtons[tab.key] = btn;
+        tabBar.appendChild(btn);
+    });
+    container.appendChild(tabBar);
+
+    // Content area
+    const card = _el('div', 'rounded-xl border border-white/[0.08] bg-white/[0.03] p-5');
+    const content = _el('div');
+    card.appendChild(content);
+    container.appendChild(card);
+
+    function renderTab(key) {
+        activeKey = key;
+        const tab = IV_TABS.find(t => t.key === key);
+        if (!tab) return;
+        const c = tab.color;
+
+        // Update badge
+        activeBadge.className = `text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border border-${c}-400/30 bg-${c}-400/10 text-${c}-400`;
+        activeBadge.textContent = tab.label;
+
+        // Update tab buttons
+        IV_TABS.forEach(t => {
+            const btn = tabButtons[t.key];
+            if (t.key === key) {
+                btn.className = `px-3 py-1.5 rounded-lg text-xs font-bold uppercase border border-${c}-400/40 bg-${c}-500/20 text-${c}-400 transition-colors`;
+            } else {
+                const has = hasData(t);
+                btn.className = `px-3 py-1.5 rounded-lg text-xs font-bold uppercase border border-transparent text-slate-500 bg-white/[0.02] hover:bg-white/[0.04] transition-colors ${has ? '' : 'opacity-30 cursor-default'}`;
+            }
+        });
+
+        // Build player list
+        content.textContent = '';
+        const players = dataMap[key]?.players || [];
+        const list = _el('div', 'space-y-1.5');
+
+        players.forEach((p, i) => {
+            const safeName = stripEtColors(p.name || p.guid_short || '');
+            const score = p[tab.scoreField] || 0;
+
+            const row = _el('div', 'flex items-center gap-3 rounded-xl bg-white/[0.02] px-3 py-2.5 hover:bg-white/[0.04] transition-colors');
+            row.style.animation = `fadeUp 0.3s ease-out ${i * 0.04}s both`;
+
+            // Score
+            row.appendChild(_el('span', `text-lg font-black text-${c}-400 tabular-nums w-14 text-right`, tab.scoreFmt(score)));
+
+            // Name
+            row.appendChild(_el('span', 'text-sm text-white font-medium flex-1 truncate', safeName));
+
+            // Stat cells
+            const cellsWrap = _el('div', 'flex gap-2');
+            tab.cells(p).forEach(([label, val]) => {
+                cellsWrap.appendChild(_statCell(label, val ?? 0));
+            });
+            row.appendChild(cellsWrap);
+
+            list.appendChild(row);
+        });
+
+        content.appendChild(list);
+    }
+
+    // Tab click handler
+    tabBar.addEventListener('click', e => {
+        const btn = e.target.closest('button');
+        if (!btn || btn.disabled) return;
+        const tab = IV_TABS.find(t => t.label === btn.textContent);
+        if (tab) renderTab(tab.key);
+    });
+
+    // Initial render
+    renderTab(activeKey);
 }
 
 // ── Player Win Contribution (PWC) ────────────────────────────────
