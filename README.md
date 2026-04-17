@@ -3,7 +3,7 @@
 > **PostgreSQL-powered real-time analytics for competitive ET:Legacy — Discord bot, web dashboard, demo highlight scanner, and game server telemetry**
 
 [![Production Status](https://img.shields.io/badge/status-production-brightgreen)](https://github.com/iamez/slomix)
-[![Version](https://img.shields.io/badge/version-1.5.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.4.2-blue)](CHANGELOG.md)
 [![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL_17-336791)](https://www.postgresql.org/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/web-FastAPI-009688)](https://fastapi.tiangolo.com/)
@@ -14,9 +14,31 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 ---
 
-## 🔥 Recent Updates (March 2026)
+## 🔥 Recent Updates (April 2026)
 
-### **🎬 v1.5.0: Round Replay Timeline, Momentum Chart & Codacy Zero (March 28)** 🆕
+### **🛡️ Mega Audit v3: Security, Performance & Session Detail 2.0 (April 17)** 🆕
+
+**Three-sprint hardening pass with 1M-context holistic review, 9/9 CI checks green each PR.**
+
+- 🔐 **Sprint 2 Security** (PR #80) — New `require_admin_user` FastAPI dependency: 10/11 diagnostics endpoints now require admin session (11th stays public as health check). `strip_et_colors()` centralized in `api_helpers` — covers 10+ consumer routers (records, proximity_*, greatshot_topshots). Discord ID masked at INFO log level (`1234****`); full ID+username moved to DEBUG only
+- 🎯 **Session Detail 2.0 Matrix** (PR #79) — Player × Map grid with per-round team assignment. Handles stopwatch side swaps (R1 attack = R2 defense — same player in same team cell across maps) + mid-session substitutions (player on both teams appears in both rosters, stats split by rounds). Backend `build_team_matrix()` with majority-vote side-to-team mapping; React component (3 metrics) + legacy JS (7 metrics, heatmap, drill-down, MVP★/sub⚠ badges)
+- ⚡ **Storytelling Performance** — `compute_session_kis` loaders + `detect_moments` detectors parallelized with `asyncio.gather` (-2s total response time on `/storytelling/*` endpoints)
+- 🗓️ **Date Bounds Validation** — `storytelling_router._parse_date` rejects dates outside `[2020-01-01, today]` (DoS mitigation on large-interval queries)
+- 📊 **Session Matrix Infrastructure** — `round_correlation_service` auto-merges drifted R1/R2 correlations (bot restart no longer orphans data); `stopwatch_scoring_service.build_round_side_to_team_mapping()` with tri-format side normalization (int / string / faction name)
+
+### **🧬 Mandelbrot RCA v2.0 + Oksii Adoption (March 29-30)**
+
+**6-phase audit framework with quantitative metrics: hardcoded creds=0, silent exceptions=0 in critical path, god files (>3000 lines)=0, ruff 2257→0 errors.**
+
+- 🩹 **Oksii Lua v6.01** — `killer_health`, `alive_count`, reinforcement timing. KIS v2 formula with 3 new multipliers (health, alive, reinf) + soft cap at 5.0
+- 🏅 **BOX Scoring** — Oksii-style stopwatch map scoring (`box_scoring_service.py`) — per-round win/fullhold points
+- 🧱 **God File Decomposition** — `proximity_router.py` 5515 → 14 sub-routers, `records_router.py` 3172 → 10 sub-routers
+- 🧹 **Code Quality** — Shared constants in `et_constants.py` (KILL_MOD_NAMES, color strip, weapon names), 23 silent `except: pass` → proper logging, `_compute_locks` memory leak → `BoundedLockDict` (max 64, LRU)
+- 📖 **Storytelling Evolution** — Gravity metric, space-created metric, enabler score, lurker profile, invisible value per-player micro-narratives
+- 🗺️ **Proximity Pipeline** — STATS_READY webhook + re-linker + 2min polling eliminates 60% of historical linkage failures
+- 🧪 **Tests** — 101 new unit tests (476 → 540), end-to-end verified with bots (33 rounds, 2781 positions)
+
+### **🎬 v1.5.0: Round Replay Timeline, Momentum Chart & Codacy Zero (March 28)**
 
 **Visual round analysis, momentum tracking, session narratives, and full Codacy compliance — 53 commits, 58 issues → 0.**
 
@@ -67,17 +89,18 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 | Metric | Value |
 |--------|-------|
-| **Kills Tracked** | 79,303 |
-| **Headshot Kills** | 15,474 |
-| **Damage Dealt** | 15.7 million |
-| **Revives Given** | 5,655 |
-| **Rounds Parsed** | 1,320 |
-| **Gaming Sessions** | 103+ |
-| **Unique Players** | 40+ |
+| **Kills Tracked** | 174,561 |
+| **Headshot Kills** | 36,215 |
+| **Damage Dealt** | 33.9 million |
+| **Revives Given** | 14,669 |
+| **Rounds Parsed** | 2,228 |
+| **Gaming Sessions** | 108 |
+| **Unique Players** | 57 |
 | **Stats Per Player Per Round** | 57 fields |
-| **Discord Commands** | ~99 across 21 cogs |
-| **Database Tables** | 80 |
-| **Data Span** | Jan 2025 — Mar 2026 (15 months) |
+| **Discord Commands** | ~99 across 22 cogs |
+| **Database Tables** | 95 |
+| **Test Coverage** | 540 tests |
+| **Data Span** | Jan 2025 — Apr 2026 (16 months) |
 
 ---
 
@@ -116,7 +139,7 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 | **Website** (`/website/`) | ✅ Production | FastAPI + React 19/TypeScript SPA: profiles, sessions, leaderboards, proximity, greatshot |
 | **Lua Webhook** (`vps_scripts/`) | ✅ Production | Real-time round notifications, surrender timing fix, team capture |
 | **Greatshot** (`/greatshot/`) | ✅ Production | Demo upload, highlight detection, clip extraction, render pipeline |
-| **Proximity** (`/proximity/`) | ✅ Production | Lua v6.01 teamplay analytics — engagement, cohesion, crossfire, trade kills, objective intelligence |
+| **Proximity** (`/proximity/`) | ✅ Production | Lua v6.01+ teamplay analytics — engagement, cohesion, crossfire, trade kills, objective intelligence, Oksii-adopted fields (killer_health, alive_count, reinf timing) |
 
 ---
 
