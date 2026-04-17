@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from bot.config import load_config
 from bot.core.utils import escape_like_pattern
 from bot.services.session_stats_aggregator import SessionStatsAggregator
-from bot.services.stopwatch_scoring_service import StopwatchScoringService
+from bot.services.stopwatch_scoring_service import StopwatchScoringService, normalize_side
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
@@ -180,7 +180,7 @@ async def build_team_matrix(
     if not side_to_team:
         return {"available": False, "reason": "side_mapping_failed"}
 
-    placeholders = ",".join(f"${i+1}" for i in range(len(round_ids)))
+    placeholders = ",".join(["?"] * len(round_ids))
     stats_query = f"""
         SELECT p.round_id, p.player_guid, MAX(p.player_name) AS name,
                p.team AS side,
@@ -236,7 +236,7 @@ async def build_team_matrix(
         round_id = row[0]
         player_guid = row[1]
         player_name = strip_et_colors(row[2] or "")
-        side = row[3]
+        side = normalize_side(row[3])
         kills = int(row[4] or 0)
         deaths = int(row[5] or 0)
         damage = int(row[6] or 0)
@@ -251,7 +251,7 @@ async def build_team_matrix(
         weapon_hs = int(row[15] or 0)
         rf_ms = float(row[16]) if row[16] is not None else None
 
-        if side not in (1, 2):
+        if side is None:
             continue
         mapping = side_to_team.get(round_id)
         if not mapping:

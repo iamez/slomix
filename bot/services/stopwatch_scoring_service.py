@@ -19,6 +19,20 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def normalize_side(value) -> int | None:
+    """Normalize a game side value to canonical 1/2.
+
+    Legacy data has stored the `team`/`side` column as int (1,2), string ('1','2'),
+    or faction name ('Axis','Allies'). Callers must accept all variants or they
+    silently drop rows.
+    """
+    if value in (1, '1', 'Axis', 'axis'):
+        return 1
+    if value in (2, '2', 'Allies', 'allies'):
+        return 2
+    return None
+
+
 class StopwatchScoringService:
     """Calculate Stopwatch mode map scores (async PostgreSQL version)"""
 
@@ -749,15 +763,8 @@ class StopwatchScoringService:
                 team_a_on_side = {1: 0, 2: 0}
                 team_b_on_side = {1: 0, 2: 0}
 
-                def _normalize_side(value):
-                    if value in (1, '1', 'Axis', 'axis'):
-                        return 1
-                    if value in (2, '2', 'Allies', 'allies'):
-                        return 2
-                    return None
-
                 for player_guid, side in r1_players:
-                    side_key = _normalize_side(side)
+                    side_key = normalize_side(side)
                     if side_key is None:
                         continue
                     if player_guid in team_a_guids:
@@ -1054,17 +1061,18 @@ class StopwatchScoringService:
         team_a_guids = set(team_rosters[team_a_name])
         team_b_guids = set(team_rosters[team_b_name])
 
-        placeholders = ",".join(f"${i+1}" for i in range(len(round_ids)))
+        placeholders = ",".join(["?"] * len(round_ids))
         query = f"""
             SELECT round_id, player_guid, team
             FROM player_comprehensive_stats
             WHERE round_id IN ({placeholders})
-        """  # nosec B608 - safe: parameterized placeholders
+        """  # nosec B608 - safe: parameterized placeholders (adapter translates ? to $N on PostgreSQL)
         rows = await self.db.fetch_all(query, tuple(round_ids))
 
         tally: dict[int, dict[int, dict[str, int]]] = {}
-        for rid, guid, side in rows:
-            if side not in (1, 2):
+        for rid, guid, raw_side in rows:
+            side = normalize_side(raw_side)
+            if side is None:
                 continue
             if rid not in tally:
                 tally[rid] = {1: {"a": 0, "b": 0}, 2: {"a": 0, "b": 0}}

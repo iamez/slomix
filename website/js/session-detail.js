@@ -952,10 +952,12 @@ function _sortRosterForMetric(roster, metric, sortMap, sortDir) {
             av = num(a.totals?.[key] ?? 0);
             bv = num(b.totals?.[key] ?? 0);
         } else {
+            // Unplayed rows must sort last regardless of direction.
+            const missingValue = sortDir === 'asc' ? Infinity : -Infinity;
             const ca = a.cells?.[sortMap];
             const cb = b.cells?.[sortMap];
-            av = ca?.played ? num(ca[key] ?? 0) : -Infinity;
-            bv = cb?.played ? num(cb[key] ?? 0) : -Infinity;
+            av = ca?.played ? num(ca[key] ?? 0) : missingValue;
+            bv = cb?.played ? num(cb[key] ?? 0) : missingValue;
         }
         return (bv - av) * -mult; // desc default: bv - av
     });

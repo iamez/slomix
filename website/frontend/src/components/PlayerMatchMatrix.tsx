@@ -82,13 +82,21 @@ export function PlayerMatchMatrix({
 }: Props) {
   const [metric, setMetric] = useState<MetricMode>(() => {
     if (typeof window === 'undefined') return 'dpm';
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    return (stored === 'kd' || stored === 'damage' || stored === 'dpm') ? stored : 'dpm';
+    try {
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      return (stored === 'kd' || stored === 'damage' || stored === 'dpm') ? stored : 'dpm';
+    } catch {
+      // localStorage can throw in Safari private mode or when disabled.
+      return 'dpm';
+    }
   });
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window === 'undefined') return;
+    try {
       window.localStorage.setItem(STORAGE_KEY, metric);
+    } catch {
+      // Ignore write failures; in-memory selection still works.
     }
   }, [metric]);
 
