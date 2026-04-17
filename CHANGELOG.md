@@ -6,6 +6,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.5.0](https://github.com/iamez/slomix/compare/v1.4.2...v1.5.0) (2026-04-17)
+
+
+### Features
+
+* **website:** add BOX Score and Invisible Value panels to legacy story page ([#78](https://github.com/iamez/slomix/issues/78)) ([df23d77](https://github.com/iamez/slomix/commit/df23d77aacd7420f253093c3f8f7318cf8c94594))
+* **website:** session detail 2.0 matrix + Mega Audit v3 Sprint 1 ([#79](https://github.com/iamez/slomix/issues/79)) ([7848233](https://github.com/iamez/slomix/commit/7848233429660fb4a058e9e5514afe75a068cca2))
+
+
+### Bug Fixes
+
+* **website:** overhaul PWC/WIS/MVP scoring with Bayesian fairness + UX clarity ([#76](https://github.com/iamez/slomix/issues/76)) ([bc13d3c](https://github.com/iamez/slomix/commit/bc13d3ccfda89a071038fcfd59927f3eca4b9a22))
+
 ## [1.4.2](https://github.com/iamez/slomix/compare/v1.4.1...v1.4.2) (2026-04-06)
 
 
