@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from bot.services.round_linkage_anomaly_service import assess_round_linkage_anomalies
-from website.backend.dependencies import get_db
+from website.backend.dependencies import get_db, require_admin_user
 from website.backend.env_utils import getenv_int
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
@@ -46,7 +46,10 @@ async def get_status(db: DatabaseAdapter = Depends(get_db)):
 
 
 @router.get("/diagnostics")
-async def get_diagnostics(db: DatabaseAdapter = Depends(get_db)):
+async def get_diagnostics(
+    db: DatabaseAdapter = Depends(get_db),
+    _user: dict = Depends(require_admin_user),
+):
     """
     Run comprehensive diagnostics on the website backend.
     Checks database connectivity, table permissions, and data availability.
@@ -233,7 +236,10 @@ async def get_diagnostics(db: DatabaseAdapter = Depends(get_db)):
 
 
 @router.get("/diagnostics/lua-webhook")
-async def get_lua_webhook_diagnostics(db: DatabaseAdapter = Depends(get_db)):
+async def get_lua_webhook_diagnostics(
+    db: DatabaseAdapter = Depends(get_db),
+    _user: dict = Depends(require_admin_user),
+):
     """
     Diagnostics for Lua webhook ingestion (lua_round_teams).
     Shows recent captures and whether rows are linked to rounds.
@@ -477,6 +483,7 @@ async def get_lua_webhook_diagnostics(db: DatabaseAdapter = Depends(get_db)):
 async def get_round_linkage_diagnostics(
     sample_limit: int = Query(default=20, ge=1, le=200),
     db: DatabaseAdapter = Depends(get_db),
+    _user: dict = Depends(require_admin_user),
 ):
     """
     Read-only anomaly checks for round/match linkage consistency.
@@ -490,6 +497,7 @@ async def get_time_audit(
     limit: int = Query(default=250, ge=1, le=1000),
     ratio_diff: float = Query(default=5.0, ge=0.0, le=500.0),
     db: DatabaseAdapter = Depends(get_db),
+    _user: dict = Depends(require_admin_user),
 ):
     """
     Audit stored time_dead values against computed ratios for recent rows.
@@ -606,6 +614,7 @@ async def get_spawn_audit(
     limit: int = Query(default=200, ge=1, le=1000),
     diff_seconds: int = Query(default=30, ge=0, le=3600),
     db: DatabaseAdapter = Depends(get_db),
+    _user: dict = Depends(require_admin_user),
 ):
     """
     Audit Lua spawn stats vs player_comprehensive_stats time_dead_minutes.
@@ -719,7 +728,10 @@ async def get_spawn_audit(
 
 
 @router.get("/monitoring/status")
-async def get_monitoring_status(db: DatabaseAdapter = Depends(get_db)):
+async def get_monitoring_status(
+    db: DatabaseAdapter = Depends(get_db),
+    _user: dict = Depends(require_admin_user),
+):
     """
     Lightweight monitoring status for history tables.
     """
@@ -785,7 +797,10 @@ async def get_monitoring_status(db: DatabaseAdapter = Depends(get_db)):
 
 
 @router.get("/live-status")
-async def get_live_status(db: DatabaseAdapter = Depends(get_db)):
+async def get_live_status(
+    db: DatabaseAdapter = Depends(get_db),
+    _user: dict = Depends(require_admin_user),
+):
     """
     Get real-time status of voice channels and game server.
 
@@ -848,7 +863,9 @@ async def get_live_status(db: DatabaseAdapter = Depends(get_db)):
 
 @router.get("/server-activity/history")
 async def get_server_activity_history(
-    hours: int = 72, db: DatabaseAdapter = Depends(get_db)
+    hours: int = 72,
+    db: DatabaseAdapter = Depends(get_db),
+    _user: dict = Depends(require_admin_user),
 ):
     """
     Get historical server activity data for charting.
@@ -938,7 +955,9 @@ async def get_server_activity_history(
 
 @router.get("/voice-activity/history")
 async def get_voice_activity_history(
-    hours: int = 720, db: DatabaseAdapter = Depends(get_db)
+    hours: int = 720,
+    db: DatabaseAdapter = Depends(get_db),
+    _user: dict = Depends(require_admin_user),
 ):
     """
     Get historical voice channel activity data for charting.
@@ -1029,7 +1048,10 @@ async def get_voice_activity_history(
 
 
 @router.get("/voice-activity/current")
-async def get_current_voice_activity(db: DatabaseAdapter = Depends(get_db)):
+async def get_current_voice_activity(
+    db: DatabaseAdapter = Depends(get_db),
+    _user: dict = Depends(require_admin_user),
+):
     """
     Get detailed current voice channel status with join times.
 

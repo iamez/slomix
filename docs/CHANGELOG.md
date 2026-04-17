@@ -10,6 +10,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Security — Sprint 2 (2026-04-17, Mega Audit v3)
+- **`dependencies.py`**: new `require_admin_user` FastAPI dependency that reuses existing `WEBSITE_ADMIN_DISCORD_IDS` / `ADMIN_DISCORD_IDS` / `OWNER_USER_ID` env vars for consistent admin gating (matches `availability.py` and `planning.py`). Raises 401 on missing session, 403 on non-admin session.
+- **`diagnostics_router.py`**: 10 of 11 endpoints now require admin session (`/diagnostics`, `/diagnostics/lua-webhook`, `/diagnostics/round-linkage`, `/diagnostics/time-audit`, `/diagnostics/spawn-audit`, `/monitoring/status`, `/live-status`, `/server-activity/history`, `/voice-activity/history`, `/voice-activity/current`). `/status` stays public as a health check.
+- **`api_helpers.py::resolve_display_name` + `batch_resolve_display_names`**: strip ET color codes from every resolved name — covers 10+ consumer routers (records_awards, records_player, proximity_*, greatshot_topshots, etc.) in one change.
+- **`auth.py` OAuth callback**: Discord ID is now masked at INFO log level (`discord_id=1234****`); full ID + username moves to DEBUG only to reduce PII exposure in production logs.
+- Full report: `docs/research/MEGA_AUDIT_V3_SPRINT2_2026-04-17.md`.
+
 ### Session Detail 2.0 matrix — review fixes (2026-04-17, Mega Audit v3 Sprint 1.5)
 - **`sessions_router.py::build_team_matrix`**: `strip_et_colors()` now applied to `player_name` before JSON output — fixes UX bug where names rendered with raw `^1`, `^3` color codes (CR-01).
 - **`sessions_router.py::build_team_matrix`**: name selection logic changed from "longest string wins" (which always picked color-coded version) to "first non-empty wins" — stable across aliases after strip (CR-01b).

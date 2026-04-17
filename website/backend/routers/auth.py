@@ -403,7 +403,10 @@ async def callback(
         user_data = user_resp.json()
 
     discord_id, username, display_name, avatar = _discord_identity(user_data)
-    logger.info("OAuth callback success: discord_id=%s username=%s", discord_id, username)
+    # PII: log only a masked ID at INFO level; full value is audit-level (DEBUG).
+    masked_id = f"{str(discord_id)[:4]}****" if discord_id else "unknown"
+    logger.info("OAuth callback success: discord_id=%s", masked_id)
+    logger.debug("OAuth callback details: discord_id=%s username=%s", discord_id, username)
 
     website_user_id = discord_id
     linked_player_guid = None
