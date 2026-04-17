@@ -14,7 +14,8 @@ const METRIC_LABELS: Record<MetricMode, string> = {
   damage: 'Damage',
 };
 
-const STORAGE_KEY = 'session-matrix-metric';
+// Shared with legacy session-detail.js — keep in sync.
+const MATRIX_METRIC_STORAGE = 'session-matrix-metric';
 
 function formatCell(cell: SessionTeamMatrixCell | undefined, metric: MetricMode): string {
   if (!cell || !cell.played) return '—';
@@ -83,7 +84,7 @@ export function PlayerMatchMatrix({
   const [metric, setMetric] = useState<MetricMode>(() => {
     if (typeof window === 'undefined') return 'dpm';
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
+      const stored = window.localStorage.getItem(MATRIX_METRIC_STORAGE);
       return (stored === 'kd' || stored === 'damage' || stored === 'dpm') ? stored : 'dpm';
     } catch {
       // localStorage can throw in Safari private mode or when disabled.
@@ -94,7 +95,7 @@ export function PlayerMatchMatrix({
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      window.localStorage.setItem(STORAGE_KEY, metric);
+      window.localStorage.setItem(MATRIX_METRIC_STORAGE, metric);
     } catch {
       // Ignore write failures; in-memory selection still works.
     }
@@ -147,10 +148,10 @@ export function PlayerMatchMatrix({
           </button>
         </td>
         {maps.map((_, mapIdx) => {
-          const cell = player.cells[mapIdx];
+          const cell: SessionTeamMatrixCell | undefined = player.cells[mapIdx];
           const primary = formatCell(cell, metric);
           const secondary = cellSecondaryLine(cell, metric);
-          const played = cell?.played;
+          const played = Boolean(cell?.played);
           return (
             <td
               key={mapIdx}
@@ -158,8 +159,8 @@ export function PlayerMatchMatrix({
                 'px-3 py-2 text-center tabular-nums',
                 played ? 'text-slate-200' : 'text-slate-600',
               )}
-              title={played && cell
-                ? `kills ${cell.kills} · deaths ${cell.deaths} · dmg ${cell.damage} · dpm ${cell.dpm.toFixed(1)}`
+              title={played
+                ? `kills ${cell!.kills} · deaths ${cell!.deaths} · dmg ${cell!.damage} · dpm ${cell!.dpm.toFixed(1)}`
                 : 'did not play'}
             >
               <div className="font-semibold text-sm">{primary}</div>
@@ -188,7 +189,7 @@ export function PlayerMatchMatrix({
             <button
               key={m}
               type="button"
-              onClick={() => setMetric(m)}
+              onClick={() => { setMetric(m); }}
               className={cn(
                 'px-3 py-1.5 transition',
                 metric === m

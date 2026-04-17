@@ -243,9 +243,9 @@ function ScoringBanner({
   scoring: SessionDetailResponse['scoring'];
   matrix?: SessionDetailResponse['team_matrix'];
 }) {
-  const teamAScore = scoring?.team_a_score ?? scoring?.team_a_total;
-  const teamBScore = scoring?.team_b_score ?? scoring?.team_b_total;
-  if (!scoring?.available || teamAScore == null || teamBScore == null) return null;
+  const teamAScore = scoring.team_a_score ?? scoring.team_a_total;
+  const teamBScore = scoring.team_b_score ?? scoring.team_b_total;
+  if (!scoring.available || teamAScore == null || teamBScore == null) return null;
 
   const aLead = teamAScore > teamBScore;
   const bLead = teamBScore > teamAScore;
