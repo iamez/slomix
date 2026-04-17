@@ -193,14 +193,16 @@ class RoundCorrelationService:
         if not await self._allow_live_write():
             return
 
-        correlation_id = f"{match_id}:{map_name}"
+        existing_cid = await self._find_nearby_correlation_id(match_id, map_name, round_number)
+        correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
+
         flag_col = f"has_r{round_number}_stats"
         id_col = f"r{round_number}_round_id"
         arrived_col = f"r{round_number}_arrived_at"
 
         await self._upsert_correlation(
             correlation_id=correlation_id,
-            match_id=match_id,
+            match_id=effective_mid,
             map_name=map_name,
             updates={
                 flag_col: True,
@@ -382,12 +384,14 @@ class RoundCorrelationService:
         if not await self._allow_live_write():
             return
 
-        correlation_id = f"{match_id}:{map_name}"
+        existing_cid = await self._find_nearby_correlation_id(match_id, map_name, round_number)
+        correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
+
         flag_col = f"has_r{round_number}_endstats"
 
         await self._upsert_correlation(
             correlation_id=correlation_id,
-            match_id=match_id,
+            match_id=effective_mid,
             map_name=map_name,
             updates={flag_col: True},
         )

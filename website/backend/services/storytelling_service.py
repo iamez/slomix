@@ -146,14 +146,24 @@ class StorytellingService:
         if not kills:
             return {"status": "no_data", "kills_scored": 0}
 
-        # 2. Pre-load context data for the session
-        carrier_kills = await self._load_carrier_kills(sd)
-        carrier_returns = await self._load_carrier_returns(sd)
-        pushes = await self._load_pushes(sd)
-        crossfires = await self._load_crossfires(sd)
-        spawn_timings = await self._load_spawn_timings(sd)
-        victim_classes = await self._load_victim_classes(sd)
-        combat_positions = await self._load_combat_positions(sd)
+        # 2. Pre-load context data for the session (parallel — independent queries)
+        (
+            carrier_kills,
+            carrier_returns,
+            pushes,
+            crossfires,
+            spawn_timings,
+            victim_classes,
+            combat_positions,
+        ) = await asyncio.gather(
+            self._load_carrier_kills(sd),
+            self._load_carrier_returns(sd),
+            self._load_pushes(sd),
+            self._load_crossfires(sd),
+            self._load_spawn_timings(sd),
+            self._load_victim_classes(sd),
+            self._load_combat_positions(sd),
+        )
 
         # 3. Score each kill
         scored = []
@@ -490,14 +500,19 @@ class StorytellingService:
             self._detect_team_wipes,
             self._detect_multikills,
         ]
-        for detector in detectors:
-            try:
-                found = await detector(sd)
-                logger.info("Moment detector %s returned %d results", detector.__name__, len(found))
-                moments.extend(found)
-            except Exception as e:
+        # Run all detectors in parallel — each hits DB independently (-1.5s per session)
+        results = await asyncio.gather(
+            *(detector(sd) for detector in detectors),
+            return_exceptions=True,
+        )
+        for detector, result in zip(detectors, results, strict=True):
+            if isinstance(result, Exception):
                 logger.error("Moment detector %s failed: %s\n%s",
-                             detector.__name__, e, traceback.format_exc())
+                             detector.__name__, result,
+                             "".join(traceback.format_exception(type(result), result, result.__traceback__)))
+                continue
+            logger.info("Moment detector %s returned %d results", detector.__name__, len(result))
+            moments.extend(result)
 
         # Enrich all moments with time_formatted
         for m in moments:
