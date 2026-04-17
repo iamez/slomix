@@ -3,6 +3,8 @@ import os
 import sys
 from typing import AsyncGenerator
 
+from fastapi import HTTPException, Request
+
 from bot.config import load_config
 
 # Import base class and Postgres adapter from bot core
@@ -73,3 +75,50 @@ async def get_db() -> AsyncGenerator[DatabaseAdapter, None]:
 def get_db_pool() -> DatabaseAdapter:
     """Get the database pool directly (for background tasks)"""
     return _db_pool
+
+
+# ---------------------------------------------------------------------------
+# Authentication / authorization
+# ---------------------------------------------------------------------------
+
+def _configured_admin_ids() -> set[int]:
+    """Read admin Discord IDs from env. Matches availability.py + planning.py."""
+    ids: set[int] = set()
+    for env_name in ("WEBSITE_ADMIN_DISCORD_IDS", "ADMIN_DISCORD_IDS", "OWNER_USER_ID"):
+        raw = os.getenv(env_name, "")
+        if not raw:
+            continue
+        for token in raw.split(","):
+            token = token.strip()
+            if token.isdigit():
+                ids.add(int(token))
+    return ids
+
+
+def require_admin_user(request: Request) -> dict:
+    """FastAPI dependency: require an authenticated Discord admin session.
+
+    Returns the user dict on success; raises 401 (no session) or 403
+    (session present but not in WEBSITE_ADMIN_DISCORD_IDS / ADMIN_DISCORD_IDS /
+    OWNER_USER_ID).
+
+    Mirrors the admin gate used by availability.py / planning.py so operational
+    endpoints (diagnostics, monitoring) share one source of truth.
+    """
+    user = request.session.get("user")
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    user_id = None
+    for key in ("id", "website_user_id"):
+        raw = user.get(key)
+        try:
+            user_id = int(raw)
+            break
+        except (TypeError, ValueError):
+            continue
+
+    if user_id is None or user_id not in _configured_admin_ids():
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+
+    return user

@@ -10,6 +10,7 @@ from typing import Any
 
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
+from website.backend.utils.et_constants import strip_et_colors
 
 logger = get_app_logger("api.helpers")
 
@@ -256,6 +257,11 @@ async def resolve_display_name(
     """
     Pick a stable display name for a GUID.
     Prefer linked display name; fall back to a known alias.
+
+    ET color codes (^1, ^3, ...) are stripped from every candidate so consumers
+    receive printable names — storytelling_router and sessions_router already
+    strip at their query sites; this extends the same guarantee to the 10+
+    callers of this helper (records_awards, etc.).
     """
     # 1) Prefer explicit display_name from player_links (if column exists)
     try:
@@ -264,7 +270,7 @@ async def resolve_display_name(
             (player_guid,),
         )
         if link_row and link_row[0]:
-            return link_row[0]
+            return strip_et_colors(link_row[0])
     except (OSError, RuntimeError):
         # Fallback if display_name column doesn't exist or table is unavailable
         try:
@@ -273,7 +279,7 @@ async def resolve_display_name(
                 (player_guid,),
             )
             if link_row and link_row[0]:
-                return link_row[0]
+                return strip_et_colors(link_row[0])
         except (OSError, RuntimeError):
             logger.debug("player_links fallback query failed")
 
@@ -284,7 +290,7 @@ async def resolve_display_name(
             (player_guid,),
         )
         if alias_row and alias_row[0]:
-            return alias_row[0]
+            return strip_et_colors(alias_row[0])
     except (OSError, RuntimeError):
         logger.debug("player_aliases query failed")
 
@@ -294,9 +300,9 @@ async def resolve_display_name(
         (player_guid,),
     )
     if name_row and name_row[0]:
-        return name_row[0]
+        return strip_et_colors(name_row[0])
 
-    return fallback
+    return strip_et_colors(fallback)
 
 
 async def batch_resolve_display_names(
@@ -373,7 +379,9 @@ async def batch_resolve_display_names(
         if g not in result:
             result[g] = fallback_map.get(g, "Unknown")
 
-    return result
+    # Strip ET color codes from every resolved name — same guarantee as
+    # resolve_display_name() so callers never have to sanitize downstream.
+    return {g: strip_et_colors(name) for g, name in result.items()}
 
 
 async def resolve_alias_guid_map(
