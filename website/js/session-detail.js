@@ -870,10 +870,21 @@ function _renderOverviewPlayerStatsSection({ players = [], loading = false, erro
 
 const MATRIX_METRICS = ['dpm', 'kd', 'damage', 'revives', 'hs_pct', 'accuracy', 'assists'];
 
+// Canonical key is shared with PlayerMatchMatrix.tsx (React). The legacy key
+// is kept as a read-only fallback so existing users keep their preference
+// after the unification; new writes go to the canonical key only.
+const MATRIX_METRIC_KEY = 'session-matrix-metric';
+const MATRIX_METRIC_KEY_LEGACY = 'sd-matrix-metric';
+
 function _getMatrixMetric() {
     try {
-        const stored = localStorage.getItem('sd-matrix-metric');
-        if (MATRIX_METRICS.includes(stored)) return stored;
+        const canonical = localStorage.getItem(MATRIX_METRIC_KEY);
+        if (MATRIX_METRICS.includes(canonical)) return canonical;
+        const legacy = localStorage.getItem(MATRIX_METRIC_KEY_LEGACY);
+        if (MATRIX_METRICS.includes(legacy)) {
+            try { localStorage.setItem(MATRIX_METRIC_KEY, legacy); } catch (_) { /* ignore */ }
+            return legacy;
+        }
     } catch (_) { /* localStorage unavailable */ }
     return 'dpm';
 }
@@ -1289,7 +1300,7 @@ function _renderTeamAggregatesCards(matrix) {
 
 export function sdSetMatrixMetric(metric) {
     if (!MATRIX_METRICS.includes(metric)) return;
-    try { localStorage.setItem('sd-matrix-metric', metric); } catch (_) { /* localStorage unavailable */ }
+    try { localStorage.setItem(MATRIX_METRIC_KEY, metric); } catch (_) { /* localStorage unavailable */ }
     const panel = document.getElementById('sd-tab-summary');
     if (panel && panel.dataset.rendered === '1') {
         panel.dataset.rendered = '0';
