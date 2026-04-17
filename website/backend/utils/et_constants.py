@@ -25,6 +25,24 @@ KILL_MOD_NAMES: dict[int, str] = {
 _ET_COLOR_RE = re.compile(r'\^[0-9a-zA-Z]')
 
 
+# Weapon names (weapon_comprehensive_stats.weapon_name) that are EXCLUDED from
+# accuracy/headshot computations because they are splash/utility weapons with
+# no meaningful shots fired.
+#
+# Used by accuracy-sensitive queries (session matrix DPM/HS, records_weapons
+# leaderboards) to keep ratios comparable between classes. Projectile vs
+# hitscan gating without this set skews engineers/field ops toward 0% acc.
+UTILITY_WEAPONS_EXCLUDED_FROM_ACC: frozenset[str] = frozenset({
+    'WS_GRENADE',
+    'WS_SYRINGE',
+    'WS_DYNAMITE',
+    'WS_AIRSTRIKE',
+    'WS_ARTILLERY',
+    'WS_SATCHEL',
+    'WS_LANDMINE',
+})
+
+
 def strip_et_colors(name: str) -> str:
     """Remove ET:Legacy color codes (^0-^9, ^a-^z, ^A-^Z) from names."""
     if not name:
