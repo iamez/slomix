@@ -148,10 +148,14 @@ export function PlayerMatchMatrix({
           </button>
         </td>
         {maps.map((_, mapIdx) => {
-          const cell: SessionTeamMatrixCell | undefined = player.cells[mapIdx];
+          // mapIdx comes from the trusted maps array (server-built); backend
+          // always populates cells_by_map with length == maps.length. Safe
+          // bracket access — not user input.
+          // eslint-disable-next-line security/detect-object-injection
+          const cell = player.cells[mapIdx];
           const primary = formatCell(cell, metric);
           const secondary = cellSecondaryLine(cell, metric);
-          const played = Boolean(cell?.played);
+          const played = cell.played;
           return (
             <td
               key={mapIdx}
@@ -160,7 +164,7 @@ export function PlayerMatchMatrix({
                 played ? 'text-slate-200' : 'text-slate-600',
               )}
               title={played
-                ? `kills ${cell!.kills} · deaths ${cell!.deaths} · dmg ${cell!.damage} · dpm ${cell!.dpm.toFixed(1)}`
+                ? `kills ${cell.kills} · deaths ${cell.deaths} · dmg ${cell.damage} · dpm ${cell.dpm.toFixed(1)}`
                 : 'did not play'}
             >
               <div className="font-semibold text-sm">{primary}</div>
@@ -197,6 +201,7 @@ export function PlayerMatchMatrix({
                   : 'text-slate-400 hover:text-white hover:bg-white/5',
               )}
             >
+              {/* eslint-disable-next-line security/detect-object-injection */}
               {METRIC_LABELS[m]}
             </button>
           ))}
