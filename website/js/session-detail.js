@@ -270,6 +270,9 @@ let _vizLoaded = null;
 let _overviewMapIndex = null;
 let _overviewRoundId = null;
 let _expandedMapIndex = null;
+let _matrixSortMap = null;   // null = sort by Total; otherwise map_index
+let _matrixSortDir = 'desc'; // 'desc' | 'asc'
+let _matrixDrillKey = null;  // "<player_guid>:<map_idx>" or null
 let _overviewRenderToken = 0;
 const _overviewRoundStatsCache = new Map();
 const _overviewMapStatsCache = new Map();
@@ -446,13 +449,30 @@ function _renderMapRoundTimeline() {
 
 function _renderShell(container) {
     const scoring = _detailData.scoring || {};
+    const matrix = _detailData.team_matrix || null;
     const hasScoring = scoring.available === true;
+    const hasMatrix = matrix && matrix.available === true && matrix.aggregates;
     const teamAName = hasScoring ? (scoring.team_a_name || 'Allies') : 'Allies';
     const teamBName = hasScoring ? (scoring.team_b_name || 'Axis') : 'Axis';
     const teamAScore = hasScoring ? (scoring.team_a_score || 0) : 0;
     const teamBScore = hasScoring ? (scoring.team_b_score || 0) : 0;
     const aWinning = teamAScore > teamBScore;
     const bWinning = teamBScore > teamAScore;
+    const aggA = hasMatrix ? matrix.aggregates.team_a : null;
+    const aggB = hasMatrix ? matrix.aggregates.team_b : null;
+    const heroAgg = (aggA && aggB) ? `
+        <div class="w-full mt-4 pt-3 border-t border-white/5 grid grid-cols-2 gap-6 text-xs">
+            <div class="flex justify-around text-slate-300">
+                <div class="text-center"><div class="text-[10px] text-slate-500 uppercase">Kills</div><div class="font-bold text-brand-blue">${num(aggA.kills)}</div></div>
+                <div class="text-center"><div class="text-[10px] text-slate-500 uppercase">Damage</div><div class="font-bold text-brand-blue">${Math.round(num(aggA.damage)).toLocaleString()}</div></div>
+                <div class="text-center"><div class="text-[10px] text-slate-500 uppercase">Avg DPM</div><div class="font-bold text-brand-blue">${num(aggA.dpm_avg).toFixed(0)}</div></div>
+            </div>
+            <div class="flex justify-around text-slate-300">
+                <div class="text-center"><div class="text-[10px] text-slate-500 uppercase">Kills</div><div class="font-bold text-brand-rose">${num(aggB.kills)}</div></div>
+                <div class="text-center"><div class="text-[10px] text-slate-500 uppercase">Damage</div><div class="font-bold text-brand-rose">${Math.round(num(aggB.damage)).toLocaleString()}</div></div>
+                <div class="text-center"><div class="text-[10px] text-slate-500 uppercase">Avg DPM</div><div class="font-bold text-brand-rose">${num(aggB.dpm_avg).toFixed(0)}</div></div>
+            </div>
+        </div>` : '';
 
     container.innerHTML = `
         <div class="mb-6">
@@ -487,6 +507,7 @@ function _renderShell(container) {
                     <span class="text-sm font-bold ${bWinning ? 'text-white' : 'text-slate-400'}">${escapeHtml(teamBName)}</span>
                 </div>` : ''}
             </div>
+            ${heroAgg}
 
             <div class="mt-5">
                 <div class="flex items-center gap-3 mb-2">
@@ -847,6 +868,472 @@ function _renderOverviewPlayerStatsSection({ players = [], loading = false, erro
         </div>`;
 }
 
+const MATRIX_METRICS = ['dpm', 'kd', 'damage', 'revives', 'hs_pct', 'accuracy', 'assists'];
+
+// Canonical key is shared with PlayerMatchMatrix.tsx (React). The legacy key
+// is kept as a read-only fallback so existing users keep their preference
+// after the unification; new writes go to the canonical key only.
+const MATRIX_METRIC_KEY = 'session-matrix-metric';
+const MATRIX_METRIC_KEY_LEGACY = 'sd-matrix-metric';
+
+function _getMatrixMetric() {
+    try {
+        const canonical = localStorage.getItem(MATRIX_METRIC_KEY);
+        if (MATRIX_METRICS.includes(canonical)) return canonical;
+        const legacy = localStorage.getItem(MATRIX_METRIC_KEY_LEGACY);
+        if (MATRIX_METRICS.includes(legacy)) {
+            try { localStorage.setItem(MATRIX_METRIC_KEY, legacy); } catch (_) { /* ignore */ }
+            return legacy;
+        }
+    } catch (_) { /* localStorage unavailable */ }
+    return 'dpm';
+}
+
+function _matrixMetricLabel(m) {
+    return { dpm: 'DPM', kd: 'K/D', damage: 'Damage', revives: 'Revives', hs_pct: 'HS%', accuracy: 'Acc%', assists: 'Assists' }[m] || m;
+}
+
+function _formatMatrixCellValue(cell, metric) {
+    if (!cell || !cell.played) return '—';
+    switch (metric) {
+        case 'dpm':      return num(cell.dpm).toFixed(0);
+        case 'kd':       return `${num(cell.kills)}/${num(cell.deaths)}`;
+        case 'revives':  return String(num(cell.revives));
+        case 'hs_pct':   return `${num(cell.hs_pct).toFixed(1)}%`;
+        case 'accuracy': return `${num(cell.accuracy).toFixed(1)}%`;
+        case 'assists':  return String(num(cell.assists));
+        case 'damage':
+        default: {
+            const d = num(cell.damage);
+            return d >= 1000 ? `${(d / 1000).toFixed(1)}k` : String(d);
+        }
+    }
+}
+
+function _formatMatrixTotals(totals, metric) {
+    if (!totals) return '—';
+    switch (metric) {
+        case 'dpm':      return num(totals.dpm).toFixed(0);
+        case 'kd':       return `${num(totals.kills)}/${num(totals.deaths)}`;
+        case 'revives':  return String(num(totals.revives));
+        case 'hs_pct':   return `${num(totals.hs_pct).toFixed(1)}%`;
+        case 'accuracy': return `${num(totals.accuracy).toFixed(1)}%`;
+        case 'assists':  return String(num(totals.assists));
+        case 'damage':
+        default: {
+            const d = num(totals.damage);
+            return d >= 1000 ? `${(d / 1000).toFixed(1)}k` : String(d);
+        }
+    }
+}
+
+function _formatMatrixCellSecondary(cell, metric) {
+    if (!cell || !cell.played) return '';
+    if (metric === 'dpm')      return `${num(cell.kills)}/${num(cell.deaths)}`;
+    if (metric === 'kd')       return `${num(cell.dpm).toFixed(0)} dpm`;
+    if (metric === 'damage')   return `${num(cell.kills)}/${num(cell.deaths)}`;
+    if (metric === 'revives')  return `${num(cell.assists)} asst`;
+    if (metric === 'hs_pct')   return `${num(cell.hs_kills)} hs`;
+    if (metric === 'accuracy') return `${num(cell.hits)}/${num(cell.shots)}`;
+    if (metric === 'assists')  return `${num(cell.revives)} rev`;
+    return '';
+}
+
+function _metricKeyFor(metric) {
+    // Returns the numeric key used for sort/heatmap comparison.
+    switch (metric) {
+        case 'damage':   return 'damage';
+        case 'kd':       return 'kd';
+        case 'revives':  return 'revives';
+        case 'hs_pct':   return 'hs_pct';
+        case 'accuracy': return 'accuracy';
+        case 'assists':  return 'assists';
+        case 'dpm':
+        default:         return 'dpm';
+    }
+}
+
+function _sortRosterForMetric(roster, metric, sortMap, sortDir) {
+    const copy = [...roster];
+    const key = _metricKeyFor(metric);
+    const mult = sortDir === 'asc' ? 1 : -1;
+    copy.sort((a, b) => {
+        let av, bv;
+        if (sortMap === null || sortMap === undefined) {
+            av = num(a.totals?.[key] ?? 0);
+            bv = num(b.totals?.[key] ?? 0);
+        } else {
+            // Unplayed rows must sort last regardless of direction.
+            const missingValue = sortDir === 'asc' ? Infinity : -Infinity;
+            const ca = a.cells?.[sortMap];
+            const cb = b.cells?.[sortMap];
+            av = ca?.played ? num(ca[key] ?? 0) : missingValue;
+            bv = cb?.played ? num(cb[key] ?? 0) : missingValue;
+        }
+        return (bv - av) * -mult; // desc default: bv - av
+    });
+    return copy;
+}
+
+function _collectMetricValues(rosters, metric, sortMap) {
+    const key = _metricKeyFor(metric);
+    const values = [];
+    const all = [...(rosters.team_a || []), ...(rosters.team_b || [])];
+    for (const p of all) {
+        if (sortMap === null || sortMap === undefined) continue; // totals column not heatmapped
+        const cell = p.cells?.[sortMap];
+        if (!cell?.played) continue;
+        values.push(num(cell[key] ?? 0));
+    }
+    return values;
+}
+
+function _computeHeatmapStats(rosters, metric) {
+    // For each map, compute median + range (min/max) of played cells.
+    const key = _metricKeyFor(metric);
+    const all = [...(rosters.team_a || []), ...(rosters.team_b || [])];
+    const perMap = {};
+    if (all.length === 0) return perMap;
+    const numMaps = all[0]?.cells?.length || 0;
+    for (let i = 0; i < numMaps; i++) {
+        const values = [];
+        for (const p of all) {
+            const cell = p.cells?.[i];
+            if (cell?.played) values.push(num(cell[key] ?? 0));
+        }
+        if (values.length === 0) continue;
+        values.sort((a, b) => a - b);
+        const median = values[Math.floor(values.length / 2)];
+        const min = values[0];
+        const max = values[values.length - 1];
+        perMap[i] = { median, min, max };
+    }
+    return perMap;
+}
+
+function _heatmapClass(cell, mapIdx, metric, heatStats) {
+    if (!cell?.played) return '';
+    const stats = heatStats[mapIdx];
+    if (!stats || stats.max === stats.min) return '';
+    const key = _metricKeyFor(metric);
+    const val = num(cell[key] ?? 0);
+    const span = stats.max - stats.min;
+    if (span <= 0) return '';
+    if (val > stats.median) {
+        // above median: green intensity proporcionalna delu nad medianom
+        const intensity = Math.min(1, (val - stats.median) / ((stats.max - stats.median) || 1));
+        if (intensity > 0.66) return 'bg-emerald-500/20';
+        if (intensity > 0.33) return 'bg-emerald-500/10';
+        return 'bg-emerald-500/5';
+    }
+    if (val < stats.median) {
+        const intensity = Math.min(1, (stats.median - val) / ((stats.median - stats.min) || 1));
+        if (intensity > 0.66) return 'bg-rose-500/15';
+        if (intensity > 0.33) return 'bg-rose-500/8';
+        return 'bg-rose-500/5';
+    }
+    return '';
+}
+
+function _collectSubstituteGuids(rosters) {
+    const teamA = new Set((rosters.team_a || []).map(p => p.player_guid));
+    const teamB = new Set((rosters.team_b || []).map(p => p.player_guid));
+    const both = new Set();
+    for (const g of teamA) if (teamB.has(g)) both.add(g);
+    return both;
+}
+
+function _renderMatrixDrillRow(playerGuid, mapIdx, matrix, matches, colspan) {
+    if (!matrix || !matrix.rounds_detail || !matches) return '';
+    const match = matches[mapIdx];
+    if (!match) return '';
+    const roundIds = (match.rounds || []).map(r => r.round_id).filter(Boolean);
+    const detail = matrix.rounds_detail || {};
+
+    const rows = [];
+    for (const rid of roundIds) {
+        const roundPlayers = detail[rid] || detail[String(rid)] || [];
+        const entry = roundPlayers.find(p => p.player_guid === playerGuid);
+        if (!entry) continue;
+        const roundObj = (match.rounds || []).find(r => r.round_id === rid);
+        const rNum = roundObj?.round_number || '?';
+        const sideLabel = entry.side === 1 ? 'Axis' : entry.side === 2 ? 'Allies' : '?';
+        const sideClass = entry.side === 1 ? 'text-brand-rose' : entry.side === 2 ? 'text-brand-blue' : 'text-slate-400';
+        const rfNote = entry.return_fire_ms != null ? ` · RF ${num(entry.return_fire_ms).toFixed(0)}ms` : '';
+        rows.push(`
+            <div class="flex items-center gap-4 px-3 py-1.5 text-xs border-l-2 border-white/10">
+                <div class="font-bold text-white w-16">R${rNum}</div>
+                <div class="${sideClass} w-14">${sideLabel}</div>
+                <div class="text-slate-300">${escapeHtml(entry.team || '')}</div>
+                <div class="ml-auto flex gap-4 tabular-nums">
+                    <span><span class="text-slate-500">K/D</span> <span class="text-white font-semibold">${num(entry.kills)}/${num(entry.deaths)}</span></span>
+                    <span><span class="text-slate-500">DMG</span> <span class="text-white font-semibold">${num(entry.damage)}</span></span>
+                    <span><span class="text-slate-500">DPM</span> <span class="text-white font-semibold">${num(entry.dpm).toFixed(0)}</span></span>
+                    <span><span class="text-slate-500">REV</span> <span class="text-white font-semibold">${num(entry.revives)}</span></span>
+                    <span><span class="text-slate-500">HS</span> <span class="text-white font-semibold">${num(entry.hs_kills)}</span></span>${rfNote ? `<span class="text-slate-400">${escapeHtml(rfNote)}</span>` : ''}
+                </div>
+            </div>`);
+    }
+
+    if (rows.length === 0) {
+        return `<tr class="bg-slate-900/40"><td colspan="${colspan}" class="px-4 py-2 text-xs text-slate-500">No round-level data available.</td></tr>`;
+    }
+
+    return `
+        <tr class="bg-slate-900/60">
+            <td colspan="${colspan}" class="px-4 py-3">
+                <div class="text-[10px] uppercase text-slate-500 mb-2">Round breakdown · ${escapeHtml(mapLabel(match.map_name || ''))}</div>
+                <div class="space-y-1">${rows.join('')}</div>
+            </td>
+        </tr>`;
+}
+
+function _renderTeamMatrixSection(matrix, matches) {
+    if (!matrix || !matrix.available || !matrix.rosters || !Array.isArray(matrix.maps) || matrix.maps.length === 0) {
+        return '';
+    }
+    const matchList = Array.isArray(matches) ? matches : [];
+    const colspan = matrix.maps.length + 2;
+    const metric = _getMatrixMetric();
+    const teamAName = escapeHtml(matrix.team_a_name || 'Team A');
+    const teamBName = escapeHtml(matrix.team_b_name || 'Team B');
+    const maps = matrix.maps;
+    const sortMap = _matrixSortMap;
+    const sortDir = _matrixSortDir;
+    const teamA = _sortRosterForMetric(matrix.rosters.team_a || [], metric, sortMap, sortDir);
+    const teamB = _sortRosterForMetric(matrix.rosters.team_b || [], metric, sortMap, sortDir);
+    const heatStats = _computeHeatmapStats(matrix.rosters, metric);
+    const substituteGuids = _collectSubstituteGuids(matrix.rosters);
+
+    // MVP (top DPM) per team — always DPM-based, regardless of current metric
+    const mvpA = [...(matrix.rosters.team_a || [])].sort((a, b) => num(b.totals?.dpm) - num(a.totals?.dpm))[0];
+    const mvpB = [...(matrix.rosters.team_b || [])].sort((a, b) => num(b.totals?.dpm) - num(a.totals?.dpm))[0];
+    const mvpGuid = { A: mvpA?.player_guid, B: mvpB?.player_guid };
+
+    const metricOptions = MATRIX_METRICS.map(m => {
+        const active = metric === m;
+        return `<button onclick="sdSetMatrixMetric('${m}')"
+            class="px-3 py-1.5 text-xs transition ${active ? 'bg-brand-cyan/20 text-brand-cyan font-bold' : 'text-slate-400 hover:text-white hover:bg-white/5'}">
+            ${_matrixMetricLabel(m)}
+        </button>`;
+    }).join('');
+
+    const sortArrow = (thisMapIdx) => {
+        const activeThis = (sortMap === thisMapIdx) || (sortMap === null && thisMapIdx === 'total');
+        if (!activeThis) return '';
+        return sortDir === 'desc' ? ' <span class="text-brand-cyan">▼</span>' : ' <span class="text-brand-cyan">▲</span>';
+    };
+
+    const mapHeaders = maps.map((m) => {
+        const thumb = mapImageFor(m.map_name || '');
+        const isGeneric = thumb.includes('map_generic');
+        const imgHtml = isGeneric ? '' : `<img src="${thumb}" alt="" class="inline-block w-6 h-4 rounded-sm mr-1 object-cover" />`;
+        return `
+        <th class="px-3 py-2 text-center text-[11px] uppercase cursor-pointer transition select-none
+                   ${sortMap === m.map_index ? 'text-brand-cyan bg-brand-cyan/5' : 'text-slate-400 hover:text-brand-cyan hover:bg-white/5'}"
+            onclick="sdSortMatrix(${m.map_index})"
+            title="Click to sort by this map">
+            ${imgHtml}${escapeHtml(mapLabel(m.map_name))}${sortArrow(m.map_index)}
+        </th>`;
+    }).join('');
+
+    const renderRow = (player, team) => {
+        const badgeColor = team === 'A'
+            ? 'border-brand-blue/40 text-brand-blue bg-brand-blue/10'
+            : 'border-brand-rose/40 text-brand-rose bg-brand-rose/10';
+        const isSub = substituteGuids.has(player.player_guid);
+        const cells = maps.map((_, i) => {
+            const cell = player.cells?.[i];
+            const primary = _formatMatrixCellValue(cell, metric);
+            const secondary = _formatMatrixCellSecondary(cell, metric);
+            const played = cell?.played;
+            const heatClass = _heatmapClass(cell, i, metric, heatStats);
+            const rfNote = cell?.return_fire_ms != null ? ` · reaction ${num(cell.return_fire_ms).toFixed(0)}ms` : '';
+            const tooltip = played
+                ? `${num(cell.kills)}K ${num(cell.deaths)}D · ${num(cell.damage)} dmg · ${num(cell.dpm).toFixed(1)} dpm · ${num(cell.revives)}rev · HS ${num(cell.hs_pct).toFixed(1)}% · acc ${num(cell.accuracy).toFixed(1)}%${rfNote}`
+                : 'did not play';
+            const drillKey = `${player.player_guid}:${i}`;
+            const isDrillActive = _matrixDrillKey === drillKey;
+            const activeClass = isDrillActive ? ' ring-2 ring-brand-cyan/50 bg-brand-cyan/5' : '';
+            const clickAttr = played
+                ? `onclick="sdToggleMatrixDrill('${escapeJsString(player.player_guid)}', ${i})"`
+                : '';
+            const cursor = played ? 'cursor-pointer hover:bg-white/10' : '';
+            return `<td class="px-3 py-2 text-center tabular-nums ${played ? 'text-slate-200' : 'text-slate-600'} ${heatClass}${activeClass} ${cursor}" title="${escapeHtml(tooltip)}" ${clickAttr}>
+                <div class="font-semibold text-sm">${escapeHtml(primary)}</div>
+                ${secondary ? `<div class="text-[10px] text-slate-500">${escapeHtml(secondary)}</div>` : ''}
+            </td>`;
+        }).join('');
+        const totalStr = _formatMatrixTotals(player.totals, metric);
+        const name = escapeHtml(player.player_name || '—');
+        const jsName = escapeJsString(player.player_name || '');
+        const isMvp = mvpGuid[team] === player.player_guid;
+        const mvpBadge = isMvp
+            ? `<span class="text-yellow-300 text-xs" title="Session MVP by DPM">★</span>`
+            : '';
+        const subBadge = isSub
+            ? `<span class="text-amber-400 text-xs" title="Played for both teams this session">⚠</span>`
+            : '';
+        const mvpRing = isMvp ? ' ring-2 ring-yellow-400/60' : '';
+        const totalCellHl = sortMap === null ? 'bg-brand-cyan/10' : 'bg-white/5';
+        const mainRow = `
+            <tr class="border-t border-white/5 hover:bg-white/5">
+                <td class="sticky left-0 z-10 bg-slate-900/80 backdrop-blur px-3 py-2">
+                    <div class="flex items-center gap-2 cursor-pointer group" onclick="loadPlayerProfile('${jsName}')">
+                        <span class="inline-flex items-center justify-center w-6 h-5 text-[10px] font-black rounded border ${badgeColor}">${team}</span>
+                        <span class="text-white font-semibold text-sm group-hover:text-brand-cyan">${name}</span>
+                        ${mvpBadge}${subBadge}
+                    </div>
+                </td>
+                ${cells}
+                <td class="px-3 py-2 text-center font-bold text-white tabular-nums ${totalCellHl}${mvpRing}">${escapeHtml(totalStr)}</td>
+            </tr>`;
+
+        let drillRow = '';
+        if (_matrixDrillKey) {
+            const [drillGuid, drillMapStr] = _matrixDrillKey.split(':');
+            const drillMapIdx = Number(drillMapStr);
+            if (drillGuid === player.player_guid && Number.isFinite(drillMapIdx)) {
+                drillRow = _renderMatrixDrillRow(player.player_guid, drillMapIdx, matrix, matchList, colspan);
+            }
+        }
+        return mainRow + drillRow;
+    };
+
+    const scoreRow = `
+        <tr class="border-t-2 border-white/10">
+            <td class="sticky left-0 bg-slate-900/80 backdrop-blur px-3 py-2 text-[11px] uppercase text-slate-400">Map score</td>
+            ${maps.map(m => {
+                const a = num(m.team_a_score);
+                const b = num(m.team_b_score);
+                const aWon = a > b, bWon = b > a;
+                return `<td class="px-3 py-2 text-center text-xs tabular-nums">
+                    <span class="${aWon ? 'text-brand-blue font-bold' : 'text-slate-400'}">${a}</span>
+                    <span class="text-slate-600 mx-1">–</span>
+                    <span class="${bWon ? 'text-brand-rose font-bold' : 'text-slate-400'}">${b}</span>
+                </td>`;
+            }).join('')}
+            <td class="px-3 py-2 bg-white/5"></td>
+        </tr>`;
+
+    const teamAHeader = teamA.length > 0 ? `
+        <tr class="bg-brand-blue/5">
+            <td colspan="${maps.length + 2}" class="sticky left-0 bg-brand-blue/10 px-3 py-1.5 text-[11px] uppercase font-bold text-brand-blue">
+                ${teamAName}
+            </td>
+        </tr>` : '';
+    const teamBHeader = teamB.length > 0 ? `
+        <tr class="bg-brand-rose/5">
+            <td colspan="${maps.length + 2}" class="sticky left-0 bg-brand-rose/10 px-3 py-1.5 text-[11px] uppercase font-bold text-brand-rose">
+                ${teamBName}
+            </td>
+        </tr>` : '';
+
+    return `
+        <div id="sd-team-matrix" class="glass-panel p-5 rounded-xl mb-8">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h3 class="font-bold text-white flex items-center gap-2">
+                        <i data-lucide="grid-3x3" class="w-5 h-5 text-brand-cyan"></i>
+                        Player × Map Matrix
+                    </h3>
+                    <div class="text-[11px] text-slate-500 mt-1">Stats split per round by team. Substitutes appear in both rosters.</div>
+                </div>
+                <div class="inline-flex rounded-lg border border-white/10 overflow-hidden">${metricOptions}</div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm border-collapse">
+                    <thead>
+                        <tr>
+                            <th class="sticky left-0 z-10 bg-slate-900/80 backdrop-blur px-3 py-2 text-left text-[11px] uppercase text-slate-400">Player</th>
+                            ${mapHeaders}
+                            <th class="px-3 py-2 text-center text-[11px] uppercase cursor-pointer transition select-none
+                                       ${sortMap === null ? 'text-brand-cyan bg-brand-cyan/10' : 'text-slate-400 bg-white/5 hover:text-brand-cyan'}"
+                                onclick="sdSortMatrix('total')"
+                                title="Click to sort by total">
+                                Total${sortArrow('total')}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${teamAHeader}${teamA.map(p => renderRow(p, 'A')).join('')}
+                        ${teamBHeader}${teamB.map(p => renderRow(p, 'B')).join('')}
+                        ${scoreRow}
+                    </tbody>
+                </table>
+            </div>
+        </div>`;
+}
+
+function _renderTeamAggregatesCards(matrix) {
+    if (!matrix || !matrix.available || !matrix.aggregates) return '';
+    const aggA = matrix.aggregates.team_a;
+    const aggB = matrix.aggregates.team_b;
+    if (!aggA || !aggB) return '';
+    const teamAName = escapeHtml(matrix.team_a_name || 'Team A');
+    const teamBName = escapeHtml(matrix.team_b_name || 'Team B');
+    const stat = (label, value, colorClass) => `
+        <div class="text-center">
+            <div class="text-[10px] text-slate-500 uppercase">${label}</div>
+            <div class="font-bold ${colorClass}">${value}</div>
+        </div>`;
+    return `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div class="glass-card p-4 rounded-xl border border-brand-blue/20">
+                <div class="text-xs uppercase text-brand-blue font-bold mb-3">${teamAName}</div>
+                <div class="flex justify-around text-sm">
+                    ${stat('Kills', num(aggA.kills), 'text-brand-blue')}
+                    ${stat('Damage', Math.round(num(aggA.damage)).toLocaleString(), 'text-brand-blue')}
+                    ${stat('Avg DPM', num(aggA.dpm_avg).toFixed(0), 'text-brand-blue')}
+                </div>
+            </div>
+            <div class="glass-card p-4 rounded-xl border border-brand-rose/20">
+                <div class="text-xs uppercase text-brand-rose font-bold mb-3">${teamBName}</div>
+                <div class="flex justify-around text-sm">
+                    ${stat('Kills', num(aggB.kills), 'text-brand-rose')}
+                    ${stat('Damage', Math.round(num(aggB.damage)).toLocaleString(), 'text-brand-rose')}
+                    ${stat('Avg DPM', num(aggB.dpm_avg).toFixed(0), 'text-brand-rose')}
+                </div>
+            </div>
+        </div>`;
+}
+
+export function sdSetMatrixMetric(metric) {
+    if (!MATRIX_METRICS.includes(metric)) return;
+    try { localStorage.setItem(MATRIX_METRIC_KEY, metric); } catch (_) { /* localStorage unavailable */ }
+    const panel = document.getElementById('sd-tab-summary');
+    if (panel && panel.dataset.rendered === '1') {
+        panel.dataset.rendered = '0';
+        _renderSummaryTab(true);
+    }
+}
+
+export function sdSortMatrix(target) {
+    // target: 'total' or a map_index number
+    const nextMap = target === 'total' ? null : Number(target);
+    if (_matrixSortMap === nextMap) {
+        _matrixSortDir = _matrixSortDir === 'desc' ? 'asc' : 'desc';
+    } else {
+        _matrixSortMap = nextMap;
+        _matrixSortDir = 'desc';
+    }
+    const panel = document.getElementById('sd-tab-summary');
+    if (panel && panel.dataset.rendered === '1') {
+        panel.dataset.rendered = '0';
+        _renderSummaryTab(true);
+    }
+}
+
+export function sdToggleMatrixDrill(playerGuid, mapIdx) {
+    const key = `${playerGuid}:${mapIdx}`;
+    _matrixDrillKey = _matrixDrillKey === key ? null : key;
+    const panel = document.getElementById('sd-tab-summary');
+    if (panel && panel.dataset.rendered === '1') {
+        panel.dataset.rendered = '0';
+        _renderSummaryTab(true);
+    }
+}
+
 function _renderOverviewMapBreakdown({ matches, scoringMaps, teamAName, teamBName }) {
     if (!matches.length && !scoringMaps.length) return '';
 
@@ -976,6 +1463,8 @@ async function _renderSummaryTab(force = false) {
     const scoringMaps = hasScoring && Array.isArray(scoring.maps) ? scoring.maps : [];
     const matches = _getOverviewMatches();
 
+    const matrix = data.team_matrix || null;
+
     let html = `
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <div class="glass-card p-4 rounded-xl text-center">
@@ -997,6 +1486,8 @@ async function _renderSummaryTab(force = false) {
             </div>
         </div>`;
 
+    html += _renderTeamAggregatesCards(matrix);
+    html += _renderTeamMatrixSection(matrix, matches);
     html += _renderOverviewMapBreakdown({ matches, scoringMaps, teamAName, teamBName });
     html += _renderOverviewPlayerStatsSection({ loading: true });
 
@@ -3039,3 +3530,6 @@ window.sdSelectHeaderMap = sdSelectHeaderMap;
 window.sdSelectHeaderRound = sdSelectHeaderRound;
 window.sdClearRoundKeepMap = sdClearRoundKeepMap;
 window.sdClearHeaderMapScope = sdClearHeaderMapScope;
+window.sdSetMatrixMetric = sdSetMatrixMetric;
+window.sdSortMatrix = sdSortMatrix;
+window.sdToggleMatrixDrill = sdToggleMatrixDrill;

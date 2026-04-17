@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from bot.config import load_config
 from bot.core.utils import escape_like_pattern
 from bot.services.session_stats_aggregator import SessionStatsAggregator
-from bot.services.stopwatch_scoring_service import StopwatchScoringService
+from bot.services.stopwatch_scoring_service import StopwatchScoringService, normalize_side
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
@@ -23,6 +23,7 @@ from website.backend.routers.api_helpers import (
 from website.backend.services.website_session_data_service import (
     WebsiteSessionDataService as SessionDataService,
 )
+from website.backend.utils.et_constants import strip_et_colors
 
 router = APIRouter()
 logger = get_app_logger("api.sessions")
@@ -122,6 +123,295 @@ async def build_session_scoring(
     }
 
     return scoring_payload, warnings, hardcoded_teams
+
+
+def _extract_team_rosters(hardcoded_teams: dict | None) -> dict[str, list[str]]:
+    """Normalize get_hardcoded_teams() output to {team_name: [guid, ...]}."""
+    rosters: dict[str, list[str]] = {}
+    if not hardcoded_teams:
+        return rosters
+    for team_name, data in hardcoded_teams.items():
+        if isinstance(data, dict):
+            rosters[team_name] = list(data.get("guids", []))
+        elif isinstance(data, list):
+            guids = []
+            for p in data:
+                if isinstance(p, dict) and "guid" in p:
+                    guids.append(p["guid"])
+                elif isinstance(p, str):
+                    guids.append(p)
+            rosters[team_name] = guids
+    return rosters
+
+
+async def build_team_matrix(
+    round_ids: list[int],
+    matches: list[dict],
+    scoring_payload: dict,
+    hardcoded_teams: dict | None,
+    scoring_service: StopwatchScoringService,
+    db: DatabaseAdapter,
+) -> dict:
+    """
+    Player x Map matrix with per-round team assignment (handles substitutions).
+
+    A player who played for both teams appears twice in the output — once under
+    each team — with stats split by the rounds they played for each team.
+    """
+    if not round_ids or not matches:
+        return {"available": False, "reason": "no_rounds"}
+
+    team_rosters = _extract_team_rosters(hardcoded_teams)
+    if len(team_rosters) < 2:
+        return {"available": False, "reason": "no_teams"}
+
+    team_names = list(team_rosters.keys())
+    team_a_name = scoring_payload.get("team_a_name") or team_names[0]
+    team_b_name = scoring_payload.get("team_b_name") or team_names[1]
+
+    round_to_map_idx: dict[int, int] = {}
+    for map_idx, match in enumerate(matches):
+        for r in match["rounds"]:
+            round_to_map_idx[r["round_id"]] = map_idx
+
+    side_to_team = await scoring_service.build_round_side_to_team_mapping(
+        round_ids, team_rosters, team_a_name=team_a_name, team_b_name=team_b_name
+    )
+    if not side_to_team:
+        return {"available": False, "reason": "side_mapping_failed"}
+
+    placeholders = ",".join(["?"] * len(round_ids))
+    stats_query = f"""
+        SELECT p.round_id, p.player_guid, MAX(p.player_name) AS name,
+               p.team AS side,
+               SUM(p.kills) AS kills, SUM(p.deaths) AS deaths,
+               SUM(p.damage_given) AS damage,
+               SUM(p.time_played_seconds) AS time_played,
+               SUM(p.revives_given) AS revives,
+               SUM(p.times_revived) AS times_revived,
+               SUM(p.kill_assists) AS assists,
+               SUM(p.gibs) AS gibs,
+               SUM(p.headshot_kills) AS hs_kills,
+               COALESCE(SUM(w.hits), 0) AS hits,
+               COALESCE(SUM(w.shots), 0) AS shots,
+               COALESCE(SUM(w.headshots), 0) AS weapon_hs,
+               AVG(rm.return_fire_ms) AS return_fire_ms
+        FROM player_comprehensive_stats p
+        LEFT JOIN (
+            SELECT round_id, player_guid,
+                   SUM(hits) AS hits, SUM(shots) AS shots, SUM(headshots) AS headshots
+            FROM weapon_comprehensive_stats
+            WHERE weapon_name NOT IN (
+                'WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE',
+                'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE'
+            )
+            GROUP BY round_id, player_guid
+        ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
+        LEFT JOIN (
+            SELECT round_id, target_guid, AVG(return_fire_ms) AS return_fire_ms
+            FROM proximity_reaction_metric
+            WHERE return_fire_ms IS NOT NULL AND round_id IS NOT NULL
+            GROUP BY round_id, target_guid
+        ) rm ON rm.round_id = p.round_id AND rm.target_guid = p.player_guid
+        WHERE p.round_id IN ({placeholders})
+        GROUP BY p.round_id, p.player_guid, p.team
+    """  # nosec B608 - safe: parameterized placeholders
+    rows = await db.fetch_all(stats_query, tuple(round_ids))
+
+    num_maps = len(matches)
+    rosters_dict: dict[tuple[str, str], dict] = {}
+    rounds_detail: dict[int, list[dict]] = {}
+
+    def _empty_cell(map_idx: int) -> dict:
+        return {
+            "map_index": map_idx,
+            "kills": 0, "deaths": 0, "damage": 0, "time_played": 0,
+            "revives": 0, "times_revived": 0, "assists": 0, "gibs": 0,
+            "hs_kills": 0, "hits": 0, "shots": 0, "weapon_hs": 0,
+            "return_fire_sum": 0.0, "return_fire_count": 0,
+            "played": False,
+        }
+
+    for row in rows:
+        round_id = row[0]
+        player_guid = row[1]
+        player_name = strip_et_colors(row[2] or "")
+        side = normalize_side(row[3])
+        kills = int(row[4] or 0)
+        deaths = int(row[5] or 0)
+        damage = int(row[6] or 0)
+        time_played = int(row[7] or 0)
+        revives = int(row[8] or 0)
+        times_revived = int(row[9] or 0)
+        assists = int(row[10] or 0)
+        gibs = int(row[11] or 0)
+        hs_kills = int(row[12] or 0)
+        hits = int(row[13] or 0)
+        shots = int(row[14] or 0)
+        weapon_hs = int(row[15] or 0)
+        rf_ms = float(row[16]) if row[16] is not None else None
+
+        if side is None:
+            continue
+        mapping = side_to_team.get(round_id)
+        if not mapping:
+            continue
+        team_for_round = mapping.get(side)
+        if not team_for_round:
+            continue
+        map_idx = round_to_map_idx.get(round_id)
+        if map_idx is None:
+            continue
+
+        dpm_row = round(damage * 60.0 / time_played, 1) if time_played > 0 else 0.0
+        kd_row = round(kills / deaths, 2) if deaths > 0 else float(kills)
+        rounds_detail.setdefault(round_id, []).append({
+            "player_guid": player_guid,
+            "player_name": player_name,
+            "team": team_for_round,
+            "side": side,
+            "kills": kills, "deaths": deaths, "damage": damage,
+            "dpm": dpm_row, "kd": kd_row,
+            "time_played": time_played,
+            "revives": revives, "assists": assists, "gibs": gibs,
+            "hs_kills": hs_kills,
+            "return_fire_ms": round(rf_ms, 1) if rf_ms is not None else None,
+        })
+
+        key = (team_for_round, player_guid)
+        if key not in rosters_dict:
+            rosters_dict[key] = {
+                "player_guid": player_guid,
+                "player_name": player_name,
+                "cells_by_map": [_empty_cell(i) for i in range(num_maps)],
+            }
+        elif player_name and not rosters_dict[key]["player_name"]:
+            # Only backfill when the previously-stored name is empty — names are
+            # already stripped, so length comparison would be misleading and
+            # would oscillate across aliases like "Dmon" vs "Dmon|afk".
+            rosters_dict[key]["player_name"] = player_name
+
+        cell = rosters_dict[key]["cells_by_map"][map_idx]
+        cell["kills"] += kills
+        cell["deaths"] += deaths
+        cell["damage"] += damage
+        cell["time_played"] += time_played
+        cell["revives"] += revives
+        cell["times_revived"] += times_revived
+        cell["assists"] += assists
+        cell["gibs"] += gibs
+        cell["hs_kills"] += hs_kills
+        cell["hits"] += hits
+        cell["shots"] += shots
+        cell["weapon_hs"] += weapon_hs
+        if rf_ms is not None:
+            cell["return_fire_sum"] += rf_ms
+            cell["return_fire_count"] += 1
+        cell["played"] = True
+
+    def _finalize_cell(cell: dict) -> None:
+        time_played = cell["time_played"]
+        cell["dpm"] = round(cell["damage"] * 60.0 / time_played, 1) if time_played > 0 else 0.0
+        if cell["deaths"] > 0:
+            cell["kd"] = round(cell["kills"] / cell["deaths"], 2)
+        else:
+            cell["kd"] = float(cell["kills"])
+        cell["accuracy"] = round(cell["hits"] / cell["shots"] * 100, 1) if cell["shots"] > 0 else 0.0
+        cell["hs_pct"] = round(cell["weapon_hs"] / cell["hits"] * 100, 1) if cell["hits"] > 0 else 0.0
+        rf_count = cell.pop("return_fire_count", 0)
+        rf_sum = cell.pop("return_fire_sum", 0.0)
+        cell["return_fire_ms"] = round(rf_sum / rf_count, 1) if rf_count > 0 else None
+
+    def _sum_cells(cells: list[dict]) -> dict:
+        totals: dict = {
+            "kills": 0, "deaths": 0, "damage": 0, "time_played": 0,
+            "revives": 0, "times_revived": 0, "assists": 0, "gibs": 0,
+            "hs_kills": 0, "hits": 0, "shots": 0, "weapon_hs": 0,
+        }
+        rf_sum = 0.0
+        rf_count = 0
+        for cell in cells:
+            for k in totals:
+                totals[k] += cell.get(k, 0)
+            if cell.get("return_fire_ms") is not None:
+                rf_sum += cell["return_fire_ms"]
+                rf_count += 1
+        time_played = totals["time_played"]
+        totals["dpm"] = round(totals["damage"] * 60.0 / time_played, 1) if time_played > 0 else 0.0
+        totals["kd"] = round(totals["kills"] / totals["deaths"], 2) if totals["deaths"] > 0 else float(totals["kills"])
+        totals["accuracy"] = round(totals["hits"] / totals["shots"] * 100, 1) if totals["shots"] > 0 else 0.0
+        totals["hs_pct"] = round(totals["weapon_hs"] / totals["hits"] * 100, 1) if totals["hits"] > 0 else 0.0
+        totals["return_fire_ms"] = round(rf_sum / rf_count, 1) if rf_count > 0 else None
+        return totals
+
+    for data in rosters_dict.values():
+        for cell in data["cells_by_map"]:
+            _finalize_cell(cell)
+        data["totals"] = _sum_cells(data["cells_by_map"])
+
+    team_a_roster: list[dict] = []
+    team_b_roster: list[dict] = []
+    for (team_name, _guid), data in rosters_dict.items():
+        entry = {
+            "player_guid": data["player_guid"],
+            "player_name": data["player_name"],
+            "totals": data["totals"],
+            "cells": data["cells_by_map"],
+        }
+        if team_name == team_a_name:
+            team_a_roster.append(entry)
+        elif team_name == team_b_name:
+            team_b_roster.append(entry)
+
+    team_a_roster.sort(key=lambda p: p["totals"]["dpm"], reverse=True)
+    team_b_roster.sort(key=lambda p: p["totals"]["dpm"], reverse=True)
+
+    scoring_maps = scoring_payload.get("maps", []) if scoring_payload.get("available") else []
+    maps_list: list[dict] = []
+    for map_idx, match in enumerate(matches):
+        score_entry = scoring_maps[map_idx] if map_idx < len(scoring_maps) else {}
+        maps_list.append({
+            "map_name": match["map_name"],
+            "map_index": map_idx,
+            "team_a_score": score_entry.get("team_a_points"),
+            "team_b_score": score_entry.get("team_b_points"),
+        })
+
+    def _aggregate(roster: list[dict]) -> dict:
+        totals: dict = {
+            "kills": 0, "deaths": 0, "damage": 0, "time_played": 0,
+            "revives": 0, "assists": 0, "gibs": 0, "hs_kills": 0,
+            "hits": 0, "shots": 0, "weapon_hs": 0,
+        }
+        rf_sum = 0.0
+        rf_count = 0
+        for p in roster:
+            t = p["totals"]
+            for k in totals:
+                totals[k] += t.get(k, 0)
+            if t.get("return_fire_ms") is not None:
+                rf_sum += t["return_fire_ms"]
+                rf_count += 1
+        time_played = totals["time_played"]
+        totals["dpm_avg"] = round(totals["damage"] * 60.0 / time_played, 1) if time_played > 0 else 0.0
+        totals["kd_avg"] = round(totals["kills"] / totals["deaths"], 2) if totals["deaths"] > 0 else float(totals["kills"])
+        totals["accuracy_avg"] = round(totals["hits"] / totals["shots"] * 100, 1) if totals["shots"] > 0 else 0.0
+        totals["hs_pct_avg"] = round(totals["weapon_hs"] / totals["hits"] * 100, 1) if totals["hits"] > 0 else 0.0
+        totals["return_fire_avg"] = round(rf_sum / rf_count, 1) if rf_count > 0 else None
+        return totals
+
+    return {
+        "available": True,
+        "team_a_name": team_a_name,
+        "team_b_name": team_b_name,
+        "maps": maps_list,
+        "rosters": {"team_a": team_a_roster, "team_b": team_b_roster},
+        "aggregates": {
+            "team_a": _aggregate(team_a_roster),
+            "team_b": _aggregate(team_b_roster),
+        },
+        "rounds_detail": rounds_detail,
+    }
 
 
 @router.get("/stats/last-session")
@@ -1614,6 +1904,8 @@ async def get_stats_session_detail(
     # 5. Scoring — reuse StopwatchScoringService for team-aware map scoring
     first_date = round_rows[0][4] if round_rows else None
     scoring_payload = {"available": False}
+    hardcoded_teams: dict | None = None
+    scoring_service: StopwatchScoringService | None = None
     try:
         config = load_config()
         db_path = config.sqlite_db_path if config.database_type == "sqlite" else None
@@ -1621,11 +1913,22 @@ async def get_stats_session_detail(
         scoring_service = StopwatchScoringService(db)
         session_date = str(first_date) if first_date else None
         if session_date:
-            scoring_payload, _, _ = await build_session_scoring(
+            scoring_payload, _, hardcoded_teams = await build_session_scoring(
                 session_date, round_ids, service, scoring_service
             )
     except Exception as e:
         logger.warning(f"Scoring unavailable for session {gaming_session_id}: {e}")
+
+    # 6. Team matrix — per-player x per-map stats split by round team assignment
+    team_matrix_payload: dict = {"available": False, "reason": "no_teams"}
+    if scoring_service is not None:
+        try:
+            team_matrix_payload = await build_team_matrix(
+                round_ids, matches, scoring_payload, hardcoded_teams, scoring_service, db
+            )
+        except Exception as e:
+            logger.warning(f"Team matrix unavailable for session {gaming_session_id}: {e}")
+            team_matrix_payload = {"available": False, "reason": "error"}
 
     return {
         "session_id": gaming_session_id,
@@ -1635,6 +1938,7 @@ async def get_stats_session_detail(
         "matches": matches,
         "players": players,
         "scoring": scoring_payload,
+        "team_matrix": team_matrix_payload,
     }
 
 

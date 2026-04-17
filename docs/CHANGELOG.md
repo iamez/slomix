@@ -10,6 +10,24 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Session Detail 2.0 matrix — review fixes (2026-04-17, Mega Audit v3 Sprint 1.5)
+- **`sessions_router.py::build_team_matrix`**: `strip_et_colors()` now applied to `player_name` before JSON output — fixes UX bug where names rendered with raw `^1`, `^3` color codes (CR-01).
+- **`sessions_router.py::build_team_matrix`**: name selection logic changed from "longest string wins" (which always picked color-coded version) to "first non-empty wins" — stable across aliases after strip (CR-01b).
+- **`stopwatch_scoring_service.py::build_round_side_to_team_mapping`**: now accepts optional `team_a_name` + `team_b_name` kwargs so caller can pass canonical names from `scoring_payload` instead of relying on dict-order heuristic; `build_team_matrix` updated to pass them (CR-03 — prevents swapped team assignment when dict insertion order ≠ expected order).
+- Full review in `docs/research/SESSION_DETAIL_V2_REVIEW_2026-04-17.md` (9 findings, 3 fixed, 6 deferred to Sprint 2+).
+
+### Performance — Storytelling parallelization (2026-04-17, Mega Audit v3 Sprint 1)
+- **`storytelling_service.py`**: 7 context loaders in `compute_session_kis` now run in parallel via `asyncio.gather` (was sequential `await` chain). Expected -500 ms per call.
+- **`storytelling_service.py`**: 11 moment detectors in `detect_moments` now run in parallel via `asyncio.gather(return_exceptions=True)`. Per-detector error logging preserved. Expected -1.5 s per call.
+- **Total impact**: ~-2 s response time on `/storytelling/kill-impact/*` and `/storytelling/moments/*` endpoints.
+
+### Security — Date validation
+- **`storytelling_router._parse_date`**: now rejects dates outside `[2020-01-01, today]` with HTTP 400 (prevents DoS via large-interval queries).
+
+### Docs
+- **`CLAUDE.md`**: version bumped 1.1.2 → 1.4.2 (sync with `.release-please-manifest.json`).
+- **`docs/research/MEGA_AUDIT_V3_SPRINT1_2026-04-17.md`**: full Sprint 1 report with findings, verifications, and remaining work.
+
 ## [1.7.0] — 2026-04-01: Live Session Audit & Website Data Quality
 
 **Live pipeline audit during 3v3 session + Mandelbrot RCA on every change. 11 commits, website data quality fixes.**

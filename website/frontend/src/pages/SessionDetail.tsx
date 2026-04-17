@@ -49,6 +49,7 @@ import { EmptyState } from '../components/EmptyState';
 import { GlassCard } from '../components/GlassCard';
 import { GlassPanel } from '../components/GlassPanel';
 import { PageHeader } from '../components/PageHeader';
+import { PlayerMatchMatrix } from '../components/PlayerMatchMatrix';
 import { Skeleton } from '../components/Skeleton';
 import { cn } from '../lib/cn';
 import { formatNumber, formatDurationMS as formatDuration } from '../lib/format';
@@ -235,26 +236,73 @@ function KpiCard({ icon: Icon, label, value, color }: { icon: typeof Users; labe
   );
 }
 
-function ScoringBanner({ scoring }: { scoring: SessionDetailResponse['scoring'] }) {
-  if (!scoring?.available || scoring.team_a_total == null || scoring.team_b_total == null) return null;
-  const alliesLead = scoring.team_a_total > scoring.team_b_total;
-  const tied = scoring.team_a_total === scoring.team_b_total;
+function ScoringBanner({
+  scoring,
+  matrix,
+}: {
+  scoring: SessionDetailResponse['scoring'];
+  matrix?: SessionDetailResponse['team_matrix'];
+}) {
+  const teamAScore = scoring.team_a_score ?? scoring.team_a_total;
+  const teamBScore = scoring.team_b_score ?? scoring.team_b_total;
+  if (!scoring.available || teamAScore == null || teamBScore == null) return null;
+
+  const aLead = teamAScore > teamBScore;
+  const bLead = teamBScore > teamAScore;
+  const teamAName = scoring.team_a_name ?? matrix?.team_a_name ?? 'Team A';
+  const teamBName = scoring.team_b_name ?? matrix?.team_b_name ?? 'Team B';
+  const aggA = matrix?.available ? matrix.aggregates?.team_a : null;
+  const aggB = matrix?.available ? matrix.aggregates?.team_b : null;
 
   return (
-    <div className="glass-card rounded-xl p-5 mb-6 flex items-center justify-center gap-6">
-      <div className="text-center">
-        <div className="text-[10px] text-slate-500 uppercase mb-1">Allies</div>
-        <div className={cn('text-3xl font-black', alliesLead && !tied ? 'text-blue-400' : 'text-slate-300')}>
-          {scoring.team_a_total}
+    <div className="glass-card rounded-xl p-5 mb-6">
+      <div className="flex items-center justify-center gap-6">
+        <div className="text-center">
+          <div className="text-[10px] text-blue-400 uppercase mb-1 font-semibold">{teamAName}</div>
+          <div className={cn('text-3xl font-black', aLead ? 'text-blue-400' : 'text-slate-300')}>
+            {teamAScore}
+          </div>
+        </div>
+        <div className="text-slate-600 text-2xl font-bold">vs</div>
+        <div className="text-center">
+          <div className="text-[10px] text-rose-400 uppercase mb-1 font-semibold">{teamBName}</div>
+          <div className={cn('text-3xl font-black', bLead ? 'text-rose-400' : 'text-slate-300')}>
+            {teamBScore}
+          </div>
         </div>
       </div>
-      <div className="text-slate-600 text-2xl font-bold">vs</div>
-      <div className="text-center">
-        <div className="text-[10px] text-slate-500 uppercase mb-1">Axis</div>
-        <div className={cn('text-3xl font-black', !alliesLead && !tied ? 'text-rose-400' : 'text-slate-300')}>
-          {scoring.team_b_total}
+      {aggA && aggB && (
+        <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/5 text-xs">
+          <div className="flex justify-around text-slate-300">
+            <div className="text-center">
+              <div className="text-[10px] text-slate-500 uppercase">Kills</div>
+              <div className="font-bold text-blue-300">{aggA.kills}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[10px] text-slate-500 uppercase">Damage</div>
+              <div className="font-bold text-blue-300">{Math.round(aggA.damage).toLocaleString()}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[10px] text-slate-500 uppercase">Avg DPM</div>
+              <div className="font-bold text-blue-300">{aggA.dpm_avg.toFixed(0)}</div>
+            </div>
+          </div>
+          <div className="flex justify-around text-slate-300">
+            <div className="text-center">
+              <div className="text-[10px] text-slate-500 uppercase">Kills</div>
+              <div className="font-bold text-rose-300">{aggB.kills}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[10px] text-slate-500 uppercase">Damage</div>
+              <div className="font-bold text-rose-300">{Math.round(aggB.damage).toLocaleString()}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[10px] text-slate-500 uppercase">Avg DPM</div>
+              <div className="font-bold text-rose-300">{aggB.dpm_avg.toFixed(0)}</div>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -411,7 +459,13 @@ function SummaryTab({
 }) {
   return (
     <>
-      <ScoringBanner scoring={data.scoring} />
+      <ScoringBanner scoring={data.scoring} matrix={data.team_matrix} />
+      {data.team_matrix?.available && (
+        <PlayerMatchMatrix
+          matrix={data.team_matrix}
+          onMapClick={onSelectMap}
+        />
+      )}
       <MapStrip
         matches={data.matches}
         activeRoundId={activeRoundId}
