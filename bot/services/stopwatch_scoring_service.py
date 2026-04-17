@@ -1009,3 +1009,80 @@ class StopwatchScoringService:
         except Exception as e:
             logger.error(f"Error calculating team-aware session scores: {e}", exc_info=True)
             return None
+
+    async def build_round_side_to_team_mapping(
+        self,
+        round_ids: list[int],
+        team_rosters: dict[str, list[str]],
+        team_a_name: str | None = None,
+        team_b_name: str | None = None,
+    ) -> dict[int, dict[int, str]]:
+        """
+        Build per-round mapping from game side (1/2) to persistent team name.
+
+        For each round, counts how many players from each team played on each
+        side, then assigns the side with majority team_a players to team_a name
+        (and vice versa). Handles stopwatch side swaps naturally - R2 rows will
+        get opposite mapping from R1 for the same match.
+
+        Args:
+            round_ids: Round IDs to map.
+            team_rosters: {team_name: [player_guid, ...]} from get_hardcoded_teams.
+            team_a_name: Canonical team A name. Falls back to first dict key.
+            team_b_name: Canonical team B name. Falls back to second dict key.
+
+        Returns:
+            {round_id: {1: team_a_name, 2: team_b_name}} per round. Rounds with
+            ambiguous or missing side data are omitted.
+        """
+        if not round_ids or not team_rosters or len(team_rosters) < 2:
+            return {}
+
+        # Prefer explicit canonical names from caller; fall back to dict order
+        # only as a last resort (insertion order is preserved in Python 3.7+,
+        # but get_hardcoded_teams callers should pass the authoritative names).
+        dict_keys = list(team_rosters.keys())
+        if team_a_name is None:
+            team_a_name = dict_keys[0]
+        if team_b_name is None:
+            team_b_name = next(
+                (k for k in dict_keys if k != team_a_name),
+                dict_keys[1] if len(dict_keys) > 1 else dict_keys[0],
+            )
+        if team_a_name not in team_rosters or team_b_name not in team_rosters:
+            return {}
+        team_a_guids = set(team_rosters[team_a_name])
+        team_b_guids = set(team_rosters[team_b_name])
+
+        placeholders = ",".join(f"${i+1}" for i in range(len(round_ids)))
+        query = f"""
+            SELECT round_id, player_guid, team
+            FROM player_comprehensive_stats
+            WHERE round_id IN ({placeholders})
+        """  # nosec B608 - safe: parameterized placeholders
+        rows = await self.db.fetch_all(query, tuple(round_ids))
+
+        tally: dict[int, dict[int, dict[str, int]]] = {}
+        for rid, guid, side in rows:
+            if side not in (1, 2):
+                continue
+            if rid not in tally:
+                tally[rid] = {1: {"a": 0, "b": 0}, 2: {"a": 0, "b": 0}}
+            if guid in team_a_guids:
+                tally[rid][side]["a"] += 1
+            elif guid in team_b_guids:
+                tally[rid][side]["b"] += 1
+
+        mapping: dict[int, dict[int, str]] = {}
+        for rid, sides in tally.items():
+            s1_a, s1_b = sides[1]["a"], sides[1]["b"]
+            s2_a, s2_b = sides[2]["a"], sides[2]["b"]
+            # Score: team_a on side 1 vs side 2 (positive = side 1)
+            side1_favors_a = (s1_a - s1_b) + (s2_b - s2_a)
+            if side1_favors_a > 0:
+                mapping[rid] = {1: team_a_name, 2: team_b_name}
+            elif side1_favors_a < 0:
+                mapping[rid] = {1: team_b_name, 2: team_a_name}
+            # else: ambiguous - skip
+
+        return mapping

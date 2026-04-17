@@ -433,6 +433,7 @@ class ProximityCog(commands.Cog, name="Proximity"):
                     round_number,
                     target_dt=target_dt,
                     round_date=round_date_str,
+                    window_minutes=120,
                 )
 
                 if round_id is None:

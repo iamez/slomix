@@ -314,10 +314,74 @@ export interface SessionScoringMap {
 }
 export interface SessionScoring {
   available: boolean;
+  team_a_name?: string;
+  team_b_name?: string;
+  team_a_score?: number;
+  team_b_score?: number;
   team_a_total?: number;
   team_b_total?: number;
   maps?: SessionScoringMap[];
 }
+
+export interface SessionTeamMatrixCell {
+  map_index: number;
+  kills: number;
+  deaths: number;
+  damage: number;
+  time_played: number;
+  dpm: number;
+  kd: number;
+  played: boolean;
+}
+
+export interface SessionTeamMatrixTotals {
+  kills: number;
+  deaths: number;
+  damage: number;
+  time_played: number;
+  dpm: number;
+  kd: number;
+}
+
+export interface SessionTeamMatrixPlayer {
+  player_guid: string;
+  player_name: string;
+  totals: SessionTeamMatrixTotals;
+  cells: SessionTeamMatrixCell[];
+}
+
+export interface SessionTeamMatrixMap {
+  map_name: string;
+  map_index: number;
+  team_a_score: number | null;
+  team_b_score: number | null;
+}
+
+export interface SessionTeamMatrixAggregates {
+  kills: number;
+  deaths: number;
+  damage: number;
+  time_played: number;
+  dpm_avg: number;
+  kd_avg: number;
+}
+
+export interface SessionTeamMatrix {
+  available: boolean;
+  reason?: string;
+  team_a_name?: string;
+  team_b_name?: string;
+  maps?: SessionTeamMatrixMap[];
+  rosters?: {
+    team_a: SessionTeamMatrixPlayer[];
+    team_b: SessionTeamMatrixPlayer[];
+  };
+  aggregates?: {
+    team_a: SessionTeamMatrixAggregates;
+    team_b: SessionTeamMatrixAggregates;
+  };
+}
+
 export interface SessionDetailResponse {
   session_id: number | null;
   date: string | null;
@@ -326,6 +390,7 @@ export interface SessionDetailResponse {
   matches: SessionMatch[];
   players: SessionPlayer[];
   scoring: SessionScoring;
+  team_matrix?: SessionTeamMatrix;
 }
 
 export interface SessionGraphTimelinePoint {

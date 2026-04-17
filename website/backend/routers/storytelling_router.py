@@ -38,11 +38,21 @@ router = APIRouter()
 logger = get_app_logger("api.storytelling")
 
 
+_MIN_SESSION_DATE = date(2020, 1, 1)
+
+
 def _parse_date(val: str) -> date:
     try:
-        return datetime.strptime(val, "%Y-%m-%d").date()
+        parsed = datetime.strptime(val, "%Y-%m-%d").date()
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+    today = date.today()
+    if parsed > today or parsed < _MIN_SESSION_DATE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"session_date out of range (must be {_MIN_SESSION_DATE.isoformat()} to {today.isoformat()}).",
+        )
+    return parsed
 
 
 @router.get("/storytelling/moments")
