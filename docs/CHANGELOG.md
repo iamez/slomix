@@ -10,6 +10,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Refactor — Sprint 2.5 matrix cleanup (2026-04-17, Mega Audit v3)
+- **`website/backend/utils/et_constants.py`**: new `UTILITY_WEAPONS_EXCLUDED_FROM_ACC` frozenset — single source of truth for the splash/utility weapon filter used in accuracy/headshot queries (CR-05).
+- **`website/backend/services/session_matrix_service.py`**: new module extracting the 289-line `build_team_matrix` + `_extract_team_rosters` from `sessions_router.py` into a testable `SessionMatrixService` class with 7 private helpers. SQL query now parameterizes the utility weapon list via `?` placeholders instead of inlining it (CR-04).
+- **`sessions_router.py`**: 1944 → 1655 lines (-15%). `build_team_matrix(...)` call replaced with `SessionMatrixService(db, scoring_service).compute(...)`.
+- **`tests/unit/test_session_matrix_service.py`**: new — 12 unit tests with FakeDB pattern covering stopwatch swap + substitution, color-code strip, tri-format side normalization (`1`/`'1'`/`'Axis'`), division-by-zero guards, and degenerate-input branches. Total suite: 496 → 508 passed, 0 regressions (CR-07).
+- Full report: `docs/research/MEGA_AUDIT_V3_SPRINT2.5_2026-04-17.md`.
+
 ### Security — Sprint 2 (2026-04-17, Mega Audit v3)
 - **`dependencies.py`**: new `require_admin_user` FastAPI dependency that reuses existing `WEBSITE_ADMIN_DISCORD_IDS` / `ADMIN_DISCORD_IDS` / `OWNER_USER_ID` env vars for consistent admin gating (matches `availability.py` and `planning.py`). Raises 401 on missing session, 403 on non-admin session.
 - **`diagnostics_router.py`**: 10 of 11 endpoints now require admin session (`/diagnostics`, `/diagnostics/lua-webhook`, `/diagnostics/round-linkage`, `/diagnostics/time-audit`, `/diagnostics/spawn-audit`, `/monitoring/status`, `/live-status`, `/server-activity/history`, `/voice-activity/history`, `/voice-activity/current`). `/status` stays public as a health check.
