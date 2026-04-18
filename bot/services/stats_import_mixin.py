@@ -266,6 +266,7 @@ class _StatsImportMixin:
                 insert_vals.append(int(stats_data.get("human_player_count", 0) or 0))
 
             placeholders = ", ".join(["?"] * len(insert_cols))
+            # nosec B608 - insert_cols entries come from schema introspection + hardcoded constants, not user input
             insert_round_query = f"""
                 INSERT INTO rounds (
                     {", ".join(insert_cols)}
@@ -334,6 +335,7 @@ class _StatsImportMixin:
                         summary_vals.append(int(human_count))
 
                     summary_placeholders = ", ".join(["?"] * len(summary_cols))
+                    # nosec B608 - summary_cols entries come from schema introspection + hardcoded constants, not user input
                     insert_summary_query = f"""
                         INSERT INTO rounds (
                             {", ".join(summary_cols)}
@@ -797,6 +799,7 @@ class _StatsImportMixin:
 
                 insert_cols += ["weapon_name", "kills", "deaths", "headshots", "hits", "shots", "accuracy"]
                 placeholders = ",".join(["?"] * len(insert_cols))
+                # nosec B608 - insert_cols entries are hardcoded constants + schema-introspected column names, not user input
                 insert_sql = f"INSERT INTO weapon_comprehensive_stats ({', '.join(insert_cols)}) VALUES ({placeholders})"
 
                 logger.debug(
