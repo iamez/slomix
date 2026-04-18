@@ -266,13 +266,12 @@ class _StatsImportMixin:
                 insert_vals.append(int(stats_data.get("human_player_count", 0) or 0))
 
             placeholders = ", ".join(["?"] * len(insert_cols))
-            # nosec B608 - insert_cols entries come from schema introspection + hardcoded constants, not user input
             insert_round_query = f"""
                 INSERT INTO rounds (
                     {", ".join(insert_cols)}
                 ) VALUES ({placeholders})
                 RETURNING id
-            """
+            """  # nosec B608 - cols from schema introspection + hardcoded constants; values parameterized via ?
             round_id = await self.db_adapter.fetch_val(
                 insert_round_query,
                 tuple(insert_vals),
@@ -335,13 +334,12 @@ class _StatsImportMixin:
                         summary_vals.append(int(human_count))
 
                     summary_placeholders = ", ".join(["?"] * len(summary_cols))
-                    # nosec B608 - summary_cols entries come from schema introspection + hardcoded constants, not user input
                     insert_summary_query = f"""
                         INSERT INTO rounds (
                             {", ".join(summary_cols)}
                         ) VALUES ({summary_placeholders})
                         RETURNING id
-                    """
+                    """  # nosec B608 - cols from schema introspection + hardcoded constants; values parameterized via ?
                     match_summary_id = await self.db_adapter.fetch_val(
                         insert_summary_query,
                         tuple(summary_vals),
@@ -799,8 +797,7 @@ class _StatsImportMixin:
 
                 insert_cols += ["weapon_name", "kills", "deaths", "headshots", "hits", "shots", "accuracy"]
                 placeholders = ",".join(["?"] * len(insert_cols))
-                # nosec B608 - insert_cols entries are hardcoded constants + schema-introspected column names, not user input
-                insert_sql = f"INSERT INTO weapon_comprehensive_stats ({', '.join(insert_cols)}) VALUES ({placeholders})"
+                insert_sql = f"INSERT INTO weapon_comprehensive_stats ({', '.join(insert_cols)}) VALUES ({placeholders})"  # nosec B608 - cols are hardcoded constants + schema-introspected names; values parameterized
 
                 logger.debug(
                     f"Preparing to insert {len(weapon_stats)} weapon rows for {player.get('name')} (session {round_id})"
