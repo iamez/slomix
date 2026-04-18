@@ -10,6 +10,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Refactor — Sprint 3 architecture cleanup (2026-04-18, Mega Audit v3)
+- **`storytelling_service.py`**: 10 module-level timing constants (`CARRIER_RETURN_WINDOW_MS`, `CROSSFIRE_TIMING_WINDOW_MS`, `SPAWN_TIMING_WINDOW_MS`, `OBJECTIVE_EVENT_WINDOW_MS`, `KILL_STREAK_WINDOW_MS`, `MULTIKILL_SHORT_WINDOW_MS`, `MULTIKILL_EXTENDED_WINDOW_MS`, `TRADE_KILL_DELTA_MS`, `LURKER_MIN_DURATION_MS`, `DEATH_TRADE_WINDOW_MS`) replacing 15+ magic ms numbers scattered across loaders and SQL (REFAC-01).
+- **`bot/core/guid_utils.py`** (new): `short_guid()` / `name_or_short_guid()` helpers centralizing the `(guid or "?")[:8]` pattern previously duplicated in 12 files. Applied in `storytelling_service`, `storytelling_router`, `proximity_helpers` (CQ-03).
+- **`api_helpers.handle_router_errors`** (new decorator): one-line replacement for the `try/except Exception: logger.error + raise HTTPException(500)` wrapper boilerplate. Preserves `HTTPException` raises, logs via `logger.exception` with stack trace. Applied to 2 endpoints in `proximity_support.py` as demo; 63 other candidate sites documented for future migration (ARCH-01).
+- **`proximity_helpers.ProximityQueryBuilder`** (new): fluent builder for the `if session_date: ... if map_name: ... if player_guid: ...` WHERE-clause pattern repeated ~79× across 4 proximity routers. Applied to both endpoints in `proximity_support.py` (16 lines of boilerplate removed each) (CQ-04).
+- **`pyproject.toml`**: added `bot/diagnostics/*` to ruff's T201 per-file-ignores (standalone CLI diagnostics legitimately use `print()`).
+- Full report: `docs/research/MEGA_AUDIT_V3_SPRINT3_2026-04-18.md`.
+
 ### Refactor — Sprint 2.5 matrix cleanup (2026-04-17, Mega Audit v3)
 - **`website/backend/utils/et_constants.py`**: new `UTILITY_WEAPONS_EXCLUDED_FROM_ACC` frozenset — single source of truth for the splash/utility weapon filter used in accuracy/headshot queries (CR-05).
 - **`website/backend/services/session_matrix_service.py`**: new module extracting the 289-line `build_team_matrix` + `_extract_team_rosters` from `sessions_router.py` into a testable `SessionMatrixService` class with 7 private helpers. SQL query now parameterizes the utility weapon list via `?` placeholders instead of inlining it (CR-04).
