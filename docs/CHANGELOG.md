@@ -10,6 +10,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Refactor — Sprint 6 / D.1 storytelling_service split (2026-04-18, Mega Audit v3)
+- **`storytelling_service.py` 3302 → 14 line shim** + 10-module package under `storytelling/` (base, service, kis, loaders, moments, archetypes, synergy, win_contribution, momentum, narrative, advanced_metrics). Biggest file now 889 lines (moments.py).
+- **Mixin pattern**: `StorytellingService` inherits from 9 `_XMixin` classes. Public API unchanged — all 83 storytelling-related tests pass without modification.
+- **AST-based split**: Python `ast` module parsed all 42 methods and categorized into domain modules deterministically.
+- Added `website/backend/services/storytelling/*` to ruff F403/F405 per-file-ignores (explicit `__all__` in base.py).
+- Full report: `docs/research/MEGA_AUDIT_V3_SPRINT6_STORYTELLING_2026-04-18.md`.
+
 ### Refactor — Sprint 5 / P3f shared/ package (2026-04-18, Mega Audit v3)
 - **New `shared/` package** (re-export shim): makes the bot ↔ website boundary explicit. Modules: `config`, `database_adapter`, `season_manager`, `utils`, `guid_utils`, plus `services/{session_data_service, session_stats_aggregator, stopwatch_scoring_service, round_linkage_anomaly_service}`.
 - **All 25 `website/backend → bot/` cross-imports migrated to `shared/`**: `grep "^from bot\." website/backend/` now returns 0 hits across 16 touched files.
