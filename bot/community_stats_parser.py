@@ -13,6 +13,7 @@ from typing import Any
 
 import discord
 
+from bot.core.guid_utils import short_guid
 from bot.core.round_contract import (
     derive_stopwatch_contract,
     normalize_side_value,
@@ -1297,9 +1298,9 @@ class C0RNP0RN3StatsParser:
             # This matches bot identity across R1→R2 within the same round pair.
             if is_bot and clean_name:
                 bot_hash = hashlib.sha256(clean_name.encode()).hexdigest()[:24]
-                effective_guid = f"{guid[:8]}{bot_hash}"  # e.g. "OMNIBOT0a1b2c3d4e5f6..."
+                effective_guid = f"{short_guid(guid)}{bot_hash}"  # e.g. "OMNIBOT0a1b2c3d4e5f6..."
             else:
-                effective_guid = guid[:8]
+                effective_guid = short_guid(guid)
 
             return {
                 'guid': effective_guid,  # Unique per bot via name hash

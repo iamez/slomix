@@ -8,8 +8,8 @@ from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.routers.api_helpers import handle_router_errors
 from website.backend.routers.proximity_helpers import (
+    ProximityQueryBuilder,
     _build_proximity_where_clause,
-    _parse_iso_date,
     _table_column_exists,
 )
 
@@ -408,19 +408,12 @@ async def get_proximity_combat_position_stats(
     if not await _table_column_exists(db, 'proximity_combat_position', 'attacker_guid'):
         return {"status": "ok", "summary": {}, "by_class": [], "by_map": []}
 
-    where_parts: list = []
-    params: list = []
-    if session_date:
-        params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
-        where_parts.append(f"session_date = ${len(params)}")
-    else:
-        params.append(range_days)
-        where_parts.append(f"session_date >= CURRENT_DATE - ${len(params)} * INTERVAL '1 day'")
-    if map_name:
-        params.append(map_name)
-        where_parts.append(f"map_name = ${len(params)}")
-
-    where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+    where_sql, params = (
+        ProximityQueryBuilder()
+        .with_session_scope(session_date, range_days)
+        .with_map_name(map_name)
+        .build()
+    )
 
     # Summary with kill distance stats
     summary_row = await db.fetch_one(

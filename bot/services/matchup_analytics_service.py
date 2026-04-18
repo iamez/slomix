@@ -20,6 +20,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from bot.core.guid_utils import short_guid
+
 logger = logging.getLogger(__name__)
 
 # Simple TTL cache implementation (avoid external dependency)
@@ -541,7 +543,7 @@ class MatchupAnalyticsService:
                 impact_percent = (delta_dpm / baseline_dpm * 100) if baseline_dpm > 0 else 0
 
                 # Get player name from first match
-                player_name = match_list[0].get('name', guid[:8])
+                player_name = match_list[0].get('name', short_guid(guid))
 
                 player_stat = PlayerMatchupStats(
                     player_guid=guid,

@@ -10,6 +10,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Refactor — Sprint 4B + 4C guid_utils + ProximityQueryBuilder migration (2026-04-18, Mega Audit v3)
+- **Sprint 4B** (`short_guid()`): 7 sites migrated across `prediction_embed_builder`, `matchup_analytics_service`, `team_management_cog`, `matchup_cog`, `predictions_cog`, `proximity_session_score_service`, `community_stats_parser`. Replaces `guid[:8]` / `(guid or "?")[:8]` / `f"Player_{guid[:8]}"` with the Sprint 3 helper.
+- **Sprint 4C** (`ProximityQueryBuilder`): 3 endpoints migrated — `/proximity/carrier-events`, `/proximity/carrier-kills`, `/proximity/combat-position-stats`. Removes ~40 lines of `where_parts/params` boilerplate; uses fluent `.with_session_scope()` / `.with_map_name()` / `.with_raw()` API with automatic `$N` placeholder renumbering.
+- **`pyproject.toml`**: add `bot/tools/*` to ruff T201 per-file-ignores (dev CLI scripts).
+- Full report: `docs/research/MEGA_AUDIT_V3_SPRINT4BC_2026-04-18.md`.
+
 ### Refactor — Sprint 4A error-decorator migration (2026-04-18, Mega Audit v3)
 - **25 endpointov dobilo `@handle_router_errors()`** (dekorator iz Sprint 3) in ~150 vrstic identičnega `try/except → HTTPException(500)` boilerplatea izbrisanih:
   - `proximity_positions.py` — 7 endpointov

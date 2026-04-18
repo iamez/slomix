@@ -15,6 +15,8 @@ from datetime import datetime, timedelta
 import discord
 from discord.ext import commands
 
+from bot.core.guid_utils import short_guid
+
 logger = logging.getLogger('PredictionsCog')
 
 
@@ -679,7 +681,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
 
             # Add leaderboard entries
             for rank, (guid, total, completed, correct, avg_acc) in enumerate(sorted_rows, 1):
-                player_name = guid_to_name.get(guid, f"Player_{guid[:8]}")
+                player_name = guid_to_name.get(guid, f"Player_{short_guid(guid)}")
                 accuracy = (correct / completed * 100) if completed > 0 else 0
                 avg_acc_pct = (avg_acc * 100) if avg_acc else 0
 
