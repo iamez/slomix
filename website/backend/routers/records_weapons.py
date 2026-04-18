@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from bot.core.season_manager import SeasonManager
 from website.backend.dependencies import get_db
@@ -13,15 +13,19 @@ from website.backend.routers.api_helpers import (
     clean_weapon_name as _clean_weapon_name,
 )
 from website.backend.routers.api_helpers import (
+    handle_router_errors,
+    resolve_display_name,
+)
+from website.backend.routers.api_helpers import (
     normalize_weapon_key as _normalize_weapon_key,
 )
-from website.backend.routers.api_helpers import resolve_display_name
 
 router = APIRouter()
 logger = get_app_logger("api.records.weapons")
 
 
 @router.get("/stats/weapons")
+@handle_router_errors("Database error")
 async def get_weapon_stats(
     period: str = "all",
     limit: int = 20,
@@ -70,12 +74,7 @@ async def get_weapon_stats(
     """
     params.append(limit)
 
-    try:
-        rows = await db.fetch_all(query, tuple(params))
-    except Exception as e:
-        logger.error(f"Error fetching weapon stats: {e}")
-        raise HTTPException(status_code=500, detail="Database error")
-
+    rows = await db.fetch_all(query, tuple(params))
     if not rows:
         return []
 
@@ -210,6 +209,7 @@ async def get_weapon_hall_of_fame(
 
 @router.get("/stats/weapons/by-player")
 @router.get("/stats/weapons/by_player")
+@handle_router_errors("Database error")
 async def get_weapon_stats_by_player(
     period: str = "all",
     player_limit: int = 25,
@@ -284,12 +284,7 @@ async def get_weapon_stats_by_player(
         ORDER BY player_guid, total_kills DESC, total_hits DESC
     """
 
-    try:
-        rows = await db.fetch_all(query, tuple(params))
-    except Exception as e:
-        logger.error(f"Error fetching weapon stats by player: {e}")
-        raise HTTPException(status_code=500, detail="Database error")
-
+    rows = await db.fetch_all(query, tuple(params))
     players: dict[str, dict[str, Any]] = {}
     for row in rows:
         guid = row[0]
