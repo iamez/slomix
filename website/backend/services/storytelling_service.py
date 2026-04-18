@@ -993,7 +993,7 @@ class StorytellingService:
             FROM revives
             WHERE revive_burst >= 3
             ORDER BY revive_burst DESC, outcome_time
-        """, (sd,))
+        """, (sd,))  # nosec B608 - trusted module constant, not user input
 
         # Group by (reviver_guid, round_start_unix) and take best burst per medic per round
         seen = {}
