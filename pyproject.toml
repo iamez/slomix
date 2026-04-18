@@ -99,6 +99,7 @@ ignore = [
 "bot/endstats_parser.py" = ["T201"]
 "bot/diagnostics/*" = ["T201"]  # Standalone CLI diagnostics use print() for dev output
 "bot/tools/*" = ["T201"]  # Standalone CLI dev scripts use print() for output
+"website/backend/services/storytelling/*" = ["F403", "F405"]  # Mixin pattern uses `from .base import *` with explicit __all__
 "website/backend/init_db.py" = ["T201"]
 "postgresql_database_manager.py" = ["T201", "SIM117", "SIM118", "F841"]
 "scripts/*" = ["T201"]
