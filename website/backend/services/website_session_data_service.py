@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from bot.services.session_data_service import SessionDataService
+from shared.services.session_data_service import SessionDataService
 
 
 class WebsiteSessionDataService(SessionDataService):

@@ -14,7 +14,7 @@ import asyncio
 import traceback
 from datetime import date, datetime
 
-from bot.core.guid_utils import short_guid as _safe_short
+from shared.guid_utils import short_guid as _safe_short
 from website.backend.logging_config import get_app_logger
 from website.backend.utils.et_constants import strip_et_colors, weapon_name
 

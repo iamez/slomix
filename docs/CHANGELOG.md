@@ -10,6 +10,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Refactor — Sprint 5 / P3f shared/ package (2026-04-18, Mega Audit v3)
+- **New `shared/` package** (re-export shim): makes the bot ↔ website boundary explicit. Modules: `config`, `database_adapter`, `season_manager`, `utils`, `guid_utils`, plus `services/{session_data_service, session_stats_aggregator, stopwatch_scoring_service, round_linkage_anomaly_service}`.
+- **All 25 `website/backend → bot/` cross-imports migrated to `shared/`**: `grep "^from bot\." website/backend/` now returns 0 hits across 16 touched files.
+- Low-risk shim: canonical code stays in `bot/`. Future micro-service split is one file move per module + back-compat shim in `bot/`, not a cross-repo rename.
+- Full report: `docs/research/MEGA_AUDIT_V3_SPRINT5_SHARED_2026-04-18.md`.
+
 ### Refactor — Sprint 4B + 4C guid_utils + ProximityQueryBuilder migration (2026-04-18, Mega Audit v3)
 - **Sprint 4B** (`short_guid()`): 7 sites migrated across `prediction_embed_builder`, `matchup_analytics_service`, `team_management_cog`, `matchup_cog`, `predictions_cog`, `proximity_session_score_service`, `community_stats_parser`. Replaces `guid[:8]` / `(guid or "?")[:8]` / `f"Player_{guid[:8]}"` with the Sprint 3 helper.
 - **Sprint 4C** (`ProximityQueryBuilder`): 3 endpoints migrated — `/proximity/carrier-events`, `/proximity/carrier-kills`, `/proximity/combat-position-stats`. Removes ~40 lines of `where_parts/params` boilerplate; uses fluent `.with_session_scope()` / `.with_map_name()` / `.with_raw()` API with automatic `$N` placeholder renumbering.

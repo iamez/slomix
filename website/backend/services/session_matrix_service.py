@@ -9,7 +9,7 @@ Builds a Player × Map matrix that respects:
 """
 from __future__ import annotations
 
-from bot.services.stopwatch_scoring_service import (
+from shared.services.stopwatch_scoring_service import (
     StopwatchScoringService,
     normalize_side,
 )

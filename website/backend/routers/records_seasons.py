@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
-from bot.core.season_manager import SeasonManager
+from shared.season_manager import SeasonManager
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
