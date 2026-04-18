@@ -10,10 +10,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from bot.config import load_config
-from bot.core.utils import escape_like_pattern
-from bot.services.session_stats_aggregator import SessionStatsAggregator
-from bot.services.stopwatch_scoring_service import StopwatchScoringService
+from shared.config import load_config
+from shared.services.session_stats_aggregator import SessionStatsAggregator
+from shared.services.stopwatch_scoring_service import StopwatchScoringService
+from shared.utils import escape_like_pattern
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
