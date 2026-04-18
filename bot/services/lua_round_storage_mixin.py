@@ -12,6 +12,7 @@ import json
 from datetime import datetime
 
 from bot.core.round_contract import normalize_end_reason, normalize_side_value
+from bot.core.round_linker import _parse_round_datetime
 from bot.logging_config import get_logger
 
 logger = get_logger("bot.core")
@@ -54,7 +55,6 @@ class _LuaRoundStorageMixin:
                     (round_id,),
                 )
                 if round_row:
-                    from bot.core.round_linker import _parse_round_datetime
                     dt = _parse_round_datetime(
                         round_row[0] if isinstance(round_row, (list, tuple)) else round_row.get('round_date'),
                         round_row[1] if isinstance(round_row, (list, tuple)) else round_row.get('round_time'),
@@ -150,7 +150,6 @@ class _LuaRoundStorageMixin:
                 )
                 if not current_round:
                     continue
-                from bot.core.round_linker import _parse_round_datetime
                 current_round_dt = _parse_round_datetime(current_round[0], current_round[1])
                 if not current_round_dt:
                     continue
