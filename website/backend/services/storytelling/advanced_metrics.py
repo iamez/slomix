@@ -376,7 +376,8 @@ class _AdvancedMetricsMixin:
                 import json as _json
                 try:
                     path_data = _json.loads(path_data)
-                except Exception:  # noqa: S112 — skip unparseable track paths
+                except (ValueError, TypeError):
+                    # Unparseable JSON (legacy rows / corrupted data) — skip the track.
                     continue
             points = []
             last_t = -DOWNSAMPLE_MS
