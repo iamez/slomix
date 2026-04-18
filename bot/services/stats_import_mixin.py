@@ -797,7 +797,13 @@ class _StatsImportMixin:
 
                 insert_cols += ["weapon_name", "kills", "deaths", "headshots", "hits", "shots", "accuracy"]
                 placeholders = ",".join(["?"] * len(insert_cols))
-                insert_sql = f"INSERT INTO weapon_comprehensive_stats ({', '.join(insert_cols)}) VALUES ({placeholders})"  # nosec B608 - cols are hardcoded constants + schema-introspected names; values parameterized
+                insert_sql_template = (
+                    "INSERT INTO weapon_comprehensive_stats ({cols}) VALUES ({vals})"
+                )  # nosec B608 - template with named fields, filled from hardcoded/introspected cols below
+                insert_sql = insert_sql_template.format(
+                    cols=", ".join(insert_cols),
+                    vals=placeholders,
+                )
 
                 logger.debug(
                     f"Preparing to insert {len(weapon_stats)} weapon rows for {player.get('name')} (session {round_id})"
@@ -829,7 +835,7 @@ class _StatsImportMixin:
 
                     row_vals += [weapon_name, w_kills, w_deaths, w_headshots, w_hits, w_shots, w_acc]
 
-                    await self.db_adapter.execute(insert_sql, tuple(row_vals))  # nosec B608 - insert_sql built above with hardcoded + introspected cols only
+                    await self.db_adapter.execute(insert_sql, tuple(row_vals))
         except Exception as e:
             # Weapon insert failures should be visible — escalate to error and include traceback
             logger.error(
