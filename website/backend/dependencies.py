@@ -5,13 +5,13 @@ from typing import AsyncGenerator
 
 from fastapi import HTTPException, Request
 
-from bot.config import load_config
+from shared.config import load_config
 
 # Import base class and Postgres adapter from bot core
-from bot.core.database_adapter import (
+from shared.database_adapter import (
     DatabaseAdapter,
 )
-from bot.core.database_adapter import (
+from shared.database_adapter import (
     create_adapter as create_postgres_adapter,
 )
 

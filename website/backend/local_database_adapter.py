@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 # Import base class from bot core
-from bot.core.database_adapter import DatabaseAdapter
+from shared.database_adapter import DatabaseAdapter
 
 # SQLite support
 try:

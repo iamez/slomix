@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from bot.services.round_linkage_anomaly_service import assess_round_linkage_anomalies
+from shared.services.round_linkage_anomaly_service import assess_round_linkage_anomalies
 from website.backend.dependencies import get_db, require_admin_user
 from website.backend.env_utils import getenv_int
 from website.backend.local_database_adapter import DatabaseAdapter

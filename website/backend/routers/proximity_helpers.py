@@ -11,7 +11,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from bot.core.guid_utils import short_guid
+from shared.guid_utils import short_guid
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 

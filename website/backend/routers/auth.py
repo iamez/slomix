@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from bot.core.database_adapter import DatabaseAdapter
+from shared.database_adapter import DatabaseAdapter
 from website.backend.dependencies import get_db
 from website.backend.logging_config import get_app_logger
 from website.backend.routers.api_helpers import resolve_display_name

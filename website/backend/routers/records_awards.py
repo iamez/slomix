@@ -4,8 +4,8 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from bot.core.season_manager import SeasonManager
-from bot.core.utils import escape_like_pattern
+from shared.season_manager import SeasonManager
+from shared.utils import escape_like_pattern
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
