@@ -7,6 +7,7 @@ from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.requests import Request
 
+from bot.core.guid_utils import short_guid
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
@@ -170,7 +171,7 @@ async def get_kill_impact_details(
             "SELECT MAX(killer_name) FROM storytelling_kill_impact WHERE session_date = $1 AND killer_guid = $2",
             (sd, player_guid)
         )
-        player_name = strip_et_colors((name_row[0] if name_row else "") or player_guid[:8])
+        player_name = strip_et_colors((name_row[0] if name_row else "") or short_guid(player_guid))
 
     return {
         "status": "ok",

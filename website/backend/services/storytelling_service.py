@@ -14,15 +14,11 @@ import asyncio
 import traceback
 from datetime import date, datetime
 
+from bot.core.guid_utils import short_guid as _safe_short
 from website.backend.logging_config import get_app_logger
 from website.backend.utils.et_constants import strip_et_colors, weapon_name
 
 logger = get_app_logger("storytelling")
-
-
-def _safe_short(guid: str | None) -> str:
-    """Safe guid[:8] that handles None."""
-    return (guid or "?")[:8]
 
 # Per-session locks to prevent concurrent TOCTOU races on lazy compute
 class _BoundedLockDict:
@@ -84,6 +80,20 @@ SYNERGY_WEIGHTS = {
     'medic': 0.15,
 }
 COHESION_MAX_DISPERSION = 1500      # Game units; above this = 0 cohesion
+
+# ── Timing windows (milliseconds) ─────────────────────────────────
+# Previously magic numbers scattered across loaders, detectors, and SQL.
+# Consolidated here so query tuning is one edit instead of ~20.
+CARRIER_RETURN_WINDOW_MS = 10000    # Teammate must return the flag within 10s of the carrier kill
+CROSSFIRE_TIMING_WINDOW_MS = 3000   # Crossfire teammate must have dealt damage within 3s of the kill
+SPAWN_TIMING_WINDOW_MS = 2000       # Spawn-wave score keyed to kills within 2s of a spawn event
+OBJECTIVE_EVENT_WINDOW_MS = 15000   # Kill is "objective-related" if within 15s of an obj event
+KILL_STREAK_WINDOW_MS = 10000       # 3 kills within this window count as a streak
+MULTIKILL_SHORT_WINDOW_MS = 5000    # 2-kill multikill requires this tight spacing
+MULTIKILL_EXTENDED_WINDOW_MS = 8000 # 3+ kills allow a slightly longer spacing
+TRADE_KILL_DELTA_MS = 5000          # Avenger must kill within 5s of teammate's death
+LURKER_MIN_DURATION_MS = 2000       # player_track segments shorter than this are not "lurks"
+DEATH_TRADE_WINDOW_MS = 10000       # Window after a death in which a trade counts
 
 def _to_date(val: str | date) -> date:
     """Normalize to datetime.date for asyncpg DATE params (proximity tables use DATE type)."""
@@ -234,7 +244,7 @@ class StorytellingService:
             if cr_key in carrier_returns:
                 chain = False
                 for ret in carrier_returns[cr_key]:
-                    if 0 < (ret - kill_time) <= 10000:  # returned within 10s
+                    if 0 < (ret - kill_time) <= CARRIER_RETURN_WINDOW_MS:
                         carrier_mult = CARRIER_CHAIN_MULTIPLIER
                         chain = True
                         break
@@ -264,7 +274,7 @@ class StorytellingService:
         is_cf = False
         if round_key in crossfires:
             for cf_time in crossfires[round_key]:
-                if abs(kill_time - cf_time) <= 3000:
+                if abs(kill_time - cf_time) <= CROSSFIRE_TIMING_WINDOW_MS:
                     cf_mult = CROSSFIRE_MULTIPLIER
                     is_cf = True
                     break
@@ -274,7 +284,7 @@ class StorytellingService:
         if round_key in spawn_timings:
             best_score = max(
                 (st_data[2] for st_data in spawn_timings[round_key]
-                 if st_data[0] == killer_guid and abs(st_data[1] - kill_time) <= 2000),
+                 if st_data[0] == killer_guid and abs(st_data[1] - kill_time) <= SPAWN_TIMING_WINDOW_MS),
                 default=0.0,
             )
             spawn_mult = 1.0 + best_score
@@ -331,7 +341,7 @@ class StorytellingService:
         victim_reinf_stored = 0.0
         if round_key in spawn_timings:
             for st_data in spawn_timings[round_key]:
-                if st_data[0] == killer_guid and abs(st_data[1] - kill_time) <= 2000:
+                if st_data[0] == killer_guid and abs(st_data[1] - kill_time) <= SPAWN_TIMING_WINDOW_MS:
                     # Check if we have reinf data (extended tuple)
                     if len(st_data) > 4:
                         victim_reinf_val = st_data[4]  # victim_reinf seconds
@@ -547,14 +557,16 @@ class StorytellingService:
         """Detector A: Multi-kill streaks (3+ kills within 10s window).
         Enhanced with objective proximity bonus: +1★ if streak overlaps with
         carrier event, objective run, or team push in the same round."""
-        rows = await self.db.fetch_all("""
+        # RANGE BETWEEN N PRECEDING cannot accept query params in PostgreSQL,
+        # so we interpolate the trusted module constant directly.
+        rows = await self.db.fetch_all(f"""
             WITH windowed AS (
                 SELECT killer_guid, killer_name, kill_time, round_number, map_name,
                        round_start_unix,
                        COUNT(*) OVER (
                            PARTITION BY killer_guid, round_start_unix
                            ORDER BY kill_time
-                           RANGE BETWEEN 10000 PRECEDING AND CURRENT ROW
+                           RANGE BETWEEN {KILL_STREAK_WINDOW_MS} PRECEDING AND CURRENT ROW
                        ) AS streak
                 FROM proximity_kill_outcome
                 WHERE session_date = $1
@@ -564,7 +576,7 @@ class StorytellingService:
             FROM windowed
             WHERE streak >= 3
             ORDER BY streak DESC, kill_time
-        """, (sd,))
+        """, (sd,))  # nosec B608 - trusted module constant, not user input
 
         # Pre-load objective event times for proximity bonus
         obj_times = await self._load_objective_event_times(sd)
@@ -597,7 +609,7 @@ class StorytellingService:
             rkey = (info["round_start_unix"], info["round_number"])
             kt = info["kill_time"] or 0
             for evt_time in obj_times.get(rkey, []):
-                if abs(kt - evt_time) <= 15000:  # within 15s of objective event
+                if abs(kt - evt_time) <= OBJECTIVE_EVENT_WINDOW_MS:
                     near_obj = True
                     break
             if near_obj:
@@ -661,9 +673,9 @@ class StorytellingService:
                 AND cr.round_number = ck.round_number
                 AND cr.round_start_unix = ck.round_start_unix
             WHERE ck.session_date = $1
-                AND (cr.return_time - ck.kill_time) BETWEEN 0 AND 10000
+                AND (cr.return_time - ck.kill_time) BETWEEN 0 AND $2
             ORDER BY ck.kill_time
-        """, (sd,))
+        """, (sd, CARRIER_RETURN_WINDOW_MS))
 
         moments = []
         for r in (rows or []):
@@ -763,10 +775,10 @@ class StorytellingService:
                    original_killer_guid, original_killer_name, delta_ms,
                    round_number, map_name, traded_kill_time
             FROM proximity_lua_trade_kill
-            WHERE session_date = $1 AND delta_ms <= 5000
+            WHERE session_date = $1 AND delta_ms <= $2
             ORDER BY delta_ms ASC
             LIMIT 10
-        """, (sd,))
+        """, (sd, TRADE_KILL_DELTA_MS))
 
         moments = []
         for r in (rows or []):
@@ -959,14 +971,16 @@ class StorytellingService:
         """Detector I: Medic revives 3+ teammates within a 15s window.
         Inspired by Overwatch's mass-rez moments — in high-TTK games like ET,
         rapid revives swing fights dramatically."""
-        rows = await self.db.fetch_all("""
+        # RANGE BETWEEN N PRECEDING cannot accept query params in PostgreSQL,
+        # so we interpolate the trusted module constant directly.
+        rows = await self.db.fetch_all(f"""
             WITH revives AS (
                 SELECT reviver_guid, reviver_name, outcome_time,
                        round_number, map_name, round_start_unix,
                        COUNT(*) OVER (
                            PARTITION BY reviver_guid, round_start_unix
                            ORDER BY outcome_time
-                           RANGE BETWEEN 15000 PRECEDING AND CURRENT ROW
+                           RANGE BETWEEN {OBJECTIVE_EVENT_WINDOW_MS} PRECEDING AND CURRENT ROW
                        ) AS revive_burst
                 FROM proximity_kill_outcome
                 WHERE session_date = $1
@@ -1090,7 +1104,7 @@ class StorytellingService:
                     victims_in_window = set()
 
                     for j in range(i, len(team_kills)):
-                        if team_kills[j]["time"] - window_start > 15000:
+                        if team_kills[j]["time"] - window_start > OBJECTIVE_EVENT_WINDOW_MS:
                             break
                         window_kills.append(team_kills[j])
                         victims_in_window.add(team_kills[j]["victim_guid"])
@@ -1244,7 +1258,7 @@ class StorytellingService:
                 for j in range(i + 1, len(kills)):
                     delta = kills[j]["time"] - kills[i]["time"]
                     # 5s base window, extend to 8s if already 3+ kills
-                    max_window = 5000 if len(window_kills) < 3 else 8000
+                    max_window = MULTIKILL_SHORT_WINDOW_MS if len(window_kills) < 3 else MULTIKILL_EXTENDED_WINDOW_MS
                     if delta > max_window:
                         break
                     window_kills.append(kills[j])
@@ -1291,7 +1305,7 @@ class StorytellingService:
                 # Objective proximity bonus
                 near_obj = False
                 for evt_time in obj_times.get(rkey, []):
-                    if abs(first_kill["time"] - evt_time) <= 15000:
+                    if abs(first_kill["time"] - evt_time) <= OBJECTIVE_EVENT_WINDOW_MS:
                         near_obj = True
                         break
                 if near_obj and stars < 5:
@@ -2893,7 +2907,7 @@ class StorytellingService:
         Formula: productive_deaths / total_deaths
         """
         sd = _to_date(session_date)
-        WINDOW_MS = 10000  # 10 seconds after death
+        WINDOW_MS = DEATH_TRADE_WINDOW_MS
 
         # All kills grouped by round for temporal analysis
         kill_rows = await self.db.fetch_all("""
@@ -3001,7 +3015,7 @@ class StorytellingService:
         and ≤500 game units. Includes crossfire assists and trade assists.
         """
         sd = _to_date(session_date)
-        TIME_WINDOW_MS = 5000
+        TIME_WINDOW_MS = TRADE_KILL_DELTA_MS
         DISTANCE_THRESHOLD = 500
 
         # All kills with positions (from engagement end positions)
@@ -3167,9 +3181,9 @@ class StorytellingService:
             SELECT player_guid, player_name, team, round_start_unix,
                    spawn_time_ms, death_time_ms, duration_ms, path
             FROM player_track
-            WHERE session_date = $1 AND duration_ms > 2000 AND path IS NOT NULL
+            WHERE session_date = $1 AND duration_ms > $2 AND path IS NOT NULL
             ORDER BY round_start_unix, player_guid
-        """, (sd,))
+        """, (sd, LURKER_MIN_DURATION_MS))
 
         if not track_rows:
             return {"status": "ok", "session_date": str(sd), "players": []}

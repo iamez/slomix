@@ -2,6 +2,7 @@
 
 import json
 import math
+import re
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -10,10 +11,97 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from bot.core.guid_utils import short_guid
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 
 logger = get_app_logger("api.proximity")
+
+
+# ========================================
+# PROXIMITY QUERY BUILDER
+# ========================================
+
+class ProximityQueryBuilder:
+    """Fluent WHERE-clause builder for proximity endpoints.
+
+    Consolidates the ``if session_date: ... else: range_days ... if map_name:
+    ... if player_guid: ...`` boilerplate that was duplicated across
+    proximity_support, proximity_objectives, proximity_teamplay, and
+    proximity_positions (~80 call sites total).
+
+    Example::
+
+        qb = (
+            ProximityQueryBuilder()
+              .with_session_scope(session_date, range_days)
+              .with_map_name(map_name)
+              .with_player_guid("player_guid", guid)
+        )
+        where_sql, params = qb.build()
+        rows = await db.fetch_all(f"SELECT ... FROM proximity_X {where_sql}", params)
+    """
+
+    def __init__(self, base_conditions: list[str] | None = None) -> None:
+        self.where_parts: list[str] = list(base_conditions or [])
+        self.params: list[Any] = []
+
+    def with_session_scope(
+        self,
+        session_date: str | Any | None,
+        range_days: int = 30,
+    ) -> "ProximityQueryBuilder":
+        """Add ``session_date = $N`` if provided, else a ``range_days`` fallback."""
+        if session_date:
+            parsed = _parse_iso_date(session_date) if isinstance(session_date, str) else session_date
+            self.params.append(parsed)
+            self.where_parts.append(f"session_date = ${len(self.params)}")
+        else:
+            self.params.append(range_days)
+            self.where_parts.append(
+                f"session_date >= CURRENT_DATE - ${len(self.params)} * INTERVAL '1 day'"
+            )
+        return self
+
+    def with_map_name(self, map_name: str | None) -> "ProximityQueryBuilder":
+        if map_name:
+            self.params.append(map_name)
+            self.where_parts.append(f"map_name = ${len(self.params)}")
+        return self
+
+    def with_player_guid(self, column: str, guid: str | None) -> "ProximityQueryBuilder":
+        """Add ``<column> = $N`` filter when ``guid`` is non-empty.
+
+        ``column`` is a hardcoded identifier from the caller (not user input),
+        so the f-string is safe — but keep the convention of passing it
+        explicitly rather than building dynamic column names elsewhere.
+        """
+        if guid:
+            self.params.append(guid)
+            self.where_parts.append(f"{column} = ${len(self.params)}")  # nosec B608
+        return self
+
+    def with_raw(self, clause: str, *values: Any) -> "ProximityQueryBuilder":
+        """Append a raw WHERE clause whose ``$1,$2,...`` placeholders are
+        renumbered to continue from the builder's current param count.
+        """
+        offset = len(self.params)
+
+        def _shift(match: "re.Match[str]") -> str:
+            return f"${int(match.group(1)) + offset}"
+
+        shifted = re.sub(r"\$(\d+)", _shift, clause)
+        self.where_parts.append(shifted)
+        self.params.extend(values)
+        return self
+
+    def build_where_sql(self) -> str:
+        """Return ``WHERE a AND b AND c`` or empty string when no conditions."""
+        return ("WHERE " + " AND ".join(self.where_parts)) if self.where_parts else ""
+
+    def build(self) -> tuple[str, tuple]:
+        """Return ``(where_sql, params_tuple)`` ready for ``db.fetch_*``."""
+        return self.build_where_sql(), tuple(self.params)
 
 
 # ========================================
@@ -201,7 +289,7 @@ async def _load_scoped_guid_name_map(
                 name = str(row[1])
                 result[guid] = name
                 # Also index by 8-char prefix for cross-format lookups (32→8)
-                short = guid[:8]
+                short = short_guid(guid)
                 if short not in result:
                     result[short] = name
         return result

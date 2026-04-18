@@ -6,13 +6,59 @@ without circular imports.
 """
 
 from datetime import datetime, timezone
+from functools import wraps
 from typing import Any
+
+from fastapi import HTTPException
 
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 from website.backend.utils.et_constants import strip_et_colors
 
 logger = get_app_logger("api.helpers")
+
+
+# ── Router error decorator ────────────────────────────────────────────
+
+def handle_router_errors(detail: str = "An internal error occurred."):
+    """Decorator for async FastAPI endpoints that turns unhandled exceptions
+    into ``HTTPException(500)`` with a structured log line.
+
+    Existing ``HTTPException`` raises pass through unchanged (so ``raise
+    HTTPException(404, "Not found")`` inside the endpoint still works).
+
+    Use this for endpoints whose only error-handling is the identical
+    ``try/except Exception as e: logger.error(...); raise HTTPException(500)``
+    wrapper that was duplicated across ~163 sites in 22 routers. Do NOT use
+    on endpoints that catch ``Exception`` for **business-logic fallback**
+    (e.g. ``except: fall back to legacy query``) — keep those explicit.
+
+    Example::
+
+        @router.get("/player/{guid}")
+        @handle_router_errors()
+        async def get_player(guid: str, db=Depends(get_db)):
+            return await db.fetch_one(query, (guid,))
+    """
+    def decorator(func):
+        endpoint_logger = get_app_logger(func.__module__)
+
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            try:
+                return await func(*args, **kwargs)
+            except HTTPException:
+                # Preserve explicit 400/404/etc. raised by the endpoint.
+                raise
+            except Exception:
+                endpoint_logger.exception(
+                    "Unhandled error in %s.%s", func.__module__, func.__name__,
+                )
+                raise HTTPException(status_code=500, detail=detail)
+
+        return wrapper
+
+    return decorator
 
 
 # ── Normalization helpers ─────────────────────────────────────────────
