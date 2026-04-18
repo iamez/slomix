@@ -10,6 +10,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Refactor — Sprint 4A error-decorator migration (2026-04-18, Mega Audit v3)
+- **25 endpointov dobilo `@handle_router_errors()`** (dekorator iz Sprint 3) in ~150 vrstic identičnega `try/except → HTTPException(500)` boilerplatea izbrisanih:
+  - `proximity_positions.py` — 7 endpointov
+  - `proximity_objectives.py` — 8 endpointov
+  - `proximity_teamplay.py` — 6 endpointov (teamplay preskočen — fallback payload)
+  - `records_trends.py` — 1 endpoint (retro-viz preskočen — fallback images=[])
+  - `records_weapons.py` — 2 endpointa (hall-of-fame preskočen — fallback leaders={})
+- Business-logic fallback catches v `records_awards/overview/seasons`, `players_router`, `/hall-of-fame` ostajajo **eksplicitni** (schema negotiation, fallback queries) — ne smejo biti zamenjani.
+- Pristop: Python batch script (find `@router.get` + `except Exception: logger + raise HTTPException(500)` pattern, add decorator, strip try/except, de-indent body).
+- Full report: `docs/research/MEGA_AUDIT_V3_SPRINT4A_2026-04-18.md`.
+
 ### Refactor — Sprint 3 architecture cleanup (2026-04-18, Mega Audit v3)
 - **`storytelling_service.py`**: 10 module-level timing constants (`CARRIER_RETURN_WINDOW_MS`, `CROSSFIRE_TIMING_WINDOW_MS`, `SPAWN_TIMING_WINDOW_MS`, `OBJECTIVE_EVENT_WINDOW_MS`, `KILL_STREAK_WINDOW_MS`, `MULTIKILL_SHORT_WINDOW_MS`, `MULTIKILL_EXTENDED_WINDOW_MS`, `TRADE_KILL_DELTA_MS`, `LURKER_MIN_DURATION_MS`, `DEATH_TRADE_WINDOW_MS`) replacing 15+ magic ms numbers scattered across loaders and SQL (REFAC-01).
 - **`bot/core/guid_utils.py`** (new): `short_guid()` / `name_or_short_guid()` helpers centralizing the `(guid or "?")[:8]` pattern previously duplicated in 12 files. Applied in `storytelling_service`, `storytelling_router`, `proximity_helpers` (CQ-03).
