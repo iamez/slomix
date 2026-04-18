@@ -98,6 +98,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "bot/endstats_parser.py" = ["T201"]
 "bot/diagnostics/*" = ["T201"]  # Standalone CLI diagnostics use print() for dev output
+"bot/tools/*" = ["T201"]  # Standalone CLI dev scripts use print() for output
 "website/backend/init_db.py" = ["T201"]
 "postgresql_database_manager.py" = ["T201", "SIM117", "SIM118", "F841"]
 "scripts/*" = ["T201"]

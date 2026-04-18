@@ -15,6 +15,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_public_channel
+from bot.core.guid_utils import short_guid
 from bot.core.utils import sanitize_error_message
 from bot.services.matchup_analytics_service import MatchupAnalyticsService
 from bot.services.player_resolver_service import resolve_player_guids
@@ -42,7 +43,7 @@ class MatchupCog(commands.Cog):
             LIMIT 1
         """
         result = await self.bot.db_adapter.fetch_one(query, (guid,))
-        return result[0] if result else guid[:8]
+        return result[0] if result else short_guid(guid)
 
     @commands.command(name="matchup", aliases=["vs", "headtohead"])
     @is_public_channel()
