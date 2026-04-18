@@ -5,8 +5,26 @@ Imports all module-level names (constants, helpers) from .base.
 """
 from __future__ import annotations
 
-from .base import *  # noqa: F401, F403  (constants and helpers used by method bodies)
 from .base import (
+    CARRIER_CHAIN_MULTIPLIER,
+    CARRIER_KILL_MULTIPLIER,
+    CARRIER_RETURN_WINDOW_MS,
+    CLASS_WEIGHTS,
+    CROSSFIRE_MULTIPLIER,
+    CROSSFIRE_TIMING_WINDOW_MS,
+    DISTANCE_NORMAL,
+    LOW_HEALTH_MULTIPLIER,
+    LOW_HEALTH_THRESHOLD,
+    OUTCOME_GIBBED,
+    OUTCOME_REVIVED,
+    OUTNUMBERED_MULTIPLIER,
+    PUSH_BUFFER_MS,
+    PUSH_QUALITY_THRESHOLD,
+    PUSH_TOWARD_EXCLUDE,
+    REINF_PENALTY_THRESHOLD,
+    SOLO_CLUTCH_MULTIPLIER,
+    SOLO_CLUTCH_THRESHOLD,
+    SPAWN_TIMING_WINDOW_MS,
     _compute_locks,
     _to_date,
     asyncio,

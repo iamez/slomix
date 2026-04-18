@@ -5,8 +5,9 @@ Imports all module-level names (constants, helpers) from .base.
 """
 from __future__ import annotations
 
-from .base import *  # noqa: F401, F403  (constants and helpers used by method bodies)
 from .base import (
+    COHESION_MAX_DISPERSION,
+    SYNERGY_WEIGHTS,
     _to_date,
     _to_date_str,
     date,

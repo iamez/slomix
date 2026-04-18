@@ -5,8 +5,10 @@ Imports all module-level names (constants, helpers) from .base.
 """
 from __future__ import annotations
 
-from .base import *  # noqa: F401, F403  (constants and helpers used by method bodies)
 from .base import (
+    DEATH_TRADE_WINDOW_MS,
+    LURKER_MIN_DURATION_MS,
+    TRADE_KILL_DELTA_MS,
     _to_date,
     date,
     strip_et_colors,
