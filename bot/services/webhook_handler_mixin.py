@@ -2,9 +2,11 @@
 
 Extracted from ultimate_bot.py in P3e Sprint 7 / C.3.
 
-All methods live on UltimateETLegacyBot via mixin inheritance, so
-``self.db``, ``self.config``, ``self.processed_files`` references
-resolve as before.
+All methods live on UltimateETLegacyBot via mixin inheritance. Runtime
+attributes consumed here are set in the main class ``__init__``:
+``self.db_adapter``, ``self.config``, ``self.bot_startup_time``,
+``self.file_tracker``, ``self.processed_endstats_files``, and the
+rate-limit helpers defined in the bot base class.
 """
 from __future__ import annotations
 
@@ -376,6 +378,7 @@ class _WebhookHandlerMixin:
                 await trigger_message.add_reaction('🚨')
                 await trigger_message.reply(f"🚨 Critical error processing `{filename}`. Check logs.")
             except discord.DiscordException:
-                pass
+                # Reaction/reply failure is non-critical — error itself is already logged above
+                logger.debug("Failed to post webhook-processing error reaction (non-critical)")
             # Track for admin alerts
             await self.track_error("webhook_processing", str(e), max_consecutive=3)

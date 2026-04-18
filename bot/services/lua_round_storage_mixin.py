@@ -2,9 +2,9 @@
 
 Extracted from ultimate_bot.py in P3e Sprint 7 / C.3.
 
-All methods live on UltimateETLegacyBot via mixin inheritance, so
-``self.db``, ``self.config``, ``self.processed_files`` references
-resolve as before.
+All methods live on UltimateETLegacyBot via mixin inheritance. Database
+access goes through ``self.db_adapter`` and configuration values are read
+from ``self.config``.
 """
 from __future__ import annotations
 
