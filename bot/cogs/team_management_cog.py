@@ -18,6 +18,7 @@ import discord
 from discord.ext import commands
 
 from bot.core.checks import is_admin
+from bot.core.guid_utils import short_guid
 from bot.core.utils import sanitize_error_message
 
 logger = logging.getLogger("UltimateBot.TeamManagementCog")
@@ -199,7 +200,7 @@ class TeamManagementCog(commands.Cog, name="Team Management"):
                     color=0x00FF00,
                 )
                 embed.add_field(name="Session Date", value=round_date, inline=True)
-                embed.add_field(name="Player GUID", value=f"`{player_guid[:8]}...`", inline=True)
+                embed.add_field(name="Player GUID", value=f"`{short_guid(player_guid)}...`", inline=True)
 
                 await ctx.send(embed=embed)
                 logger.info(f"✅ Assigned {resolved_alias} to {team_name} for {round_date}")

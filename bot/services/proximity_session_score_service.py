@@ -9,6 +9,7 @@ Used by both the Discord bot (!psession) and the website API (/proximity/session
 
 import logging
 
+from bot.core.guid_utils import short_guid
 from website.backend.utils.et_constants import strip_et_colors
 
 logger = logging.getLogger(__name__)
@@ -293,7 +294,7 @@ class ProximitySessionScoreService:
 
             results.append({
                 "guid": guid,
-                "name": strip_et_colors(names.get(guid, (guid or "?")[:8])),
+                "name": strip_et_colors(names.get(guid, short_guid(guid))),
                 "total_score": round(total, 1),
                 "categories": categories,
                 "engagement_count": eng_total,

@@ -6,6 +6,7 @@ from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.routers.api_helpers import handle_router_errors
 from website.backend.routers.proximity_helpers import (
+    ProximityQueryBuilder,
     _parse_iso_date,
     _table_column_exists,
 )
@@ -25,26 +26,17 @@ async def get_proximity_carrier_events(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Carrier leaderboard + recent events from proximity_carrier_event."""
-    where_parts: list = []
-    params: list = []
-
-    if session_date:
-        params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
-        where_parts.append(f"session_date = ${len(params)}")
-    else:
-        params.append(range_days)
-        where_parts.append(f"session_date >= CURRENT_DATE - ${len(params)} * INTERVAL '1 day'")
-    if map_name:
-        params.append(map_name)
-        where_parts.append(f"map_name = ${len(params)}")
+    qb = (
+        ProximityQueryBuilder()
+        .with_session_scope(session_date, range_days)
+        .with_map_name(map_name)
+    )
     if round_number is not None:
-        params.append(round_number)
-        where_parts.append(f"round_number = ${len(params)}")
+        qb.with_raw("round_number = $1", round_number)
     if round_start_unix is not None:
-        params.append(round_start_unix)
-        where_parts.append(f"round_start_unix = ${len(params)}")
-
-    where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+        qb.with_raw("round_start_unix = $1", round_start_unix)
+    where_sql, params = qb.build()
+    params = list(params)
     safe_limit = max(1, min(limit, 50))
     scope = {"session_date": session_date, "map_name": map_name, "round_number": round_number}
 
@@ -155,26 +147,16 @@ async def get_proximity_carrier_kills(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Carrier killer leaderboard from proximity_carrier_kill."""
-    where_parts: list = []
-    params: list = []
-
-    if session_date:
-        params.append(_parse_iso_date(session_date) if isinstance(session_date, str) else session_date)
-        where_parts.append(f"session_date = ${len(params)}")
-    else:
-        params.append(range_days)
-        where_parts.append(f"session_date >= CURRENT_DATE - ${len(params)} * INTERVAL '1 day'")
-    if map_name:
-        params.append(map_name)
-        where_parts.append(f"map_name = ${len(params)}")
+    qb = (
+        ProximityQueryBuilder()
+        .with_session_scope(session_date, range_days)
+        .with_map_name(map_name)
+    )
     if round_number is not None:
-        params.append(round_number)
-        where_parts.append(f"round_number = ${len(params)}")
+        qb.with_raw("round_number = $1", round_number)
     if round_start_unix is not None:
-        params.append(round_start_unix)
-        where_parts.append(f"round_start_unix = ${len(params)}")
-
-    where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+        qb.with_raw("round_start_unix = $1", round_start_unix)
+    where_sql, params = qb.build()
     safe_limit = max(1, min(limit, 50))
 
     exists = await _table_column_exists(db, "proximity_carrier_kill", "killer_guid")

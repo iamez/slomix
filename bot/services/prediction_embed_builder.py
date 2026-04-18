@@ -11,6 +11,8 @@ from datetime import datetime
 
 import discord
 
+from bot.core.guid_utils import short_guid
+
 logger = logging.getLogger(__name__)
 
 
@@ -251,7 +253,7 @@ class PredictionEmbedBuilder:
             if guid in player_names:
                 names.append(player_names[guid])
             else:
-                names.append(f"Player_{guid[:8]}")
+                names.append(f"Player_{short_guid(guid)}")
 
         # Limit to first 6 players to avoid embed size limits
         if len(names) > 6:
