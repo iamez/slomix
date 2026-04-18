@@ -752,7 +752,7 @@ class _StatsImportMixin:
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
         """
-        player_stats_id = await self.db_adapter.execute(query, values)
+        await self.db_adapter.execute(query, values)
 
         # Optional: store full_selfkills if column exists
         if "full_selfkills" in getattr(self, "_player_stats_columns", set()):
@@ -768,41 +768,15 @@ class _StatsImportMixin:
         try:
             weapon_stats = player.get("weapon_stats", {}) or {}
             if weapon_stats:
-                # Get table column info (PostgreSQL)
-                col_query = """
-                    SELECT column_name FROM information_schema.columns
-                    WHERE table_name = 'weapon_comprehensive_stats'
-                    ORDER BY ordinal_position
-                """
-                pragma_rows = await self.db_adapter.fetch_all(col_query)
-                cols = [r[0] for r in pragma_rows]
-
-                # Include session metadata columns if present (they're NOT NULL in some schemas)
-                insert_cols = ["round_id"]
-                if "round_date" in cols:
-                    insert_cols.append("round_date")
-                if "map_name" in cols:
-                    insert_cols.append("map_name")
-                if "round_number" in cols:
-                    insert_cols.append("round_number")
-
-                if "player_comprehensive_stat_id" in cols:
-                    insert_cols.append("player_comprehensive_stat_id")
-                # If DB has both GUID and player_name columns, include both.
-                # Some schemas require player_name NOT NULL even when GUID exists.
-                if "player_guid" in cols:
-                    insert_cols.append("player_guid")
-                if "player_name" in cols:
-                    insert_cols.append("player_name")
-
-                insert_cols += ["weapon_name", "kills", "deaths", "headshots", "hits", "shots", "accuracy"]
-                placeholders = ",".join(["?"] * len(insert_cols))
-                insert_sql_template = (
-                    "INSERT INTO weapon_comprehensive_stats ({cols}) VALUES ({vals})"
-                )  # nosec B608 - template with named fields, filled from hardcoded/introspected cols below
-                insert_sql = insert_sql_template.format(
-                    cols=", ".join(insert_cols),
-                    vals=placeholders,
+                # Static SQL — schema 2.2 weapon_comprehensive_stats has these fixed columns
+                # (see tools/schema_postgresql.sql:129). No dynamic column list = no SQL
+                # injection risk = Codacy-safe.
+                insert_sql = (
+                    "INSERT INTO weapon_comprehensive_stats "
+                    "(round_id, round_date, map_name, round_number, "
+                    "player_guid, player_name, weapon_name, "
+                    "kills, deaths, headshots, hits, shots, accuracy) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 )
 
                 logger.debug(
@@ -816,26 +790,21 @@ class _StatsImportMixin:
                     w_headshots = int(w.get("headshots", 0) or 0)
                     w_acc = (w_hits / w_shots * 100) if w_shots > 0 else 0.0
 
-                    # Build row values in the same order as insert_cols
-                    row_vals = [round_id]
-                    if "round_date" in cols:
-                        row_vals.append(round_date)
-                    if "map_name" in cols:
-                        row_vals.append(result.get("map_name"))
-                    if "round_number" in cols:
-                        row_vals.append(result.get("round_num"))
-
-                    if "player_comprehensive_stat_id" in cols:
-                        row_vals.append(player_stats_id)
-                    # Append GUID then player_name if present, matching insert_cols order above
-                    if "player_guid" in cols:
-                        row_vals.append(player.get("guid", "UNKNOWN"))
-                    if "player_name" in cols:
-                        row_vals.append(player.get("name", "Unknown"))
-
-                    row_vals += [weapon_name, w_kills, w_deaths, w_headshots, w_hits, w_shots, w_acc]
-
-                    await self.db_adapter.execute(insert_sql, tuple(row_vals))  # nosec B608
+                    await self.db_adapter.execute(insert_sql, (
+                        round_id,
+                        round_date,
+                        result.get("map_name"),
+                        result.get("round_num"),
+                        player.get("guid", "UNKNOWN"),
+                        player.get("name", "Unknown"),
+                        weapon_name,
+                        w_kills,
+                        w_deaths,
+                        w_headshots,
+                        w_hits,
+                        w_shots,
+                        w_acc,
+                    ))
         except Exception as e:
             # Weapon insert failures should be visible — escalate to error and include traceback
             logger.error(
