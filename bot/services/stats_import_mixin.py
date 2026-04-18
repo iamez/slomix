@@ -829,7 +829,7 @@ class _StatsImportMixin:
 
                     row_vals += [weapon_name, w_kills, w_deaths, w_headshots, w_hits, w_shots, w_acc]
 
-                    await self.db_adapter.execute(insert_sql, tuple(row_vals))
+                    await self.db_adapter.execute(insert_sql, tuple(row_vals))  # nosec B608 - insert_sql built above with hardcoded + introspected cols only
         except Exception as e:
             # Weapon insert failures should be visible — escalate to error and include traceback
             logger.error(
