@@ -237,12 +237,13 @@ class _LinkCoreMixin:
             all_guids = [player[0] for player in top_players]
             # Safe: placeholders are generated strings ($1, $2, $3), not user input
             placeholders = ', '.join([f'${i+1}' for i in range(len(all_guids))])
-            alias_query = f"""
-                SELECT guid, alias, last_seen, times_seen
-                FROM player_aliases
-                WHERE guid IN ({placeholders})
-                ORDER BY guid, last_seen DESC, times_seen DESC
-            """
+            alias_query_template = (
+                "SELECT guid, alias, last_seen, times_seen "
+                "FROM player_aliases "
+                "WHERE guid IN ({placeholders}) "
+                "ORDER BY guid, last_seen DESC, times_seen DESC"
+            )  # nosec B608 - placeholders is generated $N list, values parameterized
+            alias_query = alias_query_template.format(placeholders=placeholders)
 
             all_aliases = await self.bot.db_adapter.fetch_all(alias_query, all_guids)
 
