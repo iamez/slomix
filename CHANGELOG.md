@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.5.1](https://github.com/iamez/slomix/compare/v1.5.0...v1.5.1) (2026-04-19)
+
+
+### Bug Fixes
+
+* **db:** commit guid_canonical columns to schema (035 migration) ([#99](https://github.com/iamez/slomix/issues/99)) ([7b145fc](https://github.com/iamez/slomix/commit/7b145fc3c03cbe3baefef91b706547569007bd3a))
+* **db:** schema drift sync — migration 036 (5 fixes + tracker catchup) ([#100](https://github.com/iamez/slomix/issues/100)) ([d473e5b](https://github.com/iamez/slomix/commit/d473e5b5458dd7dcd0bafe1db73d6a93af05f0f5))
+
 ## [1.5.0](https://github.com/iamez/slomix/compare/v1.4.2...v1.5.0) (2026-04-17)
 
 
