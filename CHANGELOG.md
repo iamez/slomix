@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.5.3](https://github.com/iamez/slomix/compare/v1.5.2...v1.5.3) (2026-04-19)
+
+
+### Bug Fixes
+
+* **storytelling:** restore _PWC_W_* weight constants lost in Sprint 6 split ([#104](https://github.com/iamez/slomix/issues/104)) ([fbc73d0](https://github.com/iamez/slomix/commit/fbc73d0e591562224727b580ad2ebe572d92c323))
+
 ## [1.5.2](https://github.com/iamez/slomix/compare/v1.5.1...v1.5.2) (2026-04-19)
 
 
