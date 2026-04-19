@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.5.2](https://github.com/iamez/slomix/compare/v1.5.1...v1.5.2) (2026-04-19)
+
+
+### Bug Fixes
+
+* **db:** migration 037 — proximity_reaction_metric + 4 analytics views ([#102](https://github.com/iamez/slomix/issues/102)) ([c04d18e](https://github.com/iamez/slomix/commit/c04d18ead25bf0b2266ee724f7ba47e6f975e244))
+
 ## [1.5.1](https://github.com/iamez/slomix/compare/v1.5.0...v1.5.1) (2026-04-19)
 
 
