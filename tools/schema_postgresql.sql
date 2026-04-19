@@ -646,8 +646,10 @@ CREATE TABLE IF NOT EXISTS player_teamplay_stats (
     total_damage_taken INTEGER DEFAULT 0,
     total_damage_dealt_crossfire INTEGER DEFAULT 0,
     first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    player_guid_canonical VARCHAR(32)  -- first 8 chars of player_guid, backfilled by migration 035
 );
+CREATE INDEX IF NOT EXISTS idx_pts_player_canonical ON player_teamplay_stats(player_guid_canonical);
 
 -- Map kill heatmap: Grid-based kill/death density
 CREATE TABLE IF NOT EXISTS map_kill_heatmap (
@@ -810,11 +812,13 @@ CREATE TABLE IF NOT EXISTS proximity_spawn_timing (
     time_to_next_spawn INTEGER NOT NULL,
     spawn_timing_score REAL NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    killer_guid_canonical VARCHAR(32),  -- first 8 chars of killer_guid, backfilled by migration 035
     UNIQUE(session_date, round_number, round_start_unix, killer_guid, victim_guid, kill_time)
 );
 CREATE INDEX IF NOT EXISTS idx_spawn_timing_session ON proximity_spawn_timing(session_date, round_number);
 CREATE INDEX IF NOT EXISTS idx_spawn_timing_killer ON proximity_spawn_timing(killer_guid);
 CREATE INDEX IF NOT EXISTS idx_spawn_timing_score ON proximity_spawn_timing(spawn_timing_score DESC);
+CREATE INDEX IF NOT EXISTS idx_st_killer_canonical ON proximity_spawn_timing(killer_guid_canonical);
 
 -- Proximity v5: Team cohesion snapshots
 CREATE TABLE IF NOT EXISTS proximity_team_cohesion (
@@ -920,10 +924,12 @@ CREATE TABLE IF NOT EXISTS proximity_lua_trade_kill (
     trader_guid VARCHAR(32) NOT NULL,
     trader_name VARCHAR(64) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    trader_guid_canonical VARCHAR(32),  -- first 8 chars of trader_guid, backfilled by migration 035
     UNIQUE(session_date, round_number, round_start_unix, original_victim_guid, original_kill_time, trader_guid)
 );
 CREATE INDEX IF NOT EXISTS idx_lua_trade_session ON proximity_lua_trade_kill(session_date, round_number);
 CREATE INDEX IF NOT EXISTS idx_lua_trade_trader ON proximity_lua_trade_kill(trader_guid);
+CREATE INDEX IF NOT EXISTS idx_tk_trader_canonical ON proximity_lua_trade_kill(trader_guid_canonical);
 
 
 -- ============================================================================
