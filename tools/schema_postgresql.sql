@@ -167,8 +167,11 @@ CREATE TABLE IF NOT EXISTS session_teams (
     color INTEGER,
     gaming_session_id INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    session_identity TEXT GENERATED ALWAYS AS (COALESCE((gaming_session_id)::text, session_start_date)) STORED,
     UNIQUE(session_start_date, map_name, team_name)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS session_teams_identity_unique
+    ON session_teams(session_identity, map_name, team_name);
 
 -- Player links: Discord account to ET:Legacy GUID linking
 CREATE TABLE IF NOT EXISTS player_links (
@@ -296,7 +299,9 @@ CREATE TABLE IF NOT EXISTS round_correlations (
     r1_arrived_at TIMESTAMP,
     r2_arrived_at TIMESTAMP,
     completed_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    has_r1_proximity BOOLEAN DEFAULT FALSE,  -- added in migration 034
+    has_r2_proximity BOOLEAN DEFAULT FALSE   -- added in migration 034
 );
 
 CREATE INDEX IF NOT EXISTS idx_round_corr_match_id ON round_correlations(match_id);
@@ -957,7 +962,8 @@ CREATE TABLE IF NOT EXISTS greatshot_analysis (
     metadata_json JSONB NOT NULL,
     stats_json JSONB NOT NULL,
     events_json JSONB NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    total_kills INTEGER DEFAULT 0  -- used in greatshot_jobs.py ON CONFLICT UPDATE
 );
 
 -- Greatshot highlights: Extracted highlight clips
