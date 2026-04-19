@@ -34,5 +34,17 @@ class StorytellingService(
     Split from monolithic storytelling_service.py in Sprint 6 via mixin pattern.
     """
 
+    # PWC v2 weights (must sum to 1.0). Used by _WinContributionMixin.
+    # Were lost during Sprint 6 mixin split — restored here as class attrs so
+    # all mixins resolve via MRO.
+    _PWC_W_KILLS = 0.22
+    _PWC_W_DAMAGE = 0.10
+    _PWC_W_OBJECTIVES = 0.20
+    _PWC_W_REVIVES = 0.12
+    _PWC_W_SURVIVAL = 0.08
+    _PWC_W_CROSSFIRE = 0.10   # Crossfire kills share (team coordination)
+    _PWC_W_TRADE = 0.10       # Trade kills share (avenging teammates)
+    _PWC_W_CLUTCH = 0.08      # Clutch kills share (low HP / outnumbered)
+
     def __init__(self, db):
         self.db = db
