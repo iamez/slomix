@@ -718,6 +718,7 @@ CREATE TABLE IF NOT EXISTS player_track (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(session_date, round_number, round_start_unix, player_guid, spawn_time_ms)
 );
+CREATE INDEX IF NOT EXISTS idx_player_track_round_id ON player_track(round_id);
 
 -- Proximity trade event: Trade opportunities per death
 CREATE TABLE IF NOT EXISTS proximity_trade_event (
