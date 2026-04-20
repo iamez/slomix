@@ -72,8 +72,6 @@ LOW_HEALTH_MULTIPLIER = 1.3         # Kill with <30 HP = clutch
 SOLO_CLUTCH_THRESHOLD = 3           # Enemies alive for solo clutch
 SOLO_CLUTCH_MULTIPLIER = 2.0        # 1v3+ kill
 OUTNUMBERED_MULTIPLIER = 1.5        # Kill while outnumbered
-REINF_PENALTY_THRESHOLD = 0.75      # victim_reinf > 75% of spawn interval = bonus (legacy binary mode)
-
 # Graduated reinforcement multiplier tiers (UTRO-inspired, 2026-04-20).
 # Each tier is (max_reinf_seconds_inclusive, multiplier): a wait whose
 # value is <= that tier's max wins it. The last tier uses infinity, so
@@ -183,7 +181,6 @@ __all__ = [
     "SOLO_CLUTCH_THRESHOLD",
     "SOLO_CLUTCH_MULTIPLIER",
     "OUTNUMBERED_MULTIPLIER",
-    "REINF_PENALTY_THRESHOLD",
     "REINF_MULT_TIERS",
     "SYNERGY_WEIGHTS",
     "COHESION_MAX_DISPERSION",

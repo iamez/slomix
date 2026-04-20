@@ -48,3 +48,10 @@ class StorytellingService(
 
     def __init__(self, db):
         self.db = db
+        # Per-instance memo for `_build_player_groups(sd)`. Story page
+        # triggers /gravity, /space-created, /enabler, /player-narratives
+        # in parallel, each of which calls this PCS JOIN rounds query
+        # independently — memo cuts 3-4 duplicate scans per request to 1.
+        # Bound to the request-scoped service instance, so no cross-
+        # request leakage.
+        self._groups_cache: dict = {}
