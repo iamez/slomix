@@ -185,13 +185,37 @@ async def resolve_round_id_with_reason(
                     return None, diag
             else:
                 diag["reason_code"] = "no_rows_for_map_round"
-                logger.warning(
-                    "round_linker: reason=no_rows_for_map_round map=%s rn=%d date=%s "
-                    "(no rounds within ±%dmin of target_dt — likely race condition; "
-                    "relinker cron will retry)",
-                    map_name, round_number, round_date,
-                    window_minutes if target_dt else 0,
-                )
+                # Distinguish a live race (target_dt within the last hour — the
+                # round just hasn't landed yet) from a stale orphan (target_dt
+                # is hours or days old — the round never made it into rounds,
+                # and the relinker cron has nothing to retry against).
+                if target_dt:
+                    age_seconds = int(
+                        (datetime.utcnow() - target_dt).total_seconds()
+                    )
+                    if age_seconds > 3600:
+                        # Stale: more than an hour since the source event fired
+                        logger.warning(
+                            "round_linker: reason=no_rows_for_map_round map=%s rn=%d date=%s "
+                            "(target_dt is %dh %dm old — stale orphan, no rounds row "
+                            "was ever created; skip or manual import)",
+                            map_name, round_number, round_date,
+                            age_seconds // 3600,
+                            (age_seconds % 3600) // 60,
+                        )
+                    else:
+                        logger.warning(
+                            "round_linker: reason=no_rows_for_map_round map=%s rn=%d date=%s "
+                            "(no rounds within ±%dmin of target_dt — likely race "
+                            "condition; relinker cron will retry)",
+                            map_name, round_number, round_date, window_minutes,
+                        )
+                else:
+                    logger.warning(
+                        "round_linker: reason=no_rows_for_map_round map=%s rn=%d date=%s "
+                        "(no target_dt supplied)",
+                        map_name, round_number, round_date,
+                    )
                 return None, diag
         else:
             diag["reason_code"] = "no_rows_for_map_round"
