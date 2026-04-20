@@ -6,6 +6,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.5.5](https://github.com/iamez/slomix/compare/v1.5.4...v1.5.5) (2026-04-20)
+
+
+### Bug Fixes
+
+* **bot:** round_linker race condition + midnight crossover (date_free fallback) ([#109](https://github.com/iamez/slomix/issues/109)) ([e502b0a](https://github.com/iamez/slomix/commit/e502b0a93b64298c66794e445f4af392b92876c4))
+* **bot:** serialize round_correlation critical section to prevent race ([#114](https://github.com/iamez/slomix/issues/114)) ([c97ac71](https://github.com/iamez/slomix/commit/c97ac7165923a9b946a1102a2417a4446a9375bb))
+* **db:** migration 039 — consolidate 14 Python-runtime tables into committed migrations ([#112](https://github.com/iamez/slomix/issues/112)) ([ccf05ad](https://github.com/iamez/slomix/commit/ccf05ad116bd6266f10d1d911570d5e83f543592))
+* **db:** migration 040 — dedup round_correlations + partial UNIQUE constraint ([#113](https://github.com/iamez/slomix/issues/113)) ([ac43466](https://github.com/iamez/slomix/commit/ac43466b5085e2c8f55830d59a899e1975bd516f))
+
 ## [1.5.4](https://github.com/iamez/slomix/compare/v1.5.3...v1.5.4) (2026-04-20)
 
 
