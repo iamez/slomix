@@ -1416,15 +1416,42 @@ export interface KillImpactResponse {
 }
 
 // ── Match Moments ──
+export type MatchMomentType =
+  | 'kill_streak'
+  | 'carrier_chain'
+  | 'focus_survival'
+  | 'push_success'
+  | 'trade_chain'
+  | 'objective_secured'
+  | 'objective_run'
+  | 'objective_denied'
+  | 'multi_revive'
+  | 'team_wipe'
+  | 'multikill';
+
+export interface MomentKill {
+  killer: string;
+  victim: string;
+  weapon?: string;
+  time_ms?: number;
+  time_formatted?: string;
+}
+
 export interface MatchMoment {
-  type: 'kill_streak' | 'carrier_chain' | 'focus_survival' | 'push_success' | 'trade_chain';
+  type: MatchMomentType;
   round_number: number;
   map_name: string;
   time_ms: number;
+  time_formatted?: string;
   player: string;
   narrative: string;
   impact_stars: number;
   detail: Record<string, unknown>;
+  // Optional for multikill / team_wipe — emitted by _detect_multikills
+  // and _detect_team_wipes in moments.py. When present the frontend
+  // renders a per-kill breakdown under the narrative.
+  kills?: MomentKill[];
+  duration_ms?: number;
 }
 
 export interface MomentsResponse {
