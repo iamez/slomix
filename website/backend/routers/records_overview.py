@@ -37,256 +37,56 @@ async def get_stats_overview(db: DatabaseAdapter = Depends(get_db)):
             logger.warning("[overview] query failed: %s", e)
             return None
 
-    # Use only legal rounds (completed or pre-status rows) and only R1/R2
+    # Use only legal rounds (completed or pre-status rows) and only R1/R2.
+    # `round_status` ships since migration 036; SQLite legacy fallbacks and
+    # the sessions-table branch were removed 2026-04-20 after drift-cleanup
+    # landed on prod.
     round_filter = """
         WHERE round_number IN (1, 2)
           AND (round_status IN ('completed', 'substitution') OR round_status IS NULL)
     """
-    round_filter_fallback = """
-        WHERE round_number IN (1, 2)
-    """
 
-    rounds_table_exists = await safe_val(
-        """
-        SELECT EXISTS (
-            SELECT 1
-            FROM information_schema.tables
-            WHERE table_name = 'rounds'
-        )
-        """,
-        default=False,
+    rounds_count = await safe_val(f"SELECT COUNT(*) FROM rounds {round_filter}")
+    rounds_first = await safe_val(
+        f"SELECT MIN(SUBSTR(CAST(round_date AS TEXT), 1, 10)) FROM rounds {round_filter}",
+        default=None,
     )
-    sessions_table_exists = await safe_val(
-        """
-        SELECT EXISTS (
-            SELECT 1
-            FROM information_schema.tables
-            WHERE table_name = 'sessions'
-        )
+    rounds_latest = await safe_val(
+        f"SELECT MAX(SUBSTR(CAST(round_date AS TEXT), 1, 10)) FROM rounds {round_filter}",
+        default=None,
+    )
+    rounds_recent = await safe_val(
+        f"""
+        SELECT COUNT(*)
+        FROM rounds
+        {round_filter}
+          AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
         """,
-        default=False,
+        (start_date_str,),
+    )
+    sessions_count = await safe_val(
+        f"""
+        SELECT COUNT(DISTINCT gaming_session_id)
+        FROM rounds
+        {round_filter}
+          AND gaming_session_id IS NOT NULL
+        """
+    )
+    sessions_recent = await safe_val(
+        f"""
+        SELECT COUNT(DISTINCT gaming_session_id)
+        FROM rounds
+        {round_filter}
+          AND gaming_session_id IS NOT NULL
+          AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
+        """,
+        (start_date_str,),
     )
 
-    if rounds_table_exists:
-        # Round-based metrics (try with round_status first, fallback without)
-        try:
-            rounds_count = await db.fetch_val(
-                f"SELECT COUNT(*) FROM rounds {round_filter}"
-            )
-            rounds_first = await db.fetch_val(
-                f"SELECT MIN(SUBSTR(CAST(round_date AS TEXT), 1, 10)) FROM rounds {round_filter}"
-            )
-            rounds_latest = await db.fetch_val(
-                f"SELECT MAX(SUBSTR(CAST(round_date AS TEXT), 1, 10)) FROM rounds {round_filter}"
-            )
-            rounds_recent = await db.fetch_val(
-                f"""
-                SELECT COUNT(*)
-                FROM rounds
-                {round_filter}
-                  AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-                """,
-                (start_date_str,),
-            )
-            sessions_count = await db.fetch_val(
-                f"""
-                SELECT COUNT(DISTINCT gaming_session_id)
-                FROM rounds
-                {round_filter}
-                  AND gaming_session_id IS NOT NULL
-                """
-            )
-            sessions_recent = await db.fetch_val(
-                f"""
-                SELECT COUNT(DISTINCT gaming_session_id)
-                FROM rounds
-                {round_filter}
-                  AND gaming_session_id IS NOT NULL
-                  AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-                """,
-                (start_date_str,),
-            )
-        except Exception as e:
-            logger.warning("round_status filter failed, retrying fallback: %s", e)
-            rounds_count = await safe_val(
-                f"SELECT COUNT(*) FROM rounds {round_filter_fallback}"
-            )
-            rounds_first = await safe_val(
-                f"SELECT MIN(SUBSTR(CAST(round_date AS TEXT), 1, 10)) FROM rounds {round_filter_fallback}",
-                default=None,
-            )
-            rounds_latest = await safe_val(
-                f"SELECT MAX(SUBSTR(CAST(round_date AS TEXT), 1, 10)) FROM rounds {round_filter_fallback}",
-                default=None,
-            )
-            rounds_recent = await safe_val(
-                f"""
-                SELECT COUNT(*)
-                FROM rounds
-                {round_filter_fallback}
-                  AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-                """,
-                (start_date_str,),
-            )
-            sessions_count = await safe_val(
-                f"""
-                SELECT COUNT(DISTINCT gaming_session_id)
-                FROM rounds
-                {round_filter_fallback}
-                  AND gaming_session_id IS NOT NULL
-                """
-            )
-            sessions_recent = await safe_val(
-                f"""
-                SELECT COUNT(DISTINCT gaming_session_id)
-                FROM rounds
-                {round_filter_fallback}
-                  AND gaming_session_id IS NOT NULL
-                  AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-                """,
-                (start_date_str,),
-            )
-    if (rounds_count or 0) == 0 and sessions_table_exists:
-        # If rounds table exists but is empty, fall back to sessions table
-        rounds_count = await safe_val(
-            """
-            SELECT COUNT(*)
-            FROM sessions
-            WHERE round_number IN (1, 2)
-            """
-        )
-        rounds_first = await safe_val(
-            """
-            SELECT MIN(SUBSTR(CAST(session_date AS TEXT), 1, 10))
-            FROM sessions
-            WHERE round_number IN (1, 2)
-            """,
-            default=None,
-        )
-        rounds_latest = await safe_val(
-            """
-            SELECT MAX(SUBSTR(CAST(session_date AS TEXT), 1, 10))
-            FROM sessions
-            WHERE round_number IN (1, 2)
-            """,
-            default=None,
-        )
-        rounds_recent = await safe_val(
-            """
-            SELECT COUNT(*)
-            FROM sessions
-            WHERE round_number IN (1, 2)
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-            """,
-            (start_date_str,),
-        )
-        try:
-            sessions_count = await db.fetch_val(
-                """
-                SELECT COUNT(DISTINCT session_id)
-                FROM sessions
-                WHERE session_id IS NOT NULL
-                """
-            )
-        except Exception:
-            sessions_count = await safe_val(
-                """
-                SELECT COUNT(DISTINCT match_id)
-                FROM sessions
-                WHERE match_id IS NOT NULL
-                """
-            )
-        try:
-            sessions_recent = await db.fetch_val(
-                """
-                SELECT COUNT(DISTINCT session_id)
-                FROM sessions
-                WHERE session_id IS NOT NULL
-                  AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-                """,
-                (start_date_str,),
-            )
-        except Exception:
-            sessions_recent = await safe_val(
-                """
-                SELECT COUNT(DISTINCT match_id)
-                FROM sessions
-                WHERE match_id IS NOT NULL
-                  AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-                """,
-                (start_date_str,),
-            )
-    elif not rounds_table_exists:
-        rounds_count = await safe_val(
-            """
-            SELECT COUNT(*)
-            FROM sessions
-            WHERE round_number IN (1, 2)
-            """
-        )
-        rounds_first = await safe_val(
-            """
-            SELECT MIN(SUBSTR(CAST(session_date AS TEXT), 1, 10))
-            FROM sessions
-            WHERE round_number IN (1, 2)
-            """,
-            default=None,
-        )
-        rounds_latest = await safe_val(
-            """
-            SELECT MAX(SUBSTR(CAST(session_date AS TEXT), 1, 10))
-            FROM sessions
-            WHERE round_number IN (1, 2)
-            """,
-            default=None,
-        )
-        rounds_recent = await safe_val(
-            """
-            SELECT COUNT(*)
-            FROM sessions
-            WHERE round_number IN (1, 2)
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-            """,
-            (start_date_str,),
-        )
-        try:
-            sessions_count = await db.fetch_val(
-                """
-                SELECT COUNT(DISTINCT session_id)
-                FROM sessions
-                WHERE session_id IS NOT NULL
-                """
-            )
-        except Exception:
-            sessions_count = await safe_val(
-                """
-                SELECT COUNT(DISTINCT match_id)
-                FROM sessions
-                WHERE match_id IS NOT NULL
-                """
-            )
-        try:
-            sessions_recent = await db.fetch_val(
-                """
-                SELECT COUNT(DISTINCT session_id)
-                FROM sessions
-                WHERE session_id IS NOT NULL
-                  AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-                """,
-                (start_date_str,),
-            )
-        except Exception:
-            sessions_recent = await safe_val(
-                """
-                SELECT COUNT(DISTINCT match_id)
-                FROM sessions
-                WHERE match_id IS NOT NULL
-                  AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-                """,
-                (start_date_str,),
-            )
-
-    # Player + kill metrics from stats table
+    # Player + kill metrics from stats table.
+    # `player_comprehensive_stats` has `round_date`; the `session_date`
+    # fallbacks removed here silently swallowed UndefinedColumnError and
+    # returned 0 — worse than just surfacing the real error via safe_val.
     players_all_time = await safe_val(
         """
         SELECT COUNT(DISTINCT player_guid)
@@ -295,39 +95,16 @@ async def get_stats_overview(db: DatabaseAdapter = Depends(get_db)):
           AND time_played_seconds > 0
         """
     )
-    try:
-        players_recent = await db.fetch_val(
-            """
-            SELECT COUNT(DISTINCT player_guid)
-            FROM player_comprehensive_stats
-            WHERE round_number IN (1, 2)
-              AND time_played_seconds > 0
-              AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-            """,
-            (start_date_str,),
-        )
-    except Exception:
-        players_recent = await safe_val(
-            """
-            SELECT COUNT(DISTINCT player_guid)
-            FROM player_comprehensive_stats
-            WHERE round_number IN (1, 2)
-              AND time_played_seconds > 0
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-            """,
-            (start_date_str,),
-        )
-    if players_recent == 0:
-        players_recent = await safe_val(
-            """
-            SELECT COUNT(DISTINCT player_guid)
-            FROM player_comprehensive_stats
-            WHERE round_number IN (1, 2)
-              AND time_played_seconds > 0
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-            """,
-            (start_date_str,),
-        )
+    players_recent = await safe_val(
+        """
+        SELECT COUNT(DISTINCT player_guid)
+        FROM player_comprehensive_stats
+        WHERE round_number IN (1, 2)
+          AND time_played_seconds > 0
+          AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
+        """,
+        (start_date_str,),
+    )
     total_kills = await safe_val(
         """
         SELECT COALESCE(SUM(kills), 0)
@@ -335,36 +112,15 @@ async def get_stats_overview(db: DatabaseAdapter = Depends(get_db)):
         WHERE round_number IN (1, 2)
         """
     )
-    try:
-        total_kills_recent = await db.fetch_val(
-            """
-            SELECT COALESCE(SUM(kills), 0)
-            FROM player_comprehensive_stats
-            WHERE round_number IN (1, 2)
-              AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-            """,
-            (start_date_str,),
-        )
-    except Exception:
-        total_kills_recent = await safe_val(
-            """
-            SELECT COALESCE(SUM(kills), 0)
-            FROM player_comprehensive_stats
-            WHERE round_number IN (1, 2)
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-            """,
-            (start_date_str,),
-        )
-    if total_kills_recent == 0:
-        total_kills_recent = await safe_val(
-            """
-            SELECT COALESCE(SUM(kills), 0)
-            FROM player_comprehensive_stats
-            WHERE round_number IN (1, 2)
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-            """,
-            (start_date_str,),
-        )
+    total_kills_recent = await safe_val(
+        """
+        SELECT COALESCE(SUM(kills), 0)
+        FROM player_comprehensive_stats
+        WHERE round_number IN (1, 2)
+          AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
+        """,
+        (start_date_str,),
+    )
 
     # Most active players (by rounds played)
     active_overall = await safe_one(
@@ -380,101 +136,21 @@ async def get_stats_overview(db: DatabaseAdapter = Depends(get_db)):
         LIMIT 1
         """
     )
-    if active_overall is None:
-        active_overall = await safe_one(
-            """
-            SELECT player_guid,
-                   MAX(player_name) as player_name,
-                   COUNT(*) as rounds_played
-            FROM player_comprehensive_stats
-            WHERE round_number IN (1, 2)
-              AND time_played_seconds > 0
-            GROUP BY player_guid
-            ORDER BY rounds_played DESC
-            LIMIT 1
-            """
-        )
-
-    try:
-        active_recent = await db.fetch_one(
-            """
-            SELECT player_guid,
-                   MAX(player_name) as player_name,
-                   COUNT(DISTINCT round_id) as rounds_played
-            FROM player_comprehensive_stats
-            WHERE round_number IN (1, 2)
-              AND time_played_seconds > 0
-              AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-            GROUP BY player_guid
-            ORDER BY rounds_played DESC
-            LIMIT 1
-            """,
-            (start_date_str,),
-        )
-    except Exception:
-        active_recent = await safe_one(
-            """
-            SELECT player_guid,
-                   MAX(player_name) as player_name,
-                   COUNT(DISTINCT round_id) as rounds_played
-            FROM player_comprehensive_stats
-            WHERE round_number IN (1, 2)
-              AND time_played_seconds > 0
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-            GROUP BY player_guid
-            ORDER BY rounds_played DESC
-            LIMIT 1
-            """,
-            (start_date_str,),
-        )
-    if active_recent is None:
-        active_recent = await safe_one(
-            """
-            SELECT player_guid,
-                   MAX(player_name) as player_name,
-                   COUNT(*) as rounds_played
-            FROM player_comprehensive_stats
-            WHERE round_number IN (1, 2)
-              AND time_played_seconds > 0
-              AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-            GROUP BY player_guid
-            ORDER BY rounds_played DESC
-            LIMIT 1
-            """,
-            (start_date_str,),
-        )
-    if active_recent is None:
-        active_recent = await safe_one(
-            """
-            SELECT player_guid,
-                   MAX(player_name) as player_name,
-                   COUNT(*) as rounds_played
-            FROM player_comprehensive_stats
-            WHERE round_number IN (1, 2)
-              AND time_played_seconds > 0
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-            GROUP BY player_guid
-            ORDER BY rounds_played DESC
-            LIMIT 1
-            """,
-            (start_date_str,),
-        )
-    if active_recent is None:
-        active_recent = await safe_one(
-            """
-            SELECT player_guid,
-                   MAX(player_name) as player_name,
-                   COUNT(*) as rounds_played
-            FROM player_comprehensive_stats
-            WHERE round_number IN (1, 2)
-              AND time_played_seconds > 0
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-            GROUP BY player_guid
-            ORDER BY rounds_played DESC
-            LIMIT 1
-            """,
-            (start_date_str,),
-        )
+    active_recent = await safe_one(
+        """
+        SELECT player_guid,
+               MAX(player_name) as player_name,
+               COUNT(DISTINCT round_id) as rounds_played
+        FROM player_comprehensive_stats
+        WHERE round_number IN (1, 2)
+          AND time_played_seconds > 0
+          AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
+        GROUP BY player_guid
+        ORDER BY rounds_played DESC
+        LIMIT 1
+        """,
+        (start_date_str,),
+    )
 
     active_overall_payload = None
     if active_overall:
@@ -532,24 +208,9 @@ async def get_activity_calendar(
 
     try:
         rows = await db.fetch_all(query, (start_date,))
-    except Exception:
-        rows = []
-
-    if not rows:
-        # Fallback for legacy SQLite schema (sessions table)
-        fallback = """
-            SELECT SUBSTR(CAST(session_date AS TEXT), 1, 10) as day, COUNT(*) as rounds
-            FROM sessions
-            WHERE round_number IN (1, 2)
-              AND SUBSTR(CAST(session_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-            GROUP BY SUBSTR(CAST(session_date AS TEXT), 1, 10)
-            ORDER BY day
-        """
-        try:
-            rows = await db.fetch_all(fallback, (start_date,))
-        except Exception:
-            # If legacy table doesn't exist, return empty activity
-            return {"days": lookback_days, "activity": {}}
+    except Exception as e:
+        logger.warning("[activity-calendar] query failed: %s", e)
+        return {"days": lookback_days, "activity": {}}
 
     activity = {str(row[0]): int(row[1]) for row in rows}
     return {"days": lookback_days, "activity": activity}
