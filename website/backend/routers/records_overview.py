@@ -48,16 +48,21 @@ async def _safe_one(
 
 
 async def _fetch_rounds_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
-    """Count rounds + distinct gaming sessions, overall and in the lookback."""
-    rounds_count = await _safe_val(db, f"SELECT COUNT(*) FROM rounds {_ROUND_FILTER}")
+    """Count rounds + distinct gaming sessions, overall and in the lookback.
+
+    nosec B608 rationale: every `{_ROUND_FILTER}` interpolation is a
+    module-level constant defined at import time; no user input reaches
+    these queries. Date filters use $1 parameters.
+    """
+    rounds_count = await _safe_val(db, f"SELECT COUNT(*) FROM rounds {_ROUND_FILTER}")  # nosec B608 - trusted module constant, not user input
     rounds_first = await _safe_val(
         db,
-        f"SELECT MIN(SUBSTR(CAST(round_date AS TEXT), 1, 10)) FROM rounds {_ROUND_FILTER}",
+        f"SELECT MIN(SUBSTR(CAST(round_date AS TEXT), 1, 10)) FROM rounds {_ROUND_FILTER}",  # nosec B608 - trusted module constant, not user input
         default=None,
     )
     rounds_latest = await _safe_val(
         db,
-        f"SELECT MAX(SUBSTR(CAST(round_date AS TEXT), 1, 10)) FROM rounds {_ROUND_FILTER}",
+        f"SELECT MAX(SUBSTR(CAST(round_date AS TEXT), 1, 10)) FROM rounds {_ROUND_FILTER}",  # nosec B608 - trusted module constant, not user input
         default=None,
     )
     rounds_recent = await _safe_val(
@@ -67,7 +72,7 @@ async def _fetch_rounds_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
         FROM rounds
         {_ROUND_FILTER}
           AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-        """,
+        """,  # nosec B608 - trusted module constant, not user input
         (start_date_str,),
     )
     sessions_count = await _safe_val(
@@ -77,7 +82,7 @@ async def _fetch_rounds_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
         FROM rounds
         {_ROUND_FILTER}
           AND gaming_session_id IS NOT NULL
-        """,
+        """,  # nosec B608 - trusted module constant, not user input
     )
     sessions_recent = await _safe_val(
         db,
@@ -87,7 +92,7 @@ async def _fetch_rounds_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
         {_ROUND_FILTER}
           AND gaming_session_id IS NOT NULL
           AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-        """,
+        """,  # nosec B608 - trusted module constant, not user input
         (start_date_str,),
     )
     return {
