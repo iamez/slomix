@@ -130,8 +130,9 @@ async def test_awards_leaderboard_groups_by_projected_guid_expression(monkeypatc
     payload = await records_awards.get_awards_leaderboard(limit=5, db=db)
 
     normalized_query = _normalize_sql(db.primary_query)
-    # Current query groups by player_key, player_guid, ra.award_name
-    assert "group by player_key, player_guid, ra.award_name" in normalized_query
+    # Query groups by player_key, resolved_guid, ra.award_name (resolved_guid
+    # renamed from player_guid in #107 to avoid PG17 AmbiguousColumnError)
+    assert "group by player_key, resolved_guid, ra.award_name" in normalized_query
     assert payload["leaderboard"][0]["guid"] == "guid-1"
     assert payload["leaderboard"][0]["award_count"] == 9
     assert payload["leaderboard"][0]["top_award"] == "Most Gibs"
