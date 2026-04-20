@@ -86,6 +86,25 @@ class _SynergyMixin:
         return result
 
     async def _build_player_groups(self, sd: date) -> dict | None:
+        """Memoized wrapper: see `_build_player_groups_uncached` for logic.
+
+        Story page fans out to gravity/space-created/enabler/narratives
+        concurrently; each of those mixins independently calls this.
+        Caching on the request-scoped service instance collapses 3-4
+        identical PCS JOIN rounds scans into one per request.
+        """
+        cache = getattr(self, "_groups_cache", None)
+        if cache is None:
+            # Defensive: any subclass that skips the __init__ cache
+            # allocation still gets the old behaviour (no memo).
+            return await self._build_player_groups_uncached(sd)
+        if sd in cache:
+            return cache[sd]
+        value = await self._build_player_groups_uncached(sd)
+        cache[sd] = value
+        return value
+
+    async def _build_player_groups_uncached(self, sd: date) -> dict | None:
         """Identify stable player groups across stopwatch rounds.
 
         In stopwatch, teams swap sides between R1/R2.  Group A is defined
