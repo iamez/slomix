@@ -357,7 +357,7 @@ async def batch_resolve_display_names(
 ) -> dict[str, str]:
     """
     Batch-resolve display names for multiple GUIDs in minimal queries.
-    Returns a dict mapping guid -> display_name.
+    Returns a dict mapping guid -> display_name with ET color codes stripped.
     """
     if not guid_fallback_pairs:
         return {}
@@ -365,6 +365,17 @@ async def batch_resolve_display_names(
     guids = [g for g, _ in guid_fallback_pairs]
     fallback_map = {g: f for g, f in guid_fallback_pairs}
     result: dict[str, str] = {}
+
+    def _finalize() -> dict[str, str]:
+        # Fill any still-missing with fallbacks.
+        for g in guids:
+            if g not in result:
+                result[g] = fallback_map.get(g, "Unknown")
+        # Strip ET color codes — same guarantee as resolve_display_name()
+        # so callers never have to sanitize downstream. Applied on every
+        # return path; the early returns below rely on this helper (prior
+        # versions skipped stripping when all names resolved in tier 1/2).
+        return {g: strip_et_colors(name) for g, name in result.items()}
 
     # 1) Batch from player_links
     try:
@@ -391,7 +402,7 @@ async def batch_resolve_display_names(
 
     remaining = [g for g in guids if g not in result]
     if not remaining:
-        return result
+        return _finalize()
 
     # 2) Batch from player_aliases
     try:
@@ -408,7 +419,7 @@ async def batch_resolve_display_names(
 
     remaining = [g for g in guids if g not in result]
     if not remaining:
-        return result
+        return _finalize()
 
     # 3) Batch from player_comprehensive_stats
     placeholders = ", ".join(f"${i+1}" for i in range(len(remaining)))
@@ -420,14 +431,7 @@ async def batch_resolve_display_names(
         if row[1]:
             result[row[0]] = row[1]
 
-    # Fill any still-missing with fallbacks
-    for g in guids:
-        if g not in result:
-            result[g] = fallback_map.get(g, "Unknown")
-
-    # Strip ET color codes from every resolved name — same guarantee as
-    # resolve_display_name() so callers never have to sanitize downstream.
-    return {g: strip_et_colors(name) for g, name in result.items()}
+    return _finalize()
 
 
 async def resolve_alias_guid_map(
