@@ -46,6 +46,7 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
             "/api/stats/matches",
             "/api/sessions",
             "/api/seasons/current",
+            "/api/storytelling/",
         )
         invalidate_prefixes_raw = os.getenv(
             "CACHE_INVALIDATE_ON_WRITE_PREFIXES",
@@ -252,6 +253,11 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
             "/api/hall-of-fame",
             "/api/stats/overview",
             "/api/proximity/",
+            # Storytelling endpoints are session-scoped analytics — same TTL
+            # as leaderboards (300s default). Recompute cost per request
+            # includes 11 parallel moment detectors + KIS lookups, so a
+            # 5-minute cache dominates the latency profile.
+            "/api/storytelling/",
         )
 
         if path.startswith(live_prefixes):
