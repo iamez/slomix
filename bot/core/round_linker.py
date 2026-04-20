@@ -15,10 +15,17 @@ Matching strategy:
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Any
 
 logger = logging.getLogger("bot.core.round_linker")
+
+# Sanity bounds on unix timestamps — reject values that are almost
+# certainly a server clock misconfiguration. ET:Legacy round_start_unix
+# values should always fall inside this window.
+_MIN_PLAUSIBLE_UNIX_TS = 1577836800  # 2020-01-01 UTC
+_MAX_FUTURE_DRIFT_SECONDS = 86400    # 1 day — allow minor clock skew
 
 
 def _parse_round_datetime(round_date: str | None, round_time: str | None) -> datetime | None:
@@ -251,15 +258,29 @@ async def resolve_round_id_with_reason(
 
         # Prefer round_start_unix (most accurate for same-map disambiguation)
         candidate_dt = None
-        if r_start_unix and int(r_start_unix) > 0:
+        if r_start_unix:
             try:
-                # Use fromtimestamp() WITHOUT tz to get LOCAL naive datetime,
-                # matching target_dt which is also local naive (from filename
-                # round_date+round_time or from datetime.fromtimestamp(unix)
-                # in _resolve_round_id_for_metadata).
-                candidate_dt = datetime.fromtimestamp(int(r_start_unix))
-            except (ValueError, TypeError, OSError):
-                candidate_dt = None
+                ts = int(r_start_unix)
+            except (ValueError, TypeError):
+                ts = 0
+            max_future_ts = int(time.time()) + _MAX_FUTURE_DRIFT_SECONDS
+            if _MIN_PLAUSIBLE_UNIX_TS < ts <= max_future_ts:
+                try:
+                    # Use fromtimestamp() WITHOUT tz to get LOCAL naive datetime,
+                    # matching target_dt which is also local naive (from filename
+                    # round_date+round_time or from datetime.fromtimestamp(unix)
+                    # in _resolve_round_id_for_metadata).
+                    candidate_dt = datetime.fromtimestamp(ts)
+                except (ValueError, TypeError, OSError):
+                    candidate_dt = None
+            elif ts > 0:
+                # Out-of-bounds timestamp — server clock was misconfigured or
+                # value is corrupted. Skip this candidate (fall through to the
+                # round_date+round_time text fallback below).
+                logger.debug(
+                    "round_linker: skipping candidate round_id=%s with "
+                    "out-of-bounds round_start_unix=%d", round_id, ts,
+                )
 
         if not candidate_dt:
             candidate_dt = _parse_round_datetime(r_date, r_time)
