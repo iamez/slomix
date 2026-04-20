@@ -10,6 +10,7 @@ from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 from website.backend.routers.api_helpers import (
+    batch_resolve_display_names,
     resolve_alias_guid_map,
     resolve_display_name,
     resolve_name_guid_map,
@@ -509,12 +510,16 @@ async def list_awards(
         """
         rows = await db.fetch_all(fallback_query, tuple(params))
 
+    name_map = await batch_resolve_display_names(
+        db,
+        [(row[2], row[1] or "Unknown") for row in rows if row[2]],
+    )
     return {
         "awards": [
             {
                 "award": row[0],
                 "player": (
-                    await resolve_display_name(db, row[2], row[1] or "Unknown")
+                    name_map.get(row[2], row[1] or "Unknown")
                     if row[2]
                     else (row[1] or "Unknown")
                 ),
@@ -619,13 +624,15 @@ async def get_hall_of_fame(
                 LIMIT {limit_param}
             """
             rows = await db.fetch_all(query, tuple(params))
+            name_map = await batch_resolve_display_names(
+                db, [(row[0], row[1] or "Unknown") for row in rows]
+            )
             entries = []
             for rank, row in enumerate(rows, 1):
-                name = await resolve_display_name(db, row[0], row[1] or "Unknown")
                 entries.append({
                     "rank": rank,
                     "player_guid": row[0],
-                    "player_name": name,
+                    "player_name": name_map.get(row[0], "Unknown"),
                     "value": int(row[2]) if row[2] is not None else 0,
                     "unit": unit,
                 })
@@ -646,13 +653,15 @@ async def get_hall_of_fame(
             LIMIT {limit_param}
         """
         rows = await db.fetch_all(wins_query, tuple(params))
+        name_map = await batch_resolve_display_names(
+            db, [(row[0], row[1] or "Unknown") for row in rows]
+        )
         entries = []
         for rank, row in enumerate(rows, 1):
-            name = await resolve_display_name(db, row[0], row[1] or "Unknown")
             entries.append({
                 "rank": rank,
                 "player_guid": row[0],
-                "player_name": name,
+                "player_name": name_map.get(row[0], "Unknown"),
                 "value": int(row[2]) if row[2] is not None else 0,
                 "unit": "wins",
             })
@@ -673,13 +682,15 @@ async def get_hall_of_fame(
             LIMIT {limit_param}
         """
         rows = await db.fetch_all(dpm_query, tuple(dpm_params))
+        name_map = await batch_resolve_display_names(
+            db, [(row[0], row[1] or "Unknown") for row in rows]
+        )
         entries = []
         for rank, row in enumerate(rows, 1):
-            name = await resolve_display_name(db, row[0], row[1] or "Unknown")
             entries.append({
                 "rank": rank,
                 "player_guid": row[0],
-                "player_name": name,
+                "player_name": name_map.get(row[0], "Unknown"),
                 "value": float(row[2]) if row[2] is not None else 0.0,
                 "unit": "dpm",
             })
@@ -728,13 +739,15 @@ async def get_hall_of_fame(
             LIMIT {limit_param}
         """
         rows = await db.fetch_all(consec_query, tuple(params))
+        name_map = await batch_resolve_display_names(
+            db, [(row[0], row[1] or "Unknown") for row in rows]
+        )
         entries = []
         for rank, row in enumerate(rows, 1):
-            name = await resolve_display_name(db, row[0], row[1] or "Unknown")
             entries.append({
                 "rank": rank,
                 "player_guid": row[0],
-                "player_name": name,
+                "player_name": name_map.get(row[0], "Unknown"),
                 "value": int(row[2]) if row[2] is not None else 0,
                 "unit": "sessions",
             })
