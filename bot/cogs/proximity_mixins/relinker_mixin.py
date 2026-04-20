@@ -14,6 +14,14 @@ from discord.ext import tasks
 
 logger = logging.getLogger("bot.cogs.proximity")
 
+# Rounds whose target_dt is older than this are treated as permanent
+# orphans: the stats file was never written (surrender crash, disk full,
+# VPS network loss, …) and the round_id will never resolve. Skipping them
+# stops the 5-minute cron from spamming `no_rows_for_map_round` warnings
+# every cycle. Tuned against production logs where orphans aged 400 h-1600 h
+# repeated every 5 min forever.
+_PERMANENT_ORPHAN_AGE_HOURS = 48
+
 
 class _ProximityRelinkerMixin:
     """Null-round relinker (fixes proximity rows linked to wrong rounds) for ProximityCog."""
@@ -59,6 +67,8 @@ class _ProximityRelinkerMixin:
 
             linked = 0
             failed = 0
+            stale_skipped = 0
+            now = datetime.utcnow()
 
             for row in unlinked:
                 map_name = row[0] if isinstance(row, (list, tuple)) else row.get('map_name') or row['map_name']
@@ -75,6 +85,16 @@ class _ProximityRelinkerMixin:
                         target_dt = datetime.fromtimestamp(int(round_start_unix))
                     except (ValueError, TypeError, OSError):
                         pass  # Invalid timestamp format; fall back to date-based resolution
+
+                # Skip permanent orphans — rows whose target time is older
+                # than the configured threshold will never resolve and
+                # only spam the log. Counted separately so an operator can
+                # still see them in the summary line.
+                if target_dt is not None:
+                    age_hours = (now - target_dt).total_seconds() / 3600.0
+                    if age_hours > _PERMANENT_ORPHAN_AGE_HOURS:
+                        stale_skipped += 1
+                        continue
 
                 round_date_str = str(session_date) if session_date else None
 
@@ -154,10 +174,12 @@ class _ProximityRelinkerMixin:
 
                 linked += 1
 
-            if linked > 0 or failed > 0:
+            if linked > 0 or failed > 0 or stale_skipped > 0:
                 logger.info(
-                    f"🔗 Proximity re-linker: {linked} rounds linked, "
-                    f"{failed} unresolved (of {len(unlinked)} total)"
+                    "🔗 Proximity re-linker: %d linked, %d unresolved, "
+                    "%d stale skipped (>%dh) — of %d total",
+                    linked, failed, stale_skipped,
+                    _PERMANENT_ORPHAN_AGE_HOURS, len(unlinked),
                 )
 
         except Exception as e:

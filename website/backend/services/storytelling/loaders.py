@@ -65,17 +65,21 @@ class _LoadersMixin:
     async def _load_spawn_timings(self, session_date):
         """Load spawn timings indexed by (round_start_unix, round_number).
 
-        Each entry is a tuple of (guid, kill_time, score, enemy_spawn_interval, victim_reinf).
+        Each entry is a tuple of (guid, kill_time, score, victim_reinf).
+        `enemy_spawn_interval` was stored at index 3 through KIS v2 where
+        reinf_mult was a ratio `victim_reinf / spawn_interval`; KIS v3
+        (graduated tiers by absolute seconds) no longer needs it, so it
+        is dropped from the tuple and from the SELECT list.
         """
         rows = await self.db.fetch_all(
             "SELECT killer_guid, kill_time, spawn_timing_score, round_start_unix, round_number, "
-            "enemy_spawn_interval, victim_reinf "
+            "victim_reinf "
             "FROM proximity_spawn_timing WHERE session_date = $1", (session_date,))
         result = {}
         for r in (rows or []):
             key = (r[3], r[4])
             result.setdefault(key, []).append(
-                (r[0], r[1], float(r[2] or 0.5), r[5] or 0, float(r[6] or 0)))
+                (r[0], r[1], float(r[2] or 0.5), float(r[5] or 0)))
         return result
 
     async def _load_victim_classes(self, session_date):

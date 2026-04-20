@@ -110,10 +110,13 @@ async def get_kill_impact_details(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Per-kill KIS breakdown for a specific player in a session."""
-    svc = StorytellingService(db)
-    await svc.compute_session_kis(session_date)
-
+    # Validate the date first — previously compute_session_kis() received
+    # the raw query string, so `session_date=foo` surfaced as an internal
+    # 500 via the ValueError raised from _to_date. Parsing up front turns
+    # that into the 400 handled by _parse_date.
     sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    await svc.compute_session_kis(sd)
     rows = await db.fetch_all("""
         SELECT kill_outcome_id, round_number, round_start_unix, map_name,
                victim_guid, victim_name,

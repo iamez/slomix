@@ -234,14 +234,27 @@ class _MomentsMixin:
         return moments
 
     async def _detect_focus_survivals(self, sd: date) -> list:
-        """Detector C: Survived 3v1+ focus fire."""
+        """Detector C: Survived 3v1+ focus fire.
+
+        Joins `combat_engagement` on `(session_date, round_number,
+        engagement_id)` to recover `end_time_ms` — without it the
+        returned moment carries `time_ms: 0` and the UI renders every
+        focus survival at the pistol round. The JOIN is LEFT so rows
+        without a matching engagement still surface (time stays 0 as a
+        fallback).
+        """
         rows = await self.db.fetch_all("""
-            SELECT target_guid, target_name, attacker_count, focus_score,
-                   round_number, map_name, engagement_id
-            FROM proximity_focus_fire
-            WHERE session_date = $1 AND attacker_count >= 3
-                AND focus_score >= 0.5
-            ORDER BY focus_score DESC
+            SELECT ff.target_guid, ff.target_name, ff.attacker_count, ff.focus_score,
+                   ff.round_number, ff.map_name, ff.engagement_id,
+                   ce.end_time_ms
+            FROM proximity_focus_fire ff
+            LEFT JOIN combat_engagement ce
+                   ON ce.session_date = ff.session_date
+                  AND ce.round_number = ff.round_number
+                  AND ce.engagement_id = ff.engagement_id
+            WHERE ff.session_date = $1 AND ff.attacker_count >= 3
+                AND ff.focus_score >= 0.5
+            ORDER BY ff.focus_score DESC
             LIMIT 10
         """, (sd,))
 
@@ -255,7 +268,7 @@ class _MomentsMixin:
                 "type": "focus_survival",
                 "round_number": r[4],
                 "map_name": r[5],
-                "time_ms": 0,
+                "time_ms": int(r[7]) if r[7] is not None else 0,
                 "player": name,
                 "narrative": f"{name} survived a {attackers}v1 focus fire (score {score:.0%})",
                 "impact_stars": stars,
