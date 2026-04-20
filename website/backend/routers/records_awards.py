@@ -146,7 +146,7 @@ async def get_awards_leaderboard(
         player_counts AS (
             SELECT
                 COALESCE(ra.player_guid, am.guid, nm.player_guid, ra.player_name) as player_key,
-                COALESCE(ra.player_guid, am.guid, nm.player_guid) as player_guid,
+                COALESCE(ra.player_guid, am.guid, nm.player_guid) as resolved_guid,
                 MAX(ra.player_name) as player_name,
                 ra.award_name,
                 COUNT(*) as award_specific_count
@@ -154,12 +154,12 @@ async def get_awards_leaderboard(
             LEFT JOIN alias_map am ON LOWER(ra.player_name) = LOWER(am.alias)
             LEFT JOIN name_map nm ON LOWER(ra.player_name) = nm.name_key
             {where_sql}
-            GROUP BY player_key, player_guid, ra.award_name
+            GROUP BY player_key, resolved_guid, ra.award_name
         ),
         player_totals AS (
             SELECT
                 player_key,
-                MAX(player_guid) as player_guid,
+                MAX(resolved_guid) as player_guid,
                 MAX(player_name) as player_name,
                 SUM(award_specific_count) as total_awards
             FROM player_counts
