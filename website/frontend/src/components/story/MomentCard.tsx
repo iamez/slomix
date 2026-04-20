@@ -1,4 +1,4 @@
-import type { MatchMoment, MatchMomentType } from '../../api/types';
+import type { MatchMoment } from '../../api/types';
 import { cn } from '../../lib/cn';
 
 // Palette mirrors legacy website/js/story.js:618 so React + legacy
@@ -6,7 +6,13 @@ import { cn } from '../../lib/cn';
 // Previously only the first 5 were covered here, which silently fell
 // every other moment back to the `kill_streak` config and mislabelled
 // ~55% of cards.
-const MOMENT_CONFIG: Record<MatchMomentType, { icon: string; color: string; bg: string }> = {
+//
+// Typed as `Record<string, ...>` (not `Record<MatchMomentType, ...>`)
+// on purpose: a future detector may emit a new moment type before the
+// frontend type union catches up, so the `?? FALLBACK` path has to
+// remain reachable. TS would mark the coalesce dead-code if we tightened
+// the key type.
+const MOMENT_CONFIG: Record<string, { icon: string; color: string; bg: string }> = {
   kill_streak:       { icon: '\u{1F480}',        color: 'text-rose-400',    bg: 'from-rose-500/15 to-pink-500/15' },
   carrier_chain:     { icon: '\u{1F3AF}',        color: 'text-emerald-400', bg: 'from-emerald-500/15 to-teal-500/15' },
   focus_survival:    { icon: '\u{1F48E}',        color: 'text-purple-400',  bg: 'from-purple-500/15 to-violet-500/15' },
@@ -20,7 +26,7 @@ const MOMENT_CONFIG: Record<MatchMomentType, { icon: string; color: string; bg: 
   multikill:         { icon: '\u{1F525}',        color: 'text-amber-400',   bg: 'from-amber-500/15 to-orange-500/15' },
 };
 
-const TYPE_LABELS: Record<MatchMomentType, string> = {
+const TYPE_LABELS: Record<string, string> = {
   kill_streak:       'Kill Streak',
   carrier_chain:     'Carrier Chain',
   focus_survival:    'Focus Survival',
@@ -102,7 +108,7 @@ export function MomentCard({ moment, index }: MomentCardProps) {
       {/* Per-kill breakdown (multikill / team_wipe emit this payload) */}
       {hasKills && (
         <div className="mt-2 pt-2 border-t border-white/5 space-y-0.5 text-[10px]">
-          {moment.kills!.map((k, i) => (
+          {moment.kills?.map((k, i) => (
             <div key={i} className="flex items-center gap-1">
               <span className="text-white">{k.killer}</span>
               <span className="text-slate-600">{'\u2192'}</span>
