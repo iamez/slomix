@@ -629,9 +629,6 @@ class UltimateETLegacyBot(
         except Exception as e:
             logger.error(f'Failed to load Analytics Cog: {e}', exc_info=True)
 
-        # �🎯 FIVEEYES: Load synergy analytics cog (SAFE - disabled by default)
-        # synergy_analytics disabled — analytics package never created
-
         # 🎯 PROXIMITY TRACKER: Load combat engagement analytics (SAFE - disabled by default)
         try:
             await self.load_extension("bot.cogs.proximity_cog")
