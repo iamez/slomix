@@ -186,18 +186,22 @@ class SSHHandler:
         sftp = None
 
         try:
+            # 20s connect timeout (was 10s) — EU peak latency can push SSH
+            # auth handshake past 10s on shared links. Paired with the 30s
+            # asyncio.wait_for outer timeout so a hung handshake cannot keep
+            # the event loop waiting indefinitely.
             ssh.connect(
                 hostname=ssh_config["host"],
                 port=ssh_config["port"],
                 username=ssh_config["user"],
                 key_filename=key_path,
-                timeout=10,
+                timeout=20,
             )
 
             sftp = ssh.open_sftp()
 
             # Set timeout for SFTP operations
-            sftp.get_channel().settimeout(15.0)
+            sftp.get_channel().settimeout(20.0)
 
             files = sftp.listdir(ssh_config["remote_path"])
 
@@ -276,12 +280,14 @@ class SSHHandler:
         sftp = None
 
         try:
+            # 20s connect timeout (was 10s) — EU peak latency can push SSH
+            # auth handshake past 10s on shared links.
             ssh.connect(
                 hostname=ssh_config["host"],
                 port=ssh_config["port"],
                 username=ssh_config["user"],
                 key_filename=key_path,
-                timeout=10,
+                timeout=20,
             )
 
             sftp = ssh.open_sftp()
