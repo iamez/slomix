@@ -33,6 +33,8 @@
     - Timing legend in embed (v1.3.0)
     - Surrender vote tracking (v1.4.0) - who called, which team
     - Match score tracking (v1.4.0) - running Axis/Allies win count
+    - RFC 8259-compliant JSON escape (v1.6.4) - handles all control bytes in
+      player names (previously names with \x00..\x1f broke webhook parsing)
 
     Webhook Fields (v1.4.0):
     - Lua_Playtime: Actual play time (excludes pauses)
@@ -65,7 +67,7 @@
 ]]--
 
 local modname = "stats_discord_webhook"
-local version = "1.6.3"
+local version = "1.6.4"
 
 -- ============================================================================
 -- CONFIGURATION - EDIT THESE VALUES
@@ -222,9 +224,32 @@ local function shell_escape(str)
     return "'" .. tostring(str or ""):gsub("'", "'\"'\"'") .. "'"
 end
 
+-- JSON string escape compliant with RFC 8259 §7.
+--
+-- Previous version (≤ v1.6.3) only escaped \ " \n \r \t. Player names with
+-- raw control bytes (e.g. \x08 backspace, \x1b ESC inside ANSI terminal
+-- copy-paste, or \x00 NULL from clipboard corruption) produced invalid
+-- JSON and the bot silently dropped the webhook. v1.6.4 escapes every
+-- code point in U+0000..U+001F plus U+007F (DEL) using the canonical
+-- \uXXXX escape, and keeps the fast path for the common specials.
 local function json_escape(str)
-    return tostring(str or ""):gsub("\\", "\\\\"):gsub('"', '\\"')
-        :gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t")
+    if str == nil then
+        return ""
+    end
+    local s = tostring(str)
+    -- Canonical specials first; leaves the remaining gsub with only raw
+    -- control bytes to handle.
+    s = s:gsub("\\", "\\\\"):gsub('"', '\\"')
+    s = s:gsub("\b", "\\b"):gsub("\f", "\\f")
+    s = s:gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t")
+    -- Any remaining control byte (incl. \x00..\x07, \x0b, \x0e..\x1f, \x7f)
+    -- becomes \u00XX. Non-ASCII bytes (\x80..\xFF — UTF-8 leading and
+    -- continuation sequences) are not matched by %c and pass through
+    -- unchanged, as JSON permits raw UTF-8.
+    s = s:gsub("([%c])", function(c)
+        return string.format("\\u%04x", string.byte(c))
+    end)
+    return s
 end
 
 local function get_gametimes_dir()
@@ -470,10 +495,14 @@ local function format_player_json(players)
 
     local parts = {}
     for _, p in ipairs(players) do
-        -- Escape special characters for JSON
-        local safe_name = p.name:gsub('\\', '\\\\'):gsub('"', '\\"')
-        local safe_guid = p.guid:gsub('\\', '\\\\'):gsub('"', '\\"')
-        table.insert(parts, string.format('{"guid":"%s","name":"%s"}', safe_guid, safe_name))
+        -- Use the RFC 8259-compliant escape (v1.6.4): names can contain raw
+        -- control bytes from clipboard paste / binary corruption, and the
+        -- prior inline `\` and `"` only escape let those through.
+        table.insert(parts, string.format(
+            '{"guid":"%s","name":"%s"}',
+            json_escape(p.guid),
+            json_escape(p.name)
+        ))
     end
     return "[" .. table.concat(parts, ",") .. "]"
 end
@@ -876,8 +905,10 @@ local function send_webhook()
         -- Format pause events for JSON field (v1.3.0)
         local pause_events_json = format_pause_events_json()
 
-        -- Escape surrender caller name for JSON (v1.4.0)
-        local safe_surrender_name = surrender_vote.caller_name:gsub('\\', '\\\\'):gsub('"', '\\"')
+        -- Escape surrender caller name for JSON (v1.4.0, v1.6.4 uses
+        -- the full control-char-safe json_escape so names with raw
+        -- control bytes no longer corrupt the outer payload)
+        local safe_surrender_name = json_escape(surrender_vote.caller_name)
 
         local payload = string.format([[{
         "username": "ET:Legacy Stats",
@@ -924,10 +955,15 @@ local function send_webhook()
             safe_surrender_name,  -- Name of surrender caller (v1.4.0)
             match_score.axis_wins,  -- Axis round wins (v1.4.0)
             match_score.allies_wins,  -- Allies round wins (v1.4.0)
-            axis_players_json:gsub('"', '\\"'),  -- JSON escaped for embedding
-            allies_players_json:gsub('"', '\\"'),  -- JSON escaped for embedding
-            pause_events_json:gsub('"', '\\"'),  -- Pause events JSON (v1.3.0)
-            spawn_summary:gsub('"', '\\"'),
+            -- These fragments are already JSON arrays; embedded here as
+            -- JSON string values, so the whole fragment needs the full
+            -- RFC 8259 escape (v1.6.4) — not just `"`. Prior versions
+            -- let raw control bytes and backslashes through and broke
+            -- the outer Discord embed parser.
+            json_escape(axis_players_json),
+            json_escape(allies_players_json),
+            json_escape(pause_events_json),
+            json_escape(spawn_summary),
             version  -- footer
         )
 
