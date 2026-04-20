@@ -27,7 +27,7 @@ from website.backend.services.storytelling_service import (
     OUTCOME_TAPPED,
     OUTNUMBERED_MULTIPLIER,
     PUSH_QUALITY_THRESHOLD,
-    REINF_PENALTY_THRESHOLD,
+    REINF_MULT_TIERS,
     SOLO_CLUTCH_MULTIPLIER,
     SOLO_CLUTCH_THRESHOLD,
     SPAWN_TIMING_BONUS,
@@ -249,9 +249,21 @@ async def get_kis_formula():
                 "description": "Kill while outnumbered or solo clutch",
             },
             "reinforcement": {
-                "value": 1.2,
-                "threshold": f"victim_reinf > {REINF_PENALTY_THRESHOLD*100:.0f}% of spawn interval",
-                "description": "Kill denying long respawn time",
+                "tiers": [
+                    {
+                        "max_reinf_seconds": (None if upper == float("inf") else upper),
+                        "multiplier": mult,
+                    }
+                    for upper, mult in REINF_MULT_TIERS
+                ],
+                "description": (
+                    "Graduated UTRO-inspired tiers (2026-04-20). The longer "
+                    "the victim has to wait before respawning, the more time "
+                    "the kill removed from the enemy team — so the multiplier "
+                    "scales from 0.70 (≤2s, they were about to respawn) up to "
+                    "1.40 (≥25s, full wave penalty). Replaces the previous "
+                    "binary 1.0/1.2 split."
+                ),
             },
         },
         "soft_cap": {

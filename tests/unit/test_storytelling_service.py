@@ -554,32 +554,61 @@ class TestScoreKillCombined:
 
 
 class TestScoreKillReinfMultiplier:
-    """Reinforcement timing multiplier from spawn_timings extended tuple."""
+    """Reinforcement timing multiplier — UTRO-inspired graduated tiers.
 
-    def test_reinf_bonus_applied(self):
-        """victim_reinf > 75% of spawn interval => 1.2x reinf_mult."""
+    Tier table (from REINF_MULT_TIERS, inclusive upper bounds):
+        ≤ 2s  → 0.70
+        ≤ 5s  → 0.85
+        ≤ 10s → 1.00
+        ≤ 15s → 1.10
+        ≤ 20s → 1.20
+        ≤ 25s → 1.30
+        > 25s → 1.40
+    """
+
+    def test_reinf_tier_baseline(self):
+        """victim_reinf = 10s lands on the ≤10s baseline tier."""
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
-        # Extended tuple: (guid, kill_time, score, enemy_spawn_interval_ms, victim_reinf_s)
-        # spawn_interval = 30000ms (30s), reinf_penalty threshold = 0.75 * 30 = 22.5s
-        # victim_reinf = 25s > 22.5s => bonus
+        spawn_timings = {
+            (100, 1): [("A", 5000, 0.5, 30000, 10.0)]
+        }
+        ck, cr, pu, cf, vc, cp = {}, {}, {}, {}, {}, {}
+        result = svc._score_kill(kill, ck, cr, pu, cf, spawn_timings, vc, cp)
+        assert result["reinf_multiplier"] == 1.0
+
+    def test_reinf_tier_long_wait(self):
+        """victim_reinf = 25s lands on the ≤25s strong-bonus tier (1.30x)."""
+        svc = _service()
+        kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
         spawn_timings = {
             (100, 1): [("A", 5000, 0.5, 30000, 25.0)]
         }
         ck, cr, pu, cf, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pu, cf, spawn_timings, vc, cp)
-        assert result["reinf_multiplier"] == 1.2
+        assert result["reinf_multiplier"] == 1.30
 
-    def test_reinf_no_bonus_below_threshold(self):
-        """victim_reinf < 75% of spawn interval => no bonus."""
+    def test_reinf_tier_quick_respawn_penalty(self):
+        """victim_reinf = 2s (≤2 tier) dilutes the kill value to 0.70x."""
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
         spawn_timings = {
-            (100, 1): [("A", 5000, 0.5, 30000, 10.0)]  # 10s < 22.5s
+            (100, 1): [("A", 5000, 0.5, 30000, 2.0)]
         }
         ck, cr, pu, cf, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pu, cf, spawn_timings, vc, cp)
-        assert result["reinf_multiplier"] == 1.0
+        assert result["reinf_multiplier"] == 0.70
+
+    def test_reinf_tier_full_wave(self):
+        """victim_reinf = 30s caps at 1.40x (full wave)."""
+        svc = _service()
+        kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
+        spawn_timings = {
+            (100, 1): [("A", 5000, 0.5, 30000, 30.0)]
+        }
+        ck, cr, pu, cf, vc, cp = {}, {}, {}, {}, {}, {}
+        result = svc._score_kill(kill, ck, cr, pu, cf, spawn_timings, vc, cp)
+        assert result["reinf_multiplier"] == 1.40
 
 
 # ===========================================================================
