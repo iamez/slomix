@@ -271,10 +271,18 @@ class _KisMixin:
         if round_key in spawn_timings:
             for st_data in spawn_timings[round_key]:
                 if st_data[0] == killer_guid and abs(st_data[1] - kill_time) <= SPAWN_TIMING_WINDOW_MS:
-                    if len(st_data) > 4:
-                        victim_reinf_val = st_data[4]  # victim_reinf seconds
-                        victim_reinf_stored = float(victim_reinf_val)
-                        reinf_mult = _graduated_reinf_mult(victim_reinf_val)
+                    # (guid, kill_time, score, victim_reinf) after F6.
+                    # Older callers that still pass a 5-tuple with
+                    # enemy_spawn_interval at index 3 → index 4 takes
+                    # precedence (backward-compat for cached fixtures).
+                    if len(st_data) >= 5:
+                        victim_reinf_val = st_data[4]
+                    elif len(st_data) >= 4:
+                        victim_reinf_val = st_data[3]
+                    else:
+                        break
+                    victim_reinf_stored = float(victim_reinf_val)
+                    reinf_mult = _graduated_reinf_mult(victim_reinf_val)
                     break
 
         # Total impact = product of all multipliers
