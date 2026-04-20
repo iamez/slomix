@@ -21,7 +21,7 @@ from .base import (
     PUSH_BUFFER_MS,
     PUSH_QUALITY_THRESHOLD,
     PUSH_TOWARD_EXCLUDE,
-    REINF_PENALTY_THRESHOLD,
+    REINF_MULT_TIERS,
     SOLO_CLUTCH_MULTIPLIER,
     SOLO_CLUTCH_THRESHOLD,
     SPAWN_TIMING_WINDOW_MS,
@@ -31,6 +31,20 @@ from .base import (
     date,
     logger,
 )
+
+
+def _graduated_reinf_mult(victim_reinf_seconds: float) -> float:
+    """Look up the graduated reinf multiplier for the given wait in seconds.
+
+    Uses REINF_MULT_TIERS; first tier whose inclusive upper bound is at
+    least the wait wins (so r=10.0 maps to the ≤10 tier, not the next).
+    Negative/zero wait falls into the shortest tier.
+    """
+    r = float(victim_reinf_seconds or 0.0)
+    for upper, mult in REINF_MULT_TIERS:
+        if r <= upper:
+            return mult
+    return REINF_MULT_TIERS[-1][1]
 
 
 class _KisMixin:
@@ -248,20 +262,19 @@ class _KisMixin:
                 elif my_alive > 0 and (enemy_alive - my_alive) >= outnumbered_threshold:
                     alive_mult = OUTNUMBERED_MULTIPLIER
 
-        # Reinforcement timing multiplier (Oksii adoption)
-        # Only apply if victim has a long wait until respawn relative to spawn interval
+        # Reinforcement timing multiplier (UTRO-inspired graduated tiers,
+        # 2026-04-20 — replaces the previous binary 1.0/1.2 split).
+        # Longer wait until respawn ⇒ the kill removed more time from the
+        # enemy team, so the multiplier scales from 0.70 (≤2s, they were
+        # about to respawn anyway) up to 1.40 (≥25s, full wave penalty).
         victim_reinf_stored = 0.0
         if round_key in spawn_timings:
             for st_data in spawn_timings[round_key]:
                 if st_data[0] == killer_guid and abs(st_data[1] - kill_time) <= SPAWN_TIMING_WINDOW_MS:
-                    # Check if we have reinf data (extended tuple)
                     if len(st_data) > 4:
                         victim_reinf_val = st_data[4]  # victim_reinf seconds
                         victim_reinf_stored = float(victim_reinf_val)
-                        enemy_spawn_interval_val = st_data[3]  # enemy_spawn_interval ms
-                        spawn_interval_s = enemy_spawn_interval_val / 1000.0 if enemy_spawn_interval_val > 0 else 30
-                        if spawn_interval_s > 0 and victim_reinf_val > (spawn_interval_s * REINF_PENALTY_THRESHOLD):
-                            reinf_mult = 1.2
+                        reinf_mult = _graduated_reinf_mult(victim_reinf_val)
                     break
 
         # Total impact = product of all multipliers
