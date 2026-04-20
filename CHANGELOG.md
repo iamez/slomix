@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.5.4](https://github.com/iamez/slomix/compare/v1.5.3...v1.5.4) (2026-04-20)
+
+
+### Bug Fixes
+
+* **db:** migration 038 — player_track round-linkage columns + backfill ([#106](https://github.com/iamez/slomix/issues/106)) ([3a28dac](https://github.com/iamez/slomix/commit/3a28dac2f9aa096f5afe2f2935c8f1ea9a3ddac4))
+* **db:** PG 17 ambiguous column in awards leaderboard query ([#107](https://github.com/iamez/slomix/issues/107)) ([cd1f1e1](https://github.com/iamez/slomix/commit/cd1f1e12209f3590233251172ca8bfa35ade6456))
+
 ## [1.5.3](https://github.com/iamez/slomix/compare/v1.5.2...v1.5.3) (2026-04-19)
 
 
