@@ -684,14 +684,23 @@ class C0RNP0RN3StatsParser:
                 continue
 
             reset_fields = self._detect_player_counter_reset(r1_player, r2_player)
-            # Require at least 2 dropped cumulative fields to confirm a reconnect.
-            # A single field anomaly could be noise; multiple drops strongly indicate
-            # the player's counters were reset mid-round (reconnect scenario).
-            use_r2_raw = len(reset_fields) >= 2
+            # Trigger the R2-raw fallback on ANY dropped cumulative field. The
+            # previous `>= 2` threshold missed late-leaver scenarios where only
+            # `time_played_minutes` drops (~5-10% of sessions per Layer 2 audit).
+            #
+            # Trade-off: a single-field anomaly might be noise (clock skew,
+            # parser bug) rather than a genuine reconnect. But R2-raw is a
+            # safe over-estimate — it reports what the file shows rather than
+            # computing a negative differential that gets clamped to 0 and
+            # silently understates real play. Log levels below reflect
+            # certainty: WARNING for ≥2 drops (strong signal), INFO for a
+            # single drop (weaker signal, more likely noise-tolerable).
+            use_r2_raw = len(reset_fields) >= 1
             if use_r2_raw:
                 r1_obj = r1_player.get('objective_stats', {}) or {}
                 r2_obj = r2_player.get('objective_stats', {}) or {}
-                logger.warning(
+                log_fn = logger.warning if len(reset_fields) >= 2 else logger.info
+                log_fn(
                     "[R2 RESET FALLBACK] player=%s guid=%s dropped_fields=%s "
                     "dropped_count=%d mode=use_r2_raw "
                     "r1_kills=%d r2_kills=%d r1_deaths=%d r2_deaths=%d "
