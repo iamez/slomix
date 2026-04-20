@@ -18,6 +18,7 @@ Mode is config-driven:
   automatic rollback guardrails
 """
 
+import asyncio
 import logging
 from datetime import datetime
 
@@ -72,6 +73,13 @@ class RoundCorrelationService:
         self.preflight_ok = False
         self.guardrail_reason = None
         self._initialized = False
+        # Serialize the find-nearby → resolve → upsert critical section so
+        # simultaneous Lua webhook + stats-import events cannot both observe
+        # "no nearby correlation" and each create a new row (the root cause
+        # of the 84 duplicate (r1, r2) pairs migration 040 just cleaned up).
+        # Slomix hosts at most one active match at a time; a single global
+        # lock has negligible throughput impact.
+        self._correlation_lock = asyncio.Lock()
 
         mode = "DRY-RUN" if dry_run else "LIVE_REQUESTED"
         logger.info(
@@ -193,23 +201,24 @@ class RoundCorrelationService:
         if not await self._allow_live_write():
             return
 
-        existing_cid = await self._find_nearby_correlation_id(match_id, map_name, round_number)
-        correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
-
         flag_col = f"has_r{round_number}_stats"
         id_col = f"r{round_number}_round_id"
         arrived_col = f"r{round_number}_arrived_at"
 
-        await self._upsert_correlation(
-            correlation_id=correlation_id,
-            match_id=effective_mid,
-            map_name=map_name,
-            updates={
-                flag_col: True,
-                id_col: round_id,
-                arrived_col: datetime.now(),
-            },
-        )
+        async with self._correlation_lock:
+            existing_cid = await self._find_nearby_correlation_id(match_id, map_name, round_number)
+            correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
+
+            await self._upsert_correlation(
+                correlation_id=correlation_id,
+                match_id=effective_mid,
+                map_name=map_name,
+                updates={
+                    flag_col: True,
+                    id_col: round_id,
+                    arrived_col: datetime.now(),
+                },
+            )
 
     async def _find_nearby_correlation_id(self, match_id: str, map_name: str,
                                           round_number: int = 0,
@@ -331,18 +340,19 @@ class RoundCorrelationService:
         if not await self._allow_live_write():
             return
 
-        existing_cid = await self._find_nearby_correlation_id(match_id, map_name, round_number)
-        correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
+        async with self._correlation_lock:
+            existing_cid = await self._find_nearby_correlation_id(match_id, map_name, round_number)
+            correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
 
-        await self._upsert_correlation(
-            correlation_id=correlation_id,
-            match_id=effective_mid,
-            map_name=map_name,
-            updates={
-                f"has_r{round_number}_lua_teams": True,
-                f"r{round_number}_lua_teams_id": lua_teams_id,
-            },
-        )
+            await self._upsert_correlation(
+                correlation_id=correlation_id,
+                match_id=effective_mid,
+                map_name=map_name,
+                updates={
+                    f"has_r{round_number}_lua_teams": True,
+                    f"r{round_number}_lua_teams_id": lua_teams_id,
+                },
+            )
 
     async def on_gametime_processed(self, match_id: str, round_number: int,
                                     map_name: str):
@@ -359,15 +369,16 @@ class RoundCorrelationService:
         if not await self._allow_live_write():
             return
 
-        existing_cid = await self._find_nearby_correlation_id(match_id, map_name, round_number)
-        correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
+        async with self._correlation_lock:
+            existing_cid = await self._find_nearby_correlation_id(match_id, map_name, round_number)
+            correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
 
-        await self._upsert_correlation(
-            correlation_id=correlation_id,
-            match_id=effective_mid,
-            map_name=map_name,
-            updates={f"has_r{round_number}_gametime": True},
-        )
+            await self._upsert_correlation(
+                correlation_id=correlation_id,
+                match_id=effective_mid,
+                map_name=map_name,
+                updates={f"has_r{round_number}_gametime": True},
+            )
 
     async def on_endstats_processed(self, match_id: str, round_number: int,
                                     map_name: str):
@@ -384,17 +395,18 @@ class RoundCorrelationService:
         if not await self._allow_live_write():
             return
 
-        existing_cid = await self._find_nearby_correlation_id(match_id, map_name, round_number)
-        correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
-
         flag_col = f"has_r{round_number}_endstats"
 
-        await self._upsert_correlation(
-            correlation_id=correlation_id,
-            match_id=effective_mid,
-            map_name=map_name,
-            updates={flag_col: True},
-        )
+        async with self._correlation_lock:
+            existing_cid = await self._find_nearby_correlation_id(match_id, map_name, round_number)
+            correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
+
+            await self._upsert_correlation(
+                correlation_id=correlation_id,
+                match_id=effective_mid,
+                map_name=map_name,
+                updates={flag_col: True},
+            )
 
     async def on_proximity_imported(self, match_id: str, round_number: int,
                                     map_name: str):
@@ -411,15 +423,16 @@ class RoundCorrelationService:
         if not await self._allow_live_write():
             return
 
-        existing_cid = await self._find_nearby_correlation_id(match_id, map_name, round_number)
-        correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
+        async with self._correlation_lock:
+            existing_cid = await self._find_nearby_correlation_id(match_id, map_name, round_number)
+            correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
 
-        await self._upsert_correlation(
-            correlation_id=correlation_id,
-            match_id=effective_mid,
-            map_name=map_name,
-            updates={f"has_r{round_number}_proximity": True},
-        )
+            await self._upsert_correlation(
+                correlation_id=correlation_id,
+                match_id=effective_mid,
+                map_name=map_name,
+                updates={f"has_r{round_number}_proximity": True},
+            )
 
     # ------------------------------------------------------------------
     # Internal helpers
