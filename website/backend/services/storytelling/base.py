@@ -75,8 +75,10 @@ OUTNUMBERED_MULTIPLIER = 1.5        # Kill while outnumbered
 REINF_PENALTY_THRESHOLD = 0.75      # victim_reinf > 75% of spawn interval = bonus (legacy binary mode)
 
 # Graduated reinforcement multiplier tiers (UTRO-inspired, 2026-04-20).
-# Each tier is (max_reinf_seconds_exclusive, multiplier). The first tier
-# whose max is greater than victim_reinf wins; the final tier uses infinity.
+# Each tier is (max_reinf_seconds_inclusive, multiplier): a wait whose
+# value is <= that tier's max wins it. The last tier uses infinity, so
+# every wait maps to exactly one tier. Implementation: kis.py uses
+# `if r <= upper` — match this on every update.
 # Monotonic ramp from 0.70 (quick respawn — kill removed little time) up
 # to 1.40 (full wave — kill caught them at max penalty).
 #
