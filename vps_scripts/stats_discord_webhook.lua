@@ -33,6 +33,8 @@
     - Timing legend in embed (v1.3.0)
     - Surrender vote tracking (v1.4.0) - who called, which team
     - Match score tracking (v1.4.0) - running Axis/Allies win count
+    - RFC 8259-compliant JSON escape (v1.6.4) - handles all control bytes in
+      player names (previously names with \x00..\x1f broke webhook parsing)
 
     Webhook Fields (v1.4.0):
     - Lua_Playtime: Actual play time (excludes pauses)
@@ -65,7 +67,7 @@
 ]]--
 
 local modname = "stats_discord_webhook"
-local version = "1.6.3"
+local version = "1.6.4"
 
 -- ============================================================================
 -- CONFIGURATION - EDIT THESE VALUES
@@ -222,9 +224,31 @@ local function shell_escape(str)
     return "'" .. tostring(str or ""):gsub("'", "'\"'\"'") .. "'"
 end
 
+-- JSON string escape compliant with RFC 8259 §7.
+--
+-- Previous version (≤ v1.6.3) only escaped \ " \n \r \t. Player names with
+-- raw control bytes (e.g. \x08 backspace, \x1b ESC inside ANSI terminal
+-- copy-paste, or \x00 NULL from clipboard corruption) produced invalid
+-- JSON and the bot silently dropped the webhook. v1.6.4 escapes every
+-- code point in U+0000..U+001F plus U+007F (DEL) using the canonical
+-- \uXXXX escape, and keeps the fast path for the common specials.
 local function json_escape(str)
-    return tostring(str or ""):gsub("\\", "\\\\"):gsub('"', '\\"')
-        :gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t")
+    if str == nil then
+        return ""
+    end
+    local s = tostring(str)
+    -- Canonical specials first; leaves the remaining gsub with only raw
+    -- control bytes to handle.
+    s = s:gsub("\\", "\\\\"):gsub('"', '\\"')
+    s = s:gsub("\b", "\\b"):gsub("\f", "\\f")
+    s = s:gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t")
+    -- Any remaining control byte (incl. \x00..\x07, \x0b, \x0e..\x1f, \x7f)
+    -- becomes \u00XX. UTF-8 continuation bytes (\x80..\xFF) are NOT in %c
+    -- and pass through unchanged — JSON permits raw UTF-8.
+    s = s:gsub("([%c])", function(c)
+        return string.format("\\u%04x", string.byte(c))
+    end)
+    return s
 end
 
 local function get_gametimes_dir()
