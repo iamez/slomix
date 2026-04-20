@@ -251,7 +251,11 @@ async def get_kis_formula():
             "reinforcement": {
                 "tiers": [
                     {
+                        # Inclusive upper bound: wait values ≤ this are
+                        # mapped to this tier's multiplier. `null` marks
+                        # the final catch-all tier (no upper limit).
                         "max_reinf_seconds": (None if upper == float("inf") else upper),
+                        "inclusive": True,
                         "multiplier": mult,
                     }
                     for upper, mult in REINF_MULT_TIERS
