@@ -6,6 +6,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.6.0](https://github.com/iamez/slomix/compare/v1.5.5...v1.6.0) (2026-04-20)
+
+
+### Features
+
+* **kis:** graduated UTRO-inspired reinforcement multiplier ([#121](https://github.com/iamez/slomix/issues/121)) ([48209ce](https://github.com/iamez/slomix/commit/48209cee07d83e1917fec3de63c8b8881b4ecf8b))
+
+
+### Bug Fixes
+
+* **bot:** bump SSH connect timeout 10s → 20s (Layer 1 audit) ([#115](https://github.com/iamez/slomix/issues/115)) ([a961e13](https://github.com/iamez/slomix/commit/a961e13f77def9d5b8d3fc0e8d64cf9a1326cee5))
+* **bot:** round_linker — sanity-bound round_start_unix (Layer 2 audit) ([#118](https://github.com/iamez/slomix/issues/118)) ([bebfed5](https://github.com/iamez/slomix/commit/bebfed51d185d609c67b3120d741bec94fa1c3e2))
+* **parser:** lower R2-raw fallback threshold 2→1 field (Layer 2 audit) ([#117](https://github.com/iamez/slomix/issues/117)) ([4968da0](https://github.com/iamez/slomix/commit/4968da0a2bd8daa86fba3249d7f260d997b5d60d))
+
+
+### Performance Improvements
+
+* **db:** add functional + composite indexes for hot query paths ([#041](https://github.com/iamez/slomix/issues/041)) ([#119](https://github.com/iamez/slomix/issues/119)) ([2ad013c](https://github.com/iamez/slomix/commit/2ad013c1f64a0876a46b50e8ed6abe67807b09ad))
+* **records:** batch resolve_display_name in hall_of_fame + awards ([#120](https://github.com/iamez/slomix/issues/120)) ([7728038](https://github.com/iamez/slomix/commit/77280386fe7d2cd485891e3a50507bae0ebde449))
+
 ## [1.5.5](https://github.com/iamez/slomix/compare/v1.5.4...v1.5.5) (2026-04-20)
 
 
