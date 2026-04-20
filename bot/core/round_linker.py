@@ -134,10 +134,38 @@ async def resolve_round_id_with_reason(
     rows = await db_adapter.fetch_all(query, params)
     if not rows:
         if round_date:
-            date_free_rows = await db_adapter.fetch_all(
-                f"{base_query} ORDER BY created_at DESC LIMIT 10",
-                (map_name, round_number),
-            )
+            # Prefer round_start_unix proximity to target_dt — handles two real
+            # production scenarios:
+            #   (1) Midnight crossover: round_date='2026-04-19' but the round
+            #       actually spans into 2026-04-20, so the DB row was recorded
+            #       with round_date='2026-04-20'.
+            #   (2) Race condition: the stats file that will insert THIS round
+            #       hasn't been imported yet; if we just ORDER BY created_at
+            #       DESC we will pick up stale rounds from weeks ago and
+            #       report a misleading "25-day diff" match.
+            # By adding a `round_start_unix BETWEEN target±window` filter we
+            # correctly surface only rounds that could plausibly match, and
+            # return zero rows (→ no_rows_for_map_round) when the round is
+            # not yet persisted.
+            if target_dt:
+                window_seconds = max(1, window_minutes) * 60
+                target_ts = int(target_dt.timestamp())
+                date_free_rows = await db_adapter.fetch_all(
+                    f"{base_query} AND round_start_unix BETWEEN ? AND ? "
+                    "ORDER BY ABS(round_start_unix - ?) ASC LIMIT 10",
+                    (
+                        map_name,
+                        round_number,
+                        target_ts - window_seconds,
+                        target_ts + window_seconds,
+                        target_ts,
+                    ),
+                )
+            else:
+                date_free_rows = await db_adapter.fetch_all(
+                    f"{base_query} ORDER BY created_at DESC LIMIT 10",
+                    (map_name, round_number),
+                )
             if date_free_rows:
                 if target_dt:
                     rows = date_free_rows
@@ -158,8 +186,11 @@ async def resolve_round_id_with_reason(
             else:
                 diag["reason_code"] = "no_rows_for_map_round"
                 logger.warning(
-                    "round_linker: reason=no_rows_for_map_round map=%s rn=%d date=%s",
+                    "round_linker: reason=no_rows_for_map_round map=%s rn=%d date=%s "
+                    "(no rounds within ±%dmin of target_dt — likely race condition; "
+                    "relinker cron will retry)",
                     map_name, round_number, round_date,
+                    window_minutes if target_dt else 0,
                 )
                 return None, diag
         else:
