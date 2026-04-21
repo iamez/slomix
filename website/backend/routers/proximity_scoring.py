@@ -9,7 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.rate_limit import limiter
+from shared.guid_utils import short_guid
 from website.backend.routers.proximity_helpers import (
+    _load_scoped_guid_name_map,
     _parse_iso_date,
     logger,
 )
@@ -348,45 +350,55 @@ async def get_proximity_leaderboards(
             }
 
         elif category == "crossfire":
+            # Audit P6: previous version ran per-row `LEFT JOIN LATERAL
+            # (SELECT target_name FROM combat_engagement …)` to resolve
+            # teammate names — O(N × index+sort) against a 58k-row
+            # combat_engagement table for every crossfire row. Replaced
+            # with a single scope-wide player_track name map, then
+            # resolve names in Python. Matches the pattern the other
+            # leaderboards already use (`MAX(name_col)` in-query).
             scope_where, scope_params, next_idx = _lb_scope(table_alias="c", has_round_number=True)
+            pt_where, pt_params, _ = _lb_scope(has_round_number=True)
+            guid_name_map = await _load_scoped_guid_name_map(
+                db, f"WHERE {pt_where}", pt_params,
+            )
             rows = await db.fetch_all(
                 f"""
-                SELECT guid, name, SUM(cnt) AS total, ROUND(AVG(avg_angle)::numeric, 1) AS avg_angle
+                SELECT guid, SUM(cnt) AS total, ROUND(AVG(avg_angle)::numeric, 1) AS avg_angle
                 FROM (
                     SELECT c.teammate1_guid AS guid,
-                           COALESCE(MAX(ce.target_name), c.teammate1_guid) AS name,
                            COUNT(*) AS cnt, AVG(c.angular_separation) AS avg_angle
                     FROM proximity_crossfire_opportunity c
-                    LEFT JOIN LATERAL (
-                        SELECT target_name FROM combat_engagement
-                        WHERE target_guid = c.teammate1_guid
-                        ORDER BY session_date DESC LIMIT 1
-                    ) ce ON true
                     WHERE c.was_executed = true AND {scope_where}
                     GROUP BY c.teammate1_guid
                     UNION ALL
                     SELECT c.teammate2_guid AS guid,
-                           COALESCE(MAX(ce.target_name), c.teammate2_guid) AS name,
                            COUNT(*) AS cnt, AVG(c.angular_separation) AS avg_angle
                     FROM proximity_crossfire_opportunity c
-                    LEFT JOIN LATERAL (
-                        SELECT target_name FROM combat_engagement
-                        WHERE target_guid = c.teammate2_guid
-                        ORDER BY session_date DESC LIMIT 1
-                    ) ce ON true
                     WHERE c.was_executed = true AND {scope_where}
                     GROUP BY c.teammate2_guid
-                ) sub GROUP BY guid, name
+                ) sub GROUP BY guid
                 ORDER BY total DESC
                 LIMIT ${next_idx}
                 """,
                 scope_params + (safe_limit,),
             )
+
+            def _resolve_name(guid: str) -> str:
+                if not guid:
+                    return ""
+                if guid in guid_name_map:
+                    return guid_name_map[guid]
+                # Short-prefix fallback (map is double-indexed by 8-char prefix)
+                short = short_guid(guid)
+                return guid_name_map.get(short, guid)
+
             return {
                 "status": "ok", "category": "crossfire",
                 "entries": [
-                    {"guid": r[0], "name": r[1], "value": int(r[2] or 0),
-                     "avg_angle": float(r[3] or 0)}
+                    {"guid": r[0], "name": _resolve_name(r[0]),
+                     "value": int(r[1] or 0),
+                     "avg_angle": float(r[2] or 0)}
                     for r in (rows or [])
                 ],
             }
