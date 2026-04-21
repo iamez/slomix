@@ -600,6 +600,16 @@ async def get_proximity_weapon_accuracy(
             params.append(map_name.strip())
             clauses.append(f"map_name = ${len(params)}")
 
+        # Audit P8 + migration 043: previously `range_days` was accepted
+        # but never applied to the query — the endpoint returned all-time
+        # rows. Filter on `session_date` (play time) with created_at
+        # fallback for rows whose re-linker hasn't populated round_id yet.
+        params.append(range_days)
+        clauses.append(
+            "(session_date >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day' "
+            "OR (session_date IS NULL AND created_at >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day'))"
+        )
+
         where = "WHERE " + " AND ".join(clauses)
 
         rows = await db.fetch_all(
@@ -683,9 +693,16 @@ async def get_proximity_revives(
             params.append(player_guid.strip())
             clauses.append(f"medic_guid = ${len(params)}")
 
-        # Apply range_days filter (proximity_revive has created_at, not session_date)
+        # Audit P8 + migration 043: filter on session_date (play time)
+        # now that the column exists and is backfilled. Rows with NULL
+        # session_date (re-linker hasn't populated round_id yet) fall
+        # back to created_at so the endpoint still surfaces them during
+        # the catch-up window.
         params.append(range_days)
-        clauses.append(f"created_at >= CURRENT_DATE - ${len(params)} * INTERVAL '1 day'")
+        clauses.append(
+            "(session_date >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day' "
+            "OR (session_date IS NULL AND created_at >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day'))"
+        )
 
         where_sql = "WHERE " + " AND ".join(clauses)
         medic_filter = "medic_guid IS NOT NULL AND medic_guid != ''"
