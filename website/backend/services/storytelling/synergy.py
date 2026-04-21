@@ -101,6 +101,15 @@ class _SynergyMixin:
         concurrently; each of those mixins independently calls this.
         Caching on the request-scoped service instance collapses 3-4
         identical PCS JOIN rounds scans into one per request.
+
+        A per-date asyncio.Lock around the cache-miss branch prevents
+        the concurrent fan-out from all missing together and running
+        `_build_player_groups_uncached` N times. Pattern:
+
+            - Fast path: cache hit → return immediately (no lock).
+            - Slow path: acquire the per-date lock; first waiter runs
+              the uncached query and writes the cache; every other
+              waiter wakes up into the fast path.
         """
         cache = getattr(self, "_groups_cache", None)
         if cache is None:
@@ -109,9 +118,22 @@ class _SynergyMixin:
             return await self._build_player_groups_uncached(sd)
         if sd in cache:
             return cache[sd]
-        value = await self._build_player_groups_uncached(sd)
-        cache[sd] = value
-        return value
+
+        locks = getattr(self, "_groups_locks", None)
+        if locks is None:
+            value = await self._build_player_groups_uncached(sd)
+            cache[sd] = value
+            return value
+
+        lock = locks.setdefault(sd, asyncio.Lock())
+        async with lock:
+            # Double-check after acquiring — first waiter may have
+            # already populated the cache while we queued for the lock.
+            if sd in cache:
+                return cache[sd]
+            value = await self._build_player_groups_uncached(sd)
+            cache[sd] = value
+            return value
 
     async def _build_player_groups_uncached(self, sd: date) -> dict | None:
         """Identify stable player groups across stopwatch rounds.

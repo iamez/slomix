@@ -41,7 +41,10 @@ WHERE phr.id = ranked.id
 
 -- ---------------------------------------------------------------------------
 -- 2. Unique constraint — prevent future duplicates.
---    Named explicitly so the parser's ON CONFLICT target can reference it.
+--    Named explicitly for schema clarity and easier inspection via
+--    `\d proximity_hit_region` / pg_constraint. The parser uses a
+--    column-list ON CONFLICT target rather than ON CONSTRAINT, so the
+--    name itself is not referenced by code (just by operators).
 -- ---------------------------------------------------------------------------
 DO $$
 BEGIN

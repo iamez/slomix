@@ -329,6 +329,16 @@ async def get_proximity_pushes(
     # Drop the filter; if per-player scope is later added, it needs a
     # schema column or a subquery against a table that records push
     # participants per player.
+    if player_guid:
+        # Copilot review on PR #130: silently ignoring the param misleads
+        # API consumers into thinking results are filtered when they're
+        # not. Log at info so the behaviour is at least observable; an
+        # explicit 400 would be a hard break for legacy dashboards that
+        # ship the same scope object to every endpoint.
+        logger.info(
+            "/proximity/pushes: player_guid=%s ignored — team-level endpoint has no per-player scope",
+            player_guid[:8] if isinstance(player_guid, str) else player_guid,
+        )
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
     )

@@ -110,6 +110,16 @@ async def resolve_round_id_with_reason(
         logger.warning("round_linker: reason=invalid_input map=%s rn=%s", map_name, round_number)
         return None, diag
 
+    # Normalize tz-aware target_dt to naive-local at the entry. Every
+    # `candidate_dt` built downstream comes from `datetime.fromtimestamp()`
+    # / `strptime()` / `_parse_round_datetime()` — all naive-local — so
+    # mixing a tz-aware target_dt would raise `TypeError` inside
+    # `abs(candidate_dt - target_dt)`. The proximity-audit relinker fix
+    # (PR #130, P3) started passing tz-aware UTC here; fix centralizes
+    # the convention so every existing legacy caller keeps working.
+    if target_dt is not None and target_dt.tzinfo is not None:
+        target_dt = target_dt.astimezone().replace(tzinfo=None)
+
     if not target_dt and round_date and round_time:
         target_dt = _parse_round_datetime(round_date, round_time)
         if not target_dt:
