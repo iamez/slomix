@@ -35,6 +35,9 @@ from .base import (
 # Keyed by (session_date, limit) — moments are a pure function of the
 # data in the DB for that date, and the limit determines type-diversity
 # truncation so we cache per-limit to preserve exact behavior.
+#
+# Timestamp column uses `time.monotonic()` — wall-clock jumps (NTP, DST,
+# manual adjustment) would otherwise corrupt TTL math.
 _MOMENTS_CACHE: dict[tuple[date, int], tuple[list, float]] = {}
 _MOMENTS_CACHE_MAX = 32  # 16 sessions × 2 typical limits
 _MOMENTS_TTL_TODAY = 300    # 5 min — new rounds may still arrive
@@ -45,7 +48,14 @@ def _moments_cache_ttl(sd: date) -> int:
     return _MOMENTS_TTL_TODAY if sd >= date.today() else _MOMENTS_TTL_HISTORICAL
 
 
-def _moments_cache_evict_oldest() -> None:
+def _moments_cache_evict_oldest_computed() -> None:
+    """Evict the entry with the oldest computed-at timestamp when full.
+
+    This is FIFO-by-compute-time, not true LRU — we don't track
+    last-access. For this cache the distinction barely matters: entries
+    expire by TTL (5 min / 1 h) long before eviction pressure reaches
+    32 entries in typical use.
+    """
     if len(_MOMENTS_CACHE) <= _MOMENTS_CACHE_MAX:
         return
     oldest = min(_MOMENTS_CACHE, key=lambda k: _MOMENTS_CACHE[k][1])
@@ -63,7 +73,7 @@ class _MomentsMixin:
         subsequent callers hit the cache.
         """
         sd = _to_date(session_date)
-        now = time.time()
+        now = time.monotonic()
         ttl = _moments_cache_ttl(sd)
         key = (sd, limit)
         cached = _MOMENTS_CACHE.get(key)
@@ -75,12 +85,12 @@ class _MomentsMixin:
         lock = _compute_locks.get(f"moments:{sd}:{limit}")
         async with lock:
             cached = _MOMENTS_CACHE.get(key)
-            if cached and (time.time() - cached[1]) < ttl:
+            if cached and (time.monotonic() - cached[1]) < ttl:
                 return cached[0]
 
             result = await self._detect_moments_uncached(sd, limit)
-            _MOMENTS_CACHE[key] = (result, time.time())
-            _moments_cache_evict_oldest()
+            _MOMENTS_CACHE[key] = (result, time.monotonic())
+            _moments_cache_evict_oldest_computed()
             return result
 
     async def _detect_moments_uncached(self, sd: date, limit: int) -> list:
