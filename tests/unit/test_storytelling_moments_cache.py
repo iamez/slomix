@@ -61,7 +61,7 @@ def _service_with_stub_detectors():
 @pytest.mark.asyncio
 async def test_second_call_hits_cache():
     svc, calls = _service_with_stub_detectors()
-    sd = date(2026, 4, 21) - timedelta(days=30)  # historical → long TTL
+    sd = date.today() - timedelta(days=30)  # historical → long TTL
 
     first = await svc.detect_moments(sd, limit=10)
     second = await svc.detect_moments(sd, limit=10)
@@ -74,7 +74,7 @@ async def test_second_call_hits_cache():
 async def test_different_limit_recomputes():
     """Cache key includes limit — limit=1 vs limit=10 are distinct entries."""
     svc, calls = _service_with_stub_detectors()
-    sd = date(2026, 4, 21) - timedelta(days=30)
+    sd = date.today() - timedelta(days=30)
 
     await svc.detect_moments(sd, limit=10)
     await svc.detect_moments(sd, limit=1)
@@ -88,12 +88,12 @@ async def test_different_limit_recomputes():
 async def test_ttl_expiry_recomputes():
     """After TTL passes, the next call re-runs the detectors."""
     svc, calls = _service_with_stub_detectors()
-    sd = date(2026, 4, 21) - timedelta(days=30)
+    sd = date.today() - timedelta(days=30)
 
     await svc.detect_moments(sd, limit=10)
     # Force the cached entry to look stale (>1h for historical TTL).
     cached_list, _ = moments_module._MOMENTS_CACHE[(sd, 10)]
-    moments_module._MOMENTS_CACHE[(sd, 10)] = (cached_list, time.time() - 4000)
+    moments_module._MOMENTS_CACHE[(sd, 10)] = (cached_list, time.monotonic() - 4000)
 
     await svc.detect_moments(sd, limit=10)
 
@@ -115,7 +115,7 @@ async def test_concurrent_callers_collapse_to_one_compute():
         return [{"type": "kill_streak", "impact_stars": 5, "time_ms": 1000}]
 
     svc._detect_moments_uncached = slow_uncached
-    sd = date(2026, 4, 21) - timedelta(days=30)
+    sd = date.today() - timedelta(days=30)
 
     results = await asyncio.gather(
         *(svc.detect_moments(sd, limit=10) for _ in range(8))
@@ -142,7 +142,7 @@ async def test_lru_eviction_when_cache_full():
     original_max = moments_module._MOMENTS_CACHE_MAX
     moments_module._MOMENTS_CACHE_MAX = 3
     try:
-        base = date(2026, 1, 1)
+        base = date.today() - timedelta(days=100)
         await svc.detect_moments(base + timedelta(days=0), limit=10)
         await svc.detect_moments(base + timedelta(days=1), limit=10)
         await svc.detect_moments(base + timedelta(days=2), limit=10)
