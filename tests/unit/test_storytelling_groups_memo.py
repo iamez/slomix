@@ -10,6 +10,7 @@ many callers await the group map.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from datetime import date
 from pathlib import Path
@@ -77,3 +78,45 @@ async def test_uncached_helper_still_reachable():
     # Not memoized — two separate DB calls.
     assert db.fetch_all.await_count == 2
     assert first == second  # same structure, not identity
+
+
+# ---------------------------------------------------------------------------
+# Regression for Copilot review on PR #128: under the proximity audit
+# F3 memo the cache-miss path was racy — N concurrent awaiters for the
+# same (sd) all checked `sd in cache` before any of them wrote, so the
+# underlying PCS scan ran N times despite the memo. The follow-up in
+# PR #131 added per-date `asyncio.Lock` so only the first waiter runs
+# the scan; the rest pick up the cached value on a double-check.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_memo_is_concurrent_safe():
+    """N parallel awaits of `_build_player_groups(sd)` for the same
+    session_date collapse to exactly 1 DB scan, even when the calls
+    fan out via asyncio.gather (Story page pattern).
+
+    We slow the stub `fetch_all` with a short asyncio.sleep so every
+    gathered coroutine has time to queue on the lock before the first
+    one resolves — without the lock, all N would see an empty cache
+    and each start their own scan."""
+
+    db = AsyncMock()
+
+    async def slow_fetch(*_args, **_kwargs):
+        await asyncio.sleep(0.01)
+        return _fixture_rows()
+
+    db.fetch_all.side_effect = slow_fetch
+
+    svc = StorytellingService(db)
+    sd = date(2026, 4, 21)
+
+    # 8 concurrent callers — representative of the Story page fan-out
+    # (gravity + space-created + enabler + player-narratives + …).
+    results = await asyncio.gather(*(svc._build_player_groups(sd) for _ in range(8)))
+
+    assert db.fetch_all.await_count == 1
+    # All coroutines see the same memoized object.
+    first = results[0]
+    for r in results[1:]:
+        assert r is first

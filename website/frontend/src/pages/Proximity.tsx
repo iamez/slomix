@@ -96,6 +96,13 @@ function buildParams(state: { sessionDate: string | null; mapName: string | null
 function HeatmapCanvas({ hotzones, mapImage, intensity = 1.0 }: { hotzones: HotzonePoint[]; mapImage: string | null; intensity: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
+  // drawRef holds the current `draw` closure so the image loader can
+  // always call the latest render pass without listing `draw` in its
+  // deps. Listing `draw` there (earlier attempt) re-fired the effect
+  // on every hotzone / intensity change, allocating a new Image() and
+  // re-kicking `img.src` — wasteful and occasionally raced the network
+  // fetch. Copilot suggested this ref+cleanup pattern on PR #130.
+  const drawRef = useRef<() => void>(() => {});
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -139,17 +146,42 @@ function HeatmapCanvas({ hotzones, mapImage, intensity = 1.0 }: { hotzones: Hotz
     }
   }, [hotzones, intensity]);
 
-  // Image loader runs after `draw` is bound. Including `draw` in deps
-  // means the onload handler always closes over the current render pass
-  // — previously `[mapImage]` captured the first-render `draw`, leaving
-  // stale hotzones on screen during rapid scope switches.
+  // Keep drawRef pointing at the newest draw without re-running the
+  // image loader — separating these two concerns is the whole point
+  // of the ref pattern.
   useEffect(() => {
-    if (!mapImage) { imgRef.current = null; return; }
+    drawRef.current = draw;
+  }, [draw]);
+
+  // Image loader only re-runs when `mapImage` itself changes. When it
+  // goes null (user switches to a map without a background asset) we
+  // still trigger a redraw so the canvas immediately clears instead of
+  // stranding the previous image until another render pulse arrives.
+  useEffect(() => {
+    if (!mapImage) {
+      imgRef.current = null;
+      drawRef.current();
+      return;
+    }
+    let cancelled = false;
     const img = new Image();
-    img.onload = () => { imgRef.current = img; draw(); };
-    img.onerror = () => { imgRef.current = null; draw(); };
+    img.onload = () => {
+      if (cancelled) return;
+      imgRef.current = img;
+      drawRef.current();
+    };
+    img.onerror = () => {
+      if (cancelled) return;
+      imgRef.current = null;
+      drawRef.current();
+    };
     img.src = mapImage;
-  }, [mapImage, draw]);
+    return () => {
+      cancelled = true;
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [mapImage]);
 
   useEffect(() => { draw(); }, [draw]);
 

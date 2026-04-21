@@ -236,12 +236,16 @@ class _MomentsMixin:
     async def _detect_focus_survivals(self, sd: date) -> list:
         """Detector C: Survived 3v1+ focus fire.
 
-        Joins `combat_engagement` on `(session_date, round_number,
-        engagement_id)` to recover `end_time_ms` — without it the
-        returned moment carries `time_ms: 0` and the UI renders every
-        focus survival at the pistol round. The JOIN is LEFT so rows
-        without a matching engagement still surface (time stays 0 as a
-        fallback).
+        Joins `combat_engagement` to recover `end_time_ms` — without it
+        the moment carries `time_ms: 0` and the UI renders every focus
+        survival at the pistol round.
+
+        The JOIN key mirrors `combat_engagement`'s UNIQUE constraint
+        `(session_date, round_number, round_start_unix, engagement_id)`
+        so multiple rounds on the same day can't collide. `map_name` is
+        added as a final safety net (different maps share engagement_id
+        counters when rounds start from 1 again). LEFT JOIN keeps rows
+        whose engagement never landed — `time_ms` then stays 0.
         """
         rows = await self.db.fetch_all("""
             SELECT ff.target_guid, ff.target_name, ff.attacker_count, ff.focus_score,
@@ -251,7 +255,9 @@ class _MomentsMixin:
             LEFT JOIN combat_engagement ce
                    ON ce.session_date = ff.session_date
                   AND ce.round_number = ff.round_number
+                  AND ce.round_start_unix = ff.round_start_unix
                   AND ce.engagement_id = ff.engagement_id
+                  AND ce.map_name = ff.map_name
             WHERE ff.session_date = $1 AND ff.attacker_count >= 3
                 AND ff.focus_score >= 0.5
             ORDER BY ff.focus_score DESC
