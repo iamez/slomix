@@ -1632,10 +1632,15 @@ export interface SynergyGroup {
 }
 
 export interface SynergyResponse {
+  // Possible values: "ok" | "ok_with_defaults" | "no_data" | "partial_data"
+  // Partial_data path (new 2026-04-21): rows exist but no R1 data. In
+  // that case `groups` is empty and `reason` is populated.
   status: string;
   session_date: string;
-  weights: Record<string, number>;
-  groups: { group_a: SynergyGroup; group_b: SynergyGroup };
+  weights?: Record<string, number>;
+  reason?: string;
+  defaulted_players_count?: number;
+  groups: { group_a?: SynergyGroup; group_b?: SynergyGroup } | Record<string, never>;
 }
 
 // ── Win Contribution (PWC) ──
