@@ -3,7 +3,7 @@
 > **PostgreSQL-powered real-time analytics for competitive ET:Legacy — Discord bot, web dashboard, demo highlight scanner, and game server telemetry**
 
 [![Production Status](https://img.shields.io/badge/status-production-brightgreen)](https://github.com/iamez/slomix)
-[![Version](https://img.shields.io/badge/version-1.5.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.6.0-blue)](CHANGELOG.md)
 [![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL_17-336791)](https://www.postgresql.org/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/web-FastAPI-009688)](https://fastapi.tiangolo.com/)
@@ -16,13 +16,32 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 ## 🔥 Recent Updates (April 2026)
 
-### **🛡️ Mega Audit v3: Security, Performance & Session Detail 2.0 (April 17)** 🆕
+### **⚖️ v1.6.0: Fairness Overhaul + Story Expansion (April 20-21)** 🆕
 
-**Three-sprint hardening pass with 1M-context holistic review, 9/9 CI checks green each PR.**
+**Bayesian scoring fairness, new story panels, and a storytelling engine that's 2× faster.**
+
+- 🧮 **Bayesian MVP Selection** (PR #76) — MVP now uses Bayesian shrinkage (C=2 prior) so late-joiners and short-sample players get regressed toward session average. No more 1-round wonders stealing MVP. Minimum 50% round eligibility, deterministic tie-breaker
+- 📉 **WIS v2 — Harmonic Confidence** — Win Impact Score dampens unbalanced samples (1W/3L halved), returns 0 for all-wins or all-losses (no contrast to measure). Prevents single-match statistical noise from dominating the leaderboard
+- 📊 **PWC Fairness Fix** — `max(team_kills, 1)` → `0 when team=0` eliminates 30× score inflation on zero-team-kill edge cases. 20 new unit tests for every formula edge case
+- 🎬 **BOX Score Panel** (PR #78) — Stopwatch match scoring on the legacy story page with per-map breakdown, winner badges, fullhold indicators, round time display. 4 parallel Invisible Value fetches (Gravity / Space / Enabler / Lurker) with race-condition guards
+- 🧠 **KIS v3 — Graduated Reinforcement** (PR #121) — UTRO-inspired 7-tier reinforcement multiplier (0.70-1.40) replaces binary bonus. Ties kill weight to actual respawn pressure at time of kill
+- 🏷️ **Team Synergy "Insufficient Data" Badge** — R2-only sessions (stopwatch crashes before R1) now render an explicit amber badge explaining the missing data instead of silently showing zero bars. Backend reports `defaulted_players_count` so the UI can surface correlation warnings
+- ⚡ **Storytelling Performance Pass** — `asyncio.gather` across 5 synergy axes + 10 proximity metrics. Records overview, hall-of-fame, and awards endpoints batch their `resolve_display_name` lookups (360 → 36 queries). 300s HTTP cache on 14 storytelling endpoints
+
+### **🔧 v1.5.x: Runtime Bug Sweep + Performance RCA (April 19-20)**
+
+**Mandelbrot audit across 4 layers (ingestion → correlation → rounds → API). 14 PRs, every finding fixed.**
+
+- 🧱 **Round Linker Robustness** — Race condition + midnight crossover handled (`round_start_unix BETWEEN` window), sanity bounds reject pre-2020 timestamps, tz-aware normalization fixes production `TypeError`, stale warnings (>1h) emit single summary instead of per-row spam (was 72/hour)
+- 🔒 **Round Correlations Serialized** — `asyncio.Lock` on round_correlation_service critical section prevents the race where 4 pipeline events create duplicate rows. Migration 040 dedups existing duplicates + partial UNIQUE index
+- 📦 **Schema Drift Zero** — 4 migrations consolidate 14 Python-runtime DDL tables into committed migration files. `schema_postgresql.sql` now matches live DB. Proximity `guid_canonical` columns formalized
+- 🏎️ **Hot Path Indexes** — `idx_player_aliases_alias_lower` (functional btree for ILIKE/LOWER prefix queries) + composite `idx_kis_session_killer`. Autocomplete query time 50ms → <1ms
+- 🔁 **Parser Reconnect Threshold** — R2-raw fallback triggers on 1 dropped field (was 2), recovers single-field network glitches during differential calculation
+
+### **🛡️ v1.5.0: Security, Performance & Session Detail 2.0 (April 17)**
 
 - 🔐 **Sprint 2 Security** (PR #80) — New `require_admin_user` FastAPI dependency: 10/11 diagnostics endpoints now require admin session (11th stays public as health check). `strip_et_colors()` centralized in `api_helpers` — covers 10+ consumer routers (records, proximity_*, greatshot_topshots). Discord ID masked at INFO log level (`1234****`); full ID+username moved to DEBUG only
 - 🎯 **Session Detail 2.0 Matrix** (PR #79) — Player × Map grid with per-round team assignment. Handles stopwatch side swaps (R1 attack = R2 defense — same player in same team cell across maps) + mid-session substitutions (player on both teams appears in both rosters, stats split by rounds). Backend `build_team_matrix()` with majority-vote side-to-team mapping; React component (3 metrics) + legacy JS (7 metrics, heatmap, drill-down, MVP★/sub⚠ badges)
-- ⚡ **Storytelling Performance** — `compute_session_kis` loaders + `detect_moments` detectors parallelized with `asyncio.gather` (-2s total response time on `/storytelling/*` endpoints)
 - 🗓️ **Date Bounds Validation** — `storytelling_router._parse_date` rejects dates outside `[2020-01-01, today]` (DoS mitigation on large-interval queries)
 - 📊 **Session Matrix Infrastructure** — `round_correlation_service` auto-merges drifted R1/R2 correlations (bot restart no longer orphans data); `stopwatch_scoring_service.build_round_side_to_team_mapping()` with tri-format side normalization (int / string / faction name)
 
@@ -71,15 +90,16 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 ## ✨ What Makes This Special
 
-- 🔒 **6-Layer Data Integrity** — Transaction safety, ACID guarantees, per-insert verification
-- 🤖 **Full Automation** — SSH monitoring, auto-download, auto-import, auto-post (60s cycle)
-- ⚡ **Real-Time Lua Telemetry** — Game server webhook fires ~3s after round end
-- 🧮 **Differential Calculation** — Smart Round 2 stats (subtracts Round 1 for accurate team-swap metrics)
-- 📊 **57 Statistics** — K/D, DPM, accuracy, alive%, efficiency, headshots, damage, playtime, and more
-- 🔮 **AI Match Predictions** — 4-factor algorithm (H2H, form, map performance, substitutions)
-- 🎬 **Demo Highlight Scanner** — Upload demos, detect multi-kills/sprees, cut clips
-- 🏆 **EndStats Awards** — Post-round awards with 7 categories
-- 🌐 **Web Dashboard** — FastAPI + React 19 SPA with auth, profiles, leaderboards, proximity analytics
+- 🎬 **Round Replay Timeline** — Dual-pane viewer: event feed + 2D map canvas + scrubber, 420+ events per round, player positions at 200ms precision
+- 🧠 **Smart Storytelling** — Kill Impact Score (7 multipliers), 11 moment detectors, 9 player archetypes, auto-generated session narratives
+- ⚖️ **Bayesian MVP + WIS v2** — Fairness-first scoring with shrinkage prior and harmonic confidence weighting; late-joiners don't steal MVP
+- 🎯 **Proximity Teamplay Analytics** — Lua v6.01 telemetry: engagements, crossfire, cohesion, trade kills, spawn timing, objective intelligence
+- ⚔️ **Player Rivalries** — H2H stats, nemesis/prey classification, per-map drill-down, rivalry leaderboard
+- 📈 **ET Rating System** — 9-metric percentile skill rating with per-session drill-down and confidence indicator
+- 🔮 **AI Match Predictions** — 4-factor algorithm (H2H, form, map performance, substitutions) with auto voice-channel detection
+- 🎬 **Demo Highlight Scanner** — Upload demos, detect multi-kills/sprees, cut clips, ready-to-render highlights
+- 🔒 **6-Layer Data Integrity** — Transaction safety, ACID guarantees, per-insert verification, schema drift zero
+- 🤖 **Full Automation** — SSH monitoring, auto-download, auto-import, auto-post (60s cycle) + real-time Lua webhook (~3s latency)
 
 **[📊 Data Pipeline](docs/DATA_PIPELINE.md)** | **[🔒 Safety & Validation](docs/SAFETY_VALIDATION_SYSTEMS.md)** | **[📖 Changelog](CHANGELOG.md)**
 
@@ -89,17 +109,16 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 | Metric | Value |
 |--------|-------|
-| **Kills Tracked** | 174,561 |
-| **Headshot Kills** | 36,215 |
-| **Damage Dealt** | 33.9 million |
-| **Revives Given** | 14,669 |
-| **Rounds Parsed** | 2,228 |
-| **Gaming Sessions** | 108 |
+| **Kills Tracked** | 176,911 |
+| **Headshot Kills** | 36,811 |
+| **Damage Dealt** | 34.4 million |
+| **Revives Given** | 15,111 |
+| **Rounds Parsed** | 2,258 |
 | **Unique Players** | 57 |
 | **Stats Per Player Per Round** | 57 fields |
 | **Discord Commands** | ~99 across 22 cogs |
-| **Database Tables** | 95 |
-| **Test Coverage** | 540 tests |
+| **Database Tables** | 95 (48 migrations committed) |
+| **Test Coverage** | 530 tests, 9/9 CI green |
 | **Data Span** | Jan 2025 — Apr 2026 (16 months) |
 
 ---
@@ -128,14 +147,14 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 │                          │                                     │
 │                  ┌───────▼───────┐                             │
 │                  │  PostgreSQL   │                             │
-│                  │  80 Tables    │                             │
+│                  │  95 Tables    │                             │
 │                  └───────────────┘                             │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 | Project | Status | Description |
 |---------|--------|-------------|
-| **Discord Bot** (this repo) | ✅ Production | ~99 commands, 21 cogs, full automation, AI predictions |
+| **Discord Bot** (this repo) | ✅ Production | ~99 commands, 22 cogs, full automation, AI predictions |
 | **Website** (`/website/`) | ✅ Production | FastAPI + React 19/TypeScript SPA: profiles, sessions, leaderboards, proximity, greatshot |
 | **Lua Webhook** (`vps_scripts/`) | ✅ Production | Real-time round notifications, surrender timing fix, team capture |
 | **Greatshot** (`/greatshot/`) | ✅ Production | Demo upload, highlight detection, clip extraction, render pipeline |
@@ -175,7 +194,7 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 ┌──────────────────────────────────────────────────┐
 │  Layer 5-6: PostgreSQL (ACID) + Constraints      │
 │  ✓ Transaction safety  ✓ FK/NOT NULL/UNIQUE      │
-│  80 tables  |  57 columns per player per round    │
+│  95 tables  |  57 columns per player per round    │
 └──────────────────────┬───────────────────────────┘
                        │
               ┌────────┼────────┐
@@ -578,7 +597,7 @@ slomix/
 
 ## 🗄️ Database Schema
 
-### **PostgreSQL — 80 Tables**
+### **PostgreSQL — 95 Tables**
 
 ```sql
 -- Core Stats (7)
