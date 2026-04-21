@@ -543,8 +543,8 @@ slomix/
 │   │   ├── matchup_cog.py           # Matchup analytics
 │   │   ├── predictions_cog.py       # AI predictions (7 commands)
 │   │   ├── admin_predictions_cog.py # Prediction admin (5 commands)
-│   │   ├── server_control_cog.py    # RCON, status, map management
-│   │   └── ... (14 more cogs)
+│   │   ├── server_control.py        # RCON, status, map management
+│   │   └── ... (13 more cogs)
 │   ├── core/                        # Team detection, achievements, cache
 │   └── services/                    # Analytics, scoring, predictions, graphs
 │
