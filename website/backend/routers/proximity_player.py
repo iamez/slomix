@@ -1,5 +1,6 @@
 """Proximity player endpoints: player/{guid}/profile, player/{guid}/radar."""
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -20,9 +21,11 @@ async def get_proximity_player_profile(
     """Aggregated player proximity stats for profile page."""
     since = datetime.now(timezone.utc).replace(tzinfo=None).date() - timedelta(days=max(1, min(range_days, 3650)))
     try:
-        # Engagement stats
-        eng_stats = await db.fetch_one(
-            """
+        # All 7 queries below hit different tables with no ordering
+        # dependency. Parallelising them turns 7 × RTT into 1 × RTT
+        # — on production (remote DB) this dominates the profile
+        # endpoint latency.
+        eng_query = """
             SELECT COUNT(*) AS total_engagements,
                    SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes,
                    SUM(CASE WHEN outcome = 'killed' THEN 1 ELSE 0 END) AS deaths,
@@ -32,12 +35,8 @@ async def get_proximity_player_profile(
                    SUM(CASE WHEN is_crossfire THEN 1 ELSE 0 END) AS crossfire_count
             FROM combat_engagement
             WHERE target_guid = $1 AND session_date >= $2
-            """,
-            (guid, since),
-        )
-        # Kill stats (as attacker)
-        kill_stats = await db.fetch_one(
-            """
+        """
+        kill_query = """
             SELECT COUNT(*) AS total_kills
             FROM combat_engagement e
             WHERE e.outcome = 'killed'
@@ -48,58 +47,48 @@ async def get_proximity_player_profile(
                     WHERE attacker->>'guid' = $1
                       AND COALESCE((attacker->>'got_kill')::boolean, FALSE)
               )
-            """,
-            (guid, since),
-        )
-        # Spawn timing
-        spawn_timing = await db.fetch_one(
-            """
+        """
+        spawn_query = """
             SELECT ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,
                    COUNT(*) AS timed_kills,
                    ROUND(AVG(time_to_next_spawn)::numeric, 0) AS avg_denial_ms
             FROM proximity_spawn_timing
             WHERE killer_guid = $1 AND session_date >= $2
-            """,
-            (guid, since),
-        )
-        # Reaction metrics
-        reactions = await db.fetch_one(
-            """
+        """
+        reactions_query = """
             SELECT ROUND(AVG(return_fire_ms)::numeric, 0) AS avg_return_fire,
                    ROUND(AVG(dodge_reaction_ms)::numeric, 0) AS avg_dodge,
                    ROUND(AVG(support_reaction_ms)::numeric, 0) AS avg_support,
                    COUNT(*) AS reaction_samples
             FROM proximity_reaction_metric
             WHERE target_guid = $1 AND session_date >= $2
-            """,
-            (guid, since),
-        )
-        # Movement stats
-        movement = await db.fetch_one(
-            """
+        """
+        movement_query = """
             SELECT ROUND(AVG(avg_speed)::numeric, 1) AS avg_speed,
                    ROUND(AVG(sprint_percentage)::numeric, 1) AS avg_sprint_pct,
                    ROUND(AVG(total_distance)::numeric, 0) AS avg_distance_per_life,
                    COUNT(*) AS tracks
             FROM player_track
             WHERE player_guid = $1 AND session_date >= $2
-            """,
-            (guid, since),
-        )
-        # Trade kills
-        trade_stats = await db.fetch_one(
-            """
+        """
+        trade_query = """
             SELECT COUNT(*) AS trades_made
             FROM proximity_lua_trade_kill
             WHERE trader_guid = $1 AND session_date >= $2
-            """,
-            (guid, since),
-        )
+        """
+        name_query = "SELECT player_name FROM player_track WHERE player_guid = $1 ORDER BY session_date DESC LIMIT 1"
 
-        # Player name lookup
-        name_row = await db.fetch_one(
-            "SELECT player_name FROM player_track WHERE player_guid = $1 ORDER BY session_date DESC LIMIT 1",
-            (guid,),
+        (
+            eng_stats, kill_stats, spawn_timing,
+            reactions, movement, trade_stats, name_row,
+        ) = await asyncio.gather(
+            db.fetch_one(eng_query, (guid, since)),
+            db.fetch_one(kill_query, (guid, since)),
+            db.fetch_one(spawn_query, (guid, since)),
+            db.fetch_one(reactions_query, (guid, since)),
+            db.fetch_one(movement_query, (guid, since)),
+            db.fetch_one(trade_query, (guid, since)),
+            db.fetch_one(name_query, (guid,)),
         )
         player_name = name_row[0] if name_row else guid
 
@@ -139,33 +128,45 @@ async def get_proximity_player_radar(
     """5-axis radar data: Aggression, Awareness, Teamplay, Timing, Mechanical."""
     since = datetime.now(timezone.utc).replace(tzinfo=None).date() - timedelta(days=max(1, min(range_days, 3650)))
     try:
-        # Aggression: sprint %, avg speed, distance per life
-        aggression_row = await db.fetch_one(
-            """
+        # 5 independent axis queries — parallelise. Teamplay axis stays
+        # below since it branches on awareness_row's engagement count and
+        # may call the separate prox_scoring service.
+        aggression_query = """
             SELECT ROUND(AVG(sprint_percentage)::numeric, 1),
                    ROUND(AVG(avg_speed)::numeric, 1)
             FROM player_track WHERE player_guid = $1 AND session_date >= $2
-            """, (guid, since),
+        """
+        awareness_query = """
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes
+            FROM combat_engagement WHERE target_guid = $1 AND session_date >= $2
+        """
+        dodge_query = """
+            SELECT ROUND(AVG(dodge_reaction_ms)::numeric, 0)
+            FROM proximity_reaction_metric
+            WHERE target_guid = $1 AND dodge_reaction_ms IS NOT NULL AND session_date >= $2
+        """
+        timing_query = """
+            SELECT ROUND(AVG(spawn_timing_score)::numeric, 3), COUNT(*)
+            FROM proximity_spawn_timing WHERE killer_guid = $1 AND session_date >= $2
+        """
+        rf_query = """
+            SELECT ROUND(AVG(return_fire_ms)::numeric, 0)
+            FROM proximity_reaction_metric
+            WHERE target_guid = $1 AND return_fire_ms IS NOT NULL AND session_date >= $2
+        """
+        aggression_row, awareness_row, dodge_row, timing_row, rf_row = await asyncio.gather(
+            db.fetch_one(aggression_query, (guid, since)),
+            db.fetch_one(awareness_query, (guid, since)),
+            db.fetch_one(dodge_query, (guid, since)),
+            db.fetch_one(timing_query, (guid, since)),
+            db.fetch_one(rf_query, (guid, since)),
         )
+
         sprint_pct = float(aggression_row[0] or 0) if aggression_row else 0
         avg_speed = float(aggression_row[1] or 0) if aggression_row else 0
         aggression = min(100, (sprint_pct * 0.6) + (min(avg_speed / 300, 1) * 100 * 0.4))
 
-        # Awareness: escape rate + dodge reaction
-        awareness_row = await db.fetch_one(
-            """
-            SELECT COUNT(*) AS total,
-                   SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes
-            FROM combat_engagement WHERE target_guid = $1 AND session_date >= $2
-            """, (guid, since),
-        )
-        dodge_row = await db.fetch_one(
-            """
-            SELECT ROUND(AVG(dodge_reaction_ms)::numeric, 0)
-            FROM proximity_reaction_metric
-            WHERE target_guid = $1 AND dodge_reaction_ms IS NOT NULL AND session_date >= $2
-            """, (guid, since),
-        )
         total_eng = int(awareness_row[0] or 0) if awareness_row else 0
         escapes = int(awareness_row[1] or 0) if awareness_row else 0
         escape_rate = escapes / max(total_eng, 1) * 100
@@ -208,25 +209,11 @@ async def get_proximity_player_radar(
             trade_per_session = trade_total / trade_sessions
             teamplay = min(100, (min(cf_per_session / 20, 1) * 50) + (min(trade_per_session / 10, 1) * 50))
 
-        # Timing: spawn timing score
-        timing_row = await db.fetch_one(
-            """
-            SELECT ROUND(AVG(spawn_timing_score)::numeric, 3), COUNT(*)
-            FROM proximity_spawn_timing WHERE killer_guid = $1 AND session_date >= $2
-            """, (guid, since),
-        )
+        # Timing + Mechanical rows already fetched in the gather() above.
         avg_timing = float(timing_row[0] or 0) if timing_row else 0
         timing_count = int(timing_row[1] or 0) if timing_row else 0
         timing = min(100, avg_timing * 100 * min(timing_count / 5, 1))
 
-        # Mechanical: return fire speed + kills
-        rf_row = await db.fetch_one(
-            """
-            SELECT ROUND(AVG(return_fire_ms)::numeric, 0)
-            FROM proximity_reaction_metric
-            WHERE target_guid = $1 AND return_fire_ms IS NOT NULL AND session_date >= $2
-            """, (guid, since),
-        )
         rf_ms = int(rf_row[0] or 3000) if rf_row and rf_row[0] else 3000
         rf_score = max(0, 100 - (rf_ms / 30))
         mechanical = min(100, rf_score)
