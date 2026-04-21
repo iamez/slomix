@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.7.1](https://github.com/iamez/slomix/compare/v1.7.0...v1.7.1) (2026-04-21)
+
+
+### Performance Improvements
+
+* **storytelling:** cache detect_moments by (session_date, limit) ([#138](https://github.com/iamez/slomix/issues/138)) ([4e758c5](https://github.com/iamez/slomix/commit/4e758c5df9c138d820a8e80807ffcff32300cc22))
+
 ## [1.7.0](https://github.com/iamez/slomix/compare/v1.6.0...v1.7.0) (2026-04-21)
 
 
