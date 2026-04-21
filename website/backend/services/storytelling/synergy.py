@@ -194,7 +194,15 @@ class _SynergyMixin:
                 "synergy: session %s has rows but no R1 — partial_data",
                 sd,
             )
-            return {"_status": "partial_data", "_reason": "no_r1_data"}
+            return {
+                "_status": "partial_data",
+                "_reason": "no_r1_data",
+                "round_map": {},
+                "guid_to_group": {},
+                "group_a_players": [],
+                "group_b_players": [],
+                "defaulted_players_count": 0,
+            }
 
         first_rsu = min(r[4] for r in r1_entries)
 

@@ -748,11 +748,10 @@ function renderTeamSynergy(data) {
     // F9 secondary signal — high default count means the stopwatch
     // correlation was spotty and results are skewed.
     const defaulted = data?.defaulted_players_count ?? 0;
+    let warning = null;
     if (defaulted > 0) {
-        container.textContent = '';
-        const warning = _el('div', 'mb-3 text-[10px] text-amber-400/80 uppercase tracking-wider');
+        warning = _el('div', 'mb-3 text-[10px] text-amber-400/80 uppercase tracking-wider');
         warning.textContent = `${defaulted} player${defaulted === 1 ? '' : 's'} had incomplete stopwatch correlation — results may be skewed`;
-        container.appendChild(warning);
     }
 
     function buildPanel(gkey) {
@@ -789,6 +788,7 @@ function renderTeamSynergy(data) {
     }
 
     container.textContent = '';
+    if (warning) container.appendChild(warning);
     const grid = _el('div', 'grid grid-cols-1 md:grid-cols-2 gap-4');
     const panelA = buildPanel('group_a');
     const panelB = buildPanel('group_b');
