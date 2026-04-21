@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.7.0](https://github.com/iamez/slomix/compare/v1.6.0...v1.7.0) (2026-04-21)
+
+
+### Features
+
+* **audit:** cleanup sweep — 10 commits covering deferred P5-P8 + F8-F10 + safe_val + orphan drops ([#133](https://github.com/iamez/slomix/issues/133)) ([2b989cc](https://github.com/iamez/slomix/commit/2b989cc7b147b2fa9813ab58abab7a9a55341796))
+
 ## [1.6.0](https://github.com/iamez/slomix/compare/v1.5.5...v1.6.0) (2026-04-21)
 
 
