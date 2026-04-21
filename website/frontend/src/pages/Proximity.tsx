@@ -97,14 +97,6 @@ function HeatmapCanvas({ hotzones, mapImage, intensity = 1.0 }: { hotzones: Hotz
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
 
-  useEffect(() => {
-    if (!mapImage) { imgRef.current = null; return; }
-    const img = new Image();
-    img.onload = () => { imgRef.current = img; draw(); };
-    img.onerror = () => { imgRef.current = null; draw(); };
-    img.src = mapImage;
-  }, [mapImage]);
-
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -146,6 +138,18 @@ function HeatmapCanvas({ hotzones, mapImage, intensity = 1.0 }: { hotzones: Hotz
       ctx.fill();
     }
   }, [hotzones, intensity]);
+
+  // Image loader runs after `draw` is bound. Including `draw` in deps
+  // means the onload handler always closes over the current render pass
+  // — previously `[mapImage]` captured the first-render `draw`, leaving
+  // stale hotzones on screen during rapid scope switches.
+  useEffect(() => {
+    if (!mapImage) { imgRef.current = null; return; }
+    const img = new Image();
+    img.onload = () => { imgRef.current = img; draw(); };
+    img.onerror = () => { imgRef.current = null; draw(); };
+    img.src = mapImage;
+  }, [mapImage, draw]);
 
   useEffect(() => { draw(); }, [draw]);
 
