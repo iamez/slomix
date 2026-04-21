@@ -572,6 +572,28 @@ class ProximityParserV4:
             return None
         return value if value > 0 else None
 
+    @staticmethod
+    def _extract_timestamp_from_filename(filepath: str) -> int | None:
+        """Parse `YYYY-MM-DD-HHMMSS` prefix out of an engagement filename.
+
+        Audit P7 fallback: when the `# round_start_unix=…` header is
+        missing or zero, every INSERT site stores `round_start_unix = 0`
+        and the natural UNIQUE constraint
+        `(session_date, round_number, round_start_unix, …)` silently
+        merges multiple same-day rounds into the first one that landed.
+        Filename timestamp gives a second-granularity fallback good
+        enough to disambiguate rounds on the same day.
+        """
+        basename = os.path.basename(filepath)
+        match = re.match(r"^(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})(\d{2})-", basename)
+        if not match:
+            return None
+        try:
+            y, mo, d, h, mi, s = (int(x) for x in match.groups())
+            return int(datetime(y, mo, d, h, mi, s).timestamp())
+        except (ValueError, OSError):
+            return None
+
     def _extract_round_from_gametime(self, map_name: str, round_end_unix: int) -> int | None:
         if not map_name or round_end_unix <= 0:
             return None
@@ -597,6 +619,20 @@ class ProximityParserV4:
         return None
 
     def _normalize_round_metadata(self, filepath: str) -> None:
+        # Audit P7: fall back to filename timestamp when header lacks
+        # round_start_unix. Without this, UNIQUE constraints keyed on
+        # (session_date, round_number, round_start_unix, …) silently
+        # merge multiple rounds from the same day into the first one.
+        if int(self.metadata.get('round_start_unix') or 0) == 0:
+            fallback_ts = self._extract_timestamp_from_filename(filepath)
+            if fallback_ts:
+                self.metadata['round_start_unix'] = fallback_ts
+                self.logger.warning(
+                    "[ROUND_START_UNIX FALLBACK] file=%s header=0 fallback=%d",
+                    os.path.basename(filepath),
+                    fallback_ts,
+                )
+
         header_round = int(self.metadata.get('round_num') or 0)
         map_name = str(self.metadata.get('map_name') or '')
         round_end_unix = int(self.metadata.get('round_end_unix') or 0)
