@@ -80,9 +80,10 @@ class _NarrativeMixin:
             composites = {t: d.get("composite", 0) for t, d in teams.items()}
             if composites:
                 better_team = max(composites, key=composites.get)
-                worse_team = min(composites, key=composites.get)
                 better_composite = composites.get(better_team, 0)
-                worse_composite = composites.get(worse_team, 0)
+                # Low-end composite sourced without the unused `worse_team`
+                # variable (audit F8 — previously assigned but never read).
+                worse_composite = min(composites.values())
                 # Find the best synergy axis for the better team
                 better_data = teams.get(better_team, {})
                 for axis in ('crossfire', 'trade', 'cohesion', 'push', 'medic'):
@@ -115,11 +116,21 @@ class _NarrativeMixin:
                 f"when {top_moment_narrative}"
             )
 
-        if better_team and better_composite > 0:
+        # Guard on best_axis_name (audit F10) — prevents grammar slip
+        # "driven by superior  (0)" when no axis has a value > 0 on very
+        # low-data sessions.
+        if better_team and better_composite > 0 and best_axis_name:
             parts.append(
                 f". Team synergy favored {better_team} "
                 f"({better_composite:.0f} vs {worse_composite:.0f}), "
                 f"driven by superior {best_axis_name} ({best_axis_val:.0f})"
+            )
+        elif better_team and better_composite > 0:
+            # Composite is populated but every axis is 0 — render a
+            # shorter sentence without the axis blurb.
+            parts.append(
+                f". Team synergy favored {better_team} "
+                f"({better_composite:.0f} vs {worse_composite:.0f})"
             )
 
         narrative = "".join(parts) + "."

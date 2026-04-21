@@ -1,5 +1,7 @@
 """Proximity movement endpoints: movers, reactions."""
 
+import asyncio
+
 from fastapi import APIRouter, Depends
 
 from website.backend.dependencies import get_db
@@ -43,33 +45,38 @@ async def get_proximity_movers(
         limit_placeholder = len(base_params) + 1
         query_params = tuple(base_params + [safe_limit])
 
-        distance_rows = await db.fetch_all(
+        # 4 independent aggregations on player_track — gather to cut
+        # 4 × RTT down to 1 × RTT. Matches the player profile / radar /
+        # round-timeline pattern landed in PR #130.
+        distance_query = (
             "SELECT player_guid, player_name, SUM(total_distance) AS total_distance, COUNT(*) AS tracks "
             f"FROM player_track {where_sql} "
             "GROUP BY player_guid, player_name "
-            f"ORDER BY total_distance DESC NULLS LAST LIMIT ${limit_placeholder}",
-            query_params,
+            f"ORDER BY total_distance DESC NULLS LAST LIMIT ${limit_placeholder}"
         )
-        sprint_rows = await db.fetch_all(
+        sprint_query = (
             "SELECT player_guid, player_name, AVG(sprint_percentage) AS sprint_pct, COUNT(*) AS tracks "
             f"FROM player_track {where_sql} AND sprint_percentage IS NOT NULL "
             "GROUP BY player_guid, player_name "
-            f"ORDER BY sprint_pct DESC NULLS LAST LIMIT ${limit_placeholder}",
-            query_params,
+            f"ORDER BY sprint_pct DESC NULLS LAST LIMIT ${limit_placeholder}"
         )
-        reaction_rows = await db.fetch_all(
+        reaction_query = (
             "SELECT player_guid, player_name, AVG(time_to_first_move_ms) AS reaction_ms, COUNT(*) AS tracks "
             f"FROM player_track {where_sql} AND time_to_first_move_ms IS NOT NULL AND spawn_time_ms >= 0 "
             "GROUP BY player_guid, player_name "
-            f"ORDER BY reaction_ms ASC NULLS LAST LIMIT ${limit_placeholder}",
-            query_params,
+            f"ORDER BY reaction_ms ASC NULLS LAST LIMIT ${limit_placeholder}"
         )
-        survival_rows = await db.fetch_all(
+        survival_query = (
             "SELECT player_guid, player_name, AVG(duration_ms) AS duration_ms, COUNT(*) AS tracks "
             f"FROM player_track {where_sql} AND duration_ms IS NOT NULL "
             "GROUP BY player_guid, player_name "
-            f"ORDER BY duration_ms DESC NULLS LAST LIMIT ${limit_placeholder}",
-            query_params,
+            f"ORDER BY duration_ms DESC NULLS LAST LIMIT ${limit_placeholder}"
+        )
+        distance_rows, sprint_rows, reaction_rows, survival_rows = await asyncio.gather(
+            db.fetch_all(distance_query, query_params),
+            db.fetch_all(sprint_query, query_params),
+            db.fetch_all(reaction_query, query_params),
+            db.fetch_all(survival_query, query_params),
         )
 
         ready = bool(distance_rows or sprint_rows or reaction_rows or survival_rows)
@@ -192,7 +199,9 @@ async def get_proximity_reactions(
         scoped_params.append(safe_limit)
         limit_placeholder = len(scoped_params)
 
-        return_rows = await db.fetch_all(
+        # 4 independent reaction-metric queries — gather. table-exists
+        # check above is the only ordering blocker.
+        return_query = (
             "SELECT r.target_guid, r.target_name, r.target_class, "
             "AVG(r.return_fire_ms) AS avg_return_fire_ms, "
             "COUNT(r.return_fire_ms) AS samples "
@@ -200,10 +209,9 @@ async def get_proximity_reactions(
             f"{where_sql} AND r.return_fire_ms IS NOT NULL "
             "GROUP BY r.target_guid, r.target_name, r.target_class "
             "ORDER BY avg_return_fire_ms ASC NULLS LAST "
-            f"LIMIT ${limit_placeholder}",
-            tuple(scoped_params),
+            f"LIMIT ${limit_placeholder}"
         )
-        dodge_rows = await db.fetch_all(
+        dodge_query = (
             "SELECT r.target_guid, r.target_name, r.target_class, "
             "AVG(r.dodge_reaction_ms) AS avg_dodge_reaction_ms, "
             "COUNT(r.dodge_reaction_ms) AS samples "
@@ -211,10 +219,9 @@ async def get_proximity_reactions(
             f"{where_sql} AND r.dodge_reaction_ms IS NOT NULL "
             "GROUP BY r.target_guid, r.target_name, r.target_class "
             "ORDER BY avg_dodge_reaction_ms ASC NULLS LAST "
-            f"LIMIT ${limit_placeholder}",
-            tuple(scoped_params),
+            f"LIMIT ${limit_placeholder}"
         )
-        support_rows = await db.fetch_all(
+        support_query = (
             "SELECT r.target_guid, r.target_name, r.target_class, "
             "AVG(r.support_reaction_ms) AS avg_support_reaction_ms, "
             "COUNT(r.support_reaction_ms) AS samples "
@@ -222,10 +229,9 @@ async def get_proximity_reactions(
             f"{where_sql} AND r.support_reaction_ms IS NOT NULL "
             "GROUP BY r.target_guid, r.target_name, r.target_class "
             "ORDER BY avg_support_reaction_ms ASC NULLS LAST "
-            f"LIMIT ${limit_placeholder}",
-            tuple(scoped_params),
+            f"LIMIT ${limit_placeholder}"
         )
-        class_rows = await db.fetch_all(
+        class_query = (
             "SELECT r.target_class, "
             "COUNT(*) AS events, "
             "COUNT(r.return_fire_ms) AS return_samples, AVG(r.return_fire_ms) AS avg_return_fire_ms, "
@@ -234,8 +240,13 @@ async def get_proximity_reactions(
             "FROM proximity_reaction_metric r "
             f"{where_sql} "
             "GROUP BY r.target_class "
-            "ORDER BY events DESC, r.target_class ASC",
-            query_params,
+            "ORDER BY events DESC, r.target_class ASC"
+        )
+        return_rows, dodge_rows, support_rows, class_rows = await asyncio.gather(
+            db.fetch_all(return_query, tuple(scoped_params)),
+            db.fetch_all(dodge_query, tuple(scoped_params)),
+            db.fetch_all(support_query, tuple(scoped_params)),
+            db.fetch_all(class_query, query_params),
         )
 
         ready = bool(return_rows or dodge_rows or support_rows or class_rows)

@@ -722,11 +722,36 @@ function renderTeamSynergy(data) {
     const container = document.getElementById('story-team-synergy');
     if (!container) return;
 
+    // F9 (2026-04-21): partial_data status signals the session has
+    // rows but no R1 — show an explicit badge instead of collapsing
+    // the panel into "No synergy data available" (which reads as
+    // "we have no data" when actually "we have one side of the match").
+    if (data?.status === 'partial_data') {
+        container.textContent = '';
+        const badge = _el('div', 'rounded-xl border border-amber-500/25 bg-amber-500/10 p-5 text-center');
+        badge.appendChild(_el('div', 'text-amber-400 text-xs uppercase tracking-wider font-bold mb-2', 'Insufficient data'));
+        badge.appendChild(_el('div', 'text-xs text-slate-400',
+            data.reason === 'no_r1_data'
+                ? 'Round 1 stats are missing for this session — team synergy needs R1 to establish groups.'
+                : 'Not enough data to compute team synergy for this session.'));
+        container.appendChild(badge);
+        return;
+    }
+
     const groups = data?.groups;
     if (!groups || (!groups.group_a && !groups.group_b)) {
         container.textContent = '';
         container.appendChild(_el('div', 'text-center text-slate-500 py-8 text-sm', 'No synergy data available'));
         return;
+    }
+
+    // F9 secondary signal — high default count means the stopwatch
+    // correlation was spotty and results are skewed.
+    const defaulted = data?.defaulted_players_count ?? 0;
+    let warning = null;
+    if (defaulted > 0) {
+        warning = _el('div', 'mb-3 text-[10px] text-amber-400/80 uppercase tracking-wider');
+        warning.textContent = `${defaulted} player${defaulted === 1 ? '' : 's'} had incomplete stopwatch correlation — results may be skewed`;
     }
 
     function buildPanel(gkey) {
@@ -763,6 +788,7 @@ function renderTeamSynergy(data) {
     }
 
     container.textContent = '';
+    if (warning) container.appendChild(warning);
     const grid = _el('div', 'grid grid-cols-1 md:grid-cols-2 gap-4');
     const panelA = buildPanel('group_a');
     const panelB = buildPanel('group_b');
