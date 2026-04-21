@@ -1,6 +1,6 @@
 """Proximity player endpoints: player/{guid}/profile, player/{guid}/radar."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -18,7 +18,7 @@ async def get_proximity_player_profile(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Aggregated player proximity stats for profile page."""
-    since = datetime.utcnow().date() - timedelta(days=max(1, min(range_days, 3650)))
+    since = datetime.now(timezone.utc).replace(tzinfo=None).date() - timedelta(days=max(1, min(range_days, 3650)))
     try:
         # Engagement stats
         eng_stats = await db.fetch_one(
@@ -137,7 +137,7 @@ async def get_proximity_player_radar(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """5-axis radar data: Aggression, Awareness, Teamplay, Timing, Mechanical."""
-    since = datetime.utcnow().date() - timedelta(days=max(1, min(range_days, 3650)))
+    since = datetime.now(timezone.utc).replace(tzinfo=None).date() - timedelta(days=max(1, min(range_days, 3650)))
     try:
         # Aggression: sprint %, avg speed, distance per life
         aggression_row = await db.fetch_one(

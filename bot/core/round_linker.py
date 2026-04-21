@@ -197,8 +197,16 @@ async def resolve_round_id_with_reason(
                 # is hours or days old — the round never made it into rounds,
                 # and the relinker cron has nothing to retry against).
                 if target_dt:
+                    # target_dt may be naive-local (legacy callers use
+                    # datetime.fromtimestamp()) or tz-aware UTC (relinker
+                    # P3 fix). Pick a matching `now` so the subtraction
+                    # doesn't silently drift by the host's UTC offset.
+                    if target_dt.tzinfo is not None:
+                        now_ref = datetime.now(target_dt.tzinfo)
+                    else:
+                        now_ref = datetime.now()
                     age_seconds = int(
-                        (datetime.utcnow() - target_dt).total_seconds()
+                        (now_ref - target_dt).total_seconds()
                     )
                     if age_seconds > 3600:
                         # Stale: more than an hour since the source event fired

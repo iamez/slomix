@@ -5,7 +5,7 @@ import math
 import re
 import time
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from itertools import combinations
 from typing import Any
 
@@ -114,7 +114,7 @@ def _proximity_stub_meta(range_days: int) -> dict:
         "ready": False,
         "message": "Proximity pipeline not connected.",
         "range_days": range_days,
-        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "generated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z",
     }
 
 
@@ -160,7 +160,7 @@ def _build_proximity_where_clause(
         clauses.append(f"{prefix}session_date = ${len(params)}")
     else:
         safe_range = max(1, min(int(range_days or 30), 3650))
-        since = datetime.utcnow().date() - timedelta(days=safe_range)
+        since = datetime.now(timezone.utc).replace(tzinfo=None).date() - timedelta(days=safe_range)
         params.append(since)
         clauses.append(f"{prefix}session_date >= ${len(params)}")
 

@@ -26,7 +26,7 @@ import os
 import re
 from bisect import bisect_left
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 PROXIMITY_FILENAME_ROUND_RE = re.compile(r"-round-(\d+)_engagements\.txt$", re.IGNORECASE)
@@ -913,7 +913,7 @@ class ProximityParserV4:
             "round_id": None,
             "round_link_source": "unresolved",
             "round_link_reason": "not_resolved",
-            "round_linked_at": datetime.utcnow(),
+            "round_linked_at": datetime.now(timezone.utc).replace(tzinfo=None),
         }
         self._round_link_context = context
 
