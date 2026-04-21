@@ -322,9 +322,15 @@ async def get_proximity_pushes(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Team push analysis: per-team summary and quality distribution."""
+    # proximity_team_push has no per-player column — `team` holds
+    # 'Axis' / 'Allies', not a GUID. Previous `player_guid_columns=["team"]`
+    # caused every `?player_guid=X` scope to silently return [] because the
+    # WHERE clause became `team = '<GUID>'` which never matches.
+    # Drop the filter; if per-player scope is later added, it needs a
+    # schema column or a subquery against a table that records push
+    # participants per player.
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
-        player_guid=player_guid, player_guid_columns=["team"],
     )
     query_params = tuple(params)
     team_summary = await db.fetch_all(

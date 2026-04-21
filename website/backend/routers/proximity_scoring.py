@@ -2,7 +2,7 @@
 
 import math
 from bisect import bisect_right
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -75,7 +75,7 @@ async def get_proximity_leaderboards(
     if parsed_date:
         since = parsed_date
     else:
-        since = datetime.utcnow().date() - timedelta(days=max(1, min(range_days, 3650)))
+        since = datetime.now(timezone.utc).replace(tzinfo=None).date() - timedelta(days=max(1, min(range_days, 3650)))
 
     # Build scope filter helper for leaderboard queries
     def _lb_scope(table_alias: str = "", has_round_number: bool = False):

@@ -47,6 +47,49 @@ async def test_http_cache_middleware_etag_and_hit_cycle():
 
 
 @pytest.mark.asyncio
+async def test_http_cache_bypasses_proximity_error_bodies():
+    """Audit P10: proximity endpoints return HTTP 200 with
+    `{"status": "error", ...}` on query failure. Previously these got
+    cached for the full 300s TTL, masking outages from monitoring.
+    The middleware now detects that shape via byte substring and tags
+    the response with `X-Cache: BYPASS-ERROR` + `Cache-Control: no-store`.
+    """
+    app = FastAPI()
+    cache_backend = MemoryCacheBackend()
+
+    state = {"value": 0}
+
+    @app.get("/api/proximity/summary")
+    async def summary():
+        state["value"] += 1
+        # Emulate the stub-meta + error-update pattern used by
+        # proximity_dashboard.py / proximity_trades.py on query failure.
+        return {
+            "status": "error",
+            "ready": False,
+            "message": "Proximity query failed",
+            "value": state["value"],
+        }
+
+    app.add_middleware(HTTPCacheMiddleware, cache_backend=cache_backend)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        first = await client.get("/api/proximity/summary")
+        assert first.status_code == 200
+        assert first.headers.get("X-Cache") == "BYPASS-ERROR"
+        assert first.headers.get("Cache-Control") == "no-store"
+        assert first.json()["value"] == 1
+
+        # Second call re-runs the handler (no cache) and sees a fresh
+        # `value`, proving the first response was never stored.
+        second = await client.get("/api/proximity/summary")
+        assert second.status_code == 200
+        assert second.json()["value"] == 2
+        assert second.headers.get("X-Cache") == "BYPASS-ERROR"
+
+
+@pytest.mark.asyncio
 async def test_rate_limit_middleware_rejects_when_limit_exceeded(monkeypatch):
     monkeypatch.setenv("RATE_LIMIT_ENABLED", "true")
     monkeypatch.setenv("RATE_LIMIT_WINDOW_SECONDS", "60")
