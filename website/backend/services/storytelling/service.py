@@ -53,5 +53,9 @@ class StorytellingService(
         # in parallel, each of which calls this PCS JOIN rounds query
         # independently — memo cuts 3-4 duplicate scans per request to 1.
         # Bound to the request-scoped service instance, so no cross-
-        # request leakage.
+        # request leakage. Paired `_groups_locks` guards against the
+        # concurrent miss-miss-miss race that Copilot flagged on PR #128:
+        # without per-date locking, N coroutines that all arrive before
+        # the first write land all fire _build_player_groups_uncached.
         self._groups_cache: dict = {}
+        self._groups_locks: dict = {}
