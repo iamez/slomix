@@ -84,7 +84,7 @@ export function TeamSynergyPanel({ data }: Props) {
   }
 
   const groups = data.groups as { group_a?: SynergyGroup; group_b?: SynergyGroup };
-  if (!groups || !groups.group_a || !groups.group_b) return null;
+  if (!groups.group_a || !groups.group_b) return null;
 
   const { group_a, group_b } = groups;
   const aWins = group_a.composite >= group_b.composite;
