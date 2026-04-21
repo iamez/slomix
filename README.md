@@ -25,7 +25,7 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 - 📊 **PWC Fairness Fix** — `max(team_kills, 1)` → `0 when team=0` eliminates 30× score inflation on zero-team-kill edge cases. 20 new unit tests for every formula edge case
 - 🎬 **BOX Score Panel** (PR #78) — Stopwatch match scoring on the legacy story page with per-map breakdown, winner badges, fullhold indicators, round time display. 4 parallel Invisible Value fetches (Gravity / Space / Enabler / Lurker) with race-condition guards
 - 🧠 **KIS v3 — Graduated Reinforcement** (PR #121) — UTRO-inspired 7-tier reinforcement multiplier (0.70-1.40) replaces binary bonus. Ties kill weight to actual respawn pressure at time of kill
-- 🏷️ **Team Synergy "Insufficient Data" Badge** — R2-only sessions (stopwatch crashes before R1) now render an explicit amber badge explaining the missing data instead of silently showing zero bars. Backend reports `defaulted_players_count` so the UI can surface correlation warnings
+- 🏷️ **Team Synergy "Insufficient Data" Badge** — Sessions where R1 stats are missing (crash between halves, only R2 file captured) now render an explicit amber badge explaining the gap instead of silently showing zero bars. Backend reports `defaulted_players_count` so the UI can surface correlation warnings
 - ⚡ **Storytelling Performance Pass** — `asyncio.gather` across 5 synergy axes + 10 proximity metrics. Records overview, hall-of-fame, and awards endpoints batch their `resolve_display_name` lookups (360 → 36 queries). 300s HTTP cache on 14 storytelling endpoints
 
 ### **🔧 v1.5.x: Runtime Bug Sweep + Performance RCA (April 19-20)**
@@ -116,8 +116,8 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 | **Rounds Parsed** | 2,258 |
 | **Unique Players** | 57 |
 | **Stats Per Player Per Round** | 57 fields |
-| **Discord Commands** | ~99 across 22 cogs |
-| **Database Tables** | 95 (48 migrations committed) |
+| **Discord Commands** | ~99 across 20 cogs |
+| **Database Tables** | 95 (managed via committed SQL migrations) |
 | **Test Coverage** | 530 tests, 9/9 CI green |
 | **Data Span** | Jan 2025 — Apr 2026 (16 months) |
 
@@ -154,7 +154,7 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 | Project | Status | Description |
 |---------|--------|-------------|
-| **Discord Bot** (this repo) | ✅ Production | ~99 commands, 22 cogs, full automation, AI predictions |
+| **Discord Bot** (this repo) | ✅ Production | ~99 commands, 20 cogs, full automation, AI predictions |
 | **Website** (`/website/`) | ✅ Production | FastAPI + React 19/TypeScript SPA: profiles, sessions, leaderboards, proximity, greatshot |
 | **Lua Webhook** (`vps_scripts/`) | ✅ Production | Real-time round notifications, surrender timing fix, team capture |
 | **Greatshot** (`/greatshot/`) | ✅ Production | Demo upload, highlight detection, clip extraction, render pipeline |
@@ -536,7 +536,7 @@ slomix/
 │   ├── ultimate_bot.py              # Entry point + SSH monitor loop
 │   ├── community_stats_parser.py    # Stats parser with R2 differential
 │   ├── endstats_parser.py           # EndStats awards parser
-│   ├── cogs/                        # 21 command modules
+│   ├── cogs/                        # 20 command modules
 │   │   ├── last_session_cog.py      # Session stats & summaries
 │   │   ├── leaderboard_cog.py       # Rankings
 │   │   ├── analytics_cog.py         # Player analytics
@@ -584,7 +584,7 @@ slomix/
 
 | File | Purpose |
 |------|---------|
-| `bot/ultimate_bot.py` | Main entry point, SSH monitor, 21 cog loader |
+| `bot/ultimate_bot.py` | Main entry point, SSH monitor, 20 cog loader |
 | `bot/community_stats_parser.py` | R1/R2 differential parser (53+ fields) |
 | `postgresql_database_manager.py` | All DB operations: create, import, rebuild, validate |
 | `bot/core/database_adapter.py` | Async PostgreSQL adapter with connection pooling |
