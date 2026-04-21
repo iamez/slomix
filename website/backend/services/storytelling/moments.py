@@ -5,6 +5,8 @@ Imports all module-level names (constants, helpers) from .base.
 """
 from __future__ import annotations
 
+import time
+
 from .base import (
     CARRIER_RETURN_WINDOW_MS,
     KILL_STREAK_WINDOW_MS,
@@ -12,6 +14,7 @@ from .base import (
     MULTIKILL_SHORT_WINDOW_MS,
     OBJECTIVE_EVENT_WINDOW_MS,
     TRADE_KILL_DELTA_MS,
+    _compute_locks,
     _format_time_ms,
     _safe_short,
     _to_date,
@@ -23,13 +26,65 @@ from .base import (
     weapon_name,
 )
 
+# Module-level cache for `detect_moments` results. The 11 detectors fire
+# 11 parallel DB queries + objective-event loader on every request; story
+# page typically triggers both `/moments` (limit=N from user) and
+# `/narrative` (internal call with limit=1) on the same session, so
+# without caching we recompute identically twice.
+#
+# Keyed by (session_date, limit) — moments are a pure function of the
+# data in the DB for that date, and the limit determines type-diversity
+# truncation so we cache per-limit to preserve exact behavior.
+_MOMENTS_CACHE: dict[tuple[date, int], tuple[list, float]] = {}
+_MOMENTS_CACHE_MAX = 32  # 16 sessions × 2 typical limits
+_MOMENTS_TTL_TODAY = 300    # 5 min — new rounds may still arrive
+_MOMENTS_TTL_HISTORICAL = 3600  # 1 h — stable, bounded for retro-corrections
+
+
+def _moments_cache_ttl(sd: date) -> int:
+    return _MOMENTS_TTL_TODAY if sd >= date.today() else _MOMENTS_TTL_HISTORICAL
+
+
+def _moments_cache_evict_oldest() -> None:
+    if len(_MOMENTS_CACHE) <= _MOMENTS_CACHE_MAX:
+        return
+    oldest = min(_MOMENTS_CACHE, key=lambda k: _MOMENTS_CACHE[k][1])
+    _MOMENTS_CACHE.pop(oldest, None)
+
 
 class _MomentsMixin:
     """Moments methods for StorytellingService."""
 
     async def detect_moments(self, session_date: str | date, limit: int = 10) -> list:
-        """Detect highlight-reel moments for a session across 11 detectors."""
+        """Detect highlight-reel moments for a session across 11 detectors.
+
+        Results are memoized at module level per (session_date, limit) —
+        TTL 5 min for today, 1 h for historical. First caller computes,
+        subsequent callers hit the cache.
+        """
         sd = _to_date(session_date)
+        now = time.time()
+        ttl = _moments_cache_ttl(sd)
+        key = (sd, limit)
+        cached = _MOMENTS_CACHE.get(key)
+        if cached and (now - cached[1]) < ttl:
+            return cached[0]
+
+        # Double-check under lock to prevent concurrent recompute when
+        # several coroutines all miss the cache before any of them writes.
+        lock = _compute_locks.get(f"moments:{sd}:{limit}")
+        async with lock:
+            cached = _MOMENTS_CACHE.get(key)
+            if cached and (time.time() - cached[1]) < ttl:
+                return cached[0]
+
+            result = await self._detect_moments_uncached(sd, limit)
+            _MOMENTS_CACHE[key] = (result, time.time())
+            _moments_cache_evict_oldest()
+            return result
+
+    async def _detect_moments_uncached(self, sd: date, limit: int) -> list:
+        """Run all 11 detectors, diversify by type, sort by stars, truncate."""
         moments = []
 
         # Run all 11 detectors (5 original + 4 objective + 2 combat)
