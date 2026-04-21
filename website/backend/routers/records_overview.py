@@ -27,11 +27,16 @@ async def _safe_val(
     query: str,
     params: tuple | None = None,
     default=0,
+    metric: str = "",
 ):
     try:
         return await db.fetch_val(query, params)
     except Exception as e:
-        logger.warning("[overview] query failed: %s", e)
+        # Copilot review on PR #123: without a metric label the
+        # warning line doesn't say which aggregation failed — debugging
+        # this endpoint under 6 back-to-back queries was ambiguous.
+        label = metric or "unknown"
+        logger.warning("[overview] query failed (%s): %s", label, e)
         return default
 
 
@@ -39,11 +44,13 @@ async def _safe_one(
     db: DatabaseAdapter,
     query: str,
     params: tuple | None = None,
+    metric: str = "",
 ):
     try:
         return await db.fetch_one(query, params)
     except Exception as e:
-        logger.warning("[overview] query failed: %s", e)
+        label = metric or "unknown"
+        logger.warning("[overview] query failed (%s): %s", label, e)
         return None
 
 
@@ -54,16 +61,18 @@ async def _fetch_rounds_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
     module-level constant defined at import time; no user input reaches
     these queries. Date filters use $1 parameters.
     """
-    rounds_count = await _safe_val(db, f"SELECT COUNT(*) FROM rounds {_ROUND_FILTER}")  # nosec B608 - trusted module constant, not user input
+    rounds_count = await _safe_val(db, f"SELECT COUNT(*) FROM rounds {_ROUND_FILTER}", metric="rounds_count")  # nosec B608 - trusted module constant, not user input
     rounds_first = await _safe_val(
         db,
         f"SELECT MIN(SUBSTR(CAST(round_date AS TEXT), 1, 10)) FROM rounds {_ROUND_FILTER}",  # nosec B608 - trusted module constant, not user input
         default=None,
+        metric="rounds_first",
     )
     rounds_latest = await _safe_val(
         db,
         f"SELECT MAX(SUBSTR(CAST(round_date AS TEXT), 1, 10)) FROM rounds {_ROUND_FILTER}",  # nosec B608 - trusted module constant, not user input
         default=None,
+        metric="rounds_latest",
     )
     rounds_recent = await _safe_val(
         db,
@@ -74,6 +83,7 @@ async def _fetch_rounds_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
           AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
         """,  # nosec B608 - trusted module constant, not user input
         (start_date_str,),
+        metric="rounds_recent",
     )
     sessions_count = await _safe_val(
         db,
@@ -83,6 +93,7 @@ async def _fetch_rounds_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
         {_ROUND_FILTER}
           AND gaming_session_id IS NOT NULL
         """,  # nosec B608 - trusted module constant, not user input
+        metric="sessions_count",
     )
     sessions_recent = await _safe_val(
         db,
@@ -94,6 +105,7 @@ async def _fetch_rounds_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
           AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
         """,  # nosec B608 - trusted module constant, not user input
         (start_date_str,),
+        metric="sessions_recent",
     )
     return {
         "rounds_count": rounds_count,
@@ -115,6 +127,7 @@ async def _fetch_player_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
         WHERE round_number IN (1, 2)
           AND time_played_seconds > 0
         """,
+        metric="players_all_time",
     )
     players_recent = await _safe_val(
         db,
@@ -126,6 +139,7 @@ async def _fetch_player_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
           AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
         """,
         (start_date_str,),
+        metric="players_recent",
     )
     total_kills = await _safe_val(
         db,
@@ -134,6 +148,7 @@ async def _fetch_player_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
         FROM player_comprehensive_stats
         WHERE round_number IN (1, 2)
         """,
+        metric="total_kills",
     )
     total_kills_recent = await _safe_val(
         db,
@@ -144,6 +159,7 @@ async def _fetch_player_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
           AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
         """,
         (start_date_str,),
+        metric="total_kills_recent",
     )
     return {
         "players_all_time": players_all_time,
@@ -168,6 +184,7 @@ async def _fetch_most_active(db: DatabaseAdapter, start_date_str: str) -> tuple:
         ORDER BY rounds_played DESC
         LIMIT 1
         """,
+        metric="active_overall",
     )
     active_recent = await _safe_one(
         db,
@@ -184,6 +201,7 @@ async def _fetch_most_active(db: DatabaseAdapter, start_date_str: str) -> tuple:
         LIMIT 1
         """,
         (start_date_str,),
+        metric="active_recent",
     )
     return active_overall, active_recent
 

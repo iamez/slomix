@@ -8,6 +8,7 @@ Percentile normalization: rank / pool_size (0.0 to 1.0).
 Inverted metrics (lower = better): percentile is flipped.
 """
 
+import asyncio
 import bisect
 import logging
 import math
@@ -236,6 +237,11 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
     """
     Fetch raw per-player metric values from all source tables.
     Returns {guid: {metric_key: value, ...}} merged dict.
+
+    All 10 source queries are independent — run them concurrently via
+    `asyncio.gather(..., return_exceptions=True)` so one slow table
+    doesn't gate the rest. Results merge sequentially into `players`
+    afterwards (no shared-state race).
     """
     since_date = date.today() - timedelta(days=int(range_days))
     players: dict[str, dict] = {}
@@ -250,9 +256,10 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
         if name and len(name) > len(players[guid].get("name", "")):
             players[guid]["name"] = name
 
-    # 1. Engagements: escape_rate, engagement count
-    try:
-        rows = await db.fetch_all("""
+    # Query catalog: (label, sql). Order matches legacy numbered sections
+    # below so the handler dispatch stays readable.
+    queries = [
+        ("combat_engagement", """
             SELECT target_guid, MAX(target_name) as name,
                    COUNT(*) as engagements,
                    SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END)::REAL
@@ -260,18 +267,8 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
             FROM combat_engagement
             WHERE session_date >= $1
             GROUP BY target_guid
-        """, (since_date,))
-        for r in rows:
-            _merge(r[0], r[1], {
-                "engagements": int(r[2] or 0),
-                "escape_rate": float(r[3] or 0),
-            })
-    except Exception as e:
-        logger.warning("prox_scoring: combat_engagement query failed: %s", e)
-
-    # 2. Reactions: return_fire_ms, dodge_ms, support_reaction_ms
-    try:
-        rows = await db.fetch_all("""
+        """),
+        ("proximity_reaction_metric", """
             SELECT target_guid, MAX(target_name),
                    AVG(return_fire_ms) as avg_rf,
                    AVG(dodge_reaction_ms) as avg_dodge,
@@ -279,37 +276,16 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
             FROM proximity_reaction_metric
             WHERE session_date >= $1
             GROUP BY target_guid
-        """, (since_date,))
-        for r in rows:
-            _merge(r[0], r[1], {
-                "return_fire_ms": float(r[2]) if r[2] else None,
-                "dodge_ms": float(r[3]) if r[3] else None,
-                "support_reaction_ms": float(r[4]) if r[4] else None,
-            })
-    except Exception as e:
-        logger.warning("prox_scoring: proximity_reaction_metric query failed: %s", e)
-
-    # 3. Spawn timing: avg score, timed kills
-    try:
-        rows = await db.fetch_all("""
+        """),
+        ("proximity_spawn_timing", """
             SELECT killer_guid, MAX(killer_name),
                    AVG(spawn_timing_score) as avg_score,
                    COUNT(*) as timed_kills
             FROM proximity_spawn_timing
             WHERE session_date >= $1
             GROUP BY killer_guid
-        """, (since_date,))
-        for r in rows:
-            _merge(r[0], r[1], {
-                "spawn_score": float(r[2] or 0),
-                "timed_kills": float(r[3] or 0),
-            })
-    except Exception as e:
-        logger.warning("prox_scoring: proximity_spawn_timing query failed: %s", e)
-
-    # 4. Movement: speed, sprint, distance, stance, post_spawn
-    try:
-        rows = await db.fetch_all("""
+        """),
+        ("player_track", """
             SELECT player_guid, MAX(player_name),
                    COUNT(*) as tracks,
                    AVG(avg_speed) as avg_speed,
@@ -324,38 +300,8 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
             WHERE session_date >= $1
               AND peak_speed IS NOT NULL
             GROUP BY player_guid
-        """, (since_date,))
-        for r in rows:
-            tracks = int(r[2] or 0)
-            standing = float(r[8] or 0)
-            crouching = float(r[9] or 0)
-            prone = float(r[10] or 0)
-            total_stance = standing + crouching + prone
-            # Stance variety: entropy-like measure (max when evenly split = 1.0)
-            stance_variety = 0.0
-            if total_stance > 0:
-                fracs = [standing / total_stance, crouching / total_stance, prone / total_stance]
-                # Normalized entropy: -sum(p*log(p)) / log(3)
-                entropy = 0.0
-                for f in fracs:
-                    if f > 0:
-                        entropy -= f * math.log(f)
-                stance_variety = entropy / math.log(3)  # 0 to 1
-
-            _merge(r[0], r[1], {
-                "tracks": tracks,
-                "peak_speed": float(r[4] or 0),
-                "sprint_discipline": float(r[5] or 0),
-                "distance_per_life": float(r[6] or 0),
-                "post_spawn_rush": float(r[7] or 0),
-                "stance_variety": stance_variety,
-            })
-    except Exception as e:
-        logger.warning("prox_scoring: player_track query failed: %s", e)
-
-    # 5. Kill outcomes: KPR (as killer)
-    try:
-        rows = await db.fetch_all("""
+        """),
+        ("proximity_kill_outcome_killer", """
             SELECT killer_guid, MAX(killer_name),
                    COUNT(*) as total_kills,
                    SUM(CASE WHEN outcome = 'gibbed' THEN 1 ELSE 0 END) as gibs,
@@ -365,21 +311,8 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
             WHERE session_date >= $1
             GROUP BY killer_guid
             HAVING COUNT(*) >= 3
-        """, (since_date,))
-        for r in rows:
-            gibs = int(r[3] or 0)
-            rev = int(r[4] or 0)
-            kpr = gibs / max(gibs + rev, 1)
-            _merge(r[0], r[1], {
-                "kpr": kpr,
-                "denied_time": float(r[5] or 0),
-            })
-    except Exception as e:
-        logger.warning("prox_scoring: proximity_kill_outcome (killer) query failed: %s", e)
-
-    # 6. Kill outcomes: revive rate (as victim)
-    try:
-        rows = await db.fetch_all("""
+        """),
+        ("proximity_kill_outcome_victim", """
             SELECT victim_guid, MAX(victim_name),
                    COUNT(*) as times_killed,
                    SUM(CASE WHEN outcome = 'revived' THEN 1 ELSE 0 END) as times_revived
@@ -387,19 +320,8 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
             WHERE session_date >= $1
             GROUP BY victim_guid
             HAVING COUNT(*) >= 3
-        """, (since_date,))
-        for r in rows:
-            killed = int(r[2] or 0)
-            revived = int(r[3] or 0)
-            _merge(r[0], r[1], {
-                "revive_rate_as_victim": revived / max(killed, 1),
-            })
-    except Exception as e:
-        logger.warning("prox_scoring: proximity_kill_outcome (victim) query failed: %s", e)
-
-    # 7. Hit regions: headshot %
-    try:
-        rows = await db.fetch_all("""
+        """),
+        ("proximity_hit_region", """
             SELECT attacker_guid, MAX(attacker_name),
                    SUM(CASE WHEN hit_region = 0 THEN 1 ELSE 0 END) as head_hits,
                    COUNT(*) as total_hits
@@ -407,19 +329,8 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
             WHERE session_date >= $1
             GROUP BY attacker_guid
             HAVING COUNT(*) >= 20
-        """, (since_date,))
-        for r in rows:
-            total = int(r[3] or 1)
-            head = int(r[2] or 0)
-            _merge(r[0], r[1], {
-                "headshot_pct": head / max(total, 1),
-            })
-    except Exception as e:
-        logger.warning("prox_scoring: proximity_hit_region query failed: %s", e)
-
-    # 8. Crossfire: execution rate (no name columns — guid only)
-    try:
-        rows = await db.fetch_all("""
+        """),
+        ("proximity_crossfire_opportunity", """
             SELECT guid, cf_total, cf_executed FROM (
                 SELECT teammate1_guid as guid,
                        COUNT(*) as cf_total,
@@ -435,8 +346,120 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
                 WHERE session_date >= $1
                 GROUP BY teammate2_guid
             ) sub
-        """, (since_date,))
-        # Merge duplicates (player appears as teammate1 AND teammate2)
+        """),
+        ("proximity_lua_trade_kill", """
+            SELECT trader_guid, MAX(trader_name),
+                   COUNT(*) as trades,
+                   COUNT(DISTINCT session_date) as sessions
+            FROM proximity_lua_trade_kill
+            WHERE session_date >= $1
+            GROUP BY trader_guid
+        """),
+        ("proximity_focus_fire", """
+            SELECT target_guid, MAX(target_name),
+                   COUNT(*) as times_focused,
+                   AVG(focus_score) as avg_focus_score
+            FROM proximity_focus_fire
+            WHERE session_date >= $1
+            GROUP BY target_guid
+            HAVING COUNT(*) >= 3
+        """),
+    ]
+
+    results = await asyncio.gather(
+        *(db.fetch_all(q, (since_date,)) for _, q in queries),
+        return_exceptions=True,
+    )
+
+    def _rows(idx: int) -> list | None:
+        r = results[idx]
+        if isinstance(r, Exception):
+            logger.warning("prox_scoring: %s query failed: %s", queries[idx][0], r)
+            return None
+        return r
+
+    # 1. Engagements: escape_rate, engagement count
+    if (rows := _rows(0)) is not None:
+        for r in rows:
+            _merge(r[0], r[1], {
+                "engagements": int(r[2] or 0),
+                "escape_rate": float(r[3] or 0),
+            })
+
+    # 2. Reactions: return_fire_ms, dodge_ms, support_reaction_ms
+    if (rows := _rows(1)) is not None:
+        for r in rows:
+            _merge(r[0], r[1], {
+                "return_fire_ms": float(r[2]) if r[2] else None,
+                "dodge_ms": float(r[3]) if r[3] else None,
+                "support_reaction_ms": float(r[4]) if r[4] else None,
+            })
+
+    # 3. Spawn timing
+    if (rows := _rows(2)) is not None:
+        for r in rows:
+            _merge(r[0], r[1], {
+                "spawn_score": float(r[2] or 0),
+                "timed_kills": float(r[3] or 0),
+            })
+
+    # 4. Movement: speed, sprint, distance, stance, post_spawn
+    if (rows := _rows(3)) is not None:
+        for r in rows:
+            tracks = int(r[2] or 0)
+            standing = float(r[8] or 0)
+            crouching = float(r[9] or 0)
+            prone = float(r[10] or 0)
+            total_stance = standing + crouching + prone
+            stance_variety = 0.0
+            if total_stance > 0:
+                fracs = [standing / total_stance, crouching / total_stance, prone / total_stance]
+                entropy = 0.0
+                for f in fracs:
+                    if f > 0:
+                        entropy -= f * math.log(f)
+                stance_variety = entropy / math.log(3)
+
+            _merge(r[0], r[1], {
+                "tracks": tracks,
+                "peak_speed": float(r[4] or 0),
+                "sprint_discipline": float(r[5] or 0),
+                "distance_per_life": float(r[6] or 0),
+                "post_spawn_rush": float(r[7] or 0),
+                "stance_variety": stance_variety,
+            })
+
+    # 5. Kill outcomes: KPR (as killer)
+    if (rows := _rows(4)) is not None:
+        for r in rows:
+            gibs = int(r[3] or 0)
+            rev = int(r[4] or 0)
+            kpr = gibs / max(gibs + rev, 1)
+            _merge(r[0], r[1], {
+                "kpr": kpr,
+                "denied_time": float(r[5] or 0),
+            })
+
+    # 6. Kill outcomes: revive rate (as victim)
+    if (rows := _rows(5)) is not None:
+        for r in rows:
+            killed = int(r[2] or 0)
+            revived = int(r[3] or 0)
+            _merge(r[0], r[1], {
+                "revive_rate_as_victim": revived / max(killed, 1),
+            })
+
+    # 7. Hit regions: headshot %
+    if (rows := _rows(6)) is not None:
+        for r in rows:
+            total = int(r[3] or 1)
+            head = int(r[2] or 0)
+            _merge(r[0], r[1], {
+                "headshot_pct": head / max(total, 1),
+            })
+
+    # 8. Crossfire: execution rate (no name columns — guid only)
+    if (rows := _rows(7)) is not None:
         cf_agg: dict[str, tuple[int, int]] = {}
         for r in rows:
             g = r[0]
@@ -451,45 +474,22 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
             _merge(g, "", {
                 "crossfire_rate": executed / max(total, 1),
             })
-    except Exception as e:
-        logger.warning("prox_scoring: proximity_crossfire_opportunity query failed: %s", e)
 
     # 9. Trade kills per session
-    try:
-        rows = await db.fetch_all("""
-            SELECT trader_guid, MAX(trader_name),
-                   COUNT(*) as trades,
-                   COUNT(DISTINCT session_date) as sessions
-            FROM proximity_lua_trade_kill
-            WHERE session_date >= $1
-            GROUP BY trader_guid
-        """, (since_date,))
+    if (rows := _rows(8)) is not None:
         for r in rows:
             trades = int(r[2] or 0)
             sessions = max(int(r[3] or 1), 1)
             _merge(r[0], r[1], {
                 "trades_per_session": trades / sessions,
             })
-    except Exception as e:
-        logger.warning("prox_scoring: proximity_lua_trade_kill query failed: %s", e)
 
-    # 10. Focus fire score (avg focus_score — higher = better performance under pressure)
-    try:
-        rows = await db.fetch_all("""
-            SELECT target_guid, MAX(target_name),
-                   COUNT(*) as times_focused,
-                   AVG(focus_score) as avg_focus_score
-            FROM proximity_focus_fire
-            WHERE session_date >= $1
-            GROUP BY target_guid
-            HAVING COUNT(*) >= 3
-        """, (since_date,))
+    # 10. Focus fire score
+    if (rows := _rows(9)) is not None:
         for r in rows:
             _merge(r[0], r[1], {
                 "focus_survival": float(r[3] or 0),
             })
-    except Exception as e:
-        logger.warning("prox_scoring: proximity_focus_fire query failed: %s", e)
 
     return players
 

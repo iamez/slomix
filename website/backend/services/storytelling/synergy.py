@@ -34,6 +34,18 @@ class _SynergyMixin:
         if not groups:
             return {"status": "no_data", "session_date": str(sd), "groups": {}}
 
+        # Audit F9: partial_data signal from _build_player_groups_uncached
+        # when PCS rows exist but R1 data is missing. Propagate to the
+        # endpoint response so the frontend can render "Insufficient
+        # data — R1 missing" instead of degenerate zero-bars.
+        if groups.get('_status') == 'partial_data':
+            return {
+                "status": "partial_data",
+                "reason": groups.get('_reason', 'unknown'),
+                "session_date": str(sd),
+                "groups": {},
+            }
+
         rmap = groups['round_map']
         g2g = groups['guid_to_group']
 
@@ -79,8 +91,19 @@ class _SynergyMixin:
                      result_groups.get('group_b', {}).get('composite', 0),
                      ', '.join(groups['group_b_players'][:3]))
 
-        return {"status": "ok", "session_date": str(sd),
-                "groups": result_groups, "weights": SYNERGY_WEIGHTS}
+        # F9: report how many subs/late joins hit the group_b default
+        # in `_build_player_groups`. High counts indicate missing
+        # stopwatch correlation rather than real substitutions; the
+        # frontend can surface this as a secondary warning.
+        defaulted = int(groups.get('defaulted_players_count', 0) or 0)
+        response = {
+            "status": "ok" if defaulted == 0 else "ok_with_defaults",
+            "session_date": str(sd),
+            "groups": result_groups,
+            "weights": SYNERGY_WEIGHTS,
+            "defaulted_players_count": defaulted,
+        }
+        return response
 
     async def _build_round_team_map(self, sd: date) -> dict:
         """Build (player_guid, round_number) -> faction mapping from PCS."""
@@ -162,7 +185,24 @@ class _SynergyMixin:
         # Find the first R1 (lowest round_start_unix with round_number=1)
         r1_entries = [r for r in rows if r[2] == 1]
         if not r1_entries:
-            return None
+            # Audit F9: session has only R2 data (stopwatch crash,
+            # surrender before R1 stats, incomplete correlation). Signal
+            # the partial state so the caller can surface an
+            # "Insufficient data" badge instead of silently rendering
+            # a degenerate single-group layout.
+            logger.warning(
+                "synergy: session %s has rows but no R1 — partial_data",
+                sd,
+            )
+            return {
+                "_status": "partial_data",
+                "_reason": "no_r1_data",
+                "round_map": {},
+                "guid_to_group": {},
+                "group_a_players": [],
+                "group_b_players": [],
+                "defaulted_players_count": 0,
+            }
 
         first_rsu = min(r[4] for r in r1_entries)
 
@@ -196,11 +236,19 @@ class _SynergyMixin:
                 round_map[(rsu, 'AXIS')] = 'group_b'
                 round_map[(rsu, 'ALLIES')] = 'group_a'
 
-        # Assign any players not in initial groups (subs, late joins)
+        # Assign any players not in initial groups (subs, late joins).
+        # Audit F9: track how many players hit the `round_map.get(...,
+        # 'group_b')` default so the caller can expose "N players
+        # defaulted" in the synergy response. High counts indicate
+        # missing stopwatch correlation data rather than real subs.
+        defaulted_player_guids: set[str] = set()
         for guid, _name, rn, team, rsu in rows:
             if guid not in group_a_guids and guid not in group_b_guids:
                 faction = 'AXIS' if team == 1 else 'ALLIES'
+                default_used = (rsu, faction) not in round_map
                 group = round_map.get((rsu, faction), 'group_b')
+                if default_used:
+                    defaulted_player_guids.add(guid)
                 if group == 'group_a':
                     group_a_guids.add(guid)
                 else:
@@ -220,6 +268,7 @@ class _SynergyMixin:
                                       for g in group_b_guids),
             'round_map': round_map,
             'guid_to_group': guid_to_group,
+            'defaulted_players_count': len(defaulted_player_guids),
         }
 
     async def _synergy_crossfire(self, sd: date, round_map: dict) -> dict:
