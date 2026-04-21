@@ -1,5 +1,7 @@
 """Proximity round endpoints: round/{round_id}/timeline, round/{round_id}/tracks, round/{round_id}/team-comparison."""
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from website.backend.dependencies import get_db
@@ -16,7 +18,37 @@ async def get_proximity_round_timeline(
 ):
     """All events for a round sorted by time — for round replay UI."""
     try:
-        # Get round info
+        # 5 independent queries — all keyed on round_id, no ordering
+        # dependency. Serial awaits were costing 5 × RTT; gather() flattens
+        # to 1 × RTT.
+        engagements_q = """
+            SELECT id, start_time_ms, end_time_ms, target_guid, target_name, target_team,
+                   outcome, total_damage_taken, num_attackers, is_crossfire, attackers,
+                   start_x, start_y, end_x, end_y
+            FROM combat_engagement WHERE round_id = $1
+            ORDER BY start_time_ms
+        """
+        spawn_q = """
+            SELECT kill_time, killer_guid, killer_name, victim_guid, victim_name,
+                   spawn_timing_score
+            FROM proximity_spawn_timing WHERE round_id = $1
+            ORDER BY kill_time
+        """
+        trades_q = """
+            SELECT original_kill_time, traded_kill_time, delta_ms,
+                   original_victim_guid, original_victim_name,
+                   trader_guid, trader_name
+            FROM proximity_lua_trade_kill WHERE round_id = $1
+            ORDER BY traded_kill_time
+        """
+        pushes_q = """
+            SELECT start_time, end_time, team, avg_speed, alignment_score,
+                   push_quality, participant_count, toward_objective
+            FROM proximity_team_push WHERE round_id = $1
+            ORDER BY start_time
+        """
+        # round_info + dur_row both hit rounds; keep `round_info` first so
+        # its 404 check short-circuits before we buffer 5 result sets.
         round_info = await db.fetch_one(
             "SELECT map_name, round_number, round_date, round_time FROM rounds WHERE id = $1",
             (round_id,),
@@ -24,52 +56,12 @@ async def get_proximity_round_timeline(
         if not round_info:
             raise HTTPException(status_code=404, detail="Round not found")
 
-        # Engagements (kills/escapes)
-        engagements = await db.fetch_all(
-            """
-            SELECT id, start_time_ms, end_time_ms, target_guid, target_name, target_team,
-                   outcome, total_damage_taken, num_attackers, is_crossfire, attackers,
-                   start_x, start_y, end_x, end_y
-            FROM combat_engagement WHERE round_id = $1
-            ORDER BY start_time_ms
-            """,
-            (round_id,),
-        )
-        # Spawn timing events
-        spawn_events = await db.fetch_all(
-            """
-            SELECT kill_time, killer_guid, killer_name, victim_guid, victim_name,
-                   spawn_timing_score
-            FROM proximity_spawn_timing WHERE round_id = $1
-            ORDER BY kill_time
-            """,
-            (round_id,),
-        )
-        # Trade kills
-        trades = await db.fetch_all(
-            """
-            SELECT original_kill_time, traded_kill_time, delta_ms,
-                   original_victim_guid, original_victim_name,
-                   trader_guid, trader_name
-            FROM proximity_lua_trade_kill WHERE round_id = $1
-            ORDER BY traded_kill_time
-            """,
-            (round_id,),
-        )
-        # Team pushes
-        pushes = await db.fetch_all(
-            """
-            SELECT start_time, end_time, team, avg_speed, alignment_score,
-                   push_quality, participant_count, toward_objective
-            FROM proximity_team_push WHERE round_id = $1
-            ORDER BY start_time
-            """,
-            (round_id,),
-        )
-
-        # Round duration (ms) from actual_duration_seconds
-        dur_row = await db.fetch_one(
-            "SELECT actual_duration_seconds FROM rounds WHERE id = $1", (round_id,),
+        engagements, spawn_events, trades, pushes, dur_row = await asyncio.gather(
+            db.fetch_all(engagements_q, (round_id,)),
+            db.fetch_all(spawn_q, (round_id,)),
+            db.fetch_all(trades_q, (round_id,)),
+            db.fetch_all(pushes_q, (round_id,)),
+            db.fetch_one("SELECT actual_duration_seconds FROM rounds WHERE id = $1", (round_id,)),
         )
         duration_ms = int((dur_row[0] or 0) * 1000) if dur_row and dur_row[0] else 0
 

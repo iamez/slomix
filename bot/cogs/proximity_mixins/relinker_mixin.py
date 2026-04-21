@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from discord.ext import tasks
 
@@ -21,6 +21,35 @@ logger = logging.getLogger("bot.cogs.proximity")
 # every cycle. Tuned against production logs where orphans aged 400 h-1600 h
 # repeated every 5 min forever.
 _PERMANENT_ORPHAN_AGE_HOURS = 48
+
+
+# Relink SQL templates hoisted to module scope (audit P4). Previously
+# built anew for every unresolved round every 5 min (50 rounds × 21 tables
+# × 2 dicts ≈ 2 100 string constructions/cycle). Both dicts are built
+# once at import time from the table list defined on ProximityCog.
+#
+# We keep the table list in one place (ProximityCog._PROXIMITY_ROUND_ID_TABLES)
+# and materialize the dicts lazily on first call so the mixin doesn't need
+# to import the cog itself (which would be circular).
+_RELINK_PRIMARY_TEMPLATE = (
+    "UPDATE {table} SET round_id = $1 "
+    "WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4"
+)
+_RELINK_FALLBACK_TEMPLATE = (
+    "UPDATE {table} SET round_id = $1 "
+    "WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3"
+)
+_relink_primary_cache: dict[str, str] = {}
+_relink_fallback_cache: dict[str, str] = {}
+
+
+def _relink_sql(table: str, *, fallback: bool = False) -> str:
+    """Return (and cache) the relink SQL for a given proximity table."""
+    cache = _relink_fallback_cache if fallback else _relink_primary_cache
+    if table not in cache:
+        template = _RELINK_FALLBACK_TEMPLATE if fallback else _RELINK_PRIMARY_TEMPLATE
+        cache[table] = template.format(table=table)
+    return cache[table]
 
 
 class _ProximityRelinkerMixin:
@@ -68,7 +97,12 @@ class _ProximityRelinkerMixin:
             linked = 0
             failed = 0
             stale_skipped = 0
-            now = datetime.utcnow()
+            # Both `now` and `target_dt` are tz-aware UTC so the 48-h
+            # cutoff below isn't affected by the host's UTC offset.
+            # Previously (P3 bug) `datetime.utcnow()` was compared against
+            # `datetime.fromtimestamp(...)` which returns LOCAL naive —
+            # the age calculation silently drifted by ±1–2h on the prod VPS.
+            now = datetime.now(timezone.utc)
 
             for row in unlinked:
                 map_name = row[0] if isinstance(row, (list, tuple)) else row.get('map_name') or row['map_name']
@@ -76,13 +110,11 @@ class _ProximityRelinkerMixin:
                 round_start_unix = row[2] if isinstance(row, (list, tuple)) else row.get('round_start_unix') or row['round_start_unix']
                 session_date = row[3] if isinstance(row, (list, tuple)) else row.get('session_date') or row['session_date']
 
-                # Build target_dt from unix timestamp if available.
-                # Use fromtimestamp() WITHOUT tz to get LOCAL naive datetime,
-                # matching the round_linker's candidate convention.
+                # tz-aware UTC to match `now` above and prevent drift.
                 target_dt = None
                 if round_start_unix:
                     try:
-                        target_dt = datetime.fromtimestamp(int(round_start_unix))
+                        target_dt = datetime.fromtimestamp(int(round_start_unix), tz=timezone.utc)
                     except (ValueError, TypeError, OSError):
                         pass  # Invalid timestamp format; fall back to date-based resolution
 
@@ -111,62 +143,17 @@ class _ProximityRelinkerMixin:
                     failed += 1
                     continue
 
-                # Pre-built parameterized relink queries per table (no string concat in SQL)
-                _RELINK_PRIMARY = {
-                    "proximity_carrier_event": "UPDATE proximity_carrier_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_carrier_kill": "UPDATE proximity_carrier_kill SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_carrier_return": "UPDATE proximity_carrier_return SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_combat_position": "UPDATE proximity_combat_position SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_construction_event": "UPDATE proximity_construction_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_crossfire_opportunity": "UPDATE proximity_crossfire_opportunity SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_escort_credit": "UPDATE proximity_escort_credit SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_focus_fire": "UPDATE proximity_focus_fire SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_hit_region": "UPDATE proximity_hit_region SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_kill_outcome": "UPDATE proximity_kill_outcome SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_lua_trade_kill": "UPDATE proximity_lua_trade_kill SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_objective_focus": "UPDATE proximity_objective_focus SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_objective_run": "UPDATE proximity_objective_run SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_reaction_metric": "UPDATE proximity_reaction_metric SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_spawn_timing": "UPDATE proximity_spawn_timing SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_support_summary": "UPDATE proximity_support_summary SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_team_cohesion": "UPDATE proximity_team_cohesion SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_team_push": "UPDATE proximity_team_push SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_trade_event": "UPDATE proximity_trade_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                    "proximity_vehicle_progress": "UPDATE proximity_vehicle_progress SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4",
-                }
-                _RELINK_FALLBACK = {
-                    "proximity_carrier_event": "UPDATE proximity_carrier_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_carrier_kill": "UPDATE proximity_carrier_kill SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_carrier_return": "UPDATE proximity_carrier_return SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_combat_position": "UPDATE proximity_combat_position SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_construction_event": "UPDATE proximity_construction_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_crossfire_opportunity": "UPDATE proximity_crossfire_opportunity SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_escort_credit": "UPDATE proximity_escort_credit SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_focus_fire": "UPDATE proximity_focus_fire SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_hit_region": "UPDATE proximity_hit_region SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_kill_outcome": "UPDATE proximity_kill_outcome SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_lua_trade_kill": "UPDATE proximity_lua_trade_kill SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_objective_focus": "UPDATE proximity_objective_focus SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_objective_run": "UPDATE proximity_objective_run SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_reaction_metric": "UPDATE proximity_reaction_metric SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_spawn_timing": "UPDATE proximity_spawn_timing SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_support_summary": "UPDATE proximity_support_summary SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_team_cohesion": "UPDATE proximity_team_cohesion SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_team_push": "UPDATE proximity_team_push SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_trade_event": "UPDATE proximity_trade_event SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                    "proximity_vehicle_progress": "UPDATE proximity_vehicle_progress SET round_id = $1 WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3",
-                }
                 for table in self._PROXIMITY_ROUND_ID_TABLES:
                     try:
                         await db.execute(
-                            _RELINK_PRIMARY[table],
+                            _relink_sql(table),
                             (round_id, map_name, round_number, session_date),
                         )
                     except Exception as e:
                         logger.warning("Re-linker: %s primary update failed: %s", table, e)
                         try:
                             await db.execute(
-                                _RELINK_FALLBACK[table],
+                                _relink_sql(table, fallback=True),
                                 (round_id, map_name, round_start_unix),
                             )
                         except Exception as e:

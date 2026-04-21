@@ -2,7 +2,7 @@
 
 import asyncio
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -185,7 +185,7 @@ async def get_proximity_scopes(
     """
     payload = _proximity_stub_meta(range_days)
     safe_range = max(1, min(int(range_days or 60), 3650))
-    since = datetime.utcnow().date() - timedelta(days=safe_range)
+    since = datetime.now(timezone.utc).replace(tzinfo=None).date() - timedelta(days=safe_range)
 
     try:
         rows = await db.fetch_all(

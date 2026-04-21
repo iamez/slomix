@@ -145,6 +145,23 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
                 return response
             consumed_stream = True
 
+        # Bypass cache when the body carries a proximity stub error — those
+        # endpoints return HTTP 200 with `{"status": "error", "message":
+        # "Proximity query failed"}` on query failure (audit finding P10).
+        # Without this bypass, a transient DB blip gets cached for the full
+        # 300s leaderboard TTL and monitoring can't see the underlying
+        # failure. Byte-substring match avoids a JSON parse per response.
+        if self._is_proximity_error_body(response_body):
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["X-Cache"] = "BYPASS-ERROR"
+            return Response(
+                content=response_body,
+                status_code=response.status_code,
+                headers=dict(response.headers),
+                media_type=content_type.split(";")[0],
+                background=response.background,
+            )
+
         if self.max_body_bytes > 0 and len(response_body) > self.max_body_bytes:
             if not consumed_stream:
                 response.headers["Cache-Control"] = self._cache_control_header(ttl)
@@ -275,6 +292,18 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
     def _cache_control_header(ttl: int) -> str:
         stale = min(max(ttl * 2, ttl), 900)
         return f"public, max-age={ttl}, stale-while-revalidate={stale}"
+
+    @staticmethod
+    def _is_proximity_error_body(body: bytes) -> bool:
+        """Detect proximity/prototype error payloads that must bypass cache.
+
+        Matches `{"status":"error"}` with and without a space after the
+        colon so it works regardless of whether FastAPI emits compact or
+        pretty JSON. False positives would require an unrelated field
+        whose value literally starts with `"error"` — acceptable tradeoff
+        for avoiding a JSON parse on every cached response.
+        """
+        return b'"status":"error"' in body or b'"status": "error"' in body
 
     @staticmethod
     def _compute_etag(payload: bytes) -> str:

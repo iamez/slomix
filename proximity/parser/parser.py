@@ -26,7 +26,7 @@ import os
 import re
 from bisect import bisect_left
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 PROXIMITY_FILENAME_ROUND_RE = re.compile(r"-round-(\d+)_engagements\.txt$", re.IGNORECASE)
@@ -913,7 +913,7 @@ class ProximityParserV4:
             "round_id": None,
             "round_link_source": "unresolved",
             "round_link_reason": "not_resolved",
-            "round_linked_at": datetime.utcnow(),
+            "round_linked_at": datetime.now(timezone.utc).replace(tzinfo=None),
         }
         self._round_link_context = context
 
@@ -2168,9 +2168,16 @@ class ProximityParserV4:
                 values.insert(3, self.metadata.get('round_end_unix', 0))
             await self._append_round_link_columns("proximity_hit_region", columns, values)
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            # Natural key match migration 042 — prevents 8 % dup pollution
+            # discovered in the proximity audit 2026-04-21. The previous
+            # INSERT had no ON CONFLICT and relied on PK (serial id), so
+            # every reimport silently accumulated duplicates.
             query = f"""
                 INSERT INTO proximity_hit_region ({", ".join(columns)})
                 VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix,
+                             attacker_guid, victim_guid, event_time, weapon_id)
+                DO NOTHING
             """
             await self.db_adapter.execute(query, tuple(values))
 
