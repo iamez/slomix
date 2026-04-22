@@ -38,17 +38,13 @@ class _StatsReadyMixin:
 
     async def _process_stats_ready_webhook(self, message):
         """
-        Process STATS_READY webhook from Lua script with embedded metadata.
+        Process STATS_READY webhook: parse embed, validate, enqueue for the
+        worker. Returns after ~10 ms so bursts of webhooks don't fan out
+        into N concurrent SSH fetches.
 
-        The Lua script on the game server sends accurate timing data including:
-        - Winner team
-        - Actual duration (correct even on surrender)
-        - Pause tracking
-        - Start/end unix timestamps
-        - Team composition (Axis/Allies player lists)
-
-        This metadata is used to override potentially incorrect values in stats files.
-        Team data is stored separately in lua_round_teams table for analysis.
+        The queue (`self.webhook_event_queue`) calls
+        `_process_stats_ready_round()` below, which does the actual fetch
+        + store work sequentially.
         """
         try:
             embed = message.embeds[0]
@@ -72,17 +68,17 @@ class _StatsReadyMixin:
                 )
                 return
 
-            # Human-readable team names (for logging)
-            axis_names = metadata.get('axis', '(none)')
-            allies_names = metadata.get('allies', '(none)')
-            if (axis_names in {"(none)", ""}) and round_metadata.get("axis_players"):
-                axis_names = ", ".join(
-                    p.get("name", "") for p in round_metadata.get("axis_players", []) if p.get("name")
-                )
-            if (allies_names in {"(none)", ""}) and round_metadata.get("allies_players"):
-                allies_names = ", ".join(
-                    p.get("name", "") for p in round_metadata.get("allies_players", []) if p.get("name")
-                )
+            # Pre-parse spawn stats and display names so the worker does not
+            # need the original embed.fields shape — attach them to the
+            # metadata payload so the queued dict is the single source of
+            # truth for the worker.
+            round_metadata['_spawn_stats'] = self._parse_spawn_stats_from_metadata(metadata)
+            round_metadata['_axis_names_log'] = self._resolve_team_display_names(
+                metadata.get('axis', '(none)'), round_metadata.get('axis_players', []),
+            )
+            round_metadata['_allies_names_log'] = self._resolve_team_display_names(
+                metadata.get('allies', '(none)'), round_metadata.get('allies_players', []),
+            )
 
             # Log summary including surrender info (v1.4.0)
             surrender_info = ""
@@ -97,41 +93,70 @@ class _StatsReadyMixin:
                 f"warmup={round_metadata['lua_warmup_seconds']}s, pauses={round_metadata['lua_pause_count']}"
                 f"{surrender_info}, score={round_metadata['axis_score']}-{round_metadata['allies_score']})"
             )
-            webhook_logger.info(f"   Axis: {axis_names}")
-            webhook_logger.info(f"   Allies: {allies_names}")
+            webhook_logger.info(f"   Axis: {round_metadata['_axis_names_log']}")
+            webhook_logger.info(f"   Allies: {round_metadata['_allies_names_log']}")
 
-            # Order matters: fetch stats FIRST so the `rounds` row exists by
-            # the time we try to resolve a round_id in `_store_lua_round_teams`.
-            # The old order (Lua store → stats fetch) always raced because the
-            # rounds row was created as a side-effect of the stats parse that
-            # only runs in step 2, producing a predictable "no_rows_for_map_round"
-            # WARN pair on every live match.
-            #
-            # Parse spawn stats now so we still have them if the fetch fails
-            # (spawn stats don't depend on the stats file).
-            spawn_stats = self._parse_spawn_stats_from_metadata(metadata)
+            # Enqueue for the worker — fast path. Dedup on
+            # (map, round_number, round_end_unix) so Lua retries after a
+            # Discord blip don't double-fetch the same round.
+            queue = getattr(self, 'webhook_event_queue', None)
+            if queue is None:
+                # Fallback for tests / partial setups that don't wire the queue:
+                # run inline (old fire-and-forget behaviour).
+                await self._process_stats_ready_round(round_metadata, message)
+                return
+            accepted, reason = queue.enqueue(round_metadata, message)
+            if not accepted:
+                if reason == "duplicate":
+                    webhook_logger.info(
+                        "↪️ STATS_READY duplicate skipped (dedup): %s R%s",
+                        round_metadata['map_name'], round_metadata['round_number'],
+                    )
+                else:
+                    webhook_logger.warning(
+                        "⚠️ STATS_READY dropped (%s): %s R%s — consider raising queue size",
+                        reason, round_metadata['map_name'], round_metadata['round_number'],
+                    )
 
-            # Keep metadata queued for the filename-triggered SSH-poll path
-            # as a safety net — if the immediate fetch below fails, the next
-            # polling cycle will pick up the file and still apply our overrides.
+        except Exception as e:
+            webhook_logger.error(f"❌ Error processing STATS_READY webhook: {e}", exc_info=True)
+            await self.track_error("stats_ready_webhook", str(e), max_consecutive=3)
+
+    @staticmethod
+    def _resolve_team_display_names(primary: str, players: list) -> str:
+        if primary and primary not in {"(none)", ""}:
+            return primary
+        if players:
+            return ", ".join(p.get("name", "") for p in players if p.get("name"))
+        return "(none)"
+
+    async def _process_stats_ready_round(self, round_metadata: dict, message) -> None:
+        """Worker-side: fetch stats file, then store Lua team/spawn data.
+
+        Order matters — fetch first so the `rounds` row exists when
+        `_store_lua_round_teams` resolves round_id. The old inverted
+        order produced a deterministic `no_rows_for_map_round` WARN
+        on every live match.
+        """
+        try:
+            # Safety net: queue metadata before fetch so the SSH-poll
+            # path can pick up overrides if the immediate fetch fails.
             self._queue_pending_metadata(round_metadata, source="stats_ready")
 
-            # Trigger immediate SSH fetch for the actual stats file.
-            # `_fetch_latest_stats_file` is internally resilient (4× retry with
-            # 5 s backoff, catches per-attempt errors) so a fetch miss does
-            # not raise here.
             from datetime import datetime
             timestamp = datetime.fromtimestamp(round_metadata['round_end_unix'])
             date_prefix = timestamp.strftime('%Y-%m-%d')
-            webhook_logger.info(f"🔍 Looking for stats file from {date_prefix} for {round_metadata['map_name']}")
+            webhook_logger.info(
+                f"🔍 Looking for stats file from {date_prefix} for {round_metadata['map_name']}"
+            )
+
+            # _fetch_latest_stats_file is internally resilient (4×5s retry,
+            # per-attempt try/except) so a miss does not raise.
             await self._fetch_latest_stats_file(round_metadata, message)
 
-            # Now store Lua team + spawn data. The rounds row created above
-            # means `_store_lua_round_teams` can resolve round_id directly
-            # (no WARN). If the fetch failed, resolve falls back to NULL
-            # and the relinker cron picks it up later — same behaviour as
-            # before, just without the noisy WARN on the happy path.
+            # rounds row now exists → resolve succeeds in store.
             await self._store_lua_round_teams(round_metadata)
+            spawn_stats = round_metadata.get('_spawn_stats')
             if spawn_stats:
                 await self._store_lua_spawn_stats(round_metadata, spawn_stats)
 
@@ -143,5 +168,7 @@ class _StatsReadyMixin:
                 webhook_logger.debug(f"Could not delete webhook message: {e}")
 
         except Exception as e:
-            webhook_logger.error(f"❌ Error processing STATS_READY webhook: {e}", exc_info=True)
-            await self.track_error("stats_ready_webhook", str(e), max_consecutive=3)
+            webhook_logger.error(
+                f"❌ Error in STATS_READY worker: {e}", exc_info=True
+            )
+            await self.track_error("stats_ready_worker", str(e), max_consecutive=3)
