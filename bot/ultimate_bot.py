@@ -347,14 +347,26 @@ class UltimateETLegacyBot(
 
     async def close(self):
         """
-        🔌 Clean up database connections and close bot gracefully
+        🔌 Clean up services and close bot gracefully.
+
+        Each subsystem is shut down in its own try block so a failure
+        in one does not mask or skip the others, and the log message
+        names the subsystem that actually failed.
         """
         try:
             if getattr(self, 'webhook_event_queue', None) is not None:
                 await self.webhook_event_queue.stop()
                 logger.info("✅ Webhook event queue worker stopped")
+        except Exception as e:
+            logger.error(f"⚠️ Error stopping webhook event queue: {e}")
+
+        try:
             if self.monitoring_service and self._monitoring_started:
                 await self.monitoring_service.stop()
+        except Exception as e:
+            logger.error(f"⚠️ Error stopping monitoring service: {e}")
+
+        try:
             if hasattr(self, 'db_adapter'):
                 await self.db_adapter.close()
                 logger.info("✅ Database adapter closed successfully")

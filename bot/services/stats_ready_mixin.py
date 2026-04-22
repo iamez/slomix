@@ -96,13 +96,23 @@ class _StatsReadyMixin:
             webhook_logger.info(f"   Axis: {round_metadata['_axis_names_log']}")
             webhook_logger.info(f"   Allies: {round_metadata['_allies_names_log']}")
 
+            # Queue the pending metadata NOW (on the receive side), before
+            # enqueueing for the worker. If the worker is backed up and the
+            # stats file lands via the filename/SSH-poll path first, the
+            # poll can still `_pop_pending_metadata(filename)` and apply
+            # Lua overrides correctly. The worker also runs fetch + store
+            # but the queue_pending_metadata call is idempotent (list-append
+            # keyed by map+round with dedup within the queue helper).
+            self._queue_pending_metadata(round_metadata, source="stats_ready")
+
             # Enqueue for the worker — fast path. Dedup on
             # (map, round_number, round_end_unix) so Lua retries after a
             # Discord blip don't double-fetch the same round.
             queue = getattr(self, 'webhook_event_queue', None)
             if queue is None:
-                # Fallback for tests / partial setups that don't wire the queue:
-                # run inline (old fire-and-forget behaviour).
+                # Fallback for tests / partial setups that don't wire the queue.
+                # Awaits inline — callers that need fire-and-forget should
+                # wrap the webhook handler in _safe_create_task themselves.
                 await self._process_stats_ready_round(round_metadata, message)
                 return
             accepted, reason = queue.enqueue(round_metadata, message)
@@ -137,12 +147,13 @@ class _StatsReadyMixin:
         `_store_lua_round_teams` resolves round_id. The old inverted
         order produced a deterministic `no_rows_for_map_round` WARN
         on every live match.
+
+        The receive-side handler is responsible for queueing pending
+        metadata before enqueueing this work, so the SSH-poll fallback
+        can apply Lua overrides immediately even if the worker is
+        backed up.
         """
         try:
-            # Safety net: queue metadata before fetch so the SSH-poll
-            # path can pick up overrides if the immediate fetch fails.
-            self._queue_pending_metadata(round_metadata, source="stats_ready")
-
             from datetime import datetime
             timestamp = datetime.fromtimestamp(round_metadata['round_end_unix'])
             date_prefix = timestamp.strftime('%Y-%m-%d')
