@@ -100,28 +100,40 @@ class _StatsReadyMixin:
             webhook_logger.info(f"   Axis: {axis_names}")
             webhook_logger.info(f"   Allies: {allies_names}")
 
-            # Store team data in lua_round_teams table (separate from stats file data)
-            await self._store_lua_round_teams(round_metadata)
-
-            # Store spawn stats if present (Lua v1.6.0+)
+            # Order matters: fetch stats FIRST so the `rounds` row exists by
+            # the time we try to resolve a round_id in `_store_lua_round_teams`.
+            # The old order (Lua store → stats fetch) always raced because the
+            # rounds row was created as a side-effect of the stats parse that
+            # only runs in step 2, producing a predictable "no_rows_for_map_round"
+            # WARN pair on every live match.
+            #
+            # Parse spawn stats now so we still have them if the fetch fails
+            # (spawn stats don't depend on the stats file).
             spawn_stats = self._parse_spawn_stats_from_metadata(metadata)
-            if spawn_stats:
-                await self._store_lua_spawn_stats(round_metadata, spawn_stats)
 
-            # Keep metadata queued for later filename-triggered processing as fallback.
+            # Keep metadata queued for the filename-triggered SSH-poll path
+            # as a safety net — if the immediate fetch below fails, the next
+            # polling cycle will pick up the file and still apply our overrides.
             self._queue_pending_metadata(round_metadata, source="stats_ready")
 
-            # Now trigger SSH fetch for the actual stats file
-            # Build expected filename pattern: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
+            # Trigger immediate SSH fetch for the actual stats file.
+            # `_fetch_latest_stats_file` is internally resilient (4× retry with
+            # 5 s backoff, catches per-attempt errors) so a fetch miss does
+            # not raise here.
             from datetime import datetime
             timestamp = datetime.fromtimestamp(round_metadata['round_end_unix'])
-            # Give some flexibility - file might have slightly different timestamp
             date_prefix = timestamp.strftime('%Y-%m-%d')
-
             webhook_logger.info(f"🔍 Looking for stats file from {date_prefix} for {round_metadata['map_name']}")
-
-            # Trigger immediate SSH check for the file
             await self._fetch_latest_stats_file(round_metadata, message)
+
+            # Now store Lua team + spawn data. The rounds row created above
+            # means `_store_lua_round_teams` can resolve round_id directly
+            # (no WARN). If the fetch failed, resolve falls back to NULL
+            # and the relinker cron picks it up later — same behaviour as
+            # before, just without the noisy WARN on the happy path.
+            await self._store_lua_round_teams(round_metadata)
+            if spawn_stats:
+                await self._store_lua_spawn_stats(round_metadata, spawn_stats)
 
             # Delete the webhook message to keep channel clean
             try:
