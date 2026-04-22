@@ -350,6 +350,9 @@ class UltimateETLegacyBot(
         🔌 Clean up database connections and close bot gracefully
         """
         try:
+            if getattr(self, 'webhook_event_queue', None) is not None:
+                await self.webhook_event_queue.stop()
+                logger.info("✅ Webhook event queue worker stopped")
             if self.monitoring_service and self._monitoring_started:
                 await self.monitoring_service.stop()
             if hasattr(self, 'db_adapter'):
@@ -728,6 +731,18 @@ class UltimateETLegacyBot(
 
         # Sync existing local files to processed_files table
         await self.file_tracker.sync_local_files_to_processed_table()
+
+        # Webhook event queue — sequentialises STATS_READY processing so
+        # burst webhooks don't fan out into N parallel SSH fetches, and
+        # deduplicates on (map, round_number, round_end_unix) for Lua
+        # retries. Worker calls _process_stats_ready_round() on each
+        # dequeue; see bot/services/webhook_event_queue.py.
+        from bot.services.webhook_event_queue import WebhookEventQueue
+        self.webhook_event_queue = WebhookEventQueue(
+            self, handler=self._process_stats_ready_round,
+        )
+        self.webhook_event_queue.start()
+        logger.info("✅ Webhook event queue worker started")
 
         # Start background tasks (only if not already running)
         if not self.endstats_monitor.is_running():
