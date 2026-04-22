@@ -8,8 +8,8 @@ single dedicated worker. Goals:
   Discord blip collapse to one fetch.
 - Queue-full drops record a reason and drop the overflow (was:
   `_stats_ready_rate_limit` dropped silently).
-- Worker exceptions do not kill the loop.
-- Graceful shutdown drains cleanly.
+- Worker exceptions do not kill the loop and clear dedup for retry.
+- Graceful shutdown drains the queue before exiting.
 """
 
 from __future__ import annotations
@@ -131,3 +131,50 @@ async def test_start_is_idempotent():
     q.start()
     q.start()  # second call should be a no-op
     await q.stop(timeout=2.0)
+
+
+@pytest.mark.asyncio
+async def test_stop_drains_pending_items():
+    """Graceful shutdown must finish the in-memory queue before exiting."""
+    processed: list[str] = []
+
+    async def slow_handler(metadata, _message):
+        await asyncio.sleep(0.02)
+        processed.append(metadata["map_name"])
+
+    q = WebhookEventQueue(bot=None, handler=slow_handler)
+    q.start()
+    # Fill with 5 items, then request stop while the worker is mid-drain.
+    for i in range(5):
+        q.enqueue(_meta(map_name=f"map{i}"), object())
+    await asyncio.sleep(0.005)  # let worker grab the first one
+    await q.stop(timeout=5.0)
+    assert len(processed) == 5
+
+
+@pytest.mark.asyncio
+async def test_handler_failure_clears_dedup_for_retry():
+    """A handler exception must NOT lock the round out of a retry — the
+    dedup key is cleared so the next Lua retry within the TTL can go
+    through instead of being silently rejected."""
+    calls: list[int] = []
+
+    async def flaky_handler(_metadata, _message):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("boom")
+        # 2nd call succeeds
+
+    q = WebhookEventQueue(bot=None, handler=flaky_handler)
+    q.start()
+    accepted_first, _ = q.enqueue(_meta(), object())
+    assert accepted_first is True
+    await asyncio.sleep(0.05)  # let the failure process
+    # Same key should NOT be dedup-rejected — failure cleared the entry.
+    accepted_retry, reason = q.enqueue(_meta(), object())
+    assert accepted_retry is True, f"expected retry accepted after failure, got {reason}"
+    await asyncio.sleep(0.05)
+    await q.stop(timeout=2.0)
+    assert q.stats()["handler_failures"] == 1
+    assert q.stats()["processed"] == 1
+    assert len(calls) == 2

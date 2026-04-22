@@ -143,6 +143,13 @@ class WebhookEventQueue:
         logger.info("webhook event queue worker started (maxsize=%d)", self._q.maxsize)
 
     async def stop(self, timeout: float = 10.0) -> None:
+        """Request shutdown and wait for the worker to drain + exit.
+
+        The worker loop keeps consuming while the queue has items even
+        after `_shutdown` is set, so pending STATS_READY events aren't
+        lost on a graceful restart. If the timeout fires the worker is
+        cancelled as a last resort.
+        """
         self._shutdown.set()
         task = self._worker_task
         if task is None:
@@ -150,25 +157,46 @@ class WebhookEventQueue:
         try:
             await asyncio.wait_for(task, timeout=timeout)
         except (asyncio.TimeoutError, TimeoutError):  # noqa: UP041 — Py 3.10 compat
-            logger.warning("webhook event queue worker did not stop within %ss", timeout)
+            logger.warning(
+                "webhook event queue worker did not drain within %ss (%d items left) — cancelling",
+                timeout, self._q.qsize(),
+            )
             task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                # Expected — we just cancelled it.
+                pass
+            except Exception:  # noqa: BLE001 — already logged inside worker loop
+                logger.exception("webhook queue worker raised during cancel")
         finally:
             self._worker_task = None
 
     async def _worker_loop(self) -> None:
-        while not self._shutdown.is_set():
+        # Drain-on-stop: keep consuming while the queue has items even
+        # after shutdown is requested, so a graceful restart doesn't
+        # drop STATS_READY events that already made it into the queue.
+        while True:
+            if self._shutdown.is_set() and self._q.empty():
+                break
             try:
                 item = await asyncio.wait_for(self._q.get(), timeout=1.0)
             except (asyncio.TimeoutError, TimeoutError):  # noqa: UP041 — Py 3.10 compat
                 continue
+            key = _dedup_key(item.metadata)
             try:
                 await self._handler(item.metadata, item.message)
                 self._stats["processed"] += 1
             except Exception:
+                # Handler failure: drop the dedup entry so the next Lua
+                # retry for this round is allowed through. Keeping the
+                # entry would lock the round out of recovery until the
+                # TTL expires.
                 self._stats["handler_failures"] += 1
+                self._seen.pop(key, None)
                 logger.exception(
-                    "webhook queue handler raised for %s — continuing",
-                    _dedup_key(item.metadata),
+                    "webhook queue handler raised for %s — dedup cleared, continuing",
+                    key,
                 )
             finally:
                 self._q.task_done()
