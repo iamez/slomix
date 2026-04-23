@@ -153,6 +153,21 @@ async def test_stop_drains_pending_items():
 
 
 @pytest.mark.asyncio
+async def test_enqueue_rejects_after_shutdown():
+    """Once `stop()` has set the shutdown flag, further enqueues must
+    be refused — otherwise a webhook handler racing with bot.close()
+    would park an item in the queue AFTER the worker has exited, and
+    the item would be silently lost on DB shutdown."""
+    q = WebhookEventQueue(bot=None, handler=AsyncMock())
+    q.start()
+    await q.stop(timeout=2.0)
+    accepted, reason = q.enqueue(_meta(), object())
+    assert accepted is False
+    assert reason == "shutting_down"
+    assert q.stats().get("dropped_shutdown", 0) == 1
+
+
+@pytest.mark.asyncio
 async def test_handler_failure_clears_dedup_for_retry():
     """A handler exception must NOT lock the round out of a retry — the
     dedup key is cleared so the next Lua retry within the TTL can go
