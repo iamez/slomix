@@ -163,28 +163,43 @@ class _StatsReadyMixin:
 
             # _fetch_latest_stats_file is internally resilient but returns
             # False on soft failure (file missing, download failed, parser
-            # rejected). Raise so the queue worker clears the dedup key —
-            # otherwise the next Lua retry for this round would be
-            # silently rejected as a "duplicate" for the full TTL.
+            # rejected). We capture the result but DO NOT early-return:
+            # the Lua team/spawn data below is authoritative capture that
+            # must be persisted even on fetch miss, so the relinker cron
+            # can pair it with the rounds row whenever SSH poll finally
+            # imports the stats file.
             fetched = await self._fetch_latest_stats_file(round_metadata, message)
-            if not fetched:
-                raise RuntimeError(
-                    f"stats fetch returned soft-fail for "
-                    f"{round_metadata.get('map_name')} R{round_metadata.get('round_number')}"
-                )
 
-            # rounds row now exists → resolve succeeds in store.
+            # Persist Lua team composition (always). If rounds row
+            # doesn't exist yet (fetch soft-fail), round_id resolves to
+            # NULL and `_link_lua_round_teams` pairs it later during
+            # stats import.
             await self._store_lua_round_teams(round_metadata)
             spawn_stats = round_metadata.get('_spawn_stats')
             if spawn_stats:
                 await self._store_lua_spawn_stats(round_metadata, spawn_stats)
 
-            # Delete the webhook message to keep channel clean
+            # Delete the webhook message to keep channel clean — Lua
+            # doesn't retry automatically once Discord has acked, and
+            # the SSH-poll path will pick up the stats file via the
+            # metadata we already queued above.
             try:
                 await message.delete()
                 webhook_logger.debug("🗑️ Deleted STATS_READY webhook message")
             except Exception as e:
                 webhook_logger.debug(f"Could not delete webhook message: {e}")
+
+            # Soft-fail signal AFTER all capture work is persisted.
+            # Raising here lets `WebhookEventQueue._worker_loop` clear
+            # the dedup key so a Lua retry within the TTL (if any) can
+            # re-enter and potentially catch the stats file on a fresh
+            # fetch attempt.
+            if not fetched:
+                raise RuntimeError(
+                    f"stats fetch soft-fail for "
+                    f"{round_metadata.get('map_name')} R{round_metadata.get('round_number')} "
+                    f"— Lua capture persisted, SSH poll will retry via queued metadata"
+                )
 
         except Exception as e:
             # Log + alert admin BEFORE re-raising so track_error gets the
