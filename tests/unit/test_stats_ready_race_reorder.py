@@ -67,10 +67,14 @@ async def test_stats_ready_fetches_before_storing_lua():
 
     order: list[str] = []
 
+    def _fetch_side_effect(*_a, **_kw):
+        order.append("fetch")
+        return True  # success — so the handler doesn't raise
+
     class _Bot(_StatsReadyMixin):
         def __init__(self):
             self._queue_pending_metadata = MagicMock(side_effect=lambda *a, **kw: order.append("queue"))
-            self._fetch_latest_stats_file = AsyncMock(side_effect=lambda *a, **kw: order.append("fetch"))
+            self._fetch_latest_stats_file = AsyncMock(side_effect=_fetch_side_effect)
             self._store_lua_round_teams = AsyncMock(side_effect=lambda *a, **kw: order.append("store_lua"))
             self._store_lua_spawn_stats = AsyncMock(side_effect=lambda *a, **kw: order.append("store_spawn"))
             self._parse_spawn_stats_from_metadata = MagicMock(return_value=None)
@@ -118,10 +122,14 @@ async def test_stats_ready_queues_metadata_before_fetch():
 
     order: list[str] = []
 
+    def _fetch_side_effect(*_a, **_kw):
+        order.append("fetch")
+        return True
+
     class _Bot(_StatsReadyMixin):
         def __init__(self):
             self._queue_pending_metadata = MagicMock(side_effect=lambda *a, **kw: order.append("queue"))
-            self._fetch_latest_stats_file = AsyncMock(side_effect=lambda *a, **kw: order.append("fetch"))
+            self._fetch_latest_stats_file = AsyncMock(side_effect=_fetch_side_effect)
             self._store_lua_round_teams = AsyncMock()
             self._store_lua_spawn_stats = AsyncMock()
             self._parse_spawn_stats_from_metadata = MagicMock(return_value=None)

@@ -161,9 +161,17 @@ class _StatsReadyMixin:
                 f"🔍 Looking for stats file from {date_prefix} for {round_metadata['map_name']}"
             )
 
-            # _fetch_latest_stats_file is internally resilient (4×5s retry,
-            # per-attempt try/except) so a miss does not raise.
-            await self._fetch_latest_stats_file(round_metadata, message)
+            # _fetch_latest_stats_file is internally resilient but returns
+            # False on soft failure (file missing, download failed, parser
+            # rejected). Raise so the queue worker clears the dedup key —
+            # otherwise the next Lua retry for this round would be
+            # silently rejected as a "duplicate" for the full TTL.
+            fetched = await self._fetch_latest_stats_file(round_metadata, message)
+            if not fetched:
+                raise RuntimeError(
+                    f"stats fetch returned soft-fail for "
+                    f"{round_metadata.get('map_name')} R{round_metadata.get('round_number')}"
+                )
 
             # rounds row now exists → resolve succeeds in store.
             await self._store_lua_round_teams(round_metadata)

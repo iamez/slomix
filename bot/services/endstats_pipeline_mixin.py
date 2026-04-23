@@ -30,9 +30,16 @@ webhook_logger = get_logger("bot.webhook")
 class _EndstatsPipelineMixin:
     """Endstats pipeline methods for UltimateETLegacyBot."""
 
-    async def _fetch_latest_stats_file(self, round_metadata: dict, trigger_message):
+    async def _fetch_latest_stats_file(self, round_metadata: dict, trigger_message) -> bool:
         """
         Fetch the latest stats file from game server after receiving STATS_READY.
+
+        Returns True on successful import (stats file downloaded, parsed,
+        rounds row created, Discord post attempted). Returns False on any
+        soft failure (file missing after retries, download failed, parser
+        rejected the file). A False return lets the caller propagate a
+        retryable failure — WebhookEventQueue's worker uses this signal
+        to release the dedup key so Lua retries aren't locked out.
 
         Uses the metadata to find the correct file and applies accurate timing data.
         """
@@ -69,7 +76,7 @@ class _EndstatsPipelineMixin:
                     if attempt < 3:
                         await asyncio.sleep(5)
                         continue
-                    return
+                    return False
 
                 matching_files = []
                 for f in files:
@@ -90,7 +97,7 @@ class _EndstatsPipelineMixin:
 
             if not matching_files:
                 webhook_logger.warning(f"No matching file found for {map_name} R{round_num} (after retries)")
-                return
+                return False
 
             def _extract_timestamp(filename: str) -> int | None:
                 # Expect: YYYY-MM-DD-HHMMSS-mapname-round-N.txt
@@ -134,10 +141,12 @@ class _EndstatsPipelineMixin:
 
             webhook_logger.info(f"📥 Found matching file: {filename}")
 
-            # Check if already processed
+            # Check if already processed — this is "already did the work"
+            # (not a soft-fail), so signal success back to the worker so
+            # the dedup key stays held for its TTL.
             if not await self.file_tracker.should_process_file(filename):
                 webhook_logger.debug(f"⏭️ File already processed: {filename}")
-                return
+                return True
 
             # Mark as processing
             self.file_tracker.processed_files.add(filename)
@@ -152,7 +161,7 @@ class _EndstatsPipelineMixin:
                 webhook_logger.error(f"❌ Failed to download: {filename}")
                 if added_processing_marker:
                     self.file_tracker.processed_files.discard(filename)
-                return
+                return False
 
             webhook_logger.info(f"✅ Downloaded: {local_path}")
             await asyncio.sleep(1)  # Brief wait for file write
@@ -176,16 +185,19 @@ class _EndstatsPipelineMixin:
                 except Exception as post_err:
                     webhook_logger.error(f"❌ Discord post FAILED for {filename}: {post_err}", exc_info=True)
                     await self.track_error("discord_posting", f"Failed to post {filename}: {post_err}", max_consecutive=2)
+                return True
             else:
                 error_msg = result.get('error', 'Unknown') if result else 'No result'
                 webhook_logger.warning(f"⚠️ Processing failed: {error_msg}")
                 if added_processing_marker:
                     self.file_tracker.processed_files.discard(filename)
+                return False
 
         except Exception as e:
             if added_processing_marker:
                 self.file_tracker.processed_files.discard(filename)
             webhook_logger.error(f"❌ Error fetching stats file: {e}", exc_info=True)
+            return False
 
     async def _trigger_proximity_scan_after_stats(self, round_id: int = None, delay_seconds: int = 5, max_retries: int = 3):
         """Trigger proximity import after stats creates the round in DB.

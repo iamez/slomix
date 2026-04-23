@@ -35,7 +35,11 @@ if TYPE_CHECKING:
 
 logger = get_logger("bot.webhook_queue")
 
-DEDUP_TTL_SECONDS = 600  # 10 min — round-end timestamps never replay after this
+# Dedup TTL is tight on purpose: Lua's realistic retry window after a
+# Discord blip is seconds, not minutes. A long TTL widens the lockout if
+# a round ever gets stuck in a "failed but not raised" state. Combined
+# with handler-raises-on-soft-fail, 2 min is defense-in-depth.
+DEDUP_TTL_SECONDS = 120
 DEFAULT_QUEUE_SIZE = 50   # generous headroom; peak is ~1 webhook / 3 min today
 
 
@@ -48,17 +52,26 @@ class QueuedRound:
     received_at: float = field(default_factory=time.time)
 
 
-def _dedup_key(metadata: dict) -> str:
+def _dedup_key(metadata: dict) -> str | None:
     """Key that uniquely identifies a Lua webhook event.
 
     Round-end unix timestamp is the ground truth — two webhooks with the
     same (map, round_number, round_end_unix) can only come from a Lua
     retry of the same real-world round, so they must collapse.
+
+    Returns None when `round_end_unix` is missing or zero: that means
+    we have no reliable third component, and collapsing every such
+    payload to `map:round:0` would let a legitimate later round of the
+    same map/number get rejected as a duplicate. The caller must treat
+    None as "skip dedup for this one" and let it through.
     """
+    end_unix = int(metadata.get('round_end_unix', 0) or 0)
+    if end_unix <= 0:
+        return None
     return (
         f"{metadata.get('map_name', 'unknown')}:"
         f"{metadata.get('round_number', 0)}:"
-        f"{metadata.get('round_end_unix', 0)}"
+        f"{end_unix}"
     )
 
 
@@ -116,7 +129,7 @@ class WebhookEventQueue:
             return (False, "shutting_down")
         self._prune_seen()
         key = _dedup_key(metadata)
-        if key in self._seen:
+        if key is not None and key in self._seen:
             self._stats["deduped"] += 1
             return (False, "duplicate")
         try:
@@ -124,7 +137,8 @@ class WebhookEventQueue:
         except asyncio.QueueFull:
             self._stats["dropped_full"] += 1
             return (False, "queue_full")
-        self._seen[key] = time.monotonic() + self._dedup_ttl
+        if key is not None:
+            self._seen[key] = time.monotonic() + self._dedup_ttl
         self._stats["enqueued"] += 1
         return (True, "ok")
 
@@ -201,7 +215,8 @@ class WebhookEventQueue:
                 # entry would lock the round out of recovery until the
                 # TTL expires.
                 self._stats["handler_failures"] += 1
-                self._seen.pop(key, None)
+                if key is not None:
+                    self._seen.pop(key, None)
                 logger.exception(
                     "webhook queue handler raised for %s — dedup cleared, continuing",
                     key,
