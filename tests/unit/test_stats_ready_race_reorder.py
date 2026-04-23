@@ -26,16 +26,95 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 
 @pytest.mark.asyncio
+async def test_worker_round_reraises_on_failure():
+    """The worker handler must propagate exceptions so
+    `WebhookEventQueue._worker_loop` can clear the dedup key. A
+    swallowed exception would lock Lua retries out of the TTL window
+    — regression pin for the Copilot/codex P1 finding on #142.
+    """
+    from bot.services.stats_ready_mixin import _StatsReadyMixin
+
+    class _Bot(_StatsReadyMixin):
+        def __init__(self):
+            self._queue_pending_metadata = MagicMock()
+            self._fetch_latest_stats_file = AsyncMock(
+                side_effect=RuntimeError("SSH boom"),
+            )
+            self._store_lua_round_teams = AsyncMock()
+            self._store_lua_spawn_stats = AsyncMock()
+            self.track_error = AsyncMock()
+
+    bot = _Bot()
+    msg = MagicMock()
+    msg.delete = AsyncMock()
+
+    metadata = {
+        "map_name": "te_escape2",
+        "round_number": 1,
+        "round_end_unix": 1772746382,
+    }
+    with pytest.raises(RuntimeError, match="SSH boom"):
+        await bot._process_stats_ready_round(metadata, msg)
+
+    # track_error still fires before re-raise (admin alerting preserved)
+    bot.track_error.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_soft_fail_still_persists_lua_capture():
+    """When `_fetch_latest_stats_file` soft-fails (returns False), the
+    Lua team + spawn data MUST still be stored — otherwise we lose
+    team composition / spawn telemetry permanently since Lua doesn't
+    auto-retry once Discord acks. The SSH-poll path picks up the
+    stats file later and the relinker pairs NULL-round_id Lua rows
+    with the new rounds row. Regression pin for the codex P1 finding
+    ("Persist Lua team/spawn data before raising soft fetch failures").
+    """
+    from bot.services.stats_ready_mixin import _StatsReadyMixin
+
+    class _Bot(_StatsReadyMixin):
+        def __init__(self):
+            self._queue_pending_metadata = MagicMock()
+            self._fetch_latest_stats_file = AsyncMock(return_value=False)
+            self._store_lua_round_teams = AsyncMock()
+            self._store_lua_spawn_stats = AsyncMock()
+            self.track_error = AsyncMock()
+
+    bot = _Bot()
+    msg = MagicMock()
+    msg.delete = AsyncMock()
+
+    metadata = {
+        "map_name": "te_escape2",
+        "round_number": 1,
+        "round_end_unix": 1772746382,
+        "_spawn_stats": [{"guid": "X", "spawns": 1}],
+    }
+    with pytest.raises(RuntimeError, match="soft-fail"):
+        await bot._process_stats_ready_round(metadata, msg)
+
+    # Critical: capture methods still fired even though fetch failed
+    bot._store_lua_round_teams.assert_awaited_once()
+    bot._store_lua_spawn_stats.assert_awaited_once()
+    # Message still deleted — Discord channel cleanup
+    msg.delete.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_stats_ready_fetches_before_storing_lua():
     """The two side effects must fire in the right order — fetch first."""
     from bot.services.stats_ready_mixin import _StatsReadyMixin
 
     order: list[str] = []
 
+    def _fetch_side_effect(*_a, **_kw):
+        order.append("fetch")
+        return True  # success — so the handler doesn't raise
+
     class _Bot(_StatsReadyMixin):
         def __init__(self):
             self._queue_pending_metadata = MagicMock(side_effect=lambda *a, **kw: order.append("queue"))
-            self._fetch_latest_stats_file = AsyncMock(side_effect=lambda *a, **kw: order.append("fetch"))
+            self._fetch_latest_stats_file = AsyncMock(side_effect=_fetch_side_effect)
             self._store_lua_round_teams = AsyncMock(side_effect=lambda *a, **kw: order.append("store_lua"))
             self._store_lua_spawn_stats = AsyncMock(side_effect=lambda *a, **kw: order.append("store_spawn"))
             self._parse_spawn_stats_from_metadata = MagicMock(return_value=None)
@@ -83,10 +162,14 @@ async def test_stats_ready_queues_metadata_before_fetch():
 
     order: list[str] = []
 
+    def _fetch_side_effect(*_a, **_kw):
+        order.append("fetch")
+        return True
+
     class _Bot(_StatsReadyMixin):
         def __init__(self):
             self._queue_pending_metadata = MagicMock(side_effect=lambda *a, **kw: order.append("queue"))
-            self._fetch_latest_stats_file = AsyncMock(side_effect=lambda *a, **kw: order.append("fetch"))
+            self._fetch_latest_stats_file = AsyncMock(side_effect=_fetch_side_effect)
             self._store_lua_round_teams = AsyncMock()
             self._store_lua_spawn_stats = AsyncMock()
             self._parse_spawn_stats_from_metadata = MagicMock(return_value=None)
