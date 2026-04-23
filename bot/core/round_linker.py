@@ -259,6 +259,41 @@ async def resolve_round_id_with_reason(
         )
         return rows[0][0], diag
 
+    # Exact round_start_unix match takes priority over closest-timestamp
+    # search. When the same (map, round_number) is played multiple times
+    # in a session (common in scrim queues), closest-timestamp wrongly
+    # attributes engagement/proximity rows to an earlier round because
+    # the engagement's start-of-round timestamp falls between the prior
+    # round's stats-file end time and the current round's stats-file end
+    # time. If the caller's target_dt comes from the same Lua `round_start_unix`
+    # that's stored on `rounds`, exact match is unambiguous.
+    if target_dt:
+        try:
+            target_unix = int(target_dt.timestamp())
+        except (OSError, OverflowError, ValueError):
+            target_unix = 0
+        if target_unix > 0:
+            for row in rows:
+                r_start_unix = row[4] if len(row) > 4 else None
+                if r_start_unix is None:
+                    continue
+                try:
+                    cand_unix = int(r_start_unix)
+                except (ValueError, TypeError):
+                    continue
+                if cand_unix == target_unix:
+                    round_id = row[0] if len(row) > 0 else None
+                    if round_id is not None:
+                        diag["reason_code"] = "resolved_exact_unix_match"
+                        diag["best_diff_seconds"] = 0
+                        diag["candidate_count"] = len(rows)
+                        diag["parsed_candidate_count"] = len(rows)
+                        logger.debug(
+                            "round_linker: exact round_start_unix match map=%s rn=%d round_id=%d unix=%d",
+                            map_name, round_number, round_id, target_unix,
+                        )
+                        return round_id, diag
+
     best_id = None
     best_diff = timedelta(days=1)
     max_diff = timedelta(minutes=window_minutes)
