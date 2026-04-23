@@ -6,6 +6,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.7.2](https://github.com/iamez/slomix/compare/v1.7.1...v1.7.2) (2026-04-23)
+
+
+### Bug Fixes
+
+* **bot:** eliminate round_linker WARN race in STATS_READY webhook ([#140](https://github.com/iamez/slomix/issues/140)) ([e55b5b0](https://github.com/iamez/slomix/commit/e55b5b0e77f0d630c4d850602d92f2ca5552a4e7))
+
+
+### Performance Improvements
+
+* **bot:** queue + dedup STATS_READY webhooks (scale-out prep) ([#142](https://github.com/iamez/slomix/issues/142)) ([2d9c249](https://github.com/iamez/slomix/commit/2d9c2491e03696f145ea97f80a86e02af37c3473))
+
 ## [1.7.1](https://github.com/iamez/slomix/compare/v1.7.0...v1.7.1) (2026-04-21)
 
 
