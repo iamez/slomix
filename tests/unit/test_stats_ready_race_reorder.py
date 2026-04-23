@@ -26,6 +26,41 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 
 @pytest.mark.asyncio
+async def test_worker_round_reraises_on_failure():
+    """The worker handler must propagate exceptions so
+    `WebhookEventQueue._worker_loop` can clear the dedup key. A
+    swallowed exception would lock Lua retries out of the TTL window
+    — regression pin for the Copilot/codex P1 finding on #142.
+    """
+    from bot.services.stats_ready_mixin import _StatsReadyMixin
+
+    class _Bot(_StatsReadyMixin):
+        def __init__(self):
+            self._queue_pending_metadata = MagicMock()
+            self._fetch_latest_stats_file = AsyncMock(
+                side_effect=RuntimeError("SSH boom"),
+            )
+            self._store_lua_round_teams = AsyncMock()
+            self._store_lua_spawn_stats = AsyncMock()
+            self.track_error = AsyncMock()
+
+    bot = _Bot()
+    msg = MagicMock()
+    msg.delete = AsyncMock()
+
+    metadata = {
+        "map_name": "te_escape2",
+        "round_number": 1,
+        "round_end_unix": 1772746382,
+    }
+    with pytest.raises(RuntimeError, match="SSH boom"):
+        await bot._process_stats_ready_round(metadata, msg)
+
+    # track_error still fires before re-raise (admin alerting preserved)
+    bot.track_error.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_stats_ready_fetches_before_storing_lua():
     """The two side effects must fire in the right order — fetch first."""
     from bot.services.stats_ready_mixin import _StatsReadyMixin

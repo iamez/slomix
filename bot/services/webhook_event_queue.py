@@ -103,9 +103,17 @@ class WebhookEventQueue:
     def enqueue(self, metadata: dict, message) -> tuple[bool, str]:
         """Try to enqueue one round. Returns (accepted, reason).
 
-        `reason` is "ok" / "duplicate" / "queue_full". Producer side
-        logs appropriately and does NOT raise on overflow.
+        `reason` is "ok" / "duplicate" / "queue_full" / "shutting_down".
+        Producer side logs appropriately and does NOT raise on overflow.
+
+        A shutdown-in-progress refusal is important: without it, webhook
+        handlers that are mid-flight when `stop()` fires can still
+        `enqueue()` successfully AFTER the worker has exited, leaving
+        the item stranded in memory and silently lost on bot close.
         """
+        if self._shutdown.is_set():
+            self._stats["dropped_shutdown"] = self._stats.get("dropped_shutdown", 0) + 1
+            return (False, "shutting_down")
         self._prune_seen()
         key = _dedup_key(metadata)
         if key in self._seen:

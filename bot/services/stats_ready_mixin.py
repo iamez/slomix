@@ -179,7 +179,14 @@ class _StatsReadyMixin:
                 webhook_logger.debug(f"Could not delete webhook message: {e}")
 
         except Exception as e:
+            # Log + alert admin BEFORE re-raising so track_error gets the
+            # context. Re-raising is critical: WebhookEventQueue's worker
+            # loop uses the exception as a signal to clear the dedup key
+            # so a Lua retry for the same round can be accepted within
+            # the TTL. Swallowing here would turn a transient SSH/DB blip
+            # into a 10-minute lockout.
             webhook_logger.error(
                 f"❌ Error in STATS_READY worker: {e}", exc_info=True
             )
             await self.track_error("stats_ready_worker", str(e), max_consecutive=3)
+            raise
