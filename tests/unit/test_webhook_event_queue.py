@@ -42,6 +42,27 @@ def test_dedup_key_is_deterministic():
     assert k1 != k3
 
 
+def test_dedup_key_is_none_when_round_end_missing():
+    """Zero / missing round_end_unix must NOT collapse to a shared key.
+    Without the timestamp component we have no reliable identity, and
+    collapsing to `map:round:0` would let a legitimate later round of
+    the same map + number get dropped as a duplicate."""
+    assert _dedup_key({"map_name": "foo", "round_number": 1, "round_end_unix": 0}) is None
+    assert _dedup_key({"map_name": "foo", "round_number": 1}) is None
+    assert _dedup_key({"map_name": "foo", "round_number": 1, "round_end_unix": None}) is None
+
+
+@pytest.mark.asyncio
+async def test_enqueue_skips_dedup_when_timestamp_missing():
+    """Two enqueues with missing timestamp both accepted — no dedup lockout."""
+    q = WebhookEventQueue(bot=None, handler=AsyncMock())
+    a, _ = q.enqueue(_meta(end=0), object())
+    b, _ = q.enqueue(_meta(end=0), object())
+    assert a is True
+    assert b is True
+    assert q.stats()["deduped"] == 0
+
+
 @pytest.mark.asyncio
 async def test_enqueue_accepts_new_key():
     q = WebhookEventQueue(bot=None, handler=AsyncMock())
