@@ -1,6 +1,7 @@
 """Proximity round endpoints: round/{round_id}/timeline, round/{round_id}/tracks, round/{round_id}/team-comparison."""
 
 import asyncio
+import json
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -168,6 +169,23 @@ async def get_proximity_round_tracks(
         if not tracks:
             raise HTTPException(status_code=404, detail="No tracks for round")
 
+        # asyncpg returns jsonb columns as Python str (double-encoded
+        # when FastAPI serialises the response — the path is JSON inside
+        # a JSON string, ~30 % wasted bytes). Decoding here lets FastAPI
+        # emit a single-level JSON array, cutting the typical 1.7 MB
+        # /tracks response by ~30 %. Done locally so the global pool
+        # codec stays intact (bot-side services rely on str-then-loads
+        # patterns and would break under a global codec change).
+        def _decode_path(value):
+            if value is None:
+                return []
+            if isinstance(value, str):
+                try:
+                    return json.loads(value)
+                except (ValueError, TypeError):
+                    return []
+            return value
+
         return {
             "status": "ok",
             "round_id": round_id,
@@ -178,7 +196,7 @@ async def get_proximity_round_tracks(
                     "spawn_time": int(r[4] or 0), "death_time": int(r[5] or 0),
                     "first_move_time": int(r[6] or 0) if r[6] else None,
                     "death_type": r[7],
-                    "path": r[8] or [],
+                    "path": _decode_path(r[8]),
                 }
                 for r in tracks
             ],
