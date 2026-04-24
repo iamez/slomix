@@ -38,8 +38,8 @@ WITH recoverable AS (
     ON r.map_name = t.map_name
    AND r.round_number = t.round_number
    AND r.round_start_unix IS NOT NULL
-   AND DATE(TO_TIMESTAMP(r.round_start_unix)) = DATE(TO_TIMESTAMP(t.round_start_unix))
-   AND ABS(r.round_start_unix - t.round_start_unix) <= 900
+   AND r.round_date::date = t.session_date
+   AND r.round_start_unix BETWEEN t.round_start_unix - 900 AND t.round_start_unix + 900
   WHERE t.round_id IS NULL AND t.round_start_unix > 0
   GROUP BY t.map_name, t.round_number, t.round_start_unix
   HAVING COUNT(DISTINCT r.id) = 1
@@ -59,8 +59,8 @@ WITH recoverable AS (
     ON r.map_name = t.map_name
    AND r.round_number = t.round_number
    AND r.round_start_unix IS NOT NULL
-   AND DATE(TO_TIMESTAMP(r.round_start_unix)) = DATE(TO_TIMESTAMP(t.round_start_unix))
-   AND ABS(r.round_start_unix - t.round_start_unix) <= 900
+   AND r.round_date::date = t.session_date
+   AND r.round_start_unix BETWEEN t.round_start_unix - 900 AND t.round_start_unix + 900
   WHERE t.round_id IS NULL AND t.round_start_unix > 0
   GROUP BY t.map_name, t.round_number, t.round_start_unix
   HAVING COUNT(DISTINCT r.id) = 1
@@ -74,25 +74,40 @@ WHERE pt.map_name = rec.map_name
   AND pt.round_id IS NULL;
 
 WITH recoverable AS (
-  SELECT t.map_name, t.round_number, t.round_start_unix, MIN(r.id) AS target_round_id
+  -- lua_round_teams has no session_date but has match_id (deterministic
+  -- session identifier, generated in the same format as rounds.match_id
+  -- per `_store_lua_round_teams`). Prefer match_id join when present;
+  -- fall back to map+rn+drift heuristic only when match_id is empty.
+  SELECT t.map_name, t.round_number, t.round_start_unix,
+         t.match_id, MIN(r.id) AS target_round_id
   FROM lua_round_teams t
   JOIN rounds r
-    ON r.map_name = t.map_name
-   AND r.round_number = t.round_number
-   AND r.round_start_unix IS NOT NULL
-   AND DATE(TO_TIMESTAMP(r.round_start_unix)) = DATE(TO_TIMESTAMP(t.round_start_unix))
-   AND ABS(r.round_start_unix - t.round_start_unix) <= 900
+    ON r.round_start_unix IS NOT NULL
+   AND r.round_start_unix BETWEEN t.round_start_unix - 900 AND t.round_start_unix + 900
+   AND (
+        (t.match_id IS NOT NULL AND BTRIM(t.match_id) <> ''
+         AND r.match_id = t.match_id
+         AND r.round_number = t.round_number
+         AND r.map_name = t.map_name)
+        OR
+        ((t.match_id IS NULL OR BTRIM(t.match_id) = '')
+         AND r.map_name = t.map_name
+         AND r.round_number = t.round_number)
+       )
   WHERE t.round_id IS NULL AND t.round_start_unix > 0
-  GROUP BY t.map_name, t.round_number, t.round_start_unix
+  GROUP BY t.map_name, t.round_number, t.round_start_unix, t.match_id
   HAVING COUNT(DISTINCT r.id) = 1
 )
 UPDATE lua_round_teams lrt
 SET round_id = rec.target_round_id
 FROM recoverable rec
-WHERE lrt.map_name = rec.map_name
-  AND lrt.round_number = rec.round_number
+WHERE lrt.round_id IS NULL
   AND lrt.round_start_unix = rec.round_start_unix
-  AND lrt.round_id IS NULL;
+  AND lrt.round_number = rec.round_number
+  AND lrt.map_name = rec.map_name
+  AND ((lrt.match_id = rec.match_id)
+       OR (rec.match_id IS NULL
+           AND (lrt.match_id IS NULL OR BTRIM(lrt.match_id) = '')));
 
 WITH recoverable AS (
   SELECT t.map_name, t.round_number, t.round_start_unix, MIN(r.id) AS target_round_id
@@ -101,8 +116,8 @@ WITH recoverable AS (
     ON r.map_name = t.map_name
    AND r.round_number = t.round_number
    AND r.round_start_unix IS NOT NULL
-   AND DATE(TO_TIMESTAMP(r.round_start_unix)) = DATE(TO_TIMESTAMP(t.round_start_unix))
-   AND ABS(r.round_start_unix - t.round_start_unix) <= 900
+   AND r.round_date::date = t.session_date
+   AND r.round_start_unix BETWEEN t.round_start_unix - 900 AND t.round_start_unix + 900
   WHERE t.round_id IS NULL AND t.round_start_unix > 0
   GROUP BY t.map_name, t.round_number, t.round_start_unix
   HAVING COUNT(DISTINCT r.id) = 1
@@ -122,8 +137,8 @@ WITH recoverable AS (
     ON r.map_name = t.map_name
    AND r.round_number = t.round_number
    AND r.round_start_unix IS NOT NULL
-   AND DATE(TO_TIMESTAMP(r.round_start_unix)) = DATE(TO_TIMESTAMP(t.round_start_unix))
-   AND ABS(r.round_start_unix - t.round_start_unix) <= 900
+   AND r.round_date::date = t.session_date
+   AND r.round_start_unix BETWEEN t.round_start_unix - 900 AND t.round_start_unix + 900
   WHERE t.round_id IS NULL AND t.round_start_unix > 0
   GROUP BY t.map_name, t.round_number, t.round_start_unix
   HAVING COUNT(DISTINCT r.id) = 1
@@ -143,8 +158,8 @@ WITH recoverable AS (
     ON r.map_name = t.map_name
    AND r.round_number = t.round_number
    AND r.round_start_unix IS NOT NULL
-   AND DATE(TO_TIMESTAMP(r.round_start_unix)) = DATE(TO_TIMESTAMP(t.round_start_unix))
-   AND ABS(r.round_start_unix - t.round_start_unix) <= 900
+   AND r.round_date::date = t.session_date
+   AND r.round_start_unix BETWEEN t.round_start_unix - 900 AND t.round_start_unix + 900
   WHERE t.round_id IS NULL AND t.round_start_unix > 0
   GROUP BY t.map_name, t.round_number, t.round_start_unix
   HAVING COUNT(DISTINCT r.id) = 1
@@ -164,8 +179,8 @@ WITH recoverable AS (
     ON r.map_name = t.map_name
    AND r.round_number = t.round_number
    AND r.round_start_unix IS NOT NULL
-   AND DATE(TO_TIMESTAMP(r.round_start_unix)) = DATE(TO_TIMESTAMP(t.round_start_unix))
-   AND ABS(r.round_start_unix - t.round_start_unix) <= 900
+   AND r.round_date::date = t.session_date
+   AND r.round_start_unix BETWEEN t.round_start_unix - 900 AND t.round_start_unix + 900
   WHERE t.round_id IS NULL AND t.round_start_unix > 0
   GROUP BY t.map_name, t.round_number, t.round_start_unix
   HAVING COUNT(DISTINCT r.id) = 1
