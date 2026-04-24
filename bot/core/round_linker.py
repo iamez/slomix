@@ -267,12 +267,19 @@ async def resolve_round_id_with_reason(
     # round's stats-file end time and the current round's stats-file end
     # time. If the caller's target_dt comes from the same Lua `round_start_unix`
     # that's stored on `rounds`, exact match is unambiguous.
+    #
+    # Plausibility guards apply BOTH sides: target_unix and candidate
+    # unix must be within the same sanity window as the main matcher
+    # (`_MIN_PLAUSIBLE_UNIX_TS` / `_MAX_FUTURE_DRIFT_SECONDS`), otherwise
+    # a corrupted timestamp on either side could short-circuit the
+    # safer date/time fallback path.
     if target_dt:
         try:
             target_unix = int(target_dt.timestamp())
         except (OSError, OverflowError, ValueError):
             target_unix = 0
-        if target_unix > 0:
+        max_future_ts = int(time.time()) + _MAX_FUTURE_DRIFT_SECONDS
+        if _MIN_PLAUSIBLE_UNIX_TS < target_unix <= max_future_ts:
             for row in rows:
                 r_start_unix = row[4] if len(row) > 4 else None
                 if r_start_unix is None:
@@ -281,13 +288,19 @@ async def resolve_round_id_with_reason(
                     cand_unix = int(r_start_unix)
                 except (ValueError, TypeError):
                     continue
+                if not (_MIN_PLAUSIBLE_UNIX_TS < cand_unix <= max_future_ts):
+                    continue
                 if cand_unix == target_unix:
                     round_id = row[0] if len(row) > 0 else None
                     if round_id is not None:
                         diag["reason_code"] = "resolved_exact_unix_match"
                         diag["best_diff_seconds"] = 0
                         diag["candidate_count"] = len(rows)
-                        diag["parsed_candidate_count"] = len(rows)
+                        # Only the matched candidate was parsed/validated
+                        # here — the loop short-circuits, so we didn't
+                        # touch the other rows' timestamps. Reporting 1
+                        # matches the other branches' semantics.
+                        diag["parsed_candidate_count"] = 1
                         logger.debug(
                             "round_linker: exact round_start_unix match map=%s rn=%d round_id=%d unix=%d",
                             map_name, round_number, round_id, target_unix,
