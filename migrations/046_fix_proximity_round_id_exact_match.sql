@@ -32,161 +32,207 @@ BEGIN;
 UPDATE combat_engagement t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE player_track t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE lua_round_teams t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_carrier_event t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_carrier_kill t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_carrier_return t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_combat_position t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_construction_event t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_crossfire_opportunity t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_escort_credit t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_focus_fire t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_hit_region t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_kill_outcome t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_lua_trade_kill t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_objective_focus t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_objective_run t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_reaction_metric t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_spawn_timing t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_support_summary t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_team_cohesion t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_team_push t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_trade_event t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
 UPDATE proximity_vehicle_progress t SET round_id = r.id
 FROM rounds r
 WHERE r.map_name = t.map_name
+  AND r.round_number = t.round_number
   AND r.round_start_unix = t.round_start_unix
+  AND t.round_start_unix > 0
   AND t.round_id IS NOT NULL
   AND t.round_id != r.id;
 
