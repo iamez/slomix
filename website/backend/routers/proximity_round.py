@@ -1,13 +1,12 @@
 """Proximity round endpoints: round/{round_id}/timeline, round/{round_id}/tracks, round/{round_id}/team-comparison."""
 
 import asyncio
-import json
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
-from website.backend.routers.proximity_helpers import logger
+from website.backend.routers.proximity_helpers import _parse_json_field, logger
 
 router = APIRouter()
 
@@ -176,15 +175,16 @@ async def get_proximity_round_tracks(
         # /tracks response by ~30 %. Done locally so the global pool
         # codec stays intact (bot-side services rely on str-then-loads
         # patterns and would break under a global codec change).
+        #
+        # Reuses `_parse_json_field` for consistency with other
+        # proximity endpoints, then normalises the result to a list —
+        # the contract for `path` is "array of waypoints", and the
+        # parser writes a JSON array, but a defensive list-or-empty
+        # pin keeps a corrupted row (e.g. jsonb 'null', stray dict)
+        # from propagating an invalid shape to the frontend.
         def _decode_path(value):
-            if value is None:
-                return []
-            if isinstance(value, str):
-                try:
-                    return json.loads(value)
-                except (ValueError, TypeError):
-                    return []
-            return value
+            decoded = _parse_json_field(value)
+            return decoded if isinstance(decoded, list) else []
 
         return {
             "status": "ok",
