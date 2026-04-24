@@ -2519,45 +2519,165 @@ function renderDangerZones(mapName, classFilter) {
 
 /* ===== v5.2 Combat Heatmap ===== */
 
-function renderCombatHeatmap(mapName, perspective) {
+async function renderCombatHeatmap(mapName, perspective) {
     if (!mapName) return;
+    const canvas = document.getElementById('combat-heatmap-canvas');
+    if (!canvas) return;
+
     const params1 = buildScopeParams({ extra: { map_name: mapName, perspective: perspective || 'kills' } });
     const params2 = buildScopeParams({ extra: { map_name: mapName, limit: 200 } });
-    Promise.allSettled([
-        fetchJSON(`${API_BASE}/proximity/combat-positions/heatmap?${params1}`),
-        fetchJSON(`${API_BASE}/proximity/combat-positions/kill-lines?${params2}`)
-    ]).then(([heatRes, lineRes]) => {
-        const canvas = document.getElementById('combat-heatmap-canvas');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        const W = canvas.width, H = canvas.height;
-        ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, W, H);
-        const hotzones = heatRes.status === 'fulfilled' ? (heatRes.value.hotzones ?? []) : [];
-        const killLines = lineRes.status === 'fulfilled' ? (lineRes.value.lines ?? []) : [];
-        const gridSize = heatRes.status === 'fulfilled' ? (heatRes.value.grid_size ?? 512) : 512;
-        if (hotzones.length === 0 && killLines.length === 0) {
-            ctx.fillStyle = '#64748b'; ctx.font = '12px monospace'; ctx.textAlign = 'center';
-            ctx.fillText('No combat data for this map yet', W / 2, H / 2);
-            return;
-        }
-        const maxCount = Math.max(...hotzones.map(h => h.count), 1);
+
+    let heatRes, lineRes;
+    try {
+        [heatRes, lineRes] = await Promise.allSettled([
+            fetchJSON(`${API_BASE}/proximity/combat-positions/heatmap?${params1}`),
+            fetchJSON(`${API_BASE}/proximity/combat-positions/kill-lines?${params2}`),
+        ]);
+    } catch (err) {
+        console.warn('Proximity heatmap fetch failed:', err);
+        return;
+    }
+
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth || 512;
+    const H = canvas.clientHeight || 512;
+    canvas.width = Math.floor(W * dpr);
+    canvas.height = Math.floor(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    // Map image underlay — matches `renderHeatmap()` pattern for
+    // proximity-heatmap so the v5.2 combat panel no longer renders on
+    // an abstract dark canvas disconnected from the actual map.
+    await ensureMapTransformConfig();
+    const transform = getMapTransformEntry(mapName);
+    const worldBounds = getWorldBounds(transform);
+    const mapImage = await preloadMapImage(transform?.image || null);
+    if (mapImage) {
+        ctx.save();
+        ctx.globalAlpha = 0.28;
+        ctx.drawImage(mapImage, 0, 0, W, H);
+        ctx.restore();
+    } else {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, W, H);
+    }
+
+    const hotzones = heatRes && heatRes.status === 'fulfilled' ? (heatRes.value.hotzones ?? []) : [];
+    const killLines = lineRes && lineRes.status === 'fulfilled' ? (lineRes.value.lines ?? []) : [];
+    const gridSize = heatRes && heatRes.status === 'fulfilled' ? (heatRes.value.grid_size ?? PROXIMITY_GRID_SIZE) : PROXIMITY_GRID_SIZE;
+
+    if (hotzones.length === 0 && killLines.length === 0) {
+        ctx.fillStyle = '#64748b';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('No combat data for this map yet', W / 2, H / 2);
+        return;
+    }
+
+    // Fallback path for maps without a map_transforms entry: relative
+    // min/max normalization across observed hotzone + kill-line points
+    // with a padding border. Matches the approach used in the old-style
+    // `renderHeatmap` fallback (line ~974) so unknown maps still get a
+    // consistent layout instead of collapsing toward the origin.
+    //
+    // Hotzones arrive as GRID indices (FLOOR(world/512)); kill lines
+    // arrive as raw WORLD coords. To fit both into one fallback frame
+    // we promote hotzones to world coords (cell centre = (gx+0.5)*512)
+    // and compute min/max over that common space.
+    const pad = 6;
+    let fallbackBounds = null;
+    if (!worldBounds && (hotzones.length > 0 || killLines.length > 0)) {
+        const xs = [];
+        const ys = [];
         for (const hz of hotzones) {
-            const nx = (hz.x / gridSize) * W, ny = (hz.y / gridSize) * H;
-            const intensity = hz.count / maxCount;
-            const radius = 4 + intensity * 16;
-            const alpha = 0.2 + intensity * 0.6;
-            ctx.beginPath(); ctx.arc(nx, ny, radius, 0, Math.PI * 2);
-            ctx.fillStyle = perspective === 'deaths' ? `rgba(96,165,250,${alpha})` : `rgba(239,68,68,${alpha})`;
-            ctx.fill();
+            const gx = Number(hz.x);
+            const gy = Number(hz.y);
+            if (Number.isFinite(gx) && Number.isFinite(gy)) {
+                xs.push((gx + 0.5) * gridSize);
+                ys.push((gy + 0.5) * gridSize);
+            }
         }
         for (const line of killLines) {
-            const ax = (line.ax / gridSize) * W, ay = (line.ay / gridSize) * H;
-            const vx = (line.vx / gridSize) * W, vy = (line.vy / gridSize) * H;
-            ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(vx, vy);
-            ctx.strokeStyle = line.attacker_team === 'AXIS' ? 'rgba(239,68,68,0.15)' : 'rgba(96,165,250,0.15)';
-            ctx.lineWidth = 1; ctx.stroke();
+            const ax = Number(line.ax), ay = Number(line.ay);
+            const vx = Number(line.vx), vy = Number(line.vy);
+            if (Number.isFinite(ax) && Number.isFinite(ay)) { xs.push(ax); ys.push(ay); }
+            if (Number.isFinite(vx) && Number.isFinite(vy)) { xs.push(vx); ys.push(vy); }
         }
-    }).catch(err => console.warn('Proximity fetch failed:', err));
+        if (xs.length && ys.length) {
+            const minX = Math.min(...xs), maxX = Math.max(...xs);
+            const minY = Math.min(...ys), maxY = Math.max(...ys);
+            const spanX = Math.max(maxX - minX, 1);
+            const spanY = Math.max(maxY - minY, 1);
+            fallbackBounds = { minX, minY, spanX, spanY };
+        }
+    }
+
+    const fallbackProject = (worldX, worldY) => {
+        if (!fallbackBounds) return null;
+        const nx = (worldX - fallbackBounds.minX) / fallbackBounds.spanX;
+        const ny = (worldY - fallbackBounds.minY) / fallbackBounds.spanY;
+        return {
+            x: pad + nx * (W - pad * 2),
+            y: pad + ny * (H - pad * 2),
+        };
+    };
+
+    // Hotzones: backend returns GRID coords (FLOOR(world/512)). Reconstruct
+    // cell centre world coord, then project through either worldToCanvas
+    // (map image overlay) or the relative fallback.
+    const maxCount = Math.max(...hotzones.map((h) => Number(h.count || 0)), 1);
+    for (const hz of hotzones) {
+        const gx = Number(hz.x);
+        const gy = Number(hz.y);
+        if (!Number.isFinite(gx) || !Number.isFinite(gy)) continue;
+
+        const intensity = clamp(Number(hz.count || 0) / maxCount, 0, 1);
+        const alpha = 0.2 + intensity * 0.6;
+        const fill = perspective === 'deaths'
+            ? `rgba(96, 165, 250, ${alpha})`
+            : `rgba(239, 68, 68, ${alpha})`;
+
+        const worldX = (gx + 0.5) * gridSize;
+        const worldY = (gy + 0.5) * gridSize;
+        const point = worldBounds
+            ? worldToCanvasPoint(worldX, worldY, W, H, worldBounds)
+            : fallbackProject(worldX, worldY);
+        if (!point) continue;
+
+        const radius = 4 + intensity * (worldBounds ? 20 : 16);
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = fill;
+        ctx.fill();
+    }
+
+    // Kill lines: backend returns raw WORLD coords on (ax, ay, vx, vy).
+    // Project through the same transform (or fallback) as hotzones for
+    // alignment.
+    for (const line of killLines) {
+        const ax = Number(line.ax), ay = Number(line.ay);
+        const vx = Number(line.vx), vy = Number(line.vy);
+        if (!Number.isFinite(ax) || !Number.isFinite(ay) || !Number.isFinite(vx) || !Number.isFinite(vy)) continue;
+
+        const a = worldBounds
+            ? worldToCanvasPoint(ax, ay, W, H, worldBounds)
+            : fallbackProject(ax, ay);
+        const v = worldBounds
+            ? worldToCanvasPoint(vx, vy, W, H, worldBounds)
+            : fallbackProject(vx, vy);
+        if (!a || !v) continue;
+
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(v.x, v.y);
+        ctx.strokeStyle = line.attacker_team === 'AXIS'
+            ? 'rgba(239, 68, 68, 0.15)'
+            : 'rgba(96, 165, 250, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
 }
 
 /* ===== v5.2 Leaderboard Tabs ===== */
@@ -2756,7 +2876,10 @@ function bindV52PanelEvents() {
     // Combat heatmap
     const hmMapInput = document.getElementById('combat-heatmap-map');
     const hmPerspective = document.getElementById('combat-heatmap-perspective');
-    const hmLoad = () => renderCombatHeatmap(hmMapInput?.value || '', hmPerspective?.value || 'kills');
+    const hmLoad = () => {
+        renderCombatHeatmap(hmMapInput?.value || '', hmPerspective?.value || 'kills')
+            .catch((err) => console.warn('Combat heatmap render failed:', err));
+    };
     if (hmMapInput) {
         hmMapInput.onchange = hmLoad;
         hmMapInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') hmLoad(); });
