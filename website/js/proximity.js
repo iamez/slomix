@@ -2519,45 +2519,127 @@ function renderDangerZones(mapName, classFilter) {
 
 /* ===== v5.2 Combat Heatmap ===== */
 
-function renderCombatHeatmap(mapName, perspective) {
+async function renderCombatHeatmap(mapName, perspective) {
     if (!mapName) return;
+    const canvas = document.getElementById('combat-heatmap-canvas');
+    if (!canvas) return;
+
     const params1 = buildScopeParams({ extra: { map_name: mapName, perspective: perspective || 'kills' } });
     const params2 = buildScopeParams({ extra: { map_name: mapName, limit: 200 } });
-    Promise.allSettled([
-        fetchJSON(`${API_BASE}/proximity/combat-positions/heatmap?${params1}`),
-        fetchJSON(`${API_BASE}/proximity/combat-positions/kill-lines?${params2}`)
-    ]).then(([heatRes, lineRes]) => {
-        const canvas = document.getElementById('combat-heatmap-canvas');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        const W = canvas.width, H = canvas.height;
-        ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, W, H);
-        const hotzones = heatRes.status === 'fulfilled' ? (heatRes.value.hotzones ?? []) : [];
-        const killLines = lineRes.status === 'fulfilled' ? (lineRes.value.lines ?? []) : [];
-        const gridSize = heatRes.status === 'fulfilled' ? (heatRes.value.grid_size ?? 512) : 512;
-        if (hotzones.length === 0 && killLines.length === 0) {
-            ctx.fillStyle = '#64748b'; ctx.font = '12px monospace'; ctx.textAlign = 'center';
-            ctx.fillText('No combat data for this map yet', W / 2, H / 2);
-            return;
+
+    let heatRes, lineRes;
+    try {
+        [heatRes, lineRes] = await Promise.allSettled([
+            fetchJSON(`${API_BASE}/proximity/combat-positions/heatmap?${params1}`),
+            fetchJSON(`${API_BASE}/proximity/combat-positions/kill-lines?${params2}`),
+        ]);
+    } catch (err) {
+        console.warn('Proximity heatmap fetch failed:', err);
+        return;
+    }
+
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth || 512;
+    const H = canvas.clientHeight || 512;
+    canvas.width = Math.floor(W * dpr);
+    canvas.height = Math.floor(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    // Map image underlay — matches `renderHeatmap()` pattern for
+    // proximity-heatmap so the v5.2 combat panel no longer renders on
+    // an abstract dark canvas disconnected from the actual map.
+    await ensureMapTransformConfig();
+    const transform = getMapTransformEntry(mapName);
+    const worldBounds = getWorldBounds(transform);
+    const mapImage = await preloadMapImage(transform?.image || null);
+    if (mapImage) {
+        ctx.save();
+        ctx.globalAlpha = 0.28;
+        ctx.drawImage(mapImage, 0, 0, W, H);
+        ctx.restore();
+    } else {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, W, H);
+    }
+
+    const hotzones = heatRes && heatRes.status === 'fulfilled' ? (heatRes.value.hotzones ?? []) : [];
+    const killLines = lineRes && lineRes.status === 'fulfilled' ? (lineRes.value.lines ?? []) : [];
+    const gridSize = heatRes && heatRes.status === 'fulfilled' ? (heatRes.value.grid_size ?? PROXIMITY_GRID_SIZE) : PROXIMITY_GRID_SIZE;
+
+    if (hotzones.length === 0 && killLines.length === 0) {
+        ctx.fillStyle = '#64748b';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('No combat data for this map yet', W / 2, H / 2);
+        return;
+    }
+
+    // Backend returns `hotzones` in GRID coords (FLOOR(world / 512)).
+    // Reconstruct the world coord at cell centre and project through
+    // worldToCanvasPoint so the overlay aligns with the map image.
+    const maxCount = Math.max(...hotzones.map((h) => Number(h.count || 0)), 1);
+    for (const hz of hotzones) {
+        const gx = Number(hz.x);
+        const gy = Number(hz.y);
+        if (!Number.isFinite(gx) || !Number.isFinite(gy)) continue;
+
+        const intensity = clamp(Number(hz.count || 0) / maxCount, 0, 1);
+        const alpha = 0.2 + intensity * 0.6;
+        const fill = perspective === 'deaths'
+            ? `rgba(96, 165, 250, ${alpha})`
+            : `rgba(239, 68, 68, ${alpha})`;
+
+        let cx, cy, radius;
+        if (worldBounds) {
+            const worldX = (gx + 0.5) * gridSize;
+            const worldY = (gy + 0.5) * gridSize;
+            const point = worldToCanvasPoint(worldX, worldY, W, H, worldBounds);
+            if (!point) continue;
+            cx = point.x;
+            cy = point.y;
+            radius = 4 + intensity * 20;
+        } else {
+            // Fallback to grid-relative when no map_transforms entry.
+            cx = (gx / gridSize) * W;
+            cy = (gy / gridSize) * H;
+            radius = 4 + intensity * 16;
         }
-        const maxCount = Math.max(...hotzones.map(h => h.count), 1);
-        for (const hz of hotzones) {
-            const nx = (hz.x / gridSize) * W, ny = (hz.y / gridSize) * H;
-            const intensity = hz.count / maxCount;
-            const radius = 4 + intensity * 16;
-            const alpha = 0.2 + intensity * 0.6;
-            ctx.beginPath(); ctx.arc(nx, ny, radius, 0, Math.PI * 2);
-            ctx.fillStyle = perspective === 'deaths' ? `rgba(96,165,250,${alpha})` : `rgba(239,68,68,${alpha})`;
-            ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fillStyle = fill;
+        ctx.fill();
+    }
+
+    // Kill lines: backend returns world-space coords on (ax, ay, vx, vy)
+    // (raw engagement positions, NOT grid-binned). Project through the
+    // same transform as hotzones for alignment.
+    for (const line of killLines) {
+        const ax = Number(line.ax), ay = Number(line.ay);
+        const vx = Number(line.vx), vy = Number(line.vy);
+        if (!Number.isFinite(ax) || !Number.isFinite(ay) || !Number.isFinite(vx) || !Number.isFinite(vy)) continue;
+
+        let a, v;
+        if (worldBounds) {
+            a = worldToCanvasPoint(ax, ay, W, H, worldBounds);
+            v = worldToCanvasPoint(vx, vy, W, H, worldBounds);
+            if (!a || !v) continue;
+        } else {
+            a = { x: (ax / gridSize) * W, y: (ay / gridSize) * H };
+            v = { x: (vx / gridSize) * W, y: (vy / gridSize) * H };
         }
-        for (const line of killLines) {
-            const ax = (line.ax / gridSize) * W, ay = (line.ay / gridSize) * H;
-            const vx = (line.vx / gridSize) * W, vy = (line.vy / gridSize) * H;
-            ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(vx, vy);
-            ctx.strokeStyle = line.attacker_team === 'AXIS' ? 'rgba(239,68,68,0.15)' : 'rgba(96,165,250,0.15)';
-            ctx.lineWidth = 1; ctx.stroke();
-        }
-    }).catch(err => console.warn('Proximity fetch failed:', err));
+
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(v.x, v.y);
+        ctx.strokeStyle = line.attacker_team === 'AXIS'
+            ? 'rgba(239, 68, 68, 0.15)'
+            : 'rgba(96, 165, 250, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
 }
 
 /* ===== v5.2 Leaderboard Tabs ===== */
