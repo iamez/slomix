@@ -2576,9 +2576,57 @@ async function renderCombatHeatmap(mapName, perspective) {
         return;
     }
 
-    // Backend returns `hotzones` in GRID coords (FLOOR(world / 512)).
-    // Reconstruct the world coord at cell centre and project through
-    // worldToCanvasPoint so the overlay aligns with the map image.
+    // Fallback path for maps without a map_transforms entry: relative
+    // min/max normalization across observed hotzone + kill-line points
+    // with a padding border. Matches the approach used in the old-style
+    // `renderHeatmap` fallback (line ~974) so unknown maps still get a
+    // consistent layout instead of collapsing toward the origin.
+    //
+    // Hotzones arrive as GRID indices (FLOOR(world/512)); kill lines
+    // arrive as raw WORLD coords. To fit both into one fallback frame
+    // we promote hotzones to world coords (cell centre = (gx+0.5)*512)
+    // and compute min/max over that common space.
+    const pad = 6;
+    let fallbackBounds = null;
+    if (!worldBounds && (hotzones.length > 0 || killLines.length > 0)) {
+        const xs = [];
+        const ys = [];
+        for (const hz of hotzones) {
+            const gx = Number(hz.x);
+            const gy = Number(hz.y);
+            if (Number.isFinite(gx) && Number.isFinite(gy)) {
+                xs.push((gx + 0.5) * gridSize);
+                ys.push((gy + 0.5) * gridSize);
+            }
+        }
+        for (const line of killLines) {
+            const ax = Number(line.ax), ay = Number(line.ay);
+            const vx = Number(line.vx), vy = Number(line.vy);
+            if (Number.isFinite(ax) && Number.isFinite(ay)) { xs.push(ax); ys.push(ay); }
+            if (Number.isFinite(vx) && Number.isFinite(vy)) { xs.push(vx); ys.push(vy); }
+        }
+        if (xs.length && ys.length) {
+            const minX = Math.min(...xs), maxX = Math.max(...xs);
+            const minY = Math.min(...ys), maxY = Math.max(...ys);
+            const spanX = Math.max(maxX - minX, 1);
+            const spanY = Math.max(maxY - minY, 1);
+            fallbackBounds = { minX, minY, spanX, spanY };
+        }
+    }
+
+    const fallbackProject = (worldX, worldY) => {
+        if (!fallbackBounds) return null;
+        const nx = (worldX - fallbackBounds.minX) / fallbackBounds.spanX;
+        const ny = (worldY - fallbackBounds.minY) / fallbackBounds.spanY;
+        return {
+            x: pad + nx * (W - pad * 2),
+            y: pad + ny * (H - pad * 2),
+        };
+    };
+
+    // Hotzones: backend returns GRID coords (FLOOR(world/512)). Reconstruct
+    // cell centre world coord, then project through either worldToCanvas
+    // (map image overlay) or the relative fallback.
     const maxCount = Math.max(...hotzones.map((h) => Number(h.count || 0)), 1);
     for (const hz of hotzones) {
         const gx = Number(hz.x);
@@ -2591,45 +2639,35 @@ async function renderCombatHeatmap(mapName, perspective) {
             ? `rgba(96, 165, 250, ${alpha})`
             : `rgba(239, 68, 68, ${alpha})`;
 
-        let cx, cy, radius;
-        if (worldBounds) {
-            const worldX = (gx + 0.5) * gridSize;
-            const worldY = (gy + 0.5) * gridSize;
-            const point = worldToCanvasPoint(worldX, worldY, W, H, worldBounds);
-            if (!point) continue;
-            cx = point.x;
-            cy = point.y;
-            radius = 4 + intensity * 20;
-        } else {
-            // Fallback to grid-relative when no map_transforms entry.
-            cx = (gx / gridSize) * W;
-            cy = (gy / gridSize) * H;
-            radius = 4 + intensity * 16;
-        }
+        const worldX = (gx + 0.5) * gridSize;
+        const worldY = (gy + 0.5) * gridSize;
+        const point = worldBounds
+            ? worldToCanvasPoint(worldX, worldY, W, H, worldBounds)
+            : fallbackProject(worldX, worldY);
+        if (!point) continue;
 
+        const radius = 4 + intensity * (worldBounds ? 20 : 16);
         ctx.beginPath();
-        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
         ctx.fillStyle = fill;
         ctx.fill();
     }
 
-    // Kill lines: backend returns world-space coords on (ax, ay, vx, vy)
-    // (raw engagement positions, NOT grid-binned). Project through the
-    // same transform as hotzones for alignment.
+    // Kill lines: backend returns raw WORLD coords on (ax, ay, vx, vy).
+    // Project through the same transform (or fallback) as hotzones for
+    // alignment.
     for (const line of killLines) {
         const ax = Number(line.ax), ay = Number(line.ay);
         const vx = Number(line.vx), vy = Number(line.vy);
         if (!Number.isFinite(ax) || !Number.isFinite(ay) || !Number.isFinite(vx) || !Number.isFinite(vy)) continue;
 
-        let a, v;
-        if (worldBounds) {
-            a = worldToCanvasPoint(ax, ay, W, H, worldBounds);
-            v = worldToCanvasPoint(vx, vy, W, H, worldBounds);
-            if (!a || !v) continue;
-        } else {
-            a = { x: (ax / gridSize) * W, y: (ay / gridSize) * H };
-            v = { x: (vx / gridSize) * W, y: (vy / gridSize) * H };
-        }
+        const a = worldBounds
+            ? worldToCanvasPoint(ax, ay, W, H, worldBounds)
+            : fallbackProject(ax, ay);
+        const v = worldBounds
+            ? worldToCanvasPoint(vx, vy, W, H, worldBounds)
+            : fallbackProject(vx, vy);
+        if (!a || !v) continue;
 
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
@@ -2838,7 +2876,10 @@ function bindV52PanelEvents() {
     // Combat heatmap
     const hmMapInput = document.getElementById('combat-heatmap-map');
     const hmPerspective = document.getElementById('combat-heatmap-perspective');
-    const hmLoad = () => renderCombatHeatmap(hmMapInput?.value || '', hmPerspective?.value || 'kills');
+    const hmLoad = () => {
+        renderCombatHeatmap(hmMapInput?.value || '', hmPerspective?.value || 'kills')
+            .catch((err) => console.warn('Combat heatmap render failed:', err));
+    };
     if (hmMapInput) {
         hmMapInput.onchange = hmLoad;
         hmMapInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') hmLoad(); });
