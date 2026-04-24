@@ -75,6 +75,48 @@ async def test_resolve_round_id_with_reason_date_filter_excluded_rows():
 
 
 @pytest.mark.asyncio
+async def test_resolve_round_id_exact_unix_match_beats_closest():
+    """When two rounds share (map, round_number) and target_dt's unix
+    timestamp is exactly equal to one candidate's round_start_unix,
+    that candidate wins — even if the OTHER candidate is closer by
+    naive time distance.
+
+    Real-world cause: scrim queues replay the same map; engagement/
+    proximity rows carry the Lua round_start_unix. Closest-timestamp
+    wrongly attributed rows to the prior round because engagement
+    start falls between the prior round's stats-file time and the
+    current round's stats-file time.
+    """
+    target_unix = 1776802310
+    target_dt = datetime.fromtimestamp(target_unix)
+
+    # Candidate 10455: slightly EARLIER start_unix but closer by |Δ| to
+    # target (scenario from prod audit 2026-04-23).
+    earlier_start_unix = target_unix - 460  # ~7.7 min before
+    earlier_dt = datetime.fromtimestamp(earlier_start_unix)
+    # Candidate 10458: EXACT match on unix — should win.
+    rows = [
+        (10455, "2026-04-21", earlier_dt.strftime("%H%M%S"), None, earlier_start_unix),
+        (10458, "2026-04-21", "221717", None, target_unix),
+    ]
+    db = _FakeDB(rows_with_date=rows, rows_without_date=rows)
+
+    round_id, diag = await resolve_round_id_with_reason(
+        db,
+        "te_escape2",
+        1,
+        target_dt=target_dt,
+        round_date="2026-04-21",
+        round_time="221717",
+        window_minutes=45,
+    )
+
+    assert round_id == 10458, f"exact unix match should win (got {round_id})"
+    assert diag["reason_code"] == "resolved_exact_unix_match"
+    assert diag["best_diff_seconds"] == 0
+
+
+@pytest.mark.asyncio
 async def test_resolve_round_id_with_reason_outside_window():
     db = _FakeDB(
         rows_with_date=[(9818, "2026-02-11", "230000", None)],
