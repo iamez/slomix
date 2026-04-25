@@ -6,6 +6,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.8.0](https://github.com/iamez/slomix/compare/v1.7.1...v1.8.0) (2026-04-25)
+
+
+### Features
+
+* **diagnostics:** expose DB pool capacity + utilisation metrics ([#149](https://github.com/iamez/slomix/issues/149)) ([a1c27c2](https://github.com/iamez/slomix/commit/a1c27c2dba6cd0dcf8bc81d1d854e113a576d443))
+* **proximity:** combat-heatmap panel uses map image overlay ([#145](https://github.com/iamez/slomix/issues/145)) ([227a0f7](https://github.com/iamez/slomix/commit/227a0f7d578006df36e54397aa99b27fcac56117))
+
+
+### Bug Fixes
+
+* **bot:** eliminate round_linker WARN race in STATS_READY webhook ([#140](https://github.com/iamez/slomix/issues/140)) ([e55b5b0](https://github.com/iamez/slomix/commit/e55b5b0e77f0d630c4d850602d92f2ca5552a4e7))
+* **linker:** exact round_start_unix match beats closest-timestamp ([#143](https://github.com/iamez/slomix/issues/143)) ([79c8917](https://github.com/iamez/slomix/commit/79c8917efe5eeabae16615f37aa545396ecf3a53))
+
+
+### Performance Improvements
+
+* **bot:** queue + dedup STATS_READY webhooks (scale-out prep) ([#142](https://github.com/iamez/slomix/issues/142)) ([2d9c249](https://github.com/iamez/slomix/commit/2d9c2491e03696f145ea97f80a86e02af37c3473))
+* **proximity:** decode jsonb path locally in /tracks endpoint (~30% smaller response) ([#148](https://github.com/iamez/slomix/issues/148)) ([eb89675](https://github.com/iamez/slomix/commit/eb8967550f0756b51200196b7e1f247e2fbdedc6))
+
 ## [1.7.1](https://github.com/iamez/slomix/compare/v1.7.0...v1.7.1) (2026-04-21)
 
 
