@@ -232,6 +232,29 @@ async def get_diagnostics(
             monitoring[key] = {"count": 0, "last_recorded_at": None, "error": "query failed"}
 
     results["monitoring"] = monitoring
+
+    # DB connection pool metrics — surfaces saturation / leak signals.
+    # `pool_stats()` is defined on PostgresAdapter only; SQLite sites
+    # don't have a pool. `getattr` keeps the diagnostics endpoint usable
+    # under either backend without an isinstance import.
+    pool_stats_fn = getattr(db, "pool_stats", None)
+    if callable(pool_stats_fn):
+        try:
+            results["pool"] = pool_stats_fn()
+        except Exception as e:
+            logger.warning("pool_stats failed: %s", e, exc_info=True)
+            # Keep the response shape consistent with both the
+            # connected-pool branch and the no-adapter branch — every
+            # path includes `connected` so dashboards can switch on
+            # one key, not three.
+            results["pool"] = {
+                "connected": False,
+                "reason": "pool_stats failed",
+                "error": str(e),
+            }
+    else:
+        results["pool"] = {"connected": False, "reason": "adapter has no pool_stats"}
+
     return results
 
 
