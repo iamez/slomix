@@ -29,10 +29,14 @@ def _adapter_with_pool(get_size: int, get_idle_size: int, get_min: int, get_max:
 
 
 def test_pool_stats_returns_dict_with_expected_keys():
+    """Exact-set equality (not subset) so adding a new key forces a
+    deliberate test update — keeps the dashboard contract pinned."""
     a = _adapter_with_pool(get_size=10, get_idle_size=7, get_min=5, get_max=20)
     stats = a.pool_stats()
     expected = {"connected", "size", "idle", "in_use", "min_size", "max_size", "utilisation_pct"}
-    assert expected.issubset(stats.keys()), f"missing keys: {expected - stats.keys()}"
+    assert set(stats.keys()) == expected, (
+        f"unexpected key set: expected {expected}, got {set(stats.keys())}"
+    )
 
 
 def test_pool_stats_reports_no_pool_when_unconnected():
