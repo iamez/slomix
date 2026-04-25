@@ -242,8 +242,16 @@ async def get_diagnostics(
         try:
             results["pool"] = pool_stats_fn()
         except Exception as e:
-            logger.warning("pool_stats failed: %s", e)
-            results["pool"] = {"error": str(e)}
+            logger.warning("pool_stats failed: %s", e, exc_info=True)
+            # Keep the response shape consistent with both the
+            # connected-pool branch and the no-adapter branch — every
+            # path includes `connected` so dashboards can switch on
+            # one key, not three.
+            results["pool"] = {
+                "connected": False,
+                "reason": "pool_stats failed",
+                "error": str(e),
+            }
     else:
         results["pool"] = {"connected": False, "reason": "adapter has no pool_stats"}
 

@@ -189,9 +189,11 @@ class PostgreSQLAdapter(DatabaseAdapter):
         a single dict so the diagnostics endpoint can render it
         without poking at private attributes.
 
-        Returns an empty dict when the pool isn't initialised yet so
-        callers can render "uninitialised" instead of crashing during
-        early startup probes.
+        Returns `{"connected": False}` when the pool isn't initialised
+        yet so callers can render "uninitialised" instead of crashing
+        during early startup probes. On a getter exception (e.g., pool
+        teardown mid-request), returns `{"connected": True, "error": ...}`
+        so consumers see the failure without a 500.
         """
         if not self.pool:
             return {"connected": False}
