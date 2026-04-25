@@ -180,6 +180,39 @@ class PostgreSQLAdapter(DatabaseAdapter):
         """Return True when the adapter has an active connection pool."""
         return self.pool is not None
 
+    def pool_stats(self) -> dict:
+        """Return current pool capacity / utilisation stats.
+
+        Used by `/diagnostics` to expose pool pressure (saturation)
+        and detect connection leaks. asyncpg's `Pool` exposes size /
+        idle / min / max via dedicated getters; we surface them as
+        a single dict so the diagnostics endpoint can render it
+        without poking at private attributes.
+
+        Returns `{"connected": False}` when the pool isn't initialised
+        yet so callers can render "uninitialised" instead of crashing
+        during early startup probes. On a getter exception (e.g., pool
+        teardown mid-request), returns `{"connected": True, "error": ...}`
+        so consumers see the failure without a 500.
+        """
+        if not self.pool:
+            return {"connected": False}
+        try:
+            size = self.pool.get_size()
+            idle = self.pool.get_idle_size()
+            return {
+                "connected": True,
+                "size": size,
+                "idle": idle,
+                "in_use": size - idle,
+                "min_size": self.pool.get_min_size(),
+                "max_size": self.pool.get_max_size(),
+                "utilisation_pct": round((size - idle) / size * 100, 1) if size else 0.0,
+            }
+        except Exception as e:
+            logger.debug("pool_stats failed: %s", e)
+            return {"connected": True, "error": str(e)}
+
     @asynccontextmanager
     async def connection(self):
         """Provide PostgreSQL connection from pool."""
