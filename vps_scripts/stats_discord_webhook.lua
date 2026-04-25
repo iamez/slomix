@@ -35,6 +35,11 @@
     - Match score tracking (v1.4.0) - running Axis/Allies win count
     - RFC 8259-compliant JSON escape (v1.6.4) - handles all control bytes in
       player names (previously names with \x00..\x1f broke webhook parsing)
+    - Persistent retry buffer (v1.7.0) - webhook payloads land in
+      `/tmp/slomix_pending_webhooks/` and the per-frame retry sweep
+      re-launches abandoned or curl-failed sends. Survives Discord
+      outage > 15s, bot down, even Lua restart (buffer is on disk).
+      Cap: 100 pending payloads (~500KB), oldest dropped on overflow.
 
     Webhook Fields (v1.4.0):
     - Lua_Playtime: Actual play time (excludes pauses)
@@ -67,7 +72,7 @@
 ]]--
 
 local modname = "stats_discord_webhook"
-local version = "1.6.4"
+local version = "1.7.0"
 
 -- ============================================================================
 -- CONFIGURATION - EDIT THESE VALUES
@@ -104,7 +109,20 @@ local configuration = {
     curl_max_time = 10,
     curl_retry = 3,
     curl_retry_delay = 1,
-    curl_retry_max_time = 15
+    curl_retry_max_time = 15,
+
+    -- Persistent retry buffer (v1.7.0+):
+    -- Stores webhook payloads on disk so a Discord/network/bot outage
+    -- longer than `curl_retry_max_time` doesn't drop the round. The
+    -- per-frame retry loop in et_RunFrame periodically rescans this
+    -- directory and re-attempts unsent payloads with the same curl
+    -- command. Successful sends remove the file; capped at
+    -- `pending_buffer_max` to bound disk use during a long outage.
+    pending_dir = "/tmp/slomix_pending_webhooks",
+    pending_buffer_max = 100,                 -- max payloads to keep
+    pending_retry_interval_seconds = 60,      -- min gap between retry sweeps
+    pending_grace_seconds = 35,               -- ignore files younger than this
+                                              -- (give the original curl 30s + 5s slack)
 }
 
 -- ============================================================================
@@ -339,44 +357,171 @@ local function write_gametime_file(payload_json, meta)
     return true
 end
 
-local function execute_curl_async(payload_json)
-    if not payload_json or payload_json == "" then
-        return false, "empty payload"
-    end
+-- ============================================================================
+-- PERSISTENT WEBHOOK RETRY BUFFER (v1.7.0+)
+-- ============================================================================
+--
+-- Each webhook payload is staged in `pending_dir` as `<timestamp>-<rand>.json`.
+-- The curl command writes its exit code into a sibling `.exit` marker file
+-- when finished. The per-frame retry loop (`pending_retry_sweep`) reads
+-- those markers; payloads with no marker (curl never finished) or non-zero
+-- exit codes are re-sent. Successful sends remove the .json + .exit pair.
+-- ============================================================================
 
-    local temp_file = os.tmpname() .. ".json"
-    local f, err = io.open(temp_file, "w")
-    if not f then
-        return false, "Failed to create temp file: " .. (err or "unknown")
-    end
-    f:write(payload_json)
-    f:close()
+local pending_buffer_initialised = false
+local last_pending_retry_unix = 0
 
-    local curl_cmd = string.format(
-        "curl -s -X POST -H 'Content-Type: application/json' --data-binary @%s %s " ..
+local function ensure_pending_dir()
+    if pending_buffer_initialised then return true end
+    local cmd = string.format("mkdir -p %s 2>/dev/null", shell_escape(configuration.pending_dir))
+    os.execute(cmd)
+    pending_buffer_initialised = true
+    return true
+end
+
+local function generate_pending_id()
+    -- Lua doesn't have a native UUID generator, but the pair
+    -- (microseconds, random) is collision-resistant within a single
+    -- mod run. Discord webhook is server-side ack'd so duplicate ID
+    -- collisions just mean two attempts of the same payload — safe.
+    local now_ms = (et.trap_Milliseconds and et.trap_Milliseconds()) or (os.time() * 1000)
+    local rand = math.random(0, 999999)
+    return string.format("%d-%06d", now_ms, rand)
+end
+
+local function build_curl_command(payload_path, exit_marker_path)
+    return string.format(
+        "(curl -s -X POST -H 'Content-Type: application/json' --data-binary @%s %s " ..
         "--compressed --connect-timeout %d --max-time %d --retry %d --retry-delay %d --retry-max-time %d " ..
-        "> /dev/null 2>&1 &",
-        shell_escape(temp_file),
+        "> /dev/null 2>&1; echo $? > %s) &",
+        shell_escape(payload_path),
         shell_escape(configuration.discord_webhook_url),
         configuration.curl_connect_timeout,
         configuration.curl_max_time,
         configuration.curl_retry,
         configuration.curl_retry_delay,
-        configuration.curl_retry_max_time
+        configuration.curl_retry_max_time,
+        shell_escape(exit_marker_path)
     )
+end
 
+local function pending_buffer_count()
+    -- Returns the number of pending .json files. Best-effort — used to
+    -- enforce `pending_buffer_max`; if `ls` fails we return 0 and let
+    -- the next sweep try again.
+    local cmd = string.format("ls -1 %s/*.json 2>/dev/null | wc -l", shell_escape(configuration.pending_dir))
+    local handle = io.popen(cmd)
+    if not handle then return 0 end
+    local count = tonumber(handle:read("*a")) or 0
+    handle:close()
+    return count
+end
+
+local function pending_buffer_drop_oldest()
+    -- Drop the single oldest .json + its .exit marker. Called when the
+    -- buffer hits `pending_buffer_max` so we never grow without bound
+    -- during a long outage. Logs the drop so the loss is visible.
+    local cmd = string.format(
+        "ls -1t %s/*.json 2>/dev/null | tail -1",
+        shell_escape(configuration.pending_dir)
+    )
+    local handle = io.popen(cmd)
+    if not handle then return end
+    local oldest = handle:read("*l")
+    handle:close()
+    if oldest and oldest ~= "" then
+        os.execute(string.format("rm -f %s %s.exit 2>/dev/null", shell_escape(oldest), shell_escape(oldest:gsub("%.json$", ""))))
+        log("[retry-buffer] dropped oldest payload at buffer cap: " .. oldest)
+    end
+end
+
+local function execute_curl_async(payload_json)
+    if not payload_json or payload_json == "" then
+        return false, "empty payload"
+    end
+
+    ensure_pending_dir()
+
+    -- Cap the buffer BEFORE adding the new payload so we always have
+    -- room. Drop the oldest if we're at capacity.
+    if pending_buffer_count() >= configuration.pending_buffer_max then
+        pending_buffer_drop_oldest()
+    end
+
+    local pending_id = generate_pending_id()
+    local payload_path = configuration.pending_dir .. "/" .. pending_id .. ".json"
+    local exit_marker_path = configuration.pending_dir .. "/" .. pending_id .. ".exit"
+
+    local f, err = io.open(payload_path, "w")
+    if not f then
+        return false, "Failed to create payload file: " .. (err or "unknown")
+    end
+    f:write(payload_json)
+    f:close()
+
+    local curl_cmd = build_curl_command(payload_path, exit_marker_path)
     local ok, exit_type, exit_code = os.execute(curl_cmd)
-    os.execute(string.format("sleep 30 && rm -f %s &", shell_escape(temp_file)))
 
     if ok == true or ok == 0 then
-        return true, "curl launched in background"
+        return true, "curl launched (id=" .. pending_id .. ")"
     end
     return false, string.format(
-        "curl launch failed (ok=%s, type=%s, code=%s)",
+        "curl launch failed (ok=%s, type=%s, code=%s, id=%s)",
         tostring(ok),
         tostring(exit_type),
-        tostring(exit_code)
+        tostring(exit_code),
+        pending_id
     )
+end
+
+local function pending_retry_sweep()
+    -- Periodic sweep over `pending_dir`:
+    --  1. payloads with .exit marker == "0" → send succeeded; clean up
+    --  2. payloads with .exit marker != "0" → curl reported failure,
+    --     re-launch (clearing the marker); delete after re-launch
+    --  3. payloads WITHOUT .exit marker AND older than grace period →
+    --     curl never finished (process killed mid-flight, OS issue);
+    --     re-launch
+    --  4. payloads WITHOUT .exit marker AND fresh → original curl is
+    --     still running, leave alone
+    ensure_pending_dir()
+
+    local list_cmd = string.format(
+        "find %s -maxdepth 1 -name '*.json' -printf '%%T@ %%p\\n' 2>/dev/null",
+        shell_escape(configuration.pending_dir)
+    )
+    local handle = io.popen(list_cmd)
+    if not handle then return end
+    local now = os.time()
+
+    for line in handle:lines() do
+        local mtime, path = line:match("^(%S+)%s(.+)$")
+        if mtime and path then
+            local age = now - math.floor(tonumber(mtime) or now)
+            local exit_path = path:gsub("%.json$", "") .. ".exit"
+            local exit_handle = io.open(exit_path, "r")
+
+            if exit_handle then
+                local code = exit_handle:read("*l")
+                exit_handle:close()
+                if code == "0" then
+                    -- success — clean up
+                    os.execute(string.format("rm -f %s %s 2>/dev/null", shell_escape(path), shell_escape(exit_path)))
+                else
+                    -- curl reported failure — clear marker + re-launch
+                    log(string.format("[retry-buffer] re-launching failed payload (exit=%s) %s", tostring(code), path))
+                    os.execute(string.format("rm -f %s 2>/dev/null", shell_escape(exit_path)))
+                    os.execute(build_curl_command(path, exit_path))
+                end
+            elseif age > configuration.pending_grace_seconds then
+                -- no marker + old → original curl never finished
+                log(string.format("[retry-buffer] re-launching abandoned payload (age=%ds) %s", age, path))
+                os.execute(build_curl_command(path, exit_path))
+            end
+            -- else: no marker + fresh → original curl in flight, skip
+        end
+    end
+    handle:close()
 end
 
 local function Info_ValueForKey(info, key)
@@ -1204,6 +1349,17 @@ end
 
 function et_RunFrame(levelTime)
     frame_level_time = levelTime
+
+    -- Pending webhook retry sweep — throttled to once per
+    -- `pending_retry_interval_seconds`. Sweeps the on-disk buffer for
+    -- abandoned/failed payloads from past curl attempts and re-launches
+    -- them. Cheap when buffer is empty (one `find` listing returns
+    -- zero lines); only does real I/O when there's work to do.
+    local now_unix = os.time()
+    if now_unix - last_pending_retry_unix >= configuration.pending_retry_interval_seconds then
+        last_pending_retry_unix = now_unix
+        pending_retry_sweep()
+    end
 
     -- Check for gamestate changes
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate"))
