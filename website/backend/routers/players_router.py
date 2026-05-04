@@ -740,11 +740,11 @@ async def get_quick_leaders(
     xp_rows = []
     try:
         xp_rows = await db.fetch_all(xp_query, (start_date, limit))
-    except Exception:
-        xp_rows = []
-
-    if not xp_rows:
-        # Fallback for schemas using session_date
+    except Exception as primary_exc:
+        # Local/dev SQLite (DATABASE_TYPE=sqlite via scripts/dev_up.sh) uses
+        # the legacy player_comprehensive_stats schema with session_date /
+        # session_id instead of round_date — the primary query raises
+        # OperationalError there. Try the legacy column once before giving up.
         fallback_xp = """
             SELECT
                 p.player_guid,
@@ -759,12 +759,14 @@ async def get_quick_leaders(
             ORDER BY total_xp DESC
             LIMIT $2
         """
+        logger.warning("XP primary failed, trying session_date fallback: %s", primary_exc)
         try:
             xp_rows = await db.fetch_all(fallback_xp, (start_date, limit))
-        except Exception as e:
-            logger.error("XP leaderboard fallback query failed: %s", e, exc_info=True)
+        except Exception as fallback_exc:
+            logger.error("XP leaderboard fallback also failed: %s", fallback_exc, exc_info=True)
             errors.append("xp_query_failed")
             xp_rows = []
+
     xp_name_map = await batch_resolve_display_names(
         db, [(row[0], row[1] or "Unknown") for row in xp_rows]
     )
@@ -815,7 +817,8 @@ async def get_quick_leaders(
     dpm_rows = []
     try:
         dpm_rows = await db.fetch_all(dpm_query, (start_date, limit))
-    except Exception:
+    except Exception as e:
+        logger.warning("DPM primary query failed, will retry with fallback: %s", e)
         dpm_rows = []
 
     if not dpm_rows:
@@ -855,7 +858,11 @@ async def get_quick_leaders(
         """
         try:
             dpm_rows = await db.fetch_all(fallback_dpm, (start_date, limit))
-        except Exception:
+        except Exception as fallback_exc:
+            # Last-resort SQLite fallback: legacy schema keys by session_id /
+            # session_date and has no round_date column on
+            # player_comprehensive_stats, so neither the primary nor the first
+            # fallback succeeds. See scripts/dev_up.sh + website/backend/init_db.py.
             fallback_session_dpm = """
                 WITH session_player AS (
                     SELECT
@@ -885,11 +892,15 @@ async def get_quick_leaders(
                 ORDER BY value DESC
                 LIMIT $2
             """
+            logger.warning(
+                "DPM fallback failed, trying session-based fallback: %s", fallback_exc
+            )
             try:
-                dpm_rows = await db.fetch_all(
-                    fallback_session_dpm, (start_date, limit)
+                dpm_rows = await db.fetch_all(fallback_session_dpm, (start_date, limit))
+            except Exception as session_exc:
+                logger.error(
+                    "DPM session fallback also failed: %s", session_exc, exc_info=True
                 )
-            except Exception:
                 errors.append("dpm_query_failed")
                 dpm_rows = []
     dpm_leaders = []
