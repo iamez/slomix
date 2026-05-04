@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.10.1](https://github.com/iamez/slomix/compare/v1.10.0...v1.10.1) (2026-05-04)
+
+
+### Bug Fixes
+
+* **website:** remove dead session_date fallback queries in quick-leaders ([#154](https://github.com/iamez/slomix/issues/154)) ([ce554e5](https://github.com/iamez/slomix/commit/ce554e57e117ca1ed70e64ad17ce0edbf826eb03))
+
 ## [1.10.0](https://github.com/iamez/slomix/compare/v1.9.0...v1.10.0) (2026-04-25)
 
 
