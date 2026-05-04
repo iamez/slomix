@@ -740,31 +740,11 @@ async def get_quick_leaders(
     xp_rows = []
     try:
         xp_rows = await db.fetch_all(xp_query, (start_date, limit))
-    except Exception:
+    except Exception as e:
+        logger.error("XP leaderboard query failed: %s", e, exc_info=True)
+        errors.append("xp_query_failed")
         xp_rows = []
 
-    if not xp_rows:
-        # Fallback for schemas using session_date
-        fallback_xp = """
-            SELECT
-                p.player_guid,
-                MAX(p.player_name) as player_name,
-                SUM(p.xp) as total_xp,
-                COUNT(*) as rounds_played
-            FROM player_comprehensive_stats p
-            WHERE p.round_number IN (1, 2)
-              AND p.time_played_seconds > 0
-              AND CAST(SUBSTR(CAST(p.session_date AS TEXT), 1, 10) AS DATE) >= $1
-            GROUP BY p.player_guid
-            ORDER BY total_xp DESC
-            LIMIT $2
-        """
-        try:
-            xp_rows = await db.fetch_all(fallback_xp, (start_date, limit))
-        except Exception as e:
-            logger.error("XP leaderboard fallback query failed: %s", e, exc_info=True)
-            errors.append("xp_query_failed")
-            xp_rows = []
     xp_name_map = await batch_resolve_display_names(
         db, [(row[0], row[1] or "Unknown") for row in xp_rows]
     )
@@ -815,7 +795,8 @@ async def get_quick_leaders(
     dpm_rows = []
     try:
         dpm_rows = await db.fetch_all(dpm_query, (start_date, limit))
-    except Exception:
+    except Exception as e:
+        logger.warning("DPM primary query failed, will retry with fallback: %s", e)
         dpm_rows = []
 
     if not dpm_rows:
@@ -855,43 +836,10 @@ async def get_quick_leaders(
         """
         try:
             dpm_rows = await db.fetch_all(fallback_dpm, (start_date, limit))
-        except Exception:
-            fallback_session_dpm = """
-                WITH session_player AS (
-                    SELECT
-                        p.session_id,
-                        p.player_guid,
-                        MAX(p.player_name) as player_name,
-                        SUM(p.damage_given) as total_damage,
-                        SUM(p.time_played_seconds) as total_time
-                    FROM player_comprehensive_stats p
-                    WHERE p.session_id IS NOT NULL
-                      AND p.round_number IN (1, 2)
-                      AND p.time_played_seconds > 0
-                      AND CAST(SUBSTR(CAST(p.session_date AS TEXT), 1, 10) AS DATE) >= $1
-                    GROUP BY p.session_id, p.player_guid
-                ),
-                session_dpm AS (
-                    SELECT
-                        player_guid,
-                        MAX(player_name) as player_name,
-                        AVG(CASE WHEN total_time > 0 THEN (total_damage::numeric / total_time * 60) ELSE 0 END) as value,
-                        COUNT(*) as sessions_played
-                    FROM session_player
-                    GROUP BY player_guid
-                )
-                SELECT player_guid, player_name, value, sessions_played
-                FROM session_dpm
-                ORDER BY value DESC
-                LIMIT $2
-            """
-            try:
-                dpm_rows = await db.fetch_all(
-                    fallback_session_dpm, (start_date, limit)
-                )
-            except Exception:
-                errors.append("dpm_query_failed")
-                dpm_rows = []
+        except Exception as e:
+            logger.error("DPM fallback query failed: %s", e, exc_info=True)
+            errors.append("dpm_query_failed")
+            dpm_rows = []
     dpm_leaders = []
     for i, row in enumerate(dpm_rows):
         display_name = await resolve_display_name(db, row[0], row[1] or "Unknown")
