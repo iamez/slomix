@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.10.0](https://github.com/iamez/slomix/compare/v1.9.0...v1.10.0) (2026-04-25)
+
+
+### Features
+
+* **lua:** persistent retry buffer for webhook payloads (v1.7.0) ([#152](https://github.com/iamez/slomix/issues/152)) ([98cb16c](https://github.com/iamez/slomix/commit/98cb16ca2584017e69442d9d273091896400f353))
+
 ## [1.9.0](https://github.com/iamez/slomix/compare/v1.8.0...v1.9.0) (2026-04-25)
 
 
