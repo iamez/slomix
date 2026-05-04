@@ -22,7 +22,10 @@ from website.backend.routers import players_router
 class FakeQuickLeadersDB:
     """
     Minimal DB stub. Routes queries by substring match.
-    fetch_all results can be queued per query-keyword via .queue_xp / .queue_dpm.
+
+    Configure return values by setting xp_rows / dpm_rows attributes; configure
+    failures by assigning to fail_xp / fail_dpm / fail_dpm_fallback (raised the
+    next time the matching query is executed).
     """
 
     def __init__(self):
@@ -60,7 +63,11 @@ class FakeQuickLeadersDB:
 
 def _build_app(db: FakeQuickLeadersDB) -> FastAPI:
     app = FastAPI()
-    app.dependency_overrides[get_db] = lambda: db
+
+    async def _db_override():
+        yield db
+
+    app.dependency_overrides[get_db] = _db_override
     app.include_router(players_router.router, prefix="/api")
     return app
 
