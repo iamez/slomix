@@ -508,8 +508,21 @@ function renderPlayerCards(players) {
             _el('span', null, `Context: ${p.kills > 0 ? (((p.carrier_kills + p.push_kills + p.crossfire_kills) / p.kills) * 100).toFixed(0) : 0}%`)
         ));
 
+        // KIS drill-down: prikaže per-kill izračun (preverjanje halucinacij).
+        if (p.guid) {
+            const detailsBtn = _el('button',
+                'mt-2 w-full text-center text-[10px] font-bold text-slate-400 hover:text-white border border-white/5 hover:border-white/20 rounded py-1 transition');
+            detailsBtn.type = 'button';
+            detailsBtn.textContent = 'ℹ Pokaži detajle KIS izračuna';
+            detailsBtn.dataset.kisDetails = p.guid;
+            detailsBtn.dataset.kisName = stripEtColors(p.name || '');
+            card.appendChild(detailsBtn);
+        }
+
         container.appendChild(card);
     });
+
+    bindKisDetailsHandler(container);
 }
 
 function renderKISBreakdown(players) {
@@ -1240,6 +1253,233 @@ function renderAdvancedMetrics(data) {
 
         card.appendChild(grid);
         container.appendChild(card);
+    });
+}
+
+// ============================================================================
+// KIS DRILL-DOWN MODAL ("Show your work" — preverjanje halucinacij)
+// ============================================================================
+
+let _kisDetailsBound = false;
+let _kisFormulaCache = null;
+
+function bindKisDetailsHandler(container) {
+    if (_kisDetailsBound) return;
+    _kisDetailsBound = true;
+    document.addEventListener('click', (event) => {
+        const btn = event.target.closest('[data-kis-details]');
+        if (!btn) return;
+        event.preventDefault();
+        const guid = btn.dataset.kisDetails;
+        const name = btn.dataset.kisName || guid;
+        if (guid) openKisDetailsModal(guid, name);
+    });
+    // Escape closes any open modal.
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closeKisDetailsModal();
+    });
+    // container reference unused but kept so callsite can pass it for future scoping.
+    void container;
+}
+
+function closeKisDetailsModal() {
+    const overlay = document.getElementById('kis-details-overlay');
+    if (overlay) overlay.remove();
+}
+
+function _multCell(label, value) {
+    const v = Number(value || 1);
+    const isBoost = v > 1.001;
+    const isDamp = v < 0.999;
+    const cls = isBoost
+        ? 'text-emerald-300'
+        : (isDamp ? 'text-rose-300' : 'text-slate-400');
+    const td = document.createElement('td');
+    td.className = `px-2 py-1 text-right tabular-nums ${cls}`;
+    td.title = label;
+    td.textContent = v.toFixed(2);
+    return td;
+}
+
+function _renderKillsTable(kills) {
+    const wrap = _el('div', 'overflow-x-auto rounded-lg border border-white/10');
+    const table = _el('table', 'w-full text-xs');
+    const thead = _el('thead', 'bg-slate-900/80 text-slate-400 text-[10px] uppercase tracking-wider');
+    const headRow = _el('tr');
+    const cols = ['#', 'Round', 'Map', 'Žrtev', 'Carrier', 'Push', 'Crossfire', 'Spawn', 'Outcome', 'Class', 'Dist', 'Health', 'Alive', 'Reinf', 'Total'];
+    cols.forEach((c) => {
+        const th = document.createElement('th');
+        th.className = 'px-2 py-2 text-right font-bold';
+        if (c === 'Žrtev' || c === 'Map' || c === '#') th.className = 'px-2 py-2 text-left font-bold';
+        th.textContent = c;
+        headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = _el('tbody', 'divide-y divide-white/5');
+    kills.forEach((k, idx) => {
+        const tr = _el('tr', 'hover:bg-white/5');
+
+        const tdIdx = document.createElement('td');
+        tdIdx.className = 'px-2 py-1 text-slate-500 tabular-nums';
+        tdIdx.textContent = String(idx + 1);
+        tr.appendChild(tdIdx);
+
+        const tdRound = document.createElement('td');
+        tdRound.className = 'px-2 py-1 text-right tabular-nums text-slate-300';
+        tdRound.textContent = `R${k.round_number}`;
+        tr.appendChild(tdRound);
+
+        const tdMap = document.createElement('td');
+        tdMap.className = 'px-2 py-1 text-slate-300 truncate max-w-[120px]';
+        tdMap.title = k.map_name || '';
+        tdMap.textContent = k.map_name || '—';
+        tr.appendChild(tdMap);
+
+        const tdVictim = document.createElement('td');
+        tdVictim.className = 'px-2 py-1 text-slate-200 truncate max-w-[140px]';
+        tdVictim.title = `${k.victim_name} (${k.victim_guid})`;
+        tdVictim.textContent = k.victim_name || '?';
+        tr.appendChild(tdVictim);
+
+        tr.appendChild(_multCell('Carrier', k.carrier_multiplier));
+        tr.appendChild(_multCell('Push', k.push_multiplier));
+        tr.appendChild(_multCell('Crossfire', k.crossfire_multiplier));
+        tr.appendChild(_multCell('Spawn', k.spawn_multiplier));
+        tr.appendChild(_multCell('Outcome', k.outcome_multiplier));
+        tr.appendChild(_multCell('Class', k.class_multiplier));
+        tr.appendChild(_multCell('Distance', k.distance_multiplier));
+        tr.appendChild(_multCell('Health', k.health_multiplier));
+        tr.appendChild(_multCell('Alive', k.alive_multiplier));
+        tr.appendChild(_multCell('Reinf', k.reinf_multiplier));
+
+        const tdTotal = document.createElement('td');
+        tdTotal.className = 'px-2 py-1 text-right tabular-nums font-bold text-amber-300';
+        tdTotal.textContent = Number(k.total_impact || 0).toFixed(2);
+        tr.appendChild(tdTotal);
+
+        tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    return wrap;
+}
+
+function _renderFormulaPanel(formula) {
+    if (!formula) {
+        return _el('div', 'text-xs text-slate-500', 'Formule ni mogoče naložiti.');
+    }
+    const pre = document.createElement('pre');
+    pre.className = 'text-[11px] text-slate-300 overflow-x-auto bg-slate-950/60 rounded p-3 border border-white/5';
+    try {
+        pre.textContent = JSON.stringify(formula, null, 2);
+    } catch (_) {
+        pre.textContent = String(formula);
+    }
+    return pre;
+}
+
+async function _fetchFormulaCached() {
+    if (_kisFormulaCache) return _kisFormulaCache;
+    try {
+        _kisFormulaCache = await fetchJSON(`${API_BASE}/storytelling/formula`);
+    } catch (_) {
+        _kisFormulaCache = null;
+    }
+    return _kisFormulaCache;
+}
+
+async function openKisDetailsModal(playerGuid, playerName) {
+    closeKisDetailsModal();
+
+    const overlay = _el('div', 'fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-start md:items-center justify-center p-4 overflow-y-auto');
+    overlay.id = 'kis-details-overlay';
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) closeKisDetailsModal();
+    });
+
+    const panel = _el('div', 'relative w-full max-w-6xl rounded-2xl border border-white/10 bg-slate-950 shadow-2xl my-4');
+    overlay.appendChild(panel);
+
+    const headerRow = _el('div', 'flex items-center justify-between gap-4 px-6 py-4 border-b border-white/10');
+    headerRow.appendChild(_el('div', null,
+        _el('div', 'text-xs uppercase tracking-wider text-slate-400', 'KIS izračun — per kill'),
+        _el('h3', 'text-xl font-black text-white', playerName || playerGuid)
+    ));
+    const closeBtn = _el('button', 'text-slate-400 hover:text-white text-2xl font-bold leading-none px-2');
+    closeBtn.type = 'button';
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', closeKisDetailsModal);
+    headerRow.appendChild(closeBtn);
+    panel.appendChild(headerRow);
+
+    const body = _el('div', 'p-6 space-y-4');
+    body.appendChild(_el('div', 'text-sm text-slate-400', 'Nalagam podrobnosti...'));
+    panel.appendChild(body);
+
+    document.body.appendChild(overlay);
+
+    const sessionDate = storyState.sessionDate;
+    if (!sessionDate) {
+        body.textContent = '';
+        body.appendChild(_el('div', 'text-rose-300 text-sm', 'session_date ni izbran.'));
+        return;
+    }
+
+    let data;
+    try {
+        const url = `${API_BASE}/storytelling/kill-impact/details?session_date=${encodeURIComponent(sessionDate)}&player_guid=${encodeURIComponent(playerGuid)}`;
+        data = await fetchJSON(url);
+    } catch (err) {
+        body.textContent = '';
+        body.appendChild(_el('div', 'text-rose-300 text-sm', `Napaka: ${err?.message || 'fetch failed'}`));
+        return;
+    }
+
+    body.textContent = '';
+
+    const summary = data.summary || {};
+    const summaryRow = _el('div', 'grid grid-cols-2 md:grid-cols-5 gap-3');
+    const summaryCell = (label, value) => _el('div', 'rounded-lg border border-white/10 bg-slate-900/60 p-3',
+        _el('div', 'text-[10px] uppercase tracking-wider text-slate-400', label),
+        _el('div', 'text-lg font-black text-white', String(value))
+    );
+    summaryRow.appendChild(summaryCell('Total KIS', (summary.total_kis ?? 0).toFixed(1)));
+    summaryRow.appendChild(summaryCell('Kills', summary.kills ?? 0));
+    summaryRow.appendChild(summaryCell('Avg impact', (summary.avg_impact ?? 0).toFixed(2)));
+    summaryRow.appendChild(summaryCell('Carrier', summary.carrier_kills ?? 0));
+    summaryRow.appendChild(summaryCell('Push', summary.push_kills ?? 0));
+    body.appendChild(summaryRow);
+
+    body.appendChild(_el('div', 'text-xs text-slate-500',
+        `session_date = ${data.session_date} · player_guid = ${data.player_guid}. ` +
+        'Vsak multiplikator je iz storytelling_kill_impact tabele. ' +
+        'Total = base × vsi multiplikatorji (s soft cap pri 5.0).'
+    ));
+
+    const kills = data.kills || [];
+    if (kills.length === 0) {
+        body.appendChild(_el('div', 'rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-200 p-3 text-sm',
+            'Ni kill rows v storytelling_kill_impact za ta player+date — KIS ni izračunan.'
+        ));
+    } else {
+        body.appendChild(_renderKillsTable(kills));
+    }
+
+    const formulaToggle = _el('details', 'rounded-lg border border-white/10 bg-slate-900/40 p-3');
+    const formulaSummary = document.createElement('summary');
+    formulaSummary.className = 'cursor-pointer text-xs uppercase tracking-wider text-slate-400 select-none';
+    formulaSummary.textContent = 'Kako se to računa? (multiplikator definicije)';
+    formulaToggle.appendChild(formulaSummary);
+    const formulaSlot = _el('div', 'mt-3');
+    formulaSlot.appendChild(_el('div', 'text-xs text-slate-500', 'Nalagam formulo...'));
+    formulaToggle.appendChild(formulaSlot);
+    body.appendChild(formulaToggle);
+
+    _fetchFormulaCached().then((formula) => {
+        formulaSlot.textContent = '';
+        formulaSlot.appendChild(_renderFormulaPanel(formula));
     });
 }
 
