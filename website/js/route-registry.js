@@ -19,6 +19,7 @@ const STATS_VIEWS = new Set([
     'rivalries',
     'story',
     'replay',
+    'smart-stats-diag',
 ]);
 
 const VIEW_TO_NAV = Object.freeze({
@@ -282,6 +283,15 @@ const ROUTE_DEFINITIONS = Object.freeze({
         migrationWave: 'C',
         buildHash: () => '#/replay',
         load: ({ legacy }) => legacy.loadReplayView(),
+    },
+    'smart-stats-diag': {
+        viewId: 'smart-stats-diag',
+        label: 'Smart Stats — Diag',
+        mode: VIEW_MODE.LEGACY,
+        surfaceType: 'read-heavy',
+        migrationWave: 'C',
+        buildHash: () => '#/smart-stats-diag',
+        load: ({ legacy }) => legacy.loadSmartStatsDiagView(),
     },
     sessions2: {
         viewId: 'sessions2',
