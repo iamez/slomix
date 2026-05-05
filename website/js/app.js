@@ -24,6 +24,7 @@ import { loadProximityView } from './proximity.js';
 import { loadStoryView } from './story.js';
 import { loadReplayView } from './replay.js';
 import { loadRivalriesView } from './rivalries.js';
+import { loadSmartStatsDiagView } from './smart-stats-diag.js';
 import { loadAdminPanelView } from './admin-panel.js';
 import { loadUploadsView, loadUploadDetail } from './uploads.js';
 import { loadAvailabilityView } from './availability.js';
@@ -91,6 +92,7 @@ const legacyRuntime = {
     loadStoryView,
     loadReplayView,
     loadRivalriesView,
+    loadSmartStatsDiagView,
     loadGreatshotView,
     loadGreatshotDemoDetail,
     loadUploadsView,
