@@ -313,6 +313,38 @@ class RoundCorrelationService:
                         )
                         return cid
 
+            # Strategy 3: round_id linkage (canonical, neodvisno od match_id timestamp).
+            # Najdi rounds.id z najbližjim round_start_unix za isti map+round_number,
+            # nato najdi correlation čez (r1|r2)_round_id.
+            # Pokrije proximity events (5+ min za R2) in vse late-arrival scenarije.
+            if round_number in (1, 2):
+                target_unix = int(target_dt.timestamp())
+                round_match = await self.db.fetch_one(
+                    """SELECT id FROM rounds
+                       WHERE map_name = ?
+                         AND round_number = ?
+                         AND round_start_unix IS NOT NULL
+                         AND ABS(round_start_unix - ?) <= 1800
+                       ORDER BY ABS(round_start_unix - ?) ASC
+                       LIMIT 1""",
+                    (map_name, round_number, target_unix, target_unix),
+                )
+                if round_match:
+                    rid = round_match[0] if isinstance(round_match, (list, tuple)) else round_match.get('id')
+                    col = f"r{round_number}_round_id"
+                    cid_row = await self.db.fetch_one(
+                        f"""SELECT correlation_id FROM round_correlations
+                            WHERE {col} = ? LIMIT 1""",
+                        (rid,),
+                    )
+                    if cid_row:
+                        cid = cid_row[0] if isinstance(cid_row, (list, tuple)) else cid_row.get('correlation_id')
+                        logger.info(
+                            "[CORRELATION] Merging %s:%s into %s (strategy=round_id, rid=%d)",
+                            match_id, map_name, cid, rid,
+                        )
+                        return cid
+
             return None
         except Exception as e:
             logger.debug(f"[CORRELATION] Nearby search failed: {e}")
@@ -410,7 +442,13 @@ class RoundCorrelationService:
 
     async def on_proximity_imported(self, match_id: str, round_number: int,
                                     map_name: str):
-        """Called after successful proximity engagement import in proximity_cog.py."""
+        """Called after successful proximity engagement import in proximity_cog.py.
+
+        Note: proximity engagements files use round-START timestamp (per-round file),
+        kar je 5+ min po R1 match start za R2. Default 30s window ne zadošča —
+        razširimo na 600s za Strategy 1, plus Strategy 3 (round_id) pokriva
+        scenarij ko je gap večji od tega.
+        """
         if round_number not in (1, 2):
             return
 
@@ -424,7 +462,9 @@ class RoundCorrelationService:
             return
 
         async with self._correlation_lock:
-            existing_cid = await self._find_nearby_correlation_id(match_id, map_name, round_number)
+            existing_cid = await self._find_nearby_correlation_id(
+                match_id, map_name, round_number, window_seconds=600
+            )
             correlation_id, effective_mid = self._resolve_correlation_id(match_id, map_name, existing_cid)
 
             await self._upsert_correlation(
