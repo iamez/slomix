@@ -6,7 +6,7 @@ Extracted from api.py to reduce file size and improve maintainability.
 
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -631,6 +631,142 @@ async def get_time_audit(
         "summary": summary,
         "samples": samples,
     }
+
+
+@router.get("/diagnostics/storytelling-completeness")
+async def get_storytelling_completeness(
+    session_date: str = Query(..., description="YYYY-MM-DD"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Quick health check za Smart Stats podatke za izbrani session_date.
+    Primerja kills v proximity_kill_outcome vs. KIS rows v storytelling_kill_impact
+    in poroča linkage pokritost (kills brez round_id, rounds brez korelacije).
+    Read-only, brez auth — UI uporablja kot 'show your work' za številke.
+    """
+    try:
+        sd = datetime.strptime(session_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="session_date must be YYYY-MM-DD")
+    try:
+        kills_row = await db.fetch_one(
+            """
+            SELECT
+                COUNT(*) AS kills_total,
+                COUNT(*) FILTER (WHERE round_id IS NOT NULL) AS kills_with_round,
+                COUNT(DISTINCT round_id) FILTER (WHERE round_id IS NOT NULL) AS distinct_rounds,
+                COUNT(DISTINCT killer_guid) AS distinct_killers
+            FROM proximity_kill_outcome
+            WHERE session_date = $1
+            """,
+            (sd,),
+        )
+        kis_row = await db.fetch_one(
+            """
+            SELECT
+                COUNT(*) AS kis_rows,
+                COUNT(DISTINCT killer_guid) AS distinct_killers,
+                COALESCE(ROUND(SUM(total_impact)::numeric, 2), 0) AS total_impact_sum
+            FROM storytelling_kill_impact
+            WHERE session_date = $1
+            """,
+            (sd,),
+        )
+        rounds_row = await db.fetch_one(
+            """
+            SELECT
+                COUNT(DISTINCT r.id) AS rounds_total,
+                COUNT(DISTINCT r.id) FILTER (WHERE rc.id IS NOT NULL) AS rounds_correlated
+            FROM proximity_kill_outcome pko
+            JOIN rounds r ON r.id = pko.round_id
+            LEFT JOIN round_correlations rc
+                ON rc.r1_round_id = r.id OR rc.r2_round_id = r.id
+            WHERE pko.session_date = $1
+            """,
+            (sd,),
+        )
+    except Exception as e:
+        logger.error("Database error in storytelling-completeness: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred.")
+
+    kills_total = int(kills_row[0] or 0) if kills_row else 0
+    kills_with_round = int(kills_row[1] or 0) if kills_row else 0
+    distinct_rounds = int(kills_row[2] or 0) if kills_row else 0
+    kis_rows = int(kis_row[0] or 0) if kis_row else 0
+    rounds_total = int(rounds_row[0] or 0) if rounds_row else 0
+    rounds_correlated = int(rounds_row[1] or 0) if rounds_row else 0
+
+    completeness_ratio = (kis_rows / kills_total) if kills_total > 0 else 0.0
+    linkage_ratio = (kills_with_round / kills_total) if kills_total > 0 else 0.0
+    correlation_ratio = (rounds_correlated / rounds_total) if rounds_total > 0 else 0.0
+
+    warnings = []
+    if kills_total == 0:
+        warnings.append({"level": "info", "message": "Za ta datum ni kill outcome zapisov."})
+    else:
+        if completeness_ratio < 0.95:
+            warnings.append({
+                "level": "warning",
+                "message": (
+                    f"Samo {kis_rows}/{kills_total} ({completeness_ratio*100:.1f}%) kills ima KIS izračun. "
+                    "Smart Stats so morda nepopolni — sproži recompute."
+                ),
+            })
+        if linkage_ratio < 0.99:
+            warnings.append({
+                "level": "warning",
+                "message": (
+                    f"{kills_total - kills_with_round} kills brez round_id linka — "
+                    "round_linker še ni resolviral vseh."
+                ),
+            })
+        if rounds_total > 0 and correlation_ratio < 0.90:
+            warnings.append({
+                "level": "warning",
+                "message": (
+                    f"Samo {rounds_correlated}/{rounds_total} rounds-ov je korelirano (R1+R2) — "
+                    "match metrike (BOX, momentum) so lahko nepopolne."
+                ),
+            })
+
+    # Znana sistemska opozorila iz docs/STATS_FORMULA_RESEARCH.md — vedno prikazana.
+    known_issues = [
+        {
+            "key": "time_played_per_player",
+            "title": "time_played_seconds ni per-player",
+            "detail": (
+                "Parser nastavi za vse igralce time_played_seconds = round duration. "
+                "Vpliva na soft cap, gravity, lurker profile."
+            ),
+        },
+        {
+            "key": "headshot_pct",
+            "title": "headshot_percentage uporablja napačno razmerje",
+            "detail": "Računa headshot_kills/total_kills namesto headshot_hits/total_hits.",
+        },
+        {
+            "key": "distance_mult_hardcoded",
+            "title": "Distance multiplier hardcoded na 1.0",
+            "detail": "kis.py:229 — per-kill distance data še ni implementirana.",
+        },
+    ]
+
+    return {
+        "session_date": session_date,
+        "kills_total": kills_total,
+        "kills_with_round": kills_with_round,
+        "distinct_rounds_in_kills": distinct_rounds,
+        "kis_rows": kis_rows,
+        "rounds_total": rounds_total,
+        "rounds_correlated": rounds_correlated,
+        "completeness_ratio": round(completeness_ratio, 4),
+        "linkage_ratio": round(linkage_ratio, 4),
+        "correlation_ratio": round(correlation_ratio, 4),
+        "kis_total_impact_sum": float(kis_row[2]) if kis_row and kis_row[2] is not None else 0.0,
+        "warnings": warnings,
+        "known_issues": known_issues,
+    }
+
 
 @router.get("/diagnostics/spawn-audit")
 async def get_spawn_audit(
