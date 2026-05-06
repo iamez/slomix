@@ -11,7 +11,7 @@
 | **2. Dual-write ingest** | ✅ Live | #165 | helper + 4 callsites + bulk reconcile SQL |
 | **3. UNIQUE constraint** | ✅ Live | #166 | partial UNIQUE on canonical_id WHERE NOT NULL |
 | **4. Round_linker primary lookup** | ✅ Live | #166 | O(1) canonical-first, fuzzy fallback |
-| **5. Retire 5/6 fuzzy** | ⏳ Pending | — | next session |
+| **5. Retire 5/6 fuzzy** | ✅ Re-scoped (see below) | — | RCA assumption corrected |
 | **6. Saga timeout** | ✅ Live | (this commit) | 6h pending → 'incomplete' |
 
 > **Decision:** Uvesti `round_canonical_id` (trace_id-style stable identifier) na rounds tabel, derived deterministično iz `(round_start_unix, map_name, round_number)`. Vsi 5 ingest entry pointov pišejo z `INSERT ... ON CONFLICT (round_canonical_id) DO UPDATE` (idempotent). Round_linker postane preprost lookup, ne fuzzy matching.
@@ -253,6 +253,29 @@ def test_stats_derive_round_start():
 6. **Saga timeout duration**: 1h dovolj? Real game session lahko zamuja >1h med Lua ingest in proximity flush?
 
 ---
+
+## Phase 5 — re-scoped after deeper review
+
+Original RCA assumption: "6 fuzzy matching implementations, retire 5 of them as duplicate code."
+
+**Re-scoped after Phase 4 implementation:** the 5 non-round_linker subsystems are **orthogonal logic for different scopes**, not duplicates:
+
+| Subsystem | Actual scope | Why it stays |
+|---|---|---|
+| `round_correlation_service._find_nearby_correlation_id` | R1+R2 correlation merge (Strategy 1+2+3) | Different layer than rounds linkage. Matches `round_correlations` rows, not `rounds`. Strategy 3 specifically prefers `round_end_unix` for proximity events (canonical_id is keyed on `round_start_unix` — incompatible directly). |
+| `timing_comparison_service` "round-number-relaxed fallback" | Dev channel display widget for stats vs Lua webhook timing comparison | Dev tool, not production linkage. Outputs Discord embed for operators. |
+| `endstats_pipeline_mixin` "duplicate_richer_selected" | Per-source file deduplication when 2 endstats files arrive (lua_restart, retry) | File-level merge logic, not round-level. Selects higher-quality payload between competing files. |
+| `timing_debug_service` | Debug channel posting for round timing inspection | Debug-only, optional feature. |
+| `team_management_cog` team-level fuzzy | Player→team assignment matching | Team scope, not round scope. |
+
+**Conclusion:** the canonical_id pattern (Phases 1-4) eliminated the **only** real round-linkage duplication (round_linker fuzzy). The remaining 5 systems each serve distinct purposes and are correctly factored.
+
+**Operational consequence:**
+- Round_linker: canonical primary + fuzzy fallback (Phase 4) — **DONE**
+- Correlation service Strategy 3: keeps end_unix priority for proximity (which canonical_id can't replace) — **NO CHANGE**
+- Dev/debug tools: orthogonal, untouched
+
+**Lesson learned:** initial RCA's "6 fuzzy implementations need retire" framing was over-aggressive. Code duplication review should distinguish **logical duplication** (same problem solved twice) from **scope orthogonality** (similar pattern, different domain). Investigated thoroughly only via Phase 4 implementation experience.
 
 ## Reference
 
