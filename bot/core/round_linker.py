@@ -129,6 +129,36 @@ async def resolve_round_id_with_reason(
                 map_name, round_number, round_date, round_time,
             )
 
+    # Phase 4: PRIMARY canonical_id lookup (per ADR docs/ADR_round_canonical_id.md).
+    # If caller provides target_dt with a real round_start_unix, compute the
+    # canonical_id deterministically and try a direct O(1) lookup first.
+    # Falls through to existing fuzzy matching if no hit (handles historic
+    # rounds without canonical_id and pre-Lua arrivals).
+    if target_dt:
+        try:
+            from bot.core.round_canonical import compute_canonical_id
+            target_unix_for_canonical = int(target_dt.timestamp())
+            canonical_id = compute_canonical_id(
+                target_unix_for_canonical, map_name, round_number
+            )
+            if canonical_id:
+                row = await db_adapter.fetch_one(
+                    "SELECT id FROM rounds WHERE round_canonical_id = ?",
+                    (canonical_id,),
+                )
+                if row:
+                    diag["reason_code"] = "resolved_canonical_id_match"
+                    diag["best_diff_seconds"] = 0
+                    diag["candidate_count"] = 1
+                    diag["parsed_candidate_count"] = 1
+                    logger.debug(
+                        "round_linker: canonical_id match map=%s rn=%d round_id=%d cid=%s",
+                        map_name, round_number, row[0], canonical_id,
+                    )
+                    return row[0], diag
+        except Exception as _e:
+            logger.debug(f"canonical_id primary lookup skipped (non-fatal): {_e}")
+
     if not round_date and target_dt:
         round_date = target_dt.strftime("%Y-%m-%d")
         diag["round_date"] = round_date
