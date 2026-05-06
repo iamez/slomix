@@ -1497,6 +1497,14 @@ class UltimateETLegacyBot(
 
             await self.db_adapter.execute(update_query, tuple(update_values))
 
+            # Phase 2 canonical_id dual-write: Lua arrival is primary point
+            # where round_start_unix becomes set, so canonical_id computable.
+            try:
+                from bot.core.round_canonical import update_canonical_id_if_possible
+                await update_canonical_id_if_possible(self.db_adapter, round_id)
+            except Exception as _e:
+                logger.debug(f"canonical_id dual-write skipped (non-fatal): {_e}")
+
             logger.info(
                 f"✅ Applied Lua metadata to round {round_id}: "
                 f"winner={metadata.get('winner_team')}, "
@@ -1859,6 +1867,25 @@ class UltimateETLegacyBot(
                 parts = result.split()
                 if len(parts) == 2 and parts[1] != '0':
                     logger.info(f"[TIMING RECONCILE] Backfilled timing for {parts[1]} rounds")
+                    # Phase 2 canonical_id: rounds with newly-set round_start_unix
+                    # are now canonicalizable. Bulk update instead of per-row.
+                    try:
+                        await self.db_adapter.execute("""
+                            UPDATE rounds SET round_canonical_id = SUBSTRING(
+                                ENCODE(DIGEST(
+                                    round_start_unix::text || ':' ||
+                                    LOWER(REGEXP_REPLACE(map_name, '\\^[0-9A-Za-z]', '', 'g')) || ':' ||
+                                    round_number::text,
+                                    'sha256'
+                                ), 'hex') FROM 1 FOR 16
+                            )
+                            WHERE round_canonical_id IS NULL
+                              AND round_start_unix IS NOT NULL AND round_start_unix > 0
+                              AND map_name IS NOT NULL
+                              AND round_number IN (0, 1, 2)
+                        """)
+                    except Exception as _e:
+                        logger.debug(f"canonical_id bulk reconcile skipped: {_e}")
         except Exception as e:
             logger.warning(f"[TIMING RECONCILE] Failed: {e}")
 
