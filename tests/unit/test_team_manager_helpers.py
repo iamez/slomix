@@ -233,18 +233,18 @@ def test_decode_json_array_returns_empty_for_unknown_type():
     assert TeamManager._decode_json_array(3.14) == []
 
 
-def test_decode_json_array_json_string_returning_dict_passes_through():
-    """JSON parse can return any type — if the JSON is `{"k": "v"}`, the
-    function returns the dict (json.loads result), NOT []. Pin observed
-    behaviour so callers know to type-check downstream if they need
-    only lists."""
+def test_decode_json_array_json_string_returning_dict_normalises_to_empty():
+    """A JSON string that parses to a non-list (`{"k": "v"}`) is NOT a roster.
+    Pin the contract: the helper returns a list — non-list parses normalize
+    to []. Callers (`get_session_teams`, etc.) immediately do `len(guids)`
+    so a dict leak would crash the read path."""
     out = TeamManager._decode_json_array('{"k": "v"}')
-    # Returns the parsed dict — NOT wrapped in a list
-    assert out == {"k": "v"}
+    assert out == []
 
 
-def test_decode_json_array_json_string_returning_null_passes_through():
-    """JSON `null` → None comes back from json.loads; pin observed
-    behaviour (NOT empty list)."""
+def test_decode_json_array_json_string_returning_null_normalises_to_empty():
+    """JSON `null` → json.loads returns None → helper normalises to [].
+    Pin the safe behaviour so a stored JSON `null` (legacy/malformed row)
+    doesn't TypeError on `len(...)` downstream."""
     out = TeamManager._decode_json_array("null")
-    assert out is None
+    assert out == []

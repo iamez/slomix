@@ -75,17 +75,14 @@ def test_resolve_404_for_missing_file(svc, tmp_path):
     assert exc.value.status_code == 404
 
 
-def test_resolve_symlink_handling_followed_to_target(svc, tmp_path):
-    """The current implementation calls `.resolve()` BEFORE `.is_symlink()`,
-    so symlinks pointing to a real file inside the root resolve to the
-    target — `.is_symlink()` returns False on the target, so the link is
-    accepted.
+def test_resolve_rejects_symlink_input(svc, tmp_path):
+    """Symlink anywhere along the candidate path → 403 (TOCTOU defence).
 
-    This pins observed behaviour. If a future security hardening pass
-    inserts an `os.path.islink(self.root / stored_path)` check BEFORE
-    resolve(), this test would need to be inverted to expect 403.
-    Leaving as-is so the change is loud (test breaks → operator notices).
-    """
+    The implementation walks the candidate parents BEFORE `resolve()` so
+    a symlink that points to a real file inside the storage root is still
+    rejected. Pin the security contract — without this guard, an attacker
+    who can write to the storage root could swap the link target between
+    `is_file()` check and read."""
     sub = tmp_path / "config" / "linked"
     sub.mkdir(parents=True)
     real = sub / "real.cfg"
@@ -97,9 +94,29 @@ def test_resolve_symlink_handling_followed_to_target(svc, tmp_path):
     except OSError:
         pytest.skip("Filesystem does not support symlinks")
 
-    # Currently resolves through the link to the target file — succeeds.
-    out = svc.resolve_download_path("config/linked/evil.cfg")
-    assert out == real.resolve()
+    with pytest.raises(HTTPException) as exc:
+        svc.resolve_download_path("config/linked/evil.cfg")
+    assert exc.value.status_code == 403
+
+
+def test_resolve_rejects_symlink_in_parent_dir(svc, tmp_path):
+    """Symlink in a parent directory (not the leaf) is also rejected.
+    Pin the walk-the-parents check — a single is_symlink() on the leaf
+    would miss this attack."""
+    real_dir = tmp_path / "config" / "real_dir"
+    real_dir.mkdir(parents=True)
+    target_file = real_dir / "x.cfg"
+    target_file.write_text("safe")
+
+    link_dir = tmp_path / "config" / "link_dir"
+    try:
+        link_dir.symlink_to(real_dir)
+    except OSError:
+        pytest.skip("Filesystem does not support symlinks")
+
+    with pytest.raises(HTTPException) as exc:
+        svc.resolve_download_path("config/link_dir/x.cfg")
+    assert exc.value.status_code == 403
 
 
 def test_resolve_404_when_path_is_a_directory(svc, tmp_path):
