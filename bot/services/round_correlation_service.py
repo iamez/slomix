@@ -711,6 +711,26 @@ class RoundCorrelationService:
     # Phase E: periodic orphan sweep
     # ------------------------------------------------------------------
 
+    async def close(self):
+        """Cancel the sweep task and await its exit so shutdown is clean.
+
+        Without this the task keeps running after the DB pool is closed,
+        producing noisy errors and 'Task was destroyed but it is pending'
+        warnings during process termination.
+        Safe to call multiple times.
+        """
+        task = self._sweep_task
+        self._sweep_task = None
+        if task is None or task.done():
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.warning("[CORRELATION] Sweep task raised on shutdown: %s", e)
+
     async def _periodic_orphan_sweep(self):
         """Each hour: scan pending+orphan rows older than 1h, try late merge.
 
