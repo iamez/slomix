@@ -6,6 +6,29 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.11.0](https://github.com/iamez/slomix/compare/v1.10.1...v1.11.0) (2026-05-06)
+
+
+### Features
+
+* **correlation:** Phase D cleanup + Phase E periodic sweep ([71ebdd3](https://github.com/iamez/slomix/commit/71ebdd3be230d21961e134ca6eabbadf6b27ae0c))
+* **correlation:** Phase D cleanup tool + Phase E periodic sweep ([9a69029](https://github.com/iamez/slomix/commit/9a69029cc3421d968dc1d66cebe515efb3d61c3f))
+* **diag:** storytelling-completeness endpoint + correct rounds_correlated ([6193c46](https://github.com/iamez/slomix/commit/6193c466836e03bb381d4d6d4349d83293509d5f))
+* **tools:** website sanity check — cross-validate API vs SQL ([6fa07c8](https://github.com/iamez/slomix/commit/6fa07c8f4653c51ce3cf30a575bfa7345dea42d3))
+* **tools:** website-wide sanity check tool ([0dacbfc](https://github.com/iamez/slomix/commit/0dacbfc9a6495859007c47cc95de27d28fa42da9))
+* **website:** Stats dropdown reorder + Smart Stats verification UI ([29ef728](https://github.com/iamez/slomix/commit/29ef7287f891129dfe27243bbb506f573042118b))
+
+
+### Bug Fixes
+
+* correlation orphan regression remediation (Phase A+B) ([b54dc37](https://github.com/iamez/slomix/commit/b54dc370e4cb10bd97540d6d7110adb02432df14))
+* **correlation:** Strategy 3 back-to-back match cross-pollination ([bd22565](https://github.com/iamez/slomix/commit/bd2256502f9ace42bc1157a7cd6b654c4159fb12))
+* **correlation:** Strategy 3 round_id merge + 600s proximity window ([9c86dbc](https://github.com/iamez/slomix/commit/9c86dbc80e5384f5eaa8f61df9673e803330402f))
+* **proximity:** re-linker detects + repairs mismatched round_id ([ba3c5c4](https://github.com/iamez/slomix/commit/ba3c5c48f8cc2bb8a6471e53013e5fb39059b9ca))
+* **proximity:** re-linker detects + repairs mismatched round_id assignments ([9ba7bcf](https://github.com/iamez/slomix/commit/9ba7bcf121793ea5cdd8c96e3bfa464b2a4c63ba))
+* Strategy 3 back-to-back match cross-pollination + diag KIS auto-compute ([1e23b34](https://github.com/iamez/slomix/commit/1e23b34c5746872516f2b1d28d21151e43a4794c))
+* **tools:** cleanup script preserves multi-match days (best-of-3 stil) ([b6752d9](https://github.com/iamez/slomix/commit/b6752d9ad67e278f5388f36665adbee54983fac7))
+
 ## [1.10.1](https://github.com/iamez/slomix/compare/v1.10.0...v1.10.1) (2026-05-04)
 
 
