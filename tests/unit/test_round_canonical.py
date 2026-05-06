@@ -184,3 +184,48 @@ async def test_update_returns_none_when_row_missing():
     db = _FakeDb(row=None)
     assert await update_canonical_id_if_possible(db, round_id=999) is None
     assert db.executes == []
+
+
+class _CollidingDb:
+    """DB whose UPDATE raises a UniqueViolation-like error.
+
+    Mirrors what asyncpg does when migration 050's partial UNIQUE index
+    rejects a duplicate canonical_id (real-world: 1 of 409 historic rounds
+    collided during backfill).
+    """
+
+    def __init__(self, row, exc):
+        self._row = row
+        self._exc = exc
+        self.executes: list[tuple] = []
+
+    async def fetch_one(self, query, params=None):
+        return self._row
+
+    async def execute(self, query, params=None):
+        self.executes.append((str(query), params))
+        raise self._exc
+
+
+class _FakeUniqueViolation(Exception):
+    """Stands in for asyncpg.exceptions.UniqueViolationError without importing the driver."""
+
+
+@pytest.mark.asyncio
+async def test_update_swallows_unique_violation():
+    """Collision → log + return None instead of crashing the ingest path."""
+    exc = _FakeUniqueViolation("duplicate key value violates unique constraint \"uniq_rounds_canonical_id\"")
+    db = _CollidingDb(row=(1_700_000_000, "te_escape2", 1, None), exc=exc)
+    cid = await update_canonical_id_if_possible(db, round_id=42)
+    assert cid is None
+    # We did try the UPDATE
+    assert len(db.executes) == 1
+
+
+@pytest.mark.asyncio
+async def test_update_re_raises_unrelated_errors():
+    """Non-collision DB errors must propagate so callers can react."""
+    exc = RuntimeError("connection lost mid-query")
+    db = _CollidingDb(row=(1_700_000_000, "te_escape2", 1, None), exc=exc)
+    with pytest.raises(RuntimeError, match="connection lost"):
+        await update_canonical_id_if_possible(db, round_id=42)
