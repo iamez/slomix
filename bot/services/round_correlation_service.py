@@ -323,11 +323,11 @@ class RoundCorrelationService:
 
             # Strategy 3: round_id linkage. Match is ROBUST samo za proximity events,
             # ki dump-ajo OB ROUND END (~2-3s delay). Preferiramo round_end_unix match.
-            # Stats events naj se reroutajo samo če target je BLIZU round_start (≤60s),
+            # Stats events naj se reroutajo samo če target je BLIZU round_start (≤90s),
             # da preprečimo back-to-back match cross-pollination (8-12 min razlik
             # med match-i istega map-a v sequenced session-u).
             #
-            # Tolerance:
+            # Tolerance (oba ±90s — komentar in koda morata ostati v sinhronu):
             #   round_end_unix ±90s    → priority 1 (proximity end-of-round flush)
             #   round_start_unix ±90s  → priority 2 (Lua/stats near-start)
             # NE uporabljamo 1800s window — to povzroča false-merge v back-to-back matchih.

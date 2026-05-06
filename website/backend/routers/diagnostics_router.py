@@ -642,20 +642,17 @@ async def get_storytelling_completeness(
     Quick health check za Smart Stats podatke za izbrani session_date.
     Primerja kills v proximity_kill_outcome vs. KIS rows v storytelling_kill_impact
     in poroča linkage pokritost (kills brez round_id, rounds brez korelacije).
+
     Read-only, brez auth — UI uporablja kot 'show your work' za številke.
+    Endpoint NE triggera compute side-effects, ker bi to bilo unauthenticated
+    write surface (DoS) — če `kis_rows == 0` za session, UI mora pokazati
+    "Smart Stats še ni izračunan — odpri Smart Stats za ta datum" in
+    `kis_computed=false` v response-u za tisti UX hint.
     """
     try:
         sd = datetime.strptime(session_date, "%Y-%m-%d").date()
     except ValueError:
         raise HTTPException(status_code=400, detail="session_date must be YYYY-MM-DD")
-
-    # Auto-trigger KIS compute (lazy-by-default), tako da diag pokaže true stanje.
-    # Brez tega vsak nov datum prikaže 0/N — false alarm dokler nekdo ne obišče Smart Stats.
-    try:
-        from website.backend.services.storytelling_service import StorytellingService
-        await StorytellingService(db).compute_session_kis(sd)
-    except Exception as e:
-        logger.warning("Diag pre-compute KIS failed (continuing): %s", e)
 
     try:
         kills_row = await db.fetch_one(
@@ -709,11 +706,21 @@ async def get_storytelling_completeness(
     linkage_ratio = (kills_with_round / kills_total) if kills_total > 0 else 0.0
     correlation_ratio = (rounds_correlated / rounds_total) if rounds_total > 0 else 0.0
 
+    kis_computed = kis_rows > 0
+
     warnings = []
     if kills_total == 0:
         warnings.append({"level": "info", "message": "Za ta datum ni kill outcome zapisov."})
     else:
-        if completeness_ratio < 0.95:
+        if not kis_computed:
+            warnings.append({
+                "level": "info",
+                "message": (
+                    "Smart Stats še ni izračunan za ta datum. "
+                    "Odpri stran 'Smart Stats' za izbrani datum — KIS se izračuna ob prvem obisku."
+                ),
+            })
+        elif completeness_ratio < 0.95:
             warnings.append({
                 "level": "warning",
                 "message": (
@@ -766,6 +773,7 @@ async def get_storytelling_completeness(
         "kills_with_round": kills_with_round,
         "distinct_rounds_in_kills": distinct_rounds,
         "kis_rows": kis_rows,
+        "kis_computed": kis_computed,
         "rounds_total": rounds_total,
         "rounds_correlated": rounds_correlated,
         "completeness_ratio": round(completeness_ratio, 4),
