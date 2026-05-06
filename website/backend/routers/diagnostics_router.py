@@ -6,7 +6,7 @@ Extracted from api.py to reduce file size and improve maintainability.
 
 import json
 import os
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
