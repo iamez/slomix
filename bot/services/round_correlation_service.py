@@ -321,21 +321,41 @@ class RoundCorrelationService:
                         )
                         return cid
 
-            # Strategy 3: round_id linkage (canonical, neodvisno od match_id timestamp).
-            # Najdi rounds.id z najbližjim round_start_unix za isti map+round_number,
-            # nato najdi correlation čez (r1|r2)_round_id.
-            # Pokrije proximity events (5+ min za R2) in vse late-arrival scenarije.
+            # Strategy 3: round_id linkage. Match is ROBUST samo za proximity events,
+            # ki dump-ajo OB ROUND END (~2-3s delay). Preferiramo round_end_unix match.
+            # Stats events naj se reroutajo samo če target je BLIZU round_start (≤60s),
+            # da preprečimo back-to-back match cross-pollination (8-12 min razlik
+            # med match-i istega map-a v sequenced session-u).
+            #
+            # Tolerance:
+            #   round_end_unix ±90s    → priority 1 (proximity end-of-round flush)
+            #   round_start_unix ±90s  → priority 2 (Lua/stats near-start)
+            # NE uporabljamo 1800s window — to povzroča false-merge v back-to-back matchih.
             if round_number in (1, 2):
                 target_unix = int(target_dt.timestamp())
                 round_match = await self.db.fetch_one(
-                    """SELECT id FROM rounds
+                    """SELECT id,
+                              CASE
+                                WHEN round_end_unix IS NOT NULL AND ABS(round_end_unix - ?) <= 90 THEN 1
+                                WHEN ABS(round_start_unix - ?) <= 90 THEN 2
+                                ELSE 99
+                              END AS priority,
+                              LEAST(
+                                  ABS(round_start_unix - ?),
+                                  COALESCE(ABS(round_end_unix - ?), 9999999)
+                              ) AS dist
+                       FROM rounds
                        WHERE map_name = ?
                          AND round_number = ?
                          AND round_start_unix IS NOT NULL
-                         AND ABS(round_start_unix - ?) <= 1800
-                       ORDER BY ABS(round_start_unix - ?) ASC
+                         AND (
+                             (round_end_unix IS NOT NULL AND ABS(round_end_unix - ?) <= 90)
+                             OR ABS(round_start_unix - ?) <= 90
+                         )
+                       ORDER BY priority ASC, dist ASC
                        LIMIT 1""",
-                    (map_name, round_number, target_unix, target_unix),
+                    (target_unix, target_unix, target_unix, target_unix,
+                     map_name, round_number, target_unix, target_unix),
                 )
                 if round_match:
                     rid = round_match[0] if isinstance(round_match, (list, tuple)) else round_match.get('id')
