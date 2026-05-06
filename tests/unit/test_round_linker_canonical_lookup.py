@@ -184,8 +184,16 @@ async def test_tz_aware_target_dt_is_normalized_for_canonical():
 
 @pytest.mark.asyncio
 async def test_invalid_round_number_skips_canonical():
-    """round_number not in (0,1,2) → compute_canonical_id returns None →
-    canonical query never fires."""
+    """round_number not in (0,1,2) → canonical branch is silently skipped
+    because compute_canonical_id() returns None for those values.
+
+    Note: resolve_round_id_with_reason's `invalid_input` guard only fires
+    on FALSY round_number (0 or None). For out-of-range values like 5
+    the linker still proceeds into the legacy fuzzy SELECT — it's
+    `compute_canonical_id`'s round_number ∈ (0,1,2) check that prevents
+    a meaningless canonical lookup. The test asserts both halves of
+    that contract.
+    """
     target_dt = datetime.fromtimestamp(1_700_000_000)
     db = _ScriptedDb()
     db.add_fetch_all("FROM rounds", [])
@@ -195,6 +203,10 @@ async def test_invalid_round_number_skips_canonical():
     )
 
     canonical_fired = any("round_canonical_id" in q for kind, q, p in db.queries)
-    # round_number=5 fails the early invalid_input guard before even reaching canonical
+    legacy_fired = any(
+        "FROM rounds" in q and "round_canonical_id" not in q
+        for kind, q, p in db.queries
+    )
     assert round_id is None
-    assert not canonical_fired
+    assert not canonical_fired, "canonical lookup must be suppressed for round_number=5"
+    assert legacy_fired, "legacy fuzzy SELECT should still run (no early invalid_input)"
