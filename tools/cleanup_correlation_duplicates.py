@@ -112,14 +112,24 @@ def choose_canonical(rows: list[dict]) -> dict | None:
     Pravila:
     1. Vsaj eden mora imeti r1_round_id ALI r2_round_id (ker bo postal canonical
        — ostali so orphani brez round_id-jev).
-    2. Najpopolnejši (highest completeness_pct).
-    3. Tie-breaker: najstarejši (najmanjši id).
+    2. Vsi candidate-i z NOT NULL r1_round_id morajo kazati na isti round
+       (sicer je multi-match day — best-of-3 stil — skip).
+    3. Najpopolnejši (highest completeness_pct).
+    4. Tie-breaker: najstarejši (najmanjši id).
 
-    Vrne None če ni primernega canonical row-a (vse so orphani).
+    Vrne None če ni primernega canonical row-a (vse so orphani ali multi-match).
     """
     candidates = [r for r in rows if r["r1_round_id"] is not None or r["r2_round_id"] is not None]
     if not candidates:
         return None
+
+    # Multi-match day detection: če imamo več complete-ov z različnimi r1_round_id
+    # ali r2_round_id, to ni dup grupa, ampak legitimni multi-match (best-of-3).
+    distinct_r1 = {c["r1_round_id"] for c in candidates if c["r1_round_id"] is not None}
+    distinct_r2 = {c["r2_round_id"] for c in candidates if c["r2_round_id"] is not None}
+    if len(distinct_r1) > 1 or len(distinct_r2) > 1:
+        return None
+
     # Sort: completeness DESC, id ASC
     candidates.sort(key=lambda r: (-r["completeness_pct"], r["id"]))
     return candidates[0]
@@ -178,10 +188,20 @@ async def execute_cleanup(conn, groups: list[dict], apply: bool, summary_only: b
 
         canonical = choose_canonical(rows)
         if canonical is None:
-            stats["groups_skipped_no_canonical"] += 1
+            # Razlikuj: čisti orphan vs multi-match day
+            with_round_id = [r for r in rows if r["r1_round_id"] is not None or r["r2_round_id"] is not None]
+            distinct_r1 = {r["r1_round_id"] for r in with_round_id if r["r1_round_id"] is not None}
+            distinct_r2 = {r["r2_round_id"] for r in with_round_id if r["r2_round_id"] is not None}
+            if len(distinct_r1) > 1 or len(distinct_r2) > 1:
+                reason = "multi_match_day_distinct_round_ids"
+                stats.setdefault("groups_skipped_multi_match", 0)
+                stats["groups_skipped_multi_match"] += 1
+            else:
+                reason = "no_canonical"
+                stats["groups_skipped_no_canonical"] += 1
             actions.append({
                 "kind": "SKIP",
-                "reason": "no_canonical",
+                "reason": reason,
                 "key": (date, map_name),
                 "rows": [r["id"] for r in rows],
             })
