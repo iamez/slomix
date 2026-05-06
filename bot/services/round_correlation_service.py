@@ -20,6 +20,7 @@ Mode is config-driven:
 
 import asyncio
 import logging
+import os
 from datetime import datetime
 
 logger = logging.getLogger('RoundCorrelation')
@@ -80,6 +81,7 @@ class RoundCorrelationService:
         # Slomix hosts at most one active match at a time; a single global
         # lock has negligible throughput impact.
         self._correlation_lock = asyncio.Lock()
+        self._sweep_task = None
 
         mode = "DRY-RUN" if dry_run else "LIVE_REQUESTED"
         logger.info(
@@ -117,6 +119,12 @@ class RoundCorrelationService:
             return
 
         logger.info("[CORRELATION] LIVE mode enabled (schema preflight passed)")
+
+        # Phase E: periodic orphan sweep — late-merge stranded pending rows.
+        # Disabled with CORRELATION_PERIODIC_SWEEP=false.
+        if os.getenv("CORRELATION_PERIODIC_SWEEP", "true").lower() != "false":
+            self._sweep_task = asyncio.create_task(self._periodic_orphan_sweep())
+            logger.info("[CORRELATION] Periodic orphan sweep started (interval=3600s)")
 
     async def _run_schema_preflight(self):
         try:
@@ -678,6 +686,163 @@ class RoundCorrelationService:
             logger.warning(
                 f"[CORRELATION] Error linking summary for {match_id}: {e}"
             )
+
+    # ------------------------------------------------------------------
+    # Phase E: periodic orphan sweep
+    # ------------------------------------------------------------------
+
+    async def _periodic_orphan_sweep(self):
+        """Each hour: scan pending+orphan rows older than 1h, try late merge.
+
+        Catches edge cases that escaped the synchronous merge path (race
+        conditions, late-arrival events). Idempotent — if no orphan found,
+        cycle is a no-op.
+
+        Toggle via env CORRELATION_PERIODIC_SWEEP=false.
+        """
+        # Initial delay so we do not collide with bot startup activity.
+        await asyncio.sleep(120)
+
+        while True:
+            try:
+                await self._sweep_once()
+            except asyncio.CancelledError:
+                logger.info("[CORRELATION-SWEEP] Cancelled (shutdown)")
+                raise
+            except Exception as e:
+                logger.error(f"[CORRELATION-SWEEP] Cycle failed: {e}", exc_info=True)
+            await asyncio.sleep(3600)
+
+    async def _sweep_once(self):
+        if not await self._allow_live_write():
+            return
+
+        rows = await self.db.fetch_all(
+            """
+            SELECT correlation_id, match_id, map_name,
+                   has_r1_proximity, has_r2_proximity,
+                   has_r1_lua_teams, has_r2_lua_teams
+            FROM round_correlations
+            WHERE status = 'pending'
+              AND r1_round_id IS NULL
+              AND r2_round_id IS NULL
+              AND created_at < NOW() - INTERVAL '1 hour'
+            ORDER BY created_at DESC
+            LIMIT 50
+            """
+        )
+        if not rows:
+            return
+
+        merged_count = 0
+        for row in rows:
+            cid = row[0] if isinstance(row, (list, tuple)) else row.get('correlation_id')
+            mid = row[1] if isinstance(row, (list, tuple)) else row.get('match_id')
+            mn = row[2] if isinstance(row, (list, tuple)) else row.get('map_name')
+            # Detect round_number from set flags (R1 if r1_*, R2 if r2_*)
+            has_r1 = (row[3] or row[5])
+            has_r2 = (row[4] or row[6])
+            if has_r1 and not has_r2:
+                rn = 1
+            elif has_r2 and not has_r1:
+                rn = 2
+            else:
+                continue  # Ambiguous — leave for manual review
+
+            async with self._correlation_lock:
+                target_cid = await self._find_nearby_correlation_id(
+                    mid, mn, rn, window_seconds=1800
+                )
+                if not target_cid or target_cid == cid:
+                    continue
+
+                merged = await self._merge_orphan(cid, target_cid)
+                if merged:
+                    merged_count += 1
+                    logger.info(
+                        f"[CORRELATION-SWEEP] Late-merged orphan {cid} → {target_cid} "
+                        f"(round_number={rn})"
+                    )
+
+        if merged_count:
+            logger.info(f"[CORRELATION-SWEEP] Cycle done: {merged_count} orphan(s) merged")
+
+    async def _merge_orphan(self, source_cid: str, target_cid: str) -> bool:
+        """Copy has_* flags from source orphan into target, then delete source.
+        Returns True on success."""
+        try:
+            src = await self.db.fetch_one(
+                """SELECT has_r1_stats, has_r2_stats,
+                          has_r1_lua_teams, has_r2_lua_teams,
+                          has_r1_gametime, has_r2_gametime,
+                          has_r1_endstats, has_r2_endstats,
+                          has_r1_proximity, has_r2_proximity,
+                          r1_lua_teams_id, r2_lua_teams_id
+                   FROM round_correlations WHERE correlation_id = ?""",
+                (source_cid,),
+            )
+            if not src:
+                return False
+
+            (s_s1, s_s2, s_l1, s_l2, s_g1, s_g2, s_e1, s_e2,
+             s_p1, s_p2, s_lt1, s_lt2) = src
+
+            tgt = await self.db.fetch_one(
+                """SELECT has_r1_stats, has_r2_stats,
+                          has_r1_lua_teams, has_r2_lua_teams,
+                          has_r1_gametime, has_r2_gametime,
+                          has_r1_endstats, has_r2_endstats,
+                          has_r1_proximity, has_r2_proximity,
+                          r1_lua_teams_id, r2_lua_teams_id
+                   FROM round_correlations WHERE correlation_id = ?""",
+                (target_cid,),
+            )
+            if not tgt:
+                return False
+
+            (t_s1, t_s2, t_l1, t_l2, t_g1, t_g2, t_e1, t_e2,
+             t_p1, t_p2, t_lt1, t_lt2) = tgt
+
+            updates = {}
+            for label, src_v, tgt_v in [
+                ("has_r1_stats", s_s1, t_s1), ("has_r2_stats", s_s2, t_s2),
+                ("has_r1_lua_teams", s_l1, t_l1), ("has_r2_lua_teams", s_l2, t_l2),
+                ("has_r1_gametime", s_g1, t_g1), ("has_r2_gametime", s_g2, t_g2),
+                ("has_r1_endstats", s_e1, t_e1), ("has_r2_endstats", s_e2, t_e2),
+                ("has_r1_proximity", s_p1, t_p1), ("has_r2_proximity", s_p2, t_p2),
+            ]:
+                if src_v and not tgt_v:
+                    updates[label] = True
+            for label, src_v, tgt_v in [
+                ("r1_lua_teams_id", s_lt1, t_lt1), ("r2_lua_teams_id", s_lt2, t_lt2),
+            ]:
+                if src_v is not None and tgt_v is None:
+                    updates[label] = src_v
+
+            if updates:
+                set_parts = []
+                params = []
+                for col, val in updates.items():
+                    set_parts.append(f"{col} = ?")
+                    params.append(val)
+                params.append(target_cid)
+                await self.db.execute(
+                    f"UPDATE round_correlations SET {', '.join(set_parts)} "
+                    f"WHERE correlation_id = ?",
+                    tuple(params),
+                )
+                await self._recalculate_completeness(target_cid)
+
+            await self.db.execute(
+                "DELETE FROM round_correlations WHERE correlation_id = ?",
+                (source_cid,),
+            )
+            self._record_write_success()
+            return True
+        except Exception as e:
+            self._record_write_failure(f"_merge_orphan:{source_cid}", e)
+            logger.warning(f"[CORRELATION-SWEEP] Merge failed {source_cid}→{target_cid}: {e}")
+            return False
 
     async def get_status_summary(self) -> dict:
         """Return counts by status for the admin command."""
