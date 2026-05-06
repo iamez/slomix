@@ -361,6 +361,16 @@ class UltimateETLegacyBot(
             logger.error(f"⚠️ Error stopping webhook event queue: {e}")
 
         try:
+            if getattr(self, 'correlation_service', None) is not None:
+                cancelled = await self.correlation_service.close()
+                if cancelled:
+                    logger.info("✅ Correlation service sweep task stopped")
+                else:
+                    logger.info("✅ Correlation service closed (no sweep task was running)")
+        except Exception as e:
+            logger.error(f"⚠️ Error stopping correlation service: {e}")
+
+        try:
             if self.monitoring_service and self._monitoring_started:
                 await self.monitoring_service.stop()
         except Exception as e:

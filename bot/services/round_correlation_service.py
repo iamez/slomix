@@ -323,11 +323,11 @@ class RoundCorrelationService:
 
             # Strategy 3: round_id linkage. Match is ROBUST samo za proximity events,
             # ki dump-ajo OB ROUND END (~2-3s delay). Preferiramo round_end_unix match.
-            # Stats events naj se reroutajo samo če target je BLIZU round_start (≤60s),
+            # Stats events naj se reroutajo samo če target je BLIZU round_start (≤90s),
             # da preprečimo back-to-back match cross-pollination (8-12 min razlik
             # med match-i istega map-a v sequenced session-u).
             #
-            # Tolerance:
+            # Tolerance (oba ±90s — komentar in koda morata ostati v sinhronu):
             #   round_end_unix ±90s    → priority 1 (proximity end-of-round flush)
             #   round_start_unix ±90s  → priority 2 (Lua/stats near-start)
             # NE uporabljamo 1800s window — to povzroča false-merge v back-to-back matchih.
@@ -710,6 +710,33 @@ class RoundCorrelationService:
     # ------------------------------------------------------------------
     # Phase E: periodic orphan sweep
     # ------------------------------------------------------------------
+
+    async def close(self) -> bool:
+        """Cancel the sweep task and await its exit so shutdown is clean.
+
+        Without this the task keeps running after the DB pool is closed,
+        producing noisy errors and 'Task was destroyed but it is pending'
+        warnings during process termination.
+
+        Returns True if a sweep task was actually cancelled, False if
+        nothing was running (dry-run mode, or sweep disabled). Caller
+        can use this to log accurately during shutdown.
+        Safe to call multiple times.
+        """
+        task = self._sweep_task
+        self._sweep_task = None
+        if task is None or task.done():
+            return False
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            # Expected — we just cancelled the task. The sweep loop's
+            # own `except CancelledError: raise` propagates here.
+            pass
+        except Exception as e:
+            logger.warning("[CORRELATION] Sweep task raised on shutdown: %s", e)
+        return True
 
     async def _periodic_orphan_sweep(self):
         """Each hour: scan pending+orphan rows older than 1h, try late merge.
