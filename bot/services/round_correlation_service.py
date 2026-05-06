@@ -737,6 +737,29 @@ class RoundCorrelationService:
         if not await self._allow_live_write():
             return
 
+        # Phase 6 (saga timeout): mark stale pending correlations as 'incomplete'
+        # so they don't accumulate forever and operators see actionable status.
+        # Threshold: 6h since created_at (real games rarely take >2h end-to-end;
+        # 6h is generous to avoid false positives in long-paused sessions).
+        try:
+            timeout_result = await self.db.execute(
+                """
+                UPDATE round_correlations
+                SET status = 'incomplete'
+                WHERE status = 'pending'
+                  AND created_at < NOW() - INTERVAL '6 hours'
+                """
+            )
+            if isinstance(timeout_result, str):
+                parts = timeout_result.split()
+                if len(parts) == 2 and parts[1] != '0':
+                    logger.warning(
+                        f"[CORRELATION-SWEEP] Saga timeout: marked {parts[1]} pending "
+                        f"correlations as 'incomplete' (>6h old)"
+                    )
+        except Exception as e:
+            logger.warning(f"[CORRELATION-SWEEP] saga timeout step failed: {e}")
+
         rows = await self.db.fetch_all(
             """
             SELECT correlation_id, match_id, map_name,
