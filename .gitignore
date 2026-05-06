@@ -382,6 +382,7 @@ tools/*
 !tools/schema_postgresql.sql
 !tools/pipeline_health_report.py
 !tools/verify_pipeline.py
+!tools/cleanup_correlation_duplicates.py
 # tools/migrations/ — dev-only
 # tools/schema_sqlite.sql — dev-only, not needed in repo
 # tools/vm_steps/ — VM setup scripts, dev-only
