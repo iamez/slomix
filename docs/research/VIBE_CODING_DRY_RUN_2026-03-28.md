@@ -30,12 +30,12 @@
 
 ## P0-1: Odstrani hardcoded gesla (32 min)
 
-### 4 datoteke z geslom `etlegacy_secure_2025`:
+### 4 datoteke z geslom `<REDACTED_DB_PASSWORD>`:
 
 **Datoteka 1: `scripts/backfill_player_track_metrics.py:21`**
 ```python
 # BEFORE:
-"password": "etlegacy_secure_2025"
+"password": "<REDACTED_DB_PASSWORD>"
 
 # AFTER:
 "password": os.getenv("DB_PASSWORD")
@@ -45,7 +45,7 @@
 **Datoteka 2: `scripts/repair_endstats_round_assignments.py:156`**
 ```python
 # BEFORE:
-os.getenv("DB_PASSWORD", "etlegacy_secure_2025")
+os.getenv("DB_PASSWORD", "<REDACTED_DB_PASSWORD>")
 
 # AFTER:
 os.getenv("DB_PASSWORD")  # brez fallback!
@@ -54,7 +54,7 @@ os.getenv("DB_PASSWORD")  # brez fallback!
 **Datoteka 3: `scripts/backfill_vs_stats_subjects.py:315`**
 ```python
 # BEFORE:
-os.getenv("DB_PASSWORD", "etlegacy_secure_2025")
+os.getenv("DB_PASSWORD", "<REDACTED_DB_PASSWORD>")
 
 # AFTER:
 os.getenv("DB_PASSWORD")
@@ -63,7 +63,7 @@ os.getenv("DB_PASSWORD")
 **Datoteka 4: `scripts/reprocess_missing_endstats.py:188`**
 ```python
 # BEFORE:
-os.getenv("DB_PASSWORD", "etlegacy_secure_2025")
+os.getenv("DB_PASSWORD", "<REDACTED_DB_PASSWORD>")
 
 # AFTER:
 os.getenv("DB_PASSWORD")

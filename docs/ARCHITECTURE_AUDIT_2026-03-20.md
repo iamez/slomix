@@ -33,7 +33,7 @@ Conducted on commit `6d8b3e0` (main) + cleanup branch `refactor/architecture-aud
 
 | ID | Component | Description | Status |
 |----|-----------|-------------|--------|
-| C-SEC-001 | Security | Hardcoded DB password `etlegacy_secure_2025` in 2 tracked files | **FIXED** (this audit). Still in git history — rotate password recommended |
+| C-SEC-001 | Security | Hardcoded DB password `<REDACTED_DB_PASSWORD>` in 2 tracked files | **FIXED** (this audit). Still in git history — rotate password recommended |
 | C-IMPORT-001 | DB Import | `time_played_percent` (alive%) parsed & calculated by parser but never stored in PostgreSQL. Column missing from schema | **OPEN** — needs migration + insert update |
 
 ### MEDIUM
@@ -136,7 +136,7 @@ Conducted on commit `6d8b3e0` (main) + cleanup branch `refactor/architecture-aud
 
 ## Recommended Next Steps (Priority Order)
 
-1. **Rotate DB password** — `etlegacy_secure_2025` is in git history
+1. **Rotate DB password** — `<REDACTED_DB_PASSWORD>` is in git history
 2. **Add `time_played_percent` column** to PostgreSQL schema + store in import path (C-IMPORT-001)
 3. **Fix PostgreSQL session ID assignment** for backfills (M-IMPORT-001) — port chronological-predecessor query from SQLite path
 4. **Expand ON CONFLICT update sets** for rounds and player stats (M-IMPORT-004/005)

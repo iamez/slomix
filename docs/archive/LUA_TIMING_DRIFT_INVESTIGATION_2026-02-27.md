@@ -127,7 +127,7 @@ Result: Round 9982 gets lua 148 (dur=377s, wrong match) → 720s - 377s = **343s
 
 | Host | Role | IP | DB Host | DB Password | Code Path | Git HEAD |
 |------|------|-----|---------|-------------|-----------|----------|
-| samba | Dev | 192.168.64.116 | 192.168.64.116 | etlegacy_secure_2025 | /home/samba/share/slomix_discord | 62624e3 |
+| samba | Dev | 192.168.64.116 | 192.168.64.116 | <REDACTED_DB_PASSWORD> | /home/samba/share/slomix_discord | 62624e3 |
 | slomix | Prod VM | 192.168.64.159 | localhost | SPCQon2JzLqVqpuXc9CaRNt6LjWKlSGR | /opt/slomix | 8dca0e1 |
 
 - SSH to slomix: `ssh -i ~/.ssh/slomix_vm_ed25519 slomix@192.168.64.159` (alias: `slomix-vm`)

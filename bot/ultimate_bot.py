@@ -362,8 +362,11 @@ class UltimateETLegacyBot(
 
         try:
             if getattr(self, 'correlation_service', None) is not None:
-                await self.correlation_service.close()
-                logger.info("✅ Correlation service sweep task stopped")
+                cancelled = await self.correlation_service.close()
+                if cancelled:
+                    logger.info("✅ Correlation service sweep task stopped")
+                else:
+                    logger.info("✅ Correlation service closed (no sweep task was running)")
         except Exception as e:
             logger.error(f"⚠️ Error stopping correlation service: {e}")
 

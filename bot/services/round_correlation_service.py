@@ -711,25 +711,32 @@ class RoundCorrelationService:
     # Phase E: periodic orphan sweep
     # ------------------------------------------------------------------
 
-    async def close(self):
+    async def close(self) -> bool:
         """Cancel the sweep task and await its exit so shutdown is clean.
 
         Without this the task keeps running after the DB pool is closed,
         producing noisy errors and 'Task was destroyed but it is pending'
         warnings during process termination.
+
+        Returns True if a sweep task was actually cancelled, False if
+        nothing was running (dry-run mode, or sweep disabled). Caller
+        can use this to log accurately during shutdown.
         Safe to call multiple times.
         """
         task = self._sweep_task
         self._sweep_task = None
         if task is None or task.done():
-            return
+            return False
         task.cancel()
         try:
             await task
         except asyncio.CancelledError:
+            # Expected — we just cancelled the task. The sweep loop's
+            # own `except CancelledError: raise` propagates here.
             pass
         except Exception as e:
             logger.warning("[CORRELATION] Sweep task raised on shutdown: %s", e)
+        return True
 
     async def _periodic_orphan_sweep(self):
         """Each hour: scan pending+orphan rows older than 1h, try late merge.

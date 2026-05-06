@@ -32,11 +32,16 @@ from bot.core.round_canonical import compute_canonical_id
 
 
 async def get_conn():
+    password = os.getenv("DB_PASSWORD")
+    if not password:
+        raise RuntimeError(
+            "DB_PASSWORD env var is required. Export it (or load .env) before running this tool."
+        )
     return await asyncpg.connect(
         host=os.getenv("DB_HOST", "127.0.0.1"),
         port=int(os.getenv("DB_PORT", "5432")),
         user=os.getenv("DB_USER", "etlegacy_user"),
-        password=os.getenv("DB_PASSWORD", "etlegacy_secure_2025"),
+        password=password,
         database=os.getenv("DB_NAME", "etlegacy"),
     )
 
