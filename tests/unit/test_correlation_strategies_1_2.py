@@ -131,25 +131,48 @@ async def test_strategy1_returns_none_for_exact_match_to_self(svc):
 
 
 @pytest.mark.asyncio
-async def test_strategy1_prefers_correlation_with_round_id(svc):
-    """When two rows are equidistant, prefer the one already linked
-    to a real round (has_round truthy) over a bare orphan."""
+async def test_strategy1_closer_orphan_beats_farther_linked(svc):
+    """Closer wins on diff regardless of has_round_id status.
+
+    Production logic (line 279-282):
+        if diff < best_diff:
+            if has_round or best_id is None:
+                # update best
+    On the first iteration `best_id is None` so the orphan claims the
+    slot; on the second iteration the linked row's diff is LARGER, so
+    the outer `diff < best_diff` check fails before has_round is even
+    consulted. Pin that order — diff strictly dominates has_round.
+    """
     s, db = svc
     target_dt = datetime(2026, 4, 21, 18, 0, 0)
     db.strategy1_rows = [
-        # Orphan candidate first
+        # Orphan candidate first, closer
         ("orphan-cid", _mid(target_dt.replace(second=5)), None),
-        # Linked candidate slightly farther
+        # Linked candidate later, farther
         ("linked-cid", _mid(target_dt.replace(second=10)), 1234),
     ]
     cid = await s._find_nearby_correlation_id(
         _mid(target_dt), "supply", round_number=1,
     )
-    # The first iteration sets best_id=orphan-cid (best_diff_5s).
-    # Then linked-cid at diff=10s does NOT replace it because diff>best_diff.
-    # Production semantics confirmed via reading: orphan wins on tighter diff,
-    # but if linked were closer we'd prefer it. This pins current behaviour.
-    assert cid in ("orphan-cid", "linked-cid")
+    assert cid == "orphan-cid"
+
+
+@pytest.mark.asyncio
+async def test_strategy1_linked_replaces_orphan_when_closer(svc):
+    """Inverse of the above: when the linked row is also CLOSER, it
+    must replace the orphan via the has_round preference branch."""
+    s, db = svc
+    target_dt = datetime(2026, 4, 21, 18, 0, 0)
+    db.strategy1_rows = [
+        # Orphan first, farther
+        ("orphan-cid", _mid(target_dt.replace(second=10)), None),
+        # Linked candidate later, closer
+        ("linked-cid", _mid(target_dt.replace(second=3)), 1234),
+    ]
+    cid = await s._find_nearby_correlation_id(
+        _mid(target_dt), "supply", round_number=1,
+    )
+    assert cid == "linked-cid"
 
 
 # ---------------------------------------------------------------------------
@@ -221,18 +244,36 @@ async def test_strategy2_only_applies_to_round_number_2(svc):
 
 
 @pytest.mark.asyncio
-async def test_strategy2_skips_self_match_id(svc):
-    """If candidate's match_id equals the target's, it's the same row —
-    return None so caller doesn't merge with itself."""
+async def test_strategy2_self_match_short_circuits_before_valid_candidate(svc):
+    """The `if mid == match_id: return None` guard fires the FIRST time
+    a self-match shows up in r2_rows and exits the function entirely.
+
+    Without the guard, the loop would continue past the self row,
+    find the second valid R1 candidate (300s gap → in 30-900s window),
+    and merge into r1-cid. So setting up TWO rows — first the self,
+    second a legitimate R1 — proves the guard actually fires
+    rather than the test passing for unrelated reasons (e.g., 0s gap
+    failing the window check).
+    """
     s, db = svc
-    same_mid = _mid(datetime(2026, 4, 21, 18, 0, 0))
+    target_dt = datetime(2026, 4, 21, 18, 5, 0)
+    target_mid = _mid(target_dt)
+    r1_dt = datetime(2026, 4, 21, 18, 0, 0)  # 300s before target → in window
     db.strategy2_rows = [
-        (None, same_mid, 1234),  # cid=None to make sure we exit before reading
+        # Self-match row appears FIRST — guard must short-circuit here
+        ("self-cid", target_mid, None),
+        # Legitimate R1 that WOULD merge if the guard were removed
+        ("r1-cid", _mid(r1_dt), 1234),
     ]
     cid = await s._find_nearby_correlation_id(
-        same_mid, "supply", round_number=2,
+        target_mid, "supply", round_number=2,
     )
-    assert cid is None
+    # If the guard regresses, this would be "r1-cid" (loop continues
+    # to second row, gap 300s passes window check, merge happens).
+    assert cid is None, (
+        "Strategy 2 self-match guard regressed — loop continued past "
+        "the target's own match_id and merged into the next valid R1 row"
+    )
 
 
 @pytest.mark.asyncio
