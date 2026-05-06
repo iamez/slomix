@@ -121,7 +121,7 @@ Iz analize stotih napak čez 15+ aplikacij zgrajenih s Cline, Claude, Cursor, Re
 ## CRITICAL najdbe
 
 ### SEC-01: Hardcoded DB geslo v scriptih
-- **KAJ**: Geslo `etlegacy_secure_2025` hardkodirano v 4 Python scriptih
+- **KAJ**: Geslo `<REDACTED_DB_PASSWORD>` hardkodirano v 4 Python scriptih
 - **KJE**:
   - `scripts/backfill_player_track_metrics.py:21` - direktno hardkodirano
   - `scripts/repair_endstats_round_assignments.py:156` - kot os.getenv fallback
@@ -263,7 +263,7 @@ Iz analize stotih napak čez 15+ aplikacij zgrajenih s Cline, Claude, Cursor, Re
 ### 1. Odstrani hardcoded gesla iz scriptov
 ```bash
 # Poišči vse:
-grep -rn "etlegacy_secure_2025" --include="*.py" .
+grep -rn "<REDACTED_DB_PASSWORD>" --include="*.py" .
 # Zamenjaj z:
 os.getenv("DB_PASSWORD")  # brez fallback!
 # Rotiraj geslo - staro je v Git zgodovini
@@ -438,7 +438,7 @@ Migriraj na `structlog` s korelacijskimi ID-ji (gaming_session_id, player_guid, 
 
 | Tveganje | Opis |
 |----------|------|
-| Geslo v Git zgodovini | `etlegacy_secure_2025` je permanentno v zgodovini |
+| Geslo v Git zgodovini | `<REDACTED_DB_PASSWORD>` je permanentno v zgodovini |
 | Diagnostics brez auth | 11 endpointov razkriva operativne podatke |
 | slowapi tiha degradacija | Rate limiting izpade brez opozorila |
 | Memory leak v locks | `_compute_locks` raste neomejeno |

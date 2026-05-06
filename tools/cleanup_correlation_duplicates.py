@@ -68,7 +68,11 @@ def status_from_flags(flags: dict) -> str:
 
 async def get_conn():
     user = os.getenv("DB_USER", "etlegacy_user")
-    password = os.getenv("DB_PASSWORD", "etlegacy_secure_2025")
+    password = os.getenv("DB_PASSWORD")
+    if not password:
+        raise RuntimeError(
+            "DB_PASSWORD env var is required. Export it (or load .env) before running this tool."
+        )
     db = os.getenv("DB_NAME", "etlegacy")
     host = os.getenv("DB_HOST", "127.0.0.1")
     port = int(os.getenv("DB_PORT", "5432"))

@@ -271,7 +271,7 @@ The AUDIT_FINDINGS_SECURITY doc (Feb 19) raised 3 High severity issues. Here's w
 **SQL Injection**: GOOD - All queries use parameterized placeholders (`$1`, `$2`). `escape_like_pattern()` helper exists for LIKE queries.
 
 **Hardcoded Credentials** (`config.json`, `backups/`):
-- `config.json` contains DB password `etlegacy_secure_2025` in plaintext
+- `config.json` contains DB password `<REDACTED_DB_PASSWORD>` in plaintext
 - `backups/2025-11/bot_backup_20251117_235848/config.json` contains DB password + RCON password
 - **HOWEVER**: Both are already in `.gitignore` and NOT tracked by git (`git ls-files` returns empty)
 - **Risk**: Local-only exposure on this Samba share. Not in git history.
