@@ -1,7 +1,18 @@
 # ADR: Canonical round identity for multi-source ingest
 
-**Datum:** 2026-05-06  ·  **Avtor:** iamez + Claude  ·  **Status:** PROPOSED
+**Datum:** 2026-05-06  ·  **Avtor:** iamez + Claude  ·  **Status:** ACCEPTED + 5/6 PHASES DEPLOYED
 **Predhodno:** [`docs/RCA_round_linker_architecture.md`](RCA_round_linker_architecture.md)
+
+## Implementation status (zadnji update 2026-05-06)
+
+| Phase | Status | PR | Commit signature |
+|---|---|---|---|
+| **1. Schema + backfill** | ✅ Live | #164 | 409 historic rounds canonical_id, 0 dup |
+| **2. Dual-write ingest** | ✅ Live | #165 | helper + 4 callsites + bulk reconcile SQL |
+| **3. UNIQUE constraint** | ✅ Live | #166 | partial UNIQUE on canonical_id WHERE NOT NULL |
+| **4. Round_linker primary lookup** | ✅ Live | #166 | O(1) canonical-first, fuzzy fallback |
+| **5. Retire 5/6 fuzzy** | ⏳ Pending | — | next session |
+| **6. Saga timeout** | ✅ Live | (this commit) | 6h pending → 'incomplete' |
 
 > **Decision:** Uvesti `round_canonical_id` (trace_id-style stable identifier) na rounds tabel, derived deterministično iz `(round_start_unix, map_name, round_number)`. Vsi 5 ingest entry pointov pišejo z `INSERT ... ON CONFLICT (round_canonical_id) DO UPDATE` (idempotent). Round_linker postane preprost lookup, ne fuzzy matching.
 
