@@ -648,6 +648,15 @@ async def get_storytelling_completeness(
         sd = datetime.strptime(session_date, "%Y-%m-%d").date()
     except ValueError:
         raise HTTPException(status_code=400, detail="session_date must be YYYY-MM-DD")
+
+    # Auto-trigger KIS compute (lazy-by-default), tako da diag pokaže true stanje.
+    # Brez tega vsak nov datum prikaže 0/N — false alarm dokler nekdo ne obišče Smart Stats.
+    try:
+        from website.backend.services.storytelling_service import StorytellingService
+        await StorytellingService(db).compute_session_kis(sd)
+    except Exception as e:
+        logger.warning("Diag pre-compute KIS failed (continuing): %s", e)
+
     try:
         kills_row = await db.fetch_one(
             """
