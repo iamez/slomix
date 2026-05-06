@@ -73,3 +73,46 @@ def derive_round_start_from_stats_filename(
     if actual_duration_seconds is None or actual_duration_seconds < 0:
         return None
     return int(filename_ts_unix) - int(actual_duration_seconds)
+
+
+async def update_canonical_id_if_possible(db_adapter, round_id: int) -> str | None:
+    """Compute and write round_canonical_id for an existing rounds row.
+
+    Idempotent: no-op if canonical_id already set, or if round lacks
+    round_start_unix. Safe to call from any ingest path after INSERT or
+    UPDATE that sets round_start_unix.
+
+    Returns the canonical_id (newly written or already present), or None
+    if round can't be canonicalized (missing fields).
+
+    Phase 2 of ADR docs/ADR_round_canonical_id.md: dual-write pattern.
+    """
+    if round_id is None or round_id <= 0:
+        return None
+    row = await db_adapter.fetch_one(
+        "SELECT round_start_unix, map_name, round_number, round_canonical_id "
+        "FROM rounds WHERE id = ?",
+        (round_id,),
+    )
+    if not row:
+        return None
+
+    start_unix = row[0]
+    map_name = row[1]
+    round_number = row[2]
+    existing_cid = row[3]
+
+    if existing_cid:
+        return existing_cid
+
+    cid = compute_canonical_id(start_unix, map_name, round_number)
+    if cid is None:
+        return None
+
+    # Conditional UPDATE: only set if still NULL (race-safe).
+    await db_adapter.execute(
+        "UPDATE rounds SET round_canonical_id = ? "
+        "WHERE id = ? AND round_canonical_id IS NULL",
+        (cid, round_id),
+    )
+    return cid

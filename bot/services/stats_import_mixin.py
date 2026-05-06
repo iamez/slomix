@@ -277,6 +277,14 @@ class _StatsImportMixin:
                 tuple(insert_vals),
             )
 
+            # Phase 2 dual-write: best-effort canonical_id (no-op if start_unix unset).
+            # See docs/ADR_round_canonical_id.md.
+            try:
+                from bot.core.round_canonical import update_canonical_id_if_possible
+                await update_canonical_id_if_possible(self.db_adapter, round_id)
+            except Exception as _e:
+                logger.debug(f"canonical_id dual-write skipped (non-fatal): {_e}")
+
             # Insert player stats
             for player in stats_data.get("players", []):
                 await self._insert_player_stats(
@@ -344,6 +352,13 @@ class _StatsImportMixin:
                         insert_summary_query,
                         tuple(summary_vals),
                     )
+
+                    # Phase 2 dual-write canonical_id for match summary row.
+                    try:
+                        from bot.core.round_canonical import update_canonical_id_if_possible
+                        await update_canonical_id_if_possible(self.db_adapter, match_summary_id)
+                    except Exception as _e:
+                        logger.debug(f"canonical_id dual-write skipped (non-fatal): {_e}")
 
                     # Insert match summary player stats
                     for player in match_summary.get("players", []):
