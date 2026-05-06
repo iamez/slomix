@@ -24,6 +24,7 @@ class _StatusFakeDb:
         self.counts_rows = counts_rows or []
         self.recent_rows = recent_rows or []
         self.raises = raises
+        self.recent_query: str | None = None  # captured for query-shape asserts
 
     async def fetch_all(self, query, params=None):
         if self.raises:
@@ -32,6 +33,7 @@ class _StatusFakeDb:
         if "GROUP BY status" in q:
             return self.counts_rows
         if "ORDER BY created_at DESC LIMIT 10" in q:
+            self.recent_query = q
             return self.recent_rows
         return []
 
@@ -74,22 +76,39 @@ async def test_status_summary_aggregates_counts_and_total():
 
 
 @pytest.mark.asyncio
-async def test_status_summary_includes_recent_correlations():
+async def test_status_summary_preserves_db_recency_order():
+    """The result["recent"] must keep the DB-supplied order intact —
+    the function relies on SQL's ORDER BY DESC for newest-first.
+
+    Two halves:
+    1. Sequence preservation: pass rows newest-first to the fake DB,
+       assert they come out newest-first (no in-Python re-sorting that
+       could silently break the contract).
+    2. Query-shape: capture the SQL and assert it still contains the
+       `ORDER BY created_at DESC` + `LIMIT 10` clauses. Without this,
+       a future refactor that drops ORDER BY would still pass test #1
+       (because the fake DB doesn't sort).
+    """
+    newer = ("cid-NEW", "2026-04-21-181500", "frostbite", "partial", 50, datetime(2026, 4, 21, 18, 15))
+    older = ("cid-OLD", "2026-04-21-180000", "supply", "complete", 100, datetime(2026, 4, 21, 18, 0))
     db = _StatusFakeDb(
         counts_rows=[("complete", 1)],
-        recent_rows=[
-            ("cid-A", "2026-04-21-180000", "supply", "complete", 100, datetime(2026, 4, 21, 18)),
-            ("cid-B", "2026-04-21-181500", "frostbite", "partial", 50, datetime(2026, 4, 21, 18, 15)),
-        ],
+        # Caller (production SQL) returns newest first → mirror that here
+        recent_rows=[newer, older],
     )
     svc = _make_svc(db)
 
     result = await svc.get_status_summary()
 
+    # 1. Sequence preserved (no in-memory re-sort)
     assert len(result["recent"]) == 2
-    # Order is whatever the DB returns; we don't enforce sort here
-    cids = [r[0] for r in result["recent"]]
-    assert "cid-A" in cids
+    assert result["recent"][0][0] == "cid-NEW", "recency order must be preserved"
+    assert result["recent"][1][0] == "cid-OLD"
+
+    # 2. Query-shape contract — recency lives in SQL, must stay there
+    assert db.recent_query is not None
+    assert "ORDER BY created_at DESC" in db.recent_query
+    assert "LIMIT 10" in db.recent_query
 
 
 @pytest.mark.asyncio
