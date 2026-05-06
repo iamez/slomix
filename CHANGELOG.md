@@ -6,6 +6,43 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.11.0](https://github.com/iamez/slomix/compare/v1.10.1...v1.11.0) (2026-05-06)
+
+
+### Features
+
+* **canonical:** Phase 1 — schema + backfill round_canonical_id ([8523952](https://github.com/iamez/slomix/commit/85239529cb5191fdcde30ea3ddcf2d9fb7176f4e))
+* **canonical:** Phase 1 — schema + backfill round_canonical_id ([52b7867](https://github.com/iamez/slomix/commit/52b7867c799ce31b234f54262047b4ec7bffd629))
+* **canonical:** Phase 2 — dual-write round_canonical_id in ingest paths ([5900d5e](https://github.com/iamez/slomix/commit/5900d5eedbf882db8af66e8edbe32617d66638ff))
+* **canonical:** Phase 2 — dual-write round_canonical_id in ingest paths ([3c89d3c](https://github.com/iamez/slomix/commit/3c89d3c049ff35c91ae65d357232868361070f03))
+* **canonical:** Phase 3+4 — UNIQUE constraint + canonical_id primary lookup ([cf05fe7](https://github.com/iamez/slomix/commit/cf05fe722a5c3e1c5fb5c3b5f82ab919be3c9019))
+* **canonical:** Phase 3+4 — UNIQUE constraint + primary canonical lookup ([bb05994](https://github.com/iamez/slomix/commit/bb05994635c7edbfe52c4b1f638f1e226bf6f9fd))
+* **canonical:** Phase 6 — saga timeout for stale pending correlations ([ca7d98c](https://github.com/iamez/slomix/commit/ca7d98c9b5f846259f21124c12523ac9efb19469))
+* **canonical:** Phase 6 — saga timeout for stale pending correlations ([ec2fe5a](https://github.com/iamez/slomix/commit/ec2fe5a6ffaf76cc34b61cefe401a1bb47c342af))
+* **correlation:** Phase D cleanup + Phase E periodic sweep ([71ebdd3](https://github.com/iamez/slomix/commit/71ebdd3be230d21961e134ca6eabbadf6b27ae0c))
+* **correlation:** Phase D cleanup tool + Phase E periodic sweep ([9a69029](https://github.com/iamez/slomix/commit/9a69029cc3421d968dc1d66cebe515efb3d61c3f))
+* **diag:** storytelling-completeness endpoint + correct rounds_correlated ([6193c46](https://github.com/iamez/slomix/commit/6193c466836e03bb381d4d6d4349d83293509d5f))
+* **tools:** website sanity check — cross-validate API vs SQL ([6fa07c8](https://github.com/iamez/slomix/commit/6fa07c8f4653c51ce3cf30a575bfa7345dea42d3))
+* **tools:** website-wide sanity check tool ([0dacbfc](https://github.com/iamez/slomix/commit/0dacbfc9a6495859007c47cc95de27d28fa42da9))
+* **website:** Stats dropdown reorder + Smart Stats verification UI ([29ef728](https://github.com/iamez/slomix/commit/29ef7287f891129dfe27243bbb506f573042118b))
+
+
+### Bug Fixes
+
+* address Copilot + CodeQL review on PR [#169](https://github.com/iamez/slomix/issues/169) ([c9f8991](https://github.com/iamez/slomix/commit/c9f89913a37b272b5f3c34ba0dbef9f17c304910))
+* address Copilot review followups from PR [#156](https://github.com/iamez/slomix/issues/156) + [#158](https://github.com/iamez/slomix/issues/158) ([09c7992](https://github.com/iamez/slomix/commit/09c79929a867bfa04fe5039d5d8fbde658375e4a))
+* address remaining Copilot review followups (PR [#159](https://github.com/iamez/slomix/issues/159) + [#156](https://github.com/iamez/slomix/issues/156)) ([cd05d67](https://github.com/iamez/slomix/commit/cd05d67be7b05903ec1e9f1e717249a3dadca4ef))
+* **canonical:** tighten UniqueViolation detection per Copilot review on PR [#171](https://github.com/iamez/slomix/issues/171) ([be049b1](https://github.com/iamez/slomix/commit/be049b19d56df8f2695d333a6a8178037040e097))
+* Copilot review followups — security + correctness sweep across 7 PRs ([a0f0c16](https://github.com/iamez/slomix/commit/a0f0c1664c3292410242ab4f460d43a2f387c024))
+* correlation orphan regression remediation (Phase A+B) ([b54dc37](https://github.com/iamez/slomix/commit/b54dc370e4cb10bd97540d6d7110adb02432df14))
+* **correlation:** Strategy 3 back-to-back match cross-pollination ([bd22565](https://github.com/iamez/slomix/commit/bd2256502f9ace42bc1157a7cd6b654c4159fb12))
+* **correlation:** Strategy 3 round_id merge + 600s proximity window ([9c86dbc](https://github.com/iamez/slomix/commit/9c86dbc80e5384f5eaa8f61df9673e803330402f))
+* **diag:** drop unused datetime.date import after auto-compute removal ([90e623a](https://github.com/iamez/slomix/commit/90e623a64331bce05f83219973c898d43f74bf16))
+* **proximity:** re-linker detects + repairs mismatched round_id ([ba3c5c4](https://github.com/iamez/slomix/commit/ba3c5c48f8cc2bb8a6471e53013e5fb39059b9ca))
+* **proximity:** re-linker detects + repairs mismatched round_id assignments ([9ba7bcf](https://github.com/iamez/slomix/commit/9ba7bcf121793ea5cdd8c96e3bfa464b2a4c63ba))
+* Strategy 3 back-to-back match cross-pollination + diag KIS auto-compute ([1e23b34](https://github.com/iamez/slomix/commit/1e23b34c5746872516f2b1d28d21151e43a4794c))
+* **tools:** cleanup script preserves multi-match days (best-of-3 stil) ([b6752d9](https://github.com/iamez/slomix/commit/b6752d9ad67e278f5388f36665adbee54983fac7))
+
 ## [1.10.1](https://github.com/iamez/slomix/compare/v1.10.0...v1.10.1) (2026-05-04)
 
 
