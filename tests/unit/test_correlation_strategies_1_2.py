@@ -158,20 +158,34 @@ async def test_strategy1_closer_orphan_beats_farther_linked(svc):
 
 
 @pytest.mark.asyncio
-async def test_strategy1_linked_replaces_orphan_when_closer(svc):
-    """Inverse of the above: when the linked row is also CLOSER, it
-    must replace the orphan via the has_round preference branch."""
+async def test_strategy1_linked_blocks_closer_orphan_replacement(svc):
+    """has_round preference: once a LINKED candidate is chosen, a
+    later orphan candidate that is STRICTLY CLOSER does NOT replace it.
+
+    Production logic (lines 279-282):
+        if diff < best_diff:
+            if has_round or best_id is None:  # orphan needs best_id is None
+                update best
+
+    Order matters here: linked row processed first (farther, has_round=1234)
+    claims best_id. Then orphan (closer, has_round=None) hits the inner
+    `has_round or best_id is None` guard and is REJECTED because best_id
+    is now non-None and orphan has no round.
+
+    A pure "closest wins" implementation (without the has_round branch)
+    would return the orphan instead — this is the regression we pin."""
     s, db = svc
     target_dt = datetime(2026, 4, 21, 18, 0, 0)
     db.strategy1_rows = [
-        # Orphan first, farther
-        ("orphan-cid", _mid(target_dt.replace(second=10)), None),
-        # Linked candidate later, closer
-        ("linked-cid", _mid(target_dt.replace(second=3)), 1234),
+        # Linked candidate FIRST, FARTHER (10s)
+        ("linked-cid", _mid(target_dt.replace(second=10)), 1234),
+        # Orphan SECOND, CLOSER (3s) — but should be blocked
+        ("orphan-cid", _mid(target_dt.replace(second=3)), None),
     ]
     cid = await s._find_nearby_correlation_id(
         _mid(target_dt), "supply", round_number=1,
     )
+    # Linked wins despite being farther — has_round preference dominates
     assert cid == "linked-cid"
 
 

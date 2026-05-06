@@ -111,16 +111,36 @@ async def test_admin_channel_silently_denies_wrong_channel():
 
 
 @pytest.mark.asyncio
-async def test_public_channel_allows_when_unconfigured():
-    """No `public_channels` configured → DEFAULT ALLOW. This is
-    intentional fail-open for legacy deployments that haven't set
-    the public list yet."""
+async def test_public_channel_allows_when_attr_missing():
+    """No `public_channels` ATTRIBUTE at all → DEFAULT ALLOW.
+    Production code: `if not hasattr(ctx.bot, 'public_channels') or not ctx.bot.public_channels`
+    — the `hasattr` guard MUST short-circuit so the predicate doesn't
+    crash with AttributeError on bots that never set the attribute.
+
+    A regression that drops the `hasattr` guard would only manifest
+    on deployments where `public_channels` was never configured —
+    using a real object (not MagicMock) here is essential because
+    MagicMock auto-creates attributes, masking the bug."""
     pred = _extract_predicate(is_public_channel())
-    ctx = _ctx(channel_id=42)
-    # Bot has no public_channels attr at all
-    delattr(ctx.bot, "public_channels") if hasattr(ctx.bot, "public_channels") else None
-    # Mock will autocreate, so set it explicitly to a falsy value
-    ctx.bot.public_channels = []
+    # Build ctx with a SimpleNamespace bot that has NO public_channels attr.
+    # MagicMock would autocreate it, so we use a plain namespace.
+    bot = SimpleNamespace()  # genuinely has no public_channels attribute
+    assert not hasattr(bot, "public_channels")
+    ctx = SimpleNamespace(
+        bot=bot,
+        channel=SimpleNamespace(id=42),
+        author=SimpleNamespace(id=0),
+    )
+    assert await pred(ctx) is True
+
+
+@pytest.mark.asyncio
+async def test_public_channel_allows_when_attr_is_empty_list():
+    """Empty `public_channels=[]` → DEFAULT ALLOW (second clause of the
+    `or`). Pinned alongside the missing-attr case so both branches of the
+    fail-open guard remain wired up."""
+    pred = _extract_predicate(is_public_channel())
+    ctx = _ctx(channel_id=42, bot_attrs={"public_channels": []})
     assert await pred(ctx) is True
 
 
