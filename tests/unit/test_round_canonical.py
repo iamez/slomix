@@ -208,18 +208,60 @@ class _CollidingDb:
 
 
 class _FakeUniqueViolation(Exception):
-    """Stands in for asyncpg.exceptions.UniqueViolationError without importing the driver."""
+    """Stands in for asyncpg.exceptions.UniqueViolationError.
+
+    asyncpg's UniqueViolationError exposes `constraint_name`; we mirror
+    that attribute so the production code can prefer the structured
+    field over message-scanning.
+    """
+
+    def __init__(self, message, constraint_name=None):
+        super().__init__(message)
+        self.constraint_name = constraint_name
 
 
 @pytest.mark.asyncio
-async def test_update_swallows_unique_violation():
-    """Collision → log + return None instead of crashing the ingest path."""
-    exc = _FakeUniqueViolation("duplicate key value violates unique constraint \"uniq_rounds_canonical_id\"")
+async def test_update_swallows_canonical_collision_by_constraint_name():
+    """asyncpg-style: structured constraint_name attribute is the
+    primary signal — message contents irrelevant."""
+    exc = _FakeUniqueViolation(
+        "duplicate key value violates unique constraint",
+        constraint_name="uniq_rounds_canonical_id",
+    )
     db = _CollidingDb(row=(1_700_000_000, "te_escape2", 1, None), exc=exc)
     cid = await update_canonical_id_if_possible(db, round_id=42)
     assert cid is None
-    # We did try the UPDATE
     assert len(db.executes) == 1
+
+
+@pytest.mark.asyncio
+async def test_update_swallows_canonical_collision_by_message_fallback():
+    """When the driver doesn't expose `constraint_name`, fall back to
+    scanning the error message for the canonical index name."""
+    # Plain Exception subclass with no constraint_name attribute
+    class _NoAttrError(Exception):
+        pass
+
+    exc = _NoAttrError(
+        'duplicate key value violates unique constraint "uniq_rounds_canonical_id"'
+    )
+    db = _CollidingDb(row=(1_700_000_000, "te_escape2", 1, None), exc=exc)
+    cid = await update_canonical_id_if_possible(db, round_id=42)
+    assert cid is None
+
+
+@pytest.mark.asyncio
+async def test_update_re_raises_other_unique_violations():
+    """A UniqueViolation on a DIFFERENT constraint must NOT be swallowed —
+    that's a real bug that needs admin attention.
+    """
+    exc = _FakeUniqueViolation(
+        "duplicate key value violates unique constraint",
+        constraint_name="rounds_pkey",  # different constraint!
+    )
+    db = _CollidingDb(row=(1_700_000_000, "te_escape2", 1, None), exc=exc)
+    with pytest.raises(_FakeUniqueViolation):
+        await update_canonical_id_if_possible(db, round_id=42)
 
 
 @pytest.mark.asyncio

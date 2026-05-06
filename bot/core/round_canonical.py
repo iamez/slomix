@@ -125,10 +125,22 @@ async def update_canonical_id_if_possible(db_adapter, round_id: int) -> str | No
             (cid, round_id),
         )
     except Exception as e:
-        # asyncpg UniqueViolationError is the expected case; we don't import
-        # asyncpg here (would tie this module to a specific driver), so we
-        # match by class name + repr, which is robust across driver versions.
-        if "UniqueViolation" in type(e).__name__ or "uniq_rounds_canonical_id" in str(e):
+        # We only swallow ONE specific failure: the partial UNIQUE index
+        # from migration 050 (`uniq_rounds_canonical_id`) rejecting a
+        # duplicate canonical id. Any other UniqueViolation (rounds_pkey,
+        # session_teams_session_identity_key, …) is a real bug and must
+        # propagate so the caller / admin alert surfaces it.
+        #
+        # Resolution order: prefer the driver-provided constraint name
+        # (asyncpg's UniqueViolationError exposes `constraint_name`),
+        # fall back to message scan only when that attribute is absent.
+        constraint_name = getattr(e, "constraint_name", None)
+        message = str(e)
+        is_canonical_collision = (
+            constraint_name == "uniq_rounds_canonical_id"
+            or (constraint_name is None and "uniq_rounds_canonical_id" in message)
+        )
+        if is_canonical_collision:
             logger.warning(
                 "round_canonical_id collision for round_id=%s cid=%s — leaving NULL "
                 "(round will fall back to fuzzy linker)",
