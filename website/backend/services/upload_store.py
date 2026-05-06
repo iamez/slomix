@@ -289,11 +289,31 @@ class UploadStorageService:
             HTTPException: If path is invalid or outside storage root (403/404)
         """
         try:
-            # Resolve path relative to storage root
-            resolved = (self.root / stored_path).resolve()
+            candidate = self.root / stored_path
+
+            # Reject symlink at any point along the candidate path BEFORE
+            # resolve() — resolve() follows symlinks, so a post-resolve
+            # is_symlink() check never fires (the resolved target is the
+            # real file, not the link). Walking the candidate parents
+            # catches symlink-to-inside-root attacks (TOCTOU window).
+            probe = candidate
+            while True:
+                if probe.is_symlink():
+                    logger.warning(f"Symlink detected in upload path: {stored_path}")
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Invalid file path"
+                    )
+                if probe == probe.parent:
+                    break
+                probe = probe.parent
+
+            resolved = candidate.resolve()
 
             # Ensure path is within storage root (prevent traversal)
             resolved.relative_to(self.root)
+        except HTTPException:
+            raise
         except ValueError as exc:
             logger.warning(f"Path traversal attempt detected: {stored_path}")
             raise HTTPException(
@@ -305,14 +325,6 @@ class UploadStorageService:
                 status_code=400,
                 detail="Invalid file path"
             ) from exc
-
-        # Reject symlinks to prevent TOCTOU attacks
-        if resolved.is_symlink():
-            logger.warning(f"Symlink detected in upload path: {stored_path}")
-            raise HTTPException(
-                status_code=403,
-                detail="Invalid file path"
-            )
 
         # Verify file exists
         if not resolved.exists() or not resolved.is_file():
