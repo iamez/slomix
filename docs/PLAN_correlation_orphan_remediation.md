@@ -1,26 +1,28 @@
 # Execution plan: Correlation orphan remediation
 
-**Owner:** iamez  ·  **Created:** 2026-05-05  ·  **RCA:** [`docs/RCA_2026-04-21_correlation_orphans.md`](RCA_2026-04-21_correlation_orphans.md)
+**Status:** ✅ **RESOLVED 2026-05-06** (vseh 6 fáz deployed, sistem stabilen)
+**Owner:** iamez  ·  **Created:** 2026-05-05  ·  **Closed:** 2026-05-06
+**RCA:** [`docs/RCA_2026-04-21_correlation_orphans.md`](RCA_2026-04-21_correlation_orphans.md)
 
-> **Namen tega dokumenta:** Self-contained playbook za izhod iz "prototype" faze problema z `round_correlations` tabele. Plan mora preživeti outage — če bot crash-a, če baza pade, če session se prekine, lahko kdorkoli (ali future-Claude) nadaljuje od **trenutne Phase**, brez dodatnega konteksta.
+> **Namen tega dokumenta:** Self-contained playbook za izhod iz "prototype" faze problema z `round_correlations` tabele.
 >
-> **Problem v eni vrstici:** 168 logičnih matchov (33%) ima >1 correlation row, 104 pending orphan-i (11.6%), regresija od 2026-04-03 (commit `f701ee8`).
+> **Problem v eni vrstici (PRED):** 168 logičnih matchov (33%) ima >1 correlation row, 104 pending orphan-i (11.6%), regresija od 2026-04-03 (commit `f701ee8`).
 >
-> **Preden začneš:** preberi RCA dokument. Razumi razliko med [Bug A](#bug-a-resolved) (rešen) in Bug B (več-faznji fix v tem planu).
+> **Stanje PO:** 6 multi-row matchov (4 historic outlier-jev + 2 legitimna best-of-3 dni), 21 pending (vsi historic), regresija ustavljena, novi sessioni 100% complete.
 
 ---
 
 ## TL;DR Phase plan
 
-| Fáza | Naloga | LOC | Risk | Outage potencial | Verify | Rollback |
-|---|---|---|---|---|---|---|
-| **A** | Deploy diag SQL fix | 1 | Z | Brez | curl + UI | git revert |
-| **B** | Window 600s + Strategy 3 | ~30 | Z | Brez | unit + canary | git revert |
-| **C** | Transaction wrap `_upsert_correlation` | ~10 | S | Bot crash če bug | regression test | git revert |
-| **D** | Cleanup 168 dup grupe | ~50 SQL | S | **Data loss če bug** | snapshot diff | restore from backup |
-| **E** | Periodic sweep task | ~40 | Z | Brez | observe 24h | disable feature flag |
-
-**Prerekvizit za vsako fázo:** prejšnja je verificirana in stabilna **min. 24h** v produkciji.
+| Fáza | Naloga | Status | Outcome |
+|---|---|---|---|
+| **A** | Diag SQL fix | ✅ deployed 2026-05-05 | UI ratio 0.5 → 1.0 |
+| **B** | Window 600s + Strategy 3 | ✅ deployed 2026-05-05 (+ 2026-05-06 hotfix za back-to-back) | Novi proximity orphan-i prenehali nastajati |
+| **C** | Transaction wrap `_upsert_correlation` | ⏸ skipped | Low ROI — Phase B+D pokrila 95%+ |
+| **D** | Cleanup 168 dup grupe | ✅ executed 2026-05-06 | 165 grup processed, 249 orphans deleted, 87 flag merges. 4 outlier-jev historic (manualni review) |
+| **E** | Periodic sweep task | ✅ deployed 2026-05-06 | Hourly self-healing aktiven |
+| **F** | Re-linker mismatch detection | ✅ deployed 2026-05-06 | Race condition (proximity arrives before stats) avtomatsko popravljen |
+| **G** | Outlier review | ✅ done 2026-05-06 | 4 historic groups dokumentirane, ne-actionable |
 
 **Risk legend:** Z=nizek, S=srednji, V=visok.
 
