@@ -15,7 +15,10 @@ ingest pattern (Phase 3 of migration).
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
+
+logger = logging.getLogger("round_canonical")
 
 # Length tuning: 16 chars = 8 bytes = 2^64 space. Birthday collision at ~4×10^9
 # rounds. We expect <10^6 in any decade. Headroom huge.
@@ -110,9 +113,39 @@ async def update_canonical_id_if_possible(db_adapter, round_id: int) -> str | No
         return None
 
     # Conditional UPDATE: only set if still NULL (race-safe).
-    await db_adapter.execute(
-        "UPDATE rounds SET round_canonical_id = ? "
-        "WHERE id = ? AND round_canonical_id IS NULL",
-        (cid, round_id),
-    )
+    # The partial UNIQUE index from migration 050 will reject this if
+    # another round already owns the same canonical_id (a true collision —
+    # 1 of 409 historic rounds hit this during backfill). Catch and log
+    # rather than crash the calling ingest path: the round just stays
+    # without a canonical id and falls back to fuzzy round_linker logic.
+    try:
+        await db_adapter.execute(
+            "UPDATE rounds SET round_canonical_id = ? "
+            "WHERE id = ? AND round_canonical_id IS NULL",
+            (cid, round_id),
+        )
+    except Exception as e:
+        # We only swallow ONE specific failure: the partial UNIQUE index
+        # from migration 050 (`uniq_rounds_canonical_id`) rejecting a
+        # duplicate canonical id. Any other UniqueViolation (rounds_pkey,
+        # session_teams_session_identity_key, …) is a real bug and must
+        # propagate so the caller / admin alert surfaces it.
+        #
+        # Resolution order: prefer the driver-provided constraint name
+        # (asyncpg's UniqueViolationError exposes `constraint_name`),
+        # fall back to message scan only when that attribute is absent.
+        constraint_name = getattr(e, "constraint_name", None)
+        message = str(e)
+        is_canonical_collision = (
+            constraint_name == "uniq_rounds_canonical_id"
+            or (constraint_name is None and "uniq_rounds_canonical_id" in message)
+        )
+        if is_canonical_collision:
+            logger.warning(
+                "round_canonical_id collision for round_id=%s cid=%s — leaving NULL "
+                "(round will fall back to fuzzy linker)",
+                round_id, cid,
+            )
+            return None
+        raise
     return cid
