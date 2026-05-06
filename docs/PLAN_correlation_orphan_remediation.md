@@ -32,7 +32,7 @@
 
 ```bash
 # Snapshot pred začetkom — preglej preden začneš katerokoli fázo
-PGPASSWORD="etlegacy_secure_2025" psql -h 127.0.0.1 -U etlegacy_user -d etlegacy <<'SQL'
+PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U etlegacy_user -d etlegacy <<'SQL'
 SELECT
     'snapshot' AS marker,
     NOW() AS taken_at,
@@ -115,7 +115,7 @@ sudo systemctl restart etlegacy-web
 
 ### Predicate test (pred fixom — pridobi baseline)
 ```bash
-PGPASSWORD="etlegacy_secure_2025" psql -h 127.0.0.1 -U etlegacy_user -d etlegacy -tA -c "
+PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U etlegacy_user -d etlegacy -tA -c "
 SELECT COUNT(*) FROM round_correlations
 WHERE created_at > NOW() - INTERVAL '7 days'
   AND status='pending' AND r1_round_id IS NULL"
@@ -201,7 +201,7 @@ async def test_strategy_3_does_not_break_existing_lua_stats_merge():
 ### Verify (24h po deploy)
 ```bash
 # Canary: orphan rate /day
-PGPASSWORD="etlegacy_secure_2025" psql -h 127.0.0.1 -U etlegacy_user -d etlegacy -tA -c "
+PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U etlegacy_user -d etlegacy -tA -c "
 SELECT created_at::date AS day,
        COUNT(*) FILTER (WHERE status='pending' AND r1_round_id IS NULL) AS new_orphans
 FROM round_correlations
@@ -293,7 +293,7 @@ ORDER BY a.created_at DESC;
 - [ ] **Snapshot baze**: `pg_dump -t round_correlations -t storytelling_kill_impact -t proximity_kill_outcome > backup_$(date +%Y%m%d).sql`
 - [ ] **Sandbox kopija** za test:
   ```bash
-  PGPASSWORD="etlegacy_secure_2025" createdb -h 127.0.0.1 -U etlegacy_user etlegacy_sandbox
+  PGPASSWORD="$DB_PASSWORD" createdb -h 127.0.0.1 -U etlegacy_user etlegacy_sandbox
   pg_restore --clean -h 127.0.0.1 -U etlegacy_user -d etlegacy_sandbox backup_*.sql
   ```
 - [ ] User je explicit potrdil: "yes, run cleanup".
@@ -371,7 +371,7 @@ WHERE session_date = '2026-04-21';
 ### Rollback
 ```bash
 # CRITICAL: cleanup je destruktiven, revert preko file edit-a NE deluje!
-PGPASSWORD="etlegacy_secure_2025" psql -h 127.0.0.1 -U etlegacy_user -d etlegacy < backup_YYYYMMDD.sql
+PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U etlegacy_user -d etlegacy < backup_YYYYMMDD.sql
 # Rollback obnovi pre-cleanup stanje.
 ```
 
@@ -458,7 +458,7 @@ Disable feature flag: `export CORRELATION_PERIODIC_SWEEP=false` + restart.
 
 - Primary: iamez (samba@samba.local user)
 - Logs: `journalctl -u etlegacy-bot -u etlegacy-web -f`
-- DB: `PGPASSWORD="etlegacy_secure_2025" psql -h 127.0.0.1 -U etlegacy_user -d etlegacy`
+- DB: `PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U etlegacy_user -d etlegacy`
 - Backup location: `/home/samba/share/slomix_discord/backups/`
 - Service control: `sudo systemctl {start|stop|restart|status} etlegacy-{bot|web}`
 
