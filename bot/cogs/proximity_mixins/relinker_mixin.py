@@ -33,11 +33,14 @@ _PERMANENT_ORPHAN_AGE_HOURS = 48
 # to import the cog itself (which would be circular).
 _RELINK_PRIMARY_TEMPLATE = (
     "UPDATE {table} SET round_id = $1 "
-    "WHERE round_id IS NULL AND map_name = $2 AND round_number = $3 AND session_date = $4"
+    "WHERE map_name = $2 AND round_number = $3 AND session_date = $4 "
+    "  AND round_start_unix = $5 "
+    "  AND (round_id IS NULL OR round_id != $1)"
 )
 _RELINK_FALLBACK_TEMPLATE = (
     "UPDATE {table} SET round_id = $1 "
-    "WHERE round_id IS NULL AND map_name = $2 AND round_start_unix = $3"
+    "WHERE map_name = $2 AND round_start_unix = $3 "
+    "  AND (round_id IS NULL OR round_id != $1)"
 )
 _relink_primary_cache: dict[str, str] = {}
 _relink_fallback_cache: dict[str, str] = {}
@@ -62,33 +65,45 @@ class _ProximityRelinkerMixin:
 
             db = self.bot.db_adapter
 
-            # Find distinct unlinked proximity rounds across all tables that
-            # carry session_date + round_number + round_start_unix.
-            # Tables without those columns (proximity_revive, proximity_weapon_accuracy)
-            # are excluded; they rely on map_name + round_start_unix fallback only.
+            # Find distinct proximity rounds that need (re-)linking: NULL round_id
+            # OR round_id pointing to a row whose round_start_unix differs from
+            # the proximity row's round_start_unix (back-to-back match race fix).
+            # Tables without round_number column rely on map+round_start_unix fallback.
+            #
+            # Mismatch leg specifically catches: proximity arrived BEFORE stats,
+            # round_linker picked nearest-neighbour round (wrong match), then
+            # stats arrived later creating the correct round but proximity stayed
+            # linked to the wrong one. Without re-linking these, KIS / momentum /
+            # BOX score for the mis-routed round are silently corrupted.
+            tables_with_round_number = [
+                "proximity_reaction_metric", "proximity_spawn_timing",
+                "proximity_team_cohesion", "proximity_kill_outcome",
+                "proximity_carrier_event", "proximity_carrier_kill",
+                "proximity_carrier_return", "proximity_combat_position",
+                "proximity_construction_event", "proximity_crossfire_opportunity",
+                "proximity_escort_credit", "proximity_focus_fire",
+                "proximity_hit_region", "proximity_lua_trade_kill",
+                "proximity_objective_focus", "proximity_objective_run",
+                "proximity_support_summary", "proximity_team_push",
+                "proximity_trade_event", "proximity_vehicle_progress",
+            ]
+            null_legs = " UNION ".join(
+                f"SELECT map_name, round_number, round_start_unix, session_date "
+                f"FROM {t} WHERE round_id IS NULL"
+                for t in tables_with_round_number
+            )
+            mismatch_legs = " UNION ".join(
+                f"SELECT pko.map_name, pko.round_number, pko.round_start_unix, pko.session_date "
+                f"FROM {t} pko JOIN rounds r ON r.id = pko.round_id "
+                f"WHERE pko.round_start_unix IS NOT NULL "
+                f"  AND r.round_start_unix IS NOT NULL "
+                f"  AND pko.round_start_unix != r.round_start_unix"
+                for t in tables_with_round_number
+            )
             unlinked = await db.fetch_all(
-                "SELECT DISTINCT map_name, round_number, round_start_unix, session_date FROM ("
-                "  SELECT map_name, round_number, round_start_unix, session_date FROM proximity_reaction_metric WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_spawn_timing WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_team_cohesion WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_kill_outcome WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_carrier_event WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_carrier_kill WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_carrier_return WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_combat_position WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_construction_event WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_crossfire_opportunity WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_escort_credit WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_focus_fire WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_hit_region WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_lua_trade_kill WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_objective_focus WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_objective_run WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_support_summary WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_team_push WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_trade_event WHERE round_id IS NULL"
-                "  UNION SELECT map_name, round_number, round_start_unix, session_date FROM proximity_vehicle_progress WHERE round_id IS NULL"
-                ") sub ORDER BY session_date DESC LIMIT 50"
+                f"SELECT DISTINCT map_name, round_number, round_start_unix, session_date "
+                f"FROM ({null_legs} UNION {mismatch_legs}) sub "
+                f"ORDER BY session_date DESC LIMIT 50"
             )
 
             if not unlinked:
@@ -147,7 +162,7 @@ class _ProximityRelinkerMixin:
                     try:
                         await db.execute(
                             _relink_sql(table),
-                            (round_id, map_name, round_number, session_date),
+                            (round_id, map_name, round_number, session_date, round_start_unix),
                         )
                     except Exception as e:
                         logger.warning("Re-linker: %s primary update failed: %s", table, e)
