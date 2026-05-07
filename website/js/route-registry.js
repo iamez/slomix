@@ -4,6 +4,7 @@ export const VIEW_MODE = Object.freeze({
 });
 
 const GREATSHOT_SECTIONS = new Set(['demos', 'highlights', 'clips', 'renders']);
+const SESSION_DETAIL_TABS = ['summary', 'players', 'teamplay', 'charts'];
 const STATS_VIEWS = new Set([
     'sessions',
     'leaderboards',
@@ -308,18 +309,22 @@ const ROUTE_DEFINITIONS = Object.freeze({
         mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'B',
-        buildHash: ({ sessionId, sessionDate } = {}) => {
+        buildHash: ({ sessionId, sessionDate, tab } = {}) => {
+            const tabSeg = tab && tab !== 'summary' && SESSION_DETAIL_TABS.includes(tab)
+                ? `/${tab}`
+                : '';
             if (sessionId) {
-                return `#/session-detail/${encodeURIComponent(sessionId)}`;
+                return `#/session-detail/${encodeURIComponent(sessionId)}${tabSeg}`;
             }
             if (sessionDate) {
-                return `#/session-detail/date/${encodeURIComponent(sessionDate)}`;
+                return `#/session-detail/date/${encodeURIComponent(sessionDate)}${tabSeg}`;
             }
             return '#/sessions2';
         },
         load: ({ legacy, params }) => legacy.loadSessionDetailView({
             sessionId: params.sessionId,
             sessionDate: params.sessionDate,
+            tab: params.tab,
         }),
     },
 });
@@ -377,16 +382,18 @@ export function parseHashRoute(hashValue = window.location.hash) {
     }
 
     if (segments[0] === 'session-detail' && segments[1] === 'date' && segments[2]) {
+        const tab = SESSION_DETAIL_TABS.includes(segments[3]) ? segments[3] : 'summary';
         return {
             viewId: 'session-detail',
-            params: { sessionDate: safeDecode(segments[2]) },
+            params: { sessionDate: safeDecode(segments[2]), tab },
         };
     }
 
     if (segments[0] === 'session-detail' && segments[1]) {
+        const tab = SESSION_DETAIL_TABS.includes(segments[2]) ? segments[2] : 'summary';
         return {
             viewId: 'session-detail',
-            params: { sessionId: safeDecode(segments[1]) },
+            params: { sessionId: safeDecode(segments[1]), tab },
         };
     }
 

@@ -4,6 +4,9 @@
  * @module session-detail
  */
 import { API_BASE, fetchJSON, escapeHtml, escapeJsString } from './utils.js';
+import { getRouteHash } from './route-registry.js?v=20260330-v120-deploy';
+
+const SESSION_DETAIL_TABS = ['summary', 'players', 'teamplay', 'charts'];
 import {
     renderMatchSummary,
     renderCombatRadar,
@@ -260,6 +263,7 @@ let _sessionDate = null;
 let _detailData = null;
 let _graphData = null;
 let _activeTab = 'summary';
+let _initialTab = 'summary';
 let _activeRoundId = null;
 let _activeRoundStartUnix = null;
 let _activeRoundSessionDate = null;
@@ -294,12 +298,13 @@ let _sessionGraphDataPromise = null;
 // ENTRY POINT
 // ============================================================
 
-export async function loadSessionDetailView({ sessionId, sessionDate } = {}) {
+export async function loadSessionDetailView({ sessionId, sessionDate, tab } = {}) {
     _sessionId = sessionId ? parseInt(sessionId, 10) : null;
     _sessionDate = sessionDate || null;
+    _initialTab = SESSION_DETAIL_TABS.includes(tab) ? tab : 'summary';
     _detailData = null;
     _graphData = null;
-    _activeTab = 'summary';
+    _activeTab = _initialTab;
     _activeRoundId = null;
     _activeRoundStartUnix = null;
     _activeRoundSessionDate = null;
@@ -363,7 +368,7 @@ export async function loadSessionDetailView({ sessionId, sessionDate } = {}) {
         }
 
         _renderShell(container);
-        _activateTab('summary');
+        _activateTab(_initialTab);
     } catch (e) {
         console.error('Failed to load session detail:', e);
         container.innerHTML = '<div class="text-center text-red-500 py-12">Failed to load session</div>';
@@ -529,13 +534,23 @@ function _renderShell(container) {
             </div>
         </div>
 
-        <div class="flex gap-1 mb-6 p-1 bg-slate-900/60 rounded-xl flex-wrap" id="sd-tab-nav">
-            ${['summary', 'players', 'teamplay', 'charts'].map(tab => `
+        <div class="flex gap-2 mb-6 p-1 bg-slate-900/40 rounded-2xl flex-wrap" id="sd-tab-nav" role="tablist">
+            ${[
+                ['summary', 'bar-chart-3'],
+                ['players', 'users'],
+                ['teamplay', 'share-2'],
+                ['charts', 'line-chart'],
+            ].map(([tab, icon]) => `
                 <button id="sd-tab-btn-${tab}"
                     onclick="sdSwitchTab('${tab}')"
-                    class="sd-tab-btn flex-1 py-2 px-4 rounded-lg text-sm font-bold transition
-                           text-slate-400 hover:text-white hover:bg-white/5">
-                    ${_tabLabel(tab)}
+                    role="tab"
+                    aria-selected="false"
+                    class="sd-tab-btn flex-1 min-w-[140px] py-3 px-5 rounded-xl text-sm font-black tracking-wide transition cursor-pointer
+                           border border-white/8 bg-slate-800/40 text-slate-300
+                           hover:border-cyan-400/40 hover:bg-slate-800/80 hover:text-white hover:scale-[1.02]
+                           active:scale-95 flex items-center justify-center gap-2">
+                    <i data-lucide="${icon}" class="w-4 h-4"></i>
+                    <span>${_tabLabel(tab)}</span>
                 </button>`).join('')}
         </div>
 
@@ -570,19 +585,41 @@ function _getScopePillLabel() {
 // ============================================================
 
 export function sdSwitchTab(tab) {
+    if (!SESSION_DETAIL_TABS.includes(tab)) tab = 'summary';
     _activeTab = tab;
     document.querySelectorAll('.sd-tab-panel').forEach(el => el.classList.add('hidden'));
     const panel = document.getElementById(`sd-tab-${tab}`);
     if (panel) panel.classList.remove('hidden');
 
     document.querySelectorAll('.sd-tab-btn').forEach(btn => {
-        btn.classList.remove('bg-brand-blue', 'text-white');
-        btn.classList.add('text-slate-400');
+        btn.classList.remove(
+            'bg-cyan-500/15', 'border-cyan-400/60', 'text-cyan-200',
+            'shadow-lg', 'shadow-cyan-500/20',
+        );
+        btn.setAttribute('aria-selected', 'false');
     });
     const activeBtn = document.getElementById(`sd-tab-btn-${tab}`);
     if (activeBtn) {
-        activeBtn.classList.add('bg-brand-blue', 'text-white');
-        activeBtn.classList.remove('text-slate-400');
+        activeBtn.classList.add(
+            'bg-cyan-500/15', 'border-cyan-400/60', 'text-cyan-200',
+            'shadow-lg', 'shadow-cyan-500/20',
+        );
+        activeBtn.setAttribute('aria-selected', 'true');
+    }
+
+    // Sync URL — replaceState so we don't push a new history entry per tab click
+    // and don't re-fire hashchange (which would re-dispatch the route loader).
+    try {
+        const hash = getRouteHash('session-detail', {
+            sessionId: _sessionId,
+            sessionDate: _sessionDate,
+            tab,
+        });
+        if (hash && hash !== window.location.hash) {
+            window.history.replaceState(null, '', hash);
+        }
+    } catch (e) {
+        console.warn('Failed to sync tab URL:', e);
     }
 
     if (tab === 'summary') _renderSummaryTab();
@@ -1488,8 +1525,6 @@ async function _renderSummaryTab(force = false) {
 
     html += _renderTeamAggregatesCards(matrix);
     html += _renderTeamMatrixSection(matrix, matches);
-    html += _renderOverviewMapBreakdown({ matches, scoringMaps, teamAName, teamBName });
-    html += _renderOverviewPlayerStatsSection({ loading: true });
 
     const teams = data.teams || (scoring.teams ? scoring.teams : []);
     if (Array.isArray(teams) && teams.length > 0) {
@@ -1525,7 +1560,29 @@ async function _renderSummaryTab(force = false) {
         html += `<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">${rosterHtml}</div>`;
     }
 
-    html += _renderRoundsSection();
+    // Bottom block: collapsed by default. The three sections (map breakdown,
+    // scoped player stats, all rounds) overlap with the matrix + tab nav above
+    // and confuse first-time readers. Hidden behind a disclosure until a clearer
+    // unified scope picker lands in Faza B.
+    const totalRounds = data.round_count ?? data.total_rounds ?? matches.reduce((sum, m) => sum + (m.rounds?.length || 0), 0);
+    html += `
+        <details class="glass-panel rounded-xl mb-8 group" id="sd-summary-bottom-block">
+            <summary class="flex items-center justify-between px-5 py-4 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden hover:bg-white/5 rounded-xl transition">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="layers" class="w-5 h-5 text-brand-cyan"></i>
+                    <div>
+                        <div class="font-bold text-white">Detailed map &amp; round breakdown</div>
+                        <div class="text-xs text-slate-500">Drill into individual maps, rounds, and scoped player stats · ${matches.length} maps · ${totalRounds} rounds</div>
+                    </div>
+                </div>
+                <i data-lucide="chevron-down" class="w-5 h-5 text-slate-400 transition-transform group-open:rotate-180"></i>
+            </summary>
+            <div class="px-5 pb-5 pt-2 space-y-6">
+                ${_renderOverviewMapBreakdown({ matches, scoringMaps, teamAName, teamBName })}
+                ${_renderOverviewPlayerStatsSection({ loading: true })}
+                ${_renderRoundsSection()}
+            </div>
+        </details>`;
 
     panel.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
