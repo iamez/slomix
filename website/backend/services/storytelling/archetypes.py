@@ -115,6 +115,7 @@ class _ArchetypesMixin:
                    SUM(time_dead_minutes) as time_dead
             FROM player_comprehensive_stats
             WHERE round_date = $1
+              AND round_number > 0
             GROUP BY player_guid
         """, (_to_date_str(session_date),))
         # Build short→long GUID lookup (PCS uses 8-char, proximity uses 32-char)

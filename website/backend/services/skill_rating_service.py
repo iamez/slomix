@@ -170,6 +170,7 @@ async def compute_population_percentiles(db) -> dict:
         ) as denied_playtime_pm,
         COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
         FROM player_comprehensive_stats
+        WHERE round_number > 0
         GROUP BY player_guid
         HAVING COUNT(*) >= $1
     """, (MIN_ROUNDS,))
@@ -358,6 +359,7 @@ async def compute_all_ratings(db) -> list[dict]:
             GROUP BY killer_guid_canonical
         ) prox_spawn ON prox_spawn.guid_c = pcs.player_guid
 
+        WHERE pcs.round_number > 0
         GROUP BY pcs.player_guid, prox_quality.kill_quality,
                  pts.crossfire_kills, prox_trades.trade_count,
                  prox_perm.gib_rate, prox_clutch.clutch_rate,
@@ -475,7 +477,7 @@ async def compute_session_ratings(db, player_guid: str, session_date: str,
         ) as denied_playtime_pm,
         COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
         FROM player_comprehensive_stats
-        WHERE player_guid = $1 AND round_date = $2
+        WHERE player_guid = $1 AND round_date = $2 AND round_number > 0
     """, (player_guid, session_date))
 
     if not row or int(row[0]) == 0:
@@ -529,7 +531,7 @@ async def compute_session_map_ratings(db, player_guid: str, session_date: str,
         ) as denied_playtime_pm,
         COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
         FROM player_comprehensive_stats
-        WHERE player_guid = $1 AND round_date = $2
+        WHERE player_guid = $1 AND round_date = $2 AND round_number > 0
         GROUP BY map_name
         ORDER BY map_name
     """, (player_guid, session_date))
@@ -567,6 +569,7 @@ async def get_player_session_history(db, player_guid: str,
         SELECT DISTINCT round_date
         FROM player_comprehensive_stats
         WHERE player_guid = $1
+          AND round_number > 0
           AND round_date >= TO_CHAR(CURRENT_DATE - $2::INTEGER, 'YYYY-MM-DD')
         ORDER BY round_date ASC
     """, (player_guid, range_days))
@@ -608,7 +611,7 @@ async def get_player_session_history(db, player_guid: str,
             ) as denied_playtime_pm,
             COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
             FROM player_comprehensive_stats
-            WHERE player_guid = $1 AND round_date <= $2
+            WHERE player_guid = $1 AND round_date <= $2 AND round_number > 0
         """, (player_guid, date_str))
 
         cum_rating = None
