@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from shared.database_adapter import DatabaseAdapter
 from website.backend.dependencies import get_db
 from website.backend.logging_config import get_app_logger
+from website.backend.rate_limit import limiter
 from website.backend.routers.api_helpers import resolve_display_name
 
 # Load .env file explicitly
@@ -119,6 +120,13 @@ def _enforce_oauth_rate_limit(request: Request, endpoint: str) -> None:
         )
 
     bucket.append(now)
+
+    # Opportunistic cleanup: drop empty/stale buckets so the dict can't grow
+    # forever as new IPs hit the endpoint. Runs at most once per
+    # OAUTH_RATE_LIMIT_WINDOW_SECONDS via the modulo gate.
+    if int(now) % max(OAUTH_RATE_LIMIT_WINDOW_SECONDS, 60) == 0:
+        for stale_key in [k for k, v in _oauth_rate_buckets.items() if not v]:
+            _oauth_rate_buckets.pop(stale_key, None)
 
 
 def _pkce_challenge(verifier: str) -> str:
@@ -524,9 +532,12 @@ async def get_link_status(request: Request, db: DatabaseAdapter = Depends(get_db
     }
 
 
-@router.get("/players/search")
-async def search_players(q: str, db: DatabaseAdapter = Depends(get_db)):
-    """Search for players by name to link to Discord account."""
+async def _player_search_impl(q: str, db: DatabaseAdapter) -> list[dict]:
+    """Shared implementation: route handler + internal callers both use this.
+
+    Pulled out so the rate-limit decorator only applies to the public route,
+    not internal lookups (e.g. /players/suggestions hitting it for two terms).
+    """
     if not q or len(q) < 2:
         return []
 
@@ -587,6 +598,14 @@ async def search_players(q: str, db: DatabaseAdapter = Depends(get_db)):
     return results
 
 
+@router.get("/players/search")
+@limiter.limit("30/minute")
+async def search_players(request: Request, q: str, db: DatabaseAdapter = Depends(get_db)):
+    """Search for players by name to link to Discord account.
+    Rate-limited to deter player-database enumeration."""
+    return await _player_search_impl(q, db)
+
+
 @router.get("/players/suggestions")
 async def suggested_players_for_me(request: Request, db: DatabaseAdapter = Depends(get_db)):
     user = _require_session_user(request)
@@ -604,7 +623,7 @@ async def suggested_players_for_me(request: Request, db: DatabaseAdapter = Depen
     suggestions = []
     seen_guids: set[str] = set()
     for term in terms:
-        matches = await search_players(term, db)
+        matches = await _player_search_impl(term, db)
         for match in matches:
             guid = str(match.get("guid") or "")
             if not guid or guid in seen_guids:
