@@ -3,20 +3,63 @@
 > **PostgreSQL-powered real-time analytics for competitive ET:Legacy — Discord bot, web dashboard, demo highlight scanner, and game server telemetry**
 
 [![Production Status](https://img.shields.io/badge/status-production-brightgreen)](https://github.com/iamez/slomix)
-[![Version](https://img.shields.io/badge/version-1.6.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.11.1-blue)](CHANGELOG.md)
 [![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL_17-336791)](https://www.postgresql.org/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/web-FastAPI-009688)](https://fastapi.tiangolo.com/)
 [![Data Integrity](https://img.shields.io/badge/data%20integrity-6%20layers-blue)](docs/SAFETY_VALIDATION_SYSTEMS.md)
+[![Tests](https://img.shields.io/badge/tests-2859%20passing-success)](tests/)
 [![Discord.py](https://img.shields.io/badge/discord.py-2.0+-5865F2)](https://discordpy.readthedocs.io/)
 
 A **production-grade** Discord bot + web dashboard + demo analysis pipeline with **6-layer data validation**, **real-time Lua telemetry**, **AI match predictions**, and **demo highlight detection** for ET:Legacy game servers.
 
 ---
 
-## 🔥 Recent Updates (April 2026)
+## 🔥 Recent Updates (May 2026)
 
-### **⚖️ v1.6.0: Fairness Overhaul + Story Expansion (April 20-21)** 🆕
+### **🛡️ v1.11.1: Mass Test Coverage Sweep + Security Hardening (May 6-7)** 🆕
+
+**+2,266 unit tests in a single PR (#173) — 5.4× growth — plus two P1 security fixes.**
+
+- 🧪 **Test Coverage 593 → 2,859** — Mandelbrot-style audit sweep added focused tests across 50+ modules: notifier helpers, telegram/signal connectors, scheduler quiet-hours, achievement ledger, BoundedLockDict, file_tracker dedup, replay_service primitives, prox_scoring percentile math, session-matrix aggregation, monitoring allowlist, stopwatch scoring, and dozens more. Every test docstring documents the regression it catches
+- 🔒 **Symlink TOCTOU Fix** — `upload_store.resolve_download_path` post-resolve `is_symlink()` check never fired (resolve() follows symlinks). Now walks candidate parents BEFORE resolve(), bounded at storage root so symlinked-mount deploys still work
+- 🩹 **JSON Null Roster Normalisation** — `TeamManager._decode_json_array` returned `None` for stored JSON `null` (legacy/malformed rows), then crashed `len(...)` downstream. Now normalises null and non-list shapes to `[]`
+- 🐛 **Observed Tripwires Pinned** — `_format_delta_seconds(None)` AttributeError, `_is_reminder_due(None)` AttributeError — both now have explicit tests so a fix is a deliberate change, not silent
+
+### **🧬 v1.11.0: Round Canonical ID + Correlation Saga (May 6)**
+
+**Content-addressed round identity + 6-phase rollout to eliminate orphan correlations.**
+
+- 🆔 **Round Canonical ID** — `sha256(round_start_unix:map_name:round_number)[:16]` as a stable cross-source identifier (Phases 1-4: schema → dual-write → UNIQUE constraint → primary lookup). Idempotent ingest, zero collision risk in our scale window
+- ⏱️ **Saga Timeout for Stale Pending Correlations** (Phase 6) — Long-pending pending rows time out gracefully instead of blocking later imports
+- 🧹 **Periodic Correlation Sweep** (Phase D + E) — Cleanup tool + scheduled sweep finally closes the orphan-row regression. Cleanup script now preserves multi-match days (best-of-3 style) instead of nuking them
+- 🔬 **Strategy 3 Cross-Pollination Fix** — Back-to-back same-map matches no longer mix kill data into the wrong round (600s proximity window + canonical merge)
+- 🩹 **Re-linker Repairs Mismatched round_id** — Catches and corrects existing wrong assignments instead of just adding new links
+- 🔧 **Storytelling Completeness Diag** — `/diagnostics/storytelling-completeness` endpoint with corrected `rounds_correlated` counter
+- 🎨 **Stats Dropdown Reorder + Smart Stats Verification UI** — Verification panel for KIS audit transparency
+
+### **♻️ v1.10.x: Lua Retry Buffer + Quick-Leaders Cleanup (April 25 → May 4)**
+
+- 💾 **Lua v1.7.0 Persistent Retry Buffer** (#152) — Game-server Lua now disk-buffers webhook payloads when Discord rejects them, replays on reconnect. No more lost round notifications during transient network glitches
+- 🧽 **Quick-Leaders Dead Code Removal** (#154) — Eliminated stale `session_date` fallback queries that masked actual data integrity issues
+
+### **🚀 v1.9.0: The Big Rollup — Proximity v6.01, Oksii Adoption, KIS v3 (April 25)**
+
+**The largest single release: proximity overhaul, Oksii Lua adoption, scoring v3, and complete website redesign.**
+
+- 🎯 **Proximity v6.01 Objective Intelligence** (#53) — Carrier kills, returns, construction events, vehicle progress with full backend + frontend coverage
+- 🩹 **Oksii Lua Adoption** — `killer_health`, `alive_count`, reinf timing flow into KIS v2 multipliers + BOX scoring service
+- 🧠 **KIS v3 — Graduated Reinforcement** (#121) — UTRO-inspired 7-tier reinf multiplier (0.70-1.40) replaces binary bonus
+- ⚔️ **Player Rivalries** — H2H stats, nemesis/prey/rival classification at `/#/rivalries`
+- 🏆 **Win Contribution (PWC/WIS/WAA)** — 5-component formula, dynamic weight redistribution, MVP detection
+- 🔮 **Match Predictions** (Phase 1-7) — 4-factor algorithm with auto voice-channel detection
+- 🎬 **Greatshot Demo Pipeline** — Upload → UDT scan → highlight detect → cut → render
+- 🛠️ **Round Correlation System** — `match_id` canonicalisation + linkage diagnostics
+- 📊 **Diagnostics: DB Pool Capacity** (#149) — Live pool utilisation metrics
+- 🔥 **Combat Heatmap Overlay** (#145) — Map-image-based grid overlay for kill/death hotzones
+- 🧱 **God File Decomposition** — `proximity_router.py` 5,515 → 14 sub-routers; `records_router.py` 3,172 → 10 sub-routers
+
+### **⚖️ v1.6.0: Fairness Overhaul + Story Expansion (April 20-21)**
 
 **Bayesian scoring fairness, new story panels, and a storytelling engine that's 2× faster.**
 
@@ -109,17 +152,17 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 | Metric | Value |
 |--------|-------|
-| **Kills Tracked** | 176,911 |
-| **Headshot Kills** | 36,811 |
-| **Damage Dealt** | 34.4 million |
-| **Revives Given** | 15,111 |
-| **Rounds Parsed** | 2,258 |
+| **Kills Tracked** | 180,943 |
+| **Headshot Kills** | 37,761 |
+| **Damage Dealt** | 35.2 million |
+| **Revives Given** | 16,043 |
+| **Rounds Parsed** | 2,309 |
 | **Unique Players** | 57 |
 | **Stats Per Player Per Round** | 57 fields |
-| **Discord Commands** | ~99 across 20 cogs |
+| **Discord Commands** | 112 across 18 cogs |
 | **Database Tables** | 95 (managed via committed SQL migrations) |
-| **Test Coverage** | 530 tests, 9/9 CI green |
-| **Data Span** | Jan 2025 — Apr 2026 (16 months) |
+| **Test Coverage** | 2,859 tests, 9/9 CI green |
+| **Data Span** | Jan 2025 — May 2026 (17 months) |
 
 ---
 
@@ -154,7 +197,7 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 | Project | Status | Description |
 |---------|--------|-------------|
-| **Discord Bot** (this repo) | ✅ Production | ~99 commands, 20 cogs, full automation, AI predictions |
+| **Discord Bot** (this repo) | ✅ Production | 112 commands, 18 cogs, full automation, AI predictions |
 | **Website** (`/website/`) | ✅ Production | FastAPI + React 19/TypeScript SPA: profiles, sessions, leaderboards, proximity, greatshot |
 | **Lua Webhook** (`vps_scripts/`) | ✅ Production | Real-time round notifications, surrender timing fix, team capture |
 | **Greatshot** (`/greatshot/`) | ✅ Production | Demo upload, highlight detection, clip extraction, render pipeline |
@@ -536,7 +579,7 @@ slomix/
 │   ├── ultimate_bot.py              # Entry point + SSH monitor loop
 │   ├── community_stats_parser.py    # Stats parser with R2 differential
 │   ├── endstats_parser.py           # EndStats awards parser
-│   ├── cogs/                        # 20 command modules
+│   ├── cogs/                        # 18 command modules
 │   │   ├── last_session_cog.py      # Session stats & summaries
 │   │   ├── leaderboard_cog.py       # Rankings
 │   │   ├── analytics_cog.py         # Player analytics
@@ -544,7 +587,7 @@ slomix/
 │   │   ├── predictions_cog.py       # AI predictions (7 commands)
 │   │   ├── admin_predictions_cog.py # Prediction admin (5 commands)
 │   │   ├── server_control.py        # RCON, status, map management
-│   │   └── ... (13 more cogs)
+│   │   └── ... (11 more cogs)
 │   ├── core/                        # Team detection, achievements, cache
 │   └── services/                    # Analytics, scoring, predictions, graphs
 │
