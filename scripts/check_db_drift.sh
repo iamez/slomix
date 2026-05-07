@@ -37,6 +37,12 @@ fi
 log() { printf '%s[drift]%s %s\n' "$C_DIM" "$C_RESET" "$*"; }
 err() { printf '%s[fail]%s %s\n' "$C_ERR" "$C_RESET" "$*" >&2; }
 
+# Honor the documented exit-code contract (0=match, 1=drift, 2=error) for
+# unexpected aborts too. Without this trap, set -e would propagate the
+# failing command's exit (often psql=1), colliding with the legitimate
+# "drift detected" code.
+trap 'err "unexpected abort at line $LINENO (exit code $?)"; exit 2' ERR
+
 # -------------------------------------------------------------------------
 # The four metrics to compare. Each is a single-value SELECT.
 # Keep these in lock-step with `records_overview.py` so dev+prod home
@@ -69,6 +75,16 @@ readonly DB_PORT="${POSTGRES_PORT:-${DB_PORT:-5432}}"
 
 if [[ -z "$DB_USER_NAME" || -z "$DB_PASS" ]]; then
     err "POSTGRES_USER / POSTGRES_PASSWORD missing in $LOCAL_ENV"
+    exit 2
+fi
+
+# The remote query_prod call uses prod's PGDATABASE (typically 'etlegacy').
+# If local DB_NAME differs, we'd silently compare two unrelated databases,
+# which renders the drift report meaningless. Refuse to run rather than
+# print misleading match/mismatch rows.
+if [[ "$DB_NAME" != "etlegacy" ]]; then
+    err "local DB_NAME='${DB_NAME}' but prod side queries 'etlegacy' — comparison would be meaningless."
+    err "Set POSTGRES_DATABASE=etlegacy in $LOCAL_ENV, or override prod by exporting PROD_DB_NAME (not yet supported)."
     exit 2
 fi
 
