@@ -291,27 +291,33 @@ class UploadStorageService:
         try:
             candidate = self.root / stored_path
 
-            # Reject symlink at any point along the candidate path BEFORE
-            # resolve() — resolve() follows symlinks, so a post-resolve
-            # is_symlink() check never fires (the resolved target is the
-            # real file, not the link). Walking the candidate parents
-            # catches symlink-to-inside-root attacks (TOCTOU window).
+            # Reject symlink at any point along the candidate path BELOW
+            # self.root, BEFORE resolve() — resolve() follows symlinks, so a
+            # post-resolve is_symlink() check never fires (the resolved
+            # target is the real file, not the link). Walking the candidate
+            # parents catches symlink-to-inside-root attacks (TOCTOU window).
+            #
+            # Stop the walk at self.root (exclusive) — deployments often
+            # point storage at a symlinked mount, which is operator config,
+            # not an attack vector. Only symlinks between root and leaf
+            # (i.e., user-controlled subpaths) matter here.
             probe = candidate
-            while True:
+            while probe != self.root and probe != probe.parent:
                 if probe.is_symlink():
                     logger.warning(f"Symlink detected in upload path: {stored_path}")
                     raise HTTPException(
                         status_code=403,
                         detail="Invalid file path"
                     )
-                if probe == probe.parent:
-                    break
                 probe = probe.parent
 
             resolved = candidate.resolve()
 
-            # Ensure path is within storage root (prevent traversal)
-            resolved.relative_to(self.root)
+            # Ensure path is within storage root (prevent traversal).
+            # Resolve the root too so a deployment with self.root as a
+            # symlinked mount path still matches the resolved candidate
+            # (both sides canonicalised before relative_to).
+            resolved.relative_to(self.root.resolve())
         except HTTPException:
             raise
         except ValueError as exc:
