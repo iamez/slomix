@@ -6,6 +6,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.13.0](https://github.com/iamez/slomix/compare/v1.12.0...v1.13.0) (2026-05-07)
+
+
+### Features
+
+* **website:** Session Detail UX redesign — Faza A ([#186](https://github.com/iamez/slomix/issues/186)) ([ef2427a](https://github.com/iamez/slomix/commit/ef2427ae8af17ad293084ad58733004becf28eef))
+
+
+### Bug Fixes
+
+* **deploy:** un-ignore compare_mixin.py — stats_cog broken on prod ([8f78e19](https://github.com/iamez/slomix/commit/8f78e19564596a7d0a253fe73286a560d1dc8864))
+* **parser,kis:** populate *_guid_canonical on INSERT ([cdb7f51](https://github.com/iamez/slomix/commit/cdb7f5115ccc33f8e4627b4c48128953fe540f98))
+
 ## [1.12.0](https://github.com/iamez/slomix/compare/v1.11.1...v1.12.0) (2026-05-07)
 
 
