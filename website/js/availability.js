@@ -436,6 +436,16 @@ function renderTodayTomorrowActions() {
     container.innerHTML = cards.join('');
 }
 
+// Small DOM helper kept local to this file — uses textContent so user data
+// can never be interpreted as HTML. Project policy avoids innerHTML for any
+// path that touches user-supplied strings (Codacy XSS lints).
+function _qel(tag, className, textContent) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    if (textContent != null) el.textContent = textContent;
+    return el;
+}
+
 function renderCurrentQueue() {
     const container = document.getElementById('availability-current-queue');
     if (!container) return;
@@ -445,52 +455,71 @@ function renderCurrentQueue() {
     const lookingUsers = Array.isArray(entry.usersByStatus?.LOOKING) ? entry.usersByStatus.LOOKING : [];
     const total = lookingUsers.length;
 
+    container.replaceChildren();
+
     if (!entry.usersByStatus || !total) {
-        container.innerHTML = `
-            <div class="text-center py-8 px-4 rounded-xl border border-dashed border-white/10 bg-slate-950/30">
-                <div class="text-2xl mb-2" aria-hidden="true">🪑</div>
-                <div class="text-sm font-semibold text-slate-300">Queue is empty</div>
-                <div class="text-xs text-slate-500 mt-1">Be the first &mdash; pick &ldquo;Looking to play&rdquo; up top.</div>
-            </div>
-        `;
+        const empty = _qel('div', 'text-center py-8 px-4 rounded-xl border border-dashed border-white/10 bg-slate-950/30');
+        const icon = _qel('div', 'text-2xl mb-2', '🪑');
+        icon.setAttribute('aria-hidden', 'true');
+        empty.appendChild(icon);
+        empty.appendChild(_qel('div', 'text-sm font-semibold text-slate-300', 'Queue is empty'));
+        empty.appendChild(_qel(
+            'div',
+            'text-xs text-slate-500 mt-1',
+            'Be the first — pick "Looking to play" up top.'
+        ));
+        container.appendChild(empty);
         return;
     }
 
-    const headerHtml = `
-        <div class="flex items-center justify-between mb-3">
-            <div class="text-sm font-bold text-white inline-flex items-center gap-2">
-                <span class="inline-flex items-center justify-center min-w-[2rem] h-7 px-2 rounded-full bg-brand-emerald/20 text-brand-emerald text-sm font-black">${total}</span>
-                <span>looking to play</span>
-            </div>
-            <div class="text-[11px] text-slate-500">Top ${Math.min(total, 12)} shown</div>
-        </div>
-    `;
+    // Header bar with count badge + "Top N shown" label
+    const header = _qel('div', 'flex items-center justify-between mb-3');
+    const headerLeft = _qel('div', 'text-sm font-bold text-white inline-flex items-center gap-2');
+    const countBadge = _qel(
+        'span',
+        'inline-flex items-center justify-center min-w-[2rem] h-7 px-2 rounded-full bg-brand-emerald/20 text-brand-emerald text-sm font-black',
+        String(total),
+    );
+    headerLeft.appendChild(countBadge);
+    headerLeft.appendChild(_qel('span', null, 'looking to play'));
+    header.appendChild(headerLeft);
+    header.appendChild(_qel('div', 'text-[11px] text-slate-500', `Top ${Math.min(total, 12)} shown`));
+    container.appendChild(header);
 
+    // Player grid
     const maxRows = 12;
-    const rows = lookingUsers.slice(0, maxRows).map((user) => {
-        const displayName = escapeHtml(user?.display_name || (user?.user_id ? `User ${user.user_id}` : 'Player'));
-        const initial = (displayName.replace(/<[^>]+>/g, '').trim()[0] || '?').toUpperCase();
-        const timeWindow = escapeHtml(extractQueueTimeWindow(user));
-        const timeHtml = timeWindow
-            ? `<div class="text-xs text-slate-400 whitespace-nowrap">${timeWindow}</div>`
-            : '';
-        return `
-            <div class="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 hover:border-brand-emerald/30 transition">
-                <div class="flex items-center gap-3 min-w-0">
-                    <div class="w-9 h-9 rounded-full bg-brand-emerald/15 text-brand-emerald flex items-center justify-center text-sm font-black shrink-0" aria-hidden="true">${initial}</div>
-                    <div class="text-sm font-bold text-slate-100 truncate">${displayName}</div>
-                </div>
-                ${timeHtml}
-            </div>
-        `;
+    const grid = _qel('div', 'grid grid-cols-1 md:grid-cols-2 gap-2');
+    lookingUsers.slice(0, maxRows).forEach((user) => {
+        const rawName = user?.display_name || (user?.user_id ? `User ${user.user_id}` : 'Player');
+        const initial = (String(rawName).trim()[0] || '?').toUpperCase();
+        const timeWindow = extractQueueTimeWindow(user);
+
+        const row = _qel('div', 'flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 hover:border-brand-emerald/30 transition');
+        const left = _qel('div', 'flex items-center gap-3 min-w-0');
+        const avatar = _qel(
+            'div',
+            'w-9 h-9 rounded-full bg-brand-emerald/15 text-brand-emerald flex items-center justify-center text-sm font-black shrink-0',
+            initial,
+        );
+        avatar.setAttribute('aria-hidden', 'true');
+        left.appendChild(avatar);
+        left.appendChild(_qel('div', 'text-sm font-bold text-slate-100 truncate', rawName));
+        row.appendChild(left);
+        if (timeWindow) {
+            row.appendChild(_qel('div', 'text-xs text-slate-400 whitespace-nowrap', timeWindow));
+        }
+        grid.appendChild(row);
     });
+    container.appendChild(grid);
 
     const remaining = Math.max(0, total - maxRows);
-    const moreHtml = remaining > 0
-        ? `<div class="text-xs text-slate-500 text-center pt-2">+${remaining} more in queue</div>`
-        : '';
-
-    container.innerHTML = `${headerHtml}<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${rows.join('')}</div>${moreHtml}`;
+    if (remaining > 0) {
+        container.appendChild(_qel(
+            'div',
+            'text-xs text-slate-500 text-center pt-2',
+            `+${remaining} more in queue`,
+        ));
+    }
 }
 
 function renderPromoteControls() {
