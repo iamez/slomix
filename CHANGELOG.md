@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.13.1](https://github.com/iamez/slomix/compare/v1.13.0...v1.13.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* **scripts:** address remaining ultrareview nits on sync helpers ([#190](https://github.com/iamez/slomix/issues/190)) ([ad5321f](https://github.com/iamez/slomix/commit/ad5321f1f34d69911a99f76645f3e67357039810))
+
 ## [1.13.0](https://github.com/iamez/slomix/compare/v1.12.0...v1.13.0) (2026-05-07)
 
 
