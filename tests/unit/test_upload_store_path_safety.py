@@ -119,6 +119,62 @@ def test_resolve_rejects_symlink_in_parent_dir(svc, tmp_path):
     assert exc.value.status_code == 403
 
 
+def test_resolve_accepts_when_root_itself_is_symlinked(tmp_path):
+    """Deployments often point storage at a symlinked mount (operator
+    config, NOT an attack). The pre-resolve symlink walk MUST stop at
+    self.root — symlinks above it don't matter.
+
+    Pin so a deploy with `data/uploads -> /mnt/uploads_volume` doesn't
+    have every download fail with 403."""
+    # Real backing storage
+    real_storage = tmp_path / "real_uploads"
+    real_storage.mkdir()
+    sub = real_storage / "config" / "abc"
+    sub.mkdir(parents=True)
+    f = sub / "file.cfg"
+    f.write_text("payload")
+
+    # Symlink the configured root → real backing storage
+    symlinked_root = tmp_path / "uploads_link"
+    try:
+        symlinked_root.symlink_to(real_storage)
+    except OSError:
+        pytest.skip("Filesystem does not support symlinks")
+
+    svc = UploadStorageService(symlinked_root)
+
+    # Should NOT raise — root being symlinked is operator config, not attack
+    out = svc.resolve_download_path("config/abc/file.cfg")
+    assert out == f.resolve()
+
+
+def test_resolve_accepts_when_root_ancestor_is_symlinked(tmp_path):
+    """Even an ancestor of self.root being symlinked must NOT cause
+    rejections. Pin so `/mnt/data/uploads` where `/mnt/data` is a
+    symlink works."""
+    real_parent = tmp_path / "real_parent"
+    real_parent.mkdir()
+    real_root = real_parent / "uploads"
+    real_root.mkdir()
+    sub = real_root / "config" / "abc"
+    sub.mkdir(parents=True)
+    f = sub / "file.cfg"
+    f.write_text("payload")
+
+    # Symlink an ancestor (parent of root)
+    symlinked_parent = tmp_path / "linked_parent"
+    try:
+        symlinked_parent.symlink_to(real_parent)
+    except OSError:
+        pytest.skip("Filesystem does not support symlinks")
+
+    # Configure service rooted INSIDE the symlinked ancestor
+    svc = UploadStorageService(symlinked_parent / "uploads")
+
+    out = svc.resolve_download_path("config/abc/file.cfg")
+    assert out == f.resolve()
+
+
 def test_resolve_404_when_path_is_a_directory(svc, tmp_path):
     """Path resolves to a directory (not a file) → 404. Required so the
     download endpoint never streams a directory listing."""
