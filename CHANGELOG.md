@@ -6,6 +6,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.11.1](https://github.com/iamez/slomix/compare/v1.11.0...v1.11.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* **security:** reject symlinks pre-resolve + normalise null roster JSON ([4ca0724](https://github.com/iamez/slomix/commit/4ca072493f10226514005ad94d842461724fc45e))
+* **test:** address Codex P2 findings on PR [#173](https://github.com/iamez/slomix/issues/173) ([ce0d098](https://github.com/iamez/slomix/commit/ce0d09810fd792d1495cb233e4b5fce975f26739))
+* **upload:** stop symlink walk at storage root boundary ([a91d406](https://github.com/iamez/slomix/commit/a91d4061366ca16d29f0d02525ace3d8ab2ea387))
+
 ## [1.11.0](https://github.com/iamez/slomix/compare/v1.10.1...v1.11.0) (2026-05-06)
 
 
