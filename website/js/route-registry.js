@@ -214,7 +214,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
     },
     availability: {
         viewId: 'availability',
-        label: 'Availability',
+        label: '#ETL',
         mode: VIEW_MODE.LEGACY,
         surfaceType: 'write/auth-heavy',
         migrationWave: 'C',

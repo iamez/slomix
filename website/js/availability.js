@@ -436,6 +436,16 @@ function renderTodayTomorrowActions() {
     container.innerHTML = cards.join('');
 }
 
+// Small DOM helper kept local to this file — uses textContent so user data
+// can never be interpreted as HTML. Project policy avoids innerHTML for any
+// path that touches user-supplied strings (Codacy XSS lints).
+function _qel(tag, className, textContent) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    if (textContent != null) el.textContent = textContent;
+    return el;
+}
+
 function renderCurrentQueue() {
     const container = document.getElementById('availability-current-queue');
     if (!container) return;
@@ -443,33 +453,77 @@ function renderCurrentQueue() {
     const todayIso = toISODate(new Date());
     const entry = getEntry(todayIso);
     const lookingUsers = Array.isArray(entry.usersByStatus?.LOOKING) ? entry.usersByStatus.LOOKING : [];
+    const total = lookingUsers.length;
 
-    if (!entry.usersByStatus || !lookingUsers.length) {
-        container.innerHTML = '<div class="text-xs text-slate-500">Queue is empty</div>';
+    container.replaceChildren();
+
+    if (!entry.usersByStatus || !total) {
+        const empty = _qel('div', 'text-center py-8 px-4 rounded-xl border border-dashed border-white/10 bg-slate-950/30');
+        const icon = _qel('div', 'text-2xl mb-2', '🪑');
+        icon.setAttribute('aria-hidden', 'true');
+        empty.appendChild(icon);
+        empty.appendChild(_qel('div', 'text-sm font-semibold text-slate-300', 'Queue is empty'));
+        empty.appendChild(_qel(
+            'div',
+            'text-xs text-slate-500 mt-1',
+            'Be the first — pick "Looking to play" up top.'
+        ));
+        container.appendChild(empty);
         return;
     }
 
+    // Header bar with count badge + "Top N shown" label
+    const header = _qel('div', 'flex items-center justify-between mb-3');
+    const headerLeft = _qel('div', 'text-sm font-bold text-white inline-flex items-center gap-2');
+    const countBadge = _qel(
+        'span',
+        'inline-flex items-center justify-center min-w-[2rem] h-7 px-2 rounded-full bg-brand-emerald/20 text-brand-emerald text-sm font-black',
+        String(total),
+    );
+    headerLeft.appendChild(countBadge);
+    headerLeft.appendChild(_qel('span', null, 'looking to play'));
+    header.appendChild(headerLeft);
+    header.appendChild(_qel('div', 'text-[11px] text-slate-500', `Top ${Math.min(total, 12)} shown`));
+    container.appendChild(header);
+
+    // Player grid
     const maxRows = 12;
-    const rows = lookingUsers.slice(0, maxRows).map((user) => {
-        const displayName = escapeHtml(user?.display_name || (user?.user_id ? `User ${user.user_id}` : 'Player'));
-        const timeWindow = escapeHtml(extractQueueTimeWindow(user));
-        const timeHtml = timeWindow
-            ? `<div class="text-[11px] text-slate-400 whitespace-nowrap">${timeWindow}</div>`
-            : '';
-        return `
-            <div class="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-950/35 px-3 py-2">
-                <div class="text-sm font-semibold text-slate-100 truncate">${displayName}</div>
-                ${timeHtml}
-            </div>
-        `;
+    const grid = _qel('div', 'grid grid-cols-1 md:grid-cols-2 gap-2');
+    lookingUsers.slice(0, maxRows).forEach((user) => {
+        const rawName = user?.display_name || (user?.user_id ? `User ${user.user_id}` : 'Player');
+        // Unicode-safe first-grapheme extraction — Array.from splits on code
+        // points so emoji + surrogate-pair names render the avatar correctly
+        // instead of showing a half-character replacement glyph.
+        const codePoints = Array.from(String(rawName).trim());
+        const initial = (codePoints[0] || '?').toUpperCase();
+        const timeWindow = extractQueueTimeWindow(user);
+
+        const row = _qel('div', 'flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 hover:border-brand-emerald/30 transition');
+        const left = _qel('div', 'flex items-center gap-3 min-w-0');
+        const avatar = _qel(
+            'div',
+            'w-9 h-9 rounded-full bg-brand-emerald/15 text-brand-emerald flex items-center justify-center text-sm font-black shrink-0',
+            initial,
+        );
+        avatar.setAttribute('aria-hidden', 'true');
+        left.appendChild(avatar);
+        left.appendChild(_qel('div', 'text-sm font-bold text-slate-100 truncate', rawName));
+        row.appendChild(left);
+        if (timeWindow) {
+            row.appendChild(_qel('div', 'text-xs text-slate-400 whitespace-nowrap', timeWindow));
+        }
+        grid.appendChild(row);
     });
+    container.appendChild(grid);
 
-    const remaining = Math.max(0, lookingUsers.length - maxRows);
-    const moreHtml = remaining > 0
-        ? `<div class="text-[11px] text-slate-500">+${remaining} more in queue</div>`
-        : '';
-
-    container.innerHTML = `${rows.join('')}${moreHtml}`;
+    const remaining = Math.max(0, total - maxRows);
+    if (remaining > 0) {
+        container.appendChild(_qel(
+            'div',
+            'text-xs text-slate-500 text-center pt-2',
+            `+${remaining} more in queue`,
+        ));
+    }
 }
 
 function renderPromoteControls() {
@@ -800,7 +854,10 @@ function renderActionCard(title, dateIso, canAct) {
 
     const buttonHtml = STATUS_ORDER.map((statusKey) => {
         const meta = STATUS_META[statusKey];
-        const selectedClass = selected === statusKey ? meta.selectedClass : meta.idleClass;
+        const isSelected = selected === statusKey;
+        const stateClass = isSelected
+            ? `${meta.selectedClass} ring-2 ring-offset-0 shadow-lg`
+            : meta.idleClass;
         const disabledClass = canAct ? '' : 'opacity-60 cursor-not-allowed';
         const disabled = canAct ? '' : 'disabled';
 
@@ -811,23 +868,49 @@ function renderActionCard(title, dateIso, canAct) {
                 data-date-iso="${escapeHtml(dateIso)}"
                 data-status-key="${escapeHtml(statusKey)}"
                 ${disabled}
-                class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition ${selectedClass} ${disabledClass}">
-                ${meta.shortLabel}
+                aria-pressed="${isSelected ? 'true' : 'false'}"
+                class="flex flex-col items-center justify-center gap-1.5 px-3 py-4 rounded-xl text-sm font-bold border transition ${stateClass} ${disabledClass}">
+                <span class="text-xl" aria-hidden="true">${meta.emoji}</span>
+                <span>${escapeHtml(meta.shortLabel)}</span>
             </button>
         `;
     }).join('');
 
+    // Compare against today's ISO date rather than the title string —
+    // titles can drift (localization, copy tweaks) but dateIso is always the
+    // canonical source of truth.
+    const isToday = dateIso === toISODate(new Date());
+    const accent = isToday ? 'border-brand-cyan/30' : 'border-brand-purple/25';
+    const accentGlow = isToday ? 'from-brand-cyan/10' : 'from-brand-purple/10';
+    const dateLabel = formatDate(dateIso, { weekday: 'long', month: 'short', day: 'numeric' });
+    const selectedMeta = selected ? STATUS_META[selected] : null;
+    const statusBadge = selectedMeta
+        ? `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${selectedMeta.selectedClass}">
+                <span aria-hidden="true">${selectedMeta.emoji}</span>${escapeHtml(selectedMeta.label)}
+            </span>`
+        : '<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-slate-900/60 border border-white/10 text-slate-400">Not set</span>';
+    const hint = canAct
+        ? (selected ? '' : 'Tap a status to commit.')
+        : 'Sign in &amp; link your player to commit.';
+
     return `
-        <div class="glass-card rounded-xl p-4 border border-white/10">
-            <div class="flex items-start justify-between gap-3">
-                <div>
-                    <div class="text-sm font-bold text-white">${escapeHtml(title)}</div>
-                    <div class="text-[11px] text-slate-500 mt-1">${escapeHtml(formatDate(dateIso, { weekday: 'short', month: 'short', day: 'numeric' }))}</div>
+        <div class="glass-card rounded-2xl border ${accent} overflow-hidden">
+            <div class="px-5 py-4 bg-gradient-to-br ${accentGlow} to-transparent border-b border-white/5">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <div class="text-xl font-black text-white">${escapeHtml(title)}</div>
+                        <div class="text-xs text-slate-500 mt-0.5">${escapeHtml(dateLabel)}</div>
+                    </div>
+                    ${statusBadge}
                 </div>
-                <div class="text-[11px] text-slate-400">${escapeHtml(selected ? `${STATUS_META[selected].emoji} ${STATUS_META[selected].label}` : 'Not set')}</div>
             </div>
-            <div class="flex flex-wrap gap-2 mt-3">${buttonHtml}</div>
-            <div class="text-[11px] text-slate-500 mt-3">${entry.total} responses</div>
+            <div class="p-5">
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">${buttonHtml}</div>
+                <div class="flex items-center justify-between mt-4 text-[11px] text-slate-500">
+                    <span>${entry.total} response${entry.total === 1 ? '' : 's'}</span>
+                    ${hint ? `<span class="text-slate-400">${hint}</span>` : ''}
+                </div>
+            </div>
         </div>
     `;
 }
