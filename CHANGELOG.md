@@ -17,6 +17,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.11.0](https://github.com/iamez/slomix/compare/v1.10.1...v1.11.0) (2026-05-06)
 
+> **Round Canonical ID + Correlation Saga.** Content-addressed round identity (`sha256(round_start_unix:map_name:round_number)[:16]`) shipped in a 6-phase rollout: schema → dual-write → UNIQUE constraint → primary lookup → saga timeout → periodic sweep. The orphan-row regression that plagued correlation since the proximity pipeline merge is finally closed: cleanup tool now preserves multi-match days (best-of-3 style), the re-linker repairs mismatched `round_id` assignments instead of just adding new ones, and Strategy 3's back-to-back same-map cross-pollination bug (kills mixed into the wrong round) is fixed via a 600s proximity window + canonical merge. New `/diagnostics/storytelling-completeness` endpoint with corrected `rounds_correlated` counter exposes data-quality at a glance, and the Stats dropdown gains a Smart Stats verification UI for KIS audit transparency.
 
 ### Features
 
@@ -61,6 +62,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.10.0](https://github.com/iamez/slomix/compare/v1.9.0...v1.10.0) (2026-04-25)
 
+> **Lua v1.7.0 Persistent Retry Buffer.** The game-server Lua now disk-buffers webhook payloads when Discord rejects them and replays on reconnect. No more lost round notifications during transient network glitches — a long-standing class of "missing R2" reports finally has a fix at the source.
 
 ### Features
 
@@ -68,6 +70,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.9.0](https://github.com/iamez/slomix/compare/v1.8.0...v1.9.0) (2026-04-25)
 
+> **The Big Rollup — Proximity v6.01, Oksii Adoption, KIS v3, AI Predictions, Greatshot pipeline.** This is the largest single release in the project's history, consolidating ~6 weeks of feature work behind release-please's first run. Highlights: **Proximity v6.01 Objective Intelligence** (#53) ships carrier kills, returns, construction events, and vehicle progress with full backend + frontend coverage. **Oksii Lua Adoption** flows `killer_health`, `alive_count`, and reinf timing into KIS v2 multipliers and a new BOX scoring service (Oksii-style stopwatch). **KIS v3** (#121) replaces the binary reinforcement bonus with a UTRO-inspired 7-tier graduated multiplier (0.70-1.40). **Player Rivalries** lands at `/#/rivalries` with H2H stats and nemesis/prey/rival classification. **Win Contribution (PWC/WIS/WAA)** introduces a 5-component fairness formula with dynamic weight redistribution and MVP detection. **Match Predictions** (Phase 1-7) ship a 4-factor algorithm with auto voice-channel detection. **Greatshot Demo Pipeline** completes the upload → UDT scan → highlight detect → cut → render flow. The **Round Correlation System** introduces `match_id` canonicalisation and linkage diagnostics. **God file decomposition** breaks `proximity_router.py` (5,515 → 14 sub-routers) and `records_router.py` (3,172 → 10 sub-routers). DB pool capacity diagnostics (#149) and a map-image combat heatmap overlay (#145) round things out.
 
 ### Features
 
@@ -352,6 +355,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.8.0](https://github.com/iamez/slomix/compare/v1.7.1...v1.8.0) (2026-04-25)
 
+> **Scale-out prep + observability.** Diagnostics endpoint exposes live DB pool utilisation (#149) so production capacity ceilings stop being a guessing game. Combat heatmap (#145) gains a real map-image overlay instead of a blank grid. The two big stability fixes: round_linker WARN race in the STATS_READY webhook is eliminated (#140), and exact `round_start_unix` matching now beats closest-timestamp matching (#143) — fixing a long-standing source of mis-linkage during back-to-back rounds. Performance: STATS_READY webhooks are queued + deduped (#142) for scale-out, and `/tracks` decodes JSONB locally for a ~30% smaller response (#148).
 
 ### Features
 
@@ -379,6 +383,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.7.0](https://github.com/iamez/slomix/compare/v1.6.0...v1.7.0) (2026-04-21)
 
+> **Cleanup sweep — Mega Audit v3 closeout.** A single PR (#133) bundles 10 commits covering deferred Mega Audit findings P5-P8 and F8-F10, the `safe_val` helper extraction, and orphan-row drops on legacy schemas. Closes the audit cycle that started with v1.5.0 — every flagged finding is now either landed, deferred with a tracking note, or explicitly accepted-as-is.
 
 ### Features
 
@@ -386,6 +391,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.6.0](https://github.com/iamez/slomix/compare/v1.5.5...v1.6.0) (2026-04-21)
 
+> **Fairness Overhaul + Story Expansion.** KIS finally lands a graduated 7-tier reinforcement multiplier (#121) — UTRO-inspired, ties kill weight to actual respawn pressure at time-of-kill instead of a binary bonus. Storytelling pipeline gets a polish pass (#128) that hushes relinker spam and addresses 6 audit findings + 1 infra fix. Robustness: SSH connect timeout bumped 10s → 20s (#115), round_linker sanity-bounds `round_start_unix` to reject pre-2020 timestamps (#118), Lua webhook payloads now use RFC 8259-compliant JSON escapes (v1.6.4, #125), and the parser's R2-raw fallback triggers on 1 dropped field instead of 2 (#117) so single-field network glitches recover cleanly. Performance: HTTP cache enabled on storytelling endpoints (#122), `idx_player_aliases_alias_lower` functional btree drops autocomplete from 50ms → <1ms (#119, migration 041), and `resolve_display_name` is batched across hall-of-fame and awards endpoints (#120).
 
 ### Features
 
@@ -411,6 +417,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.5.5](https://github.com/iamez/slomix/compare/v1.5.4...v1.5.5) (2026-04-20)
 
+> **Round linker hardening + correlation race fix.** Two production-affecting fixes land together: round_linker's race condition + midnight crossover bug is solved by a `round_start_unix BETWEEN` window with date-free fallback (#109), and `asyncio.Lock` serializes the round_correlation critical section (#114) — preventing the race where 4 pipeline events could create duplicate rows. Schema drift closes with migration 039 consolidating 14 Python-runtime tables into committed migrations (#112), and migration 040 dedups existing duplicates plus adds a partial UNIQUE index (#113).
 
 ### Bug Fixes
 
@@ -451,6 +458,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.5.0](https://github.com/iamez/slomix/compare/v1.4.2...v1.5.0) (2026-04-17)
 
+> **Security, Performance & Session Detail 2.0.** First post-Mega-Audit-v3 release. **Sprint 2 Security** (#80) introduces the `require_admin_user` FastAPI dependency: 10/11 diagnostics endpoints now require admin session (the 11th stays public as a health check), `strip_et_colors()` is centralized in `api_helpers` (covers 10+ consumer routers), and Discord IDs are masked at INFO log level (`1234****`) with full ID+username moved to DEBUG only. **Session Detail 2.0** (#79) ships a player × map matrix with per-round team assignment that correctly handles stopwatch side swaps (R1 attack = R2 defense — same player in same team cell across maps) AND mid-session substitutions (player on both teams appears in both rosters, stats split by rounds). Backend `build_team_matrix()` uses majority-vote side-to-team mapping; React + legacy JS consumers ship with heatmap, drill-down, and MVP★/sub⚠ badges. **Bayesian MVP/PWC/WIS overhaul** (#76): MVP uses Bayesian shrinkage (C=2 prior) so late-joiners regress toward session average, WIS v2 adopts harmonic confidence dampening (1W/3L halved, all-wins/all-losses → 0), and the `max(team_kills, 1)` PWC fairness fix eliminates 30× score inflation on zero-team-kill edges. **BOX Score Panel** (#78) lands with stopwatch match scoring and 4 parallel Invisible Value fetches (Gravity / Space / Enabler / Lurker) under race-condition guards. Date bounds validation rejects out-of-range queries as DoS mitigation, and the round_correlation_service auto-merges drifted R1/R2 correlations after bot restart.
 
 ### Features
 
@@ -480,6 +488,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.4.0](https://github.com/iamez/slomix/compare/v1.3.0...v1.4.0) (2026-04-03)
 
+> **Storytelling expansion — Invisible Value metrics.** Three new per-round metrics quantify the contributions that don't show up in the K/D column: **Gravity** (how much enemy attention a player draws), **Space-created** (cleared map area enabling teammate plays), and **Enabler score** (kills you set up that teammates finish). Adds a **Lurker profile** computed from `player_track.path` JSONB to surface solo-time players, and per-player **invisible-value micro-narratives** that turn the metrics into prose. Backend perf: enabler score moves from O(n²) to a windowed scan. Bug-fix sweep: 30 error-swallowing blocks across the website replaced with proper `HTTPException(500)`, GUID name resolution now supports both 32-char and 8-char formats, and synergy trade=0/medic=0 (a GUID-format-mismatch silent failure) is fixed. Round correlation system gains proximity tracking integration.
 
 ### Features
 
@@ -507,6 +516,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.3.0](https://github.com/iamez/slomix/compare/v1.2.0...v1.3.0) (2026-04-01)
 
+> **ET Rating v2 + Replay Map Visualization + GUID canonical fix.** ET Rating expands to a 15-metric formula (9 PCS + 6 proximity) with composite stats endpoint and a legacy JS panel. **Replay map visualization** ships with player tracks, kill markers, and playback controls — turning each round into a navigable 2D timeline. The **`guid_canonical` migration** is the structural fix for the proximity-PCS GUID mismatch that had been quietly cross-polluting analytics: all proximity tables now carry a canonical 8-char column matching player_comprehensive_stats. Session stats gain Useful Kills, Self Kills, and Full Self Kills. Mandelbrot RCA review addresses 8 audit findings; Codacy compliance: 5 issues resolved (void arrow returns + object injection); 30 error-swallowing blocks → `HTTPException(500)`. Smaller wins: weapon mastery filters 0-kill weapons, weapon accuracy uses `SUM(hits)/SUM(shots)` not `AVG(accuracy)`, momentum chart axis bias fixed.
 
 ### Features
 
@@ -536,6 +546,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.2.0](https://github.com/iamez/slomix/compare/v1.1.2...v1.2.0) (2026-03-30)
 
+> **Mandelbrot RCA v2.0 + Oksii adoption + the foundation release.** This is the inflection point: the project moves from "feature factory" to "audited platform." A 6-phase Mandelbrot audit drives ruff from 2,257 → 0 errors (8 rule sets enabled), eliminates 23 silent `except: pass` blocks, replaces the unbounded `_compute_locks` dict with a `BoundedLockDict` (max 64, LRU), and centralizes shared constants in `et_constants.py`. Two god files are decomposed: `proximity_router.py` 5,515 → 14 sub-routers, `records_router.py` 3,172 → 10 sub-routers. **Oksii Lua v6.01 adoption** brings `killer_health`, `alive_count`, and reinf timing into KIS v2 (3 new multipliers + soft cap at 5.0) and a new BOX scoring service (`box_scoring_service.py`) for Oksii-style stopwatch map scoring. Storytelling evolves: Gravity, Space-created, Enabler, Lurker, and per-player Invisible Value micro-narratives. Proximity pipeline finally fixes its 60% historical linkage failure rate via STATS_READY webhook + re-linker + 2min polling. AI Match Predictions ship Phases 1-7 with auto voice-channel detection. Player Rivalries (H2H, nemesis/prey/rival classification) and Win Contribution (PWC/WIS/WAA, 5-component formula) land as first-class features. Tests grow from 476 → 540 with 33-round end-to-end bot verification (2,781 positions tracked).
 
 ### Features
 
@@ -754,6 +765,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.1.1](https://github.com/iamez/slomix/compare/v1.1.0...v1.1.1) (2026-03-28)
 
+> **Codacy zero — 58 → 0 issues, no suppressions.** Massive code-quality sweep across XSS (22 CRITICAL: `innerHTML` → DOM API), TypeScript (12 HIGH), SQL injection (7: f-string → whitelists), Protocol stubs, stack-trace exposure, and URL-redirect validation. Zero `# noqa` suppressions added — every finding is fixed at root. CI: 9/9 checks green for the first time. Round Replay Timeline + Momentum Chart + Session Narrative ship alongside (those are the v1.1.0 features that needed the cleanup pass).
 
 ### Bug Fixes
 
@@ -772,6 +784,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.1.0](https://github.com/iamez/slomix/compare/v1.0.8...v1.1.0) (2026-03-25)
 
+> **Stats accuracy audit + React 19 modernization + proximity v5 teamplay.** First release-please-tagged version. The stats-accuracy audit fixes long-standing bugs: R0 double-counting, missing `NULLIF` guards, accuracy formula (`SUM(hits)/SUM(shots)` not `AVG`), alive% / TMP normalization (TAB[8] now stored), headshot ratio computation. **React 19 frontend** modernization migrates 19/19 routes to the new website with game-assets integration. **Proximity v5 teamplay** lands kill outcomes, hit regions, combat heatmaps, movement analytics, composite scoring, and full v5.2 frontend panels. **Greatshot demo pipeline** completes Phase 2-5 (multi-file upload, player stats display, topshots API endpoints, demo-to-stats cross-reference matching). New systems: round correlation + match_id canonicalization, ET Rating skill system (experimental), AI matchup analytics, real-time stats notification via Discord webhook, lazy-loading pagination on `!leaderboard`. Lua: `gamestate` detection fix + timing-comparison service.
 
 ### Features
 
