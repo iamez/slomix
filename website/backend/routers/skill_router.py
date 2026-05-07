@@ -312,6 +312,7 @@ async def get_composite_stats(
                 SUM(time_played_seconds) as time_played_seconds
             FROM player_comprehensive_stats
             WHERE round_date = $1
+              AND round_number > 0
             GROUP BY player_guid
         ),
         session_crossfire AS (
@@ -396,9 +397,11 @@ async def get_composite_stats(
         avg_time_dead = float(r[15])
 
         # TIR: Team Impact Rating (0-100)
+        # crossfire_pct + trade_pct are ratios (0-1); scale each to half the
+        # 0-100 range so the sum stays bounded.
         crossfire_pct = min(1.0, crossfire_kills / kills) if kills else 0
         trade_pct = min(1.0, trade_kills / kills) if kills else 0
-        tir = round(min(100, (crossfire_pct * 50 + trade_pct * 50) * 100), 1)
+        tir = round(min(100, crossfire_pct * 50 + trade_pct * 50), 1)
 
         # CI: Clutch Index (0-100)
         ci = round(min(100, (clutch_kills / max(total_combat_kills, 1)) * 100), 1)
@@ -416,7 +419,7 @@ async def get_composite_stats(
             survival_rate * 40 +
             focus_escape_rate * 30 +
             max(0, 1 - avg_time_dead) * 30
-        ) * 100 / 100), 1)
+        )), 1)
 
         players.append({
             "player_guid": guid,
