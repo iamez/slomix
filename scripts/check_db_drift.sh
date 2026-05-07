@@ -17,7 +17,8 @@
 
 set -euo pipefail
 
-readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly REPO_ROOT
 readonly LOCAL_ENV="${REPO_ROOT}/.env"
 readonly PROD_SSH_ALIAS="${PROD_SSH_ALIAS:-slomix-vm}"
 readonly PROD_REPO_PATH="${PROD_REPO_PATH:-/opt/slomix}"
@@ -48,42 +49,54 @@ readonly Q_PLAYERS="SELECT COUNT(DISTINCT player_guid) FROM player_comprehensive
 readonly Q_LATEST="SELECT COALESCE(TO_CHAR(MAX(round_date)::date, 'YYYY-MM-DD'), '-')::text FROM rounds WHERE round_number IN (1,2)"
 
 # -------------------------------------------------------------------------
-# Load local env (best-effort — if missing, we still try with defaults)
+# Load local env (canonical names: POSTGRES_HOST/PORT/DATABASE/USER/PASSWORD,
+# matching .env.example). Legacy DB_* variables also accepted as fallback.
 # -------------------------------------------------------------------------
 if [[ ! -f "$LOCAL_ENV" ]]; then
     err "Local .env not found at $LOCAL_ENV"
     exit 2
 fi
-# shellcheck disable=SC1090
-set -a; source "$LOCAL_ENV"; set +a
+set -a
+# shellcheck source=/dev/null
+source "$LOCAL_ENV"
+set +a
 
-: "${POSTGRES_USER:?POSTGRES_USER missing in .env}"
-: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD missing in .env}"
-readonly DB_NAME="${DB_NAME:-etlegacy}"
-readonly DB_HOST="${DB_HOST:-127.0.0.1}"
-readonly DB_PORT="${DB_PORT:-5432}"
+readonly DB_USER_NAME="${POSTGRES_USER:-${DB_USER:-}}"
+readonly DB_PASS="${POSTGRES_PASSWORD:-${DB_PASSWORD:-}}"
+readonly DB_NAME="${POSTGRES_DATABASE:-${DB_NAME:-etlegacy}}"
+readonly DB_HOST="${POSTGRES_HOST:-${DB_HOST:-127.0.0.1}}"
+readonly DB_PORT="${POSTGRES_PORT:-${DB_PORT:-5432}}"
+
+if [[ -z "$DB_USER_NAME" || -z "$DB_PASS" ]]; then
+    err "POSTGRES_USER / POSTGRES_PASSWORD missing in $LOCAL_ENV"
+    exit 2
+fi
 
 query_local() {
-    PGPASSWORD="$POSTGRES_PASSWORD" psql \
-        -h "$DB_HOST" -p "$DB_PORT" -U "$POSTGRES_USER" -d "$DB_NAME" \
+    PGPASSWORD="$DB_PASS" psql \
+        -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER_NAME" -d "$DB_NAME" \
         -tAc "$1" 2>/dev/null | tr -d '[:space:]'
 }
 
+# Run a single SELECT on prod via SSH. SQL is passed as positional $2 inside a
+# quoted heredoc — no client-side expansion, no quoting issues with embedded
+# single quotes (e.g. `round_status IN ('completed', ...)`). Path is $1.
 query_prod() {
-    # Single-line query passed via stdin; prod env extraction lives on the remote.
-    ssh -o BatchMode=yes "${PROD_SSH_ALIAS}" "
-        set -euo pipefail
-        cd '${PROD_REPO_PATH}'
-        PGPASSWORD=\$(grep ^POSTGRES_PASSWORD .env | cut -d= -f2- | tr -d '\"\\\"')
-        PGUSER=\$(grep ^POSTGRES_USER     .env | cut -d= -f2- | tr -d '\"\\\"')
-        PGPASSWORD=\"\$PGPASSWORD\" psql -h localhost -U \"\$PGUSER\" -d etlegacy -tAc '$1'
-    " 2>/dev/null | tr -d '[:space:]'
+    local sql="$1"
+    ssh -o BatchMode=yes "${PROD_SSH_ALIAS}" bash -s "${PROD_REPO_PATH}" "$sql" <<'REMOTE_END' 2>/dev/null | tr -d '[:space:]'
+set -euo pipefail
+cd "$1"
+PGPASSWORD=$(grep -E '^POSTGRES_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '"')
+PGUSER=$(grep -E '^POSTGRES_USER=' .env | head -1 | cut -d= -f2- | tr -d '"')
+PGDATABASE=$(grep -E '^POSTGRES_DATABASE=' .env | head -1 | cut -d= -f2- | tr -d '"')
+PGPASSWORD="$PGPASSWORD" psql -h localhost -U "$PGUSER" -d "${PGDATABASE:-etlegacy}" -tAc "$2"
+REMOTE_END
 }
 
 # -------------------------------------------------------------------------
 # Run all metrics on both sides
 # -------------------------------------------------------------------------
-log "Querying local: ${POSTGRES_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+log "Querying local: ${DB_USER_NAME}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
 LOCAL_SESSIONS_DISTINCT=$(query_local "$Q_SESSIONS_DISTINCT") || { err "local query failed"; exit 2; }
 LOCAL_SESSIONS_MAX=$(query_local "$Q_SESSIONS_MAX")
 LOCAL_ROUNDS=$(query_local "$Q_ROUNDS_R1R2")
@@ -102,13 +115,11 @@ PROD_LATEST=$(query_prod "$Q_LATEST")
 # -------------------------------------------------------------------------
 DRIFT=0
 print_row() {
-    # name, local, prod
     local name="$1" loc="$2" prod="$3"
     if [[ "$loc" == "$prod" ]]; then
         printf '  %s✓%s %-28s local=%-12s prod=%-12s match\n' "$C_OK" "$C_RESET" "$name" "$loc" "$prod"
     else
         DRIFT=1
-        # Compute delta for numeric metrics
         local arrow="≠"
         if [[ "$loc" =~ ^[0-9]+$ && "$prod" =~ ^[0-9]+$ ]]; then
             local d=$((prod - loc))

@@ -8,34 +8,35 @@
 #      a separate, queryable database — `\c etlegacy_backup_<ts>` to read)
 #   3. Creates a fresh empty `etlegacy` owned by the original user
 #   4. Streams pg_dump from prod over SSH and pg_restores into the fresh DB
-#   5. Verifies row counts (sessions, rounds) and prints summary
+#   5. Verifies row counts (sessions, rounds) and aborts if verification
+#      shows the new DB is empty (auto-rollback by renaming back)
 #
-# Rollback:
+# Rollback if anything looks wrong:
 #   psql -c "ALTER DATABASE etlegacy RENAME TO etlegacy_failed_<ts>"
 #   psql -c "ALTER DATABASE etlegacy_backup_<ts> RENAME TO etlegacy"
 #   …and you're back where you started, no data lost.
 #
 # Prerequisites:
 #   - SSH alias `slomix-vm` configured (~/.ssh/config)
-#   - Local /home/samba/share/slomix_discord/.env contains POSTGRES_USER + POSTGRES_PASSWORD
+#   - Local repo .env contains POSTGRES_USER + POSTGRES_PASSWORD (canonical
+#     names from .env.example; legacy DB_* names also accepted)
 #   - Local user has CREATEDB privilege OR is db owner (etlegacy_user is owner)
-#   - No active connections to local etlegacy during rename. If bot/website are
-#     running locally, stop them first — script will detect and abort cleanly.
+#   - No active connections to local etlegacy during rename. Bot/website
+#     services must be stopped first — script aborts cleanly if any are open.
 
 set -euo pipefail
 
-# -------------------------------------------------------------------------
-# Config
-# -------------------------------------------------------------------------
-readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly REPO_ROOT
 readonly LOCAL_ENV="${REPO_ROOT}/.env"
 readonly PROD_SSH_ALIAS="${PROD_SSH_ALIAS:-slomix-vm}"
 readonly PROD_REPO_PATH="${PROD_REPO_PATH:-/opt/slomix}"
-readonly TS="$(date +%Y%m%d-%H%M%S)"
+
+TS="$(date +%Y%m%d-%H%M%S)"
+readonly TS
 readonly DUMP_DIR="${DUMP_DIR:-/tmp}"
 readonly LOCAL_PRE_SYNC_DUMP="${DUMP_DIR}/etlegacy_local_pre-sync_${TS}.dump"
 readonly PROD_DUMP="${DUMP_DIR}/etlegacy_prod_${TS}.dump"
-readonly BACKUP_DB_NAME="etlegacy_backup_${TS}"
 
 # -------------------------------------------------------------------------
 # Helpers
@@ -53,25 +54,34 @@ confirm() {
 
 # -------------------------------------------------------------------------
 # Step 0 — Load local env, sanity-check
+# Canonical names: POSTGRES_HOST/PORT/DATABASE/USER/PASSWORD (per .env.example).
+# Legacy DB_* fall-throughs accepted to keep older devboxes working.
 # -------------------------------------------------------------------------
 [[ -f "$LOCAL_ENV" ]] || die "Local .env not found at $LOCAL_ENV"
 
-# shellcheck disable=SC1090
-set -a; source "$LOCAL_ENV"; set +a
+set -a
+# shellcheck source=/dev/null
+source "$LOCAL_ENV"
+set +a
 
-: "${POSTGRES_USER:?POSTGRES_USER missing in .env}"
-: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD missing in .env}"
-readonly DB_NAME="${DB_NAME:-etlegacy}"
-readonly DB_HOST="${DB_HOST:-127.0.0.1}"
-readonly DB_PORT="${DB_PORT:-5432}"
+readonly DB_USER_NAME="${POSTGRES_USER:-${DB_USER:-}}"
+readonly DB_PASS="${POSTGRES_PASSWORD:-${DB_PASSWORD:-}}"
+readonly DB_NAME="${POSTGRES_DATABASE:-${DB_NAME:-etlegacy}}"
+readonly DB_HOST="${POSTGRES_HOST:-${DB_HOST:-127.0.0.1}}"
+readonly DB_PORT="${POSTGRES_PORT:-${DB_PORT:-5432}}"
 
-# psql + pg_restore wrappers that pass the password via env (safer than -W)
-psql_local() { PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$POSTGRES_USER" "$@"; }
-restore_local() { PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -h "$DB_HOST" -p "$DB_PORT" -U "$POSTGRES_USER" "$@"; }
-dump_local() { PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h "$DB_HOST" -p "$DB_PORT" -U "$POSTGRES_USER" "$@"; }
+[[ -n "$DB_USER_NAME" ]] || die "POSTGRES_USER missing in $LOCAL_ENV"
+[[ -n "$DB_PASS"      ]] || die "POSTGRES_PASSWORD missing in $LOCAL_ENV"
+
+readonly BACKUP_DB_NAME="${DB_NAME}_backup_${TS}"
+
+# psql + pg_dump + pg_restore wrappers (password via env, never on argv)
+psql_local() { PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER_NAME" "$@"; }
+restore_local() { PGPASSWORD="$DB_PASS" pg_restore -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER_NAME" "$@"; }
+dump_local() { PGPASSWORD="$DB_PASS" pg_dump -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER_NAME" "$@"; }
 
 log "Repo root: $REPO_ROOT"
-log "Local target: ${POSTGRES_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+log "Local target: ${DB_USER_NAME}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
 log "Prod source: ssh ${PROD_SSH_ALIAS} → ${PROD_REPO_PATH}/.env"
 log "Backup DB will be named: ${BACKUP_DB_NAME}"
 log "Dump files (parachutes):"
@@ -100,11 +110,11 @@ log "Plan:"
 log "  1. Dump local ${DB_NAME} → ${LOCAL_PRE_SYNC_DUMP}"
 log "  2. Pull prod dump via SSH → ${PROD_DUMP}"
 log "  3. ALTER DATABASE ${DB_NAME} RENAME TO ${BACKUP_DB_NAME}  (preserves all current data)"
-log "  4. CREATE DATABASE ${DB_NAME} OWNER ${POSTGRES_USER}"
+log "  4. CREATE DATABASE ${DB_NAME} OWNER ${DB_USER_NAME}"
 log "  5. pg_restore ${PROD_DUMP} → fresh ${DB_NAME}"
-log "  6. Verify row counts"
+log "  6. Verify row counts; auto-rollback rename if verify fails"
 echo
-warn "If something fails at step 5, you can rename ${BACKUP_DB_NAME} back to ${DB_NAME} — no data is destroyed."
+warn "If something fails at step 5, the script will rename ${BACKUP_DB_NAME} back to ${DB_NAME}. No data is destroyed."
 confirm "Proceed?"
 
 # -------------------------------------------------------------------------
@@ -116,16 +126,24 @@ LOCAL_DUMP_SIZE=$(du -h "${LOCAL_PRE_SYNC_DUMP}" | cut -f1)
 log "   ✓ Local parachute saved (${LOCAL_DUMP_SIZE})"
 
 # -------------------------------------------------------------------------
-# Step 4 — Prod dump pulled via SSH (uses prod's own credentials from /opt/slomix/.env)
+# Step 4 — Prod dump pulled via SSH (uses prod's own credentials from
+# /opt/slomix/.env). Uses heredoc + positional $1 to avoid client-side
+# expansion of the path and any quoting issues.
 # -------------------------------------------------------------------------
 log "(2/6) Pulling prod dump via ssh ${PROD_SSH_ALIAS}..."
-ssh "${PROD_SSH_ALIAS}" "
-    set -euo pipefail
-    cd ${PROD_REPO_PATH}
-    PGPASSWORD=\$(grep ^POSTGRES_PASSWORD .env | cut -d= -f2- | tr -d '\"\\\"')
-    PGUSER=\$(grep ^POSTGRES_USER .env | cut -d= -f2- | tr -d '\"\\\"')
-    PGPASSWORD=\"\$PGPASSWORD\" pg_dump -h localhost -U \"\$PGUSER\" -Fc -d etlegacy
-" > "${PROD_DUMP}"
+ssh "${PROD_SSH_ALIAS}" bash -s "${PROD_REPO_PATH}" <<'REMOTE_DUMP_END' > "${PROD_DUMP}"
+set -euo pipefail
+cd "$1"
+PGPASSWORD=$(grep -E '^POSTGRES_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '"')
+PGUSER=$(grep -E '^POSTGRES_USER=' .env | head -1 | cut -d= -f2- | tr -d '"')
+PGDATABASE=$(grep -E '^POSTGRES_DATABASE=' .env | head -1 | cut -d= -f2- | tr -d '"')
+PGPASSWORD="$PGPASSWORD" pg_dump -h localhost -U "$PGUSER" -Fc -d "${PGDATABASE:-etlegacy}"
+REMOTE_DUMP_END
+
+# Sanity-check the dump file before we touch the local DB
+if [[ ! -s "${PROD_DUMP}" ]]; then
+    die "Prod dump is empty (${PROD_DUMP}) — refusing to proceed. Local DB is untouched."
+fi
 PROD_DUMP_SIZE=$(du -h "${PROD_DUMP}" | cut -f1)
 log "   ✓ Prod dump received (${PROD_DUMP_SIZE})"
 
@@ -137,37 +155,70 @@ psql_local -d postgres -c "ALTER DATABASE \"${DB_NAME}\" RENAME TO \"${BACKUP_DB
 log "   ✓ Old data preserved as database '${BACKUP_DB_NAME}' (queryable: \\c ${BACKUP_DB_NAME})"
 
 # -------------------------------------------------------------------------
+# Auto-rollback helper. If anything between here and the final verification
+# fails, swap names back so the user is not stuck without a working DB.
+# -------------------------------------------------------------------------
+rollback_rename() {
+    local reason="$1"
+    warn "Auto-rollback: ${reason}"
+    if psql_local -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" | grep -q 1; then
+        psql_local -d postgres -c "ALTER DATABASE \"${DB_NAME}\" RENAME TO \"${DB_NAME}_failed_${TS}\"" || true
+    fi
+    psql_local -d postgres -c "ALTER DATABASE \"${BACKUP_DB_NAME}\" RENAME TO \"${DB_NAME}\""
+    warn "Rolled back. ${DB_NAME} is your original data; failed restore is ${DB_NAME}_failed_${TS}."
+    warn "Parachute dump still at ${LOCAL_PRE_SYNC_DUMP}; prod dump at ${PROD_DUMP}."
+}
+
+# -------------------------------------------------------------------------
 # Step 6 — Create fresh empty DB
 # -------------------------------------------------------------------------
-log "(4/6) Creating fresh empty ${DB_NAME} owned by ${POSTGRES_USER}"
-psql_local -d postgres -c "CREATE DATABASE \"${DB_NAME}\" OWNER \"${POSTGRES_USER}\""
+log "(4/6) Creating fresh empty ${DB_NAME} owned by ${DB_USER_NAME}"
+if ! psql_local -d postgres -c "CREATE DATABASE \"${DB_NAME}\" OWNER \"${DB_USER_NAME}\""; then
+    rollback_rename "CREATE DATABASE failed"
+    die "Aborted at step 4."
+fi
 log "   ✓ Empty DB created"
 
 # -------------------------------------------------------------------------
 # Step 7 — Restore prod dump into fresh DB
+# Capture pg_restore exit code separately. Non-zero is common (e.g. missing
+# website_app / website_readonly roles → harmless GRANT errors). We don't
+# treat exit code alone as fatal — verification (next step) decides.
 # -------------------------------------------------------------------------
 log "(5/6) Restoring prod dump into ${DB_NAME}..."
-# --no-owner so objects end up owned by the local connecting user.
-# --no-acl drops GRANT/REVOKE statements that reference prod-only roles
-#   (eg. website_app password may differ; perms get re-applied via app config).
-restore_local --no-owner --no-acl -d "${DB_NAME}" "${PROD_DUMP}" \
-    || warn "pg_restore reported errors (often harmless: missing roles, comments). Verify counts below."
-log "   ✓ Restore complete"
+RESTORE_RC=0
+restore_local --no-owner --no-acl -d "${DB_NAME}" "${PROD_DUMP}" || RESTORE_RC=$?
+if [[ "${RESTORE_RC}" -ne 0 ]]; then
+    warn "pg_restore exit ${RESTORE_RC} (often harmless: missing roles, comments). Verification will decide."
+else
+    log "   ✓ pg_restore exit 0"
+fi
 
 # -------------------------------------------------------------------------
-# Step 8 — Verify
+# Step 8 — Verify. If the new DB has zero rounds, treat the restore as
+# failed and roll back. This catches catastrophic restore errors that exit 0.
 # -------------------------------------------------------------------------
 log "(6/6) Verification"
+ROUNDS_COUNT=0
+if ! ROUNDS_COUNT=$(psql_local -d "${DB_NAME}" -tAc "
+    SELECT COUNT(*) FROM rounds
+    WHERE round_number IN (1,2)
+      AND (round_status IN ('completed','substitution') OR round_status IS NULL)
+" 2>/dev/null); then
+    rollback_rename "verification query failed (table missing or DB unusable)"
+    die "Aborted at step 6 — restored DB is not usable."
+fi
+
+if [[ "${ROUNDS_COUNT}" -lt 1 ]]; then
+    rollback_rename "verification: 0 rounds in restored DB"
+    die "Aborted at step 6 — restored DB has no rounds."
+fi
+
 SESSIONS_COUNT=$(psql_local -d "${DB_NAME}" -tAc "
     SELECT COUNT(DISTINCT gaming_session_id) FROM rounds
     WHERE round_number IN (1,2)
       AND (round_status IN ('completed','substitution') OR round_status IS NULL)
       AND gaming_session_id IS NOT NULL
-")
-ROUNDS_COUNT=$(psql_local -d "${DB_NAME}" -tAc "
-    SELECT COUNT(*) FROM rounds
-    WHERE round_number IN (1,2)
-      AND (round_status IN ('completed','substitution') OR round_status IS NULL)
 ")
 BACKUP_SESSIONS=$(psql_local -d "${BACKUP_DB_NAME}" -tAc "
     SELECT COUNT(DISTINCT gaming_session_id) FROM rounds
@@ -180,6 +231,7 @@ echo
 log "==================== SUMMARY ===================="
 log "Old data preserved as DB:   ${BACKUP_DB_NAME}  (sessions: ${BACKUP_SESSIONS})"
 log "New ${DB_NAME} from prod:    sessions: ${SESSIONS_COUNT}, R1+R2 rounds: ${ROUNDS_COUNT}"
+log "pg_restore exit code:       ${RESTORE_RC} (warnings tolerated when verification passes)"
 log "Parachute dump file:        ${LOCAL_PRE_SYNC_DUMP}"
 log "Prod snapshot dump file:    ${PROD_DUMP}"
 log "================================================="
