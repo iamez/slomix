@@ -1,6 +1,6 @@
 -- Migration 051: Add hot-path indexes flagged by 2026-05-07 audit
 --
--- See docs/AUDIT_2026-05-07.md L1+L2/P1, L7/P0+P2 for context.
+-- See docs/audit_2026-05-07.md L1+L2/P1, L7/P0+P2 for context.
 --
 -- All indexes use IF NOT EXISTS so this migration is idempotent across
 -- environments where some indexes were already added manually. Each is
@@ -30,16 +30,18 @@ CREATE INDEX IF NOT EXISTS idx_round_correlations_r2_round_id
 -- need the inverse leading column.
 --
 -- Partial index on round_number > 0 (R1+R2 only, excludes R0 aggregate rows)
--- because every audit-aware query filters R0 out anyway.
+-- because every audit-aware query filters R0 out anyway. The trailing
+-- round_number column lets the planner short-circuit on R0 without re-scanning.
 CREATE INDEX IF NOT EXISTS idx_pcs_player_guid_round_number
     ON player_comprehensive_stats (player_guid, round_number)
     WHERE round_number > 0;
 
 -- ============================================================================
--- rounds: file_tracker existence check speedup
+-- rounds: file_tracker existence check
 -- ============================================================================
--- file_tracker._session_exists_in_db() filters by (round_date, map_name,
--- round_number). With ingest scaling we want this to be O(log n), not a
--- sequential scan as more files are processed.
-CREATE INDEX IF NOT EXISTS idx_rounds_date_map_round
-    ON rounds (round_date, map_name, round_number);
+-- The audit's draft index (round_date, map_name, round_number) was redundant
+-- with the existing `idx_rounds_map_round_date_time` (migration 014) which
+-- covers (map_name, round_number, round_date, round_time) and matches the
+-- full predicate of file_tracker._session_exists_in_db (which also filters
+-- on round_time). PostgreSQL's planner uses that index regardless of the
+-- ordering of equality columns in the WHERE clause. No new index needed.

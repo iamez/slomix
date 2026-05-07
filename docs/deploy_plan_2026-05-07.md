@@ -15,19 +15,18 @@ git status -s
 
 # 2. main is at origin/main
 git fetch origin
-git rev-parse main == git rev-parse origin/main
-# (expect identical SHAs)
+test "$(git rev-parse main)" = "$(git rev-parse origin/main)" || echo "FAIL: main not synced with origin"
 
-# 3. Tests green locally
-PGPASSWORD="etlegacy_secure_2025" pytest -q tests/unit/ 2>&1 | tail -5
+# 3. Tests green locally (PGPASSWORD must be set in your shell, never committed)
+pytest -q tests/unit/ 2>&1 | tail -5
 # (expect "X passed" — was 2,859 baseline; we added ~5)
 
 # 4. CI green on main
 gh run list --branch main --limit 5
 # (latest run conclusion: success)
 
-# 5. Schema drift check vs prod
-PGPASSWORD="etlegacy_secure_2025" psql -h 127.0.0.1 -U etlegacy_user -d etlegacy \
+# 5. Schema drift check vs prod (export PGPASSWORD first; do not paste in scripts)
+psql -h 127.0.0.1 -U etlegacy_user -d etlegacy \
   -c "SELECT version, applied_at FROM schema_migrations ORDER BY applied_at DESC LIMIT 5;"
 # (compare to expected from main; flag any mismatch)
 ```
@@ -36,9 +35,12 @@ PGPASSWORD="etlegacy_secure_2025" psql -h 127.0.0.1 -U etlegacy_user -d etlegacy
 
 ### Apply `migrations/051_add_audit_indexes.sql`
 
-This is **the only schema change in the bundle**. Indexes are non-destructive,
-created with `IF NOT EXISTS`, and `CONCURRENTLY` is used for live tables —
-zero downtime, no lock contention.
+This is **the only schema change in the bundle**. Indexes use `CREATE INDEX
+IF NOT EXISTS` (idempotent across environments). PostgreSQL takes a brief
+`SHARE` lock on the table while building each index; on the current data
+volume that's a sub-second pause per index. Use `CREATE INDEX CONCURRENTLY`
+manually if you want zero-lock builds during peak hours, but it cannot run
+inside a transaction (which the migration runner wraps everything in).
 
 ```bash
 # On production VM (slomix_vm):
@@ -157,7 +159,7 @@ Stop services first, take a DB snapshot, then debug:
 
 ```bash
 sudo systemctl stop slomix-bot slomix-web
-PGPASSWORD="etlegacy_secure_2025" pg_dump -h 127.0.0.1 -U etlegacy_user etlegacy \
+pg_dump -h 127.0.0.1 -U etlegacy_user etlegacy \  # PGPASSWORD set in shell env, do not inline
   > /tmp/etlegacy_pre_audit_rollback_$(date +%s).sql
 # … debug …
 sudo systemctl start slomix-web

@@ -103,6 +103,30 @@ def _oauth_bucket_key(request: Request, endpoint: str) -> str:
     return f"{endpoint}:{client_host}"
 
 
+_OAUTH_BUCKETS_LAST_SWEEP = [0.0]  # mutable container so we can update from inner fn
+
+
+def _sweep_oauth_rate_buckets(now: float) -> None:
+    """Evict buckets whose newest timestamp is older than the rate-limit window.
+
+    Iterating only on enqueue means one-off IPs that never re-hit the endpoint
+    keep their stale entries forever; this sweep drops them in a single pass.
+    Gated to run at most once per OAUTH_RATE_LIMIT_WINDOW_SECONDS using a
+    monotonic-time threshold (modulo arithmetic isn't reliable here because
+    multiple enqueues can land in the same wallclock second).
+    """
+    if now - _OAUTH_BUCKETS_LAST_SWEEP[0] < OAUTH_RATE_LIMIT_WINDOW_SECONDS:
+        return
+    _OAUTH_BUCKETS_LAST_SWEEP[0] = now
+    cutoff = now - OAUTH_RATE_LIMIT_WINDOW_SECONDS
+    stale_keys = [
+        k for k, q in _oauth_rate_buckets.items()
+        if not q or q[-1] <= cutoff
+    ]
+    for k in stale_keys:
+        _oauth_rate_buckets.pop(k, None)
+
+
 def _enforce_oauth_rate_limit(request: Request, endpoint: str) -> None:
     """Additional guardrail for OAuth endpoints on top of global middleware."""
     now = time.monotonic()
@@ -121,12 +145,9 @@ def _enforce_oauth_rate_limit(request: Request, endpoint: str) -> None:
 
     bucket.append(now)
 
-    # Opportunistic cleanup: drop empty/stale buckets so the dict can't grow
-    # forever as new IPs hit the endpoint. Runs at most once per
-    # OAUTH_RATE_LIMIT_WINDOW_SECONDS via the modulo gate.
-    if int(now) % max(OAUTH_RATE_LIMIT_WINDOW_SECONDS, 60) == 0:
-        for stale_key in [k for k, v in _oauth_rate_buckets.items() if not v]:
-            _oauth_rate_buckets.pop(stale_key, None)
+    # Opportunistic full sweep — drops one-off IP entries whose buckets fell
+    # silent before the next enqueue would have pruned them.
+    _sweep_oauth_rate_buckets(now)
 
 
 def _pkce_challenge(verifier: str) -> str:
