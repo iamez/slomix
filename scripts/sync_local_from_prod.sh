@@ -236,10 +236,15 @@ log "Parachute dump file:        ${LOCAL_PRE_SYNC_DUMP}"
 log "Prod snapshot dump file:    ${PROD_DUMP}"
 log "================================================="
 echo
+# Print rollback / cleanup hints with a real copy-pasteable psql command.
+# Earlier versions referenced `psql_local`, the in-script bash function defined
+# above — that name does not exist in the user's shell after the script exits,
+# which is exactly when these hints are needed.
+RECOVERY_PSQL="PGPASSWORD=\$POSTGRES_PASSWORD psql -h ${DB_HOST} -p ${DB_PORT} -U ${DB_USER_NAME} -d postgres -c"
 log "Rollback (if needed):"
-log "  psql_local -d postgres -c \"ALTER DATABASE ${DB_NAME} RENAME TO etlegacy_failed_${TS}\""
-log "  psql_local -d postgres -c \"ALTER DATABASE ${BACKUP_DB_NAME} RENAME TO ${DB_NAME}\""
+log "  ${RECOVERY_PSQL} \"ALTER DATABASE ${DB_NAME} RENAME TO etlegacy_failed_${TS}\""
+log "  ${RECOVERY_PSQL} \"ALTER DATABASE ${BACKUP_DB_NAME} RENAME TO ${DB_NAME}\""
 echo
 log "Cleanup (when you're sure new DB is good):"
-log "  psql_local -d postgres -c \"DROP DATABASE ${BACKUP_DB_NAME}\""
+log "  ${RECOVERY_PSQL} \"DROP DATABASE ${BACKUP_DB_NAME}\""
 log "  rm ${LOCAL_PRE_SYNC_DUMP} ${PROD_DUMP}"
