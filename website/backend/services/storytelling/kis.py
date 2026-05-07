@@ -125,6 +125,7 @@ class _KisMixin:
                     s['killer_health'], s['axis_alive'], s['allies_alive'], s['victim_reinf'],
                     s['total_impact'], s['is_carrier_kill'], s['is_during_push'], s['is_crossfire'],
                     s['is_objective_area'], s['kill_time_ms'],
+                    s['killer_guid'][:8] if s['killer_guid'] else None,
                 )
                 for s in scored
             ]
@@ -137,8 +138,8 @@ class _KisMixin:
                  health_multiplier, alive_multiplier, reinf_multiplier,
                  killer_health, axis_alive, allies_alive, victim_reinf,
                  total_impact, is_carrier_kill, is_during_push, is_crossfire, is_objective_area,
-                 kill_time_ms)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
+                 kill_time_ms, killer_guid_canonical)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
             """, batch)
 
         logger.info("KIS computed for %s: %d kills scored", sd, len(scored))

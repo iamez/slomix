@@ -1033,6 +1033,28 @@ class ProximityParserV4:
                 (diag or {}).get("best_diff_seconds"),
             )
 
+    async def _append_canonical_guid_columns(
+        self,
+        table: str,
+        columns: list[str],
+        values: list[object],
+        canonical_map: dict[str, str | None],
+    ) -> None:
+        """Append canonical short-form (first 8 chars) guid columns if present.
+
+        canonical_map: {canonical_column_name: full_guid_value}.
+        Mirrors the substring(guid FROM 1 FOR 8) backfill in migration 035.
+        Without this hook, INSERT paths leave *_guid_canonical NULL and queries
+        that join on canonical (skill_router, kis, win_contribution) silently
+        return 0/empty — see the 2026-05-07 regression that left all
+        Advanced Metrics at zero on prod.
+        """
+        for canonical_col, source_guid in canonical_map.items():
+            if not await self._table_has_column(table, canonical_col):
+                continue
+            columns.append(canonical_col)
+            values.append(source_guid[:8] if source_guid else None)
+
     async def _append_round_link_columns(self, table: str, columns: list[str], values: list[object]) -> None:
         context = self._round_link_context or {}
         if await self._table_has_column(table, "round_id"):
@@ -1681,12 +1703,14 @@ class ProximityParserV4:
                     solo_kills, solo_engagements,
                     times_targeted, times_focused, focus_escapes, focus_deaths,
                     solo_escapes, solo_deaths,
-                    avg_escape_distance, avg_engagement_duration_ms, total_damage_taken
+                    avg_escape_distance, avg_engagement_duration_ms, total_damage_taken,
+                    player_guid_canonical
                 ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
                 )
                 ON CONFLICT (player_guid) DO UPDATE SET
                     player_name = EXCLUDED.player_name,
+                    player_guid_canonical = COALESCE(player_teamplay_stats.player_guid_canonical, EXCLUDED.player_guid_canonical),
                     crossfire_participations = player_teamplay_stats.crossfire_participations + EXCLUDED.crossfire_participations,
                     crossfire_kills = player_teamplay_stats.crossfire_kills + EXCLUDED.crossfire_kills,
                     crossfire_damage = player_teamplay_stats.crossfire_damage + EXCLUDED.crossfire_damage,
@@ -1775,7 +1799,8 @@ class ProximityParserV4:
                 stats['times_targeted'], stats['times_focused'],
                 stats['focus_escapes'], stats['focus_deaths'],
                 stats['solo_escapes'], stats['solo_deaths'],
-                avg_escape, avg_duration, stats['total_damage_taken']
+                avg_escape, avg_duration, stats['total_damage_taken'],
+                guid[:8] if guid else None,
             ))
 
     def _new_player_stats(self, name: str) -> dict:
@@ -2149,6 +2174,10 @@ class ProximityParserV4:
                 columns.insert(3, "round_end_unix")
                 values.insert(3, self.metadata.get('round_end_unix', 0))
             await self._append_round_link_columns("proximity_kill_outcome", columns, values)
+            await self._append_canonical_guid_columns(
+                "proximity_kill_outcome", columns, values,
+                {"killer_guid_canonical": ko.killer_guid},
+            )
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""
                 INSERT INTO proximity_kill_outcome ({", ".join(columns)})
@@ -2450,6 +2479,10 @@ class ProximityParserV4:
                 columns.insert(3, "round_end_unix")
                 values.insert(3, self.metadata.get('round_end_unix', 0))
             await self._append_round_link_columns("proximity_combat_position", columns, values)
+            await self._append_canonical_guid_columns(
+                "proximity_combat_position", columns, values,
+                {"attacker_guid_canonical": cp.attacker_guid},
+            )
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""
                 INSERT INTO proximity_combat_position ({", ".join(columns)})
@@ -2794,6 +2827,10 @@ class ProximityParserV4:
                 columns.extend(["killer_reinf", "victim_reinf"])
                 values.extend([evt.killer_reinf, evt.victim_reinf])
             await self._append_round_link_columns("proximity_spawn_timing", columns, values)
+            await self._append_canonical_guid_columns(
+                "proximity_spawn_timing", columns, values,
+                {"killer_guid_canonical": evt.killer_guid},
+            )
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""
                 INSERT INTO proximity_spawn_timing ({", ".join(columns)})
@@ -2932,6 +2969,10 @@ class ProximityParserV4:
                 columns.insert(3, "round_end_unix")
                 values.insert(3, self.metadata.get('round_end_unix', 0))
             await self._append_round_link_columns("proximity_lua_trade_kill", columns, values)
+            await self._append_canonical_guid_columns(
+                "proximity_lua_trade_kill", columns, values,
+                {"trader_guid_canonical": tk.trader_guid},
+            )
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""
                 INSERT INTO proximity_lua_trade_kill ({", ".join(columns)})
