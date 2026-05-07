@@ -292,3 +292,74 @@ def command_error_handler(command_label: str):
                 return None
         return wrapper
     return decorator
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Discord embed size validation
+#
+# Discord enforces hard limits per embed:
+#   - title: 256
+#   - description: 4096
+#   - field name: 256
+#   - field value: 1024
+#   - up to 25 fields
+#   - total characters across title+description+fields+author.name+footer.text: 6000
+#
+# `validate_embed_size` returns (ok, total_chars, warnings). Callers should
+# log a warning + send a fallback if `ok` is False instead of letting
+# discord.py raise HTTPException at send time, which silently aborts the
+# command.
+# ──────────────────────────────────────────────────────────────────────
+
+EMBED_TOTAL_LIMIT = 6000
+EMBED_TITLE_LIMIT = 256
+EMBED_DESCRIPTION_LIMIT = 4096
+EMBED_FIELD_NAME_LIMIT = 256
+EMBED_FIELD_VALUE_LIMIT = 1024
+EMBED_FIELD_COUNT_LIMIT = 25
+
+
+def validate_embed_size(embed) -> tuple[bool, int, list[str]]:
+    """Return (ok, total_chars, warnings) for a discord.Embed.
+
+    Does not raise. Callers can choose to truncate, drop fields, or send
+    a fallback message based on the returned diagnostics. Useful as a
+    pre-send tripwire on any embed assembled from variable-length user data
+    (rosters, factor breakdowns, narratives).
+    """
+    warnings: list[str] = []
+    total = 0
+
+    title = getattr(embed, "title", None) or ""
+    description = getattr(embed, "description", None) or ""
+    if len(title) > EMBED_TITLE_LIMIT:
+        warnings.append(f"title {len(title)} > {EMBED_TITLE_LIMIT}")
+    if len(description) > EMBED_DESCRIPTION_LIMIT:
+        warnings.append(f"description {len(description)} > {EMBED_DESCRIPTION_LIMIT}")
+    total += len(title) + len(description)
+
+    fields = getattr(embed, "fields", []) or []
+    if len(fields) > EMBED_FIELD_COUNT_LIMIT:
+        warnings.append(f"fields {len(fields)} > {EMBED_FIELD_COUNT_LIMIT}")
+
+    for i, field in enumerate(fields):
+        name = getattr(field, "name", "") or ""
+        value = getattr(field, "value", "") or ""
+        if len(name) > EMBED_FIELD_NAME_LIMIT:
+            warnings.append(f"field[{i}].name {len(name)} > {EMBED_FIELD_NAME_LIMIT}")
+        if len(value) > EMBED_FIELD_VALUE_LIMIT:
+            warnings.append(f"field[{i}].value {len(value)} > {EMBED_FIELD_VALUE_LIMIT}")
+        total += len(name) + len(value)
+
+    author = getattr(embed, "author", None)
+    if author is not None:
+        total += len(getattr(author, "name", "") or "")
+
+    footer = getattr(embed, "footer", None)
+    if footer is not None:
+        total += len(getattr(footer, "text", "") or "")
+
+    if total > EMBED_TOTAL_LIMIT:
+        warnings.append(f"total {total} > {EMBED_TOTAL_LIMIT}")
+
+    return (len(warnings) == 0, total, warnings)

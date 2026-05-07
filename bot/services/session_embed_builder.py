@@ -360,6 +360,22 @@ class SessionEmbedBuilder:
             if reason and reason != "OK":
                 footer += f" • {reason}"
         embed.set_footer(text=footer)
+
+        # Tripwire: log if the assembled embed will exceed Discord's hard
+        # limits. Doesn't change behaviour — the send still goes out — but
+        # surfaces the overflow in logs so we know which session triggered
+        # it instead of getting a silent HTTPException at send time.
+        try:
+            from bot.core.utils import validate_embed_size
+            ok, total, warnings = validate_embed_size(embed)
+            if not ok:
+                logger.warning(
+                    "Session overview embed near/over Discord limits: total=%d warnings=%s",
+                    total, warnings,
+                )
+        except Exception as embed_err:  # pragma: no cover — observability path, never block send
+            logger.debug("validate_embed_size skipped: %s", embed_err)
+
         return embed
 
     def _build_endstats_section(
