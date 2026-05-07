@@ -131,7 +131,9 @@ log "   ✓ Local parachute saved (${LOCAL_DUMP_SIZE})"
 # expansion of the path and any quoting issues.
 # -------------------------------------------------------------------------
 log "(2/6) Pulling prod dump via ssh ${PROD_SSH_ALIAS}..."
-ssh "${PROD_SSH_ALIAS}" bash -s "${PROD_REPO_PATH}" <<'REMOTE_DUMP_END' > "${PROD_DUMP}"
+# BatchMode=yes makes ssh fail fast on auth issues instead of prompting
+# for a passphrase mid-deploy (consistent with check_db_drift.sh).
+ssh -o BatchMode=yes "${PROD_SSH_ALIAS}" bash -s "${PROD_REPO_PATH}" <<'REMOTE_DUMP_END' > "${PROD_DUMP}"
 set -euo pipefail
 cd "$1"
 PGPASSWORD=$(grep -E '^POSTGRES_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '"')
@@ -240,11 +242,20 @@ echo
 # Earlier versions referenced `psql_local`, the in-script bash function defined
 # above — that name does not exist in the user's shell after the script exits,
 # which is exactly when these hints are needed.
-RECOVERY_PSQL="PGPASSWORD=\$POSTGRES_PASSWORD psql -h ${DB_HOST} -p ${DB_PORT} -U ${DB_USER_NAME} -d postgres -c"
+#
+# The hints reference $POSTGRES_PASSWORD; in a fresh shell the user needs to
+# load the env first. Print the loader command explicitly so the recovery
+# steps are self-contained (no hidden prerequisite).
+readonly ENV_LOAD_CMD="set -a && . '${LOCAL_ENV}' && set +a"
+readonly RECOVERY_PSQL="PGPASSWORD=\"\$POSTGRES_PASSWORD\" psql -h ${DB_HOST} -p ${DB_PORT} -U ${DB_USER_NAME} -d postgres -c"
 log "Rollback (if needed):"
+log "  # 1. Load env (in a fresh shell):"
+log "  ${ENV_LOAD_CMD}"
+log "  # 2. Rename:"
 log "  ${RECOVERY_PSQL} \"ALTER DATABASE ${DB_NAME} RENAME TO etlegacy_failed_${TS}\""
 log "  ${RECOVERY_PSQL} \"ALTER DATABASE ${BACKUP_DB_NAME} RENAME TO ${DB_NAME}\""
 echo
 log "Cleanup (when you're sure new DB is good):"
+log "  ${ENV_LOAD_CMD}"
 log "  ${RECOVERY_PSQL} \"DROP DATABASE ${BACKUP_DB_NAME}\""
 log "  rm ${LOCAL_PRE_SYNC_DUMP} ${PROD_DUMP}"
