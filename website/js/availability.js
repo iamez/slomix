@@ -491,7 +491,11 @@ function renderCurrentQueue() {
     const grid = _qel('div', 'grid grid-cols-1 md:grid-cols-2 gap-2');
     lookingUsers.slice(0, maxRows).forEach((user) => {
         const rawName = user?.display_name || (user?.user_id ? `User ${user.user_id}` : 'Player');
-        const initial = (String(rawName).trim()[0] || '?').toUpperCase();
+        // Unicode-safe first-grapheme extraction — Array.from splits on code
+        // points so emoji + surrogate-pair names render the avatar correctly
+        // instead of showing a half-character replacement glyph.
+        const codePoints = Array.from(String(rawName).trim());
+        const initial = (codePoints[0] || '?').toUpperCase();
         const timeWindow = extractQueueTimeWindow(user);
 
         const row = _qel('div', 'flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 hover:border-brand-emerald/30 transition');
@@ -872,7 +876,10 @@ function renderActionCard(title, dateIso, canAct) {
         `;
     }).join('');
 
-    const isToday = (title || '').toLowerCase() === 'today';
+    // Compare against today's ISO date rather than the title string —
+    // titles can drift (localization, copy tweaks) but dateIso is always the
+    // canonical source of truth.
+    const isToday = dateIso === toISODate(new Date());
     const accent = isToday ? 'border-brand-cyan/30' : 'border-brand-purple/25';
     const accentGlow = isToday ? 'from-brand-cyan/10' : 'from-brand-purple/10';
     const dateLabel = formatDate(dateIso, { weekday: 'long', month: 'short', day: 'numeric' });
