@@ -443,33 +443,54 @@ function renderCurrentQueue() {
     const todayIso = toISODate(new Date());
     const entry = getEntry(todayIso);
     const lookingUsers = Array.isArray(entry.usersByStatus?.LOOKING) ? entry.usersByStatus.LOOKING : [];
+    const total = lookingUsers.length;
 
-    if (!entry.usersByStatus || !lookingUsers.length) {
-        container.innerHTML = '<div class="text-xs text-slate-500">Queue is empty</div>';
+    if (!entry.usersByStatus || !total) {
+        container.innerHTML = `
+            <div class="text-center py-8 px-4 rounded-xl border border-dashed border-white/10 bg-slate-950/30">
+                <div class="text-2xl mb-2" aria-hidden="true">🪑</div>
+                <div class="text-sm font-semibold text-slate-300">Queue is empty</div>
+                <div class="text-xs text-slate-500 mt-1">Be the first &mdash; pick &ldquo;Looking to play&rdquo; up top.</div>
+            </div>
+        `;
         return;
     }
+
+    const headerHtml = `
+        <div class="flex items-center justify-between mb-3">
+            <div class="text-sm font-bold text-white inline-flex items-center gap-2">
+                <span class="inline-flex items-center justify-center min-w-[2rem] h-7 px-2 rounded-full bg-brand-emerald/20 text-brand-emerald text-sm font-black">${total}</span>
+                <span>looking to play</span>
+            </div>
+            <div class="text-[11px] text-slate-500">Top ${Math.min(total, 12)} shown</div>
+        </div>
+    `;
 
     const maxRows = 12;
     const rows = lookingUsers.slice(0, maxRows).map((user) => {
         const displayName = escapeHtml(user?.display_name || (user?.user_id ? `User ${user.user_id}` : 'Player'));
+        const initial = (displayName.replace(/<[^>]+>/g, '').trim()[0] || '?').toUpperCase();
         const timeWindow = escapeHtml(extractQueueTimeWindow(user));
         const timeHtml = timeWindow
-            ? `<div class="text-[11px] text-slate-400 whitespace-nowrap">${timeWindow}</div>`
+            ? `<div class="text-xs text-slate-400 whitespace-nowrap">${timeWindow}</div>`
             : '';
         return `
-            <div class="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-950/35 px-3 py-2">
-                <div class="text-sm font-semibold text-slate-100 truncate">${displayName}</div>
+            <div class="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 hover:border-brand-emerald/30 transition">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-9 h-9 rounded-full bg-brand-emerald/15 text-brand-emerald flex items-center justify-center text-sm font-black shrink-0" aria-hidden="true">${initial}</div>
+                    <div class="text-sm font-bold text-slate-100 truncate">${displayName}</div>
+                </div>
                 ${timeHtml}
             </div>
         `;
     });
 
-    const remaining = Math.max(0, lookingUsers.length - maxRows);
+    const remaining = Math.max(0, total - maxRows);
     const moreHtml = remaining > 0
-        ? `<div class="text-[11px] text-slate-500">+${remaining} more in queue</div>`
+        ? `<div class="text-xs text-slate-500 text-center pt-2">+${remaining} more in queue</div>`
         : '';
 
-    container.innerHTML = `${rows.join('')}${moreHtml}`;
+    container.innerHTML = `${headerHtml}<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${rows.join('')}</div>${moreHtml}`;
 }
 
 function renderPromoteControls() {
@@ -800,7 +821,10 @@ function renderActionCard(title, dateIso, canAct) {
 
     const buttonHtml = STATUS_ORDER.map((statusKey) => {
         const meta = STATUS_META[statusKey];
-        const selectedClass = selected === statusKey ? meta.selectedClass : meta.idleClass;
+        const isSelected = selected === statusKey;
+        const stateClass = isSelected
+            ? `${meta.selectedClass} ring-2 ring-offset-0 shadow-lg`
+            : meta.idleClass;
         const disabledClass = canAct ? '' : 'opacity-60 cursor-not-allowed';
         const disabled = canAct ? '' : 'disabled';
 
@@ -811,23 +835,46 @@ function renderActionCard(title, dateIso, canAct) {
                 data-date-iso="${escapeHtml(dateIso)}"
                 data-status-key="${escapeHtml(statusKey)}"
                 ${disabled}
-                class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition ${selectedClass} ${disabledClass}">
-                ${meta.shortLabel}
+                aria-pressed="${isSelected ? 'true' : 'false'}"
+                class="flex flex-col items-center justify-center gap-1.5 px-3 py-4 rounded-xl text-sm font-bold border transition ${stateClass} ${disabledClass}">
+                <span class="text-xl" aria-hidden="true">${meta.emoji}</span>
+                <span>${escapeHtml(meta.shortLabel)}</span>
             </button>
         `;
     }).join('');
 
+    const isToday = (title || '').toLowerCase() === 'today';
+    const accent = isToday ? 'border-brand-cyan/30' : 'border-brand-purple/25';
+    const accentGlow = isToday ? 'from-brand-cyan/10' : 'from-brand-purple/10';
+    const dateLabel = formatDate(dateIso, { weekday: 'long', month: 'short', day: 'numeric' });
+    const selectedMeta = selected ? STATUS_META[selected] : null;
+    const statusBadge = selectedMeta
+        ? `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${selectedMeta.selectedClass}">
+                <span aria-hidden="true">${selectedMeta.emoji}</span>${escapeHtml(selectedMeta.label)}
+            </span>`
+        : '<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-slate-900/60 border border-white/10 text-slate-400">Not set</span>';
+    const hint = canAct
+        ? (selected ? '' : 'Tap a status to commit.')
+        : 'Sign in &amp; link your player to commit.';
+
     return `
-        <div class="glass-card rounded-xl p-4 border border-white/10">
-            <div class="flex items-start justify-between gap-3">
-                <div>
-                    <div class="text-sm font-bold text-white">${escapeHtml(title)}</div>
-                    <div class="text-[11px] text-slate-500 mt-1">${escapeHtml(formatDate(dateIso, { weekday: 'short', month: 'short', day: 'numeric' }))}</div>
+        <div class="glass-card rounded-2xl border ${accent} overflow-hidden">
+            <div class="px-5 py-4 bg-gradient-to-br ${accentGlow} to-transparent border-b border-white/5">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <div class="text-xl font-black text-white">${escapeHtml(title)}</div>
+                        <div class="text-xs text-slate-500 mt-0.5">${escapeHtml(dateLabel)}</div>
+                    </div>
+                    ${statusBadge}
                 </div>
-                <div class="text-[11px] text-slate-400">${escapeHtml(selected ? `${STATUS_META[selected].emoji} ${STATUS_META[selected].label}` : 'Not set')}</div>
             </div>
-            <div class="flex flex-wrap gap-2 mt-3">${buttonHtml}</div>
-            <div class="text-[11px] text-slate-500 mt-3">${entry.total} responses</div>
+            <div class="p-5">
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">${buttonHtml}</div>
+                <div class="flex items-center justify-between mt-4 text-[11px] text-slate-500">
+                    <span>${entry.total} response${entry.total === 1 ? '' : 's'}</span>
+                    ${hint ? `<span class="text-slate-400">${hint}</span>` : ''}
+                </div>
+            </div>
         </div>
     `;
 }
