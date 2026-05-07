@@ -14,6 +14,7 @@ from shared.utils import escape_like_pattern
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
+from website.backend.rate_limit import limiter
 from website.backend.routers.api_helpers import (
     batch_resolve_display_names,
     calculate_player_achievements,
@@ -35,8 +36,9 @@ def _require_ajax_csrf_header(request: Request) -> None:
 
 
 @router.get("/player/search")
-async def search_player(query: str, db: DatabaseAdapter = Depends(get_db)):
-    """Search for player aliases"""
+@limiter.limit("30/minute")
+async def search_player(request: Request, query: str, db: DatabaseAdapter = Depends(get_db)):
+    """Search for player aliases. Rate-limited to deter enumeration."""
     if len(query) < 2:
         return []
 
@@ -417,10 +419,15 @@ async def compare_players(
     else:
         ordered_rows = rows
 
+    # Batch resolve display names once instead of N+1 per-row.
+    quick_name_map = await batch_resolve_display_names(
+        db, [(r[0], r[1] or "Unknown") for r in ordered_rows if r and r[0]]
+    )
+
     for row in ordered_rows:
         guid = row[0]
         name = (
-            await resolve_display_name(db, guid, row[1] or "Unknown")
+            quick_name_map.get(guid, row[1] or "Unknown")
             if guid
             else (row[1] or "Unknown")
         )
@@ -903,14 +910,17 @@ async def get_quick_leaders(
                 )
                 errors.append("dpm_query_failed")
                 dpm_rows = []
+    # Batch resolve display names instead of N+1 per-row lookup.
+    dpm_name_map = await batch_resolve_display_names(
+        db, [(row[0], row[1] or "Unknown") for row in dpm_rows]
+    )
     dpm_leaders = []
     for i, row in enumerate(dpm_rows):
-        display_name = await resolve_display_name(db, row[0], row[1] or "Unknown")
         dpm_leaders.append(
             {
                 "rank": i + 1,
                 "guid": row[0],
-                "name": display_name,
+                "name": dpm_name_map.get(row[0], row[1] or "Unknown"),
                 "value": float(row[2] or 0),
                 "sessions": row[3] or 0,
                 "label": "DPM/session",

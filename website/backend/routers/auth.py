@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from shared.database_adapter import DatabaseAdapter
 from website.backend.dependencies import get_db
 from website.backend.logging_config import get_app_logger
+from website.backend.rate_limit import limiter
 from website.backend.routers.api_helpers import resolve_display_name
 
 # Load .env file explicitly
@@ -102,6 +103,30 @@ def _oauth_bucket_key(request: Request, endpoint: str) -> str:
     return f"{endpoint}:{client_host}"
 
 
+_OAUTH_BUCKETS_LAST_SWEEP = [0.0]  # mutable container so we can update from inner fn
+
+
+def _sweep_oauth_rate_buckets(now: float) -> None:
+    """Evict buckets whose newest timestamp is older than the rate-limit window.
+
+    Iterating only on enqueue means one-off IPs that never re-hit the endpoint
+    keep their stale entries forever; this sweep drops them in a single pass.
+    Gated to run at most once per OAUTH_RATE_LIMIT_WINDOW_SECONDS using a
+    monotonic-time threshold (modulo arithmetic isn't reliable here because
+    multiple enqueues can land in the same wallclock second).
+    """
+    if now - _OAUTH_BUCKETS_LAST_SWEEP[0] < OAUTH_RATE_LIMIT_WINDOW_SECONDS:
+        return
+    _OAUTH_BUCKETS_LAST_SWEEP[0] = now
+    cutoff = now - OAUTH_RATE_LIMIT_WINDOW_SECONDS
+    stale_keys = [
+        k for k, q in _oauth_rate_buckets.items()
+        if not q or q[-1] <= cutoff
+    ]
+    for k in stale_keys:
+        _oauth_rate_buckets.pop(k, None)
+
+
 def _enforce_oauth_rate_limit(request: Request, endpoint: str) -> None:
     """Additional guardrail for OAuth endpoints on top of global middleware."""
     now = time.monotonic()
@@ -119,6 +144,10 @@ def _enforce_oauth_rate_limit(request: Request, endpoint: str) -> None:
         )
 
     bucket.append(now)
+
+    # Opportunistic full sweep — drops one-off IP entries whose buckets fell
+    # silent before the next enqueue would have pruned them.
+    _sweep_oauth_rate_buckets(now)
 
 
 def _pkce_challenge(verifier: str) -> str:
@@ -524,9 +553,12 @@ async def get_link_status(request: Request, db: DatabaseAdapter = Depends(get_db
     }
 
 
-@router.get("/players/search")
-async def search_players(q: str, db: DatabaseAdapter = Depends(get_db)):
-    """Search for players by name to link to Discord account."""
+async def _player_search_impl(q: str, db: DatabaseAdapter) -> list[dict]:
+    """Shared implementation: route handler + internal callers both use this.
+
+    Pulled out so the rate-limit decorator only applies to the public route,
+    not internal lookups (e.g. /players/suggestions hitting it for two terms).
+    """
     if not q or len(q) < 2:
         return []
 
@@ -587,6 +619,14 @@ async def search_players(q: str, db: DatabaseAdapter = Depends(get_db)):
     return results
 
 
+@router.get("/players/search")
+@limiter.limit("30/minute")
+async def search_players(request: Request, q: str, db: DatabaseAdapter = Depends(get_db)):
+    """Search for players by name to link to Discord account.
+    Rate-limited to deter player-database enumeration."""
+    return await _player_search_impl(q, db)
+
+
 @router.get("/players/suggestions")
 async def suggested_players_for_me(request: Request, db: DatabaseAdapter = Depends(get_db)):
     user = _require_session_user(request)
@@ -604,7 +644,7 @@ async def suggested_players_for_me(request: Request, db: DatabaseAdapter = Depen
     suggestions = []
     seen_guids: set[str] = set()
     for term in terms:
-        matches = await search_players(term, db)
+        matches = await _player_search_impl(term, db)
         for match in matches:
             guid = str(match.get("guid") or "")
             if not guid or guid in seen_guids:
