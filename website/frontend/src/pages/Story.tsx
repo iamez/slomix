@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   useStoryKillImpact, useStoryMoments, useStoryMomentum, useStoryNarrative, usePlayerNarratives,
   useStoryGravity, useStorySpaceCreated, useStoryEnabler, useStoryLurkerProfile,
-  useStorySynergy, useStoryWinContribution, useStoryBoxScore,
+  useStorySynergy, useStoryWinContribution, useStoryBoxScore, useStoryComposite,
 } from '../api/hooks';
 import type { KillImpactEntry } from '../api/types';
 import { Skeleton } from '../components/Skeleton';
@@ -14,6 +14,7 @@ import { MomentumChart } from '../components/story/MomentumChart';
 import { NarrativePanel } from '../components/story/NarrativePanel';
 import { PlayerNarrativesPanel } from '../components/story/PlayerNarrativesPanel';
 import { InvisibleValuePanel } from '../components/story/InvisibleValuePanel';
+import { CompositeStatsPanel } from '../components/story/CompositeStatsPanel';
 import { WinContributionPanel } from '../components/story/WinContributionPanel';
 import { TeamSynergyPanel } from '../components/story/TeamSynergyPanel';
 import { BoxScorePanel } from '../components/story/BoxScorePanel';
@@ -94,6 +95,7 @@ export default function Story() {
   const { data: synergyData, isLoading: synergyLoading } = useStorySynergy(sessionDate);
   const { data: pwcData, isLoading: pwcLoading } = useStoryWinContribution(sessionDate);
   const { data: boxData, isLoading: boxLoading } = useStoryBoxScore(sessionDate);
+  const { data: compositeData } = useStoryComposite(sessionDate);
 
   const entries = useMemo(() => kis?.entries ?? [], [kis]);
   const totalKills = kis?.total_kills ?? 0;
@@ -204,6 +206,9 @@ export default function Story() {
         ) : (
           <InvisibleValuePanel gravity={gravityData} space={spaceData} enabler={enablerData} lurker={lurkerData} />
         )}
+
+        {/* Performance Fingerprint — TIR/CI/KPI/SDS/CP composite stats */}
+        <CompositeStatsPanel composite={compositeData} />
 
         {/* Team Synergy */}
         {synergyLoading ? (

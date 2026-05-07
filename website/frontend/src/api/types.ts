@@ -1716,3 +1716,35 @@ export interface BoxScoreResponse {
   winner_name: string | null;
   maps: BoxScoreMap[];
 }
+
+// Composite advanced stats — TIR/CI/KPI/SDS/CP per player.
+// Backend: GET /api/skill/composite (skill_router.py:275)
+export interface CompositeStatsPlayer {
+  player_guid: string;
+  player_name: string;
+  kills: number;
+  tir: number;  // Team Impact Rating (0-100)
+  ci: number;   // Clutch Index (0-100)
+  kpi: number;  // Kill Permanence Index (0-100)
+  sds: number;  // Spawn Denial Score (0-100)
+  cp: number;   // Combat Presence (0-100)
+  details: {
+    crossfire_kills: number;
+    trade_kills: number;
+    clutch_kills: number;
+    gibbed_count: number;
+    total_outcomes: number;
+    avg_spawn_score: number;
+    focus_escapes: number;
+    times_focused: number;
+  };
+}
+
+export interface CompositeStatsResponse {
+  status: string;
+  session_date: string | null;
+  players: CompositeStatsPlayer[];
+  meta?: {
+    metrics: Record<string, string>;
+  };
+}

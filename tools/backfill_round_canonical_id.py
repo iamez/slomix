@@ -32,17 +32,21 @@ from bot.core.round_canonical import compute_canonical_id
 
 
 async def get_conn():
-    password = os.getenv("DB_PASSWORD")
+    # Read POSTGRES_* (canonical names from .env.example) first; fall back to
+    # legacy DB_* so older devboxes keep working. Mirrors the precedence used
+    # in scripts/sync_local_from_prod.sh and scripts/check_db_drift.sh.
+    password = os.getenv("POSTGRES_PASSWORD") or os.getenv("DB_PASSWORD")
     if not password:
         raise RuntimeError(
-            "DB_PASSWORD env var is required. Export it (or load .env) before running this tool."
+            "POSTGRES_PASSWORD (or legacy DB_PASSWORD) env var is required. "
+            "Export it or load .env before running this tool."
         )
     return await asyncpg.connect(
-        host=os.getenv("DB_HOST", "127.0.0.1"),
-        port=int(os.getenv("DB_PORT", "5432")),
-        user=os.getenv("DB_USER", "etlegacy_user"),
+        host=os.getenv("POSTGRES_HOST") or os.getenv("DB_HOST", "127.0.0.1"),
+        port=int(os.getenv("POSTGRES_PORT") or os.getenv("DB_PORT", "5432")),
+        user=os.getenv("POSTGRES_USER") or os.getenv("DB_USER", "etlegacy_user"),
         password=password,
-        database=os.getenv("DB_NAME", "etlegacy"),
+        database=os.getenv("POSTGRES_DATABASE") or os.getenv("DB_NAME", "etlegacy"),
     )
 
 
