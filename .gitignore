@@ -345,17 +345,28 @@ scripts/rcon_command.py
 scripts/run_retro_test.py
 
 # ============================================
-# ROOT DIAGNOSTIC/DEV SCRIPTS
+# ROOT DIAGNOSTIC/DEV SCRIPTS (root-only, leading slash)
 # ============================================
-check_*.py
-compare_*.py
-investigate_*.py
-show_*.py
-pentest_*.py
-test_*.py
+# Patterns anchored to repo root with leading slash so nested files like
+# bot/cogs/stats_mixins/compare_mixin.py (real runtime code) aren't silently
+# excluded. Past incident: stats_cog import failed on prod because
+# compare_mixin was matched by an unanchored compare_*.py rule.
+/check_*.py
+/compare_*.py
+/investigate_*.py
+/show_*.py
+/pentest_*.py
+/test_*.py
 !tests/test_*.py
 !tests/**/test_*.py
 trigger_timing_debug.py
+
+# Dev-only files in nested locations (explicit allow-list of ignores so they
+# don't accidentally get committed when the patterns above are anchored).
+proximity/test_standalone.py
+website/backend/check_bot_db.py
+website/backend/check_schema.py
+website/backend/check_stats_schema.py
 
 # ============================================
 # MIGRATIONS — KEEP ALL SQL MIGRATIONS
