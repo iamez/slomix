@@ -6,6 +6,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.12.0](https://github.com/iamez/slomix/compare/v1.11.1...v1.12.0) (2026-05-07)
+
+
+### Features
+
+* **website:** minimalize Stats dropdown — 13 items → 6 ([#178](https://github.com/iamez/slomix/issues/178)) ([6c88c59](https://github.com/iamez/slomix/commit/6c88c59243f35d15d681dcb21c4ed268e34f12b9))
+* **website:** redesign Availability page as #ETL — bigger, bolder, clearer ([#182](https://github.com/iamez/slomix/issues/182)) ([aa58f24](https://github.com/iamez/slomix/commit/aa58f24ff599a2719f21234738c430f189d61bfc))
+* **website:** redesign System Overview as About page (-7000 lines) ([#179](https://github.com/iamez/slomix/issues/179)) ([56b50d0](https://github.com/iamez/slomix/commit/56b50d0408aabbdee799966302a5247d36ea288d))
+
+
+### Bug Fixes
+
+* **stats:** R0 double-counting + TIR formula bug across PCS aggregations ([#176](https://github.com/iamez/slomix/issues/176)) ([516d9b0](https://github.com/iamez/slomix/commit/516d9b0335051a0f543d64b3a7c11dc1e46330e1))
+
 ## [1.11.1](https://github.com/iamez/slomix/compare/v1.11.0...v1.11.1) (2026-05-07)
 
 
