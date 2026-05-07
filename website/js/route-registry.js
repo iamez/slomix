@@ -223,9 +223,9 @@ const ROUTE_DEFINITIONS = Object.freeze({
     },
     admin: {
         viewId: 'admin',
-        label: 'Admin',
+        label: 'About',
         mode: VIEW_MODE.LEGACY,
-        surfaceType: 'write/auth-heavy',
+        surfaceType: 'static',
         migrationWave: 'C',
         buildHash: () => '#/admin',
         load: ({ legacy }) => legacy.loadAdminPanelView(),
