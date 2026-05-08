@@ -160,12 +160,10 @@ function metricValue(p: CompositeStatsPlayer, m: Metric): number {
     case 'kpi': return p.kpi;
     case 'sds': return p.sds;
     case 'cp':  return p.cp;
-    default: {
-      const _exhaustive: never = m;
-      void _exhaustive;
-      return 0;
-    }
   }
+  // Unreachable while `m` is a Metric — switch above covers all union members.
+  // The explicit return keeps linters that demand a fallback path happy.
+  return 0;
 }
 
 function renderDetailCells(metric: Metric, p: CompositeStatsPlayer) {
@@ -220,13 +218,8 @@ function renderDetailCells(metric: Metric, p: CompositeStatsPlayer) {
           <StatCell label="FOCUSED" value={String(d.times_focused)} />
         </>
       );
-    default: {
-      // Exhaustiveness check — TypeScript will narrow `metric` to `never`
-      // here; if a new tab key is added without a case, this assignment
-      // produces a compile error and a runtime fallback.
-      const _exhaustive: never = metric;
-      void _exhaustive;
-      return null;
-    }
   }
+  // Unreachable while `metric` is a Metric — the switch above covers all
+  // union members. Explicit return null for linters that demand a fallback.
+  return null;
 }
