@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.13.3](https://github.com/iamez/slomix/compare/v1.13.2...v1.13.3) (2026-05-08)
+
+
+### Bug Fixes
+
+* **scripts:** robust env loading + base64-encoded SQL over SSH ([#195](https://github.com/iamez/slomix/issues/195)) ([04b41b3](https://github.com/iamez/slomix/commit/04b41b39a34332c50c4785f5f95b994fa764d6f4))
+
 ## [1.13.2](https://github.com/iamez/slomix/compare/v1.13.1...v1.13.2) (2026-05-07)
 
 
