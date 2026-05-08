@@ -53,22 +53,51 @@ confirm() {
 }
 
 # -------------------------------------------------------------------------
-# Step 0 — Load local env, sanity-check
-# Canonical names: POSTGRES_HOST/PORT/DATABASE/USER/PASSWORD (per .env.example).
-# Legacy DB_* fall-throughs accepted to keep older devboxes working.
+# Step 0 — Load local env, sanity-check.
+#
+# We extract specific keys with grep instead of `source`-ing the file.
+# `source` breaks on real-world .env files that contain unquoted values
+# with spaces (e.g. `KEY=ET:Legacy Stats`) or CRLF line endings — the
+# bash parser treats post-space tokens as commands. Targeted grep/cut
+# is robust against both. Mirrors the pattern in scripts/deploy_clean.sh.
+#
+# Canonical names: POSTGRES_HOST/PORT/DATABASE/USER/PASSWORD (per
+# .env.example).
 # -------------------------------------------------------------------------
 [[ -f "$LOCAL_ENV" ]] || die "Local .env not found at $LOCAL_ENV"
 
-set -a
-# shellcheck source=/dev/null
-source "$LOCAL_ENV"
-set +a
+env_value() {
+    # Returns the value for the first matching `KEY=` line across the keys
+    # passed as arguments. CR stripped, surrounding double-quotes removed.
+    # Empty string if no match. Multi-arg form lets callers express the
+    # canonical-then-legacy precedence (e.g. `env_value POSTGRES_USER DB_USER`).
+    local key val
+    for key in "$@"; do
+        # Strip CR (CRLF .env compatibility) and surrounding quotes — both
+        # double and single, since `.env` files commonly support either form
+        # (`PASSWORD="..."` or `PASSWORD='...'`). The previous `source`-based
+        # loader handled both natively; the manual parser must mirror that.
+        val=$(grep -E "^${key}=" "$LOCAL_ENV" 2>/dev/null \
+            | head -1 \
+            | cut -d= -f2- \
+            | tr -d '\r' \
+            | sed -E -e "s/^'(.*)'\$/\\1/" -e 's/^"(.*)"$/\1/')
+        if [[ -n "$val" ]]; then
+            printf '%s' "$val"
+            return
+        fi
+    done
+}
 
-readonly DB_USER_NAME="${POSTGRES_USER:-${DB_USER:-}}"
-readonly DB_PASS="${POSTGRES_PASSWORD:-${DB_PASSWORD:-}}"
-readonly DB_NAME="${POSTGRES_DATABASE:-${DB_NAME:-etlegacy}}"
-readonly DB_HOST="${POSTGRES_HOST:-${DB_HOST:-127.0.0.1}}"
-readonly DB_PORT="${POSTGRES_PORT:-${DB_PORT:-5432}}"
+DB_USER_NAME="$(env_value POSTGRES_USER DB_USER)"
+DB_PASS="$(env_value POSTGRES_PASSWORD DB_PASSWORD)"
+DB_NAME_RAW="$(env_value POSTGRES_DATABASE DB_NAME)"
+DB_HOST_RAW="$(env_value POSTGRES_HOST DB_HOST)"
+DB_PORT_RAW="$(env_value POSTGRES_PORT DB_PORT)"
+readonly DB_USER_NAME DB_PASS
+readonly DB_NAME="${DB_NAME_RAW:-etlegacy}"
+readonly DB_HOST="${DB_HOST_RAW:-127.0.0.1}"
+readonly DB_PORT="${DB_PORT_RAW:-5432}"
 
 [[ -n "$DB_USER_NAME" ]] || die "POSTGRES_USER missing in $LOCAL_ENV"
 [[ -n "$DB_PASS"      ]] || die "POSTGRES_PASSWORD missing in $LOCAL_ENV"
@@ -136,9 +165,13 @@ log "(2/6) Pulling prod dump via ssh ${PROD_SSH_ALIAS}..."
 ssh -o BatchMode=yes "${PROD_SSH_ALIAS}" bash -s "${PROD_REPO_PATH}" <<'REMOTE_DUMP_END' > "${PROD_DUMP}"
 set -euo pipefail
 cd "$1"
-PGPASSWORD=$(grep -E '^POSTGRES_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '"')
-PGUSER=$(grep -E '^POSTGRES_USER=' .env | head -1 | cut -d= -f2- | tr -d '"')
-PGDATABASE=$(grep -E '^POSTGRES_DATABASE=' .env | head -1 | cut -d= -f2- | tr -d '"')
+# Strip CR on the remote side too — prod .env may have CRLF line endings if
+# it was copied from a Windows-edited template. Without this, a trailing \r
+# corrupts PGPASSWORD/PGUSER and produces opaque pg_dump auth failures.
+strip_env_quotes() { tr -d '\r' | sed -E -e "s/^'(.*)'\$/\\1/" -e 's/^"(.*)"$/\1/'; }
+PGPASSWORD=$(grep -E '^POSTGRES_PASSWORD=' .env | head -1 | cut -d= -f2- | strip_env_quotes)
+PGUSER=$(grep -E '^POSTGRES_USER=' .env | head -1 | cut -d= -f2- | strip_env_quotes)
+PGDATABASE=$(grep -E '^POSTGRES_DATABASE=' .env | head -1 | cut -d= -f2- | strip_env_quotes)
 PGPASSWORD="$PGPASSWORD" pg_dump -h localhost -U "$PGUSER" -Fc -d "${PGDATABASE:-etlegacy}"
 REMOTE_DUMP_END
 
