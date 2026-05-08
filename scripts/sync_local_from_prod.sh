@@ -53,22 +53,39 @@ confirm() {
 }
 
 # -------------------------------------------------------------------------
-# Step 0 — Load local env, sanity-check
-# Canonical names: POSTGRES_HOST/PORT/DATABASE/USER/PASSWORD (per .env.example).
-# Legacy DB_* fall-throughs accepted to keep older devboxes working.
+# Step 0 — Load local env, sanity-check.
+#
+# We extract specific keys with grep instead of `source`-ing the file.
+# `source` breaks on real-world .env files that contain unquoted values
+# with spaces (e.g. `KEY=ET:Legacy Stats`) or CRLF line endings — the
+# bash parser treats post-space tokens as commands. Targeted grep/cut
+# is robust against both. Mirrors the pattern in scripts/deploy_clean.sh.
+#
+# Canonical names: POSTGRES_HOST/PORT/DATABASE/USER/PASSWORD (per
+# .env.example).
 # -------------------------------------------------------------------------
 [[ -f "$LOCAL_ENV" ]] || die "Local .env not found at $LOCAL_ENV"
 
-set -a
-# shellcheck source=/dev/null
-source "$LOCAL_ENV"
-set +a
+env_value() {
+    # First matching `KEY=` line; CR stripped, surrounding double-quotes
+    # removed. Empty string if not present.
+    local key="$1"
+    grep -E "^${key}=" "$LOCAL_ENV" 2>/dev/null \
+        | head -1 \
+        | cut -d= -f2- \
+        | tr -d '\r' \
+        | sed -E 's/^"(.*)"$/\1/'
+}
 
-readonly DB_USER_NAME="${POSTGRES_USER:-${DB_USER:-}}"
-readonly DB_PASS="${POSTGRES_PASSWORD:-${DB_PASSWORD:-}}"
-readonly DB_NAME="${POSTGRES_DATABASE:-${DB_NAME:-etlegacy}}"
-readonly DB_HOST="${POSTGRES_HOST:-${DB_HOST:-127.0.0.1}}"
-readonly DB_PORT="${POSTGRES_PORT:-${DB_PORT:-5432}}"
+DB_USER_NAME="$(env_value POSTGRES_USER)"
+DB_PASS="$(env_value POSTGRES_PASSWORD)"
+DB_NAME_RAW="$(env_value POSTGRES_DATABASE)"
+DB_HOST_RAW="$(env_value POSTGRES_HOST)"
+DB_PORT_RAW="$(env_value POSTGRES_PORT)"
+readonly DB_USER_NAME DB_PASS
+readonly DB_NAME="${DB_NAME_RAW:-etlegacy}"
+readonly DB_HOST="${DB_HOST_RAW:-127.0.0.1}"
+readonly DB_PORT="${DB_PORT_RAW:-5432}"
 
 [[ -n "$DB_USER_NAME" ]] || die "POSTGRES_USER missing in $LOCAL_ENV"
 [[ -n "$DB_PASS"      ]] || die "POSTGRES_PASSWORD missing in $LOCAL_ENV"

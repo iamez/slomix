@@ -57,21 +57,38 @@ readonly Q_LATEST="SELECT COALESCE(TO_CHAR(MAX(round_date)::date, 'YYYY-MM-DD'),
 # -------------------------------------------------------------------------
 # Load local env (canonical names: POSTGRES_HOST/PORT/DATABASE/USER/PASSWORD,
 # matching .env.example). Legacy DB_* variables also accepted as fallback.
+#
+# We extract specific keys with grep instead of `source`-ing the file.
+# `source` breaks on real-world .env files that contain unquoted values
+# with spaces (e.g. `KEY=ET:Legacy Stats`) or CRLF line endings — the
+# bash parser treats post-space tokens as commands. Targeted grep/cut
+# is robust against both. Mirrors the pattern in scripts/deploy_clean.sh.
 # -------------------------------------------------------------------------
 if [[ ! -f "$LOCAL_ENV" ]]; then
     err "Local .env not found at $LOCAL_ENV"
     exit 2
 fi
-set -a
-# shellcheck source=/dev/null
-source "$LOCAL_ENV"
-set +a
 
-readonly DB_USER_NAME="${POSTGRES_USER:-${DB_USER:-}}"
-readonly DB_PASS="${POSTGRES_PASSWORD:-${DB_PASSWORD:-}}"
-readonly DB_NAME="${POSTGRES_DATABASE:-${DB_NAME:-etlegacy}}"
-readonly DB_HOST="${POSTGRES_HOST:-${DB_HOST:-127.0.0.1}}"
-readonly DB_PORT="${POSTGRES_PORT:-${DB_PORT:-5432}}"
+env_value() {
+    # Returns the value for the first matching `KEY=` line, with CR stripped
+    # and surrounding double-quotes removed. Empty string if not present.
+    local key="$1"
+    grep -E "^${key}=" "$LOCAL_ENV" 2>/dev/null \
+        | head -1 \
+        | cut -d= -f2- \
+        | tr -d '\r' \
+        | sed -E 's/^"(.*)"$/\1/'
+}
+
+DB_USER_NAME="$(env_value POSTGRES_USER)"
+DB_PASS="$(env_value POSTGRES_PASSWORD)"
+DB_NAME_RAW="$(env_value POSTGRES_DATABASE)"
+DB_HOST_RAW="$(env_value POSTGRES_HOST)"
+DB_PORT_RAW="$(env_value POSTGRES_PORT)"
+readonly DB_USER_NAME DB_PASS
+readonly DB_NAME="${DB_NAME_RAW:-etlegacy}"
+readonly DB_HOST="${DB_HOST_RAW:-127.0.0.1}"
+readonly DB_PORT="${DB_PORT_RAW:-5432}"
 
 if [[ -z "$DB_USER_NAME" || -z "$DB_PASS" ]]; then
     err "POSTGRES_USER / POSTGRES_PASSWORD missing in $LOCAL_ENV"
@@ -94,18 +111,25 @@ query_local() {
         -tAc "$1" 2>/dev/null | tr -d '[:space:]'
 }
 
-# Run a single SELECT on prod via SSH. SQL is passed as positional $2 inside a
-# quoted heredoc — no client-side expansion, no quoting issues with embedded
-# single quotes (e.g. `round_status IN ('completed', ...)`). Path is $1.
+# Run a single SELECT on prod via SSH. SQL is base64-encoded into a positional
+# arg so neither the local shell nor SSH re-tokenize it on whitespace or
+# special characters. The remote heredoc decodes it before passing to psql.
+#
+# Why not pass the SQL raw as `bash -s "$1" "$sql"`: SSH wraps remote command
+# args into a single string and the remote shell re-parses it, which silently
+# splits SQL like `SELECT COUNT(...)` into "$2=SELECT", "$3=COUNT(...)", "$4=…".
+# Base64 has no shell-meaningful characters, so the round-trip is safe.
 query_prod() {
-    local sql="$1"
-    ssh -o BatchMode=yes "${PROD_SSH_ALIAS}" bash -s "${PROD_REPO_PATH}" "$sql" <<'REMOTE_END' 2>/dev/null | tr -d '[:space:]'
+    local sql_b64
+    sql_b64=$(printf '%s' "$1" | base64 -w0)
+    ssh -o BatchMode=yes "${PROD_SSH_ALIAS}" bash -s "${PROD_REPO_PATH}" "$sql_b64" <<'REMOTE_END' 2>/dev/null | tr -d '[:space:]'
 set -euo pipefail
 cd "$1"
 PGPASSWORD=$(grep -E '^POSTGRES_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '"')
 PGUSER=$(grep -E '^POSTGRES_USER=' .env | head -1 | cut -d= -f2- | tr -d '"')
 PGDATABASE=$(grep -E '^POSTGRES_DATABASE=' .env | head -1 | cut -d= -f2- | tr -d '"')
-PGPASSWORD="$PGPASSWORD" psql -h localhost -U "$PGUSER" -d "${PGDATABASE:-etlegacy}" -tAc "$2"
+SQL=$(printf '%s' "$2" | base64 -d)
+PGPASSWORD="$PGPASSWORD" psql -h localhost -U "$PGUSER" -d "${PGDATABASE:-etlegacy}" -tAc "$SQL"
 REMOTE_END
 }
 
