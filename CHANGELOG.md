@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.13.2](https://github.com/iamez/slomix/compare/v1.13.1...v1.13.2) (2026-05-07)
+
+
+### Bug Fixes
+
+* **scripts:** two RCA-driven follow-ups missed in initial ultrareview pass ([#192](https://github.com/iamez/slomix/issues/192)) ([9e4b2f8](https://github.com/iamez/slomix/commit/9e4b2f8e1b86a417f48895c39fe132b28481ab09))
+
 ## [1.13.1](https://github.com/iamez/slomix/compare/v1.13.0...v1.13.1) (2026-05-07)
 
 
