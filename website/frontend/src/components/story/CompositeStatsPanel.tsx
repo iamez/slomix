@@ -89,7 +89,11 @@ export function CompositeStatsPanel({ composite }: Props) {
   const players = composite?.players ?? [];
   if (players.length === 0) return null;
 
-  const activeMetric = METRICS.find((m) => m.key === active)!;
+  // METRICS is a constant-length array containing every Metric union member
+  // (tir/ci/kpi/sds/cp), and `active` is typed as Metric — so .find() never
+  // returns undefined here. Default to METRICS[0] anyway so we don't need
+  // the forbidden non-null assertion.
+  const activeMetric = METRICS.find((m) => m.key === active) ?? METRICS[0];
 
   // Sort by the active metric (descending). Fall back to kills for stable
   // tie-breaking so the order doesn't jitter on toggle.
@@ -117,7 +121,7 @@ export function CompositeStatsPanel({ composite }: Props) {
         {METRICS.map((m) => (
           <button
             key={m.key}
-            onClick={() => setActive(m.key)}
+            onClick={() => { setActive(m.key); }}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all
               ${active === m.key
                 ? `${m.activeBg} ${m.color} border`
@@ -167,20 +171,10 @@ function metricValue(p: CompositeStatsPlayer, m: Metric): number {
 }
 
 function renderDetailCells(metric: Metric, p: CompositeStatsPlayer) {
-  // Defensive `|| {}` because some upstream rows may have a missing `details`
-  // bag if the underlying SQL CTEs don't have the matching scope (e.g. a player
-  // appears in PCS but has no proximity_kill_outcome rows). Default to 0/-
-  // rather than crashing on `undefined.crossfire_kills`.
-  const d = p.details ?? {
-    crossfire_kills: 0,
-    trade_kills: 0,
-    clutch_kills: 0,
-    gibbed_count: 0,
-    total_outcomes: 0,
-    avg_spawn_score: 0,
-    focus_escapes: 0,
-    times_focused: 0,
-  };
+  // `details` is required on the response type (skill_router.py always
+  // includes the bag for every player), so no fallback needed — the
+  // backend will populate it with zeros when source CTEs don't intersect.
+  const d = p.details;
   switch (metric) {
     case 'tir':
       return (
