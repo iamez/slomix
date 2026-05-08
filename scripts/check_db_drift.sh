@@ -76,11 +76,15 @@ env_value() {
     # canonical-then-legacy precedence (e.g. `env_value POSTGRES_USER DB_USER`).
     local key val
     for key in "$@"; do
+        # Strip CR (CRLF .env compatibility) and surrounding quotes — both
+        # double and single, since `.env` files commonly support either form
+        # (`PASSWORD="..."` or `PASSWORD='...'`). The previous `source`-based
+        # loader handled both natively; the manual parser must mirror that.
         val=$(grep -E "^${key}=" "$LOCAL_ENV" 2>/dev/null \
             | head -1 \
             | cut -d= -f2- \
             | tr -d '\r' \
-            | sed -E 's/^"(.*)"$/\1/')
+            | sed -E -e "s/^'(.*)'\$/\\1/" -e 's/^"(.*)"$/\1/')
         if [[ -n "$val" ]]; then
             printf '%s' "$val"
             return
@@ -138,9 +142,10 @@ cd "$1"
 # Strip CR on the remote side too — prod .env may have CRLF line endings if
 # it was copied from a Windows-edited template. Without this, a trailing \r
 # corrupts PGPASSWORD/PGUSER and produces opaque auth failures.
-PGPASSWORD=$(grep -E '^POSTGRES_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '\r"')
-PGUSER=$(grep -E '^POSTGRES_USER=' .env | head -1 | cut -d= -f2- | tr -d '\r"')
-PGDATABASE=$(grep -E '^POSTGRES_DATABASE=' .env | head -1 | cut -d= -f2- | tr -d '\r"')
+strip_env_quotes() { tr -d '\r' | sed -E -e "s/^'(.*)'\$/\\1/" -e 's/^"(.*)"$/\1/'; }
+PGPASSWORD=$(grep -E '^POSTGRES_PASSWORD=' .env | head -1 | cut -d= -f2- | strip_env_quotes)
+PGUSER=$(grep -E '^POSTGRES_USER=' .env | head -1 | cut -d= -f2- | strip_env_quotes)
+PGDATABASE=$(grep -E '^POSTGRES_DATABASE=' .env | head -1 | cut -d= -f2- | strip_env_quotes)
 SQL=$(printf '%s' "$2" | base64 -d)
 PGPASSWORD="$PGPASSWORD" psql -h localhost -U "$PGUSER" -d "${PGDATABASE:-etlegacy}" -tAc "$SQL"
 REMOTE_END
