@@ -70,21 +70,29 @@ if [[ ! -f "$LOCAL_ENV" ]]; then
 fi
 
 env_value() {
-    # Returns the value for the first matching `KEY=` line, with CR stripped
-    # and surrounding double-quotes removed. Empty string if not present.
-    local key="$1"
-    grep -E "^${key}=" "$LOCAL_ENV" 2>/dev/null \
-        | head -1 \
-        | cut -d= -f2- \
-        | tr -d '\r' \
-        | sed -E 's/^"(.*)"$/\1/'
+    # Returns the value for the first matching `KEY=` line across the keys
+    # passed as arguments. CR stripped, surrounding double-quotes removed.
+    # Empty string if no match. Multi-arg form lets callers express the
+    # canonical-then-legacy precedence (e.g. `env_value POSTGRES_USER DB_USER`).
+    local key val
+    for key in "$@"; do
+        val=$(grep -E "^${key}=" "$LOCAL_ENV" 2>/dev/null \
+            | head -1 \
+            | cut -d= -f2- \
+            | tr -d '\r' \
+            | sed -E 's/^"(.*)"$/\1/')
+        if [[ -n "$val" ]]; then
+            printf '%s' "$val"
+            return
+        fi
+    done
 }
 
-DB_USER_NAME="$(env_value POSTGRES_USER)"
-DB_PASS="$(env_value POSTGRES_PASSWORD)"
-DB_NAME_RAW="$(env_value POSTGRES_DATABASE)"
-DB_HOST_RAW="$(env_value POSTGRES_HOST)"
-DB_PORT_RAW="$(env_value POSTGRES_PORT)"
+DB_USER_NAME="$(env_value POSTGRES_USER DB_USER)"
+DB_PASS="$(env_value POSTGRES_PASSWORD DB_PASSWORD)"
+DB_NAME_RAW="$(env_value POSTGRES_DATABASE DB_NAME)"
+DB_HOST_RAW="$(env_value POSTGRES_HOST DB_HOST)"
+DB_PORT_RAW="$(env_value POSTGRES_PORT DB_PORT)"
 readonly DB_USER_NAME DB_PASS
 readonly DB_NAME="${DB_NAME_RAW:-etlegacy}"
 readonly DB_HOST="${DB_HOST_RAW:-127.0.0.1}"
@@ -120,14 +128,19 @@ query_local() {
 # splits SQL like `SELECT COUNT(...)` into "$2=SELECT", "$3=COUNT(...)", "$4=…".
 # Base64 has no shell-meaningful characters, so the round-trip is safe.
 query_prod() {
+    # `base64 -w0` is GNU-specific (BSD/macOS base64 doesn't accept -w);
+    # piping through `tr -d '\n'` is portable across both implementations.
     local sql_b64
-    sql_b64=$(printf '%s' "$1" | base64 -w0)
+    sql_b64=$(printf '%s' "$1" | base64 | tr -d '\n')
     ssh -o BatchMode=yes "${PROD_SSH_ALIAS}" bash -s "${PROD_REPO_PATH}" "$sql_b64" <<'REMOTE_END' 2>/dev/null | tr -d '[:space:]'
 set -euo pipefail
 cd "$1"
-PGPASSWORD=$(grep -E '^POSTGRES_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '"')
-PGUSER=$(grep -E '^POSTGRES_USER=' .env | head -1 | cut -d= -f2- | tr -d '"')
-PGDATABASE=$(grep -E '^POSTGRES_DATABASE=' .env | head -1 | cut -d= -f2- | tr -d '"')
+# Strip CR on the remote side too — prod .env may have CRLF line endings if
+# it was copied from a Windows-edited template. Without this, a trailing \r
+# corrupts PGPASSWORD/PGUSER and produces opaque auth failures.
+PGPASSWORD=$(grep -E '^POSTGRES_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '\r"')
+PGUSER=$(grep -E '^POSTGRES_USER=' .env | head -1 | cut -d= -f2- | tr -d '\r"')
+PGDATABASE=$(grep -E '^POSTGRES_DATABASE=' .env | head -1 | cut -d= -f2- | tr -d '\r"')
 SQL=$(printf '%s' "$2" | base64 -d)
 PGPASSWORD="$PGPASSWORD" psql -h localhost -U "$PGUSER" -d "${PGDATABASE:-etlegacy}" -tAc "$SQL"
 REMOTE_END

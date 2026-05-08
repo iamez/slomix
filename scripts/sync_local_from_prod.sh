@@ -67,21 +67,29 @@ confirm() {
 [[ -f "$LOCAL_ENV" ]] || die "Local .env not found at $LOCAL_ENV"
 
 env_value() {
-    # First matching `KEY=` line; CR stripped, surrounding double-quotes
-    # removed. Empty string if not present.
-    local key="$1"
-    grep -E "^${key}=" "$LOCAL_ENV" 2>/dev/null \
-        | head -1 \
-        | cut -d= -f2- \
-        | tr -d '\r' \
-        | sed -E 's/^"(.*)"$/\1/'
+    # Returns the value for the first matching `KEY=` line across the keys
+    # passed as arguments. CR stripped, surrounding double-quotes removed.
+    # Empty string if no match. Multi-arg form lets callers express the
+    # canonical-then-legacy precedence (e.g. `env_value POSTGRES_USER DB_USER`).
+    local key val
+    for key in "$@"; do
+        val=$(grep -E "^${key}=" "$LOCAL_ENV" 2>/dev/null \
+            | head -1 \
+            | cut -d= -f2- \
+            | tr -d '\r' \
+            | sed -E 's/^"(.*)"$/\1/')
+        if [[ -n "$val" ]]; then
+            printf '%s' "$val"
+            return
+        fi
+    done
 }
 
-DB_USER_NAME="$(env_value POSTGRES_USER)"
-DB_PASS="$(env_value POSTGRES_PASSWORD)"
-DB_NAME_RAW="$(env_value POSTGRES_DATABASE)"
-DB_HOST_RAW="$(env_value POSTGRES_HOST)"
-DB_PORT_RAW="$(env_value POSTGRES_PORT)"
+DB_USER_NAME="$(env_value POSTGRES_USER DB_USER)"
+DB_PASS="$(env_value POSTGRES_PASSWORD DB_PASSWORD)"
+DB_NAME_RAW="$(env_value POSTGRES_DATABASE DB_NAME)"
+DB_HOST_RAW="$(env_value POSTGRES_HOST DB_HOST)"
+DB_PORT_RAW="$(env_value POSTGRES_PORT DB_PORT)"
 readonly DB_USER_NAME DB_PASS
 readonly DB_NAME="${DB_NAME_RAW:-etlegacy}"
 readonly DB_HOST="${DB_HOST_RAW:-127.0.0.1}"
@@ -153,9 +161,12 @@ log "(2/6) Pulling prod dump via ssh ${PROD_SSH_ALIAS}..."
 ssh -o BatchMode=yes "${PROD_SSH_ALIAS}" bash -s "${PROD_REPO_PATH}" <<'REMOTE_DUMP_END' > "${PROD_DUMP}"
 set -euo pipefail
 cd "$1"
-PGPASSWORD=$(grep -E '^POSTGRES_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '"')
-PGUSER=$(grep -E '^POSTGRES_USER=' .env | head -1 | cut -d= -f2- | tr -d '"')
-PGDATABASE=$(grep -E '^POSTGRES_DATABASE=' .env | head -1 | cut -d= -f2- | tr -d '"')
+# Strip CR on the remote side too — prod .env may have CRLF line endings if
+# it was copied from a Windows-edited template. Without this, a trailing \r
+# corrupts PGPASSWORD/PGUSER and produces opaque pg_dump auth failures.
+PGPASSWORD=$(grep -E '^POSTGRES_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '\r"')
+PGUSER=$(grep -E '^POSTGRES_USER=' .env | head -1 | cut -d= -f2- | tr -d '\r"')
+PGDATABASE=$(grep -E '^POSTGRES_DATABASE=' .env | head -1 | cut -d= -f2- | tr -d '\r"')
 PGPASSWORD="$PGPASSWORD" pg_dump -h localhost -U "$PGUSER" -Fc -d "${PGDATABASE:-etlegacy}"
 REMOTE_DUMP_END
 
