@@ -93,9 +93,12 @@ export function CompositeStatsPanel({ composite }: Props) {
 
   // Sort by the active metric (descending). Fall back to kills for stable
   // tie-breaking so the order doesn't jitter on toggle.
+  // Use an explicit accessor switch instead of `a[active]` dynamic indexing —
+  // the dynamic form is type-safe under TS but trips "object injection" rules
+  // in some static analyzers because `active` is tab-state user-controlled.
   const sortedPlayers = [...players].sort((a, b) => {
-    const av = a[active];
-    const bv = b[active];
+    const av = metricValue(a, active);
+    const bv = metricValue(b, active);
     if (bv !== av) return bv - av;
     return b.kills - a.kills;
   });
@@ -150,8 +153,36 @@ export function CompositeStatsPanel({ composite }: Props) {
   );
 }
 
+function metricValue(p: CompositeStatsPlayer, m: Metric): number {
+  switch (m) {
+    case 'tir': return p.tir;
+    case 'ci':  return p.ci;
+    case 'kpi': return p.kpi;
+    case 'sds': return p.sds;
+    case 'cp':  return p.cp;
+    default: {
+      const _exhaustive: never = m;
+      void _exhaustive;
+      return 0;
+    }
+  }
+}
+
 function renderDetailCells(metric: Metric, p: CompositeStatsPlayer) {
-  const d = p.details;
+  // Defensive `|| {}` because some upstream rows may have a missing `details`
+  // bag if the underlying SQL CTEs don't have the matching scope (e.g. a player
+  // appears in PCS but has no proximity_kill_outcome rows). Default to 0/-
+  // rather than crashing on `undefined.crossfire_kills`.
+  const d = p.details ?? {
+    crossfire_kills: 0,
+    trade_kills: 0,
+    clutch_kills: 0,
+    gibbed_count: 0,
+    total_outcomes: 0,
+    avg_spawn_score: 0,
+    focus_escapes: 0,
+    times_focused: 0,
+  };
   switch (metric) {
     case 'tir':
       return (
@@ -189,5 +220,13 @@ function renderDetailCells(metric: Metric, p: CompositeStatsPlayer) {
           <StatCell label="FOCUSED" value={String(d.times_focused)} />
         </>
       );
+    default: {
+      // Exhaustiveness check — TypeScript will narrow `metric` to `never`
+      // here; if a new tab key is added without a case, this assignment
+      // produces a compile error and a runtime fallback.
+      const _exhaustive: never = metric;
+      void _exhaustive;
+      return null;
+    }
   }
 }
