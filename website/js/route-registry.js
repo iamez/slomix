@@ -4,7 +4,10 @@ export const VIEW_MODE = Object.freeze({
 });
 
 const GREATSHOT_SECTIONS = new Set(['demos', 'highlights', 'clips', 'renders']);
-const SESSION_DETAIL_TABS = ['summary', 'players', 'teamplay', 'charts'];
+
+// Single source of truth for session-detail tab keys. Imported by
+// `session-detail.js` so adding/removing a tab is a one-file change.
+export const SESSION_DETAIL_TABS = ['summary', 'players', 'teamplay', 'charts'];
 const STATS_VIEWS = new Set([
     'sessions',
     'leaderboards',

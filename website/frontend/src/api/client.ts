@@ -60,6 +60,7 @@ import type {
   SynergyResponse,
   WinContributionResponse,
   BoxScoreResponse,
+  CompositeStatsResponse,
 } from './types';
 
 const API_BASE = '/api';
@@ -473,6 +474,9 @@ export const api = {
 
   getStoryBoxScore: (sessionDate: string) =>
     get<BoxScoreResponse>(`/storytelling/box-score?session_date=${sessionDate}`),
+
+  getCompositeStats: (sessionDate: string) =>
+    get<CompositeStatsResponse>(`/skill/composite?session_date=${sessionDate}`),
 
   // Auth
   getAuthMe: async (): Promise<AuthUser | null> => {

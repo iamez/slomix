@@ -4,9 +4,7 @@
  * @module session-detail
  */
 import { API_BASE, fetchJSON, escapeHtml, escapeJsString } from './utils.js';
-import { getRouteHash } from './route-registry.js?v=20260330-v120-deploy';
-
-const SESSION_DETAIL_TABS = ['summary', 'players', 'teamplay', 'charts'];
+import { getRouteHash, SESSION_DETAIL_TABS } from './route-registry.js?v=20260330-v120-deploy';
 import {
     renderMatchSummary,
     renderCombatRadar,
