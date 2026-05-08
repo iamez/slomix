@@ -679,3 +679,18 @@ export function useStoryBoxScore(sessionDate: string | null) {
     staleTime: 60_000,
   });
 }
+
+// Composite advanced stats: TIR / CI / KPI / SDS / CP (the "stories WITH numbers"
+// numerical layer). Endpoint already produces clean 0-100 scaled values per
+// player; Story page uses this hook to wire CompositeStatsPanel.
+export function useStoryComposite(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['story-composite', sessionDate],
+    queryFn: () => {
+      if (!sessionDate) throw new Error('sessionDate required');
+      return api.getCompositeStats(sessionDate);
+    },
+    enabled: !!sessionDate,
+    staleTime: 60_000,
+  });
+}
