@@ -767,12 +767,27 @@ class _StatsImportMixin:
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
         """
-        # Atomic per-player write: PCS row + optional full_selfkills UPDATE
-        # + per-weapon INSERT loop. Without this, a crash mid-loop leaves an
-        # orphan player row with partial weapon rows; downstream displays
-        # then show "player with no weapons" as a real datapoint.
-        # db_adapter.transaction() supports savepoint-nesting, so wrapping
-        # here is safe even if a future caller wraps the whole round import.
+        # Per-player write boundary. The outer transaction commits the PCS
+        # row plus whatever weapon rows survived; nested savepoints isolate
+        # the optional UPDATE and the weapon batch so individual failures
+        # don't taint the parent.
+        #
+        # Failure modes after this change:
+        #   - Process crash mid-loop: nothing committed (clean rollback). This
+        #     is the original concern that motivated the wrap — previously a
+        #     crash left an orphan PCS row with partial weapons.
+        #   - Single weapon INSERT raises: weapon savepoint rolls back ALL
+        #     weapon rows for this player; parent tx still commits the PCS row.
+        #     Net result is "player with zero weapons recorded for this round"
+        #     — a real, non-orphan datapoint, intentionally chosen over the
+        #     prior behavior of "first-N weapons committed, rest dropped".
+        #   - full_selfkills UPDATE raises: savepoint rolls back the UPDATE
+        #     only; PCS row and weapons commit normally.
+        #   - PCS INSERT raises: parent tx rolls back; nothing committed.
+        #
+        # db_adapter.transaction() handles savepoint nesting via _active_tx_conn
+        # (bot/core/database_adapter.py:237-270), so wrapping here is safe
+        # even if a future caller wraps the whole round import.
         async with self.db_adapter.transaction():
             await self.db_adapter.execute(query, values)
 
@@ -793,11 +808,15 @@ class _StatsImportMixin:
                     logger.debug(f"Failed to update full_selfkills: {e}")
 
             # Insert weapon stats into weapon_comprehensive_stats if available.
-            # Wrapped in a savepoint (nested tx) so a single bad weapon row
-            # rolls back only the weapon writes and lets the parent player tx
-            # commit. Preserves the prior "log + continue on weapon failure"
-            # behavior under postgres' "current transaction is aborted, queries
-            # ignored until end of transaction block" rule.
+            # Wrapped in a savepoint so a single bad weapon row rolls back
+            # only the weapon writes and lets the parent player tx commit.
+            # This is NOT a 1:1 preservation of the prior behavior: previously
+            # earlier weapon rows could already be committed before a later
+            # failure, leaving a partial set. Under the savepoint, weapon
+            # writes are now atomic — either all weapons for this player land
+            # or none do. The parent tx still commits the PCS row regardless.
+            # Without the savepoint, postgres' "current transaction is aborted"
+            # rule would also abort the PCS row on any weapon failure.
             weapon_stats = player.get("weapon_stats", {}) or {}
             if weapon_stats:
                 # Static SQL — schema 2.2 weapon_comprehensive_stats has these fixed columns

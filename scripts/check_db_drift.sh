@@ -27,7 +27,10 @@ for arg in "$@"; do
     case "$arg" in
         --diff) DIFF_MODE=1 ;;
         -h|--help)
-            sed -n '2,15p' "$0"
+            # Print the entire header comment block (everything from line 2
+            # up to but not including the first blank line). Survives header
+            # edits without needing a hand-counted line range.
+            awk 'NR==1 {next} /^[[:space:]]*$/ {exit} {print}' "$0"
             exit 0
             ;;
         *)
