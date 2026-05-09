@@ -7,6 +7,11 @@
 #   - players (PCS, R1+R2)         COUNT(DISTINCT player_guid)
 #   - latest round_date            MAX
 #
+# Flags:
+#   --diff    After the count summary, dump full local/prod GUID + per-date
+#             round lists and print symmetric diffs. Useful to identify
+#             *which* rows account for a count delta. Still read-only.
+#
 # Exit status:
 #   0 — no drift (local fully matches prod)
 #   1 — drift detected (counts differ in one or more metrics)
@@ -16,6 +21,21 @@
 # Read-only: SELECT-only queries, no writes, no schema changes.
 
 set -euo pipefail
+
+DIFF_MODE=0
+for arg in "$@"; do
+    case "$arg" in
+        --diff) DIFF_MODE=1 ;;
+        -h|--help)
+            sed -n '2,15p' "$0"
+            exit 0
+            ;;
+        *)
+            printf 'unknown arg: %s (see --help)\n' "$arg" >&2
+            exit 2
+            ;;
+    esac
+done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly REPO_ROOT
@@ -214,6 +234,80 @@ if [[ "$LOCAL_SESSIONS_MAX" == "$PROD_SESSIONS_MAX" \
     printf '%sNote:%s MAX(gaming_session_id) matches but DISTINCT does not — \n' "$C_DRIFT" "$C_RESET"
     printf '      classic partial-dump symptom (some session_ids inside 1..MAX are absent locally).\n'
     printf '      Run %sscripts/sync_local_from_prod.sh%s for non-destructive resync.\n' "$C_DIM" "$C_RESET"
+fi
+
+# -------------------------------------------------------------------------
+# Optional --diff mode: dump full lists and surface row-level deltas.
+# Helps identify *which* GUIDs / rounds account for a count drift.
+# -------------------------------------------------------------------------
+if [[ "$DIFF_MODE" -eq 1 ]]; then
+    echo
+    log "==================== DIFF MODE ===================="
+
+    # Helper: dump a list query to a temp file via local psql or remote ssh.
+    # Output is one row per line, columns separated by '|'. Sorted for `comm`.
+    dump_local() {
+        PGPASSWORD="$DB_PASS" psql \
+            -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER_NAME" -d "$DB_NAME" \
+            -tA -F '|' -c "$1" 2>/dev/null | sort
+    }
+    dump_prod() {
+        local sql_b64
+        sql_b64=$(printf '%s' "$1" | base64 | tr -d '\n')
+        ssh -o BatchMode=yes "${PROD_SSH_ALIAS}" bash -s "${PROD_REPO_PATH}" "$sql_b64" <<'REMOTE_END' 2>/dev/null | sort
+set -euo pipefail
+cd "$1"
+strip_env_quotes() { tr -d '\r' | sed -E -e "s/^'(.*)'\$/\\1/" -e 's/^"(.*)"$/\1/'; }
+PGPASSWORD=$(grep -E '^POSTGRES_PASSWORD=' .env | head -1 | cut -d= -f2- | strip_env_quotes)
+PGUSER=$(grep -E '^POSTGRES_USER=' .env | head -1 | cut -d= -f2- | strip_env_quotes)
+PGDATABASE=$(grep -E '^POSTGRES_DATABASE=' .env | head -1 | cut -d= -f2- | strip_env_quotes)
+SQL=$(printf '%s' "$2" | base64 -d)
+PGPASSWORD="$PGPASSWORD" psql -h localhost -U "$PGUSER" -d "${PGDATABASE:-etlegacy}" -tA -F '|' -c "$SQL"
+REMOTE_END
+    }
+
+    print_diff_section() {
+        local label="$1" local_file="$2" prod_file="$3"
+        local only_local only_prod
+        only_local=$(comm -23 "$local_file" "$prod_file" | wc -l)
+        only_prod=$(comm -13 "$local_file" "$prod_file" | wc -l)
+
+        printf '\n%s%s%s\n' "$C_DIM" "── $label ──" "$C_RESET"
+        printf '  local-only: %d row(s)   prod-only: %d row(s)\n' "$only_local" "$only_prod"
+
+        if (( only_local > 0 )); then
+            printf '  %sLocal-only rows%s (top 20):\n' "$C_DRIFT" "$C_RESET"
+            comm -23 "$local_file" "$prod_file" | head -20 | sed 's/^/    /'
+        fi
+        if (( only_prod > 0 )); then
+            printf '  %sProd-only rows%s (top 20):\n' "$C_DRIFT" "$C_RESET"
+            comm -13 "$local_file" "$prod_file" | head -20 | sed 's/^/    /'
+        fi
+    }
+
+    TMPDIR_DIFF=$(mktemp -d)
+    trap 'rm -rf "$TMPDIR_DIFF"' EXIT
+
+    # Players (PCS R1+R2 with time>0) — same filter as Q_PLAYERS so deltas
+    # explain the count drift directly.
+    Q_PLAYERS_LIST="SELECT player_guid, COALESCE(MAX(player_name), '?') FROM player_comprehensive_stats WHERE round_number IN (1,2) AND time_played_seconds > 0 GROUP BY player_guid"
+    log "dumping player lists..."
+    dump_local "$Q_PLAYERS_LIST" > "${TMPDIR_DIFF}/local_players" || { err "local players dump failed"; exit 2; }
+    dump_prod  "$Q_PLAYERS_LIST" > "${TMPDIR_DIFF}/prod_players"  || { err "prod players dump failed"; exit 2; }
+    print_diff_section "players (player_guid|player_name)" \
+        "${TMPDIR_DIFF}/local_players" "${TMPDIR_DIFF}/prod_players"
+
+    # Rounds R1+R2 keyed by (date, time, map, round_num) — same filter as Q_ROUNDS_R1R2.
+    # match_id deliberately omitted: it is repo-locally derived and may differ
+    # between import paths even when the underlying round is identical.
+    Q_ROUNDS_LIST="SELECT round_date::text, round_time, map_name, round_number FROM rounds WHERE round_number IN (1,2) AND (round_status IN ('completed','substitution') OR round_status IS NULL)"
+    log "dumping rounds lists..."
+    dump_local "$Q_ROUNDS_LIST" > "${TMPDIR_DIFF}/local_rounds" || { err "local rounds dump failed"; exit 2; }
+    dump_prod  "$Q_ROUNDS_LIST" > "${TMPDIR_DIFF}/prod_rounds"  || { err "prod rounds dump failed"; exit 2; }
+    print_diff_section "rounds (date|time|map|round_num)" \
+        "${TMPDIR_DIFF}/local_rounds" "${TMPDIR_DIFF}/prod_rounds"
+
+    log "=================================================="
 fi
 
 exit 1
