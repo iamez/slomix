@@ -776,13 +776,19 @@ class _StatsImportMixin:
         async with self.db_adapter.transaction():
             await self.db_adapter.execute(query, values)
 
-            # Optional: store full_selfkills if column exists
+            # Optional: store full_selfkills if column exists.
+            # Wrapped in a savepoint (same reason as the weapon loop below):
+            # without it, a failed UPDATE marks the parent transaction as
+            # aborted under postgres' "current transaction is aborted" rule,
+            # and the subsequent weapon INSERTs would all be rejected — even
+            # though the bare try/except looks like it swallows the failure.
             if "full_selfkills" in getattr(self, "_player_stats_columns", set()):
                 try:
-                    await self.db_adapter.execute(
-                        "UPDATE player_comprehensive_stats SET full_selfkills = ? WHERE round_id = ? AND player_guid = ?",
-                        (obj_stats.get("full_selfkills", 0), round_id, player.get("guid", "UNKNOWN"))
-                    )
+                    async with self.db_adapter.transaction():
+                        await self.db_adapter.execute(
+                            "UPDATE player_comprehensive_stats SET full_selfkills = ? WHERE round_id = ? AND player_guid = ?",
+                            (obj_stats.get("full_selfkills", 0), round_id, player.get("guid", "UNKNOWN"))
+                        )
                 except Exception as e:
                     logger.debug(f"Failed to update full_selfkills: {e}")
 
