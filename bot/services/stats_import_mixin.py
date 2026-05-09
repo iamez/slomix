@@ -849,21 +849,23 @@ class _StatsImportMixin:
             else:
                 last_seen_datetime = last_seen_date
 
-            # Check if this GUID+alias combination exists
-            check_query = 'SELECT times_seen FROM player_aliases WHERE guid = ? AND alias = ?'
-            existing = await self.db_adapter.fetch_one(check_query, (guid, alias))
-
-            if existing:
-                # Update existing alias: increment times_seen and update last_seen
-                update_query = '''UPDATE player_aliases
-                       SET times_seen = times_seen + 1, last_seen = ?
-                       WHERE guid = ? AND alias = ?'''
-                await self.db_adapter.execute(update_query, (last_seen_datetime, guid, alias))
-            else:
-                # Insert new alias
-                insert_query = '''INSERT INTO player_aliases (guid, alias, first_seen, last_seen, times_seen)
-                       VALUES (?, ?, ?, ?, 1)'''
-                await self.db_adapter.execute(insert_query, (guid, alias, last_seen_datetime, last_seen_datetime))
+            # Atomic upsert — single statement closes TOCTOU window between
+            # SELECT and UPDATE/INSERT under concurrent imports of the same player.
+            # GREATEST/LEAST guard against late-arriving / backfill imports moving
+            # last_seen backwards or first_seen forward (alias selection orders by
+            # last_seen DESC, so corruption here breaks display-name resolution).
+            upsert_query = '''
+                INSERT INTO player_aliases (guid, alias, first_seen, last_seen, times_seen)
+                VALUES (?, ?, ?, ?, 1)
+                ON CONFLICT (guid, alias) DO UPDATE
+                  SET times_seen = player_aliases.times_seen + 1,
+                      last_seen = GREATEST(player_aliases.last_seen, EXCLUDED.last_seen),
+                      first_seen = LEAST(player_aliases.first_seen, EXCLUDED.first_seen)
+            '''
+            await self.db_adapter.execute(
+                upsert_query,
+                (guid, alias, last_seen_datetime, last_seen_datetime),
+            )
 
             logger.debug(f"✅ Updated alias: {alias} for GUID {guid}")
 

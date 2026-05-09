@@ -934,9 +934,16 @@ class ProximityParserV4:
         try:
             row = await self.db_adapter.fetch_one(query, (table, column))
             self._schema_cache[key] = bool(row)
-        except Exception:
-            self._schema_cache[key] = False
-        return self._schema_cache[key]
+            return self._schema_cache[key]
+        except Exception as e:
+            # Do NOT cache False on exception: a transient DB blip would
+            # otherwise pin the cache to "column missing" for the rest of
+            # the process lifetime, silently dropping optional columns
+            # (e.g., canonical_guid, round_link_*) on every later insert.
+            self.logger.warning(
+                f"_table_has_column DB query failed for {table}.{column}: {e}"
+            )
+            return False
 
     async def _resolve_round_link_context(self, session_date) -> None:
         """
@@ -977,7 +984,11 @@ class ProximityParserV4:
 
         try:
             from bot.core.round_linker import resolve_round_id_with_reason
-        except Exception:
+        except Exception as e:
+            self.logger.error(
+                f"round_linker import failed — round will be unlinked: {e}",
+                exc_info=True,
+            )
             context["round_link_reason"] = "round_linker_import_failed"
             return
 
@@ -1451,7 +1462,7 @@ class ProximityParserV4:
             return True
 
         except Exception as e:
-            self.logger.error(f"Import error: {e}")
+            self.logger.error(f"Import error: {e}", exc_info=True)
             return False
 
     async def _check_processed_file(self, filename: str) -> bool:
@@ -1464,7 +1475,8 @@ class ProximityParserV4:
                 (filename,),
             )
             return bool(row and row[0])
-        except Exception:
+        except Exception as e:
+            self.logger.debug(f"_check_processed_file query failed for {filename}: {e}")
             return False
 
     async def _mark_file_processed(self, filename: str) -> None:
