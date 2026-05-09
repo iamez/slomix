@@ -637,7 +637,14 @@ class UnifiedAvailabilityNotifier:
                     """,
                     (int(user_id), event_key, channel_type, error_text, payload_json),
                 )
-            logger.warning(
+            # Discord DMs being closed is a normal user-state condition
+            # (the user has DMs disabled), not a delivery system fault.
+            # Downgrade to INFO so it doesn't flood the warning channel
+            # on every scheduled tick — real failures (network errors,
+            # Discord outages, schema problems) keep WARNING visibility.
+            is_user_state = "DMs are closed" in error_text
+            log_func = logger.info if is_user_state else logger.warning
+            log_func(
                 "Availability notification failed user_id=%s event_key=%s channel=%s error=%s",
                 user_id,
                 event_key,
