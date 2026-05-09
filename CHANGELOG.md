@@ -6,6 +6,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.14.0](https://github.com/iamez/slomix/compare/v1.13.3...v1.14.0) (2026-05-09)
+
+
+### Features
+
+* **scripts:** add --diff mode to check_db_drift for row-level deltas ([#201](https://github.com/iamez/slomix/issues/201)) ([dc7201f](https://github.com/iamez/slomix/commit/dc7201f44cc7c4ca683a274edfd1d84d44b1d6e6))
+
+
+### Bug Fixes
+
+* **bot,proximity:** close TOCTOU on player_aliases + log silent excepts in parser ([#197](https://github.com/iamez/slomix/issues/197)) ([2fdd86d](https://github.com/iamez/slomix/commit/2fdd86d39442fc989f86029f81909940209fad2a))
+* **bot:** wrap _insert_player_stats in atomic tx + weapon savepoint ([#199](https://github.com/iamez/slomix/issues/199)) ([ae61048](https://github.com/iamez/slomix/commit/ae61048e2cc0b1f1f7fecbce976ada7719ea3a3c))
+
 ## [1.13.3](https://github.com/iamez/slomix/compare/v1.13.2...v1.13.3) (2026-05-08)
 
 
