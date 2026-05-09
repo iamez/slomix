@@ -384,7 +384,9 @@ class _MomentsMixin:
             quality = float(r[2])
             objective = r[4] or "objective"
             stars = 3 if quality < 0.8 else (4 if quality < 0.9 else 5)
-            obj_label = objective.replace('_', ' ')
+            # Title-case for user-facing display: "flag_room" → "Flag Room",
+            # not the previous lowercase "flag room" that read as if mid-sentence.
+            obj_label = objective.replace('_', ' ').title()
             moments.append({
                 "type": "push_success",
                 "round_number": r[5],

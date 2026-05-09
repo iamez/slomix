@@ -8,6 +8,16 @@ const METRIC_LABELS: { key: keyof Omit<SynergyGroup, 'players' | 'composite'>; l
   { key: 'medic', label: 'Medic', color: 'bg-emerald-400' },
 ];
 
+// Build a roster label without the orphaned " +" suffix that the previous
+// `slice(0,2).join(' & ') + (length > 2 ? ' +' : '')` form left when
+// a group had 3+ players. Now: 1-2 players → "& ", 3+ → "+N more".
+function formatGroupLabel(players: string[]): string {
+  if (!players || players.length === 0) return '—';
+  if (players.length === 1) return players[0];
+  if (players.length === 2) return `${players[0]} & ${players[1]}`;
+  return `${players[0]}, ${players[1]} +${players.length - 2} more`;
+}
+
 function GroupCard({ group, label, isWinner }: { group: SynergyGroup; label: string; isWinner: boolean }) {
   return (
     <div className={`glass-card rounded-[20px] p-5 border ${isWinner ? 'border-amber-400/25' : 'border-white/8'}`}>
@@ -99,8 +109,8 @@ export function TeamSynergyPanel({ data }: Props) {
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <GroupCard group={group_a} label={group_a.players.slice(0, 2).join(' & ') + (group_a.players.length > 2 ? ' +' : '')} isWinner={aWins} />
-        <GroupCard group={group_b} label={group_b.players.slice(0, 2).join(' & ') + (group_b.players.length > 2 ? ' +' : '')} isWinner={!aWins} />
+        <GroupCard group={group_a} label={formatGroupLabel(group_a.players)} isWinner={aWins} />
+        <GroupCard group={group_b} label={formatGroupLabel(group_b.players)} isWinner={!aWins} />
       </div>
     </div>
   );
