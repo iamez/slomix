@@ -517,9 +517,13 @@ class _AdvancedMetricsMixin:
                 -- rounds.round_date is TEXT in this schema, storytelling
                 -- session_date is DATE — cast on the rounds side so the
                 -- downstream JOIN uses native date comparison.
+                -- round_start_unix joins us back to a specific round so
+                -- two sessions on the same calendar date with the same
+                -- map+R1 don't collide (the previous (date,map,round_num)
+                -- key was non-unique under that scenario).
                 SELECT pcs.round_id, pcs.player_guid, pcs.team, r.defender_team,
                        r.round_date::date AS round_date_d,
-                       r.map_name, r.round_number
+                       r.map_name, r.round_number, r.round_start_unix
                 FROM player_comprehensive_stats pcs
                 JOIN rounds r ON r.id = pcs.round_id
                 WHERE r.round_date::date = $1
@@ -527,7 +531,12 @@ class _AdvancedMetricsMixin:
                   AND pcs.team = r.defender_team
             ),
             defense_deaths AS (
-                SELECT ski.victim_guid, ski.victim_name,
+                -- GROUP BY victim_guid only; MAX(victim_name) avoids
+                -- splitting the same player into multiple rows when
+                -- their displayed name changes mid-session (color codes,
+                -- clan tag swaps).
+                SELECT ski.victim_guid,
+                       MAX(ski.victim_name) AS victim_name,
                        COUNT(*) FILTER (
                            WHERE ski.victim_reinf >= $2
                              AND ski.killer_health >= $3
@@ -536,18 +545,21 @@ class _AdvancedMetricsMixin:
                 FROM storytelling_kill_impact ski
                 JOIN defender_pcs dp
                   ON dp.round_date_d = ski.session_date
-                 AND dp.map_name = ski.map_name
-                 AND dp.round_number = ski.round_number
+                 AND dp.round_start_unix = ski.round_start_unix
                  -- PCS stores 8-char short_guid; storytelling_kill_impact
                  -- stores the full 32-char Lua GUID. Match on prefix.
                  AND dp.player_guid = LEFT(ski.victim_guid, 8)
                 WHERE ski.session_date = $1
-                GROUP BY ski.victim_guid, ski.victim_name
+                GROUP BY ski.victim_guid
             )
             SELECT victim_guid, victim_name, useless_deaths, total_def_deaths
             FROM defense_deaths
             WHERE useless_deaths > 0
-            ORDER BY useless_deaths DESC, total_def_deaths ASC
+            -- Tie-break favors stable players (more total def deaths) over
+            -- single-incident outliers when the absolute useless count ties.
+            -- A player with 3/100 ranks above 3/5 — the latter is small
+            -- sample. Previously this used ASC and inverted the intent.
+            ORDER BY useless_deaths DESC, total_def_deaths DESC
             """,
             (sd, min_reinf_seconds, min_killer_health),
         )
