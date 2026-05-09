@@ -2,8 +2,17 @@
 
 Extracted from the monolithic storytelling_service.py in Sprint 6.
 Imports all module-level names (constants, helpers) from .base.
+
+Narrative style note (2026-05-09 overhaul): we follow the
+"wordalisation" pattern from sports NLG research — flow numbers into
+sentences with context rather than emit "(N% / N vs N)" parenthetical
+data dumps. Where a single template would feel formulaic across many
+sessions, three phrasing variants are picked deterministically by
+session_id hash so back-to-back sessions don't read identically.
 """
 from __future__ import annotations
+
+import re
 
 from .base import (
     _to_date,
@@ -14,13 +23,124 @@ from .base import (
 )
 
 
+# ---------------------------------------------------------------------------
+# Map name humanization
+# ---------------------------------------------------------------------------
+
+# Strip common ET:Legacy map prefixes/suffixes that mean nothing to a
+# human reader. ``etl_adlernest`` → ``Adlernest``; ``sw_goldrush_te`` →
+# ``Goldrush``. Versioned tails like ``_b3``, ``_t2`` are also dropped.
+_MAP_PREFIX_RE = re.compile(r'^(etl?_|sw_|te_)+', re.IGNORECASE)
+_MAP_SUFFIX_RE = re.compile(r'(_te|_b\d+|_t\d+|_v\d+)$', re.IGNORECASE)
+
+
+def _humanize_map_name(raw: str) -> str:
+    if not raw:
+        return ""
+    cleaned = _MAP_PREFIX_RE.sub("", raw)
+    cleaned = _MAP_SUFFIX_RE.sub("", cleaned)
+    return cleaned.replace('_', ' ').strip().title() or raw
+
+
+def _format_maps_list(maps: list[str]) -> str:
+    """Render a friendly map list. Truncates aggressively past 4 entries.
+
+    Returns just the names (no "N maps" prefix) — the caller decides
+    whether to wrap with a count. Avoids doubled "across N maps — N maps
+    including ..." when the opener already mentions the count.
+    """
+    pretty = [_humanize_map_name(m) for m in maps if m]
+    pretty = [p for p in pretty if p]
+    if not pretty:
+        return "no map data"
+    if len(pretty) == 1:
+        return pretty[0]
+    if len(pretty) == 2:
+        return f"{pretty[0]} and {pretty[1]}"
+    if len(pretty) <= 4:
+        return ", ".join(pretty[:-1]) + f", and {pretty[-1]}"
+    # >4 maps: list the first 3 + how many more remain
+    return f"{', '.join(pretty[:3])} (+{len(pretty) - 3} more)"
+
+
+# ---------------------------------------------------------------------------
+# Variant phrasing (deterministic pick by session_id)
+# ---------------------------------------------------------------------------
+# Three variants per slot avoids same-template fatigue across back-to-back
+# sessions while staying maintainable (no LLM, no per-style branches).
+
+_MVP_LEADS = (
+    "{name} led the leaderboard as {archetype} with {dpm} DPM (damage/min) and {kis:.0f} KIS",
+    "{name} took the top spot — {archetype} with {dpm} DPM and {kis:.0f} KIS",
+    "{name} carried the session as {archetype}, posting {dpm} DPM and {kis:.0f} KIS",
+)
+
+_MEDIC_LEADS = (
+    "{name} kept the squad alive with {revives} revives",
+    "{name} patched the team back together {revives} times",
+    "{name} held down medic duty ({revives} revives)",
+)
+
+_MOMENT_LEADS = (
+    "The defining moment came {when} — {what}",
+    "The session pivoted {when}: {what}",
+    "Standout play of the day {when}: {what}",
+)
+
+_SYNERGY_LEADS = (
+    "{winner} edged out {loser} {win_score}–{lose_score} on team synergy, {tip}",
+    "Synergy went to {winner} ({win_score}–{lose_score}), {tip}",
+    "{winner} pulled ahead in coordination {win_score}–{lose_score}, {tip}",
+)
+
+_AXIS_PHRASING = {
+    "crossfire": "set up by tighter crossfire angles",
+    "trade": "carried by quicker trades",
+    "cohesion": "anchored by tighter formation",
+    "push": "driven by cleaner pushes",
+    "medic": "kept upright by stronger medic play",
+}
+
+
+def _push_quality_phrase(quality: float | None) -> str:
+    """Translate raw alignment_score into a descriptor a human can use."""
+    if quality is None:
+        return "coordinated"
+    if quality >= 1.5:
+        return "textbook"
+    if quality >= 1.0:
+        return "well-coordinated"
+    return "solid"
+
+
+def _pick_variant(variants: tuple[str, ...], seed: int) -> str:
+    return variants[seed % len(variants)]
+
+
+def _format_group_label(group_data: dict, fallback: str) -> str:
+    """Build a human label for a synergy group from its players list.
+
+    Prefer real names ("bronze, qmr, vid") over the internal ``group_a``
+    key. Falls back to "Side A" / "Side B" when player data is missing.
+    """
+    players = [strip_et_colors(p) for p in (group_data.get("players") or []) if p]
+    players = [p for p in players if p]
+    if not players:
+        return fallback
+    if len(players) <= 3:
+        return ", ".join(players)
+    return f"{', '.join(players[:3])} (+{len(players) - 3} more)"
+
+
 class _NarrativeMixin:
     """Narrative methods for StorytellingService."""
 
     async def generate_narrative(self, session_date: str | date) -> dict:
         """Generate a human-readable paragraph summarizing the session.
 
-        Uses KIS, moments, synergy, archetypes, and PWC data.
+        Uses KIS, moments, synergy, archetypes, and PWC data. Output is
+        designed to read like a sports recap, not a stats dump — see
+        the module docstring for the wordalisation rationale.
         """
         sd = _to_date(session_date)
         sd_str = _to_date_str(sd)
@@ -33,11 +153,13 @@ class _NarrativeMixin:
         if not kis_board:
             return {"status": "no_data", "narrative": ""}
 
-        # 2. Maps played
+        # 2. Maps played — humanize and truncate (was a 6-entry comma sandwich)
         map_rows = await self.db.fetch_all(
             "SELECT DISTINCT map_name FROM proximity_kill_outcome WHERE session_date = $1",
             (sd,))
-        maps_played = ", ".join(strip_et_colors(r[0]) for r in (map_rows or []) if r[0])
+        raw_maps = [strip_et_colors(r[0]) for r in (map_rows or []) if r[0]]
+        maps_played = _format_maps_list(raw_maps)
+        map_count = len(raw_maps)
 
         # 3. MVP (top KIS player)
         mvp = kis_board[0]
@@ -45,7 +167,7 @@ class _NarrativeMixin:
         mvp_archetype = (archetypes.get(mvp["guid"], "frontline_warrior")).replace("_", " ")
         mvp_guid = mvp["guid"]
         mvp_stats = stats.get(mvp_guid, {})
-        mvp_dpm = round(mvp_stats.get("dpm", 0), 1)
+        mvp_dpm = round(mvp_stats.get("dpm", 0))
         mvp_kis = mvp.get("total_kis", 0)
 
         # 4. Medic anchor (most revives)
@@ -55,85 +177,118 @@ class _NarrativeMixin:
             rev = s.get("revives_given", 0)
             if rev > medic_revives:
                 medic_revives = rev
-                # Find name from kis_board
                 entry = next((e for e in kis_board if e["guid"] == guid), None)
                 medic_name = strip_et_colors(entry["name"]) if entry else guid[:8]
 
-        # 5. Top moment
+        # 5. Top moment — include map+round context, drop raw quality%
         moments = await self.detect_moments(sd, limit=1)
-        top_moment_time = ""
-        top_moment_narrative = ""
+        top_moment_when = ""
+        top_moment_what = ""
         if moments:
             m = moments[0]
-            top_moment_time = m.get("time_formatted", "")
-            top_moment_narrative = strip_et_colors(m.get("narrative", "an intense play"))
+            map_label = _humanize_map_name(m.get("map_name") or "")
+            round_num = m.get("round_number")
+            if map_label and round_num:
+                top_moment_when = f"on {map_label} R{round_num}"
+            elif map_label:
+                top_moment_when = f"on {map_label}"
+            elif m.get("time_formatted"):
+                top_moment_when = f"at {m['time_formatted']}"
 
-        # 6. Team synergy
+            # For push_success moments, replace the noisy
+            # "(quality 174%)" tail with a descriptive adjective and
+            # keep the rest of the moment narrative intact.
+            raw = strip_et_colors(m.get("narrative", "an intense play"))
+            if m.get("type") == "push_success":
+                detail = m.get("detail") or {}
+                quality = detail.get("push_quality")
+                count = detail.get("participant_count")
+                team = detail.get("team", "Unknown")
+                obj = (detail.get("objective") or "the objective").replace('_', ' ')
+                top_moment_what = (
+                    f"{team} pulled off a {_push_quality_phrase(quality)} "
+                    f"{count}-player {obj} push" if count
+                    else f"{team} put together a {_push_quality_phrase(quality)} push toward {obj}"
+                )
+            else:
+                top_moment_what = raw
+
+        # 6. Team synergy — humanize labels, drop raw axis number
         synergy = await self.compute_team_synergy(sd)
-        better_team = ""
-        better_composite = 0.0
-        worse_composite = 0.0
-        best_axis_name = ""
-        best_axis_val = 0.0
+        winner_label = ""
+        loser_label = ""
+        win_score = 0
+        lose_score = 0
+        axis_tip = ""
         teams = synergy.get("groups", {})
         if teams:
             composites = {t: d.get("composite", 0) for t, d in teams.items()}
             if composites:
-                better_team = max(composites, key=composites.get)
-                better_composite = composites.get(better_team, 0)
-                # Low-end composite sourced without the unused `worse_team`
-                # variable (audit F8 — previously assigned but never read).
-                worse_composite = min(composites.values())
-                # Find the best synergy axis for the better team
-                better_data = teams.get(better_team, {})
-                for axis in ('crossfire', 'trade', 'cohesion', 'push', 'medic'):
-                    val = better_data.get(axis, 0)
-                    if val > best_axis_val:
-                        best_axis_val = val
-                        best_axis_name = axis
+                winner_key = max(composites, key=composites.get)
+                loser_key = min(composites, key=composites.get)
+                if winner_key != loser_key:
+                    winner_label = _format_group_label(
+                        teams.get(winner_key, {}),
+                        fallback=winner_key.replace('group_', 'Side ').upper(),
+                    )
+                    loser_label = _format_group_label(
+                        teams.get(loser_key, {}),
+                        fallback=loser_key.replace('group_', 'Side ').upper(),
+                    )
+                    win_score = round(composites[winner_key])
+                    lose_score = round(composites[loser_key])
 
-        # 7. Session ID from gaming sessions
+                    # Find the axis where the winner was strongest
+                    winner_data = teams.get(winner_key, {})
+                    best_axis = ""
+                    best_axis_val = 0.0
+                    for axis in ('crossfire', 'trade', 'cohesion', 'push', 'medic'):
+                        val = winner_data.get(axis, 0)
+                        if val > best_axis_val:
+                            best_axis_val = val
+                            best_axis = axis
+                    axis_tip = _AXIS_PHRASING.get(best_axis, "with the edge across the board")
+
+        # 7. Session ID for variant seed
         session_id_row = await self.db.fetch_one(
             "SELECT gaming_session_id FROM rounds "
             "WHERE round_date = $1 LIMIT 1",
             (sd_str,))
-        session_id = session_id_row[0] if session_id_row else "?"
+        session_id = session_id_row[0] if session_id_row else 0
+        seed = int(session_id) if isinstance(session_id, int) else hash(str(session_id))
 
-        # 8. Build narrative
-        parts = [f"Session {session_id} on {maps_played}"]
+        # 8. Build narrative — variant phrasings, flowed numbers
+        if map_count >= 2:
+            opener = f"Session {session_id} played out across {map_count} maps — {maps_played}."
+        elif map_count == 1:
+            opener = f"Session {session_id} on {maps_played}."
+        else:
+            opener = f"Session {session_id}."
 
-        parts.append(
-            f" was defined by {mvp_name}'s {mvp_archetype} performance "
-            f"({mvp_dpm} DPM, {mvp_kis:.0f} KIS)"
-        )
+        parts = [opener]
+
+        parts.append(" " + _pick_variant(_MVP_LEADS, seed).format(
+            name=mvp_name, archetype=mvp_archetype, dpm=mvp_dpm, kis=mvp_kis,
+        ) + ".")
 
         if medic_name and medic_revives > 0:
-            parts.append(f". {medic_name} anchored the team with {medic_revives} revives")
+            parts.append(" " + _pick_variant(_MEDIC_LEADS, seed + 1).format(
+                name=medic_name, revives=medic_revives,
+            ) + ".")
 
-        if top_moment_narrative:
-            parts.append(
-                f". The session's defining moment came at {top_moment_time} "
-                f"when {top_moment_narrative}"
-            )
+        if top_moment_what and top_moment_when:
+            parts.append(" " + _pick_variant(_MOMENT_LEADS, seed + 2).format(
+                when=top_moment_when, what=top_moment_what,
+            ) + ".")
 
-        # Guard on best_axis_name (audit F10) — prevents grammar slip
-        # "driven by superior  (0)" when no axis has a value > 0 on very
-        # low-data sessions.
-        if better_team and better_composite > 0 and best_axis_name:
-            parts.append(
-                f". Team synergy favored {better_team} "
-                f"({better_composite:.0f} vs {worse_composite:.0f}), "
-                f"driven by superior {best_axis_name} ({best_axis_val:.0f})"
-            )
-        elif better_team and better_composite > 0:
-            # Composite is populated but every axis is 0 — render a
-            # shorter sentence without the axis blurb.
-            parts.append(
-                f". Team synergy favored {better_team} "
-                f"({better_composite:.0f} vs {worse_composite:.0f})"
-            )
+        if winner_label and loser_label and win_score > 0 and axis_tip:
+            parts.append(" " + _pick_variant(_SYNERGY_LEADS, seed + 3).format(
+                winner=winner_label, loser=loser_label,
+                win_score=win_score, lose_score=lose_score,
+                tip=axis_tip,
+            ) + ".")
 
-        narrative = "".join(parts) + "."
+        narrative = "".join(parts).strip()
 
         return {
             "status": "ok",
