@@ -767,20 +767,31 @@ class _StatsImportMixin:
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
         """
-        await self.db_adapter.execute(query, values)
+        # Atomic per-player write: PCS row + optional full_selfkills UPDATE
+        # + per-weapon INSERT loop. Without this, a crash mid-loop leaves an
+        # orphan player row with partial weapon rows; downstream displays
+        # then show "player with no weapons" as a real datapoint.
+        # db_adapter.transaction() supports savepoint-nesting, so wrapping
+        # here is safe even if a future caller wraps the whole round import.
+        async with self.db_adapter.transaction():
+            await self.db_adapter.execute(query, values)
 
-        # Optional: store full_selfkills if column exists
-        if "full_selfkills" in getattr(self, "_player_stats_columns", set()):
-            try:
-                await self.db_adapter.execute(
-                    "UPDATE player_comprehensive_stats SET full_selfkills = ? WHERE round_id = ? AND player_guid = ?",
-                    (obj_stats.get("full_selfkills", 0), round_id, player.get("guid", "UNKNOWN"))
-                )
-            except Exception as e:
-                logger.debug(f"Failed to update full_selfkills: {e}")
+            # Optional: store full_selfkills if column exists
+            if "full_selfkills" in getattr(self, "_player_stats_columns", set()):
+                try:
+                    await self.db_adapter.execute(
+                        "UPDATE player_comprehensive_stats SET full_selfkills = ? WHERE round_id = ? AND player_guid = ?",
+                        (obj_stats.get("full_selfkills", 0), round_id, player.get("guid", "UNKNOWN"))
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to update full_selfkills: {e}")
 
-        # Insert weapon stats into weapon_comprehensive_stats if available
-        try:
+            # Insert weapon stats into weapon_comprehensive_stats if available.
+            # Wrapped in a savepoint (nested tx) so a single bad weapon row
+            # rolls back only the weapon writes and lets the parent player tx
+            # commit. Preserves the prior "log + continue on weapon failure"
+            # behavior under postgres' "current transaction is aborted, queries
+            # ignored until end of transaction block" rule.
             weapon_stats = player.get("weapon_stats", {}) or {}
             if weapon_stats:
                 # Static SQL — schema 2.2 weapon_comprehensive_stats has these fixed columns
@@ -797,35 +808,37 @@ class _StatsImportMixin:
                 logger.debug(
                     f"Preparing to insert {len(weapon_stats)} weapon rows for {player.get('name')} (session {round_id})"
                 )
-                for weapon_name, w in weapon_stats.items():
-                    w_hits = int(w.get("hits", 0) or 0)
-                    w_shots = int(w.get("shots", 0) or 0)
-                    w_kills = int(w.get("kills", 0) or 0)
-                    w_deaths = int(w.get("deaths", 0) or 0)
-                    w_headshots = int(w.get("headshots", 0) or 0)
-                    w_acc = (w_hits / w_shots * 100) if w_shots > 0 else 0.0
+                try:
+                    async with self.db_adapter.transaction():
+                        for weapon_name, w in weapon_stats.items():
+                            w_hits = int(w.get("hits", 0) or 0)
+                            w_shots = int(w.get("shots", 0) or 0)
+                            w_kills = int(w.get("kills", 0) or 0)
+                            w_deaths = int(w.get("deaths", 0) or 0)
+                            w_headshots = int(w.get("headshots", 0) or 0)
+                            w_acc = (w_hits / w_shots * 100) if w_shots > 0 else 0.0
 
-                    await self.db_adapter.execute(insert_sql, (
-                        round_id,
-                        round_date,
-                        result.get("map_name"),
-                        result.get("round_num"),
-                        player.get("guid", "UNKNOWN"),
-                        player.get("name", "Unknown"),
-                        weapon_name,
-                        w_kills,
-                        w_deaths,
-                        w_headshots,
-                        w_hits,
-                        w_shots,
-                        w_acc,
-                    ))
-        except Exception as e:
-            # Weapon insert failures should be visible — escalate to error and include traceback
-            logger.error(
-                f"Failed to insert weapon stats for {player.get('name')} (session {round_id}): {e}",
-                exc_info=True,
-            )
+                            await self.db_adapter.execute(insert_sql, (
+                                round_id,
+                                round_date,
+                                result.get("map_name"),
+                                result.get("round_num"),
+                                player.get("guid", "UNKNOWN"),
+                                player.get("name", "Unknown"),
+                                weapon_name,
+                                w_kills,
+                                w_deaths,
+                                w_headshots,
+                                w_hits,
+                                w_shots,
+                                w_acc,
+                            ))
+                except Exception as e:
+                    # Weapon savepoint rolled back; player core write survives.
+                    logger.error(
+                        f"Failed to insert weapon stats for {player.get('name')} (session {round_id}): {e}",
+                        exc_info=True,
+                    )
 
         # 🔗 CRITICAL: Update player aliases for !stats and !link commands
         await self._update_player_alias(
