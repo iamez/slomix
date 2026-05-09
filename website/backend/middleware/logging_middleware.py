@@ -37,8 +37,11 @@ QUIET_PATHS = {
 }
 
 # Expected auth failures for background/polling reads should stay informational.
+# /auth/me is the canonical "am I logged in?" probe issued on every page
+# load — a 401 here is the API contract reply, not a security event.
 INFO_AUTH_FAILURE_PATHS = {
     "/api/availability/promotions/campaign",
+    "/auth/me",
 }
 
 # Paths that should trigger security logging
@@ -274,7 +277,14 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         """Log security-relevant events."""
 
         event_type = "auth_success" if status_code < 400 else "auth_failure"
-        log_level = logging.INFO if status_code < 400 else logging.WARNING
+        # Downgrade benign auth probes (e.g. /auth/me 401 on every page
+        # load before the user signs in) so the security log isn't drowned
+        # in normal traffic. Same allow-list used for access-log downgrade.
+        is_expected_probe = (
+            status_code in {401, 403}
+            and request.url.path in INFO_AUTH_FAILURE_PATHS
+        )
+        log_level = logging.INFO if status_code < 400 or is_expected_probe else logging.WARNING
 
         security_logger.log(
             log_level,
