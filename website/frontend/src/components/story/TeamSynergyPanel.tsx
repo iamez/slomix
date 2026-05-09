@@ -12,7 +12,10 @@ const METRIC_LABELS: { key: keyof Omit<SynergyGroup, 'players' | 'composite'>; l
 // `slice(0,2).join(' & ') + (length > 2 ? ' +' : '')` form left when
 // a group had 3+ players. Now: 1-2 players → "& ", 3+ → "+N more".
 function formatGroupLabel(players: string[]): string {
-  if (!players || players.length === 0) return '—';
+  // Note: `players` is typed as `string[]`, so the `!players` defensive
+  // check the previous draft had was a no-op flagged by ESLint
+  // (no-unnecessary-condition). Length check alone is the right guard.
+  if (players.length === 0) return '—';
   if (players.length === 1) return players[0];
   if (players.length === 2) return `${players[0]} & ${players[1]}`;
   return `${players[0]}, ${players[1]} +${players.length - 2} more`;

@@ -22,7 +22,6 @@ from .base import (
     strip_et_colors,
 )
 
-
 # ---------------------------------------------------------------------------
 # Map name humanization
 # ---------------------------------------------------------------------------
@@ -49,7 +48,10 @@ def _format_maps_list(maps: list[str]) -> str:
     whether to wrap with a count. Avoids doubled "across N maps — N maps
     including ..." when the opener already mentions the count.
     """
-    pretty = [_humanize_map_name(m) for m in maps if m]
+    # Sort on the humanized form (post-prefix-strip) so the visible
+    # order is alphabetical to a reader: "Adlernest, Brewdog, ..." not
+    # the raw-name order ("et_brewdog" < "etl_adlernest" lexically).
+    pretty = sorted({_humanize_map_name(m) for m in maps if m})
     pretty = [p for p in pretty if p]
     if not pretty:
         return "no map data"
@@ -103,7 +105,13 @@ _AXIS_PHRASING = {
 
 
 def _push_quality_phrase(quality: float | None) -> str:
-    """Translate raw alignment_score into a descriptor a human can use."""
+    """Band the moment's `push_quality` (0..2+ range) into a human descriptor.
+
+    Source field is `proximity_team_push.push_quality`, the same value
+    the moment-detector filters at >= 0.7. (The sibling `alignment_score`
+    is the raw cohesion ratio without the toward-objective weighting,
+    not what we want for "how textbook was the execution".)
+    """
     if quality is None:
         return "coordinated"
     if quality >= 1.5:
@@ -153,9 +161,15 @@ class _NarrativeMixin:
         if not kis_board:
             return {"status": "no_data", "narrative": ""}
 
-        # 2. Maps played — humanize and truncate (was a 6-entry comma sandwich)
+        # 2. Maps played — humanize and truncate (was a 6-entry comma sandwich).
+        # Order by map_name so the rendered list is stable across re-renders.
+        # Without ORDER BY, postgres can return DISTINCT rows in any order
+        # and the same session would narrate "Brewdog, Adlernest, ..." one
+        # time and "Adlernest, Brewdog, ..." the next — variant phrasing on
+        # purpose, but map ordering shouldn't drift.
         map_rows = await self.db.fetch_all(
-            "SELECT DISTINCT map_name FROM proximity_kill_outcome WHERE session_date = $1",
+            "SELECT DISTINCT map_name FROM proximity_kill_outcome "
+            "WHERE session_date = $1 ORDER BY map_name",
             (sd,))
         raw_maps = [strip_et_colors(r[0]) for r in (map_rows or []) if r[0]]
         maps_played = _format_maps_list(raw_maps)
@@ -204,7 +218,10 @@ class _NarrativeMixin:
                 quality = detail.get("push_quality")
                 count = detail.get("participant_count")
                 team = detail.get("team", "Unknown")
-                obj = (detail.get("objective") or "the objective").replace('_', ' ')
+                # Title-case the objective the same way moments.py does
+                # for its own card narrative — "flag_room" → "Flag Room"
+                # rather than the previous lowercase "flag room" mid-sentence.
+                obj = (detail.get("objective") or "the objective").replace('_', ' ').title()
                 top_moment_what = (
                     f"{team} pulled off a {_push_quality_phrase(quality)} "
                     f"{count}-player {obj} push" if count
@@ -249,21 +266,33 @@ class _NarrativeMixin:
                             best_axis = axis
                     axis_tip = _AXIS_PHRASING.get(best_axis, "with the edge across the board")
 
-        # 7. Session ID for variant seed
+        # 7. Session ID for variant seed.
+        # Legacy rows may have NULL gaming_session_id; render as "?" and
+        # derive a stable seed from the session_date string. Avoid Python's
+        # built-in `hash()` because it's PYTHONHASHSEED-dependent and
+        # would shuffle variant pickup across uvicorn restarts.
         session_id_row = await self.db.fetch_one(
             "SELECT gaming_session_id FROM rounds "
             "WHERE round_date = $1 LIMIT 1",
             (sd_str,))
-        session_id = session_id_row[0] if session_id_row else 0
-        seed = int(session_id) if isinstance(session_id, int) else hash(str(session_id))
+        raw_id = session_id_row[0] if session_id_row else None
+        if isinstance(raw_id, int):
+            session_label = str(raw_id)
+            seed = raw_id
+        else:
+            session_label = "?"
+            # Stable across processes: sum of date character codes is
+            # deterministic and good enough for variant pickup over a
+            # 4-element variant pool.
+            seed = sum(ord(c) for c in sd_str)
 
         # 8. Build narrative — variant phrasings, flowed numbers
         if map_count >= 2:
-            opener = f"Session {session_id} played out across {map_count} maps — {maps_played}."
+            opener = f"Session {session_label} played out across {map_count} maps — {maps_played}."
         elif map_count == 1:
-            opener = f"Session {session_id} on {maps_played}."
+            opener = f"Session {session_label} on {maps_played}."
         else:
-            opener = f"Session {session_id}."
+            opener = f"Session {session_label}."
 
         parts = [opener]
 
