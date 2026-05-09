@@ -394,7 +394,10 @@ async def get_useless_defense_deaths(
     session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
     min_killer_health: int = Query(
         default=80, ge=1, le=200,
-        description="Minimum killer health (HP+armor) at moment of kill",
+        description=(
+            "Minimum killer HP at moment of kill (Lua gentity.health, no "
+            "armor). Default 80 means the killer was barely scratched."
+        ),
     ),
     min_reinf_seconds: int = Query(
         default=25, ge=1, le=60,
@@ -407,7 +410,9 @@ async def get_useless_defense_deaths(
     Per Discord ask 2026-05-07 (olympus + superboyy). Counts kills where the
     victim was on the defending team, the killer had high health (no real
     trade), and the victim's spawn wait was long. Players ranked by absolute
-    count then by rate.
+    useless count, then by total defensive deaths descending — the tie-break
+    favors stable players (high sample size) over single-incident outliers.
+    Rate (useless / total) is included in the response for downstream sorting.
     """
     sd = _parse_date(session_date)
     svc = StorytellingService(db)
