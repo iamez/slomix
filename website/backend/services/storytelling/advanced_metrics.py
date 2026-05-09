@@ -314,7 +314,16 @@ class _AdvancedMetricsMixin:
 
         players = []
         for guid, stats in player_stats.items():
-            alive_min = alive_map.get(guid, 60000) / 60000
+            # Skip players with no track data instead of falling back to a
+            # 60_000 ms (1-minute) baseline — the previous fallback inflated
+            # enabler_score for players whose tracks weren't logged (a bot,
+            # an early-leaver, or a missing-data session). compute_gravity()
+            # uses the same skip pattern; mismatch caused per-metric players
+            # to be ranked against each other on different denominators.
+            alive_ms = alive_map.get(guid)
+            if not alive_ms:
+                continue
+            alive_min = alive_ms / 60000
             # crossfire_assists are a spatial subset of enabled_kills — don't double-count
             total_assists = stats["enabled_kills"] + stats["trade_assists"]
             players.append({

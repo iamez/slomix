@@ -80,14 +80,25 @@ METRICS = {
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _percentile_rank(values: list[float]) -> list[float]:
-    """Return percentile rank (0.0-1.0) for each value. Ties get average rank."""
+    """Return percentile rank (0.0-1.0) for each value via bisect_right.
+
+    Semantics intentionally pinned by tests
+    (test_prox_scoring_helpers.test_percentile_rank_*):
+      - Top value: exactly 1.0
+      - Lowest value in a multi-element list: 1/n (NEVER 0.0)
+      - Ties: all tied values get the SAME upper-edge percentile, not
+        the midpoint average. Rationale: in this scoring system, "no
+        signal" (everyone equal) treats all qualified players as
+        co-leaders rather than collapsing them to mid-pack.
+    """
     if not values:
         return []
     sorted_vals = sorted(values)
     n = len(sorted_vals)
     result = []
     for v in values:
-        # Position in sorted list (0-based), normalized to 0-1
+        # bisect_right places ties at the upper edge — 1-based position,
+        # normalized by n.
         pos = bisect.bisect_right(sorted_vals, v)
         result.append(pos / n)
     return result
