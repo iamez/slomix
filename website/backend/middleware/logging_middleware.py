@@ -279,9 +279,13 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         event_type = "auth_success" if status_code < 400 else "auth_failure"
         # Downgrade benign auth probes (e.g. /auth/me 401 on every page
         # load before the user signs in) so the security log isn't drowned
-        # in normal traffic. Same allow-list used for access-log downgrade.
+        # in normal traffic. Same allow-list used for access-log downgrade,
+        # and we mirror its `request.method == "GET"` guard — only read
+        # probes are benign; a POST/PUT to /auth/me is suspicious enough
+        # that it should still surface as WARNING.
         is_expected_probe = (
-            status_code in {401, 403}
+            request.method == "GET"
+            and status_code in {401, 403}
             and request.url.path in INFO_AUTH_FAILURE_PATHS
         )
         log_level = logging.INFO if status_code < 400 or is_expected_probe else logging.WARNING

@@ -33,11 +33,14 @@ export function PlayerStoryCard({ entry, rank, archetype, className }: PlayerSto
   const total = entry.carrier_kills + entry.push_kills + entry.crossfire_kills;
   const baseKills = entry.kills - total;
 
-  // Segment widths (percentage of total kills)
-  const pctBase = entry.kills > 0 ? (baseKills / entry.kills) * 100 : 100;
-  const pctCarrier = entry.kills > 0 ? (entry.carrier_kills / entry.kills) * 100 : 0;
-  const pctPush = entry.kills > 0 ? (entry.push_kills / entry.kills) * 100 : 0;
-  const pctXfire = entry.kills > 0 ? (entry.crossfire_kills / entry.kills) * 100 : 0;
+  // Segment widths (percentage of total kills). When a player has zero
+  // kills the breakdown is undefined — render nothing rather than a
+  // misleading 100% gray "base" bar that suggests one full segment.
+  const hasKills = entry.kills > 0;
+  const pctBase = hasKills ? (baseKills / entry.kills) * 100 : 0;
+  const pctCarrier = hasKills ? (entry.carrier_kills / entry.kills) * 100 : 0;
+  const pctPush = hasKills ? (entry.push_kills / entry.kills) * 100 : 0;
+  const pctXfire = hasKills ? (entry.crossfire_kills / entry.kills) * 100 : 0;
 
   return (
     <div
@@ -83,7 +86,10 @@ export function PlayerStoryCard({ entry, rank, archetype, className }: PlayerSto
         <StatCell label="Crossfire" value={entry.crossfire_kills} highlight={entry.crossfire_kills > 0} color="text-cyan-400" />
       </div>
 
-      {/* KIS breakdown bar */}
+      {/* KIS breakdown bar — omit entirely on 0-kill rounds; the empty
+          gray bar implied "all base kills" which is false for someone
+          who didn't frag. */}
+      {hasKills && (
       <div className="mt-4">
         <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Kill Breakdown</div>
         <div className="flex h-2 rounded-full overflow-hidden bg-slate-800/50">
@@ -108,6 +114,7 @@ export function PlayerStoryCard({ entry, rank, archetype, className }: PlayerSto
           {pctXfire > 0 && <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-cyan-500/70" />Crossfire</span>}
         </div>
       </div>
+      )}
     </div>
   );
 }
