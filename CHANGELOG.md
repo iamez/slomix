@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.13.4](https://github.com/iamez/slomix/compare/v1.13.3...v1.13.4) (2026-05-09)
+
+
+### Bug Fixes
+
+* **bot,proximity:** close TOCTOU on player_aliases + log silent excepts in parser ([#197](https://github.com/iamez/slomix/issues/197)) ([2fdd86d](https://github.com/iamez/slomix/commit/2fdd86d39442fc989f86029f81909940209fad2a))
+
 ## [1.13.3](https://github.com/iamez/slomix/compare/v1.13.2...v1.13.3) (2026-05-08)
 
 
