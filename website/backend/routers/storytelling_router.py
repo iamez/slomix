@@ -387,6 +387,37 @@ async def get_lurker_profile(
     return await svc.compute_lurker_profile(sd)
 
 
+@router.get("/storytelling/useless-defense-deaths")
+@limiter.limit("10/minute")
+async def get_useless_defense_deaths(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    min_killer_health: int = Query(
+        default=80, ge=1, le=200,
+        description="Minimum killer health (HP+armor) at moment of kill",
+    ),
+    min_reinf_seconds: int = Query(
+        default=25, ge=1, le=60,
+        description="Minimum victim reinforcement wait time (seconds)",
+    ),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Useless defensive deaths: panic deaths the defending team can't afford.
+
+    Per Discord ask 2026-05-07 (olympus + superboyy). Counts kills where the
+    victim was on the defending team, the killer had high health (no real
+    trade), and the victim's spawn wait was long. Players ranked by absolute
+    count then by rate.
+    """
+    sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    return await svc.compute_useless_defense_deaths(
+        sd,
+        min_killer_health=min_killer_health,
+        min_reinf_seconds=min_reinf_seconds,
+    )
+
+
 @router.get("/storytelling/player-narratives")
 @limiter.limit("5/minute")
 async def get_player_narratives(

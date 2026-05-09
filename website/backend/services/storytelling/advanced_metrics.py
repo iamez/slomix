@@ -479,3 +479,108 @@ class _AdvancedMetricsMixin:
             "players": players,
         }
 
+    async def compute_useless_defense_deaths(
+        self,
+        session_date: str | date,
+        min_killer_health: int = 80,
+        min_reinf_seconds: int = 25,
+    ) -> dict:
+        """Compute "useless deaths in defense" — panic deaths the team can't afford.
+
+        A defending player who dies while (a) the killer was barely scratched
+        (killer_health >= min_killer_health) and (b) their own next spawn is
+        far away (victim_reinf >= min_reinf_seconds) handed the attackers free
+        time on the objective without trading damage. This is the metric the
+        Discord community asked for on 2026-05-07 (olympus + superboyy ask:
+        "kolkrat si na relativno full mrtu v obrambi 25+ sekund").
+
+        Defending team is detected via ``rounds.defender_team`` (1=axis, 2=allies)
+        joined to the victim's PCS row for the same round. Rounds with
+        ``defender_team = 0`` (unknown) contribute no candidates.
+
+        Returns per-player ranking with absolute count, total defensive deaths,
+        and rate (rate = useless / total_def_deaths). Rate is the stable signal:
+        a 1/2 player is worse than a 5/50 player even though absolute count is
+        lower.
+
+        This relies on the storytelling_kill_impact pre-compute (which carries
+        ``victim_reinf`` and ``killer_health``); the caller is expected to have
+        triggered ``compute_session_kis(sd)`` already if it wants fresh KIS
+        coverage. We do NOT trigger it here — keeps this metric independent of
+        the KIS code path.
+        """
+        sd = _to_date(session_date)
+
+        rows = await self.db.fetch_all(
+            """
+            WITH defender_pcs AS (
+                -- rounds.round_date is TEXT in this schema, storytelling
+                -- session_date is DATE — cast on the rounds side so the
+                -- downstream JOIN uses native date comparison.
+                SELECT pcs.round_id, pcs.player_guid, pcs.team, r.defender_team,
+                       r.round_date::date AS round_date_d,
+                       r.map_name, r.round_number
+                FROM player_comprehensive_stats pcs
+                JOIN rounds r ON r.id = pcs.round_id
+                WHERE r.round_date::date = $1
+                  AND r.defender_team IN (1, 2)
+                  AND pcs.team = r.defender_team
+            ),
+            defense_deaths AS (
+                SELECT ski.victim_guid, ski.victim_name,
+                       COUNT(*) FILTER (
+                           WHERE ski.victim_reinf >= $2
+                             AND ski.killer_health >= $3
+                       ) AS useless_deaths,
+                       COUNT(*) AS total_def_deaths
+                FROM storytelling_kill_impact ski
+                JOIN defender_pcs dp
+                  ON dp.round_date_d = ski.session_date
+                 AND dp.map_name = ski.map_name
+                 AND dp.round_number = ski.round_number
+                 -- PCS stores 8-char short_guid; storytelling_kill_impact
+                 -- stores the full 32-char Lua GUID. Match on prefix.
+                 AND dp.player_guid = LEFT(ski.victim_guid, 8)
+                WHERE ski.session_date = $1
+                GROUP BY ski.victim_guid, ski.victim_name
+            )
+            SELECT victim_guid, victim_name, useless_deaths, total_def_deaths
+            FROM defense_deaths
+            WHERE useless_deaths > 0
+            ORDER BY useless_deaths DESC, total_def_deaths ASC
+            """,
+            (sd, min_reinf_seconds, min_killer_health),
+        )
+
+        players = []
+        for r in (rows or []):
+            guid = r[0]
+            useless = int(r[2] or 0)
+            total = int(r[3] or 0)
+            rate = (useless / total) if total > 0 else 0.0
+            players.append({
+                "guid": guid,
+                "guid_short": guid[:8],
+                "name": strip_et_colors(r[1] or guid[:8]),
+                "useless_deaths": useless,
+                "total_defense_deaths": total,
+                "rate": round(rate, 3),
+            })
+
+        return {
+            "status": "ok",
+            "session_date": str(sd),
+            "metric": "useless_defense_deaths",
+            "description": (
+                "Defenders who died with their next spawn far away "
+                f"(>= {min_reinf_seconds}s) and the killer barely scratched "
+                f"(>= {min_killer_health} HP). Hands the attackers free time "
+                "on the objective without trading damage."
+            ),
+            "thresholds": {
+                "min_reinf_seconds": min_reinf_seconds,
+                "min_killer_health": min_killer_health,
+            },
+            "players": players,
+        }
+
