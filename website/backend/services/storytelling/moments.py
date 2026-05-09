@@ -351,7 +351,19 @@ class _MomentsMixin:
         return moments
 
     async def _detect_push_successes(self, sd: date) -> list:
-        """Detector D: High-quality team pushes (3+ participants, high push_quality)."""
+        """Detector D: High-quality team pushes (3+ participants, high push_quality).
+
+        Excludes the first 5s of every round so spawn-rush flows — players
+        moving together because they all just spawned at the same gate, not
+        because they coordinated a push — don't get classified as strategic
+        pushes. On maps like etl_adlernest R2, axis spawn forces everyone
+        through the transmitter corridor at t=0; that movement is not a
+        decision, it's geometry.
+
+        Also tightens the toward_objective filter: 'N/A' was previously
+        passing through (only 'NO' was rejected), surfacing direction-less
+        pushes as "Team X pushed objective".
+        """
         rows = await self.db.fetch_all("""
             SELECT team, participant_count, push_quality, alignment_score,
                    toward_objective, round_number, map_name, start_time
@@ -359,7 +371,8 @@ class _MomentsMixin:
             WHERE session_date = $1
                 AND participant_count >= 3
                 AND push_quality >= 0.7
-                AND toward_objective != 'NO'
+                AND toward_objective NOT IN ('NO', 'N/A')
+                AND start_time >= 5000
             ORDER BY push_quality DESC
             LIMIT 5
         """, (sd,))
@@ -371,7 +384,9 @@ class _MomentsMixin:
             quality = float(r[2])
             objective = r[4] or "objective"
             stars = 3 if quality < 0.8 else (4 if quality < 0.9 else 5)
-            obj_label = objective.replace('_', ' ')
+            # Title-case for user-facing display: "flag_room" → "Flag Room",
+            # not the previous lowercase "flag room" that read as if mid-sentence.
+            obj_label = objective.replace('_', ' ').title()
             moments.append({
                 "type": "push_success",
                 "round_number": r[5],
