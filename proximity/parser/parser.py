@@ -934,12 +934,16 @@ class ProximityParserV4:
         try:
             row = await self.db_adapter.fetch_one(query, (table, column))
             self._schema_cache[key] = bool(row)
+            return self._schema_cache[key]
         except Exception as e:
+            # Do NOT cache False on exception: a transient DB blip would
+            # otherwise pin the cache to "column missing" for the rest of
+            # the process lifetime, silently dropping optional columns
+            # (e.g., canonical_guid, round_link_*) on every later insert.
             self.logger.warning(
                 f"_table_has_column DB query failed for {table}.{column}: {e}"
             )
-            self._schema_cache[key] = False
-        return self._schema_cache[key]
+            return False
 
     async def _resolve_round_link_context(self, session_date) -> None:
         """

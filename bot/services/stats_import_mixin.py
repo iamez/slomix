@@ -851,12 +851,16 @@ class _StatsImportMixin:
 
             # Atomic upsert — single statement closes TOCTOU window between
             # SELECT and UPDATE/INSERT under concurrent imports of the same player.
+            # GREATEST/LEAST guard against late-arriving / backfill imports moving
+            # last_seen backwards or first_seen forward (alias selection orders by
+            # last_seen DESC, so corruption here breaks display-name resolution).
             upsert_query = '''
                 INSERT INTO player_aliases (guid, alias, first_seen, last_seen, times_seen)
                 VALUES (?, ?, ?, ?, 1)
                 ON CONFLICT (guid, alias) DO UPDATE
                   SET times_seen = player_aliases.times_seen + 1,
-                      last_seen = EXCLUDED.last_seen
+                      last_seen = GREATEST(player_aliases.last_seen, EXCLUDED.last_seen),
+                      first_seen = LEAST(player_aliases.first_seen, EXCLUDED.first_seen)
             '''
             await self.db_adapter.execute(
                 upsert_query,
