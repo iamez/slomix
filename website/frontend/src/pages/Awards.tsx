@@ -136,7 +136,7 @@ function AwardExplorer({ awards }: { awards: RoundAward[] }) {
           <div key={`${round.round_id}-${round.date}`} className="glass-card rounded-xl overflow-hidden">
             <div className="px-5 py-3 bg-slate-800/50 border-b border-white/5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <img src={mapLevelshot(round.map || '')} alt="" className="w-8 h-8 rounded object-cover bg-slate-700" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                <img src={mapLevelshot(round.map || '')} alt={round.map ? `${round.map} levelshot` : ''} className="w-8 h-8 rounded object-cover bg-slate-700" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                 <div>
                   <div className="font-bold text-white">{round.map || 'Unknown Map'}</div>
                   <div className="text-xs text-slate-500">Round {round.round_number} · {dateLabel}</div>
@@ -155,11 +155,11 @@ function AwardExplorer({ awards }: { awards: RoundAward[] }) {
                 return (
                   <div key={`${a.award}-${a.player}-${i}`} className={cn('flex items-center gap-3 p-3 rounded-lg border border-white/5', style.bg)}>
                     {wIcon ? (
-                      <img src={wIcon} alt="" className="w-7 h-5 object-contain opacity-80 shrink-0" style={{ filter: 'brightness(1.6)' }} />
+                      <img src={wIcon} alt={`${a.award} weapon`} className="w-7 h-5 object-contain opacity-80 shrink-0" style={{ filter: 'brightness(1.6)' }} />
                     ) : mIcon ? (
-                      <img src={mIcon} alt="" className="w-6 h-6 object-contain shrink-0" />
+                      <img src={mIcon} alt={`${a.award} medal`} className="w-6 h-6 object-contain shrink-0" />
                     ) : (
-                      <span className="text-lg">{style.emoji}</span>
+                      <span className="text-lg" role="img" aria-label={a.award}>{style.emoji}</span>
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="text-xs text-slate-400 truncate">{a.award}</div>
