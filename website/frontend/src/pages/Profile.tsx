@@ -286,7 +286,7 @@ export default function Profile({ params }: { params?: Record<string, string> })
                     <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500">Favorite weapon</div>
                     <div className="mt-3 flex items-center gap-3">
                       {stats.favorite_weapon && weaponIcon(stats.favorite_weapon) ? (
-                        <img src={weaponIcon(stats.favorite_weapon)!} alt="" className="h-7 object-contain opacity-80" style={{ filter: 'brightness(1.7)' }} />
+                        <img src={weaponIcon(stats.favorite_weapon)!} alt={`${stats.favorite_weapon} icon`} className="h-7 object-contain opacity-80" style={{ filter: 'brightness(1.7)' }} />
                       ) : (
                         <Crosshair className="h-5 w-5 text-cyan-300" />
                       )}

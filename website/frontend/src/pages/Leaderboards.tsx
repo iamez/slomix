@@ -46,7 +46,7 @@ function rankBadge(rank: number) {
   if (rank <= 11) {
     return (
       <span className="inline-flex items-center gap-1.5 text-slate-400 font-mono">
-        <img src={rankIcon(rank)} alt="" className="w-4 h-4 object-contain" />
+        <img src={rankIcon(rank)} alt={`Rank ${rank} medal`} className="w-4 h-4 object-contain" />
         #{rank}
       </span>
     );
