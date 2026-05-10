@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.14.1](https://github.com/iamez/slomix/compare/v1.14.0...v1.14.1) (2026-05-10)
+
+
+### Bug Fixes
+
+* mega audit v6 — verified-real fixes (12 fixes, 16 false positives ruled out) ([#210](https://github.com/iamez/slomix/issues/210)) ([69f3eb9](https://github.com/iamez/slomix/commit/69f3eb9ba4d10809e7bf31aecc39d58ae263053f))
+
 ## [1.14.0](https://github.com/iamez/slomix/compare/v1.13.3...v1.14.0) (2026-05-10)
 
 
