@@ -401,11 +401,12 @@ class _SynergyMixin:
             if group:
                 td[group] += int(r[1] or 0)
 
-        # Medic bond: trades / deaths * 200, clamped to 100. The 200x scale
-        # (rather than 100x) gives full credit at 50% revive-on-death rate,
-        # not 100% — competitive ET medics rarely revive every death because
-        # tactical decisions (tap-out for spawn, gibbed bodies, in-combat) make
-        # 100% revive an unrealistic ceiling. 50% is a strong medic.
+        # Medic bond: revives_received / teammate_deaths * 200, clamped to 100.
+        # The 200x scale (rather than 100x) gives full credit at 50% revive-on-
+        # death rate, not 100% — competitive ET medics rarely revive every death
+        # because tactical decisions (tap-out for spawn, gibbed bodies, in-combat)
+        # make 100% revive an unrealistic ceiling. 50% is a strong medic.
+        # (Trade kills are scored separately in _synergy_trade above.)
         return {g: min(100, tr[g] / max(td[g], 1) * 200)
                 for g in ('group_a', 'group_b')}
 
