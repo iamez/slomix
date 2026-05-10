@@ -148,12 +148,17 @@ class _WebhookMetadataMixin:
         best_idx = len(candidates) - 1  # Fallback to newest metadata
         best_diff = None
         if filename_ts:
+            # Tiebreak with `<=` so when two candidates share the same
+            # timestamp diff, the LATER (newer) one wins. Stale entries
+            # otherwise shadow fresh ones — a back-to-back round on the
+            # same map can leave an old R1 entry in the queue whose
+            # timestamp diff happens to equal the newer R1's diff.
             for idx, entry in enumerate(candidates):
                 meta_ts = self._metadata_event_unix(entry.get("metadata") or {})
                 if not meta_ts:
                     continue
                 diff = abs(meta_ts - filename_ts)
-                if best_diff is None or diff < best_diff:
+                if best_diff is None or diff <= best_diff:
                     best_diff = diff
                     best_idx = idx
 

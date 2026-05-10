@@ -79,25 +79,6 @@ logger.info(f"📦 Discord.py: {discord.__version__}")
 # ======================================================================
 
 
-def _split_chunks(s: str, max_len: int = 900):
-    """Split a long string into line-preserving chunks under max_len.
-
-    Used by embed helpers to avoid Discord field size limits.
-    """
-    lines = s.splitlines(keepends=True)
-    chunks = []
-    cur = ""
-    for line in lines:
-        if len(cur) + len(line) > max_len:
-            chunks.append(cur.rstrip())
-            cur = line
-        else:
-            cur += line
-    if cur:
-        chunks.append(cur.rstrip())
-    return chunks
-
-
 # ============================================================================
 # 🚀 PERFORMANCE: QUERY CACHE
 # ============================================================================
@@ -472,7 +453,10 @@ class UltimateETLegacyBot(
                 f"📁 Loaded {len(self.processed_gametimes_files)} processed gametimes entries"
             )
         except Exception as e:
-            logger.debug(f"Gametime index load failed: {e}")
+            # Promoted from DEBUG: a failed index load means processed
+            # gametimes will be reprocessed (cost + duplicate webhook traffic).
+            # Operators need to see this in default log level.
+            logger.warning(f"Gametime index load failed (will reprocess): {e}")
 
     def _mark_gametime_processed(self, filename: str) -> None:
         if not filename or filename in self.processed_gametimes_files:

@@ -869,7 +869,7 @@ async def get_quick_leaders(
             # Last-resort SQLite fallback: legacy schema keys by session_id /
             # session_date and has no round_date column on
             # player_comprehensive_stats, so neither the primary nor the first
-            # fallback succeeds. See scripts/dev_up.sh + website/backend/init_db.py.
+            # fallback succeeds.
             fallback_session_dpm = """
                 WITH session_player AS (
                     SELECT

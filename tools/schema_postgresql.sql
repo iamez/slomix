@@ -5,6 +5,18 @@
 -- PostgreSQL 14 | Database: etlegacy
 -- Total tables: 37 (excluding one-off backup tables)
 --
+-- ⚠️ STALE NOTICE (verified 2026-05-10, mega audit v6):
+-- Live DB now has ~90 tables (47 added since 2026-02-08 via migrations
+-- 026-052). Tables NOT yet documented here include:
+--   - proximity_combat_position, proximity_kill_outcome, proximity_*
+--   - storytelling_kill_impact, player_skill_ratings, player_skill_history
+--   - availability_*, planning_*, poll_*, notifications_ledger, uploads
+--   - account_link_audit_log, daily_polls, discord_accounts, website_users
+-- Authoritative source: migrations/ directory (sequenced).
+-- For disaster recovery use:
+--   pg_dump -s -h <host> -U etlegacy_user etlegacy > schema_actual.sql
+-- A follow-up PR will reconcile this reference with live state.
+--
 -- Sections:
 --   1. Core Bot Tables (7)
 --   2. Lua Webhook Tables (2) + Round Correlations (1)

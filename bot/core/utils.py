@@ -117,28 +117,6 @@ def sanitize_error_message(error: Exception) -> str:
     return error_str
 
 
-async def send_safe_error(
-    ctx,
-    error: Exception,
-    user_message: str = "An error occurred while processing your request."
-) -> None:
-    """
-    Send a safe error message to the user without exposing internals.
-
-    Args:
-        ctx: Discord context
-        error: The exception that occurred
-        user_message: Generic message to show the user
-    """
-    # Log the full error for debugging
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.error(f"Error in command: {error}", exc_info=True)
-
-    # Send sanitized message to user
-    await ctx.send(f"❌ {user_message}")
-
-
 def format_duration(seconds: int) -> str:
     """
     Format a duration in seconds to a human-readable string.
