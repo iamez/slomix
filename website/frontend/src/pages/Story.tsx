@@ -106,7 +106,7 @@ export default function Story() {
 
   // Current session metadata
   const currentSession = scopes?.sessions.find((s) => s.session_date === sessionDate);
-  const mapNames = currentSession?.maps.map((m) => m.map_name) ?? [];
+  const mapNames = currentSession?.maps?.map((m) => m.map_name) ?? [];
 
   return (
     <>
