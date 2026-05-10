@@ -26,7 +26,7 @@ const API = '/api';
 
 interface ScopeSession {
   session_date: string;
-  maps: Array<{ map_name: string }>;
+  maps?: Array<{ map_name: string }>;
 }
 interface ScopeData {
   sessions: ScopeSession[];
@@ -141,7 +141,7 @@ export default function Story() {
             {scopesLoading && <option value="">Loading...</option>}
             {scopes?.sessions.map((s) => (
               <option key={s.session_date} value={s.session_date}>
-                {s.session_date} — {s.maps.length} map{s.maps.length !== 1 ? 's' : ''}
+                {s.session_date} — {s.maps?.length ?? 0} map{(s.maps?.length ?? 0) !== 1 ? 's' : ''}
               </option>
             ))}
           </select>

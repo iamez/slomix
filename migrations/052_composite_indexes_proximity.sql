@@ -44,10 +44,7 @@ CREATE INDEX IF NOT EXISTS idx_pcp_session_attacker_canonical
     ON proximity_combat_position (session_date, attacker_guid_canonical)
     WHERE attacker_guid_canonical IS NOT NULL;
 
-INSERT INTO schema_migrations (version, filename, applied_by)
-VALUES ('052_composite_indexes_proximity',
-        '052_composite_indexes_proximity.sql',
-        'self')
-ON CONFLICT (version) DO NOTHING;
+-- Note: schema_migrations row is inserted by scripts/apply_migrations.py
+-- (with checksum + execution_ms), so no manual INSERT here.
 
 COMMIT;

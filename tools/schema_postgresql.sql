@@ -11,7 +11,7 @@
 --   - proximity_combat_position, proximity_kill_outcome, proximity_*
 --   - storytelling_kill_impact, player_skill_ratings, player_skill_history
 --   - availability_*, planning_*, poll_*, notifications_ledger, uploads
---   - account_link_audit_log, daily_polls, discord_accounts, websited_users
+--   - account_link_audit_log, daily_polls, discord_accounts, website_users
 -- Authoritative source: migrations/ directory (sequenced).
 -- For disaster recovery use:
 --   pg_dump -s -h <host> -U etlegacy_user etlegacy > schema_actual.sql
