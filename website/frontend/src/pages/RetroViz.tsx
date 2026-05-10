@@ -36,7 +36,7 @@ function MatchSummary({ data }: { data: RoundVizData }) {
       <h3 className="text-sm font-bold text-white mb-4">Match Summary</h3>
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div className="glass-panel rounded-lg p-3 flex items-center gap-2">
-          <img src={mapLevelshot(data.map_name || '')} alt="" className="w-8 h-8 rounded object-cover bg-slate-700" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          <img src={mapLevelshot(data.map_name || '')} alt={data.map_name ? `${data.map_name} levelshot` : ''} className="w-8 h-8 rounded object-cover bg-slate-700" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           <div>
             <div className="text-[11px] text-slate-500">Map</div>
             <div className="font-bold text-white">{data.map_name || 'Unknown'}</div>

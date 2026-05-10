@@ -51,7 +51,7 @@ function DemoCard({ item }: { item: GreatshotItem }) {
       </div>
       <div className="mt-2 text-xs text-slate-400 flex flex-wrap items-center gap-3">
         <span className="inline-flex items-center gap-1.5">
-          {item.map && <img src={mapLevelshot(item.map)} alt="" className="w-4 h-4 rounded-sm object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+          {item.map && <img src={mapLevelshot(item.map)} alt={`${item.map} levelshot`} className="w-4 h-4 rounded-sm object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
           Map: {item.map || '--'}
         </span>
         <span>Duration: {fmtMs(item.duration_ms)}</span>
