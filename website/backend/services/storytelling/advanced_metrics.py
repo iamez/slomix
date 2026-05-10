@@ -90,11 +90,17 @@ class _AdvancedMetricsMixin:
         sd = _to_date(session_date)
         WINDOW_MS = DEATH_TRADE_WINDOW_MS
 
-        # All kills grouped by round for temporal analysis
+        # All kills grouped by round for temporal analysis.
+        # round_start_unix > 0 filter: orphaned rows with NULL/0 rsu would
+        # collapse into bucket 0 and mix unrelated kills into the same
+        # temporal window, producing spurious teammate-trade matches.
         kill_rows = await self.db.fetch_all("""
             SELECT victim_guid, killer_guid, kill_time, round_number, round_start_unix
             FROM proximity_kill_outcome
-            WHERE session_date = $1 AND outcome IN ('gibbed', 'tapped_out')
+            WHERE session_date = $1
+              AND outcome IN ('gibbed', 'tapped_out')
+              AND round_start_unix IS NOT NULL
+              AND round_start_unix > 0
             ORDER BY round_start_unix, kill_time
         """, (sd,))
 

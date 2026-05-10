@@ -43,22 +43,6 @@ from bot.stats import StatsCalculator
 logger = logging.getLogger("UltimateBot.SessionCog")
 
 
-def _split_chunks(text: str, max_len: int = 900):
-    """Helper to split long text into Discord-safe chunks"""
-    lines = text.splitlines(keepends=True)
-    chunks = []
-    current = ""
-    for line in lines:
-        if len(current) + len(line) > max_len:
-            chunks.append(current.rstrip())
-            current = line
-        else:
-            current += line
-    if current:
-        chunks.append(current.rstrip())
-    return chunks
-
-
 class SessionCog(commands.Cog, name="Session Commands"):
     """🎮 Session viewing and analytics commands with service architecture"""
 

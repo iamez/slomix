@@ -55,7 +55,9 @@ function formatLeaderDetail(category: string, entry: ProximityLeaderboardEntry):
     case 'survivors': return `${entry.escapes ?? 0}/${entry.total ?? 0} engagements`;
     case 'movement': return `sprint ${entry.sprint_pct ?? 0}%, ${((entry.total_distance as number) ?? 0).toLocaleString()}u total`;
     case 'focus_fire': return `${entry.times_focused ?? 0}x focused, avg ${entry.avg_attackers ?? 0} attackers, ${entry.avg_damage ?? 0} dmg`;
-    default: return '';
+    default:
+      if (typeof console !== 'undefined') console.warn('formatLeaderDetail: unknown category', category);
+      return '';
   }
 }
 
@@ -209,7 +211,7 @@ function LeaderList({ title, rows, format, tip }: { title: string; rows: LeaderR
       ) : (
         <div className="space-y-1">
           {rows.map((r, i) => (
-            <div key={i} className="flex items-center justify-between text-xs">
+            <div key={(r.guid as string | undefined) ?? `${r.name}-${i}`} className="flex items-center justify-between text-xs">
               <span className="text-slate-200 truncate">{stripColors(String(r.name))}</span>
               <span className="text-cyan-400 font-mono text-[11px]">{format(r)}</span>
             </div>
@@ -404,8 +406,8 @@ function ProxScoresPanel() {
                 <div className="ml-8 mb-2 p-2 rounded bg-slate-800/30 border border-slate-700/30">
                   {/* Mini radar */}
                   <div className="flex gap-4 mb-2">
-                    {p.prox_radar.map((axis, i) => (
-                      <div key={i} className="text-center">
+                    {p.prox_radar.map((axis) => (
+                      <div key={axis.label} className="text-center">
                         <div className="text-[10px] text-slate-500">{axis.label}</div>
                         <div className="text-sm font-bold text-white">{axis.value.toFixed(0)}</div>
                       </div>
@@ -614,10 +616,10 @@ function HitRegionsPanel({ scope }: { scope?: ProximityScope }) {
         {totalHits > 0 && (
           <>
             <div className="flex items-end gap-1 h-28 mb-3 justify-center">
-              {regionBars.map((b, i) => {
+              {regionBars.map((b) => {
                 const pct = totalHits > 0 ? (b.count / totalHits) * 100 : 0;
                 return (
-                  <div key={i} className="flex flex-col items-center gap-1 flex-1 max-w-16">
+                  <div key={b.label} className="flex flex-col items-center gap-1 flex-1 max-w-16">
                     <span className="text-[10px] font-mono text-slate-300">{pct.toFixed(1)}%</span>
                     <div className="w-full rounded-t" style={{
                       height: `${Math.max((b.count / maxRegionCount) * 100, 4)}%`,
