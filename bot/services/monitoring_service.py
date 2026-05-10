@@ -13,7 +13,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Add project root to path for imports
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
@@ -308,7 +308,8 @@ class MonitoringService:
 
     async def _cleanup_old_records(self):
         """Delete history records older than retention_days"""
-        cutoff = datetime.utcnow() - timedelta(days=self.retention_days)
+        # naive UTC for comparison against TIMESTAMP columns
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=self.retention_days)
         await self._cleanup_table("server_status_history", cutoff)
         await self._cleanup_table("voice_status_history", cutoff)
         logger.info(

@@ -455,12 +455,12 @@ async def _settings_payload(db, user_id: int) -> dict[str, Any]:
         sound_enabled = bool(settings_row[0])
         cooldown_seconds = int(settings_row[1] or DEFAULT_SOUND_COOLDOWN_SECONDS)
         reminders_enabled = bool(settings_row[2])
-        timezone = settings_row[3] or "UTC"
+        user_timezone = settings_row[3] or "UTC"
     else:
         sound_enabled = True
         cooldown_seconds = DEFAULT_SOUND_COOLDOWN_SECONDS
         reminders_enabled = True
-        timezone = "UTC"
+        user_timezone = "UTC"
 
     subscriptions = await _fetch_subscriptions_map(db, user_id)
 
@@ -470,7 +470,7 @@ async def _settings_payload(db, user_id: int) -> dict[str, Any]:
         "get_ready_sound": sound_enabled,
         "sound_cooldown_seconds": cooldown_seconds,
         "availability_reminders_enabled": reminders_enabled,
-        "timezone": timezone,
+        "timezone": user_timezone,
         "discord_notify": bool(subscriptions["discord"]["enabled"]),
         "telegram_notify": bool(subscriptions["telegram"]["enabled"]),
         "signal_notify": bool(subscriptions["signal"]["enabled"]),
@@ -750,11 +750,11 @@ async def upsert_settings(request: Request, db=Depends(get_db)):
         body.get("availability_reminders_enabled", body.get("threshold_notify")),
         default=True,
     )
-    timezone = body.get("timezone", "UTC")
-    if not isinstance(timezone, str) or not timezone.strip():
-        timezone = "UTC"
-    timezone = timezone.strip()
-    if len(timezone) > 64:
+    user_timezone = body.get("timezone", "UTC")
+    if not isinstance(user_timezone, str) or not user_timezone.strip():
+        user_timezone = "UTC"
+    user_timezone = user_timezone.strip()
+    if len(user_timezone) > 64:
         raise HTTPException(status_code=400, detail="timezone is too long")
 
     sound_cooldown = body.get("sound_cooldown_seconds", DEFAULT_SOUND_COOLDOWN_SECONDS)
@@ -802,14 +802,14 @@ async def upsert_settings(request: Request, db=Depends(get_db)):
             timezone = EXCLUDED.timezone,
             updated_at = CURRENT_TIMESTAMP
         """,
-        (user_id, sound_enabled, sound_cooldown, reminders_enabled, timezone),
+        (user_id, sound_enabled, sound_cooldown, reminders_enabled, user_timezone),
     )
     for channel_type, raw_enabled in channel_flags.items():
         if not isinstance(raw_enabled, bool):
             continue
 
         channel_address = str(user_id) if channel_type == "discord" else None
-        verified_at = datetime.utcnow() if channel_type == "discord" else linked_channel_verified_at.get(channel_type)
+        verified_at = datetime.now(timezone.utc).replace(tzinfo=None) if channel_type == "discord" else linked_channel_verified_at.get(channel_type)
         await db.execute(
             """
             INSERT INTO availability_subscriptions
@@ -892,7 +892,7 @@ async def upsert_subscription(request: Request, db=Depends(get_db)):
 
     verified_at = None
     if channel_type == "discord":
-        verified_at = datetime.utcnow()
+        verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
     elif enabled:
         verified_link = await db.fetch_one(
             """
@@ -1024,7 +1024,7 @@ async def create_link_token(request: Request, db=Depends(get_db)):
 
     token = secrets.token_urlsafe(24)
     token_hash = _link_token_hash(token)
-    expires_at = datetime.utcnow() + timedelta(minutes=ttl_minutes)
+    expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=ttl_minutes)
 
     await db.execute(
         """
