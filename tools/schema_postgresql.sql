@@ -2,23 +2,16 @@
 -- PostgreSQL Schema Reference for ET:Legacy Discord Bot (Slomix)
 -- ============================================================================
 -- Source: pg_dump -s --no-owner --no-privileges (live `etlegacy` database)
--- Regenerated: 2026-05-11 (mega audit v6 follow-up — see PR #210)
+-- Regenerated: 2026-05-11 via tools/regen_schema_dump.sh
 -- PostgreSQL: 14 (dev) / 17 (prod)
--- Total tables: 90 | Total indexes: 252
+-- Total tables: 90 | Total indexes: 416
+--   (252 CREATE INDEX + 164 from PK/UNIQUE constraints)
 --
--- This file is now AUTHORITATIVE — generated from real schema state, not
--- hand-curated. Replaces the prior 2026-02-08 reference that had drifted
--- by 47 missing tables (proximity_*, storytelling_*, skill ratings,
--- availability/planning/poll subsystems, uploads, website_users, etc.).
+-- This file is AUTHORITATIVE — generated from real schema state, not
+-- hand-curated. For canonical change history use migrations/*.sql.
 --
 -- To regenerate after schema migrations:
---   ./tools/regen_schema_dump.sh
--- or manually:
---   pg_dump -s --no-owner --no-privileges -h 127.0.0.1 -U etlegacy_user \
---     etlegacy > tools/schema_postgresql.sql
---   # Then strip the \restrict/\unrestrict lines (PG14 psql-only)
---
--- For canonical change history use migrations/*.sql (sequenced).
+--   PGPASSWORD=... ./tools/regen_schema_dump.sh
 -- ============================================================================
 
 --
