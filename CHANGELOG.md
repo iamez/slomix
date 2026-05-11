@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.14.2](https://github.com/iamez/slomix/compare/v1.14.1...v1.14.2) (2026-05-11)
+
+
+### Bug Fixes
+
+* **logging:** use exc_info=error instead of exc_info=True in error handlers ([#234](https://github.com/iamez/slomix/issues/234)) ([8e10dbb](https://github.com/iamez/slomix/commit/8e10dbb734cbcb558884619fac87d4dee3a0b465))
+
 ## [1.14.1](https://github.com/iamez/slomix/compare/v1.14.0...v1.14.1) (2026-05-11)
 
 
