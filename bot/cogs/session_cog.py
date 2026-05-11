@@ -157,7 +157,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                 await self.view_handlers.show_objectives_view(ctx, target_date, session_ids, session_ids_str, player_count)
                 return
 
-            if subcommand and subcommand.lower() in ("combat",):
+            if subcommand and subcommand.lower() == "combat":
                 await self.view_handlers.show_combat_view(ctx, target_date, session_ids, session_ids_str, player_count)
                 return
 
@@ -165,7 +165,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                 await self.view_handlers.show_weapons_view(ctx, target_date, session_ids, session_ids_str, player_count)
                 return
 
-            if subcommand and subcommand.lower() in ("support",):
+            if subcommand and subcommand.lower() == "support":
                 await self.view_handlers.show_support_view(ctx, target_date, session_ids, session_ids_str, player_count)
                 return
 

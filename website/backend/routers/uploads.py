@@ -338,7 +338,7 @@ async def get_upload(upload_id: str, db=Depends(get_db)):
         "tags": tags,
         "share_url": f"/share/{row[0]}",
         "download_url": f"/api/uploads/{row[0]}/download",
-        "is_playable": row[5] in (".mp4",),
+        "is_playable": row[5] == ".mp4",
     }
 
 

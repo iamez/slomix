@@ -384,7 +384,7 @@ async def resolve_round_id_with_reason(
         if not candidate_dt and created_at:
             if isinstance(created_at, str):
                 try:
-                    created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                    created_at = datetime.fromisoformat(created_at)
                 except ValueError:
                     created_at = None
             if created_at:

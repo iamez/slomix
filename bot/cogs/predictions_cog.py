@@ -422,7 +422,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
     def _format_time_ago(self, timestamp: datetime) -> str:
         """Format timestamp as 'X hours/days ago'."""
         if isinstance(timestamp, str):
-            timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            timestamp = datetime.fromisoformat(timestamp)
 
         now = datetime.now()
         if timestamp.tzinfo:
