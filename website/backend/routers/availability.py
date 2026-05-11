@@ -16,33 +16,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from website.backend.dependencies import get_db
 from website.backend.logging_config import get_app_logger
-from website.backend.middleware.auth_helpers import (
-    configured_admin_ids as _configured_admin_ids,
-)
-from website.backend.middleware.auth_helpers import (
-    configured_promoter_ids as _configured_promoter_ids,
-)
-from website.backend.middleware.auth_helpers import (
-    is_admin_user as _is_admin_user,
-)
-from website.backend.middleware.auth_helpers import (
-    link_token_hash as _link_token_hash,
-)
-from website.backend.middleware.auth_helpers import (
-    optional_user as _optional_user,
-)
-from website.backend.middleware.auth_helpers import (
-    optional_user_id as _optional_user_id,
-)
-from website.backend.middleware.auth_helpers import (
-    require_ajax_csrf_header as _require_ajax_csrf_header,
-)
-from website.backend.middleware.auth_helpers import (
-    require_user as _require_user,
-)
-from website.backend.middleware.auth_helpers import (
-    website_user_id_from_user as _website_user_id_from_user,
-)
+from website.backend.middleware.auth_helpers import configured_admin_ids as _configured_admin_ids
+from website.backend.middleware.auth_helpers import configured_promoter_ids as _configured_promoter_ids
+from website.backend.middleware.auth_helpers import is_admin_user as _is_admin_user
+from website.backend.middleware.auth_helpers import link_token_hash as _link_token_hash
+from website.backend.middleware.auth_helpers import optional_user as _optional_user
+from website.backend.middleware.auth_helpers import optional_user_id as _optional_user_id
+from website.backend.middleware.auth_helpers import require_ajax_csrf_header as _require_ajax_csrf_header
+from website.backend.middleware.auth_helpers import require_user as _require_user
+from website.backend.middleware.auth_helpers import website_user_id_from_user as _website_user_id_from_user
 from website.backend.services.contact_handle_crypto import ContactHandleCrypto, mask_contact
 
 logger = get_app_logger("availability.api")
