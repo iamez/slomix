@@ -1,5 +1,6 @@
 """Records sub-router: Awards, records, and hall of fame endpoints."""
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -50,19 +51,19 @@ async def get_records(
         "dyna_defused": {"col": "dynamites_defused", "label": "Dynamites Defused"},
     }
 
-    results = {}
-
     base_where = "WHERE round_number IN (1, 2) AND time_played_seconds > 0"
-    params = []
-
     if map_name:
         base_where += " AND map_name = $1"
-        params.append(map_name)
 
+    # Build per-category (query, params) plan, then fire all queries in
+    # parallel via asyncio.gather. Previously this loop ran 13 queries
+    # sequentially (~150 ms each → ~2 s page latency). With gather the
+    # total time collapses to roughly a single query's RTT.
+    plans: list[tuple[str, str, tuple]] = []
     for key, config in categories.items():
         col = config["col"]
         extra_filter = f" AND {config['filter']}" if "filter" in config else ""
-
+        limit_placeholder = "$2" if map_name else "$1"
         query = f"""
             SELECT
                 player_name,
@@ -72,27 +73,26 @@ async def get_records(
             FROM player_comprehensive_stats
             {base_where} {extra_filter}
             ORDER BY {col} DESC
-            LIMIT $2
+            LIMIT {limit_placeholder}
         """
+        q_params = (map_name, limit) if map_name else (limit,)
+        plans.append((key, query, q_params))
 
-        # Adjust param index for limit
-        if map_name:
-            q_params = (map_name, limit)
-            query = query.replace("$2", "$2")
-        else:
-            q_params = (limit,)
-            query = query.replace("$2", "$1")
+    rows_per_category = await asyncio.gather(
+        *(db.fetch_all(q, p) for _, q, p in plans),
+        return_exceptions=True,
+    )
 
-        try:
-            rows = await db.fetch_all(query, q_params)
-            if rows:
-                results[key] = [
-                    {"player": row[0], "value": row[1], "map": row[2], "date": row[3]}
-                    for row in rows
-                ]
-        except Exception as e:
-            logger.error(f"Error fetching record for {key}: {e}")
+    results: dict[str, list[dict]] = {}
+    for (key, _, _), outcome in zip(plans, rows_per_category):
+        if isinstance(outcome, BaseException):
+            logger.error(f"Error fetching record for {key}: {outcome}")
             results[key] = []
+            continue
+        results[key] = [
+            {"player": row[0], "value": row[1], "map": row[2], "date": row[3]}
+            for row in (outcome or [])
+        ]
 
     return results
 
