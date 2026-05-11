@@ -314,7 +314,7 @@ class SSHMonitor:
             minute = int(time_str[2:4])
             second = int(time_str[4:6])
 
-            return datetime(year, month, day, hour, minute, second)
+            return datetime(year, month, day, hour, minute, second)  # noqa: DTZ001 — parses filename timestamp written by Lua os.date() in the game-server's local TZ; must stay local-naive to match other bot/ datetime comparisons
 
         except (ValueError, IndexError) as e:
             logger.debug(f"Could not parse timestamp from filename {filename}: {e}")

@@ -116,24 +116,32 @@ class SeasonManager:
         # Calculate start month
         start_month = (quarter - 1) * 3 + 1
 
+        # Season boundaries stay tz-naive on purpose — the public API
+        # (get_season_dates) is documented as naive, callers do
+        # `get_season_dates() - datetime.now()` math (line 246), and the
+        # tests in tests/unit/test_season_manager.py pin the naive return.
+        # Only the YYYY-MM-DD strftime is used in SQL filters, so tzinfo
+        # would carry no semantic value. Each constructor below carries a
+        # `noqa: DTZ001` to document the intent.
+
         # Start: First day of first month
-        start_date = datetime(year, start_month, 1)
+        start_date = datetime(year, start_month, 1)  # noqa: DTZ001
 
         # End: Last day of last month in quarter
         if quarter == 4:
-            end_date = datetime(year, 12, 31, 23, 59, 59)
+            end_date = datetime(year, 12, 31, 23, 59, 59)  # noqa: DTZ001
         else:
             end_month = start_month + 2
             # Get last day of end month
             if end_month == 12:
-                end_date = datetime(year, 12, 31, 23, 59, 59)
+                end_date = datetime(year, 12, 31, 23, 59, 59)  # noqa: DTZ001
             else:
                 # First day of next month minus 1 second
-                next_month = datetime(year, end_month + 1, 1)
-                end_date = datetime(
+                next_month = datetime(year, end_month + 1, 1)  # noqa: DTZ001
+                end_date = datetime(  # noqa: DTZ001
                     year,
                     end_month,
-                    (next_month - datetime(year, end_month, 1)).days,
+                    (next_month - datetime(year, end_month, 1)).days,  # noqa: DTZ001
                     23,
                     59,
                     59,
