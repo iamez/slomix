@@ -150,7 +150,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 logging.getLogger("app").error(
                     f"Request failed: {error}",
                     extra={"request_id": request_id},
-                    exc_info=True
+                    exc_info=error
                 )
 
             # Security logging for auth paths

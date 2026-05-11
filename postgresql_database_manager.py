@@ -1705,7 +1705,7 @@ class PostgreSQLDatabaseManager:
             error_msg = str(e)
             duration = time.time() - start_time
             logger.error(f"❌ Error processing {filename} [{duration:.2f}s]: {error_msg}", exc_info=True)
-            log_stats_import(filename, error=error_msg, duration=duration)
+            log_stats_import(filename, error=e, duration=duration)
             await self.mark_file_processed(
                 filename,
                 success=False,
