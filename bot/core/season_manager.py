@@ -59,7 +59,7 @@ class SeasonManager:
             >>> sm.get_current_season()
             '2025-Q4'
         """
-        now = datetime.now()
+        now = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         quarter = (now.month - 1) // 3 + 1
         return f"{now.year}-Q{quarter}"
 
@@ -243,6 +243,6 @@ class SeasonManager:
             60  # 60 days left in Q4
         """
         _, end_date = self.get_season_dates()
-        now = datetime.now()
+        now = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         delta = end_date - now
         return delta.days

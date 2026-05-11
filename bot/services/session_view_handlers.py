@@ -645,7 +645,7 @@ class SessionViewHandlers:
             title=f"🎯 Objective & Support - {latest_date}",
             description=f"Top objective contributors • {player_count} players",
             color=0x00D166,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         for i, (player, stats) in enumerate(sorted_players, 1):
@@ -710,7 +710,7 @@ class SessionViewHandlers:
             title=f"⚔️ Combat Stats - {latest_date}",
             description=f"Combat leaders • {player_count} players",
             color=0xED4245,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         medals = ["🥇", "🥈", "🥉"]
@@ -774,7 +774,7 @@ class SessionViewHandlers:
             title=f"🔫 Weapon Mastery - {latest_date}",
             description=f"Top weapons per player • {len(player_weapon_map)} players",
             color=0x5865F2,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         for player, weapons in player_weapon_map.items():
@@ -819,7 +819,7 @@ class SessionViewHandlers:
             title=f"💉 Support Stats - {latest_date}",
             description=f"Support activity • {player_count} players",
             color=0x57F287,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         for name, revives_given, times_revived, kills, deaths, self_kills, full_selfkills in sup_rows:
@@ -860,7 +860,7 @@ class SessionViewHandlers:
             title=f"🔥 Killing Sprees & Multi-Kills - {latest_date}",
             description=f"Sprees and monster kills • {player_count} players",
             color=0xFEE75C,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         for i, (name, best_spree, doubles, triples, quads, multis, megas, total_kills) in enumerate(spree_rows, 1):
@@ -899,7 +899,7 @@ class SessionViewHandlers:
             title=f"🏆 All Players - {latest_date}",
             description=f"All {player_count} players from {total_maps} maps",
             color=0xFEE75C,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         medals = ["🥇", "🥈", "🥉"]
@@ -1012,7 +1012,7 @@ class SessionViewHandlers:
                 title=f"🗺️ {display_map_name.upper()} - Map Complete!",
                 description=f"Aggregate stats from **{len(map_session_ids)} rounds** • {len(players)} players",
                 color=discord.Color.gold(),
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Rank emoji helper
@@ -1257,7 +1257,7 @@ class SessionViewHandlers:
             title=title,
             description=description,
             color=color,
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         # Rank emoji helper
@@ -1435,7 +1435,7 @@ class SessionViewHandlers:
             title=f"⏱️ Time Audit - {latest_date}",
             description=description,
             color=discord.Color.blurple(),
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         total_played = 0
@@ -1645,7 +1645,7 @@ class SessionViewHandlers:
                 "`denied_playtime` is in **seconds**; `time_dead_minutes` is in **minutes**."
             ),
             color=discord.Color.gold(),
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
         embed.set_footer(text=f"Rows: {len(rows)}")
         await ctx.send(embed=embed, file=file)

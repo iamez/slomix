@@ -120,9 +120,9 @@ class SessionCog(commands.Cog, name="Session Commands"):
                 date_lower = date_arg.lower()
 
                 if date_lower == "yesterday":
-                    target_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+                    target_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 elif date_lower == "today":
-                    target_date = datetime.now().strftime("%Y-%m-%d")
+                    target_date = datetime.now().strftime("%Y-%m-%d")  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 elif "-" in date_arg:
                     # Already in YYYY-MM-DD format
                     target_date = date_arg
@@ -205,7 +205,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                         title=f"COMBAT STATS (OFFENSE)  -  {target_date}",
                         description=f"Kills/Deaths, Damage, K/D, DPM - Top players across {total_maps} maps",
                         color=0x5865F2,
-                        timestamp=datetime.now()
+                        timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     )
                     embed1.set_image(
                         url=f"attachment://session_{target_date}_offense.png"
@@ -221,7 +221,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                         title=f"COMBAT STATS (DEFENSE/SUPPORT)  -  {target_date}",
                         description="Revives, Time Alive/Dead, Gibs, Headshots",
                         color=0x57F287,
-                        timestamp=datetime.now()
+                        timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     )
                     embed2.set_image(
                         url=f"attachment://session_{target_date}_defense.png"
@@ -237,7 +237,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                         title=f"ADVANCED METRICS  -  {target_date}",
                         description="FragPotential, Damage Efficiency, Denied Playtime, Survival Rate, Useful Kills, Self Kills, Full Selfkills",
                         color=0xE74C3C,
-                        timestamp=datetime.now()
+                        timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     )
                     embed3.set_image(
                         url=f"attachment://session_{target_date}_metrics.png"
@@ -253,7 +253,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                         title=f"PLAYSTYLE ANALYSIS  -  {target_date}",
                         description="Player playstyles based on combat metrics",
                         color=0x9B59B6,
-                        timestamp=datetime.now()
+                        timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     )
                     embed4.set_image(
                         url=f"attachment://session_{target_date}_playstyle.png"
@@ -270,7 +270,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                             title=f"DPM TIMELINE  -  {target_date}",
                             description="DPM evolution across rounds - Performance trends",
                             color=0xF39C12,
-                            timestamp=datetime.now()
+                            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                         )
                         embed5.set_image(
                             url=f"attachment://session_{target_date}_timeline.png"
@@ -409,7 +409,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                     # Month name provided - use current year
                     from datetime import datetime
 
-                    current_year = datetime.now().year
+                    current_year = datetime.now().year  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     month_filter = f"{current_year}-{month_names[month_lower]}"
                 elif "-" in month:
                     # Full YYYY-MM format
@@ -418,7 +418,7 @@ class SessionCog(commands.Cog, name="Session Commands"):
                     # Just month number - use current year
                     from datetime import datetime
 
-                    current_year = datetime.now().year
+                    current_year = datetime.now().year  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     month_filter = f"{current_year}-{int(month):02d}"
                 else:
                     await ctx.send(

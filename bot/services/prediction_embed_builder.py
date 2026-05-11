@@ -62,7 +62,7 @@ class PredictionEmbedBuilder:
             title="🔮 Match Prediction",
             description=f"**{split_data['format']}** Competitive Match",
             color=color,
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         # Add prediction probabilities
@@ -172,7 +172,7 @@ class PredictionEmbedBuilder:
             title="🏆 Match Result",
             description=f"**{split_data['format']}** Match Complete",
             color=color,
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         # Add result
@@ -339,7 +339,7 @@ class PredictionEmbedBuilder:
         embed = discord.Embed(
             title=title,
             color=self.COLOR_NEUTRAL,
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         if not predictions:

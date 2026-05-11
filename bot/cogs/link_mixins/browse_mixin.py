@@ -166,7 +166,7 @@ class _LinkBrowseMixin:
                             last_date = datetime.fromisoformat(
                                 last_played_str.replace("Z", "+00:00") if "Z" in last_played_str else last_played_str
                             )
-                            days_ago = (datetime.now() - last_date).days
+                            days_ago = (datetime.now() - last_date).days  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                             if days_ago == 0:
                                 last_str = "today"
                             elif days_ago == 1:
@@ -308,7 +308,7 @@ class _LinkBrowseMixin:
                 title="🔍 Player Search Results",
                 description=f"Search: **'{search_term}'** • Found **{len(guid_set)}** players (showing top {len(guid_list)})",
                 color=0x5865F2,  # Discord Blurple
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             for guid in guid_list:

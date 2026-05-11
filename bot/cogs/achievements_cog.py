@@ -56,7 +56,7 @@ class AchievementsCog(commands.Cog, name="Achievements"):
                 "no more stacking confusion!"
             ),
             color=0xFFD700,  # Gold
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         # Core Achievements
@@ -110,7 +110,7 @@ class AchievementsCog(commands.Cog, name="Achievements"):
             title="⚔️ Combat Achievements",
             description="Earn these badges through kills, games played, and K/D ratio",
             color=0xE74C3C,  # Red
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         embed1.add_field(
@@ -160,7 +160,7 @@ class AchievementsCog(commands.Cog, name="Achievements"):
             title="💉 Support & Objective Achievements",
             description="Earn these through teamwork and objective play",
             color=0x57F287,  # Green
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         embed2.add_field(
@@ -223,7 +223,7 @@ class AchievementsCog(commands.Cog, name="Achievements"):
             title="❓ How Achievement Badges Work",
             description="Everything you need to know about earning and displaying badges",
             color=0x5865F2,  # Discord Blurple
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         embed3.add_field(

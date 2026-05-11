@@ -63,7 +63,7 @@ class _AdminAlertMixin:
                 title=f"{emoji} {title}",
                 description=description[:4000],  # Discord limit
                 color=color,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
             embed.set_footer(text=f"Severity: {severity.upper()}")
 

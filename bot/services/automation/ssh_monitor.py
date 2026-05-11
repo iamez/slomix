@@ -226,7 +226,7 @@ class SSHMonitor:
 
         while self.is_monitoring:
             try:
-                start_time = datetime.now()
+                start_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
                 # Voice-conditional check: only check SSH if players are in voice
                 if self.voice_conditional:
@@ -234,13 +234,13 @@ class SSHMonitor:
 
                     if voice_count > 0:
                         # Players in voice - update activity time and check SSH
-                        self.last_voice_activity_time = datetime.now()
+                        self.last_voice_activity_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                         logger.info(f"🎙️ {voice_count} player(s) in voice - checking SSH")
 
                     elif voice_count == 0:
                         # No players in voice - check if we're in grace period
                         if self.last_voice_activity_time:
-                            time_since_activity = (datetime.now() - self.last_voice_activity_time).total_seconds() / 60
+                            time_since_activity = (datetime.now() - self.last_voice_activity_time).total_seconds() / 60  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
                             if time_since_activity < self.grace_period_minutes:
                                 # Still in grace period - continue checking
@@ -263,12 +263,12 @@ class SSHMonitor:
                 await self._check_for_new_files()
 
                 # Track check time
-                check_duration = (datetime.now() - start_time).total_seconds()
+                check_duration = (datetime.now() - start_time).total_seconds()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 self.check_times.append(check_duration)
                 if len(self.check_times) > 100:
                     self.check_times.pop(0)  # Keep last 100
 
-                self.last_check_time = datetime.now()
+                self.last_check_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
                 # Wait before next check
                 await asyncio.sleep(self.check_interval)
@@ -339,7 +339,7 @@ class SSHMonitor:
             # ALWAYS filter by time to avoid processing old files (not just first check)
             # This prevents re-processing thousands of old files if processed_files table gets cleared
             if self.startup_lookback_hours > 0:
-                cutoff_time = datetime.now() - timedelta(hours=self.startup_lookback_hours)
+                cutoff_time = datetime.now() - timedelta(hours=self.startup_lookback_hours)  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 time_filtered_files = []
 
                 for f in stats_files:
@@ -431,7 +431,7 @@ class SSHMonitor:
         """
         try:
             logger.info(f"📥 Processing new file: {filename}")
-            start_time = datetime.now()
+            start_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
             # Download file
             local_path = await self._download_file(filename)
@@ -461,7 +461,7 @@ class SSHMonitor:
             self.files_processed_count += 1
 
             # Track processing time
-            process_duration = (datetime.now() - start_time).total_seconds()
+            process_duration = (datetime.now() - start_time).total_seconds()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             logger.info(f"✅ Processed {filename} in {process_duration:.2f}s")
 
             # Reset error count on success
@@ -480,7 +480,7 @@ class SSHMonitor:
 
         from bot.automation.ssh_handler import configure_ssh_host_key_policy
 
-        download_start = datetime.now()
+        download_start = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         ssh = None
 
         try:
@@ -518,7 +518,7 @@ class SSHMonitor:
                 scp.get(remote_path, local_path)
 
             # Calculate download time
-            download_duration = (datetime.now() - download_start).total_seconds()
+            download_duration = (datetime.now() - download_start).total_seconds()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
             return local_path, download_duration
 
@@ -707,7 +707,7 @@ class SSHMonitor:
             title=f"🎮 Round {data['round_num']} Complete!",
             description=f"**Map:** {data['map_name']}\n**Players:** {data['player_count']}",
             color=discord.Color.green(),
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         # Get all players with comprehensive stats
@@ -962,7 +962,7 @@ class SSHMonitor:
             title=f"🏆 Match Complete - {map_name}",
             description="**Stopwatch Mode** - Combined stats from both rounds",
             color=discord.Color.gold(),
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         # Match outcome with stopwatch times

@@ -220,7 +220,7 @@ async def get_stats_overview(db: DatabaseAdapter = Depends(get_db)):
     """Get homepage overview statistics."""
     lookback_days = 14
     start_date_str = (
-        (datetime.now() - timedelta(days=lookback_days))
+        (datetime.now() - timedelta(days=lookback_days))  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
         .date()
         .strftime("%Y-%m-%d")
     )
@@ -254,7 +254,7 @@ async def get_activity_calendar(
 ):
     """Return a simple activity calendar (rounds per day) for the last N days."""
     lookback_days = max(1, min(days, 365))
-    start_date = (datetime.now() - timedelta(days=lookback_days)).date().strftime(
+    start_date = (datetime.now() - timedelta(days=lookback_days)).date().strftime(  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
         "%Y-%m-%d"
     )
 

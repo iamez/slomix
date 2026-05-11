@@ -180,7 +180,7 @@ class _StatsCompareMixin:
                     title="📊 Player Comparison (No Chart)",
                     description=f"**{p1_stats['name']}** vs **{p2_stats['name']}**",
                     color=0x9B59B6,
-                    timestamp=datetime.now(),
+                    timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 )
 
                 embed.add_field(
@@ -356,7 +356,7 @@ class _StatsCompareMixin:
                 title="📊 Player Comparison",
                 description=f"**{p1_stats['name']}** vs **{p2_stats['name']}**",
                 color=0x9B59B6,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Add stats comparison

@@ -75,14 +75,14 @@ class DatabaseMaintenance:
             return False
 
         try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
             if database_type in ("postgresql", "postgres"):
                 backup_path = await self._backup_postgres(timestamp)
             else:
                 backup_path = await self._backup_sqlite_file(timestamp)
 
-            self.last_backup = datetime.now()
+            self.last_backup = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
             # Cleanup old backups
             await self._cleanup_old_backups()
@@ -189,7 +189,7 @@ class DatabaseMaintenance:
                 await self.bot.db_adapter.execute("VACUUM", ())
                 await self.bot.db_adapter.execute("ANALYZE", ())
 
-            self.last_vacuum = datetime.now()
+            self.last_vacuum = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             logger.info("✅ Database vacuumed and optimized")
             return True
 
@@ -203,7 +203,7 @@ class DatabaseMaintenance:
             if not os.path.exists(self.log_dir):
                 return 0
 
-            cutoff = datetime.now() - timedelta(days=self.log_retention_days)
+            cutoff = datetime.now() - timedelta(days=self.log_retention_days)  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             cleaned = 0
 
             for filename in os.listdir(self.log_dir):
@@ -215,7 +215,7 @@ class DatabaseMaintenance:
                         cleaned += 1
 
             if cleaned > 0:
-                self.last_cleanup = datetime.now()
+                self.last_cleanup = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 logger.info(f"✅ Cleaned {cleaned} old log files")
 
             return cleaned
@@ -251,7 +251,7 @@ class DatabaseMaintenance:
                     title=title,
                     description=message,
                     color=discord.Color.green(),
-                    timestamp=datetime.now()
+                    timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 )
                 await channel.send(embed=embed)
         except Exception as e:

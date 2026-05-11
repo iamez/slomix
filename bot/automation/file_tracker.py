@@ -260,7 +260,7 @@ class FileTracker:
                     file_hash,
                     success,
                     error_msg,
-                    datetime.now(),
+                    datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 ),
             )
 

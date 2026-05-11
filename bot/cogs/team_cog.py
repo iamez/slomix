@@ -108,7 +108,7 @@ class TeamCog(commands.Cog):
                 title=f"🎮 Team Rosters - {date}",
                 description="Achievement badges shown next to player names",
                 color=0x5865F2,  # Discord Blurple
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Add team rosters with badges
@@ -180,7 +180,7 @@ class TeamCog(commands.Cog):
                     title="✅ Team Names Updated",
                     description=f"**{team_a}** ⚔️ **{team_b}**",
                     color=0x57F287,  # Green
-                    timestamp=datetime.now()
+                    timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 )
                 embed.add_field(
                     name="📅 Session Date",
@@ -250,7 +250,7 @@ class TeamCog(commands.Cog):
                     f"`{changes.get('previous_date')}` ➜ `{current_date}`"
                 ),
                 color=0xF26522,  # Orange
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Add summary
@@ -405,7 +405,7 @@ class TeamCog(commands.Cog):
                 title="🏆 Session Score",
                 description=description,
                 color=color,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Score display
@@ -496,7 +496,7 @@ class TeamCog(commands.Cog):
                 title="🏆 Team Pool",
                 description="Available team names for random assignment",
                 color=0x5865F2,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             team_list = ""
@@ -560,7 +560,7 @@ class TeamCog(commands.Cog):
                 title="🎲 Teams Assigned",
                 description=f"Session: `{date}`",
                 color=color_a or 0x5865F2,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             embed.add_field(
@@ -602,7 +602,7 @@ class TeamCog(commands.Cog):
                 title=f"📊 {team_name} Record",
                 description=f"Last {days} days",
                 color=color,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Overall record
@@ -680,7 +680,7 @@ class TeamCog(commands.Cog):
                 title=f"⚔️ {team_a} vs {team_b}",
                 description="Head-to-Head Record",
                 color=color,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Session record
@@ -768,7 +768,7 @@ class TeamCog(commands.Cog):
                     title="✅ Team Added",
                     description=f"**{name}** added to the pool",
                     color=color or 0x57F287,
-                    timestamp=datetime.now()
+                    timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 )
                 embed.set_footer(text=f"Added by {ctx.author.name}")
                 await ctx.send(embed=embed)

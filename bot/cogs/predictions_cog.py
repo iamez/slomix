@@ -92,7 +92,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                 title="🔮 Recent Match Predictions",
                 description=f"Showing last {len(rows)} prediction(s)",
                 color=0x3498DB,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             for row in rows:
@@ -159,7 +159,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                 await ctx.send("❌ Days must be between 1 and 365")
                 return
 
-            cutoff_date = datetime.now() - timedelta(days=days)
+            cutoff_date = datetime.now() - timedelta(days=days)  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
             # Fetch statistics
             query = """
@@ -210,7 +210,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                 title="📈 Prediction Accuracy Statistics",
                 description=f"Analysis of last **{days} days**",
                 color=color,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Overall stats
@@ -353,7 +353,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                 title="🔮 Your Match Predictions",
                 description=f"Predictions for **{ctx.author.display_name}** (last 10 matches)",
                 color=0x3498DB,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             for row in rows:
@@ -424,7 +424,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
         if isinstance(timestamp, str):
             timestamp = datetime.fromisoformat(timestamp)
 
-        now = datetime.now()
+        now = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         if timestamp.tzinfo:
             # Make now timezone-aware if timestamp is
             from datetime import timezone
@@ -465,7 +465,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                 await ctx.send("❌ Days must be between 1 and 365")
                 return
 
-            cutoff_date = datetime.now() - timedelta(days=days)
+            cutoff_date = datetime.now() - timedelta(days=days)  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
             # Get daily accuracy trends
             query = """
@@ -493,7 +493,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                 title="📈 Prediction Accuracy Trends",
                 description=f"Daily trends over last {days} days",
                 color=0x3498DB,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Calculate overall trend
@@ -632,7 +632,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                 HAVING COUNT(CASE WHEN actual_winner IS NOT NULL THEN 1 END) >= 3
             """
 
-            cutoff_date = datetime.now() - timedelta(days=30)
+            cutoff_date = datetime.now() - timedelta(days=30)  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             rows = await self.db.fetch_all(query, (cutoff_date,))
 
             if not rows:
@@ -676,7 +676,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                 title=title,
                 description=f"{desc}\n*Last 30 days, minimum 3 completed matches*",
                 color=color,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Add leaderboard entries
@@ -769,7 +769,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                 title=f"🗺️ Map Prediction Statistics{f': {map_name}' if map_name else ''}",
                 description="Prediction performance by map",
                 color=0x3498DB,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             for map_name_val, total, completed, correct, avg_acc, avg_prob in rows:

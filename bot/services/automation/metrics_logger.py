@@ -60,7 +60,7 @@ class MetricsLogger:
         self.error_counts = defaultdict(int)
 
         # Start time
-        self.start_time = datetime.now()
+        self.start_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
         # Metrics database path (explicit config path wins)
         self.metrics_db_path = db_path or os.path.join(log_dir, "metrics.db")
@@ -183,7 +183,7 @@ class MetricsLogger:
             success: Whether the event succeeded
         """
         try:
-            timestamp = datetime.now().isoformat()
+            timestamp = datetime.now().isoformat()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
             # Store in memory
             event = {
@@ -232,7 +232,7 @@ class MetricsLogger:
             context: Additional context about when/where error occurred
         """
         try:
-            timestamp = datetime.now().isoformat()
+            timestamp = datetime.now().isoformat()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
             # Store in memory
             error = {
@@ -279,7 +279,7 @@ class MetricsLogger:
             unit: Unit of measurement (e.g., 'ms', 'seconds', 'bytes')
         """
         try:
-            timestamp = datetime.now().isoformat()
+            timestamp = datetime.now().isoformat()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
             # Store in memory
             metric = {
@@ -323,7 +323,7 @@ class MetricsLogger:
             cpu_percent: CPU usage percentage
         """
         try:
-            timestamp = datetime.now().isoformat()
+            timestamp = datetime.now().isoformat()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
             await self._execute_write(
                 """
@@ -352,12 +352,12 @@ class MetricsLogger:
         for attempt in range(2):
             try:
                 await self._ensure_initialized()
-                cutoff_time = datetime.now() - timedelta(hours=hours)
+                cutoff_time = datetime.now() - timedelta(hours=hours)  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 cutoff_str = cutoff_time.isoformat()
                 db = await self._get_db_connection()
 
                 report = {
-                    'generated_at': datetime.now().isoformat(),
+                    'generated_at': datetime.now().isoformat(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     'time_range_hours': hours,
                     'summary': {},
                     'events': {},
@@ -487,7 +487,7 @@ class MetricsLogger:
         """
         try:
             if not filepath:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 filepath = os.path.join(self.log_dir, f"metrics_export_{timestamp}.json")
 
             # Generate comprehensive report
@@ -510,7 +510,7 @@ class MetricsLogger:
 
     def get_summary(self) -> dict[str, Any]:
         """Get quick summary of current metrics"""
-        uptime = datetime.now() - self.start_time
+        uptime = datetime.now() - self.start_time  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
         return {
             'uptime_seconds': int(uptime.total_seconds()),

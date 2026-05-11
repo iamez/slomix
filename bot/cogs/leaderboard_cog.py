@@ -321,7 +321,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 title="📊 Player Statistics",
                 description=f"**{formatted_name}**",
                 color=0x5865F2,  # Discord Blurple
-                timestamp=datetime.now(),
+                timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Enhanced stat display with better formatting
@@ -760,7 +760,7 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
                 embed = discord.Embed(
                     title=title,
                     color=0xFFD700,  # Gold
-                    timestamp=datetime.now(),
+                    timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 )
 
                 # Format results based on stat type

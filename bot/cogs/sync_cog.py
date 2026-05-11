@@ -88,7 +88,7 @@ class SyncCog(commands.Cog, name="Sync Commands"):
                 return True
             date_str = "-".join(parts[:3])
             file_date = datetime.strptime(date_str, "%Y-%m-%d")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
-            cutoff_date = datetime.now() - timedelta(days=days_back)
+            cutoff_date = datetime.now() - timedelta(days=days_back)  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             return file_date >= cutoff_date
         except Exception:
             return True
@@ -289,7 +289,7 @@ class SyncCog(commands.Cog, name="Sync Commands"):
             embed = discord.Embed(
                 title="✅ Stats Sync Complete!",
                 color=0x00FF00,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
             embed.add_field(
                 name="📥 Download Phase",
@@ -491,7 +491,7 @@ class SyncCog(commands.Cog, name="Sync Commands"):
             embed = discord.Embed(
                 title="✅ Historical Sync Complete!",
                 color=0x00FF00 if failed == 0 else 0xFFA500,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
             embed.add_field(
                 name="📊 Summary",

@@ -1028,7 +1028,7 @@ async def get_live_status(
         "player_count": server_status.player_count,
         "max_players": server_status.max_players,
         "ping_ms": server_status.ping_ms,
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat(),  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
     }
 
     if server_status.error:

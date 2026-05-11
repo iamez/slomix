@@ -258,7 +258,7 @@ class _LinkInteractiveMixin:
             title=f"📝 {ctx.author.display_name}'s Aliases",
             description=f"All names you've used in-game • `{len(aliases)}` total aliases",
             color=0x5865F2,
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         # Group aliases for better display

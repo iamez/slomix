@@ -371,7 +371,7 @@ class PredictionEngine:
         """
 
         # Look back 90 days
-        cutoff = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
+        cutoff = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
         try:
             rows = await self.db.fetch_all(query, (cutoff,))

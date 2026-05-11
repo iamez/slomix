@@ -81,7 +81,7 @@ class _MonitorTasksMixin:
             if ws_active and hasattr(self.ws_client, 'last_notification'):
                 last_notif = self.ws_client.last_notification
                 if last_notif:
-                    time_since_notif = (datetime.now() - last_notif).total_seconds()
+                    time_since_notif = (datetime.now() - last_notif).total_seconds()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     # If no notification in 5 min, WebSocket might be stale
                     if time_since_notif > 300:
                         ws_active = False
@@ -106,7 +106,7 @@ class _MonitorTasksMixin:
                 except ImportError:
                     cet = None
 
-            now = datetime.now(cet) if cet else datetime.now()
+            now = datetime.now(cet) if cet else datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             hour = now.hour
 
             # Skip SSH check during dead hours (02:00-11:00)
@@ -131,7 +131,7 @@ class _MonitorTasksMixin:
             grace_period_active = False
             grace_period_seconds = self.config.monitoring_grace_period_minutes * 60
             if hasattr(self, 'last_file_download_time') and self.last_file_download_time:
-                time_since_last_file = (datetime.now() - self.last_file_download_time).total_seconds()
+                time_since_last_file = (datetime.now() - self.last_file_download_time).total_seconds()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 grace_period_active = time_since_last_file < grace_period_seconds
 
             if total_players >= 6 or grace_period_active:
@@ -225,7 +225,7 @@ class _MonitorTasksMixin:
                         logger.info(f"✅ Downloaded in {download_time:.2f}s: {local_path}")
 
                         # Track download time for grace period logic
-                        self.last_file_download_time = datetime.now()
+                        self.last_file_download_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
                         # Wait 3 seconds for file to fully write
                         logger.debug("⏳ Waiting 3s for file to fully write...")
@@ -367,7 +367,7 @@ class _MonitorTasksMixin:
             if total_players < self.session_end_threshold:
                 if self.session_active and not self.session_end_timer:
                     # Start timer
-                    self.session_end_timer = datetime.now()
+                    self.session_end_timer = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     logger.info(
                         f"⏱️ Session end timer started "
                         f"({total_players} < {self.session_end_threshold})"
@@ -375,7 +375,7 @@ class _MonitorTasksMixin:
 
                 elif self.session_end_timer:
                     # Check if timer expired
-                    elapsed = (datetime.now() - self.session_end_timer).seconds
+                    elapsed = (datetime.now() - self.session_end_timer).seconds  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     if elapsed >= self.session_end_delay:
                         logger.info(
                             "🏁 3 minutes elapsed - auto-ending session"

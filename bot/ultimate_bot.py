@@ -146,7 +146,7 @@ class UltimateETLegacyBot(
         self.db_path = None
 
         # 🎮 Bot State
-        self.bot_startup_time = datetime.now()  # Track when bot started (for auto-import filtering)
+        self.bot_startup_time = datetime.now()  # Track when bot started (for auto-import filtering)  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         self.current_session = None
         self.processed_files = set()
         self.processed_endstats_files = set()  # In-memory set to prevent race conditions
@@ -837,7 +837,7 @@ class UltimateETLegacyBot(
                 return
 
             # Track download time for grace period logic (fallback SSH uses this)
-            self.last_file_download_time = datetime.now()
+            self.last_file_download_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
             # Wait 3 seconds for file to fully write on remote
             logger.debug("⏳ Waiting 3s for file to fully write...")
@@ -1351,7 +1351,7 @@ class UltimateETLegacyBot(
                 title="🏆 Achievement Round Summary",
                 description="New achievements unlocked this round.",
                 color=discord.Color.gold(),
-                timestamp=datetime.now(),
+                timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
             embed.add_field(
                 name=f"Players ({len(by_player)})",
@@ -1794,7 +1794,7 @@ class UltimateETLegacyBot(
 
         cutoff = None
         if self.config.gametimes_startup_lookback_hours > 0:
-            cutoff = datetime.now().timestamp() - (self.config.gametimes_startup_lookback_hours * 3600)
+            cutoff = datetime.now().timestamp() - (self.config.gametimes_startup_lookback_hours * 3600)  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
         gametime_files = [f for f in files if f.startswith("gametime-") and f.endswith(".json")]
         if not gametime_files:
