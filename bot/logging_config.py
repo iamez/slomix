@@ -180,6 +180,18 @@ def setup_logging(log_level=logging.INFO):
     return root_logger
 
 
+def _exc_info_for(error):
+    """Return a value safe to pass as ``exc_info=`` to logger.error.
+
+    Callers sometimes pass an exception instance, sometimes a pre-formatted
+    error string (e.g. ``str(e)`` or a parser error message). ``logger.error``
+    only treats a BaseException as a traceback source — strings fall through
+    to ``sys.exc_info()``, which is ``(None, None, None)`` outside an active
+    ``except``, silently dropping the traceback.
+    """
+    return error if isinstance(error, BaseException) else False
+
+
 def log_command_execution(ctx, command_name, start_time=None, end_time=None, error=None):
     """
     Log command execution with full context
@@ -209,7 +221,7 @@ def log_command_execution(ctx, command_name, start_time=None, end_time=None, err
     if error:
         logger.error(
             f"❌ FAILED: {command_name}{duration} | User: {user} | Guild: {guild} | Channel: {channel} | Error: {error}",
-            exc_info=error
+            exc_info=_exc_info_for(error)
         )
     else:
         logger.info(
@@ -232,7 +244,7 @@ def log_database_operation(operation, details, duration=None, error=None):
     duration_str = f" [{duration:.3f}s]" if duration else ""
 
     if error:
-        logger.error(f"❌ DB {operation} FAILED{duration_str}: {details} | Error: {error}", exc_info=error)
+        logger.error(f"❌ DB {operation} FAILED{duration_str}: {details} | Error: {error}", exc_info=_exc_info_for(error))
     else:
         logger.debug(f"✓ DB {operation}{duration_str}: {details}")
 
@@ -254,7 +266,7 @@ def log_stats_import(filename, round_count=0, player_count=0, weapon_count=0, du
     duration_str = f" [{duration:.2f}s]" if duration else ""
 
     if error:
-        logger.error(f"❌ IMPORT FAILED{duration_str}: {filename} | Error: {error}", exc_info=error)
+        logger.error(f"❌ IMPORT FAILED{duration_str}: {filename} | Error: {error}", exc_info=_exc_info_for(error))
     else:
         logger.info(
             f"✓ IMPORTED{duration_str}: {filename} | "
@@ -289,7 +301,7 @@ def log_automation_event(event_type, details, success=True, error=None):
     logger = logging.getLogger('bot.automation')
 
     if error:
-        logger.error(f"❌ {event_type} FAILED: {details} | Error: {error}", exc_info=error)
+        logger.error(f"❌ {event_type} FAILED: {details} | Error: {error}", exc_info=_exc_info_for(error))
     elif success:
         logger.info(f"✓ {event_type}: {details}")
     else:

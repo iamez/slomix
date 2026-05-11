@@ -2019,7 +2019,7 @@ class UltimateETLegacyBot(
             f"!{ctx.command.name}" if ctx.command else "unknown",
             start_time=getattr(ctx, 'command_start_time', None),
             end_time=time.time(),
-            error=str(error)
+            error=error
         )
 
         if isinstance(error, commands.CommandNotFound):
