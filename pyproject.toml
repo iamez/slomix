@@ -67,6 +67,10 @@ disable = [
 [tool.ruff]
 line-length = 120
 target-version = "py311"
+# Pin a minimum ruff version so CI / dev environments don't silently
+# install an older release that doesn't recognize newer rule codes
+# (FURB*, LOG014, PIE*, PERF*, etc.) and skip those checks.
+required-version = ">=0.15.0"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "S", "T20", "DTZ001", "DTZ003", "DTZ005", "DTZ006", "DTZ007", "DTZ011", "FURB162", "FURB171", "LOG014", "PIE790", "PIE810", "PERF102", "PERF401", "ISC003", "TID252", "PT003"]
