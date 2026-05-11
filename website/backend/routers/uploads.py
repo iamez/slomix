@@ -59,13 +59,6 @@ def _require_user(request: Request) -> dict[str, Any]:
     return user
 
 
-def _optional_user(request: Request) -> dict[str, Any] | None:
-    user = request.session.get("user")
-    if user and "id" in user:
-        return user
-    return None
-
-
 # ---------------------------------------------------------------------------
 # Lazy storage import (avoid import-time side effects)
 # ---------------------------------------------------------------------------

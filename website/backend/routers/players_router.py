@@ -14,6 +14,7 @@ from shared.utils import escape_like_pattern
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
+from website.backend.middleware.auth_helpers import require_ajax_csrf_header as _require_ajax_csrf_header
 from website.backend.rate_limit import limiter
 from website.backend.routers.api_helpers import (
     batch_resolve_display_names,
@@ -28,11 +29,6 @@ logger = get_app_logger("api.players")
 
 class LinkPlayerRequest(BaseModel):
     player_name: str
-
-
-def _require_ajax_csrf_header(request: Request) -> None:
-    if request.headers.get("x-requested-with", "").lower() != "xmlhttprequest":
-        raise HTTPException(status_code=403, detail="Missing required CSRF header")
 
 
 @router.get("/player/search")
