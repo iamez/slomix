@@ -6,6 +6,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.14.1](https://github.com/iamez/slomix/compare/v1.14.0...v1.14.1) (2026-05-11)
+
+
+### Bug Fixes
+
+* **deprecation:** kill datetime.fromtimestamp() + date.today() raw calls ([#216](https://github.com/iamez/slomix/issues/216)) ([345bc6c](https://github.com/iamez/slomix/commit/345bc6c418e96e50586a574773f1f0a8288507b9))
+* **deprecation:** replace datetime.utcnow() with timezone-aware UTC ([#214](https://github.com/iamez/slomix/issues/214)) ([72f2d00](https://github.com/iamez/slomix/commit/72f2d001c723ce9fa45eaf2899e041711c2d5dbd))
+* **lint:** enable DTZ007 with noqa rationales (49 sites) ([#222](https://github.com/iamez/slomix/issues/222)) ([ff06278](https://github.com/iamez/slomix/commit/ff06278fdf2a55c94330bc7a39e82ed3ee8b742f))
+* mega audit v6 — verified-real fixes (12 fixes, 16 false positives ruled out) ([#210](https://github.com/iamez/slomix/issues/210)) ([69f3eb9](https://github.com/iamez/slomix/commit/69f3eb9ba4d10809e7bf31aecc39d58ae263053f))
+* **storytelling:** filter NULL/0 round_start_unix in enabler + lurker ([#228](https://github.com/iamez/slomix/issues/228)) ([f61888f](https://github.com/iamez/slomix/commit/f61888fd2bcb4fa6c73a4389175994a0f48e7fe8))
+
 ## [1.14.0](https://github.com/iamez/slomix/compare/v1.13.3...v1.14.0) (2026-05-10)
 
 
