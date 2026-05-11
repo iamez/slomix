@@ -564,8 +564,8 @@ async def get_hall_of_fame(
         param_idx += 2
     elif period == "custom" and start_date and end_date:
         try:
-            datetime.strptime(start_date, "%Y-%m-%d")
-            datetime.strptime(end_date, "%Y-%m-%d")
+            datetime.strptime(start_date, "%Y-%m-%d")  # noqa: DTZ007 date-only parsing, no time component used
+            datetime.strptime(end_date, "%Y-%m-%d")  # noqa: DTZ007 date-only parsing, no time component used
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
         date_filter = f"AND pcs.round_date >= ${param_idx} AND pcs.round_date <= ${param_idx + 1}"

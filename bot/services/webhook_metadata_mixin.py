@@ -69,7 +69,7 @@ class _WebhookMetadataMixin:
         date_part, time_part, map_name, round_text = match.groups()
         try:
             filename_ts = int(
-                datetime.strptime(
+                datetime.strptime(  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
                     f"{date_part} {time_part}", "%Y-%m-%d %H%M%S"
                 ).timestamp()
             )

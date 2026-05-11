@@ -87,7 +87,7 @@ class SyncCog(commands.Cog, name="Sync Commands"):
             if len(parts) < 3:
                 return True
             date_str = "-".join(parts[:3])
-            file_date = datetime.strptime(date_str, "%Y-%m-%d")
+            file_date = datetime.strptime(date_str, "%Y-%m-%d")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
             cutoff_date = datetime.now() - timedelta(days=days_back)
             return file_date >= cutoff_date
         except Exception:

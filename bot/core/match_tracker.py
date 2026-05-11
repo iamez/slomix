@@ -137,14 +137,14 @@ class MatchTracker:
 
         # If multiple matches, use the one closest in time
         if len(matches) > 1:
-            r2_time = datetime.strptime(components['time'], '%H%M%S')
+            r2_time = datetime.strptime(components['time'], '%H%M%S')  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
 
             closest = None
             min_diff = timedelta(hours=24)  # Max difference
 
             for match in matches:
                 r1_components = MatchTracker.extract_match_components(match.name)
-                r1_time = datetime.strptime(r1_components['time'], '%H%M%S')
+                r1_time = datetime.strptime(r1_components['time'], '%H%M%S')  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
 
                 diff = abs(r2_time - r1_time)
                 if diff < min_diff:

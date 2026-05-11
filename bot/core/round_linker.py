@@ -37,7 +37,7 @@ def _parse_round_datetime(round_date: str | None, round_time: str | None) -> dat
         return None
 
     try:
-        return datetime.strptime(f"{round_date} {clean_time}", "%Y-%m-%d %H%M%S")
+        return datetime.strptime(f"{round_date} {clean_time}", "%Y-%m-%d %H%M%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
     except ValueError:
         return None
 

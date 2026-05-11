@@ -473,7 +473,7 @@ class C0RNP0RN3StatsParser:
         # STEP 3: If no same-day files, check previous date (midnight-crossing)
         if not potential_files:
             try:
-                date_obj = datetime.strptime(date, '%Y-%m-%d')
+                date_obj = datetime.strptime(date, '%Y-%m-%d')  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
                 prev_date = (date_obj - timedelta(days=1)).strftime('%Y-%m-%d')
                 prev_pattern = f"{prev_date}-*-{map_name}-round-1.txt"
 
@@ -494,7 +494,7 @@ class C0RNP0RN3StatsParser:
 
         # Find the best Round 1: closest before Round 2, within round_match_window_minutes
         try:
-            r2_datetime = datetime.strptime(f"{date} {time_part}", '%Y-%m-%d %H%M%S')
+            r2_datetime = datetime.strptime(f"{date} {time_part}", '%Y-%m-%d %H%M%S')  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
         except (ValueError, IndexError):
             return None
 
@@ -510,7 +510,7 @@ class C0RNP0RN3StatsParser:
                 try:
                     r1_date = '-'.join(r1_parts[:3])  # YYYY-MM-DD
                     r1_time = r1_parts[3]  # HHMMSS
-                    r1_datetime = datetime.strptime(f"{r1_date} {r1_time}", '%Y-%m-%d %H%M%S')
+                    r1_datetime = datetime.strptime(f"{r1_date} {r1_time}", '%Y-%m-%d %H%M%S')  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
 
                     # Round 1 must be BEFORE Round 2
                     if r1_datetime < r2_datetime:

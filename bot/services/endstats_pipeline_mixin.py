@@ -109,7 +109,7 @@ class _EndstatsPipelineMixin:
                     return None
                 date_str, time_str = match.groups()
                 try:
-                    dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H%M%S")
+                    dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H%M%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
                     return int(dt.timestamp())
                 except ValueError:
                     return None
@@ -265,7 +265,7 @@ class _EndstatsPipelineMixin:
     def _parse_endstats_filename_timestamp(filename: str) -> datetime | None:
         """Extract datetime from endstats filename (YYYY-MM-DD-HHMMSS-...)."""
         try:
-            return datetime.strptime(filename[:17], "%Y-%m-%d-%H%M%S")
+            return datetime.strptime(filename[:17], "%Y-%m-%d-%H%M%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
         except (ValueError, IndexError):
             return None
 

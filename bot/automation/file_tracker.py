@@ -98,7 +98,7 @@ class FileTracker:
                 try:
                     # Parse datetime from filename: YYYY-MM-DD-HHMMSS-...
                     datetime_str = filename[:17]  # Get YYYY-MM-DD-HHMMSS
-                    file_datetime = datetime.strptime(datetime_str, "%Y-%m-%d-%H%M%S")
+                    file_datetime = datetime.strptime(datetime_str, "%Y-%m-%d-%H%M%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
 
                     # Get lookback window (default: 7 days = 168 hours)
                     lookback_hours = getattr(self.config, 'STARTUP_LOOKBACK_HOURS', 168)
@@ -353,7 +353,7 @@ class FileTracker:
 
                 for filename in unimported:
                     try:
-                        file_datetime = datetime.strptime(filename[:17], "%Y-%m-%d-%H%M%S")
+                        file_datetime = datetime.strptime(filename[:17], "%Y-%m-%d-%H%M%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
                         if file_datetime >= cutoff_time:
                             actionable_unimported.append(filename)
                         else:

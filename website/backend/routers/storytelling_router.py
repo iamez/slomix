@@ -44,7 +44,7 @@ _MIN_SESSION_DATE = date(2020, 1, 1)
 
 def _parse_date(val: str) -> date:
     try:
-        parsed = datetime.strptime(val, "%Y-%m-%d").date()
+        parsed = datetime.strptime(val, "%Y-%m-%d").date()  # noqa: DTZ007 date-only parsing, no time component used
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
     # UTC date — avoids midnight-edge drift on non-UTC servers, consistent

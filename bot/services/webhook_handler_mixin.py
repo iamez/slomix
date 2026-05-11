@@ -114,7 +114,7 @@ class _WebhookHandlerMixin:
         # Startup lookback (mirrors FileTracker behavior, but endstats-specific)
         try:
             datetime_str = filename[:17]  # YYYY-MM-DD-HHMMSS
-            file_datetime = datetime.strptime(datetime_str, "%Y-%m-%d-%H%M%S")
+            file_datetime = datetime.strptime(datetime_str, "%Y-%m-%d-%H%M%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
             lookback_hours = getattr(self.config, 'STARTUP_LOOKBACK_HOURS', 168)
             cutoff_time = self.bot_startup_time - timedelta(hours=lookback_hours)
 

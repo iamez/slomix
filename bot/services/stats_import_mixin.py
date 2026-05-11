@@ -523,9 +523,9 @@ class _StatsImportMixin:
 
             # Parse current timestamp first
             try:
-                current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H%M%S')
+                current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H%M%S')  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
             except ValueError:
-                current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H:%M:%S')
+                current_dt = datetime.strptime(f"{round_date} {round_time}", '%Y-%m-%d %H:%M:%S')  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
 
             # Get the chronologically PREVIOUS round (before current round)
             # This allows importing old rounds without messing up session IDs
@@ -562,9 +562,9 @@ class _StatsImportMixin:
 
             # Parse previous timestamp
             try:
-                prev_dt = datetime.strptime(f"{prev_date} {prev_time}", '%Y-%m-%d %H%M%S')
+                prev_dt = datetime.strptime(f"{prev_date} {prev_time}", '%Y-%m-%d %H%M%S')  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
             except ValueError:
-                prev_dt = datetime.strptime(f"{prev_date} {prev_time}", '%Y-%m-%d %H:%M:%S')
+                prev_dt = datetime.strptime(f"{prev_date} {prev_time}", '%Y-%m-%d %H:%M:%S')  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
 
             # Calculate time gap (current - previous, should always be positive)
             gap = current_dt - prev_dt
@@ -883,7 +883,7 @@ class _StatsImportMixin:
             # Convert string date to datetime for PostgreSQL compatibility
             # datetime already imported at module level
             if isinstance(last_seen_date, str):
-                last_seen_datetime = datetime.strptime(last_seen_date, '%Y-%m-%d')
+                last_seen_datetime = datetime.strptime(last_seen_date, '%Y-%m-%d')  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
             else:
                 last_seen_datetime = last_seen_date
 

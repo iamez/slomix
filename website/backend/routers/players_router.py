@@ -1060,7 +1060,7 @@ async def get_player_form(
 
         date_obj = row[1]
         if isinstance(date_obj, str):
-            date_obj = datetime.strptime(date_obj, "%Y-%m-%d")
+            date_obj = datetime.strptime(date_obj, "%Y-%m-%d")  # noqa: DTZ007 date-only parsing, no time component used
         label = date_obj.strftime("%b %d")
 
         sessions.append(

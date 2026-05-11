@@ -122,14 +122,14 @@ def _to_date(val: str | date) -> date:
     """Normalize to datetime.date for asyncpg DATE params (proximity tables use DATE type)."""
     if isinstance(val, date):
         return val
-    return datetime.strptime(val, "%Y-%m-%d").date()
+    return datetime.strptime(val, "%Y-%m-%d").date()  # noqa: DTZ007 date-only parsing, no time component used
 
 
 def _to_date_str(val: str | date) -> str:
     """Normalize to YYYY-MM-DD string for TEXT columns (player_comprehensive_stats.round_date)."""
     if isinstance(val, date):
         return val.isoformat()
-    datetime.strptime(val, "%Y-%m-%d")  # validate
+    datetime.strptime(val, "%Y-%m-%d")  # validate  # noqa: DTZ007 date-only parsing, no time component used
     return val
 
 

@@ -496,28 +496,28 @@ class TimingComparisonService:
         # Case 1: round_date already includes HHMMSS (YYYY-MM-DD-HHMMSS)
         if re.match(r"^\d{4}-\d{2}-\d{2}-\d{6}$", date_str):
             try:
-                return datetime.strptime(date_str, "%Y-%m-%d-%H%M%S")
+                return datetime.strptime(date_str, "%Y-%m-%d-%H%M%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
             except ValueError:
                 pass
 
         # Case 2: round_date includes time with colons
         if re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$", date_str):
             try:
-                return datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+                return datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
             except ValueError:
                 pass
 
         # Case 3: round_time provided as HH:MM:SS
         if time_str and ":" in time_str:
             try:
-                return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S")
+                return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
             except ValueError:
                 pass
 
         # Case 4: round_time provided as HHMMSS
         if time_str and re.match(r"^\d{6}$", time_str):
             try:
-                return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H%M%S")
+                return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H%M%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
             except ValueError:
                 pass
 

@@ -87,7 +87,7 @@ class _ProximityIngestionMixin:
         date_str, time_str = match.groups()
         try:
             from datetime import datetime
-            dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H%M%S")
+            dt = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H%M%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
             return int(dt.timestamp())
         except ValueError:
             return None
@@ -302,7 +302,7 @@ class _ProximityIngestionMixin:
             hour = int(file_time[:2]) if len(file_time) >= 2 else 99
             if hour < 5:
                 prev_date = (
-                    datetime.strptime(file_date, '%Y-%m-%d') - timedelta(days=1)
+                    datetime.strptime(file_date, '%Y-%m-%d') - timedelta(days=1)  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
                 ).strftime('%Y-%m-%d')
 
                 result = await self.bot.db_adapter.fetch_one(query, (prev_date, map_name))
