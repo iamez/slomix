@@ -332,7 +332,7 @@ class _AvailabilityExternalChannelsMixin:
         elif head in {"/tomorrow", "tomorrow"}:
             args = ["tomorrow", *tokens[1:]]
         elif head in {"/avail", "!avail", "avail"}:
-            if len(tokens) >= 2 and tokens[1].strip().lower() in {"status"}:
+            if len(tokens) >= 2 and tokens[1].strip().lower() == "status":
                 linked_user_id = await self._resolve_linked_user_from_channel(
                     channel_type=channel_type,
                     channel_address=channel_address,

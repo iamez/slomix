@@ -4,7 +4,7 @@ Player-related endpoints: search, link, profile, compare, leaderboard, matches, 
 Extracted from api.py to reduce file size and improve maintainability.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -509,7 +509,7 @@ async def get_leaderboard(
         sm = SeasonManager()
         start_date_str = sm.get_season_dates()[0].strftime("%Y-%m-%d")
     else:
-        start_date_str = datetime(2020, 1, 1).strftime("%Y-%m-%d")
+        start_date_str = datetime(2020, 1, 1, tzinfo=timezone.utc).strftime("%Y-%m-%d")
 
     # Base query parts
     # nosec B608 - These clauses are static strings, not user-controlled input

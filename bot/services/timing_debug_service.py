@@ -223,7 +223,7 @@ class TimingDebugService:
             if captured_at:
                 if isinstance(captured_at, str):
                     try:
-                        captured_dt = datetime.fromisoformat(captured_at.replace('Z', '+00:00'))
+                        captured_dt = datetime.fromisoformat(captured_at)
                         candidates.append(captured_dt.replace(tzinfo=None))
                     except ValueError:
                         pass
