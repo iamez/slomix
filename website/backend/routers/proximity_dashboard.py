@@ -383,8 +383,8 @@ async def get_proximity_summary(
                        FLOOR(COALESCE(end_y, start_y) / 256.0)::int AS grid_y
                 FROM combat_engagement
             """
-            + f" {where_sql} "
-            + """
+            f" {where_sql} "
+            """
                   AND COALESCE(end_x, start_x) IS NOT NULL
                   AND COALESCE(end_y, start_y) IS NOT NULL
                 GROUP BY 1, 2

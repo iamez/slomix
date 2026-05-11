@@ -20,7 +20,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from ..logging_config import get_access_logger, get_security_logger
+from website.backend.logging_config import get_access_logger, get_security_logger
 
 access_logger = get_access_logger()
 security_logger = get_security_logger()
