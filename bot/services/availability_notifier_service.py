@@ -7,7 +7,7 @@ import json
 import logging
 import secrets
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterable
 
 import discord
@@ -190,7 +190,8 @@ class UnifiedAvailabilityNotifier:
 
         token = secrets.token_urlsafe(24)
         token_hash = self._token_hash(token)
-        expires_at = datetime.utcnow() + timedelta(minutes=max(5, int(ttl_minutes)))
+        # naive UTC for TIMESTAMP column (preserves prior datetime.utcnow() behavior)
+        expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=max(5, int(ttl_minutes)))
 
         await self.db_adapter.execute(
             """

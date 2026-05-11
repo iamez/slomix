@@ -7,7 +7,7 @@ All methods live on LinkCog via mixin inheritance.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import discord
 from discord.ext import commands
@@ -25,7 +25,7 @@ class _LinkCoreMixin:
         """Store pending link selection (in-memory, experimental)."""
         if not self.enable_link_selection_state:
             return
-        expires_at = datetime.utcnow().timestamp() + self.selection_ttl_seconds
+        expires_at = datetime.now(timezone.utc).timestamp() + self.selection_ttl_seconds
         self.pending_link_selections[discord_id] = {
             "message_id": message_id,
             "options": options,
@@ -37,7 +37,7 @@ class _LinkCoreMixin:
         pending = self.pending_link_selections.get(discord_id)
         if not pending:
             return None
-        if pending.get("expires_at", 0) < datetime.utcnow().timestamp():
+        if pending.get("expires_at", 0) < datetime.now(timezone.utc).timestamp():
             self.pending_link_selections.pop(discord_id, None)
             return None
         return pending
