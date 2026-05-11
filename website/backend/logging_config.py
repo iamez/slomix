@@ -172,7 +172,7 @@ class ColoredFormatter(logging.Formatter):
         color = self.COLORS.get(record.levelname, self.RESET)
 
         # Format timestamp
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
 
         # Build message
         msg = f"{color}{timestamp} | {record.levelname:8}{self.RESET} | {record.name} | {record.getMessage()}"

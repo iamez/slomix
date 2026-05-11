@@ -339,7 +339,7 @@ class AchievementSystem:
                 title=f"{ach_data['emoji']} Achievement Unlocked!",
                 description=f"**{ach_data['title']}**",
                 color=ach_data["color"],
-                timestamp=datetime.now(),
+                timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             embed.add_field(name="Player", value=mention, inline=True)

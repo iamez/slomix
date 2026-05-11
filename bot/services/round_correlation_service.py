@@ -224,7 +224,7 @@ class RoundCorrelationService:
                 updates={
                     flag_col: True,
                     id_col: round_id,
-                    arrived_col: datetime.now(),
+                    arrived_col: datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 },
             )
 
@@ -657,7 +657,7 @@ class RoundCorrelationService:
         # Status determination
         if has_r1_stats and has_r2_stats:
             status = 'complete'
-            completed_at = datetime.now()
+            completed_at = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         elif has_r1_stats or has_r2_stats:
             status = 'partial'
             completed_at = None

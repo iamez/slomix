@@ -71,7 +71,7 @@ class AutomationCommands(commands.Cog):
                 title="🔄 SSH Monitor Statistics",
                 description=status_text,
                 color=color,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Files processed
@@ -218,7 +218,7 @@ class AutomationCommands(commands.Cog):
                 title="📊 Metrics Report",
                 description=f"Performance analysis for last `{hours}` hours",
                 color=color,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Overall summary
@@ -321,7 +321,7 @@ class AutomationCommands(commands.Cog):
                 title="📊 Metrics Summary",
                 description=f"Bot performance overview • Error rate: `{error_rate:.2f}%`",
                 color=color,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             embed.add_field(
@@ -441,7 +441,7 @@ class AutomationCommands(commands.Cog):
                 title="🤖 Automation Services Status",
                 description=f"{status_emoji} **{status_text}**",
                 color=color,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # SSH Monitor

@@ -188,7 +188,7 @@ class ServerControl(commands.Cog):
 
     async def log_action(self, ctx, action: str, details: str = ""):
         """Log admin action to local file"""
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         log_entry = f"[{timestamp}] {action} by {ctx.author} ({ctx.author.id})"
         if details:
             log_entry += f" - {details}"
@@ -292,7 +292,7 @@ class ServerControl(commands.Cog):
                     title="✅ Server Online",
                     description=f"ET:Legacy server is running in screen session `{self.screen_name}`",
                     color=discord.Color.green(),
-                    timestamp=datetime.now()
+                    timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 )
                 embed.add_field(name="CPU Usage", value=f"{cpu_usage}%", inline=True)
                 embed.add_field(name="Memory", value=f"{mem_usage}%", inline=True)
@@ -305,7 +305,7 @@ class ServerControl(commands.Cog):
                     title="❌ Server Offline",
                     description=f"ET:Legacy server is not running (screen session `{self.screen_name}` not found)",
                     color=discord.Color.red(),
-                    timestamp=datetime.now()
+                    timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 )
                 await ctx.send(embed=embed)
 
@@ -349,7 +349,7 @@ class ServerControl(commands.Cog):
                     title="✅ Server Started",
                     description=f"ET:Legacy server is now running in screen session `{self.screen_name}`",
                     color=discord.Color.green(),
-                    timestamp=datetime.now()
+                    timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 )
                 embed.add_field(
                     name="ℹ️ Note",
@@ -405,7 +405,7 @@ class ServerControl(commands.Cog):
                     title="✅ Server Stopped",
                     description="ET:Legacy server has been stopped",
                     color=discord.Color.orange(),
-                    timestamp=datetime.now()
+                    timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 )
                 embed.add_field(
                     name="⚠️ Note",
@@ -483,7 +483,7 @@ class ServerControl(commands.Cog):
                     title=f"🗺️ Server Maps ({i+1}-{min(i+chunk_size, len(maps))} of {len(maps)})",
                     description='\n'.join(chunk),
                     color=discord.Color.blue(),
-                    timestamp=datetime.now()
+                    timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 )
                 embed.set_footer(text=f"Path: {self.maps_path}")
                 await ctx.send(embed=embed)
@@ -555,7 +555,7 @@ class ServerControl(commands.Cog):
                 title="✅ Map Uploaded",
                 description=f"`{sanitized_name}` has been uploaded to the server",
                 color=discord.Color.green(),
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
             embed.add_field(name="Size", value=f"{attachment.size / 1024 / 1024:.1f} MB", inline=True)
             embed.add_field(name="MD5", value=f"`{file_hash[:8]}...`", inline=True)
@@ -618,7 +618,7 @@ class ServerControl(commands.Cog):
                 title="✅ Map Changed",
                 description=f"Server is now loading `{map_name}`",
                 color=discord.Color.blue(),
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
             await ctx.send(embed=embed)
             await self.log_action(ctx, "Map Change Success", map_name)
@@ -660,7 +660,7 @@ class ServerControl(commands.Cog):
                     title="✅ Map Deleted",
                     description=f"`{map_name}` has been removed from the server",
                     color=discord.Color.orange(),
-                    timestamp=datetime.now()
+                    timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 )
                 await ctx.send(embed=embed)
                 await self.log_action(ctx, "Map Delete Success", map_name)
@@ -712,7 +712,7 @@ class ServerControl(commands.Cog):
                 title="🎮 RCON Response",
                 description=f"```\n{response}\n```",
                 color=discord.Color.purple(),
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
             embed.set_footer(text=f"Command: {command}")
             await ctx.send(embed=embed)

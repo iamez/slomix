@@ -572,22 +572,22 @@ async def get_hall_of_fame(
         params.extend([start_date, end_date])
         param_idx += 2
     elif period == "7d":
-        cutoff = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        cutoff = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
         date_filter = f"AND pcs.round_date >= ${param_idx}"
         params.append(cutoff)
         param_idx += 1
     elif period == "14d":
-        cutoff = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
+        cutoff = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
         date_filter = f"AND pcs.round_date >= ${param_idx}"
         params.append(cutoff)
         param_idx += 1
     elif period == "30d":
-        cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        cutoff = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
         date_filter = f"AND pcs.round_date >= ${param_idx}"
         params.append(cutoff)
         param_idx += 1
     elif period == "90d":
-        cutoff = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+        cutoff = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
         date_filter = f"AND pcs.round_date >= ${param_idx}"
         params.append(cutoff)
         param_idx += 1

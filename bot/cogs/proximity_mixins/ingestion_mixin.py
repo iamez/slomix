@@ -161,7 +161,7 @@ class _ProximityIngestionMixin:
 
         cutoff = None
         if self.lookback_hours and self.lookback_hours > 0:
-            cutoff = (datetime.now().timestamp() - (self.lookback_hours * 3600))
+            cutoff = (datetime.now().timestamp() - (self.lookback_hours * 3600))  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
         for filename in sorted(proximity_files):
             if filename in self.processed_remote_files:
@@ -197,7 +197,7 @@ class _ProximityIngestionMixin:
 
         async with self._scan_lock:
             try:
-                self.last_scan_time = datetime.now()
+                self.last_scan_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
                 # Fetch new files from remote server if configured
                 await self._fetch_remote_files()
@@ -219,7 +219,7 @@ class _ProximityIngestionMixin:
                     and self.lookback_hours
                     and self.lookback_hours > 0
                 ):
-                    startup_cutoff = int(datetime.now().timestamp() - (self.lookback_hours * 3600))
+                    startup_cutoff = int(datetime.now().timestamp() - (self.lookback_hours * 3600))  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
                 new_files = [
                     f for f in engagement_files
@@ -334,7 +334,7 @@ class _ProximityIngestionMixin:
                     file_date, file_time, parts, filename
                 )
             else:
-                session_date = datetime.now().strftime("%Y-%m-%d")
+                session_date = datetime.now().strftime("%Y-%m-%d")  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
             # Create parser with database adapter
             parser = ProximityParserV4(

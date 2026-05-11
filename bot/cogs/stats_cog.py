@@ -209,7 +209,7 @@ class StatsCog(
             embed = discord.Embed(
                 title=f"🏆 Achievement Progress: {display_name}",
                 color=0xFFD700,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Kill achievements
@@ -331,7 +331,7 @@ class StatsCog(
                 title="📅 Season Information",
                 description=f"**{season_name}**\n`{current_season}`",
                 color=0xFFD700,  # Gold
-                timestamp=datetime.now(),
+                timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Season dates

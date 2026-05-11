@@ -168,7 +168,7 @@ class LastSessionCog(commands.Cog):
                         title=f"COMBAT STATS (OFFENSE)  -  {latest_date}",
                         description=f"Kills/Deaths, Damage, K/D, DPM - Top players across {total_maps} maps",
                         color=0x5865F2,
-                        timestamp=datetime.now()
+                        timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     )
                     embed1.set_image(
                         url=f"attachment://session_{latest_date}_offense.png"
@@ -184,7 +184,7 @@ class LastSessionCog(commands.Cog):
                         title=f"COMBAT STATS (DEFENSE/SUPPORT)  -  {latest_date}",
                         description="Revives, Time Alive/Dead, Gibs, Headshots",
                         color=0x57F287,
-                        timestamp=datetime.now()
+                        timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     )
                     embed2.set_image(
                         url=f"attachment://session_{latest_date}_defense.png"
@@ -200,7 +200,7 @@ class LastSessionCog(commands.Cog):
                         title=f"ADVANCED METRICS  -  {latest_date}",
                         description="FragPotential, Damage Efficiency, Denied Playtime, Survival Rate, Useful Kills, Self Kills, Full Selfkills",
                         color=0xE74C3C,
-                        timestamp=datetime.now()
+                        timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     )
                     embed3.set_image(
                         url=f"attachment://session_{latest_date}_metrics.png"
@@ -216,7 +216,7 @@ class LastSessionCog(commands.Cog):
                         title=f"PLAYSTYLE ANALYSIS  -  {latest_date}",
                         description="Player playstyles based on combat metrics",
                         color=0x9B59B6,
-                        timestamp=datetime.now()
+                        timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     )
                     embed4.set_image(
                         url=f"attachment://session_{latest_date}_playstyle.png"
@@ -233,7 +233,7 @@ class LastSessionCog(commands.Cog):
                             title=f"DPM TIMELINE  -  {latest_date}",
                             description="DPM evolution across rounds - Performance trends",
                             color=0xF39C12,
-                            timestamp=datetime.now()
+                            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                         )
                         embed5.set_image(
                             url=f"attachment://session_{latest_date}_timeline.png"
@@ -302,7 +302,7 @@ class LastSessionCog(commands.Cog):
                         "\n".join(lines)
                     ),
                     color=0x95A5A6,
-                    timestamp=datetime.now()
+                    timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 )
                 await ctx.send(embed=embed)
                 return
@@ -525,7 +525,7 @@ class LastSessionCog(commands.Cog):
                     f"Lua coverage: `{rounds_with_telemetry}/{rounds_total}` rounds"
                 ),
                 color=0x95A5A6,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             if rows:
@@ -640,7 +640,7 @@ class LastSessionCog(commands.Cog):
                 title=f"🔎 Endstats Audit - {latest_date}",
                 description="Coverage summary for the latest session",
                 color=0x5DADE2,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             embed.add_field(
@@ -760,7 +760,7 @@ class LastSessionCog(commands.Cog):
                 title=f"🏆 Endstats - {display_map_name}",
                 description=f"Session {latest_date} • Map {map_index}/{len(map_matches)}",
                 color=0xF1C40F,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             for round_info in match["rounds"]:
@@ -790,7 +790,7 @@ class LastSessionCog(commands.Cog):
                     title=f"🏆 Endstats - {display_map_name} R{round_num}",
                     description=f"Session {latest_date}",
                     color=0xF39C12,
-                    timestamp=datetime.now(),
+                    timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 )
 
                 awards_text = self.endstats_aggregator.build_round_awards_display(

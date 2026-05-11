@@ -46,7 +46,7 @@ class SessionManagementCog(commands.Cog, name="Session Management"):
                 )
                 return
 
-            now = datetime.now()
+            now = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             date_str = now.strftime("%Y-%m-%d")
             time_str = now.strftime("%H:%M:%S")
 
@@ -76,7 +76,7 @@ class SessionManagementCog(commands.Cog, name="Session Management"):
                     "✅ Monitoring enabled - stats will be tracked automatically."
                 ),
                 color=0x00FF00,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             await ctx.send(embed=embed)
@@ -115,7 +115,7 @@ class SessionManagementCog(commands.Cog, name="Session Management"):
                     "Use `!session_start` to re-enable automatic monitoring."
                 ),
                 color=0xFF0000,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             await ctx.send(embed=embed)

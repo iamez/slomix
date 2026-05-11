@@ -216,7 +216,7 @@ class PlayerDisplayNameService:
             """
             await self.db_adapter.execute(
                 update_query,
-                (display_name, datetime.now(), discord_id)
+                (display_name, datetime.now(), discord_id)  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             return True, f"Display name set to **{display_name}**"
@@ -281,7 +281,7 @@ class PlayerDisplayNameService:
             """
             await self.db_adapter.execute(
                 update_query,
-                (exact_alias, datetime.now(), discord_id)
+                (exact_alias, datetime.now(), discord_id)  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             return True, f"Display name set to **{exact_alias}** (from your aliases)"
@@ -322,7 +322,7 @@ class PlayerDisplayNameService:
             """
             await self.db_adapter.execute(
                 update_query,
-                (datetime.now(), discord_id)
+                (datetime.now(), discord_id)  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             return True, "Display name reset to automatic (most recent alias)"

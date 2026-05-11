@@ -566,7 +566,7 @@ class TimingComparisonService:
                        f"🔥 **Warmup** = Pre-round warmup phase\n"
                        f"🕐 **Wall-clock** = Total elapsed time (includes pauses + warmup)",
             color=color,
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         # Stats file timing

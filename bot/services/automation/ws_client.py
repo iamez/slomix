@@ -221,7 +221,7 @@ class StatsWebSocketClient:
         if self._is_valid_stats_filename(message):
             logger.info(f"📥 NEW FILE notification: {message}")
             self.files_received += 1
-            self.last_notification = datetime.now()
+            self.last_notification = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
             try:
                 await self.on_new_file(message)
