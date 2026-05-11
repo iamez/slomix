@@ -650,7 +650,7 @@ async def get_storytelling_completeness(
     `kis_computed=false` v response-u za tisti UX hint.
     """
     try:
-        sd = datetime.strptime(session_date, "%Y-%m-%d").date()
+        sd = datetime.strptime(session_date, "%Y-%m-%d").date()  # noqa: DTZ007 date-only parsing, no time component used
     except ValueError:
         raise HTTPException(status_code=400, detail="session_date must be YYYY-MM-DD")
 

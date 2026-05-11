@@ -87,25 +87,25 @@ class TimingDebugService:
 
         if re.match(r"^\d{4}-\d{2}-\d{2}-\d{6}$", date_str):
             try:
-                return datetime.strptime(date_str, "%Y-%m-%d-%H%M%S")
+                return datetime.strptime(date_str, "%Y-%m-%d-%H%M%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
             except ValueError:
                 pass
 
         if re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$", date_str):
             try:
-                return datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+                return datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
             except ValueError:
                 pass
 
         if time_str and ":" in time_str:
             try:
-                return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S")
+                return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
             except ValueError:
                 pass
 
         if time_str and re.match(r"^\d{6}$", time_str):
             try:
-                return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H%M%S")
+                return datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H%M%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
             except ValueError:
                 pass
 

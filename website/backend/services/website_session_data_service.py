@@ -24,7 +24,7 @@ class WebsiteSessionDataService(SessionDataService):
             return "Unknown"
         try:
             if isinstance(date_val, str):
-                dt = datetime.strptime(date_val, "%Y-%m-%d")
+                dt = datetime.strptime(date_val, "%Y-%m-%d")  # noqa: DTZ007 date-only parsing, no time component used
             else:
                 dt = datetime.combine(date_val, datetime.min.time())
             now = datetime.now()

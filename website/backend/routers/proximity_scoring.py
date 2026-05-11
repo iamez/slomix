@@ -49,7 +49,7 @@ async def get_proximity_session_scores(
             return {"status": "ok", "session_date": None, "players": []}
 
         # asyncpg needs date object, not string
-        sd = datetime.strptime(session_date, "%Y-%m-%d").date() if isinstance(session_date, str) else session_date
+        sd = datetime.strptime(session_date, "%Y-%m-%d").date() if isinstance(session_date, str) else session_date  # noqa: DTZ007 date-only parsing, no time component used
         results = await svc.compute_session_scores(sd)
         return {"status": "ok", "session_date": session_date, "players": results}
     except Exception:
