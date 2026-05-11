@@ -316,34 +316,35 @@ class RoundPublisherService:
             rows = await self.db_adapter.fetch_all(players_query, (round_id, round_num))
 
             # Convert to dict format
-            players = []
-            for row in rows:
-                    players.append({
-                        'name': row[0],
-                        'team': row[1],
-                        'kills': row[2],
-                        'deaths': row[3],
-                        'damage_given': row[4],
-                        'damage_received': row[5],
-                        'team_damage_given': row[6],
-                        'team_damage_received': row[7],
-                        'gibs': row[8],
-                        'headshots': row[9],
-                        'accuracy': row[10],
-                        'revives': row[11],
-                        'times_revived': row[12],
-                        'time_dead': row[13],
-                        'efficiency': row[14],
-                        'kd_ratio': row[15],
-                        'time_played': row[16],
-                        'dpm': row[17],
-                        'double_kills': row[18] or 0,
-                        'triple_kills': row[19] or 0,
-                        'quad_kills': row[20] or 0,
-                        'multi_kills': row[21] or 0,
-                        'mega_kills': row[22] or 0,
-                        'time_denied': row[23] or 0
-                    })
+            players = [
+                {
+                    'name': row[0],
+                    'team': row[1],
+                    'kills': row[2],
+                    'deaths': row[3],
+                    'damage_given': row[4],
+                    'damage_received': row[5],
+                    'team_damage_given': row[6],
+                    'team_damage_received': row[7],
+                    'gibs': row[8],
+                    'headshots': row[9],
+                    'accuracy': row[10],
+                    'revives': row[11],
+                    'times_revived': row[12],
+                    'time_dead': row[13],
+                    'efficiency': row[14],
+                    'kd_ratio': row[15],
+                    'time_played': row[16],
+                    'dpm': row[17],
+                    'double_kills': row[18] or 0,
+                    'triple_kills': row[19] or 0,
+                    'quad_kills': row[20] or 0,
+                    'multi_kills': row[21] or 0,
+                    'mega_kills': row[22] or 0,
+                    'time_denied': row[23] or 0,
+                }
+                for row in rows
+            ]
 
             logger.info(f"📊 Fetched {len(players)} players with FULL stats from database")
 

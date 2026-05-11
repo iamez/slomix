@@ -763,9 +763,8 @@ class _MomentsMixin:
                         round_number = first_kill["round_number"]
 
                         # Build rich kill context
-                        kill_details = []
-                        for k in wipe_kills:
-                            kill_details.append({
+                        kill_details = [
+                            {
                                 "killer": k["killer"],
                                 "killer_guid": k["killer_guid"],
                                 "victim": k["victim"],
@@ -773,7 +772,9 @@ class _MomentsMixin:
                                 "weapon": k["weapon"],
                                 "time_ms": k["time"],
                                 "time_formatted": _format_time_ms(k["time"]),
-                            })
+                            }
+                            for k in wipe_kills
+                        ]
 
                         victims_list = [k["victim"] for k in wipe_kills]
                         killers = list({k["killer"] for k in wipe_kills})
@@ -949,9 +950,8 @@ class _MomentsMixin:
                 label = "ACE" if is_ace else labels.get(n, f"{n}-KILL")
 
                 # Build rich kill context
-                kill_details = []
-                for k in unique_kills:
-                    kill_details.append({
+                kill_details = [
+                    {
                         "killer": k["killer"],
                         "killer_guid": k["killer_guid"],
                         "victim": k["victim"],
@@ -959,7 +959,9 @@ class _MomentsMixin:
                         "weapon": k["weapon"],
                         "time_ms": k["time"],
                         "time_formatted": _format_time_ms(k["time"]),
-                    })
+                    }
+                    for k in unique_kills
+                ]
 
                 obj_suffix = " near objective" if near_obj else ""
                 victims_list = [k["victim"] for k in unique_kills]

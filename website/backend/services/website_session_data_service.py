@@ -276,19 +276,18 @@ class WebsiteSessionDataService(SessionDataService):
         """
         rows = await self.db_adapter.fetch_all(query, (date,))
 
-        matches = []
-        for row in rows:
-            matches.append(
-                {
-                    "id": row[0],
-                    "map_name": row[1],
-                    "round_number": row[2],
-                    "duration": row[3],
-                    "winner": self._team_name(row[4]),
-                    "outcome": row[5],
-                    "date": row[6],
-                }
-            )
+        matches = [
+            {
+                "id": row[0],
+                "map_name": row[1],
+                "round_number": row[2],
+                "duration": row[3],
+                "winner": self._team_name(row[4]),
+                "outcome": row[5],
+                "date": row[6],
+            }
+            for row in rows
+        ]
 
         return matches
 
