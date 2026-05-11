@@ -366,7 +366,7 @@ async def resolve_round_id_with_reason(
                     # matching target_dt which is also local naive (from filename
                     # round_date+round_time or from datetime.fromtimestamp(unix)
                     # in _resolve_round_id_for_metadata).
-                    candidate_dt = datetime.fromtimestamp(ts)
+                    candidate_dt = datetime.fromtimestamp(ts)  # noqa: DTZ006 — intentional: target_dt is local-naive (from filename), candidate must match for `abs(candidate_dt - target_dt)` arithmetic.
                 except (ValueError, TypeError, OSError):
                     candidate_dt = None
             elif ts > 0:
