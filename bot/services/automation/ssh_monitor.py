@@ -333,7 +333,7 @@ class SSHMonitor:
             # Filter for .stats files and .txt files (but exclude _ws.txt files)
             stats_files = [
                 f for f in remote_files
-                if (f.endswith('.stats') or f.endswith('.txt')) and not f.endswith('_ws.txt')
+                if f.endswith(('.stats', '.txt')) and not f.endswith('_ws.txt')
             ]
 
             # ALWAYS filter by time to avoid processing old files (not just first check)

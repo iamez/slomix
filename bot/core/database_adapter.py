@@ -28,43 +28,35 @@ class DatabaseAdapter(ABC):
     @abstractmethod
     async def connect(self):
         """Initialize database connection/pool."""
-        pass
 
     @abstractmethod
     async def close(self):
         """Close database connection/pool."""
-        pass
 
     @abstractmethod
     @asynccontextmanager
     async def connection(self):
         """Context manager for database connections."""
-        pass
 
     @abstractmethod
     async def execute(self, query: str, params: tuple | None = None, *extra):
         """Execute a query without returning results."""
-        pass
 
     @abstractmethod
     async def executemany(self, query: str, params_list: list[tuple]) -> None:
         """Execute a query for each tuple in params_list (batch insert/update)."""
-        pass
 
     @abstractmethod
     async def fetch_one(self, query: str, params: tuple | None = None) -> Any | None:
         """Fetch a single row."""
-        pass
 
     @abstractmethod
     async def fetch_all(self, query: str, params: tuple | None = None) -> list[Any]:
         """Fetch all rows."""
-        pass
 
     @abstractmethod
     async def fetch_val(self, query: str, params: tuple | None = None) -> Any:
         """Fetch a single value from first row."""
-        pass
 
     def translate_query(self, query: str) -> str:
         """Translate query syntax if needed (override in subclasses)."""

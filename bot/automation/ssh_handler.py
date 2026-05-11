@@ -31,7 +31,6 @@ SAFE_GAMETIME_FILENAME_PATTERN = re.compile(
 
 class SSHConnectionError(Exception):
     """Raised when SSH operations fail due to connection or transport errors."""
-    pass
 
 # Security: SSH host key verification mode
 # Strict verification is always enforced.

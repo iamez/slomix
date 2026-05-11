@@ -727,4 +727,4 @@ class TimingComparisonService:
 
 async def setup(bot):
     """Setup function for loading as a service."""
-    pass  # Service is initialized directly, not as a cog
+    # Service is initialized directly, not as a cog

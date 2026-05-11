@@ -140,7 +140,7 @@ class _MomentsMixin:
         # Pick the best moment from each type first
         result = []
         seen_ids = set()
-        for t, bucket in by_type.items():
+        for bucket in by_type.values():
             if bucket:
                 best = bucket[0]
                 result.append(best)
