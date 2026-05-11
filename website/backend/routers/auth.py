@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from shared.database_adapter import DatabaseAdapter
 from website.backend.dependencies import get_db
 from website.backend.logging_config import get_app_logger
+from website.backend.middleware.auth_helpers import require_ajax_csrf_header as _require_ajax_csrf_header
 from website.backend.rate_limit import limiter
 from website.backend.routers.api_helpers import resolve_display_name
 
@@ -32,15 +33,6 @@ OAUTH_RATE_LIMIT_WINDOW_SECONDS = max(10, int(os.getenv("DISCORD_OAUTH_RATE_LIMI
 OAUTH_RATE_LIMIT_MAX_REQUESTS = max(5, int(os.getenv("DISCORD_OAUTH_RATE_LIMIT_MAX_REQUESTS", "40")))
 
 _oauth_rate_buckets: dict[str, deque[float]] = defaultdict(deque)
-
-
-def _require_ajax_csrf_header(request: Request) -> None:
-    """
-    Lightweight CSRF hardening: require a non-simple AJAX header on
-    state-changing session routes.
-    """
-    if request.headers.get("x-requested-with", "").lower() != "xmlhttprequest":
-        raise HTTPException(status_code=403, detail="Missing required CSRF header")
 
 
 def _normalize_redirect_uri(value: str) -> str:
