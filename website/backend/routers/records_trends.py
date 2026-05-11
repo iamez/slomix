@@ -31,13 +31,16 @@ async def get_stats_trends(
     days = max(1, min(days, 90))
     requested = {m.strip().lower() for m in metrics.split(",") if m.strip()}
 
-    start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
-    end_date = datetime.now().strftime("%Y-%m-%d")  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
+    now = datetime.now()  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
+    range_start = now - timedelta(days=days)
+    start_date = range_start.strftime("%Y-%m-%d")
+    end_date = now.strftime("%Y-%m-%d")
 
-    # Generate full date range
+    # Generate full date range (single snapshot of `now` avoids midnight skew)
     date_list = []
-    current = datetime.now() - timedelta(days=days)  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
-    while current.date() <= datetime.now().date():  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
+    current = range_start
+    end_day = now.date()
+    while current.date() <= end_day:
         date_list.append(current.strftime("%Y-%m-%d"))
         current += timedelta(days=1)
 
