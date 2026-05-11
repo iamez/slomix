@@ -1175,9 +1175,9 @@ class UltimateETLegacyBot(
                 round_start_unix = 0
 
             if round_end_unix:
-                target_dt = datetime.fromtimestamp(round_end_unix)
+                target_dt = datetime.fromtimestamp(round_end_unix)  # noqa: DTZ006 — local-naive matches round_linker candidate_dt convention
             elif round_start_unix:
-                target_dt = datetime.fromtimestamp(round_start_unix)
+                target_dt = datetime.fromtimestamp(round_start_unix)  # noqa: DTZ006
 
             window_minutes = getattr(self.config, "round_match_window_minutes", 45)
             round_id, diag = await resolve_round_id_with_reason(
@@ -1716,7 +1716,7 @@ class UltimateETLegacyBot(
                     # NOTE: fromtimestamp() uses local time, matching Lua os.date()
                     # which generates stats filenames in the game server's local TZ.
                     # Both machines are CET — do NOT change to utcfromtimestamp().
-                    ts = _dt.fromtimestamp(round_end)
+                    ts = _dt.fromtimestamp(round_end)  # noqa: DTZ006 — see NOTE above: match_id format requires local time
                     fallback_match_id = ts.strftime('%Y-%m-%d-%H%M%S')
 
                 try:

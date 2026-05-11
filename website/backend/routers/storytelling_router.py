@@ -2,7 +2,7 @@
 Storytelling Stats API — Kill Impact Score (KIS) endpoints.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.requests import Request
@@ -47,7 +47,9 @@ def _parse_date(val: str) -> date:
         parsed = datetime.strptime(val, "%Y-%m-%d").date()
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
-    today = date.today()
+    # UTC date — avoids midnight-edge drift on non-UTC servers, consistent
+    # with PCS round_date which is stored as the server's local date (UTC prod).
+    today = datetime.now(timezone.utc).date()
     if parsed > today or parsed < _MIN_SESSION_DATE:
         raise HTTPException(
             status_code=400,

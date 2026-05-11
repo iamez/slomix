@@ -247,7 +247,7 @@ class _LuaRoundStorageMixin:
             # Create match_id in same format as rounds table
             # Format: YYYY-MM-DD-HHMMSS (timestamp only, NO map name)
             # This matches how postgresql_database_manager stores match_id
-            timestamp = datetime.fromtimestamp(round_end)
+            timestamp = datetime.fromtimestamp(round_end)  # noqa: DTZ006 — match_id format mirrors local-time strftime used by postgresql_database_manager and the CET-running game server
             match_id = timestamp.strftime('%Y-%m-%d-%H%M%S')
 
             # Try to resolve round_id for direct linking (may be None if stats not imported yet)
@@ -494,7 +494,7 @@ class _LuaRoundStorageMixin:
                 webhook_logger.warning("Cannot store spawn stats: missing round_end_unix")
                 return
 
-            timestamp = datetime.fromtimestamp(round_end)
+            timestamp = datetime.fromtimestamp(round_end)  # noqa: DTZ006 — match_id format mirrors local-time strftime used by postgresql_database_manager and the CET-running game server
             match_id = timestamp.strftime('%Y-%m-%d-%H%M%S')
             round_id = await self._resolve_round_id_for_metadata(None, round_metadata)
 

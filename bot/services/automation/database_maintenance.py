@@ -209,7 +209,7 @@ class DatabaseMaintenance:
             for filename in os.listdir(self.log_dir):
                 filepath = os.path.join(self.log_dir, filename)
                 if os.path.isfile(filepath):
-                    mtime = datetime.fromtimestamp(os.path.getmtime(filepath))
+                    mtime = datetime.fromtimestamp(os.path.getmtime(filepath))  # noqa: DTZ006 — compared with `cutoff = datetime.now()` (local naive) above
                     if mtime < cutoff:
                         os.remove(filepath)
                         cleaned += 1
