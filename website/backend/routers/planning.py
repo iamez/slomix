@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from datetime import date, datetime, timezone
 from typing import Any
@@ -943,29 +944,27 @@ async def save_planning_teams(request: Request, db=Depends(get_db)):
 
     await db.execute("DELETE FROM planning_team_members WHERE session_id = $1", (session_id,))
 
-    for user_id in side_a:
-        await db.execute(
-            """
-            INSERT INTO planning_team_members
-                (session_id, team_id, user_id, created_at)
-            VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
-            ON CONFLICT (session_id, user_id) DO UPDATE SET
-                team_id = EXCLUDED.team_id
-            """,
-            (session_id, team_a_id, int(user_id)),
-        )
+    # Combine both team-member upserts into a single parallel batch.
+    # Each (session, user) row is independent post-DELETE, and the
+    # ON CONFLICT guards against any race so re-running is idempotent.
+    # Semaphore caps peak pool acquisition for users with large rosters.
+    insert_sql = """
+        INSERT INTO planning_team_members
+            (session_id, team_id, user_id, created_at)
+        VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+        ON CONFLICT (session_id, user_id) DO UPDATE SET
+            team_id = EXCLUDED.team_id
+    """
+    sem = asyncio.Semaphore(5)
 
-    for user_id in side_b:
-        await db.execute(
-            """
-            INSERT INTO planning_team_members
-                (session_id, team_id, user_id, created_at)
-            VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
-            ON CONFLICT (session_id, user_id) DO UPDATE SET
-                team_id = EXCLUDED.team_id
-            """,
-            (session_id, team_b_id, int(user_id)),
-        )
+    async def _upsert(team_id: int, user_id: Any):
+        async with sem:
+            await db.execute(insert_sql, (session_id, team_id, int(user_id)))
+
+    await asyncio.gather(
+        *(_upsert(team_a_id, uid) for uid in side_a),
+        *(_upsert(team_b_id, uid) for uid in side_b),
+    )
 
     return {
         "success": True,

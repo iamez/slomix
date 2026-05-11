@@ -277,21 +277,19 @@ class GreatshotJobService:
                 (demo_id,),
             )
 
+            # Batch the highlight inserts. Each highlight row is independent
+            # (post-DELETE) and shares the same INSERT statement; executemany
+            # ships one prepared statement + N param sets in a single
+            # round-trip vs the prior N sequential round-trips that ran
+            # while the user waits for demo-analysis to complete.
+            highlight_rows: list[tuple] = []
             for highlight in analysis.get("highlights", []) or []:
-                highlight_id = uuid.uuid4().hex
                 meta_payload = dict(highlight.get("meta") or {})
                 if highlight.get("explanation"):
                     meta_payload.setdefault("explanation", str(highlight.get("explanation")))
-
-                await self.db.execute(
-                    """
-                    INSERT INTO greatshot_highlights (
-                        id, demo_id, type, player, start_ms, end_ms, score, meta_json, clip_demo_path
-                    )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, NULL)
-                    """,
+                highlight_rows.append(
                     (
-                        highlight_id,
+                        uuid.uuid4().hex,
                         demo_id,
                         str(highlight.get("type") or "unknown"),
                         str(highlight.get("player") or "unknown"),
@@ -299,7 +297,17 @@ class GreatshotJobService:
                         int(highlight.get("end_ms") or 0),
                         float(highlight.get("score") or 0.0),
                         json.dumps(meta_payload),
-                    ),
+                    )
+                )
+            if highlight_rows:
+                await self.db.executemany(
+                    """
+                    INSERT INTO greatshot_highlights (
+                        id, demo_id, type, player, start_ms, end_ms, score, meta_json, clip_demo_path
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, NULL)
+                    """,
+                    highlight_rows,
                 )
 
             await self.db.execute(
