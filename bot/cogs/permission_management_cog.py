@@ -92,7 +92,7 @@ class PermissionManagement(commands.Cog):
                 title="✅ User Added to Whitelist",
                 description=f"{user.mention} has been granted **{tier}** permissions.",
                 color=discord.Color.green(),
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
             embed.add_field(name="Added By", value=ctx.author.mention, inline=True)
             embed.add_field(name="Tier", value=tier.upper(), inline=True)
@@ -153,7 +153,7 @@ class PermissionManagement(commands.Cog):
                 title="✅ User Removed from Whitelist",
                 description=f"{user.mention} no longer has **{old_tier}** permissions.",
                 color=discord.Color.orange(),
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
             embed.add_field(name="Removed By", value=ctx.author.mention, inline=True)
             embed.add_field(name="Previous Tier", value=old_tier.upper(), inline=True)
@@ -205,7 +205,7 @@ class PermissionManagement(commands.Cog):
                 title="🔒 User Permissions",
                 description=f"Total: {len(users)} users",
                 color=discord.Color.blue(),
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Add fields for each tier
@@ -261,7 +261,7 @@ class PermissionManagement(commands.Cog):
                 title="📜 Permission Audit Log",
                 description=f"Showing last {len(logs)} changes",
                 color=discord.Color.purple(),
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Query returns: target_discord_id(0), action(1), old_tier(2), new_tier(3), changed_by(4), changed_at(5), reason(6)

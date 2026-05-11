@@ -525,7 +525,7 @@ async def get_sessions_list(
         else:
             dt = datetime.combine(round_date, datetime.min.time())
 
-        now = datetime.now()
+        now = datetime.now()  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
         diff = now - dt
         days = diff.days
 
@@ -1331,7 +1331,7 @@ async def get_stats_sessions(
             end_time_str = f"{lt[:2]}:{lt[2:4]}"
 
         # Time ago
-        now = datetime.now()
+        now = datetime.now()  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
         diff = now - dt
         days = diff.days
         if days == 0:

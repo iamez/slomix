@@ -971,7 +971,7 @@ class C0RNP0RN3StatsParser:
             'players': round_2_only_players,
             'mvp': mvp,
             'total_players': len(round_2_only_players),
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': datetime.now().isoformat(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             'differential_calculation': True,  # Flag to indicate this was calculated
         }
 
@@ -1115,7 +1115,7 @@ class C0RNP0RN3StatsParser:
                 'bot_player_count': bot_player_count,
                 'human_player_count': human_player_count,
                 'is_bot_round': is_bot_round,
-                'timestamp': datetime.now().isoformat(),
+                'timestamp': datetime.now().isoformat(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             }
 
         except Exception as e:
@@ -1409,7 +1409,7 @@ class C0RNP0RN3StatsParser:
             'players': [],
             'mvp': None,
             'total_players': 0,
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': datetime.now().isoformat(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         }
 
 

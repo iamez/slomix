@@ -378,7 +378,7 @@ class TimingDebugService:
             embed = discord.Embed(
                 title=f"⏱️ TIMING DEBUG: {map_name or 'Unknown'} R{db_round_num}",
                 color=embed_color,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Stats File (c0rnp0rn) section
@@ -628,7 +628,7 @@ class TimingDebugService:
             embed = discord.Embed(
                 title=f"⏱️ SESSION TIMING DEBUG: {total_rounds} rounds",
                 color=embed_color,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Table header

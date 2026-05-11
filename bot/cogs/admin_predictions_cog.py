@@ -122,7 +122,7 @@ class AdminPredictionsCog(commands.Cog, name="Admin Predictions"):
                 title="🔧 Admin: Prediction Management",
                 description=f"Showing {len(rows)} prediction(s) - Filter: **{status}**",
                 color=0xFF6B00,  # Orange for admin
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             for row in rows:
@@ -224,7 +224,7 @@ class AdminPredictionsCog(commands.Cog, name="Admin Predictions"):
             embed = discord.Embed(
                 title="✅ Prediction Outcome Updated",
                 color=0x00FF00 if pred_correct else 0xFF0000,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             winner_text = {0: "Draw/Cancelled", 1: "Team A", 2: "Team B"}[winner]
@@ -298,7 +298,7 @@ class AdminPredictionsCog(commands.Cog, name="Admin Predictions"):
             embed = discord.Embed(
                 title="✅ Recalculation Complete",
                 color=0x00FF00,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             embed.add_field(name="Total Predictions", value=str(len(rows)), inline=True)
@@ -366,7 +366,7 @@ class AdminPredictionsCog(commands.Cog, name="Admin Predictions"):
                 title="⚡ Prediction System Performance",
                 description="System health and metrics",
                 color=0x3498DB,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             embed.add_field(

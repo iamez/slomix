@@ -175,7 +175,7 @@ class SessionEmbedBuilder:
             title=f"📊 Session Summary: {latest_date}",
             description=desc,
             color=0x5865F2,
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         # Build player summary - split into multiple fields to avoid 1024 char limit
@@ -514,7 +514,7 @@ class SessionEmbedBuilder:
             title=f"Session Awards - {latest_date}",
             description=f"Cumulative awards from {rounds_with}/{total_rounds} rounds",
             color=0xFFD700,  # Gold
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         # Category config with emojis
@@ -599,7 +599,7 @@ class SessionEmbedBuilder:
             title=f"⚔️ Team Analytics - {team_1_name} vs {team_2_name}",
             description=analytics_desc,
             color=0xED4245,
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         # Team stats - separate fields for each team
@@ -687,7 +687,7 @@ class SessionEmbedBuilder:
                 "🔄 indicates players who swapped teams during session"
             ),
             color=0x57F287,
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         # Team 1 roster
@@ -735,7 +735,7 @@ class SessionEmbedBuilder:
             title="💥 DPM Analytics - Damage Per Minute",
             description="Enhanced DPM with Kill/Death Details",
             color=0xFEE75C,
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         # DPM Leaderboard
@@ -775,7 +775,7 @@ class SessionEmbedBuilder:
             title="🔫 Weapon Mastery Breakdown",
             description="Top weapons and combat statistics",
             color=0x5865F2,
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         # Group weapons by player
@@ -824,7 +824,7 @@ class SessionEmbedBuilder:
             title="🏆 SESSION SPECIAL AWARDS 🏆",
             description="*Celebrating excellence... and chaos!*",
             color=0xFFD700,  # Gold
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         # Calculate awards

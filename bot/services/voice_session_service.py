@@ -346,7 +346,7 @@ class VoiceSessionService:
                         title="🏁 Gaming Session Complete!",
                         description=f"Duration: {display_duration}",
                         color=0xFFD700,
-                        timestamp=datetime.now(),
+                        timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     )
                     embed.add_field(
                         name="👥 Participants",
@@ -454,7 +454,7 @@ class VoiceSessionService:
                     "Generating session summary..."
                 ),
                 color=0xFF8800,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
             await channel.send(embed=embed)
 
@@ -619,7 +619,7 @@ class VoiceSessionService:
             # during an ongoing gaming session
             recent_activity = False
             if total_players >= self.config.session_start_threshold:
-                cutoff_time = datetime.now() - timedelta(minutes=self.config.session_gap_minutes)
+                cutoff_time = datetime.now() - timedelta(minutes=self.config.session_gap_minutes)  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 cutoff_date = cutoff_time.strftime('%Y-%m-%d')
                 cutoff_time_str = cutoff_time.strftime('%H%M%S')
 
@@ -755,7 +755,7 @@ class VoiceSessionService:
                             f"Use `!suggest_teams` to see balanced team options!"
                         ),
                         color=0x00D166,
-                        timestamp=datetime.now()
+                        timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     )
                     embed.set_footer(
                         text="Vote on team suggestions with reactions"
@@ -796,7 +796,7 @@ class VoiceSessionService:
 
                 # Check cooldown (don't spam if teams keep splitting)
                 if self.last_split_time:
-                    time_since_last = datetime.now() - self.last_split_time
+                    time_since_last = datetime.now() - self.last_split_time  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     cooldown = timedelta(minutes=self.prediction_cooldown_minutes)
                     if time_since_last < cooldown and not is_new_split:
                         logger.debug(
@@ -811,7 +811,7 @@ class VoiceSessionService:
                 self.team_b_channel_id = split_data['team_b_channel_id']
                 self.team_a_guids = split_data['team_a_guids']
                 self.team_b_guids = split_data['team_b_guids']
-                self.last_split_time = datetime.now()
+                self.last_split_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
                 # Log event
                 if is_new_split:
@@ -873,7 +873,7 @@ class VoiceSessionService:
                                         logger.warning("⚠️ Production channel not found, prediction not posted")
 
                                     # Store prediction in database
-                                    session_date = datetime.now().strftime('%Y-%m-%d')
+                                    session_date = datetime.now().strftime('%Y-%m-%d')  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                                     prediction_id = await self.prediction_engine.store_prediction(
                                         prediction,
                                         split_data,

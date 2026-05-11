@@ -27,7 +27,7 @@ class WebsiteSessionDataService(SessionDataService):
                 dt = datetime.strptime(date_val, "%Y-%m-%d")  # noqa: DTZ007 date-only parsing, no time component used
             else:
                 dt = datetime.combine(date_val, datetime.min.time())
-            now = datetime.now()
+            now = datetime.now()  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
             diff = now - dt
             days = diff.days
             if days == 0:

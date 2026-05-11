@@ -179,7 +179,7 @@ class _WebhookMetadataMixin:
     def _prune_processed_webhook_message_ids(self) -> None:
         if not self._processed_webhook_message_ids:
             return
-        cutoff = datetime.now() - timedelta(seconds=self._webhook_message_dedupe_ttl)
+        cutoff = datetime.now() - timedelta(seconds=self._webhook_message_dedupe_ttl)  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         while self._processed_webhook_message_ids and self._processed_webhook_message_ids[0][0] < cutoff:
             _, stale_id = self._processed_webhook_message_ids.popleft()
             self._processed_webhook_message_id_set.discard(stale_id)
@@ -193,7 +193,7 @@ class _WebhookMetadataMixin:
         self._prune_processed_webhook_message_ids()
         if message_id in self._processed_webhook_message_id_set:
             return False
-        now = datetime.now()
+        now = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         self._processed_webhook_message_ids.append((now, message_id))
         self._processed_webhook_message_id_set.add(message_id)
         return True
@@ -207,7 +207,7 @@ class _WebhookMetadataMixin:
         window_seconds: int,
         label: str,
     ) -> bool:
-        now = datetime.now()
+        now = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         window_start = now - timedelta(seconds=window_seconds)
         timestamps = bucket[bucket_key]
 

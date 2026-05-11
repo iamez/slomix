@@ -50,7 +50,7 @@ class HealthMonitor:
         self.metrics = metrics_logger
 
         # Health state
-        self.start_time = datetime.now()
+        self.start_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         self.last_check_time: datetime | None = None
         self.is_monitoring = False
 
@@ -121,7 +121,7 @@ class HealthMonitor:
             if issues:
                 await self._send_health_alert(issues, health_data)
 
-            self.last_check_time = datetime.now()
+            self.last_check_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             logger.debug(f"✅ Health check complete: {health_data['status']}")
 
             return health_data
@@ -132,13 +132,13 @@ class HealthMonitor:
 
     async def _gather_health_data(self) -> dict[str, Any]:
         """Gather all health metrics"""
-        uptime = datetime.now() - self.start_time
+        uptime = datetime.now() - self.start_time  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
         health = {
             'status': 'healthy',
             'uptime': str(uptime).split('.')[0],
             'uptime_seconds': int(uptime.total_seconds()),
-            'timestamp': datetime.now().isoformat(),
+            'timestamp': datetime.now().isoformat(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         }
 
         # Get bot error count from track_error() system
@@ -218,12 +218,12 @@ class HealthMonitor:
         try:
             # Rate limiting
             if self.last_alert_time:
-                elapsed = (datetime.now() - self.last_alert_time).total_seconds()
+                elapsed = (datetime.now() - self.last_alert_time).total_seconds()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 if elapsed < self.alert_cooldown:
                     logger.debug(f"Alert suppressed (cooldown: {self.alert_cooldown - elapsed:.0f}s)")
                     return
 
-            self.last_alert_time = datetime.now()
+            self.last_alert_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
             # Get channel
             channel = self.bot.get_channel(self.admin_channel_id)
@@ -238,7 +238,7 @@ class HealthMonitor:
                 title="🚨 Bot Health Alert",
                 description="Health issues detected that require attention",
                 color=color,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Add issues
@@ -280,7 +280,7 @@ class HealthMonitor:
         embed = discord.Embed(
             title="🏥 Bot Health Status",
             color=color,
-            timestamp=datetime.now()
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
         )
 
         # Status overview

@@ -427,7 +427,7 @@ class RoundPublisherService:
                 title=title,
                 description="\n".join(description_parts),
                 color=embed_color,
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Rank emoji/number helper
@@ -753,7 +753,7 @@ class RoundPublisherService:
                 title=f"🗺️ {map_name.upper()} - Map Complete!",
                 description=f"Aggregate stats from **{total_rounds} rounds**",
                 color=discord.Color.gold(),
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Map overview
@@ -863,7 +863,7 @@ class RoundPublisherService:
             embed = discord.Embed(
                 title=title,
                 color=discord.Color.gold(),
-                timestamp=datetime.now()
+                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             )
 
             # Category display info

@@ -498,9 +498,9 @@ async def get_leaderboard(
 ):
     # Calculate start date
     if period == "7d":
-        start_date_str = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        start_date_str = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
     elif period == "30d":
-        start_date_str = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        start_date_str = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
     elif period == "season":
         sm = SeasonManager()
         start_date_str = sm.get_season_dates()[0].strftime("%Y-%m-%d")
@@ -723,7 +723,7 @@ async def get_quick_leaders(
     - Top XP in last 7 days
     - Top DPM per session in last 7 days
     """
-    start_date = (datetime.now() - timedelta(days=7)).date()
+    start_date = (datetime.now() - timedelta(days=7)).date()  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
 
     xp_query = """
         SELECT
