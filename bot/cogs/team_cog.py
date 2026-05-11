@@ -84,7 +84,7 @@ class TeamCog(commands.Cog):
 
             # Validate date format
             try:
-                datetime.strptime(date, "%Y-%m-%d")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
+                datetime.strptime(date, "%Y-%m-%d")  # noqa: DTZ007 — date-only validation of user-supplied YYYY-MM-DD, no time component
             except ValueError:
                 await ctx.send(
                     "❌ Invalid date format. Use YYYY-MM-DD (e.g., 2025-10-28)"
@@ -152,7 +152,7 @@ class TeamCog(commands.Cog):
         try:
             # Validate date format
             try:
-                datetime.strptime(date, "%Y-%m-%d")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
+                datetime.strptime(date, "%Y-%m-%d")  # noqa: DTZ007 — date-only validation of user-supplied YYYY-MM-DD, no time component
             except ValueError:
                 await ctx.send(
                     "❌ Invalid date format. Use YYYY-MM-DD (e.g., 2025-10-28)"
@@ -222,9 +222,9 @@ class TeamCog(commands.Cog):
 
             # Validate dates
             try:
-                datetime.strptime(current_date, "%Y-%m-%d")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
+                datetime.strptime(current_date, "%Y-%m-%d")  # noqa: DTZ007 — date-only validation of user-supplied YYYY-MM-DD, no time component
                 if previous_date:
-                    datetime.strptime(previous_date, "%Y-%m-%d")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
+                    datetime.strptime(previous_date, "%Y-%m-%d")  # noqa: DTZ007 — date-only validation of user-supplied YYYY-MM-DD, no time component
             except ValueError:
                 await ctx.send(
                     "❌ Invalid date format. Use YYYY-MM-DD (e.g., 2025-10-28)"
@@ -324,7 +324,7 @@ class TeamCog(commands.Cog):
 
             # Validate date
             try:
-                datetime.strptime(date, "%Y-%m-%d")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
+                datetime.strptime(date, "%Y-%m-%d")  # noqa: DTZ007 — date-only validation of user-supplied YYYY-MM-DD, no time component
             except ValueError:
                 await ctx.send(
                     "❌ Invalid date format. Use YYYY-MM-DD (e.g., 2025-10-28)"
@@ -543,7 +543,7 @@ class TeamCog(commands.Cog):
 
             # Validate date
             try:
-                datetime.strptime(date, "%Y-%m-%d")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
+                datetime.strptime(date, "%Y-%m-%d")  # noqa: DTZ007 — date-only validation of user-supplied YYYY-MM-DD, no time component
             except ValueError:
                 await ctx.send("❌ Invalid date format. Use YYYY-MM-DD")
                 return
