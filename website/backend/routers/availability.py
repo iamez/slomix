@@ -16,6 +16,33 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from website.backend.dependencies import get_db
 from website.backend.logging_config import get_app_logger
+from website.backend.middleware.auth_helpers import (
+    configured_admin_ids as _configured_admin_ids,
+)
+from website.backend.middleware.auth_helpers import (
+    configured_promoter_ids as _configured_promoter_ids,
+)
+from website.backend.middleware.auth_helpers import (
+    is_admin_user as _is_admin_user,
+)
+from website.backend.middleware.auth_helpers import (
+    link_token_hash as _link_token_hash,
+)
+from website.backend.middleware.auth_helpers import (
+    optional_user as _optional_user,
+)
+from website.backend.middleware.auth_helpers import (
+    optional_user_id as _optional_user_id,
+)
+from website.backend.middleware.auth_helpers import (
+    require_ajax_csrf_header as _require_ajax_csrf_header,
+)
+from website.backend.middleware.auth_helpers import (
+    require_user as _require_user,
+)
+from website.backend.middleware.auth_helpers import (
+    website_user_id_from_user as _website_user_id_from_user,
+)
 from website.backend.services.contact_handle_crypto import ContactHandleCrypto, mask_contact
 
 logger = get_app_logger("availability.api")
@@ -42,78 +69,6 @@ PROMOTION_GLOBAL_COOLDOWN = os.getenv("AVAILABILITY_PROMOTION_GLOBAL_COOLDOWN", 
 PROMOTION_CHANNEL_TYPES = ("discord", "telegram", "signal")
 PROMOTION_JOB_TYPES = ("send_reminder_2045", "send_start_2100", "voice_check_2100")
 PROMOTION_PREFERRED_CHANNELS = ("discord", "telegram", "signal", "any")
-
-
-def _require_user(request: Request) -> dict[str, Any]:
-    user = request.session.get("user")
-    if not user or "id" not in user:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    return user
-
-
-def _optional_user(request: Request) -> dict[str, Any] | None:
-    user = request.session.get("user")
-    if not user or "id" not in user:
-        return None
-    return user
-
-
-def _optional_user_id(request: Request) -> int | None:
-    user = _optional_user(request)
-    if not user:
-        return None
-    try:
-        return int(user["id"])
-    except (TypeError, ValueError):
-        return None
-
-
-def _require_ajax_csrf_header(request: Request) -> None:
-    """Require a non-simple AJAX header on state-changing session routes."""
-    if request.headers.get("x-requested-with", "").lower() != "xmlhttprequest":
-        raise HTTPException(status_code=403, detail="Missing required CSRF header")
-
-
-def _configured_admin_ids() -> set[int]:
-    ids: set[int] = set()
-    for env_name in ("WEBSITE_ADMIN_DISCORD_IDS", "ADMIN_DISCORD_IDS", "OWNER_USER_ID"):
-        raw = os.getenv(env_name, "")
-        if not raw:
-            continue
-        for token in raw.split(","):
-            token = token.strip()
-            if token.isdigit():
-                ids.add(int(token))
-    return ids
-
-
-def _is_admin_user(request: Request) -> bool:
-    user_id = _optional_user_id(request)
-    if user_id is None:
-        return False
-    return user_id in _configured_admin_ids()
-
-
-def _configured_promoter_ids() -> set[int]:
-    raw = os.getenv("PROMOTER_DISCORD_IDS", "")
-    if not raw:
-        return set()
-    values: set[int] = set()
-    for token in raw.split(","):
-        token = token.strip()
-        if token.isdigit():
-            values.add(int(token))
-    return values
-
-
-def _website_user_id_from_user(user: dict[str, Any]) -> int | None:
-    for key in ("website_user_id", "id"):
-        raw = user.get(key)
-        try:
-            return int(raw)
-        except (TypeError, ValueError):
-            continue
-    return None
 
 
 def _promotion_timezone() -> ZoneInfo:
@@ -250,10 +205,6 @@ def _status_label(status: str) -> str:
     if normalized in STATUS_VALUES:
         return normalized
     raise HTTPException(status_code=400, detail=f"status must be one of: {', '.join(STATUS_VALUES)}")
-
-
-def _link_token_hash(raw_token: str) -> str:
-    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
 
 async def _current_db_date(db) -> date:
