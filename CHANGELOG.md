@@ -6,6 +6,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.14.2](https://github.com/iamez/slomix/compare/v1.14.1...v1.14.2) (2026-05-11)
+
+
+### Bug Fixes
+
+* **logging:** use exc_info=error instead of exc_info=True in error handlers ([#234](https://github.com/iamez/slomix/issues/234)) ([8e10dbb](https://github.com/iamez/slomix/commit/8e10dbb734cbcb558884619fac87d4dee3a0b465))
+
+
+### Performance Improvements
+
+* **kis:** merge spawn_mult + reinf_mult into single pass over spawn_timings ([#241](https://github.com/iamez/slomix/issues/241)) ([9683070](https://github.com/iamez/slomix/commit/968307044a44a1faa4d680b67ebbc5ab5d5a2316))
+* **records:** parallelize 13 sequential queries via asyncio.gather ([#243](https://github.com/iamez/slomix/issues/243)) ([c347fd4](https://github.com/iamez/slomix/commit/c347fd407b331951bb507e4d7ebd64c03e6450f9))
+
 ## [1.14.1](https://github.com/iamez/slomix/compare/v1.14.0...v1.14.1) (2026-05-11)
 
 
