@@ -285,8 +285,10 @@ class MatchupCog(commands.Cog):
             worst = [n for n in nemeses if n['suppression'] < -5][:3]
             if worst:
                 lines.append("**Nemeses** (underperforms against):")
-                for n in worst:
-                    lines.append(f"• {n['name']}: {n['suppression']:.0f}% ({n['matches']} matches)")
+                lines.extend(
+                    f"• {n['name']}: {n['suppression']:.0f}% ({n['matches']} matches)"
+                    for n in worst
+                )
 
             # Easy matchups (positive impact)
             best = [n for n in nemeses if n['suppression'] > 5]
@@ -294,8 +296,10 @@ class MatchupCog(commands.Cog):
             best = best[:3]
             if best:
                 lines.append("\n**Favorable Matchups** (overperforms against):")
-                for n in best:
-                    lines.append(f"• {n['name']}: +{n['suppression']:.0f}% ({n['matches']} matches)")
+                lines.extend(
+                    f"• {n['name']}: +{n['suppression']:.0f}% ({n['matches']} matches)"
+                    for n in best
+                )
 
             embed = discord.Embed(
                 title="Nemesis Analysis",

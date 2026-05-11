@@ -488,23 +488,22 @@ class SessionViewHandlers:
                 + abs(int(getattr(row, "denied_diff_seconds", 0) or 0)),
                 reverse=True,
             )
-            rows = []
-            for row in rows_sorted[:top_n]:
-                rows.append(
-                    {
-                        "round_id": int(getattr(row, "round_id", 0) or 0),
-                        "map_name": getattr(row, "map_name", "unknown"),
-                        "round_number": int(getattr(row, "round_number", 0) or 0),
-                        "player_name": getattr(row, "player_name", "Unknown"),
-                        "old_dead_seconds": int(getattr(row, "old_dead_seconds", 0) or 0),
-                        "new_dead_seconds": int(getattr(row, "new_dead_seconds", 0) or 0),
-                        "dead_diff_seconds": int(getattr(row, "dead_diff_seconds", 0) or 0),
-                        "old_denied_seconds": int(getattr(row, "old_denied_playtime", 0) or 0),
-                        "new_denied_seconds": int(getattr(row, "new_denied_playtime", 0) or 0),
-                        "denied_diff_seconds": int(getattr(row, "denied_diff_seconds", 0) or 0),
-                        "fallback_reason": getattr(row, "fallback_reason", ""),
-                    }
-                )
+            rows = [
+                {
+                    "round_id": int(getattr(row, "round_id", 0) or 0),
+                    "map_name": getattr(row, "map_name", "unknown"),
+                    "round_number": int(getattr(row, "round_number", 0) or 0),
+                    "player_name": getattr(row, "player_name", "Unknown"),
+                    "old_dead_seconds": int(getattr(row, "old_dead_seconds", 0) or 0),
+                    "new_dead_seconds": int(getattr(row, "new_dead_seconds", 0) or 0),
+                    "dead_diff_seconds": int(getattr(row, "dead_diff_seconds", 0) or 0),
+                    "old_denied_seconds": int(getattr(row, "old_denied_playtime", 0) or 0),
+                    "new_denied_seconds": int(getattr(row, "new_denied_playtime", 0) or 0),
+                    "denied_diff_seconds": int(getattr(row, "denied_diff_seconds", 0) or 0),
+                    "fallback_reason": getattr(row, "fallback_reason", ""),
+                }
+                for row in rows_sorted[:top_n]
+            ]
 
             round_diagnostics = tuple(getattr(shadow_result, "round_diagnostics", ()) or ())
             rounds_total = len(round_diagnostics)

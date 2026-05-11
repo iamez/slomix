@@ -268,9 +268,8 @@ async def list_uploads(
 
     rows = await db.fetch_all(data_q, tuple(params))
 
-    items = []
-    for r in rows:
-        items.append({
+    items = [
+        {
             "id": r[0],
             "title": r[1],
             "filename": r[2],
@@ -282,7 +281,9 @@ async def list_uploads(
             "download_count": r[8],
             "created_at": str(r[9]) if r[9] else None,
             "share_url": f"/share/{r[0]}",
-        })
+        }
+        for r in rows
+    ]
 
     return {"items": items, "total": total or 0, "limit": limit, "offset": offset}
 

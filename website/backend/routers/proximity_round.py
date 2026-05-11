@@ -66,9 +66,9 @@ async def get_proximity_round_timeline(
         duration_ms = int((dur_row[0] or 0) * 1000) if dur_row and dur_row[0] else 0
 
         # Build unified event timeline — flat structure matching frontend TimelineEvent
-        events = []
-        for r in (engagements or []):
-            events.append({
+        events: list[dict] = []
+        events.extend(
+            {
                 "type": "engagement",
                 "id": r[0],
                 "time": int(r[1] or 0),
@@ -81,23 +81,29 @@ async def get_proximity_round_timeline(
                 "start_y": float(r[12]) if r[12] is not None else None,
                 "end_x": float(r[13]) if r[13] is not None else None,
                 "end_y": float(r[14]) if r[14] is not None else None,
-            })
-        for r in (spawn_events or []):
-            events.append({
+            }
+            for r in (engagements or [])
+        )
+        events.extend(
+            {
                 "type": "spawn_timing_kill",
                 "time": int(r[0] or 0),
                 "attacker_name": r[2],
                 "victim_name": r[4],
                 "score": float(r[5] or 0),
-            })
-        for r in (trades or []):
-            events.append({
+            }
+            for r in (spawn_events or [])
+        )
+        events.extend(
+            {
                 "type": "trade_kill",
                 "time": int(r[1] or 0),
                 "trader_name": r[6],
                 "avenged_name": r[4],
                 "delta_ms": int(r[2] or 0),
-            })
+            }
+            for r in (trades or [])
+        )
         for r in (pushes or []):
             push_start = int(r[0] or 0)
             push_end = int(r[1] or 0)
