@@ -309,12 +309,18 @@ class _MonitorTasksMixin:
         to avoid fetching all 4000+ rows every cycle.
         """
         try:
-            from datetime import datetime
+            from datetime import datetime, timezone
+
+            # naive UTC preserves prior datetime.utcnow() behavior — the
+            # `_cache_last_refresh` is passed to file_repository which expects
+            # naive datetimes for comparison against TIMESTAMP columns.
+            def _utcnow_naive() -> datetime:
+                return datetime.now(timezone.utc).replace(tzinfo=None)
 
             if not hasattr(self, '_cache_last_refresh'):
                 # First run: full load
                 self.processed_files = await self.file_repository.get_processed_filenames()
-                self._cache_last_refresh = datetime.utcnow()
+                self._cache_last_refresh = _utcnow_naive()
             else:
                 # Subsequent runs: incremental delta only
                 new_files = await self.file_repository.get_newly_processed_filenames(
@@ -322,7 +328,7 @@ class _MonitorTasksMixin:
                 )
                 if new_files:
                     self.processed_files.update(new_files)
-                self._cache_last_refresh = datetime.utcnow()
+                self._cache_last_refresh = _utcnow_naive()
 
         except Exception as e:
             logger.debug(f"Cache refresh error: {e}")

@@ -6,7 +6,7 @@ Extracted from api.py to reduce file size and improve maintainability.
 
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -65,7 +65,7 @@ async def get_diagnostics(
         "monitoring": {},
     }
 
-    results["timestamp"] = datetime.utcnow().isoformat()
+    results["timestamp"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
     # Tables to check
     tables_to_check = [
@@ -911,7 +911,7 @@ async def get_monitoring_status(
     """
     Lightweight monitoring status for history tables.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     payload = {
         "server": {
             "count": 0,
@@ -1055,7 +1055,7 @@ async def get_server_activity_history(
     """
     try:
         # Calculate time range
-        since = datetime.utcnow() - timedelta(hours=hours)
+        since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
 
         # Fetch data points
         query = """
@@ -1147,7 +1147,7 @@ async def get_voice_activity_history(
     """
     try:
         # Calculate time range
-        since = datetime.utcnow() - timedelta(hours=hours)
+        since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
 
         # Fetch data points from voice_status_history
         query = """
@@ -1256,7 +1256,7 @@ async def get_current_voice_activity(
 
             # Calculate time in voice
             if joined_at:
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc).replace(tzinfo=None)
                 if hasattr(joined_at, "replace"):
                     # Make naive if timezone-aware
                     if joined_at.tzinfo is not None:

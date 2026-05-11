@@ -11,7 +11,7 @@ import csv
 import logging
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
 
@@ -228,7 +228,7 @@ class SessionTimingShadowService:
         if not normalized_ids:
             return SessionTimingShadowResult(
                 session_ids=tuple(),
-                generated_at=datetime.utcnow(),
+                generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 player_rounds=tuple(),
                 player_summaries=tuple(),
                 round_diagnostics=tuple(),
@@ -239,7 +239,7 @@ class SessionTimingShadowService:
         if not force_refresh and normalized_ids in self._cache:
             return self._cache[normalized_ids]
 
-        generated_at = datetime.utcnow()
+        generated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         round_rows = await self._fetch_round_rows(normalized_ids)
         old_rows = await self._fetch_old_rows(normalized_ids)
 
