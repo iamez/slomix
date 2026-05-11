@@ -397,9 +397,8 @@ async def get_round_viz(
         (round_id,),
     )
 
-    players = []
-    for r in rows:
-        players.append({
+    players = [
+        {
             "name": r[0],
             "guid": r[1],
             "kills": r[2] or 0,
@@ -418,7 +417,9 @@ async def get_round_viz(
             "kill_assists": r[15],
             "efficiency": float(r[16]),
             "dpm": float(r[17]),
-        })
+        }
+        for r in rows
+    ]
 
     # Compute highlights
     highlights: dict[str, Any] = {}
