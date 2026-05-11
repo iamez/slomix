@@ -59,6 +59,12 @@ async def get_records(
     # parallel via asyncio.gather. Previously this loop ran 13 queries
     # sequentially (~150 ms each → ~2 s page latency). With gather the
     # total time collapses to roughly a single query's RTT.
+    #
+    # A bounded semaphore caps simultaneous connection acquisitions per
+    # request so a couple of concurrent /stats/records callers can't
+    # exhaust the shared asyncpg pool (~20 conns) and queue every other
+    # endpoint behind us. 5 is a balance: ≥80% of the latency win, ≤25%
+    # of peak pool pressure.
     plans: list[tuple[str, str, tuple]] = []
     for key, config in categories.items():
         col = config["col"]
@@ -78,21 +84,36 @@ async def get_records(
         q_params = (map_name, limit) if map_name else (limit,)
         plans.append((key, query, q_params))
 
+    sem = asyncio.Semaphore(5)
+
+    async def _run(q: str, p: tuple):
+        async with sem:
+            return await db.fetch_all(q, p)
+
     rows_per_category = await asyncio.gather(
-        *(db.fetch_all(q, p) for _, q, p in plans),
+        *(_run(q, p) for _, q, p in plans),
         return_exceptions=True,
     )
 
     results: dict[str, list[dict]] = {}
     for (key, _, _), outcome in zip(plans, rows_per_category):
-        if isinstance(outcome, BaseException):
+        # Re-raise CancelledError so request cancellation / shutdown
+        # signals propagate; only treat ordinary Exceptions as a
+        # per-category failure to fall back to [].
+        if isinstance(outcome, BaseException) and not isinstance(outcome, Exception):
+            raise outcome
+        if isinstance(outcome, Exception):
+            # Match prior behavior: exception falls back to []
             logger.error(f"Error fetching record for {key}: {outcome}")
             results[key] = []
             continue
-        results[key] = [
-            {"player": row[0], "value": row[1], "map": row[2], "date": row[3]}
-            for row in (outcome or [])
-        ]
+        rows = outcome or []
+        if rows:
+            # Match prior behavior: empty success result omits the key
+            results[key] = [
+                {"player": row[0], "value": row[1], "map": row[2], "date": row[3]}
+                for row in rows
+            ]
 
     return results
 
