@@ -141,8 +141,8 @@ async def get_proximity_hotzones(
                    COUNT(*) AS total_events
             FROM combat_engagement e
             """
-            + f" {map_filter} "
-            + """
+            f" {map_filter} "
+            """
               AND COALESCE(e.end_x, e.start_x) IS NOT NULL
               AND COALESCE(e.end_y, e.start_y) IS NOT NULL
             GROUP BY 1, 2
