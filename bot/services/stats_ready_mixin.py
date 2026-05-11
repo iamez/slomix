@@ -155,7 +155,7 @@ class _StatsReadyMixin:
         """
         try:
             from datetime import datetime
-            timestamp = datetime.fromtimestamp(round_metadata['round_end_unix'])
+            timestamp = datetime.fromtimestamp(round_metadata['round_end_unix'])  # noqa: DTZ006 — local-naive to match remote stats-file date prefixes (CET game server)
             date_prefix = timestamp.strftime('%Y-%m-%d')
             webhook_logger.info(
                 f"🔍 Looking for stats file from {date_prefix} for {round_metadata['map_name']}"

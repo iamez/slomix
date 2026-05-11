@@ -303,12 +303,12 @@ class TimingComparisonService:
             candidates = []
             if end_unix:
                 try:
-                    candidates.append(datetime.fromtimestamp(end_unix))
+                    candidates.append(datetime.fromtimestamp(end_unix))  # noqa: DTZ006 — local-naive timestamps compared against naive round_date/round_time
                 except (OSError, ValueError, TypeError):
                     pass
             if start_unix:
                 try:
-                    candidates.append(datetime.fromtimestamp(start_unix))
+                    candidates.append(datetime.fromtimestamp(start_unix))  # noqa: DTZ006
                 except (OSError, ValueError, TypeError):
                     pass
 
@@ -398,12 +398,12 @@ class TimingComparisonService:
             candidates = []
             if end_unix:
                 try:
-                    candidates.append(datetime.fromtimestamp(end_unix))
+                    candidates.append(datetime.fromtimestamp(end_unix))  # noqa: DTZ006 — local-naive timestamps compared against naive round_date/round_time
                 except (OSError, ValueError, TypeError):
                     pass  # Invalid/out-of-range unix timestamp; skip
             if start_unix:
                 try:
-                    candidates.append(datetime.fromtimestamp(start_unix))
+                    candidates.append(datetime.fromtimestamp(start_unix))  # noqa: DTZ006
                 except (OSError, ValueError, TypeError):
                     pass  # Invalid/out-of-range unix timestamp; skip
             if captured_at:

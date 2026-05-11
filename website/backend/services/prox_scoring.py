@@ -12,7 +12,7 @@ import asyncio
 import bisect
 import logging
 import math
-from datetime import date, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -254,7 +254,7 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
     doesn't gate the rest. Results merge sequentially into `players`
     afterwards (no shared-state race).
     """
-    since_date = date.today() - timedelta(days=int(range_days))
+    since_date = datetime.now(timezone.utc).date() - timedelta(days=int(range_days))
     players: dict[str, dict] = {}
 
     def _merge(guid: str, name: str, data: dict):

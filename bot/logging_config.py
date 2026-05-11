@@ -41,7 +41,7 @@ class DetailedFormatter(logging.Formatter):
             record.guild_id = 'N/A'
 
         # Format timestamp
-        timestamp = datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S')
+        timestamp = datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S')  # noqa: DTZ006 — log timestamps intentionally in local-naive time for operator readability
 
         # Base format
         if self.use_colors:

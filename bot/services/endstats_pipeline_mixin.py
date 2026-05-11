@@ -66,7 +66,10 @@ class _EndstatsPipelineMixin:
             # Only consider files from the same day to avoid picking old files
             date_prefix = None
             if target_time:
-                date_prefix = datetime.fromtimestamp(target_time).strftime('%Y-%m-%d')
+                # Remote stats files are named using the game-server's LOCAL
+                # date (server runs CET) — the date_prefix must match that
+                # local date, not UTC, so we keep the bare fromtimestamp().
+                date_prefix = datetime.fromtimestamp(target_time).strftime('%Y-%m-%d')  # noqa: DTZ006
 
             matching_files = []
             for attempt in range(4):
