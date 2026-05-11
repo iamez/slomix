@@ -30,7 +30,7 @@ def event_loop_policy():
     return asyncio.get_event_loop_policy()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def event_loop(event_loop_policy):
     """Create an event loop for each test function"""
     loop = event_loop_policy.new_event_loop()
