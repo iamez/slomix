@@ -97,7 +97,7 @@ class _AvailabilityTelegramGatewayMixin:
             await connector.send_message(chat_id, self._format_external_usage())
             return
 
-        if lower.startswith("/avail") or lower.startswith("/today") or lower.startswith("/tomorrow"):
+        if lower.startswith(("/avail", "/today", "/tomorrow")):
             reply = await self._apply_external_availability_command(
                 channel_type="telegram",
                 channel_address=chat_id,

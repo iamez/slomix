@@ -237,7 +237,7 @@ def setup_logging(
     file_formatter = JSONFormatter() if json_logs else StandardFormatter()
 
     # Setup file handlers
-    for log_name, config in LOG_FILES.items():
+    for config in LOG_FILES.values():
         handler = logging.handlers.RotatingFileHandler(
             filename=LOG_DIR / config["filename"],
             maxBytes=config["max_bytes"],

@@ -132,7 +132,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _should_limit(path: str) -> bool:
-        return path.startswith("/api/") or path.startswith("/auth/")
+        return path.startswith(("/api/", "/auth/"))
 
     @staticmethod
     def _load_trusted_proxies(

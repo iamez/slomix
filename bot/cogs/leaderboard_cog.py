@@ -40,7 +40,6 @@ class LeaderboardCog(commands.Cog, name="Leaderboard"):
 
     async def _enable_sql_diag(self):
         """Enable SQL diagnostics for troubleshooting (no-op for PostgreSQL)"""
-        pass
 
     @is_public_channel()
     @commands.cooldown(1, 5, commands.BucketType.user)

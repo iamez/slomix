@@ -49,4 +49,3 @@ def get_voice_status_from_db(db_adapter) -> dict:
     """
     # This will be implemented to read from live_status table
     # which the bot populates
-    pass
