@@ -995,7 +995,11 @@ class UltimateETLegacyBot(
                 # Reuse the same correlation service so stats imports participate
                 # in the same round completeness lifecycle as webhook/gametime data.
                 if hasattr(self, 'correlation_service') and self.correlation_service:
-                    db_manager._correlation_service = self.correlation_service
+                    # Inject bot's correlation service into the db_manager so
+                    # stats imports participate in the same lifecycle. The
+                    # underscore is intentional: this is a framework-managed
+                    # internal attribute, not part of the manager's public API.
+                    db_manager._correlation_service = self.correlation_service  # noqa: SLF001
                 # Reuse the bot's existing asyncpg pool instead of creating a new one
                 if hasattr(self, 'db_adapter') and hasattr(self.db_adapter, 'pool') and self.db_adapter.pool:
                     db_manager.pool = self.db_adapter.pool

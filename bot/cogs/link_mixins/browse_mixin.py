@@ -218,7 +218,7 @@ class _LinkBrowseMixin:
             else:
                 view = PaginationView(ctx, pages)
                 view.current_page = initial_page  # Start on requested page
-                view._update_buttons()
+                view.update_buttons()
                 message = await ctx.send(embed=pages[initial_page], view=view)
                 view.message = message  # Store message ref for timeout handling
 

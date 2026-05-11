@@ -134,7 +134,7 @@ def test_parse_time_handles_int_input():
 
 
 # ---------------------------------------------------------------------------
-# _format_seconds
+# format_seconds
 # ---------------------------------------------------------------------------
 
 
@@ -149,22 +149,22 @@ def test_parse_time_handles_int_input():
     (3600,   "60:00"),  # 1h rendered as MM:SS — no HH rollover
 ])
 def test_format_seconds_known_values(seconds, expected):
-    assert RoundPublisherService._format_seconds(seconds) == expected
+    assert RoundPublisherService.format_seconds(seconds) == expected
 
 
 def test_format_seconds_negative_clamps_to_zero():
     """Defensive: negative seconds (clock skew) shouldn't display as
     "-1:00"; clamp to 0:00."""
-    assert RoundPublisherService._format_seconds(-30) == "0:00"
+    assert RoundPublisherService.format_seconds(-30) == "0:00"
 
 
 def test_format_seconds_handles_none():
-    assert RoundPublisherService._format_seconds(None) == "0:00"
+    assert RoundPublisherService.format_seconds(None) == "0:00"
 
 
 def test_format_seconds_zero_pads_seconds():
     """5 seconds renders as 0:05, not 0:5 — required for MM:SS layout."""
-    assert RoundPublisherService._format_seconds(5) == "0:05"
+    assert RoundPublisherService.format_seconds(5) == "0:05"
 
 
 # ---------------------------------------------------------------------------
@@ -200,5 +200,5 @@ def test_format_delta_negative_zero_seconds_is_unsigned():
 
 
 def test_format_delta_seconds_zero_pad():
-    """+0:05 not +0:5 — same MM:SS rule as _format_seconds."""
+    """+0:05 not +0:5 — same MM:SS rule as format_seconds."""
     assert RoundPublisherService._format_delta_seconds(5) == "+0:05"

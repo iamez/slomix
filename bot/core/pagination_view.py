@@ -53,9 +53,9 @@ class PaginationView(View):
             self.next_button.disabled = True
             self.last_button.disabled = True
         else:
-            self._update_buttons()
+            self.update_buttons()
 
-    def _update_buttons(self):
+    def update_buttons(self):
         """Update button enabled/disabled states based on current page"""
         total_pages = len(self.pages)
 
@@ -74,7 +74,7 @@ class PaginationView(View):
         Args:
             interaction: Discord interaction from button click
         """
-        self._update_buttons()
+        self.update_buttons()
         await interaction.response.edit_message(
             embed=self.pages[self.current_page],
             view=self

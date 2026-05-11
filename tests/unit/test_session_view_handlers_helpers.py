@@ -3,7 +3,7 @@
 These tiny helpers shape every paginated `!last_session` view embed.
 A regression silently:
 
-- _format_seconds: produces wrong MM:SS → operator misreads round
+- format_seconds: produces wrong MM:SS → operator misreads round
   durations.
 - _format_delta_seconds: drops the `+` sign or returns "+0:00"
   (positive zero) → ambiguous "is this earlier or later".
@@ -35,7 +35,7 @@ def handlers():
 
 
 # ---------------------------------------------------------------------------
-# _format_seconds — MM:SS rendering
+# format_seconds — MM:SS rendering
 # ---------------------------------------------------------------------------
 
 
@@ -48,22 +48,22 @@ def handlers():
     (3661,  "61:01"),  # ≥1h still MM:SS
 ])
 def test_format_seconds_known_values(secs, expected):
-    assert SessionViewHandlers._format_seconds(secs) == expected
+    assert SessionViewHandlers.format_seconds(secs) == expected
 
 
 def test_format_seconds_handles_none():
     """None → "0:00" (fail-safe)."""
-    assert SessionViewHandlers._format_seconds(None) == "0:00"
+    assert SessionViewHandlers.format_seconds(None) == "0:00"
 
 
 def test_format_seconds_rounds_floats():
     """5.7s → 6 → "0:06" (rounded, not truncated)."""
-    assert SessionViewHandlers._format_seconds(5.7) == "0:06"
+    assert SessionViewHandlers.format_seconds(5.7) == "0:06"
 
 
 def test_format_seconds_handles_garbage():
     """Non-numeric input → "0:00" (try/except guard)."""
-    assert SessionViewHandlers._format_seconds("abc") == "0:00"
+    assert SessionViewHandlers.format_seconds("abc") == "0:00"
 
 
 # ---------------------------------------------------------------------------

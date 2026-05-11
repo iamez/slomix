@@ -23,7 +23,7 @@ class _AvailabilityTelegramGatewayMixin:
         if not connector.enabled:
             return
 
-        client = await connector._get_client()
+        client = await connector.get_client()
         endpoint = f"{connector.api_base_url}/bot{connector.bot_token}/getUpdates"
         response = await client.get(
             endpoint,

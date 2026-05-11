@@ -194,7 +194,7 @@ class _ProximityAdminCommandsMixin:
         await ctx.send("🔍 Scanning for engagement files...")
 
         # Run the scan manually
-        await self._scan_and_import(force=True)
+        await self.scan_and_import(force=True)
 
         await ctx.send(
             f"✅ Scan complete.\n"

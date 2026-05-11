@@ -185,7 +185,7 @@ class _ProximityIngestionMixin:
 
             self._mark_remote_processed(filename)
 
-    async def _scan_and_import(self, force: bool = False) -> None:
+    async def scan_and_import(self, force: bool = False) -> None:
         if not self.enabled:
             return
         if not force and not self.bot.config.proximity_auto_import:
@@ -247,7 +247,7 @@ class _ProximityIngestionMixin:
     @tasks.loop(minutes=2)
     async def scan_engagement_files(self):
         """Periodically scan for new engagement files and import them"""
-        await self._scan_and_import(force=False)
+        await self.scan_and_import(force=False)
 
     @scan_engagement_files.before_loop
     async def before_scan(self):
