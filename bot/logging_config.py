@@ -209,7 +209,7 @@ def log_command_execution(ctx, command_name, start_time=None, end_time=None, err
     if error:
         logger.error(
             f"❌ FAILED: {command_name}{duration} | User: {user} | Guild: {guild} | Channel: {channel} | Error: {error}",
-            exc_info=True
+            exc_info=error
         )
     else:
         logger.info(
@@ -232,7 +232,7 @@ def log_database_operation(operation, details, duration=None, error=None):
     duration_str = f" [{duration:.3f}s]" if duration else ""
 
     if error:
-        logger.error(f"❌ DB {operation} FAILED{duration_str}: {details} | Error: {error}", exc_info=True)
+        logger.error(f"❌ DB {operation} FAILED{duration_str}: {details} | Error: {error}", exc_info=error)
     else:
         logger.debug(f"✓ DB {operation}{duration_str}: {details}")
 
@@ -254,7 +254,7 @@ def log_stats_import(filename, round_count=0, player_count=0, weapon_count=0, du
     duration_str = f" [{duration:.2f}s]" if duration else ""
 
     if error:
-        logger.error(f"❌ IMPORT FAILED{duration_str}: {filename} | Error: {error}", exc_info=True)
+        logger.error(f"❌ IMPORT FAILED{duration_str}: {filename} | Error: {error}", exc_info=error)
     else:
         logger.info(
             f"✓ IMPORTED{duration_str}: {filename} | "
@@ -289,7 +289,7 @@ def log_automation_event(event_type, details, success=True, error=None):
     logger = logging.getLogger('bot.automation')
 
     if error:
-        logger.error(f"❌ {event_type} FAILED: {details} | Error: {error}", exc_info=True)
+        logger.error(f"❌ {event_type} FAILED: {details} | Error: {error}", exc_info=error)
     elif success:
         logger.info(f"✓ {event_type}: {details}")
     else:

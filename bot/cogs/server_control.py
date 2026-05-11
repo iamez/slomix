@@ -799,7 +799,7 @@ class ServerControl(commands.Cog):
                 f"This command can only be used in {channel_mention}!"
             )
         else:
-            logger.error(f"Command error: {error}", exc_info=True)
+            logger.error(f"Command error: {error}", exc_info=error)
             await ctx.send(
                 f"❌ An error occurred: {sanitize_error_message(error)}")
 

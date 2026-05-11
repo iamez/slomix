@@ -109,7 +109,7 @@ class ProximityCog(
 
     async def cog_command_error(self, ctx, error):
         """Handle errors without crashing bot"""
-        logger.error(f"Error in ProximityCog: {error}", exc_info=True)
+        logger.error(f"Error in ProximityCog: {error}", exc_info=error)
         await ctx.send(
             "⚠️ An error occurred in proximity tracker.\n"
             "Main bot functionality is unaffected."

@@ -2052,7 +2052,7 @@ class UltimateETLegacyBot(
             error_logger = get_logger('bot.errors')
             error_logger.error(
                 f"Command error in !{ctx.command.name if ctx.command else 'unknown'}: {error}",
-                exc_info=True
+                exc_info=error
             )
             await ctx.send(f"❌ An error occurred: {sanitize_error_message(error)}")
 
