@@ -206,15 +206,39 @@ class _KisMixin:
                     is_cf = True
                     break
 
-        # Spawn timing bonus (1.0 + score, range 1.0-2.0)
+        # Spawn timing bonus + victim reinf wait (combined single pass).
+        # spawn_mult uses max score across all matching st_data; reinf_mult
+        # uses the first matching st_data's victim_reinf (preserves prior
+        # break-on-first-match semantics). Combining avoids a second walk
+        # of spawn_timings[round_key] further down the function.
         spawn_mult = 1.0
+        reinf_mult = 1.0
+        victim_reinf_stored = 0.0
         if round_key in spawn_timings:
-            best_score = max(
-                (st_data[2] for st_data in spawn_timings[round_key]
-                 if st_data[0] == killer_guid and abs(st_data[1] - kill_time) <= SPAWN_TIMING_WINDOW_MS),
-                default=0.0,
-            )
+            best_score = 0.0
+            first_match_reinf = None
+            for st_data in spawn_timings[round_key]:
+                if (
+                    st_data[0] != killer_guid
+                    or abs(st_data[1] - kill_time) > SPAWN_TIMING_WINDOW_MS
+                ):
+                    continue
+                score = st_data[2]
+                if score > best_score:
+                    best_score = score
+                if first_match_reinf is None:
+                    # (guid, kill_time, score, victim_reinf) after F6.
+                    # Older callers that still pass a 5-tuple with
+                    # enemy_spawn_interval at index 3 → index 4 takes
+                    # precedence (backward-compat for cached fixtures).
+                    if len(st_data) >= 5:
+                        first_match_reinf = st_data[4]
+                    elif len(st_data) >= 4:
+                        first_match_reinf = st_data[3]
             spawn_mult = 1.0 + best_score
+            if first_match_reinf is not None:
+                victim_reinf_stored = float(first_match_reinf)
+                reinf_mult = _graduated_reinf_mult(first_match_reinf)
 
         # Kill outcome multiplier
         outcome_mult = 1.0
@@ -234,8 +258,7 @@ class _KisMixin:
         health_mult = 1.0
         # Oksii adoption: alive count multiplier (outnumbered/solo clutch)
         alive_mult = 1.0
-        # Oksii adoption: reinforcement timing multiplier
-        reinf_mult = 1.0
+        # reinf_mult is computed together with spawn_mult above
 
         cp = None
         cp_key = (killer_guid, round_start_unix, round_number, kill_time)
@@ -262,29 +285,6 @@ class _KisMixin:
                     alive_mult = SOLO_CLUTCH_MULTIPLIER
                 elif my_alive > 0 and (enemy_alive - my_alive) >= outnumbered_threshold:
                     alive_mult = OUTNUMBERED_MULTIPLIER
-
-        # Reinforcement timing multiplier (UTRO-inspired graduated tiers,
-        # 2026-04-20 — replaces the previous binary 1.0/1.2 split).
-        # Longer wait until respawn ⇒ the kill removed more time from the
-        # enemy team, so the multiplier scales from 0.70 (≤2s, they were
-        # about to respawn anyway) up to 1.40 (≥25s, full wave penalty).
-        victim_reinf_stored = 0.0
-        if round_key in spawn_timings:
-            for st_data in spawn_timings[round_key]:
-                if st_data[0] == killer_guid and abs(st_data[1] - kill_time) <= SPAWN_TIMING_WINDOW_MS:
-                    # (guid, kill_time, score, victim_reinf) after F6.
-                    # Older callers that still pass a 5-tuple with
-                    # enemy_spawn_interval at index 3 → index 4 takes
-                    # precedence (backward-compat for cached fixtures).
-                    if len(st_data) >= 5:
-                        victim_reinf_val = st_data[4]
-                    elif len(st_data) >= 4:
-                        victim_reinf_val = st_data[3]
-                    else:
-                        break
-                    victim_reinf_stored = float(victim_reinf_val)
-                    reinf_mult = _graduated_reinf_mult(victim_reinf_val)
-                    break
 
         # Total impact = product of all multipliers
         raw = (1.0 * carrier_mult * push_mult * cf_mult
