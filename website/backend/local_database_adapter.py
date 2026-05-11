@@ -40,11 +40,9 @@ class SQLiteAdapter(DatabaseAdapter):
         """Initialize SQLite connection."""
         if not SQLITE_AVAILABLE:
             raise RuntimeError("aiosqlite not available - cannot connect to SQLite")
-        pass
 
     async def close(self):
         """Close SQLite connection."""
-        pass
 
     @asynccontextmanager
     async def connection(self):

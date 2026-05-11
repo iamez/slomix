@@ -107,7 +107,7 @@ class _WinContributionMixin:
         # player_guid → {name, per_round: [...], total_pwc, won_pwc, lost_pwc, rounds_won, rounds_lost}
         player_data: dict[str, dict] = {}
 
-        for round_id, round_rows in rounds_map.items():
+        for round_rows in rounds_map.values():
             winner_team = round_rows[0][5]  # same for all rows in this round
             map_name = round_rows[0][3]
             round_number = round_rows[0][2]

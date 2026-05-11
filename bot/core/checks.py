@@ -30,7 +30,6 @@ logger = logging.getLogger("bot.core.checks")
 
 class ChannelCheckFailure(commands.CheckFailure):
     """Custom exception for channel check failures (kept for backward compatibility)."""
-    pass
 
 
 def is_admin_channel():
