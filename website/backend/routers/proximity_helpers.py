@@ -125,7 +125,7 @@ def _parse_iso_date(value: str | None) -> Any | None:
     if not raw:
         return None
     try:
-        return datetime.strptime(raw, "%Y-%m-%d").date()
+        return datetime.strptime(raw, "%Y-%m-%d").date()  # noqa: DTZ007 date-only parsing, no time component used
     except ValueError:
         raise HTTPException(
             status_code=400,

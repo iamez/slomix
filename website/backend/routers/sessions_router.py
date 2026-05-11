@@ -521,7 +521,7 @@ async def get_sessions_list(
         # Format time_ago
         if isinstance(round_date, str):
             round_date = round_date[:10]
-            dt = datetime.strptime(round_date, "%Y-%m-%d")
+            dt = datetime.strptime(round_date, "%Y-%m-%d")  # noqa: DTZ007 date-only parsing, no time component used
         else:
             dt = datetime.combine(round_date, datetime.min.time())
 
@@ -1316,7 +1316,7 @@ async def get_stats_sessions(
 
         # Format date
         if isinstance(first_date, str):
-            dt = datetime.strptime(first_date[:10], "%Y-%m-%d")
+            dt = datetime.strptime(first_date[:10], "%Y-%m-%d")  # noqa: DTZ007 date-only parsing, no time component used
         else:
             dt = datetime.combine(first_date, datetime.min.time())
 

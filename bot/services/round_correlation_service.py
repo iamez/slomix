@@ -248,7 +248,7 @@ class RoundCorrelationService:
                 return None
             ts_str = '-'.join(parts[:3]) + ' ' + parts[3]
             try:
-                target_dt = dt_cls.strptime(ts_str, "%Y-%m-%d %H%M%S")
+                target_dt = dt_cls.strptime(ts_str, "%Y-%m-%d %H%M%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
             except ValueError:
                 return None
 
@@ -272,7 +272,7 @@ class RoundCorrelationService:
                 try:
                     cparts = mid.split('-')
                     cts = '-'.join(cparts[:3]) + ' ' + cparts[3]
-                    candidate_dt = dt_cls.strptime(cts, "%Y-%m-%d %H%M%S")
+                    candidate_dt = dt_cls.strptime(cts, "%Y-%m-%d %H%M%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
                 except (ValueError, IndexError):
                     continue
                 diff = abs(candidate_dt - target_dt)
@@ -309,7 +309,7 @@ class RoundCorrelationService:
                     try:
                         cparts = mid.split('-')
                         cts = '-'.join(cparts[:3]) + ' ' + cparts[3]
-                        candidate_dt = dt_cls.strptime(cts, "%Y-%m-%d %H%M%S")
+                        candidate_dt = dt_cls.strptime(cts, "%Y-%m-%d %H%M%S")  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
                     except (ValueError, IndexError):
                         continue
                     diff = target_dt - candidate_dt  # R2 is always AFTER R1
