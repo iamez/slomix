@@ -585,9 +585,10 @@ class _AvailabilitySchedulerMixin:
                 for player in players:
                     if isinstance(player, dict):
                         server_names.add(self._normalize_name_for_match(player.get("name")))
-            for name in missing_names:
-                if self._normalize_name_for_match(name) in server_names:
-                    in_server_not_voice.append(name)
+            in_server_not_voice.extend(
+                name for name in missing_names
+                if self._normalize_name_for_match(name) in server_names
+            )
 
         targeted_message_base = "We're starting now (21:00 CET). Join voice if you can."
         targeted_sent = 0

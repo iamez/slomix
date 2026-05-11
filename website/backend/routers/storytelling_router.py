@@ -134,9 +134,8 @@ async def get_kill_impact_details(
         ORDER BY total_impact DESC
     """, (sd, player_guid))
 
-    kills = []
-    for r in (rows or []):
-        kills.append({
+    kills = [
+        {
             "kill_outcome_id": r[0],
             "round_number": r[1],
             "round_start_unix": r[2],
@@ -163,7 +162,9 @@ async def get_kill_impact_details(
             "killer_health": r[23],
             "axis_alive": r[24],
             "allies_alive": r[25],
-        })
+        }
+        for r in (rows or [])
+    ]
 
     # Summary stats
     total_kis = sum(k["total_impact"] for k in kills)

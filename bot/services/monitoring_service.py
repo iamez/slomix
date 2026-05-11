@@ -398,10 +398,10 @@ class MonitoringService:
                             channel_id = channel.id
                             channel_name = channel.name
 
-                        for member in channel.members:
-                            members_data.append(
-                                {"discord_id": member.id, "name": member.display_name}
-                            )
+                        members_data.extend(
+                            {"discord_id": member.id, "name": member.display_name}
+                            for member in channel.members
+                        )
                         total_members += len(channel.members)
 
             # Determine first joiner (simplified - just first in list)

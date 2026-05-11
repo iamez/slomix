@@ -1033,10 +1033,11 @@ class VoiceSessionService:
         id_to_guid = {int(row[0]): row[1] for row in rows}
 
         # Return GUIDs in order (skip unmapped)
-        guids = []
-        for discord_id in discord_ids:
-            if discord_id in id_to_guid:
-                guids.append(id_to_guid[discord_id])
+        guids = [
+            id_to_guid[discord_id]
+            for discord_id in discord_ids
+            if discord_id in id_to_guid
+        ]
 
         logger.debug(
             f"GUID resolution: {len(guids)}/{len(discord_ids)} Discord IDs mapped "

@@ -94,9 +94,8 @@ async def get_proximity_carrier_events(
         tuple(params),
     )
 
-    events = []
-    for r in (events_rows or []):
-        events.append({
+    events = [
+        {
             "carrier_name": r[0],
             "carrier_team": r[1],
             "flag_team": r[2],
@@ -108,7 +107,9 @@ async def get_proximity_carrier_events(
             "map_name": r[8],
             "killer_name": r[9] or "",
             "pickup_time": int(r[10] or 0),
-        })
+        }
+        for r in (events_rows or [])
+    ]
 
     # Summary
     summary_row = await db.fetch_one(
@@ -177,14 +178,15 @@ async def get_proximity_carrier_kills(
         tuple(params),
     )
 
-    killers = []
-    for r in (rows or []):
-        killers.append({
+    killers = [
+        {
             "guid": r[0],
             "name": r[1],
             "carrier_kills": int(r[2] or 0),
             "avg_distance_stopped": float(r[3] or 0),
-        })
+        }
+        for r in (rows or [])
+    ]
 
     return {"status": "ok", "killers": killers}
 
