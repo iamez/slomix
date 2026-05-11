@@ -203,13 +203,18 @@ class _AdvancedMetricsMixin:
         TIME_WINDOW_MS = TRADE_KILL_DELTA_MS
         DISTANCE_THRESHOLD = 500
 
-        # All kills with positions (from engagement end positions)
+        # round_start_unix > 0 filter: orphaned rows with NULL/0 rsu would
+        # collapse into bucket 0 and mix unrelated rounds' temporal windows
+        # (same pattern as compute_space_created fix in PR #210).
         eng_rows = await self.db.fetch_all("""
             SELECT target_guid, killer_guid, end_x, end_y, end_time_ms,
                    round_start_unix, num_attackers
             FROM combat_engagement
-            WHERE session_date = $1 AND outcome = 'killed'
+            WHERE session_date = $1
+              AND outcome = 'killed'
               AND end_x IS NOT NULL AND end_y IS NOT NULL
+              AND round_start_unix IS NOT NULL
+              AND round_start_unix > 0
             ORDER BY round_start_unix, end_time_ms
         """, (sd,))
 
@@ -369,11 +374,18 @@ class _AdvancedMetricsMixin:
         import math
         from collections import defaultdict
 
+        # round_start_unix > 0 filter: orphaned rows with NULL/0 rsu would
+        # collapse into bucket 0 and mix unrelated rounds' tracks together
+        # (same pattern as compute_space_created fix in PR #210).
         track_rows = await self.db.fetch_all("""
             SELECT player_guid, player_name, team, round_start_unix,
                    spawn_time_ms, death_time_ms, duration_ms, path
             FROM player_track
-            WHERE session_date = $1 AND duration_ms > $2 AND path IS NOT NULL
+            WHERE session_date = $1
+              AND duration_ms > $2
+              AND path IS NOT NULL
+              AND round_start_unix IS NOT NULL
+              AND round_start_unix > 0
             ORDER BY round_start_unix, player_guid
         """, (sd, LURKER_MIN_DURATION_MS))
 
