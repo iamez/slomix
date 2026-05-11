@@ -241,11 +241,6 @@ def _to_bool(value: Any) -> bool:
     return False
 
 
-def _short_guid(guid: str) -> str:
-    token = str(guid or "").strip()
-    return token[:8] if token else "unknown"
-
-
 def _resolve_name_for_guid(
     guid: str,
     guid_name_map: dict[str, str] | None = None,
