@@ -129,7 +129,15 @@ run_remote "cd $VM_PATH && git fetch origin --tags && git checkout $TAG && git l
 #
 # Rewriting these three files in place (post-checkout, pre-restart) gives every
 # release a unique buster derived from the commit SHA. The files are otherwise
-# byte-identical to the tagged content; we never commit the rewrite.
+# byte-identical to the tagged content.
+#
+# IMPORTANT: this dirties the VM working tree, which would trip step 3's
+# `git status --porcelain` clean-tree guard on the NEXT deploy. To avoid that,
+# we register an EXIT trap below that restores the three files via
+# `git checkout --` whether the deploy succeeded or failed. CF has already
+# cached the bumped URL by the time we restore, so the cache-bust effect
+# persists for the user-visible window; the on-disk file just goes back to
+# tagged content (the cache key is what matters, not the served bytes).
 log "3b/8 Auto-bump cache-buster to current git SHA"
 run_remote "cd $VM_PATH && \
   SHA=\$(git rev-parse --short HEAD) && \
@@ -138,6 +146,18 @@ run_remote "cd $VM_PATH && \
   done && \
   echo \"  cache-buster bumped to ?v=\$SHA\" && \
   grep -hoE '\\?v=[A-Za-z0-9._-]+' website/index.html | sort -u"
+
+# Register cleanup trap: restore the three files no matter how we exit,
+# so the next deploy's clean-tree guard doesn't trip on our leftover edits.
+cleanup_cache_buster_bump() {
+  local rc=$?
+  $DRY_RUN && return $rc
+  log "Cleanup trap: restoring cache-buster files to tagged content"
+  $SSH "cd $VM_PATH && git checkout -- website/index.html website/js/app.js website/js/session-detail.js 2>&1" \
+    || warn "Cleanup failed — VM tree may be dirty. Run on VM: cd $VM_PATH && git checkout -- website/index.html website/js/app.js website/js/session-detail.js"
+  return $rc
+}
+trap cleanup_cache_buster_bump EXIT
 
 # ─── 4. Stop services (clean restart) ─────────────────────────────────────────
 log "4/8  Stop services before migration"
