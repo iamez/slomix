@@ -4,7 +4,7 @@
  * @module session-detail
  */
 import { API_BASE, fetchJSON, escapeHtml, escapeJsString } from './utils.js';
-import { getRouteHash, SESSION_DETAIL_TABS } from './route-registry.js?v=20260330-v120-deploy';
+import { getRouteHash, SESSION_DETAIL_TABS } from './route-registry.js?v=20260513-v142-cf-bust';
 import {
     renderMatchSummary,
     renderCombatRadar,
