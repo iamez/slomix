@@ -38,15 +38,18 @@ Rounding strategy:
 
 Python uses banker's rounding (`round(2.125, 2)` == 2.12) while PostgreSQL
 `ROUND(numeric, 2)` uses half-away-from-zero (== 2.13). Replicating
-banker's rounding exactly in SQL is possible but verbose and slower than
-the eventual cutover query would tolerate. Instead, this module:
+banker's rounding exactly in SQL is possible but verbose. Instead, this
+module:
 
-  - Computes `total_impact` in SQL using NUMERIC arithmetic with
-    `ROUND(x::numeric, 2)` (half-away-from-zero) to match the eventual
-    production-cutover behavior.
-  - Surfaces every divergent row in the audit. The user reviews the
-    distribution histogram and decides whether ±0.01 tolerance is
-    acceptable.
+  - Returns the 10 raw multipliers from SQL (per kill) and applies the
+    soft cap + rounding in Python — but with `decimal.Decimal.quantize`
+    using `ROUND_HALF_UP`, deliberately mirroring PostgreSQL's
+    `ROUND(numeric, 2)` semantics. The Python production path keeps
+    using built-in `round()` (banker's), so the audit captures the
+    divergence between the two rounding modes.
+  - Surfaces every divergent row in `storytelling_kis_shadow_audit`. The
+    user reviews the distribution histogram and decides whether ±0.01
+    tolerance is acceptable before Phase 2 cutover.
 
 This is intentional: the *purpose* of Phase 1 is exactly to expose this
 rounding-band so the user can make an informed cutover decision.
@@ -73,6 +76,7 @@ from .base import (
     SOLO_CLUTCH_MULTIPLIER,
     SOLO_CLUTCH_THRESHOLD,
     SPAWN_TIMING_WINDOW_MS,
+    _compute_locks,
     _to_date,
     date,
     logger,
@@ -459,9 +463,20 @@ class _KisShadowMixin:
         return prod_summary
 
     async def _run_kis_shadow_audit(self, sd: str | date) -> dict:
-        """Compute deltas, persist top-N worst rows, return histogram summary."""
-        sd_date = _to_date(sd)
+        """Compute deltas, persist top-N worst rows, return histogram summary.
 
+        Guarded by the same per-session lock as `compute_session_kis` so two
+        concurrent shadow-mode requests for the same session_date can't
+        interleave their DELETE/INSERT sequences and corrupt each other's
+        audit snapshot.
+        """
+        sd_date = _to_date(sd)
+        lock_key = str(sd_date)
+        async with _compute_locks.get(lock_key):
+            return await self._run_kis_shadow_audit_locked(sd_date)
+
+    async def _run_kis_shadow_audit_locked(self, sd_date: date) -> dict:
+        """Inner shadow-audit body — must hold the per-session lock."""
         # Clear stale audit rows up-front so every shadow rerun replaces the
         # prior snapshot, including the early-return "no_data" / "no_overlap"
         # paths where the bottom-of-function DELETE is skipped.

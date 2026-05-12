@@ -70,10 +70,11 @@ async def get_weapon_stats(
     # else: all time, no date filter
 
     # nosec B608 — where_clause is built from a fixed period whitelist
-    # ("today"/"7d"/"30d"/"season"/"all") and uses $N parameter
-    # placeholders for the only user-derived value (a date string already
-    # passed via the params tuple). param_idx is an integer counter for
-    # PG positional placeholders, not user input.
+    # ("7d"/"30d"/"season" → adds a date filter; anything else → no
+    # date filter / "all"). Uses $N parameter placeholders for the only
+    # user-derived value (a date string already passed via the params
+    # tuple). param_idx is an integer counter for PG positional
+    # placeholders, not user input.
     live_query = f"""
         SELECT
             weapon_name,
