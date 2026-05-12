@@ -49,9 +49,10 @@
 --        -f migrations/053_add_weapon_stats_mv.sql
 --    The bot/website do NOT auto-apply migrations.
 --
--- 2. Populate the MV (first-time only — REFRESH CONCURRENTLY requires an
---    initial non-concurrent build; the CREATE statement below already does
---    a non-concurrent build, so this is a no-op on first run):
+-- 2. (Optional) Force-rebuild ONLY if needed. The `CREATE MATERIALIZED VIEW`
+--    statement below already populates data on first run, so this step is
+--    normally NOT required. Run it only if you used `WITH NO DATA` (we
+--    don't) or want a manual non-concurrent rebuild later:
 --      REFRESH MATERIALIZED VIEW weapon_stats_mv;
 --
 -- 3. Enable the feature flag for the website service:

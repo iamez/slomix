@@ -129,7 +129,7 @@ def _build_shadow_kis_query() -> str:
         WHERE was_executed = TRUE AND session_date = $1
     ),
     st AS (
-        SELECT killer_guid, round_start_unix, round_number, kill_time,
+        SELECT id, killer_guid, round_start_unix, round_number, kill_time,
                COALESCE(spawn_timing_score, 0.5)::numeric AS score,
                COALESCE(victim_reinf, 0)::numeric AS victim_reinf
         FROM proximity_spawn_timing
@@ -145,13 +145,19 @@ def _build_shadow_kis_query() -> str:
         ORDER BY target_guid, round_start_unix, round_number, id
     ),
     cp AS (
-        SELECT attacker_guid, round_start_unix, round_number, event_time,
+        -- Dedup to one row per (attacker_guid, round_start_unix, round_number,
+        -- event_time) — the join key — so a kill outcome cannot fan out into
+        -- multiple shadow rows when the same attacker has duplicate position
+        -- entries at the same timestamp. Stable selection via row id.
+        SELECT DISTINCT ON (attacker_guid, round_start_unix, round_number, event_time)
+               attacker_guid, round_start_unix, round_number, event_time,
                COALESCE(killer_health, 0)::int AS killer_health,
                COALESCE(axis_alive, 0)::int AS axis_alive,
                COALESCE(allies_alive, 0)::int AS allies_alive,
                COALESCE(UPPER(attacker_team), '') AS attacker_team
         FROM proximity_combat_position
         WHERE session_date = $1 AND event_type = 'kill'
+        ORDER BY attacker_guid, round_start_unix, round_number, event_time, id
     )
     SELECT
         ko.id AS kill_outcome_id,
@@ -222,7 +228,11 @@ def _build_shadow_kis_query() -> str:
                   AND st.round_number = ko.round_number
                   AND st.killer_guid = ko.killer_guid
                   AND ABS(st.kill_time - ko.kill_time) <= {SPAWN_TIMING_WINDOW_MS}
-                ORDER BY st.kill_time
+                -- Deterministic match: closest spawn-timing by time delta,
+                -- then by row id for stability. Python "first match" is
+                -- iteration-order from an unsorted load; surfacing any
+                -- ordering divergence in the audit is the point of shadow.
+                ORDER BY ABS(st.kill_time - ko.kill_time), st.id
                 LIMIT 1
             ),
             1.0::numeric
@@ -482,12 +492,14 @@ class _KisShadowMixin:
         deltas.sort(key=lambda t: abs(t[3]), reverse=True)
         top_n = [d for d in deltas if abs(d[3]) >= SHADOW_AUDIT_DELTA_FLOOR][:SHADOW_AUDIT_TOP_N]
 
+        # Always clear prior audit rows for this session so a clean rerun
+        # (zero divergences) doesn't leave stale rows from an earlier run
+        # surfacing through the diagnostics endpoint.
+        await self.db.execute(
+            "DELETE FROM storytelling_kis_shadow_audit WHERE session_date = $1",
+            (sd_date,),
+        )
         if top_n:
-            # Clear prior audit rows for this session so reruns reflect only the latest run.
-            await self.db.execute(
-                "DELETE FROM storytelling_kis_shadow_audit WHERE session_date = $1",
-                (sd_date,),
-            )
             batch = [(sd_date, ko_id, py, sql_, d) for (ko_id, py, sql_, d) in top_n]
             await self.db.executemany(
                 "INSERT INTO storytelling_kis_shadow_audit "

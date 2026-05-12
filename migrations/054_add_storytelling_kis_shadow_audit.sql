@@ -1,4 +1,4 @@
--- Migration 053: KIS server-side jsonb_agg shadow audit table (Phase 1 of A5).
+-- Migration 054: KIS server-side jsonb_agg shadow audit table (Phase 1 of A5).
 --
 -- Captures row-by-row deltas between the Python `_score_kill` path and a
 -- SQL-only re-implementation. While shadow mode is enabled, the Python

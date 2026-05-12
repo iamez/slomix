@@ -18,6 +18,7 @@ import contextlib
 import os
 from typing import Any
 
+from website.backend.env_utils import getenv_int
 from website.backend.logging_config import get_app_logger
 
 logger = get_app_logger("services.weapon_stats_mv")
@@ -90,7 +91,7 @@ async def weapon_stats_mv_refresh_loop(
     zero-argument callable that returns one. Disabled when interval <= 0.
     """
     if interval_seconds is None:
-        interval_seconds = int(os.getenv("WEAPON_STATS_MV_REFRESH_SECONDS", "0") or 0)
+        interval_seconds = getenv_int("WEAPON_STATS_MV_REFRESH_SECONDS", 0)
     if interval_seconds <= 0:
         logger.debug("weapon_stats_mv refresh loop disabled (interval=%s)", interval_seconds)
         return

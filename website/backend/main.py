@@ -366,6 +366,22 @@ async def startup_event():
     logger.info("🚀 Slomix Website Backend Starting...")
     await init_db_pool()  # Initialize shared DB pool once
     await cache_backend.connect()
+    # A8 audit: optional background refresh of weapon_stats_mv. Enabled when
+    # WEAPON_STATS_MV_REFRESH_SECONDS > 0. Scheduled BEFORE the Greatshot
+    # early-return so the MV refresh runs in deployment modes where
+    # GREATSHOT_STARTUP_ENABLED=false. The loop is permissive — missing MV
+    # (migration not applied) is a no-op.
+    mv_refresh_seconds = getenv_int("WEAPON_STATS_MV_REFRESH_SECONDS", 0)
+    if mv_refresh_seconds > 0:
+        app.state.weapon_stats_mv_task = asyncio.create_task(
+            weapon_stats_mv_refresh_loop(get_db_pool, mv_refresh_seconds),
+            name="weapon-stats-mv-refresh",
+        )
+        logger.info(
+            "weapon_stats_mv refresh loop scheduled (interval=%ss)",
+            mv_refresh_seconds,
+        )
+
     greatshot_startup_enabled = os.getenv("GREATSHOT_STARTUP_ENABLED", "true").lower() in {
         "1",
         "true",
@@ -404,20 +420,10 @@ async def startup_event():
         name="greatshot-startup",
     )
 
-    # A8 audit: optional background refresh of weapon_stats_mv. Enabled when
-    # WEAPON_STATS_MV_REFRESH_SECONDS > 0. The loop is permissive — missing
-    # MV (migration 053 not applied) is a no-op.
-    mv_refresh_seconds = int(os.getenv("WEAPON_STATS_MV_REFRESH_SECONDS", "0") or 0)
-    if mv_refresh_seconds > 0:
-        app.state.weapon_stats_mv_task = asyncio.create_task(
-            weapon_stats_mv_refresh_loop(get_db_pool, mv_refresh_seconds),
-            name="weapon-stats-mv-refresh",
-        )
-        logger.info(
-            "weapon_stats_mv refresh loop scheduled (interval=%ss)",
-            mv_refresh_seconds,
-        )
-    else:
+    # weapon_stats_mv task already scheduled above (before the Greatshot
+    # early-return), so it runs in either deployment mode. Mark None if
+    # disabled to keep app.state attribute consistent.
+    if not hasattr(app.state, "weapon_stats_mv_task"):
         app.state.weapon_stats_mv_task = None
 
     logger.info("✅ Slomix Website Backend Ready")
