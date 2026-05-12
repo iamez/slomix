@@ -66,10 +66,14 @@ sudo_run() {
     log "[dry-run] would sudo: $*"
     return
   fi
+  # Password is piped over SSH stdin (not embedded in argv) so it never
+  # appears in `ps`/process args on the local box. `sudo -S` reads its own
+  # password from stdin, then the rest of the command (no stdin needed for
+  # systemctl/grep). Also safe against passwords containing single quotes.
   if [ -n "${SUDO_PASS:-}" ]; then
-    $SSH "echo '$SUDO_PASS' | sudo -S $*"
+    printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -- $*"
   else
-    $SSH "sudo -n $*" || fail "sudo failed — re-run with SUDO_PASS=<pass>"
+    $SSH "sudo -n -- $*" || fail "sudo failed — re-run with SUDO_PASS=<pass>"
   fi
 }
 
@@ -102,11 +106,15 @@ log "Current commit: $CURRENT_COMMIT (rollback target)"
 if ! $SKIP_MIGRATIONS; then
   log "2/8  Backup DB before migrations"
   BACKUP_NAME="pre-${TAG}-$(date +%Y%m%d-%H%M%S).sql.gz"
-  run_remote "cd $VM_PATH && mkdir -p backups && \
+  # set -o pipefail: pg_dump errors propagate through the `| gzip` pipeline
+  # instead of silently producing an empty .sql.gz that `ls` would still
+  # report as "success", letting migrations run without a real backup.
+  run_remote "set -o pipefail; cd $VM_PATH && mkdir -p backups && \
     PGPASSWORD=\$(grep -E '^(DB|POSTGRES)_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '\"') \
     pg_dump -h localhost -U etlegacy_user -d etlegacy \
       | gzip > backups/$BACKUP_NAME && \
-    ls -lh backups/$BACKUP_NAME"
+    ls -lh backups/$BACKUP_NAME && \
+    [ -s backups/$BACKUP_NAME ] || { echo 'ERROR: backup file is empty — pg_dump likely failed' >&2; exit 1; }"
 fi
 
 # ─── 3. Fetch + checkout tag ──────────────────────────────────────────────────
@@ -215,11 +223,15 @@ log "7/8  Start services (web → bot)"
 sudo_run "systemctl daemon-reload"
 sudo_run "systemctl start slomix-web"
 $DRY_RUN || sleep 3
-sudo_run "systemctl is-active slomix-web && journalctl -u slomix-web --since '30 seconds ago' --no-pager | grep -E 'weapon_stats_mv|ERROR|started' | head -10 || true"
+# Split is-active (must pass) from journalctl-grep (cosmetic). Earlier
+# version combined them via `&& ... || true` which let an inactive
+# service slip through because `|| true` neutralized the whole chain.
+sudo_run "systemctl is-active slomix-web" || fail "slomix-web failed to start — check 'journalctl -u slomix-web'"
+sudo_run "bash -c \"journalctl -u slomix-web --since '30 seconds ago' --no-pager | grep -E 'weapon_stats_mv|ERROR|started' | head -10 || true\""
 
 sudo_run "systemctl start slomix-bot"
 $DRY_RUN || sleep 5
-sudo_run "systemctl is-active slomix-bot"
+sudo_run "systemctl is-active slomix-bot" || fail "slomix-bot failed to start — check 'journalctl -u slomix-bot'"
 
 # ─── 8. Smoke test ────────────────────────────────────────────────────────────
 log "8/8  Public smoke test"
@@ -238,7 +250,7 @@ echo
 log "Deploy complete. To rollback to pre-deploy commit ($CURRENT_COMMIT):"
 echo "  ssh $VM_USER@$VM_HOST 'cd $VM_PATH && git checkout $CURRENT_COMMIT && sudo systemctl restart slomix-web slomix-bot'"
 echo "  To disable just the MV flag (cheaper rollback — keeps code, just falls back to live query):"
-echo "  ssh $VM_USER@$VM_HOST 'sed -i s/^USE_WEAPON_STATS_MV=.*/USE_WEAPON_STATS_MV=false/ $VM_PATH/.env && sudo systemctl restart slomix-web'"
+echo "  ssh $VM_USER@$VM_HOST \"sudo sed -i 's/^USE_WEAPON_STATS_MV=.*/USE_WEAPON_STATS_MV=false/' $VM_PATH/.env && sudo systemctl restart slomix-web\""
 echo "  To DROP the materialized view if it caused issues:"
 echo "    psql ... -c 'DROP MATERIALIZED VIEW IF EXISTS weapon_stats_mv;'"
 echo

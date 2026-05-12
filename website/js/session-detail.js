@@ -13,7 +13,7 @@ import {
     renderSupportPerformance,
     renderTimeDistribution,
     _rvCharts,
-} from './retro-viz.js?v=20260312-site-recovery3';
+} from './retro-viz.js?v=20260513-v142-cf-bust';
 
 // ---- Constants (copied from sessions.js) ----
 const MAP_IMAGE_MAP = {
