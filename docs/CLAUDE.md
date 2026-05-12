@@ -84,9 +84,9 @@ ET:Legacy Game Server -> SSH Monitor -> Parser -> PostgreSQL -> Discord Bot -> U
 
 All in `bot/cogs/`: achievements, admin, admin_predictions, analytics, availability_poll, last_session, leaderboard, link, matchup, permission_management, predictions, proximity, session, session_management, stats, sync, team, team_management.
 
-### 16 Core Modules
+### 15 Core Modules
 
-All in `bot/core/`: achievement_system, advanced_team_detector, checks, database_adapter, endstats_pagination_view, frag_potential, lazy_pagination_view, match_tracker, pagination_view, round_contract, round_linker, season_manager, stats_cache, substitution_detector, team_manager, utils.
+All in `bot/core/`: achievement_system, checks, database_adapter, endstats_pagination_view, frag_potential, lazy_pagination_view, match_tracker, pagination_view, round_contract, round_linker, season_manager, stats_cache, substitution_detector, team_manager, utils.
 
 ---
 
