@@ -86,6 +86,9 @@ from website.backend.services.greatshot_jobs import (
 )
 from website.backend.services.greatshot_store import get_greatshot_storage
 from website.backend.services.http_cache_backend import create_cache_backend_from_env
+from website.backend.services.weapon_stats_mv_refresh import (
+    weapon_stats_mv_refresh_loop,
+)
 
 # Configuration from environment
 WEBSITE_PORT = getenv_int("WEBSITE_PORT", 7000)
@@ -363,6 +366,22 @@ async def startup_event():
     logger.info("🚀 Slomix Website Backend Starting...")
     await init_db_pool()  # Initialize shared DB pool once
     await cache_backend.connect()
+    # A8 audit: optional background refresh of weapon_stats_mv. Enabled when
+    # WEAPON_STATS_MV_REFRESH_SECONDS > 0. Scheduled BEFORE the Greatshot
+    # early-return so the MV refresh runs in deployment modes where
+    # GREATSHOT_STARTUP_ENABLED=false. The loop is permissive — missing MV
+    # (migration not applied) is a no-op.
+    mv_refresh_seconds = getenv_int("WEAPON_STATS_MV_REFRESH_SECONDS", 0)
+    if mv_refresh_seconds > 0:
+        app.state.weapon_stats_mv_task = asyncio.create_task(
+            weapon_stats_mv_refresh_loop(get_db_pool, mv_refresh_seconds),
+            name="weapon-stats-mv-refresh",
+        )
+        logger.info(
+            "weapon_stats_mv refresh loop scheduled (interval=%ss)",
+            mv_refresh_seconds,
+        )
+
     greatshot_startup_enabled = os.getenv("GREATSHOT_STARTUP_ENABLED", "true").lower() in {
         "1",
         "true",
@@ -400,6 +419,13 @@ async def startup_event():
         _start_greatshot_service(),
         name="greatshot-startup",
     )
+
+    # weapon_stats_mv task already scheduled above (before the Greatshot
+    # early-return), so it runs in either deployment mode. Mark None if
+    # disabled to keep app.state attribute consistent.
+    if not hasattr(app.state, "weapon_stats_mv_task"):
+        app.state.weapon_stats_mv_task = None
+
     logger.info("✅ Slomix Website Backend Ready")
 
 
@@ -421,6 +447,18 @@ async def shutdown_event():
         job_service = None  # Service never initialised; nothing to stop
     if job_service is not None:
         await job_service.stop()
+    mv_task = getattr(app.state, "weapon_stats_mv_task", None)
+    if mv_task is not None and not mv_task.done():
+        mv_task.cancel()
+        try:
+            await asyncio.wait_for(mv_task, timeout=2.0)
+        except asyncio.CancelledError:
+            pass  # Expected during shutdown
+        except Exception:
+            logger.debug(
+                "weapon_stats_mv refresh task failed during shutdown",
+                exc_info=True,
+            )
     await cache_backend.close()
     await close_db_pool()  # Clean up DB pool
     logger.info("✅ Slomix Website Backend Stopped")

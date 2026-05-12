@@ -153,8 +153,11 @@ class _NarrativeMixin:
         sd = _to_date(session_date)
         sd_str = _to_date_str(sd)
 
-        # 1. Ensure KIS is computed, then fetch leaderboard + archetypes
-        await self.compute_session_kis(sd)
+        # 1. Ensure KIS is computed, then fetch leaderboard + archetypes.
+        # Routes through kis_compute_with_shadow so KIS_SHADOW_MODE_ENABLED
+        # sessions get an audit-row even when narrative generation is the
+        # first thing that triggers a KIS compute.
+        await self.kis_compute_with_shadow(sd)
         kis_board = await self.get_kis_leaderboard(sd, limit=50)
         archetypes, stats = await self.classify_players(sd, kis_board)
 
@@ -341,8 +344,9 @@ class _NarrativeMixin:
             self.compute_lurker_profile(sd),
         )
 
-        # Also get KIS for archetype + kills context
-        await self.compute_session_kis(sd)
+        # Also get KIS for archetype + kills context (shadow-aware — see
+        # generate_narrative for rationale).
+        await self.kis_compute_with_shadow(sd)
         kis_board = await self.get_kis_leaderboard(sd, limit=50)
 
         # Index by guid_short
