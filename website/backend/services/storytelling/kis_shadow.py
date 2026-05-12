@@ -54,6 +54,7 @@ rounding-band so the user can make an informed cutover decision.
 from __future__ import annotations
 
 import os
+from decimal import ROUND_HALF_UP, Decimal
 
 from .base import (
     CARRIER_CHAIN_MULTIPLIER,
@@ -349,15 +350,24 @@ def _build_shadow_kis_query() -> str:
     """  # nosec B608
 
 
+_TWO_PLACES = Decimal("0.01")
+
+
 def _apply_soft_cap_and_round(raw: float) -> float:
-    """Mirror of Python's soft-cap + rounding at the end of _score_kill.
+    """Mirror of the SQL post-processing: soft-cap at 5.0, then round HALF UP.
 
     Used by `compute_kis_session_sql_shadow` when the SQL adapter returns
     the raw multipliers; we apply the cap in Python so the SQL doesn't
     have to special-case the `<= 5.0` branch in NUMERIC.
+
+    Rounding deliberately uses ``Decimal.quantize(..., ROUND_HALF_UP)`` —
+    matching PostgreSQL's ``ROUND(numeric, 2)`` semantics — so the audit
+    surfaces the documented banker's-vs-half-away divergence against the
+    Python production path (which uses built-in ``round(x, 2)``).
     """
     capped = raw if raw <= 5.0 else 5.0 + (raw - 5.0) * 0.25
-    return round(capped, 2)
+    quantized = Decimal(str(capped)).quantize(_TWO_PLACES, rounding=ROUND_HALF_UP)
+    return float(quantized)
 
 
 class _KisShadowMixin:
@@ -447,6 +457,14 @@ class _KisShadowMixin:
         """Compute deltas, persist top-N worst rows, return histogram summary."""
         sd_date = _to_date(sd)
 
+        # Clear stale audit rows up-front so every shadow rerun replaces the
+        # prior snapshot, including the early-return "no_data" / "no_overlap"
+        # paths where the bottom-of-function DELETE is skipped.
+        await self.db.execute(
+            "DELETE FROM storytelling_kis_shadow_audit WHERE session_date = $1",
+            (sd_date,),
+        )
+
         sql_rows = await self.compute_kis_session_sql_shadow(sd_date)
         if not sql_rows:
             return {"status": "no_data", "compared": 0}
@@ -496,17 +514,11 @@ class _KisShadowMixin:
             else:
                 buckets[">0.05"] += 1
 
-        # Persist top-N worst rows for human review.
+        # Persist top-N worst rows for human review. (Stale rows were
+        # cleared up-front, so we only need to insert here.)
         deltas.sort(key=lambda t: abs(t[3]), reverse=True)
         top_n = [d for d in deltas if abs(d[3]) >= SHADOW_AUDIT_DELTA_FLOOR][:SHADOW_AUDIT_TOP_N]
 
-        # Always clear prior audit rows for this session so a clean rerun
-        # (zero divergences) doesn't leave stale rows from an earlier run
-        # surfacing through the diagnostics endpoint.
-        await self.db.execute(
-            "DELETE FROM storytelling_kis_shadow_audit WHERE session_date = $1",
-            (sd_date,),
-        )
         if top_n:
             batch = [(sd_date, ko_id, py, sql_, d) for (ko_id, py, sql_, d) in top_n]
             await self.db.executemany(

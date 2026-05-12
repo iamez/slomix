@@ -106,9 +106,12 @@ GROUP BY weapon_name, round_date;
 CREATE UNIQUE INDEX IF NOT EXISTS weapon_stats_mv_pk
     ON weapon_stats_mv (weapon_name, round_date);
 
--- Secondary index to speed up the period-filtered GROUP BY in the router.
-CREATE INDEX IF NOT EXISTS weapon_stats_mv_round_date
-    ON weapon_stats_mv (round_date);
+-- Functional index matching the router's period filter expression. The
+-- router uses `SUBSTR(CAST(round_date AS TEXT), 1, 10) >= $N` as a
+-- defensive guard against time-suffixed values; a plain index on
+-- `round_date` cannot serve that scan, so we index the exact expression.
+CREATE INDEX IF NOT EXISTS weapon_stats_mv_round_date_substr
+    ON weapon_stats_mv (SUBSTR(CAST(round_date AS TEXT), 1, 10));
 
 COMMENT ON MATERIALIZED VIEW weapon_stats_mv IS
     'A8 audit: pre-aggregated weapon leaderboard. Refresh out-of-band, never via trigger. See migrations/053_add_weapon_stats_mv.sql';
