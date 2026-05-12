@@ -53,7 +53,7 @@ class SignalConnector:
         if enabled and not self.sender_number:
             logger.warning("Signal connector enabled but SIGNAL sender number is missing")
 
-    async def _get_client(self):
+    async def get_client(self):
         if httpx is None:
             raise RuntimeError("httpx is not installed")
         if self._client is None:
@@ -89,7 +89,7 @@ class SignalConnector:
             raise RuntimeError("Signal send failed after retries")
 
     async def _send_via_daemon(self, recipient: str, message: str) -> str:
-        client = await self._get_client()
+        client = await self.get_client()
         endpoint = f"{self.daemon_url}/v2/send"
         payload = {
             "number": self.sender_number,

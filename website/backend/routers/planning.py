@@ -943,8 +943,18 @@ async def save_planning_teams(request: Request, db=Depends(get_db)):
 
     await db.execute("DELETE FROM planning_team_members WHERE session_id = $1", (session_id,))
 
-    for user_id in side_a:
-        await db.execute(
+    # Batch both team-member upserts with executemany — single prepared
+    # statement, single round-trip, single connection. Avoids the
+    # concurrent-write footgun on the SQLite dev adapter (which would
+    # otherwise hit `database is locked` under asyncio.gather) while
+    # still eliminating the per-user-id N+1 pattern in production.
+    member_rows = [
+        (session_id, team_a_id, int(uid)) for uid in side_a
+    ] + [
+        (session_id, team_b_id, int(uid)) for uid in side_b
+    ]
+    if member_rows:
+        await db.executemany(
             """
             INSERT INTO planning_team_members
                 (session_id, team_id, user_id, created_at)
@@ -952,19 +962,7 @@ async def save_planning_teams(request: Request, db=Depends(get_db)):
             ON CONFLICT (session_id, user_id) DO UPDATE SET
                 team_id = EXCLUDED.team_id
             """,
-            (session_id, team_a_id, int(user_id)),
-        )
-
-    for user_id in side_b:
-        await db.execute(
-            """
-            INSERT INTO planning_team_members
-                (session_id, team_id, user_id, created_at)
-            VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
-            ON CONFLICT (session_id, user_id) DO UPDATE SET
-                team_id = EXCLUDED.team_id
-            """,
-            (session_id, team_b_id, int(user_id)),
+            member_rows,
         )
 
     return {

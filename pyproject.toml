@@ -73,7 +73,7 @@ target-version = "py311"
 required-version = ">=0.15.0"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "S", "T20", "DTZ001", "DTZ003", "DTZ005", "DTZ006", "DTZ007", "DTZ011", "FURB162", "FURB171", "LOG014", "PIE790", "PIE810", "PERF102", "PERF401", "ISC003", "TID252", "PT003"]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "S", "T20", "DTZ001", "DTZ003", "DTZ005", "DTZ006", "DTZ007", "DTZ011", "FURB162", "FURB171", "LOG014", "PIE790", "PIE810", "PERF102", "PERF401", "ISC003", "TID252", "PT003", "SLF001"]
 ignore = [
     "E501",   # line-too-long (handled separately)
     "E402",   # module-level-import-not-at-top (intentional deferred imports)

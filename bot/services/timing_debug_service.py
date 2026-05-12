@@ -111,7 +111,7 @@ class TimingDebugService:
 
         return None
 
-    async def _fetch_lua_data(
+    async def fetch_lua_data(
         self,
         round_id: int | None,
         map_name: str,
@@ -341,7 +341,7 @@ class TimingDebugService:
             # Unpack results
             _, db_match_id, db_round_num, map_name, round_date, round_time, time_limit, actual_time = row
 
-            lua_data = await self._fetch_lua_data(round_id, map_name, db_round_num, round_date, round_time)
+            lua_data = await self.fetch_lua_data(round_id, map_name, db_round_num, round_date, round_time)
             lua_duration = lua_data.get('lua_duration_seconds') if lua_data else None
             lua_start_unix = lua_data.get('round_start_unix') if lua_data else None
             lua_end_unix = lua_data.get('round_end_unix') if lua_data else None

@@ -102,7 +102,7 @@ class RoundPublisherService:
             return None
 
     @staticmethod
-    def _format_seconds(seconds: int) -> str:
+    def format_seconds(seconds: int) -> str:
         """Format integer seconds as MM:SS."""
         total = max(0, int(seconds or 0))
         return f"{total // 60}:{total % 60:02d}"
@@ -362,7 +362,7 @@ class RoundPublisherService:
             if dual_timing_enabled:
                 stopwatch_seconds = self._parse_time_to_seconds(actual_time)
                 stopwatch_display = actual_time if actual_time and actual_time != 'Unknown' else "N/A"
-                elapsed_display = self._format_seconds(elapsed_seconds) if elapsed_seconds else "N/A"
+                elapsed_display = self.format_seconds(elapsed_seconds) if elapsed_seconds else "N/A"
 
                 if stopwatch_seconds is not None and elapsed_seconds is not None:
                     delta_display = self._format_delta_seconds(elapsed_seconds - stopwatch_seconds)

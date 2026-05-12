@@ -68,9 +68,9 @@ class LazyPaginationView(View):
         self.max_cache_size = 20  # Limit cache to prevent memory leak
         self.fetching = False  # Prevent concurrent fetches
 
-        self._update_buttons()
+        self.update_buttons()
 
-    def _update_buttons(self):
+    def update_buttons(self):
         """Update button enabled/disabled states"""
         self.first_button.disabled = (self.current_page == 0)
         self.prev_button.disabled = (self.current_page == 0)
@@ -115,7 +115,7 @@ class LazyPaginationView(View):
 
         self.fetching = True
         try:
-            self._update_buttons()
+            self.update_buttons()
             embed = await self.get_page(self.current_page)
             await interaction.response.edit_message(embed=embed, view=self)
         finally:

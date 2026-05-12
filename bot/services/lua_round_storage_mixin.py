@@ -521,33 +521,34 @@ class _LuaRoundStorageMixin:
                     captured_at = CURRENT_TIMESTAMP
             """
 
+            # Build parameter rows up-front, then batch-insert with
+            # executemany. Previously this fired N sequential UPSERTs (8–16
+            # per round) per round import; on a busy server with backlog
+            # this dominated import latency. executemany ships one prepared
+            # statement and N param sets in a single round-trip.
+            batch_params: list[tuple] = []
             for entry in spawn_stats:
                 guid = (entry.get("guid") or "")[:32]
-                name = entry.get("name") or "unknown"
-                spawns = int(entry.get("spawns") or 0)
-                deaths = int(entry.get("deaths") or 0)
-                dead_seconds = int(entry.get("dead_seconds") or 0)
-                avg_respawn = int(entry.get("avg_respawn") or 0)
-                max_respawn = int(entry.get("max_respawn") or 0)
-
                 if not guid:
                     continue
-
-                params = (
-                    match_id,
-                    round_number,
-                    round_id,
-                    map_name,
-                    round_end,
-                    guid,
-                    name,
-                    spawns,
-                    deaths,
-                    dead_seconds,
-                    avg_respawn,
-                    max_respawn,
+                batch_params.append(
+                    (
+                        match_id,
+                        round_number,
+                        round_id,
+                        map_name,
+                        round_end,
+                        guid,
+                        entry.get("name") or "unknown",
+                        int(entry.get("spawns") or 0),
+                        int(entry.get("deaths") or 0),
+                        int(entry.get("dead_seconds") or 0),
+                        int(entry.get("avg_respawn") or 0),
+                        int(entry.get("max_respawn") or 0),
+                    )
                 )
-                await self.db_adapter.execute(query, params)
+            if batch_params:
+                await self.db_adapter.executemany(query, batch_params)
 
             webhook_logger.info(
                 f"💾 Stored Lua spawn stats: {match_id} R{round_number} "

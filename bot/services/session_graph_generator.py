@@ -197,7 +197,7 @@ class SessionGraphGenerator:
                 result["source"] = method_name
                 return result
 
-        if not hasattr(self.timing_shadow_service, "_fetch_lua_data"):
+        if not hasattr(self.timing_shadow_service, "fetch_lua_data"):
             result["reason"] = "Timing service does not expose round comparison data"
             return result
 
@@ -217,9 +217,9 @@ class SessionGraphGenerator:
             actual_time = self._row_get(row, 5, "actual_time", "")
 
             stats_seconds = self._parse_time_to_seconds(actual_time)
-            if hasattr(self.timing_shadow_service, "_fetch_stats_file_data"):
+            if hasattr(self.timing_shadow_service, "fetch_stats_file_data"):
                 try:
-                    stats_data = await self.timing_shadow_service._fetch_stats_file_data(round_id)
+                    stats_data = await self.timing_shadow_service.fetch_stats_file_data(round_id)
                 except Exception:  # nosec B110
                     stats_data = None
                 if isinstance(stats_data, dict):
@@ -230,7 +230,7 @@ class SessionGraphGenerator:
                     stats_seconds = int(stats_data.get("stats_duration_seconds") or stats_seconds or 0)
 
             try:
-                lua_data = await self.timing_shadow_service._fetch_lua_data(
+                lua_data = await self.timing_shadow_service.fetch_lua_data(
                     round_id,
                     map_name,
                     round_number,

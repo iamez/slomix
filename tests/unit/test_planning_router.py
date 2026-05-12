@@ -251,6 +251,13 @@ class FakePlanningDB:
 
         raise AssertionError(f"Unexpected fetch_all query: {normalized}")
 
+    async def executemany(self, query: str, params_list) -> None:
+        # Mirror asyncpg/local-adapter semantics: re-dispatch each param tuple
+        # through .execute(). Sufficient for tests that only care about
+        # end-state side effects, not transaction granularity.
+        for params in params_list or []:
+            await self.execute(query, params)
+
     async def execute(self, query: str, params=None, *extra):
         normalized = self._normalize(query)
 

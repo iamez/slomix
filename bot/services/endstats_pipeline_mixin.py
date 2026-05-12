@@ -211,12 +211,12 @@ class _EndstatsPipelineMixin:
             try:
                 await asyncio.sleep(delay_seconds)
                 proximity_cog = self.get_cog("Proximity")
-                if proximity_cog and hasattr(proximity_cog, '_scan_and_import'):
+                if proximity_cog and hasattr(proximity_cog, 'scan_and_import'):
                     webhook_logger.info(
                         "🎯 Triggering proximity scan after stats import (attempt %d/%d, round_id=%s)",
                         attempt + 1, max_retries, round_id,
                     )
-                    await proximity_cog._scan_and_import(force=True)
+                    await proximity_cog.scan_and_import(force=True)
                     return
                 webhook_logger.debug(
                     "Proximity cog not available (attempt %d/%d); retrying",

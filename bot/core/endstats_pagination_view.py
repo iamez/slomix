@@ -36,12 +36,12 @@ class EndstatsPaginationView(View):
         self.mode = "map"
         self.current_page = 0
         self.message = None
-        self._update_buttons()
+        self.update_buttons()
 
     def _get_pages(self) -> list[discord.Embed]:
         return self.map_pages if self.mode == "map" else self.round_pages
 
-    def _update_buttons(self):
+    def update_buttons(self):
         pages = self._get_pages()
         total_pages = len(pages)
         self.first_button.disabled = (self.current_page == 0 or total_pages <= 1)
@@ -58,20 +58,20 @@ class EndstatsPaginationView(View):
         # Toggle label
         self.toggle_button.label = "Map View" if self.mode == "round" else "Round View"
 
-    def _decorate_embed(self, embed: discord.Embed) -> discord.Embed:
+    def decorate_embed(self, embed: discord.Embed) -> discord.Embed:
         total_pages = len(self._get_pages())
         footer = f"{self.mode.title()} View • Page {self.current_page + 1}/{max(total_pages, 1)}"
         embed.set_footer(text=footer)
         return embed
 
     async def update_message(self, interaction: Interaction):
-        self._update_buttons()
+        self.update_buttons()
         pages = self._get_pages()
         if not pages:
             if not interaction.response.is_done():
                 await interaction.response.defer()
             return
-        embed = self._decorate_embed(pages[self.current_page])
+        embed = self.decorate_embed(pages[self.current_page])
         try:
             if interaction.response.is_done():
                 await interaction.message.edit(embed=embed, view=self)

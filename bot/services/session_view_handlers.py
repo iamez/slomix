@@ -53,7 +53,7 @@ class SessionViewHandlers:
         self.show_timing_dual = bool(show_timing_dual)
 
     @staticmethod
-    def _format_seconds(seconds: float) -> str:
+    def format_seconds(seconds: float) -> str:
         """Format seconds as MM:SS (safe for None/float)."""
         try:
             total = int(round(seconds or 0))
@@ -225,7 +225,7 @@ class SessionViewHandlers:
                 return result
 
         # Compatibility path: derive factors from timing comparison service internals
-        has_fetch_lua = hasattr(self.timing_shadow_service, "_fetch_lua_data")
+        has_fetch_lua = hasattr(self.timing_shadow_service, "fetch_lua_data")
         if not has_fetch_lua:
             result["reason"] = "Timing service does not expose round comparison data"
             return result
@@ -251,12 +251,12 @@ class SessionViewHandlers:
             actual_time = self._row_get(row, 5, "actual_time", "")
 
             stats_seconds = self._parse_time_to_seconds(actual_time)
-            if hasattr(self.timing_shadow_service, "_fetch_stats_file_data"):
+            if hasattr(self.timing_shadow_service, "fetch_stats_file_data"):
                 try:
-                    stats_data = await self.timing_shadow_service._fetch_stats_file_data(round_id)
+                    stats_data = await self.timing_shadow_service.fetch_stats_file_data(round_id)
                 except Exception as e:  # nosec B110
                     stats_data = None
-                    logger.debug("shadow _fetch_stats_file_data failed for round %s: %s", round_id, e)
+                    logger.debug("shadow fetch_stats_file_data failed for round %s: %s", round_id, e)
                 if isinstance(stats_data, dict):
                     map_name = stats_data.get("map_name") or map_name
                     round_number = int(stats_data.get("round_number") or round_number or 0)
@@ -266,7 +266,7 @@ class SessionViewHandlers:
 
             lua_seconds: int | None = None
             try:
-                lua_data = await self.timing_shadow_service._fetch_lua_data(
+                lua_data = await self.timing_shadow_service.fetch_lua_data(
                     round_id,
                     map_name,
                     round_number,
@@ -275,7 +275,7 @@ class SessionViewHandlers:
                 )
             except Exception as e:  # nosec B110
                 lua_data = None
-                logger.debug("shadow _fetch_lua_data failed for round %s: %s", round_id, e)
+                logger.debug("shadow fetch_lua_data failed for round %s: %s", round_id, e)
 
             if isinstance(lua_data, dict):
                 lua_seconds_raw = lua_data.get("lua_duration_seconds")
@@ -1497,18 +1497,18 @@ class SessionViewHandlers:
                 delta_dead = dead_new - td_cap
                 delta_denied = denied_new - denied
                 lines.append(
-                    f"**{name}** ⏱`{self._format_seconds(tp)}` "
-                    f"💀O`{self._format_seconds(td_cap)}` N`{self._format_seconds(dead_new)}`"
+                    f"**{name}** ⏱`{self.format_seconds(tp)}` "
+                    f"💀O`{self.format_seconds(td_cap)}` N`{self.format_seconds(dead_new)}`"
                     f"(Δ{self._format_delta_seconds(delta_dead)}) "
-                    f"⏳O`{self._format_seconds(denied)}` N`{self._format_seconds(denied_new)}`"
+                    f"⏳O`{self.format_seconds(denied)}` N`{self.format_seconds(denied_new)}`"
                     f"(Δ{self._format_delta_seconds(delta_denied)})"
                     f"{telemetry_note}{cap_note}{ratio_note} ({rounds}r)"
                 )
             else:
                 lines.append(
-                    f"**{name}** ⏱`{self._format_seconds(tp)}` "
-                    f"💀`{self._format_seconds(td_cap)}`({dead_pct:.0f}%) "
-                    f"⏳`{self._format_seconds(denied)}`({denied_pct:.0f}%)"
+                    f"**{name}** ⏱`{self.format_seconds(tp)}` "
+                    f"💀`{self.format_seconds(td_cap)}`({dead_pct:.0f}%) "
+                    f"⏳`{self.format_seconds(denied)}`({denied_pct:.0f}%)"
                     f"{cap_note}{ratio_note} ({rounds}r)"
                 )
 
@@ -1531,12 +1531,12 @@ class SessionViewHandlers:
             embed.add_field(
                 name="Totals",
                 value=(
-                    f"OLD: ⏱`{self._format_seconds(total_played)}` "
-                    f"💀`{self._format_seconds(total_dead)}`({total_dead_pct:.0f}%) "
-                    f"⏳`{self._format_seconds(total_denied)}`({total_denied_pct:.0f}%)\n"
-                    f"NEW: ⏱`{self._format_seconds(total_played)}` "
-                    f"💀`{self._format_seconds(total_dead_new)}`({total_dead_new_pct:.0f}%) "
-                    f"⏳`{self._format_seconds(total_denied_new)}`({total_denied_new_pct:.0f}%)\n"
+                    f"OLD: ⏱`{self.format_seconds(total_played)}` "
+                    f"💀`{self.format_seconds(total_dead)}`({total_dead_pct:.0f}%) "
+                    f"⏳`{self.format_seconds(total_denied)}`({total_denied_pct:.0f}%)\n"
+                    f"NEW: ⏱`{self.format_seconds(total_played)}` "
+                    f"💀`{self.format_seconds(total_dead_new)}`({total_dead_new_pct:.0f}%) "
+                    f"⏳`{self.format_seconds(total_denied_new)}`({total_denied_new_pct:.0f}%)\n"
                     f"Δ: 💀`{self._format_delta_seconds(total_dead_new - total_dead)}` "
                     f"⏳`{self._format_delta_seconds(total_denied_new - total_denied)}`"
                 ),
@@ -1561,9 +1561,9 @@ class SessionViewHandlers:
             embed.add_field(
                 name="Totals",
                 value=(
-                    f"⏱`{self._format_seconds(total_played)}` "
-                    f"💀`{self._format_seconds(total_dead)}`({total_dead_pct:.0f}%) "
-                    f"⏳`{self._format_seconds(total_denied)}`({total_denied_pct:.0f}%)"
+                    f"⏱`{self.format_seconds(total_played)}` "
+                    f"💀`{self.format_seconds(total_dead)}`({total_dead_pct:.0f}%) "
+                    f"⏳`{self.format_seconds(total_denied)}`({total_denied_pct:.0f}%)"
                 ),
                 inline=False
             )
