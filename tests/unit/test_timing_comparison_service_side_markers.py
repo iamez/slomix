@@ -40,7 +40,7 @@ async def test_fetch_stats_file_data_includes_team_side_payload():
     db = _FakeDB(round_row, player_rows)
     service = TimingComparisonService(db_adapter=db, bot=None)
 
-    stats = await service._fetch_stats_file_data(9819)
+    stats = await service.fetch_stats_file_data(9819)
 
     assert stats is not None
     assert db.last_player_params == (9819,)

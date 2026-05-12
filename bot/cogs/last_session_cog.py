@@ -478,7 +478,7 @@ class LastSessionCog(commands.Cog):
                 )
                 if map_pages:
                     view = EndstatsPaginationView(ctx, map_pages, round_pages)
-                    first_embed = view._decorate_embed(map_pages[0])
+                    first_embed = view.decorate_embed(map_pages[0])
                     message = await ctx.send(embed=first_embed, view=view)
                     view.message = message
                 else:
@@ -546,11 +546,11 @@ class LastSessionCog(commands.Cog):
                         player_segment = f" `{player_name[:12]}`" if player_name else ""
                         lines.append(
                             f"`{idx:>2}.` **{map_name} R{round_number}**{player_segment} "
-                            f"💀O`{self.view_handlers._format_seconds(old_dead)}` "
-                            f"N`{self.view_handlers._format_seconds(new_dead)}` "
+                            f"💀O`{self.view_handlers.format_seconds(old_dead)}` "
+                            f"N`{self.view_handlers.format_seconds(new_dead)}` "
                             f"Δ`{dead_diff:+d}s` "
-                            f"⏳O`{self.view_handlers._format_seconds(old_denied)}` "
-                            f"N`{self.view_handlers._format_seconds(new_denied)}` "
+                            f"⏳O`{self.view_handlers.format_seconds(old_denied)}` "
+                            f"N`{self.view_handlers.format_seconds(new_denied)}` "
                             f"Δ`{denied_diff:+d}s`{fallback_note}"
                         )
                     else:
@@ -560,8 +560,8 @@ class LastSessionCog(commands.Cog):
                         diff_seconds = int(item.get("diff_seconds") or 0)
                         lines.append(
                             f"`{idx:>2}.` **{map_name} R{round_number}** "
-                            f"O`{self.view_handlers._format_seconds(stats_seconds)}` "
-                            f"N`{self.view_handlers._format_seconds(lua_seconds)}` "
+                            f"O`{self.view_handlers.format_seconds(stats_seconds)}` "
+                            f"N`{self.view_handlers.format_seconds(lua_seconds)}` "
                             f"Δ`{diff_seconds:+d}s`"
                         )
 

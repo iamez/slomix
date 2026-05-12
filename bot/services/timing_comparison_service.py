@@ -83,13 +83,13 @@ class TimingComparisonService:
         """
         try:
             # Fetch stats file data
-            stats_data = await self._fetch_stats_file_data(round_id)
+            stats_data = await self.fetch_stats_file_data(round_id)
             if not stats_data:
                 logger.warning(f"No stats file data found for round {round_id}")
                 return False
 
             # Fetch Lua webhook data (fuzzy match on map + round + time)
-            lua_data = await self._fetch_lua_data(
+            lua_data = await self.fetch_lua_data(
                 round_id,
                 stats_data['map_name'],
                 stats_data['round_number'],
@@ -118,7 +118,7 @@ class TimingComparisonService:
             logger.error(f"Error posting timing comparison: {e}", exc_info=True)
             return False
 
-    async def _fetch_stats_file_data(self, round_id: int) -> dict[str, Any] | None:
+    async def fetch_stats_file_data(self, round_id: int) -> dict[str, Any] | None:
         """
         Fetch stats file timing data for a round.
 
@@ -196,7 +196,7 @@ class TimingComparisonService:
             'players': players
         }
 
-    async def _fetch_lua_data(
+    async def fetch_lua_data(
         self,
         round_id: int | None,
         map_name: str,
@@ -571,7 +571,7 @@ class TimingComparisonService:
 
         # Stats file timing
         stats_duration = stats_data['stats_duration_seconds']
-        stats_time_str = self._format_seconds(stats_duration)
+        stats_time_str = self.format_seconds(stats_duration)
 
         embed.add_field(
             name="📄 Stats File",
@@ -583,7 +583,7 @@ class TimingComparisonService:
         # Lua webhook timing
         if lua_data:
             lua_duration = lua_data.get('lua_duration_seconds', 0) or 0
-            lua_time_str = self._format_seconds(lua_duration)
+            lua_time_str = self.format_seconds(lua_duration)
             warmup = lua_data.get('warmup_seconds', 0)
             pauses = lua_data.get('total_pause_seconds', 0)
             pause_count = lua_data.get('pause_count', 0)
@@ -650,8 +650,8 @@ class TimingComparisonService:
             player_lines = []
             mixed_or_unknown_count = 0
             for p in players:
-                time_played = self._format_seconds(int(p['time_played_seconds']))
-                time_dead = self._format_seconds(int(p['time_dead_seconds']))
+                time_played = self.format_seconds(int(p['time_played_seconds']))
+                time_dead = self.format_seconds(int(p['time_dead_seconds']))
                 dead_pct = p.get('time_dead_ratio', 0)
                 dpm = p.get('dpm', 0)
                 name = p['name'][:12]  # Truncate name
@@ -667,8 +667,8 @@ class TimingComparisonService:
                     corrected_played = int(p['time_played_seconds'] * factor)
                     corrected_dead = int(p['time_dead_seconds'] * factor)
                     player_lines.append(
-                        f"{side_marker} `{name:<12}` ⏱{time_played}→{self._format_seconds(corrected_played)} "
-                        f"💀{time_dead}→{self._format_seconds(corrected_dead)} ({dead_pct:.0f}%) "
+                        f"{side_marker} `{name:<12}` ⏱{time_played}→{self.format_seconds(corrected_played)} "
+                        f"💀{time_dead}→{self.format_seconds(corrected_dead)} ({dead_pct:.0f}%) "
                         f"DPM:{dpm:.0f}"
                     )
                 else:
@@ -716,7 +716,7 @@ class TimingComparisonService:
         except (ValueError, TypeError):
             return 0
 
-    def _format_seconds(self, seconds: int) -> str:
+    def format_seconds(self, seconds: int) -> str:
         """Format seconds as MM:SS string."""
         if seconds <= 0:
             return "0:00"

@@ -158,21 +158,42 @@ class _ProximityRelinkerMixin:
                     failed += 1
                     continue
 
-                for table in self._PROXIMITY_ROUND_ID_TABLES:
-                    try:
-                        await db.execute(
-                            _relink_sql(table),
-                            (round_id, map_name, round_number, session_date, round_start_unix),
-                        )
-                    except Exception as e:
-                        logger.warning("Re-linker: %s primary update failed: %s", table, e)
+                # Fan out 21 independent table updates per round in parallel
+                # (background task on backlog can be hundreds of rounds × 21
+                # tables = thousands of sequential round-trips otherwise).
+                # Semaphore caps peak pool pressure; per-table primary→fallback
+                # retry semantics preserved inside the helper. Loop-locals
+                # are bound as kwargs defaults to avoid late-binding (B023).
+                _link_sem = asyncio.Semaphore(10)
+
+                async def _link_table(
+                    table: str,
+                    rid: int = round_id,
+                    mn: str = map_name,
+                    rn: int = round_number,
+                    sd: str = session_date,
+                    rsu: int = round_start_unix,
+                    sem: asyncio.Semaphore = _link_sem,
+                ) -> None:
+                    async with sem:
                         try:
                             await db.execute(
-                                _relink_sql(table, fallback=True),
-                                (round_id, map_name, round_start_unix),
+                                _relink_sql(table),
+                                (rid, mn, rn, sd, rsu),
                             )
                         except Exception as e:
-                            logger.warning(f"Re-linker: {table} fallback update failed: {e}")
+                            logger.warning("Re-linker: %s primary update failed: %s", table, e)
+                            try:
+                                await db.execute(
+                                    _relink_sql(table, fallback=True),
+                                    (rid, mn, rsu),
+                                )
+                            except Exception as e2:
+                                logger.warning(f"Re-linker: {table} fallback update failed: {e2}")
+
+                await asyncio.gather(
+                    *(_link_table(t) for t in self._PROXIMITY_ROUND_ID_TABLES)
+                )
 
                 linked += 1
 

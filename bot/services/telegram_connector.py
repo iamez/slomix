@@ -46,7 +46,7 @@ class TelegramConnector:
         if enabled and not self.bot_token:
             logger.warning("Telegram connector enabled but bot token is missing")
 
-    async def _get_client(self):
+    async def get_client(self):
         if httpx is None:
             raise RuntimeError("httpx is not installed")
         if self._client is None:
@@ -77,7 +77,7 @@ class TelegramConnector:
         async with self._send_lock:
             for attempt in range(1, self.max_retries + 1):
                 await self._pace_locked()
-                client = await self._get_client()
+                client = await self.get_client()
 
                 try:
                     response = await client.post(endpoint, json=payload)
