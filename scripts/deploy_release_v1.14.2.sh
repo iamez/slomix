@@ -118,15 +118,24 @@ if ! $SKIP_MIGRATIONS; then
 fi
 
 # ─── 3. Fetch + checkout tag ──────────────────────────────────────────────────
-log "3/8  Fetch tags + verify clean tree + checkout $TAG"
-# Refuse to clobber uncommitted changes — abort and let user reconcile manually.
+# Clean-tree guard with allow-list: the previous deploy's step 3b leaves
+# `website/index.html`, `website/js/app.js`, and `website/js/session-detail.js`
+# permanently modified (bumped to that release's git SHA — see step 3b's
+# rationale block below). We tolerate those known-bumped files here but
+# abort on ANY OTHER dirty file (manual prod edits, leftover hotfix, etc.).
+log "3/8  Fetch tags + verify clean tree (allow-listed bumped files) + checkout $TAG"
 run_remote "cd $VM_PATH && \
-  if [ -n \"\$(git status --porcelain)\" ]; then \
-    echo 'ERROR: VM working tree not clean. Aborting before checkout.' >&2; \
-    git status --short; \
+  UNEXPECTED=\$(git status --porcelain | grep -vE ' website/(index\\.html|js/(app|session-detail)\\.js)\$' || true); \
+  if [ -n \"\$UNEXPECTED\" ]; then \
+    echo 'ERROR: Unexpected dirty files in VM working tree (not the allow-listed cache-buster files). Aborting before checkout.' >&2; \
+    echo \"\$UNEXPECTED\" >&2; \
     exit 1; \
   fi"
-run_remote "cd $VM_PATH && git fetch origin --tags && git checkout $TAG && git log --oneline -1"
+# `git checkout -f $TAG` force-overwrites any cache-buster-bumped files left
+# from the previous deploy with the tagged content. Without -f, git would
+# refuse with "Your local changes would be overwritten by checkout".
+# Safe because the allow-list guard above already proved nothing else is dirty.
+run_remote "cd $VM_PATH && git fetch origin --tags && git checkout -f $TAG && git log --oneline -1"
 
 # ─── 3b. Auto-bump JS cache-buster to current git SHA (CF edge cache purge) ───
 # Why: index.html / app.js / session-detail.js reference static JS files with a
@@ -139,14 +148,13 @@ run_remote "cd $VM_PATH && git fetch origin --tags && git checkout $TAG && git l
 # release a unique buster derived from the commit SHA. The files are otherwise
 # byte-identical to the tagged content.
 #
-# IMPORTANT: this dirties the VM working tree, which would trip step 3's
-# `git status --porcelain` clean-tree guard on the NEXT deploy. To avoid that,
-# we register an EXIT trap below that restores the three files via
-# `git checkout --` whether the deploy succeeded or failed. CF has already
-# cached the bumped URL by the time we restore, so the cache-bust effect
-# persists for the user-visible window; the on-disk file just goes back to
-# tagged content (the cache key is what matters, not the served bytes).
-log "3b/8 Auto-bump cache-buster to current git SHA"
+# IMPORTANT: the bump PERSISTS on disk after the deploy completes. The web
+# backend serves index.html via FastAPI's FileResponse and mounts the rest as
+# StaticFiles — both read from disk on every request — so the bumped `?v=SHA`
+# URLs MUST stay on disk for traffic after the deploy to keep getting the new
+# cache key. Step 3 above tolerates these known-dirty files; step 3's
+# `git checkout -f` overwrites them on the next deploy run.
+log "3b/8 Auto-bump cache-buster to current git SHA (persists after deploy)"
 run_remote "cd $VM_PATH && \
   SHA=\$(git rev-parse --short HEAD) && \
   for f in website/index.html website/js/app.js website/js/session-detail.js; do \
@@ -154,18 +162,6 @@ run_remote "cd $VM_PATH && \
   done && \
   echo \"  cache-buster bumped to ?v=\$SHA\" && \
   grep -hoE '\\?v=[A-Za-z0-9._-]+' website/index.html | sort -u"
-
-# Register cleanup trap: restore the three files no matter how we exit,
-# so the next deploy's clean-tree guard doesn't trip on our leftover edits.
-cleanup_cache_buster_bump() {
-  local rc=$?
-  $DRY_RUN && return $rc
-  log "Cleanup trap: restoring cache-buster files to tagged content"
-  $SSH "cd $VM_PATH && git checkout -- website/index.html website/js/app.js website/js/session-detail.js 2>&1" \
-    || warn "Cleanup failed — VM tree may be dirty. Run on VM: cd $VM_PATH && git checkout -- website/index.html website/js/app.js website/js/session-detail.js"
-  return $rc
-}
-trap cleanup_cache_buster_bump EXIT
 
 # ─── 4. Stop services (clean restart) ─────────────────────────────────────────
 log "4/8  Stop services before migration"
@@ -248,7 +244,9 @@ fi
 # ─── Done ─────────────────────────────────────────────────────────────────────
 echo
 log "Deploy complete. To rollback to pre-deploy commit ($CURRENT_COMMIT):"
-echo "  ssh $VM_USER@$VM_HOST 'cd $VM_PATH && git checkout $CURRENT_COMMIT && sudo systemctl restart slomix-web slomix-bot'"
+# Use `git checkout -f` because step 3b leaves the cache-buster files
+# permanently bumped on disk; rollback must force-overwrite them.
+echo "  ssh $VM_USER@$VM_HOST 'cd $VM_PATH && git checkout -f $CURRENT_COMMIT && sudo systemctl restart slomix-web slomix-bot'"
 echo "  To disable just the MV flag (cheaper rollback — keeps code, just falls back to live query):"
 echo "  ssh $VM_USER@$VM_HOST \"sudo sed -i 's/^USE_WEAPON_STATS_MV=.*/USE_WEAPON_STATS_MV=false/' $VM_PATH/.env && sudo systemctl restart slomix-web\""
 echo "  To DROP the materialized view if it caused issues:"
