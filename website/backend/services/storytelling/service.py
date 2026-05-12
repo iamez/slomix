@@ -10,6 +10,7 @@ from .advanced_metrics import _AdvancedMetricsMixin
 from .archetypes import _ArchetypesMixin
 from .base import *  # noqa: F401, F403  (constants + helpers)
 from .kis import _KisMixin
+from .kis_shadow import _KisShadowMixin
 from .loaders import _LoadersMixin
 from .moments import _MomentsMixin
 from .momentum import _MomentumMixin
@@ -20,6 +21,7 @@ from .win_contribution import _WinContributionMixin
 
 class StorytellingService(
     _KisMixin,
+    _KisShadowMixin,
     _LoadersMixin,
     _MomentsMixin,
     _ArchetypesMixin,

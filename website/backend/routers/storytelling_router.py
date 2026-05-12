@@ -89,7 +89,12 @@ async def get_kill_impact_leaderboard(
     """KIS leaderboard for a session. Lazy-computes if not cached."""
     sd = _parse_date(session_date)
     svc = StorytellingService(db)
-    compute_result = await svc.compute_session_kis(sd)
+    # Routes through kis_compute_with_shadow so that, when
+    # KIS_SHADOW_MODE_ENABLED is set, the SQL shadow audit runs and
+    # populates storytelling_kis_shadow_audit. When the flag is off
+    # this is a thin pass-through to compute_session_kis (production
+    # path is always authoritative and writes are unchanged).
+    compute_result = await svc.kis_compute_with_shadow(sd)
     leaderboard = await svc.get_kis_leaderboard(sd, limit=limit)
 
     return {
@@ -118,7 +123,8 @@ async def get_kill_impact_details(
     # that into the 400 handled by _parse_date.
     sd = _parse_date(session_date)
     svc = StorytellingService(db)
-    await svc.compute_session_kis(sd)
+    # Same shadow-aware entrypoint as the leaderboard route (see above).
+    await svc.kis_compute_with_shadow(sd)
     rows = await db.fetch_all("""
         SELECT kill_outcome_id, round_number, round_start_unix, map_name,
                victim_guid, victim_name,
