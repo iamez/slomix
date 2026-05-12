@@ -19,9 +19,20 @@ from website.backend.routers.api_helpers import (
 from website.backend.routers.api_helpers import (
     normalize_weapon_key as _normalize_weapon_key,
 )
+from website.backend.services.weapon_stats_mv_refresh import (
+    use_weapon_stats_mv_enabled,
+)
 
 router = APIRouter()
 logger = get_app_logger("api.records.weapons")
+
+
+def _looks_like_missing_mv(exc: Exception) -> bool:
+    """Detect ``weapon_stats_mv does not exist`` without importing asyncpg."""
+    msg = str(exc).lower()
+    return "weapon_stats_mv" in msg and (
+        "does not exist" in msg or "undefinedtable" in msg
+    )
 
 
 @router.get("/stats/weapons")
@@ -58,7 +69,7 @@ async def get_weapon_stats(
         param_idx += 1
     # else: all time, no date filter
 
-    query = f"""
+    live_query = f"""
         SELECT
             weapon_name,
             SUM(kills) as total_kills,
@@ -74,7 +85,47 @@ async def get_weapon_stats(
     """
     params.append(limit)
 
-    rows = await db.fetch_all(query, tuple(params))
+    # A8 optimization: serve from the weapon_stats_mv materialized view when
+    # the feature flag is on. The MV is grouped by (weapon_name, round_date)
+    # so the same date filters apply. Fall back to the live query when the
+    # MV is missing (migration 053 not applied yet) or on any error.
+    mv_query = f"""
+        SELECT
+            weapon_name,
+            SUM(total_kills) as total_kills,
+            SUM(total_headshots) as total_headshots,
+            SUM(total_shots) as total_shots,
+            SUM(total_hits) as total_hits,
+            ROUND((SUM(total_hits)::numeric / NULLIF(SUM(total_shots), 0)) * 100, 1) as avg_accuracy
+        FROM weapon_stats_mv
+        {where_clause}
+        GROUP BY weapon_name
+        ORDER BY total_kills DESC
+        LIMIT ${param_idx}
+    """
+
+    rows = None
+    used_mv = False
+    if use_weapon_stats_mv_enabled():
+        try:
+            rows = await db.fetch_all(mv_query, tuple(params))
+            used_mv = True
+            logger.debug("get_weapon_stats served from weapon_stats_mv")
+        except Exception as exc:
+            if _looks_like_missing_mv(exc):
+                logger.info(
+                    "weapon_stats_mv not present — falling back to live query"
+                )
+            else:
+                logger.warning(
+                    "weapon_stats_mv query failed (%s) — falling back to live query",
+                    exc,
+                )
+            rows = None
+    if rows is None:
+        rows = await db.fetch_all(live_query, tuple(params))
+        if not used_mv:
+            logger.debug("get_weapon_stats served from live weapon_comprehensive_stats")
     if not rows:
         return []
 

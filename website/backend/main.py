@@ -86,6 +86,9 @@ from website.backend.services.greatshot_jobs import (
 )
 from website.backend.services.greatshot_store import get_greatshot_storage
 from website.backend.services.http_cache_backend import create_cache_backend_from_env
+from website.backend.services.weapon_stats_mv_refresh import (
+    weapon_stats_mv_refresh_loop,
+)
 
 # Configuration from environment
 WEBSITE_PORT = getenv_int("WEBSITE_PORT", 7000)
@@ -400,6 +403,23 @@ async def startup_event():
         _start_greatshot_service(),
         name="greatshot-startup",
     )
+
+    # A8 audit: optional background refresh of weapon_stats_mv. Enabled when
+    # WEAPON_STATS_MV_REFRESH_SECONDS > 0. The loop is permissive — missing
+    # MV (migration 053 not applied) is a no-op.
+    mv_refresh_seconds = int(os.getenv("WEAPON_STATS_MV_REFRESH_SECONDS", "0") or 0)
+    if mv_refresh_seconds > 0:
+        app.state.weapon_stats_mv_task = asyncio.create_task(
+            weapon_stats_mv_refresh_loop(get_db_pool, mv_refresh_seconds),
+            name="weapon-stats-mv-refresh",
+        )
+        logger.info(
+            "weapon_stats_mv refresh loop scheduled (interval=%ss)",
+            mv_refresh_seconds,
+        )
+    else:
+        app.state.weapon_stats_mv_task = None
+
     logger.info("✅ Slomix Website Backend Ready")
 
 
@@ -421,6 +441,18 @@ async def shutdown_event():
         job_service = None  # Service never initialised; nothing to stop
     if job_service is not None:
         await job_service.stop()
+    mv_task = getattr(app.state, "weapon_stats_mv_task", None)
+    if mv_task is not None and not mv_task.done():
+        mv_task.cancel()
+        try:
+            await asyncio.wait_for(mv_task, timeout=2.0)
+        except asyncio.CancelledError:
+            pass  # Expected during shutdown
+        except Exception:
+            logger.debug(
+                "weapon_stats_mv refresh task failed during shutdown",
+                exc_info=True,
+            )
     await cache_backend.close()
     await close_db_pool()  # Clean up DB pool
     logger.info("✅ Slomix Website Backend Stopped")
