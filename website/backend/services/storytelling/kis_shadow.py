@@ -138,8 +138,13 @@ def _build_shadow_kis_query() -> str:
         WHERE was_executed = TRUE AND session_date = $1
     ),
     st AS (
+        -- NULLIF(...) drops to NULL so the outer COALESCE applies the
+        -- 0.5 fallback. Mirrors the Python loader's `float(r[2] or 0.5)`
+        -- which coerces falsy zeros to the default; using plain COALESCE
+        -- here would treat 0 as a real score and silently diverge from
+        -- production for sessions containing zero-valued rows.
         SELECT id, killer_guid, round_start_unix, round_number, kill_time,
-               COALESCE(spawn_timing_score, 0.5)::numeric AS score,
+               COALESCE(NULLIF(spawn_timing_score, 0), 0.5)::numeric AS score,
                COALESCE(victim_reinf, 0)::numeric AS victim_reinf
         FROM proximity_spawn_timing
         WHERE session_date = $1

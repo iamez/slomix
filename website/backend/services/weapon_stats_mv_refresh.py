@@ -37,9 +37,16 @@ def _looks_like_missing_relation(exc: Exception) -> bool:
 
 
 def _looks_like_needs_initial_populate(exc: Exception) -> bool:
-    """REFRESH CONCURRENTLY fails until the MV has been populated once."""
+    """REFRESH CONCURRENTLY fails until the MV has been populated once.
+
+    PostgreSQL's actual error message is ``"... is not populated"`` (see
+    src/backend/commands/matview.c). Earlier code matched the looser
+    phrase ``"has not been populated"`` which never appears in the real
+    message — the detector therefore never triggered the blocking
+    fallback and the refresh loop kept failing indefinitely.
+    """
     msg = str(exc).lower()
-    return "has not been populated" in msg
+    return "is not populated" in msg or "has not been populated" in msg
 
 
 async def refresh_weapon_stats_mv(db: Any) -> bool:
