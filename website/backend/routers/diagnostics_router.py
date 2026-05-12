@@ -785,6 +785,60 @@ async def get_storytelling_completeness(
     }
 
 
+@router.get("/diagnostics/kis-shadow-audit")
+async def get_kis_shadow_audit(
+    session_date: str = Query(..., description="YYYY-MM-DD"),
+    limit: int = Query(default=50, ge=1, le=500),
+    db: DatabaseAdapter = Depends(get_db),
+    _user: dict = Depends(require_admin_user),
+):
+    """KIS shadow audit (Audit A5, Phase 1).
+
+    Returns the persisted top-N worst per-kill deltas between the Python
+    `_score_kill` path (production) and the SQL `jsonb_agg`-style
+    re-implementation for the given session. Read-only — no compute.
+
+    Sort: |delta| DESC, so the most divergent rows surface first.
+    """
+    try:
+        sd = datetime.strptime(session_date, "%Y-%m-%d").date()  # noqa: DTZ007 date-only parsing, no time component used
+    except ValueError:
+        raise HTTPException(status_code=400, detail="session_date must be YYYY-MM-DD")
+
+    try:
+        rows = await db.fetch_all(
+            """
+            SELECT kill_outcome_id, python_impact, sql_impact, delta, captured_at
+            FROM storytelling_kis_shadow_audit
+            WHERE session_date = $1
+            ORDER BY ABS(delta) DESC, kill_outcome_id
+            LIMIT $2
+            """,
+            (sd, limit),
+        )
+    except Exception as e:
+        logger.error("Database error in kis-shadow-audit: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred.")
+
+    samples = []
+    for row in rows or []:
+        ko_id, py_impact, sql_impact, delta, captured_at = row
+        samples.append({
+            "kill_outcome_id": int(ko_id),
+            "python_impact": float(py_impact),
+            "sql_impact": float(sql_impact),
+            "delta": float(delta),
+            "captured_at": captured_at.isoformat() if captured_at else None,
+        })
+
+    return {
+        "session_date": session_date,
+        "limit": limit,
+        "count": len(samples),
+        "samples": samples,
+    }
+
+
 @router.get("/diagnostics/spawn-audit")
 async def get_spawn_audit(
     limit: int = Query(default=200, ge=1, le=1000),
