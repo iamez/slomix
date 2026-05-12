@@ -102,7 +102,15 @@ def _shadow_mode_enabled() -> bool:
 # readable and avoid parameter-count bloat.
 
 def _build_shadow_kis_query() -> str:
-    """Compose the shadow KIS SQL query, embedding tunable constants."""
+    """Compose the shadow KIS SQL query, embedding tunable constants.
+
+    Every interpolated value is a module-level Python constant
+    (CARRIER_CHAIN_MULTIPLIER, OUTCOME_GIBBED, etc.) defined above this
+    function. No user input ever reaches this query construction; the
+    only runtime parameter is ``session_date``, passed via ``$1``
+    placeholder. The Bandit B608 suppressions live on the literal lines
+    below.
+    """
     return f"""
     WITH ck AS (
         -- carrier kill keyed by (killer_guid, round_start_unix, round_number, kill_time)
@@ -338,7 +346,7 @@ def _build_shadow_kis_query() -> str:
        AND cp.event_time = ko.kill_time
     WHERE ko.session_date = $1
     ORDER BY ko.round_start_unix, ko.kill_time
-    """
+    """  # nosec B608
 
 
 def _apply_soft_cap_and_round(raw: float) -> float:

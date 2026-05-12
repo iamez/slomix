@@ -69,6 +69,11 @@ async def get_weapon_stats(
         param_idx += 1
     # else: all time, no date filter
 
+    # nosec B608 — where_clause is built from a fixed period whitelist
+    # ("today"/"7d"/"30d"/"season"/"all") and uses $N parameter
+    # placeholders for the only user-derived value (a date string already
+    # passed via the params tuple). param_idx is an integer counter for
+    # PG positional placeholders, not user input.
     live_query = f"""
         SELECT
             weapon_name,
@@ -82,13 +87,14 @@ async def get_weapon_stats(
         GROUP BY weapon_name
         ORDER BY total_kills DESC
         LIMIT ${param_idx}
-    """
+    """  # nosec B608
     params.append(limit)
 
     # A8 optimization: serve from the weapon_stats_mv materialized view when
     # the feature flag is on. The MV is grouped by (weapon_name, round_date)
     # so the same date filters apply. Fall back to the live query when the
     # MV is missing (migration 053 not applied yet) or on any error.
+    # nosec B608 — same rationale as live_query above.
     mv_query = f"""
         SELECT
             weapon_name,
@@ -102,7 +108,7 @@ async def get_weapon_stats(
         GROUP BY weapon_name
         ORDER BY total_kills DESC
         LIMIT ${param_idx}
-    """
+    """  # nosec B608
 
     rows = None
     used_mv = False
