@@ -141,7 +141,7 @@ AUTOMATION_ENABLED=true
 ## Infrastructure Services
 
 - **PostgreSQL**: Primary database (17 in production, 14 in dev)
-- **Redis**: v7.2.1 (caching, session data) — running on localhost:6379
+- **Redis**: v7.4.2 (caching, session data) — running on localhost:6379; CI uses the same image (`redis:7.4.2-alpine` in `.github/workflows/tests.yml`)
 - **Website**: FastAPI backend on port 8000
 
 ---
