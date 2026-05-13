@@ -66,8 +66,8 @@ DB_PASSWORD=REDACTED_DB_PASSWORD
 | `STARTUP_LOOKBACK_HOURS` | 168 | Hours to look back on startup (7 days) |
 
 ### Discord Bot Architecture: Cog-Based Modular Design
-- **Entry point:** `bot/ultimate_bot.py` (4,990 lines but most logic in Cogs)
-- **14 Cogs in `bot/cogs/`:** Each handles specific command domain (admin, stats, leaderboards, sessions, teams, etc.)
+- **Entry point:** `bot/ultimate_bot.py` (~2,100 lines after the mega-audit cog-mixin split; most logic now in Cogs + mixins)
+- **20 Cogs in `bot/cogs/`:** Each handles specific command domain (admin, stats, leaderboards, sessions, teams, etc.)
 - **12 Core modules in `bot/core/`:** Shared business logic (team detection, achievements, caching, season management, pagination)
 - **4 Automation services:** SSH monitoring, health checks, metrics (in `bot/services/automation/`)
 
