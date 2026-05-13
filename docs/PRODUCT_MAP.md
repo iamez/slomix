@@ -53,10 +53,10 @@ Slomix is a **Discord bot + website** that turns raw ET:Legacy game statistics i
     └─ Interactive UI (pagination, embeds, buttons)
 
          v
-    [Website] FastAPI backend + 2 frontends
-    ├─ 8 routers, 22+ services, PostgreSQL queries
-    ├─ Vanilla JS frontend (14 pages, 17 modules)
-    ├─ React 19 frontend (10 TSX pages, in development)
+    [Website] FastAPI backend + React frontend
+    ├─ 40+ routers (split from god files), 30+ services, PostgreSQL queries
+    ├─ React 19 + TypeScript 5.9 + Vite 7 + Tailwind v4 (25 pages, production)
+    ├─ Small legacy website/js/ bundle still ships for a few non-migrated entry points
     └─ HTTP endpoints: /api/*, /auth/*, /greatshot/*, etc.
 
     TIMING: Lua fires (~1s) → SSH download (~30-60s) → Parse + store (~5s) → Auto-post to Discord (~2s) = **40-70 seconds end-to-end**
@@ -69,10 +69,10 @@ Slomix is a **Discord bot + website** that turns raw ET:Legacy game statistics i
 | Department | Status | What It Does | Key Files | What To Touch It For |
 |-----------|--------|--------------|-----------|---------------------|
 | **Stats Pipeline** | ✅ Working | Lua hooks → SSH download → parse → PostgreSQL import | `bot/community_stats_parser.py`, `postgresql_database_manager.py`, `vps_scripts/stats_discord_webhook.lua` | Adding fields, parsing changes, backfill ops |
-| **Bot + Commands** | ✅ Working | 18 Cogs delivering 80+ Discord commands across all analytics | `bot/cogs/`, `bot/services/`, 22 service files | New commands, session detection, real-time alerts |
-| **Database** | ✅ Working | PostgreSQL 17 (prod) / 14 (dev), 68 tables, 56-column player stats | `tools/schema_postgresql.sql`, `bot/core/database_adapter.py` | Schema changes, new tables, migration rollout |
-| **Website Backend** | ✅ Working | FastAPI server, 8 routers, 22+ services, query caching | `website/backend/routers/api.py` (9.4KB — largest), auth, availability, uploads | New API endpoints, performance tuning, route changes |
-| **Website Frontend** | ⚠️ In Flux | Vanilla JS (14 pages, production) + React 19 (10 pages, development) | `website/js/` (17 modules), `gemini-website/src/pages/` (10 TSX) | UI/UX improvements, new pages, framework migration |
+| **Bot + Commands** | ✅ Working | 20 Cogs delivering 80+ Discord commands across all analytics | `bot/cogs/`, `bot/services/` (37 service files incl. cog-mixin split) | New commands, session detection, real-time alerts |
+| **Database** | ✅ Working | PostgreSQL 17 (prod) / 14 (dev), 90 tables, 57-column player stats | `tools/schema_postgresql.sql`, `bot/core/database_adapter.py` | Schema changes, new tables, migration rollout |
+| **Website Backend** | ✅ Working | FastAPI server, 40+ sub-routers (post-god-file split), 30+ services, query caching | `website/backend/routers/api.py`, auth, availability, uploads | New API endpoints, performance tuning, route changes |
+| **Website Frontend** | ✅ Working | React 19 + TypeScript 5.9 + Vite 7 + Tailwind v4 (25 pages, production); small legacy `website/js/` bundle still ships for a few non-migrated entry points | `website/frontend/src/pages/*.tsx` (25 pages), `website/js/*.js` (35 legacy modules) | UI/UX improvements, new pages |
 | **Proximity Analytics** | ⚠️ Waiting | 5 new v5 metrics (spawn timing, team cohesion, crossfire, pushes, Lua trades) | `proximity/`, `bot/services/round_correlation_service.py`, tables added Feb 26 | Lua tracker data, API endpoints, website panels |
 | **Greatshot (Highlights)** | ⚠️ Buggy | Demo upload, clip extraction, video storage, sharing | `website/backend/routers/greatshot.py`, services/ | Upload bugs (Download/Share broken), UI redesign |
 | **Availability Poll** | ⚠️ Needs UX | Daily player queue system with Discord/Telegram/Signal notifications | `bot/cogs/availability_poll_cog.py` (85KB), `website/backend/routers/availability.py` | Social redesign (avatars, progress bars, animations) |
