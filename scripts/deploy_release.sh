@@ -132,6 +132,59 @@ sudo_run() {
   fi
 }
 
+# ─── Mid-deploy recovery trap ─────────────────────────────────────────────────
+# If anything fails *after* services are stopped (step 4) but *before* they're
+# confirmed restarted (end of step 7), the EXIT trap auto-restarts both
+# services so the operator doesn't have to scramble for SSH to bring prod back.
+#
+# Why this trap matters: previously a migration error in step 5 or a sudo
+# permission glitch in step 6 would leave slomix-web + slomix-bot stopped
+# until manual intervention — possibly minutes/hours of public downtime.
+# (Deferred follow-up from #253 Copilot review.)
+#
+# Edge cases handled:
+#   - Failure before step 4 → SERVICES_STOPPED=false, trap no-ops.
+#     (Services are still running on the old tag; nothing to recover.)
+#   - Success path → SERVICES_RESTARTED=true at end of step 7, trap no-ops.
+#   - Dry-run → trap no-ops (no real state change happened).
+#   - Failure mid-step-7 (e.g. slomix-bot fails is-active) → trap fires.
+#     `systemctl start` is idempotent so retrying both services is safe.
+#   - Trap function inlines the SSH+sudo call instead of using `sudo_run`,
+#     because `sudo_run` calls `fail` on error which would re-enter the trap.
+SERVICES_STOPPED=false
+SERVICES_RESTARTED=false
+
+recover_services_on_failure() {
+  local rc=$?
+  if $DRY_RUN || [ "$rc" -eq 0 ] || ! $SERVICES_STOPPED || $SERVICES_RESTARTED; then
+    exit "$rc"
+  fi
+  echo "" >&2
+  warn "═════════════════════════════════════════════════════════════"
+  warn "Deploy aborted (rc=$rc) after services were stopped, before"
+  warn "they were confirmed restarted. Auto-recovery: starting both"
+  warn "services on whatever code is currently checked out on the VM."
+  warn "═════════════════════════════════════════════════════════════"
+  local recover_rc=0
+  if [ -n "${SUDO_PASS:-}" ]; then
+    printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -- systemctl start slomix-web slomix-bot" || recover_rc=$?
+  else
+    $SSH "sudo -n -- systemctl start slomix-web slomix-bot" || recover_rc=$?
+  fi
+  if [ "$recover_rc" -eq 0 ]; then
+    warn "Recovery succeeded. Verify state with:"
+    warn "  ssh -i $VM_KEY $VM_USER@$VM_HOST 'systemctl is-active slomix-web slomix-bot'"
+    warn "Then investigate the original failure (rc=$rc) before re-deploying."
+  else
+    warn "Recovery FAILED (rc=$recover_rc). Manual intervention required:"
+    warn "  ssh -i $VM_KEY $VM_USER@$VM_HOST"
+    warn "  sudo systemctl start slomix-web slomix-bot"
+    warn "  sudo journalctl -u slomix-web -u slomix-bot --since '5 minutes ago' --no-pager"
+  fi
+  exit "$rc"
+}
+trap recover_services_on_failure EXIT
+
 # ─── Header ───────────────────────────────────────────────────────────────────
 MIG_DESC="SKIP"
 FLAG_DESC="SKIP"
@@ -257,6 +310,9 @@ run_remote "cd $VM_PATH && \
 # ─── 4. Stop services (clean restart) ─────────────────────────────────────────
 log "4/8  Stop services before migration"
 sudo_run "systemctl stop slomix-web slomix-bot"
+# Arm the recovery trap. Any non-zero exit from here until the end of
+# step 7 will trigger an auto-restart of both services.
+SERVICES_STOPPED=true
 
 # ─── 5. Apply migrations ──────────────────────────────────────────────────────
 if ! $SKIP_MIGRATIONS && [ ${#MIGRATIONS[@]} -gt 0 ]; then
@@ -340,6 +396,8 @@ sudo_run "bash -c \"journalctl -u slomix-web --since '30 seconds ago' --no-pager
 sudo_run "systemctl start slomix-bot"
 $DRY_RUN || sleep 5
 sudo_run "systemctl is-active slomix-bot" || fail "slomix-bot failed to start — check 'journalctl -u slomix-bot'"
+# Disarm the recovery trap — both services are confirmed up.
+SERVICES_RESTARTED=true
 
 # ─── 8. Smoke test ────────────────────────────────────────────────────────────
 log "8/8  Public smoke test"
