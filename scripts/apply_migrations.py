@@ -69,14 +69,18 @@ def _file_checksum(path: Path) -> str:
 # ── Database helpers ──────────────────────────────────────────────────
 
 def _env(*names: str, default: str = "") -> str:
-    """Return first non-empty env var from `names`, else `default`.
+    """Return first env var from `names` that is *defined*, else `default`.
 
     Lets us accept both POSTGRES_* (this script's documented convention) and
-    DB_* (historical prod .env convention). POSTGRES_* wins when both are set.
+    DB_* (historical prod .env convention). POSTGRES_* wins when both are set,
+    even if explicitly empty — an operator who exports `POSTGRES_PASSWORD=''`
+    has explicitly overridden the DB_* fallback (e.g. for password-less
+    trust-auth setups in dev). Truthiness check (`if v:`) would incorrectly
+    fall back through here. (Codex P2 review on #257.)
     """
     for n in names:
         v = os.getenv(n)
-        if v:
+        if v is not None:
             return v
     return default
 
@@ -265,29 +269,76 @@ async def cmd_mark(filenames: list[str]):
     conn = await get_connection()
     try:
         await ensure_tracking_table(conn)
-        applied = await get_applied(conn)
+        # Fetch (filename, success) so we can distinguish already-marked-OK
+        # rows from previously-failed rows that should now be reconciled.
+        # (Copilot review on #257.)
+        existing: dict[str, bool] = {
+            r["filename"]: r["success"]
+            for r in await conn.fetch(
+                "SELECT filename, success FROM schema_migrations"
+            )
+        }
 
         marked = 0
         skipped = 0
+        repaired = 0
+        raced = 0
         for filename in filenames:
-            if filename in applied:
-                print(f"  [SKIP   ] {filename} (already recorded)")
-                skipped += 1
-                continue
             path = discovered[filename]
             version = _version_from_filename(filename)
             checksum = _file_checksum(path)
-            await conn.execute(
+
+            prior = existing.get(filename)
+            if prior is True:
+                print(f"  [SKIP   ] {filename} (already recorded success=TRUE)")
+                skipped += 1
+                continue
+
+            if prior is False:
+                # Reconcile a previously-failed row: a manual psql apply
+                # succeeded, so flip success to TRUE and record the manual
+                # provenance + fresh checksum.
+                row = await conn.fetchrow(
+                    """UPDATE schema_migrations
+                       SET success = TRUE,
+                           applied_by = 'manual-mark',
+                           checksum = $2,
+                           applied_at = NOW()
+                       WHERE filename = $1
+                       RETURNING id""",
+                    filename, checksum,
+                )
+                if row is None:
+                    # Row vanished between SELECT and UPDATE — exotic, but report it.
+                    print(f"  [RACED  ] {filename} (row disappeared during reconcile)")
+                    raced += 1
+                else:
+                    print(f"  [REPAIR ] {filename} (success FALSE→TRUE)")
+                    repaired += 1
+                continue
+
+            # No existing row → insert. Use RETURNING to verify a real insert
+            # happened (vs a concurrent insert hitting the UNIQUE constraint).
+            row = await conn.fetchrow(
                 """INSERT INTO schema_migrations
                    (version, filename, checksum, applied_by, success)
                    VALUES ($1, $2, $3, 'manual-mark', TRUE)
-                   ON CONFLICT (filename) DO NOTHING""",
+                   ON CONFLICT (filename) DO NOTHING
+                   RETURNING id""",
                 version, filename, checksum,
             )
-            print(f"  [MARKED ] {filename}")
-            marked += 1
+            if row is None:
+                # Lost the race against a concurrent writer.
+                print(f"  [RACED  ] {filename} (concurrent insert won; row already exists)")
+                raced += 1
+            else:
+                print(f"  [MARKED ] {filename}")
+                marked += 1
 
-        print(f"\n  Marked: {marked}, Skipped: {skipped}\n")
+        print(
+            f"\n  Marked: {marked}, Repaired: {repaired}, "
+            f"Skipped: {skipped}, Raced: {raced}\n"
+        )
     finally:
         await conn.close()
 
