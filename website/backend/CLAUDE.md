@@ -5,10 +5,9 @@
 FastAPI backend for the ET:Legacy Statistics Website.
 Provides REST API endpoints for player stats, sessions, predictions, and Greatshot analytics.
 
-**Frontend (Updated Feb 2026)**: React 19 + TypeScript 5.9 + Vite 7 + Tailwind CSS v4 + Framer Motion
-- **Pages**: Dashboard, Matches, Leaderboards, PlayerProfile, Sessions, Records, Awards, Activity, Maps, System (10 total)
-- **New Pages (5)**: Sessions, Records, Awards, Activity Calendar (90-day heatmap), Maps
-- **Features**: Player autocomplete, achievement grid, heatmap activity, voice channel display
+**Frontend**: React 19 + TypeScript 5.9 + Vite 7 + Tailwind CSS v4 + Framer Motion
+- **Pages**: 25 in `website/frontend/src/pages/*.tsx` — Home, Leaderboards, Profile, Sessions2, SessionDetail, Records, Awards, HallOfFame, SkillRating, Rivalries, Story, Replay, RetroViz, Weapons, Maps, Greatshot, GreatshotDemo, Uploads, UploadDetail, Availability, Admin, Proximity, ProximityPlayer, ProximityTeams, ProximityReplay
+- **Features**: Player autocomplete, achievement grid, activity heatmap, voice channel display, BOX score panel, proximity teamplay analytics, skill rating, rivalries
 
 ## Architecture
 
