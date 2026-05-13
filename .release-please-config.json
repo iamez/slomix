@@ -7,7 +7,11 @@
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         "pyproject.toml",
-        "package.json"
+        "package.json",
+        {
+          "type": "generic",
+          "path": "docs/CLAUDE.md"
+        }
       ]
     }
   }
