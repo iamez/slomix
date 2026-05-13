@@ -6,6 +6,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.15.0](https://github.com/iamez/slomix/compare/v1.14.2...v1.15.0) (2026-05-13)
+
+
+### Features
+
+* **deploy:** auto-restart services if deploy fails mid-flight ([#263](https://github.com/iamez/slomix/issues/263)) ([afd4429](https://github.com/iamez/slomix/commit/afd4429af24ceb3e2d4e3397405bba3888ee1054))
+
+
+### Bug Fixes
+
+* **deploy:** cache-bust EVERY local JS import, not just 3 entry points ([#261](https://github.com/iamez/slomix/issues/261)) ([f0014be](https://github.com/iamez/slomix/commit/f0014be6ff71ea9239347abf43c6bb65f539c75d))
+* **webhook-metadata:** defensive DB gate against stale Lua metadata leak ([#255](https://github.com/iamez/slomix/issues/255)) ([27e3dc9](https://github.com/iamez/slomix/commit/27e3dc9c762adf1172c48c2c89503c3550b590bb))
+
 ## [1.14.2](https://github.com/iamez/slomix/compare/v1.14.1...v1.14.2) (2026-05-12)
 
 
