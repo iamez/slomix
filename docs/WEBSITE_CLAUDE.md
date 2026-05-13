@@ -1,14 +1,13 @@
 # Website - CLAUDE.md
 
-> **Status**: Production-Ready | **Version**: 1.0.0
-> **Last Updated**: 2026-02-19
+> **Status**: Production-Ready
 > **Move to**: `website/CLAUDE.md` after permissions restart
 
 ## Overview
 
 The **Slomix Website** is a modern, responsive web frontend for the ET:Legacy stats tracking system. It provides real-time player statistics, leaderboards, match histories, live server status, and a date-based availability planner.
 
-**Stack**: FastAPI (Python) + Vanilla JavaScript + Tailwind CSS + Chart.js
+**Stack**: FastAPI (Python) backend + React 19 + TypeScript 5.9 + Vite 7 + Tailwind CSS v4 + Framer Motion frontend (a legacy `website/js/*.js` bundle still ships for the few non-migrated entry points — see `website/backend/CLAUDE.md` for the current page list). Chart.js is loaded via CDN in `index.html`.
 **Database**: PostgreSQL (read-only user, shared with bot)
 **Auth**: Discord OAuth2
 **Port**: 8000 | **Screen Session**: `website`

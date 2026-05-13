@@ -36,10 +36,10 @@ ET:Legacy Game Server → SSH/Local Files → Parser → PostgreSQL → Discord 
 ### Components
 
 1. **Stats Parser** (`community_stats_parser.py`) - Extracts 50+ fields per player
-2. **Database** (PostgreSQL only) - 68 tables, 56 columns in player_comprehensive_stats
-3. **Bot Core** (`bot/ultimate_bot.py`) - 21 cogs, 18 core modules
+2. **Database** (PostgreSQL only) - 90 tables, 57 columns in player_comprehensive_stats
+3. **Bot Core** (`bot/ultimate_bot.py`) - 20 cogs, 18 core modules
 4. **SSH Monitor** - 60-second polling for new stats files
-5. **Discord Interface** - 80+ commands across 21 cogs
+5. **Discord Interface** - 80+ commands across 20 cogs
 
 ### Data Flow (30-70 seconds total)
 
@@ -72,7 +72,7 @@ time_limit TEXT
 actual_time TEXT
 ```yaml
 
-#### player_comprehensive_stats (56 columns)
+#### player_comprehensive_stats (57 columns)
 
 - Core: player_guid, player_name, round_id
 - Combat: kills, deaths, damage_given, damage_received, accuracy
@@ -419,7 +419,7 @@ SESSION_END_DELAY=180
 
 - ✅ Parser: 100% functional, R2 differential working perfectly
 - ✅ Database: 100% accurate, no corruption
-- ✅ Bot Commands: All 80+ commands functional across 21 cogs
+- ✅ Bot Commands: All 80+ commands functional across 20 cogs
 - ✅ SSH Monitoring: Active and working
 - ✅ Duplicate Detection: Fixed (includes round_time now)
 - ✅ Gaming Session Logic: Fixed (60-minute gaps, handles midnight)

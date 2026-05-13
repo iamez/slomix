@@ -57,7 +57,7 @@ ET:Legacy Game Server -> SSH Monitor -> Parser -> PostgreSQL -> Discord Bot -> U
 
 - **SSH Monitoring**: Only `endstats_monitor` task loop handles SSH (SSHMonitor disabled - race condition fix)
 - **R2 Differential**: Round 2 files contain CUMULATIVE stats; parser subtracts R1 values automatically
-- **Lua Webhook** (`vps_scripts/stats_discord_webhook.lua` v1.6.2): Real-time round notification, fixes surrender timing bug. Data stored in `lua_round_teams` table.
+- **Lua Webhook** (`vps_scripts/stats_discord_webhook.lua` v1.7.0): Real-time round notification, fixes surrender timing bug. Data stored in `lua_round_teams` table.
 - **Cog Pattern**: 20 Cogs in `bot/cogs/`, 18 core modules in `bot/core/`, services in `bot/services/`
 
 ### Timing Configuration
@@ -149,7 +149,7 @@ AUTOMATION_ENABLED=true
 ## NEW FEATURES (February 2026)
 
 ### Round Correlation System (Feb 22-26)
-- **Table**: `round_correlations` (23 columns, 8 completeness boolean flags)
+- **Table**: `round_correlations` (25 columns, 10 completeness boolean flags — `has_{r1,r2}_{stats,lua_teams,gametime,endstats,proximity}`)
 - **Service**: `bot/services/round_correlation_service.py`
 - **Command**: `!correlation_status` (admin only)
 - **Purpose**: Tracks data completeness for each match (R1+R2 together)
@@ -171,7 +171,7 @@ AUTOMATION_ENABLED=true
 ### Website Redesign (Feb 23)
 - **Framework**: React 19 + TypeScript 5.9 + Tailwind CSS v4 + Framer Motion
 - **New Pages**: Sessions, Records, Awards, Activity Calendar (90-day heatmap), Maps
-- **Total Pages**: 10 (5 new)
+- **Total Pages**: 25 (grew from 10 at the Feb 2026 redesign — see website/backend/CLAUDE.md for the current list)
 - **Features**: Player autocomplete search, achievement grid, discord badge display
 
 ### Objective Coordinate Gates (Feb 26)
@@ -184,7 +184,7 @@ AUTOMATION_ENABLED=true
 - **Router**: `website/backend/routers/skill_router.py` (4 endpoints)
 - **Endpoints**: `/api/skill/leaderboard`, `/api/skill/player/{id}`, `/api/skill/player/{id}/history`, `/api/skill/formula`
 - **Frontend**: `website/frontend/src/pages/SkillRating.tsx`
-- **Migration**: `migrations/024_add_skill_ratings.sql`, `migrations/030_add_skill_history_session_scope.sql`
+- **Migration**: `migrations/024_add_skill_ratings.sql`, `migrations/031_add_skill_history_session_scope.sql`
 - **Features**: Per-session/map drill-down, confidence indicator, server-side tiers, auto-refresh when stale >1h
 - **Status**: Live, 40 players rated
 
@@ -248,12 +248,12 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 ## System Status (Version 1.14.2) <!-- x-release-please-version -->
 
 - Parser: 100% functional, R2 differential validated, Oksii fields backward-compatible
-- Database: PostgreSQL (69 tables), no corruption
-- Bot: 80+ commands across 18 Cogs, all functional
+- Database: PostgreSQL (90 tables), no corruption
+- Bot: 80+ commands across 20 Cogs, all functional
 - Website: Upload library, availability polls, greatshot, storytelling, skill rating, BOX scoring
-- Automation: SSH monitoring, voice detection, Lua webhook (v1.6.2)
+- Automation: SSH monitoring, voice detection, Lua webhook (v1.7.0)
 - Lua: v6.01 with Oksii adoption (killer_health, alive_count, reinf timing)
-- Code quality: Ruff 0 errors, 476 tests, mypy configured
+- Code quality: Ruff 0 errors, 2,989 tests, mypy configured
 - Production Ready: Fully tested and validated
 
 ---
