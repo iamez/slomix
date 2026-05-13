@@ -223,12 +223,17 @@ class _WebhookMetadataMixin:
         if rsu <= 0:
             return False
 
-        map_name = metadata.get("map_name")
+        # Use the mixin's canonical normalization (strip + lower) so the DB
+        # lookup matches map names exactly the same way the pending-queue
+        # bucket keys are built. A bare `str(map_name).lower()` would miss
+        # rows when the webhook payload has whitespace quirks — false
+        # negative letting stale metadata through. (Copilot review #255.)
+        normalized_map = self._normalize_metadata_map_name(metadata.get("map_name"))
         try:
             round_number = int(metadata.get("round_number", 0) or 0)
         except (TypeError, ValueError):
             round_number = 0
-        if not map_name or round_number <= 0:
+        if not normalized_map or round_number <= 0:
             return False
 
         try:
@@ -237,7 +242,7 @@ class _WebhookMetadataMixin:
                 "WHERE map_name = ? AND round_number = ? "
                 "  AND round_start_unix = ? "
                 "LIMIT 1",
-                (str(map_name).lower(), round_number, rsu),
+                (normalized_map, round_number, rsu),
             )
         except Exception as exc:
             webhook_logger.warning(

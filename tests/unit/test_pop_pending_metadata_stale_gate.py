@@ -184,7 +184,58 @@ async def test_gate_skips_when_db_adapter_absent():
 
 
 # ---------------------------------------------------------------------------
-# Test 6 — replay of real field incident: round 9955/9958 collision
+# Test 6 — map_name normalization matches pending-queue bucket key
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_gate_normalizes_map_name_consistently_with_queue_keys(caplog):
+    """Regression for Copilot review #255: the gate's DB lookup must use
+    the same `_normalize_metadata_map_name` (strip + lower) that the
+    pending-queue bucket keys use. A bare `str.lower()` would miss the
+    DB row when the webhook payload has leading/trailing whitespace in
+    `map_name`, false-negative letting stale metadata through.
+
+    Here we queue metadata with surrounding whitespace + mixed case,
+    then verify the gate's DB query was called with the stripped-lower
+    normalized value (matching what the round row actually stores).
+    """
+    db = MagicMock()
+    db.fetch_one = AsyncMock(return_value=(9955,))  # round exists
+    bot = _make_bot(db_adapter=db)
+
+    bot._queue_pending_metadata(
+        _make_metadata(
+            map_name="  TE_Escape2  ",  # quirky payload — strip + lower
+            round_number=1,
+            start_unix=1771969065,
+        ),
+        source="stats_ready",
+    )
+    # filename normalization in _parse_stats_filename_context returns
+    # the regex group as-is, so this filename uses the lowercased form
+    # that the bucket key was actually built from (queue key uses
+    # _normalize_metadata_map_name internally).
+    filename = "2026-02-24-223229-te_escape2-round-1.txt"
+
+    with caplog.at_level("WARNING", logger="bot.webhook"):
+        result = await bot._pop_pending_metadata(filename)
+
+    # Gate should have fired (DB found a match because normalization
+    # was consistent).
+    assert result is None
+    # Verify the query used the normalized form, not the raw quirky value.
+    db.fetch_one.assert_awaited_once()
+    call_args = db.fetch_one.await_args
+    sql, params = call_args.args
+    assert params[0] == "te_escape2", (
+        f"Gate must use _normalize_metadata_map_name output 'te_escape2', "
+        f"got {params[0]!r}. If this passes with the raw value, the "
+        f"normalization regression has returned."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 7 — replay of real field incident: round 9955/9958 collision
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
