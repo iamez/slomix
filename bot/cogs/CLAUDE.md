@@ -5,7 +5,7 @@
 Discord.py Cogs for the ET:Legacy Statistics Bot.
 Each cog handles a specific domain of commands.
 
-## Available Cogs (18 total)
+## Available Cogs (20 total)
 
 ### Core User Cogs
 
@@ -30,7 +30,9 @@ Each cog handles a specific domain of commands.
 |------|---------|
 | `admin_cog.py` | Cache/reload/diagnostic/correlation_status admin commands |
 | `admin_predictions_cog.py` | Admin prediction management |
+| `automation_commands.py` | Automation health, SSH-monitor stats, metrics reports |
 | `permission_management_cog.py` | Permission whitelist management |
+| `server_control.py` | Remote ET:Legacy server management (SSH + RCON) |
 | `session_management_cog.py` | Manual session start/end |
 | `sync_cog.py` | Manual sync/backfill commands |
 | `team_management_cog.py` | Team assignment helpers |
