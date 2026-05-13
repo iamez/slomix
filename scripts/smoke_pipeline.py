@@ -3,7 +3,7 @@
 
 This script:
 - Finds a matching R1/R2 stats file pair
-- Parses both rounds (primary parser, fallback to retro parser)
+- Parses both rounds via community_stats_parser
 - Computes a stopwatch score
 - Optionally runs read-only SQLite DB checks if a DB file exists
 
@@ -75,23 +75,10 @@ def _parse_stats_file(path: str) -> dict[str, object]:
     except Exception as exc:
         print(f"WARN: community_stats_parser failed on {os.path.basename(path)}: {exc}")
 
-    # Fallback parser (no discord dependency)
-    try:
-        from bot.retro_text_stats import parse_stats_file_complete
-
-        data = parse_stats_file_complete(path)
-        if data:
-            return {
-                "parser": "retro_text_stats",
-                "map_name": data.get("map_name"),
-                "round_num": data.get("round_num"),
-                "map_time": data.get("duration"),
-                "actual_time": data.get("actual_time"),
-                "players": len(data.get("players", [])),
-            }
-    except Exception as exc:
-        print(f"ERROR: retro_text_stats failed on {os.path.basename(path)}: {exc}")
-
+    # Note: a `bot.retro_text_stats` fallback was removed alongside that module
+    # in commit f12c2ad (cleanup wave). The smoke test now relies entirely on
+    # community_stats_parser — if it fails, surface that, don't pretend a
+    # second-chance parser exists.
     raise RuntimeError(f"Unable to parse stats file: {path}")
 
 
