@@ -21,7 +21,8 @@ scripts/
    - `MIGRATIONS=()` — filenames under `migrations/` to `psql`-apply in order. Must be idempotent (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`, etc.).
    - `FLAGS=()` — `KEY=VALUE` pairs to set/replace in `/opt/slomix/.env`. The deploy script uses `sudo` to write — the deploy user has read-only access to `.env`.
    - `RELEASE_NOTES=""` — one-line description shown in the deploy header.
-3. Commit alongside the release PR (so the tag and its config land together).
+3. Keep the `# shellcheck shell=bash` + `# shellcheck disable=SC2034` directives in the header — without them, shellcheck/Codacy flag the three arrays as "unused" (they're consumed via `source`, which static linters can't see).
+4. Commit alongside the release PR (so the tag and its config land together).
 
 ## Deploying
 

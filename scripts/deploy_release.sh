@@ -69,6 +69,8 @@ elif ! $SKIP_MIGRATIONS || ! $SKIP_FLAGS; then
   echo "  mkdir -p $SCRIPT_DIR/release_configs" >&2
   echo "  cat > $CONFIG_FILE <<'EOF'" >&2
   echo "  # Release config for $TAG" >&2
+  echo "  # shellcheck shell=bash" >&2
+  echo "  # shellcheck disable=SC2034" >&2
   echo "  MIGRATIONS=(" >&2
   echo "    # \"055_example.sql\"" >&2
   echo "  )" >&2

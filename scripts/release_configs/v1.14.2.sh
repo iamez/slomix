@@ -7,6 +7,11 @@
 #   MIGRATIONS=()    filenames under migrations/ to psql-apply in order
 #   FLAGS=()         KV pairs to set/replace in /opt/slomix/.env (sudo'd)
 #   RELEASE_NOTES    free-form description shown in deploy header
+#
+# shellcheck shell=bash
+# shellcheck disable=SC2034
+# (SC2034: vars below look unused to a static linter — they are consumed
+#  by scripts/deploy_release.sh after `source`-ing this file.)
 
 MIGRATIONS=(
   "052_composite_indexes_proximity.sql"
