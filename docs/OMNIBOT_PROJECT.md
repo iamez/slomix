@@ -164,7 +164,7 @@ All these components exist in the repo and are ready to use:
 
 ### Code & Environment
 
-- [ ] Python 3.8+ available locally
+- [ ] Python 3.11+ available locally (pyproject.toml requires-python: `>=3.11,<3.14`)
 - [ ] `.env` file exists with all RCON/POSTGRES credentials
 - [ ] `requirements.txt` dependencies installed locally
 - [ ] Git branch is clean or changes committed
