@@ -159,9 +159,9 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 | **Rounds Parsed** | 2,309 |
 | **Unique Players** | 57 |
 | **Stats Per Player Per Round** | 57 fields |
-| **Discord Commands** | 112 across 18 cogs |
-| **Database Tables** | 95 (managed via committed SQL migrations) |
-| **Test Coverage** | 2,859 tests, 9/9 CI green |
+| **Discord Commands** | 112 across 20 cogs |
+| **Database Tables** | 90 (managed via committed SQL migrations) |
+| **Test Coverage** | 2,989 tests, 9/9 CI green |
 | **Data Span** | Jan 2025 — May 2026 (17 months) |
 
 ---
