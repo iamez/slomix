@@ -3,12 +3,12 @@
 > **PostgreSQL-powered real-time analytics for competitive ET:Legacy — Discord bot, web dashboard, demo highlight scanner, and game server telemetry**
 
 [![Production Status](https://img.shields.io/badge/status-production-brightgreen)](https://github.com/iamez/slomix)
-[![Version](https://img.shields.io/badge/version-1.11.1-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.14.2-blue)](CHANGELOG.md) <!-- x-release-please-version -->
 [![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL_17-336791)](https://www.postgresql.org/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/web-FastAPI-009688)](https://fastapi.tiangolo.com/)
 [![Data Integrity](https://img.shields.io/badge/data%20integrity-6%20layers-blue)](docs/SAFETY_VALIDATION_SYSTEMS.md)
-[![Tests](https://img.shields.io/badge/tests-2859%20passing-success)](tests/)
+[![Tests](https://img.shields.io/badge/tests-2989%20passing-success)](tests/)
 [![Discord.py](https://img.shields.io/badge/discord.py-2.0+-5865F2)](https://discordpy.readthedocs.io/)
 
 A **production-grade** Discord bot + web dashboard + demo analysis pipeline with **6-layer data validation**, **real-time Lua telemetry**, **AI match predictions**, and **demo highlight detection** for ET:Legacy game servers.
