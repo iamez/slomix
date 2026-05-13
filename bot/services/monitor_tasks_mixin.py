@@ -243,7 +243,7 @@ class _MonitorTasksMixin:
                             logger.info(f"⚙️ Processing completed in {process_time:.2f}s")
                         else:
                             # Regular stats file processing
-                            override_metadata = self._pop_pending_metadata(filename)
+                            override_metadata = await self._pop_pending_metadata(filename)
                             result = await self.process_gamestats_file(local_path, filename, override_metadata=override_metadata)
                             process_time = time.time() - process_start
 
