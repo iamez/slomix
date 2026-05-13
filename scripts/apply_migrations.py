@@ -6,13 +6,18 @@ Tracks applied migrations in a `schema_migrations` table and applies
 any pending .sql files from the migrations/ directory.
 
 Usage:
-    python scripts/apply_migrations.py                # Apply pending migrations
-    python scripts/apply_migrations.py --status       # Show migration status
-    python scripts/apply_migrations.py --baseline     # Mark all as pre-applied
+    python scripts/apply_migrations.py                       # Apply pending migrations
+    python scripts/apply_migrations.py --status              # Show migration status
+    python scripts/apply_migrations.py --baseline            # Mark all as pre-applied
+    python scripts/apply_migrations.py --mark FILE [FILE..]  # Record specific files as applied without running them
 
 Environment variables (or .env file):
     POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DATABASE,
     POSTGRES_USER, POSTGRES_PASSWORD
+
+    DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD are accepted as
+    fallbacks — production .env files in this repo historically used
+    DB_* names. POSTGRES_* takes precedence when both are present.
 """
 
 import asyncio
@@ -63,13 +68,26 @@ def _file_checksum(path: Path) -> str:
 
 # ── Database helpers ──────────────────────────────────────────────────
 
+def _env(*names: str, default: str = "") -> str:
+    """Return first non-empty env var from `names`, else `default`.
+
+    Lets us accept both POSTGRES_* (this script's documented convention) and
+    DB_* (historical prod .env convention). POSTGRES_* wins when both are set.
+    """
+    for n in names:
+        v = os.getenv(n)
+        if v:
+            return v
+    return default
+
+
 async def get_connection() -> asyncpg.Connection:
     return await asyncpg.connect(
-        host=os.getenv("POSTGRES_HOST", "localhost"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
-        database=os.getenv("POSTGRES_DATABASE", "etlegacy"),
-        user=os.getenv("POSTGRES_USER", "etlegacy_user"),
-        password=os.getenv("POSTGRES_PASSWORD", ""),
+        host=_env("POSTGRES_HOST", "DB_HOST", default="localhost"),
+        port=int(_env("POSTGRES_PORT", "DB_PORT", default="5432")),
+        database=_env("POSTGRES_DATABASE", "DB_NAME", default="etlegacy"),
+        user=_env("POSTGRES_USER", "DB_USER", default="etlegacy_user"),
+        password=_env("POSTGRES_PASSWORD", "DB_PASSWORD", default=""),
     )
 
 
@@ -224,6 +242,56 @@ async def cmd_apply():
         await conn.close()
 
 
+async def cmd_mark(filenames: list[str]):
+    """Record specific migration files as applied without running their SQL.
+
+    Use after manually applying a migration via raw `psql` (e.g. during an
+    emergency deploy) so the tracking table stays in sync. Refuses any
+    filename that doesn't exist under `migrations/`.
+    """
+    if not filenames:
+        print("ERROR: --mark requires at least one filename. "
+              "Example: --mark 052_add_weapon_stats_mv.sql")
+        sys.exit(1)
+
+    discovered = {f: p for f, p in discover_migrations()}
+    missing = [f for f in filenames if f not in discovered]
+    if missing:
+        print(f"ERROR: file(s) not found under {MIGRATIONS_DIR}:")
+        for f in missing:
+            print(f"    {f}")
+        sys.exit(1)
+
+    conn = await get_connection()
+    try:
+        await ensure_tracking_table(conn)
+        applied = await get_applied(conn)
+
+        marked = 0
+        skipped = 0
+        for filename in filenames:
+            if filename in applied:
+                print(f"  [SKIP   ] {filename} (already recorded)")
+                skipped += 1
+                continue
+            path = discovered[filename]
+            version = _version_from_filename(filename)
+            checksum = _file_checksum(path)
+            await conn.execute(
+                """INSERT INTO schema_migrations
+                   (version, filename, checksum, applied_by, success)
+                   VALUES ($1, $2, $3, 'manual-mark', TRUE)
+                   ON CONFLICT (filename) DO NOTHING""",
+                version, filename, checksum,
+            )
+            print(f"  [MARKED ] {filename}")
+            marked += 1
+
+        print(f"\n  Marked: {marked}, Skipped: {skipped}\n")
+    finally:
+        await conn.close()
+
+
 async def cmd_baseline_inner(conn: asyncpg.Connection, migrations: list):
     """Baseline helper (uses existing connection)."""
     for filename, path in migrations:
@@ -245,6 +313,11 @@ def main():
         asyncio.run(cmd_status())
     elif "--baseline" in sys.argv:
         asyncio.run(cmd_baseline())
+    elif "--mark" in sys.argv:
+        idx = sys.argv.index("--mark")
+        # Everything after --mark, stripped of leading paths if user pasted them
+        filenames = [Path(a).name for a in sys.argv[idx + 1:] if not a.startswith("-")]
+        asyncio.run(cmd_mark(filenames))
     else:
         asyncio.run(cmd_apply())
 
