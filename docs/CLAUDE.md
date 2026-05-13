@@ -149,7 +149,7 @@ AUTOMATION_ENABLED=true
 ## NEW FEATURES (February 2026)
 
 ### Round Correlation System (Feb 22-26)
-- **Table**: `round_correlations` (23 columns, 8 completeness boolean flags)
+- **Table**: `round_correlations` (25 columns, 10 completeness boolean flags — `has_{r1,r2}_{stats,lua_teams,gametime,endstats,proximity}`)
 - **Service**: `bot/services/round_correlation_service.py`
 - **Command**: `!correlation_status` (admin only)
 - **Purpose**: Tracks data completeness for each match (R1+R2 together)
@@ -171,7 +171,7 @@ AUTOMATION_ENABLED=true
 ### Website Redesign (Feb 23)
 - **Framework**: React 19 + TypeScript 5.9 + Tailwind CSS v4 + Framer Motion
 - **New Pages**: Sessions, Records, Awards, Activity Calendar (90-day heatmap), Maps
-- **Total Pages**: 10 (5 new)
+- **Total Pages**: 25 (grew from 10 at the Feb 2026 redesign — see website/backend/CLAUDE.md for the current list)
 - **Features**: Player autocomplete search, achievement grid, discord badge display
 
 ### Objective Coordinate Gates (Feb 26)
