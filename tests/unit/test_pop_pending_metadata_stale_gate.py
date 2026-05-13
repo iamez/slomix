@@ -235,7 +235,63 @@ async def test_gate_normalizes_map_name_consistently_with_queue_keys(caplog):
 
 
 # ---------------------------------------------------------------------------
-# Test 7 — replay of real field incident: round 9955/9958 collision
+# Test 7 — stopwatch R2 (Lua g_currentRound=0) goes through the gate
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_gate_normalizes_stopwatch_r2_round_number(caplog):
+    """Regression for Codex P1 review on #255: this codebase maps Lua
+    `g_currentRound=0` → stopwatch round 2 via
+    `_normalize_lua_round_for_metadata_paths`. Bucket keys (`..._R2`)
+    are built with that normalization, so a stale stopwatch-R2 entry
+    can be SELECTED by the proximity matcher. If the gate then used a
+    bare `int(round_number)` and skipped on `<= 0`, the exact collision
+    this fix targets would still occur for stopwatch traffic.
+
+    The gate must apply the same normalization before looking up
+    or short-circuiting on `round_number`.
+    """
+    db = MagicMock()
+    db.fetch_one = AsyncMock(return_value=(8888,))  # round exists
+    bot = _make_bot(db_adapter=db)
+
+    # Lua-style stopwatch R2 metadata: raw round_number=0, which the
+    # codebase treats as R2. Queue uses _pending_metadata_key which
+    # itself normalizes — so this entry lands in a "<map>_R2" bucket
+    # the same way real production payloads do.
+    bot._queue_pending_metadata(
+        _make_metadata(
+            map_name="te_escape2",
+            round_number=0,  # Lua g_currentRound=0 means R2 in stopwatch
+            start_unix=1771969065,
+        ),
+        source="gametime",
+    )
+    # The stats filename uses literal `round-2` (post-parser convention).
+    filename = "2026-02-24-224947-te_escape2-round-2.txt"
+
+    with caplog.at_level("WARNING", logger="bot.webhook"):
+        result = await bot._pop_pending_metadata(filename)
+
+    # Gate must fire: the entry IS stale (DB has the round).
+    assert result is None, (
+        "Stale stopwatch-R2 metadata must be caught by the gate. "
+        "If this returns metadata, the gate skipped on a bare `int(0)<=0` "
+        "check and missed the Lua R2 convention."
+    )
+    db.fetch_one.assert_awaited_once()
+    # Verify the query used the normalized round number (2, not 0).
+    call_args = db.fetch_one.await_args
+    sql, params = call_args.args
+    assert params[1] == 2, (
+        f"Gate must use _normalize_lua_round_for_metadata_paths output 2, "
+        f"got {params[1]!r}. If this passes with 0, the Lua R2 "
+        f"normalization regression has returned."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 8 — replay of real field incident: round 9955/9958 collision
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio

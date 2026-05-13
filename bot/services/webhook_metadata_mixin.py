@@ -229,10 +229,14 @@ class _WebhookMetadataMixin:
         # rows when the webhook payload has whitespace quirks — false
         # negative letting stale metadata through. (Copilot review #255.)
         normalized_map = self._normalize_metadata_map_name(metadata.get("map_name"))
-        try:
-            round_number = int(metadata.get("round_number", 0) or 0)
-        except (TypeError, ValueError):
-            round_number = 0
+        # Use the Lua-aware round normalization for the same reason: this
+        # codebase maps `g_currentRound=0` → stopwatch round 2. Bare int()
+        # would treat that as "<= 0", skip the gate, and let exactly the
+        # collision this fix targets recur for stopwatch-R2 traffic.
+        # (Codex P1 review on #255.)
+        round_number = self._normalize_lua_round_for_metadata_paths(
+            metadata.get("round_number")
+        )
         if not normalized_map or round_number <= 0:
             return False
 
