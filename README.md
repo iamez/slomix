@@ -634,7 +634,7 @@ slomix/
 | `bot/services/prediction_engine.py` | AI match prediction engine (4-factor algorithm) |
 | `website/backend/main.py` | FastAPI app with auth, routers, greatshot job workers |
 | `greatshot/scanner/api.py` | Demo analysis entry point (UDT → events → highlights) |
-| `vps_scripts/stats_discord_webhook.lua` | Game server Lua script (v1.6.2) |
+| `vps_scripts/stats_discord_webhook.lua` | Game server Lua script (v1.7.0) |
 
 ---
 
