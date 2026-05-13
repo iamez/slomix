@@ -57,7 +57,7 @@ ET:Legacy Game Server -> SSH Monitor -> Parser -> PostgreSQL -> Discord Bot -> U
 
 - **SSH Monitoring**: Only `endstats_monitor` task loop handles SSH (SSHMonitor disabled - race condition fix)
 - **R2 Differential**: Round 2 files contain CUMULATIVE stats; parser subtracts R1 values automatically
-- **Lua Webhook** (`vps_scripts/stats_discord_webhook.lua` v1.6.2): Real-time round notification, fixes surrender timing bug. Data stored in `lua_round_teams` table.
+- **Lua Webhook** (`vps_scripts/stats_discord_webhook.lua` v1.7.0): Real-time round notification, fixes surrender timing bug. Data stored in `lua_round_teams` table.
 - **Cog Pattern**: 20 Cogs in `bot/cogs/`, 18 core modules in `bot/core/`, services in `bot/services/`
 
 ### Timing Configuration
@@ -251,7 +251,7 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 - Database: PostgreSQL (69 tables), no corruption
 - Bot: 80+ commands across 18 Cogs, all functional
 - Website: Upload library, availability polls, greatshot, storytelling, skill rating, BOX scoring
-- Automation: SSH monitoring, voice detection, Lua webhook (v1.6.2)
+- Automation: SSH monitoring, voice detection, Lua webhook (v1.7.0)
 - Lua: v6.01 with Oksii adoption (killer_health, alive_count, reinf timing)
 - Code quality: Ruff 0 errors, 476 tests, mypy configured
 - Production Ready: Fully tested and validated
