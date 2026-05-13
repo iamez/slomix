@@ -185,16 +185,23 @@ else
 fi
 
 # ─── 3. Fetch + checkout tag ──────────────────────────────────────────────────
-# Clean-tree guard with allow-list: step 3b leaves website/index.html,
-# website/js/app.js, and website/js/session-detail.js permanently modified
-# (bumped to that release's git SHA — see step 3b's rationale block below).
-# We tolerate those known-bumped files here but abort on ANY OTHER dirty
-# file (manual prod edits, leftover hotfix, etc.).
+# Clean-tree guard with allow-list: step 3b mutates `website/index.html`
+# plus every direct child `website/js/*.js` (cache-buster `?v=$SHA` is
+# injected into bare imports too — see step 3b's rationale below). Those
+# files stay dirty between deploys. We tolerate them here but abort on
+# ANY OTHER dirty file (manual prod edits, leftover hotfix, etc.).
 log "3/8  Fetch tags + verify clean tree (allow-listed bumped files) + checkout $TAG"
+# Status codes from `git status --porcelain` are 2 chars: X (staged) + Y
+# (unstaged). After step 3b's sed mutation, our files are ` M` (space-M,
+# unstaged modified). After a manual `git add`, they'd be `M ` or `MM`.
+# Tighten the allow-list to only tolerate THOSE three states under the
+# expected paths — any untracked (`??`), deleted (` D`), or renamed (`R `)
+# entry, even under website/js/, must abort because `git checkout -f`
+# won't reconcile those. (Copilot review on #261.)
 run_remote "cd $VM_PATH && \
-  UNEXPECTED=\$(git status --porcelain | grep -vE ' website/(index\\.html|js/(app|session-detail)\\.js)\$' || true); \
+  UNEXPECTED=\$(git status --porcelain | grep -vE '^(M |MM| M) website/(index\\.html|js/[^/]+\\.js)\$' || true); \
   if [ -n \"\$UNEXPECTED\" ]; then \
-    echo 'ERROR: Unexpected dirty files in VM working tree (not the allow-listed cache-buster files). Aborting before checkout.' >&2; \
+    echo 'ERROR: Unexpected dirty files in VM working tree. Only `M`/`MM`/` M` (modified) under website/(index.html|js/*.js) are allow-listed. Aborting before checkout.' >&2; \
     echo \"\$UNEXPECTED\" >&2; \
     exit 1; \
   fi"
@@ -205,29 +212,46 @@ run_remote "cd $VM_PATH && \
 run_remote "cd $VM_PATH && git fetch origin --tags && git checkout -f $TAG && git log --oneline -1"
 
 # ─── 3b. Auto-bump JS cache-buster to current git SHA (CF edge cache purge) ───
-# Why: index.html / app.js / session-detail.js reference static JS files with a
-# fixed `?v=...` query. Cloudflare's edge cache keys include the query string,
-# so unless the buster changes between releases, CF keeps serving the previous
-# version of any updated JS file (24h max-age). We saw this exact failure on
-# 2026-05-13 — session-detail.js was Apr-19 cached, user saw old UI.
+# Why: every <script src="..."> in index.html and every `from './foo.js'`
+# in the JS module graph is a candidate URL that Cloudflare caches by
+# (URL + query-string) for 24h. Unless the URL changes between releases,
+# CF keeps serving the previous deploy's bytes after the origin updates.
+# We hit this on 2026-05-13 — session-detail.js was Apr-19 cached, user saw
+# old UI.
 #
-# Rewriting these three files in place (post-checkout, pre-restart) gives every
-# release a unique buster derived from the commit SHA. The files are otherwise
-# byte-identical to the tagged content.
+# Two-step rewrite (run on the VM after `git checkout -f $TAG`):
 #
-# IMPORTANT: the bump PERSISTS on disk after the deploy completes. The web
-# backend serves index.html via FastAPI's FileResponse and mounts the rest as
-# StaticFiles — both read from disk on every request — so the bumped `?v=SHA`
-# URLs MUST stay on disk for traffic after the deploy to keep getting the new
-# cache key. Step 3 above tolerates these known-dirty files; step 3's
-# `git checkout -f` overwrites them on the next deploy run.
+#   (1) Bump any *existing* `?v=...` query in website/{index.html,**.js}
+#       to `?v=$SHA`. Catches files that already had a buster.
+#
+#   (2) Inject `?v=$SHA` into any *local* import / src reference that
+#       doesn't already have a query string. Covers the long tail of
+#       legacy imports like `from './auth.js'` that we'd otherwise have
+#       to remember to manually add a buster to. Patterns matched:
+#         JS:   from '\./<path>.js'              from "./<path>.js"
+#               import '\./<path>.js'            import "./<path>.js"
+#               (side-effect import, no `from` clause — e.g.
+#                `import './compare.js';` in app.js — Copilot #261.)
+#         HTML: src="js/<path>.js"               src='js/<path>.js'
+#       Stops at the first `?` or quote, so files that already have a
+#       query are left alone (handled by step 1 instead).
+#
+# IMPORTANT: the rewrite PERSISTS on disk after the deploy completes. The
+# web backend serves index.html via FastAPI's FileResponse and mounts the
+# rest as StaticFiles — both read from disk on every request — so the
+# bumped `?v=$SHA` URLs MUST stay on disk for traffic after the deploy to
+# keep getting the new cache key. Step 3 above tolerates these known-dirty
+# files via an allow-list; step 3's `git checkout -f` overwrites them on
+# the next deploy run.
 log "3b/8 Auto-bump cache-buster to current git SHA (persists after deploy)"
 run_remote "cd $VM_PATH && \
   SHA=\$(git rev-parse --short HEAD) && \
-  for f in website/index.html website/js/app.js website/js/session-detail.js; do \
-    sed -i \"s|?v=[A-Za-z0-9._-]\\+|?v=\$SHA|g\" \"\$f\"; \
-  done && \
-  echo \"  cache-buster bumped to ?v=\$SHA\" && \
+  echo \"  step 1: bump existing ?v= queries (index.html + all js/*.js)\" && \
+  sed -i \"s|?v=[A-Za-z0-9._-]\\+|?v=\$SHA|g\" website/index.html website/js/*.js && \
+  echo \"  step 2: inject ?v=\$SHA into bare local imports/refs\" && \
+  sed -i -E \"s|(from '\\./[^'?]+\\.js)'|\\1?v=\$SHA'|g; s|(from \\\"\\./[^\\\"?]+\\.js)\\\"|\\1?v=\$SHA\\\"|g; s|(import '\\./[^'?]+\\.js)'|\\1?v=\$SHA'|g; s|(import \\\"\\./[^\\\"?]+\\.js)\\\"|\\1?v=\$SHA\\\"|g\" website/js/*.js website/index.html && \
+  sed -i -E \"s|(src=\\\"js/[^\\\"?]+\\.js)\\\"|\\1?v=\$SHA\\\"|g; s|(src='js/[^'?]+\\.js)'|\\1?v=\$SHA'|g\" website/index.html && \
+  echo \"  unique busters now in index.html:\" && \
   grep -hoE '\\?v=[A-Za-z0-9._-]+' website/index.html | sort -u"
 
 # ─── 4. Stop services (clean restart) ─────────────────────────────────────────
