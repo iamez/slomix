@@ -120,10 +120,25 @@ class _WebhookMetadataMixin:
         if len(bucket) > self._pending_metadata_max_per_key:
             del bucket[:-self._pending_metadata_max_per_key]
 
-    def _pop_pending_metadata(self, filename: str):
+    async def _pop_pending_metadata(self, filename: str):
         """
         Pop best matching Lua metadata from pending queue for this stats filename.
         Chooses by timestamp proximity when both sides have timestamps.
+
+        Defensive DB gate (B1 fix, 2026-05-13): before returning a selected
+        candidate, verify that its `round_start_unix` is not already attached
+        to a round in the database. If it is, the entry belongs to that
+        prior round (a late Lua webhook left a leftover bucket entry that
+        the proximity matcher would otherwise mis-attach to the current
+        filename). Discard it and return None — same semantics as "no
+        Lua metadata available", which the caller already handles.
+
+        Fails open on any DB error: if the gate cannot verify, the original
+        metadata is returned (preserves pre-fix behavior on transient DB
+        outages — better than blocking imports).
+
+        See docs/PLAN_B1_metadata_timestamp_leak_fix.md and memory
+        `round_metadata_timestamp_leak.md` for the full rationale.
         """
         self._prune_pending_round_metadata()
         if not self._pending_round_metadata:
@@ -167,6 +182,9 @@ class _WebhookMetadataMixin:
             self._pending_round_metadata.pop(metadata_key, None)
 
         metadata = selected.get("metadata")
+        if metadata and await self._is_metadata_stale(metadata, metadata_key):
+            return None
+
         if metadata:
             if best_diff is not None:
                 webhook_logger.info(
@@ -175,6 +193,78 @@ class _WebhookMetadataMixin:
             else:
                 webhook_logger.info(f"📎 Attached pending Lua metadata for {metadata_key}")
         return metadata
+
+    async def _is_metadata_stale(self, metadata: dict, metadata_key: str) -> bool:
+        """
+        Stale-entry gate for `_pop_pending_metadata` (B1 fix). Returns True
+        when the candidate's `round_start_unix` already corresponds to a
+        round in the DB — meaning the entry was queued late by Lua for
+        that prior round and would corrupt the current import if attached.
+
+        Returns False (allow attach) when:
+        - bot has no db_adapter (tests, partial init)
+        - metadata lacks usable identifying fields (start_unix=0,
+          missing map_name/round_number)
+        - DB query raises (fail open — preserve legacy behavior)
+        - no matching row is found
+
+        Uses the existing composite index `idx_rounds_map_round_start`
+        on `(map_name, round_number, round_start_unix)` — single
+        index seek, sub-millisecond on the live table.
+        """
+        db_adapter = getattr(self, "db_adapter", None)
+        if db_adapter is None:
+            return False
+
+        try:
+            rsu = int(metadata.get("round_start_unix", 0) or 0)
+        except (TypeError, ValueError):
+            rsu = 0
+        if rsu <= 0:
+            return False
+
+        # Use the mixin's canonical normalization (strip + lower) so the DB
+        # lookup matches map names exactly the same way the pending-queue
+        # bucket keys are built. A bare `str(map_name).lower()` would miss
+        # rows when the webhook payload has whitespace quirks — false
+        # negative letting stale metadata through. (Copilot review #255.)
+        normalized_map = self._normalize_metadata_map_name(metadata.get("map_name"))
+        # Use the Lua-aware round normalization for the same reason: this
+        # codebase maps `g_currentRound=0` → stopwatch round 2. Bare int()
+        # would treat that as "<= 0", skip the gate, and let exactly the
+        # collision this fix targets recur for stopwatch-R2 traffic.
+        # (Codex P1 review on #255.)
+        round_number = self._normalize_lua_round_for_metadata_paths(
+            metadata.get("round_number")
+        )
+        if not normalized_map or round_number <= 0:
+            return False
+
+        try:
+            row = await db_adapter.fetch_one(
+                "SELECT id FROM rounds "
+                "WHERE map_name = ? AND round_number = ? "
+                "  AND round_start_unix = ? "
+                "LIMIT 1",
+                (normalized_map, round_number, rsu),
+            )
+        except Exception as exc:
+            webhook_logger.warning(
+                "DB lookup failed during stale-metadata gate for %s (%s); "
+                "attaching metadata as before.",
+                metadata_key, exc,
+            )
+            return False
+
+        if row:
+            webhook_logger.warning(
+                "🚫 Stale Lua metadata for %s — round_start_unix=%d "
+                "already attached to round_id=%s; discarding to prevent "
+                "canonical_id collision.",
+                metadata_key, rsu, row[0],
+            )
+            return True
+        return False
 
     def _prune_processed_webhook_message_ids(self) -> None:
         if not self._processed_webhook_message_ids:
