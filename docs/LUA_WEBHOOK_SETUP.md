@@ -2,7 +2,7 @@
 
 Real-time round notifications from ET:Legacy game server to Discord bot.
 
-**Current Version:** v1.3.0
+**Current Version:** v1.7.0 (matches `vps_scripts/stats_discord_webhook.lua` `local version = "1.7.0"`)
 
 ## Overview
 
