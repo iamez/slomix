@@ -17,7 +17,7 @@
 - [x] `.gitignore` - Proper exclusions **[FIXED]**
 - [x] `README.md` - Complete setup guide
 
-### All 14 Cogs Present
+### All 20 Cogs Present
 
 - [x] `bot/cogs/admin_cog.py`
 - [x] `bot/cogs/stats_cog.py`
@@ -217,7 +217,7 @@ Before deploying, verify:
 - [ ] PostgreSQL connection credentials ready
 - [ ] Discord bot token ready
 - [ ] Stats file path configured
-- [ ] All 14 cogs load without errors
+- [ ] All 20 cogs load without errors
 - [ ] Database initializes successfully
 - [ ] Bot connects to Discord
 

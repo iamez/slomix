@@ -190,14 +190,14 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 │                          │                                     │
 │                  ┌───────▼───────┐                             │
 │                  │  PostgreSQL   │                             │
-│                  │  95 Tables    │                             │
+│                  │  90 Tables    │                             │
 │                  └───────────────┘                             │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 | Project | Status | Description |
 |---------|--------|-------------|
-| **Discord Bot** (this repo) | ✅ Production | 112 commands, 18 cogs, full automation, AI predictions |
+| **Discord Bot** (this repo) | ✅ Production | 112 commands, 20 cogs, full automation, AI predictions |
 | **Website** (`/website/`) | ✅ Production | FastAPI + React 19/TypeScript SPA: profiles, sessions, leaderboards, proximity, greatshot |
 | **Lua Webhook** (`vps_scripts/`) | ✅ Production | Real-time round notifications, surrender timing fix, team capture |
 | **Greatshot** (`/greatshot/`) | ✅ Production | Demo upload, highlight detection, clip extraction, render pipeline |
@@ -237,7 +237,7 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 ┌──────────────────────────────────────────────────┐
 │  Layer 5-6: PostgreSQL (ACID) + Constraints      │
 │  ✓ Transaction safety  ✓ FK/NOT NULL/UNIQUE      │
-│  95 tables  |  57 columns per player per round    │
+│  90 tables  |  57 columns per player per round    │
 └──────────────────────┬───────────────────────────┘
                        │
               ┌────────┼────────┐
@@ -640,7 +640,7 @@ slomix/
 
 ## 🗄️ Database Schema
 
-### **PostgreSQL — 95 Tables**
+### **PostgreSQL — 90 Tables**
 
 ```sql
 -- Core Stats (7)
