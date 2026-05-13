@@ -37,7 +37,7 @@ Slomix is a **Discord bot + website** that turns raw ET:Legacy game statistics i
     └─ Team detection (team_manager.py, historical matching)
 
          v
-    [PostgreSQL] 68 tables
+    [PostgreSQL] 90 tables
     ├─ rounds, player_comprehensive_stats (56 columns), weapon stats
     ├─ lua_round_teams (webhook timing data)
     ├─ session grouping (60-minute gap rule)

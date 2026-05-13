@@ -56,7 +56,7 @@ A comprehensive Discord bot that tracks, analyzes, and displays ET:Legacy game s
 ```python
 stats/
 ├── bot/
-│   ├── ultimate_bot.py           # Main bot (4,371 lines) - Core logic
+│   ├── ultimate_bot.py           # Main bot (~2,100 lines after mega-audit) - Core logic
 │   ├── postgresql_database_manager.py  # PostgreSQL schema/import management
 │   │
 │   ├── cogs/                      # Modular command groups
@@ -1089,8 +1089,9 @@ tail -f logs/bot.log
 
 ### Why Modular Cogs?
 
-**Before:** All commands in ultimate_bot.py (11,000 lines)  
-**After:** Separate cog files (bot.py now 4,371 lines)
+**Before:** All commands in ultimate_bot.py (11,000 lines)
+**Phase 1 (cog extraction):** Separate cog files brought it to ~4,400 lines
+**Phase 2 (mega-audit cog-mixin split):** ~2,100 lines today; the rest moved into per-cog mixins under `bot/cogs/*_mixins/` and `bot/services/*_mixin.py`
 
 **Benefits:**
 

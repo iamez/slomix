@@ -100,7 +100,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 │           │                                                     │
 │           ▼                                                     │
 │  ┌─────────────────┐                                            │
-│  │  Discord Bot    │ 14 Cogs, 60+ commands                      │
+│  │  Discord Bot    │ 20 Cogs, 60+ commands                      │
 │  │  ultimate_bot.py│ Real-time analytics                        │
 │  └────────┬────────┘                                            │
 └───────────┼─────────────────────────────────────────────────────┘
@@ -178,12 +178,12 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 
 ### Layer 1: Entry Point & Configuration
 
-#### `bot/ultimate_bot.py` (4,990 lines)
+#### `bot/ultimate_bot.py` (~2,100 lines (post mega-audit cog-mixin split))
 
 - **Purpose:** Main bot class. Handles Discord connection, loads Cogs, runs background tasks.
 - **Key sections:**
   - Lines 160-280: `__init__()` - loads config, creates database adapter
-  - Lines 370-520: `setup_hook()` - loads all 14 Cogs
+  - Lines 370-520: `setup_hook()` - loads all 20 Cogs
   - Lines 1300-1500: `endstats_monitor` - SSH file monitoring task
 - **Dependencies:** All Cogs access `self.bot` to reach database, config, cache
 
@@ -320,7 +320,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
    ├── 4. validate_database_schema() → Checks 54 columns exist
    │
    ├── 5. setup_hook():
-   │   ├── Load 14 Cogs from bot/cogs/
+   │   ├── Load 20 Cogs from bot/cogs/
    │   ├── Initialize automation services
    │   └── Start background tasks
    │
@@ -493,7 +493,7 @@ The adapter:
 
 slomix_discord/
 ├── bot/
-│   ├── ultimate_bot.py           # Main entry point (4,990 lines)
+│   ├── ultimate_bot.py           # Main entry point (~2,100 lines (post mega-audit cog-mixin split))
 │   ├── config.py                 # Configuration object
 │   ├── community_stats_parser.py # Stats file parser
 │   │
