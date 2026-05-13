@@ -23,7 +23,7 @@ ET:Legacy pub stopwatch has characteristics that make standard skill ratings dif
 
 ### Option C: Individual Performance Rating (RECOMMENDED FIRST)
 
-**Why start here**: No win/loss needed. Respects class differences. Team shuffling doesn't matter. Uses data we already have (56 fields per player per round).
+**Why start here**: No win/loss needed. Respects class differences. Team shuffling doesn't matter. Uses data we already have (57 fields per player per round).
 
 **Concept**: Build a composite "ET Rating" similar to HLTV 2.0 but adapted for ET:Legacy.
 

@@ -30,7 +30,7 @@ Slomix is a **Discord bot + website** that turns raw ET:Legacy game statistics i
          │
          v
     [Python] community_stats_parser.py
-    ├─ Parse .txt file (56 fields per player)
+    ├─ Parse .txt file (57 fields per player)
     ├─ Detect R1 vs R2 (filename: round-1.txt vs round-2.txt)
     ├─ Match R1+R2 (same timestamp within 45-min window)
     ├─ Calculate R2 differential (cumulative R1+R2 minus R1 = R2 only)
@@ -38,7 +38,7 @@ Slomix is a **Discord bot + website** that turns raw ET:Legacy game statistics i
 
          v
     [PostgreSQL] 90 tables
-    ├─ rounds, player_comprehensive_stats (56 columns), weapon stats
+    ├─ rounds, player_comprehensive_stats (57 columns), weapon stats
     ├─ lua_round_teams (webhook timing data)
     ├─ session grouping (60-minute gap rule)
     ├─ player_links (Discord user ↔ GUID mapping)
@@ -46,7 +46,7 @@ Slomix is a **Discord bot + website** that turns raw ET:Legacy game statistics i
 
          v
     [Discord Bot] ultimate_bot.py
-    ├─ 18 Cogs × 80+ commands
+    ├─ 20 Cogs × 80+ commands
     ├─ On-demand queries + auto-posting (new round summaries)
     ├─ Session detection via voice channels (VoiceSessionService)
     ├─ Real-time caching (5-min TTL, database_adapter.py)

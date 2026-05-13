@@ -78,7 +78,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
             database: Database name
             user: Database user
             password: Database password
-            min_pool_size: Minimum pool connections (default 5 for 14 cogs + tasks)
+            min_pool_size: Minimum pool connections (default 5 for 20 cogs + tasks)
             max_pool_size: Maximum pool connections (default 20 for concurrent load)
             ssl_mode: SSL mode (disable, require, verify-ca, verify-full)
             ssl_cert: Path to client certificate file
@@ -457,7 +457,7 @@ def create_adapter(db_type: str = 'postgresql', **kwargs) -> DatabaseAdapter:
         database=kwargs['database'],
         user=kwargs['user'],
         password=kwargs['password'],
-        min_pool_size=kwargs.get('min_pool_size', 5),   # 5 for 14 cogs + tasks
+        min_pool_size=kwargs.get('min_pool_size', 5),   # 5 for 20 cogs + tasks
         max_pool_size=kwargs.get('max_pool_size', 20)   # 20 for concurrent load
     )
 
