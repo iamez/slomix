@@ -10,7 +10,7 @@
 // IMPORTS
 // ============================================================================
 
-import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js?v=20260330-v120-deploy';
+import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js?v=20260513-v142-cf-bust';
 import { checkLoginStatus, initSearchListeners, setLoadPlayerProfile } from './auth.js';
 import { initLivePolling, initLiveStatusPolling, updateLiveSession } from './live-status.js';
 import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchDetails } from './player-profile.js';
@@ -40,15 +40,15 @@ import {
     getActiveNavKeys,
     parseHashRoute,
     loadRoute,
-} from './route-registry.js?v=20260330-v120-deploy';
-import { mountModernRoute, resetModernRouteHost } from './modern-route-host.js?v=20260330-v120-deploy';
+} from './route-registry.js?v=20260513-v142-cf-bust';
+import { mountModernRoute, resetModernRouteHost } from './modern-route-host.js?v=20260513-v142-cf-bust';
 import './compare.js'; // Self-registers to window
 import { getBadgesForPlayer, renderBadges, renderBadge } from './badges.js';
 import { loadSeasonLeaders, loadActivityCalendar, loadSeasonSummary } from './season-stats.js';
 import { loadHallOfFameView } from './hall-of-fame.js';
-import { loadRetroVizView } from './retro-viz.js?v=20260330-v120-deploy';
-import { loadSessions2View } from './sessions2.js?v=20260330-v120-deploy';
-import { loadSessionDetailView } from './session-detail.js?v=20260330-v120-deploy';
+import { loadRetroVizView } from './retro-viz.js?v=20260513-v142-cf-bust';
+import { loadSessions2View } from './sessions2.js?v=20260513-v142-cf-bust';
+import { loadSessionDetailView } from './session-detail.js?v=20260513-v142-cf-bust';
 
 // ============================================================================
 // NAVIGATION
