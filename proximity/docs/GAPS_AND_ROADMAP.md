@@ -41,7 +41,6 @@ Transform the proximity tracker from a "player position logger" into a "team che
 | Team detector uses SQLite | CRITICAL | `team_detector_integration.py` | Bot uses PostgreSQL |
 | `get_team_record()` empty | HIGH | `team_manager.py:374` | Just `pass` |
 | `get_map_performance()` empty | HIGH | `team_manager.py:437` | Just `pass` |
-| Async/sync mismatch | HIGH | `advanced_team_detector.py:289` | `_analyze_multi_round_consensus()` not async |
 | No automatic team storage | MEDIUM | `team_manager.py` | Only stored if cog called |
 
 ---

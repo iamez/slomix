@@ -121,13 +121,11 @@ python tools/phase2_final_validation.py  # Comprehensive checks
 4. **Never use synchronous DB calls in Cogs** - Always use `async with db.acquire()` pattern via adapter
 5. **NEVER provide destructive commands (delete/remove) unprompted** - Report findings, let user decide. No `Remove-Item`, `rm`, `del`, or `DROP TABLE` without explicit user request
 
-### Team Detection System (Complex Multi-Algorithm)
-Located in `bot/core/` - 5 separate modules work together:
-- `team_manager.py` - Orchestrates detection, assigns confidence scores (0.0-1.0)
-- `advanced_team_detector.py` - Snapshot-based detection (most reliable)
+### Team Detection System
+Located in `bot/core/` — consolidated into 2 modules (post-2026-05 cleanup):
+- `team_manager.py` - Single source of truth for team detection + confidence scoring + real-time tracking
 - `substitution_detector.py` - Handles mid-game player switches
-- `team_history.py` - Learns player preferences over time
-- `team_detector_integration.py` - Fallback chain coordinator
+(Earlier `advanced_team_detector.py`, `team_history.py`, `team_detector_integration.py` were removed/never landed — references in older docs are stale.)
 
 **Key insight:** Teams stored in `session_teams` table as JSON arrays per round. If team data missing, bot falls back to last known assignment from history table.
 
@@ -189,7 +187,7 @@ SSH_KEY_PATH=~/.ssh/id_rsa
 
 **For specific features:**
 - Session analytics → `bot/cogs/last_session_cog.py` (111KB, generates 6 matplotlib graphs)
-- Team detection → `bot/core/team_manager.py` (orchestrator) + `advanced_team_detector.py`
+- Team detection → `bot/core/team_manager.py` (sole module post-2026-05 consolidation)
 - Player stats → `bot/cogs/stats_cog.py` (16 commands including !stats, !compare, !top)
 - Database admin → `bot/cogs/admin_cog.py` (!rebuild, !import, !check_schema)
 

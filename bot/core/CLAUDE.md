@@ -18,8 +18,7 @@ This package contains the foundational components used by cogs and services.
 
 | Module | Purpose |
 |--------|---------|
-| `team_manager.py` | Orchestrates team detection + real-time tracking |
-| `advanced_team_detector.py` | Multi-strategy detection with confidence |
+| `team_manager.py` | Team detection + real-time tracking (single source of truth) |
 | `substitution_detector.py` | Detects mid-session player swaps |
 
 **Real-Time Team Tracking (Feb 2026):**
