@@ -191,10 +191,17 @@ fi
 # files stay dirty between deploys. We tolerate them here but abort on
 # ANY OTHER dirty file (manual prod edits, leftover hotfix, etc.).
 log "3/8  Fetch tags + verify clean tree (allow-listed bumped files) + checkout $TAG"
+# Status codes from `git status --porcelain` are 2 chars: X (staged) + Y
+# (unstaged). After step 3b's sed mutation, our files are ` M` (space-M,
+# unstaged modified). After a manual `git add`, they'd be `M ` or `MM`.
+# Tighten the allow-list to only tolerate THOSE three states under the
+# expected paths — any untracked (`??`), deleted (` D`), or renamed (`R `)
+# entry, even under website/js/, must abort because `git checkout -f`
+# won't reconcile those. (Copilot review on #261.)
 run_remote "cd $VM_PATH && \
-  UNEXPECTED=\$(git status --porcelain | grep -vE ' website/(index\\.html|js/[^/]+\\.js)\$' || true); \
+  UNEXPECTED=\$(git status --porcelain | grep -vE '^(M |MM| M) website/(index\\.html|js/[^/]+\\.js)\$' || true); \
   if [ -n \"\$UNEXPECTED\" ]; then \
-    echo 'ERROR: Unexpected dirty files in VM working tree (not the allow-listed cache-buster files). Aborting before checkout.' >&2; \
+    echo 'ERROR: Unexpected dirty files in VM working tree. Only `M`/`MM`/` M` (modified) under website/(index.html|js/*.js) are allow-listed. Aborting before checkout.' >&2; \
     echo \"\$UNEXPECTED\" >&2; \
     exit 1; \
   fi"
@@ -222,6 +229,9 @@ run_remote "cd $VM_PATH && git fetch origin --tags && git checkout -f $TAG && gi
 #       legacy imports like `from './auth.js'` that we'd otherwise have
 #       to remember to manually add a buster to. Patterns matched:
 #         JS:   from '\./<path>.js'              from "./<path>.js"
+#               import '\./<path>.js'            import "./<path>.js"
+#               (side-effect import, no `from` clause — e.g.
+#                `import './compare.js';` in app.js — Copilot #261.)
 #         HTML: src="js/<path>.js"               src='js/<path>.js'
 #       Stops at the first `?` or quote, so files that already have a
 #       query are left alone (handled by step 1 instead).
@@ -239,7 +249,7 @@ run_remote "cd $VM_PATH && \
   echo \"  step 1: bump existing ?v= queries (index.html + all js/*.js)\" && \
   sed -i \"s|?v=[A-Za-z0-9._-]\\+|?v=\$SHA|g\" website/index.html website/js/*.js && \
   echo \"  step 2: inject ?v=\$SHA into bare local imports/refs\" && \
-  sed -i -E \"s|(from '\\./[^'?]+\\.js)'|\\1?v=\$SHA'|g; s|(from \\\"\\./[^\\\"?]+\\.js)\\\"|\\1?v=\$SHA\\\"|g\" website/js/*.js website/index.html && \
+  sed -i -E \"s|(from '\\./[^'?]+\\.js)'|\\1?v=\$SHA'|g; s|(from \\\"\\./[^\\\"?]+\\.js)\\\"|\\1?v=\$SHA\\\"|g; s|(import '\\./[^'?]+\\.js)'|\\1?v=\$SHA'|g; s|(import \\\"\\./[^\\\"?]+\\.js)\\\"|\\1?v=\$SHA\\\"|g\" website/js/*.js website/index.html && \
   sed -i -E \"s|(src=\\\"js/[^\\\"?]+\\.js)\\\"|\\1?v=\$SHA\\\"|g; s|(src='js/[^'?]+\\.js)'|\\1?v=\$SHA'|g\" website/index.html && \
   echo \"  unique busters now in index.html:\" && \
   grep -hoE '\\?v=[A-Za-z0-9._-]+' website/index.html | sort -u"
