@@ -10,11 +10,11 @@ Discord commands for viewing stats, leaderboards, and gaming session summaries.
 
 ```python
 bot/
-├── ultimate_bot.py          # Main entry point (4,990 lines)
-├── community_stats_parser.py # Stats file parser (1,036 lines)
+├── ultimate_bot.py          # Main entry point (~2,100 lines after mega-audit cog-mixin split)
+├── community_stats_parser.py # Stats file parser
 ├── config.py                # Configuration management
 ├── logging_config.py        # Logging setup
-├── cogs/                    # Discord command modules (18 cogs currently in repo)
+├── cogs/                    # Discord command modules (20 cogs currently in repo)
 ├── core/                    # Business logic layer
 ├── services/                # Service layer
 ├── automation/              # SSH monitoring & file tracking

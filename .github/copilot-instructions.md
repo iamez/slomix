@@ -1,9 +1,9 @@
 # ET:Legacy Stats Bot - AI Agent Instructions
 
 ## Project Identity
-**Enemy Territory: Legacy Discord Stats Bot** - Comprehensive stats tracking for Wolfenstein: ET with PostgreSQL/SQLite hybrid backend. This is a mature, production-ready system (4,990 lines main bot).
+**Enemy Territory: Legacy Discord Stats Bot** - Comprehensive stats tracking for Wolfenstein: ET with PostgreSQL/SQLite hybrid backend. This is a mature, production-ready system (~2,100 lines main bot after the mega-audit refactor split the god file into cog mixins).
 
-**Version:** 1.0.3+ (Updated January 2026)
+**Version:** 1.14.2 <!-- x-release-please-version --> (Updated May 2026)
 **Status:** Production-ready, deployed on VPS with PostgreSQL
 
 ## Ecosystem Overview
@@ -99,8 +99,8 @@ python tools/phase2_final_validation.py  # Comprehensive checks
 ### Bot Startup Sequence (Critical for Debugging)
 1. `bot/logging_config.py` - Sets up comprehensive logging to `logs/`
 2. `bot/config.py` - Loads config from `.env` or `bot_config.json` (env vars take precedence)
-3. Schema validation - `validate_database_schema()` in `ultimate_bot.py` checks for 53 columns
-4. Cog loading - Loads 14 cogs from `bot/cogs/` (failure = missing dependency or syntax error)
+3. Schema validation - `validate_database_schema()` in `ultimate_bot.py` checks the 19 required-contract columns against the live `player_comprehensive_stats` table (additive columns are tolerated; the live table currently has 57 total)
+4. Cog loading - Loads 20 cogs from `bot/cogs/` (failure = missing dependency or syntax error)
 5. Cache priming - `stats_cache.py` initializes 5-min TTL query cache
 6. Ready event - `on_ready()` logs startup time and connection info
 
