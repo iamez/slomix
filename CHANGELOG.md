@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.14.3](https://github.com/iamez/slomix/compare/v1.14.2...v1.14.3) (2026-05-13)
+
+
+### Bug Fixes
+
+* **webhook-metadata:** defensive DB gate against stale Lua metadata leak ([#255](https://github.com/iamez/slomix/issues/255)) ([27e3dc9](https://github.com/iamez/slomix/commit/27e3dc9c762adf1172c48c2c89503c3550b590bb))
+
 ## [1.14.2](https://github.com/iamez/slomix/compare/v1.14.1...v1.14.2) (2026-05-12)
 
 
