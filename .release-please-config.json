@@ -10,7 +10,7 @@
         "package.json",
         {
           "type": "generic",
-          "path": "CLAUDE.md"
+          "path": "docs/CLAUDE.md"
         }
       ]
     }
