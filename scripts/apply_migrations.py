@@ -6,13 +6,18 @@ Tracks applied migrations in a `schema_migrations` table and applies
 any pending .sql files from the migrations/ directory.
 
 Usage:
-    python scripts/apply_migrations.py                # Apply pending migrations
-    python scripts/apply_migrations.py --status       # Show migration status
-    python scripts/apply_migrations.py --baseline     # Mark all as pre-applied
+    python scripts/apply_migrations.py                       # Apply pending migrations
+    python scripts/apply_migrations.py --status              # Show migration status
+    python scripts/apply_migrations.py --baseline            # Mark all as pre-applied
+    python scripts/apply_migrations.py --mark FILE [FILE..]  # Record specific files as applied without running them
 
 Environment variables (or .env file):
     POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DATABASE,
     POSTGRES_USER, POSTGRES_PASSWORD
+
+    DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD are accepted as
+    fallbacks — production .env files in this repo historically used
+    DB_* names. POSTGRES_* takes precedence when both are present.
 """
 
 import asyncio
@@ -63,13 +68,30 @@ def _file_checksum(path: Path) -> str:
 
 # ── Database helpers ──────────────────────────────────────────────────
 
+def _env(*names: str, default: str = "") -> str:
+    """Return first env var from `names` that is *defined*, else `default`.
+
+    Lets us accept both POSTGRES_* (this script's documented convention) and
+    DB_* (historical prod .env convention). POSTGRES_* wins when both are set,
+    even if explicitly empty — an operator who exports `POSTGRES_PASSWORD=''`
+    has explicitly overridden the DB_* fallback (e.g. for password-less
+    trust-auth setups in dev). Truthiness check (`if v:`) would incorrectly
+    fall back through here. (Codex P2 review on #257.)
+    """
+    for n in names:
+        v = os.getenv(n)
+        if v is not None:
+            return v
+    return default
+
+
 async def get_connection() -> asyncpg.Connection:
     return await asyncpg.connect(
-        host=os.getenv("POSTGRES_HOST", "localhost"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
-        database=os.getenv("POSTGRES_DATABASE", "etlegacy"),
-        user=os.getenv("POSTGRES_USER", "etlegacy_user"),
-        password=os.getenv("POSTGRES_PASSWORD", ""),
+        host=_env("POSTGRES_HOST", "DB_HOST", default="localhost"),
+        port=int(_env("POSTGRES_PORT", "DB_PORT", default="5432")),
+        database=_env("POSTGRES_DATABASE", "DB_NAME", default="etlegacy"),
+        user=_env("POSTGRES_USER", "DB_USER", default="etlegacy_user"),
+        password=_env("POSTGRES_PASSWORD", "DB_PASSWORD", default=""),
     )
 
 
@@ -224,6 +246,103 @@ async def cmd_apply():
         await conn.close()
 
 
+async def cmd_mark(filenames: list[str]):
+    """Record specific migration files as applied without running their SQL.
+
+    Use after manually applying a migration via raw `psql` (e.g. during an
+    emergency deploy) so the tracking table stays in sync. Refuses any
+    filename that doesn't exist under `migrations/`.
+    """
+    if not filenames:
+        print("ERROR: --mark requires at least one filename. "
+              "Example: --mark 052_add_weapon_stats_mv.sql")
+        sys.exit(1)
+
+    discovered = {f: p for f, p in discover_migrations()}
+    missing = [f for f in filenames if f not in discovered]
+    if missing:
+        print(f"ERROR: file(s) not found under {MIGRATIONS_DIR}:")
+        for f in missing:
+            print(f"    {f}")
+        sys.exit(1)
+
+    conn = await get_connection()
+    try:
+        await ensure_tracking_table(conn)
+        # Fetch (filename, success) so we can distinguish already-marked-OK
+        # rows from previously-failed rows that should now be reconciled.
+        # (Copilot review on #257.)
+        existing: dict[str, bool] = {
+            r["filename"]: r["success"]
+            for r in await conn.fetch(
+                "SELECT filename, success FROM schema_migrations"
+            )
+        }
+
+        marked = 0
+        skipped = 0
+        repaired = 0
+        raced = 0
+        for filename in filenames:
+            path = discovered[filename]
+            version = _version_from_filename(filename)
+            checksum = _file_checksum(path)
+
+            prior = existing.get(filename)
+            if prior is True:
+                print(f"  [SKIP   ] {filename} (already recorded success=TRUE)")
+                skipped += 1
+                continue
+
+            if prior is False:
+                # Reconcile a previously-failed row: a manual psql apply
+                # succeeded, so flip success to TRUE and record the manual
+                # provenance + fresh checksum.
+                row = await conn.fetchrow(
+                    """UPDATE schema_migrations
+                       SET success = TRUE,
+                           applied_by = 'manual-mark',
+                           checksum = $2,
+                           applied_at = NOW()
+                       WHERE filename = $1
+                       RETURNING id""",
+                    filename, checksum,
+                )
+                if row is None:
+                    # Row vanished between SELECT and UPDATE — exotic, but report it.
+                    print(f"  [RACED  ] {filename} (row disappeared during reconcile)")
+                    raced += 1
+                else:
+                    print(f"  [REPAIR ] {filename} (success FALSE→TRUE)")
+                    repaired += 1
+                continue
+
+            # No existing row → insert. Use RETURNING to verify a real insert
+            # happened (vs a concurrent insert hitting the UNIQUE constraint).
+            row = await conn.fetchrow(
+                """INSERT INTO schema_migrations
+                   (version, filename, checksum, applied_by, success)
+                   VALUES ($1, $2, $3, 'manual-mark', TRUE)
+                   ON CONFLICT (filename) DO NOTHING
+                   RETURNING id""",
+                version, filename, checksum,
+            )
+            if row is None:
+                # Lost the race against a concurrent writer.
+                print(f"  [RACED  ] {filename} (concurrent insert won; row already exists)")
+                raced += 1
+            else:
+                print(f"  [MARKED ] {filename}")
+                marked += 1
+
+        print(
+            f"\n  Marked: {marked}, Repaired: {repaired}, "
+            f"Skipped: {skipped}, Raced: {raced}\n"
+        )
+    finally:
+        await conn.close()
+
+
 async def cmd_baseline_inner(conn: asyncpg.Connection, migrations: list):
     """Baseline helper (uses existing connection)."""
     for filename, path in migrations:
@@ -245,6 +364,11 @@ def main():
         asyncio.run(cmd_status())
     elif "--baseline" in sys.argv:
         asyncio.run(cmd_baseline())
+    elif "--mark" in sys.argv:
+        idx = sys.argv.index("--mark")
+        # Everything after --mark, stripped of leading paths if user pasted them
+        filenames = [Path(a).name for a in sys.argv[idx + 1:] if not a.startswith("-")]
+        asyncio.run(cmd_mark(filenames))
     else:
         asyncio.run(cmd_apply())
 
