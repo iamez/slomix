@@ -32,6 +32,23 @@ if [ -z "$TAG" ] || [[ "$TAG" == --* ]]; then
 fi
 shift
 
+# Hard-validate TAG before any path/shell interpolation. Two attack vectors
+# this closes (Copilot review on #259):
+#   - Path traversal: TAG="../../../etc/passwd" would have caused us to
+#     `source $SCRIPT_DIR/release_configs/$TAG.sh`, executing arbitrary
+#     local shell code.
+#   - Remote command injection: TAG is later interpolated into an SSH
+#     command (`git checkout -f $TAG`). Shell metacharacters in TAG would
+#     execute on the VM.
+# Strict allow-list: vN.N.N optionally followed by a hyphenated suffix
+# (e.g. v1.14.3, v1.14.3-rc1). Matches the actual git tag scheme used in
+# this repo's release-please workflow.
+if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
+  echo "ERROR: TAG must match ^v[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.]+)?\$ — got: $TAG" >&2
+  echo "(Strict validation prevents path traversal + remote command injection.)" >&2
+  exit 1
+fi
+
 DRY_RUN=false
 SKIP_MIGRATIONS=false
 SKIP_FLAGS=false
@@ -251,13 +268,31 @@ if ! $SKIP_FLAGS && [ ${#FLAGS[@]} -gt 0 ]; then
   log "6/8  Add ${#FLAGS[@]} feature flag(s) to /opt/slomix/.env (via sudo)"
   for KV in "${FLAGS[@]}"; do
     KEY="${KV%%=*}"
+    VAL="${KV#*=}"
+    # Hard-validate KEY against the standard env-var pattern. A KEY with
+    # regex metacharacters would corrupt the grep/sed below. (Copilot review
+    # on #259.)
+    if [[ ! "$KEY" =~ ^[A-Z_][A-Z0-9_]*$ ]]; then
+      fail "Invalid flag KEY in FLAGS[]: '$KEY' (must match ^[A-Z_][A-Z0-9_]*\$)"
+    fi
+    # Escape VAL for sed's replacement side. Three characters are special:
+    #   \   — escape character, must be doubled first
+    #   |   — our delimiter, must be backslash-escaped
+    #   &   — backreference to the whole match
+    # We deliberately substitute order: backslash first so we don't escape
+    # the backslashes we add for the other two.
+    VAL_ESC="${VAL//\\/\\\\}"
+    VAL_ESC="${VAL_ESC//|/\\|}"
+    VAL_ESC="${VAL_ESC//&/\\&}"
     # Replace if exists, else append — wrapped in sudo bash -c for write perms.
     # The inner single-quoted block is the literal command sudo executes.
+    # Bash's builtin echo (no -e) prints literally + adds newline; KEY is
+    # validated so the appended line never starts with `-`.
     sudo_run "bash -c 'cd $VM_PATH && \
       if grep -qE \"^${KEY}=\" .env; then \
-        sed -i \"s|^${KEY}=.*|${KV}|\" .env; \
+        sed -i \"s|^${KEY}=.*|${KEY}=${VAL_ESC}|\" .env; \
       else \
-        echo \"${KV}\" >> .env; \
+        echo \"${KEY}=${VAL}\" >> .env; \
       fi'"
   done
   log "Final flag state on VM (this release only):"
@@ -296,12 +331,15 @@ echo
 log "Deploy complete. To rollback to pre-deploy commit ($CURRENT_COMMIT):"
 # Use `git checkout -f` because step 3b leaves the cache-buster files
 # permanently bumped on disk; rollback must force-overwrite them.
-echo "  ssh $VM_USER@$VM_HOST 'cd $VM_PATH && git checkout -f $CURRENT_COMMIT && sudo systemctl restart slomix-web slomix-bot'"
+# Include `-i $VM_KEY` so the printed commands match the script's own SSH
+# connection params — without it, the rollback fails for anyone who doesn't
+# have $VM_KEY as their default identity for $VM_HOST. (Copilot review on #259.)
+echo "  ssh -i $VM_KEY $VM_USER@$VM_HOST 'cd $VM_PATH && git checkout -f $CURRENT_COMMIT && sudo systemctl restart slomix-web slomix-bot'"
 if [ ${#FLAGS[@]} -gt 0 ]; then
   echo "  To disable one of this release's flags (cheaper rollback — keeps code):"
   for KV in "${FLAGS[@]}"; do
     KEY="${KV%%=*}"
-    echo "    ssh $VM_USER@$VM_HOST \"sudo sed -i 's/^${KEY}=.*/${KEY}=false/' $VM_PATH/.env && sudo systemctl restart slomix-web slomix-bot\""
+    echo "    ssh -i $VM_KEY $VM_USER@$VM_HOST \"sudo sed -i 's/^${KEY}=.*/${KEY}=false/' $VM_PATH/.env && sudo systemctl restart slomix-web slomix-bot\""
   done
 fi
 echo

@@ -16,7 +16,7 @@ scripts/
 
 ## Creating a config for a new release
 
-1. Copy an existing config: `cp release_configs/v1.14.2.sh release_configs/v1.14.3.sh`
+1. From the repo root, copy an existing config: `cp scripts/release_configs/v1.14.2.sh scripts/release_configs/v1.14.3.sh`
 2. Edit the three arrays:
    - `MIGRATIONS=()` — filenames under `migrations/` to `psql`-apply in order. Must be idempotent (`IF NOT EXISTS`, `ON CONFLICT DO NOTHING`, etc.).
    - `FLAGS=()` — `KEY=VALUE` pairs to set/replace in `/opt/slomix/.env`. The deploy script uses `sudo` to write — the deploy user has read-only access to `.env`.
