@@ -164,7 +164,7 @@ These scripts live **on the game server, NOT in your repo**. If ETLegacy changes
 
 - **Lua Time Stats Overhaul** — Replace c0rnp0rn's time tracking with new webhook-based per-player stats: spawn count, avg respawn time, longest life, denied playtime. 10-component implementation across Lua, DB schema, bot commands, website. **Effort**: 15-20 hours. **Status**: Designed, not started. **Docs**: `docs/KNOWN_ISSUES.md`.
 
-- **React Frontend (gemini-website) → Production** — React 19 frontend (10 pages) exists and is functional. Currently both Vanilla JS (prod) and React (dev) run in parallel. Plan: Test React in staging, promote to production, retire Vanilla JS. **Effort**: Testing + deployment, 4-8 hours. **Blocker**: None technical, just QA time.
+- ~~**React Frontend (gemini-website) → Production**~~ — **Done** (memory `react-migration.md`, 19/19 routes migrated). React 19 + TypeScript 5.9 + Vite 7 is now production at `website/frontend/` with 25 pages. The original `gemini-website/` scratch directory is abandoned (last touched Mar 1) and ignored by the deploy pipeline. Item kept here struck-through for history; remove on next prune.
 
 - **Time Dead Anomalies** — 13 player records have `time_dead > time_played` (off by 0.06-2.06 min) due to Lua rounding. Awaiting Lua Time Stats Overhaul to fix the source.
 
