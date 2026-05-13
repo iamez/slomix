@@ -34,7 +34,7 @@ Slomix is a **Discord bot + website** that turns raw ET:Legacy game statistics i
     ├─ Detect R1 vs R2 (filename: round-1.txt vs round-2.txt)
     ├─ Match R1+R2 (same timestamp within 45-min window)
     ├─ Calculate R2 differential (cumulative R1+R2 minus R1 = R2 only)
-    └─ Team detection (advanced_team_detector.py, historical matching)
+    └─ Team detection (team_manager.py, historical matching)
 
          v
     [PostgreSQL] 68 tables

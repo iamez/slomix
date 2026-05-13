@@ -12,6 +12,7 @@ attributes consumed here are set in the main class ``__init__``:
 """
 from __future__ import annotations
 
+import time
 from datetime import datetime
 
 from bot.core.round_contract import (
@@ -285,11 +286,27 @@ class _StatsImportMixin:
             except Exception as _e:
                 logger.debug(f"canonical_id dual-write skipped (non-fatal): {_e}")
 
-            # Insert player stats
-            for player in stats_data.get("players", []):
+            # Insert player stats. Audit plan L1 (2026-05-13): emit a single
+            # INFO line per round summarising row count + wall-clock so import
+            # latency / row counts are visible without DEBUG. Prior to this
+            # change there was no signal between "round imported" and an
+            # exception — silent regressions were impossible to spot from logs.
+            _t_start = time.perf_counter()
+            _players = stats_data.get("players", [])
+            for player in _players:
                 await self._insert_player_stats(
                     round_id, date_part, stats_data, player
                 )
+            _t_elapsed = time.perf_counter() - _t_start
+            logger.info(
+                "import round_id=%s map=%s rN=%s: %d player rows in %.2fs (%s)",
+                round_id,
+                stats_data.get("map_name", "?"),
+                stats_data.get("round_num", "?"),
+                len(_players),
+                _t_elapsed,
+                filename,
+            )
 
             # 🆕 If Round 2 file, also import match summary (cumulative stats)
             match_summary_id = None

@@ -140,7 +140,7 @@ All players marked as [full session]
 
 ```python
 from bot.core.substitution_detector import SubstitutionDetector
-from bot.core.advanced_team_detector import AdvancedTeamDetector
+from bot.core.team_manager import TeamManager
 
 # Analyze substitutions
 sub_detector = SubstitutionDetector()
@@ -150,9 +150,9 @@ sub_analysis = sub_detector.analyze_session_roster_changes(db, "2025-11-01")
 if sub_analysis['late_joiners'] or sub_analysis['substitutions']:
     print(f"⚠️ Roster changes detected: {sub_analysis['summary']}")
 
-# Run enhanced detection
-detector = AdvancedTeamDetector()
-teams = detector.detect_session_teams(db, "2025-11-01")
+# Run team detection (consolidated into TeamManager post-2026-05)
+manager = TeamManager(db)
+teams = await manager.detect_session_teams("2025-11-01")
 
 # Adjust for substitutions
 if sub_analysis['substitutions']:
@@ -247,7 +247,7 @@ Perfect example of the system working intelligently:
 
 1. ✅ **Substitution detector** - Created and tested
 2. ✅ **Demo tools** - Created for testing
-3. ⬜ **Integrate with AdvancedTeamDetector** - Apply substitution knowledge
+3. ⬜ **Integrate with TeamManager** - Apply substitution knowledge
 4. ⬜ **Update TeamManager** - Use enhanced detection
 5. ⬜ **Add to bot commands** - Show substitution info in !last_round
 
