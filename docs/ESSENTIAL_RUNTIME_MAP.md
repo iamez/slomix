@@ -218,10 +218,7 @@ bot/services/matchup_analytics_service.py
 bot/services/session_graph_generator.py
 bot/services/stopwatch_scoring_service.py
 bot/services/automation/
-bot/core/advanced_team_detector.py
-bot/core/team_detector_integration.py
 bot/core/substitution_detector.py
-bot/core/team_history.py
 bot/core/frag_potential.py
 greatshot/contracts/
 bin/UDT_* if tracing external Greatshot dependencies

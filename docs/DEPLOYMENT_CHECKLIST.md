@@ -38,10 +38,7 @@
 
 - [x] `bot/core/database_adapter.py`
 - [x] `bot/core/team_manager.py`
-- [x] `bot/core/advanced_team_detector.py`
-- [x] `bot/core/team_detector_integration.py`
 - [x] `bot/core/substitution_detector.py`
-- [x] `bot/core/team_history.py`
 - [x] `bot/core/achievement_system.py`
 - [x] `bot/core/season_manager.py`
 - [x] `bot/core/stats_cache.py`
