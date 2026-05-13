@@ -184,7 +184,7 @@ AUTOMATION_ENABLED=true
 - **Router**: `website/backend/routers/skill_router.py` (4 endpoints)
 - **Endpoints**: `/api/skill/leaderboard`, `/api/skill/player/{id}`, `/api/skill/player/{id}/history`, `/api/skill/formula`
 - **Frontend**: `website/frontend/src/pages/SkillRating.tsx`
-- **Migration**: `migrations/024_add_skill_ratings.sql`, `migrations/030_add_skill_history_session_scope.sql`
+- **Migration**: `migrations/024_add_skill_ratings.sql`, `migrations/031_add_skill_history_session_scope.sql`
 - **Features**: Per-session/map drill-down, confidence indicator, server-side tiers, auto-refresh when stale >1h
 - **Status**: Live, 40 players rated
 
