@@ -248,12 +248,12 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 ## System Status (Version 1.14.2) <!-- x-release-please-version -->
 
 - Parser: 100% functional, R2 differential validated, Oksii fields backward-compatible
-- Database: PostgreSQL (69 tables), no corruption
-- Bot: 80+ commands across 18 Cogs, all functional
+- Database: PostgreSQL (90 tables), no corruption
+- Bot: 80+ commands across 20 Cogs, all functional
 - Website: Upload library, availability polls, greatshot, storytelling, skill rating, BOX scoring
 - Automation: SSH monitoring, voice detection, Lua webhook (v1.7.0)
 - Lua: v6.01 with Oksii adoption (killer_health, alive_count, reinf timing)
-- Code quality: Ruff 0 errors, 476 tests, mypy configured
+- Code quality: Ruff 0 errors, 2,989 tests, mypy configured
 - Production Ready: Fully tested and validated
 
 ---

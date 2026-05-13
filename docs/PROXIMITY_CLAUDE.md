@@ -14,7 +14,7 @@ Use these as source-of-truth:
 Current active stack:
 
 - Lua tracker: `proximity/lua/proximity_tracker.lua` (v6.01, ~4,300 lines — file renamed off the `_v5` suffix when v6 landed)
-- Parser: `proximity/parser/parser.py` (`ProximityParserV4` — handles both v4 and v5 output)
+- Parser: `proximity/parser/parser.py` (`ProximityParserV4` — handles v4 + v5 output and v6 carrier/objective-intel extensions; class name kept for backwards-compat)
 - Migration: `migrations/013_add_proximity_v5_teamplay.sql` (5 new tables)
 - Website APIs: `/api/proximity/*` in `website/backend/routers/api.py`
 - Bot commands: `bot/cogs/proximity_cog.py` (5 new v5 commands)

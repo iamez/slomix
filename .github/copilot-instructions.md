@@ -68,7 +68,7 @@ DB_PASSWORD=REDACTED_DB_PASSWORD
 ### Discord Bot Architecture: Cog-Based Modular Design
 - **Entry point:** `bot/ultimate_bot.py` (~2,100 lines after the mega-audit cog-mixin split; most logic now in Cogs + mixins)
 - **20 Cogs in `bot/cogs/`:** Each handles specific command domain (admin, stats, leaderboards, sessions, teams, etc.)
-- **12 Core modules in `bot/core/`:** Shared business logic (team detection, achievements, caching, season management, pagination)
+- **18 Core modules in `bot/core/`:** Shared business logic (team detection, achievements, caching, season management, pagination, round canonical/contract/linker, GUID utils, etc.)
 - **4 Automation services:** SSH monitoring, health checks, metrics (in `bot/services/automation/`)
 
 **Always use Cogs for new commands** - never add commands directly to `ultimate_bot.py`
