@@ -331,7 +331,7 @@ class _WebhookHandlerMixin:
             await asyncio.sleep(2)
 
             # Check for pending Lua metadata (from STATS_READY or gametime)
-            override_metadata = self._pop_pending_metadata(filename)
+            override_metadata = await self._pop_pending_metadata(filename)
 
             # Process the file (parse and import to DB)
             result = await self.process_gamestats_file(local_path, filename, override_metadata=override_metadata)

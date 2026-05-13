@@ -844,7 +844,7 @@ class UltimateETLegacyBot(
             await asyncio.sleep(3)
 
             # Check for pending Lua metadata (from STATS_READY or gametime)
-            override_metadata = self._pop_pending_metadata(filename)
+            override_metadata = await self._pop_pending_metadata(filename)
 
             # Process the file (parse + import + Discord post)
             result = await self.process_gamestats_file(local_path, filename, override_metadata=override_metadata)
