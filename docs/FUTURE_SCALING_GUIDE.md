@@ -109,7 +109,7 @@ POSTGRES_SSL_ROOT_CERT=...     # Optional CA certificate
 
 #### 3. Modular Architecture
 
-- ✅ Cog-based command system (14 cogs)
+- ✅ Cog-based command system (20 cogs)
 - ✅ Service layer separation
 - ✅ Database adapter abstraction
 - ✅ Easy to add new servers without touching core logic
@@ -1654,10 +1654,10 @@ Required for 20 servers: 70-100 connections
 
 **Calculation:**
 - 20 servers × 2 concurrent connections = 40
-- 14 cogs × 1 connection each = 14
+- 20 cogs × 1 connection each = 20
 - 4 task loops × 1 connection = 4
 - Buffer for spikes = 12
-- **Total: 70 connections minimum**
+- **Total: 76 connections minimum**
 
 **Update `bot/config.py`:**
 

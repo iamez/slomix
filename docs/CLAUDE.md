@@ -74,7 +74,7 @@ ET:Legacy Game Server -> SSH Monitor -> Parser -> PostgreSQL -> Discord Bot -> U
 
 ### Core Files
 
-- `bot/ultimate_bot.py` - Main bot entry point, loads 18 Cogs, on_ready handler
+- `bot/ultimate_bot.py` - Main bot entry point, loads 20 Cogs, on_ready handler
 - `bot/community_stats_parser.py` - R1/R2 differential parser
 - `postgresql_database_manager.py` - **ONLY tool for DB operations**
 - `bot/core/database_adapter.py` - Async PostgreSQL/SQLite abstraction
