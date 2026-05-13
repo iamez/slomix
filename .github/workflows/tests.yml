@@ -69,7 +69,7 @@ jobs:
         run: pytest tests/ -v --tb=short --cov=bot --cov=website/backend --cov-report=xml --cov-report=term
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673
+        uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673  # v4.5.0 — bump to v5+ requires `file:` → `files:` rename
         with:
           file: ./coverage.xml
           flags: unittests
