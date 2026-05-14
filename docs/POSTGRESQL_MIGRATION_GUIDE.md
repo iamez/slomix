@@ -2,9 +2,11 @@
 
 **ET:Legacy Discord Bot - SQLite to PostgreSQL Migration**
 
+> **Historical document.** The SQLite → PostgreSQL migration was completed long ago and PostgreSQL is the only supported production backend. Kept for reference only — do not follow the steps below on a current install. The `tools/migrate_to_postgresql.py` script referenced throughout was never landed in the repo; the actual production migration was performed via direct schema + ad-hoc data copy. See `docs/POSTGRESQL_MIGRATION_INDEX.md` for the current state.
+
 ## 📋 Overview
 
-All Python code has been successfully migrated to use the database adapter pattern. The bot works perfectly with SQLite. This guide covers migrating to PostgreSQL.
+*Historical context — the work below is long since complete.* When this guide was written, all Python code had been migrated to the database adapter pattern and the bot worked against SQLite. The guide then covered cutting over to PostgreSQL. Production has been PostgreSQL-only for ages; SQLite is no longer a supported backend and the cutover script described here never landed.
 
 ## ✅ What's Done
 
@@ -14,7 +16,7 @@ All Python code has been successfully migrated to use the database adapter patte
 - ✅ Opus's datetime fixes applied
 - ✅ Bot tested with SQLite - ZERO regressions
 - ✅ PostgreSQL schema created (`tools/schema_postgresql.sql`)
-- ✅ Migration script created (`tools/migrate_to_postgresql.py`)
+- ⚠️ Migration script (`tools/migrate_to_postgresql.py`) — **never landed**; production migration ran ad-hoc
 
 ## 🚀 Migration Steps
 
