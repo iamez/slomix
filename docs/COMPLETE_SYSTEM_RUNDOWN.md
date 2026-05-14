@@ -950,10 +950,13 @@ Total query time: ~200-500ms
 ```bash
 # Discord
 DISCORD_BOT_TOKEN=your_token_here
-GUILD_ID=your_server_id
+DISCORD_GUILD_ID=your_server_id
 STATS_CHANNEL_ID=your_channel_id
 
 # Database
+# (Historical: this guide pre-dates the SQLite→PostgreSQL migration.
+# Use POSTGRES_HOST / POSTGRES_DATABASE / POSTGRES_USER / POSTGRES_PASSWORD
+# per .env.example for any new install — DATABASE_PATH below is obsolete.)
 DATABASE_PATH=bot/etlegacy_production.db
 
 # SSH Automation

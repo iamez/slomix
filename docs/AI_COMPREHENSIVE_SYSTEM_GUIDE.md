@@ -386,7 +386,7 @@ WHERE round_date = ? AND round_time = ? AND map_name = ? AND round_number = ?  â
 ```bash
 # Discord
 DISCORD_BOT_TOKEN=your_token
-GUILD_ID=your_server_id
+DISCORD_GUILD_ID=your_server_id
 STATS_CHANNEL_ID=your_channel_id
 
 # Database (PostgreSQL) â€” bot/config.py reads POSTGRES_* only.

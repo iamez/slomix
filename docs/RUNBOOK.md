@@ -4,7 +4,7 @@
 Bring up website + bot with actionable logs and health checks.
 
 ## Prereqs
-- Python 3.10+
+- Python 3.11+ (`pyproject.toml` pins `requires-python = ">=3.11,<3.14"`)
 - `pip`
 - `curl`
 - Optional: Docker + Docker Compose (for containerized dev)
