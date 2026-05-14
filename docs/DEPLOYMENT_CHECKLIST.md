@@ -31,10 +31,8 @@
 - [x] `bot/cogs/team_management_cog.py`
 - [x] `bot/cogs/automation_commands.py`
 - [x] `bot/cogs/server_control.py`
-- [x] `bot/cogs/synergy_analytics.py`
-- [x] `bot/cogs/synergy_analytics_fixed.py`
 
-### All 9 Core Modules Present
+### Core Modules Present (18 total under `bot/core/`; representative)
 
 - [x] `bot/core/database_adapter.py`
 - [x] `bot/core/team_manager.py`
@@ -43,13 +41,17 @@
 - [x] `bot/core/season_manager.py`
 - [x] `bot/core/stats_cache.py`
 
-### All 4 Automation Services Present
+Full list: `ls bot/core/*.py` (or see `bot/core/CLAUDE.md`).
 
-- [x] `bot/services/automation/ssh_monitor.py`
+### Automation Services Present
+
 - [x] `bot/services/automation/database_maintenance.py`
 - [x] `bot/services/automation/health_monitor.py`
 - [x] `bot/services/automation/metrics_logger.py`
-- [x] `bot/services/automation/INTEGRATION_GUIDE.md`
+- [x] `bot/services/automation/INTEGRATION_GUIDE.md` (note: doc, not a service module)
+
+(SSH monitoring lives in `bot/automation/ssh_handler.py` + `file_tracker.py`,
+not under `bot/services/automation/`.)
 
 ### Documentation Complete
 

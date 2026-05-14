@@ -526,11 +526,10 @@ class StatsCog(
         )
 
         embed1.add_field(
-            name="🤝 **Synergy & Analytics** (7)",
+            name="🤝 **Duo Stats** (1)",
             value=(
-                "`!synergy` `!best_duos` `!team_builder`\n"
-                "`!suggest_teams` `!player_impact`\n"
-                "└ Aliases: `!duo`, `!tb`, `!st`"
+                "`!duo_perf <p1> <p2>`\n"
+                "└ Aliases: `!duoperf`, `!pair_stats`"
             ),
             inline=True,
         )
