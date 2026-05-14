@@ -560,12 +560,14 @@ cd slomix_discord/website
 ```bash
 cat > .env << 'EOF'
 # Database (read-only user)
-DB_HOST=db.yourserver.com
-DB_PORT=5432
-DB_NAME=etlegacy
-DB_USER=website_readonly
-DB_PASSWORD=your_secure_password_here
-DB_SSL_MODE=require
+# Use POSTGRES_* names — the website backend reads via bot/config.py
+# which only knows the POSTGRES_* keys (see .env.example).
+POSTGRES_HOST=db.yourserver.com
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=etlegacy
+POSTGRES_USER=website_readonly
+POSTGRES_PASSWORD=your_secure_password_here
+POSTGRES_SSL_MODE=require
 
 # Security
 SESSION_SECRET=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
