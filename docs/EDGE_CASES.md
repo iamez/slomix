@@ -28,7 +28,7 @@ Normal gameplay - rounds typically take 10-15 minutes, so late-night matches nat
 
 ### How System Handles It
 
-✅ **FIXED** in `database_manager.py` lines 403-424:
+✅ **FIXED** in `postgresql_database_manager.py` (R1/R2 cross-day pairing logic; original cite was at `database_manager.py:403-424` before the postgres rename — line numbers in the current file differ):
 
 - When processing R2 file, if no R1 found on same date
 - Check **previous day** for matching R1 file
@@ -69,7 +69,7 @@ Multiple possible causes:
 
 ### How System Handles It
 
-✅ **Current behavior** (lines 427-429 in database_manager.py):
+✅ **Current behavior** (R2-without-R1 handling in `postgresql_database_manager.py`):
 
 ```python
 logger.warning(f"⚠️  No Round 1 file found for {file_path.name}")
@@ -203,7 +203,7 @@ If R2 timestamp < R1 timestamp, one of these is true:
 
 ### How System Handles It
 
-Current logic in `database_manager.py` (lines 436-442):
+Current logic in `postgresql_database_manager.py` (R1-before-R2 enforcement; original cite was `database_manager.py:436-442`):
 
 ```python
 # R1 must be BEFORE R2 (R1 time < R2 time)
@@ -337,7 +337,7 @@ System automatically groups consecutive rounds into "gaming sessions" representi
 
 ## References
 
-- Database Manager: `database_manager.py` lines 390-456
+- Database Manager: `postgresql_database_manager.py` (was `database_manager.py:390-456` pre-rename)
 - Validation Report: `VALIDATION_FINDINGS_NOV3.md`
 - Lua Stats Script: `c0rnp0rn.lua` (server-side)
 - Investigation Log: This document

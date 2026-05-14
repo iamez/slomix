@@ -27,7 +27,7 @@ cd /home/samba/share/slomix_discord
 source .venv/bin/activate
 
 # 3. Run database manager
-python database_manager.py
+python postgresql_database_manager.py
 
 # 4. Choose option 3 (Rebuild from scratch)
 # 5. Type: YES DELETE EVERYTHING
@@ -75,7 +75,7 @@ That's it. No AI needed. No token waste.
 **When to use:** Need clean schema with no data
 
 ```powershell
-python database_manager.py
+python postgresql_database_manager.py
 # Choose: 1
 # Result: New empty database with correct schema
 ```python
@@ -96,7 +96,7 @@ python database_manager.py
 **When to use:** Add new data without touching existing data
 
 ```powershell
-python database_manager.py
+python postgresql_database_manager.py
 # Choose: 2
 # Enter year: 2025 (or leave blank for 2025)
 # Result: Only NEW files imported
@@ -119,7 +119,7 @@ python database_manager.py
 **When to use:** Database is corrupted, has wrong data, or you need to start over
 
 ```powershell
-python database_manager.py
+python postgresql_database_manager.py
 # Choose: 3
 # Confirm: YES DELETE EVERYTHING
 # Enter year: 2025
@@ -143,7 +143,7 @@ python database_manager.py
 **When to use:** Known bad data for specific dates (e.g., Oct 28-30)
 
 ```powershell
-python database_manager.py
+python postgresql_database_manager.py
 # Choose: 4
 # Start date: 2025-10-28
 # End date: 2025-10-30
@@ -166,7 +166,7 @@ python database_manager.py
 **When to use:** Check if database is healthy
 
 ```powershell
-python database_manager.py
+python postgresql_database_manager.py
 # Choose: 5
 # Result: Statistics and integrity report
 ```yaml
@@ -185,7 +185,7 @@ python database_manager.py
 **When to use:** Test if everything works before full import
 
 ```powershell
-python database_manager.py
+python postgresql_database_manager.py
 # Choose: 6
 # Result: Import 10 files to verify functionality
 ```yaml
@@ -199,7 +199,7 @@ python database_manager.py
 After any recovery operation, validate the database:
 
 ```powershell
-python database_manager.py
+python postgresql_database_manager.py
 # Choose: 5 (Validate)
 ```text
 
@@ -236,7 +236,7 @@ If you see orphan sessions, run **Option 3 (Rebuild from scratch)**.
 
 ```bash
 cd /home/samba/share/slomix_discord
-python database_manager.py
+python postgresql_database_manager.py
 ```
 
 ---
@@ -247,7 +247,7 @@ python database_manager.py
 
 ```bash
 source .venv/bin/activate
-python database_manager.py
+python postgresql_database_manager.py
 ```
 
 ---
@@ -261,7 +261,7 @@ python database_manager.py
 Get-Process python | Stop-Process -Force
 
 # Then retry
-python database_manager.py
+python postgresql_database_manager.py
 ```python
 
 ---
@@ -287,7 +287,7 @@ notepad local_stats\2025-10-28-some-file.txt
 Remove-Item local_stats\2025-10-28-some-file.txt
 
 # Re-run import
-python database_manager.py
+python postgresql_database_manager.py
 ```
 
 ---
@@ -360,6 +360,6 @@ If this guide doesn't solve your problem:
 
 ---
 
-**Remember:** This is THE ONLY database tool. Don't create new import scripts. Everything you need is in `database_manager.py`.
+**Remember:** This is THE ONLY database tool. Don't create new import scripts. Everything you need is in `postgresql_database_manager.py`.
 
 **Questions?** Read this guide first. 99% of problems are covered here.
