@@ -166,7 +166,7 @@ def test_init_keeps_explicit_port_when_no_colon():
 
 
 def test_init_keeps_pool_size_defaults():
-    """Pool size defaults are tuned for 14 cogs + tasks — a regression
+    """Pool size defaults are tuned for 20 cogs + tasks — a regression
     that drops them to 1/1 would deadlock under load."""
     a = PostgreSQLAdapter(
         host="x", port=5432, database="x", user="x", password="x",
