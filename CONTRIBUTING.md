@@ -1,6 +1,6 @@
 # Contributing
 
-Detailed contribution guidance lives in `docs/CONTRIBUTING.md`.
+The previous long-form `docs/CONTRIBUTING.md` was retired (see Feb 2026 commit `0ed9747`). The rules that actually matter live below + in `docs/CLAUDE.md` (the root `CLAUDE.md` is a symlink to it). For deeper conventions (database, branch policy, R2 differential, etc.) read `docs/CLAUDE.md`.
 
 ## Quick Rules
 
