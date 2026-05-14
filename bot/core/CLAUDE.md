@@ -44,14 +44,25 @@ This allows tracking games that grow from 3v3 → 4v4 → 6v6.
 | `achievement_system.py` | Player badge awards |
 | `frag_potential.py` | Expected frag calculations |
 
+### Round Identity & Linking
+
+| Module | Purpose |
+|--------|---------|
+| `round_contract.py` | Canonical round shape / dataclasses passed across the pipeline |
+| `round_canonical.py` | Canonical-ID derivation (round_date + round_time + map_name + round_number) |
+| `round_linker.py` | Links Lua webhook metadata + stats files into the same canonical round |
+| `correlation_context.py` | Cross-source correlation state used by `round_correlation_service.py` |
+
 ### Utilities
 
 | Module | Purpose |
 |--------|---------|
 | `utils.py` | Shared utility functions |
 | `checks.py` | Discord command permission checks |
+| `guid_utils.py` | GUID normalization + short-GUID helpers |
 | `pagination_view.py` | Paginated Discord embeds |
 | `lazy_pagination_view.py` | Lazy-loading pagination |
+| `endstats_pagination_view.py` | Pagination view specific to endstats reports |
 
 ## Key Components
 

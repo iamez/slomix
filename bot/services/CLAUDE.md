@@ -47,9 +47,28 @@ Services are stateless and receive the bot instance for database/config access.
 | Service | File | Purpose |
 |---------|------|---------|
 | `RoundPublisherService` | `round_publisher_service.py` | Auto-post round stats |
-| `RoundCorrelationService` | `round_correlation_service.py` | **NEW (Feb 2026)** Track R1+R2 data completeness |
-| `RoundLinkageAnomalyService` | `round_linkage_anomaly_service.py` | **NEW (Feb 2026)** Detect linkage drift |
-| `WebhookRoundMetadataService` | `webhook_round_metadata_service.py` | **NEW (Feb 2026)** Enrich webhook metadata |
+| `RoundCorrelationService` | `round_correlation_service.py` | Track R1+R2 data completeness |
+| `RoundLinkageAnomalyService` | `round_linkage_anomaly_service.py` | Detect linkage drift |
+| `WebhookRoundMetadataService` | `webhook_round_metadata_service.py` | Enrich webhook metadata |
+
+### Webhook / Monitor / Stats-Ready Family (mixin pattern)
+
+The bot composes several behaviors via mixin classes mounted on `UltimateBot` (see `bot/ultimate_bot.py` after the mega-audit split):
+
+| Mixin | File | Purpose |
+|-------|------|---------|
+| `AdminAlertMixin` | `admin_alert_mixin.py` | `alert_admins()` + `track_error()` helpers |
+| `MonitorTasksMixin` | `monitor_tasks_mixin.py` | `endstats_monitor` loop + grace-period bookkeeping |
+| `StatsImportMixin` | `stats_import_mixin.py` | Stats-file import orchestration |
+| `StatsReadyMixin` | `stats_ready_mixin.py` | Lua `STATS_READY` webhook gating |
+| `WebhookHandlerMixin` | `webhook_handler_mixin.py` | Incoming Lua webhook intake |
+| `WebhookMetadataMixin` | `webhook_metadata_mixin.py` | Webhook → DB metadata enrichment (stale gate) |
+| `EndstatsPipelineMixin` | `endstats_pipeline_mixin.py` | Endstats / canonical-id pipeline |
+| `LuaRoundStorageMixin` | `lua_round_storage_mixin.py` | `lua_round_teams` row writes |
+
+### Auxiliary Services
+
+Additional services not enumerated above include `webhook_event_queue.py`, `signal_connector.py`, `telegram_connector.py`, `availability_notifier_service.py`, `monitoring_service.py`, `proximity_session_score_service.py`, `endstats_aggregator.py`, `session_timing_shadow_service.py`, `timing_comparison_service.py`, `timing_debug_service.py`, `matchup_analytics_service.py`, `player_analytics_service.py`, `prediction_embed_builder.py`, etc. Run `ls bot/services/*.py` for the canonical list — this README is a guide, not an exhaustive catalogue.
 
 ## Key Patterns
 
