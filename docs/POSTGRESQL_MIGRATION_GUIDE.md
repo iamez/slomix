@@ -6,7 +6,7 @@
 
 ## 📋 Overview
 
-All Python code has been successfully migrated to use the database adapter pattern. The bot works perfectly with SQLite. This guide covers migrating to PostgreSQL.
+*Historical context — the work below is long since complete.* When this guide was written, all Python code had been migrated to the database adapter pattern and the bot worked against SQLite. The guide then covered cutting over to PostgreSQL. Production has been PostgreSQL-only for ages; SQLite is no longer a supported backend and the cutover script described here never landed.
 
 ## ✅ What's Done
 

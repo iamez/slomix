@@ -13,13 +13,13 @@ This guide remains valid as a design reference for workflow, but occurrence coun
 
 ## Overview
 
-This document describes the secrets management system for the Slomix Discord Bot. The system is **ready to use** but **not yet activated** - current passwords remain unchanged until you explicitly rotate them.
+This document describes the **proposed** secrets management system for the Slomix Discord Bot. The CLI described below was never built and is not present in the repo; everything that follows is a design specification, not an operational guide. Current passwords are managed manually via direct `.env` edits + DB `ALTER USER` until/unless this tool lands.
 
-## Secrets Manager Tool
+## Secrets Manager Tool (proposed)
 
-Location: `tools/secrets_manager.py`
+Intended location: `tools/secrets_manager.py` (not present in the repo)
 
-### Features
+### Features (designed)
 
 - ✅ Generate secure passwords: `random-words-typed-together-like-this1337`
 - ✅ Rotate database passwords (with SQL command generation)
