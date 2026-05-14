@@ -7,20 +7,26 @@ Includes unit, security, parser, and Greatshot regression coverage.
 
 ## Directory Structure
 
-```python
+```text
 tests/
 ├── conftest.py                         # Shared pytest fixtures
-├── security/test_security_validation.py
-├── unit/                               # Core unit and regression tests
+├── security/                           # Security validation tests
+│   └── test_security_validation.py
+├── unit/                               # Core unit and regression tests (~170+ files)
 │   ├── test_database_adapter.py
 │   ├── test_data_integrity.py
 │   ├── test_round_contract.py
 │   ├── test_greatshot_crossref.py
-│   └── ...
+│   └── ... (run `ls tests/unit/` for the full set)
+├── integration/                        # Cross-module integration tests
+├── e2e/                                # End-to-end pipeline tests
+├── performance/                        # Performance/benchmark tests
+├── smoke/                              # Smoke / quick-sanity tests
 ├── test_community_stats_parser.py      # Parser regression coverage
-├── test_greatshot_api_integration.py   # API integration smoke tests
+├── test_greatshot_*.py                 # Greatshot integration / scanner / upload regression
+├── test_alias_fallback.py, test_simple_bulk_import.py
 └── fixtures/                           # Test data and fixtures
-```text
+```
 
 ## Running Tests
 
@@ -132,21 +138,10 @@ tests/fixtures/sample_stats_files/
 
 ## CI/CD Integration
 
-Add to GitHub Actions:
+Tests run via [`.github/workflows/tests.yml`](../.github/workflows/tests.yml) on every push and PR against `main` / `develop`. The workflow:
 
-```yaml
-# .github/workflows/test.yml
-name: Tests
-on: [push, pull_request]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: pip install -r requirements.txt
-      - run: pip install pytest pytest-cov pytest-asyncio
-      - run: pytest --cov=bot --cov-report=xml
-```
+- Spins up PostgreSQL 14 + Redis 7 service containers
+- Installs `requirements.txt` (Python 3.11)
+- Runs `ruff check`, the Python test suite, JS lint, file-hygiene checks, Docker build, CodeQL, and Codacy
+
+The workflow file is the single source of truth — do not duplicate its content here, since the snippet would drift the moment CI changes. To see the current set of jobs and checks, open the file directly or check the "Actions" tab on a recent PR.
