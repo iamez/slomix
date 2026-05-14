@@ -132,7 +132,6 @@ Confirmed infra/runtime files:
 
 - [vps_scripts/stats_webhook_notify.py](/home/samba/share/slomix_discord/vps_scripts/stats_webhook_notify.py) is supported, but repo comments point to Lua `STATS_READY` as the canonical path.
 - [bot/cogs/proximity_cog.py](/home/samba/share/slomix_discord/bot/cogs/proximity_cog.py) is startup-loadable but explicitly optional and isolated.
-- [bot/cogs/synergy_analytics.py](/home/samba/share/slomix_discord/bot/cogs/synergy_analytics.py) is loaded as safe/disabled-by-default.
 - [bot/cogs/server_control.py](/home/samba/share/slomix_discord/bot/cogs/server_control.py) is optional admin/runtime surface.
 - [bot/cogs/predictions_cog.py](/home/samba/share/slomix_discord/bot/cogs/predictions_cog.py) is feature-gated by predictions config.
 - [bot/cogs/admin_predictions_cog.py](/home/samba/share/slomix_discord/bot/cogs/admin_predictions_cog.py) is feature-gated by predictions config.

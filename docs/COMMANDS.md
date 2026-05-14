@@ -51,17 +51,17 @@ This document lists the Discord bot commands found in the repository, their alia
 
 ---
 
-## Synergy analytics cog (e.g. `bot/cogs/synergy_analytics.py`)
+## Synergy analytics cog — REMOVED
 
-| Command | Aliases | Description |
-|---|---|---|
-| `synergy` | `chemistry`, `duo` | Show player synergy/chemistry statistics (pair performance) |
-| `best_duos` | `top_duos`, `best_pairs` | Show the best player duos |
-| `team_builder` | `balance_teams`, `suggest_teams` | Suggest balanced teams based on analytics |
-| `player_impact` | `teammates`, `partners` | Show player impact on teammates / partners analytics |
-| `fiveeyes_enable` | (none) | Enable the "fiveeyes" feature/flag |
-| `fiveeyes_disable` | (none) | Disable the "fiveeyes" feature/flag |
-| `recalculate_synergies` | (none) | Recalculate stored synergy statistics |
+The standalone `bot/cogs/synergy_analytics.py` cog was disabled long
+ago (per CHANGELOG: "Dead cog disabled: Removed synergy_analytics load
+attempt — `analytics` package never existed, was logging warning on
+every restart"). Its 7 commands (`!synergy`, `!best_duos`,
+`!team_builder`, `!player_impact`, `!fiveeyes_enable`,
+`!fiveeyes_disable`, `!recalculate_synergies`) no longer exist.
+
+For duo / pair stats, use `!duo_perf <player1> <player2>` in matchup
+cog (aliases: `!duoperf`, `!pair_stats`).
 
 ---
 
