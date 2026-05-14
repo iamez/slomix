@@ -123,11 +123,11 @@ DISCORD_BOT_TOKEN=...
 GUILD_ID=...
 STATS_CHANNEL_ID=...
 DATABASE_TYPE=postgres
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=etlegacy
-DB_USER=etlegacy_user
-DB_PASSWORD=REDACTED_DB_PASSWORD
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=etlegacy
+POSTGRES_USER=etlegacy_user
+POSTGRES_PASSWORD=REDACTED_DB_PASSWORD
 SSH_ENABLED=true
 SSH_HOST=puran.hehe.si
 SSH_PORT=48101
@@ -135,6 +135,8 @@ SSH_USER=et
 SSH_KEY_PATH=~/.ssh/etlegacy_bot
 AUTOMATION_ENABLED=true
 ```
+
+> `bot/config.py` reads `POSTGRES_*` only — `DB_HOST/DB_NAME/DB_USER/DB_PASSWORD` names are accepted by `scripts/apply_migrations.py` as a fallback, but the bot itself will not see them. Use the `POSTGRES_*` names shown above and in `.env.example`.
 
 ---
 

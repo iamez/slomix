@@ -389,13 +389,15 @@ DISCORD_BOT_TOKEN=your_token
 GUILD_ID=your_server_id
 STATS_CHANNEL_ID=your_channel_id
 
-# Database (PostgreSQL)
+# Database (PostgreSQL) — bot/config.py reads POSTGRES_* only.
+# DB_* fallback names are accepted by scripts/apply_migrations.py but
+# NOT by the bot. Use the POSTGRES_* names shown here + in .env.example.
 DATABASE_TYPE=postgres
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=etlegacy
-DB_USER=etlegacy_user
-DB_PASSWORD=your_password
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=etlegacy
+POSTGRES_USER=etlegacy_user
+POSTGRES_PASSWORD=your_password
 
 # SSH Automation
 SSH_ENABLED=true

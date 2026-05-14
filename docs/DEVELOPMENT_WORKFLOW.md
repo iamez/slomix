@@ -110,14 +110,16 @@ GitHub Actions (`.github/workflows/tests.yml`) runs on every push to `main` and 
 
 ### Dev (Local)
 
+> `bot/config.py` reads `POSTGRES_*` only — `DB_*` keys below are accepted by `scripts/apply_migrations.py` as a fallback but the bot itself will not see them. Use the `POSTGRES_*` names from `.env.example` for any new `.env`.
+
 ```bash
 # .env (local, gitignored)
 DATABASE_TYPE=postgres
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=etlegacy
-DB_USER=etlegacy_user
-DB_PASSWORD=<local_password>
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=etlegacy
+POSTGRES_USER=etlegacy_user
+POSTGRES_PASSWORD=<local_password>
 CORS_ORIGINS=http://localhost:7000,http://localhost:8000
 SSH_ENABLED=true
 # ... other dev settings
@@ -128,11 +130,11 @@ SSH_ENABLED=true
 ```bash
 # /opt/slomix/.env (on VM, never in repo)
 DATABASE_TYPE=postgres
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=etlegacy
-DB_USER=etlegacy_user
-DB_PASSWORD=<production_password>
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=etlegacy
+POSTGRES_USER=etlegacy_user
+POSTGRES_PASSWORD=<production_password>
 CORS_ORIGINS=https://www.slomix.fyi,http://localhost:7000
 DISCORD_REDIRECT_URI=https://www.slomix.fyi/auth/callback
 # ... other prod settings
