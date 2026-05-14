@@ -549,7 +549,7 @@ You'll know automation is working correctly when:
 
 ---
 
-**Last Updated:** October 11, 2025  
-**Bot Version:** Production (5000+ lines)  
-**Database Schema:** UNIFIED 53 columns, 7 tables  
-**Total Sessions Tracked:** 1,862 sessions, 25 unique players
+**Last Updated:** October 11, 2025 (footer counts below are historical)  
+**Bot Version:** Production (current: ~2,100 lines after mega-audit cog-mixin split)  
+**Database Schema:** PostgreSQL — 90 tables, 57 columns in `player_comprehensive_stats`  
+**Total Sessions Tracked:** historical snapshot — see `!season_info` or DB for current

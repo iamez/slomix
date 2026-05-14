@@ -407,7 +407,7 @@ sudo systemctl start etlegacy-bot-refactored
 Test the refactored bot:
 
 - [ ] Bot starts without errors
-- [ ] All 12 cogs load successfully
+- [ ] All 20 cogs load successfully
 - [ ] `!ping` responds
 - [ ] `!stats <player>` shows correct data
 - [ ] `!last_session` shows latest session
