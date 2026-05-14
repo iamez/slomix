@@ -139,7 +139,7 @@ python bot/ultimate_bot.py
 
 ```bash
 # Open database (PostgreSQL)
-PGPASSWORD=$DB_PASSWORD psql -h localhost -U etlegacy_user -d etlegacy
+PGPASSWORD="$POSTGRES_PASSWORD" psql -h localhost -U etlegacy_user -d etlegacy
 ```text
 
 ```sql
@@ -179,7 +179,7 @@ Get-Content bot.log -Tail 50
 
 ```bash
 # Check database (PostgreSQL)
-PGPASSWORD=$DB_PASSWORD psql -h localhost -U etlegacy_user -d etlegacy
+PGPASSWORD="$POSTGRES_PASSWORD" psql -h localhost -U etlegacy_user -d etlegacy
 ```text
 
 ```sql
@@ -287,7 +287,7 @@ python -m py_compile bot/ultimate_bot.py
 pg_dump -h localhost -U etlegacy_user -d etlegacy > etlegacy_backup.sql
 
 # Check database connectivity
-PGPASSWORD=$DB_PASSWORD psql -h localhost -U etlegacy_user -d etlegacy -c "SELECT 1;"
+PGPASSWORD="$POSTGRES_PASSWORD" psql -h localhost -U etlegacy_user -d etlegacy -c "SELECT 1;"
 ```text
 
 ### SSH Connection Issues
