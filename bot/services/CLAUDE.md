@@ -53,7 +53,7 @@ Services are stateless and receive the bot instance for database/config access.
 
 ### Webhook / Monitor / Stats-Ready Family (mixin pattern)
 
-The bot composes several behaviors via mixin classes mounted on `UltimateBot` (see `bot/ultimate_bot.py` after the mega-audit split):
+The bot composes several behaviors via mixin classes mounted on `UltimateETLegacyBot` (see `bot/ultimate_bot.py` after the mega-audit split):
 
 | Mixin | File | Purpose |
 |-------|------|---------|
@@ -68,7 +68,7 @@ The bot composes several behaviors via mixin classes mounted on `UltimateBot` (s
 
 ### Auxiliary Services
 
-Additional services not enumerated above include `webhook_event_queue.py`, `signal_connector.py`, `telegram_connector.py`, `availability_notifier_service.py`, `monitoring_service.py`, `proximity_session_score_service.py`, `endstats_aggregator.py`, `session_timing_shadow_service.py`, `timing_comparison_service.py`, `timing_debug_service.py`, `matchup_analytics_service.py`, `player_analytics_service.py`, `prediction_embed_builder.py`, etc. Run `ls bot/services/*.py` for the canonical list — this README is a guide, not an exhaustive catalogue.
+Additional services not enumerated above include `webhook_event_queue.py`, `signal_connector.py`, `telegram_connector.py`, `availability_notifier_service.py`, `monitoring_service.py`, `proximity_session_score_service.py`, `endstats_aggregator.py`, `session_timing_shadow_service.py`, `timing_comparison_service.py`, `timing_debug_service.py`, `matchup_analytics_service.py`, `player_analytics_service.py`, `prediction_embed_builder.py`, etc. Run `ls bot/services/*.py` for the canonical list — this CLAUDE.md is a guide, not an exhaustive catalogue.
 
 ## Key Patterns
 

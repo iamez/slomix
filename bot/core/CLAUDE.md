@@ -48,7 +48,7 @@ This allows tracking games that grow from 3v3 → 4v4 → 6v6.
 
 | Module | Purpose |
 |--------|---------|
-| `round_contract.py` | Canonical round shape / dataclasses passed across the pipeline |
+| `round_contract.py` | Round-contract helpers: side/winner-confidence scoring, stopwatch-contract derivation, end-reason normalization, time-string parsing |
 | `round_canonical.py` | Canonical-ID derivation (round_date + round_time + map_name + round_number) |
 | `round_linker.py` | Links Lua webhook metadata + stats files into the same canonical round |
 | `correlation_context.py` | Cross-source correlation state used by `round_correlation_service.py` |
