@@ -187,40 +187,24 @@ class _StatsHelpEmbedsMixin:
         return embed
 
     def _help_synergy(self) -> discord.Embed:
-        """Generate synergy & analytics help embed"""
+        """Generate synergy & analytics help embed.
+
+        Note: the standalone `synergy_analytics` cog was removed (see
+        CHANGELOG "Dead cog disabled: Removed synergy_analytics load
+        attempt"). The only live duo-stats command today is `!duo_perf`
+        in matchup_cog. Six commands previously advertised here
+        (`!synergy`, `!best_duos`, `!team_builder`, `!suggest_teams`,
+        `!player_impact`, `!recalculate_synergies`) no longer exist —
+        do not re-add them without restoring the cog first.
+        """
         embed = discord.Embed(
-            title="🤝 Synergy & Analytics Commands",
-            description="Player chemistry and team building tools",
+            title="🤝 Duo Stats",
+            description="Duo / pair performance — see also: `!matchup`, `!head2head`",
             color=0xBB8FCE,
         )
         embed.add_field(
-            name="`!synergy <player1> <player2>`",
-            value="Analyze duo chemistry and performance\n└ Aliases: `!chemistry`, `!duo`\n└ Example: `!synergy carniee superboyy`",
-            inline=False,
-        )
-        embed.add_field(
-            name="`!best_duos [count]`",
-            value="Show top performing player pairs\n└ Aliases: `!top_duos`, `!best_pairs`\n└ Example: `!best_duos 10`",
-            inline=False,
-        )
-        embed.add_field(
-            name="`!team_builder <players...>`",
-            value="Build optimal teams from player list\n└ Aliases: `!tb`, `!build_teams`",
-            inline=False,
-        )
-        embed.add_field(
-            name="`!suggest_teams`",
-            value="Auto-suggest balanced team compositions\n└ Aliases: `!suggest`, `!balance`, `!st`",
-            inline=False,
-        )
-        embed.add_field(
-            name="`!player_impact <player>`",
-            value="Analyze player's impact on teammates\n└ Aliases: `!teammates`, `!partners`",
-            inline=False,
-        )
-        embed.add_field(
-            name="`!recalculate_synergies`",
-            value="🔒 Admin: Recalculate synergy data",
+            name="`!duo_perf <player1> <player2>`",
+            value="Performance stats when two players are on the same team\n└ Aliases: `!duoperf`, `!pair_stats`\n└ Example: `!duo_perf puran sWat`",
             inline=False,
         )
         return embed

@@ -152,8 +152,6 @@ class MatchupCog(commands.Cog):
 
         Usage: !duo_perf <player1> <player2>
         Example: !duo_perf puran sWat
-
-        Note: For chemistry/synergy analysis, use !synergy from SynergyAnalytics.
         """
         if not player1 or not player2:
             await ctx.send("**Usage:** `!duo_perf player1 player2`\n**Example:** `!duo_perf puran sWat`")
