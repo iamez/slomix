@@ -4,7 +4,7 @@ This document lists the Discord bot commands found in the repository, their alia
 
 ---
 
-## Analytics cog (`bot/cogs/analytics_cog.py`) - NEW v1.0.6
+## Analytics cog (`bot/cogs/analytics_cog.py`)
 
 | Command | Aliases | Description |
 |---|---|---|
@@ -16,7 +16,7 @@ This document lists the Discord bot commands found in the repository, their alia
 
 ---
 
-## Matchup cog (`bot/cogs/matchup_cog.py`) - NEW v1.0.6
+## Matchup cog (`bot/cogs/matchup_cog.py`)
 
 | Command | Aliases | Description |
 |---|---|---|
@@ -65,7 +65,7 @@ cog (aliases: `!duoperf`, `!pair_stats`).
 
 ---
 
-## Availability poll cog (`bot/cogs/availability_poll_cog.py`) - NEW
+## Availability poll cog (`bot/cogs/availability_poll_cog.py`)
 
 | Command | Aliases | Description |
 |---|---|---|
