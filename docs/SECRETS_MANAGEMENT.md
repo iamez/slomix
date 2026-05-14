@@ -1,28 +1,25 @@
 # Secrets Management Guide
 
-## Superseded Notice (2026-02-12)
-This guide remains valid for workflow, but occurrence counts in this document are historical snapshots and may be outdated.
+> **Design document — tool was never built.** The `tools/secrets_manager.py` CLI referenced throughout this guide does not exist in the repo. Treat this file as the intended *design* for a future secrets manager, not as operational instructions. Do not attempt to run the `python3 tools/secrets_manager.py ...` commands — they will fail with `No such file or directory`.
 
-For current hardcoded-secret counts/status, use:
-1. `python3 tools/secrets_manager.py audit` (live count)
-2. `docs/evidence/2026-02-18_ws4_reaudit.md`
-3. `docs/evidence/2026-02-19_ws4_secret_rotation.md`
+## Superseded Notice (2026-02-12)
+This guide remains valid as a design reference for workflow, but occurrence counts in this document are historical snapshots and may be outdated. No companion audit evidence files were ever committed — the only entry under `docs/evidence/` is `2026-02-16_ws1_live_session.md`, which is unrelated to secret rotation.
 
 **Date:** 2026-02-08
-**Version:** 1.0.0
-**Status:** Ready for activation (NOT yet deployed)
+**Version:** 1.0.0 (design only)
+**Status:** Tool never built — guide describes intended design only
 
 ---
 
 ## Overview
 
-This document describes the secrets management system for the Slomix Discord Bot. The system is **ready to use** but **not yet activated** - current passwords remain unchanged until you explicitly rotate them.
+This document describes the **proposed** secrets management system for the Slomix Discord Bot. The CLI described below was never built and is not present in the repo; everything that follows is a design specification, not an operational guide. Current passwords are managed manually via direct `.env` edits + DB `ALTER USER` until/unless this tool lands.
 
-## Secrets Manager Tool
+## Secrets Manager Tool (proposed)
 
-Location: `tools/secrets_manager.py`
+Intended location: `tools/secrets_manager.py` (not present in the repo)
 
-### Features
+### Features (designed)
 
 - ✅ Generate secure passwords: `random-words-typed-together-like-this1337`
 - ✅ Rotate database passwords (with SQL command generation)
