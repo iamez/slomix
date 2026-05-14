@@ -38,15 +38,26 @@ FastAPI (main.py)
 
 ### Routers
 
-| Router | Prefix | Purpose |
-|--------|--------|---------|
-| `api.py` | `/api` | Stats/session/search endpoints |
+| Router | Prefix (as mounted in `main.py`) | Purpose |
+|--------|-----------------------------------|---------|
+| `api.py` | `/api` | Entry shim (~20 lines) — most original endpoints were extracted into the families below |
+| `players_router.py` | `/api` | Player stats / search endpoints |
+| `sessions_router.py` | `/api` | Sessions, last-session, season-info endpoints |
+| `proximity_router.py` + `proximity_*.py` | `/api` | Proximity router family (~13 files after god-file split: combat, dashboard, events, movement, objectives, positions, round, scoring, support, teamplay, trades, player, helpers) |
+| `records_router.py` + `records_*.py` | `/api` | Records router family |
+| `diagnostics_router.py` | `/api` | Linkage diagnostics + health |
+| `skill_router.py` | `/api` | ET Rating / skill leaderboard |
+| `storytelling_router.py` | `/api` | Storytelling / narrative endpoints |
+| `rivalries_router.py` | `/api` | Player rivalry analytics |
+| `replay_router.py` | `/api` | Replay endpoints |
 | `auth.py` | `/auth` | Discord OAuth |
 | `predictions.py` | `/api/predictions` | Prediction endpoints |
-| `greatshot.py` | `/api` | Greatshot import/crossref endpoints |
-| `greatshot_topshots.py` | `/api` | Greatshot topshots endpoints |
+| `greatshot.py` / `greatshot_topshots.py` | `/api` | Greatshot import / crossref / topshots |
 | `uploads.py` | `/api/uploads` | Community file upload library |
 | `availability.py` | `/api/availability` | Daily availability poll API |
+| `planning.py` | `/api/planning` | Planning + Discord thread bridge |
+
+(For the canonical loaded list, grep `include_router` in `website/backend/main.py`; for the file list, `ls website/backend/routers/`.)
 
 ### Services
 
@@ -81,11 +92,12 @@ python -c 'import secrets; print(secrets.token_urlsafe(32))'
 ### CORS Configuration
 
 ```python
-# Restricted to specific origins
-allow_origins=[
-    "http://localhost:8000",
-    "https://your-domain.com"
-]
+# Restricted to specific origins. The literal list is loaded from
+# the CORS_ORIGINS env var (default: "http://localhost:7000,http://127.0.0.1:7000"
+# — see website/backend/main.py:99). Production sets it to the full
+# scheme+host form (e.g. "https://www.slomix.fyi,https://slomix.fyi") —
+# bare hostnames or scheme-less entries will not match browser requests.
+allow_origins=CORS_ORIGINS  # populated from CORS_ORIGINS env var
 allow_headers=["Content-Type", "Authorization", "X-Requested-With"]
 ```text
 
