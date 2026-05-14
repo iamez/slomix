@@ -97,7 +97,10 @@ All in `bot/core/`: achievement_system, checks, correlation_context, database_ad
 ```bash
 pip install -r requirements.txt
 python -m bot.ultimate_bot
-# Production: screen -r slomix (bot already running in screen session)
+# Production VM: systemd-managed
+#   sudo systemctl status slomix-bot slomix-web
+#   sudo journalctl -u slomix-bot -f
+# (Some historical hosts still run the bot under `screen -r slomix`.)
 ```
 
 ### Database Operations
