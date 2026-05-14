@@ -7,7 +7,7 @@ Includes unit, security, parser, and Greatshot regression coverage.
 
 ## Directory Structure
 
-```python
+```text
 tests/
 ├── conftest.py                         # Shared pytest fixtures
 ├── security/                           # Security validation tests
@@ -26,7 +26,7 @@ tests/
 ├── test_greatshot_*.py                 # Greatshot integration / scanner / upload regression
 ├── test_alias_fallback.py, test_simple_bulk_import.py
 └── fixtures/                           # Test data and fixtures
-```text
+```
 
 ## Running Tests
 
@@ -138,21 +138,10 @@ tests/fixtures/sample_stats_files/
 
 ## CI/CD Integration
 
-Tests run via `.github/workflows/tests.yml` on push/PR. Snippet of the test job (kept here for reference; canonical config lives in the workflow file):
+Tests run via [`.github/workflows/tests.yml`](../.github/workflows/tests.yml) on every push and PR against `main` / `develop`. The workflow:
 
-```yaml
-# .github/workflows/tests.yml
-name: Tests
-on: [push, pull_request]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: pip install -r requirements.txt
-      - run: pip install pytest pytest-cov pytest-asyncio
-      - run: pytest --cov=bot --cov-report=xml
-```
+- Spins up PostgreSQL 14 + Redis 7 service containers
+- Installs `requirements.txt` (Python 3.11)
+- Runs `ruff check`, the Python test suite, JS lint, file-hygiene checks, Docker build, CodeQL, and Codacy
+
+The workflow file is the single source of truth — do not duplicate its content here, since the snippet would drift the moment CI changes. To see the current set of jobs and checks, open the file directly or check the "Actions" tab on a recent PR.
