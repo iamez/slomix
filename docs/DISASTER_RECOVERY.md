@@ -43,7 +43,7 @@ That's it. No AI needed. No token waste.
 
 ### Scenario 1: Database Deleted
 
-**Symptom:** `etlegacy_production.db` is missing  
+**Symptom:** Production PostgreSQL `etlegacy` database is missing (or the legacy dev `bot/etlegacy_production.db` SQLite file, if running on SQLite)  
 **Solution:** Rebuild from scratch (Option 3)
 
 ### Scenario 2: Corrupted Data

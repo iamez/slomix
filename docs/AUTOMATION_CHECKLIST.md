@@ -28,7 +28,7 @@ Use this checklist to track your progress integrating the automation enhancement
 ### Files & Backups
 
 - [ ] Created backup of `bot/ultimate_bot.py`
-- [ ] Verified `bot/etlegacy_production.db` exists
+- [ ] Verified database reachable (PostgreSQL `etlegacy`; legacy SQLite at `bot/etlegacy_production.db` for dev)
 - [ ] Created `bot/backups/` directory (for automatic backups)
 - [ ] Created `bot/logs/` directory (if not exists)
 

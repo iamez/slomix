@@ -346,7 +346,7 @@ Example: `fix(website): correct upload download header in uploads.py:376`
 
 - `bot/community_stats_parser.py` — Stable since Jan 2026; touching it risks breaking imports
 - `bot/core/database_adapter.py` — Known logging gaps; document before refactoring
-- `postgresql_database_manager.py` — 3,173 lines of import logic; change only with full test suite
+- `postgresql_database_manager.py` — ~3,200 lines of import logic; change only with full test suite
 - ETLegacy Lua scripts — Live on game server, not in repo; coordinate with server admin
 
 ---
