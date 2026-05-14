@@ -35,7 +35,7 @@ ET:Legacy Game Server → SSH/Local Files → Parser → PostgreSQL → Discord 
 
 ### Components
 
-1. **Stats Parser** (`community_stats_parser.py`) - Extracts 50+ fields per player
+1. **Stats Parser** (`bot/community_stats_parser.py`) - Extracts 50+ fields per player
 2. **Database** (PostgreSQL only) - 90 tables, 57 columns in player_comprehensive_stats
 3. **Bot Core** (`bot/ultimate_bot.py`) - 20 cogs, 18 core modules
 4. **SSH Monitor** - 60-second polling for new stats files
@@ -139,7 +139,7 @@ for previous_round in get_previous_rounds():
 
 **CRITICAL**: Round 2 stats files contain **CUMULATIVE** stats (R1 + R2)
 
-**Parser Logic** (`community_stats_parser.py`):
+**Parser Logic** (`bot/community_stats_parser.py`):
 
 ```python
 def parse_round_2_with_differential(round2_file):
