@@ -357,11 +357,15 @@ python bot/ultimate_bot.py
 
 ```bash
 # Discord
-DISCORD_TOKEN=your_token_here
+DISCORD_BOT_TOKEN=your_token_here
 STATS_CHANNEL_ID=your_channel_id
 
-# Database
-DB_PATH=bot/etlegacy_production.db
+# Database (PostgreSQL — SQLite is no longer supported)
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=etlegacy
+POSTGRES_USER=etlegacy_user
+POSTGRES_PASSWORD=your_secure_password_here
 
 # Automation (keep disabled for now)
 AUTOMATION_ENABLED=false
@@ -379,6 +383,8 @@ GAMING_VOICE_CHANNELS=1029097483697143938,947583652957659166
 LOCAL_STATS_DIR=local_stats
 PROCESSED_FILES_LOG=bot/processed_files.txt
 ```
+
+For the canonical list of env vars, see `.env.example` at the repo root.
 
 ---
 

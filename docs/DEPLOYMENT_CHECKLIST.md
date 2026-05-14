@@ -8,7 +8,7 @@
 - [x] `bot/community_stats_parser.py` - Stats file parser **[FIXED]**
 - [x] `bot/config.py` - Configuration loader
 - [x] `bot/logging_config.py` - Logging setup
-- [x] `bot/image_generator.py` - Graph generation
+- [x] `bot/services/session_graph_generator.py` - Graph generation (replaced legacy `bot/image_generator.py`)
 - [x] `postgresql_database_manager.py` - Database CLI tool
 - [x] `tools/stopwatch_scoring.py` - Stopwatch calculator
 - [x] `tools/postgresql_db_manager.py` - PostgreSQL utilities
@@ -17,12 +17,12 @@
 - [x] `.gitignore` - Proper exclusions **[FIXED]**
 - [x] `README.md` - Complete setup guide
 
-### All 20 Cogs Present
+### Cogs Present (20 total under `bot/cogs/`; representative)
 
 - [x] `bot/cogs/admin_cog.py`
 - [x] `bot/cogs/stats_cog.py`
 - [x] `bot/cogs/leaderboard_cog.py`
-- [x] `bot/cogs/last_session_cog.py` (111KB)
+- [x] `bot/cogs/last_session_cog.py`
 - [x] `bot/cogs/session_cog.py`
 - [x] `bot/cogs/session_management_cog.py`
 - [x] `bot/cogs/link_cog.py`
@@ -31,6 +31,8 @@
 - [x] `bot/cogs/team_management_cog.py`
 - [x] `bot/cogs/automation_commands.py`
 - [x] `bot/cogs/server_control.py`
+
+Full list: `ls bot/cogs/*.py` (or see `bot/cogs/CLAUDE.md`).
 
 ### Core Modules Present (18 total under `bot/core/`; representative)
 
@@ -94,7 +96,8 @@ not under `bot/services/automation/`.)
 ```bash
 git clone https://github.com/iamez/slomix.git
 cd slomix
-git checkout vps-network-migration
+# Default branch is `main`; the historical `vps-network-migration`
+# branch referenced in older versions of this guide no longer exists.
 ```text
 
 ### 2. Verify Files
@@ -106,7 +109,7 @@ ls bot/community_stats_parser.py
 ls postgresql_database_manager.py
 ls requirements.txt
 
-# Count files (should be 49+)
+# Sanity check tracked file count (currently ~1,100)
 git ls-files | wc -l
 ```text
 
@@ -125,8 +128,8 @@ pip install -r requirements.txt
 
 ```bash
 sudo apt install postgresql postgresql-contrib
-sudo -u postgres createdb et_stats
-sudo -u postgres createuser et_bot -P
+sudo -u postgres createdb etlegacy
+sudo -u postgres createuser etlegacy_user -P
 # Enter secure password
 ```text
 
@@ -137,15 +140,15 @@ cp .env.example .env
 nano .env
 ```text
 
-Edit .env:
+Edit .env (key names must match `.env.example`; see also `docs/CLAUDE.md`):
 
 ```env
-DISCORD_TOKEN=your_actual_token
+DISCORD_BOT_TOKEN=your_actual_token
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
-POSTGRES_DB=et_stats
-POSTGRES_USER=et_bot
-POSTGRES_PASSWORD=your_password
+POSTGRES_DATABASE=etlegacy
+POSTGRES_USER=etlegacy_user
+POSTGRES_PASSWORD=your_secure_password_here
 LOCAL_STATS_PATH=/path/to/stats/files
 AUTOMATION_ENABLED=true
 ```text
@@ -273,7 +276,7 @@ python -c "import bot.community_stats_parser"
 
 ```bash
 # Test PostgreSQL
-psql -h localhost -U et_bot -d et_stats
+psql -h localhost -U etlegacy_user -d etlegacy
 
 # Check service
 sudo systemctl status postgresql
@@ -282,10 +285,9 @@ sudo systemctl status postgresql
 ### Missing files
 
 ```bash
-# Re-clone repository
+# Re-clone repository (default branch is `main`)
 git clone https://github.com/iamez/slomix.git
 cd slomix
-git checkout vps-network-migration
 
 # Verify critical files
 ls bot/community_stats_parser.py
@@ -296,4 +298,4 @@ ls postgresql_database_manager.py
 
 **Deployment Ready:** ✅ YES (after fixes applied)
 **Last Verified:** November 6, 2025
-**Branch:** vps-network-migration
+**Branch:** main
