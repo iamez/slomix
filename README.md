@@ -159,7 +159,7 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 | **Rounds Parsed** | 2,309 |
 | **Unique Players** | 57 |
 | **Stats Per Player Per Round** | 57 fields |
-| **Discord Commands** | 112 across 20 cogs |
+| **Discord Commands** | 100+ across 20 cogs |
 | **Database Tables** | 90 (managed via committed SQL migrations) |
 | **Test Coverage** | 2,989 tests, 9/9 CI green |
 | **Data Span** | Jan 2025 — May 2026 (17 months) |
@@ -197,7 +197,7 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 | Project | Status | Description |
 |---------|--------|-------------|
-| **Discord Bot** (this repo) | ✅ Production | 112 commands, 20 cogs, full automation, AI predictions |
+| **Discord Bot** (this repo) | ✅ Production | 100+ commands, 20 cogs, full automation, AI predictions |
 | **Website** (`/website/`) | ✅ Production | FastAPI + React 19/TypeScript SPA: profiles, sessions, leaderboards, proximity, greatshot |
 | **Lua Webhook** (`vps_scripts/`) | ✅ Production | Real-time round notifications, surrender timing fix, team capture |
 | **Greatshot** (`/greatshot/`) | ✅ Production | Demo upload, highlight detection, clip extraction, render pipeline |
@@ -498,7 +498,7 @@ pip install -r requirements-dev.txt
 cp .env.example .env
 nano .env  # Set DISCORD_BOT_TOKEN, DB credentials, SSH settings
 
-# Setup database (all 37 tables)
+# Setup database (90+ tables)
 python postgresql_database_manager.py  # Option 1: Create fresh
 
 # Run
@@ -579,15 +579,15 @@ slomix/
 │   ├── ultimate_bot.py              # Entry point + SSH monitor loop
 │   ├── community_stats_parser.py    # Stats parser with R2 differential
 │   ├── endstats_parser.py           # EndStats awards parser
-│   ├── cogs/                        # 18 command modules
+│   ├── cogs/                        # 20 command modules
 │   │   ├── last_session_cog.py      # Session stats & summaries
 │   │   ├── leaderboard_cog.py       # Rankings
 │   │   ├── analytics_cog.py         # Player analytics
 │   │   ├── matchup_cog.py           # Matchup analytics
-│   │   ├── predictions_cog.py       # AI predictions (7 commands)
-│   │   ├── admin_predictions_cog.py # Prediction admin (5 commands)
+│   │   ├── predictions_cog.py       # AI predictions
+│   │   ├── admin_predictions_cog.py # Prediction admin
 │   │   ├── server_control.py        # RCON, status, map management
-│   │   └── ... (11 more cogs)
+│   │   └── ... (13 more cogs)
 │   ├── core/                        # Team detection, achievements, cache
 │   └── services/                    # Analytics, scoring, predictions, graphs
 │
@@ -698,7 +698,7 @@ server_status_history, voice_members, availability_*, uploads_*
 
 ```bash
 python postgresql_database_manager.py
-# 1 - Create fresh database (all 37 tables + indexes + seed data)
+# 1 - Create fresh database (90+ tables + indexes + seed data)
 # 2 - Import all files from local_stats/
 # 3 - Rebuild from scratch (wipes game data + re-imports)
 # 4 - Fix specific date range
