@@ -1,13 +1,9 @@
 # Secrets Management Guide
 
-> **Design document — tool was never built.** The `tools/secrets_manager.py` CLI referenced throughout this guide does not exist in the repo. Treat this file as the intended *design* for a future secrets manager, not as operational instructions. Do not attempt to run the `python3 tools/secrets_manager.py ...` commands — they will fail with `No such file or directory`. For the current secret-rotation evidence trail, see `docs/evidence/2026-02-18_ws4_reaudit.md` and `docs/evidence/2026-02-19_ws4_secret_rotation.md`.
+> **Design document — tool was never built.** The `tools/secrets_manager.py` CLI referenced throughout this guide does not exist in the repo. Treat this file as the intended *design* for a future secrets manager, not as operational instructions. Do not attempt to run the `python3 tools/secrets_manager.py ...` commands — they will fail with `No such file or directory`.
 
 ## Superseded Notice (2026-02-12)
-This guide remains valid as a design reference for workflow, but occurrence counts in this document are historical snapshots and may be outdated.
-
-For current hardcoded-secret counts/status, see:
-1. `docs/evidence/2026-02-18_ws4_reaudit.md`
-2. `docs/evidence/2026-02-19_ws4_secret_rotation.md`
+This guide remains valid as a design reference for workflow, but occurrence counts in this document are historical snapshots and may be outdated. No companion audit evidence files were ever committed — the only entry under `docs/evidence/` is `2026-02-16_ws1_live_session.md`, which is unrelated to secret rotation.
 
 **Date:** 2026-02-08
 **Version:** 1.0.0 (design only)
