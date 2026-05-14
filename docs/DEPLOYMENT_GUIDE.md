@@ -665,7 +665,7 @@ SQLEOF
 **Deployment is successful when:**
 
 - [ ] Bot starts without errors
-- [ ] All 12 cogs load successfully
+- [ ] All 20 cogs load successfully
 - [ ] `!stats` command shows accurate DPM values
 - [ ] `!last_session` shows correct round count
 - [ ] `!leaderboard` shows non-inflated stats
