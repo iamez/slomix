@@ -336,8 +336,8 @@ WHERE round_date = ? AND round_time = ? AND map_name = ? AND round_number = ?  â
 ### Core Code Files
 
 1. `bot/ultimate_bot.py` (~2,100 lines after the mega-audit cog-mixin split) - Main bot
-2. `community_stats_parser.py` (1,036 lines) - Stats parser
-3. `bot/cogs/last_session.py` - Session logic
+2. `bot/community_stats_parser.py` (~1,450 lines) - Stats parser
+3. `bot/cogs/last_session_cog.py` - Session logic
 4. `bot/core/database_adapter.py` - Database abstraction
 5. `postgresql_database_manager.py` - Database management
 
