@@ -128,9 +128,14 @@ pip install -r requirements.txt
 
 ```bash
 sudo apt install postgresql postgresql-contrib
-sudo -u postgres createdb etlegacy
-sudo -u postgres createuser etlegacy_user -P
-# Enter secure password
+
+# Create user first, then DB owned by that user, then grant privileges.
+# (Matches the bootstrap pattern in install.sh — running `createdb`
+# before `createuser` leaves the DB owned by `postgres` and the app
+# user cannot connect.)
+sudo -u postgres createuser etlegacy_user -P            # prompts for password
+sudo -u postgres createdb -O etlegacy_user etlegacy
+sudo -u postgres psql -d etlegacy -c "GRANT ALL ON SCHEMA public TO etlegacy_user;"
 ```text
 
 ### 5. Configure Environment

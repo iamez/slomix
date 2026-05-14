@@ -360,7 +360,10 @@ python bot/ultimate_bot.py
 DISCORD_BOT_TOKEN=your_token_here
 STATS_CHANNEL_ID=your_channel_id
 
-# Database (PostgreSQL — SQLite is no longer supported)
+# Database (PostgreSQL is the primary/production backend.
+# SQLite is still wired up for local dev via DATABASE_TYPE=sqlite +
+# SQLITE_DB_PATH=bot/etlegacy_production.db — see bot/config.py.)
+DATABASE_TYPE=postgresql
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_DATABASE=etlegacy
