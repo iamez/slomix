@@ -11,7 +11,7 @@
 - [x] `bot/services/session_graph_generator.py` - Graph generation (replaced legacy `bot/image_generator.py`)
 - [x] `postgresql_database_manager.py` - Database CLI tool
 - [x] `tools/stopwatch_scoring.py` - Stopwatch calculator
-- [x] `tools/postgresql_db_manager.py` - PostgreSQL utilities
+- (Note: `tools/postgresql_db_manager.py` and other one-time migration helpers are now gitignored — they live on legacy hosts but are not part of a fresh clone. Use the root-level `postgresql_database_manager.py` instead.)
 - [x] `requirements.txt` - All dependencies **[FIXED]**
 - [x] `.env.example` - Environment template
 - [x] `.gitignore` - Proper exclusions **[FIXED]**
