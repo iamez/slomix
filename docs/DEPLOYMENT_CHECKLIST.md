@@ -256,7 +256,7 @@ Before deploying, verify:
 
 **Use .env for:**
 
-- `DISCORD_TOKEN`
+- `DISCORD_BOT_TOKEN`
 - `POSTGRES_PASSWORD`
 - All sensitive credentials
 
