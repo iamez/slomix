@@ -187,7 +187,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
   - Lines 1300-1500: `endstats_monitor` - SSH file monitoring task
 - **Dependencies:** All Cogs access `self.bot` to reach database, config, cache
 
-#### `bot/config.py` (320 lines)
+#### `bot/config.py` (~680 lines)
 
 - **Purpose:** Centralized configuration object
 - **Priority:** ENV vars → `bot_config.json` → hardcoded defaults
@@ -201,7 +201,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 
 ### Layer 2: Database Access
 
-#### `bot/core/database_adapter.py` (260 lines)
+#### `bot/core/database_adapter.py` (~540 lines)
 
 - **Purpose:** Async interface for PostgreSQL
 - **Key methods:**
@@ -215,7 +215,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 
 - **Auto-translation:** `?` placeholders → `$1, $2, $3` for PostgreSQL
 
-#### `postgresql_database_manager.py` (1,573 lines)
+#### `postgresql_database_manager.py` (~3,200 lines)
 
 - **Purpose:** CLI tool for database administration
 - **Location:** Root directory (runs standalone)
@@ -225,7 +225,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 
 ### Layer 3: Data Import Pipeline
 
-#### `bot/community_stats_parser.py` (1,038 lines)
+#### `bot/community_stats_parser.py` (~1,450 lines)
 
 - **Purpose:** Parse raw stats files into Python dicts
 - **Critical detail:** Round 2 files contain CUMULATIVE stats
@@ -236,7 +236,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
   Parser calculates: 25 - 10 = 15 kills in R2 only
   ```python
 
-#### `bot/automation/file_tracker.py` (310 lines)
+#### `bot/automation/file_tracker.py` (~390 lines)
 
 - **Purpose:** Prevent duplicate imports
 - **Logic:**
@@ -254,7 +254,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 
 ### Layer 4: Services (Business Logic)
 
-#### `bot/services/voice_session_service.py` (780 lines)
+#### `bot/services/voice_session_service.py` (~1,090 lines)
 
 - **Purpose:** Detect gaming sessions via Discord voice channels
 - **Logic:**
@@ -262,12 +262,12 @@ Think of it like a **sports statistics tracking system** - but for a video game,
   - <2 players for 5 minutes → session ends
   - Triggers session summaries and predictions
 
-#### `bot/services/round_publisher_service.py` (432 lines)
+#### `bot/services/round_publisher_service.py` (~920 lines)
 
 - **Purpose:** Auto-post round stats to Discord after processing
 - **Flow:** File processed → service builds embed → posts to channel
 
-#### `bot/services/prediction_engine.py` (573 lines)
+#### `bot/services/prediction_engine.py` (~740 lines)
 
 - **Purpose:** Predict match outcomes using historical data
 - **Output:** "Based on history, Team A has 62% win chance"

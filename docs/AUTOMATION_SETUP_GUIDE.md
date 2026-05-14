@@ -46,7 +46,7 @@ Before enabling automation, ensure you have:
 - ✅ SSH access to your ET:Legacy server
 - ✅ SSH private key configured (see `.env.template`)
 - ✅ Voice channel IDs from your Discord server
-- ✅ Database initialized (`bot/etlegacy_production.db`)
+- ✅ Database initialized (PostgreSQL `etlegacy` for production; legacy dev fallback is `bot/etlegacy_production.db` SQLite)
 
 ### Step 2: Get Voice Channel IDs
 
@@ -528,7 +528,7 @@ Before reporting issues, verify:
 - [ ] `GAMING_VOICE_CHANNELS` has valid channel IDs
 - [ ] SSH connection works manually
 - [ ] Bot has correct Discord permissions
-- [ ] Database exists at `bot/etlegacy_production.db`
+- [ ] Database reachable (PostgreSQL `etlegacy` for production; legacy SQLite at `bot/etlegacy_production.db` for dev)
 - [ ] Stats directory path is correct in .env
 - [ ] Bot logs show "Automation system ENABLED" on startup
 
