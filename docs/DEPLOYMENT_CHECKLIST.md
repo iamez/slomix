@@ -227,14 +227,13 @@ Before deploying, verify:
 
 ## 📊 Repository Stats
 
-- **Total Files:** 49
-- **Main Bot:** 4,452 lines
-- **Parser:** 875 lines
-- **Cogs:** 14 modules
-- **Core Systems:** 9 modules
-- **Automation:** 4 services
-- **Documentation:** 4 comprehensive guides
-- **Dependencies:** 11 Python packages
+- **Main Bot:** ~2,100 lines (after cog-mixin split)
+- **Parser:** ~1,450 lines
+- **Cogs:** 20 modules
+- **Core Systems:** 18 modules
+- **Automation:** 4+ services
+- **Documentation:** multiple guides under `docs/`
+- **Dependencies:** see `requirements.txt`
 
 ---
 

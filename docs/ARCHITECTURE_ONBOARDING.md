@@ -100,7 +100,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 │           │                                                     │
 │           ▼                                                     │
 │  ┌─────────────────┐                                            │
-│  │  Discord Bot    │ 20 Cogs, 60+ commands                      │
+│  │  Discord Bot    │ 20 Cogs, 80+ commands                      │
 │  │  ultimate_bot.py│ Real-time analytics                        │
 │  └────────┬────────┘                                            │
 └───────────┼─────────────────────────────────────────────────────┘
