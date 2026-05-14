@@ -110,11 +110,11 @@ GitHub Actions (`.github/workflows/tests.yml`) runs on every push to `main` and 
 
 ### Dev (Local)
 
-> `bot/config.py` reads `POSTGRES_*` only — `DB_*` keys below are accepted by `scripts/apply_migrations.py` as a fallback but the bot itself will not see them. Use the `POSTGRES_*` names from `.env.example` for any new `.env`.
+> `bot/config.py` reads `POSTGRES_*` only. The legacy `DB_HOST / DB_NAME / DB_USER / DB_PASSWORD` names (still accepted by `scripts/apply_migrations.py` as a fallback) will not reach the bot — always use the `POSTGRES_*` names from `.env.example`.
 
 ```bash
 # .env (local, gitignored)
-DATABASE_TYPE=postgres
+DATABASE_TYPE=postgresql
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_DATABASE=etlegacy
@@ -129,7 +129,7 @@ SSH_ENABLED=true
 
 ```bash
 # /opt/slomix/.env (on VM, never in repo)
-DATABASE_TYPE=postgres
+DATABASE_TYPE=postgresql
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_DATABASE=etlegacy

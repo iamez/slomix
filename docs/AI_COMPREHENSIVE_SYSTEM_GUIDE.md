@@ -392,7 +392,7 @@ STATS_CHANNEL_ID=your_channel_id
 # Database (PostgreSQL) — bot/config.py reads POSTGRES_* only.
 # DB_* fallback names are accepted by scripts/apply_migrations.py but
 # NOT by the bot. Use the POSTGRES_* names shown here + in .env.example.
-DATABASE_TYPE=postgres
+DATABASE_TYPE=postgresql
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_DATABASE=etlegacy
