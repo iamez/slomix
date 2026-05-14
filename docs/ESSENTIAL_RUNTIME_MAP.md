@@ -138,7 +138,6 @@ bot/cogs/automation_commands.py
 bot/cogs/predictions_cog.py
 bot/cogs/admin_predictions_cog.py
 bot/cogs/server_control.py
-bot/cogs/synergy_analytics.py
 bot/cogs/proximity_cog.py
 ```
 
@@ -225,7 +224,6 @@ bin/UDT_* if tracing external Greatshot dependencies
 scripts/check_ws*.sh if tracing runtime validation gates
 website/backend/local_database_adapter.py for local sqlite/dev mode only
 docs/ only when explaining live runtime/deploy/data-flow behavior
-analytics/ when tracing `bot/cogs/synergy_analytics.py`
 ```
 
 ## optional_subsystems
