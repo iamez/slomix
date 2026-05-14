@@ -110,7 +110,7 @@ code .env.example
 DISCORD_BOT_TOKEN=your_bot_token_here
 
 # Your Discord Server ID
-GUILD_ID=your_server_id_here
+DISCORD_GUILD_ID=your_server_id_here
 
 # Channel where stats will be posted
 STATS_CHANNEL_ID=your_channel_id_here
