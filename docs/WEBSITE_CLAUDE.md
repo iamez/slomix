@@ -64,7 +64,7 @@ Gating:
 
 ```
 website/
-├── index.html                    # SPA entry point (749 lines)
+├── index.html                    # SPA entry point (~4,600 lines)
 ├── js/
 │   ├── app.js                    # Navigation, view management
 │   ├── utils.js                  # XSS prevention, fetch helpers
@@ -80,9 +80,14 @@ website/
 │   ├── main.py                   # FastAPI app entry
 │   ├── dependencies.py           # DB pool injection
 │   ├── routers/
-│   │   ├── api.py                # Stats API (19 endpoints, 2,444 lines)
+│   │   ├── api.py                # Stats API entry (now ~20 lines — most endpoints split into sub-routers below)
 │   │   ├── auth.py               # Discord OAuth
-│   │   └── predictions.py        # Match predictions
+│   │   ├── predictions.py        # Match predictions
+│   │   ├── proximity_*.py        # Proximity router family (13+ files after god-file split)
+│   │   ├── records_*.py          # Records router family
+│   │   ├── greatshot*.py         # Demo upload + topshots
+│   │   ├── planning.py, availability.py, players_router.py, ...
+│   │   └── (run `ls website/backend/routers/` for the full set)
 │   └── services/
 │       ├── game_server_query.py  # UDP Quake3 server query
 │       └── ...

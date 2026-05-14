@@ -617,7 +617,7 @@ slomix/
 │
 ├── 🔧 bin/                          # Compiled binaries (UDT_json, UDT_cutter)
 ├── 📜 vps_scripts/                  # Game server Lua scripts
-├── 📚 docs/                         # Documentation (30+ files)
+├── 📚 docs/                         # Documentation (150+ files)
 ├── 🧪 tests/                        # Test suite
 ├── postgresql_database_manager.py   # ALL database operations (one tool to rule them all)
 └── install.sh                       # Automated VPS installer
