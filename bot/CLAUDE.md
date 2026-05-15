@@ -25,7 +25,7 @@ bot/
 ├── local_stats/             # Downloaded stats files
 ├── logs/                    # Bot logs
 └── tools/                   # Utility scripts
-```python
+```
 
 ## Critical Files
 
@@ -63,7 +63,7 @@ results = await self.bot.db_adapter.fetch_all(query, params)
 # Use parameterized queries with ?
 query = "SELECT * FROM players WHERE guid = ?"
 params = (player_guid,)
-```text
+```
 
 ### Player Aggregation
 
@@ -72,7 +72,7 @@ params = (player_guid,)
 GROUP BY player_guid
 # Use MAX(player_name) to get a display name
 SELECT player_guid, MAX(player_name) as name, SUM(kills) as total_kills
-```text
+```
 
 ### Session Queries
 
@@ -80,7 +80,7 @@ SELECT player_guid, MAX(player_name) as name, SUM(kills) as total_kills
 # Use gaming_session_id, not date ranges
 WHERE gaming_session_id = ?
 # 60-minute gaps define session boundaries
-```sql
+```
 
 ## Common Pitfalls
 
@@ -103,8 +103,8 @@ WHERE gaming_session_id = ?
 python -m bot.ultimate_bot
 
 # Production (systemd)
-sudo systemctl start etlegacy-bot
-sudo systemctl status etlegacy-bot
+sudo systemctl start slomix-bot
+sudo systemctl status slomix-bot
 ```
 
 ## Adding New Commands
