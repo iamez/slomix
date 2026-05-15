@@ -34,7 +34,7 @@ BG_DARK = '#2C2F33'
 BG_LIGHT = '#36393F'
 GRID_COLOR = '#40444B'
 TEXT_COLOR = '#DCDDDE'
-```yaml
+```
 
 ---
 
@@ -79,7 +79,7 @@ def create_dpm_line_graph(session_data):
         spine.set_color(GRID_COLOR)
     
     return save_graph_to_discord_file(fig, 'dpm_trends.png')
-```yaml
+```
 
 ---
 
@@ -129,7 +129,7 @@ def create_player_radar_chart(player_data):
                  color=TEXT_COLOR, size=14, pad=20)
     
     return save_graph_to_discord_file(fig, 'player_radar.png')
-```yaml
+```
 
 ---
 
@@ -197,7 +197,7 @@ def create_map_comparison_bars(session_data):
     
     plt.tight_layout()
     return save_graph_to_discord_file(fig, 'map_comparison.png')
-```yaml
+```
 
 ---
 
@@ -237,7 +237,7 @@ def create_team_performance_timeline(session_data):
         spine.set_color(GRID_COLOR)
     
     return save_graph_to_discord_file(fig, 'team_timeline.png')
-```yaml
+```
 
 ---
 
@@ -290,7 +290,7 @@ def create_player_map_heatmap(session_data):
     
     plt.tight_layout()
     return save_graph_to_discord_file(fig, 'player_map_heatmap.png')
-```yaml
+```
 
 ---
 
@@ -347,7 +347,7 @@ def create_target_accuracy_chart(player_data):
               facecolor=BG_LIGHT, edgecolor=GRID_COLOR, labelcolor=TEXT_COLOR)
     
     return save_graph_to_discord_file(fig, 'accuracy_target.png')
-```yaml
+```
 
 ---
 
@@ -408,7 +408,7 @@ def get_performance_color(kd_ratio):
         return AVERAGE
     else:
         return POOR
-```yaml
+```
 
 ---
 
@@ -421,7 +421,7 @@ matplotlib>=3.7.0
 numpy>=1.24.0
 seaborn>=0.12.0  # For heatmaps
 scipy>=1.10.0    # For advanced statistics
-```yaml
+```
 
 ---
 

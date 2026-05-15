@@ -30,7 +30,7 @@ GAMING_VOICE_CHANNELS=1234567890,9876543210  # Your voice channel IDs
 
 # 2. Restart the bot
 python bot/ultimate_bot.py
-```sql
+```
 
 That's it! Bot will now automatically monitor voice channels and post stats.
 
@@ -44,7 +44,7 @@ Before enabling automation, ensure you have:
 
 - ✅ Discord bot configured and running
 - ✅ SSH access to your ET:Legacy server
-- ✅ SSH private key configured (see `.env.template`)
+- ✅ SSH private key configured (see `.env.example`)
 - ✅ Voice channel IDs from your Discord server
 - ✅ Database initialized (PostgreSQL `etlegacy` for production; legacy dev fallback is `bot/etlegacy_production.db` SQLite)
 
@@ -64,7 +64,7 @@ You need the Discord channel IDs for voice channels you want to monitor:
 
 !channel_info
 
-```sql
+```
 
 The bot will list all voice channels with their IDs.
 
@@ -96,7 +96,7 @@ SSH_KEY_PATH=~/.ssh/etlegacy_bot
 
 # ========== SERVER PATHS ==========
 ETLEGACY_STATS_DIR=/home/et/etlegacy-v2.83.1-x86_64/legacy/gamestats
-```text
+```
 
 **Important Notes:**
 
@@ -114,7 +114,7 @@ ssh -i ~/.ssh/etlegacy_bot et@puran.hehe.si -p 48101
 
 # Once connected, verify stats directory exists
 ls /home/et/etlegacy-v2.83.1-x86_64/legacy/gamestats
-```text
+```
 
 You should see `.stats` files in the directory.
 
@@ -123,7 +123,7 @@ You should see `.stats` files in the directory.
 ```bash
 # Start with logging to see automation messages
 python bot/ultimate_bot.py
-```text
+```
 
 **Expected Startup Messages:**
 
@@ -133,7 +133,7 @@ python bot/ultimate_bot.py
 🎙️ Voice monitoring enabled for channels: [1420158097741058130, 1420158097741058131]
 🔄 Background task: endstats_monitor started
 
-```sql
+```
 
 If you see `⚠️ Automation system DISABLED`, check your `.env` file settings.
 
@@ -171,7 +171,7 @@ If you see `⚠️ Automation system DISABLED`, check your `.env` file settings.
    → Posts comprehensive session summary
    → Sets session_active = False
 
-```text
+```
 
 ### SSH File Monitoring
 
@@ -184,7 +184,7 @@ If you see `⚠️ Automation system DISABLED`, check your `.env` file settings.
 5. Posts round summaries and session updates
 6. Marks files as processed to avoid duplicates
 
-```yaml
+```
 
 ### Auto-Posting Behavior
 
@@ -220,7 +220,7 @@ AUTOMATION_ENABLED="true"  # ❌ Wrong (remove quotes)
 # 2. Restart the bot after editing .env
 pkill -f ultimate_bot.py
 python bot/ultimate_bot.py
-```sql
+```
 
 ### Voice Detection Not Working
 
@@ -331,7 +331,7 @@ async def check_voice_channels(self):
 # Line ~5483: SSH monitoring interval  
 @tasks.loop(seconds=60)  # Check server every 60 seconds
 async def endstats_monitor(self):
-```text
+```
 
 ### Custom Voice Thresholds
 
@@ -340,7 +340,7 @@ Change minimum players required for auto-start:
 ```python
 # Line ~4644: Minimum players for session start
 if len(members) >= 6:  # Change '6' to your preferred threshold
-```text
+```
 
 ### Disable Specific Auto-Posts
 
@@ -350,14 +350,14 @@ if len(members) >= 6:  # Change '6' to your preferred threshold
 # Comment out post_round_summary() call in endstats_monitor()
 # Line ~5567
 # await self.post_round_summary(data)  # Disabled
-```text
+```
 
 **Disable Session Summaries:**
 
 ```python
 # Comment out post_map_summary() call
 # await self.post_map_summary(round_id)  # Disabled
-```yaml
+```
 
 ---
 
@@ -373,7 +373,7 @@ if len(members) >= 6:  # Change '6' to your preferred threshold
 !status        # Shows current session state
 !last_round  # Verify latest session was auto-imported
 
-```text
+```
 
 **Check Logs:**
 
@@ -385,7 +385,7 @@ tail -f logs/bot.log
 grep "Automation" logs/bot.log
 grep "Gaming session detected" logs/bot.log
 grep "SSH" logs/bot.log
-```text
+```
 
 ### Database Queries
 
@@ -400,7 +400,7 @@ FROM rounds
 WHERE round_date >= date('now', '-1 day')
 GROUP BY round_date, map_name
 ORDER BY round_date DESC;
-```text
+```
 
 **Check Processed Files:**
 
@@ -412,7 +412,7 @@ SELECT
 FROM processed_files 
 ORDER BY processed_at DESC 
 LIMIT 10;
-```yaml
+```
 
 ---
 
@@ -434,7 +434,7 @@ LIMIT 10;
 10:00 PM - Everyone leaves voice
 10:00 PM - 🏁 Bot posts comprehensive session summary
 
-```text
+```
 
 **Result:** Zero manual commands needed, complete stats coverage!
 
@@ -448,7 +448,7 @@ LIMIT 10;
 !sync_stats     # Manually sync stats files after each map
 !session_end    # Post final summary when done
 
-```text
+```
 
 ### Example 3: Testing Automation
 
@@ -491,7 +491,7 @@ tail -f logs/bot.log | grep "session\|SSH\|voice"
 
 - Keep `.env` file out of version control (add to `.gitignore`)
 - Never share `.env` file with Discord tokens or SSH credentials
-- Use `.env.example` or `.env.template` for documentation
+- Use `.env.example` for documentation (canonical template name in this repo)
 
 ### Bot Permissions
 

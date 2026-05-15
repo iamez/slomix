@@ -23,7 +23,7 @@ SSH to your Vektor server and edit your config:
 ssh et@puran.hehe.si -p 48101
 cd ~/etlegacy-v2.83.1-x86_64
 nano vektor.cfg
-```sql
+```
 
 Add or update these lines in `vektor.cfg`:
 
@@ -33,13 +33,13 @@ set rconPassword "YOUR_SECURE_PASSWORD_HERE"
 set net_port "27960"
 set g_log "etserver.log"
 set g_logsync "1"
-```text
+```
 
 **IMPORTANT:** Use a strong RCON password! Generate one with:
 
 ```bash
 openssl rand -base64 32
-```text
+```
 
 Save and restart your server:
 
@@ -48,7 +48,7 @@ screen -r vektor
 # Press Ctrl+C to stop
 # Wait for clean shutdown
 # It will auto-restart via your watchdog daemon
-```sql
+```
 
 ### Step 2: Update Your .env File
 
@@ -74,7 +74,7 @@ ADMIN_CHANNEL_ID=your_admin_channel_id_here
 # SSH_PORT=48101
 # SSH_USER=et
 # SSH_KEY_PATH=~/.ssh/etlegacy_bot
-```text
+```
 
 ### Step 3: Get Your Admin Channel ID
 
@@ -91,7 +91,7 @@ Stop-Process -Name python -Force
 
 # Start it again
 python bot/ultimate_bot.py
-```text
+```
 
 You should see in the logs:
 
@@ -104,7 +104,7 @@ You should see in the logs:
    RCON: Enabled
    Admin Channel: 123456789
 
-```sql
+```
 
 ---
 
@@ -154,7 +154,7 @@ Bot: ✅ Server Online
      Memory: 3.2%
      Players: 8 online
 
-```text
+```
 
 ### Upload a New Map
 
@@ -169,7 +169,7 @@ Bot: ✅ Map Uploaded
      Size: 15.2 MB
      Use !map_change goldrush_final to load it
 
-```text
+```
 
 ### Change the Map
 
@@ -181,7 +181,7 @@ Bot: 🗺️ Changing map to `supply`...
 Bot: ✅ Map Changed
      Server is now loading supply
 
-```text
+```
 
 ### Send Server Message
 
@@ -191,7 +191,7 @@ You: !say Match will start in 5 minutes, everyone ready up!
 
 Bot: ✅ Message sent to server
 
-```text
+```
 
 ### Check Players
 
@@ -209,7 +209,7 @@ Bot: 🎮 RCON Response
        2    22   50 ^3Player3           0 9.8.7.6:27960
      ```text
 
-```text
+```
 
 ### Restart Server
 
@@ -229,7 +229,7 @@ Bot: ✅ Server Stopped
 Bot: 🚀 Starting ET:Legacy server...
 Bot: ✅ Server Started
 
-```sql
+```
 
 ---
 
@@ -251,7 +251,7 @@ All admin actions are logged to `logs/server_control_access.log`:
 [2025-10-07 14:25:42] Map Upload Success by YourName (123456789) - goldrush.pk3 - MD5: a1b2c3d4
 [2025-10-07 14:30:11] RCON Command by YourName (123456789) - Command: say Hello players!
 
-```yaml
+```
 
 ### 3. SSH Key Authentication
 
@@ -283,7 +283,7 @@ Your server setup (already configured in the cog):
 
 /home/et/.etlegacy/legacy/gamestats/        # Stats files (c0rnp0rn3.lua)
 
-```yaml
+```
 
 Screen session: `vektor`
 
@@ -448,7 +448,7 @@ In your admin channel:
 !list_maps
 !rcon status
 
-```yaml
+```
 
 ### 2. Test Map Upload
 

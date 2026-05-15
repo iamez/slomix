@@ -74,7 +74,7 @@ Multiple possible causes:
 ```python
 logger.warning(f"⚠️  No Round 1 file found for {file_path.name}")
 match_id = f"{file_date}_{round_time}_{map_name}_orphan"
-```sql
+```
 
 System creates an "orphan" match_id and imports R2 as standalone session.
 
@@ -132,7 +132,7 @@ Field [3]: Round = 2 (incorrect - should be standalone)
 Field [6]: timelimit = 12:00 (correct)
 Field [7]: nextTimeLimit = 71:05 (server uptime, not round time!)
 
-```python
+```
 
 ### Why It's Rare
 
@@ -161,7 +161,7 @@ Currently: Imported as **orphan** R2 session (match_id includes "_orphan" suffix
 if round_num == 2 and nextTimeLimit > (timelimit * 5):
     logger.warning("Suspected server uptime bug - nextTimeLimit too high")
     # Skip or treat as R1
-```python
+```
 
 ### Status
 

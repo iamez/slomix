@@ -62,7 +62,7 @@ Shows current season information including:
 ```text
 !season_info
 !season
-```text
+```
 
 **Example Output:**
 
@@ -84,7 +84,7 @@ Games: 45
 SuperBoyy
 Kills: 27,194 | K/D: 1.19
 Games: 2,731
-```text
+```
 
 ### !leaderboard (Current Implementation)
 
@@ -95,7 +95,7 @@ Currently shows **all-time** statistics. In a future update, this will default t
 ```text
 !leaderboard kills      → Current season (Q4)
 !leaderboard kills all  → All-time stats
-```python
+```
 
 ---
 
@@ -131,7 +131,7 @@ is_new = season_manager.is_new_season("2025-Q3")
 # Get days until season ends
 days = season_manager.get_days_until_season_end()  
 # Returns: 80
-```text
+```
 
 ### Database Integration
 
@@ -154,7 +154,7 @@ query = f'''
     ORDER BY total_kills DESC
     LIMIT 10
 '''
-```text
+```
 
 **All-Time Query Example:**
 
@@ -171,7 +171,7 @@ query = f'''
     GROUP BY player_guid
     ORDER BY total_kills DESC
 '''
-```sql
+```
 
 ---
 
@@ -277,7 +277,7 @@ Run the test suite:
 
 ```bash
 python test_season_system.py
-```python
+```
 
 Expected output: All 6 tests pass ✅
 
@@ -309,7 +309,7 @@ Player: !leaderboard
 Bot: 🏆 Shows all-time kills leaderboard
      (Future: Will show current season by default)
 
-```text
+```
 
 ### For Admins
 
