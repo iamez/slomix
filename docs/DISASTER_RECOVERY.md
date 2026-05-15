@@ -78,7 +78,7 @@ That's it. No AI needed. No token waste.
 python postgresql_database_manager.py
 # Choose: 1
 # Result: New empty database with correct schema
-```python
+```
 
 **What it does:**
 
@@ -100,7 +100,7 @@ python postgresql_database_manager.py
 # Choose: 2
 # Enter year: 2025 (or leave blank for 2025)
 # Result: Only NEW files imported
-```sql
+```
 
 **What it does:**
 
@@ -124,7 +124,7 @@ python postgresql_database_manager.py
 # Confirm: YES DELETE EVERYTHING
 # Enter year: 2025
 # Result: Fresh database with all data re-imported
-```sql
+```
 
 **What it does:**
 
@@ -148,7 +148,7 @@ python postgresql_database_manager.py
 # Start date: 2025-10-28
 # End date: 2025-10-30
 # Result: Only that date range is deleted and re-imported
-```yaml
+```
 
 **What it does:**
 
@@ -169,7 +169,7 @@ python postgresql_database_manager.py
 python postgresql_database_manager.py
 # Choose: 5
 # Result: Statistics and integrity report
-```yaml
+```
 
 **What it shows:**
 
@@ -188,7 +188,7 @@ python postgresql_database_manager.py
 python postgresql_database_manager.py
 # Choose: 6
 # Result: Import 10 files to verify functionality
-```yaml
+```
 
 **Use case:** After code changes, verify imports still work.
 
@@ -201,7 +201,7 @@ After any recovery operation, validate the database:
 ```powershell
 python postgresql_database_manager.py
 # Choose: 5 (Validate)
-```text
+```
 
 **Good output looks like:**
 
@@ -213,7 +213,7 @@ python postgresql_database_manager.py
    Weapon stats:      234,567
    Orphan sessions:   0  ← Should be 0!
 
-```text
+```
 
 **Bad output:**
 
@@ -222,7 +222,7 @@ python postgresql_database_manager.py
 ⚠️  Database has integrity issues!
    Orphan sessions:   15  ← This means data corruption
 
-```sql
+```
 
 If you see orphan sessions, run **Option 3 (Rebuild from scratch)**.
 
@@ -262,7 +262,7 @@ Get-Process python | Stop-Process -Force
 
 # Then retry
 python postgresql_database_manager.py
-```python
+```
 
 ---
 

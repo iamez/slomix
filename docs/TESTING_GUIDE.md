@@ -12,7 +12,7 @@ We were doing too much push → test → fix → push cycle. Here's how to avoid
 
 ```bash
 ./check_before_commit.sh
-```sql
+```
 
 This checks:
 
@@ -50,7 +50,7 @@ SSH_HOST=test.example.com
 SSH_USER=testuser
 SSH_KEY_PATH=/tmp/test_key
 DISCORD_BOT_TOKEN=fake_token_for_testing
-```text
+```
 
 This lets Claude test:
 
@@ -67,7 +67,7 @@ Upload 2-3 example `.txt` files from:
 processed_stats/2025-11-14-213000-adlernest-round-1.txt
 processed_stats/2025-11-14-213000-adlernest-round-2.txt
 
-```bash
+```
 
 This lets Claude test:
 
@@ -130,7 +130,7 @@ This lets Claude test:
 
 ```bash
 pg_dump -h localhost -U etlegacy -d etlegacy_stats --schema-only > schema.sql
-```text
+```
 
 ### Sample Data (2 sessions)
 
@@ -142,7 +142,7 @@ pg_dump -h localhost -U etlegacy -d etlegacy_stats \
   --table=weapon_comprehensive_stats \
   --table=session_teams \
   > sample_data.sql
-```text
+```
 
 ### Stats Files
 

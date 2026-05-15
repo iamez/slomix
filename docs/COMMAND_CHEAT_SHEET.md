@@ -16,7 +16,7 @@ cat .env | Select-String "AUTOMATION|SSH|GAMING"
 # Start bot
 cd g:\VisualStudio\Python\stats
 python bot/ultimate_bot.py
-```text
+```
 
 **Discord commands to test:**
 
@@ -26,7 +26,7 @@ python bot/ultimate_bot.py
 !help
 !stats vid
 
-```yaml
+```
 
 ---
 
@@ -43,7 +43,7 @@ Copy-Item .env .env.backup
 
 # Restart bot
 python bot/ultimate_bot.py
-```text
+```
 
 **Expected log:**
 
@@ -51,7 +51,7 @@ python bot/ultimate_bot.py
 
 ✅ Automation system ENABLED
 
-```yaml
+```
 
 ---
 
@@ -65,12 +65,12 @@ python bot/ultimate_bot.py
 ```bash
 # Add to .env:
 GAMING_VOICE_CHANNELS=1029097483697143938,947583652957659166
-```text
+```
 
 ```powershell
 # Restart bot
 python bot/ultimate_bot.py
-```text
+```
 
 **Expected log:**
 
@@ -78,7 +78,7 @@ python bot/ultimate_bot.py
 
 🎙️ Voice monitoring enabled for channels: [1029097483697143938, 947583652957659166]
 
-```yaml
+```
 
 ---
 
@@ -87,7 +87,7 @@ python bot/ultimate_bot.py
 ```powershell
 # Test SSH manually first
 ssh -i ~/.ssh/etlegacy_bot et@puran.hehe.si -p 48101
-```text
+```
 
 ```bash
 # Add to .env:
@@ -97,12 +97,12 @@ SSH_PORT=48101
 SSH_USER=et
 SSH_KEY_PATH=~/.ssh/etlegacy_bot
 ETLEGACY_STATS_DIR=/home/et/etlegacy-v2.83.1-x86_64/legacy/gamestats
-```text
+```
 
 ```powershell
 # Restart bot
 python bot/ultimate_bot.py
-```text
+```
 
 **Discord command to test:**
 
@@ -110,7 +110,7 @@ python bot/ultimate_bot.py
 
 !sync_stats
 
-```yaml
+```
 
 ---
 
@@ -129,7 +129,7 @@ python bot/ultimate_bot.py
 !last_round
 !stats <playername>
 
-```yaml
+```
 
 ---
 
@@ -140,7 +140,7 @@ python bot/ultimate_bot.py
 ```bash
 # Open database (PostgreSQL)
 PGPASSWORD="$POSTGRES_PASSWORD" psql -h localhost -U etlegacy_user -d etlegacy
-```text
+```
 
 ```sql
 -- Copy-paste all 9 indexes:
@@ -159,7 +159,7 @@ CREATE INDEX IF NOT EXISTS idx_weapons_player ON weapon_comprehensive_stats(play
 
 -- Exit
 .quit
-```yaml
+```
 
 ---
 
@@ -173,14 +173,14 @@ Get-Process python
 
 # View recent logs (if logging to file)
 Get-Content bot.log -Tail 50
-```text
+```
 
 ### Check Database
 
 ```bash
 # Check database (PostgreSQL)
 PGPASSWORD="$POSTGRES_PASSWORD" psql -h localhost -U etlegacy_user -d etlegacy
-```text
+```
 
 ```sql
 -- Check session count
@@ -197,7 +197,7 @@ LIMIT 5;
 
 -- Exit
 .quit
-```text
+```
 
 ### Check .env Configuration
 
@@ -209,7 +209,7 @@ cat .env
 cat .env | Select-String "AUTOMATION"
 cat .env | Select-String "SSH"
 cat .env | Select-String "CHANNEL"
-```yaml
+```
 
 ---
 
@@ -225,7 +225,7 @@ cat .env | Select-String "CHANNEL"
 !import_legacy <path>    # Import old stats files
 !rebuild_aliases         # Rebuild player alias database
 
-```text
+```
 
 ### Player Commands
 
@@ -238,7 +238,7 @@ cat .env | Select-String "CHANNEL"
 !last_round            # Show most recent session details
 !player_sessions <p>     # Show player's recent sessions
 
-```text
+```
 
 ### Info Commands
 
@@ -250,7 +250,7 @@ cat .env | Select-String "CHANNEL"
 !list_maps               # List available server maps
 !weapons                 # Show weapon statistics
 
-```text
+```
 
 ### Future Commands (Not Yet Implemented)
 
@@ -261,7 +261,7 @@ cat .env | Select-String "CHANNEL"
 !activity heatmap        # Show activity patterns
 !achievements            # View your achievements
 
-```yaml
+```
 
 ---
 
@@ -278,7 +278,7 @@ pip install -r requirements.txt
 
 # Check for syntax errors
 python -m py_compile bot/ultimate_bot.py
-```text
+```
 
 ### Database Issues
 
@@ -288,7 +288,7 @@ pg_dump -h localhost -U etlegacy_user -d etlegacy > etlegacy_backup.sql
 
 # Check database connectivity
 PGPASSWORD="$POSTGRES_PASSWORD" psql -h localhost -U etlegacy_user -d etlegacy -c "SELECT 1;"
-```text
+```
 
 ### SSH Connection Issues
 
@@ -301,7 +301,7 @@ chmod 600 ~/.ssh/etlegacy_bot
 
 # Test with verbose output
 ssh -vvv -i ~/.ssh/etlegacy_bot et@puran.hehe.si -p 48101
-```text
+```
 
 ### Voice Detection Not Working
 
@@ -314,7 +314,7 @@ ssh -vvv -i ~/.ssh/etlegacy_bot et@puran.hehe.si -p 48101
 3. AUTOMATION_ENABLED=true in .env
 4. Bot logs show voice monitoring enabled
 
-```yaml
+```
 
 ---
 
@@ -326,7 +326,7 @@ ssh -vvv -i ~/.ssh/etlegacy_bot et@puran.hehe.si -p 48101
 -- Time a query (note the time)
 .timer on
 SELECT * FROM player_comprehensive_stats WHERE guid = 'someGUID';
-```text
+```
 
 ### After Adding Indexes
 
@@ -334,7 +334,7 @@ SELECT * FROM player_comprehensive_stats WHERE guid = 'someGUID';
 -- Same query should be 10x faster
 .timer on
 SELECT * FROM player_comprehensive_stats WHERE guid = 'someGUID';
-```yaml
+```
 
 ---
 
@@ -349,7 +349,7 @@ notepad .env
 # Restart bot
 cd g:\VisualStudio\Python\stats
 python bot/ultimate_bot.py
-```yaml
+```
 
 ---
 

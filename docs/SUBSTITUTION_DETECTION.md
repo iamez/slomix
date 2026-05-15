@@ -43,7 +43,7 @@ You asked: **"Can we check round by round if there were any subs or additions to
    ├─ Mark full-session players
    ├─ Mark late joiners with round number
    └─ Identify uncertain assignments
-```text
+```
 
 ### Example Output
 
@@ -57,7 +57,7 @@ You asked: **"Can we check round by round if there were any subs or additions to
 🔵 Team B (6 players):
    - ripazha dAFF [full session]
    - PlayerZ [joined R3] ← Replaced another player
-```python
+```
 
 ## Files Added
 
@@ -91,7 +91,7 @@ Shows:
 ```bash
 # Analyze roster changes for any session
 python bot/core/substitution_detector.py 2025-11-01
-```text
+```
 
 Output:
 
@@ -109,14 +109,14 @@ Round 1: Team 1 (13), Team 2 (14)
 Round 2: Team 1 (13), Team 2 (13)
 ...
 
-```text
+```
 
 ### Full Demo - See Detection with Context
 
 ```bash
 # Show team detection WITH substitution awareness
 python demo_substitution_aware_detection.py 2025-11-01
-```text
+```
 
 Output:
 
@@ -134,7 +134,7 @@ All players marked as [full session]
 💡 Step 4: Substitution-Based Improvements...
 ✅ Stable roster - standard detection works perfectly
 
-```text
+```
 
 ### Integration in Code
 
@@ -158,7 +158,7 @@ teams = await manager.detect_session_teams("2025-11-01")
 if sub_analysis['substitutions']:
     # Future: adjust team assignments based on substitutions
     pass
-```text
+```
 
 ## What Problems This Solves
 

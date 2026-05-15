@@ -19,7 +19,7 @@ Open a terminal on your laptop and run:
 ```powershell
 ipconfig
 # Verify you are in the 192.168.64.x range
-```text
+```
 
 ### 2. Server Configuration (ALREADY DONE ✅)
 
@@ -39,14 +39,14 @@ POSTGRES_PORT=5432
 POSTGRES_USER=etlegacy_user
 POSTGRES_PASSWORD=REDACTED_DB_PASSWORD
 POSTGRES_DATABASE=etlegacy
-```text
+```
 
 ### 4. Start the Backend
 
 ```powershell
 # In z:\slomix_discord
 python -m uvicorn website.backend.main:app --reload --host 0.0.0.0 --port 8000
-```sql
+```
 
 ---
 
@@ -74,7 +74,7 @@ Run this from the Z: drive:
 ```powershell
 cd Z:\slomix_discord
 PowerShell -ExecutionPolicy Bypass -File .\migrate_to_laptop.ps1
-```text
+```
 
 ### 2. Setup Local Database
 
@@ -83,7 +83,7 @@ Once the files are on your C: drive, go there and run the DB setup:
 ```powershell
 cd C:\Users\seareal\Documents\slomix_discord
 PowerShell -ExecutionPolicy Bypass -File .\setup_local_db.ps1
-```python
+```
 
 * **With Docker**: It will spin up a Postgres container and import the latest backup.
 * **Without Docker**: It will help you configure SQLite or a manual Postgres connection.

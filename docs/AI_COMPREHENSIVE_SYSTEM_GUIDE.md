@@ -12,7 +12,7 @@ This document contains complete system understanding to prevent circular problem
 
 ```yaml
 ET:Legacy Game Server → SSH/Local Files → Parser → PostgreSQL → Discord Bot → Users
-```python
+```
 
 ### Critical Rules
 
@@ -70,7 +70,7 @@ round_number INTEGER            -- 1 or 2 (not 0!)
 gaming_session_id INTEGER       -- Groups continuous play
 time_limit TEXT
 actual_time TEXT
-```yaml
+```
 
 #### player_comprehensive_stats (57 columns)
 
@@ -110,7 +110,7 @@ for previous_round in get_previous_rounds():
         add_to_session(previous_round)
     else:
         break  # Gap too large - different session
-```python
+```
 
 **Key Points**:
 
@@ -157,7 +157,7 @@ def parse_round_2_with_differential(round2_file):
 
     # 4. Return ONLY Round 2 differential (not cumulative)
     return r2_differential
-```sql
+```
 
 **Status**: ✅ **100% VALIDATED** (Nov 3, 2025 - 2,700 field comparisons)
 
@@ -179,7 +179,7 @@ WHERE round_date = '2025-11-02'  # Gets ALL rounds on that date ❌
 
 # NEW (FIXED):
 WHERE round_id IN (2134, 2135, ..., 2151)  # Only session rounds ✅
-```text
+```
 
 #### 2. Player Duplication Bug (FIXED Nov 3, 2025)
 
@@ -193,7 +193,7 @@ GROUP BY player_name  # Duplicates on name change ❌
 
 # NEW (FIXED):
 GROUP BY player_guid  # One entry per player ✅
-```text
+```
 
 #### 3. Duplicate Detection Bug (FIXED Nov 19, 2025)
 
@@ -209,7 +209,7 @@ WHERE round_date = ? AND map_name = ? AND round_number = ?  ❌
 
 # NEW (FIXED):
 WHERE round_date = ? AND round_time = ? AND map_name = ? AND round_number = ?  ✅
-```python
+```
 
 **Location**: `bot/ultimate_bot.py` line 1337
 

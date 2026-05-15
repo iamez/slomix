@@ -43,7 +43,7 @@ RCON_PASSWORD=your_rcon_password
 
 # Admin Channel (Required)
 ADMIN_CHANNEL_ID=your_channel_id
-```yaml
+```
 
 ---
 
@@ -77,7 +77,7 @@ ADMIN_CHANNEL_ID=your_channel_id
 # Test manually
 nc -u puran.hehe.si 27960
 # Type: rcon PASSWORD status
-```text
+```
 
 **Can't use commands?**
 

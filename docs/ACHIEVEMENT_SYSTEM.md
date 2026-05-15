@@ -62,7 +62,7 @@ Player: @username
 Milestone: 1,000 kills
 
 🎮 ET:Legacy Stats Bot
-```text
+```
 
 ### 3. New Commands
 
@@ -80,7 +80,7 @@ Shows achievement progress for any player:
 !check_achievements              # Your progress (if linked)
 !check_achievements vid          # Specific player
 !check_achievements @username    # Mentioned user
-```python
+```
 
 ---
 
@@ -135,7 +135,7 @@ SELECT
     END as overall_kd
 FROM player_comprehensive_stats
 WHERE player_guid = ?
-```sql
+```
 
 **Performance:**
 
@@ -156,7 +156,7 @@ WHERE player_guid = ?
 !link                    # Link your account first
 !check_achievements      # View your achievement progress
 
-```text
+```
 
 **Check others:**
 
@@ -165,7 +165,7 @@ WHERE player_guid = ?
 !check_achievements SuperBoyY      # Search by name
 !check_achievements @vid           # Check Discord user
 
-```text
+```
 
 ### For Admins
 
@@ -177,7 +177,7 @@ await self.achievements.check_player_achievements(
     player_guid="ABCD1234",
     channel=ctx.channel
 )
-```yaml
+```
 
 **Monitor notifications:**
 
@@ -235,7 +235,7 @@ await self.achievements.check_player_achievements(
 # Verify notification deduplication
 # Check K/D calculation edge cases
 # Test Discord linking integration
-```yaml
+```
 
 ---
 
@@ -314,7 +314,7 @@ KD_MILESTONES = {threshold: {emoji, title, color}}
 # Instance variables
 notified_achievements = set()  # Tracks sent notifications
 bot = discord.Bot  # Bot instance for database access
-```text
+```
 
 ### Achievement ID Format
 

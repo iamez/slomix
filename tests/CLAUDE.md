@@ -42,7 +42,7 @@ pytest --cov=bot --cov-report=html
 
 # Verbose output
 pytest -v
-```yaml
+```
 
 ## Existing Coverage
 
@@ -97,7 +97,7 @@ class TestDatabaseAdapter:
         )
         # Should not execute SQL injection
         assert result['val'] == "test'; DROP TABLE--"
-```text
+```
 
 ### Fixtures
 
@@ -119,7 +119,7 @@ def sample_stats_file():
     path = "tests/fixtures/sample_stats_files/round-1.txt"
     with open(path) as f:
         return f.read()
-```text
+```
 
 ## Test Data
 
@@ -134,7 +134,7 @@ tests/fixtures/sample_stats_files/
     ├── 2025-01-01-235500-map-round-1.txt
     └── 2025-01-02-001000-map-round-2.txt
 
-```bash
+```
 
 ## CI/CD Integration
 

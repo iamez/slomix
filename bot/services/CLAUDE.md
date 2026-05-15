@@ -10,7 +10,7 @@ Services encapsulate complex business logic, data aggregation, and external inte
 ```text
 Cogs (commands) → Services (business logic) → DatabaseAdapter (data access)
                                             → External APIs
-```python
+```
 
 Services are stateless and receive the bot instance for database/config access.
 
@@ -84,7 +84,7 @@ class SessionDataService:
         query = "SELECT MAX(gaming_session_id) FROM rounds"
         result = await self.db.fetch_one(query)
         return result
-```text
+```
 
 ### Player GUID Aggregation (CRITICAL)
 
@@ -98,7 +98,7 @@ query = """
     WHERE round_id IN ({placeholders})
     GROUP BY player_guid
 """
-```text
+```
 
 ### Session ID Queries
 
@@ -110,7 +110,7 @@ query = """
     WHERE gaming_session_id = ?
     ORDER BY round_date, round_time
 """
-```text
+```
 
 ### Time Dead Capping (Bug Workaround)
 
@@ -126,7 +126,7 @@ SELECT
         time_played_seconds
     ) as capped_time_dead
 FROM player_comprehensive_stats
-```text
+```
 
 ## Critical Implementation Notes
 
@@ -193,7 +193,7 @@ dpm = damage_given / (time_played_seconds / 60)
 
 # NOT
 dpm = damage_given / time_played_minutes  # May have rounding errors
-```text
+```
 
 ## Testing Services
 
