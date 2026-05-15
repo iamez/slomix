@@ -137,7 +137,7 @@ All these components exist in the repo and are ready to use:
 - **OmniBot Binaries**: Located at `/home/et/etlegacy-v2.83.1-x86_64/legacy/omni-bot/`
 
 #### E. Known Lua Webhook Integration
-- **File**: `vps_scripts/stats_discord_webhook.lua` (v1.6.0)
+- **File**: `vps_scripts/stats_discord_webhook.lua` (v1.7.0)
 - **Status**: Fixed for bot entity crashes (safe_gentity_get wrapper with pcall)
 - **Previous Issue**: Script crashed with "tried to get invalid gentity field pers.connected" when bots present
 - **Fix Applied**: Safe entity getter prevents crashes on bot entities with missing fields
@@ -988,7 +988,7 @@ map_restart 0
 | bot_scrim_mode.py | 3v3 bot-only scrim mode | scripts/bot_scrim_mode.py |
 | generate_omnibot_botnames.py | Generate bot names from DB | scripts/generate_omnibot_botnames.py |
 | community_stats_parser.py | Parse stats files (R1/R2 differential) | community_stats_parser.py |
-| stats_discord_webhook.lua | Real-time stats webhook (v1.6.0 with safe_gentity_get) | vps_scripts/stats_discord_webhook.lua |
+| stats_discord_webhook.lua | Real-time stats webhook (v1.7.0; safe_gentity_get since v1.6.0) | vps_scripts/stats_discord_webhook.lua |
 | server.cfg | Game server config (g_filterBan, omnibot_enable) | /home/et/etlegacy*/server.cfg |
 
 ---
