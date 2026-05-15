@@ -153,7 +153,7 @@ Copy-Item github\README.md README.md -Force
 
 ```powershell
 # Navigate to project
-cd "c:\Users\seareal\Documents\stats"
+cd "<path-to-slomix-repo>"
 
 # Create virtual environment (if doesn't exist)
 python -m venv .venv
@@ -231,7 +231,7 @@ You're manually copying files to `github/` folder, which is wrong. Git should ma
 
 ```powershell
 # 1. Your main directory is already a git repo
-cd "c:\Users\seareal\Documents\stats"
+cd "<path-to-slomix-repo>"
 
 # 2. Check remote
 git remote -v

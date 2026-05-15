@@ -83,8 +83,8 @@ python postgresql_database_manager.py
 **What it does:**
 
 - ✅ Creates backup of existing DB (if present)
-- ✅ Creates all 7 tables with correct schema
-- ✅ Applies 51-field player stats structure
+- ✅ Creates all 90 tables with correct schema
+- ✅ Applies 57-column `player_comprehensive_stats` structure
 - ✅ Adds UNIQUE constraints (no duplicates)
 - ✅ Creates indexes for performance
 - ⏱️ Time: ~2 seconds

@@ -199,8 +199,8 @@ These scripts live **on the game server, NOT in your repo**. If ETLegacy changes
 
 1. **Is the bot running?**
    ```bash
-   screen -r slomix     # Production VM
-   ps aux | grep ultimate_bot.py  # Dev/Samba
+   sudo systemctl status slomix-bot   # Production VM (canonical)
+   ps aux | grep ultimate_bot.py      # Dev/Samba
    ```
    If running, next step. If not, check `docs/INFRA_HANDOFF_2026-02-18.md` for restart instructions.
 

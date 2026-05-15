@@ -211,7 +211,7 @@ WHERE round_date = ? AND map_name = ? AND round_number = ?  ❌
 WHERE round_date = ? AND round_time = ? AND map_name = ? AND round_number = ?  ✅
 ```
 
-**Location**: `bot/ultimate_bot.py` line 1337
+**Location**: `bot/ultimate_bot.py` (in the round lookup helper used by the import path; line number drifted after the mega-audit split — grep `WHERE round_date` to relocate)
 
 #### 4. Schema Bug - Lost Sessions (FIXED Nov 3, 2025)
 

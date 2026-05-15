@@ -14,7 +14,7 @@
 cat .env | Select-String "AUTOMATION|SSH|GAMING"
 
 # Start bot
-cd g:\VisualStudio\Python\stats
+cd <path-to-slomix-repo>
 python bot/ultimate_bot.py
 ```
 
@@ -347,7 +347,7 @@ SELECT * FROM player_comprehensive_stats WHERE guid = 'someGUID';
 notepad .env
 
 # Restart bot
-cd g:\VisualStudio\Python\stats
+cd <path-to-slomix-repo>
 python bot/ultimate_bot.py
 ```
 
