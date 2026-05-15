@@ -98,7 +98,7 @@ git clone https://github.com/iamez/slomix.git
 cd slomix
 # Default branch is `main`; the historical `vps-network-migration`
 # branch referenced in older versions of this guide no longer exists.
-```text
+```
 
 ### 2. Verify Files
 
@@ -111,7 +111,7 @@ ls requirements.txt
 
 # Sanity check tracked file count (currently ~1,100)
 git ls-files | wc -l
-```text
+```
 
 ### 3. Setup Python Environment
 
@@ -122,7 +122,7 @@ source .venv/bin/activate  # Linux/Mac
 .venv\Scripts\activate  # Windows
 
 pip install -r requirements.txt
-```text
+```
 
 ### 4. Setup PostgreSQL
 
@@ -136,14 +136,14 @@ sudo apt install postgresql postgresql-contrib
 sudo -u postgres createuser etlegacy_user -P            # prompts for password
 sudo -u postgres createdb -O etlegacy_user etlegacy
 sudo -u postgres psql -d etlegacy -c "GRANT ALL ON SCHEMA public TO etlegacy_user;"
-```text
+```
 
 ### 5. Configure Environment
 
 ```bash
 cp .env.example .env
 nano .env
-```text
+```
 
 Edit .env (key names must match `.env.example`; see also `docs/CLAUDE.md`):
 
@@ -156,20 +156,20 @@ POSTGRES_USER=etlegacy_user
 POSTGRES_PASSWORD=your_secure_password_here
 LOCAL_STATS_PATH=/path/to/stats/files
 AUTOMATION_ENABLED=true
-```text
+```
 
 ### 6. Initialize Database
 
 ```bash
 python postgresql_database_manager.py
 # Select: 1 - Initialize schema
-```text
+```
 
 ### 7. Test Bot
 
 ```bash
 python bot/ultimate_bot.py
-```text
+```
 
 Should see:
 
@@ -181,13 +181,13 @@ Loaded extension 'leaderboard'
 ...
 Bot is ready!
 
-```text
+```
 
 ### 8. Setup Systemd Service
 
 ```bash
 sudo nano /etc/systemd/system/et-bot.service
-```text
+```
 
 ```ini
 [Unit]
@@ -205,14 +205,14 @@ RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
-```text
+```
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable et-bot
 sudo systemctl start et-bot
 sudo systemctl status et-bot
-```python
+```
 
 ---
 
@@ -275,7 +275,7 @@ pip list | grep asyncpg
 python -c "from bot.core.database_adapter import create_adapter"
 python -c "from tools.stopwatch_scoring import StopwatchScoring"
 python -c "import bot.community_stats_parser"
-```text
+```
 
 ### Database connection fails
 
@@ -285,7 +285,7 @@ psql -h localhost -U etlegacy_user -d etlegacy
 
 # Check service
 sudo systemctl status postgresql
-```text
+```
 
 ### Missing files
 

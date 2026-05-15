@@ -73,7 +73,7 @@ git branch
 # Check git status
 git status
 # Should show clean or uncommitted changes
-```text
+```
 
 ### 2. Backup Current State
 
@@ -86,7 +86,7 @@ ls -lh ~/etlegacy_stats_backup_*.sql
 
 # Backup current code (if needed)
 cp -r /path/to/slomix /path/to/slomix_backup_$(date +%Y%m%d_%H%M%S)
-```text
+```
 
 ### 3. Stop Current Bot
 
@@ -107,7 +107,7 @@ tmux list-sessions
 tmux attach -t etlegacy-bot
 # Press Ctrl+C to stop bot
 # Press Ctrl+B then D to detach
-```yaml
+```
 
 ---
 
@@ -126,7 +126,7 @@ git checkout claude/fix-production-critical-issues-01TSoke7RTuTbKEhrQCgG2AF-01Gp
 
 # Pull latest commits
 git pull origin claude/fix-production-critical-issues-01TSoke7RTuTbKEhrQCgG2AF-01GphrWr5zkJmarkb6RXQdZk
-```text
+```
 
 ### Step 2: Verify Changes
 
@@ -149,7 +149,7 @@ git show --name-only 50b4ae1
 git show --name-only 94a508d
 git show --name-only f8e017d
 git show --name-only c2eaca1
-```text
+```
 
 ### Step 3: Apply Database Migration
 
@@ -167,7 +167,7 @@ psql -U your_db_user -d etlegacy_stats -f migrations/add_round_status.sql
 # Verify migration succeeded
 psql -U your_db_user -d etlegacy_stats -c "\d rounds" | grep round_status
 # Should show: round_status | character varying(20) | | default 'completed'::character varying
-```text
+```
 
 ### Step 4: Test Imports (Dry Run)
 
@@ -213,7 +213,7 @@ else
     echo "❌ Import test failed - DO NOT DEPLOY"
     exit 1
 fi
-```text
+```
 
 ### Step 5: Verify Database Schema
 
@@ -239,7 +239,7 @@ SQLEOF
 # Should show:
 #  idx_rounds_status
 #  idx_rounds_gaming_session
-```text
+```
 
 ### Step 6: Start Bot (Test Mode)
 
@@ -257,7 +257,7 @@ python3 bot/ultimate_bot.py
 # ✅ Bot ready! Logged in as <BotName>
 
 # Keep it running for next step
-```text
+```
 
 ### Step 7: Test Commands in Discord
 
@@ -329,7 +329,7 @@ python3 bot/ultimate_bot.py
 
 # Should show correct DPM values (not inflated)
 
-```sql
+```
 
 **Validation Tests:**
 
@@ -360,7 +360,7 @@ python3 bot/ultimate_bot.py
 # ✅ No query syntax errors
 # ✅ Stats file monitoring working (if files present)
 # ✅ No asyncpg connection errors
-```text
+```
 
 ### Step 9: Production Deployment
 
@@ -386,7 +386,7 @@ python3 bot/ultimate_bot.py
 tmux new -s etlegacy-bot
 python3 bot/ultimate_bot.py
 # Press Ctrl+B then D to detach
-```yaml
+```
 
 ---
 
@@ -405,7 +405,7 @@ sudo journalctl -u etlegacy-bot -n 50 --no-pager
 # Check logs (screen/tmux)
 screen -r etlegacy-bot  # or tmux attach -t etlegacy-bot
 # Ctrl+A, D to detach (screen) or Ctrl+B, D (tmux)
-```text
+```
 
 ### 2. Test File Monitoring
 
@@ -418,7 +418,7 @@ ps aux | grep endstats_monitor
 # Wait for a new stats file to be created on game server
 # Verify it gets downloaded within 10 minutes (IDLE mode)
 # Verify grace period keeps bot active for 30 min after download
-```text
+```
 
 ### 3. Verify Restart Detection
 
@@ -435,7 +435,7 @@ SQLEOF
 
 # If restarts occurred, you should see cancelled rounds
 # If no restarts yet, this will be empty (normal)
-```text
+```
 
 ### 4. Compare Stats Before/After
 
@@ -457,7 +457,7 @@ SQLEOF
 
 # Compare with your backup database if you want to see the difference
 # New values should be ~33-50% LOWER (correct, not inflated)
-```sql
+```
 
 ---
 
@@ -504,7 +504,7 @@ Your stats are now MORE ACCURATE. Some values may appear lower than before - thi
 
 Questions? Ask in #support
 
-```yaml
+```
 
 ---
 
@@ -517,7 +517,7 @@ Questions? Ask in #support
 ```bash
 sudo systemctl stop etlegacy-bot
 # or press Ctrl+C if running in foreground
-```text
+```
 
 ### 2. Restore Previous Code
 
@@ -531,7 +531,7 @@ git checkout <previous-commit-hash>
 # Or restore from backup
 # rm -rf /path/to/slomix
 # cp -r /path/to/slomix_backup_TIMESTAMP /path/to/slomix
-```text
+```
 
 ### 3. Rollback Database (If Needed)
 
@@ -547,14 +547,14 @@ SQLEOF
 
 # Or restore full backup
 # sudo -u postgres psql etlegacy_stats < ~/etlegacy_stats_backup_TIMESTAMP.sql
-```text
+```
 
 ### 4. Restart Old Bot
 
 ```bash
 sudo systemctl start etlegacy-bot
 sudo systemctl status etlegacy-bot
-```yaml
+```
 
 ---
 
@@ -567,7 +567,7 @@ sudo systemctl status etlegacy-bot
 
 ```bash
 psql -U your_db_user -d etlegacy_stats -f migrations/add_round_status.sql
-```text
+```
 
 ### Issue: Queries returning no results
 
@@ -581,7 +581,7 @@ SELECT round_status, COUNT(*) FROM rounds GROUP BY round_status;
 SQLEOF
 
 # Should show mostly 'completed', few 'cancelled'
-```text
+```
 
 ### Issue: Stats still look inflated
 
@@ -596,7 +596,7 @@ grep -n "round_number IN (1, 2)" bot/cogs/leaderboard_cog.py
 # Check git commit
 git log --oneline -1
 # Should show commit 50b4ae1 or later
-```text
+```
 
 ### Issue: File loss still occurring
 
@@ -611,7 +611,7 @@ grep -A5 "grace_period_active" bot/ultimate_bot.py
 # Check last_file_download_time is being tracked
 grep "last_file_download_time" bot/ultimate_bot.py
 # Should show initialization and update
-```yaml
+```
 
 ---
 
@@ -637,7 +637,7 @@ SELECT COUNT(*) as total_rounds,
        COUNT(CASE WHEN round_status = 'cancelled' THEN 1 END) as cancelled
 FROM rounds;
 "
-```text
+```
 
 ### Weekly Checks
 
@@ -656,7 +656,7 @@ HAVING SUM(time_played_seconds) > 600  -- At least 10 min playtime
 ORDER BY dpm DESC
 LIMIT 10;
 SQLEOF
-```bash
+```
 
 ---
 

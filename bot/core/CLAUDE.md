@@ -75,7 +75,7 @@ Async abstraction over PostgreSQL (primary) and SQLite (fallback).
 async def my_function(self):
     query = "SELECT * FROM rounds WHERE gaming_session_id = ?"
     results = await self.bot.db_adapter.fetch_all(query, (session_id,))
-```python
+```
 
 **Methods:**
 
@@ -95,7 +95,7 @@ cached = await self.bot.stats_cache.get(cache_key)
 if not cached:
     data = await expensive_query()
     await self.bot.stats_cache.set(cache_key, data, ttl=300)
-```python
+```
 
 ### TeamManager (team_manager.py)
 
@@ -110,7 +110,7 @@ Orchestrates team detection using multiple strategies:
 team_manager = TeamManager(bot)
 teams = await team_manager.detect_teams(session_id)
 # Returns: {"team1": [guid1, guid2], "team2": [guid3, guid4]}
-```python
+```
 
 ### Checks (checks.py)
 
@@ -128,7 +128,7 @@ async def my_command(self, ctx):
 @is_admin_channel()  # Only works in admin_channel from config
 async def admin_command(self, ctx):
     pass
-```text
+```
 
 **Behavior**: Returns `False` silently if wrong channel (no error message).
 
@@ -141,7 +141,7 @@ ET:Legacy stopwatch mode means teams swap sides between R1 and R2.
 Round 1: Team A = Axis,  Team B = Allies
 Round 2: Team A = Allies, Team B = Axis  (SWAPPED!)
 
-```python
+```
 
 The `team` column in database indicates SIDE (axis/allies), NOT actual team!
 Use `team_manager.py` to determine persistent team assignments.
@@ -167,7 +167,7 @@ async def get_player_stats(self, guid: str) -> dict:
         GROUP BY player_guid
     """
     return await self.bot.db_adapter.fetch_one(query, (guid,))
-```text
+```
 
 ### Session-Scoped Query
 

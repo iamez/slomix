@@ -50,7 +50,7 @@ If you're new to this migration project, read documents in this order:
 ✅ System service: postgresql.service (enabled, running)
 ✅ Data location: /var/lib/postgresql/14/main/
 ✅ ~1,800 rounds migrated successfully
-```python
+```
 
 **Production Database Info**:
 
