@@ -112,9 +112,9 @@ bot/logging_config.py
 
 Bot runtime sidecars:
 ```text
-analytics/__init__.py
-analytics/config.py
-analytics/synergy_detector.py
+(none — the `analytics/` package previously listed here was removed
+along with the synergy_analytics cog; no top-level analytics module
+is loaded by the bot today.)
 ```
 
 Bot startup-loaded command/runtime surface:
