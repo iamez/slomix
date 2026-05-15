@@ -76,7 +76,7 @@ class MyCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(MyCog(bot))
-```text
+```
 
 ## Key Patterns
 
@@ -87,7 +87,7 @@ from bot.core.checks import is_public_channel, is_admin_channel
 
 @is_public_channel()  # For user commands
 @is_admin_channel()   # For admin commands
-```text
+```
 
 ### Database Access
 
@@ -96,7 +96,7 @@ from bot.core.checks import is_public_channel, is_admin_channel
 results = await self.bot.db_adapter.fetch_all(query, params)
 result = await self.bot.db_adapter.fetch_one(query, params)
 await self.bot.db_adapter.execute(query, params)
-```text
+```
 
 ### Player Lookup
 
@@ -108,7 +108,7 @@ query = """
     WHERE gaming_session_id = ?
     GROUP BY player_guid
 """
-```text
+```
 
 ### Session Queries
 
@@ -116,7 +116,7 @@ query = """
 # Use gaming_session_id for session queries
 # 60-minute gap between rounds = new session
 WHERE gaming_session_id = ?
-```text
+```
 
 ## Common Mistakes to Avoid
 
