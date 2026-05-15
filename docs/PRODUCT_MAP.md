@@ -18,7 +18,7 @@ Slomix is a **Discord bot + website** that turns raw ET:Legacy game statistics i
 
     Round Ends (R1 or R2)
          │
-         ├─→ [Lua] stats_discord_webhook.lua v1.6.2
+         ├─→ [Lua] stats_discord_webhook.lua v1.7.0
          │   (fires HTTP webhook with timing, team data, surrender info)
          │   └─→ Discord webhook POST → bot receives timing data
          │       Stored in: lua_round_teams table
@@ -86,7 +86,7 @@ Slomix is a **Discord bot + website** that turns raw ET:Legacy game statistics i
 ### Context
 Your stats parser depends on two Lua scripts running on the ET:Legacy game server:
 - **`c0rnp0rn7.lua` (v3.0)** — generates `.txt` stats files on disk (format: `YYYY-MM-DD-HHMMSS-mapname-round-1.txt`)
-- **`stats_discord_webhook.lua` (v1.6.2)** — sends HTTP webhook with timing/team data at round end
+- **`stats_discord_webhook.lua` (v1.7.0)** — sends HTTP webhook with timing/team data at round end
 
 These scripts live **on the game server, NOT in your repo**. If ETLegacy changes its Lua API or game event handling, the scripts silently fail and stats stop flowing. This happened to other communities in **November 2025** (LuaJIT upgrade broke bitwise operators — your scripts were patched in Feb 2026).
 

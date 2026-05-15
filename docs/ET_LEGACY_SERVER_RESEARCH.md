@@ -10,7 +10,7 @@
 
 1. [ET:Legacy Stopwatch Mode Architecture](#1-etlegacy-stopwatch-mode-architecture)
 2. [Stats File Generation (c0rnp0rn7.lua)](#2-stats-file-generation-c0rnp0rn7lua)
-3. [Discord Webhook (stats_discord_webhook.lua v1.6.2)](#3-discord-webhook-stats_discord_webhooklua-v162)
+3. [Discord Webhook (stats_discord_webhook.lua v1.7.0)](#3-discord-webhook-stats_discord_webhooklua-v170)
 4. [Complete Round Lifecycle Timeline](#4-complete-round-lifecycle-timeline)
 5. [Data Arrival Order & Timing](#5-data-arrival-order--timing)
 6. [File Naming & match_id Implications](#6-file-naming--match_id-implications)
@@ -145,7 +145,7 @@ This ensures stats are saved even if the map changes before intermission complet
 
 ---
 
-## 3. Discord Webhook (stats_discord_webhook.lua v1.6.2)
+## 3. Discord Webhook (stats_discord_webhook.lua v1.7.0)
 
 ### Overview
 
@@ -182,7 +182,7 @@ Sends a Discord webhook with:
 - **Content**: `"STATS_READY"`
 - **Author**: `"ET:Legacy Stats"`
 - **Embed fields**: All timing/team data (see below)
-- **Footer**: `"Slomix Lua Webhook v1.6.2"`
+- **Footer**: `"Slomix Lua Webhook v1.7.0"` (rendered from canonical `version` constant in the Lua source)
 
 ### Data Fields Captured
 
@@ -596,7 +596,7 @@ GROUP BY status;
 | File | Purpose |
 |------|---------|
 | `deployed_lua/legacy/c0rnp0rn7.lua` | Stats file generator (v3.0) |
-| `vps_scripts/stats_discord_webhook.lua` | Discord webhook (v1.6.2) |
+| `vps_scripts/stats_discord_webhook.lua` | Discord webhook (v1.7.0) |
 | `bot/community_stats_parser.py` | R2 differential parser |
 | `bot/ultimate_bot.py` | Webhook handler, SSH monitor, data pipeline |
 | `postgresql_database_manager.py` | DB import (match_id bug at line 2112) |
