@@ -19,7 +19,6 @@ Do not track a file if it is:
 
 Core source:
 - `bot/`
-- `analytics/`
 - `website/backend/`
 - `website/frontend/src/`
 - `website/js/`
@@ -96,7 +95,6 @@ These should never be committed "by accident". If we keep them in git, it must b
 
 If you are lost, start here:
 - `bot/`: Discord bot runtime, polling, parsing, publishing
-- `analytics/`: synergy analytics dependency loaded by the bot
 - `website/backend/`: FastAPI API
 - `website/frontend/src/`: React source
 - `website/js/`: current browser runtime used by the existing site
