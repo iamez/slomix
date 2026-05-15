@@ -101,7 +101,7 @@ Deaths     ████ 22      ███ 19      ████ 22
 Gibs       ██ 12        ██ 11       █ 8
 Damage     ████████ 3420 ██████ 2980 █████ 2650
 DPM        ████████ 156  ██████ 142  █████ 128
-```yaml
+```
 
 ---
 
@@ -127,7 +127,7 @@ DPM        ████████ 156  ██████ 142  █████
  ███  5m        |  ████  8m        |  ████████  12m
  
 Time Dead: 17%  |  Time Dead: 29%  |  Time Dead: 40%
-```yaml
+```
 
 ---
 
@@ -151,7 +151,7 @@ Time Dead: 17%  |  Time Dead: 29%  |  Time Dead: 40%
 Player1   ████ 18  ███ 12  ████ 22  ██ 5      █ 3
 Player2   ███ 15   ████ 15 ███ 18   ███ 8     ██ 4
 Player3   ██ 10    █████ 20 ██ 12   █ 2       █ 1
-```yaml
+```
 
 ---
 
@@ -177,7 +177,7 @@ Objectives Stolen:         ███ 3
 Objectives Returned:       ██ 2
 Dynamites Planted:         ████ 4
 Dynamites Defused:         ██ 2
-```yaml
+```
 
 ---
 
@@ -201,7 +201,7 @@ Dynamites Defused:         ██ 2
 Player1  ███ 12  ████ 45%  ████ 82%   3.2
 Player2  ██ 8    ███ 38%   ███ 75%    2.0
 Player3  ██ 9    ██ 32%    ██ 68%     1.4
-```yaml
+```
 
 ---
 
@@ -229,7 +229,7 @@ Player3  ██ 9    ██ 32%    ██ 68%     1.4
 🎯 Quad Kills:       █ 2
 🚀 Multi Kills:      █ 1
 💫 Mega Kills:       ░ 0
-```yaml
+```
 
 ---
 
@@ -252,7 +252,7 @@ Player3  ██ 9    ██ 32%    ██ 68%     1.4
   • Team Kills: 2
   • Self Kills: 3
   • Team Damage: 450
-```yaml
+```
 
 ---
 
@@ -294,7 +294,7 @@ player3    ████     ██       █
 vid        ██         ██       █
 slomix     ███        ███      ██
 player3    ██         █        █
-```yaml
+```
 
 ---
 
@@ -359,7 +359,7 @@ def get_grouped_stats(player_data):
             'kill_steals': player_data.get('kill_steals', 0)
         }
     }
-```text
+```
 
 ### Create Grouped Bar Chart
 

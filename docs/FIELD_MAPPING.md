@@ -48,7 +48,7 @@ Complete reference of all stats fields captured by the ET:Legacy Stats Bot.
 ```text
 accuracy_percent = (hits / shots) * 100
 Example: (128 / 450) * 100 = 28.44%
-```sql
+```
 
 ---
 
@@ -65,7 +65,7 @@ Example: (128 / 450) * 100 = 28.44%
 ```text
 damage_ratio = damage_given / damage_received
 Example: 1850 / 1200 = 1.54
-```yaml
+```
 
 ---
 
@@ -98,7 +98,7 @@ Example: 1850 / 1200 = 1.54
 ```text
 xp_total = xp_combat + xp_objective + xp_support + xp_misc
 Example: 150 + 120 + 90 + 20 = 380
-```yaml
+```
 
 ---
 
@@ -117,7 +117,7 @@ Minutes = seconds / 60
 Hours = seconds / 3600
 
 Example: 900 seconds = 15 minutes
-```python
+```
 
 ---
 
@@ -226,14 +226,14 @@ Example: 900 seconds = 15 minutes
 ```sql
 INTEGER: -2,147,483,648 to 2,147,483,647
 Typical range: 0 to 1000 for most stats
-```text
+```
 
 ### Decimal Fields
 
 ```sql
 DECIMAL(5,2): 000.00 to 999.99
 Used for: accuracy_percent, team_confidence
-```text
+```
 
 ### Text Fields
 
@@ -241,7 +241,7 @@ Used for: accuracy_percent, team_confidence
 VARCHAR(N): Variable-length text up to N characters
 player_name: up to 100 chars
 weapon_name: up to 100 chars
-```text
+```
 
 ### Timestamp Fields
 
@@ -249,7 +249,7 @@ weapon_name: up to 100 chars
 TIMESTAMP: Date and time
 Format: YYYY-MM-DD HH:MM:SS
 Example: 2025-11-06 21:30:45
-```yaml
+```
 
 ---
 
@@ -293,31 +293,31 @@ Example: 2025-11-06 21:30:45
 
 ```sql
 ROUND(CAST(kills AS FLOAT) / NULLIF(deaths, 0), 2) AS kd_ratio
-```text
+```
 
 ### Headshot Percentage
 
 ```sql
 ROUND((headshots * 100.0) / NULLIF(kills, 0), 2) AS headshot_percent
-```text
+```
 
 ### Damage Efficiency
 
 ```sql
 ROUND(CAST(damage_given AS FLOAT) / NULLIF(damage_received, 0), 2) AS damage_ratio
-```text
+```
 
 ### Kills Per Minute
 
 ```sql
 ROUND((kills * 60.0) / NULLIF(time_played_seconds, 0), 2) AS kills_per_minute
-```text
+```
 
 ### Average XP Per Round
 
 ```sql
 ROUND(AVG(xp_total), 0) AS avg_xp
-```yaml
+```
 
 ---
 
@@ -335,7 +335,7 @@ SELECT
 FROM player_stats
 WHERE player_name = 'seareal'
 GROUP BY player_name;
-```text
+```
 
 ### Top Players by K/D
 
@@ -350,7 +350,7 @@ GROUP BY player_name
 HAVING SUM(deaths) > 0
 ORDER BY kd DESC
 LIMIT 10;
-```text
+```
 
 ### Weapon Usage
 
@@ -362,7 +362,7 @@ SELECT
 FROM weapon_stats
 GROUP BY weapon_name
 ORDER BY total_kills DESC;
-```yaml
+```
 
 ---
 

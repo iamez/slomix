@@ -108,13 +108,13 @@ Test and validate your setup:
 
 ```powershell
 pip install psutil
-```text
+```
 
 ### Step 2: Run Tests
 
 ```powershell
 python bot/test_automation.py
-```text
+```
 
 This will:
 
@@ -130,7 +130,7 @@ Add this to your `.env` file:
 ```bash
 # Admin channel for health alerts (can be same as stats channel)
 ADMIN_CHANNEL_ID=your_channel_id_here
-```python
+```
 
 ### Step 4: Integration Options
 
@@ -150,7 +150,7 @@ Run the integration helper:
 
 ```powershell
 python bot/integrate_automation.py
-```sql
+```
 
 This will:
 
@@ -162,7 +162,7 @@ This will:
 
 ```powershell
 python bot/ultimate_bot.py
-```text
+```
 
 Check the startup logs for:
 
@@ -172,7 +172,7 @@ Check the startup logs for:
 ✅ Daily report task ready  
 ✅ Database maintenance task ready
 
-```yaml
+```
 
 ### Step 6: Test Commands
 
@@ -281,7 +281,7 @@ SSH_PORT=22
 SSH_USER=username
 SSH_KEY_PATH=/path/to/key
 REMOTE_STATS_PATH=/path/to/stats
-```python
+```
 
 ### Tuning Parameters
 
@@ -299,7 +299,7 @@ for old_backup in backups[7:]:  # Change number to keep more/less
 
 # Log cleanup age (default: 30 days)
 await self.cleanup_old_logs(days=30)  # Change days
-```yaml
+```
 
 ---
 
@@ -339,7 +339,7 @@ CPU: 4.2%
 ✅ cache_refresher
 ✅ scheduled_monitoring_check
 
-```text
+```
 
 ### Error Statistics Command
 
@@ -358,7 +358,7 @@ endstats_monitor: 2
 cache_refresher: 0
 scheduled_monitoring_check: 0
 
-```python
+```
 
 ---
 

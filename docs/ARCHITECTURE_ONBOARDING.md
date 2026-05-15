@@ -112,7 +112,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 │  User sees: graphs, stats, leaderboards                         │
 │  Commands: !stats, !last_session, !top, !compare                │
 └─────────────────────────────────────────────────────────────────┘
-```python
+```
 
 ### Key Pipeline Stages
 
@@ -159,7 +159,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 │  PostgreSQL database                                            │
 │  Tables: rounds, player_stats, weapon_stats, etc.               │
 └─────────────────────────────────────────────────────────────────┘
-```python
+```
 
 ### Patterns Used
 
@@ -325,7 +325,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
    │   └── Start background tasks
    │
    └── 6. bot.run(token) → Connect to Discord
-```text
+```
 
 ### Flow 2: New Stats File Arrives
 
@@ -346,7 +346,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
    │
    └── 7. round_publisher: Post embed to Discord channel
 
-```text
+```
 
 ### Flow 3: User Types `!stats playername`
 
@@ -368,7 +368,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
    │
    └── 4. ctx.send(embed) → User sees stats card
 
-```python
+```
 
 ---
 
@@ -382,7 +382,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
 class SomeCog:
     def __init__(self, bot):
         self.ssh_host = os.getenv('SSH_HOST', 'localhost')  # Hidden dependency!
-```text
+```
 
 **After (centralized):**
 
@@ -391,7 +391,7 @@ class SomeCog:
     def __init__(self, bot):
         self.config = bot.config  # Single source of truth
         # Use: self.config.ssh_host
-```yaml
+```
 
 **Benefits:**
 
@@ -413,7 +413,7 @@ class SomeCog:
             "SELECT * FROM processed_files WHERE filename = ?", 
             (filename,)
         )
-```text
+```
 
 **After (Repository):**
 
@@ -421,7 +421,7 @@ class SomeCog:
 class SomeCog:
     async def check_file(self, filename):
         return await self.file_repo.get_processed_filenames()
-```sql
+```
 
 **Benefits:**
 
@@ -438,7 +438,7 @@ class SomeCog:
 ```python
 # Cog doesn't care if it's SQLite or PostgreSQL:
 await self.db.fetch_one("SELECT * FROM players WHERE name = ?", (name,))
-```python
+```
 
 The adapter:
 

@@ -6,14 +6,14 @@ SSH to your server:
 
 ```bash
 ssh et@puran.hehe.si -p 48101
-```text
+```
 
 Edit vektor.cfg:
 
 ```bash
 cd ~/etlegacy-v2.83.1-x86_64
 nano vektor.cfg
-```text
+```
 
 Add these lines:
 
@@ -21,13 +21,13 @@ Add these lines:
 // RCON Configuration
 set rconPassword "GENERATE_SECURE_PASSWORD"
 set net_port "27960"
-```text
+```
 
 Generate secure password:
 
 ```bash
 openssl rand -base64 32
-```sql
+```
 
 Save and exit (Ctrl+X, Y, Enter)
 
@@ -44,7 +44,7 @@ RCON_HOST=puran.hehe.si
 RCON_PORT=27960
 RCON_PASSWORD=paste_generated_password_here
 ADMIN_CHANNEL_ID=paste_your_admin_channel_id_here
-```yaml
+```
 
 To get channel ID:
 
@@ -61,7 +61,7 @@ Restart bot:
 ```powershell
 Stop-Process -Name python -Force
 python bot/ultimate_bot.py
-```text
+```
 
 Look for this in logs:
 
@@ -73,7 +73,7 @@ Look for this in logs:
    Screen: vektor
    RCON: Enabled
 
-```yaml
+```
 
 ---
 
@@ -87,7 +87,7 @@ In your admin channel, try:
 !list_maps
 !rcon status
 
-```sql
+```
 
 If working, you'll see:
 
