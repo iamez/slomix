@@ -1377,23 +1377,20 @@ async function loadEventDetail(id) {
 }
 
 function renderSummary(data) {
+    // Phase 4 Part B: Player Story compressed to 5 KPIs. Hot Zones /
+    // Avg Duration / Avg Sprint tiles were cut (redundant); their derivations
+    // are dropped here too so renderSummary stays in lockstep with the DOM.
     const engagements = data.total_engagements ?? data.engagements ?? null;
     const avgDistance = data.avg_distance_m ?? data.avg_distance ?? null;
     const crossfire = data.crossfire_events ?? data.crossfire ?? null;
-    const hotzones = data.hotzones ?? data.hotzone_count ?? null;
     const escapeRate = data.escape_rate_pct ?? null;
-    const avgDuration = data.avg_duration_ms ?? null;
     const avgAttackers = data.avg_attackers ?? null;
-    const avgSprint = data.avg_sprint_pct ?? null;
 
     setText('proximity-total-engagements', engagements != null ? formatNumber(engagements) : '--');
     setText('proximity-avg-distance', avgDistance != null ? `${avgDistance.toFixed(1)}u` : '--');
     setText('proximity-crossfire', crossfire != null ? formatNumber(crossfire) : '--');
-    setText('proximity-hotzones', hotzones != null ? formatNumber(hotzones) : '--');
     setText('proximity-escape-rate', escapeRate != null ? `${escapeRate.toFixed(1)}%` : '--');
-    setText('proximity-avg-duration', avgDuration != null ? formatDurationMs(avgDuration) : '--');
     setText('proximity-avg-attackers', avgAttackers != null ? avgAttackers.toFixed(2) : '--');
-    setText('proximity-avg-sprint', avgSprint != null ? `${avgSprint.toFixed(1)}%` : '--');
 
     renderDuos(data.top_duos || []);
 }
@@ -1452,15 +1449,14 @@ function renderClassReactionSummary(rows) {
 }
 
 function renderReactionSignals(payload) {
+    // Phase 4 Part B: Dodge / Support Reaction lists cut in the 7→3
+    // leaderboard consolidation; only Return Fire survives in the
+    // Finishers & Survival panel.
     const returnRows = payload?.return_fire || [];
-    const dodgeRows = payload?.dodge || [];
-    const supportRows = payload?.support || [];
     const classRows = payload?.class_summary || [];
     const formatWithClass = (row) => `${stripEtColors(row.player_class || 'UNKNOWN')} • ${formatMs(row.reaction_ms)}`;
 
     renderLeaderList('proximity-returnfire-leaders', returnRows, formatWithClass);
-    renderLeaderList('proximity-dodge-leaders', dodgeRows, formatWithClass);
-    renderLeaderList('proximity-support-reaction-leaders', supportRows, formatWithClass);
     renderClassReactionSummary(classRows);
 }
 
@@ -1471,11 +1467,8 @@ function resetProximityValues() {
     setText('proximity-total-engagements', '--');
     setText('proximity-avg-distance', '--');
     setText('proximity-crossfire', '--');
-    setText('proximity-hotzones', '--');
     setText('proximity-escape-rate', '--');
-    setText('proximity-avg-duration', '--');
     setText('proximity-avg-attackers', '--');
-    setText('proximity-avg-sprint', '--');
     setText('proximity-trade-opportunities', '--');
     setText('proximity-trade-attempts', '--');
     setText('proximity-trade-success', '--');
@@ -1498,15 +1491,12 @@ function resetProximityValues() {
     renderTradeEvents([]);
     renderDuos([]);
     renderLeaderList('proximity-distance-leaders', [], () => '--');
-    renderLeaderList('proximity-sprint-leaders', [], () => '--');
     renderLeaderList('proximity-reaction-leaders', [], () => '--');
     renderLeaderList('proximity-survival-leaders', [], () => '--');
     renderLeaderList('proximity-crossfire-leaders', [], () => '--');
     renderLeaderList('proximity-sync-leaders', [], () => '--');
     renderLeaderList('proximity-focus-leaders', [], () => '--');
     renderLeaderList('proximity-returnfire-leaders', [], () => '--');
-    renderLeaderList('proximity-dodge-leaders', [], () => '--');
-    renderLeaderList('proximity-support-reaction-leaders', [], () => '--');
     renderClassSummary({ classes: [] });
     // v5 resets
     setHtml('spawn-timing-teams', '');
@@ -1705,10 +1695,8 @@ async function loadScopedProximityData() {
                     const distance = row.total_distance != null ? `${formatNumber(Math.round(row.total_distance))}u` : '--';
                     return distance;
                 });
-                renderLeaderList('proximity-sprint-leaders', movers.sprint, (row) => {
-                    const pct = row.sprint_pct != null ? `${row.sprint_pct.toFixed(1)}%` : '--';
-                    return pct;
-                });
+                // Phase 4 Part B: Top Sprint % list cut in the 7→3
+                // leaderboard consolidation (movement micro-stat).
                 renderLeaderList('proximity-reaction-leaders', movers.reaction, (row) => {
                     return formatMs(row.reaction_ms);
                 });

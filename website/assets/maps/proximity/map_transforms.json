@@ -240,6 +240,24 @@
       "source_pk3": "Frostbite.pk3",
       "source_image": "levelshots/frostbite_cc.tga"
     },
+    "etl_frostbite": {
+      "map_name": "etl_frostbite",
+      "image": "/assets/maps/proximity/frostbite.png",
+      "size": [
+        512,
+        512
+      ],
+      "mapcoordsmins": [
+        -5888.0,
+        4352.0
+      ],
+      "mapcoordsmaxs": [
+        1536.0,
+        -3072.0
+      ],
+      "source_pk3": "Frostbite.pk3",
+      "source_image": "levelshots/frostbite_cc.tga"
+    },
     "missile_b3": {
       "map_name": "missile_b3",
       "image": "/assets/maps/proximity/missile_b3.png",

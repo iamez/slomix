@@ -103,9 +103,32 @@ environment. This matches Phase 6 item 6 (live-session / owner validation).
   - Verified: HTML parses balanced, IDs unique, metric-guide/timeline removed,
     hero single-copy, all proximity endpoints 200, legacy JS `node --check` OK,
     map-first DOM order confirmed in served HTML.
-- **Part B REMAINING (owner-visual)**: the deeper per-panel re-grouping into
-  explicit ④ Engagements & Trades / ⑤ Roles & Classes / ⑥ Replay & Teams
-  containers, and the 7→3 leaderboard / 8→5 KPI consolidation. These move
-  many nested panels and their acceptance is a human browser walkthrough
-  (cannot be discharged headlessly) — left for an owner-validated pass on
-  top of this branch. No data-path risk; pure DOM/copy.
+- **Part B-2: SHIPPED (2026-05-16, branch `feat/proximity-ia-part-b-2`)** —
+  the verifiable remainder, plus the audit's last open NIT:
+  - **A8 fix**: explicit `etl_frostbite` calibration key added to
+    `map_transforms.json` + `objective_zones.json` (DB stores
+    `etl_frostbite` exclusively; only a `frostbite` key existed, so the
+    heatmap silently fell back to the uncalibrated relative grid).
+  - **8→5 KPI**: Player Story compressed to 5 narrative tiles
+    (Engagements · Avg Distance · Crossfire · Escape Rate · Avg
+    Attackers); Hot Zones / Avg Duration / Avg Sprint cut.
+  - **7→3 leaderboards**: 10 ranked lists → 3 contextual panels
+    (Space & Pressure / Finishers & Survival / Tempo & Movement) +
+    Class Signals; Sprint / Dodge / Support-Reaction cut. React
+    `LEADERBOARD_TABS` trimmed 8→3 to the same themes.
+  - **Section framing**: ④ Roles & Classes + ⑤ Engagements & Trades
+    dividers added (mirrors ①②③); ⑥ = unchanged route targets.
+  - Verified: html.parser balanced, glyph sequence ①②③④⑤ unique,
+    KPI/leader ids (kept unique / cut absent in HTML+JS), JSON valid,
+    `node --check` OK, curl `/proximity/{players,player-heatmap,
+    combat-positions/heatmap}` (incl. `etl_frostbite`) all 200,
+    `pytest -k proximity` 61 passed / 0 fail.
+- **Part B REMAINING (owner-visual, deferred — needs a browser pass)**:
+  the *physical* block reorder to the master-plan ideal order
+  (④ Engagements before ⑤ Roles), deduping the separate v5.2
+  `#leaderboard-tabs` widget, folding the trailing v5.2 analytics tail
+  (danger zones, combat heatmap, weapon accuracy, revives) into the
+  6-section frame, and the full React glyph-section recompose. These
+  move many nested panels / a large DOM block; acceptance is a human
+  browser walkthrough that cannot be discharged headlessly. No
+  data-path risk; pure DOM/copy.
