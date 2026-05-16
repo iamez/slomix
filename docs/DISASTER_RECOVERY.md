@@ -83,11 +83,12 @@ python postgresql_database_manager.py
 **What it does:**
 
 - ✅ Creates backup of existing DB (if present)
-- ✅ Creates all 90 tables with correct schema
-- ✅ Applies 57-column `player_comprehensive_stats` structure
+- ✅ Creates the ~25 core bot tables (`rounds`, `player_comprehensive_stats`, `processed_files`, `lua_round_teams`, `match_predictions`, `session_teams`, etc.) via `_create_schema_if_missing()`
+- ✅ Applies the 57-column `player_comprehensive_stats` structure
 - ✅ Adds UNIQUE constraints (no duplicates)
 - ✅ Creates indexes for performance
-- ⏱️ Time: ~2 seconds
+- ⚠️ For the full ~90-table production schema (website, planning, proximity, greatshot, etc.), follow up with `scripts/apply_migrations.py` to apply everything under `migrations/`
+- ⏱️ Time: ~2 seconds for the core schema; migrations add a few more seconds
 
 ---
 
