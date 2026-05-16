@@ -317,7 +317,7 @@ Think of it like a **sports statistics tracking system** - but for a video game,
    │
    ├── 3. create_adapter() → PostgreSQLAdapter connects to DB
    │
-   ├── 4. validate_database_schema() → Checks 54 columns exist
+   ├── 4. validate_database_schema() → Verifies required unified-schema columns exist in player_comprehensive_stats (actual table has 57 columns; additive columns are allowed)
    │
    ├── 5. setup_hook():
    │   ├── Load 20 Cogs from bot/cogs/

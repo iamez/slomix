@@ -1419,7 +1419,7 @@ class MultiServerSSHMonitor:
 from bot.core.server_registry import ServerRegistry
 from bot.automation.multi_server_ssh_monitor import MultiServerSSHMonitor
 
-class UltimateBot(commands.Bot):
+class UltimateETLegacyBot(commands.Bot):
     def __init__(self):
         super().__init__(...)
 
@@ -1544,7 +1544,7 @@ class DiscordRateLimiter:
 **Use in bot:**
 
 ```python
-class UltimateBot(commands.Bot):
+class UltimateETLegacyBot(commands.Bot):
     def __init__(self):
         # ...
         self.rate_limiter = DiscordRateLimiter(posts_per_minute=5)
@@ -2570,7 +2570,7 @@ GROUP BY server_id;
 Run both systems in parallel during transition:
 
 ```python
-class UltimateBot(commands.Bot):
+class UltimateETLegacyBot(commands.Bot):
     @tasks.loop(seconds=60)
     async def endstats_monitor(self):
         """Monitor both SSH and webhook-ingested rounds."""
