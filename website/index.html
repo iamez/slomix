@@ -2122,7 +2122,7 @@
                     <div class="glass-card p-5 rounded-xl border-l-4 border-brand-rose">
                         <div class="text-[11px] font-bold text-slate-500 uppercase" title="Average number of unique attackers involved per engagement.">Avg Attackers</div>
                         <div id="proximity-avg-attackers" class="text-3xl font-black text-brand-rose mt-2">--</div>
-                        <div class="text-xs text-slate-500 mt-1">Enemies of attention pulled per duel</div>
+                        <div class="text-xs text-slate-500 mt-1">Enemies drawn per duel</div>
                     </div>
                 </div>
 
@@ -2217,9 +2217,11 @@
                      Class Signals. Cut as redundant: Top Sprint % (movement
                      micro-stat, mirrors the cut Avg Sprint KPI), Dodge
                      Reaction (overlaps Return Fire as reactive timing),
-                     Support Reaction (sparse Beta signal). renderLeaderList
-                     null-guards missing containers, so the cut IDs' render
-                     calls become harmless no-ops. -->
+                     Support Reaction (sparse Beta signal). The cut IDs'
+                     render/reset/populate calls were removed from
+                     proximity.js so JS stays in lockstep with the DOM;
+                     renderLeaderList's missing-container null-guard is kept
+                     only as defence-in-depth. -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
                     <div class="glass-panel p-6 rounded-xl">
                         <div class="flex items-center justify-between mb-4">
