@@ -2198,110 +2198,48 @@
                     </div>
                 </div>
 
-                <!-- ===== ④ Roles & Classes — who creates space, who finishes ===== -->
-                <!-- Phase 4 IA note: the master-plan ideal order is
-                     ④ Engagements & Trades then ⑤ Roles & Classes. The legacy
-                     DOM has the ranked panels before the engagement panels;
-                     a faithful physical block reorder (plus deduping the
-                     separate v5.2 #leaderboard-tabs widget further down) is
-                     owner-visual and headlessly unverifiable, so the dividers
-                     are numbered to honest DOM order here and the true-order
-                     reorder is deferred to an owner browser pass. -->
+                <!-- v5.2 Danger Zones -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Danger Zones</div>
+                            <div class="flex gap-2 items-center">
+                                <select id="danger-zones-class" class="rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                                    <option value="">All Classes</option>
+                                    <option value="SOLDIER">Soldier</option>
+                                    <option value="MEDIC">Medic</option>
+                                    <option value="ENGINEER">Engineer</option>
+                                    <option value="FIELDOPS">Field Ops</option>
+                                    <option value="COVERTOPS">Covert Ops</option>
+                                </select>
+                                <input id="danger-zones-map" type="text" placeholder="Map name..." class="w-28 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                            </div>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Death hotspots colored by class — where do players die most?</div>
+                        <div id="danger-zones-stats" class="text-[11px] text-slate-500 mb-2"></div>
+                        <canvas id="danger-zones-canvas" width="512" height="512" class="w-full rounded-lg border border-white/10 bg-slate-950" style="max-width:512px;aspect-ratio:1"></canvas>
+                    </div>
+
+                    <!-- v5.2 Combat Heatmap -->
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Combat Heatmap</div>
+                            <div class="flex gap-2 items-center">
+                                <select id="combat-heatmap-perspective" class="rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                                    <option value="kills">Kills</option>
+                                    <option value="deaths">Deaths</option>
+                                </select>
+                                <input id="combat-heatmap-map" type="text" placeholder="Map name..." class="w-28 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                            </div>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Kill/death positions with kill lines (last 30 days).</div>
+                        <canvas id="combat-heatmap-canvas" width="512" height="512" class="w-full rounded-lg border border-white/10 bg-slate-950" style="max-width:512px;aspect-ratio:1"></canvas>
+                    </div>
+                </div>
+
+                <!-- ===== ④ Engagements & Trades — what happened around the map ===== -->
                 <div class="flex items-center gap-3 mb-3 mt-10">
                     <span class="text-xs font-black text-brand-amber">④</span>
-                    <h2 class="text-sm font-black uppercase tracking-widest text-slate-300">Roles &amp; Classes</h2>
-                    <span class="text-[11px] text-slate-500">who creates space, who finishes</span>
-                </div>
-                <!-- Phase 4 Part B: 10 ranked leaderboard lists across 4
-                     prototype panels collapsed to 3 contextual panels +
-                     Class Signals. Cut as redundant: Top Sprint % (movement
-                     micro-stat, mirrors the cut Avg Sprint KPI), Dodge
-                     Reaction (overlaps Return Fire as reactive timing),
-                     Support Reaction (sparse Beta signal). The cut IDs'
-                     render/reset/populate calls were removed from
-                     proximity.js so JS stays in lockstep with the DOM;
-                     renderLeaderList's missing-container null-guard is kept
-                     only as defence-in-depth. -->
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-                    <div class="glass-panel p-6 rounded-xl">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="text-sm font-bold text-slate-400">Space &amp; Pressure</div>
-                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-emerald/10 text-brand-emerald">Live</span>
-                        </div>
-                        <div class="text-[11px] text-slate-500 mb-3">Who creates space — coordinated crossfire pressure and surviving focus fire.</div>
-                        <div class="space-y-4">
-                            <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Kills produced while teammate crossfire overlap is active.">Crossfire Kills</div>
-                                <div id="proximity-crossfire-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
-                            </div>
-                            <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Average teammate delay in crossfire actions (ms), lower is better.">Best Sync</div>
-                                <div id="proximity-sync-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
-                            </div>
-                            <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Survival rate for players when targeted by focused pressure.">Focus Survivors</div>
-                                <div id="proximity-focus-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="glass-panel p-6 rounded-xl">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="text-sm font-bold text-slate-400">Finishers &amp; Survival</div>
-                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-rose/10 text-brand-rose">Live</span>
-                        </div>
-                        <div class="text-[11px] text-slate-500 mb-3">Who finishes and who gets out alive — longest survival and fastest return fire.</div>
-                        <div class="space-y-4">
-                            <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Longest average survival duration in tracked windows.">Longest Survival</div>
-                                <div id="proximity-survival-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
-                            </div>
-                            <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Time to first damage dealt by the targeted player after initial incoming hit.">Return Fire</div>
-                                <div id="proximity-returnfire-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="glass-panel p-6 rounded-xl">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="text-sm font-bold text-slate-400">Tempo &amp; Movement</div>
-                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">Live</span>
-                        </div>
-                        <div class="text-[11px] text-slate-500 mb-3">Who covers ground and reacts first — map distance and spawn reaction.</div>
-                        <div class="space-y-4">
-                            <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Highest total movement distance while tracked.">Top Distance</div>
-                                <div id="proximity-distance-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
-                            </div>
-                            <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Spawn-to-first-movement reaction time (ms), lower is faster.">Spawn Reaction Time</div>
-                                <div id="proximity-reaction-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 gap-6 mt-8">
-                    <div class="glass-panel p-6 rounded-xl">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="text-sm font-bold text-slate-400">Class Signals</div>
-                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-amber/10 text-brand-amber">Live</span>
-                        </div>
-                        <div class="text-[11px] text-slate-500 mb-3">Class composition from `player_track` (C0RN does not provide this view).</div>
-                        <div id="proximity-class-summary" class="space-y-2 text-xs text-slate-300">
-                            <div class="text-[11px] text-slate-500">No class metrics yet.</div>
-                        </div>
-                        <div class="text-[11px] text-slate-500 mt-4 mb-2">Class reaction baselines from `REACTION_METRICS` (lower is faster).</div>
-                        <div id="proximity-class-reaction-summary" class="space-y-2 text-xs text-slate-300">
-                            <div class="text-[11px] text-slate-500">No class reaction baselines yet.</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ===== ⑤ Engagements & Trades — what happened around the map ===== -->
-                <div class="flex items-center gap-3 mb-3 mt-10">
-                    <span class="text-xs font-black text-brand-cyan">⑤</span>
                     <h2 class="text-sm font-black uppercase tracking-widest text-slate-300">Engagements &amp; Trades</h2>
                     <span class="text-[11px] text-slate-500">the trades and fights this scope produced</span>
                 </div>
@@ -2600,61 +2538,96 @@
                     <div id="prox-scores-list"></div>
                 </div>
 
-                <!-- v5.2 Danger Zones -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                <!-- ===== ⑤ Roles & Classes — who creates space, who finishes ===== -->
+                <div class="flex items-center gap-3 mb-3 mt-10">
+                    <span class="text-xs font-black text-brand-cyan">⑤</span>
+                    <h2 class="text-sm font-black uppercase tracking-widest text-slate-300">Roles &amp; Classes</h2>
+                    <span class="text-[11px] text-slate-500">who creates space, who finishes</span>
+                </div>
+                <!-- Phase 4 Part B: 10 ranked leaderboard lists across 4
+                     prototype panels collapsed to 3 contextual panels +
+                     Class Signals. Cut as redundant: Top Sprint % (movement
+                     micro-stat, mirrors the cut Avg Sprint KPI), Dodge
+                     Reaction (overlaps Return Fire as reactive timing),
+                     Support Reaction (sparse Beta signal). The cut IDs'
+                     render/reset/populate calls were removed from
+                     proximity.js so JS stays in lockstep with the DOM;
+                     renderLeaderList's missing-container null-guard is kept
+                     only as defence-in-depth. -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
                     <div class="glass-panel p-6 rounded-xl">
                         <div class="flex items-center justify-between mb-4">
-                            <div class="text-sm font-bold text-slate-400">Danger Zones</div>
-                            <div class="flex gap-2 items-center">
-                                <select id="danger-zones-class" class="rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
-                                    <option value="">All Classes</option>
-                                    <option value="SOLDIER">Soldier</option>
-                                    <option value="MEDIC">Medic</option>
-                                    <option value="ENGINEER">Engineer</option>
-                                    <option value="FIELDOPS">Field Ops</option>
-                                    <option value="COVERTOPS">Covert Ops</option>
-                                </select>
-                                <input id="danger-zones-map" type="text" placeholder="Map name..." class="w-28 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                            <div class="text-sm font-bold text-slate-400">Space &amp; Pressure</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-emerald/10 text-brand-emerald">Live</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Who creates space — coordinated crossfire pressure and surviving focus fire.</div>
+                        <div class="space-y-4">
+                            <div class="glass-card p-4 rounded-lg">
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Kills produced while teammate crossfire overlap is active.">Crossfire Kills</div>
+                                <div id="proximity-crossfire-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
+                            </div>
+                            <div class="glass-card p-4 rounded-lg">
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Average teammate delay in crossfire actions (ms), lower is better.">Best Sync</div>
+                                <div id="proximity-sync-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
+                            </div>
+                            <div class="glass-card p-4 rounded-lg">
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Survival rate for players when targeted by focused pressure.">Focus Survivors</div>
+                                <div id="proximity-focus-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
                             </div>
                         </div>
-                        <div class="text-[11px] text-slate-500 mb-3">Death hotspots colored by class — where do players die most?</div>
-                        <div id="danger-zones-stats" class="text-[11px] text-slate-500 mb-2"></div>
-                        <canvas id="danger-zones-canvas" width="512" height="512" class="w-full rounded-lg border border-white/10 bg-slate-950" style="max-width:512px;aspect-ratio:1"></canvas>
                     </div>
 
-                    <!-- v5.2 Combat Heatmap -->
                     <div class="glass-panel p-6 rounded-xl">
                         <div class="flex items-center justify-between mb-4">
-                            <div class="text-sm font-bold text-slate-400">Combat Heatmap</div>
-                            <div class="flex gap-2 items-center">
-                                <select id="combat-heatmap-perspective" class="rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
-                                    <option value="kills">Kills</option>
-                                    <option value="deaths">Deaths</option>
-                                </select>
-                                <input id="combat-heatmap-map" type="text" placeholder="Map name..." class="w-28 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                            <div class="text-sm font-bold text-slate-400">Finishers &amp; Survival</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-rose/10 text-brand-rose">Live</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Who finishes and who gets out alive — longest survival and fastest return fire.</div>
+                        <div class="space-y-4">
+                            <div class="glass-card p-4 rounded-lg">
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Longest average survival duration in tracked windows.">Longest Survival</div>
+                                <div id="proximity-survival-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
+                            </div>
+                            <div class="glass-card p-4 rounded-lg">
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Time to first damage dealt by the targeted player after initial incoming hit.">Return Fire</div>
+                                <div id="proximity-returnfire-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
                             </div>
                         </div>
-                        <div class="text-[11px] text-slate-500 mb-3">Kill/death positions with kill lines (last 30 days).</div>
-                        <canvas id="combat-heatmap-canvas" width="512" height="512" class="w-full rounded-lg border border-white/10 bg-slate-950" style="max-width:512px;aspect-ratio:1"></canvas>
+                    </div>
+
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Tempo &amp; Movement</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">Live</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Who covers ground and reacts first — map distance and spawn reaction.</div>
+                        <div class="space-y-4">
+                            <div class="glass-card p-4 rounded-lg">
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Highest total movement distance while tracked.">Top Distance</div>
+                                <div id="proximity-distance-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
+                            </div>
+                            <div class="glass-card p-4 rounded-lg">
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Spawn-to-first-movement reaction time (ms), lower is faster.">Spawn Reaction Time</div>
+                                <div id="proximity-reaction-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Phase 4 IA: Player Combat Map relocated to the HERO slot
-                     (top of page, map-first) — see section ① above. -->
-
-                <!-- v5.2 Leaderboard Tabs -->
-                <div class="glass-panel p-6 rounded-xl mt-8">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="text-sm font-bold text-slate-400">Proximity Leaderboards</div>
-                        <div class="flex gap-1" id="lb-range-btns">
-                            <button class="lb-range-btn text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-500 border border-white/10" data-days="14">14d</button>
-                            <button class="lb-range-btn text-[10px] px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/40" data-days="30">30d</button>
-                            <button class="lb-range-btn text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-500 border border-white/10" data-days="90">90d</button>
+                <div class="grid grid-cols-1 gap-6 mt-8">
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Class Signals</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-amber/10 text-brand-amber">Live</span>
                         </div>
-                    </div>
-                    <div id="leaderboard-tabs" class="flex flex-wrap gap-1 mb-4"></div>
-                    <div id="leaderboard-content" class="text-xs text-slate-300">
-                        <div class="text-[11px] text-slate-500">Loading leaderboards...</div>
+                        <div class="text-[11px] text-slate-500 mb-3">Class composition from `player_track` (C0RN does not provide this view).</div>
+                        <div id="proximity-class-summary" class="space-y-2 text-xs text-slate-300">
+                            <div class="text-[11px] text-slate-500">No class metrics yet.</div>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mt-4 mb-2">Class reaction baselines from `REACTION_METRICS` (lower is faster).</div>
+                        <div id="proximity-class-reaction-summary" class="space-y-2 text-xs text-slate-300">
+                            <div class="text-[11px] text-slate-500">No class reaction baselines yet.</div>
+                        </div>
                     </div>
                 </div>
 
@@ -2885,6 +2858,25 @@
                         </div>
                     </div>
                 </div>
+                <!-- v5.2 Leaderboard Tabs — relocated under ⑤ Roles as a collapsible advanced drill-down (Item 2; JS unchanged, ids intact) -->
+                <details class="mt-8">
+                    <summary class="cursor-pointer select-none text-sm font-bold text-slate-400 mb-3">All Categories (advanced) ▾</summary>
+                <div class="glass-panel p-6 rounded-xl">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="text-sm font-bold text-slate-400">Proximity Leaderboards</div>
+                        <div class="flex gap-1" id="lb-range-btns">
+                            <button class="lb-range-btn text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-500 border border-white/10" data-days="14">14d</button>
+                            <button class="lb-range-btn text-[10px] px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/40" data-days="30">30d</button>
+                            <button class="lb-range-btn text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-500 border border-white/10" data-days="90">90d</button>
+                        </div>
+                    </div>
+                    <div id="leaderboard-tabs" class="flex flex-wrap gap-1 mb-4"></div>
+                    <div id="leaderboard-content" class="text-xs text-slate-300">
+                        <div class="text-[11px] text-slate-500">Loading leaderboards...</div>
+                    </div>
+                </div>
+                </details>
+
 
             </div>
         </div>
