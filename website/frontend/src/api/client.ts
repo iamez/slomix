@@ -48,6 +48,7 @@ import type {
   WeaponHitRegionsResponse,
   HeadshotRatesResponse,
   CombatHeatmapResponse,
+  PlayerHeatmapResponse,
   KillLinesResponse,
   DangerZonesResponse,
   MomentumResponse,
@@ -242,6 +243,24 @@ export const api = {
     if (opts?.victimClass) q.set('victim_class', opts.victimClass);
     if (opts?.team) q.set('team', opts.team);
     return get<CombatHeatmapResponse>(`/proximity/combat-positions/heatmap?${q.toString()}`);
+  },
+  getPlayerHeatmap: (
+    mapName: string,
+    playerGuid: string,
+    mode: string,
+    opts?: { weaponId?: number; rangeDays?: number; sessionDate?: string; roundNumber?: number; gridSize?: number },
+  ) => {
+    const q = new URLSearchParams({
+      map_name: mapName,
+      player_guid: playerGuid,
+      mode,
+      range_days: String(opts?.rangeDays ?? 30),
+    });
+    if (opts?.weaponId != null) q.set('weapon_id', String(opts.weaponId));
+    if (opts?.sessionDate) q.set('session_date', opts.sessionDate);
+    if (opts?.roundNumber != null) q.set('round_number', String(opts.roundNumber));
+    if (opts?.gridSize != null) q.set('grid_size', String(opts.gridSize));
+    return get<PlayerHeatmapResponse>(`/proximity/player-heatmap?${q.toString()}`);
   },
   getKillLines: (mapName: string, opts?: { weaponId?: number; attackerGuid?: string; rangeDays?: number; limit?: number }) => {
     const q = new URLSearchParams({ map_name: mapName, range_days: String(opts?.rangeDays ?? 30), limit: String(opts?.limit ?? 100) });

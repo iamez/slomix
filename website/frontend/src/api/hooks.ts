@@ -476,6 +476,19 @@ export const useCombatHeatmap = (mapName: string, opts?: { weaponId?: number; pe
     staleTime: 30_000,
   });
 
+export const usePlayerHeatmap = (
+  mapName: string,
+  playerGuid: string,
+  mode: string,
+  opts?: { weaponId?: number; rangeDays?: number; sessionDate?: string; roundNumber?: number; gridSize?: number },
+) =>
+  useQuery({
+    queryKey: ['player-heatmap', mapName, playerGuid, mode, opts],
+    queryFn: () => api.getPlayerHeatmap(mapName, playerGuid, mode, opts),
+    enabled: !!mapName && !!playerGuid,
+    staleTime: 30_000,
+  });
+
 export const useKillLines = (mapName: string, opts?: { weaponId?: number; attackerGuid?: string; rangeDays?: number; limit?: number }) =>
   useQuery({
     queryKey: ['kill-lines', mapName, opts],

@@ -7,7 +7,7 @@ import { Skeleton } from '../components/Skeleton';
 import { DataTable, type Column } from '../components/DataTable';
 import { InfoTip } from '../components/InfoTip';
 import { ProximityIntro } from '../components/ProximityIntro';
-import { useProximityLeaderboards, useProximitySessionScores, useProximityKillOutcomes, useProximityKillOutcomePlayerStats, useProximityHitRegions, useProximityHeadshotRates, useCombatHeatmap, useKillLines, useDangerZones, useMovementStats, useProxScores, useProxFormula } from '../api/hooks';
+import { useProximityLeaderboards, useProximitySessionScores, useProximityKillOutcomes, useProximityKillOutcomePlayerStats, useProximityHitRegions, useProximityHeadshotRates, useCombatHeatmap, usePlayerHeatmap, useKillLines, useDangerZones, useMovementStats, useProxScores, useProxFormula } from '../api/hooks';
 import type { ProximityLeaderboardEntry, SessionScoreEntry, HitRegionPlayer, HeadshotRateEntry, MovementStatsPlayer, ProxScorePlayer, ProximityScope } from '../api/types';
 import { METRICS, LEADERBOARD_HELP } from './proximity-glossary';
 
@@ -66,7 +66,7 @@ function formatLeaderDetail(category: string, entry: ProximityLeaderboardEntry):
 interface ScopeSession { session_date: string; maps: Array<{ map_name: string; rounds: Array<{ round_number: number; round_start_unix: number }> }> }
 interface ScopeData { sessions: ScopeSession[]; scope?: { session_date: string } }
 interface SummaryData { ready: boolean; status?: string; message?: string; total_engagements?: number; sample_rounds?: number; avg_distance?: number; avg_reaction_ms?: number }
-interface HotzonePoint { x: number; y: number; count: number; team?: string }
+interface HotzonePoint { x: number; y: number; count: number }
 interface HotzoneData { hotzones: HotzonePoint[]; map_name?: string; image_path?: string }
 interface EventItem { id: number; target_name: string; attacker_name: string; target_team: string; attacker_team: string; distance: number; reaction_ms: number; weapon?: string; timestamp_ms?: number }
 interface EventsData { events: EventItem[] }
@@ -95,7 +95,7 @@ function buildParams(state: { sessionDate: string | null; mapName: string | null
 
 // ── Heatmap Canvas ───────────────────────────────────────────────────────────
 
-function HeatmapCanvas({ hotzones, mapImage, intensity = 1.0 }: { hotzones: HotzonePoint[]; mapImage: string | null; intensity: number }) {
+function HeatmapCanvas({ hotzones, mapImage, intensity = 1.0, color }: { hotzones: HotzonePoint[]; mapImage: string | null; intensity: number; color?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   // drawRef holds the current `draw` closure so the image loader can
@@ -133,14 +133,11 @@ function HeatmapCanvas({ hotzones, mapImage, intensity = 1.0 }: { hotzones: Hotz
       const alpha = Math.min(1, (p.count / maxCount) * intensity * 0.8 + 0.1);
       const r = Math.max(4, (p.count / maxCount) * 12);
 
-      const team = String(p.team ?? '').toUpperCase();
-      if (team === 'AXIS' || team === '1') {
-        ctx.fillStyle = `rgba(239, 68, 68, ${alpha})`;
-      } else if (team === 'ALLIES' || team === '2') {
-        ctx.fillStyle = `rgba(59, 130, 246, ${alpha})`;
-      } else {
-        ctx.fillStyle = `rgba(56, 189, 248, ${alpha})`;
-      }
+      // A4 fix: the heatmap endpoints never return `team`, so the old
+      // AXIS/ALLIES branch was dead code (always fell through to cyan).
+      // Color is now driven by the caller (per-player mode) with a cyan
+      // default for the global hotzones view.
+      ctx.fillStyle = `rgba(${color ?? '56, 189, 248'}, ${alpha})`;
 
       ctx.beginPath();
       ctx.arc(nx, ny, r, 0, Math.PI * 2);
@@ -1000,6 +997,90 @@ function DangerZonesPanel() {
 
 // ── Combat Heatmap (v5.2) ───────────────────────────────────────────────────
 
+// ── Per-player Combat Map (flagship) ─────────────────────────────────────────
+
+const PLAYER_HEATMAP_MODES: { key: 'kills_from' | 'victims_die' | 'player_dies' | 'presence'; label: string; rgb: string; hint: string }[] = [
+  { key: 'kills_from', label: 'Kills from', rgb: '251, 191, 36', hint: 'where they stand when they get kills' },
+  { key: 'victims_die', label: 'Victims die', rgb: '244, 63, 94', hint: "where this player's victims fall" },
+  { key: 'player_dies', label: 'Player dies', rgb: '96, 165, 250', hint: 'where this player dies (enemy kills only)' },
+  { key: 'presence', label: 'Presence', rgb: '34, 211, 238', hint: 'where this player spends time' },
+];
+
+function PlayerHeatmapPanel() {
+  const [mapName, setMapName] = useState('');
+  const [playerGuid, setPlayerGuid] = useState('');
+  const [mode, setMode] = useState<'kills_from' | 'victims_die' | 'player_dies' | 'presence'>('kills_from');
+  const modeCfg = PLAYER_HEATMAP_MODES.find(m => m.key === mode) ?? PLAYER_HEATMAP_MODES[0];
+
+  const { data, isLoading } = usePlayerHeatmap(mapName, playerGuid, mode, { rangeDays: 30 });
+  const hotzones = data?.hotzones ?? [];
+
+  return (
+    <div className="mt-6">
+      <GlassPanel>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">
+              Player Combat Map
+            </div>
+            <div className="text-[10px] text-slate-500">
+              Where one player fights on a map — no verdict, just what happened
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <input
+              type="text"
+              placeholder="Player GUID (8 or 32 char)..."
+              value={playerGuid}
+              onChange={e => { setPlayerGuid(e.target.value); }}
+              className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-44 focus:outline-none focus:border-cyan-500"
+            />
+            <input
+              type="text"
+              placeholder="Map name..."
+              value={mapName}
+              onChange={e => { setMapName(e.target.value); }}
+              className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-32 focus:outline-none focus:border-cyan-500"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-1 mb-3">
+          {PLAYER_HEATMAP_MODES.map(m => (
+            <button
+              key={m.key}
+              onClick={() => { setMode(m.key); }}
+              className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${m.key === mode ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:text-slate-300'}`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        {!mapName || !playerGuid ? (
+          <div className="flex items-center justify-center h-64 text-xs text-slate-500">
+            Enter a player GUID and a map name to see where they fight
+          </div>
+        ) : isLoading ? (
+          <Skeleton variant="card" count={1} />
+        ) : (
+          <div className="flex justify-center">
+            <HeatmapCanvas hotzones={hotzones} mapImage={null} intensity={1.0} color={modeCfg.rgb} />
+          </div>
+        )}
+
+        {data && (
+          <div className="mt-2 text-[10px] text-slate-500 text-center">
+            {stripColors(data.player_name)} · {modeCfg.label} ({modeCfg.hint}) · {hotzones.length} zones · {data.total} samples
+            {data.sampled ? ' · downsampled' : ''}
+            {data.coverage === 'kills_only' ? ' · enemy kills only — world/suicide deaths not tracked' : ''}
+          </div>
+        )}
+      </GlassPanel>
+    </div>
+  );
+}
+
 function CombatHeatmapPanel() {
   const [mapName, setMapName] = useState('');
   const [perspective, setPerspective] = useState<'kills' | 'deaths'>('kills');
@@ -1649,6 +1730,9 @@ export default function Proximity() {
 
       {/* Danger Zones — class-specific death hotspots */}
       <DangerZonesPanel />
+
+      {/* Per-player Combat Map — flagship: per-player, multi-mode */}
+      <PlayerHeatmapPanel />
 
       {/* Combat Heatmap — global data, always visible */}
       <CombatHeatmapPanel />

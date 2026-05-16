@@ -2657,6 +2657,28 @@
                     </div>
                 </div>
 
+                <!-- Per-player Combat Map (flagship) -->
+                <div class="glass-panel p-6 rounded-xl mt-8">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <div>
+                            <div class="text-sm font-bold text-slate-300">Player Combat Map</div>
+                            <div class="text-[11px] text-slate-500">Where one player fights on a map — no verdict, just what happened.</div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 items-center">
+                            <input id="proximity-player-heatmap-player" type="text" placeholder="Player GUID (8 or 32 char)..." class="w-44 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                            <input id="proximity-player-heatmap-map" type="text" placeholder="Map name..." class="w-28 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                        </div>
+                    </div>
+                    <div id="proximity-player-heatmap-modes" class="flex flex-wrap gap-2 mb-3">
+                        <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="kills_from">Kills from</button>
+                        <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="victims_die">Victims die</button>
+                        <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="player_dies">Player dies</button>
+                        <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="presence">Presence</button>
+                    </div>
+                    <canvas id="proximity-player-heatmap" width="512" height="512" class="w-full rounded-lg border border-white/10 bg-slate-950" style="max-width:640px;aspect-ratio:1"></canvas>
+                    <div id="proximity-player-heatmap-caption" class="text-xs text-slate-500 mt-2">Pick a player and a map to see where they fight.</div>
+                </div>
+
                 <!-- v5.2 Leaderboard Tabs -->
                 <div class="glass-panel p-6 rounded-xl mt-8">
                     <div class="flex items-center justify-between mb-4">

@@ -24,6 +24,18 @@ const proximityVizState = {
     showObjectiveZones: true,
     heatIntensity: 1.0,
     teamEmphasis: 'auto',
+    playerHeatmapMode: 'kills_from',
+    playerHeatmapGuid: '',
+    playerHeatmapMap: '',
+};
+
+// Per-player heatmap mode -> { label, caption, rgb } (rgb drives the canvas
+// gradient). Mirrors the backend modes of GET /proximity/player-heatmap.
+const PLAYER_HEATMAP_MODES = {
+    kills_from: { label: 'Kills from', rgb: '251, 191, 36', hint: 'where they stand when they get kills' },
+    victims_die: { label: 'Victims die', rgb: '244, 63, 94', hint: "where this player's victims fall" },
+    player_dies: { label: 'Player dies', rgb: '96, 165, 250', hint: 'where this player dies (enemy kills only)' },
+    presence: { label: 'Presence', rgb: '34, 211, 238', hint: 'where this player spends time' },
 };
 
 const proximityRenderCache = {
@@ -2680,6 +2692,159 @@ async function renderCombatHeatmap(mapName, perspective) {
     }
 }
 
+/* ===== Per-player Combat Map (flagship) ===== */
+
+// Renders GET /proximity/player-heatmap onto #proximity-player-heatmap.
+// Consumes the {x,y,count}/grid_size contract (same as renderCombatHeatmap),
+// which is why this also sidesteps the A1 grid_x/grid_y blank-canvas bug.
+async function renderPlayerHeatmap() {
+    const canvas = document.getElementById('proximity-player-heatmap');
+    const captionEl = document.getElementById('proximity-player-heatmap-caption');
+    if (!canvas) return;
+
+    const mapName = String(proximityVizState.playerHeatmapMap || '').trim();
+    const playerGuid = String(proximityVizState.playerHeatmapGuid || '').trim();
+    const mode = PLAYER_HEATMAP_MODES[proximityVizState.playerHeatmapMode]
+        ? proximityVizState.playerHeatmapMode : 'kills_from';
+    const modeCfg = PLAYER_HEATMAP_MODES[mode];
+
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth || 512;
+    const H = canvas.clientHeight || 512;
+    canvas.width = Math.floor(W * dpr);
+    canvas.height = Math.floor(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    if (!mapName || !playerGuid) {
+        ctx.fillStyle = '#64748b';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('Enter a player (name search GUID) and a map', W / 2, H / 2);
+        if (captionEl) captionEl.textContent = 'Pick a player and a map to see where they fight.';
+        return;
+    }
+
+    let resp;
+    try {
+        const params = buildScopeParams({ extra: { map_name: mapName, mode, player_guid: playerGuid } });
+        resp = await fetchJSON(`${API_BASE}/proximity/player-heatmap?${params}`);
+    } catch (err) {
+        console.warn('Player heatmap fetch failed:', err);
+        if (captionEl) captionEl.textContent = 'Failed to load player heatmap.';
+        ctx.fillStyle = '#64748b';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('Failed to load', W / 2, H / 2);
+        return;
+    }
+
+    await ensureMapTransformConfig();
+    const transform = getMapTransformEntry(mapName);
+    const worldBounds = getWorldBounds(transform);
+    const mapImage = await preloadMapImage(transform?.image || null);
+    if (mapImage) {
+        ctx.save();
+        ctx.globalAlpha = 0.28;
+        ctx.drawImage(mapImage, 0, 0, W, H);
+        ctx.restore();
+    } else {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, W, H);
+    }
+
+    const hotzones = Array.isArray(resp?.hotzones) ? resp.hotzones : [];
+    const gridSize = Number(resp?.grid_size) || PROXIMITY_GRID_SIZE;
+    const playerName = stripEtColors(resp?.player_name || playerGuid);
+
+    if (worldBounds && proximityVizState.showObjectiveZones) {
+        await ensureObjectiveZonesConfig();
+        const zones = getObjectiveZonesForMap(mapName).filter(shouldRenderObjectiveZone);
+        drawObjectiveZones(ctx, W, H, worldBounds, zones);
+    }
+
+    if (hotzones.length === 0) {
+        ctx.fillStyle = '#64748b';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`No ${modeCfg.label.toLowerCase()} data for ${stripEtColors(mapName)}`, W / 2, H / 2);
+        if (captionEl) {
+            captionEl.textContent = `${playerName} • ${modeCfg.label} • no samples on ${stripEtColors(mapName)} • ${getScopeDescription()}`;
+        }
+        return;
+    }
+
+    // Relative fallback for uncalibrated maps (mirrors renderCombatHeatmap).
+    const pad = 6;
+    let fallbackBounds = null;
+    if (!worldBounds) {
+        const xs = [];
+        const ys = [];
+        for (const hz of hotzones) {
+            const gx = Number(hz.x);
+            const gy = Number(hz.y);
+            if (Number.isFinite(gx) && Number.isFinite(gy)) {
+                xs.push((gx + 0.5) * gridSize);
+                ys.push((gy + 0.5) * gridSize);
+            }
+        }
+        if (xs.length && ys.length) {
+            const minX = Math.min(...xs), maxX = Math.max(...xs);
+            const minY = Math.min(...ys), maxY = Math.max(...ys);
+            fallbackBounds = {
+                minX, minY,
+                spanX: Math.max(maxX - minX, 1),
+                spanY: Math.max(maxY - minY, 1),
+            };
+        }
+    }
+    const fallbackProject = (worldX, worldY) => {
+        if (!fallbackBounds) return null;
+        const nx = (worldX - fallbackBounds.minX) / fallbackBounds.spanX;
+        const ny = (worldY - fallbackBounds.minY) / fallbackBounds.spanY;
+        return { x: pad + nx * (W - pad * 2), y: pad + ny * (H - pad * 2) };
+    };
+
+    const heatScale = clamp(Number(proximityVizState.heatIntensity || 1), 0.6, 1.8);
+    const maxCount = Math.max(...hotzones.map((h) => Number(h.count || 0)), 1);
+    for (const hz of hotzones) {
+        const gx = Number(hz.x);
+        const gy = Number(hz.y);
+        if (!Number.isFinite(gx) || !Number.isFinite(gy)) continue;
+        const intensity = clamp(Number(hz.count || 0) / maxCount, 0, 1);
+        const worldX = (gx + 0.5) * gridSize;
+        const worldY = (gy + 0.5) * gridSize;
+        const point = worldBounds
+            ? worldToCanvasPoint(worldX, worldY, W, H, worldBounds)
+            : fallbackProject(worldX, worldY);
+        if (!point) continue;
+        const radius = (4 + intensity * (worldBounds ? 20 : 16)) * (0.72 + heatScale * 0.28);
+        const alpha = (0.18 + intensity * 0.62) * clamp(heatScale, 0.6, 1.8);
+        const grad = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius);
+        grad.addColorStop(0, `rgba(${modeCfg.rgb}, ${alpha})`);
+        grad.addColorStop(0.7, `rgba(${modeCfg.rgb}, ${alpha * 0.45})`);
+        grad.addColorStop(1, `rgba(${modeCfg.rgb}, 0)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    if (captionEl) {
+        const bits = [
+            playerName,
+            `${modeCfg.label} (${modeCfg.hint})`,
+            `${hotzones.length} zones`,
+            `${Number(resp?.total || 0)} samples`,
+        ];
+        if (resp?.sampled) bits.push('downsampled');
+        if (resp?.coverage === 'kills_only') bits.push('enemy kills only — world/suicide deaths not tracked');
+        bits.push(getScopeDescription());
+        captionEl.textContent = bits.join(' • ');
+    }
+}
+
 /* ===== v5.2 Leaderboard Tabs ===== */
 
 const LB_TABS = [
@@ -2885,6 +3050,43 @@ function bindV52PanelEvents() {
         hmMapInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') hmLoad(); });
     }
     if (hmPerspective) hmPerspective.onchange = hmLoad;
+
+    // Per-player Combat Map (flagship)
+    const phPlayerInput = document.getElementById('proximity-player-heatmap-player');
+    const phMapInput = document.getElementById('proximity-player-heatmap-map');
+    const phModeBtns = Array.from(document.querySelectorAll('.player-pmode-btn'));
+    const phSyncModeBtns = () => {
+        phModeBtns.forEach((b) => {
+            const active = b.dataset.pmode === proximityVizState.playerHeatmapMode;
+            b.className = `player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition ${active
+                ? 'bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/40'
+                : 'bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300'}`;
+        });
+    };
+    const phLoad = () => {
+        proximityVizState.playerHeatmapGuid = phPlayerInput?.value || '';
+        proximityVizState.playerHeatmapMap = phMapInput?.value || '';
+        renderPlayerHeatmap().catch((err) => console.warn('Player heatmap render failed:', err));
+    };
+    if (phMapInput && !phMapInput.value && proximityScopeState.mapName) {
+        phMapInput.value = proximityScopeState.mapName;
+    }
+    if (phPlayerInput) {
+        phPlayerInput.onchange = phLoad;
+        phPlayerInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') phLoad(); });
+    }
+    if (phMapInput) {
+        phMapInput.onchange = phLoad;
+        phMapInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') phLoad(); });
+    }
+    phModeBtns.forEach((b) => {
+        b.onclick = () => {
+            proximityVizState.playerHeatmapMode = b.dataset.pmode || 'kills_from';
+            phSyncModeBtns();
+            phLoad();
+        };
+    });
+    phSyncModeBtns();
 
     // Leaderboard tabs
     renderLeaderboardTabs();
