@@ -1577,6 +1577,9 @@ export default function Proximity() {
         </div>
       </GlassPanel>
 
+      {/* ① HERO — Player Combat Map (map-first; mirrors legacy IA) */}
+      <PlayerHeatmapPanel />
+
       {/* Summary Stats */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
@@ -1731,8 +1734,8 @@ export default function Proximity() {
       {/* Danger Zones — class-specific death hotspots */}
       <DangerZonesPanel />
 
-      {/* Per-player Combat Map — flagship: per-player, multi-mode */}
-      <PlayerHeatmapPanel />
+      {/* Phase 4 IA: PlayerHeatmapPanel relocated to the HERO slot
+          (top, right after scope) for map-first parity with legacy. */}
 
       {/* Combat Heatmap — global data, always visible */}
       <CombatHeatmapPanel />

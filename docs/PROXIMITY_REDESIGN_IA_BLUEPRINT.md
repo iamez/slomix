@@ -91,5 +91,21 @@ environment. This matches Phase 6 item 6 (live-session / owner validation).
 ## Status
 
 - **Part A: COMPLETE & verified** (A1+A6 closed; global heatmap renders).
-- **Part B: BLUEPRINT READY** — DOM/copy-only recompose, no data-path risk;
-  flagged for owner manual validation per the plan's human-visual acceptance.
+- **Part B: PARTIALLY SHIPPED (2026-05-16, branch `feat/proximity-ia-recompose`)** — the
+  safe, tag-balance-verified subset is in:
+  - **CUT** the metric-guide modal + the Engagement Timeline sparkline
+    (blueprint noise reduction); Map Context heatmap collapsed to full-width.
+  - **HERO promotion**: the per-player Player Combat Map moved to the **top**
+    of `#view-proximity` (legacy) and to the first content slot in
+    `Proximity()` (React) — true map-first order.
+  - **Section framing**: ① Player Combat Map / ② Player Story / ③ Map Context
+    header dividers added (legacy).
+  - Verified: HTML parses balanced, IDs unique, metric-guide/timeline removed,
+    hero single-copy, all proximity endpoints 200, legacy JS `node --check` OK,
+    map-first DOM order confirmed in served HTML.
+- **Part B REMAINING (owner-visual)**: the deeper per-panel re-grouping into
+  explicit ④ Engagements & Trades / ⑤ Roles & Classes / ⑥ Replay & Teams
+  containers, and the 7→3 leaderboard / 8→5 KPI consolidation. These move
+  many nested panels and their acceptance is a human browser walkthrough
+  (cannot be discharged headlessly) — left for an owner-validated pass on
+  top of this branch. No data-path risk; pure DOM/copy.
