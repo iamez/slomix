@@ -92,19 +92,19 @@ cp -r /path/to/slomix /path/to/slomix_backup_$(date +%Y%m%d_%H%M%S)
 
 ```bash
 # If using systemd
-sudo systemctl stop etlegacy-bot
-sudo systemctl status etlegacy-bot
+sudo systemctl stop slomix-bot
+sudo systemctl status slomix-bot
 # Should show "inactive (dead)"
 
 # If using screen
 screen -list
-screen -r etlegacy-bot
+screen -r slomix-bot
 # Press Ctrl+C to stop bot
 # Type "exit" to close screen
 
 # If using tmux
 tmux list-sessions
-tmux attach -t etlegacy-bot
+tmux attach -t slomix-bot
 # Press Ctrl+C to stop bot
 # Press Ctrl+B then D to detach
 ```
@@ -370,20 +370,20 @@ python3 bot/ultimate_bot.py
 # Press Ctrl+C to stop test bot
 
 # Option A: Start with systemd (recommended)
-sudo systemctl start etlegacy-bot
-sudo systemctl status etlegacy-bot
+sudo systemctl start slomix-bot
+sudo systemctl status slomix-bot
 # Should show "active (running)"
 
 # View logs
-sudo journalctl -u etlegacy-bot -f
+sudo journalctl -u slomix-bot -f
 
 # Option B: Start with screen
-screen -S etlegacy-bot
+screen -S slomix-bot
 python3 bot/ultimate_bot.py
 # Press Ctrl+A then D to detach
 
 # Option C: Start with tmux
-tmux new -s etlegacy-bot
+tmux new -s slomix-bot
 python3 bot/ultimate_bot.py
 # Press Ctrl+B then D to detach
 ```
@@ -400,10 +400,10 @@ ps aux | grep ultimate_bot.py
 # Should show running process
 
 # Check logs (systemd)
-sudo journalctl -u etlegacy-bot -n 50 --no-pager
+sudo journalctl -u slomix-bot -n 50 --no-pager
 
 # Check logs (screen/tmux)
-screen -r etlegacy-bot  # or tmux attach -t etlegacy-bot
+screen -r slomix-bot  # or tmux attach -t slomix-bot
 # Ctrl+A, D to detach (screen) or Ctrl+B, D (tmux)
 ```
 
@@ -515,7 +515,7 @@ Questions? Ask in #support
 ### 1. Stop New Bot
 
 ```bash
-sudo systemctl stop etlegacy-bot
+sudo systemctl stop slomix-bot
 # or press Ctrl+C if running in foreground
 ```
 
@@ -552,8 +552,8 @@ SQLEOF
 ### 4. Restart Old Bot
 
 ```bash
-sudo systemctl start etlegacy-bot
-sudo systemctl status etlegacy-bot
+sudo systemctl start slomix-bot
+sudo systemctl status slomix-bot
 ```
 
 ---
@@ -621,10 +621,10 @@ grep "last_file_download_time" bot/ultimate_bot.py
 
 ```bash
 # Check bot is running
-sudo systemctl status etlegacy-bot
+sudo systemctl status slomix-bot
 
 # Check recent errors
-sudo journalctl -u etlegacy-bot --since "1 hour ago" | grep -i error
+sudo journalctl -u slomix-bot --since "1 hour ago" | grep -i error
 
 # Check file imports
 ls -lt local_stats/ | head -10
@@ -682,7 +682,7 @@ SQLEOF
 
 **If you encounter issues:**
 
-1. Check logs first: `sudo journalctl -u etlegacy-bot -n 100`
+1. Check logs first: `sudo journalctl -u slomix-bot -n 100`
 2. Verify database migration: `psql -U user -d etlegacy_stats -c "\d rounds"`
 3. Test commands manually in Discord
 4. Check git commit: `git log --oneline -5`
@@ -700,19 +700,19 @@ SQLEOF
 
 ```bash
 # Start bot
-sudo systemctl start etlegacy-bot
+sudo systemctl start slomix-bot
 
 # Stop bot
-sudo systemctl stop etlegacy-bot
+sudo systemctl stop slomix-bot
 
 # Restart bot
-sudo systemctl restart etlegacy-bot
+sudo systemctl restart slomix-bot
 
 # View logs
-sudo journalctl -u etlegacy-bot -f
+sudo journalctl -u slomix-bot -f
 
 # Check status
-sudo systemctl status etlegacy-bot
+sudo systemctl status slomix-bot
 
 # Pull updates
 git pull origin claude/fix-production-critical-issues-01TSoke7RTuTbKEhrQCgG2AF-01GphrWr5zkJmarkb6RXQdZk

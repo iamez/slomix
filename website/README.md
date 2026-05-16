@@ -90,7 +90,7 @@ website/
 ├── .env.example                    # Environment config template
 ├── setup_readonly_user.sql         # PostgreSQL read-only user setup
 ├── start_website.sh                # Linux startup script
-├── etlegacy-website.service        # Systemd service unit
+├── slomix-web.service        # Systemd service unit
 ├── requirements.txt                # Python dependencies
 ├── index.html                      # SPA entry point
 ├── backend/
@@ -156,9 +156,9 @@ pip install -r website/requirements.txt
 ### Systemd Service (Production)
 
 ```bash
-sudo cp website/etlegacy-website.service /etc/systemd/system/
-sudo systemctl enable etlegacy-website
-sudo systemctl start etlegacy-website
+sudo cp website/slomix-web.service /etc/systemd/system/
+sudo systemctl enable slomix-web
+sudo systemctl start slomix-web
 ```
 
 ### Access

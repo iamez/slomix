@@ -174,12 +174,12 @@ ps aux | grep ultimate_bot.py
 
 # Stop it
 # If using screen:
-screen -r etlegacy-bot
+screen -r slomix-bot
 # Press Ctrl+C
 # Press Ctrl+A then D
 
 # If using systemd:
-sudo systemctl stop etlegacy-bot
+sudo systemctl stop slomix-bot
 
 # If just running in terminal:
 # Find PID and kill it
@@ -261,7 +261,7 @@ python3 bot/ultimate_bot.py
 
 ```bash
 # Start screen session with new name
-screen -S etlegacy-bot-refactored
+screen -S slomix-bot-refactored
 
 # Navigate to directory
 cd ~/slomix-refactored
@@ -273,7 +273,7 @@ source venv/bin/activate
 python3 bot/ultimate_bot.py
 
 # Detach: Press Ctrl+A then D
-# Reattach later: screen -r etlegacy-bot-refactored
+# Reattach later: screen -r slomix-bot-refactored
 ```
 
 ### Option B: Using Systemd (Recommended)
@@ -281,7 +281,7 @@ python3 bot/ultimate_bot.py
 **Create service file:**
 
 ```bash
-sudo nano /etc/systemd/system/etlegacy-bot-refactored.service
+sudo nano /etc/systemd/system/slomix-bot-refactored.service
 ```
 
 **Add:**
@@ -302,8 +302,8 @@ ExecStart=/home/your-username/slomix-refactored/venv/bin/python3 /home/your-user
 Restart=always
 RestartSec=10
 
-StandardOutput=append:/var/log/etlegacy-bot-refactored.log
-StandardError=append:/var/log/etlegacy-bot-refactored-error.log
+StandardOutput=append:/var/log/slomix-bot-refactored.log
+StandardError=append:/var/log/slomix-bot-refactored-error.log
 
 [Install]
 WantedBy=multi-user.target
@@ -313,15 +313,15 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable etlegacy-bot-refactored
-sudo systemctl start etlegacy-bot-refactored
-sudo systemctl status etlegacy-bot-refactored
+sudo systemctl enable slomix-bot-refactored
+sudo systemctl start slomix-bot-refactored
+sudo systemctl status slomix-bot-refactored
 ```
 
 **View logs:**
 
 ```bash
-sudo tail -f /var/log/etlegacy-bot-refactored.log
+sudo tail -f /var/log/slomix-bot-refactored.log
 ```
 
 ---
@@ -350,14 +350,14 @@ sudo tail -f /var/log/etlegacy-bot-refactored.log
 
 **Old Bot:**
 
-- Process: `screen -r etlegacy-bot` OR `systemctl status etlegacy-bot`
-- Logs: `/var/log/etlegacy-bot.log`
+- Process: `screen -r slomix-bot` OR `systemctl status slomix-bot`
+- Logs: `/var/log/slomix-bot.log`
 - Directory: `~/slomix/`
 
 **New Bot (Refactored):**
 
-- Process: `screen -r etlegacy-bot-refactored` OR `systemctl status etlegacy-bot-refactored`
-- Logs: `/var/log/etlegacy-bot-refactored.log`
+- Process: `screen -r slomix-bot-refactored` OR `systemctl status slomix-bot-refactored`
+- Logs: `/var/log/slomix-bot-refactored.log`
 - Directory: `~/slomix-refactored/`
 
 **⚠️ Note:** You need **different Discord bot tokens** to run both at the same time!
@@ -372,32 +372,32 @@ sudo tail -f /var/log/etlegacy-bot-refactored.log
 
 ```bash
 # Stop old bot
-sudo systemctl stop etlegacy-bot
-# or: screen -r etlegacy-bot, then Ctrl+C
+sudo systemctl stop slomix-bot
+# or: screen -r slomix-bot, then Ctrl+C
 
 # Rename directories
 mv ~/slomix ~/slomix-backup
 mv ~/slomix-refactored ~/slomix
 
 # Update systemd service to point to ~/slomix
-sudo nano /etc/systemd/system/etlegacy-bot.service
+sudo nano /etc/systemd/system/slomix-bot.service
 # Change WorkingDirectory to /home/your-username/slomix
 
 # Start bot
 sudo systemctl daemon-reload
-sudo systemctl start etlegacy-bot
+sudo systemctl start slomix-bot
 ```
 
 **Option 2: Keep New Directory**
 
 ```bash
 # Just disable old bot
-sudo systemctl disable etlegacy-bot
-sudo systemctl stop etlegacy-bot
+sudo systemctl disable slomix-bot
+sudo systemctl stop slomix-bot
 
 # Run refactored bot as main bot
-sudo systemctl enable etlegacy-bot-refactored
-sudo systemctl start etlegacy-bot-refactored
+sudo systemctl enable slomix-bot-refactored
+sudo systemctl start slomix-bot-refactored
 ```
 
 ---
@@ -425,14 +425,14 @@ Watch the logs to compare performance:
 **Old bot:**
 
 ```bash
-tail -f /var/log/etlegacy-bot.log | grep "Processed"
+tail -f /var/log/slomix-bot.log | grep "Processed"
 # ✅ Processed in 0.45s (12 players, 24 weapons) (WITH WARNINGS)
 ```
 
 **New bot (refactored):**
 
 ```bash
-tail -f /var/log/etlegacy-bot-refactored.log | grep "Processed"
+tail -f /var/log/slomix-bot-refactored.log | grep "Processed"
 # ✅ Processed in 0.28s (12 players, 24 weapons)
 ```
 
@@ -450,8 +450,8 @@ tar -czf ~/slomix-backup-$(date +%Y%m%d).tar.gz ~/slomix
 rm -rf ~/slomix
 
 # Remove old systemd service
-sudo systemctl disable etlegacy-bot
-sudo rm /etc/systemd/system/etlegacy-bot.service
+sudo systemctl disable slomix-bot
+sudo rm /etc/systemd/system/slomix-bot.service
 sudo systemctl daemon-reload
 ```
 
@@ -513,12 +513,12 @@ pip install -r requirements.txt
 python3 bot/ultimate_bot.py
 
 # Run in background (screen)
-screen -S etlegacy-bot-refactored
+screen -S slomix-bot-refactored
 python3 bot/ultimate_bot.py
 # Ctrl+A, D to detach
 
 # View logs
-tail -f /var/log/etlegacy-bot-refactored.log
+tail -f /var/log/slomix-bot-refactored.log
 ```
 
 ---

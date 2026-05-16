@@ -154,8 +154,8 @@ async def fetch_all(query: str, params: tuple = ()):
 cd website
 uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 
-# Production (systemd)
-sudo systemctl start etlegacy-website
+# Production (systemd; canonical unit on slomix_vm)
+sudo systemctl start slomix-web
 ```
 
 ## Environment Variables

@@ -93,7 +93,7 @@ website/
 │       └── ...
 ├── .env.example                  # Config template
 ├── requirements.txt              # Python deps
-└── etlegacy-website.service      # Systemd service
+└── slomix-web.service      # Systemd service
 ```
 
 ---
@@ -275,9 +275,9 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000
 
 ### Systemd Alternative
 ```bash
-sudo cp etlegacy-website.service /etc/systemd/system/
-sudo systemctl enable etlegacy-website
-sudo systemctl start etlegacy-website
+sudo cp slomix-web.service /etc/systemd/system/
+sudo systemctl enable slomix-web
+sudo systemctl start slomix-web
 ```
 
 ---
