@@ -454,6 +454,122 @@
         }
       ]
     },
+    "etl_frostbite": {
+      "map_name": "etl_frostbite",
+      "aliases": [
+        "etl_frostbite"
+      ],
+      "objectives": [
+        {
+          "id": "frostbite:main_door",
+          "name": "Main Door",
+          "lua_name": "main_door",
+          "type": "objective",
+          "target": "t182",
+          "x": -32.0,
+          "y": 208.0,
+          "z": 352.0,
+          "radius": 500,
+          "source_pk3": "Frostbite.pk3"
+        },
+        {
+          "id": "frostbite:storage_wall",
+          "name": "Storage Wall",
+          "lua_name": "storage_wall",
+          "type": "objective",
+          "target": "t217",
+          "x": -32.0,
+          "y": 208.0,
+          "z": 352.0,
+          "radius": 500,
+          "source_pk3": "Frostbite.pk3"
+        },
+        {
+          "id": "frostbite:transmitter",
+          "name": "Transmitter",
+          "lua_name": "transmitter",
+          "type": "objective",
+          "target": "transmitter_cmd_marker",
+          "x": -4544.0,
+          "y": 2240.0,
+          "z": -96.0,
+          "radius": 500,
+          "source_pk3": "Frostbite.pk3"
+        },
+        {
+          "id": "frostbite:health_and_ammo_cabinets",
+          "name": "Health and Ammo Cabinets",
+          "lua_name": "health_and_ammo_cabinets",
+          "type": "objective",
+          "target": "south_hacabinet_cm_marker",
+          "x": -150.0,
+          "y": -662.0,
+          "z": 296.0,
+          "radius": 500,
+          "source_pk3": "Frostbite.pk3"
+        },
+        {
+          "id": "frostbite:platform_mg",
+          "name": "Platform MG",
+          "lua_name": "platform_mg",
+          "type": "objective",
+          "target": "platformmg42_target",
+          "x": -1512.0,
+          "y": 1868.0,
+          "z": 45.0,
+          "radius": 500,
+          "source_pk3": "Frostbite.pk3"
+        },
+        {
+          "id": "frostbite:axis_command_post",
+          "name": "Axis Command Post",
+          "lua_name": "axis_command_post",
+          "type": "command_post",
+          "target": "axis_compost_built",
+          "x": -5056.0,
+          "y": 1896.0,
+          "z": -108.0,
+          "radius": 500,
+          "source_pk3": "Frostbite.pk3"
+        },
+        {
+          "id": "frostbite:documents",
+          "name": "Documents",
+          "lua_name": "documents",
+          "type": "objective",
+          "target": "docs_cm_marker",
+          "x": 816.0,
+          "y": 160.0,
+          "z": 432.0,
+          "radius": 500,
+          "source_pk3": "Frostbite.pk3"
+        },
+        {
+          "id": "frostbite:the_gramophone",
+          "name": "the Gramophone",
+          "lua_name": "the_gramophone",
+          "type": "objective",
+          "target": "record",
+          "x": -299.0,
+          "y": 1264.0,
+          "z": 343.0,
+          "radius": 500,
+          "source_pk3": "Frostbite.pk3"
+        },
+        {
+          "id": "frostbite:allied_command_post",
+          "name": "Allied Command Post",
+          "lua_name": "allied_command_post",
+          "type": "command_post",
+          "target": "t2019",
+          "x": -1836.0,
+          "y": 404.0,
+          "z": 444.0,
+          "radius": 500,
+          "source_pk3": "Frostbite.pk3"
+        }
+      ]
+    },
     "supply": {
       "map_name": "supply",
       "aliases": [

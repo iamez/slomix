@@ -16,15 +16,16 @@ const GRID = 512;
 
 // ── Leaderboard Types & Config ──────────────────────────────────────────────
 
+// Phase 4 Part B: 8 prototype leaderboard tabs collapsed to the same 3
+// contextual themes as the legacy stack (Space & Pressure / Finishers &
+// Survival / Tempo & Movement). Pure DOM/copy \u2014 the /proximity/leaderboards
+// endpoint still accepts every category; cut tabs (power, spawn, trades,
+// reactions, focus_fire) are simply no longer offered. formatLeaderValue/
+// formatLeaderDetail keep their dead switch arms (default branch is safe).
 const LEADERBOARD_TABS = [
-  { key: 'power', label: 'Power Rating', unit: 'pts', desc: 'Composite 5-axis combat score' },
-  { key: 'spawn', label: 'Spawn Timing', unit: 'score 0\u20131', desc: 'Kill efficiency vs respawn waves' },
-  { key: 'crossfire', label: 'Crossfire', unit: 'kills', desc: 'Top crossfire duos (45\u00b0+ angle)' },
-  { key: 'trades', label: 'Trade Kills', unit: 'trades', desc: 'Revenge kills within 3 seconds' },
-  { key: 'reactions', label: 'Reactions', unit: 'ms', desc: 'Fastest return fire after being hit' },
-  { key: 'survivors', label: 'Survivors', unit: '%', desc: 'Escape rate from engagements' },
-  { key: 'movement', label: 'Movement', unit: 'u/s', desc: 'Speed & distance (\u2248300u = 5m)' },
-  { key: 'focus_fire', label: 'Focus Fire', unit: 'score 0\u20131', desc: 'Coordinated multi-attacker bursts' },
+  { key: 'crossfire', label: 'Space & Pressure', unit: 'kills', desc: 'Who creates space \u2014 coordinated crossfire kills (45\u00b0+ overlap)' },
+  { key: 'survivors', label: 'Finishers & Survival', unit: '%', desc: 'Who gets out alive \u2014 escape rate from engagements' },
+  { key: 'movement', label: 'Tempo & Movement', unit: 'u/s', desc: 'Who covers ground \u2014 speed & distance (\u2248300u = 5m)' },
 ] as const;
 
 function formatLeaderValue(category: string, entry: ProximityLeaderboardEntry): string {
@@ -1292,7 +1293,7 @@ function SessionScorePanel({ sessionDate }: { sessionDate: string | null }) {
 // ── Leaderboard Tabs ─────────────────────────────────────────────────────────
 
 function LeaderboardTabs() {
-  const [activeTab, setActiveTab] = useState('power');
+  const [activeTab, setActiveTab] = useState('crossfire');
   const [rangeDays, setRangeDays] = useState(30);
 
   const { data, isLoading } = useProximityLeaderboards(activeTab, rangeDays, 10);
