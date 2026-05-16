@@ -9,7 +9,7 @@
 [![FastAPI](https://img.shields.io/badge/web-FastAPI-009688)](https://fastapi.tiangolo.com/)
 [![Data Integrity](https://img.shields.io/badge/data%20integrity-6%20layers-blue)](docs/SAFETY_VALIDATION_SYSTEMS.md)
 [![Tests](https://img.shields.io/badge/tests-2989%20passing-success)](tests/)
-[![Discord.py](https://img.shields.io/badge/discord.py-2.0+-5865F2)](https://discordpy.readthedocs.io/)
+[![Discord.py](https://img.shields.io/badge/discord.py-2.6.4-5865F2)](https://discordpy.readthedocs.io/)
 
 A **production-grade** Discord bot + web dashboard + demo analysis pipeline with **6-layer data validation**, **real-time Lua telemetry**, **AI match predictions**, and **demo highlight detection** for ET:Legacy game servers.
 
@@ -17,7 +17,36 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 ## 🔥 Recent Updates (May 2026)
 
-### **🛡️ v1.11.1: Mass Test Coverage Sweep + Security Hardening (May 6-7)** 🆕
+### **⚡ v1.14.x: Deprecation Cleanup, Perf, Audit Sweep (May 10-12)** 🆕
+
+- 🧹 **Timezone-aware Datetime Migration** (#214, #216, #222, #230) — Killed every `datetime.utcnow()` and raw `datetime.fromtimestamp()` / `date.today()` in the codebase. Enabled ruff DTZ005 + DTZ007 with explicit `noqa` rationales on the 253 sites that legitimately need naive datetimes (Lua wall-clock, file-mtime, etc.). No more silent UTC/local mixups
+- 🔬 **Mega Audit v6** (#210) — Verified-real sweep: 12 actual fixes shipped, 16 false positives ruled out with evidence. Audit methodology refined to demand proof-of-bug, not just code smells
+- 📖 **Useless-Defense-Deaths Metric** (#204) — Captures defensive deaths that didn't help the team (panic deaths far from objectives). New endpoint feeds storytelling
+- 🩺 **DB Drift Differential Mode** (#201) — `scripts/check_db_drift.py --diff` shows row-level deltas between prod and dev DBs, not just schema delta
+- 🔒 **Atomic Stats Insert + Weapon Savepoint** (#199) — `_insert_player_stats` wrapped in a single transaction with a savepoint around weapon stats. Partial-import inconsistencies impossible
+- 🛡️ **TOCTOU Closure on player_aliases** (#197) — Closed race window in alias creation; silent excepts in parser now log
+- 📝 **Storytelling Math + Narrative Polish** (#205, #208, #228) — Spawn-rush filter, NULL/0 `round_start_unix` filter in enabler/lurker, narrative wordalisation overhaul
+- ⚡ **KIS Single-Pass Spawn Aggregation** (#241) — `spawn_mult` + `reinf_mult` merged into one pass over `spawn_timings` (was two passes)
+- 🚄 **Records Parallelisation** (#243) — 13 sequential queries on `/api/records` collapsed into `asyncio.gather`. Page-load cut substantially
+- 🐛 **Error Handler Exc-Info Fix** (#234) — `exc_info=True` replaced with `exc_info=error` so structured loggers actually capture the exception chain instead of the implicit one
+
+### **🎨 v1.13.x: Session Detail UX Redesign + Canonical GUID Plumbing (May 7-8)**
+
+- 🎯 **Session Detail Faza A** (#186) — Major UX redesign of the Session Detail page on the legacy website. Cleaner header, tighter rows, better R1/R2 split, mobile-friendly
+- 🔗 ***_guid_canonical INSERT Fix** (cdb7f51) — Parser helper + KIS now populate `*_guid_canonical` columns on insert (forward-compat), unblocking the broader canonical-ID rollout
+- 🚑 **compare_mixin.py Un-ignored** (8f78e19) — File was accidentally in `.gitignore`; stats_cog `!compare` was broken on prod until this landed
+- 🧰 **Sync Helper Hardening** (#190, #192, #195) — RCA-driven robustness pass on `scripts/sync_*.sh`: env-loading via `set -a`, base64-encoded SQL over SSH (no quoting hell), and two follow-ups for nits missed in the first ultrareview
+
+### **🎯 v1.12.0: Website Information-Architecture Redesign (May 7)**
+
+**The website got dramatically simpler — fewer pages, clearer hierarchy, less code.**
+
+- 🪶 **Stats Dropdown Minimalised** (#178) — 13 menu items → 6. Things that should be subordinate (records subpages, awards drill-downs) moved out of top-level nav
+- 🎨 **Availability Page As #ETL** (#182) — Redesigned to feel like a Discord channel: bigger fonts, bolder colors, clearer "who's coming tonight?" semantics
+- ✂️ **About Page Replaces System Overview** (#179) — Old `/#/system-overview` was 7,000 lines of internal architecture. Replaced with a focused `/#/about` page aimed at actual visitors. Net **-7,000 LOC**
+- 🐞 **R0 Double-Counting + TIR Formula Fix** (#176) — PCS aggregations were double-counting R0 (warmup) rounds in some leaderboards; TIR formula corrected across the board. Cross-leaderboard numbers now consistent
+
+### **🛡️ v1.11.1: Mass Test Coverage Sweep + Security Hardening (May 6-7)**
 
 **+2,266 unit tests in a single PR (#173) — 5.4× growth — plus two P1 security fixes.**
 

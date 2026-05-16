@@ -519,8 +519,8 @@ PGPASSWORD='REDACTED_DB_PASSWORD' psql -h db.yourserver.com -U etlegacy_user -d 
 **Restart bot:**
 
 ```bash
-sudo systemctl restart etlegacy-bot
-sudo systemctl status etlegacy-bot
+sudo systemctl restart slomix-bot
+sudo systemctl status slomix-bot
 
 # Check logs for "PostgreSQL pool created"
 tail -f logs/bot.log
@@ -680,7 +680,7 @@ sudo certbot renew --dry-run
 
 #### Step 2.7: Create Systemd Service
 
-**Create `/etc/systemd/system/etlegacy-website.service`:**
+**Create `/etc/systemd/system/slomix-web.service`:**
 
 ```ini
 [Unit]
@@ -709,9 +709,9 @@ sudo chown -R www-data:www-data /opt/slomix_discord/website
 
 # Enable and start
 sudo systemctl daemon-reload
-sudo systemctl enable etlegacy-website
-sudo systemctl start etlegacy-website
-sudo systemctl status etlegacy-website
+sudo systemctl enable slomix-web
+sudo systemctl start slomix-web
+sudo systemctl status slomix-web
 ```
 
 #### Step 2.8: Firewall Configuration
@@ -829,7 +829,7 @@ If something goes wrong:
 ```bash
 # Revert bot to local PostgreSQL
 sed -i 's/POSTGRES_HOST=.*/POSTGRES_HOST=localhost/' .env
-sudo systemctl restart etlegacy-bot
+sudo systemctl restart slomix-bot
 
 # Restore local database from backup
 pg_restore -d etlegacy etlegacy_backup.dump
