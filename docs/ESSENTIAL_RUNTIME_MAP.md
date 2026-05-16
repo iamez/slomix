@@ -7,13 +7,13 @@ This is a read-scope document, not a cleanup plan. Nothing here implies deletion
 ## Runtime Modes
 
 Full repo-managed runtime:
-- [scripts/prod_up.sh](scripts/prod_up.sh)
+- [scripts/prod_up.sh](/scripts/prod_up.sh)
 - Starts:
   - website backend via `uvicorn website.backend.main:app`
   - Discord bot via `python bot/ultimate_bot.py`
 
 Compose web stack only:
-- [docker-compose.yml](docker-compose.yml)
+- [docker-compose.yml](/docker-compose.yml)
 - Starts:
   - PostgreSQL
   - Redis
@@ -23,35 +23,35 @@ Compose web stack only:
 - Does not start the Discord bot.
 
 Single-process helpers:
-- [start_bot.sh](start_bot.sh)
-- [website/start_website.sh](website/start_website.sh)
-- [website/etlegacy-website.service](website/etlegacy-website.service)
+- [start_bot.sh](/start_bot.sh)
+- [website/start_website.sh](/website/start_website.sh)
+- [website/etlegacy-website.service](/website/etlegacy-website.service)
 
 ## Core Architecture
 
 Bot ingestion and Discord publishing:
 1. ET server writes stats files.
-2. Preferred trigger is Lua `STATS_READY` via [vps_scripts/stats_discord_webhook.lua](vps_scripts/stats_discord_webhook.lua).
-3. [bot/ultimate_bot.py](bot/ultimate_bot.py) validates the webhook and fetches the real stats file over SSH.
-4. Import path runs through [postgresql_database_manager.py](postgresql_database_manager.py) and [bot/community_stats_parser.py](bot/community_stats_parser.py).
-5. [bot/services/round_publisher_service.py](bot/services/round_publisher_service.py) posts the result to Discord.
+2. Preferred trigger is Lua `STATS_READY` via [vps_scripts/stats_discord_webhook.lua](/vps_scripts/stats_discord_webhook.lua).
+3. [bot/ultimate_bot.py](/bot/ultimate_bot.py) validates the webhook and fetches the real stats file over SSH.
+4. Import path runs through [postgresql_database_manager.py](/postgresql_database_manager.py) and [bot/community_stats_parser.py](/bot/community_stats_parser.py).
+5. [bot/services/round_publisher_service.py](/bot/services/round_publisher_service.py) posts the result to Discord.
 
 Website/API:
-1. [website/backend/main.py](website/backend/main.py) builds the FastAPI app.
-2. Routers under [website/backend/routers](website/backend/routers) expose stats, auth, uploads, availability, planning, and Greatshot APIs.
-3. [website/index.html](website/index.html) + [website/js/app.js](website/js/app.js) drive the SPA.
+1. [website/backend/main.py](/website/backend/main.py) builds the FastAPI app.
+2. Routers under [website/backend/routers](/website/backend/routers) expose stats, auth, uploads, availability, planning, and Greatshot APIs.
+3. [website/index.html](/website/index.html) + [website/js/app.js](/website/js/app.js) drive the SPA.
 
 Greatshot:
-1. Upload enters through [website/backend/routers/greatshot.py](website/backend/routers/greatshot.py).
-2. [website/backend/services/greatshot_store.py](website/backend/services/greatshot_store.py) saves and validates the demo.
-3. [website/backend/services/greatshot_jobs.py](website/backend/services/greatshot_jobs.py) queues analysis/render work.
-4. [greatshot/worker/runner.py](greatshot/worker/runner.py) calls scanner/highlight/cutter/renderer code under [greatshot](greatshot).
+1. Upload enters through [website/backend/routers/greatshot.py](/website/backend/routers/greatshot.py).
+2. [website/backend/services/greatshot_store.py](/website/backend/services/greatshot_store.py) saves and validates the demo.
+3. [website/backend/services/greatshot_jobs.py](/website/backend/services/greatshot_jobs.py) queues analysis/render work.
+4. [greatshot/worker/runner.py](/greatshot/worker/runner.py) calls scanner/highlight/cutter/renderer code under [greatshot](greatshot).
 
 Proximity:
-1. Lua tracker [proximity/lua/proximity_tracker.lua](proximity/lua/proximity_tracker.lua) writes `_engagements.txt`.
-2. [proximity/parser/parser.py](proximity/parser/parser.py) imports into PostgreSQL proximity tables.
-3. Website proximity endpoints live in [website/backend/routers/api.py](website/backend/routers/api.py).
-4. Frontend view lives in [website/js/proximity.js](website/js/proximity.js).
+1. Lua tracker [proximity/lua/proximity_tracker.lua](/proximity/lua/proximity_tracker.lua) writes `_engagements.txt`.
+2. [proximity/parser/parser.py](/proximity/parser/parser.py) imports into PostgreSQL proximity tables.
+3. Website proximity endpoints live in [website/backend/routers/api.py](/website/backend/routers/api.py).
+4. Frontend view lives in [website/js/proximity.js](/website/js/proximity.js).
 
 ## essential_now
 

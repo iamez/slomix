@@ -70,12 +70,12 @@ Rule:
 Keep these mirrored locally:
 
 - Proximity:
-  - [proximity_tracker.lua](proximity/lua/proximity_tracker.lua)
+  - [proximity_tracker.lua](/proximity/lua/proximity_tracker.lua)
 - Non-proximity game-server scripts:
-  - [c0rnp0rn8.lua](vps_scripts/c0rnp0rn8.lua)
-  - [endstats.lua](vps_scripts/endstats.lua)
-  - [stats_discord_webhook.lua](vps_scripts/stats_discord_webhook.lua)
-  - [team-lock.lua](vps_scripts/team-lock.lua)
+  - [c0rnp0rn8.lua](/vps_scripts/c0rnp0rn8.lua)
+  - [endstats.lua](/vps_scripts/endstats.lua)
+  - [stats_discord_webhook.lua](/vps_scripts/stats_discord_webhook.lua)
+  - [team-lock.lua](/vps_scripts/team-lock.lua)
 
 ## Hashes Captured On 2026-03-11
 

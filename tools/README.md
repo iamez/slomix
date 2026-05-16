@@ -10,18 +10,18 @@ This directory is the home for reusable helper scripts and maintenance utilities
 
 ## Live Entry Points
 
-- [check_production_health.py](tools/check_production_health.py)
+- [check_production_health.py](/tools/check_production_health.py)
   Operator health check for the current platform layout.
-- [verify_pipeline.py](tools/verify_pipeline.py)
+- [verify_pipeline.py](/tools/verify_pipeline.py)
   Pipeline verification helper.
-- [pipeline_health_report.py](tools/pipeline_health_report.py)
+- [pipeline_health_report.py](/tools/pipeline_health_report.py)
   Pipeline inspection/reporting helper.
-- [tools/windows](tools/windows)
+- [tools/windows](/tools/windows)
   Windows-specific local helper scripts that are still referenced by active docs.
 
 ## Archive
 
-- [tools/archive](tools/archive)
+- [tools/archive](/tools/archive)
   Older helpers that are retained for reference.
-- [tools/archive/root_diagnostics](tools/archive/root_diagnostics)
+- [tools/archive/root_diagnostics](/tools/archive/root_diagnostics)
   Root-level diagnostic scripts moved during cleanup because they are not part of normal runtime or current operator workflows.
