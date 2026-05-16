@@ -91,7 +91,7 @@ environment. This matches Phase 6 item 6 (live-session / owner validation).
 ## Status
 
 - **Part A: COMPLETE & verified** (A1+A6 closed; global heatmap renders).
-- **Part B: PARTIALLY SHIPPED (2026-05-16, branch `feat/proximity-ia-recompose`)** — the
+- **Part B: PARTIALLY SHIPPED (2026-05-16, via the Phase 4 Part B PR)** — the
   safe, tag-balance-verified subset is in:
   - **CUT** the metric-guide modal + the Engagement Timeline sparkline
     (blueprint noise reduction); Map Context heatmap collapsed to full-width.

@@ -1030,6 +1030,7 @@ function PlayerHeatmapPanel() {
           <div className="flex flex-wrap gap-2 items-center">
             <input
               type="text"
+              aria-label="Player GUID (8 or 32 characters)"
               placeholder="Player GUID (8 or 32 char)..."
               value={playerGuid}
               onChange={e => { setPlayerGuid(e.target.value); }}
@@ -1037,6 +1038,7 @@ function PlayerHeatmapPanel() {
             />
             <input
               type="text"
+              aria-label="Map name"
               placeholder="Map name..."
               value={mapName}
               onChange={e => { setMapName(e.target.value); }}
