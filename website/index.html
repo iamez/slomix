@@ -2026,48 +2026,9 @@
                     <span>Prototype mode: waiting for proximity data ingestion.</span>
                 </div>
 
-                <div class="glass-panel p-4 rounded-xl mb-8 border border-brand-cyan/20">
-                    <details id="proximity-metric-guide">
-                        <summary class="cursor-pointer list-none flex items-center justify-between">
-                            <span class="inline-flex items-center gap-2 text-sm font-bold text-slate-200">
-                                <i data-lucide="circle-help" class="w-4 h-4 text-brand-cyan"></i>
-                                How to read these stats
-                            </span>
-                            <span class="text-[10px] uppercase tracking-wide text-slate-500">Toggle guide</span>
-                        </summary>
-                        <div class="mt-3 space-y-3 text-[11px] text-slate-400 leading-relaxed">
-                            <p>
-                                Metrics come from sub-second Lua proximity telemetry, then parser aggregation into engagements, teamplay, and trade/support summaries.
-                                Scope filters (session, map, round) always control what is counted.
-                            </p>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div class="glass-card p-3 rounded-lg border border-white/5">
-                                    <div class="text-[10px] font-bold uppercase tracking-wide text-brand-cyan mb-1">Summary Cards</div>
-                                    <div>Engagements = detected combat windows.</div>
-                                    <div>Avg Distance = target movement during those windows.</div>
-                                    <div>Crossfire Events = engagements with overlapping pressure.</div>
-                                    <div>Hot Zones = map bins with concentrated kill activity.</div>
-                                </div>
-                                <div class="glass-card p-3 rounded-lg border border-white/5">
-                                    <div class="text-[10px] font-bold uppercase tracking-wide text-brand-emerald mb-1">Team Dynamics</div>
-                                    <div>Synergy Duos combine crossfire volume and delay.</div>
-                                    <div>Best Sync tracks lower teammate delay (ms).</div>
-                                    <div>Focus Survivors = survival rate when under focus.</div>
-                                    <div>Support Uptime = % time within support radius.</div>
-                                </div>
-                            </div>
-                            <div class="glass-card p-3 rounded-lg border border-white/5">
-                                <div class="text-[10px] font-bold uppercase tracking-wide text-brand-amber mb-1">Formula + Capture Source</div>
-                                <div>Engagements = count(`combat_engagement`) from Lua `ENGAGEMENTS` output.</div>
-                                <div>Spawn Reaction = avg(`player_track.time_to_first_move_ms`) from `PLAYER_TRACKS` path.</div>
-                                <div>Trade Attempt Rate = `trade_attempts / trade_opportunities` from `proximity_trade_event`.</div>
-                                <div>Support Uptime = `support_samples / total_samples` from `proximity_support_summary`.</div>
-                                <div>Return Fire / Dodge / Support Reaction = Lua `REACTION_METRICS` first-hit deltas.</div>
-                            </div>
-                            <div class="text-[10px] text-slate-500">Confidence tags use sample size: High ≥ 20, Medium 8-19, Low 1-7.</div>
-                        </div>
-                    </details>
-                </div>
+                <!-- Phase 4 IA: metric-guide modal removed (blueprint CUT — reduce
+                     prototype noise). Each metric is explained inline via title=
+                     tooltips on its own panel. -->
 
                 <div class="glass-panel p-4 rounded-xl mb-8">
                     <div class="flex items-center justify-between gap-3">
@@ -2097,6 +2058,39 @@
                     <div id="proximity-scope-caption" class="text-xs text-slate-500 mt-3">All proximity data in current window.</div>
                 </div>
 
+                <!-- ===== ① HERO — Player Combat Map (map-first) ===== -->
+                <div class="flex items-center gap-3 mb-3 mt-2">
+                    <span class="text-xs font-black text-brand-cyan">①</span>
+                    <h2 class="text-sm font-black uppercase tracking-widest text-slate-300">Player Combat Map</h2>
+                    <span class="text-[11px] text-slate-500">where a player fights — pick the lens, no verdict</span>
+                </div>
+                <div class="glass-panel p-6 rounded-xl mb-10">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <div>
+                            <div class="text-sm font-bold text-slate-300">Player Combat Map</div>
+                            <div class="text-[11px] text-slate-500">Where one player fights on a map — no verdict, just what happened.</div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 items-center">
+                            <input id="proximity-player-heatmap-player" type="text" aria-label="Player GUID (8 or 32 characters)" placeholder="Player GUID (8 or 32 char)..." class="w-44 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                            <input id="proximity-player-heatmap-map" type="text" aria-label="Map name" placeholder="Map name..." class="w-28 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                        </div>
+                    </div>
+                    <div id="proximity-player-heatmap-modes" class="flex flex-wrap gap-2 mb-3">
+                        <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="kills_from">Kills from</button>
+                        <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="victims_die">Victims die</button>
+                        <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="player_dies">Player dies</button>
+                        <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="presence">Presence</button>
+                    </div>
+                    <canvas id="proximity-player-heatmap" width="512" height="512" class="w-full rounded-lg border border-white/10 bg-slate-950" style="max-width:760px;aspect-ratio:1"></canvas>
+                    <div id="proximity-player-heatmap-caption" class="text-xs text-slate-500 mt-2">Pick a player and a map (or set the map scope) to see where they fight.</div>
+                </div>
+
+                <!-- ===== ② Player Story — KPI strip ===== -->
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="text-xs font-black text-brand-emerald">②</span>
+                    <h2 class="text-sm font-black uppercase tracking-widest text-slate-300">Player Story</h2>
+                    <span class="text-[11px] text-slate-500">the numbers around the map, in context</span>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div class="glass-card p-6 rounded-xl border-l-4 border-brand-cyan">
                         <div class="text-xs font-bold text-slate-500 uppercase" title="Count of detected combat engagement windows in the selected scope.">Engagements</div>
@@ -2143,34 +2137,15 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-                    <div class="glass-panel p-6 rounded-xl">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="text-sm font-bold text-slate-400">Engagement Timeline</div>
-                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">Live</span>
-                        </div>
-                        <div id="proximity-timeline-scope" class="text-[11px] text-slate-500 mb-3">Scope: Last 30d window</div>
-                        <div class="flex flex-wrap gap-2 mb-3 text-[10px]">
-                            <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-400" title="Each bar is one timeline bucket for the selected session/map/round scope.">
-                                <span class="w-2 h-2 rounded-sm bg-brand-cyan/40"></span>
-                                Bucketed engagements
-                            </span>
-                            <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-400" title="Taller bars mean more engagements in that bucket.">
-                                <span class="w-2 h-2 rounded-sm bg-brand-cyan"></span>
-                                Height = intensity
-                            </span>
-                        </div>
-                        <div class="h-48 rounded-lg border border-white/10 p-3 flex items-end gap-2" id="proximity-timeline">
-                            <div id="proximity-timeline-empty" class="h-full flex items-center justify-center text-slate-500">
-                                <div class="text-center">
-                                    <i data-lucide="activity" class="w-8 h-8 mx-auto mb-2 text-slate-600"></i>
-                                    <div class="text-sm font-bold text-slate-400">Timeline offline</div>
-                                    <div class="text-xs text-slate-600">Awaiting proximity events stream</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
+                <!-- ===== ③ Map Context — this map's blood & objective pull ===== -->
+                <!-- Phase 4 IA: Engagement Timeline sparkline removed (blueprint
+                     CUT). Map Context (hotzone heatmap) is now full-width. -->
+                <div class="flex items-center gap-3 mb-3 mt-10">
+                    <span class="text-xs font-black text-brand-rose">③</span>
+                    <h2 class="text-sm font-black uppercase tracking-widest text-slate-300">Map Context</h2>
+                    <span class="text-[11px] text-slate-500">where the whole server fights on this map</span>
+                </div>
+                <div class="grid grid-cols-1 gap-6 mt-2">
                     <div class="glass-panel p-6 rounded-xl">
                         <div class="flex items-center justify-between mb-4">
                             <div class="text-sm font-bold text-slate-400">Hot Zone Map</div>
@@ -2657,27 +2632,8 @@
                     </div>
                 </div>
 
-                <!-- Per-player Combat Map (flagship) -->
-                <div class="glass-panel p-6 rounded-xl mt-8">
-                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-                        <div>
-                            <div class="text-sm font-bold text-slate-300">Player Combat Map</div>
-                            <div class="text-[11px] text-slate-500">Where one player fights on a map — no verdict, just what happened.</div>
-                        </div>
-                        <div class="flex flex-wrap gap-2 items-center">
-                            <input id="proximity-player-heatmap-player" type="text" placeholder="Player GUID (8 or 32 char)..." class="w-44 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
-                            <input id="proximity-player-heatmap-map" type="text" placeholder="Map name..." class="w-28 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
-                        </div>
-                    </div>
-                    <div id="proximity-player-heatmap-modes" class="flex flex-wrap gap-2 mb-3">
-                        <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="kills_from">Kills from</button>
-                        <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="victims_die">Victims die</button>
-                        <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="player_dies">Player dies</button>
-                        <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="presence">Presence</button>
-                    </div>
-                    <canvas id="proximity-player-heatmap" width="512" height="512" class="w-full rounded-lg border border-white/10 bg-slate-950" style="max-width:640px;aspect-ratio:1"></canvas>
-                    <div id="proximity-player-heatmap-caption" class="text-xs text-slate-500 mt-2">Pick a player and a map to see where they fight.</div>
-                </div>
+                <!-- Phase 4 IA: Player Combat Map relocated to the HERO slot
+                     (top of page, map-first) — see section ① above. -->
 
                 <!-- v5.2 Leaderboard Tabs -->
                 <div class="glass-panel p-6 rounded-xl mt-8">
