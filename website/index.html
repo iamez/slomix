@@ -2198,40 +2198,22 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                <!-- Phase 4 Part B: 10 ranked leaderboard lists across 4
+                     prototype panels collapsed to 3 contextual panels +
+                     Class Signals. Cut as redundant: Top Sprint % (movement
+                     micro-stat, mirrors the cut Avg Sprint KPI), Dodge
+                     Reaction (overlaps Return Fire as reactive timing),
+                     Support Reaction (sparse Beta signal). renderLeaderList
+                     null-guards missing containers, so the cut IDs' render
+                     calls become harmless no-ops. -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
                     <div class="glass-panel p-6 rounded-xl">
                         <div class="flex items-center justify-between mb-4">
-                            <div class="text-sm font-bold text-slate-400">Movement Leaders</div>
-                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">Live</span>
-                        </div>
-                        <div class="text-[11px] text-slate-500 mb-3">Derived from per-player movement tracks in the selected scope.</div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Highest total movement distance while tracked.">Top Distance</div>
-                                <div id="proximity-distance-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
-                            </div>
-                            <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Highest sprint-time share while tracked.">Top Sprint %</div>
-                                <div id="proximity-sprint-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
-                            </div>
-                            <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Spawn-to-first-movement reaction time (ms), lower is faster.">Spawn Reaction Time</div>
-                                <div id="proximity-reaction-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
-                            </div>
-                            <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Longest average survival duration in tracked windows.">Longest Survival</div>
-                                <div id="proximity-survival-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="glass-panel p-6 rounded-xl">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="text-sm font-bold text-slate-400">Teamplay Signals</div>
+                            <div class="text-sm font-bold text-slate-400">Space &amp; Pressure</div>
                             <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-emerald/10 text-brand-emerald">Live</span>
                         </div>
-                        <div class="text-[11px] text-slate-500 mb-3">These ranks focus on coordinated pressure and survival under focus fire.</div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="text-[11px] text-slate-500 mb-3">Who creates space — coordinated crossfire pressure and surviving focus fire.</div>
+                        <div class="space-y-4">
                             <div class="glass-card p-4 rounded-lg">
                                 <div class="text-[11px] font-bold text-slate-500 uppercase" title="Kills produced while teammate crossfire overlap is active.">Crossfire Kills</div>
                                 <div id="proximity-crossfire-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
@@ -2240,15 +2222,51 @@
                                 <div class="text-[11px] font-bold text-slate-500 uppercase" title="Average teammate delay in crossfire actions (ms), lower is better.">Best Sync</div>
                                 <div id="proximity-sync-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
                             </div>
-                            <div class="glass-card p-4 rounded-lg md:col-span-2">
+                            <div class="glass-card p-4 rounded-lg">
                                 <div class="text-[11px] font-bold text-slate-500 uppercase" title="Survival rate for players when targeted by focused pressure.">Focus Survivors</div>
                                 <div id="proximity-focus-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
                             </div>
                         </div>
                     </div>
+
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Finishers &amp; Survival</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-rose/10 text-brand-rose">Live</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Who finishes and who gets out alive — longest survival and fastest return fire.</div>
+                        <div class="space-y-4">
+                            <div class="glass-card p-4 rounded-lg">
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Longest average survival duration in tracked windows.">Longest Survival</div>
+                                <div id="proximity-survival-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
+                            </div>
+                            <div class="glass-card p-4 rounded-lg">
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Time to first damage dealt by the targeted player after initial incoming hit.">Return Fire</div>
+                                <div id="proximity-returnfire-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Tempo &amp; Movement</div>
+                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">Live</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Who covers ground and reacts first — map distance and spawn reaction.</div>
+                        <div class="space-y-4">
+                            <div class="glass-card p-4 rounded-lg">
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Highest total movement distance while tracked.">Top Distance</div>
+                                <div id="proximity-distance-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
+                            </div>
+                            <div class="glass-card p-4 rounded-lg">
+                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Spawn-to-first-movement reaction time (ms), lower is faster.">Spawn Reaction Time</div>
+                                <div id="proximity-reaction-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                <div class="grid grid-cols-1 gap-6 mt-8">
                     <div class="glass-panel p-6 rounded-xl">
                         <div class="flex items-center justify-between mb-4">
                             <div class="text-sm font-bold text-slate-400">Class Signals</div>
@@ -2261,28 +2279,6 @@
                         <div class="text-[11px] text-slate-500 mt-4 mb-2">Class reaction baselines from `REACTION_METRICS` (lower is faster).</div>
                         <div id="proximity-class-reaction-summary" class="space-y-2 text-xs text-slate-300">
                             <div class="text-[11px] text-slate-500">No class reaction baselines yet.</div>
-                        </div>
-                    </div>
-
-                    <div class="glass-panel p-6 rounded-xl">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="text-sm font-bold text-slate-400">Combat Reaction Signals</div>
-                            <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">Beta</span>
-                        </div>
-                        <div class="text-[11px] text-slate-500 mb-3">Tier-B timing metrics from first incoming hit: return fire, dodge turn, teammate support.</div>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Time to first damage dealt by the targeted player after initial incoming hit.">Return Fire</div>
-                                <div id="proximity-returnfire-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
-                            </div>
-                            <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Time to first significant movement direction change after first incoming hit.">Dodge Reaction</div>
-                                <div id="proximity-dodge-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
-                            </div>
-                            <div class="glass-card p-4 rounded-lg">
-                                <div class="text-[11px] font-bold text-slate-500 uppercase" title="Time to first teammate damage on an attacker after ally takes first hit.">Support Reaction</div>
-                                <div id="proximity-support-reaction-leaders" class="mt-2 space-y-1 text-xs text-slate-300">--</div>
-                            </div>
                         </div>
                     </div>
                 </div>

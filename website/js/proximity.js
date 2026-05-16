@@ -1449,15 +1449,14 @@ function renderClassReactionSummary(rows) {
 }
 
 function renderReactionSignals(payload) {
+    // Phase 4 Part B: Dodge / Support Reaction lists cut in the 7→3
+    // leaderboard consolidation; only Return Fire survives in the
+    // Finishers & Survival panel.
     const returnRows = payload?.return_fire || [];
-    const dodgeRows = payload?.dodge || [];
-    const supportRows = payload?.support || [];
     const classRows = payload?.class_summary || [];
     const formatWithClass = (row) => `${stripEtColors(row.player_class || 'UNKNOWN')} • ${formatMs(row.reaction_ms)}`;
 
     renderLeaderList('proximity-returnfire-leaders', returnRows, formatWithClass);
-    renderLeaderList('proximity-dodge-leaders', dodgeRows, formatWithClass);
-    renderLeaderList('proximity-support-reaction-leaders', supportRows, formatWithClass);
     renderClassReactionSummary(classRows);
 }
 
@@ -1492,15 +1491,12 @@ function resetProximityValues() {
     renderTradeEvents([]);
     renderDuos([]);
     renderLeaderList('proximity-distance-leaders', [], () => '--');
-    renderLeaderList('proximity-sprint-leaders', [], () => '--');
     renderLeaderList('proximity-reaction-leaders', [], () => '--');
     renderLeaderList('proximity-survival-leaders', [], () => '--');
     renderLeaderList('proximity-crossfire-leaders', [], () => '--');
     renderLeaderList('proximity-sync-leaders', [], () => '--');
     renderLeaderList('proximity-focus-leaders', [], () => '--');
     renderLeaderList('proximity-returnfire-leaders', [], () => '--');
-    renderLeaderList('proximity-dodge-leaders', [], () => '--');
-    renderLeaderList('proximity-support-reaction-leaders', [], () => '--');
     renderClassSummary({ classes: [] });
     // v5 resets
     setHtml('spawn-timing-teams', '');
@@ -1699,10 +1695,8 @@ async function loadScopedProximityData() {
                     const distance = row.total_distance != null ? `${formatNumber(Math.round(row.total_distance))}u` : '--';
                     return distance;
                 });
-                renderLeaderList('proximity-sprint-leaders', movers.sprint, (row) => {
-                    const pct = row.sprint_pct != null ? `${row.sprint_pct.toFixed(1)}%` : '--';
-                    return pct;
-                });
+                // Phase 4 Part B: Top Sprint % list cut in the 7→3
+                // leaderboard consolidation (movement micro-stat).
                 renderLeaderList('proximity-reaction-leaders', movers.reaction, (row) => {
                     return formatMs(row.reaction_ms);
                 });
