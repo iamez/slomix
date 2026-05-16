@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from './client';
-import type { ProximityScope } from './types';
+import type { ProximityScope, PlayerHeatmapMode } from './types';
 
 // Home / Overview
 export const useOverview = () =>
@@ -473,6 +473,19 @@ export const useCombatHeatmap = (mapName: string, opts?: { weaponId?: number; pe
     queryKey: ['combat-heatmap', mapName, opts],
     queryFn: () => api.getCombatHeatmap(mapName, opts),
     enabled: !!mapName,
+    staleTime: 30_000,
+  });
+
+export const usePlayerHeatmap = (
+  mapName: string,
+  playerGuid: string,
+  mode: PlayerHeatmapMode,
+  opts?: { weaponId?: number; rangeDays?: number; sessionDate?: string; roundNumber?: number; gridSize?: number },
+) =>
+  useQuery({
+    queryKey: ['player-heatmap', mapName, playerGuid, mode, opts],
+    queryFn: () => api.getPlayerHeatmap(mapName, playerGuid, mode, opts),
+    enabled: !!mapName && !!playerGuid,
     staleTime: 30_000,
   });
 

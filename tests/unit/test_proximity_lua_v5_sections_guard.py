@@ -37,6 +37,19 @@ def test_proximity_tracker_writes_v6_section_headers():
     assert "# OBJECTIVE_RUNS" in source
 
 
+def test_proximity_tracker_shot_fired_section_is_opt_in_and_additive():
+    """v9 true-aim (6.02): SHOT_FIRED must exist, be feature-gated, and
+    default OFF so production behaviour is unchanged until explicitly
+    enabled (the section is purely additive)."""
+    source = _lua_source()
+    assert "# SHOT_FIRED" in source
+    assert 'isFeatureEnabled("shot_fired")' in source
+    # default OFF — backward compatible
+    assert "shot_fired = false," in source
+    # emission shape time;guid;weapon;ox;oy;oz;yaw;pitch
+    assert "# time;guid;weapon;ox;oy;oz;yaw;pitch" in source
+
+
 def test_output_data_calls_section_writers():
     """Verify sections are written in outputData().
 

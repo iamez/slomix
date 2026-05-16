@@ -2306,6 +2306,57 @@ CREATE TABLE public.proximity_combat_position (
 
 
 --
+-- Name: proximity_shot_fired; Type: TABLE; Schema: public; Owner: -
+-- v9 true-aim (Lua 6.02 SHOT_FIRED). Created by migrations/055; DEFAULT-OFF
+-- in Lua, so empty until the feature is enabled+deployed. Self-contained
+-- block (table + sequence + PK + indexes) — mirrors migration 055 exactly.
+--
+
+CREATE TABLE IF NOT EXISTS public.proximity_shot_fired (
+    id                  integer NOT NULL,
+    session_date        date NOT NULL,
+    round_number        integer NOT NULL,
+    round_start_unix    integer DEFAULT 0,
+    round_end_unix      integer DEFAULT 0,
+    map_name            character varying(64) NOT NULL,
+    event_time          integer NOT NULL,
+    guid                character varying(32) NOT NULL,
+    weapon_id           integer NOT NULL,
+    origin_x            integer NOT NULL,
+    origin_y            integer NOT NULL,
+    origin_z            integer NOT NULL,
+    view_yaw            real DEFAULT 0,
+    view_pitch          real DEFAULT 0,
+    round_id            integer,
+    round_link_source   character varying(32),
+    round_link_reason   character varying(64),
+    round_linked_at     timestamp without time zone,
+    created_at          timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    guid_canonical      character varying(32)
+);
+
+CREATE SEQUENCE IF NOT EXISTS public.proximity_shot_fired_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.proximity_shot_fired_id_seq OWNED BY public.proximity_shot_fired.id;
+ALTER TABLE ONLY public.proximity_shot_fired
+    ALTER COLUMN id SET DEFAULT nextval('public.proximity_shot_fired_id_seq'::regclass);
+DO $$ BEGIN
+    ALTER TABLE ONLY public.proximity_shot_fired
+        ADD CONSTRAINT proximity_shot_fired_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_table OR duplicate_object THEN NULL; END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_psf_identity
+    ON public.proximity_shot_fired
+    (session_date, round_number, round_start_unix, event_time, guid, weapon_id);
+CREATE INDEX IF NOT EXISTS idx_psf_guid_map_date
+    ON public.proximity_shot_fired (guid, map_name, session_date);
+CREATE INDEX IF NOT EXISTS idx_psf_canonical
+    ON public.proximity_shot_fired (guid_canonical);
+CREATE INDEX IF NOT EXISTS idx_psf_map_date
+    ON public.proximity_shot_fired (map_name, session_date);
+
+
+--
 -- Name: proximity_combat_position_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 

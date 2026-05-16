@@ -43,7 +43,10 @@
 -- ============================================================
 
 local modname = "proximity_tracker"
-local version = "6.01"
+-- 6.02: additive SHOT_FIRED section (true-aim workstream). Default OFF
+-- (features.shot_fired=false) so production behavior is unchanged until
+-- explicitly enabled. Backward-compatible: no existing section changed.
+local version = "6.02"
 
 -- ===== CONFIGURATION =====
 local config = {
@@ -70,6 +73,10 @@ local config = {
 
     -- Minimum damage to count
     min_damage = 1,
+
+    -- v9 true-aim: emit every Nth shot when features.shot_fired is on
+    -- (rate-limit; et_WeaponFire is high-frequency). 1 = every shot.
+    shot_fired_sample_rate = 1,
 
     -- Combat reaction tracking (Tier-B)
     reaction_window_ms = 5000,
@@ -236,6 +243,9 @@ local config = {
         vehicle_tracking = true,
         construction_tracking = true,
         objective_run_tracking = true,
+        -- v9 true-aim (6.02): per-shot origin + view angles. DEFAULT OFF —
+        -- high frequency; opt-in only. Production unchanged until enabled.
+        shot_fired = false,
     },
 
     -- ===== v5 TEAMPLAY CONFIG =====
@@ -533,6 +543,10 @@ local tracker = {
 
     -- Weapon fire tracking (for accuracy)
     weapon_fire = {},           -- [guid] = { [weapon_id] = { shots=N, hits=N, kills=N, headshots=N } }
+
+    -- v9 true-aim shot log (6.02) — array of {time,guid,weapon,ox,oy,oz,yaw,pitch}
+    shot_fired = {},
+    shot_fired_seq = 0,         -- monotonic counter for sample-rate gating
 
     -- Hit region tracking (v5.2)
     hit_regions = {},           -- array of {time, attacker_guid, attacker_name, victim_guid, victim_name, weapon, region, damage}
@@ -3133,6 +3147,20 @@ local function outputDataInner()
         end
     end
 
+    -- ===== SHOT FIRED (v9 true-aim, 6.02) =====
+    if isFeatureEnabled("shot_fired") and #tracker.shot_fired > 0 then
+        local sf_header = "\n# SHOT_FIRED\n" ..
+            "# time;guid;weapon;ox;oy;oz;yaw;pitch\n" ..
+            "# yaw/pitch from ps.viewangles (runtime-validated binding)\n"
+        et.trap_FS_Write(sf_header, string.len(sf_header), fd)
+        for _, sf in ipairs(tracker.shot_fired) do
+            local line = string.format("%d;%s;%d;%d;%d;%d;%.2f;%.2f\n",
+                sf.time, sf.guid, sf.weapon,
+                sf.ox, sf.oy, sf.oz, sf.yaw, sf.pitch)
+            et.trap_FS_Write(line, string.len(line), fd)
+        end
+    end
+
     -- ===== CARRIER EVENTS (v6) =====
     if isFeatureEnabled("carrier_tracking") and #tracker.carrier.events > 0 then
         local ce_header = "\n# CARRIER_EVENTS\n" ..
@@ -3465,6 +3493,8 @@ function et_InitGame(levelTime, randomSeed, restart)
     tracker.kill_outcomes.completed = {}
     tracker.hit_regions = {}
     tracker.combat_positions = {}
+    tracker.shot_fired = {}
+    tracker.shot_fired_seq = 0
     -- v6 carrier reset
     tracker.carrier.active = {}
     tracker.carrier.events = {}
@@ -4042,6 +4072,36 @@ function et_WeaponFire(clientNum, weapon)
         tracker.weapon_fire[guid][weapon] = { shots = 0, hits = 0, kills = 0, headshots = 0 }
     end
     tracker.weapon_fire[guid][weapon].shots = tracker.weapon_fire[guid][weapon].shots + 1
+
+    -- ===== v9 TRUE-AIM (6.02): per-shot origin + view angles =====
+    -- Opt-in (features.shot_fired) + sample-rate gated (high frequency).
+    -- origin: proven ps.origin (see getPlayerPos / line ~589).
+    -- viewangles: ps.viewangles binding is NOT proven from static code
+    -- (absent everywhere in repo+live Lua per Phase 5.0 drift report) —
+    -- it MUST be runtime-validated on a live server before deploy. We
+    -- guard defensively so a nil/!=3-tuple binding degrades to 0,0
+    -- instead of erroring, and never blocks the shot-count path above.
+    if isFeatureEnabled("shot_fired") then
+        tracker.shot_fired_seq = tracker.shot_fired_seq + 1
+        local rate = tonumber(config.shot_fired_sample_rate) or 1
+        if rate < 1 then rate = 1 end
+        if (tracker.shot_fired_seq % rate) == 0 then
+            local origin = safe_gentity_get(clientNum, "ps.origin")
+            local va = safe_gentity_get(clientNum, "ps.viewangles")  -- RUNTIME-VALIDATE
+            if origin then
+                tracker.shot_fired[#tracker.shot_fired + 1] = {
+                    time = gameTime(),
+                    guid = guid,
+                    weapon = weapon,
+                    ox = round(tonumber(origin[1]) or 0, 1),
+                    oy = round(tonumber(origin[2]) or 0, 1),
+                    oz = round(tonumber(origin[3]) or 0, 1),
+                    yaw = round((va and tonumber(va[2])) or 0, 2),
+                    pitch = round((va and tonumber(va[1])) or 0, 2),
+                }
+            end
+        end
+    end
 end
 
 -- ===== SHUTDOWN HANDLER =====
