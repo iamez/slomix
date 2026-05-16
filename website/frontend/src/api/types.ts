@@ -1277,6 +1277,21 @@ export interface CombatHeatmapResponse {
   hotzones: HotzonePoint[];
 }
 
+export type PlayerHeatmapMode = 'kills_from' | 'victims_die' | 'player_dies' | 'presence';
+
+export interface PlayerHeatmapResponse {
+  status: string;
+  map_name: string;
+  mode: PlayerHeatmapMode;
+  grid_size: number;
+  player_guid: string;
+  player_name: string;
+  hotzones: HotzonePoint[];
+  total: number;
+  sampled: boolean;
+  coverage?: 'kills_only';
+}
+
 export interface KillLine {
   ax: number;
   ay: number;
