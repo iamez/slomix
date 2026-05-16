@@ -2729,8 +2729,8 @@ async function renderPlayerHeatmap() {
         ctx.fillStyle = '#64748b';
         ctx.font = '12px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('Enter a player GUID (8 or 32 char) and a map', W / 2, H / 2);
-        if (captionEl) captionEl.textContent = 'Enter a player GUID and a map (or set the map scope) to see where they fight.';
+        ctx.fillText('Select a player and a map', W / 2, H / 2);
+        if (captionEl) captionEl.textContent = 'Select a player and a map (or set the map scope) to see where they fight.';
         return;
     }
 

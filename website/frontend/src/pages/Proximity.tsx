@@ -1014,7 +1014,9 @@ function PlayerHeatmapPanel() {
 
   const { data, isLoading } = usePlayerHeatmap(mapName, playerGuid, mode, { rangeDays: 30 });
   const hotzones = data?.hotzones ?? [];
-  const { data: playersData } = useProximityPlayers();
+  // Scope the picker to the selected map (Copilot review) — mirrors the
+  // legacy behaviour; empty map => all players.
+  const { data: playersData } = useProximityPlayers(mapName ? { map_name: mapName } : undefined);
   const players = playersData?.players ?? [];
 
   return (
@@ -1066,7 +1068,7 @@ function PlayerHeatmapPanel() {
 
         {!mapName || !playerGuid ? (
           <div className="flex items-center justify-center h-64 text-xs text-slate-500">
-            Enter a player GUID and a map name to see where they fight
+            Select a player and enter a map to see where they fight
           </div>
         ) : isLoading ? (
           <Skeleton variant="card" count={1} />
