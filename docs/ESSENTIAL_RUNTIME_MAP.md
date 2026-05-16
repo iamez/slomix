@@ -25,7 +25,7 @@ Compose web stack only:
 Single-process helpers:
 - [start_bot.sh](/start_bot.sh)
 - [website/start_website.sh](/website/start_website.sh)
-- [website/etlegacy-website.service](/website/etlegacy-website.service)
+- [website/slomix-web.service](/website/slomix-web.service)
 
 ## Core Architecture
 
@@ -171,7 +171,7 @@ website/backend/services/planning_discord_bridge.py
 website/backend/services/contact_handle_crypto.py
 website/backend/services/upload_store.py
 website/backend/services/upload_validators.py
-website/etlegacy-website.service
+website/slomix-web.service
 website/index.html
 website/js/app.js
 website/js/utils.js

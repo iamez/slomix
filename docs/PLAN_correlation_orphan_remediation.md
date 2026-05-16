@@ -61,7 +61,7 @@ SQL
 
 **Diag SQL bug** v `website/backend/routers/diagnostics_router.py`. Štel correlation rows namesto distinct rounds-ov.
 
-**Status:** ✅ Popravek je v repo-ju (vrstica ~679: `COUNT(DISTINCT r.id) FILTER (WHERE rc.id IS NOT NULL)`). **Aktivacija** zahteva `sudo systemctl restart etlegacy-web`.
+**Status:** ✅ Popravek je v repo-ju (vrstica ~679: `COUNT(DISTINCT r.id) FILTER (WHERE rc.id IS NOT NULL)`). **Aktivacija** zahteva `sudo systemctl restart slomix-web`.
 
 **Verify po restartu:**
 ```bash
@@ -78,13 +78,13 @@ curl -s "http://localhost:8000/api/diagnostics/storytelling-completeness?session
 
 ### Precondition
 - [ ] Repo branch je `main`, working tree čist (ali je commit pripravljen).
-- [ ] `etlegacy-web` service obstaja in je aktiven (`systemctl is-active etlegacy-web`).
+- [ ] `slomix-web` service obstaja in je aktiven (`systemctl is-active slomix-web`).
 
 ### Steps
 1. (Že done) Edit `website/backend/routers/diagnostics_router.py`: spremenil `COUNT(DISTINCT rc.id)` v `COUNT(DISTINCT r.id) FILTER (WHERE rc.id IS NOT NULL)`.
 2. Commit: `fix(diag): correct rounds_correlated count in storytelling-completeness endpoint`.
-3. **User action:** `sudo systemctl restart etlegacy-web`.
-4. (Po restartu) syntax/log check: `journalctl -u etlegacy-web -n 20 --no-pager` — naj ne bo Python traceback-a.
+3. **User action:** `sudo systemctl restart slomix-web`.
+4. (Po restartu) syntax/log check: `journalctl -u slomix-web -n 20 --no-pager` — naj ne bo Python traceback-a.
 
 ### Verify
 ```bash
@@ -99,12 +99,12 @@ curl -sS "http://localhost:8000/api/diagnostics/storytelling-completeness?sessio
 # Revert commit + restart. Diag stran bo prikazovala stare (napačne) številke,
 # ampak ne bo crash-ala.
 git revert HEAD
-sudo systemctl restart etlegacy-web
+sudo systemctl restart slomix-web
 ```
 
 ### Outage runbook
-- **Endpoint 500**: preglej `journalctl -u etlegacy-web -f`, najdi traceback. Najpogostejša napaka: typo v SQL. Revert.
-- **Endpoint 404**: restart ni uspel. `systemctl status etlegacy-web`.
+- **Endpoint 500**: preglej `journalctl -u slomix-web -f`, najdi traceback. Najpogostejša napaka: typo v SQL. Revert.
+- **Endpoint 404**: restart ni uspel. `systemctl status slomix-web`.
 - **`{detail: "An internal error occurred"}`**: glej log za `ERROR | api.diagnostics`. Revert in repro lokalno.
 
 ---
@@ -195,8 +195,8 @@ async def test_strategy_3_does_not_break_existing_lua_stats_merge():
 1. Implementiraj Change 1 + 2.
 2. Napiši unit teste (vsaj 3).
 3. Commit: `fix(correlation): widen proximity window + add round_id-based merge strategy`.
-4. **User action:** `sudo systemctl restart etlegacy-bot`.
-5. Spremlja log 30 min: `journalctl -u etlegacy-bot -f | grep -E '\[CORRELATION\].*strategy=round_id'`. Naj se pojavlja.
+4. **User action:** `sudo systemctl restart slomix-bot`.
+5. Spremlja log 30 min: `journalctl -u slomix-bot -f | grep -E '\[CORRELATION\].*strategy=round_id'`. Naj se pojavlja.
 
 ### Verify (24h po deploy)
 ```bash
@@ -213,12 +213,12 @@ GROUP BY day ORDER BY day DESC"
 ### Rollback
 ```bash
 git revert <phase_b_commit>
-sudo systemctl restart etlegacy-bot
+sudo systemctl restart slomix-bot
 ```
 Bug se vrne, ampak ne škoduje obstoječim podatkom.
 
 ### Outage runbook
-- **Bot ne starta**: import error v `round_correlation_service.py`. `systemctl status etlegacy-bot` pokaže traceback.
+- **Bot ne starta**: import error v `round_correlation_service.py`. `systemctl status slomix-bot` pokaže traceback.
 - **Bot starta, ampak crash pri prvem proximity event**: revert, raziskuj v sandboxu.
 - **Strategy 3 daje napačen merge** (npr. dva back-to-back match-a istega map-a → premerge): pojav v logu kot `[CORRELATION] Merging ... strategy=round_id` z napačnim `correlation_id`. **Detection:** primerjaj `rounds.round_start_unix` med dvema match-ema za isti dan/map. Če gap < 30 min, je risk. Ublažitev: zožaj `ABS(round_start_unix - ?) <= 1800` na 600.
 - **Hot rollback**: feature flag prek env var `CORRELATION_USE_STRATEGY_3=false` (TODO: implementiraj flag pred deploy-em).
@@ -258,7 +258,7 @@ async def _upsert_correlation(self, ...):
 1. Implementiraj refactor.
 2. Unit + integration test (sočasni event-i).
 3. Commit: `fix(correlation): atomic upsert via explicit DB transaction`.
-4. **User action:** `sudo systemctl restart etlegacy-bot`.
+4. **User action:** `sudo systemctl restart slomix-bot`.
 
 ### Verify (7 dni po deploy)
 ```sql
@@ -376,7 +376,7 @@ PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U etlegacy_user -d etlegacy < backu
 ```
 
 ### Outage runbook
-- **Skript briše napačne rows**: takoj `sudo systemctl stop etlegacy-bot etlegacy-web` da preprečimo dodatno korupcijo, restoraj iz backup-a.
+- **Skript briše napačne rows**: takoj `sudo systemctl stop slomix-bot slomix-web` da preprečimo dodatno korupcijo, restoraj iz backup-a.
 - **FK violation med DELETE**: skript ima bug, ne izčisti referencing rows prej. Revert iz backup-a, fix skript.
 - **KIS sume se spremenijo po cleanup-u**: `storytelling_kill_impact.session_date` IS canonical, NE referencira `correlation_id`. Če se spremeni, nekaj je narobe — RESTORE.
 
@@ -423,7 +423,7 @@ async def periodic_orphan_sweep(self):
 1. Implementiraj `periodic_orphan_sweep` + `_merge_orphan` helper.
 2. Test lokalno: ustvari sintetičen orphan, počakaj 1h (ali skrajšaj sleep za test), preveri da se merge-a.
 3. Commit: `feat(correlation): periodic orphan sweep task`.
-4. **User action:** `sudo systemctl restart etlegacy-bot`.
+4. **User action:** `sudo systemctl restart slomix-bot`.
 
 ### Verify (1 teden po deploy)
 ```sql
@@ -447,8 +447,8 @@ Disable feature flag: `export CORRELATION_PERIODIC_SWEEP=false` + restart.
 
 | Symptom | Verjetna faza | Action |
 |---|---|---|
-| Bot ne starta po deploy | B / C / E | `journalctl -u etlegacy-bot -n 50`; revert zadnji commit; restart |
-| Web 500 na diag endpointu | A | Revert; preglej tracback v `journalctl -u etlegacy-web` |
+| Bot ne starta po deploy | B / C / E | `journalctl -u slomix-bot -n 50`; revert zadnji commit; restart |
+| Web 500 na diag endpointu | A | Revert; preglej tracback v `journalctl -u slomix-web` |
 | Smart Stats UI prikazuje napačno KIS sumo | D (cleanup šel narobe) | RESTORE iz backup-a; **ne nadaljuj** dokler ni razumeti |
 | `round_correlations` rows raste hitreje kot pred fix-om | B / C | Možen merge logic infinite loop; preglej log; revert |
 | Diag UI pokaže `correlation_ratio` < 1.0 za znan kompleten dan | A or B regresija | Preveri SQL v endpointu vs spec; revert |
@@ -457,10 +457,10 @@ Disable feature flag: `export CORRELATION_PERIODIC_SWEEP=false` + restart.
 ## Kontakt + escalation
 
 - Primary: iamez (samba@samba.local user)
-- Logs: `journalctl -u etlegacy-bot -u etlegacy-web -f`
+- Logs: `journalctl -u slomix-bot -u slomix-web -f`
 - DB: `PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U etlegacy_user -d etlegacy`
 - Backup location: `<repo-root>/backups/`
-- Service control: `sudo systemctl {start|stop|restart|status} etlegacy-{bot|web}`
+- Service control: `sudo systemctl {start|stop|restart|status} slomix-{bot|web}`
 
 ## Doc lifecycle
 

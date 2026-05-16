@@ -98,7 +98,7 @@ build_file_list() {
   # Website config/startup
   [ -f website/__init__.py ] && echo "website/__init__.py"
   [ -f website/start_website.sh ] && echo "website/start_website.sh"
-  [ -f website/etlegacy-website.service ] && echo "website/etlegacy-website.service"
+  [ -f website/slomix-web.service ] && echo "website/slomix-web.service"
   [ -f website/.env.example ] && echo "website/.env.example"
 
   # Root essentials

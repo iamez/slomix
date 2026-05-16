@@ -87,7 +87,7 @@ Confirmed website/API runtime path:
 - [website/js/greatshot.js](/website/js/greatshot.js)
 - [website/js/proximity.js](/website/js/proximity.js)
 - [website/js/admin-panel.js](/website/js/admin-panel.js)
-- [website/etlegacy-website.service](/website/etlegacy-website.service)
+- [website/slomix-web.service](/website/slomix-web.service)
 
 Confirmed app.js import-graph frontend files:
 - [website/js/player-profile.js](/website/js/player-profile.js)
@@ -154,7 +154,7 @@ Confirmed infra/runtime files:
 - [website/backend/routers/predictions.py](/website/backend/routers/predictions.py) is mounted, but whether it is required for minimum successful production is still a product decision.
 - [website/backend/routers/uploads.py](/website/backend/routers/uploads.py) is mounted, but not required for base stats/website availability if upload library is considered optional.
 - [website/backend/services/planning_discord_bridge.py](/website/backend/services/planning_discord_bridge.py) is present in the mounted planning stack, but some behavior is config-gated.
-- [website/etlegacy-website.service](/website/etlegacy-website.service) is a repo-local deployment surface, but not proof of live production deployment.
+- [website/slomix-web.service](/website/slomix-web.service) is a repo-local deployment surface, but not proof of live production deployment.
 - [bot/core/checks.py](/bot/core/checks.py) is imported later from bot runtime paths, but it was not confirmed as a primary startup dependency in this pass.
 - [greatshot/contracts](/greatshot/contracts) is referenced by scanner/highlight code, but the full package was not enumerated file-by-file in this pass.
 

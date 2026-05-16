@@ -25,7 +25,7 @@ VERBOSE=false
 # Default paths and settings
 DEPLOY_DIR="/slomix"
 REPO_URL="https://github.com/iamez/slomix.git"
-REPO_BRANCH="vps-network-migration"
+REPO_BRANCH="main"
 PG_VERSION="16"
 PG_USER="etlegacy_user"
 PG_PASSWORD=""
@@ -111,7 +111,7 @@ ${BOLD}OPTIONS:${NC}
     --skip-import       Skip database import step
     --deploy-dir DIR    Installation directory (default: /slomix)
     --repo-url URL      Git repository URL
-    --repo-branch NAME  Git branch to use (default: vps-network-migration)
+    --repo-branch NAME  Git branch to use (default: main)
     --pg-user USER      PostgreSQL username (default: etlegacy_user)
     --pg-database DB    PostgreSQL database name (default: etlegacy)
     --venv-dir DIR      Virtual environment directory (default: .venv)
@@ -129,7 +129,7 @@ ${BOLD}EXAMPLES:${NC}
     $0 --env-only
 
     # Custom installation directory
-    sudo $0 --full --deploy-dir /opt/etlegacy-bot
+    sudo $0 --full --deploy-dir /opt/slomix-bot
 
     # Skip systemd service creation
     sudo $0 --vps --skip-systemd
@@ -704,7 +704,7 @@ create_systemd_service() {
     print_header "Creating Systemd Service"
     
     print_step "Creating service file..."
-    cat > /etc/systemd/system/etlegacy-bot.service <<EOF
+    cat > /etc/systemd/system/slomix-bot.service <<EOF
 [Unit]
 Description=ET:Legacy Discord Bot
 After=network.target postgresql.service
@@ -720,7 +720,7 @@ Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=etlegacy-bot
+SyslogIdentifier=slomix-bot
 
 [Install]
 WantedBy=multi-user.target
@@ -730,7 +730,7 @@ EOF
     systemctl daemon-reload
     
     print_step "Enabling service..."
-    systemctl enable etlegacy-bot
+    systemctl enable slomix-bot
     
     print_success "Service created and enabled"
 }
@@ -742,14 +742,14 @@ start_service() {
     
     print_header "Starting Bot Service"
     
-    if systemctl is-active --quiet etlegacy-bot 2>/dev/null; then
+    if systemctl is-active --quiet slomix-bot 2>/dev/null; then
         print_warning "Service is already running"
         if prompt_yes_no "Restart service?"; then
-            systemctl restart etlegacy-bot
+            systemctl restart slomix-bot
             print_success "Service restarted"
         fi
     else
-        systemctl start etlegacy-bot
+        systemctl start slomix-bot
         print_success "Service started"
     fi
     
@@ -757,11 +757,11 @@ start_service() {
     sleep 3
     
     # Check service status
-    if systemctl is-active --quiet etlegacy-bot 2>/dev/null; then
+    if systemctl is-active --quiet slomix-bot 2>/dev/null; then
         print_success "Bot is running!"
     else
         print_error "Bot failed to start - checking logs..."
-        journalctl -u etlegacy-bot -n 20 --no-pager
+        journalctl -u slomix-bot -n 20 --no-pager
     fi
 }
 
@@ -797,16 +797,16 @@ show_completion_summary() {
     
     if [ "$SKIP_SYSTEMD" = false ]; then
         echo -e "${BOLD}Service Status:${NC}"
-        systemctl status etlegacy-bot --no-pager -l | head -20 || true
+        systemctl status slomix-bot --no-pager -l | head -20 || true
         echo ""
     fi
     
     echo -e "${BOLD}Useful Commands:${NC}"
     if [ "$SKIP_SYSTEMD" = false ]; then
-        echo "  View logs:      sudo journalctl -u etlegacy-bot -f"
-        echo "  Restart bot:    sudo systemctl restart etlegacy-bot"
-        echo "  Stop bot:       sudo systemctl stop etlegacy-bot"
-        echo "  Service status: sudo systemctl status etlegacy-bot"
+        echo "  View logs:      sudo journalctl -u slomix-bot -f"
+        echo "  Restart bot:    sudo systemctl restart slomix-bot"
+        echo "  Stop bot:       sudo systemctl stop slomix-bot"
+        echo "  Service status: sudo systemctl status slomix-bot"
     else
         echo "  Start bot:      cd $DEPLOY_DIR && $VENV_DIR/bin/python3 bot/ultimate_bot.py"
         echo "  Activate venv:  source $DEPLOY_DIR/$VENV_DIR/bin/activate"
@@ -822,7 +822,7 @@ show_completion_summary() {
     echo -e "${BOLD}Configuration Files:${NC}"
     echo "  Bot config:     $DEPLOY_DIR/.env"
     if [ "$SKIP_SYSTEMD" = false ]; then
-        echo "  Service file:   /etc/systemd/system/etlegacy-bot.service"
+        echo "  Service file:   /etc/systemd/system/slomix-bot.service"
     fi
     echo ""
     
@@ -831,7 +831,7 @@ show_completion_summary() {
         echo "  cd $DEPLOY_DIR"
         echo "  git pull origin $REPO_BRANCH"
         if [ "$SKIP_SYSTEMD" = false ]; then
-            echo "  sudo systemctl restart etlegacy-bot"
+            echo "  sudo systemctl restart slomix-bot"
         fi
         echo ""
     fi
@@ -841,7 +841,7 @@ show_completion_summary() {
         echo "  cd $DEPLOY_DIR"
         echo "  $VENV_DIR/bin/python3 postgresql_database_manager.py"
         if [ "$SKIP_SYSTEMD" = false ]; then
-            echo "  sudo systemctl restart etlegacy-bot"
+            echo "  sudo systemctl restart slomix-bot"
         fi
         echo ""
     fi
