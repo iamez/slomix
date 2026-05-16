@@ -21,7 +21,7 @@
 
 ```bash
 # 1. Navigate to project directory
-cd /home/samba/share/slomix_discord
+cd <repo-root>
 
 # 2. Activate virtual environment
 source .venv/bin/activate
@@ -236,7 +236,7 @@ If you see orphan sessions, run **Option 3 (Rebuild from scratch)**.
 **Solution:** Make sure you're in the project root directory
 
 ```bash
-cd /home/samba/share/slomix_discord
+cd <repo-root>
 python postgresql_database_manager.py
 ```
 

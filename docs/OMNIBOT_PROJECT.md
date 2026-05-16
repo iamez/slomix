@@ -92,7 +92,7 @@ Result: Server functions normally, bots spawn without issues, players can connec
 All these components exist in the repo and are ready to use:
 
 #### A. Bot Names Configuration
-- **File**: `/home/samba/share/slomix_discord/server/omnibot/et_botnames_ext.gm`
+- **File**: `<repo-root>/server/omnibot/et_botnames_ext.gm`
 - **Current Bots** (11 total):
   - Axis (6): SuperBoyy, KomandantVarga, lagger, wajs, vid, olz
   - Allied (5): Olympus, carniee, bronze, endekk, Proner2026
@@ -101,7 +101,7 @@ All these components exist in the repo and are ready to use:
 - **Class Distribution**: All 5 classes (Covert Ops, Engineer, Field Ops, Medic, Soldier) assigned per team
 
 #### B. Map Rotation for Bot Games
-- **File**: `/home/samba/share/slomix_discord/server/omnibot/bot_scrim_mapcycle.cfg`
+- **File**: `<repo-root>/server/omnibot/bot_scrim_mapcycle.cfg`
 - **Maps** (11 in cycle):
   1. etl_adlernest
   2. supply
@@ -372,10 +372,12 @@ Alternatively, enable OmniBot on supply, spawn 2 bots, and observe:
     set bot BotTeam -1
     ```
 
-19. **Restart server to apply persisted config**
+19. **Restart server to apply persisted config** (game server uses screen + daemon, NOT systemd)
     ```bash
-    # Via RCON or systemctl:
-    systemctl restart etlegacy-bot
+    # SSH into game server (puran.hehe.si), then:
+    kill $(pidof /home/et/etlegacy-v2.83.1-x86_64/etlded.x86_64)
+    # etdaemon.sh auto-restarts the server within ~1 minute.
+    # See docs/GAMESERVER_CLAUDE.md for full restart procedure.
     ```
 
 20. **Final verification**
@@ -532,8 +534,8 @@ nano /path/to/server.cfg
 # seta bot MinBots "6" → "-1"
 # seta bot MaxBots "8" → "-1"
 
-# Option B: Restart server with original config
-systemctl restart etlegacy-bot
+# Option B: Restart server with original config (game server uses kill + daemon)
+kill $(pidof /home/et/etlegacy-v2.83.1-x86_64/etlded.x86_64)
 
 # Wait 30 seconds
 # Verify bots are gone
@@ -551,8 +553,8 @@ ssh et@puran.hehe.si
 # Restore from backup
 cp /path/to/server.cfg.backup-* /path/to/server.cfg
 
-# Restart
-systemctl restart etlegacy-bot
+# Restart game server (kill + daemon auto-restart; not systemd)
+kill $(pidof /home/et/etlegacy-v2.83.1-x86_64/etlded.x86_64)
 
 # Verify connectivity from local machine
 connect puran.hehe.si

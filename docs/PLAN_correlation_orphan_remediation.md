@@ -459,7 +459,7 @@ Disable feature flag: `export CORRELATION_PERIODIC_SWEEP=false` + restart.
 - Primary: iamez (samba@samba.local user)
 - Logs: `journalctl -u etlegacy-bot -u etlegacy-web -f`
 - DB: `PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U etlegacy_user -d etlegacy`
-- Backup location: `/home/samba/share/slomix_discord/backups/`
+- Backup location: `<repo-root>/backups/`
 - Service control: `sudo systemctl {start|stop|restart|status} etlegacy-{bot|web}`
 
 ## Doc lifecycle
