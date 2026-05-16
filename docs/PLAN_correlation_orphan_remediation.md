@@ -460,7 +460,7 @@ Disable feature flag: `export CORRELATION_PERIODIC_SWEEP=false` + restart.
 - Logs: `journalctl -u slomix-bot -u slomix-web -f`
 - DB: `PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U etlegacy_user -d etlegacy`
 - Backup location: `<repo-root>/backups/`
-- Service control: `sudo systemctl {start|stop|restart|status} etlegacy-{bot|web}`
+- Service control: `sudo systemctl {start|stop|restart|status} slomix-{bot|web}`
 
 ## Doc lifecycle
 

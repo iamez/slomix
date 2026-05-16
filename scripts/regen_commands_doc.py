@@ -1,7 +1,12 @@
-"""Regenerate docs/COMMANDS.md from @commands.command declarations in cogs + mixins."""
-import ast, pathlib, sys
+"""Regenerate docs/COMMANDS.md from @commands.command declarations in cogs + mixins.
 
-ROOT = pathlib.Path("/home/samba/share/slomix_discord")
+Run from anywhere; the repo root is derived from the script's own location
+(scripts/regen_commands_doc.py -> repo root is its parent's parent).
+"""
+import ast
+import pathlib
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
 COGS_DIR = ROOT / "bot" / "cogs"
 ULTIMATE = ROOT / "bot" / "ultimate_bot.py"
 
