@@ -128,6 +128,20 @@ async def test_player_dies_filters_victim_guid_and_sets_coverage():
 
 
 @pytest.mark.asyncio
+async def test_aim_mode_routes_to_proximity_shot_fired():
+    """v9 true-aim mode=aim -> proximity_shot_fired origin_x/origin_y,
+    filtered by guid. (Empty in prod until Lua feature deployed.)"""
+    db = FakeHeatmapDB()
+    r = await _get(db, {"map_name": "supply", "mode": "aim", "player_guid": SHORT})
+    assert r.status_code == 200
+    sql = db.last_grid_sql
+    assert "floor(origin_x" in sql and "floor(origin_y" in sql
+    assert "from proximity_shot_fired" in sql
+    assert "guid = $" in sql
+    assert r.json()["mode"] == "aim"
+
+
+@pytest.mark.asyncio
 async def test_presence_uses_player_track_lateral():
     db = FakeHeatmapDB(total_samples=500)
     r = await _get(db, {"map_name": "supply", "mode": "presence", "player_guid": SHORT})

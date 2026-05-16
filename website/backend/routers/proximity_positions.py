@@ -44,6 +44,13 @@ _PLAYER_HEATMAP_MODES: dict[str, dict[str, str | None]] = {
         "x": None, "y": None,
         "guid_col": "player_guid", "coverage": None,
     },
+    # v9 true-aim (Lua 6.02). Empty until the Lua feature is enabled +
+    # deployed (separate HARD STOP) — handled by the combat branch.
+    "aim": {
+        "table": "proximity_shot_fired",
+        "x": "origin_x", "y": "origin_y",
+        "guid_col": "guid", "coverage": None,
+    },
 }
 
 
@@ -352,7 +359,7 @@ async def get_proximity_player_heatmap(
     if mode_key not in _PLAYER_HEATMAP_MODES:
         raise HTTPException(
             status_code=400,
-            detail="mode must be one of: kills_from, victims_die, player_dies, presence",
+            detail="mode must be one of: kills_from, victims_die, player_dies, presence, aim",
         )
     if not player_guid or not player_guid.strip():
         raise HTTPException(status_code=400, detail="player_guid is required")

@@ -378,6 +378,21 @@ class CombatPosition:
 
 
 @dataclass
+class ShotFired:
+    """v9 true-aim (Lua 6.02 SHOT_FIRED). Per-shot shooter origin + view
+    angles. Backward-compatible: only present when the Lua feature is
+    enabled; absent files simply yield an empty list."""
+    time: int
+    guid: str
+    weapon: int
+    origin_x: int
+    origin_y: int
+    origin_z: int
+    view_yaw: float
+    view_pitch: float
+
+
+@dataclass
 class CarrierEvent:
     carrier_guid: str
     carrier_name: str
@@ -526,6 +541,7 @@ class ProximityParserV4:
         self.kill_outcomes: list[KillOutcome] = []
         self.hit_regions: list[HitRegionEvent] = []
         self.combat_positions: list[CombatPosition] = []
+        self.shot_fired: list[ShotFired] = []
         # v6 carrier intelligence
         self.carrier_events: list[CarrierEvent] = []
         self.carrier_kills: list[CarrierKill] = []
@@ -702,6 +718,7 @@ class ProximityParserV4:
         self.kill_outcomes = []
         self.hit_regions = []
         self.combat_positions = []
+        self.shot_fired = []
         self.carrier_events = []
         self.carrier_kills = []
         self.carrier_returns = []
@@ -806,6 +823,9 @@ class ProximityParserV4:
                     if line.startswith('# COMBAT_POSITIONS'):
                         section = 'combat_positions'
                         continue
+                    if line.startswith('# SHOT_FIRED'):
+                        section = 'shot_fired'
+                        continue
                     if line.startswith('# CARRIER_EVENTS'):
                         section = 'carrier_events'
                         continue
@@ -886,6 +906,8 @@ class ProximityParserV4:
                         self._parse_hit_region_line(line)
                     elif section == 'combat_positions':
                         self._parse_combat_position_line(line)
+                    elif section == 'shot_fired':
+                        self._parse_shot_fired_line(line)
                     elif section == 'carrier_events':
                         self._parse_carrier_event_line(line)
                     elif section == 'carrier_kills':
@@ -1429,6 +1451,8 @@ class ProximityParserV4:
                 await self._import_hit_regions(session_date)
             if self.combat_positions:
                 await self._import_combat_positions(session_date)
+            if self.shot_fired:
+                await self._import_shots_fired(session_date)
             # v6 carrier intelligence
             if self.carrier_events:
                 await self._import_carrier_events(session_date)
@@ -2289,6 +2313,25 @@ class ProximityParserV4:
         except (ValueError, IndexError) as e:
             self.logger.debug(f"Skip combat_position line: {e}")
 
+    def _parse_shot_fired_line(self, line: str):
+        """v9 true-aim: time;guid;weapon;ox;oy;oz;yaw;pitch (Lua 6.02)."""
+        try:
+            parts = line.split(';')
+            if len(parts) < 8:
+                return
+            self.shot_fired.append(ShotFired(
+                time=int(parts[0]),
+                guid=parts[1],
+                weapon=int(parts[2]),
+                origin_x=int(float(parts[3])),
+                origin_y=int(float(parts[4])),
+                origin_z=int(float(parts[5])),
+                view_yaw=float(parts[6]),
+                view_pitch=float(parts[7]),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip shot_fired line: {e}")
+
     def _parse_carrier_event_line(self, line: str):
         try:
             parts = line.split(';')
@@ -2500,6 +2543,46 @@ class ProximityParserV4:
                 INSERT INTO proximity_combat_position ({", ".join(columns)})
                 VALUES ({placeholders})
                 ON CONFLICT (session_date, round_number, round_start_unix, event_time, attacker_guid, victim_guid)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_shots_fired(self, session_date):
+        """Import v9 true-aim SHOT_FIRED rows to proximity_shot_fired.
+        Backward-compatible: no-op if the table/column is absent (guarded
+        like _import_combat_positions)."""
+        if not await self._table_has_column('proximity_shot_fired', 'guid'):
+            return
+        supports_round_end = await self._table_has_column('proximity_shot_fired', 'round_end_unix')
+        for sf in self.shot_fired:
+            columns = [
+                "session_date", "round_number", "round_start_unix",
+                "map_name", "event_time", "guid", "weapon_id",
+                "origin_x", "origin_y", "origin_z",
+                "view_yaw", "view_pitch",
+            ]
+            values = [
+                session_date,
+                self.metadata['round_num'],
+                self.metadata.get('round_start_unix', 0),
+                self.metadata['map_name'],
+                sf.time, sf.guid, sf.weapon,
+                sf.origin_x, sf.origin_y, sf.origin_z,
+                sf.view_yaw, sf.view_pitch,
+            ]
+            if supports_round_end:
+                columns.insert(3, "round_end_unix")
+                values.insert(3, self.metadata.get('round_end_unix', 0))
+            await self._append_round_link_columns("proximity_shot_fired", columns, values)
+            await self._append_canonical_guid_columns(
+                "proximity_shot_fired", columns, values,
+                {"guid_canonical": sf.guid},
+            )
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_shot_fired ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, event_time, guid, weapon_id)
                 DO NOTHING
             """
             await self.db_adapter.execute(query, tuple(values))
@@ -3608,6 +3691,7 @@ class ProximityParserV4:
             'kill_outcomes': len(self.kill_outcomes),
             'hit_regions': len(self.hit_regions),
             'combat_positions': len(self.combat_positions),
+            'shot_fired': len(self.shot_fired),
             'carrier_events': len(self.carrier_events),
             'carrier_kills': len(self.carrier_kills),
             'carrier_returns': len(self.carrier_returns),
