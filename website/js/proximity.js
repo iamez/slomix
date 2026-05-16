@@ -2706,7 +2706,11 @@ async function renderPlayerHeatmap() {
     const captionEl = document.getElementById('proximity-player-heatmap-caption');
     if (!canvas) return;
 
-    const mapName = String(proximityVizState.playerHeatmapMap || '').trim();
+    // Map: explicit panel input wins; otherwise follow the global scope
+    // selector live (re-read every render so it stays in sync when the
+    // user changes scope after panel init).
+    const mapName = String(proximityVizState.playerHeatmapMap || '').trim()
+        || String(proximityScopeState.mapName || '').trim();
     const playerGuid = String(proximityVizState.playerHeatmapGuid || '').trim();
     const mode = PLAYER_HEATMAP_MODES[proximityVizState.playerHeatmapMode]
         ? proximityVizState.playerHeatmapMode : 'kills_from';
@@ -2725,8 +2729,8 @@ async function renderPlayerHeatmap() {
         ctx.fillStyle = '#64748b';
         ctx.font = '12px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('Enter a player (name search GUID) and a map', W / 2, H / 2);
-        if (captionEl) captionEl.textContent = 'Pick a player and a map to see where they fight.';
+        ctx.fillText('Enter a player GUID (8 or 32 char) and a map', W / 2, H / 2);
+        if (captionEl) captionEl.textContent = 'Enter a player GUID and a map (or set the map scope) to see where they fight.';
         return;
     }
 

@@ -49,6 +49,7 @@ import type {
   HeadshotRatesResponse,
   CombatHeatmapResponse,
   PlayerHeatmapResponse,
+  PlayerHeatmapMode,
   KillLinesResponse,
   DangerZonesResponse,
   MomentumResponse,
@@ -247,7 +248,7 @@ export const api = {
   getPlayerHeatmap: (
     mapName: string,
     playerGuid: string,
-    mode: string,
+    mode: PlayerHeatmapMode,
     opts?: { weaponId?: number; rangeDays?: number; sessionDate?: string; roundNumber?: number; gridSize?: number },
   ) => {
     const q = new URLSearchParams({

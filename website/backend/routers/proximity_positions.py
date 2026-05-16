@@ -3,6 +3,7 @@
 import json
 import logging
 import math
+import re
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -68,16 +69,21 @@ async def _resolve_player_guid_canonical(
     rather than a 500). `table`/`guid_col` come from `_PLAYER_HEATMAP_MODES`
     (internal constants), so interpolation here is safe."""
     g = (raw_guid or "").strip().upper()
+    # GUIDs are uppercase hex; reject anything else up front so neither the
+    # query bind nor the log line can carry user-controlled control chars
+    # (CodeQL log-injection: only this sanitized token is ever logged).
+    safe = re.sub(r"[^A-Z0-9]", "", g)[:8]
     if len(g) >= 32:
         return g
     try:
         row = await db.fetch_val(
-            f"SELECT {guid_col} FROM {table} {where_sql} "
-            f"AND LEFT({guid_col}, 8) = ${len(params) + 1} LIMIT 1",
-            tuple(list(params) + [g[:8]]),
+            f"SELECT {guid_col} FROM {table} {where_sql} "  # nosec B608 - guid_col/table are internal _PLAYER_HEATMAP_MODES constants; all user values are $N-bound
+            f"AND LEFT({guid_col}, 8) = ${len(params) + 1} "
+            f"ORDER BY {guid_col} LIMIT 1",  # deterministic on prefix collision
+            tuple(list(params) + [safe]),
         )
     except Exception:
-        logger.warning("player-heatmap GUID resolution failed for %s", g[:8], exc_info=True)
+        logger.warning("player-heatmap GUID resolution failed for %s", safe, exc_info=True)
         row = None
     return str(row) if row else g
 
@@ -363,6 +369,13 @@ async def get_proximity_player_heatmap(
         )
     if not player_guid or not player_guid.strip():
         raise HTTPException(status_code=400, detail="player_guid is required")
+    if weapon_id is not None and mode_key == "presence":
+        # presence is positional (player_track path), it has no weapon
+        # dimension — reject rather than silently ignore the filter.
+        raise HTTPException(
+            status_code=400,
+            detail="weapon_id is not supported with mode=presence",
+        )
 
     cfg = _PLAYER_HEATMAP_MODES[mode_key]
     table = str(cfg["table"])
@@ -396,7 +409,7 @@ async def get_proximity_player_heatmap(
 
     if mode_key == "presence":
         total_samples = await db.fetch_val(
-            f"SELECT COALESCE(SUM(sample_count), 0) FROM player_track pt {where_sql}",
+            f"SELECT COALESCE(SUM(sample_count), 0) FROM player_track pt {where_sql}",  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
             tuple(params_list),
         )
         total_samples = int(total_samples or 0)
@@ -414,7 +427,7 @@ async def get_proximity_player_heatmap(
               AND (elem->>'x') IS NOT NULL AND (elem->>'y') IS NOT NULL
             GROUP BY gx, gy
             ORDER BY cnt DESC
-            """,
+            """,  # nosec B608 - g/stride are clamped ints, where_sql is $N-parameterized; no user data interpolated
             tuple(params_list),
         )
     else:
@@ -432,7 +445,7 @@ async def get_proximity_player_heatmap(
             {extra_sql}
             GROUP BY gx, gy
             ORDER BY cnt DESC
-            """,
+            """,  # nosec B608 - x_col/y_col/table are internal _PLAYER_HEATMAP_MODES constants, g clamped int, where_sql $N-bound
             tuple(params_list),
         )
 

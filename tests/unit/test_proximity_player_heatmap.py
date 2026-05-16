@@ -91,6 +91,29 @@ async def test_missing_player_guid_returns_400():
     assert "player_guid" in r.json()["detail"]
 
 
+@pytest.mark.asyncio
+async def test_weapon_id_with_presence_rejected_400():
+    """presence has no weapon dimension — reject rather than silently
+    ignore weapon_id (Copilot review)."""
+    r = await _get(
+        FakeHeatmapDB(total_samples=100),
+        {"map_name": "supply", "mode": "presence", "player_guid": SHORT, "weapon_id": 8},
+    )
+    assert r.status_code == 400
+    assert "weapon_id is not supported with mode=presence" in r.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_weapon_id_allowed_with_combat_modes():
+    db = FakeHeatmapDB()
+    r = await _get(
+        db,
+        {"map_name": "supply", "mode": "kills_from", "player_guid": SHORT, "weapon_id": 8},
+    )
+    assert r.status_code == 200
+    assert "weapon_id = $" in db.last_grid_sql
+
+
 # ---- mode -> column routing -----------------------------------------------
 
 @pytest.mark.asyncio
