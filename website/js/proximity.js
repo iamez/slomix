@@ -948,6 +948,10 @@ async function renderHeatmap(payload) {
     }
 
     const maxKills = Math.max(...hotzones.map((h) => Number(h.kills || 0)), 1);
+    // A1/A6 fix: /proximity/hotzones emits {x,y,count,kills} (NOT grid_x/
+    // grid_y) and now buckets at 512 (was 256). Read x/y and honor the
+    // payload's grid_size so the calibrated path stops rendering blank.
+    const gridSize = Number(payload?.grid_size) || PROXIMITY_GRID_SIZE;
     const heatScale = clamp(Number(proximityVizState.heatIntensity || 1), 0.6, 1.8);
     const alphaScale = clamp(heatScale, 0.6, 1.8);
 
@@ -958,14 +962,14 @@ async function renderHeatmap(payload) {
             drawObjectiveZones(ctx, width, height, worldBounds, objectiveZones);
         }
 
-        const cellRadius = worldRadiusToCanvas(PROXIMITY_GRID_SIZE * 0.65, width, height, worldBounds);
+        const cellRadius = worldRadiusToCanvas(gridSize * 0.65, width, height, worldBounds);
         for (const zone of hotzones) {
             const kills = Number(zone.kills || 0);
-            const gx = Number(zone.grid_x);
-            const gy = Number(zone.grid_y);
+            const gx = Number(zone.x);
+            const gy = Number(zone.y);
             if (!Number.isFinite(gx) || !Number.isFinite(gy)) continue;
-            const worldX = (gx + 0.5) * PROXIMITY_GRID_SIZE;
-            const worldY = (gy + 0.5) * PROXIMITY_GRID_SIZE;
+            const worldX = (gx + 0.5) * gridSize;
+            const worldY = (gy + 0.5) * gridSize;
             const point = worldToCanvasPoint(worldX, worldY, width, height, worldBounds);
             if (!point) continue;
 
@@ -984,8 +988,8 @@ async function renderHeatmap(payload) {
     }
 
     // Fallback to old relative grid rendering when map transform is unavailable.
-    const xs = hotzones.map((h) => h.grid_x);
-    const ys = hotzones.map((h) => h.grid_y);
+    const xs = hotzones.map((h) => h.x);
+    const ys = hotzones.map((h) => h.y);
     const minX = Math.min(...xs);
     const maxX = Math.max(...xs);
     const minY = Math.min(...ys);
@@ -995,8 +999,8 @@ async function renderHeatmap(payload) {
     const spanY = Math.max(maxY - minY, 1);
 
     for (const h of hotzones) {
-        const normX = (h.grid_x - minX) / spanX;
-        const normY = (h.grid_y - minY) / spanY;
+        const normX = (h.x - minX) / spanX;
+        const normY = (h.y - minY) / spanY;
         const size = (6 + Math.min(18, (h.kills / maxKills) * 18)) * (0.72 + heatScale * 0.28);
         const x = pad + normX * (width - pad * 2);
         const y = pad + normY * (height - pad * 2);

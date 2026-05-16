@@ -135,8 +135,8 @@ async def get_proximity_hotzones(
 
         rows = await db.fetch_all(
             """
-            SELECT FLOOR(COALESCE(e.end_x, e.start_x) / 256.0)::int AS grid_x,
-                   FLOOR(COALESCE(e.end_y, e.start_y) / 256.0)::int AS grid_y,
+            SELECT FLOOR(COALESCE(e.end_x, e.start_x) / 512.0)::int AS grid_x,
+                   FLOOR(COALESCE(e.end_y, e.start_y) / 512.0)::int AS grid_y,
                    SUM(CASE WHEN e.outcome = 'killed' THEN 1 ELSE 0 END) AS kills,
                    COUNT(*) AS total_events
             FROM combat_engagement e
@@ -161,6 +161,7 @@ async def get_proximity_hotzones(
                 "scope": scope,
                 "source": "combat_engagement",
                 "map_name": selected_map,
+                "grid_size": 512,
                 "hotzones": [
                     {
                         "x": row[0],
