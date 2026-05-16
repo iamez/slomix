@@ -2729,8 +2729,8 @@ async function renderPlayerHeatmap() {
         ctx.fillStyle = '#64748b';
         ctx.font = '12px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('Enter a player GUID (8 or 32 char) and a map', W / 2, H / 2);
-        if (captionEl) captionEl.textContent = 'Enter a player GUID and a map (or set the map scope) to see where they fight.';
+        ctx.fillText('Select a player and a map', W / 2, H / 2);
+        if (captionEl) captionEl.textContent = 'Select a player and a map (or set the map scope) to see where they fight.';
         return;
     }
 
@@ -3079,9 +3079,24 @@ function bindV52PanelEvents() {
     if (phMapInput && !phMapInput.value && proximityScopeState.mapName) {
         phMapInput.value = proximityScopeState.mapName;
     }
+    const populateProximityPlayers = async () => {
+        if (!phPlayerInput) return;
+        try {
+            // includeRange:false -> endpoint's wide 365d default, still
+            // scoped to the active session/map/round selection.
+            const data = await fetchJSON(scopedUrl('/proximity/players', { includeRange: false }));
+            const players = Array.isArray(data?.players) ? data.players : [];
+            const opts = [{ value: '', label: '— select player —' }].concat(
+                players.map((p) => ({ value: p.guid, label: stripEtColors(p.name || p.guid) })),
+            );
+            setSelectOptions(phPlayerInput, opts, proximityVizState.playerHeatmapGuid || '');
+        } catch (err) {
+            console.warn('Proximity players load failed:', err);
+        }
+    };
     if (phPlayerInput) {
         phPlayerInput.onchange = phLoad;
-        phPlayerInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') phLoad(); });
+        void populateProximityPlayers();
     }
     if (phMapInput) {
         phMapInput.onchange = phLoad;

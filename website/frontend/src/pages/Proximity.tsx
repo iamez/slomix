@@ -7,7 +7,7 @@ import { Skeleton } from '../components/Skeleton';
 import { DataTable, type Column } from '../components/DataTable';
 import { InfoTip } from '../components/InfoTip';
 import { ProximityIntro } from '../components/ProximityIntro';
-import { useProximityLeaderboards, useProximitySessionScores, useProximityKillOutcomes, useProximityKillOutcomePlayerStats, useProximityHitRegions, useProximityHeadshotRates, useCombatHeatmap, usePlayerHeatmap, useKillLines, useDangerZones, useMovementStats, useProxScores, useProxFormula } from '../api/hooks';
+import { useProximityLeaderboards, useProximitySessionScores, useProximityKillOutcomes, useProximityKillOutcomePlayerStats, useProximityHitRegions, useProximityHeadshotRates, useCombatHeatmap, usePlayerHeatmap, useProximityPlayers, useKillLines, useDangerZones, useMovementStats, useProxScores, useProxFormula } from '../api/hooks';
 import type { ProximityLeaderboardEntry, SessionScoreEntry, HitRegionPlayer, HeadshotRateEntry, MovementStatsPlayer, ProxScorePlayer, ProximityScope } from '../api/types';
 import { METRICS, LEADERBOARD_HELP } from './proximity-glossary';
 
@@ -1014,6 +1014,10 @@ function PlayerHeatmapPanel() {
 
   const { data, isLoading } = usePlayerHeatmap(mapName, playerGuid, mode, { rangeDays: 30 });
   const hotzones = data?.hotzones ?? [];
+  // Scope the picker to the selected map (Copilot review) — mirrors the
+  // legacy behaviour; empty map => all players.
+  const { data: playersData } = useProximityPlayers(mapName ? { map_name: mapName } : undefined);
+  const players = playersData?.players ?? [];
 
   return (
     <div className="mt-6">
@@ -1028,14 +1032,17 @@ function PlayerHeatmapPanel() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
-            <input
-              type="text"
-              aria-label="Player GUID (8 or 32 characters)"
-              placeholder="Player GUID (8 or 32 char)..."
+            <select
+              aria-label="Player"
               value={playerGuid}
               onChange={e => { setPlayerGuid(e.target.value); }}
-              className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-44 focus:outline-none focus:border-cyan-500"
-            />
+              className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-56 focus:outline-none focus:border-cyan-500"
+            >
+              <option value="">— select player —</option>
+              {players.map(p => (
+                <option key={p.guid} value={p.guid}>{stripColors(p.name || p.guid)}</option>
+              ))}
+            </select>
             <input
               type="text"
               aria-label="Map name"
@@ -1061,7 +1068,7 @@ function PlayerHeatmapPanel() {
 
         {!mapName || !playerGuid ? (
           <div className="flex items-center justify-center h-64 text-xs text-slate-500">
-            Enter a player GUID and a map name to see where they fight
+            Select a player and enter a map to see where they fight
           </div>
         ) : isLoading ? (
           <Skeleton variant="card" count={1} />
