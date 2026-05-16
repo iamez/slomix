@@ -1269,6 +1269,16 @@ export interface HotzonePoint {
   count: number;
 }
 
+export interface ProximityPlayer {
+  guid: string;
+  name: string;
+}
+
+export interface ProximityPlayersResponse {
+  status: string;
+  players: ProximityPlayer[];
+}
+
 export interface CombatHeatmapResponse {
   status: string;
   map_name: string;

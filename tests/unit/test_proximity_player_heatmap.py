@@ -68,6 +68,65 @@ async def _get(db, params):
         return await client.get("/api/proximity/player-heatmap", params=params)
 
 
+# ---- /proximity/players (dropdown source) ---------------------------------
+
+class FakePlayersDB:
+    """Captures the players query; returns two unsorted rows."""
+
+    def __init__(self):
+        self.sql = ""
+        self.params = ()
+
+    async def fetch_all(self, query, params=None):
+        self.sql = " ".join(query.strip().lower().split())
+        self.params = tuple(params or ())
+        # name already de-duped per guid by the SQL GROUP BY; endpoint
+        # passes ORDER BY through to the DB so we just echo two rows.
+        return [
+            ("AAAA1111AAAA1111AAAA1111AAAA1111", "^1zeta"),
+            ("BBBB2222BBBB2222BBBB2222BBBB2222", "alpha"),
+        ]
+
+
+async def _get_players(db, params=None):
+    transport = httpx.ASGITransport(app=_build_app(db))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        return await client.get("/api/proximity/players", params=params or {})
+
+
+@pytest.mark.asyncio
+async def test_players_returns_guid_name_list_and_shape():
+    db = FakePlayersDB()
+    r = await _get_players(db)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["players"] == [
+        {"guid": "AAAA1111AAAA1111AAAA1111AAAA1111", "name": "^1zeta"},
+        {"guid": "BBBB2222BBBB2222BBBB2222BBBB2222", "name": "alpha"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_players_query_groups_one_row_per_guid_and_sorts_by_name():
+    db = FakePlayersDB()
+    await _get_players(db)
+    assert "from player_track" in db.sql
+    assert "group by player_guid" in db.sql          # one row per canonical guid
+    assert "order by lower(max(player_name))" in db.sql  # name-sorted
+    assert "max(player_name) is not null" in db.sql
+
+
+@pytest.mark.asyncio
+async def test_players_scope_params_passed_through():
+    db = FakePlayersDB()
+    await _get_players(db, {"map_name": "supply", "session_date": "2026-05-14"})
+    # scope values are bound as $N params (not interpolated)
+    assert "supply" in db.params
+    assert any(str(p) == "2026-05-14" for p in db.params)
+    assert "map_name = $" in db.sql and "session_date = $" in db.sql
+
+
 # ---- param validation ------------------------------------------------------
 
 @pytest.mark.asyncio

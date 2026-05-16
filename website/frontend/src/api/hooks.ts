@@ -205,6 +205,14 @@ export const useSessionGraphs = (date: string | null, sessionId?: number | null,
     staleTime: 60_000,
   });
 
+export const useProximityPlayers = (params?: ProximityScope, enabled = true) =>
+  useQuery({
+    queryKey: ['proximity-players', params],
+    queryFn: () => api.getProximityPlayers(params),
+    enabled,
+    staleTime: 60_000,
+  });
+
 export const useProximityTradeSummary = (params?: ProximityScope, enabled = true) =>
   useQuery({
     queryKey: ['proximity-trade-summary', params],

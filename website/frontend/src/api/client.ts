@@ -50,6 +50,7 @@ import type {
   CombatHeatmapResponse,
   PlayerHeatmapResponse,
   PlayerHeatmapMode,
+  ProximityPlayersResponse,
   KillLinesResponse,
   DangerZonesResponse,
   MomentumResponse,
@@ -201,6 +202,8 @@ export const api = {
     get<SessionGraphsResponse>(
       `/sessions/${encodeURIComponent(date)}/graphs${gamingSessionId ? `?gaming_session_id=${gamingSessionId}` : ''}`,
     ),
+  getProximityPlayers: (params?: ProximityScope) =>
+    get<ProximityPlayersResponse>(`/proximity/players${buildScopedQuery(params) ? `?${buildScopedQuery(params)}` : ''}`),
   getProximityTradeSummary: (params?: ProximityScope) =>
     get<ProximityTradeSummaryResponse>(`/proximity/trades/summary${buildScopedQuery(params) ? `?${buildScopedQuery(params)}` : ''}`),
   getProximityTradeEvents: (params?: ProximityScope, limit = 250) =>

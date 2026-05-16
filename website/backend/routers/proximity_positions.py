@@ -93,6 +93,38 @@ async def _resolve_player_guid_canonical(
     return str(row) if row else g
 
 
+@router.get("/proximity/players")
+@handle_router_errors("Proximity players error")
+async def get_proximity_players(
+    range_days: int = 365,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Scoped {guid,name} list for the Player Combat Map picker — viewers
+    pick a name, not a GUID. One row per canonical player_guid in scope,
+    sorted by name. Same scope source (player_track) as the heatmap."""
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, round_number, round_start_unix,
+    )
+    rows = await db.fetch_all(
+        "SELECT player_guid, MAX(player_name) AS name "
+        f"FROM player_track {where_sql} "  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
+        "GROUP BY player_guid "
+        "HAVING MAX(player_name) IS NOT NULL "
+        "ORDER BY LOWER(MAX(player_name))",
+        tuple(params),
+    )
+    players = [
+        {"guid": str(r[0]), "name": str(r[1])}
+        for r in (rows or [])
+        if r and r[0] and r[1]
+    ]
+    return {"status": "ok", "scope": scope, "players": players}
+
+
 @router.get("/proximity/hit-regions")
 @handle_router_errors("Proximity hit-regions error")
 async def get_proximity_hit_regions(
