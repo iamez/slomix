@@ -3344,13 +3344,15 @@ class ProximityParserV4:
 
             missed_candidates = []
             if opportunities and not attempts and not successes:
-                for opp in opportunities:
-                    missed_candidates.append({
+                missed_candidates.extend(
+                    {
                         "guid": opp["guid"],
                         "name": opp["name"],
                         "distance": opp["distance"],
                         "reason": "no_attempt",
-                    })
+                    }
+                    for opp in opportunities
+                )
 
             is_isolation = bool(
                 (nearest_teammate_dist is None or nearest_teammate_dist > isolation_dist)

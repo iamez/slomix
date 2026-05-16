@@ -86,7 +86,7 @@ async function ensureMapTransformConfig() {
     if (!mapTransformConfigPromise) {
         mapTransformConfigPromise = fetch(MAP_TRANSFORM_CONFIG_URL)
             .then((res) => (res.ok ? res.json() : null))
-            .catch(() => null);
+            .catch((err) => { console.warn('[proximity] map transform config failed to load; calibrated heatmaps will degrade to relative grid', err); return null; });
     }
     mapTransformConfig = await mapTransformConfigPromise;
     return mapTransformConfig;
@@ -97,7 +97,7 @@ async function ensureObjectiveZonesConfig() {
     if (!objectiveZonesConfigPromise) {
         objectiveZonesConfigPromise = fetch(OBJECTIVE_ZONES_CONFIG_URL)
             .then((res) => (res.ok ? res.json() : null))
-            .catch(() => null);
+            .catch((err) => { console.warn('[proximity] objective zones config failed to load; objective overlays disabled', err); return null; });
     }
     objectiveZonesConfig = await objectiveZonesConfigPromise;
     return objectiveZonesConfig;
