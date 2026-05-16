@@ -2093,49 +2093,36 @@
                     <h2 class="text-sm font-black uppercase tracking-widest text-slate-300">Player Story</h2>
                     <span class="text-[11px] text-slate-500">the numbers around the map, in context</span>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div class="glass-card p-6 rounded-xl border-l-4 border-brand-cyan">
-                        <div class="text-xs font-bold text-slate-500 uppercase" title="Count of detected combat engagement windows in the selected scope.">Engagements</div>
+                <!-- Phase 4 Part B: 8 KPI tiles compressed to 5 (Hot Zones,
+                     Avg Duration, Avg Sprint cut as redundant — Hot Zones is
+                     shown visually in ③ Map Context, the other two are
+                     movement micro-stats surfaced in the Movement leaders).
+                     One narrative sentence per tile per the IA blueprint. -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+                    <div class="glass-card p-5 rounded-xl border-l-4 border-brand-cyan">
+                        <div class="text-[11px] font-bold text-slate-500 uppercase" title="Count of detected combat engagement windows in the selected scope.">Engagements</div>
                         <div id="proximity-total-engagements" class="text-3xl font-black text-white mt-2">--</div>
                         <div id="proximity-window-label" class="text-xs text-slate-500 mt-1">Last 30 days</div>
                     </div>
-                    <div class="glass-card p-6 rounded-xl border-l-4 border-brand-emerald">
-                        <div class="text-xs font-bold text-slate-500 uppercase" title="Average target distance moved during each engagement window.">Avg Distance</div>
+                    <div class="glass-card p-5 rounded-xl border-l-4 border-brand-emerald">
+                        <div class="text-[11px] font-bold text-slate-500 uppercase" title="Average target distance moved during each engagement window.">Avg Distance</div>
                         <div id="proximity-avg-distance" class="text-3xl font-black text-brand-emerald mt-2">--</div>
-                        <div class="text-xs text-slate-500 mt-1">Units per duel</div>
+                        <div class="text-xs text-slate-500 mt-1">How far each duel travels across the map</div>
                     </div>
-                    <div class="glass-card p-6 rounded-xl border-l-4 border-brand-amber">
-                        <div class="text-xs font-bold text-slate-500 uppercase" title="Engagements where two or more attackers overlap pressure on one target.">Crossfire Events</div>
+                    <div class="glass-card p-5 rounded-xl border-l-4 border-brand-amber">
+                        <div class="text-[11px] font-bold text-slate-500 uppercase" title="Engagements where two or more attackers overlap pressure on one target.">Crossfire Events</div>
                         <div id="proximity-crossfire" class="text-3xl font-black text-brand-amber mt-2">--</div>
-                        <div class="text-xs text-slate-500 mt-1">Team overlap windows</div>
+                        <div class="text-xs text-slate-500 mt-1">Windows where teammates' fire overlapped</div>
                     </div>
-                    <div class="glass-card p-6 rounded-xl border-l-4 border-brand-rose">
-                        <div class="text-xs font-bold text-slate-500 uppercase" title="Spatial bins with concentrated engagement kills for the selected scope.">Hot Zones</div>
-                        <div id="proximity-hotzones" class="text-3xl font-black text-brand-rose mt-2">--</div>
-                        <div class="text-xs text-slate-500 mt-1">Active map areas</div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-6">
-                    <div class="glass-card p-5 rounded-xl border-l-4 border-brand-emerald/70">
+                    <div class="glass-card p-5 rounded-xl border-l-4 border-brand-blue">
                         <div class="text-[11px] font-bold text-slate-500 uppercase" title="Percent of engagements where the target escapes instead of dying.">Escape Rate</div>
-                        <div id="proximity-escape-rate" class="text-2xl font-black text-white mt-2">--</div>
-                        <div class="text-xs text-slate-500 mt-1">Escapes per engagement</div>
+                        <div id="proximity-escape-rate" class="text-3xl font-black text-white mt-2">--</div>
+                        <div class="text-xs text-slate-500 mt-1">How often the target slips away alive</div>
                     </div>
-                    <div class="glass-card p-5 rounded-xl border-l-4 border-brand-cyan/70">
-                        <div class="text-[11px] font-bold text-slate-500 uppercase" title="Average duration of each engagement window.">Avg Duration</div>
-                        <div id="proximity-avg-duration" class="text-2xl font-black text-brand-cyan mt-2">--</div>
-                        <div class="text-xs text-slate-500 mt-1">Fight length</div>
-                    </div>
-                    <div class="glass-card p-5 rounded-xl border-l-4 border-brand-amber/70">
+                    <div class="glass-card p-5 rounded-xl border-l-4 border-brand-rose">
                         <div class="text-[11px] font-bold text-slate-500 uppercase" title="Average number of unique attackers involved per engagement.">Avg Attackers</div>
-                        <div id="proximity-avg-attackers" class="text-2xl font-black text-brand-amber mt-2">--</div>
-                        <div class="text-xs text-slate-500 mt-1">Pressure per duel</div>
-                    </div>
-                    <div class="glass-card p-5 rounded-xl border-l-4 border-brand-rose/70">
-                        <div class="text-[11px] font-bold text-slate-500 uppercase" title="Average sprint percentage observed for tracked targets during engagements.">Avg Sprint</div>
-                        <div id="proximity-avg-sprint" class="text-2xl font-black text-brand-rose mt-2">--</div>
-                        <div class="text-xs text-slate-500 mt-1">Movement tempo</div>
+                        <div id="proximity-avg-attackers" class="text-3xl font-black text-brand-rose mt-2">--</div>
+                        <div class="text-xs text-slate-500 mt-1">Enemies of attention pulled per duel</div>
                     </div>
                 </div>
 

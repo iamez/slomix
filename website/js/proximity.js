@@ -1377,23 +1377,20 @@ async function loadEventDetail(id) {
 }
 
 function renderSummary(data) {
+    // Phase 4 Part B: Player Story compressed to 5 KPIs. Hot Zones /
+    // Avg Duration / Avg Sprint tiles were cut (redundant); their derivations
+    // are dropped here too so renderSummary stays in lockstep with the DOM.
     const engagements = data.total_engagements ?? data.engagements ?? null;
     const avgDistance = data.avg_distance_m ?? data.avg_distance ?? null;
     const crossfire = data.crossfire_events ?? data.crossfire ?? null;
-    const hotzones = data.hotzones ?? data.hotzone_count ?? null;
     const escapeRate = data.escape_rate_pct ?? null;
-    const avgDuration = data.avg_duration_ms ?? null;
     const avgAttackers = data.avg_attackers ?? null;
-    const avgSprint = data.avg_sprint_pct ?? null;
 
     setText('proximity-total-engagements', engagements != null ? formatNumber(engagements) : '--');
     setText('proximity-avg-distance', avgDistance != null ? `${avgDistance.toFixed(1)}u` : '--');
     setText('proximity-crossfire', crossfire != null ? formatNumber(crossfire) : '--');
-    setText('proximity-hotzones', hotzones != null ? formatNumber(hotzones) : '--');
     setText('proximity-escape-rate', escapeRate != null ? `${escapeRate.toFixed(1)}%` : '--');
-    setText('proximity-avg-duration', avgDuration != null ? formatDurationMs(avgDuration) : '--');
     setText('proximity-avg-attackers', avgAttackers != null ? avgAttackers.toFixed(2) : '--');
-    setText('proximity-avg-sprint', avgSprint != null ? `${avgSprint.toFixed(1)}%` : '--');
 
     renderDuos(data.top_duos || []);
 }
@@ -1471,11 +1468,8 @@ function resetProximityValues() {
     setText('proximity-total-engagements', '--');
     setText('proximity-avg-distance', '--');
     setText('proximity-crossfire', '--');
-    setText('proximity-hotzones', '--');
     setText('proximity-escape-rate', '--');
-    setText('proximity-avg-duration', '--');
     setText('proximity-avg-attackers', '--');
-    setText('proximity-avg-sprint', '--');
     setText('proximity-trade-opportunities', '--');
     setText('proximity-trade-attempts', '--');
     setText('proximity-trade-success', '--');
