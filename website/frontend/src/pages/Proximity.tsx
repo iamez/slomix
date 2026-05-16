@@ -1030,6 +1030,7 @@ function PlayerHeatmapPanel() {
           <div className="flex flex-wrap gap-2 items-center">
             <input
               type="text"
+              aria-label="Player GUID (8 or 32 characters)"
               placeholder="Player GUID (8 or 32 char)..."
               value={playerGuid}
               onChange={e => { setPlayerGuid(e.target.value); }}
@@ -1037,6 +1038,7 @@ function PlayerHeatmapPanel() {
             />
             <input
               type="text"
+              aria-label="Map name"
               placeholder="Map name..."
               value={mapName}
               onChange={e => { setMapName(e.target.value); }}
@@ -1577,6 +1579,9 @@ export default function Proximity() {
         </div>
       </GlassPanel>
 
+      {/* ① HERO — Player Combat Map (map-first; mirrors legacy IA) */}
+      <PlayerHeatmapPanel />
+
       {/* Summary Stats */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
@@ -1731,8 +1736,8 @@ export default function Proximity() {
       {/* Danger Zones — class-specific death hotspots */}
       <DangerZonesPanel />
 
-      {/* Per-player Combat Map — flagship: per-player, multi-mode */}
-      <PlayerHeatmapPanel />
+      {/* Phase 4 IA: PlayerHeatmapPanel relocated to the HERO slot
+          (top, right after scope) for map-first parity with legacy. */}
 
       {/* Combat Heatmap — global data, always visible */}
       <CombatHeatmapPanel />
