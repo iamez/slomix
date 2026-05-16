@@ -268,7 +268,7 @@ screen -r website  # Attach
 
 ### Start Commands
 ```bash
-cd /home/samba/share/slomix_discord/website
+cd <repo-root>/website
 source venv/bin/activate
 uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
