@@ -1405,6 +1405,25 @@ function LeaderboardTabs() {
 
 // ── Main Page ────────────────────────────────────────────────────────────────
 
+// Phase 4 Part B (owner-visual): lightweight map-first section framing that
+// mirrors the legacy ①..⑤ dividers. Labels are placed at the existing render
+// boundaries — no panel reorder (React's render is structurally divergent and
+// a faithful reorder is headlessly unverifiable; React is not the correctness
+// gate, legacy is truth). CI tsc is the only gate for this stack.
+const SECTION_ACCENT: Record<string, string> = {
+  '①': 'text-cyan-400', '②': 'text-emerald-400', '③': 'text-rose-400',
+  '④': 'text-amber-400', '⑤': 'text-cyan-400',
+};
+function SectionHeader({ n, title, hint }: { n: string; title: string; hint?: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-3 mt-10">
+      <span className={`text-xs font-black ${SECTION_ACCENT[n] ?? 'text-slate-400'}`}>{n}</span>
+      <h2 className="text-sm font-black uppercase tracking-widest text-slate-300">{title}</h2>
+      {hint && <span className="text-[11px] text-slate-500">{hint}</span>}
+    </div>
+  );
+}
+
 export default function Proximity() {
   const [sessionDate, setSessionDate] = useState<string | null>(null);
   const [mapName, setMapName] = useState<string | null>(null);
@@ -1587,9 +1606,10 @@ export default function Proximity() {
         </div>
       </GlassPanel>
 
-      {/* ① HERO — Player Combat Map (map-first; mirrors legacy IA) */}
+      <SectionHeader n="①" title="Player Combat Map" hint="where this player fights on the map" />
       <PlayerHeatmapPanel />
 
+      <SectionHeader n="②" title="Player Story" hint="the numbers around the map, in context" />
       {/* Summary Stats */}
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
@@ -1640,6 +1660,7 @@ export default function Proximity() {
         </div>
       )}
 
+      <SectionHeader n="③" title="Map Context" hint="where the whole server fights — heatmap, danger & role leaders" />
       {ready && (
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Heatmap */}
@@ -1722,6 +1743,7 @@ export default function Proximity() {
         </div>
       )}
 
+      <SectionHeader n="④" title="Engagements & Trades" hint="the trades and fights this scope produced" />
       {ready && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
           <EventList events={events?.events ?? []} />
@@ -1729,6 +1751,7 @@ export default function Proximity() {
         </div>
       )}
 
+      <SectionHeader n="⑤" title="Roles & Classes" hint="who creates space, who finishes — scores, classes & all-category leaders" />
       {/* Proximity Composite Scores — the main rating */}
       <ProxScoresPanel />
 
@@ -1743,9 +1766,6 @@ export default function Proximity() {
 
       {/* Danger Zones — class-specific death hotspots */}
       <DangerZonesPanel />
-
-      {/* Phase 4 IA: PlayerHeatmapPanel relocated to the HERO slot
-          (top, right after scope) for map-first parity with legacy. */}
 
       {/* Combat Heatmap — global data, always visible */}
       <CombatHeatmapPanel />

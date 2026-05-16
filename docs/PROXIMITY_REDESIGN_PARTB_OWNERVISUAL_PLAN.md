@@ -99,3 +99,34 @@ ships behind merge-CI `tsc` only. Lowest priority; do after 1–3 are owner-OK.
 5. Item 4 (React) last, flagged tsc-on-CI only.
 6. **Final acceptance = your browser walkthrough** (the headless gates prove
    structure/no-regression, not visual correctness).
+
+---
+
+## Status — SHIPPED (2026-05-16, branch `feat/proximity-ia-part-b-3`)
+
+Owner approved both decision points (Item 2 = reframe & relocate;
+Item 3 = fold all). All four items executed:
+
+- **Item 1** ✅ ④ Engagements & Trades now precedes ⑤ Roles & Classes
+  (deterministic asserted block reassembly; glyphs/accents renumbered;
+  obsolete "Phase 4 IA note" + "relocated" leftover comments dropped).
+- **Item 2** ✅ v5.2 `#leaderboard-tabs` explorer relocated under ⑤ Roles
+  inside a collapsible `<details>` "All Categories (advanced)"; JS/ids
+  untouched.
+- **Item 3** ✅ Danger Zones + Combat Heatmap folded into ③ Map Context
+  (balanced pair moved as one unit); Weapon Accuracy + Revives under
+  ⑤ Roles.
+- **Item 4** ✅ React lightweight `SectionHeader` ①..⑤ framing at existing
+  boundaries (no panel reorder — divergent render; CI tsc is the gate).
+
+**Verification (all green):** legacy `index.html` id multiset **identical**
+to `origin/main` (490/490, delta empty — no id lost/dup/added → no JS
+binding or data-path touched), `html.parser` balanced, glyph sequence
+`①②③④⑤` sequential+unique, `node --check` proximity.js OK,
+`pytest -k proximity` 61 passed / 0 failed, curl `/proximity/{players,
+leaderboards,player-heatmap?etl_frostbite,combat-positions/danger-zones}`
+all 200. React: 5 well-formed self-closing `SectionHeader`, file brace
+balance 0 (tsc deferred to CI — React not the correctness gate).
+
+**Final acceptance remains the owner browser walkthrough** — the headless
+gates prove structure / no-regression, not visual correctness.
