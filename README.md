@@ -466,8 +466,8 @@ make dev
 This starts:
 - PostgreSQL (`localhost:5432`)
 - Redis cache (`localhost:6379`)
-- FastAPI backend (`localhost:8001`)
-- Website (`http://localhost:8000`)
+- FastAPI backend (`localhost:8001` — container's `:8000` published to host `:8001`)
+- Website (`http://localhost:7000` — default per `WEBSITE_PUBLIC_PORT` in `docker-compose.yml`)
 
 Optional observability stack:
 
