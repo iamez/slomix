@@ -69,9 +69,11 @@ async def _resolve_player_guid_canonical(
     rather than a 500). `table`/`guid_col` come from `_PLAYER_HEATMAP_MODES`
     (internal constants), so interpolation here is safe."""
     g = (raw_guid or "").strip().upper()
-    # GUIDs are uppercase hex; reject anything else up front so neither the
-    # query bind nor the log line can carry user-controlled control chars
-    # (CodeQL log-injection: only this sanitized token is ever logged).
+    # GUIDs are uppercase hex; strip anything else so the query bind can
+    # never carry user-controlled chars. The user-derived value is NEVER
+    # logged (only a fixed message + exc_info traceback) — closes the
+    # CodeQL log-injection finding at the source rather than relying on a
+    # sanitizer CodeQL's taint model doesn't recognize.
     safe = re.sub(r"[^A-Z0-9]", "", g)[:8]
     if len(g) >= 32:
         return g
@@ -83,7 +85,10 @@ async def _resolve_player_guid_canonical(
             tuple(list(params) + [safe]),
         )
     except Exception:
-        logger.warning("player-heatmap GUID resolution failed for %s", safe, exc_info=True)
+        logger.warning(
+            "player-heatmap GUID resolution query failed (input len=%d)",
+            len(g), exc_info=True,
+        )
         row = None
     return str(row) if row else g
 
