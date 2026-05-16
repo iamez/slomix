@@ -44,7 +44,7 @@ inside a transaction (which the migration runner wraps everything in).
 
 ```bash
 # On production VM (slomix_vm):
-sudo -u postgres psql -d etlegacy -f /home/samba/share/slomix_discord/migrations/051_add_audit_indexes.sql
+sudo -u postgres psql -d etlegacy -f <repo-root>/migrations/051_add_audit_indexes.sql
 
 # Verify indexes were created:
 sudo -u postgres psql -d etlegacy -c "\di idx_round_correlations*"
@@ -77,7 +77,7 @@ helper) and the migration file itself.
 
 ```bash
 # 1. Pull on production
-cd /home/samba/share/slomix_discord
+cd <repo-root>
 git fetch origin
 git log --oneline origin/main..HEAD  # (should be empty if local was push)
 git pull --ff-only origin main

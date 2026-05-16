@@ -10,7 +10,7 @@ sudo apt-get install -y python3 python3-venv python3-pip build-essential postgre
 
 ## 2) Python environment
 ```bash
-cd /home/samba/share/slomix_discord
+cd <repo-root>
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
@@ -37,7 +37,7 @@ Optional but recommended:
 
 ## 4) Start stack (local)
 ```bash
-cd /home/samba/share/slomix_discord
+cd <repo-root>
 SKIP_INSTALL=1 make dev-local
 ```
 

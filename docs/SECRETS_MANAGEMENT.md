@@ -157,10 +157,10 @@ When you're ready to rotate:
    # - CLAUDE.md: Replace with placeholder like 'your_secure_password_here'
    ```
 
-7. ✅ **Restart services:**
+7. ✅ **Restart services** (production = `slomix_vm`):
    ```bash
-   sudo systemctl restart etlegacy-bot
-   sudo systemctl restart etlegacy-website  # if applicable
+   sudo systemctl restart slomix-bot
+   sudo systemctl restart slomix-web   # if applicable
    ```
 
 8. ✅ **Verify:**
@@ -168,8 +168,8 @@ When you're ready to rotate:
    # Test bot connection
    python -c "import asyncpg; asyncpg.connect(...)"
 
-   # Check bot logs
-   sudo journalctl -u etlegacy-bot -n 50
+   # Check bot logs (production unit)
+   sudo journalctl -u slomix-bot -n 50
    ```
 
 ---
@@ -249,8 +249,8 @@ Generated passwords follow this format:
    ```sql
    ALTER USER etlegacy_user WITH PASSWORD 'new-password';
    ```
-3. Restart bot: `sudo systemctl restart etlegacy-bot`
-4. Check logs: `sudo journalctl -u etlegacy-bot -n 50`
+3. Restart bot: `sudo systemctl restart slomix-bot`   # production unit on `slomix_vm`
+4. Check logs: `sudo journalctl -u slomix-bot -n 50`
 
 ### "Bot won't start after token rotation"
 

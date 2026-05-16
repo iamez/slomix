@@ -35,7 +35,7 @@ The bot's LAN machine remains outbound-only (no ports exposed). Discord acts as 
 Run all migrations in order:
 
 ```bash
-cd /home/samba/share/slomix_discord
+cd <repo-root>
 
 # Core timing columns
 psql -d etlegacy -f tools/migrations/001_add_timing_metadata_columns.sql
