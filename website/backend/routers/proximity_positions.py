@@ -1,6 +1,8 @@
-"""Proximity position endpoints: hit-regions, hit-regions/by-weapon, hit-regions/headshot-rates, combat-positions/heatmap, combat-positions/kill-lines, combat-positions/danger-zones, combat-position-stats."""
+"""Proximity position endpoints: hit-regions, hit-regions/by-weapon, hit-regions/headshot-rates, combat-positions/heatmap, player-heatmap (per-player, multi-mode), combat-positions/kill-lines, combat-positions/danger-zones, combat-position-stats."""
 
 import json
+import logging
+import math
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -10,10 +12,67 @@ from website.backend.routers.api_helpers import handle_router_errors
 from website.backend.routers.proximity_helpers import (
     ProximityQueryBuilder,
     _build_proximity_where_clause,
+    _load_scoped_guid_name_map,
+    _resolve_name_for_guid,
     _table_column_exists,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+# Per-player heatmap mode -> (source table, x column, y column, guid column, coverage note).
+# Names are internal constants (never user input) -> safe to interpolate into SQL.
+_PLAYER_HEATMAP_MODES: dict[str, dict[str, str | None]] = {
+    "kills_from": {
+        "table": "proximity_combat_position",
+        "x": "attacker_x", "y": "attacker_y",
+        "guid_col": "attacker_guid", "coverage": None,
+    },
+    "victims_die": {
+        "table": "proximity_combat_position",
+        "x": "victim_x", "y": "victim_y",
+        "guid_col": "attacker_guid", "coverage": None,
+    },
+    "player_dies": {
+        "table": "proximity_combat_position",
+        "x": "victim_x", "y": "victim_y",
+        "guid_col": "victim_guid", "coverage": "kills_only",
+    },
+    "presence": {
+        "table": "player_track",
+        "x": None, "y": None,
+        "guid_col": "player_guid", "coverage": None,
+    },
+}
+
+
+async def _resolve_player_guid_canonical(
+    db: DatabaseAdapter,
+    raw_guid: str,
+    table: str,
+    guid_col: str,
+    where_sql: str,
+    params: tuple,
+) -> str:
+    """Resolve an 8-char short (or partial) GUID to the 32-char canonical form
+    stored in the proximity tables. Accepts an already-canonical 32-char input
+    as-is. Falls back to the raw prefix on miss (yields an empty result set
+    rather than a 500). `table`/`guid_col` come from `_PLAYER_HEATMAP_MODES`
+    (internal constants), so interpolation here is safe."""
+    g = (raw_guid or "").strip().upper()
+    if len(g) >= 32:
+        return g
+    try:
+        row = await db.fetch_val(
+            f"SELECT {guid_col} FROM {table} {where_sql} "
+            f"AND LEFT({guid_col}, 8) = ${len(params) + 1} LIMIT 1",
+            tuple(list(params) + [g[:8]]),
+        )
+    except Exception:
+        logger.warning("player-heatmap GUID resolution failed for %s", g[:8], exc_info=True)
+        row = None
+    return str(row) if row else g
 
 
 @router.get("/proximity/hit-regions")
@@ -257,6 +316,140 @@ async def get_proximity_combat_positions_heatmap(
             for r in (rows or [])
         ],
     }
+
+
+@router.get("/proximity/player-heatmap")
+@handle_router_errors("Proximity player-heatmap error")
+async def get_proximity_player_heatmap(
+    map_name: str | None = None,
+    mode: str | None = None,
+    player_guid: str | None = None,
+    range_days: int = 30,
+    session_date: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    weapon_id: int | None = None,
+    grid_size: int = 512,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Per-player, multi-perspective combat heatmap for a single map.
+
+    modes:
+      - kills_from   : where this player is standing when they get kills
+      - victims_die  : where this player's victims die (player = attacker)
+      - player_dies  : where this player dies (kills-by-enemy only; world/
+                       suicide deaths are NOT tracked -> coverage="kills_only")
+      - presence     : where this player spends time (player_track path,
+                       server-side stride-downsampled, never raw)
+
+    Response intentionally mirrors /proximity/combat-positions/heatmap
+    ({x,y,count} / grid_size) so the React HeatmapCanvas and the legacy
+    renderer can consume it unchanged.
+    """
+    if not map_name or not map_name.strip():
+        raise HTTPException(status_code=400, detail="map_name is required")
+    mode_key = (mode or "").strip()
+    if mode_key not in _PLAYER_HEATMAP_MODES:
+        raise HTTPException(
+            status_code=400,
+            detail="mode must be one of: kills_from, victims_die, player_dies, presence",
+        )
+    if not player_guid or not player_guid.strip():
+        raise HTTPException(status_code=400, detail="player_guid is required")
+
+    cfg = _PLAYER_HEATMAP_MODES[mode_key]
+    table = str(cfg["table"])
+    guid_col = str(cfg["guid_col"])
+    g = float(max(128, min(int(grid_size or 512), 1024)))
+    g_int = int(g)
+
+    # Base scope WHERE (no player filter) — used for GUID resolution + name map.
+    # Unaliased: the resolver and _load_scoped_guid_name_map both query the
+    # source table without an alias; the presence query aliases player_track
+    # as `pt` but the WHERE columns stay unambiguous (only pt has them).
+    base_where, base_params, _ = _build_proximity_where_clause(
+        range_days, session_date, map_name, round_number, round_start_unix,
+    )
+    base_params_t = tuple(base_params)
+
+    canonical = await _resolve_player_guid_canonical(
+        db, player_guid, table, guid_col, base_where, base_params_t,
+    )
+    name_map = await _load_scoped_guid_name_map(db, base_where, base_params_t)
+    player_name = _resolve_name_for_guid(canonical, name_map)
+
+    # Final WHERE with the per-player filter routed through the helper's
+    # built-in player_guid binding (A2 fix: the old heatmap never did this).
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, round_number, round_start_unix,
+        player_guid=canonical, player_guid_columns=[guid_col],
+    )
+    params_list = list(params)
+    sampled = False
+
+    if mode_key == "presence":
+        total_samples = await db.fetch_val(
+            f"SELECT COALESCE(SUM(sample_count), 0) FROM player_track pt {where_sql}",
+            tuple(params_list),
+        )
+        total_samples = int(total_samples or 0)
+        stride = max(1, math.ceil(total_samples / 8000)) if total_samples else 1
+        sampled = stride > 1
+        rows = await db.fetch_all(
+            f"""
+            SELECT FLOOR((elem->>'x')::numeric / {g})::int AS gx,
+                   FLOOR((elem->>'y')::numeric / {g})::int AS gy,
+                   COUNT(*) AS cnt
+            FROM player_track pt,
+                 LATERAL jsonb_array_elements(pt.path) WITH ORDINALITY AS t(elem, ord)
+            {where_sql}
+              AND (t.ord % {stride}) = 0
+              AND (elem->>'x') IS NOT NULL AND (elem->>'y') IS NOT NULL
+            GROUP BY gx, gy
+            ORDER BY cnt DESC
+            """,
+            tuple(params_list),
+        )
+    else:
+        x_col, y_col = str(cfg["x"]), str(cfg["y"])
+        extra_sql = ""
+        if weapon_id is not None:
+            params_list.append(int(weapon_id))
+            extra_sql = f"AND weapon_id = ${len(params_list)}"
+        rows = await db.fetch_all(
+            f"""
+            SELECT FLOOR({x_col} / {g})::int AS gx,
+                   FLOOR({y_col} / {g})::int AS gy,
+                   COUNT(*) AS cnt
+            FROM {table} {where_sql}
+            {extra_sql}
+            GROUP BY gx, gy
+            ORDER BY cnt DESC
+            """,
+            tuple(params_list),
+        )
+
+    hotzones = [
+        {"x": int(r[0] or 0), "y": int(r[1] or 0), "count": int(r[2] or 0)}
+        for r in (rows or [])
+    ]
+    total = sum(z["count"] for z in hotzones)
+
+    result = {
+        "status": "ok",
+        "map_name": map_name.strip(),
+        "mode": mode_key,
+        "grid_size": g_int,
+        "player_guid": canonical,
+        "player_name": player_name,
+        "hotzones": hotzones,
+        "total": total,
+        "sampled": sampled,
+        "scope": scope,
+    }
+    if cfg["coverage"]:
+        result["coverage"] = cfg["coverage"]
+    return result
 
 
 @router.get("/proximity/combat-positions/kill-lines")
