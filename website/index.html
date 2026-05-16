@@ -2198,6 +2198,20 @@
                     </div>
                 </div>
 
+                <!-- ===== ④ Roles & Classes — who creates space, who finishes ===== -->
+                <!-- Phase 4 IA note: the master-plan ideal order is
+                     ④ Engagements & Trades then ⑤ Roles & Classes. The legacy
+                     DOM has the ranked panels before the engagement panels;
+                     a faithful physical block reorder (plus deduping the
+                     separate v5.2 #leaderboard-tabs widget further down) is
+                     owner-visual and headlessly unverifiable, so the dividers
+                     are numbered to honest DOM order here and the true-order
+                     reorder is deferred to an owner browser pass. -->
+                <div class="flex items-center gap-3 mb-3 mt-10">
+                    <span class="text-xs font-black text-brand-amber">④</span>
+                    <h2 class="text-sm font-black uppercase tracking-widest text-slate-300">Roles &amp; Classes</h2>
+                    <span class="text-[11px] text-slate-500">who creates space, who finishes</span>
+                </div>
                 <!-- Phase 4 Part B: 10 ranked leaderboard lists across 4
                      prototype panels collapsed to 3 contextual panels +
                      Class Signals. Cut as redundant: Top Sprint % (movement
@@ -2283,6 +2297,12 @@
                     </div>
                 </div>
 
+                <!-- ===== ⑤ Engagements & Trades — what happened around the map ===== -->
+                <div class="flex items-center gap-3 mb-3 mt-10">
+                    <span class="text-xs font-black text-brand-cyan">⑤</span>
+                    <h2 class="text-sm font-black uppercase tracking-widest text-slate-300">Engagements &amp; Trades</h2>
+                    <span class="text-[11px] text-slate-500">the trades and fights this scope produced</span>
+                </div>
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
                     <div class="glass-panel p-6 rounded-xl lg:col-span-2">
                         <div class="flex items-center justify-between mb-4">
