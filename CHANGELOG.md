@@ -6,6 +6,28 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.15.0](https://github.com/iamez/slomix/compare/v1.14.2...v1.15.0) (2026-05-17)
+
+
+### Features
+
+* **deploy:** auto-restart services if deploy fails mid-flight ([#263](https://github.com/iamez/slomix/issues/263)) ([afd4429](https://github.com/iamez/slomix/commit/afd4429af24ceb3e2d4e3397405bba3888ee1054))
+* **proximity:** page redesign — per-player heatmap, A1/A6 fix, map-first IA ([#328](https://github.com/iamez/slomix/issues/328)) ([b7e8d83](https://github.com/iamez/slomix/commit/b7e8d834f4b8c9445b45deb7487e26f97b35deec))
+* **proximity:** Part B owner-visual — map-first reorder + v5.2 fold/dedup + React framing ([#336](https://github.com/iamez/slomix/issues/336)) ([fc2d555](https://github.com/iamez/slomix/commit/fc2d5551ecc56dfb7af3692b4426c8afa589b8c1))
+* **proximity:** Part B-2 — A8 fix + 8→5 KPI / 7→3 leaderboards + ④⑤ dividers ([#334](https://github.com/iamez/slomix/issues/334)) ([fdef3d5](https://github.com/iamez/slomix/commit/fdef3d529803916eb0710b9fcd7cb5c542bc6ee0))
+* **proximity:** per-player Hit Region Distribution by the Player Combat Map ([#339](https://github.com/iamez/slomix/issues/339)) ([2b691f0](https://github.com/iamez/slomix/commit/2b691f0aad1ace6d840b5a828e8829c22a9e291d))
+* **proximity:** Phase 4 Part B — map-first IA recompose (safe subset) ([#330](https://github.com/iamez/slomix/issues/330)) ([a92383d](https://github.com/iamez/slomix/commit/a92383da086de457edb684b7d73d4ae1a715b142))
+* **proximity:** Player Combat Map player dropdown + Part B continuation ([#332](https://github.com/iamez/slomix/issues/332)) ([60d936d](https://github.com/iamez/slomix/commit/60d936d8745142edebfd83fd9e439f8a39d77729))
+
+
+### Bug Fixes
+
+* **deploy:** cache-bust EVERY local JS import, not just 3 entry points ([#261](https://github.com/iamez/slomix/issues/261)) ([f0014be](https://github.com/iamez/slomix/commit/f0014be6ff71ea9239347abf43c6bb65f539c75d))
+* **install:** write DISCORD_GUILD_ID (not GUILD_ID) to generated .env ([#306](https://github.com/iamez/slomix/issues/306)) ([a25c414](https://github.com/iamez/slomix/commit/a25c414629be05ee9fe39ecd9ebe7825b2701291))
+* **release:** auto-bump pyproject.toml — drifted to 1.0.8 silently ([#267](https://github.com/iamez/slomix/issues/267)) ([889de06](https://github.com/iamez/slomix/commit/889de06b862d393926528ff7b92998a0bac44704))
+* **webhook-metadata:** defensive DB gate against stale Lua metadata leak ([#255](https://github.com/iamez/slomix/issues/255)) ([27e3dc9](https://github.com/iamez/slomix/commit/27e3dc9c762adf1172c48c2c89503c3550b590bb))
+* **website:** restore public Home live-status widget endpoints + sanitize ([#338](https://github.com/iamez/slomix/issues/338)) ([154ff6f](https://github.com/iamez/slomix/commit/154ff6f3cd4bdfc870c7711cf7af368e35ded8c9))
+
 ## [1.14.2](https://github.com/iamez/slomix/compare/v1.14.1...v1.14.2) (2026-05-12)
 
 
