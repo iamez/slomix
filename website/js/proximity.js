@@ -2292,6 +2292,72 @@ function renderHitRegions(data) {
     }
 }
 
+// Per-player Hit Region Distribution — tied to the ① Player Combat Map
+// player selector (proximityVizState.playerHeatmapGuid). The backend
+// /proximity/hit-regions already filters by player_guid (attacker/victim),
+// so we just pass the selected guid and render that player's head/arms/
+// body/legs split next to their combat map.
+async function renderPlayerHitRegions() {
+    const barsEl = document.getElementById('proximity-player-hit-regions');
+    const capEl = document.getElementById('proximity-player-hit-regions-caption');
+    if (!barsEl) return;
+    const guid = String(proximityVizState.playerHeatmapGuid || '').trim();
+    if (!guid) {
+        barsEl.textContent = '';
+        if (capEl) capEl.textContent = 'Select a player above to see their hit regions.';
+        return;
+    }
+    let data;
+    try {
+        data = await fetchJSON(scopedUrl('/proximity/hit-regions', { extra: { player_guid: guid, limit: 1 } }));
+    } catch (err) {
+        console.warn('Player hit-regions load failed:', err);
+        barsEl.textContent = '';
+        if (capEl) capEl.textContent = 'Hit region data unavailable.';
+        return;
+    }
+    const p = (data?.players || [])[0] || null;
+    const totals = p
+        ? { head: p.head || 0, arms: p.arms || 0, body: p.body || 0, legs: p.legs || 0 }
+        : { head: 0, arms: 0, body: 0, legs: 0 };
+    const total = totals.head + totals.arms + totals.body + totals.legs;
+    barsEl.textContent = '';
+    if (total === 0) {
+        if (capEl) capEl.textContent = 'No tracked hits for this player in the current scope.';
+        return;
+    }
+    const regions = [
+        { label: 'Head', count: totals.head, color: REGION_COLORS[0] },
+        { label: 'Arms', count: totals.arms, color: REGION_COLORS[1] },
+        { label: 'Body', count: totals.body, color: REGION_COLORS[2] },
+        { label: 'Legs', count: totals.legs, color: REGION_COLORS[3] },
+    ];
+    const maxR = Math.max(...regions.map(r => r.count), 1);
+    regions.forEach(r => {
+        const pct = ((r.count / total) * 100).toFixed(1);
+        const barH = Math.max((r.count / maxR) * 100, 4);
+        const col = document.createElement('div');
+        col.className = 'flex flex-col items-center gap-1 flex-1 max-w-16';
+        const pctSpan = document.createElement('span');
+        pctSpan.className = 'text-[11px] font-mono text-slate-300';
+        pctSpan.textContent = `${pct}%`;
+        const bar = document.createElement('div');
+        bar.className = 'w-full rounded-t';
+        bar.style.height = `${barH}%`;
+        bar.style.background = r.color;
+        bar.style.opacity = '0.85';
+        const lbl = document.createElement('span');
+        lbl.className = 'text-[11px] text-slate-400';
+        lbl.textContent = r.label;
+        col.append(pctSpan, bar, lbl);
+        barsEl.appendChild(col);
+    });
+    if (capEl) {
+        const nm = stripEtColors(p?.name || '') || 'Player';
+        capEl.textContent = `${nm} · ${formatNumber(total)} hits · ${formatNumber(p?.total_damage || 0)} damage tracked`;
+    }
+}
+
 function renderHeadshotRates(data) {
     renderLeaderList('hit-regions-headshot-leaders',
         data?.leaders?.slice(0, 15) ?? [],
@@ -3063,6 +3129,7 @@ function bindV52PanelEvents() {
         proximityVizState.playerHeatmapGuid = phPlayerInput?.value || '';
         proximityVizState.playerHeatmapMap = phMapInput?.value || '';
         renderPlayerHeatmap().catch((err) => console.warn('Player heatmap render failed:', err));
+        renderPlayerHitRegions().catch((err) => console.warn('Player hit-regions render failed:', err));
     };
     if (phMapInput && !phMapInput.value && proximityScopeState.mapName) {
         phMapInput.value = proximityScopeState.mapName;
@@ -3081,6 +3148,7 @@ function bindV52PanelEvents() {
         } catch (err) {
             console.warn('Proximity players load failed:', err);
         }
+        renderPlayerHitRegions().catch((err) => console.warn('Player hit-regions render failed:', err));
     };
     if (phPlayerInput) {
         phPlayerInput.onchange = phLoad;
