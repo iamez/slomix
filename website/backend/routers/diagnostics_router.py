@@ -960,7 +960,8 @@ async def get_spawn_audit(
 @router.get("/monitoring/status")
 async def get_monitoring_status(
     db: DatabaseAdapter = Depends(get_db),
-    _user: dict = Depends(require_admin_user),
+    # PUBLIC (owner-approved): Home-widget data-freshness indicator.
+    # #80 regression — see get_live_status. Row-count freshness only.
 ):
     """
     Lightweight monitoring status for history tables.
@@ -1029,7 +1030,11 @@ async def get_monitoring_status(
 @router.get("/live-status")
 async def get_live_status(
     db: DatabaseAdapter = Depends(get_db),
-    _user: dict = Depends(require_admin_user),
+    # PUBLIC (owner-approved fix): feeds the public Home live-status widget;
+    # the public site has no login to send an admin token. Only
+    # non-sensitive aggregate state (server online/players, voice members)
+    # — exactly what the Home page renders by design. Do NOT add
+    # require_admin_user here; #80 did and silently broke the widget.
 ):
     """
     Get real-time status of voice channels and game server.
@@ -1095,7 +1100,8 @@ async def get_live_status(
 async def get_server_activity_history(
     hours: int = 72,
     db: DatabaseAdapter = Depends(get_db),
-    _user: dict = Depends(require_admin_user),
+    # PUBLIC (owner-approved): Home server-activity chart. #80 regression
+    # — see get_live_status. Aggregate player-count history only.
 ):
     """
     Get historical server activity data for charting.
@@ -1187,7 +1193,8 @@ async def get_server_activity_history(
 async def get_voice_activity_history(
     hours: int = 720,
     db: DatabaseAdapter = Depends(get_db),
-    _user: dict = Depends(require_admin_user),
+    # PUBLIC (owner-approved): Home voice-activity chart. #80 regression
+    # — see get_live_status. Aggregate voice member-count history only.
 ):
     """
     Get historical voice channel activity data for charting.
@@ -1280,7 +1287,8 @@ async def get_voice_activity_history(
 @router.get("/voice-activity/current")
 async def get_current_voice_activity(
     db: DatabaseAdapter = Depends(get_db),
-    _user: dict = Depends(require_admin_user),
+    # PUBLIC (owner-approved): Home current-voice widget. #80 regression
+    # — see get_live_status. Voice member names + join times, as Home shows.
 ):
     """
     Get detailed current voice channel status with join times.
