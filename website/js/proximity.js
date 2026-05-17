@@ -2316,7 +2316,7 @@ async function renderPlayerHitRegions() {
         if (capEl) capEl.textContent = 'Hit region data unavailable.';
         return;
     }
-    const p = (data?.players || [])[0];
+    const p = (data?.players || [])[0] || null;
     const totals = p
         ? { head: p.head || 0, arms: p.arms || 0, body: p.body || 0, legs: p.legs || 0 }
         : { head: 0, arms: 0, body: 0, legs: 0 };
@@ -2353,8 +2353,8 @@ async function renderPlayerHitRegions() {
         barsEl.appendChild(col);
     });
     if (capEl) {
-        const nm = stripEtColors(p.name || '') || 'Player';
-        capEl.textContent = `${nm} · ${formatNumber(total)} hits · ${formatNumber(p.total_damage || 0)} damage tracked`;
+        const nm = stripEtColors(p?.name || '') || 'Player';
+        capEl.textContent = `${nm} · ${formatNumber(total)} hits · ${formatNumber(p?.total_damage || 0)} damage tracked`;
     }
 }
 
