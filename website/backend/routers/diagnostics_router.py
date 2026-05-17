@@ -960,7 +960,8 @@ async def get_spawn_audit(
 @router.get("/monitoring/status")
 async def get_monitoring_status(
     db: DatabaseAdapter = Depends(get_db),
-    _user: dict = Depends(require_admin_user),
+    # PUBLIC (owner-approved): Home-widget data-freshness indicator.
+    # #80 regression — see get_live_status. Row-count freshness only.
 ):
     """
     Lightweight monitoring status for history tables.
@@ -1029,7 +1030,11 @@ async def get_monitoring_status(
 @router.get("/live-status")
 async def get_live_status(
     db: DatabaseAdapter = Depends(get_db),
-    _user: dict = Depends(require_admin_user),
+    # PUBLIC (owner-approved fix): feeds the public Home live-status widget;
+    # the public site has no login to send an admin token. Only
+    # non-sensitive aggregate state (server online/players, voice members)
+    # — exactly what the Home page renders by design. Do NOT add
+    # require_admin_user here; #80 did and silently broke the widget.
 ):
     """
     Get real-time status of voice channels and game server.
@@ -1060,8 +1065,16 @@ async def get_live_status(
             if isinstance(status_data, str):
                 status_data = json.loads(status_data)
 
+            # Whitelist for the PUBLIC endpoint: the bot writes each
+            # member as {id, name, avatar}; never expose Discord IDs or
+            # avatar URLs. The Home widget only renders names + count.
             voice_result = {
-                **status_data,
+                "members": [
+                    {"name": m.get("name", "Unknown")}
+                    for m in (status_data.get("members") or [])
+                ],
+                "count": status_data.get("count", 0),
+                "channel_name": status_data.get("channel_name", "Gaming"),
                 "updated_at": str(updated_at) if updated_at else None,
             }
     except Exception as e:
@@ -1095,7 +1108,8 @@ async def get_live_status(
 async def get_server_activity_history(
     hours: int = 72,
     db: DatabaseAdapter = Depends(get_db),
-    _user: dict = Depends(require_admin_user),
+    # PUBLIC (owner-approved): Home server-activity chart. #80 regression
+    # — see get_live_status. Aggregate player-count history only.
 ):
     """
     Get historical server activity data for charting.
@@ -1187,7 +1201,8 @@ async def get_server_activity_history(
 async def get_voice_activity_history(
     hours: int = 720,
     db: DatabaseAdapter = Depends(get_db),
-    _user: dict = Depends(require_admin_user),
+    # PUBLIC (owner-approved): Home voice-activity chart. #80 regression
+    # — see get_live_status. Aggregate voice member-count history only.
 ):
     """
     Get historical voice channel activity data for charting.
@@ -1280,107 +1295,53 @@ async def get_voice_activity_history(
 @router.get("/voice-activity/current")
 async def get_current_voice_activity(
     db: DatabaseAdapter = Depends(get_db),
-    _user: dict = Depends(require_admin_user),
+    # PUBLIC (owner-approved): Home current-voice widget. #80 regression
+    # — see get_live_status. Voice member names + join times, as Home shows.
 ):
     """
-    Get detailed current voice channel status with join times.
+    Get current voice channel status for the public Home widget.
 
-    Returns detailed information about who is in voice and how long.
+    Reads the `live_status` table the Discord bot writes (the
+    `voice_members` table was dropped by migration 045 — its query path
+    is removed: it would error every request now that this is public, and
+    it exposed discord_id/channel_id). Response is sanitized to names +
+    count only (no Discord IDs / avatars). Per-member join times are no
+    longer available (they lived in the dropped voice_members table).
     """
     try:
-        # First try to get from voice_members table (active members)
         query = """
-            SELECT
-                discord_id,
-                member_name,
-                channel_id,
-                channel_name,
-                joined_at
-            FROM voice_members
-            WHERE left_at IS NULL
-            ORDER BY joined_at ASC
+            SELECT status_data, updated_at
+            FROM live_status
+            WHERE status_type = 'voice_channel'
         """
-        rows = await db.fetch_all(query)
+        row = await db.fetch_one(query)
 
-        members = []
-        channels = {}
+        if row:
+            status_data = row[0]
+            if isinstance(status_data, str):
+                status_data = json.loads(status_data)
 
-        for row in rows:
-            discord_id, member_name, channel_id, channel_name, joined_at = row
-
-            # Calculate time in voice
-            if joined_at:
-                now = datetime.now(timezone.utc).replace(tzinfo=None)
-                if hasattr(joined_at, "replace"):
-                    # Make naive if timezone-aware
-                    if joined_at.tzinfo is not None:
-                        joined_at = joined_at.replace(tzinfo=None)
-                duration_seconds = int((now - joined_at).total_seconds())
-            else:
-                duration_seconds = 0
-
-            member_info = {
-                "discord_id": discord_id,
-                "name": member_name,
-                "channel_id": channel_id,
-                "channel_name": channel_name or "Gaming",
-                "joined_at": joined_at.isoformat() if joined_at else None,
-                "duration_seconds": duration_seconds,
+            members = status_data.get("members") or []
+            channel_name = status_data.get("channel_name", "Gaming")
+            safe_members = [
+                {"name": m.get("name", "Unknown"), "channel_name": channel_name}
+                for m in members
+            ]
+            return {
+                "total_count": len(safe_members),
+                "members": safe_members,
+                "channels": (
+                    [{"id": None, "name": channel_name, "members": safe_members}]
+                    if safe_members
+                    else []
+                ),
             }
-            members.append(member_info)
+    except (json.JSONDecodeError, KeyError, AttributeError, TypeError) as e:
+        logger.debug(f"Voice status parse failed: {e}")
 
-            # Group by channel
-            if channel_id not in channels:
-                channels[channel_id] = {
-                    "id": channel_id,
-                    "name": channel_name or "Gaming",
-                    "members": [],
-                }
-            channels[channel_id]["members"].append(member_info)
-
-        return {
-            "total_count": len(members),
-            "members": members,
-            "channels": list(channels.values()),
-        }
-
-    except Exception as e:
-        error_text = str(e)
-        denied_voice_members = (
-            "permission denied" in error_text.lower()
-            and "voice_members" in error_text.lower()
-        )
-        if not denied_voice_members:
-            logger.error(f"Error fetching current voice activity: {e}")
-        # Fallback to live_status table
-        try:
-            query = """
-                SELECT status_data, updated_at
-                FROM live_status
-                WHERE status_type = 'voice_channel'
-            """
-            row = await db.fetch_one(query)
-
-            if row:
-                status_data = row[0]
-                if isinstance(status_data, str):
-                    status_data = json.loads(status_data)
-
-                members = status_data.get("members", [])
-                return {
-                    "total_count": len(members),
-                    "members": [
-                        {"name": m.get("name", "Unknown"), "channel_name": "Gaming"}
-                        for m in members
-                    ],
-                    "channels": [],
-                }
-        except (json.JSONDecodeError, KeyError, AttributeError, TypeError):
-            logger.debug("Voice status fallback parse failed")
-
-        return {
-            "total_count": 0,
-            "members": [],
-            "channels": [],
-            "error": None if denied_voice_members else "Voice channel query failed",
-        }
+    return {
+        "total_count": 0,
+        "members": [],
+        "channels": [],
+        "error": None,
+    }
