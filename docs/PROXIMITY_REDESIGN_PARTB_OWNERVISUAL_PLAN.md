@@ -1,10 +1,13 @@
 # Proximity Redesign — Part B Owner-Visual Remainder (Plan)
 
-Status: **plan only — not executed.** Acceptance for every item below is a
-human browser walkthrough on the `:8000` preview; none can be discharged
-headlessly. Execution waits on (1) your visual verification of the current
-post-#334 preview and (2) your approval of this plan + its decision points.
-All items are **pure DOM/copy — no data-path, schema, or endpoint change.**
+Status: **SHIPPED 2026-05-16** (branch `feat/proximity-ia-part-b-3`, owner
+approved both decision points). This document is the original plan retained
+for context; the authoritative outcome is the **"Status — SHIPPED"** section
+at the bottom. Acceptance for every item is still a human browser walkthrough
+on the `:8000` preview (the headless gates prove structure / no-regression,
+not visual correctness). All items are **pure DOM/copy — no data-path,
+schema, or endpoint change.** The "plan / waiting on approval" wording in the
+sections below is historical — read it as the rationale, not the live state.
 
 ---
 

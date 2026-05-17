@@ -1410,14 +1410,22 @@ function LeaderboardTabs() {
 // boundaries — no panel reorder (React's render is structurally divergent and
 // a faithful reorder is headlessly unverifiable; React is not the correctness
 // gate, legacy is truth). CI tsc is the only gate for this stack.
-const SECTION_ACCENT: Record<string, string> = {
-  '①': 'text-cyan-400', '②': 'text-emerald-400', '③': 'text-rose-400',
-  '④': 'text-amber-400', '⑤': 'text-cyan-400',
-};
+// switch (not a keyed-object lookup) so there is no dynamic object-index
+// sink — keeps the security static analyzer clean without a disable comment.
+function sectionAccent(n: string): string {
+  switch (n) {
+    case '①': return 'text-cyan-400';
+    case '②': return 'text-emerald-400';
+    case '③': return 'text-rose-400';
+    case '④': return 'text-amber-400';
+    case '⑤': return 'text-cyan-400';
+    default: return 'text-slate-400';
+  }
+}
 function SectionHeader({ n, title, hint }: { n: string; title: string; hint?: string }) {
   return (
     <div className="flex items-center gap-3 mb-3 mt-10">
-      <span className={`text-xs font-black ${SECTION_ACCENT[n] ?? 'text-slate-400'}`}>{n}</span>
+      <span className={`text-xs font-black ${sectionAccent(n)}`}>{n}</span>
       <h2 className="text-sm font-black uppercase tracking-widest text-slate-300">{title}</h2>
       {hint && <span className="text-[11px] text-slate-500">{hint}</span>}
     </div>
