@@ -7,7 +7,7 @@ import { Skeleton } from '../components/Skeleton';
 import { DataTable, type Column } from '../components/DataTable';
 import { InfoTip } from '../components/InfoTip';
 import { ProximityIntro } from '../components/ProximityIntro';
-import { useProximityLeaderboards, useProximitySessionScores, useProximityKillOutcomes, useProximityKillOutcomePlayerStats, useProximityHitRegions, useProximityHeadshotRates, useCombatHeatmap, usePlayerHeatmap, useProximityPlayers, useKillLines, useDangerZones, useMovementStats, useProxScores, useProxFormula } from '../api/hooks';
+import { useProximityLeaderboards, useProximitySessionScores, useProximityKillOutcomes, useProximityKillOutcomePlayerStats, useProximityHitRegions, useProximityHeadshotRates, useCombatHeatmap, usePlayerHeatmap, usePlayerHitRegions, useProximityPlayers, useKillLines, useDangerZones, useMovementStats, useProxScores, useProxFormula } from '../api/hooks';
 import type { ProximityLeaderboardEntry, SessionScoreEntry, HitRegionPlayer, HeadshotRateEntry, MovementStatsPlayer, ProxScorePlayer, ProximityScope } from '../api/types';
 import { METRICS, LEADERBOARD_HELP } from './proximity-glossary';
 
@@ -1019,6 +1019,19 @@ function PlayerHeatmapPanel() {
   // legacy behaviour; empty map => all players.
   const { data: playersData } = useProximityPlayers(mapName ? { map_name: mapName } : undefined);
   const players = playersData?.players ?? [];
+  // Per-player Hit Region Distribution — tied to the same player selector.
+  const { data: hrData } = usePlayerHitRegions(playerGuid, mapName ? { map_name: mapName } : undefined);
+  const hr = hrData?.players?.[0];
+  const hrTotal = hr ? hr.head + hr.arms + hr.body + hr.legs : 0;
+  const hrRegions = hr
+    ? [
+        { label: 'Head', count: hr.head, color: '#ef4444' },
+        { label: 'Arms', count: hr.arms, color: '#60a5fa' },
+        { label: 'Body', count: hr.body, color: '#22c55e' },
+        { label: 'Legs', count: hr.legs, color: '#f59e0b' },
+      ]
+    : [];
+  const hrMax = Math.max(...hrRegions.map(r => r.count), 1);
 
   return (
     <div className="mt-6">
@@ -1086,6 +1099,35 @@ function PlayerHeatmapPanel() {
             {data.coverage === 'kills_only' ? ' · enemy kills only — world/suicide deaths not tracked' : ''}
           </div>
         )}
+
+        {/* Per-player Hit Region Distribution — same player selector */}
+        <div className="mt-4 rounded-lg border border-white/10 bg-slate-900/40 p-4">
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-xs font-bold uppercase tracking-widest text-slate-400">Hit Region Distribution</div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400">per player</span>
+          </div>
+          <div className="text-[10px] text-slate-500 mb-3">Where this player&apos;s shots land — head, arms, body, or legs.</div>
+          {!playerGuid ? (
+            <div className="text-[11px] text-slate-500 text-center py-6">Select a player to see their hit regions.</div>
+          ) : hrTotal === 0 ? (
+            <div className="text-[11px] text-slate-500 text-center py-6">No tracked hits for this player in the current scope.</div>
+          ) : (
+            <>
+              <div className="flex items-end gap-1 h-28 justify-center">
+                {hrRegions.map(r => (
+                  <div key={r.label} className="flex flex-col items-center gap-1 flex-1 max-w-16">
+                    <span className="text-[11px] font-mono text-slate-300">{((r.count / hrTotal) * 100).toFixed(1)}%</span>
+                    <div className="w-full rounded-t" style={{ height: `${Math.max((r.count / hrMax) * 100, 4)}%`, background: r.color, opacity: 0.85 }} />
+                    <span className="text-[11px] text-slate-400">{r.label}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="text-center text-[11px] text-slate-500 mt-2">
+                {stripColors(hr?.name ?? '')} · {hrTotal.toLocaleString()} hits · {(hr?.total_damage ?? 0).toLocaleString()} damage tracked
+              </div>
+            </>
+          )}
+        </div>
       </GlassPanel>
     </div>
   );

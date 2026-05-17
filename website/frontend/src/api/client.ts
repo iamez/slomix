@@ -234,6 +234,17 @@ export const api = {
   },
   getProximityHitRegionsByWeapon: (playerGuid: string, rangeDays = 30) =>
     get<WeaponHitRegionsResponse>(`/proximity/hit-regions/by-weapon?player_guid=${encodeURIComponent(playerGuid)}&range_days=${rangeDays}`),
+  // Per-player head/arms/body/legs split — backend filters by player_guid
+  // (attacker/victim). Powers the ① Player Combat Map hit-region panel.
+  getPlayerHitRegions: (playerGuid: string, params?: ProximityScope) => {
+    const q = new URLSearchParams();
+    q.set('player_guid', playerGuid);
+    q.set('limit', '1');
+    if (params?.range_days) q.set('range_days', String(params.range_days));
+    if (params?.session_date) q.set('session_date', params.session_date);
+    if (params?.map_name) q.set('map_name', params.map_name);
+    return get<HitRegionsResponse>(`/proximity/hit-regions?${q.toString()}`);
+  },
   getProximityHeadshotRates: (params?: ProximityScope) => {
     const q = buildScopedQuery(params);
     return get<HeadshotRatesResponse>(`/proximity/hit-regions/headshot-rates${q ? `?${q}` : ''}`);

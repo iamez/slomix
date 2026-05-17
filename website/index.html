@@ -2085,6 +2085,18 @@
                     </div>
                     <canvas id="proximity-player-heatmap" width="512" height="512" class="w-full rounded-lg border border-white/10 bg-slate-950" style="max-width:760px;aspect-ratio:1"></canvas>
                     <div id="proximity-player-heatmap-caption" class="text-xs text-slate-500 mt-2">Pick a player and a map (or set the map scope) to see where they fight.</div>
+                    <!-- Per-player Hit Region Distribution — tied to the player
+                         selector above (backend /proximity/hit-regions already
+                         filters by player_guid via attacker/victim). -->
+                    <div class="mt-4 glass-card rounded-lg border border-white/10 p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="text-sm font-bold text-slate-300">Hit Region Distribution</div>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-brand-amber/10 text-brand-amber">per player</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 mb-3">Where this player's shots land — head, arms, body, or legs.</div>
+                        <div id="proximity-player-hit-regions" class="flex items-end gap-1 h-28 justify-center"></div>
+                        <div id="proximity-player-hit-regions-caption" class="text-center text-[11px] text-slate-500 mt-2">Select a player above to see their hit regions.</div>
+                    </div>
                 </div>
 
                 <!-- ===== ② Player Story — KPI strip ===== -->

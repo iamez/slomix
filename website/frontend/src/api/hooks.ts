@@ -535,6 +535,14 @@ export const useProximityHitRegionsByWeapon = (playerGuid: string, rangeDays = 3
     staleTime: 60_000,
   });
 
+export const usePlayerHitRegions = (playerGuid: string, params?: ProximityScope) =>
+  useQuery({
+    queryKey: ['player-hit-regions', playerGuid, params],
+    queryFn: () => api.getPlayerHitRegions(playerGuid, params),
+    enabled: !!playerGuid,
+    staleTime: 60_000,
+  });
+
 // Proximity Composite Scores
 export const useProxScores = (rangeDays = 30, playerGuid?: string, limit = 50) =>
   useQuery({
