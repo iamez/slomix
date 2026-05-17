@@ -1021,7 +1021,7 @@ function PlayerHeatmapPanel() {
   const players = playersData?.players ?? [];
   // Per-player Hit Region Distribution — tied to the same player selector.
   const { data: hrData } = usePlayerHitRegions(playerGuid, mapName ? { map_name: mapName } : undefined);
-  const hr = hrData?.players?.[0];
+  const hr = hrData?.players[0];
   const hrTotal = hr ? hr.head + hr.arms + hr.body + hr.legs : 0;
   const hrRegions = hr
     ? [
