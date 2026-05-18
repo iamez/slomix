@@ -26,7 +26,6 @@ const proximityVizState = {
     teamEmphasis: 'auto',
     playerHeatmapMode: 'kills_from',
     playerHeatmapGuid: '',
-    playerHeatmapMap: '',
 };
 
 // Per-player heatmap mode -> { label, caption, rgb } (rgb drives the canvas
@@ -2760,11 +2759,10 @@ async function renderPlayerHeatmap() {
     const captionEl = document.getElementById('proximity-player-heatmap-caption');
     if (!canvas) return;
 
-    // Map: explicit panel input wins; otherwise follow the global scope
-    // selector live (re-read every render so it stays in sync when the
-    // user changes scope after panel init).
-    const mapName = String(proximityVizState.playerHeatmapMap || '').trim()
-        || String(proximityScopeState.mapName || '').trim();
+    // Map follows the page-level Scope > Map selector (the redundant
+    // per-panel map box was removed). Re-read every render so it stays
+    // in sync when the user changes Scope.
+    const mapName = String(proximityScopeState.mapName || '').trim();
     const playerGuid = String(proximityVizState.playerHeatmapGuid || '').trim();
     const mode = PLAYER_HEATMAP_MODES[proximityVizState.playerHeatmapMode]
         ? proximityVizState.playerHeatmapMode : 'kills_from';
@@ -3090,32 +3088,21 @@ function bindV52PanelEvents() {
         };
     });
 
-    // Danger zones
-    const dzMapInput = document.getElementById('danger-zones-map');
+    // Danger zones — map follows the page Scope > Map (per-panel box removed).
     const dzClassSelect = document.getElementById('danger-zones-class');
-    const dzLoad = () => renderDangerZones(dzMapInput?.value || '', dzClassSelect?.value || '');
-    if (dzMapInput) {
-        dzMapInput.onchange = dzLoad;
-        dzMapInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') dzLoad(); });
-    }
+    const dzLoad = () => renderDangerZones(proximityScopeState.mapName || '', dzClassSelect?.value || '');
     if (dzClassSelect) dzClassSelect.onchange = dzLoad;
 
-    // Combat heatmap
-    const hmMapInput = document.getElementById('combat-heatmap-map');
+    // Combat heatmap — map follows the page Scope > Map (per-panel box removed).
     const hmPerspective = document.getElementById('combat-heatmap-perspective');
     const hmLoad = () => {
-        renderCombatHeatmap(hmMapInput?.value || '', hmPerspective?.value || 'kills')
+        renderCombatHeatmap(proximityScopeState.mapName || '', hmPerspective?.value || 'kills')
             .catch((err) => console.warn('Combat heatmap render failed:', err));
     };
-    if (hmMapInput) {
-        hmMapInput.onchange = hmLoad;
-        hmMapInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') hmLoad(); });
-    }
     if (hmPerspective) hmPerspective.onchange = hmLoad;
 
     // Per-player Combat Map (flagship)
     const phPlayerInput = document.getElementById('proximity-player-heatmap-player');
-    const phMapInput = document.getElementById('proximity-player-heatmap-map');
     const phModeBtns = Array.from(document.querySelectorAll('.player-pmode-btn'));
     const phSyncModeBtns = () => {
         phModeBtns.forEach((b) => {
@@ -3127,13 +3114,9 @@ function bindV52PanelEvents() {
     };
     const phLoad = () => {
         proximityVizState.playerHeatmapGuid = phPlayerInput?.value || '';
-        proximityVizState.playerHeatmapMap = phMapInput?.value || '';
         renderPlayerHeatmap().catch((err) => console.warn('Player heatmap render failed:', err));
         renderPlayerHitRegions().catch((err) => console.warn('Player hit-regions render failed:', err));
     };
-    if (phMapInput && !phMapInput.value && proximityScopeState.mapName) {
-        phMapInput.value = proximityScopeState.mapName;
-    }
     const populateProximityPlayers = async () => {
         if (!phPlayerInput) return;
         try {
@@ -3154,10 +3137,6 @@ function bindV52PanelEvents() {
         phPlayerInput.onchange = phLoad;
         void populateProximityPlayers();
     }
-    if (phMapInput) {
-        phMapInput.onchange = phLoad;
-        phMapInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') phLoad(); });
-    }
     phModeBtns.forEach((b) => {
         b.onclick = () => {
             proximityVizState.playerHeatmapMode = b.dataset.pmode || 'kills_from';
@@ -3166,6 +3145,14 @@ function bindV52PanelEvents() {
         };
     });
     phSyncModeBtns();
+
+    // Scope-driven render: these 3 panels follow the page Scope > Map
+    // (their per-panel "Map name..." boxes were removed). bindV52PanelEvents
+    // re-runs on every scoped load (loadScopedProximityData), so invoking
+    // them here keeps them in sync whenever the user changes Scope.
+    dzLoad();
+    hmLoad();
+    renderPlayerHeatmap().catch((err) => console.warn('Player heatmap render failed:', err));
 
     // Leaderboard tabs
     renderLeaderboardTabs();
