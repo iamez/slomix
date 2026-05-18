@@ -93,9 +93,10 @@ log/volume blowup. Owner validates the aim heatmap visually.
 
 ### 2026-05-18 — steps 5–6 executed, 7–9 deferred (dormant)
 
-Owner awake, explicit full authorization ("vse ti dovolim"), priority stated
-as *practical working + reproducible for a fresh install*. Executed per-step,
-gated, with verification at each step.
+Owner awake, explicit full authorization (Slovenian "vse ti dovolim" — "I
+allow you everything", given as a direct reply to the per-step gated "GO
+step 3" prompt), priority stated as *practical working + reproducible for a
+fresh install*. Executed per-step, gated, with verification at each step.
 
 - **Pre-flight 1 (no drift):** live `proximity_tracker.lua` SHA-256
   `6a49269732bc6aba50678aac68eb424267851ae6f3866f06d306533d916835cf`,
@@ -103,7 +104,13 @@ gated, with verification at each step.
   snapshot**; no out-of-band change.
 - **Pre-flight 2 (backup):** live v6.01 saved to
   `docs/reference/live_sync_backups/20260518_150254_pre_v9_deploy/proximity_tracker.lua`
-  (SHA verified MATCH). Rollback safety net in place.
+  (SHA verified MATCH). **Note for handoff:** that path is **gitignored**
+  (`.gitignore:527`) — the backup is **local-only on the dev host**
+  (`samba`, repo working dir), *not committed to the repo*. It is the
+  rollback artifact; if a different operator needs it, copy it out-of-band
+  (or simply re-pull the live file: a clean v6.01 can also be reconstructed
+  from the pre-#328 repo ancestor — SHA `6a49269…835cf`). Rollback safety
+  net in place.
 - **Step 5 (PROD DB 055): NO-OP — already applied.** `proximity_shot_fired`
   already existed on prod `etlegacy`, schema **byte-perfect** vs
   `migrations/055_add_proximity_shot_fired.sql` (20 columns, 5 indexes incl.
