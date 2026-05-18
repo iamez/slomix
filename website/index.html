@@ -2074,7 +2074,8 @@
                             <select id="proximity-player-heatmap-player" aria-label="Player" class="w-56 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
                                 <option value="">— select player —</option>
                             </select>
-                            <input id="proximity-player-heatmap-map" type="text" aria-label="Map name" placeholder="Map name..." class="w-28 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                            <!-- Map is taken from the page-level Scope > Map
+                                 selector (no redundant per-panel map box). -->
                         </div>
                     </div>
                     <div id="proximity-player-heatmap-modes" class="flex flex-wrap gap-2 mb-3">
@@ -2084,7 +2085,7 @@
                         <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="presence">Presence</button>
                     </div>
                     <canvas id="proximity-player-heatmap" width="512" height="512" class="w-full rounded-lg border border-white/10 bg-slate-950" style="max-width:760px;aspect-ratio:1"></canvas>
-                    <div id="proximity-player-heatmap-caption" class="text-xs text-slate-500 mt-2">Pick a player and a map (or set the map scope) to see where they fight.</div>
+                    <div id="proximity-player-heatmap-caption" class="text-xs text-slate-500 mt-2">Pick a player above — the map follows your Scope selection at the top of the page.</div>
                     <!-- Per-player Hit Region Distribution — tied to the player
                          selector above (backend /proximity/hit-regions already
                          filters by player_guid via attacker/victim). -->
@@ -2224,7 +2225,7 @@
                                     <option value="FIELDOPS">Field Ops</option>
                                     <option value="COVERTOPS">Covert Ops</option>
                                 </select>
-                                <input id="danger-zones-map" type="text" placeholder="Map name..." class="w-28 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                                <!-- Map follows page-level Scope > Map -->
                             </div>
                         </div>
                         <div class="text-[11px] text-slate-500 mb-3">Death hotspots colored by class — where do players die most?</div>
@@ -2241,7 +2242,7 @@
                                     <option value="kills">Kills</option>
                                     <option value="deaths">Deaths</option>
                                 </select>
-                                <input id="combat-heatmap-map" type="text" placeholder="Map name..." class="w-28 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                                <!-- Map follows page-level Scope > Map -->
                             </div>
                         </div>
                         <div class="text-[11px] text-slate-500 mb-3">Kill/death positions with kill lines (last 30 days).</div>
