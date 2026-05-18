@@ -2,13 +2,21 @@
 
 > ⛔⛔⛔ **HARD STOP — REQUIRES EXPLICIT, AWAKE USER APPROVAL.** ⛔⛔⛔
 >
-> This runbook is **documentation only**. It was prepared autonomously but
-> **NOT executed**. Phase 5.3 touches the **live game server** (SSH writes)
-> and the **production database** (migration) — both are irreversible,
-> outward-facing actions explicitly gated in the master plan as "never
-> autonomous". A blanket "do the whole plan" instruction is **not** approval
-> for a specific production deploy. Do not run any step below until the user
-> is awake and explicitly approves *this deploy*, step by step.
+> Phase 5.3 touches the **live game server** (SSH writes) and the
+> **production database** (migration) — both are irreversible, outward-facing
+> actions explicitly gated in the master plan as "never autonomous". A
+> blanket "do the whole plan" instruction is **not** approval for a specific
+> production deploy. Do not run any step below until the user is awake and
+> explicitly approves *this deploy*, step by step.
+>
+> **Partial execution 2026-05-18 (owner awake + explicit full
+> authorization, per-step gated):** runbook steps **5 (prod DB) and 6 (scp
+> dormant v6.02)** were executed and verified. Steps **7–9 (map load,
+> `ps.viewangles` runtime-validation, enabling `features.shot_fired`)** were
+> **intentionally deferred** — owner chose to leave v6.02 **dormant** (the
+> safe, reproducible default). See **Execution log** below; the procedure
+> sections remain authoritative for a fresh install (for which this deploy
+> is genuinely *not started*).
 
 ## Why this is gated (state today)
 
@@ -81,7 +89,51 @@ A real session flows parser→DB→endpoint with `SHOT_FIRED` populating
 non-empty for an active player, yaw/pitch sane, no etconsole errors, no
 log/volume blowup. Owner validates the aim heatmap visually.
 
+## Execution log
+
+### 2026-05-18 — steps 5–6 executed, 7–9 deferred (dormant)
+
+Owner awake, explicit full authorization ("vse ti dovolim"), priority stated
+as *practical working + reproducible for a fresh install*. Executed per-step,
+gated, with verification at each step.
+
+- **Pre-flight 1 (no drift):** live `proximity_tracker.lua` SHA-256
+  `6a49269732bc6aba50678aac68eb424267851ae6f3866f06d306533d916835cf`,
+  4308 lines, `version = "6.01"` — **byte-identical to the Phase 5.0
+  snapshot**; no out-of-band change.
+- **Pre-flight 2 (backup):** live v6.01 saved to
+  `docs/reference/live_sync_backups/20260518_150254_pre_v9_deploy/proximity_tracker.lua`
+  (SHA verified MATCH). Rollback safety net in place.
+- **Step 5 (PROD DB 055): NO-OP — already applied.** `proximity_shot_fired`
+  already existed on prod `etlegacy`, schema **byte-perfect** vs
+  `migrations/055_add_proximity_shot_fired.sql` (20 columns, 5 indexes incl.
+  `uq_psf_identity` UNIQUE, `idx_psf_guid_map_date`, `idx_psf_canonical`,
+  `idx_psf_map_date`). Owner `etlegacy_user`; INSERT verified (probe rolled
+  back). Re-apply would be idempotent. Prod == repo migration set.
+- **Step 6 (deploy dormant v6.02): DONE, verified.** Guarded `scp` —
+  pre-overwrite live SHA re-checked == v6.01 `6a49269…835cf` (abort guard
+  passed), post-overwrite live SHA ==
+  `2c4e38f6ae3cc38f924ed27a35e10ecdf0c2dee2c206382af038e8959d0b6aa1`
+  (repo v6.02, 4368 lines, `features.shot_fired = false` line 248 →
+  **DORMANT**). live == repo; drift eliminated; **zero behavioural change
+  vs v6.01**.
+- **Steps 7–9: DEFERRED by owner decision.** Game server was empty
+  (`etconsole.log`: single startup `InitGame` + heartbeats only), so
+  `ps.viewangles` cannot be runtime-validated (needs real shots). No forced
+  map load (runbook: coordinate with user; unnecessary while dormant — the
+  dormant v6.02 loads on the next **natural** map change). Owner chose
+  **"leave dormant for now"**: the aim heatmap stays empty,
+  `features.shot_fired` stays `false`, nothing else changes. Revisit when a
+  real/bot session is available to validate the binding before enabling.
+
+**Rollback not needed** — dormant v6.02 is behaviourally identical to v6.01;
+the backup above remains the one-command revert if ever required.
+
 ---
 
-**Status: NOT STARTED — awaiting explicit awake-user approval per step.**
-Nothing in this runbook has been executed.
+**Status: PARTIALLY EXECUTED 2026-05-18 — steps 5–6 done & verified;
+steps 7–9 intentionally deferred (v6.02 deployed DORMANT,
+`features.shot_fired = false`).** Enabling the flag still requires the gated
+live `ps.viewangles` validation (steps 7–9) under explicit per-step approval.
+For a **fresh install** this production deploy is *not started*; follow the
+procedure sections above.
