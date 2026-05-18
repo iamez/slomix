@@ -844,8 +844,8 @@ const CLASS_COLORS: Record<string, string> = {
   SOLDIER: '#ef4444', MEDIC: '#22c55e', ENGINEER: '#f59e0b', FIELDOPS: '#60a5fa', COVERTOPS: '#a855f7',
 };
 
-function DangerZonesPanel() {
-  const [mapName, setMapName] = useState('');
+// Map from the page-level Scope > Map selector (prop) — per-panel box removed.
+function DangerZonesPanel({ mapName }: { mapName: string }) {
   const [classFilter, setClassFilter] = useState<string | undefined>(undefined);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -928,15 +928,6 @@ function DangerZonesPanel() {
               Death hotspots colored by class — where do players die most? (last 30 days)
             </div>
           </div>
-          <div className="flex gap-2 items-center">
-            <input
-              type="text"
-              placeholder="Map name..."
-              value={mapName}
-              onChange={e => { setMapName(e.target.value); }}
-              className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-32 focus:outline-none focus:border-cyan-500"
-            />
-          </div>
         </div>
 
         {/* Class filter buttons */}
@@ -1007,8 +998,9 @@ const PLAYER_HEATMAP_MODES: { key: 'kills_from' | 'victims_die' | 'player_dies' 
   { key: 'presence', label: 'Presence', rgb: '34, 211, 238', hint: 'where this player spends time' },
 ];
 
-function PlayerHeatmapPanel() {
-  const [mapName, setMapName] = useState('');
+// Map comes from the page-level Scope > Map selector (prop) — the
+// redundant per-panel "Map name..." box was removed.
+function PlayerHeatmapPanel({ mapName }: { mapName: string }) {
   const [playerGuid, setPlayerGuid] = useState('');
   const [mode, setMode] = useState<'kills_from' | 'victims_die' | 'player_dies' | 'presence'>('kills_from');
   const modeCfg = PLAYER_HEATMAP_MODES.find(m => m.key === mode) ?? PLAYER_HEATMAP_MODES[0];
@@ -1057,14 +1049,6 @@ function PlayerHeatmapPanel() {
                 <option key={p.guid} value={p.guid}>{stripColors(p.name || p.guid)}</option>
               ))}
             </select>
-            <input
-              type="text"
-              aria-label="Map name"
-              placeholder="Map name..."
-              value={mapName}
-              onChange={e => { setMapName(e.target.value); }}
-              className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-32 focus:outline-none focus:border-cyan-500"
-            />
           </div>
         </div>
 
@@ -1133,8 +1117,8 @@ function PlayerHeatmapPanel() {
   );
 }
 
-function CombatHeatmapPanel() {
-  const [mapName, setMapName] = useState('');
+// Map from the page-level Scope > Map selector (prop) — per-panel box removed.
+function CombatHeatmapPanel({ mapName }: { mapName: string }) {
   const [perspective, setPerspective] = useState<'kills' | 'deaths'>('kills');
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -1221,13 +1205,6 @@ function CombatHeatmapPanel() {
             </div>
           </div>
           <div className="flex gap-2 items-center">
-            <input
-              type="text"
-              placeholder="Map name..."
-              value={mapName}
-              onChange={e => { setMapName(e.target.value); }}
-              className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 w-32 focus:outline-none focus:border-cyan-500"
-            />
             <div className="flex gap-1">
               <button
                 className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${perspective === 'kills' ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
@@ -1657,7 +1634,7 @@ export default function Proximity() {
       </GlassPanel>
 
       <SectionHeader n="①" title="Player Combat Map" hint="where this player fights on the map" />
-      <PlayerHeatmapPanel />
+      <PlayerHeatmapPanel mapName={mapName ?? ''} />
 
       <SectionHeader n="②" title="Player Story" hint="the numbers around the map, in context" />
       {/* Summary Stats */}
@@ -1815,10 +1792,10 @@ export default function Proximity() {
       <MovementStatsPanel />
 
       {/* Danger Zones — class-specific death hotspots */}
-      <DangerZonesPanel />
+      <DangerZonesPanel mapName={mapName ?? ''} />
 
       {/* Combat Heatmap — global data, always visible */}
-      <CombatHeatmapPanel />
+      <CombatHeatmapPanel mapName={mapName ?? ''} />
 
       {/* Session Combat Scores */}
       <SessionScorePanel sessionDate={sessionDate} />
