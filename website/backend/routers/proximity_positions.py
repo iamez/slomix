@@ -132,13 +132,16 @@ def _circular_yaw_stats(sin_mean: float, cos_mean: float, n: int) -> dict:
         mean_yaw -= 360.0
     elif mean_yaw <= -180.0:
         mean_yaw += 360.0
-    r = min(1.0, max(0.0, math.hypot(cos_mean, sin_mean)))
+    r = min(1.0, math.hypot(cos_mean, sin_mean))   # hypot is already >= 0
     if r >= 1.0 - 1e-12:
+        # Perfectly concentrated: std=0. Also avoids log(near-1) ~ 0
+        # numerical noise via an explicit branch.
         circ_std = 0.0
-    elif r <= 1e-9:
-        circ_std = 180.0
     else:
-        circ_std = min(180.0, math.degrees(math.sqrt(-2.0 * math.log(r))))
+        # Safe log via a floor; when r -> 0 the formula naturally produces
+        # a huge value which `min(180, ...)` caps — that is the canonical
+        # "fully uniform" answer (no separate elif branch needed).
+        circ_std = min(180.0, math.degrees(math.sqrt(-2.0 * math.log(max(r, 1e-12)))))
     z = n * r * r
     try:
         p = math.exp(-z) * (1.0 + (2.0 * z - z * z) / (4.0 * n))
