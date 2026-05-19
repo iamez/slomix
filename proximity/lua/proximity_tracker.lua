@@ -3154,7 +3154,14 @@ local function outputDataInner()
             "# yaw/pitch from ps.viewangles (runtime-validated binding)\n"
         et.trap_FS_Write(sf_header, string.len(sf_header), fd)
         for _, sf in ipairs(tracker.shot_fired) do
-            local line = string.format("%d;%s;%d;%d;%d;%d;%.2f;%.2f\n",
+            -- 6.02 fix: ox/oy/oz are round(...,1) FLOATS. Lua 5.4 `%d`
+            -- rejects non-integer floats ("number has no integer
+            -- representation") and the error aborted ALL of outputData via
+            -- the pcall (file left unclosed → whole round's proximity output
+            -- corrupt, not just SHOT_FIRED). `%.0f` renders the
+            -- integer-valued origin without the crash; the parser does
+            -- int(float(parts[..])) so the on-disk contract is unchanged.
+            local line = string.format("%d;%s;%d;%.0f;%.0f;%.0f;%.2f;%.2f\n",
                 sf.time, sf.guid, sf.weapon,
                 sf.ox, sf.oy, sf.oz, sf.yaw, sf.pitch)
             et.trap_FS_Write(line, string.len(line), fd)
