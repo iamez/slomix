@@ -35,6 +35,12 @@ python3 tools/slomix_rcon.py testmode off            # exec vektor.cfg
 #    OR do nothing — the 20:00 cron kill restores production automatically
 ```
 
+> ⚠️ **Omni-bot 0.91 bots stay idle until ≥1 real human is connected.** On an
+> empty server they connect but never fight → empty stats files (this is the
+> historical "empty stats" root cause). After `testmode on`, **join the server**
+> (`connect puran.hehe.si`, password `glhf`) — bots start playing immediately.
+> Verified live 2026-05-19.
+
 Kill-switch if anything misbehaves: `python3 tools/slomix_rcon.py omnibot off`.
 **Never** `lua_restart` — always a full map load (c0rnp0rn8 crashes otherwise).
 
