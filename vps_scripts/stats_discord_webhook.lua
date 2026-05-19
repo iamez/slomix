@@ -72,7 +72,7 @@
 ]]--
 
 local modname = "stats_discord_webhook"
-local version = "1.7.0"
+local version = "1.7.1"
 
 -- ============================================================================
 -- CONFIGURATION - EDIT THESE VALUES
@@ -1261,7 +1261,12 @@ local function detect_pause()
     -- v1.6.3: replaces broken levelTime frame-delta heuristic that never triggered
     -- (levelTime freezes during pause → frame_delta = 0, never > 2000)
     local cs = tonumber(et.trap_GetConfigstring(et.CS_SERVERTOGGLES)) or 0
-    local is_paused = bit.band(bit.lshift(1, 4), cs) ~= 0
+    -- v1.7.1: ET:Legacy 2.83.1 runs the Lua 5.4 API, which has no LuaJIT/5.1
+    -- "bit" library — the old band/lshift form crashed EVERY et_RunFrame with
+    -- 'attempt to index a nil value (global bit)'. Native 5.4 bitwise ops:
+    -- `((1 << 4) & cs) ~= 0` is identical to the old masked-bit-4 test on
+    -- CS_SERVERTOGGLES. (parses clean under lua5.4; pre-5.3 luac rejects `<<`.)
+    local is_paused = ((1 << 4) & cs) ~= 0
 
     if is_paused and not paused then
         -- Pause started
