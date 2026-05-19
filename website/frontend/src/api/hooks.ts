@@ -497,6 +497,18 @@ export const usePlayerHeatmap = (
     staleTime: 30_000,
   });
 
+export const usePlayerAim = (
+  mapName: string,
+  playerGuid: string,
+  opts?: { weaponId?: number; rangeDays?: number; sessionDate?: string; roundNumber?: number; gridSize?: number; minCell?: number },
+) =>
+  useQuery({
+    queryKey: ['player-aim', mapName, playerGuid, opts],
+    queryFn: () => api.getPlayerAim(mapName, playerGuid, opts),
+    enabled: !!mapName && !!playerGuid,
+    staleTime: 30_000,
+  });
+
 export const useKillLines = (mapName: string, opts?: { weaponId?: number; attackerGuid?: string; rangeDays?: number; limit?: number }) =>
   useQuery({
     queryKey: ['kill-lines', mapName, opts],

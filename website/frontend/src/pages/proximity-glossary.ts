@@ -9,6 +9,22 @@ export interface MetricDef {
 }
 
 export const METRICS: Record<string, MetricDef> = {
+  aim_spread: {
+    label: 'Aim Spread (circular)',
+    unit: '°',
+    oneLiner: 'How tightly a player holds their horizontal aim — small = fixed angle, large = sweeping.',
+    detail:
+      'Reported as the circular standard deviation of view_yaw across the player\'s shots (in the selected scope/map). ' +
+      'Capped at 180°. Paired with R (mean resultant length, 0..1): R close to 1 means the aim is tightly concentrated, ' +
+      'R close to 0 means it is spread across many angles. The Rayleigh p-value tests whether the distribution is ' +
+      'statistically directional (p<0.05) versus uniform.',
+    howMeasured:
+      'yaw wraps at ±180°, so an arithmetic mean is WRONG (e.g. 170° and -170° average to 0° but the true mean is ~180°). ' +
+      'We compute circular statistics: take the unit vector of each shot\'s yaw, average sin/cos, then ' +
+      'mean = atan2(mean sin, mean cos); R = hypot(mean cos, mean sin); circular std ≈ √(-2 ln R). ' +
+      'pitch does NOT wrap so its mean/std use plain arithmetic.',
+  },
+
   engagement: {
     label: 'Engagement',
     unit: '',
