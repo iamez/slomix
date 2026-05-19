@@ -251,8 +251,8 @@ function AimCanvas({ data, color }: { data: PlayerAimLike | null; color: string 
       ctx.arc(nx, ny, radius, 0, Math.PI * 2);
       ctx.fill();
       const roseMax = Math.max(...hz.rose.map((c) => c || 0), 1);
-      for (let i = 0; i < hz.rose.length; i++) {
-        const c = hz.rose[i] || 0;
+      for (const [i, raw] of hz.rose.entries()) {
+        const c = raw || 0;
         if (!c) continue;
         const ang = -aimYawBucketCenterDeg(i) * Math.PI / 180;  // naive Y-flip
         const len = baseR * (0.25 + 0.75 * (c / roseMax));
@@ -333,7 +333,7 @@ function AimAnalyticsPanel({ data }: { data: PlayerAimLike | null }) {
           <div key={i} className="flex flex-col items-center justify-end" style={{ width: '14%' }}>
             <span className="text-[9px] text-slate-400 mb-0.5">{cnt}</span>
             <div className="w-full rounded-t bg-violet-500/70" style={{ height: `${Math.max(((cnt || 0) / maxPitch) * 100, 2)}%` }} />
-            <span className="text-[8px] text-slate-500 mt-0.5">{pitchLabels[i] || ''}</span>
+            <span className="text-[8px] text-slate-500 mt-0.5">{pitchLabels.at(i) ?? ''}</span>
           </div>
         ))}
       </div>
