@@ -1302,6 +1302,48 @@ export interface PlayerHeatmapResponse {
   coverage?: 'kills_only';
 }
 
+// ── Full Aim Analytics (v9 true-aim, separate endpoint) ───────────────
+// Distinct from PlayerHeatmapMode/Response: this is a richer contract
+// (per-zone rose + circular stats + narrative) and lives on its own
+// endpoint so the simple-density player-heatmap stays untouched.
+export interface AimHotzone extends HotzonePoint {
+  rose: number[];      // length 16, bucket i = yaw band [i*22.5-180,(i+1)*22.5-180)
+  mean_yaw: number;    // per-cell circular mean yaw (deg, (-180,180])
+  r: number;           // per-cell mean resultant length (0..1)
+}
+
+export interface PitchHistogram {
+  edges: number[];     // length 7
+  counts: number[];    // length 6 (between consecutive edges)
+}
+
+export interface CircularStats {
+  n: number;
+  mean_yaw_deg: number;
+  resultant_length: number;   // 0..1 (1 = perfectly concentrated)
+  circular_std_deg: number;   // 0..180 (capped); circular, not arithmetic
+  rayleigh_p: number;         // < 0.05 ⇒ aim is statistically directional
+  pitch_mean_deg: number;     // arithmetic mean (pitch does NOT wrap)
+  pitch_std_deg: number;
+}
+
+export interface PlayerAimResponse {
+  status: string;
+  map_name: string;
+  player_guid: string;
+  player_name: string;
+  grid_size: number;
+  total: number;              // == circular.n
+  sampled: boolean;           // true if hotzones were capped (120 max)
+  scope?: Record<string, unknown>;
+  hotzones: AimHotzone[];
+  yaw_buckets: number;        // 16
+  yaw_bucket_width_deg: number; // 22.5
+  pitch_hist: PitchHistogram;
+  circular: CircularStats;
+  narrative: string[];
+}
+
 export interface KillLine {
   ax: number;
   ay: number;

@@ -35,6 +35,7 @@ const PLAYER_HEATMAP_MODES = {
     victims_die: { label: 'Victims die', rgb: '244, 63, 94', hint: "where this player's victims fall" },
     player_dies: { label: 'Player dies', rgb: '96, 165, 250', hint: 'where this player dies (enemy kills only)' },
     presence: { label: 'Presence', rgb: '34, 211, 238', hint: 'where this player spends time' },
+    aim: { label: 'Aim', rgb: '167, 139, 250', hint: 'where they shoot from + which way they aim' },
 };
 
 const proximityRenderCache = {
@@ -2768,6 +2769,14 @@ async function renderPlayerHeatmap() {
         ? proximityVizState.playerHeatmapMode : 'kills_from';
     const modeCfg = PLAYER_HEATMAP_MODES[mode];
 
+    // The Aim lens is a richer, separate render (origin density + per-zone
+    // rose + pitch/spread/narrative panel) backed by /proximity/player-aim.
+    const aimPanelEl = document.getElementById('proximity-player-aim-panel');
+    if (mode === 'aim') {
+        return renderPlayerAim();
+    }
+    if (aimPanelEl) aimPanelEl.classList.add('hidden');
+
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
     const W = canvas.clientWidth || 512;
@@ -2900,6 +2909,255 @@ async function renderPlayerHeatmap() {
         ];
         if (resp?.sampled) bits.push('downsampled');
         if (resp?.coverage === 'kills_only') bits.push('enemy kills only — world/suicide deaths not tracked');
+        bits.push(getScopeDescription());
+        captionEl.textContent = bits.join(' • ');
+    }
+}
+
+// Centre yaw (deg, (-180,180]) of 0-based rose bucket i — mirrors the
+// backend _aim_yaw_bucket_center_deg (SQL shifts yaw by +180 then buckets).
+function aimBucketCenterDeg(i) {
+    let yaw = (i + 0.5) * 22.5 - 180;
+    if (yaw > 180) yaw -= 360;
+    return yaw;
+}
+
+// Screen angle (rad) for a world yaw at a world point — bounds-agnostic:
+// project the point and a point one grid-step along the yaw, take the
+// delta. This is correct regardless of the calibration's axis orientation
+// (worldToCanvasPoint's v formula flips/scales depending on the bounds).
+function aimScreenAngle(wx, wy, yawDeg, gridSize, W, H, worldBounds, fallbackProject) {
+    const r = yawDeg * Math.PI / 180;
+    const proj = (px, py) => worldBounds
+        ? worldToCanvasPoint(px, py, W, H, worldBounds)
+        : (fallbackProject ? fallbackProject(px, py) : null);
+    const p0 = proj(wx, wy);
+    const p1 = proj(wx + gridSize * Math.cos(r), wy + gridSize * Math.sin(r));
+    if (!p0 || !p1) return null;
+    return Math.atan2(p1.y - p0.y, p1.x - p0.x);
+}
+
+function drawAimRoseGlyph(ctx, point, hz, gridSize, W, H, worldBounds, fallbackProject, rgb) {
+    const rose = Array.isArray(hz.rose) ? hz.rose : [];
+    const maxB = Math.max(...rose.map((c) => Number(c) || 0), 1);
+    const wx = (Number(hz.x) + 0.5) * gridSize;
+    const wy = (Number(hz.y) + 0.5) * gridSize;
+    const baseR = clamp(Math.min(W, H) * 0.05, 9, 26);
+    for (let i = 0; i < rose.length; i++) {
+        const c = Number(rose[i]) || 0;
+        if (!c) continue;
+        const ang = aimScreenAngle(wx, wy, aimBucketCenterDeg(i), gridSize, W, H, worldBounds, fallbackProject);
+        if (ang === null) continue;
+        const len = baseR * (0.25 + 0.75 * (c / maxB));
+        ctx.beginPath();
+        ctx.moveTo(point.x, point.y);
+        ctx.lineTo(point.x + Math.cos(ang) * len, point.y + Math.sin(ang) * len);
+        ctx.strokeStyle = `rgba(${rgb}, ${0.25 + 0.5 * (c / maxB)})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    }
+    // Mean aim direction — a brighter, longer tick.
+    const my = Number(hz.mean_yaw);
+    if (Number.isFinite(my)) {
+        const ang = aimScreenAngle(wx, wy, my, gridSize, W, H, worldBounds, fallbackProject);
+        if (ang !== null) {
+            const len = baseR * (0.6 + 0.5 * clamp(Number(hz.r) || 0, 0, 1));
+            ctx.beginPath();
+            ctx.moveTo(point.x, point.y);
+            ctx.lineTo(point.x + Math.cos(ang) * len, point.y + Math.sin(ang) * len);
+            ctx.strokeStyle = `rgba(${rgb}, 0.95)`;
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+        }
+    }
+}
+
+function renderAimPanel(resp) {
+    const narrEl = document.getElementById('proximity-player-aim-narrative');
+    const spreadEl = document.getElementById('proximity-player-aim-spread');
+    const pitchEl = document.getElementById('proximity-player-aim-pitch');
+    const circ = resp?.circular || {};
+    if (narrEl) {
+        const lines = Array.isArray(resp?.narrative) ? resp.narrative : [];
+        narrEl.innerHTML = lines.length
+            ? lines.map((s) => `<div>• ${escapeHtml(String(s))}</div>`).join('')
+            : '<div class="text-slate-500">No aim data.</div>';
+    }
+    if (spreadEl) {
+        const directional = Number(circ.rayleigh_p) < 0.05;
+        const chip = (label, val) => `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-white/10">${label}: <span class="text-brand-violet">${val}</span></span>`;
+        spreadEl.innerHTML = [
+            chip('mean yaw', `${Number(circ.mean_yaw_deg || 0).toFixed(0)}°`),
+            chip('spread', `±${Number(circ.circular_std_deg || 0).toFixed(0)}°`),
+            chip('R', Number(circ.resultant_length || 0).toFixed(2)),
+            chip('aim', directional ? 'directional' : 'uniform'),
+            chip('pitch', `${Number(circ.pitch_mean_deg || 0) >= 0 ? '+' : ''}${Number(circ.pitch_mean_deg || 0).toFixed(0)}°`),
+        ].join('');
+    }
+    if (pitchEl) {
+        const hist = resp?.pitch_hist || {};
+        const counts = Array.isArray(hist.counts) ? hist.counts : [];
+        const labels = ['−90·−60', '−60·−30', '−30·0', '0·30', '30·60', '60·90'];
+        const maxC = Math.max(...counts.map((c) => Number(c) || 0), 1);
+        pitchEl.innerHTML = counts.map((c, i) => {
+            const h = Math.round((Number(c) || 0) / maxC * 100);
+            return `<div class="flex flex-col items-center justify-end" style="width:14%">
+                <div class="text-[9px] text-slate-400 mb-0.5">${Number(c) || 0}</div>
+                <div class="w-full rounded-t bg-brand-violet/70" style="height:${Math.max(h, 2)}%"></div>
+                <div class="text-[8px] text-slate-500 mt-0.5">${labels[i] || ''}</div>
+            </div>`;
+        }).join('');
+    }
+}
+
+async function renderPlayerAim() {
+    const canvas = document.getElementById('proximity-player-heatmap');
+    const captionEl = document.getElementById('proximity-player-heatmap-caption');
+    const panel = document.getElementById('proximity-player-aim-panel');
+    if (!canvas) return;
+    if (panel) panel.classList.remove('hidden');
+
+    const mapName = String(proximityScopeState.mapName || '').trim();
+    const playerGuid = String(proximityVizState.playerHeatmapGuid || '').trim();
+    const cfg = PLAYER_HEATMAP_MODES.aim;
+
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth || 512;
+    const H = canvas.clientHeight || 512;
+    canvas.width = Math.floor(W * dpr);
+    canvas.height = Math.floor(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    if (!mapName || !playerGuid) {
+        ctx.fillStyle = '#64748b';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('Select a player and a map', W / 2, H / 2);
+        if (captionEl) captionEl.textContent = 'Select a player (the map follows your Scope) to see their aim analytics.';
+        renderAimPanel(null);
+        return;
+    }
+
+    let resp;
+    try {
+        const params = buildScopeParams({ extra: { map_name: mapName, player_guid: playerGuid } });
+        resp = await fetchJSON(`${API_BASE}/proximity/player-aim?${params}`);
+    } catch (err) {
+        console.warn('Player aim fetch failed:', err);
+        if (captionEl) captionEl.textContent = 'Failed to load aim analytics.';
+        ctx.fillStyle = '#64748b';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('Failed to load', W / 2, H / 2);
+        renderAimPanel(null);
+        return;
+    }
+
+    renderAimPanel(resp);
+
+    await ensureMapTransformConfig();
+    const transform = getMapTransformEntry(mapName);
+    const worldBounds = getWorldBounds(transform);
+    const mapImage = await preloadMapImage(transform?.image || null);
+    if (mapImage) {
+        ctx.save();
+        ctx.globalAlpha = 0.28;
+        ctx.drawImage(mapImage, 0, 0, W, H);
+        ctx.restore();
+    } else {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, W, H);
+    }
+
+    const hotzones = Array.isArray(resp?.hotzones) ? resp.hotzones : [];
+    const gridSize = Number(resp?.grid_size) || PROXIMITY_GRID_SIZE;
+    const playerName = stripEtColors(resp?.player_name || playerGuid);
+
+    if (worldBounds && proximityVizState.showObjectiveZones) {
+        await ensureObjectiveZonesConfig();
+        const zones = getObjectiveZonesForMap(mapName).filter(shouldRenderObjectiveZone);
+        drawObjectiveZones(ctx, W, H, worldBounds, zones);
+    }
+
+    if (hotzones.length === 0) {
+        ctx.fillStyle = '#64748b';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`No aim data for ${stripEtColors(mapName)}`, W / 2, H / 2);
+        if (captionEl) {
+            captionEl.textContent = `${playerName} • Aim • no shots on ${stripEtColors(mapName)} • ${getScopeDescription()}`;
+        }
+        return;
+    }
+
+    const pad = 6;
+    let fallbackBounds = null;
+    if (!worldBounds) {
+        const xs = [];
+        const ys = [];
+        for (const hz of hotzones) {
+            const gx = Number(hz.x);
+            const gy = Number(hz.y);
+            if (Number.isFinite(gx) && Number.isFinite(gy)) {
+                xs.push((gx + 0.5) * gridSize);
+                ys.push((gy + 0.5) * gridSize);
+            }
+        }
+        if (xs.length && ys.length) {
+            const minX = Math.min(...xs), maxX = Math.max(...xs);
+            const minY = Math.min(...ys), maxY = Math.max(...ys);
+            fallbackBounds = {
+                minX, minY,
+                spanX: Math.max(maxX - minX, 1),
+                spanY: Math.max(maxY - minY, 1),
+            };
+        }
+    }
+    const fallbackProject = (worldX, worldY) => {
+        if (!fallbackBounds) return null;
+        const nx = (worldX - fallbackBounds.minX) / fallbackBounds.spanX;
+        const ny = (worldY - fallbackBounds.minY) / fallbackBounds.spanY;
+        return { x: pad + nx * (W - pad * 2), y: pad + ny * (H - pad * 2) };
+    };
+
+    const heatScale = clamp(Number(proximityVizState.heatIntensity || 1), 0.6, 1.8);
+    const maxCount = Math.max(...hotzones.map((h) => Number(h.count || 0)), 1);
+    for (const hz of hotzones) {
+        const gx = Number(hz.x);
+        const gy = Number(hz.y);
+        if (!Number.isFinite(gx) || !Number.isFinite(gy)) continue;
+        const intensity = clamp(Number(hz.count || 0) / maxCount, 0, 1);
+        const worldX = (gx + 0.5) * gridSize;
+        const worldY = (gy + 0.5) * gridSize;
+        const point = worldBounds
+            ? worldToCanvasPoint(worldX, worldY, W, H, worldBounds)
+            : fallbackProject(worldX, worldY);
+        if (!point) continue;
+        const radius = (4 + intensity * (worldBounds ? 18 : 14)) * (0.72 + heatScale * 0.28);
+        const alpha = (0.14 + intensity * 0.5) * clamp(heatScale, 0.6, 1.8);
+        const grad = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius);
+        grad.addColorStop(0, `rgba(${cfg.rgb}, ${alpha})`);
+        grad.addColorStop(0.7, `rgba(${cfg.rgb}, ${alpha * 0.45})`);
+        grad.addColorStop(1, `rgba(${cfg.rgb}, 0)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        drawAimRoseGlyph(ctx, point, hz, gridSize, W, H, worldBounds, fallbackProject, cfg.rgb);
+    }
+
+    if (captionEl) {
+        const circ = resp?.circular || {};
+        const bits = [
+            playerName,
+            'Aim (where they shoot from + aim direction)',
+            `${hotzones.length} zones`,
+            `${Number(resp?.total || 0)} shots`,
+            `mean ${Number(circ.mean_yaw_deg || 0).toFixed(0)}° • spread ±${Number(circ.circular_std_deg || 0).toFixed(0)}°`,
+        ];
+        if (resp?.sampled) bits.push('downsampled');
         bits.push(getScopeDescription());
         captionEl.textContent = bits.join(' • ');
     }

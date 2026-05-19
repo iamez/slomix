@@ -2083,9 +2083,24 @@
                         <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="victims_die">Victims die</button>
                         <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="player_dies">Player dies</button>
                         <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="presence">Presence</button>
+                        <button class="player-pmode-btn text-[10px] font-bold px-3 py-1 rounded transition bg-slate-800 text-slate-500 border border-white/10 hover:text-slate-300" data-pmode="aim" title="Where they shoot from + which way they aim (v9 true-aim)">Aim</button>
                     </div>
                     <canvas id="proximity-player-heatmap" width="512" height="512" class="w-full rounded-lg border border-white/10 bg-slate-950" style="max-width:760px;aspect-ratio:1"></canvas>
                     <div id="proximity-player-heatmap-caption" class="text-xs text-slate-500 mt-2">Pick a player above — the map follows your Scope selection at the top of the page.</div>
+                    <!-- Full Aim Analytics — shown only for the Aim lens. Origin
+                         density + per-zone aim rose draw on the canvas above;
+                         this panel adds pitch profile, spread metrics and the
+                         narrative read (backend /proximity/player-aim). -->
+                    <div id="proximity-player-aim-panel" class="hidden mt-4 glass-card rounded-lg border border-white/10 p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="text-sm font-bold text-slate-300">Aim Analytics</div>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-brand-violet/10 text-brand-violet">v9 true-aim</span>
+                        </div>
+                        <div id="proximity-player-aim-narrative" class="text-[12px] text-slate-300 space-y-1 mb-3"></div>
+                        <div id="proximity-player-aim-spread" class="flex flex-wrap gap-2 mb-3"></div>
+                        <div class="text-[11px] text-slate-500 mb-1">Pitch profile (aim up / level / down)</div>
+                        <div id="proximity-player-aim-pitch" class="flex items-end gap-1 h-24 justify-center"></div>
+                    </div>
                     <!-- Per-player Hit Region Distribution — tied to the player
                          selector above (backend /proximity/hit-regions already
                          filters by player_guid via attacker/victim). -->
