@@ -7,8 +7,8 @@ import { Skeleton } from '../components/Skeleton';
 import { DataTable, type Column } from '../components/DataTable';
 import { InfoTip } from '../components/InfoTip';
 import { ProximityIntro } from '../components/ProximityIntro';
-import { useProximityLeaderboards, useProximitySessionScores, useProximityKillOutcomes, useProximityKillOutcomePlayerStats, useProximityHitRegions, useProximityHeadshotRates, useCombatHeatmap, usePlayerHeatmap, usePlayerHitRegions, useProximityPlayers, useKillLines, useDangerZones, useMovementStats, useProxScores, useProxFormula } from '../api/hooks';
-import type { ProximityLeaderboardEntry, SessionScoreEntry, HitRegionPlayer, HeadshotRateEntry, MovementStatsPlayer, ProxScorePlayer, ProximityScope } from '../api/types';
+import { useProximityLeaderboards, useProximitySessionScores, useProximityKillOutcomes, useProximityKillOutcomePlayerStats, useProximityHitRegions, useProximityHeadshotRates, useCombatHeatmap, usePlayerHeatmap, usePlayerAim, usePlayerHitRegions, useProximityPlayers, useKillLines, useDangerZones, useMovementStats, useProxScores, useProxFormula } from '../api/hooks';
+import type { ProximityLeaderboardEntry, SessionScoreEntry, HitRegionPlayer, HeadshotRateEntry, MovementStatsPlayer, ProxScorePlayer, ProximityScope, PlayerHeatmapMode, AimHotzone } from '../api/types';
 import { METRICS, LEADERBOARD_HELP } from './proximity-glossary';
 
 const API = '/api';
@@ -192,6 +192,152 @@ function HeatmapCanvas({ hotzones, mapImage, intensity = 1.0, color }: { hotzone
       height={GRID}
       className="w-full max-w-[512px] aspect-square rounded-xl border border-white/10"
     />
+  );
+}
+
+// ── Aim Canvas (Full Aim Analytics, parallel stack) ──────────────────────────
+// HeatmapCanvas above is density-only; aim adds per-cell yaw rose + a mean
+// yaw tick. Uses naive projection like HeatmapCanvas (the React stack does
+// not load map_transforms; legacy JS is production truth). Naive Y is
+// inverted (screen +y = down), so the screen angle for a world yaw θ is
+// atan2(-sinθ, cosθ) = -θ. Yaw bucket centres mirror the backend SQL.
+function aimYawBucketCenterDeg(i: number): number {
+  let y = (i + 0.5) * 22.5 - 180;
+  if (y > 180) y -= 360;
+  return y;
+}
+
+interface PlayerAimLike {
+  status: string;
+  map_name: string;
+  player_guid: string;
+  player_name: string;
+  grid_size: number;
+  total: number;
+  sampled: boolean;
+  hotzones: AimHotzone[];
+  pitch_hist: { edges: number[]; counts: number[] };
+  circular: { n: number; mean_yaw_deg: number; resultant_length: number; circular_std_deg: number; rayleigh_p: number; pitch_mean_deg: number; pitch_std_deg: number };
+  narrative: string[];
+}
+
+function AimCanvas({ data, color }: { data: PlayerAimLike | null; color: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    ctx.fillRect(0, 0, w, h);
+    if (!data || !data.hotzones.length) return;
+    const maxCount = Math.max(...data.hotzones.map((p) => p.count), 1);
+    const baseR = Math.min(w, h) * 0.05;
+    for (const hz of data.hotzones) {
+      const nx = (hz.x / GRID) * w;
+      const ny = (1 - hz.y / GRID) * h;
+      const intensity = Math.min(1, hz.count / maxCount);
+      const alpha = 0.18 + intensity * 0.55;
+      const radius = Math.max(4, intensity * 14);
+      const grad = ctx.createRadialGradient(nx, ny, 0, nx, ny, radius);
+      grad.addColorStop(0, `rgba(${color}, ${alpha})`);
+      grad.addColorStop(0.7, `rgba(${color}, ${alpha * 0.45})`);
+      grad.addColorStop(1, `rgba(${color}, 0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(nx, ny, radius, 0, Math.PI * 2);
+      ctx.fill();
+      const roseMax = Math.max(...hz.rose.map((c) => c || 0), 1);
+      for (let i = 0; i < hz.rose.length; i++) {
+        const c = hz.rose[i] || 0;
+        if (!c) continue;
+        const ang = -aimYawBucketCenterDeg(i) * Math.PI / 180;  // naive Y-flip
+        const len = baseR * (0.25 + 0.75 * (c / roseMax));
+        ctx.beginPath();
+        ctx.moveTo(nx, ny);
+        ctx.lineTo(nx + Math.cos(ang) * len, ny + Math.sin(ang) * len);
+        ctx.strokeStyle = `rgba(${color}, ${0.25 + 0.5 * (c / roseMax)})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+      if (Number.isFinite(hz.mean_yaw)) {
+        const ang = -hz.mean_yaw * Math.PI / 180;
+        const len = baseR * (0.6 + 0.5 * Math.min(1, Math.max(0, hz.r || 0)));
+        ctx.beginPath();
+        ctx.moveTo(nx, ny);
+        ctx.lineTo(nx + Math.cos(ang) * len, ny + Math.sin(ang) * len);
+        ctx.strokeStyle = `rgba(${color}, 0.95)`;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+      }
+    }
+  }, [data, color]);
+  return (
+    <canvas
+      ref={canvasRef}
+      width={GRID}
+      height={GRID}
+      className="w-full max-w-[512px] aspect-square rounded-xl border border-white/10"
+    />
+  );
+}
+
+function AimAnalyticsPanel({ data }: { data: PlayerAimLike | null }) {
+  if (!data) {
+    return (
+      <div className="mt-4 rounded-lg border border-white/10 bg-slate-900/40 p-4 text-[11px] text-slate-500 text-center">
+        Pick a player to see their aim analytics.
+      </div>
+    );
+  }
+  const c = data.circular;
+  const directional = c.rayleigh_p < 0.05;
+  const maxPitch = Math.max(...data.pitch_hist.counts.map((x) => x || 0), 1);
+  const pitchLabels = ['−90·−60', '−60·−30', '−30·0', '0·30', '30·60', '60·90'];
+  const chip = (label: string, val: string) => (
+    <span key={label} className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-white/10">
+      {label}: <span className="text-violet-300">{val}</span>
+    </span>
+  );
+  return (
+    <div className="mt-4 rounded-lg border border-white/10 bg-slate-900/40 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="text-xs font-bold uppercase tracking-widest text-slate-400">Aim Analytics</div>
+          <InfoTip label={METRICS.aim_spread.label}>
+            <p>{METRICS.aim_spread.oneLiner}</p>
+            <p className="mt-1.5 text-slate-400">{METRICS.aim_spread.detail}</p>
+            {METRICS.aim_spread.howMeasured && (<p className="mt-1.5 text-slate-500">{METRICS.aim_spread.howMeasured}</p>)}
+          </InfoTip>
+        </div>
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-violet-500/10 text-violet-300">v9 true-aim</span>
+      </div>
+      {data.narrative.length > 0 && (
+        <ul className="text-[12px] text-slate-300 space-y-1 mb-3">
+          {data.narrative.map((line, i) => (<li key={i}>• {line}</li>))}
+        </ul>
+      )}
+      <div className="flex flex-wrap gap-2 mb-3">
+        {chip('mean yaw', `${c.mean_yaw_deg.toFixed(0)}°`)}
+        {chip('spread', `±${c.circular_std_deg.toFixed(0)}°`)}
+        {chip('R', c.resultant_length.toFixed(2))}
+        {chip('aim', directional ? 'directional' : 'uniform')}
+        {chip('pitch', `${c.pitch_mean_deg >= 0 ? '+' : ''}${c.pitch_mean_deg.toFixed(0)}°`)}
+      </div>
+      <div className="text-[10px] text-slate-500 mb-1">Pitch profile (aim up / level / down)</div>
+      <div className="flex items-end gap-1 h-24 justify-center">
+        {data.pitch_hist.counts.map((cnt, i) => (
+          <div key={i} className="flex flex-col items-center justify-end" style={{ width: '14%' }}>
+            <span className="text-[9px] text-slate-400 mb-0.5">{cnt}</span>
+            <div className="w-full rounded-t bg-violet-500/70" style={{ height: `${Math.max(((cnt || 0) / maxPitch) * 100, 2)}%` }} />
+            <span className="text-[8px] text-slate-500 mt-0.5">{pitchLabels[i] || ''}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -991,21 +1137,29 @@ function DangerZonesPanel({ mapName }: { mapName: string }) {
 
 // ── Per-player Combat Map (flagship) ─────────────────────────────────────────
 
-const PLAYER_HEATMAP_MODES: { key: 'kills_from' | 'victims_die' | 'player_dies' | 'presence'; label: string; rgb: string; hint: string }[] = [
+type PlayerLensKey = 'kills_from' | 'victims_die' | 'player_dies' | 'presence' | 'aim';
+
+const PLAYER_HEATMAP_MODES: { key: PlayerLensKey; label: string; rgb: string; hint: string }[] = [
   { key: 'kills_from', label: 'Kills from', rgb: '251, 191, 36', hint: 'where they stand when they get kills' },
   { key: 'victims_die', label: 'Victims die', rgb: '244, 63, 94', hint: "where this player's victims fall" },
   { key: 'player_dies', label: 'Player dies', rgb: '96, 165, 250', hint: 'where this player dies (enemy kills only)' },
   { key: 'presence', label: 'Presence', rgb: '34, 211, 238', hint: 'where this player spends time' },
+  { key: 'aim', label: 'Aim', rgb: '167, 139, 250', hint: 'where they shoot from + which way they aim (v9 true-aim)' },
 ];
 
 // Map comes from the page-level Scope > Map selector (prop) — the
 // redundant per-panel "Map name..." box was removed.
 function PlayerHeatmapPanel({ mapName }: { mapName: string }) {
   const [playerGuid, setPlayerGuid] = useState('');
-  const [mode, setMode] = useState<'kills_from' | 'victims_die' | 'player_dies' | 'presence'>('kills_from');
+  const [mode, setMode] = useState<PlayerLensKey>('kills_from');
   const modeCfg = PLAYER_HEATMAP_MODES.find(m => m.key === mode) ?? PLAYER_HEATMAP_MODES[0];
 
-  const { data, isLoading } = usePlayerHeatmap(mapName, playerGuid, mode, { rangeDays: 30 });
+  // The Aim lens has its own richer endpoint (per-zone rose + circular
+  // stats + narrative). Both hooks live at top-level for stable hook
+  // order; only one branch is rendered at a time.
+  const heatmapMode = (mode === 'aim' ? 'kills_from' : mode) as PlayerHeatmapMode;
+  const { data, isLoading } = usePlayerHeatmap(mapName, playerGuid, heatmapMode, { rangeDays: 30 });
+  const { data: aimData, isLoading: aimLoading } = usePlayerAim(mapName, playerGuid, { rangeDays: 30 });
   const hotzones = data?.hotzones ?? [];
   // Scope the picker to the selected map (Copilot review) — mirrors the
   // legacy behaviour; empty map => all players.
@@ -1068,20 +1222,38 @@ function PlayerHeatmapPanel({ mapName }: { mapName: string }) {
           <div className="flex items-center justify-center h-64 text-xs text-slate-500">
             Select a player and enter a map to see where they fight
           </div>
+        ) : mode === 'aim' ? (
+          aimLoading ? (
+            <Skeleton variant="card" count={1} />
+          ) : (
+            <>
+              <div className="flex justify-center">
+                <AimCanvas data={aimData ?? null} color={modeCfg.rgb} />
+              </div>
+              {aimData && (
+                <div className="mt-2 text-[10px] text-slate-500 text-center">
+                  {stripColors(aimData.player_name)} · Aim · {aimData.hotzones.length} zones · {aimData.total} shots · mean {aimData.circular.mean_yaw_deg.toFixed(0)}° · spread ±{aimData.circular.circular_std_deg.toFixed(0)}°
+                  {aimData.sampled ? ' · downsampled' : ''}
+                </div>
+              )}
+              <AimAnalyticsPanel data={aimData ?? null} />
+            </>
+          )
         ) : isLoading ? (
           <Skeleton variant="card" count={1} />
         ) : (
-          <div className="flex justify-center">
-            <HeatmapCanvas hotzones={hotzones} mapImage={null} intensity={1.0} color={modeCfg.rgb} />
-          </div>
-        )}
-
-        {data && (
-          <div className="mt-2 text-[10px] text-slate-500 text-center">
-            {stripColors(data.player_name)} · {modeCfg.label} ({modeCfg.hint}) · {hotzones.length} zones · {data.total} samples
-            {data.sampled ? ' · downsampled' : ''}
-            {data.coverage === 'kills_only' ? ' · enemy kills only — world/suicide deaths not tracked' : ''}
-          </div>
+          <>
+            <div className="flex justify-center">
+              <HeatmapCanvas hotzones={hotzones} mapImage={null} intensity={1.0} color={modeCfg.rgb} />
+            </div>
+            {data && (
+              <div className="mt-2 text-[10px] text-slate-500 text-center">
+                {stripColors(data.player_name)} · {modeCfg.label} ({modeCfg.hint}) · {hotzones.length} zones · {data.total} samples
+                {data.sampled ? ' · downsampled' : ''}
+                {data.coverage === 'kills_only' ? ' · enemy kills only — world/suicide deaths not tracked' : ''}
+              </div>
+            )}
+          </>
         )}
 
         {/* Per-player Hit Region Distribution — same player selector */}
