@@ -201,11 +201,16 @@ creates separate historical records; bots in one match share `gaming_session_id`
 
 ## 8. Lua webhook & bots
 
-`vps_scripts/stats_discord_webhook.lua` (v1.7.0) wraps entity field access in a
+`vps_scripts/stats_discord_webhook.lua` (v1.7.1) wraps entity field access in a
 safe getter with `pcall` (since v1.6.0) — fixes the historical
 `tried to get invalid gentity field pers.connected` crash with bot entities.
-If a crash like that recurs, confirm the safe getter is present before anything
-else.
+**v1.7.1** (2026-05-19, PR #343) additionally replaced the LuaJIT/5.1
+`bit.band/bit.lshift` in `detect_pause()` with native Lua 5.4 bitwise
+(`((1 << 4) & cs) ~= 0`) — the `bit` library does not exist on the
+ET:Legacy 2.83.1 Lua 5.4 API and was crashing every `et_RunFrame` with
+`attempt to index a nil value (global 'bit')`.
+If a crash like that recurs, confirm the safe getter is present before
+anything else.
 
 ---
 
