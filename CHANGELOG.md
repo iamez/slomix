@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.16.0](https://github.com/iamez/slomix/compare/v1.15.0...v1.16.0) (2026-05-19)
+
+
+### Features
+
+* **proximity:** Full Aim Analytics — Player Combat Map gets a 5th lens (v9 true-aim) ([#346](https://github.com/iamez/slomix/issues/346)) ([fb9fe67](https://github.com/iamez/slomix/commit/fb9fe67ea76e3619b374506fd23ac680d4df5e05))
+
 ## [1.15.0](https://github.com/iamez/slomix/compare/v1.14.2...v1.15.0) (2026-05-19)
 
 
