@@ -106,7 +106,7 @@ RCON config comes from `.env` (`RCON_HOST`, `RCON_PORT=27960`, `RCON_PASSWORD`).
 | Boot | crontab `@reboot /home/et/start.sh` → `etdaemon.sh` |
 | Daily restart | crontab `0 20 * * * kill $(pidof …/etlded.x86_64)` → daemon restarts in **production** |
 | Prod config | `etmain/vektor.cfg` (`g_customConfig legacy3`, `omnibot_enable 0`) |
-| RCON | UDP port 27960, password `glavni123` (in `vektor.cfg` + `.env`) |
+| RCON | UDP port 27960; password lives in `etmain/vektor.cfg` on the server and locally in `.env` (`RCON_PASSWORD`) — **never** commit the value |
 | `g_filterBan` / `g_banIPs` | `"1"` / `""` — **safe** (see §5) |
 | Bot config | `legacy/omni-bot/et/user/omni-bot.cfg` (`MinBots`/`MaxBots`, `SaveConfigChanges=1`) |
 | Bot names | `legacy/omni-bot/et/scripts/et_botnames_ext.gm` (prefix `^o[BOT]^7`, 11 names) |
