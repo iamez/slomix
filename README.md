@@ -8,7 +8,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/web-FastAPI-009688)](https://fastapi.tiangolo.com/)
 [![Data Integrity](https://img.shields.io/badge/data%20integrity-6%20layers-blue)](docs/SAFETY_VALIDATION_SYSTEMS.md)
-[![Tests](https://img.shields.io/badge/tests-2989%20passing-success)](tests/)
+[![Tests](https://img.shields.io/badge/tests-3008%20passing-success)](tests/)
 [![Discord.py](https://img.shields.io/badge/discord.py-2.6.4-5865F2)](https://discordpy.readthedocs.io/)
 
 A **production-grade** Discord bot + web dashboard + demo analysis pipeline with **6-layer data validation**, **real-time Lua telemetry**, **AI match predictions**, and **demo highlight detection** for ET:Legacy game servers.
@@ -17,7 +17,32 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 ## 🔥 Recent Updates (May 2026)
 
-### **⚡ v1.14.x: Deprecation Cleanup, Perf, Audit Sweep (May 10-12)** 🆕
+### **🎯 v1.16.0: Full Aim Analytics — v9 True-Aim Shipped (May 19-20)** 🆕
+
+**The flagship `mode=aim` lens on the Player Combat Map turns per-shot
+origin + view-angles into a rich, research-grounded read of how a player
+holds, sweeps, and looks while shooting.**
+
+- 🌹 **5th lens on the Player Combat Map** (#346) — `Kills from`, `Victims die`, `Player dies`, `Presence` joined by **Aim**: origin density + a per-zone **16-bucket yaw rose** + a mean-aim tick per hotspot. Pitch profile (up / level / down), spread metrics, and narrative one-liners surface side-by-side
+- 🧮 **Wrap-safe circular statistics** — yaw lives on a circle (±180°), so an arithmetic mean is silently wrong (e.g. 170° and −170° average to 0° but the true mean is ~180°). The new `_circular_yaw_stats` helper does it right: `atan2(mean sin, mean cos)`, mean resultant length `R`, circular std, and a **Rayleigh test** for directional-vs-uniform. Verified live against a real human (1,506 shots) — endpoint matched a manual `psql` cross-check to **0.001°**, while the wrong arithmetic mean would have been off by **38°**
+- 📖 **Storytelling, not verdicts** — narrative lines are generated only from real statistics (sample size, dominant compass-sector, ±°  spread, pitch tendency, Rayleigh significance). No fabricated "center" — defensible reads like *"1,506 shots tracked · Most shots aimed SW (28% of fire) · Wide horizontal coverage (±71°) · Level aim (avg +1° pitch)"*
+- 🧰 **NEW additive endpoint** `GET /api/proximity/player-aim` — does **not** touch the existing `mode=aim` on the shared `player-heatmap` (3 consumers + ~30 tests stayed green). Dual-stack: legacy JS = production truth, React = parallel
+- 🔬 **Research-grounded design** — methodology cross-checked against esports analytics (Leetify, scope.gg), circular-statistics literature, NBA hex-bin shot-chart practice, and spatial-DB downsampling patterns before a line of code was written (`docs/PROXIMITY_AIM_ANALYTICS_PLAN.md`)
+- ✅ **Validated on real all-night session** — 30,905 shots from 6 distinct humans across 8 maps; yaw spans `[−180,180]`, pitch `[−71,88]`, **both-zero = 0%** ⇒ `ps.viewangles` binding rock-solid on humans, not just bots
+
+### **🗺️ v1.15.0: Proximity Page Major Redesign + Lua 5.4 Production-Grade (May 14-19)** 🆕
+
+**The biggest single proximity push since v6.01: map-first information architecture, every audit finding closed, and two latent Lua-5.4 incompatibilities shipped + caught + fixed under live load.**
+
+- 🗺️ **Map-first information architecture** (#328, #330, #332, #334, #336) — the Player Combat Map is the hero; the page reads top-to-bottom as a single player's story (`HERO Combat Map → Player Story → Map Context → Engagements & Trades → Roles & Classes → Round Replay`). 8 KPIs trimmed to 5, 7 leaderboards consolidated to 3 contextual ones, redundant per-panel "Map name…" inputs replaced by the page-level Scope (#340)
+- 🎯 **Per-player heatmap, 4 perspectives** (#328) — `Kills from / Victims die / Player dies / Presence`, every lens scoped to a selected player + map + range. A1 (heatmap blank on calibrated maps) + A2 (no per-player filter) + A6 (256 vs 512 grid drift) closed. Server-side stride downsamples presence (>8 k samples never ship raw)
+- 🎯 **Per-player Hit Region Distribution** (#339) — head / arms / body / legs breakdown tied to the same player selector
+- 🔓 **Home widget endpoints restored + sanitised** (#338) — `/api/live-status`, `monitoring/status`, `voice-activity/*`, `server-activity/history` accidentally got admin-gated by an earlier security sweep. Restored public, with a strict whitelist sanitiser (no Discord-ID/avatar leak; dropped dead `voice_members` path)
+- 🔥 **Webhook `bit`-library crash on Lua 5.4** (#343) — `stats_discord_webhook.lua:1264` used LuaJIT/5.1 `bit.band(bit.lshift(1,4), cs)`. ET:Legacy 2.83.1's Lua 5.4 has **no `bit` library** → every `et_RunFrame` raised `attempt to index a nil value (global 'bit')`, spamming the console for hours. Replaced with native `((1 << 4) & cs) ~= 0` and bumped webhook to v1.7.1
+- 🔥 **SHOT_FIRED `outputData` crash on Lua 5.4** (#345) — `proximity_tracker.lua:3157` formatted `round(…, 1)` float origin with `%d`. Lua 5.4 rejects non-integer floats for `%d` ("number has no integer representation"), the throw escaped `outputDataInner`, `trap_FS_CloseWrite` never ran, and **every round's proximity file was left unclosed/corrupt while `shot_fired=true`**. Fix: truncate toward zero in Lua (`math.floor` for ≥0, `math.ceil` for <0 — plain `floor` is off-by-one for negative world coords) then `%d`. Caught by the runbook's *"verify clean end-to-end on a real round"* gate exactly as planned
+- 🧰 **Hard-stop deploy discipline** — every SSH write was guarded with backup + anchored sed + a surgical-change proof (`revert(line) == known-good SHA`), so each live change was provably exactly the intended one token
+
+### **⚡ v1.14.x: Deprecation Cleanup, Perf, Audit Sweep (May 10-12)**
 
 - 🧹 **Timezone-aware Datetime Migration** (#214, #216, #222, #230) — Killed every `datetime.utcnow()` and raw `datetime.fromtimestamp()` / `date.today()` in the codebase. Enabled ruff DTZ005 + DTZ007 with explicit `noqa` rationales on the 253 sites that legitimately need naive datetimes (Lua wall-clock, file-mtime, etc.). No more silent UTC/local mixups
 - 🔬 **Mega Audit v6** (#210) — Verified-real sweep: 12 actual fixes shipped, 16 false positives ruled out with evidence. Audit methodology refined to demand proof-of-bug, not just code smells
