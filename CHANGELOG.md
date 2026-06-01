@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.16.1](https://github.com/iamez/slomix/compare/v1.16.0...v1.16.1) (2026-06-01)
+
+
+### Bug Fixes
+
+* **data-integrity:** exclude orphan R2 from leaderboards + cap time_dead (FM4, RCA-1) ([#350](https://github.com/iamez/slomix/issues/350)) ([22444da](https://github.com/iamez/slomix/commit/22444da6400a183eee31a3be6f8df62806963f2d))
+* **proximity:** re-anchor round time to round-live + coerce weapon to int (RCA-2, M1) ([#352](https://github.com/iamez/slomix/issues/352)) ([3d58f35](https://github.com/iamez/slomix/commit/3d58f3556c92b39239ef4e7f3cbccce1ccb982d0))
+
 ## [1.16.0](https://github.com/iamez/slomix/compare/v1.15.0...v1.16.0) (2026-05-19)
 
 
