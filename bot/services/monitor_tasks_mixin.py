@@ -580,3 +580,118 @@ class _MonitorTasksMixin:
     async def before_live_status_updater(self):
         """Wait for bot to be ready"""
         await self.wait_until_ready()
+
+    # ------------------------------------------------------------------
+    # Idle-server watchdog: reload a neutral map when the server sits empty
+    # so it doesn't stay on a stale map after a session (FM1/FM2). Reads the
+    # player/voice counts that live_status_updater already writes to the
+    # live_status table (no extra RCON poll). Dry-run by default.
+    # NEVER uses map_restart — issues a FULL `map <name>` load (et_InitGame),
+    # per docs + feedback_lua_restart (map_restart/lua_restart break the Lua).
+    # ------------------------------------------------------------------
+    @tasks.loop(seconds=300)
+    async def idle_restart_watchdog(self):
+        cfg = self.config
+        if not getattr(cfg, 'idle_watchdog_enabled', False):
+            return
+        try:
+            rows = await self.db_adapter.fetch_all(
+                """
+                SELECT status_type, status_data,
+                       EXTRACT(EPOCH FROM (NOW() - updated_at)) AS age_seconds
+                FROM live_status
+                WHERE status_type IN ('game_server', 'voice_channel')
+                """
+            )
+            gs = next((r for r in (rows or []) if r[0] == 'game_server'), None)
+            vc = next((r for r in (rows or []) if r[0] == 'voice_channel'), None)
+
+            # Need fresh game-server status (live_status_updater runs every 30s).
+            # Stale (>3 min) or missing → don't act this tick.
+            if not gs or gs[2] is None or float(gs[2]) > 180:
+                return
+
+            def _load(v):
+                return json.loads(v) if isinstance(v, str) else (v or {})
+
+            gdata = _load(gs[1])
+            online = bool(gdata.get('online'))
+            player_count = int(gdata.get('player_count', 0) or 0)
+            voice_count = 0
+            if vc:
+                vdata = _load(vc[1])
+                # live_status_updater writes voice count under 'count' (members list
+                # may be sanitized/absent — see PR #338), so read 'count' first.
+                voice_count = int(vdata.get('count') or len(vdata.get('members') or []) or 0)
+
+            now = time.time()
+
+            # Not idle: server offline (can't/shouldn't load), players in game, or
+            # anyone in Discord voice (a session may be about to start).
+            if not online or player_count > 0 or voice_count > 0:
+                self._idle_since = None
+                return
+
+            if getattr(self, '_idle_since', None) is None:
+                self._idle_since = now
+                return
+
+            idle_min = (now - self._idle_since) / 60.0
+            if idle_min < cfg.idle_restart_minutes:
+                return
+
+            # Act once per idle period (cooldown until players return).
+            if getattr(self, '_idle_handled_since', None) == self._idle_since:
+                return
+            self._idle_handled_since = self._idle_since
+
+            mapname = re.sub(r'[^a-zA-Z0-9_]', '', cfg.idle_reload_map) or 'supply'
+            if cfg.idle_watchdog_dry_run:
+                logger.warning(
+                    "[IDLE-WATCHDOG] DRY-RUN: server empty %.0f min — would load 'map %s' "
+                    "(set IDLE_WATCHDOG_DRY_RUN=false to enable)", idle_min, mapname
+                )
+                await self.alert_admins(
+                    "Idle watchdog (DRY-RUN)",
+                    f"Game server empty {idle_min:.0f} min — **would** reload `{mapname}` "
+                    f"(full map load, not map_restart). Set `IDLE_WATCHDOG_DRY_RUN=false` to act.",
+                    "warning",
+                )
+            else:
+                ok = await self._idle_reload_map(mapname)
+                logger.warning("[IDLE-WATCHDOG] server empty %.0f min → map %s (ok=%s)", idle_min, mapname, ok)
+                await self.alert_admins(
+                    "Idle watchdog",
+                    f"Game server empty {idle_min:.0f} min → loaded `{mapname}` "
+                    f"({'OK' if ok else '**FAILED**'}).",
+                    "warning",
+                )
+        except Exception:
+            logger.error("idle_restart_watchdog error", exc_info=True)
+
+    @idle_restart_watchdog.before_loop
+    async def before_idle_restart_watchdog(self):
+        """Wait for bot to be ready"""
+        await self.wait_until_ready()
+
+    async def _idle_reload_map(self, mapname: str) -> bool:
+        """Issue a FULL `map <name>` load via RCON (never map_restart). Returns success."""
+        try:
+            server_cog = self.get_cog('ServerControl')
+            if not (server_cog and getattr(server_cog, 'rcon_enabled', False) and getattr(server_cog, 'rcon_password', None)):
+                logger.error("[IDLE-WATCHDOG] RCON not available — cannot reload map")
+                return False
+            from bot.cogs.server_control import ETLegacyRCON
+            rcon = ETLegacyRCON(server_cog.rcon_host, server_cog.rcon_port, server_cog.rcon_password)
+            try:
+                loop = asyncio.get_running_loop()
+                resp = await loop.run_in_executor(None, rcon.send_command, f"map {mapname}")
+                return bool(resp) and 'Error' not in resp
+            finally:
+                try:
+                    await asyncio.get_running_loop().run_in_executor(None, rcon.close)
+                except Exception:
+                    logger.debug("[IDLE-WATCHDOG] rcon close failed", exc_info=True)
+        except Exception:
+            logger.error("[IDLE-WATCHDOG] map load failed", exc_info=True)
+            return False

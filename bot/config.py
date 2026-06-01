@@ -180,6 +180,16 @@ class BotConfig:
             self._get_config('MONITORING_VOICE_INTERVAL_SECONDS', '60')
         )
 
+        # ==================== IDLE-SERVER WATCHDOG ====================
+        # Reload a neutral map when the game server sits empty so it doesn't stay on a
+        # stale map after a session (FM1/FM2 in docs/AUDIT_2026-05-29.md). Uses a FULL
+        # map load (NEVER map_restart — that breaks the Lua scripts). Dry-run by default:
+        # logs + alerts what it WOULD do; set IDLE_WATCHDOG_DRY_RUN=false to act.
+        self.idle_watchdog_enabled: bool = self._get_config('IDLE_WATCHDOG_ENABLED', 'true').lower() == 'true'
+        self.idle_watchdog_dry_run: bool = self._get_config('IDLE_WATCHDOG_DRY_RUN', 'true').lower() == 'true'
+        self.idle_restart_minutes: int = int(self._get_config('IDLE_RESTART_MINUTES', '45'))
+        self.idle_reload_map: str = self._get_config('IDLE_RELOAD_MAP', 'supply')
+
         # ==================== AUTOMATION SYSTEM ====================
         self.automation_enabled: bool = self._get_config('AUTOMATION_ENABLED', 'false').lower() == 'true'
 
