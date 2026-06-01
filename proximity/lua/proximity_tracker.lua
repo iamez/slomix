@@ -1520,7 +1520,11 @@ local function recordSpawnTiming(killer_slot, victim_slot, kill_time)
     local killer_interval = killer_team_num == 1 and tracker.spawn.axis_interval or tracker.spawn.allies_interval
     local killer_reinf_ms = 0
     if killer_interval > 0 then
-        local elapsed = kill_time - (tracker.round.start_time or 0)
+        -- kill_time is already gameTime() (ms since round start); do NOT subtract
+        -- start_time again. The old `- tracker.round.start_time` was a latent double
+        -- subtraction, harmless only while start_time≈0 (map-load); the RCA-2 re-anchor
+        -- exposes it. Mirrors calculateSpawnTimingScore which uses kill_time directly.
+        local elapsed = kill_time
         local reinf_offset = (killer_team_num == 1) and (tracker.spawn.axis_offset or 0) or (tracker.spawn.allies_offset or 0)
         killer_reinf_ms = killer_interval - ((reinf_offset + elapsed) % killer_interval)
     end
@@ -3570,6 +3574,21 @@ function et_RunFrame(levelTime)
     if gamestate == 0 and last_gamestate ~= 0 then
         refreshRoundInfo()
         refreshSpawnTimers()
+        -- RCA-2: re-anchor the round time base to the ACTUAL round-live moment
+        -- (gamestate->GS_PLAYING), not map-load (et_InitGame). Without this a long
+        -- warmup or an idle map that never restarts inflates gameTime() by the whole
+        -- pre-round duration. Aligns start_time with round_start_unix (both now anchor
+        -- at round live).
+        tracker.round.start_time = levelTime
+        -- Re-anchoring resets gameTime() to ~0, so gameTime-relative throttle
+        -- timestamps left over from a previous round (the idle-map path that starts
+        -- a new round without et_InitGame) would otherwise suppress sampling/checks
+        -- for most of the round. Reset them to match the new time base. No-op in the
+        -- normal et_InitGame->warmup->live flow (already 0; warmup doesn't sample).
+        tracker.last_sample_time = 0
+        tracker.cohesion.last_check_time = 0
+        tracker.crossfire_opps.last_check_time = 0
+        tracker.pushes.last_check_time = 0
         round_start_unix = os.time()
         round_end_unix = 0
         tracker.output_written = false
@@ -4105,7 +4124,11 @@ function et_WeaponFire(clientNum, weapon)
                 tracker.shot_fired[#tracker.shot_fired + 1] = {
                     time = gameTime(),
                     guid = guid,
-                    weapon = weapon,
+                    -- M1: guarantee an INTEGER subtype — Lua 5.4 string.format("%d", ...)
+                    -- at SHOT_FIRED output throws on nil OR non-integral float, leaving
+                    -- the whole round's proximity file unclosed (same class as origin %d).
+                    -- math.tointeger fails non-integral floats safely to 0.
+                    weapon = math.tointeger(tonumber(weapon) or 0) or 0,
                     ox = round(tonumber(origin[1]) or 0, 1),
                     oy = round(tonumber(origin[2]) or 0, 1),
                     oz = round(tonumber(origin[3]) or 0, 1),
