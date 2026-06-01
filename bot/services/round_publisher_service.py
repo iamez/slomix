@@ -305,7 +305,12 @@ class RoundPublisherService:
                 SELECT
                     player_name, team, kills, deaths, damage_given, damage_received,
                     team_damage_given, team_damage_received, gibs, headshots,
-                    accuracy, revives_given, times_revived, time_dead_minutes,
+                    accuracy, revives_given, times_revived,
+                    -- RCA-1 cap: stored time_dead_minutes can exceed differential
+                    -- time_played (buggy c0rnp0rn Lua time / idle map, max ~573 min
+                    -- observed). Cap at read so Discord embeds + dead%/alive stay
+                    -- sane (matches session_stats_aggregator/graph_generator pattern).
+                    LEAST(COALESCE(time_dead_minutes, 0), COALESCE(time_played_minutes, 0)) AS time_dead_minutes,
                     efficiency, kd_ratio, time_played_minutes, dpm,
                     double_kills, triple_kills, quad_kills, multi_kills, mega_kills,
                     denied_playtime

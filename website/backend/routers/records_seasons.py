@@ -336,7 +336,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     """
     time_alive_query = """
         SELECT player_guid, MAX(player_name) as player_name,
-               SUM(time_played_seconds) - SUM(COALESCE(time_dead_minutes, 0) * 60) as time_alive_seconds
+               SUM(time_played_seconds) - SUM(LEAST(COALESCE(time_dead_minutes, 0) * 60, time_played_seconds)) as time_alive_seconds
         FROM player_comprehensive_stats
         WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid
@@ -354,7 +354,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     """
     time_dead_query = """
         SELECT player_guid, MAX(player_name) as player_name,
-               SUM(COALESCE(time_dead_minutes, 0)) as time_dead_minutes
+               SUM(LEAST(COALESCE(time_dead_minutes, 0) * 60, time_played_seconds)) / 60.0 as time_dead_minutes
         FROM player_comprehensive_stats
         WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
         GROUP BY player_guid

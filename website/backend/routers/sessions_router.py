@@ -184,7 +184,7 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
             raw_rows = await db.fetch_all(
                 f"""
                 SELECT player_guid,
-                       SUM(COALESCE(time_dead_minutes, 0) * 60) as raw_dead_seconds
+                       SUM(LEAST(COALESCE(time_dead_minutes, 0) * 60, time_played_seconds)) as raw_dead_seconds
                 FROM player_comprehensive_stats
                 WHERE round_id IN ({placeholders})
                 GROUP BY player_guid
@@ -844,7 +844,9 @@ async def get_session_graph_stats(
         ps["team_kills"] += team_kills
         ps["self_kills"] += self_kills
         ps["times_revived"] += times_revived
-        ps["time_dead_minutes"] += time_dead_minutes
+        # RCA-1: cap dead PER ROUND (time_played is seconds) before summing, so one
+        # inflated Lua dead-time round can't consume the whole session's played time
+        ps["time_dead_minutes"] += min(time_dead_minutes, time_played / 60.0)
         ps["denied_playtime"] += denied_playtime
         ps["useful_kills"] += useful_kills
         ps["full_selfkills"] += full_selfkills
@@ -886,7 +888,8 @@ async def get_session_graph_stats(
         survival_rate_engine = round(tpp_wsum / tpp_w, 1) if tpp_w > 0 else None
         time_dead_min = stats.get("time_dead_minutes", 0)
         time_played_min = max(0.01, time_minutes)
-        survival_rate_computed = max(0, 100 - (time_dead_min / time_played_min * 100))
+        # RCA-1: cap dead at played (buggy Lua time can exceed it) + clamp 0..100
+        survival_rate_computed = max(0.0, min(100.0, 100 - (min(time_dead_min, time_played_min) / time_played_min * 100)))
         survival_rate = survival_rate_engine if survival_rate_engine is not None else survival_rate_computed
 
         # Time Denied (use Lua denied_playtime when available; normalize per minute)
@@ -1506,7 +1509,7 @@ async def get_stats_session_detail(
             SUM(p.times_revived) as times_revived,
             SUM(p.time_played_seconds) as time_played_seconds,
             SUM(p.kill_assists) as kill_assists,
-            SUM(p.time_dead_minutes) as time_dead_minutes,
+            SUM(LEAST(COALESCE(p.time_dead_minutes, 0), p.time_played_seconds / 60.0)) as time_dead_minutes,
             SUM(p.denied_playtime) as denied_playtime,
             COALESCE(SUM(w.hits), 0) as total_hits,
             COALESCE(SUM(w.shots), 0) as total_shots,
@@ -1567,7 +1570,7 @@ async def get_stats_session_detail(
         time_played_minutes = time_played_seconds / 60.0
 
         # Computed alive% (fallback — ignores limbo time, underestimates)
-        alive_pct_computed = round(max(0.0, 100.0 - (time_dead_minutes / time_played_minutes * 100.0)), 1) if time_played_minutes > 0 else None
+        alive_pct_computed = round(max(0.0, min(100.0, 100.0 - (min(time_dead_minutes, time_played_minutes) / time_played_minutes * 100.0))), 1) if time_played_minutes > 0 else None
 
         # Engine alive% from TAB[8] (correct — excludes dead + limbo time)
         alive_pct_engine = round(tpp_weighted_sum / tpp_weight, 1) if tpp_weight > 0 else None
