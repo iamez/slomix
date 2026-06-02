@@ -240,7 +240,10 @@ class MatchupCog(commands.Cog):
                         WHERE lineup_b_guids::text LIKE $1
                     ) sub
                 """
-                rows = await self.bot.db_adapter.fetch_all(query, (f'%{player_guid}%',))
+                # Match the quoted JSON array element (`%"guid"%`) not a bare
+                # substring, so one GUID can't false-match another it's a prefix
+                # of (guids are stored as quoted elements: ["2B5938F5", ...]).
+                rows = await self.bot.db_adapter.fetch_all(query, (f'%"{player_guid}"%',))
 
                 if not rows:
                     await ctx.send(f"No matchup history found for {player_name}")

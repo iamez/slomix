@@ -632,9 +632,10 @@ class MatchupAnalyticsService:
                   )
             """
 
-            # Use LIKE with % to find GUIDs in JSON arrays
-            player_pattern = f'%{player_guid}%'
-            teammate_pattern = f'%{teammate_guid}%'
+            # Match the quoted JSON array element (`%"guid"%`) not a bare substring,
+            # so one GUID can't false-match another it is a prefix/substring of.
+            player_pattern = f'%"{player_guid}"%'
+            teammate_pattern = f'%"{teammate_guid}"%'
 
             rows = await self.db.fetch_all(query, (
                 days_back,
@@ -721,8 +722,9 @@ class MatchupAnalyticsService:
                   )
             """
 
-            player_pattern = f'%{player_guid}%'
-            opponent_pattern = f'%{opponent_guid}%'
+            # Quoted JSON element match (`%"guid"%`) — exact element, no substring false-match.
+            player_pattern = f'%"{player_guid}"%'
+            opponent_pattern = f'%"{opponent_guid}"%'
 
             rows = await self.db.fetch_all(query, (
                 days_back,
