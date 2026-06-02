@@ -174,6 +174,15 @@ async def test_player_overlap_case_insensitive():
 
 
 @pytest.mark.asyncio
+async def test_player_overlap_all_none_demo_names_no_zero_division():
+    """Corrupted demo header → [None, None]: survives the empty-list guard but
+    filters to an empty set. Must return 0.0, NOT raise ZeroDivisionError (0/0)."""
+    db = _FakeDb([("alice",), ("bob",)])
+    out = await _calculate_player_overlap([None, None], round_id=1, db=db)
+    assert out == 0.0
+
+
+@pytest.mark.asyncio
 async def test_player_overlap_strips_whitespace():
     db = _FakeDb([("alice",)])
     out = await _calculate_player_overlap(["  alice  "], round_id=1, db=db)

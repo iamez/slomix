@@ -127,6 +127,12 @@ async def _calculate_player_overlap(
     db_players = {str(row[0]).lower().strip() for row in db_result if row[0] is not None}
     demo_players = {str(name).lower().strip() for name in demo_player_names if name is not None}
 
+    # The `if not demo_player_names` guard above only catches an empty list; a
+    # list of all-None names (corrupted demo header) survives it but filters to
+    # an empty set here → guard against 0/0.
+    if not demo_players:
+        return 0.0
+
     overlap_count = len(demo_players & db_players)
     return overlap_count / len(demo_players)
 

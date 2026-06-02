@@ -2,10 +2,10 @@
 Match Prediction Engine
 =======================
 Predicts match outcomes based on:
-- Head-to-head history (40% weight)
-- Recent form (25% weight)
-- Map performance (20% weight)
-- Substitution impact (15% weight)
+- Head-to-head history (45% weight)
+- Recent form (30% weight)
+- Map performance (25% weight)
+- Substitution impact (0% — not yet implemented; weight redistributed)
 
 Phase 3: Competitive Analytics
 """
@@ -22,11 +22,12 @@ class PredictionEngine:
     """
     Weighted prediction engine for ET:Legacy matches.
 
-    Weights (configurable):
-    - H2H_WEIGHT: 0.40 (head-to-head history)
-    - FORM_WEIGHT: 0.25 (recent performance)
-    - MAP_WEIGHT: 0.20 (map-specific performance)
-    - SUB_WEIGHT: 0.15 (substitution impact)
+    Weights (configurable; Subs redistributed into the other three until
+    substitution impact is implemented — see class constants below):
+    - H2H_WEIGHT: 0.45 (head-to-head history)
+    - FORM_WEIGHT: 0.30 (recent performance)
+    - MAP_WEIGHT: 0.25 (map-specific performance)
+    - SUB_WEIGHT: 0.00 (substitution impact — not yet implemented)
     """
 
     # Configurable weights — Subs redistributed until implemented
