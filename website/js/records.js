@@ -168,7 +168,7 @@ export function openRecordModal(categoryKey) {
     const titleEl = document.getElementById('modal-title');
     const contentEl = document.getElementById('modal-content');
 
-    if (!modal || !currentRecordsData[categoryKey]) return;
+    if (!modal || !titleEl || !contentEl || !currentRecordsData[categoryKey]) return;
 
     const records = currentRecordsData[categoryKey];
     const catName = escapeHtml(categoryKey.replace('_', ' ').toUpperCase());

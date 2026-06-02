@@ -199,7 +199,9 @@ class PermissionManagement(commands.Cog):
             tiers = {'root': [], 'admin': [], 'moderator': []}
             for user in users:
                 user_tier = user[2]  # tier is at index 2
-                tiers[user_tier].append(user)
+                # setdefault: an unexpected/legacy tier value must not crash the
+                # whole command with a KeyError.
+                tiers.setdefault(user_tier, []).append(user)
 
             embed = discord.Embed(
                 title="🔒 User Permissions",
