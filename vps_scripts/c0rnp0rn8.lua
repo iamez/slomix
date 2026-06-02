@@ -184,8 +184,14 @@ function parseReinforcementTimes()
     end
 
     local offsets = {}
-    offsets[et.TEAM_ALLIES] = bit.rshift(reinfSeeds[1], REINF_BLUEDELT)
-    offsets[et.TEAM_AXIS]   = bit.rshift(reinfSeeds[2], REINF_REDDELT)
+    -- FIX-8: clamp the 3-bit offset to 0-7 with `% 8`, matching
+    -- proximity_tracker.lua:1437-1438. Without the clamp a reinfSeed >= 64 yields
+    -- offset > 7, so the `j = 1..MAX_REINFSEEDS` loop below (j-1 maxes at 7) never
+    -- matches, aReinfOffset[team] stays nil, and calculateReinfTime() then errors on
+    -- nil arithmetic — silently breaking ALL wave-dependent metrics (spawn timing,
+    -- reinf, useful_kills) for that team.
+    offsets[et.TEAM_ALLIES] = bit.rshift(reinfSeeds[1], REINF_BLUEDELT) % 8
+    offsets[et.TEAM_AXIS]   = bit.rshift(reinfSeeds[2], REINF_REDDELT) % 8
 
     for i = et.TEAM_AXIS, et.TEAM_ALLIES do
         for j = 1, MAX_REINFSEEDS do
