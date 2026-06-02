@@ -173,6 +173,8 @@ class AdminCog(commands.Cog, name="Admin"):
             if recent:
                 msg += "\n**Recent (last 10):**\n```\n"
                 for row in recent:
+                    if len(row) < 5:
+                        continue  # defensive: unexpected row shape shouldn't crash the command
                     cid = row[0] if row[0] else '?'
                     status = row[3] if row[3] else '?'
                     pct = row[4] if row[4] else 0
