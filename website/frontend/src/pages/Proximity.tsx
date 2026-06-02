@@ -250,8 +250,9 @@ function AimCanvas({ data, color }: { data: PlayerAimLike | null; color: string 
       ctx.beginPath();
       ctx.arc(nx, ny, radius, 0, Math.PI * 2);
       ctx.fill();
-      const roseMax = Math.max(...hz.rose.map((c) => c || 0), 1);
-      for (const [i, raw] of hz.rose.entries()) {
+      const rose = Array.isArray(hz.rose) ? hz.rose : [];
+      const roseMax = Math.max(...rose.map((c) => c || 0), 1);
+      for (const [i, raw] of rose.entries()) {
         const c = raw || 0;
         if (!c) continue;
         const ang = -aimYawBucketCenterDeg(i) * Math.PI / 180;  // naive Y-flip

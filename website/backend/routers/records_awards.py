@@ -211,6 +211,7 @@ async def get_awards_leaderboard(
     try:
         rows = await db.fetch_all(query, tuple(params))
     except Exception:
+        logger.debug("awards primary query failed, using fallback", exc_info=True)
         fallback_query = f"""
             WITH player_counts AS (
                 SELECT
@@ -356,6 +357,7 @@ async def get_player_awards(
             count_rows = await db.fetch_all(count_query, (resolved_guid,))
             recent_rows = await db.fetch_all(recent_query, (resolved_guid, limit))
         except Exception:
+            logger.debug("awards count/recent query failed, using fallback", exc_info=True)
             fallback_count = """
                 SELECT award_name, COUNT(*) as count
                 FROM round_awards
@@ -516,6 +518,7 @@ async def list_awards(
         rows = await db.fetch_all(query, tuple(params))
     except Exception:
         # Fallback if alias table missing
+        logger.debug("awards alias-join query failed, using fallback", exc_info=True)
         fallback_where_sql = where_sql.replace("COALESCE(ra.player_guid, am.guid, nm.player_guid)", "ra.player_guid")
         fallback_where_sql = fallback_where_sql.replace("COALESCE(ra.player_guid, am.guid)", "ra.player_guid")
         fallback_count = f"SELECT COUNT(*) FROM round_awards ra {fallback_where_sql}"
