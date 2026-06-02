@@ -6,6 +6,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.17.0](https://github.com/iamez/slomix/compare/v1.16.0...v1.17.0) (2026-06-02)
+
+
+### Features
+
+* **bot:** idle-server watchdog — reload neutral map when empty (FM1/FM2) ([#354](https://github.com/iamez/slomix/issues/354)) ([cb5bdcf](https://github.com/iamez/slomix/commit/cb5bdcf6d564fe6c25b29098795576fbe64594ea))
+
+
+### Bug Fixes
+
+* **data-integrity:** exclude orphan R2 from leaderboards + cap time_dead (FM4, RCA-1) ([#350](https://github.com/iamez/slomix/issues/350)) ([22444da](https://github.com/iamez/slomix/commit/22444da6400a183eee31a3be6f8df62806963f2d))
+* **lua:** clamp reinf offset to 0-7 in c0rnp0rn8 (FIX-8) ([#356](https://github.com/iamez/slomix/issues/356)) ([13852d1](https://github.com/iamez/slomix/commit/13852d1fa6a242138f6000afb557707bdb66130a))
+* **proximity:** re-anchor round time to round-live + coerce weapon to int (RCA-2, M1) ([#352](https://github.com/iamez/slomix/issues/352)) ([3d58f35](https://github.com/iamez/slomix/commit/3d58f3556c92b39239ef4e7f3cbccce1ccb982d0))
+
 ## [1.16.0](https://github.com/iamez/slomix/compare/v1.15.0...v1.16.0) (2026-05-19)
 
 
