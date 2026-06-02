@@ -757,6 +757,13 @@ class UltimateETLegacyBot(
             self.cache_refresher.start()
         if not self.live_status_updater.is_running():
             self.live_status_updater.start()
+        if self.config.idle_watchdog_enabled and not self.idle_restart_watchdog.is_running():
+            self.idle_restart_watchdog.start()
+            logger.info(
+                "🕒 Idle-server watchdog started (%s, %dmin → map %s)",
+                "DRY-RUN" if self.config.idle_watchdog_dry_run else "LIVE",
+                self.config.idle_restart_minutes, self.config.idle_reload_map,
+            )
         # scheduled_monitoring_check task removed - see performance optimization
         # voice_session_monitor disabled - using on_voice_state_update event instead (more efficient)
         # if not self.voice_session_monitor.is_running():
