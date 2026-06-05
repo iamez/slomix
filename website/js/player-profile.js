@@ -3,7 +3,7 @@
  * @module player-profile
  */
 
-import { API_BASE, fetchJSON, escapeHtml, escapeJsString } from './utils.js';
+import { API_BASE, fetchJSON, escapeHtml, escapeJsString, safeInsertHTML } from './utils.js';
 
 // Chart instances
 let sessionChartInstance = null;
@@ -465,9 +465,9 @@ export async function loadEnhancedProfileSections(playerIdentifier) {
         renderMapsTable(data.maps),
     ];
     // All section HTML is built from escapeHtml-sanitized values; insert via
-    // insertAdjacentHTML after clearing (same safe pattern as recent-matches).
+    // the shared safeInsertHTML helper (utils.js) after clearing.
     root.innerHTML = '';
-    root.insertAdjacentHTML('beforeend', sections.filter(Boolean).join(''));
+    safeInsertHTML(root, 'beforeend', sections.filter(Boolean).join(''));
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
     // Wire the aim map dropdown (rose) after the DOM exists. Pass the
