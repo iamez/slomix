@@ -46,13 +46,6 @@ from website.backend.services.skill_rating_service import get_tier
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Shortest signed angular distance between two yaw degrees, wrap-safe, as a
-# Postgres expression. abs(((a-b+180) mod 360, normalised to [0,360)) - 180).
-_YAW_DELTA_SQL = (
-    "abs( ((( ({a} - {b})::numeric + 180.0) "
-    "- floor((( {a} - {b})::numeric + 180.0)/360.0)*360.0 ) - 180.0) )"
-)
-
 _MIN_WEAPON_SHOTS = 30      # per-weapon aim needs a usable sample
 _MIN_FLICK_PAIRS = 20       # flick index needs enough consecutive shot pairs
 _MIN_ENEMY_REL = 25         # enemy-relative crosshair sample floor
@@ -632,30 +625,32 @@ async def _fetch_aim_summary(db, guid8: str) -> dict:
             "pitch_mean_deg": round(_f(r[4]), 2),
         })
 
-    # flick index — |Δyaw| between consecutive shots fired within a short gap
-    dyaw = _YAW_DELTA_SQL.format(a="view_yaw", b="prev_yaw")
+    # flick index — |Δyaw| between consecutive shots fired within a short gap.
+    # Static SQL (no interpolation); thresholds + guid are $N-bound. The window
+    # tie-breaks on id so tied event_time values give a deterministic LAG order.
     flick_row = await db.fetch_one(
-        f"""
+        """
         WITH ordered AS (
             SELECT view_yaw,
-                   LAG(view_yaw)   OVER (PARTITION BY round_id ORDER BY event_time) AS prev_yaw,
-                   LAG(event_time) OVER (PARTITION BY round_id ORDER BY event_time) AS prev_t,
+                   LAG(view_yaw)   OVER (PARTITION BY round_id ORDER BY event_time, id) AS prev_yaw,
+                   LAG(event_time) OVER (PARTITION BY round_id ORDER BY event_time, id) AS prev_t,
                    event_time
             FROM proximity_shot_fired
             WHERE guid_canonical = $1
         ),
         deltas AS (
-            SELECT {dyaw} AS d
+            SELECT abs( ((((view_yaw - prev_yaw)::numeric + 180.0)
+                        - floor(((view_yaw - prev_yaw)::numeric + 180.0)/360.0)*360.0) - 180.0) ) AS d
             FROM ordered
             WHERE prev_yaw IS NOT NULL
-              AND (event_time - prev_t) BETWEEN 1 AND {_FLICK_MAX_DT_MS}
+              AND (event_time - prev_t) BETWEEN 1 AND $2
         )
         SELECT COUNT(*) AS pairs,
-               SUM(CASE WHEN d > {_FLICK_DEG} THEN 1 ELSE 0 END) AS flicks,
+               SUM(CASE WHEN d > $3 THEN 1 ELSE 0 END) AS flicks,
                ROUND(AVG(d)::numeric, 1) AS avg_delta
         FROM deltas
-        """,  # nosec B608 - only clamped numeric/format constants interpolated; guid is $1-bound
-        (guid8,),
+        """,
+        (guid8, _FLICK_MAX_DT_MS, _FLICK_DEG),
     )
     flick = {"available": False}
     if flick_row and _i(flick_row[0]) >= _MIN_FLICK_PAIRS:
@@ -691,20 +686,21 @@ async def _fetch_enemy_relative(db, guid8: str) -> dict:
     rather than emitting an unreliable number.
     """
     try:
-        bearing = "degrees(atan2(e.end_y - s.origin_y, e.end_x - s.origin_x))"
-        err = _YAW_DELTA_SQL.format(a="s.view_yaw", b=f"({bearing})")
+        # Static SQL (no interpolation); guid is $1-bound. The crosshair-error
+        # is the wrap-safe angle between view_yaw and the bearing to the enemy.
+        # combat_engagement windows overlap, so one shot can fall in several;
+        # DISTINCT ON keeps ONE engagement per shot (tightest window = most
+        # specific enemy reference), preventing the same shot from being counted
+        # up to 5x with conflicting enemy positions (inflated sample + biased avg).
         row = await db.fetch_one(
-            f"""
+            """
             SELECT COUNT(*) AS n,
                    ROUND(AVG(err)::numeric, 1) AS avg_err,
                    ROUND((percentile_cont(0.5) WITHIN GROUP (ORDER BY err))::numeric, 1) AS median_err
             FROM (
-                -- combat_engagement windows overlap, so one shot can fall in
-                -- several. DISTINCT ON keeps ONE engagement per shot (the
-                -- tightest window = most specific enemy reference), preventing
-                -- the same shot from being counted up to 5x with conflicting
-                -- enemy positions (which inflated the sample + biased avg/median).
-                SELECT DISTINCT ON (s.id) {err} AS err
+                SELECT DISTINCT ON (s.id)
+                    abs( (((s.view_yaw - degrees(atan2(e.end_y - s.origin_y, e.end_x - s.origin_x)))::numeric + 180.0)
+                        - floor(((s.view_yaw - degrees(atan2(e.end_y - s.origin_y, e.end_x - s.origin_x)))::numeric + 180.0)/360.0)*360.0 - 180.0) ) AS err
                 FROM proximity_shot_fired s
                 JOIN combat_engagement e
                   ON e.round_id = s.round_id
@@ -718,7 +714,7 @@ async def _fetch_enemy_relative(db, guid8: str) -> dict:
                 WHERE s.guid_canonical = $1
                 ORDER BY s.id, (e.end_time_ms - e.start_time_ms) ASC
             ) q
-            """,  # nosec B608 - only internal SQL fragments interpolated; guid is $1-bound
+            """,
             (guid8,),
         )
     except Exception:
@@ -770,19 +766,29 @@ async def get_player_profile(
         raise HTTPException(status_code=404, detail="Player not found")
     deaths = _i(lifetime.get("deaths"))
 
+    # Bound per-request DB concurrency: each section may run several queries on
+    # the shared asyncpg pool, so 11 unbounded sections × N concurrent requests
+    # could saturate the pool and starve other endpoints. Cap at 5 in-flight
+    # sections (pattern from records_awards.py).
+    sem = asyncio.Semaphore(5)
+
+    async def _guard(coro):
+        async with sem:
+            return await coro
+
     (identity, streaks, advanced, movement, weapons, hit_regions,
      relationships, skill, maps, recent, aim) = await asyncio.gather(
-        _fetch_identity(db, guid8, identifier),
-        _fetch_streaks(db, guid8),
-        _fetch_advanced(db, guid8, deaths),
-        _fetch_movement(db, guid8),
-        _fetch_weapons(db, guid8),
-        _fetch_hit_regions(db, guid8),
-        _fetch_relationships(db, guid8, guid32),
-        _fetch_skill(db, guid8),
-        _fetch_maps(db, guid8),
-        _fetch_recent_matches(db, guid8),
-        _fetch_aim_summary(db, guid8),
+        _guard(_fetch_identity(db, guid8, identifier)),
+        _guard(_fetch_streaks(db, guid8)),
+        _guard(_fetch_advanced(db, guid8, deaths)),
+        _guard(_fetch_movement(db, guid8)),
+        _guard(_fetch_weapons(db, guid8)),
+        _guard(_fetch_hit_regions(db, guid8)),
+        _guard(_fetch_relationships(db, guid8, guid32)),
+        _guard(_fetch_skill(db, guid8)),
+        _guard(_fetch_maps(db, guid8)),
+        _guard(_fetch_recent_matches(db, guid8)),
+        _guard(_fetch_aim_summary(db, guid8)),
         return_exceptions=True,
     )
 

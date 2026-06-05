@@ -35,7 +35,9 @@ export function setLoadMatchDetails(fn) {
  * Load player profile page
  */
 export async function loadPlayerProfile(playerIdentifier) {
-    if (navigateToFn) navigateToFn('profile');
+    // Preserve the id in the hash so #/profile/<id> deep-links survive refresh/
+    // back/share (navigateTo builds the hash from buildHash({id})).
+    if (navigateToFn) navigateToFn('profile', true, { id: playerIdentifier });
     console.log('📋 Loading profile for:', playerIdentifier);
 
     // Reset UI

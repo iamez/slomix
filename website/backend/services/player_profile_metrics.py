@@ -21,6 +21,8 @@ store the engine ``weapon_t`` enum (NOT the ``kill_mod``/MOD_* enum that
 
 from __future__ import annotations
 
+import math
+
 from website.backend.services.storytelling.base import REINF_MULT_TIERS
 
 __all__ = [
@@ -47,7 +49,7 @@ def reinf_multiplier(wait_seconds: float) -> float:
         r = float(wait_seconds)
     except (TypeError, ValueError):
         return REINF_MULT_TIERS[0][1]
-    if r != r:  # NaN
+    if math.isnan(r):
         return REINF_MULT_TIERS[0][1]
     if r < 0.0:
         r = 0.0
