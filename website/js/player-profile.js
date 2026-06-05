@@ -464,7 +464,10 @@ export async function loadEnhancedProfileSections(playerIdentifier) {
         renderRelationships(data.relationships),
         renderMapsTable(data.maps),
     ];
-    root.innerHTML = sections.filter(Boolean).join('');
+    // All section HTML is built from escapeHtml-sanitized values; insert via
+    // insertAdjacentHTML after clearing (same safe pattern as recent-matches).
+    root.innerHTML = '';
+    root.insertAdjacentHTML('beforeend', sections.filter(Boolean).join(''));
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
     // Wire the aim map dropdown (rose) after the DOM exists. Pass the
@@ -738,11 +741,21 @@ async function wireAimRose(guid, maps) {
     // The aim endpoint requires a map. `maps` is the structured list from the
     // profile payload (most-played first); no DOM scraping.
     const list = (Array.isArray(maps) ? maps : []).slice(0, 12);
+    // Build <option>s via the DOM (textContent) — no innerHTML, inherently
+    // XSS-safe regardless of map-name contents.
+    select.replaceChildren();
     if (list.length === 0) {
-        select.innerHTML = '<option>no maps</option>';
+        const opt = document.createElement('option');
+        opt.textContent = 'no maps';
+        select.appendChild(opt);
         return;
     }
-    select.innerHTML = list.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+    for (const m of list) {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        select.appendChild(opt);
+    }
     const load = () => drawAimRose(guid, select.value, canvas);
     select.addEventListener('change', load);
     load();
