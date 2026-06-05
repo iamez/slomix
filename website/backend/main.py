@@ -68,6 +68,7 @@ from website.backend.routers import (
     greatshot,
     greatshot_topshots,
     planning,
+    players_profile_router,
     players_router,
     predictions,
     proximity_router,
@@ -302,6 +303,7 @@ app.include_router(proximity_router.router, prefix="/api", tags=["Proximity"])
 app.include_router(diagnostics_router.router, prefix="/api", tags=["Diagnostics"])
 app.include_router(sessions_router.router, prefix="/api", tags=["Sessions"])
 app.include_router(players_router.router, prefix="/api", tags=["Players"])
+app.include_router(players_profile_router.router, prefix="/api", tags=["Players"])
 app.include_router(records_router.router, prefix="/api", tags=["Records"])
 app.include_router(skill_router.router, prefix="/api", tags=["Skill Rating"])
 app.include_router(storytelling_router.router, prefix="/api", tags=["Storytelling"])
