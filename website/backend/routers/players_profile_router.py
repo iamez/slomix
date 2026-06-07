@@ -709,20 +709,23 @@ async def _fetch_burst_stats(db, guid8: str) -> dict:
     row = await db.fetch_one(
         """
         WITH ordered AS (
-            SELECT round_id, event_time,
+            SELECT round_id, id, event_time,
                    event_time - LAG(event_time)
                        OVER (PARTITION BY round_id ORDER BY event_time, id) AS gap
             FROM proximity_shot_fired
             WHERE guid_canonical = $1
         ),
         marked AS (
-            SELECT round_id, event_time,
+            SELECT round_id, id, event_time,
                    CASE WHEN gap IS NULL OR gap > $2 THEN 1 ELSE 0 END AS new_burst
             FROM ordered
         ),
         grouped AS (
+            -- burst_no must accumulate in the SAME (event_time, id) order the
+            -- gap/new_burst flags were computed in, else tied timestamps split
+            -- or merge bursts non-deterministically.
             SELECT round_id,
-                   SUM(new_burst) OVER (PARTITION BY round_id ORDER BY event_time
+                   SUM(new_burst) OVER (PARTITION BY round_id ORDER BY event_time, id
                                         ROWS UNBOUNDED PRECEDING) AS burst_no
             FROM marked
         ),
@@ -735,7 +738,7 @@ async def _fetch_burst_stats(db, guid8: str) -> dict:
                ROUND(AVG(shots)::numeric, 2) AS avg_burst,
                MAX(shots) AS max_burst,
                SUM(CASE WHEN shots = 1 THEN 1 ELSE 0 END) AS taps,
-               SUM(CASE WHEN shots >= 3 THEN 1 ELSE 0 END) AS long_bursts
+               SUM(CASE WHEN shots >= 2 THEN 1 ELSE 0 END) AS multi_bursts
         FROM sizes
         """,
         (guid8, _BURST_GAP_MS),
