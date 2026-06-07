@@ -904,6 +904,59 @@ async def _fetch_enemy_relative(db, guid8: str) -> dict:
     }
 
 
+async def _fetch_combat_timing(db, guid8: str) -> dict:
+    """Leetify-style combat timing — independent of shot_fired (uses
+    combat_engagement ~48% coverage + proximity_reaction_metric).
+
+    - Time-to-Kill: median engagement duration (first contact → kill) on the
+      player's kills. (Leetify Time-to-Damage is NOT computable: our
+      combat_engagement.start_time_ms IS the first-hit time, so time-to-first-hit
+      is ~0 — there's no 'enemy spotted' signal, so we omit TTD.)
+    - Return-fire reaction: median ms from being hit to firing back, with the
+      populated-coverage % shown (the metric is ~50% populated, so be honest).
+    All stats use the MEDIAN to drop outliers (Leetify practice).
+    """
+    row = await db.fetch_one(
+        """
+        WITH ttk AS (
+            SELECT (end_time_ms - start_time_ms) AS v
+            FROM combat_engagement
+            WHERE outcome = 'killed' AND LEFT(killer_guid, 8) = $1
+              AND end_time_ms >= start_time_ms
+        ),
+        rf AS (
+            SELECT return_fire_ms FROM proximity_reaction_metric
+            WHERE LEFT(target_guid, 8) = $1
+        )
+        SELECT
+            (SELECT COUNT(*) FROM ttk) AS ttk_n,
+            (SELECT ROUND(percentile_cont(0.5) WITHIN GROUP (ORDER BY v)) FROM ttk) AS ttk_median,
+            (SELECT COUNT(*) FILTER (WHERE return_fire_ms IS NOT NULL) FROM rf) AS rf_n,
+            (SELECT COUNT(*) FROM rf) AS rf_total,
+            (SELECT ROUND(percentile_cont(0.5) WITHIN GROUP (ORDER BY return_fire_ms))
+             FROM rf WHERE return_fire_ms IS NOT NULL) AS rf_median
+        """,
+        (guid8,),
+    )
+    if not row:
+        return {"available": False}
+    ttk_n = _i(row[0])
+    rf_n = _i(row[2])
+    rf_total = _i(row[3])
+    if ttk_n < 10 and rf_n < 10:
+        return {"available": False, "reason": "insufficient combat data"}
+    out: dict = {"available": True}
+    if ttk_n >= 10:
+        out["time_to_kill"] = {"median_ms": _i(row[1]), "kills": ttk_n}
+    if rf_n >= 10:
+        out["return_fire"] = {
+            "median_ms": _i(row[4]),
+            "samples": rf_n,
+            "coverage_pct": round(rf_n / rf_total * 100, 1) if rf_total else 0.0,
+        }
+    return out
+
+
 async def _resolve_guid32(db, guid8: str) -> str | None:
     """Best-effort 32-char proximity GUID for RivalriesService (kill_outcome key)."""
     row = await db.fetch_one(
@@ -951,7 +1004,7 @@ async def get_player_profile(
 
     (identity, streaks, advanced, movement, weapons, hit_regions,
      relationships, skill, maps, recent, aim,
-     gather_summary, nick_history) = await asyncio.gather(
+     gather_summary, nick_history, combat_timing) = await asyncio.gather(
         _guard(_fetch_identity(db, guid8, identifier)),
         _guard(_fetch_streaks(db, guid8)),
         _guard(_fetch_advanced(db, guid8, deaths)),
@@ -965,6 +1018,7 @@ async def get_player_profile(
         _guard(_fetch_aim_summary(db, guid8)),
         _guard(_fetch_gather_summary(db, guid8)),
         _guard(_fetch_nick_history(db, guid8)),
+        _guard(_fetch_combat_timing(db, guid8)),
         return_exceptions=True,
     )
 
@@ -991,4 +1045,5 @@ async def get_player_profile(
         "aim": _ok(aim, "aim"),
         "gather_summary": _ok(gather_summary, "gather_summary"),
         "nick_history": _ok(nick_history, "nick_history"),
+        "combat_timing": _ok(combat_timing, "combat_timing"),
     }
