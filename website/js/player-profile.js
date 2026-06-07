@@ -35,9 +35,18 @@ export function setLoadMatchDetails(fn) {
  * Load player profile page
  */
 export async function loadPlayerProfile(playerIdentifier) {
-    // Preserve the id in the hash so #/profile/<id> deep-links survive refresh/
-    // back/share (navigateTo builds the hash from buildHash({id})).
-    if (navigateToFn) navigateToFn('profile', true, { id: playerIdentifier });
+    // Keep #/profile/<id> shareable WITHOUT re-entrant dispatch. The route
+    // registry's profile.load also calls this function, so if we navigated
+    // unconditionally we'd loop (load → navigateTo → dispatch → load …). Only
+    // navigate when the hash differs, then return early: the resulting
+    // hashchange re-invokes this with the hash already matching, falling through
+    // to the actual load exactly once.
+    const targetHash = `#/profile/${encodeURIComponent(playerIdentifier)}`;
+    if (window.location.hash !== targetHash) {
+        if (navigateToFn) navigateToFn('profile', true, { id: playerIdentifier });
+        else window.location.hash = targetHash;
+        return;
+    }
     console.log('📋 Loading profile for:', playerIdentifier);
 
     // Reset UI

@@ -42,6 +42,7 @@ from website.backend.services.player_profile_metrics import (
 )
 from website.backend.services.rivalries_service import RivalriesService
 from website.backend.services.skill_rating_service import get_tier
+from website.backend.utils.et_constants import strip_et_colors
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -80,7 +81,11 @@ async def _fetch_identity(db, guid8: str, fallback: str) -> dict:
         """,
         (guid8,),
     )
-    aliases = [r[0] for r in (rows or []) if r and r[0]]
+    # Strip ET color codes (^1name) for consistency with identity.name, which
+    # is already normalized via resolve_display_name. De-dup post-strip.
+    aliases = list(dict.fromkeys(
+        strip_et_colors(r[0]) for r in (rows or []) if r and r[0]
+    ))
     seen = await db.fetch_one(
         """
         SELECT MIN(round_date) AS first_seen, MAX(round_date) AS last_seen,
