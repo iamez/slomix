@@ -101,8 +101,16 @@ const ROUTE_DEFINITIONS = Object.freeze({
         mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'A',
-        buildHash: () => '#/profile',
-        load: () => undefined,
+        buildHash: ({ id } = {}) => (id ? `#/profile/${encodeURIComponent(id)}` : '#/profile'),
+        parseHash: (hash) => {
+            const m = hash.match(/^#\/profile\/([^/?]+)/);
+            return m ? { id: safeDecode(m[1]) } : null;
+        },
+        load: ({ legacy, params } = {}) => (
+            params && params.id && legacy && legacy.loadPlayerProfile
+                ? legacy.loadPlayerProfile(params.id)
+                : undefined
+        ),
     },
     records: {
         viewId: 'records',
