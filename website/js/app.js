@@ -82,6 +82,7 @@ const PROTOTYPE_TONE_STYLES = {
 };
 
 const legacyRuntime = {
+    loadPlayerProfile,
     loadSessionsView,
     initLeaderboardDefaults,
     loadMapsView,

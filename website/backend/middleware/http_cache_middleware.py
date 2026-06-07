@@ -41,6 +41,7 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
             "/api/hall-of-fame",
             "/api/stats/trends",
             "/api/proximity/",
+            "/api/players/",
             "/api/stats/maps",
             "/api/stats/weapons",
             "/api/stats/matches",
