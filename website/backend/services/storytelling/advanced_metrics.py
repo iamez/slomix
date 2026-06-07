@@ -100,9 +100,9 @@ def _compute_lurker_solo(track_rows: list) -> tuple[dict, dict]:
                     best_d = float("inf")
                     for tt, tx, ty in tm_pts:
                         if abs(tt - t_ms) <= DOWNSAMPLE_MS * 2:
-                            dx = px - tx
-                            dy = py - ty
-                            d = math.sqrt(dx * dx + dy * dy)
+                            # hypot: same value as sqrt(dx²+dy²) but numerically
+                            # robust (CodeQL py/sub-optimal-pythagorean).
+                            d = math.hypot(px - tx, py - ty)
                             if d < best_d:
                                 best_d = d
                         elif tt > t_ms + DOWNSAMPLE_MS * 2:
