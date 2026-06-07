@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.18.0](https://github.com/iamez/slomix/compare/v1.17.0...v1.18.0) (2026-06-07)
+
+
+### Features
+
+* **website:** gibhub.gg-parity player profile + true-aim analytics ([#362](https://github.com/iamez/slomix/issues/362)) ([ef59023](https://github.com/iamez/slomix/commit/ef59023ccdfab89c93065e664ebd2282f0a2d73c))
+
 ## [1.17.0](https://github.com/iamez/slomix/compare/v1.16.0...v1.17.0) (2026-06-02)
 
 
