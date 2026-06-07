@@ -3,7 +3,7 @@
  * @module player-profile
  */
 
-import { API_BASE, fetchJSON, escapeHtml, escapeJsString, safeInsertHTML } from './utils.js';
+import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 
 // Chart instances
 let sessionChartInstance = null;
