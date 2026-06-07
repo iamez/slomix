@@ -13,7 +13,7 @@
 import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js?v=20260513-v142-cf-bust';
 import { checkLoginStatus, initSearchListeners, setLoadPlayerProfile } from './auth.js';
 import { initLivePolling, initLiveStatusPolling, updateLiveSession } from './live-status.js';
-import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchDetails } from './player-profile.js';
+import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchDetails } from './player-profile.js?v=20260607-aim';
 import { loadLeaderboard, loadQuickLeaders, loadRecentMatches, setNavigateTo as setLeaderboardNavigateTo, initLeaderboardDefaults } from './leaderboard.js';
 import { loadSeasonInfo, loadLastSession, loadSessionsView, loadSessionMVP, toggleSeasonDetails } from './sessions.js';
 import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from './matches.js';
@@ -21,10 +21,10 @@ import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from
 import { loadRecordsView } from './records.js';
 import { loadAwardsView } from './awards.js';
 import { loadProximityView } from './proximity.js';
-import { loadStoryView } from './story.js';
+import { loadStoryView } from './story.js?v=20260607-aim';
 import { loadReplayView } from './replay.js';
 import { loadRivalriesView } from './rivalries.js';
-import { loadSmartStatsDiagView } from './smart-stats-diag.js';
+import { loadSmartStatsDiagView } from './smart-stats-diag.js?v=20260607-aim';
 import { loadAdminPanelView } from './admin-panel.js';
 import { loadUploadsView, loadUploadDetail } from './uploads.js';
 import { loadAvailabilityView } from './availability.js';

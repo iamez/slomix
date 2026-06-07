@@ -596,6 +596,46 @@ function _regionBar(label, pct, color) {
         </div>`;
 }
 
+// Heat color (cyan→amber→rose) by intensity 0..1 for body regions.
+function _heat(intensity) {
+    const i = Math.max(0, Math.min(1, Number(intensity) || 0));
+    // 0 = dim cyan, 0.5 = amber, 1 = hot rose
+    const r = Math.round(34 + i * (244 - 34));
+    const g = Math.round(211 - i * (211 - 63));
+    const b = Math.round(238 - i * (238 - 94));
+    return `rgb(${r},${g},${b})`;
+}
+
+// SVG body silhouette: each region (head/arms/body/legs) filled by its share of
+// hits (brighter/hotter = more hits there). t = totals with *_pct fields.
+function _bodySvg(t) {
+    const head = Number(t.head_pct) || 0;
+    const arms = Number(t.arms_pct) || 0;
+    const body = Number(t.body_pct) || 0;
+    const legs = Number(t.legs_pct) || 0;
+    const max = Math.max(head, arms, body, legs, 1);
+    const fill = (pct) => _heat(pct / max);
+    const lbl = (x, y, txt) => `<text x="${x}" y="${y}" text-anchor="middle" font-size="7" fill="#e2e8f0" font-weight="bold">${txt}</text>`;
+    return `
+    <svg viewBox="0 0 100 210" width="150" height="300" class="mx-auto" role="img" aria-label="hit region body map">
+      <!-- arms -->
+      <rect x="16" y="44" width="13" height="54" rx="5" fill="${fill(arms)}" stroke="#0f172a" stroke-width="1"/>
+      <rect x="71" y="44" width="13" height="54" rx="5" fill="${fill(arms)}" stroke="#0f172a" stroke-width="1"/>
+      <!-- legs -->
+      <rect x="37" y="100" width="12" height="72" rx="5" fill="${fill(legs)}" stroke="#0f172a" stroke-width="1"/>
+      <rect x="51" y="100" width="12" height="72" rx="5" fill="${fill(legs)}" stroke="#0f172a" stroke-width="1"/>
+      <!-- torso -->
+      <rect x="33" y="42" width="34" height="58" rx="7" fill="${fill(body)}" stroke="#0f172a" stroke-width="1"/>
+      <!-- head -->
+      <circle cx="50" cy="24" r="15" fill="${fill(head)}" stroke="#0f172a" stroke-width="1"/>
+      ${lbl(50, 26, _num(head, 0) + '%')}
+      ${lbl(50, 74, _num(body, 0) + '%')}
+      ${lbl(22, 74, _num(arms, 0) + '%')}
+      ${lbl(50, 140, _num(legs, 0) + '%')}
+    </svg>
+    <div class="text-[11px] text-slate-500 text-center mt-1">Hotter = more of your hits land there</div>`;
+}
+
 function renderHitRegions(hr) {
     if (!hr || !hr.available) return '';
     const t = hr.totals || {};
@@ -612,9 +652,11 @@ function renderHitRegions(hr) {
             <td class="py-1 px-2 text-right text-slate-400">${_num(w.total)}</td>
         </tr>`).join('');
     return _panel('Where You Hit', 'target', `
-        <div class="grid md:grid-cols-2 gap-6">
+        <div class="grid md:grid-cols-3 gap-6 items-center">
+            <div>${_bodySvg(t)}</div>
             <div>${bars}</div>
             <div class="overflow-x-auto">
+                <div class="text-[11px] uppercase tracking-wide text-slate-500 mb-2">Head % by weapon</div>
                 <table class="w-full text-sm">
                     <thead><tr class="text-[10px] uppercase text-slate-500 border-b border-white/10">
                         <th class="py-1 px-2 text-left">Weapon</th><th class="py-1 px-2 text-right">Head %</th>
@@ -695,6 +737,8 @@ function renderAimSection(aim, guid) {
     const lt = aim.lifetime || {};
     const flick = aim.flick || {};
     const er = aim.enemy_relative || {};
+    const sp = aim.spread || {};
+    const bu = aim.burst || {};
 
     const head = [
         _statCell('Shots Tracked', _num(lt.n)),
@@ -703,6 +747,16 @@ function renderAimSection(aim, guid) {
         flick.available ? _statCell('Flick Shots', `${_num(flick.flick_pct, 1)}%`, 'text-amber-300') : _statCell('Flick Shots', '--'),
         flick.available ? _statCell('Tracking', `${_num(flick.track_pct, 1)}%`, 'text-emerald-300') : _statCell('Tracking', '--'),
         er.available ? _statCell('Crosshair Error (med)', `${_num(er.median_error_deg, 1)}°`, 'text-violet-300') : _statCell('Crosshair Error', '--'),
+    ].join('');
+
+    // Spread control + burst-fire profile (from consecutive-shot timing/angles)
+    const spreadBurst = [
+        sp.available ? _statCell('Spread Control', `${_num(sp.control_pct, 1)}%`, 'text-emerald-300') : _statCell('Spread Control', '--'),
+        sp.available ? _statCell('Min Spread', `${_num(sp.min_spread_deg, 1)}°`, 'text-cyan-300') : _statCell('Min Spread', '--'),
+        sp.available ? _statCell('Median Spread', `${_num(sp.median_spread_deg, 1)}°`) : _statCell('Median Spread', '--'),
+        sp.available ? _statCell('Max Spread', `${_num(sp.max_spread_deg, 1)}°`, 'text-rose-300') : _statCell('Max Spread', '--'),
+        bu.available ? _statCell('Avg Burst', `${_num(bu.avg_burst_len, 1)} shots`, 'text-amber-300') : _statCell('Avg Burst', '--'),
+        bu.available ? _statCell('Tap / Burst', `${_num(bu.tap_pct, 0)}% / ${_num(bu.burst_pct, 0)}%`) : _statCell('Tap / Burst', '--'),
     ].join('');
 
     const perWeapon = (aim.per_weapon || []).slice(0, 10).map(w => `
@@ -718,7 +772,8 @@ function renderAimSection(aim, guid) {
         : '';
 
     return _panel('True Aim', 'crosshair', `
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">${head}</div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-3">${head}</div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">${spreadBurst}</div>
         <div class="grid md:grid-cols-2 gap-6">
             <div>
                 <div class="text-[11px] uppercase tracking-wide text-slate-500 mb-2">Per-weapon vertical aim</div>
