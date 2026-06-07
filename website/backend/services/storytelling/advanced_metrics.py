@@ -5,14 +5,119 @@ Imports all module-level names (constants, helpers) from .base.
 """
 from __future__ import annotations
 
+import asyncio
+import json as _json
+import math
+from collections import defaultdict
+
 from .base import (
     DEATH_TRADE_WINDOW_MS,
     LURKER_MIN_DURATION_MS,
     TRADE_KILL_DELTA_MS,
+    _compute_locks,
     _to_date,
     date,
     strip_et_colors,
 )
+
+# Lurker-profile tuning (module constants so the sync worker + the async wrapper
+# agree on them).
+_LURKER_SOLO_RADIUS = 500     # units from nearest teammate = "solo"
+_LURKER_DOWNSAMPLE_MS = 1000  # 1s sampling for performance
+
+
+def _compute_lurker_solo(track_rows: list) -> tuple[dict, dict]:
+    """CPU-heavy solo-time computation — runs in a worker thread.
+
+    Pure function over pre-fetched ``player_track`` rows
+    (player_guid, player_name, team, round_start_unix, spawn_time_ms,
+    death_time_ms, duration_ms, path). Returns ``(player_stats, name_by_guid)``.
+
+    Offloaded via ``asyncio.to_thread`` so its O(samples × teammates × points)
+    triple loop never blocks the asyncio event loop (it was a ~13s freeze of all
+    requests). Behaviour is identical to the previous inline implementation.
+    The name map is built here from ``player_name`` keyed by the 8-char prefix —
+    the same key as ``player_stats`` — so names always resolve (the old
+    canonical-keyed map missed 32-char bot guids).
+    """
+    SOLO_RADIUS = _LURKER_SOLO_RADIUS
+    DOWNSAMPLE_MS = _LURKER_DOWNSAMPLE_MS
+
+    round_tracks: dict[int, list] = defaultdict(list)
+    name_by_guid: dict[str, str] = {}
+    for r in track_rows:
+        rsu = int(r[3] or 0)
+        path_data = r[7]
+        if not path_data:
+            continue
+        if isinstance(path_data, str):
+            try:
+                path_data = _json.loads(path_data)
+            except (ValueError, TypeError):
+                # Unparseable JSON (legacy / corrupted rows) — skip the track.
+                continue
+        points = []
+        last_t = -DOWNSAMPLE_MS
+        for p in path_data:
+            t = int(p.get("time", 0))
+            if t - last_t >= DOWNSAMPLE_MS:
+                points.append((t, float(p.get("x", 0)), float(p.get("y", 0))))
+                last_t = t
+        if not points:
+            continue
+        gshort = (r[0] or "")[:8]
+        if r[1] and gshort not in name_by_guid:
+            name_by_guid[gshort] = strip_et_colors(r[1])
+        round_tracks[rsu].append({
+            "guid": r[0], "name": r[1], "team": r[2],
+            "duration_ms": int(r[6] or 0), "points": points,
+        })
+
+    player_stats: dict[str, dict] = defaultdict(lambda: {
+        "total_samples": 0, "solo_samples": 0, "alive_ms": 0, "tracks": 0,
+    })
+    for tracks in round_tracks.values():
+        for track in tracks:
+            guid_short = track["guid"][:8]
+            team = track["team"]
+            teammates = [
+                t for t in tracks
+                if t["team"] == team and t["guid"][:8] != guid_short
+            ]
+            if not teammates:
+                # Solo player (no teammates this life) — all samples are solo.
+                player_stats[guid_short]["solo_samples"] += len(track["points"])
+                player_stats[guid_short]["total_samples"] += len(track["points"])
+                player_stats[guid_short]["alive_ms"] += track["duration_ms"]
+                player_stats[guid_short]["tracks"] += 1
+                continue
+
+            tm_arrays = [tm["points"] for tm in teammates]
+            solo_count = 0
+            for t_ms, px, py in track["points"]:
+                min_dist = float("inf")
+                for tm_pts in tm_arrays:
+                    best_d = float("inf")
+                    for tt, tx, ty in tm_pts:
+                        if abs(tt - t_ms) <= DOWNSAMPLE_MS * 2:
+                            # hypot: same value as sqrt(dx²+dy²) but numerically
+                            # robust (CodeQL py/sub-optimal-pythagorean).
+                            d = math.hypot(px - tx, py - ty)
+                            if d < best_d:
+                                best_d = d
+                        elif tt > t_ms + DOWNSAMPLE_MS * 2:
+                            break
+                    if best_d < min_dist:
+                        min_dist = best_d
+                if min_dist > SOLO_RADIUS:
+                    solo_count += 1
+
+            player_stats[guid_short]["total_samples"] += len(track["points"])
+            player_stats[guid_short]["solo_samples"] += solo_count
+            player_stats[guid_short]["alive_ms"] += track["duration_ms"]
+            player_stats[guid_short]["tracks"] += 1
+
+    return player_stats, name_by_guid
 
 
 class _AdvancedMetricsMixin:
@@ -368,11 +473,8 @@ class _AdvancedMetricsMixin:
         Downsampled to 1s intervals for performance (~20k points vs 100k).
         """
         sd = _to_date(session_date)
-        SOLO_RADIUS = 500  # units from nearest teammate = "solo"
-        DOWNSAMPLE_MS = 1000  # 1s intervals for performance
-
-        import math
-        from collections import defaultdict
+        SOLO_RADIUS = _LURKER_SOLO_RADIUS
+        DOWNSAMPLE_MS = _LURKER_DOWNSAMPLE_MS
 
         # round_start_unix > 0 filter: orphaned rows with NULL/0 rsu would
         # collapse into bucket 0 and mix unrelated rounds' tracks together
@@ -392,92 +494,15 @@ class _AdvancedMetricsMixin:
         if not track_rows:
             return {"status": "ok", "session_date": str(sd), "players": []}
 
-        # Group tracks by round, downsample paths to 1s
-        round_tracks: dict[int, list] = defaultdict(list)
-        for r in track_rows:
-            rsu = int(r[3] or 0)
-            path_data = r[7]
-            if not path_data:
-                continue
-            if isinstance(path_data, str):
-                import json as _json
-                try:
-                    path_data = _json.loads(path_data)
-                except (ValueError, TypeError):
-                    # Unparseable JSON (legacy rows / corrupted data) — skip the track.
-                    continue
-            points = []
-            last_t = -DOWNSAMPLE_MS
-            for p in path_data:
-                t = int(p.get("time", 0))
-                if t - last_t >= DOWNSAMPLE_MS:
-                    points.append((t, float(p.get("x", 0)), float(p.get("y", 0))))
-                    last_t = t
-            if not points:
-                continue
-            round_tracks[rsu].append({
-                "guid": r[0], "name": r[1], "team": r[2],
-                "duration_ms": int(r[6] or 0), "points": points,
-            })
-
-        # For each track: compute solo time (no teammate within SOLO_RADIUS)
-        player_stats: dict[str, dict] = defaultdict(lambda: {
-            "total_samples": 0, "solo_samples": 0, "alive_ms": 0, "tracks": 0,
-        })
-
-        for rsu, tracks in round_tracks.items():
-            # Pre-index teammate points by time bucket for fast lookup
-            for track in tracks:
-                guid_short = track["guid"][:8]
-                team = track["team"]
-                teammates = [
-                    t for t in tracks
-                    if t["team"] == team and t["guid"][:8] != guid_short
-                ]
-                if not teammates:
-                    # Solo player (no teammates in this life) — all samples are solo
-                    player_stats[guid_short]["solo_samples"] += len(track["points"])
-                    player_stats[guid_short]["total_samples"] += len(track["points"])
-                    player_stats[guid_short]["alive_ms"] += track["duration_ms"]
-                    player_stats[guid_short]["tracks"] += 1
-                    continue
-
-                # Build time-indexed arrays for each teammate (sorted)
-                tm_arrays = [tm["points"] for tm in teammates]
-
-                solo_count = 0
-                for t_ms, px, py in track["points"]:
-                    min_dist = float("inf")
-                    for tm_pts in tm_arrays:
-                        # Linear scan with early exit (points are time-sorted)
-                        best_d = float("inf")
-                        for tt, tx, ty in tm_pts:
-                            if abs(tt - t_ms) <= DOWNSAMPLE_MS * 2:
-                                dx = px - tx
-                                dy = py - ty
-                                d = math.sqrt(dx * dx + dy * dy)
-                                if d < best_d:
-                                    best_d = d
-                            elif tt > t_ms + DOWNSAMPLE_MS * 2:
-                                break
-                        if best_d < min_dist:
-                            min_dist = best_d
-                    if min_dist > SOLO_RADIUS:
-                        solo_count += 1
-
-                player_stats[guid_short]["total_samples"] += len(track["points"])
-                player_stats[guid_short]["solo_samples"] += solo_count
-                player_stats[guid_short]["alive_ms"] += track["duration_ms"]
-                player_stats[guid_short]["tracks"] += 1
-
-        # Resolve names
-        name_rows = await self.db.fetch_all("""
-            SELECT killer_guid_canonical, MAX(killer_name)
-            FROM storytelling_kill_impact
-            WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
-            GROUP BY killer_guid_canonical
-        """, (sd,))
-        name_map = {r[0]: strip_et_colors(r[1] or r[0]) for r in (name_rows or [])}
+        # The solo-time math is a heavy pure-Python triple loop. Offload it to a
+        # worker thread so it can't block the event loop (~13s freeze), and hold
+        # a per-session lock so concurrent cold requests don't thrash the CPU.
+        # Names are resolved inside the worker from player_track.player_name,
+        # keyed by the same 8-char prefix as player_stats (no separate query).
+        async with _compute_locks.get(f"lurker:{sd}"):
+            player_stats, name_by_guid = await asyncio.to_thread(
+                _compute_lurker_solo, track_rows,
+            )
 
         players = []
         for guid, stats in player_stats.items():
@@ -485,7 +510,7 @@ class _AdvancedMetricsMixin:
             solo_pct = (stats["solo_samples"] / total) * 100
             players.append({
                 "guid_short": guid,
-                "name": name_map.get(guid, f"#{guid}"),
+                "name": name_by_guid.get(guid, f"#{guid}"),
                 "solo_pct": round(solo_pct, 1),
                 "solo_samples": stats["solo_samples"],
                 "total_samples": stats["total_samples"],

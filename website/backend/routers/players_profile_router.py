@@ -52,6 +52,9 @@ _MIN_FLICK_PAIRS = 20       # flick index needs enough consecutive shot pairs
 _MIN_ENEMY_REL = 25         # enemy-relative crosshair sample floor
 _FLICK_DEG = 30.0           # |Δyaw| above this between quick shots = a flick
 _FLICK_MAX_DT_MS = 600      # only count pairs fired within this gap
+_SPREAD_TIGHT_DEG = 5.0     # |Δyaw| below this between quick shots = tight control
+_BURST_GAP_MS = 500         # shots within this gap belong to the same burst
+_MIN_BURST_SHOTS = 50       # need this many shots before burst stats are meaningful
 
 
 # ── helpers ────────────────────────────────────────────────────────────────
@@ -652,15 +655,22 @@ async def _fetch_aim_summary(db, guid8: str) -> dict:
         )
         SELECT COUNT(*) AS pairs,
                SUM(CASE WHEN d > $3 THEN 1 ELSE 0 END) AS flicks,
-               ROUND(AVG(d)::numeric, 1) AS avg_delta
+               ROUND(AVG(d)::numeric, 1) AS avg_delta,
+               SUM(CASE WHEN d <= $4 THEN 1 ELSE 0 END) AS tight,
+               ROUND((percentile_cont(0.5)  WITHIN GROUP (ORDER BY d))::numeric, 1) AS p50,
+               ROUND((percentile_cont(0.95) WITHIN GROUP (ORDER BY d))::numeric, 1) AS p95,
+               ROUND(MIN(d)::numeric, 1) AS min_d,
+               ROUND(MAX(d)::numeric, 1) AS max_d
         FROM deltas
         """,
-        (guid8, _FLICK_MAX_DT_MS, _FLICK_DEG),
+        (guid8, _FLICK_MAX_DT_MS, _FLICK_DEG, _SPREAD_TIGHT_DEG),
     )
     flick = {"available": False}
+    spread = {"available": False}
     if flick_row and _i(flick_row[0]) >= _MIN_FLICK_PAIRS:
         pairs = _i(flick_row[0])
         flicks = _i(flick_row[1])
+        tight = _i(flick_row[3])
         flick = {
             "available": True,
             "pairs": pairs,
@@ -668,7 +678,18 @@ async def _fetch_aim_summary(db, guid8: str) -> dict:
             "track_pct": round((pairs - flicks) / pairs * 100, 1),
             "avg_delta_yaw_deg": _f(flick_row[2]),
         }
+        # Spread control: how tightly consecutive quick shots cluster in aim
+        # angle. Lower = better control. Derived from the same Δyaw pairs.
+        spread = {
+            "available": True,
+            "control_pct": round(tight / pairs * 100, 1),   # % within ±tight°
+            "min_spread_deg": _f(flick_row[6]),             # tightest consecutive move
+            "median_spread_deg": _f(flick_row[4]),          # typical
+            "max_spread_deg": _f(flick_row[7]),             # widest swing
+            "p95_spread_deg": _f(flick_row[5]),             # near-worst (robust)
+        }
 
+    burst = await _fetch_burst_stats(db, guid8)
     enemy_rel = await _fetch_enemy_relative(db, guid8)
 
     return {
@@ -676,7 +697,62 @@ async def _fetch_aim_summary(db, guid8: str) -> dict:
         "lifetime": circ,
         "per_weapon": per_weapon,
         "flick": flick,
+        "spread": spread,
+        "burst": burst,
         "enemy_relative": enemy_rel,
+    }
+
+
+async def _fetch_burst_stats(db, guid8: str) -> dict:
+    """Burst-fire profile: sessionize each round's shots into bursts (gaps
+    > _BURST_GAP_MS start a new burst) and summarize. Static SQL; $N-bound."""
+    row = await db.fetch_one(
+        """
+        WITH ordered AS (
+            SELECT round_id, id, event_time,
+                   event_time - LAG(event_time)
+                       OVER (PARTITION BY round_id ORDER BY event_time, id) AS gap
+            FROM proximity_shot_fired
+            WHERE guid_canonical = $1
+        ),
+        marked AS (
+            SELECT round_id, id, event_time,
+                   CASE WHEN gap IS NULL OR gap > $2 THEN 1 ELSE 0 END AS new_burst
+            FROM ordered
+        ),
+        grouped AS (
+            -- burst_no must accumulate in the SAME (event_time, id) order the
+            -- gap/new_burst flags were computed in, else tied timestamps split
+            -- or merge bursts non-deterministically.
+            SELECT round_id,
+                   SUM(new_burst) OVER (PARTITION BY round_id ORDER BY event_time, id
+                                        ROWS UNBOUNDED PRECEDING) AS burst_no
+            FROM marked
+        ),
+        sizes AS (
+            SELECT round_id, burst_no, COUNT(*) AS shots
+            FROM grouped GROUP BY round_id, burst_no
+        )
+        SELECT COUNT(*) AS bursts,
+               SUM(shots) AS total_shots,
+               ROUND(AVG(shots)::numeric, 2) AS avg_burst,
+               MAX(shots) AS max_burst,
+               SUM(CASE WHEN shots = 1 THEN 1 ELSE 0 END) AS taps,
+               SUM(CASE WHEN shots >= 2 THEN 1 ELSE 0 END) AS multi_bursts
+        FROM sizes
+        """,
+        (guid8, _BURST_GAP_MS),
+    )
+    if not row or _i(row[1]) < _MIN_BURST_SHOTS:
+        return {"available": False}
+    bursts = _i(row[0])
+    return {
+        "available": True,
+        "bursts": bursts,
+        "avg_burst_len": _f(row[2]),
+        "max_burst_len": _i(row[3]),
+        "tap_pct": round(_i(row[4]) / bursts * 100, 1) if bursts else 0.0,
+        "burst_pct": round(_i(row[5]) / bursts * 100, 1) if bursts else 0.0,
     }
 
 
