@@ -92,21 +92,33 @@ def _compute_lurker_solo(track_rows: list) -> tuple[dict, dict]:
                 player_stats[guid_short]["tracks"] += 1
                 continue
 
-            tm_arrays = [tm["points"] for tm in teammates]
+            # Pre-bucket each teammate's points by 1s key once (points are
+            # time-sorted). The ±2s window for a sample at t_ms only touches
+            # buckets [(t_ms-2s)//1s .. (t_ms+2s)//1s], so we probe ~5 buckets
+            # instead of scanning the whole track — byte-identical result, far
+            # fewer comparisons. WINDOW = DOWNSAMPLE_MS*2.
+            window = DOWNSAMPLE_MS * 2
+            tm_bucket_list = []
+            for tm in teammates:
+                buckets: dict[int, list] = defaultdict(list)
+                for tt, tx, ty in tm["points"]:
+                    buckets[tt // DOWNSAMPLE_MS].append((tt, tx, ty))
+                tm_bucket_list.append(buckets)
+
             solo_count = 0
             for t_ms, px, py in track["points"]:
+                lo = (t_ms - window) // DOWNSAMPLE_MS
+                hi = (t_ms + window) // DOWNSAMPLE_MS
                 min_dist = float("inf")
-                for tm_pts in tm_arrays:
+                for buckets in tm_bucket_list:
                     best_d = float("inf")
-                    for tt, tx, ty in tm_pts:
-                        if abs(tt - t_ms) <= DOWNSAMPLE_MS * 2:
-                            # hypot: same value as sqrt(dx²+dy²) but numerically
-                            # robust (CodeQL py/sub-optimal-pythagorean).
-                            d = math.hypot(px - tx, py - ty)
-                            if d < best_d:
-                                best_d = d
-                        elif tt > t_ms + DOWNSAMPLE_MS * 2:
-                            break
+                    for b in range(lo, hi + 1):
+                        for tt, tx, ty in buckets.get(b, ()):
+                            if abs(tt - t_ms) <= window:
+                                # hypot: numerically robust (CodeQL).
+                                d = math.hypot(px - tx, py - ty)
+                                if d < best_d:
+                                    best_d = d
                     if best_d < min_dist:
                         min_dist = best_d
                 if min_dist > SOLO_RADIUS:
