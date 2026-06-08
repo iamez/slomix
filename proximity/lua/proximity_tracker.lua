@@ -243,9 +243,11 @@ local config = {
         vehicle_tracking = true,
         construction_tracking = true,
         objective_run_tracking = true,
-        -- v9 true-aim (6.02): per-shot origin + view angles. DEFAULT OFF —
-        -- high frequency; opt-in only. Production unchanged until enabled.
-        shot_fired = false,
+        -- v9 true-aim (6.02): per-shot origin + view angles. ENABLED on the
+        -- live puran server since 2026-05; repo now matches live so a future
+        -- Lua deploy can't accidentally disable the aim pipeline. (Diff-gate
+        -- 2026-06-08: this flag was the ONLY repo<->live delta in this file.)
+        shot_fired = true,
     },
 
     -- ===== v5 TEAMPLAY CONFIG =====
