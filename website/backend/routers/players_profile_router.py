@@ -37,6 +37,7 @@ from website.backend.routers.proximity_positions import _circular_yaw_stats
 from website.backend.services.player_profile_metrics import (
     bait_score,
     compute_streaks,
+    locale_to_flag,
     utro_from_waits,
     weapon_t_name,
 )
@@ -98,9 +99,29 @@ async def _fetch_identity(db, guid8: str, fallback: str) -> dict:
         """,
         (guid8,),
     )
-    discord = await db.fetch_one(
-        "SELECT 1 FROM player_links WHERE player_guid = $1 LIMIT 1", (guid8,),
-    )
+    # Discord link + optional identity enrichment (locale→flag, twitch handle).
+    # Guarded: the locale/twitch columns may not exist until migration 056 is
+    # applied — fall back to the plain link check so identity never errors.
+    discord_linked = False
+    country = None
+    twitch = None
+    try:
+        link = await db.fetch_one(
+            "SELECT discord_locale, twitch_login FROM player_links WHERE player_guid = $1 LIMIT 1",
+            (guid8,),
+        )
+        if link is not None:
+            discord_linked = True
+            country = locale_to_flag(link[0])
+            if link[1]:
+                handle = str(link[1]).strip().lstrip("@")
+                if handle:
+                    twitch = {"login": handle, "url": f"https://twitch.tv/{handle}"}
+    except Exception:
+        link = await db.fetch_one(
+            "SELECT 1 FROM player_links WHERE player_guid = $1 LIMIT 1", (guid8,),
+        )
+        discord_linked = bool(link)
     return {
         "available": True,
         "guid": guid8,
@@ -109,7 +130,9 @@ async def _fetch_identity(db, guid8: str, fallback: str) -> dict:
         "first_seen": str(seen[0]) if seen and seen[0] else None,
         "last_seen": str(seen[1]) if seen and seen[1] else None,
         "rounds": _i(seen[2]) if seen else 0,
-        "discord_linked": bool(discord),
+        "discord_linked": discord_linked,
+        "country": country,   # {flag, country, locale} or None (locale≠verified country)
+        "twitch": twitch,     # {login, url} or None (live status = future, needs Helix creds)
     }
 
 
