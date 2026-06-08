@@ -757,11 +757,12 @@ function renderGatherSummary(data) {
         return _panel('Gather Record', 'trophy', badgeRow + _na('No gather results yet'));
     }
     const st = g.current_type === 'W' ? 'text-emerald-400' : g.current_type === 'L' ? 'text-rose-400' : 'text-slate-400';
+    const streakTxt = `${_num(g.current_streak)}${escapeHtml(g.current_type || '')}`;
     const cells = [
         _statCell('Gathers', _num(g.gathers)),
         _statCell('Win Rate', `${_num(g.win_rate, 1)}%`, g.win_rate >= 50 ? 'text-emerald-400' : 'text-rose-400'),
         _statCell('Record (W-L-D)', `${_num(g.wins)}-${_num(g.losses)}-${_num(g.draws)}`),
-        _statCell('Current Streak', `<span class="${st}">${_num(g.current_streak)}${escapeHtml(g.current_type || '')}</span>`),
+        _statCell('Current Streak', streakTxt, st),
         _statCell('Longest Win', _num(g.longest_win), 'text-emerald-400'),
         _statCell('Longest Loss', _num(g.longest_loss), 'text-rose-400'),
     ].join('');
