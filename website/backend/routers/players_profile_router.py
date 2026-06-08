@@ -37,6 +37,7 @@ from website.backend.routers.proximity_positions import _circular_yaw_stats
 from website.backend.services.player_profile_metrics import (
     bait_score,
     compute_streaks,
+    locale_to_flag,
     utro_from_waits,
     weapon_t_name,
 )
@@ -98,9 +99,29 @@ async def _fetch_identity(db, guid8: str, fallback: str) -> dict:
         """,
         (guid8,),
     )
-    discord = await db.fetch_one(
-        "SELECT 1 FROM player_links WHERE player_guid = $1 LIMIT 1", (guid8,),
-    )
+    # Discord link + optional identity enrichment (locale→flag, twitch handle).
+    # Guarded: the locale/twitch columns may not exist until migration 056 is
+    # applied — fall back to the plain link check so identity never errors.
+    discord_linked = False
+    country = None
+    twitch = None
+    try:
+        link = await db.fetch_one(
+            "SELECT discord_locale, twitch_login FROM player_links WHERE player_guid = $1 LIMIT 1",
+            (guid8,),
+        )
+        if link is not None:
+            discord_linked = True
+            country = locale_to_flag(link[0])
+            if link[1]:
+                handle = str(link[1]).strip().lstrip("@")
+                if handle:
+                    twitch = {"login": handle, "url": f"https://twitch.tv/{handle}"}
+    except Exception:
+        link = await db.fetch_one(
+            "SELECT 1 FROM player_links WHERE player_guid = $1 LIMIT 1", (guid8,),
+        )
+        discord_linked = bool(link)
     return {
         "available": True,
         "guid": guid8,
@@ -109,7 +130,9 @@ async def _fetch_identity(db, guid8: str, fallback: str) -> dict:
         "first_seen": str(seen[0]) if seen and seen[0] else None,
         "last_seen": str(seen[1]) if seen and seen[1] else None,
         "rounds": _i(seen[2]) if seen else 0,
-        "discord_linked": bool(discord),
+        "discord_linked": discord_linked,
+        "country": country,   # {flag, country, locale} or None (locale≠verified country)
+        "twitch": twitch,     # {login, url} or None (live status = future, needs Helix creds)
     }
 
 
@@ -474,20 +497,126 @@ async def _fetch_relationships(db, guid8: str, guid32: str | None) -> dict:
 
 
 async def _fetch_skill(db, guid8: str) -> dict:
+    # Window-rank over all rated players (rank 1 = best), same source as
+    # /api/skill/leaderboard, so the profile shows a leaderboard position.
     row = await db.fetch_one(
-        "SELECT et_rating, games_rated, components FROM player_skill_ratings WHERE player_guid = $1",
+        """
+        WITH ranked AS (
+            SELECT player_guid, et_rating, games_rated, components,
+                   ROW_NUMBER() OVER (ORDER BY et_rating DESC) AS rnk,
+                   COUNT(*) OVER () AS total
+            FROM player_skill_ratings
+            WHERE games_rated > 0
+        )
+        SELECT et_rating, games_rated, components, rnk, total
+        FROM ranked WHERE player_guid = $1
+        """,
         (guid8,),
     )
     if not row or row[0] is None:
         return {"available": False, "reason": "not rated"}
     rating = _f(row[0])
+    rank = _i(row[3])
+    total = _i(row[4])
     return {
         "available": True,
         "et_rating": round(rating, 3),
         "tier": get_tier(rating),
         "games_rated": _i(row[1]),
         "components": row[2],
+        "rank": rank,
+        "total_rated": total,
+        "percentile": round((total - rank) / total * 100, 1) if total else 0.0,
     }
+
+
+async def _fetch_gather_summary(db, guid8: str) -> dict:
+    """Per-gather (gaming-session) W/L/D + win% + streaks.
+
+    Uses `session_results` (one stopwatch-correct row per gaming session, with
+    `winning_team` 0=draw/1/2 from the map score). This is the gather-level
+    record (gibhub gather_summary granularity), distinct from the round-level
+    streaks already shown. GUIDs are stored as quoted 8-char JSON elements, so
+    match on `%"guid"%` to avoid prefix collisions.
+    """
+    rows = await db.fetch_all(
+        """
+        SELECT session_date, gaming_session_id, winning_team, team_1_guids, team_2_guids
+        FROM session_results
+        WHERE team_1_guids LIKE $1 OR team_2_guids LIKE $1
+        ORDER BY session_date ASC, gaming_session_id ASC
+        """,
+        (f'%"{guid8}"%',),
+    )
+    if not rows:
+        return {"available": False}
+    needle = f'"{guid8}"'
+    results = []
+    wins = losses = draws = 0
+    for r in rows:
+        winner = _i(r[2])
+        in_t1 = needle in (r[3] or "")
+        my_team = 1 if in_t1 else 2
+        if winner == 0:
+            results.append("D")
+            draws += 1
+        elif winner == my_team:
+            results.append("W")
+            wins += 1
+        else:
+            results.append("L")
+            losses += 1
+    decided = wins + losses
+    streaks = compute_streaks(results)
+    return {
+        "available": True,
+        "gathers": len(results),
+        "wins": wins, "losses": losses, "draws": draws,
+        "win_rate": round(wins / decided * 100, 1) if decided else 0.0,
+        "current_streak": streaks["current_streak"],
+        "current_type": streaks["current_type"],
+        "longest_win": streaks["longest_win"],
+        "longest_loss": streaks["longest_loss"],
+    }
+
+
+async def _fetch_nick_history(db, guid8: str) -> dict:
+    """Names this GUID has used, with date ranges (gibhub nick_history)."""
+    rows = await db.fetch_all(
+        """
+        SELECT player_name, MIN(round_date) AS first_seen, MAX(round_date) AS last_seen,
+               COUNT(DISTINCT round_id) AS uses
+        FROM player_comprehensive_stats
+        WHERE player_guid = $1 AND round_number IN (1, 2) AND player_name IS NOT NULL
+        GROUP BY player_name
+        ORDER BY MAX(round_date) DESC
+        LIMIT 25
+        """,
+        (guid8,),
+    )
+    if not rows:
+        return {"available": False}
+    # Merge by the COLOR-STRIPPED visible name: the SQL groups by raw player_name,
+    # so "^1Bob"/"^2Bob" arrive as separate rows that render identically. Combine
+    # them (sum uses, widen the date range). Dates are 'YYYY-MM-DD' → string-comparable.
+    merged: dict[str, dict] = {}
+    for r in rows:
+        if not (r and r[0]):
+            continue
+        nm = strip_et_colors(r[0])
+        fs = str(r[1]) if r[1] else None
+        ls = str(r[2]) if r[2] else None
+        e = merged.get(nm)
+        if e is None:
+            merged[nm] = {"name": nm, "first_seen": fs, "last_seen": ls, "uses": _i(r[3])}
+        else:
+            e["uses"] += _i(r[3])
+            if fs and (e["first_seen"] is None or fs < e["first_seen"]):
+                e["first_seen"] = fs
+            if ls and (e["last_seen"] is None or ls > e["last_seen"]):
+                e["last_seen"] = ls
+    names = sorted(merged.values(), key=lambda x: x["last_seen"] or "", reverse=True)
+    return {"available": True, "names": names}
 
 
 async def _fetch_maps(db, guid8: str) -> dict:
@@ -812,6 +941,59 @@ async def _fetch_enemy_relative(db, guid8: str) -> dict:
     }
 
 
+async def _fetch_combat_timing(db, guid8: str) -> dict:
+    """Leetify-style combat timing — independent of shot_fired (uses
+    combat_engagement ~48% coverage + proximity_reaction_metric).
+
+    - Time-to-Kill: median engagement duration (first contact → kill) on the
+      player's kills. (Leetify Time-to-Damage is NOT computable: our
+      combat_engagement.start_time_ms IS the first-hit time, so time-to-first-hit
+      is ~0 — there's no 'enemy spotted' signal, so we omit TTD.)
+    - Return-fire reaction: median ms from being hit to firing back, with the
+      populated-coverage % shown (the metric is ~50% populated, so be honest).
+    All stats use the MEDIAN to drop outliers (Leetify practice).
+    """
+    row = await db.fetch_one(
+        """
+        WITH ttk AS (
+            SELECT (end_time_ms - start_time_ms) AS v
+            FROM combat_engagement
+            WHERE outcome = 'killed' AND LEFT(killer_guid, 8) = $1
+              AND end_time_ms >= start_time_ms
+        ),
+        rf AS (
+            SELECT return_fire_ms FROM proximity_reaction_metric
+            WHERE LEFT(target_guid, 8) = $1
+        )
+        SELECT
+            (SELECT COUNT(*) FROM ttk) AS ttk_n,
+            (SELECT ROUND(percentile_cont(0.5) WITHIN GROUP (ORDER BY v)) FROM ttk) AS ttk_median,
+            (SELECT COUNT(*) FILTER (WHERE return_fire_ms IS NOT NULL) FROM rf) AS rf_n,
+            (SELECT COUNT(*) FROM rf) AS rf_total,
+            (SELECT ROUND(percentile_cont(0.5) WITHIN GROUP (ORDER BY return_fire_ms))
+             FROM rf WHERE return_fire_ms IS NOT NULL) AS rf_median
+        """,
+        (guid8,),
+    )
+    if not row:
+        return {"available": False}
+    ttk_n = _i(row[0])
+    rf_n = _i(row[2])
+    rf_total = _i(row[3])
+    if ttk_n < 10 and rf_n < 10:
+        return {"available": False, "reason": "insufficient combat data"}
+    out: dict = {"available": True}
+    if ttk_n >= 10:
+        out["time_to_kill"] = {"median_ms": _i(row[1]), "kills": ttk_n}
+    if rf_n >= 10:
+        out["return_fire"] = {
+            "median_ms": _i(row[4]),
+            "samples": rf_n,
+            "coverage_pct": round(rf_n / rf_total * 100, 1) if rf_total else 0.0,
+        }
+    return out
+
+
 async def _resolve_guid32(db, guid8: str) -> str | None:
     """Best-effort 32-char proximity GUID for RivalriesService (kill_outcome key)."""
     row = await db.fetch_one(
@@ -858,7 +1040,8 @@ async def get_player_profile(
             return await coro
 
     (identity, streaks, advanced, movement, weapons, hit_regions,
-     relationships, skill, maps, recent, aim) = await asyncio.gather(
+     relationships, skill, maps, recent, aim,
+     gather_summary, nick_history, combat_timing) = await asyncio.gather(
         _guard(_fetch_identity(db, guid8, identifier)),
         _guard(_fetch_streaks(db, guid8)),
         _guard(_fetch_advanced(db, guid8, deaths)),
@@ -870,6 +1053,9 @@ async def get_player_profile(
         _guard(_fetch_maps(db, guid8)),
         _guard(_fetch_recent_matches(db, guid8)),
         _guard(_fetch_aim_summary(db, guid8)),
+        _guard(_fetch_gather_summary(db, guid8)),
+        _guard(_fetch_nick_history(db, guid8)),
+        _guard(_fetch_combat_timing(db, guid8)),
         return_exceptions=True,
     )
 
@@ -894,4 +1080,7 @@ async def get_player_profile(
         "maps": _ok(maps, "maps"),
         "recent_matches": _ok(recent, "recent_matches"),
         "aim": _ok(aim, "aim"),
+        "gather_summary": _ok(gather_summary, "gather_summary"),
+        "nick_history": _ok(nick_history, "nick_history"),
+        "combat_timing": _ok(combat_timing, "combat_timing"),
     }

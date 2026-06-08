@@ -15,6 +15,7 @@ from website.backend.services.player_profile_metrics import (
     REINF_MULT_TIERS,
     bait_score,
     compute_streaks,
+    locale_to_flag,
     reinf_multiplier,
     utro_from_waits,
     weapon_t_name,
@@ -145,3 +146,22 @@ def test_weapon_t_rifle_disambiguation():
 def test_weapon_t_unknown_and_none():
     assert weapon_t_name(None) == "Unknown"
     assert weapon_t_name(9999) == "Weapon 9999"
+
+
+# ── locale → flag ─────────────────────────────────────────────────────────────
+
+def test_locale_to_flag_known():
+    assert locale_to_flag("sl") == {"flag": "🇸🇮", "country": "SI", "locale": "sl"}
+    assert locale_to_flag("en-US")["country"] == "US"
+    assert locale_to_flag("pt-BR")["country"] == "BR"
+
+
+def test_locale_to_flag_region_subtag_fallback():
+    # Unknown language but a 2-letter region subtag → use the region.
+    assert locale_to_flag("xx-NL")["country"] == "NL"
+
+
+def test_locale_to_flag_invalid():
+    assert locale_to_flag(None) is None
+    assert locale_to_flag("") is None
+    assert locale_to_flag("xx") is None  # no mapping, no region subtag

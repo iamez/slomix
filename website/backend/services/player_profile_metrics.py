@@ -222,3 +222,36 @@ def weapon_t_name(weapon_id: int | None) -> str:
     if weapon_id is None:
         return "Unknown"
     return WP_WEAPON_NAMES.get(int(weapon_id), f"Weapon {int(weapon_id)}")
+
+
+# ── Discord locale → flag (best-effort, language locale ≠ verified country) ──
+# Maps a Discord OAuth locale (e.g. "en-US", "sl", "de") to an ISO-3166 alpha-2
+# country, then to a flag emoji via Unicode regional-indicator letters.
+_LOCALE_COUNTRY: dict[str, str] = {
+    "en-US": "US", "en-GB": "GB", "sl": "SI", "hr": "HR", "de": "DE", "fr": "FR",
+    "es-ES": "ES", "es-419": "MX", "it": "IT", "nl": "NL", "pl": "PL", "pt-BR": "BR",
+    "ro": "RO", "fi": "FI", "sv-SE": "SE", "no": "NO", "da": "DK", "cs": "CZ",
+    "sk": "SK", "hu": "HU", "el": "GR", "bg": "BG", "ru": "RU", "uk": "UA",
+    "tr": "TR", "lt": "LT", "lv": "LV", "et": "EE", "sr": "RS", "bs": "BA",
+    "mk": "MK", "sq": "AL", "pt-PT": "PT", "id": "ID", "vi": "VN", "th": "TH",
+    "zh-CN": "CN", "zh-TW": "TW", "ja": "JP", "ko": "KR", "hi": "IN",
+}
+
+
+def locale_to_flag(locale: str | None) -> dict | None:
+    """Best-effort {flag, country, locale} from a Discord locale, else None.
+
+    NB: a Discord locale is a *language* setting, not a verified country — the
+    profile must label this as approximate.
+    """
+    if not locale:
+        return None
+    loc = str(locale).strip()
+    cc = _LOCALE_COUNTRY.get(loc)
+    if not cc and "-" in loc:
+        cc = loc.split("-", 1)[1].upper()  # region subtag, e.g. "xx-NL" -> NL
+    if not cc or len(cc) != 2 or not cc.isalpha():
+        return None
+    cc = cc.upper()
+    flag = "".join(chr(0x1F1E6 + ord(c) - ord("A")) for c in cc)
+    return {"flag": flag, "country": cc, "locale": loc}
