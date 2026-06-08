@@ -444,6 +444,19 @@ async def callback(
         linked_player_guid = state_payload.get("linked_player_guid")
         linked_player_name = state_payload.get("linked_player_name")
 
+        # Best-effort: capture the Discord locale for a profile country flag.
+        # Fully guarded — a missing column (pre-migration-056) or any error must
+        # never break login.
+        try:
+            locale = str(user_data.get("locale") or "").strip()[:16]
+            if locale:
+                await db.execute(
+                    "UPDATE player_links SET discord_locale = $1 WHERE discord_id = $2",
+                    (locale, discord_id),
+                )
+        except Exception:
+            logger.debug("discord_locale capture skipped", exc_info=True)
+
     request.session["user"] = _build_session_user(
         discord_id=discord_id,
         username=username,
