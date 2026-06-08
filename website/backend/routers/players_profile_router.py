@@ -596,12 +596,26 @@ async def _fetch_nick_history(db, guid8: str) -> dict:
     )
     if not rows:
         return {"available": False}
-    names = [{
-        "name": strip_et_colors(r[0]),
-        "first_seen": str(r[1]) if r[1] else None,
-        "last_seen": str(r[2]) if r[2] else None,
-        "uses": _i(r[3]),
-    } for r in rows if r and r[0]]
+    # Merge by the COLOR-STRIPPED visible name: the SQL groups by raw player_name,
+    # so "^1Bob"/"^2Bob" arrive as separate rows that render identically. Combine
+    # them (sum uses, widen the date range). Dates are 'YYYY-MM-DD' → string-comparable.
+    merged: dict[str, dict] = {}
+    for r in rows:
+        if not (r and r[0]):
+            continue
+        nm = strip_et_colors(r[0])
+        fs = str(r[1]) if r[1] else None
+        ls = str(r[2]) if r[2] else None
+        e = merged.get(nm)
+        if e is None:
+            merged[nm] = {"name": nm, "first_seen": fs, "last_seen": ls, "uses": _i(r[3])}
+        else:
+            e["uses"] += _i(r[3])
+            if fs and (e["first_seen"] is None or fs < e["first_seen"]):
+                e["first_seen"] = fs
+            if ls and (e["last_seen"] is None or ls > e["last_seen"]):
+                e["last_seen"] = ls
+    names = sorted(merged.values(), key=lambda x: x["last_seen"] or "", reverse=True)
     return {"available": True, "names": names}
 
 

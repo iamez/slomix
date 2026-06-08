@@ -508,7 +508,7 @@ function renderSkillAndLifetime(data) {
             ? `<div class="px-4 py-2 rounded-lg bg-slate-800/60 border border-white/10">
                    <div class="text-[10px] uppercase text-slate-500">Rank</div>
                    <div class="text-2xl font-bold text-white">#${_num(skill.rank)}
-                       <span class="text-xs text-slate-500">/ ${_num(skill.total_rated)} · top ${_num(100 - (skill.percentile || 0), 0)}%</span></div>
+                       <span class="text-xs text-slate-500">/ ${_num(skill.total_rated)} · top ${_num(Math.max(0, 100 - (skill.percentile || 0)), 1)}%</span></div>
                </div>`
             : '';
         skillHtml = `
