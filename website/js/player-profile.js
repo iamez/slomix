@@ -465,13 +465,16 @@ export async function loadEnhancedProfileSections(playerIdentifier) {
     }
 
     const sections = [
+        renderGatherSummary(data),
         renderSkillAndLifetime(data),
         renderWeapons(data.weapons),
         renderHitRegions(data.hit_regions),
+        renderCombatTiming(data.combat_timing),
         renderAimSection(data.aim, data.guid),
         renderMovement(data.movement),
         renderRelationships(data.relationships),
         renderMapsTable(data.maps),
+        renderNickHistory(data.nick_history),
     ];
     // All section HTML is built from escapeHtml-sanitized values; insert via
     // the shared safeInsertHTML helper (utils.js) after clearing.
@@ -501,6 +504,13 @@ function renderSkillAndLifetime(data) {
     let skillHtml = '';
     if (skill.available) {
         const tc = tierColors[skill.tier] || 'text-white';
+        const rankHtml = skill.rank
+            ? `<div class="px-4 py-2 rounded-lg bg-slate-800/60 border border-white/10">
+                   <div class="text-[10px] uppercase text-slate-500">Rank</div>
+                   <div class="text-2xl font-bold text-white">#${_num(skill.rank)}
+                       <span class="text-xs text-slate-500">/ ${_num(skill.total_rated)} · top ${_num(100 - (skill.percentile || 0), 0)}%</span></div>
+               </div>`
+            : '';
         skillHtml = `
             <div class="flex items-center gap-4 mb-5 flex-wrap">
                 <div class="px-4 py-2 rounded-lg bg-slate-800/60 border border-white/10">
@@ -508,6 +518,7 @@ function renderSkillAndLifetime(data) {
                     <div class="text-2xl font-bold ${tc}">${_num(skill.et_rating, 3)}
                         <span class="text-sm uppercase">${escapeHtml(skill.tier || '')}</span></div>
                 </div>
+                ${rankHtml}
                 <div class="text-xs text-slate-500">${_num(skill.games_rated)} games rated</div>
             </div>`;
     }
@@ -727,6 +738,71 @@ function renderMapsTable(maps) {
                 <th class="py-2 px-2 text-right">DPM</th></tr></thead>
             <tbody>${rows}</tbody>
         </table></div>
+    `);
+}
+
+function renderGatherSummary(data) {
+    const g = data.gather_summary || {};
+    const id = data.identity || {};
+    const badges = [];
+    if (id.country && id.country.flag) {
+        badges.push(`<span class="px-2 py-1 rounded bg-slate-800 text-sm" title="approx. from Discord locale">${id.country.flag} ${escapeHtml(id.country.country || '')}</span>`);
+    }
+    if (id.twitch && id.twitch.login) {
+        badges.push(`<a href="${escapeHtml(id.twitch.url)}" target="_blank" rel="noopener" class="px-2 py-1 rounded bg-violet-900/50 text-violet-200 text-sm hover:bg-violet-800/60">📺 ${escapeHtml(id.twitch.login)}</a>`);
+    }
+    const badgeRow = badges.length ? `<div class="flex flex-wrap gap-2 mb-4">${badges.join('')}</div>` : '';
+    if (!g.available) {
+        if (!badgeRow) return '';
+        return _panel('Gather Record', 'trophy', badgeRow + _na('No gather results yet'));
+    }
+    const st = g.current_type === 'W' ? 'text-emerald-400' : g.current_type === 'L' ? 'text-rose-400' : 'text-slate-400';
+    const cells = [
+        _statCell('Gathers', _num(g.gathers)),
+        _statCell('Win Rate', `${_num(g.win_rate, 1)}%`, g.win_rate >= 50 ? 'text-emerald-400' : 'text-rose-400'),
+        _statCell('Record (W-L-D)', `${_num(g.wins)}-${_num(g.losses)}-${_num(g.draws)}`),
+        _statCell('Current Streak', `<span class="${st}">${_num(g.current_streak)}${escapeHtml(g.current_type || '')}</span>`),
+        _statCell('Longest Win', _num(g.longest_win), 'text-emerald-400'),
+        _statCell('Longest Loss', _num(g.longest_loss), 'text-rose-400'),
+    ].join('');
+    return _panel('Gather Record', 'trophy',
+        `${badgeRow}<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">${cells}</div>`);
+}
+
+function renderNickHistory(nh) {
+    if (!nh || !nh.available || !(nh.names || []).length) return '';
+    const rows = nh.names.map(n => `
+        <tr class="border-b border-white/5">
+            <td class="py-1 px-2 text-white">${escapeHtml(n.name)}</td>
+            <td class="py-1 px-2 text-right text-slate-400">${_num(n.uses)}</td>
+            <td class="py-1 px-2 text-right text-slate-500 text-xs">${escapeHtml(n.first_seen || '')} → ${escapeHtml(n.last_seen || '')}</td>
+        </tr>`).join('');
+    return _panel('Name History', 'history', `
+        <div class="overflow-x-auto"><table class="w-full text-sm">
+            <thead><tr class="text-[10px] uppercase text-slate-500 border-b border-white/10">
+                <th class="py-1 px-2 text-left">Name</th><th class="py-1 px-2 text-right">Uses</th>
+                <th class="py-1 px-2 text-right">Seen</th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table></div>`);
+}
+
+function renderCombatTiming(ct) {
+    if (!ct || !ct.available) return '';
+    const ttk = ct.time_to_kill || {};
+    const rf = ct.return_fire || {};
+    const cells = [];
+    if (ttk.median_ms !== undefined) {
+        cells.push(_statCell('Time to Kill (med)', `${(ttk.median_ms / 1000).toFixed(2)}s`, 'text-cyan-300'));
+        cells.push(_statCell('Kills sampled', _num(ttk.kills)));
+    }
+    if (rf.median_ms !== undefined) {
+        cells.push(_statCell('Return-fire (med)', `${_num(rf.median_ms)}ms`, 'text-amber-300'));
+        cells.push(_statCell('RF coverage', `${_num(rf.coverage_pct, 0)}%`));
+    }
+    if (!cells.length) return '';
+    return _panel('Combat Timing', 'timer', `
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">${cells.join('')}</div>
+        <p class="text-[11px] text-slate-500 mt-2">Medians (outliers dropped, Leetify-style). Time-to-Kill = first contact → kill; return-fire = got-hit → shoot-back.</p>
     `);
 }
 
