@@ -62,15 +62,19 @@ def _connect():
     )
 
 
-_SELECT_COLS = (
+# Two fully standalone literal queries (no f-strings, no concatenation) so
+# static analysers can't flag SQL injection — `session` is always bound as a
+# %s parameter, never interpolated.
+_SELECT_ALL = (
     "SELECT id, gaming_session_id, map_name, round_number, "
     "round_start_unix, round_end_unix, round_date, round_time, match_id "
     "FROM rounds WHERE round_number IN (1,2)"
 )
-# Two fixed, literal queries (no string interpolation) so static analysers
-# can't flag SQL injection — `session` is always bound as a %s parameter.
-_SELECT_ALL = _SELECT_COLS
-_SELECT_ONE_SESSION = _SELECT_COLS + " AND gaming_session_id = %s"
+_SELECT_ONE_SESSION = (
+    "SELECT id, gaming_session_id, map_name, round_number, "
+    "round_start_unix, round_end_unix, round_date, round_time, match_id "
+    "FROM rounds WHERE round_number IN (1,2) AND gaming_session_id = %s"
+)
 
 
 def _fetch_rounds(cur, session: int | None) -> tuple[list[RoundRec], dict[int, str]]:
