@@ -62,21 +62,22 @@ def _connect():
     )
 
 
+_SELECT_COLS = (
+    "SELECT id, gaming_session_id, map_name, round_number, "
+    "round_start_unix, round_end_unix, round_date, round_time, match_id "
+    "FROM rounds WHERE round_number IN (1,2)"
+)
+# Two fixed, literal queries (no string interpolation) so static analysers
+# can't flag SQL injection — `session` is always bound as a %s parameter.
+_SELECT_ALL = _SELECT_COLS
+_SELECT_ONE_SESSION = _SELECT_COLS + " AND gaming_session_id = %s"
+
+
 def _fetch_rounds(cur, session: int | None) -> tuple[list[RoundRec], dict[int, str]]:
-    where = "WHERE round_number IN (1,2)"
-    params: tuple = ()
-    if session is not None:
-        where += " AND gaming_session_id = %s"
-        params = (session,)
-    cur.execute(
-        f"""
-        SELECT id, gaming_session_id, map_name, round_number,
-               round_start_unix, round_end_unix, round_date, round_time, match_id
-        FROM rounds
-        {where}
-        """,
-        params,
-    )
+    if session is None:
+        cur.execute(_SELECT_ALL)
+    else:
+        cur.execute(_SELECT_ONE_SESSION, (session,))
     recs: list[RoundRec] = []
     current: dict[int, str] = {}
     for row in cur.fetchall():
