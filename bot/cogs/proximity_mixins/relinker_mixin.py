@@ -15,12 +15,16 @@ from discord.ext import tasks
 logger = logging.getLogger("bot.cogs.proximity")
 
 # Rounds whose target_dt is older than this are treated as permanent
-# orphans: the stats file was never written (surrender crash, disk full,
-# VPS network loss, …) and the round_id will never resolve. Skipping them
-# stops the 5-minute cron from spamming `no_rows_for_map_round` warnings
-# every cycle. Tuned against production logs where orphans aged 400 h-1600 h
-# repeated every 5 min forever.
-_PERMANENT_ORPHAN_AGE_HOURS = 48
+# orphans: the stats file was never written (surrender crash, warmup map
+# never paired, disk full, VPS network loss, …) and the round_id will never
+# resolve. Skipping them stops the 5-minute cron from retrying them every
+# cycle. Lowered 48h→6h (2026-06-09) to match the correlation saga's 6h
+# timeout: a stats file that hasn't landed 6h after the round is never
+# coming (the live race window is only 120min), and the old 48h kept warmup
+# orphans like mp_sillyctf retrying for two days. Combined with quiet=True on
+# the resolve_round_id call below (relinker retries log at DEBUG, not WARNING),
+# this kills the `no_rows_for_map_round` log spam.
+_PERMANENT_ORPHAN_AGE_HOURS = 6
 
 
 # Relink SQL templates hoisted to module scope (audit P4). Previously
@@ -152,6 +156,7 @@ class _ProximityRelinkerMixin:
                     target_dt=target_dt,
                     round_date=round_date_str,
                     window_minutes=120,
+                    quiet=True,  # relinker retries every 5min — log at DEBUG, not WARNING
                 )
 
                 if round_id is None:
