@@ -6,6 +6,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.18.0](https://github.com/iamez/slomix/compare/v1.17.0...v1.18.0) (2026-06-09)
+
+
+### Features
+
+* **bot:** deterministic stopwatch round pairing + legacy match_id backfill ([#370](https://github.com/iamez/slomix/issues/370)) ([ec3a95d](https://github.com/iamez/slomix/commit/ec3a95dc1b1ca6c329883d8a7ac1919756267d46))
+* **website:** aim body hitmap + spread/burst metrics; fix profile JS caching ([#364](https://github.com/iamez/slomix/issues/364)) ([2ac5126](https://github.com/iamez/slomix/commit/2ac512659834eefd46cc7f228716ccba745ec9d2))
+* **website:** gibhub.gg-parity player profile + true-aim analytics ([#362](https://github.com/iamez/slomix/issues/362)) ([ef59023](https://github.com/iamez/slomix/commit/ef59023ccdfab89c93065e664ebd2282f0a2d73c))
+* **website:** profile completeness + Aim v2 (Leetify-aligned) + lurker perf + identity enrichment ([#366](https://github.com/iamez/slomix/issues/366)) ([85ba0b2](https://github.com/iamez/slomix/commit/85ba0b2ad4b19dbbecfe9550957be0fd331e8abc))
+
+
+### Bug Fixes
+
+* **bot:** stop round-linker orphan log spam (quiet relinker + 6h abandon) ([#369](https://github.com/iamez/slomix/issues/369)) ([d69c937](https://github.com/iamez/slomix/commit/d69c9376f734c552e5498323caa6a1f0c68dddd1))
+
 ## [1.17.0](https://github.com/iamez/slomix/compare/v1.16.0...v1.17.0) (2026-06-02)
 
 
