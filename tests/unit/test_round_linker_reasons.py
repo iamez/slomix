@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -241,3 +241,39 @@ async def test_resolve_round_id_naive_target_dt_still_works():
     )
     assert round_id == 9818
     assert diag["reason_code"] == "resolved"
+
+
+@pytest.mark.asyncio
+async def test_quiet_downgrades_orphan_warning_to_debug(caplog):
+    """The 5-min relinker passes quiet=True so a stale orphan (no rounds row
+    ever created) logs at DEBUG, not WARNING — otherwise it spams an identical
+    WARNING every cycle for hours (regression: mp_sillyctf warmup orphan 2026-06-08)."""
+    import logging
+
+    db = _FakeDB(rows_with_date=[], rows_without_date=[])
+    old = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=10)
+
+    # quiet=False (import path): emits a WARNING once.
+    caplog.clear()
+    with caplog.at_level(logging.DEBUG, logger="bot.core.round_linker"):
+        rid, _ = await resolve_round_id_with_reason(
+            db, "mp_sillyctf", 1, target_dt=old,
+            round_date=old.strftime("%Y-%m-%d"), window_minutes=120, quiet=False,
+        )
+    assert rid is None
+    loud = [r for r in caplog.records if r.levelno == logging.WARNING
+            and "no_rows_for_map_round" in r.getMessage()]
+    assert loud, "import path should WARN once"
+
+    # quiet=True (relinker): same situation logs at DEBUG, no WARNING.
+    caplog.clear()
+    with caplog.at_level(logging.DEBUG, logger="bot.core.round_linker"):
+        rid, _ = await resolve_round_id_with_reason(
+            db, "mp_sillyctf", 1, target_dt=old,
+            round_date=old.strftime("%Y-%m-%d"), window_minutes=120, quiet=True,
+        )
+    assert rid is None
+    warns = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert not warns, f"relinker (quiet) must not WARN, got: {[r.getMessage() for r in warns]}"
+    assert any("no_rows_for_map_round" in r.getMessage() and r.levelno == logging.DEBUG
+               for r in caplog.records), "quiet should still log at DEBUG"
