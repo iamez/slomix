@@ -16,6 +16,21 @@ END_REASON_ENUM = {
 }
 
 
+def is_filler_map(map_name: str | None, excluded_maps: Iterable[str]) -> bool:
+    """Return True if a map is a non-competitive "filler" (e.g. mp_sillyctf).
+
+    Filler maps are run while waiting for a substitution and must not count
+    toward stats; the importer flags such rounds rounds.is_valid = FALSE.
+    Matching is case-insensitive. `excluded_maps` is the configured set
+    (`config.excluded_maps`); callers pass it explicitly so this stays pure
+    and unit-testable.
+    """
+    if not map_name:
+        return False
+    name = map_name.strip().lower()
+    return any(name == str(m).strip().lower() for m in excluded_maps)
+
+
 _SIDE_VALUE_MAP = {
     "axis": 1,
     "1": 1,
