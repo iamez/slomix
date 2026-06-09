@@ -121,17 +121,21 @@ class PairingResult:
         }
 
 
-def derive_match_id(r1: RoundRec) -> str:
-    """Canonical pairing key = R1's `date-HHMMSS`.
+def derive_match_id(anchor: RoundRec) -> str:
+    """Derive the shared match key from a match's anchor round.
 
-    Mirrors `stats_import_mixin` (`match_id = f"{r1_date}-{r1_time}"`) so that
+    The anchor is normally the R1 (so both R1 and its R2 get R1's key); for an
+    orphan R2 with no R1, the R2 is its own anchor. The key = `date-HHMMSS`,
+    mirroring `stats_import_mixin` (`match_id = f"{r1_date}-{r1_time}"`) so that
     backfilled legacy rows are byte-identical in format to the live path.
-    Falls back to the stable `r1:<id>` form only if the R1 lacks date/time
-    (never expected for real rounds, but keeps the key non-empty + unique).
+
+    Falls back to the stable, neutral `mid:<id>` form only if the anchor lacks
+    date/time (never expected for real rounds, but keeps the key non-empty +
+    unique). The prefix is round-agnostic on purpose — the anchor may be an R2.
     """
-    if r1.round_date and r1.round_time:
-        return f"{r1.round_date}-{r1.round_time}"
-    return f"r1:{r1.id}"
+    if anchor.round_date and anchor.round_time:
+        return f"{anchor.round_date}-{anchor.round_time}"
+    return f"mid:{anchor.id}"
 
 
 def _sort_key(r: RoundRec) -> tuple[int, float]:

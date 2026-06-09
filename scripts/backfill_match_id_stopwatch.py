@@ -33,7 +33,21 @@ import argparse
 import os
 import sys
 
-import psycopg2
+# psycopg2 is not pinned in requirements.txt (the bot uses asyncpg). Accept
+# either the psycopg2 or the psycopg (v3) driver so the script runs wherever
+# one of them is installed; fail with an actionable hint otherwise. Both expose
+# the DB-API surface this script uses: connect / cursor / execute(%s) /
+# executemany / fetchone / fetchall / commit / rollback.
+try:
+    import psycopg2 as _pg
+except ImportError:  # pragma: no cover - environment-dependent
+    try:
+        import psycopg as _pg  # psycopg3
+    except ImportError:  # pragma: no cover
+        raise SystemExit(
+            "This script needs a PostgreSQL driver. Install one of:\n"
+            "  pip install psycopg2-binary   (or)   pip install psycopg"
+        ) from None
 
 # Allow `python scripts/backfill_match_id_stopwatch.py` as well as `-m`.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -53,7 +67,7 @@ def _load_env() -> None:
 
 def _connect():
     _load_env()
-    return psycopg2.connect(
+    return _pg.connect(
         host=os.getenv("POSTGRES_HOST", "localhost"),
         port=int(os.getenv("POSTGRES_PORT", "5432")),
         dbname=os.getenv("POSTGRES_DATABASE", "etlegacy"),
@@ -77,13 +91,13 @@ _SELECT_ONE_SESSION = (
 )
 
 
-def _fetch_rounds(cur, session: int | None) -> tuple[list[RoundRec], dict[int, str]]:
+def _fetch_rounds(cur, session: int | None) -> tuple[list[RoundRec], dict[int, str | None]]:
     if session is None:
         cur.execute(_SELECT_ALL)
     else:
         cur.execute(_SELECT_ONE_SESSION, (session,))
     recs: list[RoundRec] = []
-    current: dict[int, str] = {}
+    current: dict[int, str | None] = {}  # match_id is nullable in the DB
     for row in cur.fetchall():
         (rid, gsid, mapn, rn, su, eu, rdate, rtime, mid) = row
         recs.append(
@@ -130,7 +144,7 @@ def main() -> int:
     desired = _desired_map(result)
 
     # Compute the change set: rounds whose match_id would change.
-    changes: list[tuple[int, str, str]] = []  # (round_id, old, new)
+    changes: list[tuple[int, str | None, str]] = []  # (round_id, old|None, new)
     old_to_new: dict[str, str] = {}
     for rid, new_mid in desired.items():
         old_mid = current.get(rid)
