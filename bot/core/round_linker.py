@@ -51,11 +51,16 @@ async def resolve_round_id(
     round_date: str | None = None,
     round_time: str | None = None,
     window_minutes: int = 45,
+    quiet: bool = False,
 ) -> int | None:
     """
     Resolve round_id using map + round_number + nearest time.
 
     This is the compatibility API used by existing callers.
+
+    `quiet=True` downgrades the unresolved-diagnostic logs from WARNING to
+    DEBUG — for the 5-minute relinker cron, which retries the same orphans
+    every cycle and would otherwise spam identical WARNINGs for hours.
     """
     round_id, _diag = await resolve_round_id_with_reason(
         db_adapter,
@@ -65,6 +70,7 @@ async def resolve_round_id(
         round_date=round_date,
         round_time=round_time,
         window_minutes=window_minutes,
+        quiet=quiet,
     )
     return round_id
 
@@ -78,6 +84,7 @@ async def resolve_round_id_with_reason(
     round_date: str | None = None,
     round_time: str | None = None,
     window_minutes: int = 45,
+    quiet: bool = False,
 ) -> tuple[int | None, dict[str, Any]]:
     """
     Resolve round_id and return structured diagnostics.
@@ -105,9 +112,12 @@ async def resolve_round_id_with_reason(
         "round_time": round_time,
         "window_minutes": window_minutes,
     }
+    # Relinker-driven retries pass quiet=True so the same orphan doesn't emit
+    # an identical WARNING every 5-minute cycle (the import path keeps WARNING).
+    warn = logger.debug if quiet else logger.warning
     if not map_name or not round_number:
         diag["reason_code"] = "invalid_input"
-        logger.warning("round_linker: reason=invalid_input map=%s rn=%s", map_name, round_number)
+        warn("round_linker: reason=invalid_input map=%s rn=%s", map_name, round_number)
         return None, diag
 
     # Normalize tz-aware target_dt to naive-local at the entry. Every
@@ -224,7 +234,7 @@ async def resolve_round_id_with_reason(
                     )
                 else:
                     diag["reason_code"] = "date_filter_excluded_rows"
-                    logger.warning(
+                    warn(
                         "round_linker: reason=date_filter_excluded_rows map=%s rn=%d date=%s "
                         "(rows exist for map+rn but no target_dt to safely relax date filter)",
                         map_name, round_number, round_date,
@@ -250,7 +260,7 @@ async def resolve_round_id_with_reason(
                     )
                     if age_seconds > 3600:
                         # Stale: more than an hour since the source event fired
-                        logger.warning(
+                        warn(
                             "round_linker: reason=no_rows_for_map_round map=%s rn=%d date=%s "
                             "(target_dt is %dh %dm old — stale orphan, no rounds row "
                             "was ever created; skip or manual import)",
@@ -259,14 +269,14 @@ async def resolve_round_id_with_reason(
                             (age_seconds % 3600) // 60,
                         )
                     else:
-                        logger.warning(
+                        warn(
                             "round_linker: reason=no_rows_for_map_round map=%s rn=%d date=%s "
                             "(no rounds within ±%dmin of target_dt — likely race "
                             "condition; relinker cron will retry)",
                             map_name, round_number, round_date, window_minutes,
                         )
                 else:
-                    logger.warning(
+                    warn(
                         "round_linker: reason=no_rows_for_map_round map=%s rn=%d date=%s "
                         "(no target_dt supplied)",
                         map_name, round_number, round_date,
@@ -274,7 +284,7 @@ async def resolve_round_id_with_reason(
                 return None, diag
         else:
             diag["reason_code"] = "no_rows_for_map_round"
-            logger.warning(
+            warn(
                 "round_linker: reason=no_rows_for_map_round map=%s rn=%d date=%s",
                 map_name, round_number, round_date,
             )
@@ -416,14 +426,14 @@ async def resolve_round_id_with_reason(
     if diag["parsed_candidate_count"] == 0:
         if diag.get("date_filter_relaxed"):
             diag["reason_code"] = "date_filter_excluded_rows"
-            logger.warning(
+            warn(
                 "round_linker: reason=date_filter_excluded_rows map=%s rn=%d date=%s "
                 "(date filter relaxed but candidates had no parseable timestamps)",
                 map_name, round_number, round_date,
             )
         else:
             diag["reason_code"] = "time_parse_failed"
-            logger.warning(
+            warn(
                 "round_linker: reason=time_parse_failed (no parseable candidates) map=%s rn=%d candidates=%d",
                 map_name, round_number, diag["candidate_count"],
             )
