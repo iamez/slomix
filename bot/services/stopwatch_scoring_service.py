@@ -174,6 +174,7 @@ class StopwatchScoringService:
                     FROM rounds
                     WHERE id IN ({placeholders})
                     AND round_status = 'completed'
+                    AND is_valid
                     ORDER BY gaming_session_id,
                              round_date,
                              CAST(REPLACE(round_time, ':', '') AS INTEGER),
@@ -188,6 +189,7 @@ class StopwatchScoringService:
                     FROM rounds
                     WHERE SUBSTRING(round_date, 1, 10) = $1
                     AND round_status = 'completed'
+                    AND is_valid
                     ORDER BY gaming_session_id,
                              round_date,
                              CAST(REPLACE(round_time, ':', '') AS INTEGER),
@@ -669,6 +671,7 @@ class StopwatchScoringService:
                 FROM rounds r
                 WHERE r.id IN ({placeholders})
                 AND r.round_status = 'completed'
+                AND r.is_valid
                 ORDER BY r.gaming_session_id,
                          r.round_date,
                          CAST(REPLACE(r.round_time, ':', '') AS INTEGER),
@@ -820,7 +823,24 @@ class StopwatchScoringService:
                     r1_defender_side = inferred_defender_side
 
                 if ambiguous_team_sides:
-                    # Cannot infer team sides reliably; skip scoring this map
+                    # Teams were reshuffled mid-session (e.g. a substitution), so
+                    # this map's lineup doesn't map cleanly to the detected session
+                    # rosters. Rather than show a blank "Unscored ⚪", we still
+                    # report the map winner BY TIME (R1 attackers vs R2 attackers);
+                    # we just can't attribute it to persistent Team A/B, so it does
+                    # NOT add to the session map tally. The note makes that explicit.
+                    t1_pts, t2_pts, _time_desc = self.calculate_map_score(
+                        r1.get('time_limit'), r1.get('actual_time'), r2.get('actual_time')
+                    )
+                    r1_t = r1.get('actual_time') or 'fullhold'
+                    r2_t = r2.get('actual_time') or 'fullhold'
+                    if t1_pts > t2_pts:
+                        side_note = f"R1 attackers won ({r1_t})"
+                    elif t2_pts > t1_pts:
+                        side_note = f"R2 attackers won ({r2_t})"
+                    else:
+                        side_note = "no completion (tie)"
+                    roster_note = f"⚠ roster changed — {side_note}, not attributed to a team"
                     map_results.append({
                         'map': map_name,
                         'team_a_points': 0,
@@ -829,18 +849,19 @@ class StopwatchScoringService:
                         'team_b_time': '',
                         'winner': 'tie',
                         'emoji': '⚪',
-                        'description': 'Unscored: team sides ambiguous',
+                        'description': roster_note,
                         'winner_side': r2.get('winner_team'),
                         'team_a_r1_side': None,
                         'team_a_r2_side': None,
                         'r1_defender_side': r1.get('defender_team'),
-                        'scoring_source': 'ambiguous',
+                        'scoring_source': 'time_no_attribution',
                         'counted': False,
-                        'note': 'Unscored: team sides ambiguous'
+                        'note': roster_note
                     })
                     logger.debug(
-                        "[SCORING DEBUG] %s | ambiguous sides; skipping score",
-                        map_name
+                        "[SCORING DEBUG] %s | roster changed mid-session; "
+                        "map winner by time (%s), no team attribution",
+                        map_name, side_note
                     )
                     continue
 
