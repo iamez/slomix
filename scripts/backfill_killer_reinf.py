@@ -35,14 +35,6 @@ import os
 import sys
 from collections import Counter, defaultdict
 
-try:
-    import psycopg2 as _pg
-    from psycopg2.extras import execute_values
-except ImportError:  # pragma: no cover - environment-dependent
-    raise SystemExit(
-        "This script needs a PostgreSQL driver: pip install psycopg2-binary"
-    ) from None
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Last session date whose rows predate the live F1 fix (deployed 2026-06-10
@@ -82,7 +74,20 @@ def recompute_killer_reinf(kill_time: int, offset_ms: int, interval_ms: int) -> 
     return round(reinf_ms / 1000, 1)
 
 
+def _pg_modules():
+    """Lazy driver import so the pure helpers stay importable in tests/CI."""
+    try:  # pragma: no cover - environment-dependent
+        import psycopg2 as _pg
+        from psycopg2.extras import execute_values
+    except ImportError:  # pragma: no cover
+        raise SystemExit(
+            "This script needs a PostgreSQL driver: pip install psycopg2-binary"
+        ) from None
+    return _pg, execute_values
+
+
 def _connect():
+    _pg, _ = _pg_modules()
     with contextlib.suppress(Exception):
         from dotenv import load_dotenv
 
@@ -164,6 +169,7 @@ def main() -> int:
         print("\nDRY-RUN — no changes written. Re-run with --apply to write.")
         return 0
 
+    _, execute_values = _pg_modules()
     execute_values(
         cur,
         """
