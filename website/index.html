@@ -2219,6 +2219,10 @@
                                 <span>▲ kill</span><span>✖ death</span><span>● spawn</span>
                                 <span class="border-b border-dashed border-slate-500">solo segment (no teammate ≤500u)</span>
                             </div>
+                            <!-- Per-life timeline: 1s bands — danger (enemy ≤500u) /
+                                 solo / grouped, with kill/death/objective markers. -->
+                            <div id="proximity-journey-timeline" class="relative flex w-full h-6 rounded overflow-hidden border border-white/10 mt-2 hidden"></div>
+                            <div id="proximity-journey-timeline-caption" class="text-[10px] text-slate-500 mt-1"></div>
                             <div id="proximity-journey-narrative" class="text-[11px] text-slate-400 mt-2"></div>
                         </div>
                         <div id="proximity-journey-lives" class="space-y-1 max-h-[420px] overflow-y-auto pr-1"></div>

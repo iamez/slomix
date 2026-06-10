@@ -2188,7 +2188,58 @@ function renderJourney(payload) {
     const life = lives.find((l) => l.life_index === proximityJourneyState.selectedLife) || lives[0];
     const narrativeEl = document.getElementById('proximity-journey-narrative');
     if (narrativeEl) narrativeEl.textContent = life.narrative || '';
+    renderJourneyTimeline(life);
     void drawJourneyLife(life, payload.scope?.map_name || proximityScopeState.mapName);
+}
+
+// Per-life timeline strip: one band per 1s proximity sample — danger when an
+// enemy is within 500u, solo when no teammate is, neutral otherwise — with
+// kill (▲), death (✖) and objective (◆) markers positioned on the life span.
+function renderJourneyTimeline(life) {
+    const strip = document.getElementById('proximity-journey-timeline');
+    const caption = document.getElementById('proximity-journey-timeline-caption');
+    if (!strip) return;
+    const series = life?.proximity_series || [];
+    if (!series.length) {
+        strip.classList.add('hidden');
+        if (caption) caption.textContent = '';
+        return;
+    }
+    strip.classList.remove('hidden');
+    const start = life.spawn_time_ms;
+    const end = life.death_time_ms != null ? life.death_time_ms : series[series.length - 1].t;
+    const span = Math.max(end - start, 1);
+
+    const bands = series.map((s) => {
+        const danger = Number.isFinite(s.nearest_enemy) && s.nearest_enemy != null && s.nearest_enemy <= 500;
+        const solo = s.nearest_teammate == null || s.nearest_teammate > 500;
+        const color = danger ? 'rgba(244, 63, 94, 0.55)'
+            : solo ? 'rgba(251, 191, 36, 0.4)'
+                : 'rgba(100, 116, 139, 0.25)';
+        const state = danger ? 'enemy ≤500u' : solo ? 'solo' : 'with team';
+        const tip = `${((s.t - start) / 1000).toFixed(0)}s • ${state}`
+            + (s.nearest_enemy != null ? ` • enemy ${Math.round(s.nearest_enemy)}u` : '')
+            + (s.nearest_teammate != null ? ` • teammate ${Math.round(s.nearest_teammate)}u` : '');
+        return `<div class="h-full" style="flex:1;background:${color}" title="${escapeHtml(tip)}"></div>`;
+    }).join('');
+
+    const markers = [];
+    for (const kill of life.kills || []) {
+        const pct = clamp(((kill.time - start) / span) * 100, 0, 100);
+        markers.push(`<span class="absolute top-0 text-[9px] leading-6 text-amber-300 font-bold" style="left:${pct.toFixed(1)}%" title="${escapeHtml(`kill: ${stripEtColors(kill.victim_name || '')}`)}">▲</span>`);
+    }
+    if (life.death) {
+        const pct = clamp(((life.death.time - start) / span) * 100, 0, 98);
+        markers.push(`<span class="absolute top-0 text-[9px] leading-6 text-rose-400 font-bold" style="left:${pct.toFixed(1)}%" title="${escapeHtml(`death: ${stripEtColors(life.death.killer_name || '')}`)}">✖</span>`);
+    }
+    for (const ev of life.objective_events || []) {
+        const pct = clamp(((ev.time - start) / span) * 100, 0, 100);
+        markers.push(`<span class="absolute top-0 text-[9px] leading-6 text-emerald-300 font-bold" style="left:${pct.toFixed(1)}%" title="${escapeHtml(`${ev.type}${ev.objective ? `: ${ev.objective}` : ''}`)}">◆</span>`);
+    }
+    strip.innerHTML = bands + markers.join('');
+    if (caption) {
+        caption.textContent = 'Life timeline: red = enemy within 500u, amber = solo, grey = with team • ▲ kill ✖ death ◆ objective';
+    }
 }
 
 function clearJourneyCanvas() {
