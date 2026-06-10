@@ -46,7 +46,12 @@ local modname = "proximity_tracker"
 -- 6.02: additive SHOT_FIRED section (true-aim workstream). Default OFF
 -- (features.shot_fired=false) so production behavior is unchanged until
 -- explicitly enabled. Backward-compatible: no existing section changed.
-local version = "6.02"
+-- 6.10 (v7 draft): four additive DORMANT sections — AIM_LOCK (crosshair-on-
+-- enemy via FOV prefilter + LOS trace), SPAWN_SELECT (sess.spawnObjectiveIndex
+-- + pers.lastSpawnTime), SKILL_SNAPSHOT (sess.skill at round end), COMM_EVENTS
+-- (vsay/voice-macro frequency via et_ClientCommand). ALL default OFF; see
+-- docs/LUA_V7_CAPTURE_RESEARCH_2026-06.md. Production unchanged until enabled.
+local version = "6.10"
 
 -- ===== CONFIGURATION =====
 local config = {
@@ -77,6 +82,17 @@ local config = {
     -- v9 true-aim: emit every Nth shot when features.shot_fired is on
     -- (rate-limit; et_WeaponFire is high-frequency). 1 = every shot.
     shot_fired_sample_rate = 1,
+
+    -- v7 AIM_LOCK (6.10, dormant): crosshair-on-enemy detection.
+    -- Cost model: FOV math is pure Lua per (player x enemy) pair every
+    -- interval; ONE confirming trap_Trace fires only for the best in-cone
+    -- candidate. Lock events are emitted on state CHANGE, not per sample.
+    aim_lock = {
+        interval_ms = 400,        -- check cadence (2x position interval)
+        fov_deg = 10,             -- combined yaw+pitch error to count as "on"
+        max_range = 3000,         -- ignore enemies beyond this (world units)
+        min_duration_ms = 400,    -- discard blips shorter than this
+    },
 
     -- Combat reaction tracking (Tier-B)
     reaction_window_ms = 5000,
@@ -246,6 +262,12 @@ local config = {
         -- v9 true-aim (6.02): per-shot origin + view angles. DEFAULT OFF —
         -- high frequency; opt-in only. Production unchanged until enabled.
         shot_fired = false,
+        -- v7 draft (6.10): ALL DEFAULT OFF. Enable individually after the
+        -- gated testmode probe (docs/LUA_V7_CAPTURE_RESEARCH_2026-06.md).
+        aim_lock = false,         -- crosshair-on-enemy lock events
+        spawn_select = false,     -- chosen spawn point per spawn
+        skill_snapshot = false,   -- sess.skill array at round end
+        comm_events = false,      -- vsay/voice-macro usage
     },
 
     -- ===== v5 TEAMPLAY CONFIG =====
@@ -547,6 +569,15 @@ local tracker = {
     -- v9 true-aim shot log (6.02) — array of {time,guid,weapon,ox,oy,oz,yaw,pitch}
     shot_fired = {},
     shot_fired_seq = 0,         -- monotonic counter for sample-rate gating
+
+    -- v7 draft state (6.10, all dormant)
+    aim_lock = {
+        active = {},            -- [clientnum] = {target_guid,target_name,start_time,samples,err_sum,dist_sum}
+        events = {},            -- closed lock events
+        last_check_time = 0,
+    },
+    spawn_selects = {},         -- array of {time,guid,name,team,spawn_index,last_spawn_time}
+    comm_events = {},           -- array of {time,guid,name,team,cmd,arg}
 
     -- Hit region tracking (v5.2)
     hit_regions = {},           -- array of {time, attacker_guid, attacker_name, victim_guid, victim_name, weapon, region, damage}
@@ -1054,6 +1085,119 @@ local sampleCarrierPosition
 local checkCarrierPowerups
 local sampleVehiclePositions
 
+-- ===== v7 AIM_LOCK (6.10, dormant) =====
+-- "Is the player's crosshair on an enemy?" — FOV prefilter in pure Lua over
+-- enemy pairs, then ONE confirming LOS trace for the best candidate.
+-- Emits an event when a lock CLOSES (target change / lock lost / death),
+-- so output volume is a handful of rows per life, not per sample.
+
+local function angDiff180(a, b)
+    local d = (a - b) % 360
+    if d > 180 then d = d - 360 end
+    return d
+end
+
+local function closeAimLock(clientnum, end_time)
+    local lock = tracker.aim_lock.active[clientnum]
+    if not lock then return end
+    tracker.aim_lock.active[clientnum] = nil
+    local duration = end_time - lock.start_time
+    if duration < (config.aim_lock.min_duration_ms or 400) then return end
+    local n = math.max(lock.samples, 1)
+    tracker.aim_lock.events[#tracker.aim_lock.events + 1] = {
+        start_time = lock.start_time,
+        end_time = end_time,
+        duration = duration,
+        guid = lock.guid,
+        name = lock.name,
+        team = lock.team,
+        target_guid = lock.target_guid,
+        target_name = lock.target_name,
+        avg_err = round(lock.err_sum / n, 1),
+        avg_dist = math.tointeger(math.floor(lock.dist_sum / n)) or 0,
+        samples = n,
+    }
+end
+
+local function sampleAimLocks(now)
+    if now - tracker.aim_lock.last_check_time < (config.aim_lock.interval_ms or 400) then return end
+    tracker.aim_lock.last_check_time = now
+    local fov = config.aim_lock.fov_deg or 10
+    local max_range = config.aim_lock.max_range or 3000
+
+    for clientnum, track in pairs(tracker.player_tracks) do
+        if isPlayerActive(clientnum) then
+            local pos = getPlayerPos(clientnum)
+            -- ps.viewangles binding runtime-proven on this server (v9
+            -- SHOT_FIRED validation 2026-05-19); guard defensively anyway.
+            local va = safe_gentity_get(clientnum, "ps.viewangles")
+            local yaw = va and tonumber(va[2])
+            local pitch = va and tonumber(va[1])
+            local best_num, best_err, best_dist = nil, nil, nil
+            if pos and yaw and pitch then
+                local eye_a = getEyeHeight(clientnum)
+                for othernum, otrack in pairs(tracker.player_tracks) do
+                    if othernum ~= clientnum and otrack.team ~= track.team
+                        and isPlayerActive(othernum) then
+                        local opos = getPlayerPos(othernum)
+                        if opos then
+                            local dx = opos.x - pos.x
+                            local dy = opos.y - pos.y
+                            local dz = (opos.z + getEyeHeight(othernum)) - (pos.z + eye_a)
+                            local horiz = math.sqrt(dx * dx + dy * dy)
+                            local dist = math.sqrt(horiz * horiz + dz * dz)
+                            if dist > 0 and dist <= max_range then
+                                local yaw_t = math.deg(math.atan(dy, dx))
+                                -- ET pitch: negative = aiming up (viewangles[1])
+                                local pitch_t = -math.deg(math.atan(dz, horiz))
+                                local dyaw = angDiff180(yaw_t, yaw)
+                                local dpitch = pitch_t - pitch
+                                local err = math.sqrt(dyaw * dyaw + dpitch * dpitch)
+                                if err <= fov and (best_err == nil or err < best_err) then
+                                    best_num, best_err, best_dist = othernum, err, dist
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+            local lock = tracker.aim_lock.active[clientnum]
+            if best_num ~= nil then
+                -- One trace only, for the single best candidate.
+                local opos = getPlayerPos(best_num)
+                local visible = opos and hasLineOfSight(pos, opos, clientnum, clientnum, best_num)
+                local target_guid = visible and tracker.player_tracks[best_num]
+                    and tracker.player_tracks[best_num].guid or nil
+                if target_guid then
+                    if lock and lock.target_guid ~= target_guid then
+                        closeAimLock(clientnum, now)
+                        lock = nil
+                    end
+                    if not lock then
+                        tracker.aim_lock.active[clientnum] = {
+                            guid = track.guid, name = track.name, team = track.team,
+                            target_guid = target_guid,
+                            target_name = tracker.player_tracks[best_num].name,
+                            start_time = now, samples = 0, err_sum = 0, dist_sum = 0,
+                        }
+                        lock = tracker.aim_lock.active[clientnum]
+                    end
+                    lock.samples = lock.samples + 1
+                    lock.err_sum = lock.err_sum + best_err
+                    lock.dist_sum = lock.dist_sum + best_dist
+                elseif lock then
+                    closeAimLock(clientnum, now)
+                end
+            elseif lock then
+                closeAimLock(clientnum, now)
+            end
+        elseif tracker.aim_lock.active[clientnum] then
+            closeAimLock(clientnum, now)
+        end
+    end
+end
+
 local function sampleAllPlayers()
     local now = gameTime()
     if now - tracker.last_sample_time < config.position_sample_interval then return end
@@ -1105,6 +1249,11 @@ local function sampleAllPlayers()
     -- v6: vehicle position sampling
     if isFeatureEnabled("vehicle_tracking") then
         sampleVehiclePositions()
+    end
+
+    -- v7 (6.10, dormant): crosshair-on-enemy lock detection
+    if isFeatureEnabled("aim_lock") then
+        sampleAimLocks(now)
     end
 end
 
@@ -3178,6 +3327,82 @@ local function outputDataInner()
         end
     end
 
+    -- ===== AIM_LOCK (v7 draft, 6.10) =====
+    if isFeatureEnabled("aim_lock") then
+        -- flush locks still open at round end
+        local now = gameTime()
+        for clientnum in pairs(tracker.aim_lock.active) do
+            closeAimLock(clientnum, now)
+        end
+        if #tracker.aim_lock.events > 0 then
+            local al_header = "\n# AIM_LOCK\n" ..
+                "# start_time;end_time;duration_ms;guid;name;team;target_guid;target_name;avg_err_deg;avg_dist;samples\n"
+            et.trap_FS_Write(al_header, string.len(al_header), fd)
+            for _, al in ipairs(tracker.aim_lock.events) do
+                local line = string.format("%d;%d;%d;%s;%s;%s;%s;%s;%.1f;%d;%d\n",
+                    al.start_time, al.end_time, al.duration,
+                    al.guid, al.name, al.team,
+                    al.target_guid, al.target_name,
+                    al.avg_err, al.avg_dist, al.samples)
+                et.trap_FS_Write(line, string.len(line), fd)
+            end
+        end
+    end
+
+    -- ===== SPAWN_SELECT (v7 draft, 6.10) =====
+    if isFeatureEnabled("spawn_select") and #tracker.spawn_selects > 0 then
+        local ss_header = "\n# SPAWN_SELECT\n" ..
+            "# time;guid;name;team;spawn_index;last_spawn_time\n"
+        et.trap_FS_Write(ss_header, string.len(ss_header), fd)
+        for _, ss in ipairs(tracker.spawn_selects) do
+            local line = string.format("%d;%s;%s;%s;%d;%d\n",
+                ss.time, ss.guid, ss.name, ss.team,
+                ss.spawn_index, ss.last_spawn_time)
+            et.trap_FS_Write(line, string.len(line), fd)
+        end
+    end
+
+    -- ===== SKILL_SNAPSHOT (v7 draft, 6.10) =====
+    -- One row per tracked player at round end: the 7 sess.skill values
+    -- (SK_BATTLE_SENSE..SK_COVERTOPS, indices 0-6 per the Lua docs).
+    if isFeatureEnabled("skill_snapshot") then
+        local rows = {}
+        local seen = {}
+        for clientnum, track in pairs(tracker.player_tracks) do
+            if track.guid and not seen[track.guid] and isValidClient(clientnum) then
+                seen[track.guid] = true
+                local skills = {}
+                for i = 0, 6 do
+                    skills[#skills + 1] = tostring(
+                        math.tointeger(tonumber(safe_gentity_get(clientnum, "sess.skill", i)) or 0) or 0)
+                end
+                rows[#rows + 1] = string.format("%s;%s;%s;%s\n",
+                    track.guid, track.name, track.team,
+                    table.concat(skills, ";"))
+            end
+        end
+        if #rows > 0 then
+            local sk_header = "\n# SKILL_SNAPSHOT\n" ..
+                "# guid;name;team;battle_sense;engineering;first_aid;signals;light_weapons;heavy_weapons;covertops\n"
+            et.trap_FS_Write(sk_header, string.len(sk_header), fd)
+            for _, line in ipairs(rows) do
+                et.trap_FS_Write(line, string.len(line), fd)
+            end
+        end
+    end
+
+    -- ===== COMM_EVENTS (v7 draft, 6.10) =====
+    if isFeatureEnabled("comm_events") and #tracker.comm_events > 0 then
+        local cm_header = "\n# COMM_EVENTS\n" ..
+            "# time;guid;name;team;cmd;arg\n"
+        et.trap_FS_Write(cm_header, string.len(cm_header), fd)
+        for _, cm in ipairs(tracker.comm_events) do
+            local line = string.format("%d;%s;%s;%s;%s;%s\n",
+                cm.time, cm.guid, cm.name, cm.team, cm.cmd, cm.arg)
+            et.trap_FS_Write(line, string.len(line), fd)
+        end
+    end
+
     -- ===== CARRIER EVENTS (v6) =====
     if isFeatureEnabled("carrier_tracking") and #tracker.carrier.events > 0 then
         local ce_header = "\n# CARRIER_EVENTS\n" ..
@@ -3512,6 +3737,10 @@ function et_InitGame(levelTime, randomSeed, restart)
     tracker.combat_positions = {}
     tracker.shot_fired = {}
     tracker.shot_fired_seq = 0
+    -- v7 draft reset (6.10)
+    tracker.aim_lock = { active = {}, events = {}, last_check_time = 0 }
+    tracker.spawn_selects = {}
+    tracker.comm_events = {}
     -- v6 carrier reset
     tracker.carrier.active = {}
     tracker.carrier.events = {}
@@ -4052,6 +4281,58 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
         endPlayerTrack(clientNum, nil, nil)
     end
     createPlayerTrack(clientNum)
+
+    -- v7 (6.10, dormant): which spawn point did the player pick?
+    -- sess.spawnObjectiveIndex + pers.lastSpawnTime are documented fields
+    -- (LUA_V7_CAPTURE_RESEARCH_2026-06.md, candidate 4). Real spawns only —
+    -- the revived==1 path returned above.
+    if isFeatureEnabled("spawn_select") then
+        local spawn_index = tonumber(safe_gentity_get(clientNum, "sess.spawnObjectiveIndex"))
+        local last_spawn = tonumber(safe_gentity_get(clientNum, "pers.lastSpawnTime"))
+        tracker.spawn_selects[#tracker.spawn_selects + 1] = {
+            time = gameTime(),
+            guid = getPlayerGUID(clientNum),
+            name = getPlayerName(clientNum),
+            team = getPlayerTeam(clientNum),
+            spawn_index = math.tointeger(spawn_index or -1) or -1,
+            last_spawn_time = math.tointeger(last_spawn or 0) or 0,
+        }
+    end
+end
+
+-- v7 (6.10, dormant): voice-macro / team-communication frequency.
+-- Captures only the COMMAND TYPE and the macro id (e.g. vsay "Medic") —
+-- never free chat text. MUST return 0: a non-zero return would intercept
+-- the command and break gameplay (etlegacy-lua-docs, callbacks).
+local COMM_COMMANDS = {
+    vsay = true, vsay_team = true, vsay_buddy = true,
+    say = true, say_team = true, say_buddy = true,
+}
+
+function et_ClientCommand(clientNum, command)
+    if not config.enabled or not isFeatureEnabled("comm_events") then return 0 end
+    local cmd = string.lower(tostring(command or ""))
+    if not COMM_COMMANDS[cmd] then return 0 end
+    if not isValidClient(clientNum) then return 0 end
+    local gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
+    if gamestate ~= 0 then return 0 end
+
+    -- Only voice macros carry their id; plain chat logs the type alone.
+    local arg = ""
+    if cmd == "vsay" or cmd == "vsay_team" or cmd == "vsay_buddy" then
+        arg = tostring(et.trap_Argv(1) or "")
+        -- macro ids are short tokens; clamp + strip the field separator
+        arg = string.gsub(string.sub(arg, 1, 32), ";", ",")
+    end
+    tracker.comm_events[#tracker.comm_events + 1] = {
+        time = gameTime(),
+        guid = getPlayerGUID(clientNum),
+        name = getPlayerName(clientNum),
+        team = getPlayerTeam(clientNum),
+        cmd = cmd,
+        arg = arg,
+    }
+    return 0
 end
 
 function et_ClientDisconnect(clientNum)

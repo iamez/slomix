@@ -382,3 +382,71 @@ async def get_personal_bests(
         "description": "New personal records set this session (players with prior history only).",
         "cards": cards,
     }
+
+
+# v7 capture capabilities (Lua 6.10 draft, dormant) — shown on the website as
+# a roadmap card; counts flip live once the owner enables a flag + deploys.
+_V7_CAPABILITIES = [
+    {
+        "key": "aim_lock",
+        "table": "proximity_aim_lock",
+        "title": "Aim Lock",
+        "what": "Crosshair-on-enemy windows — who tracks targets, for how long, at what range. Closes the loop between shot data and real targets.",
+        "api": "et.trap_Trace + ps.viewangles (runtime-proven)",
+    },
+    {
+        "key": "spawn_select",
+        "table": "proximity_spawn_select",
+        "title": "Spawn Selection",
+        "what": "Which spawn point each player picked, every life — spawn discipline and rotation reads become measurable.",
+        "api": "sess.spawnObjectiveIndex + pers.lastSpawnTime",
+    },
+    {
+        "key": "skill_snapshot",
+        "table": "proximity_skill_snapshot",
+        "title": "Skill Context",
+        "what": "The in-game XP skill array per player per round — correlate behavior with class skill levels.",
+        "api": "sess.skill (SK_* 0-6)",
+    },
+    {
+        "key": "comm_events",
+        "table": "proximity_comm_event",
+        "title": "Comms",
+        "what": "Voice-macro usage frequency (vsay 'Medic!' etc.) — a communication proxy. No chat text captured.",
+        "api": "et_ClientCommand + trap_Argv",
+    },
+]
+
+_V7_TABLES = {c["table"] for c in _V7_CAPABILITIES}
+
+
+@router.get("/proximity/v7-status")
+async def get_v7_status(db: DatabaseAdapter = Depends(get_db)):
+    """Live status of the dormant v7 capture tables (roadmap panel)."""
+    capabilities = []
+    for cap in _V7_CAPABILITIES:
+        table = cap["table"]
+        if table not in _V7_TABLES:  # defensive: identifiers come from the literal list above
+            continue
+        rows = 0
+        rounds = 0
+        try:
+            row = await db.fetch_one(
+                f"SELECT COUNT(*), COUNT(DISTINCT round_start_unix) FROM {table}"  # noqa: S608 — table from module literal
+            )
+            rows, rounds = int(row[0] or 0), int(row[1] or 0)
+        except Exception:
+            logger.debug("v7-status: table %s missing", table)
+        capabilities.append({
+            **{k: cap[k] for k in ("key", "title", "what", "api")},
+            "rows": rows,
+            "rounds": rounds,
+            "live": rows > 0,
+        })
+    return {
+        "status": "ok",
+        "lua_version_draft": "6.10",
+        "deployed": any(c["live"] for c in capabilities),
+        "doc": "docs/LUA_V7_CAPTURE_RESEARCH_2026-06.md",
+        "capabilities": capabilities,
+    }

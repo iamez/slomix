@@ -1822,6 +1822,7 @@ async function loadScopedProximityData() {
             bindV52PanelEvents();
             bindJourneyPanel();
             loadCompetitivePanel().catch((err) => console.warn('[proximity] competitive panel load failed', err));
+            loadV7RoadmapPanel().catch((err) => console.warn('[proximity] v7 roadmap load failed', err));
             // Reload leaderboards with current scope
             loadLeaderboardData();
         }
@@ -2483,6 +2484,42 @@ function renderWaveLedger(waves) {
             .join(' • ');
         const s = waves.summary || {};
         caption.textContent = `${clockTxt} — Axis won ${s.axis_won}, Allies ${s.allies_won}, contested ${s.contested}. Hover a segment for detail; left edge marks whose wave lands.`;
+    }
+}
+
+/* ===== v7 CAPTURE ROADMAP (dormant capabilities status) ===== */
+
+let proximityV7Loaded = false;
+
+async function loadV7RoadmapPanel() {
+    if (proximityV7Loaded) return;
+    const grid = document.getElementById('proximity-v7-grid');
+    const badge = document.getElementById('proximity-v7-badge');
+    if (!grid) return;
+    proximityV7Loaded = true;
+    try {
+        const data = await fetchJSON(`${API_BASE}/proximity/v7-status`);
+        if (badge) {
+            badge.textContent = data.deployed ? 'LIVE DATA' : `dormant (Lua ${data.lua_version_draft} draft)`;
+            badge.className = data.deployed
+                ? 'text-[10px] font-bold px-2 py-0.5 rounded bg-brand-emerald/10 text-brand-emerald'
+                : 'text-[10px] font-bold px-2 py-0.5 rounded bg-slate-700/40 text-slate-400';
+        }
+        grid.innerHTML = (data.capabilities || []).map((c) => `
+            <div class="glass-card rounded-lg border ${c.live ? 'border-brand-emerald/40' : 'border-white/10'} p-3">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs font-bold text-slate-200">${escapeHtml(c.title)}</span>
+                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${c.live
+                        ? 'bg-brand-emerald/10 text-brand-emerald' : 'bg-slate-700/40 text-slate-500'}">
+                        ${c.live ? `${formatNumber(c.rows)} rows / ${formatNumber(c.rounds)} rounds` : 'awaiting deploy'}</span>
+                </div>
+                <div class="text-[10px] text-slate-400 mb-2">${escapeHtml(c.what)}</div>
+                <div class="text-[9px] text-slate-600 font-mono">${escapeHtml(c.api)}</div>
+            </div>`).join('');
+    } catch (err) {
+        console.warn('[proximity] v7 roadmap load failed', err);
+        proximityV7Loaded = false;
+        grid.innerHTML = '<div class="text-[11px] text-slate-500">Unable to load v7 status.</div>';
     }
 }
 
