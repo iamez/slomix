@@ -220,6 +220,16 @@ def main() -> int:
 
     # Apply inside one transaction.
     print(f"\nApplying {len(changes)} round match_id updates …")
+    # rounds has a UNIQUE (match_id, round_number) constraint. Re-keying two
+    # rows that swap match_ids would transiently violate it mid-batch (e.g. an
+    # R2 takes the key another R2 hasn't released yet). Do it in two phases:
+    # park every changing row at a guaranteed-unique temp key, then assign the
+    # finals. (Verified 0 genuine (match_id, round_number) target collisions —
+    # any real duplicate will still surface as a UniqueViolation in phase 2.)
+    cur.executemany(
+        "UPDATE rounds SET match_id = %s WHERE id = %s",
+        [(f"__tmp__{rid}", rid) for rid, _old, _new in changes],
+    )
     cur.executemany(
         "UPDATE rounds SET match_id = %s WHERE id = %s",
         [(new, rid) for rid, _old, new in changes],
