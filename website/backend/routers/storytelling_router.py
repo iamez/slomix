@@ -2,7 +2,7 @@
 Storytelling Stats API — Kill Impact Score (KIS) endpoints.
 """
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.requests import Request
@@ -47,9 +47,12 @@ def _parse_date(val: str) -> date:
         parsed = datetime.strptime(val, "%Y-%m-%d").date()  # noqa: DTZ007 date-only parsing, no time component used
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
-    # UTC date — avoids midnight-edge drift on non-UTC servers, consistent
-    # with PCS round_date which is stored as the server's local date (UTC prod).
-    today = datetime.now(timezone.utc).date()
+    # session_date follows the SERVER-LOCAL day (CEST sessions roll to the
+    # new date at local midnight while UTC is still on the previous day), so
+    # a pure-UTC bound rejected live sessions between 00:00 and 02:00 local —
+    # hit 2026-06-11 ("failed to load smart stats" right after midnight).
+    # UTC+1day covers every TZ convention without admitting far-future dates.
+    today = datetime.now(timezone.utc).date() + timedelta(days=1)
     if parsed > today or parsed < _MIN_SESSION_DATE:
         raise HTTPException(
             status_code=400,
