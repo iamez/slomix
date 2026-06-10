@@ -105,6 +105,7 @@ class SessionDataService:
             WHERE gaming_session_id = ?
               AND round_number IN (1, 2)
               AND (round_status IN ('completed', 'cancelled', 'substitution') OR round_status IS NULL)
+              AND is_valid
             ORDER BY
                 round_date,
                 CAST(REPLACE(round_time, ':', '') AS INTEGER)
@@ -180,6 +181,7 @@ class SessionDataService:
             WHERE gaming_session_id IN ({placeholders})
               AND round_number IN (1, 2)
               AND (round_status IN ('completed', 'cancelled', 'substitution') OR round_status IS NULL)
+              AND is_valid
             ORDER BY
                 gaming_session_id,
                 round_date,

@@ -265,6 +265,14 @@ class _StatsImportMixin:
             if "human_player_count" in self._rounds_columns:
                 insert_cols.append("human_player_count")
                 insert_vals.append(int(stats_data.get("human_player_count", 0) or 0))
+            if "is_valid" in self._rounds_columns:
+                # Flag non-competitive filler maps (e.g. mp_sillyctf played while
+                # waiting for a substitution) so every stats aggregate can exclude
+                # them with a single `AND is_valid` predicate. Default TRUE.
+                from bot.core.round_contract import is_filler_map
+                excluded = getattr(self.config, "excluded_maps", set())
+                insert_cols.append("is_valid")
+                insert_vals.append(not is_filler_map(stats_data.get("map_name"), excluded))
 
             placeholders = ", ".join(["?"] * len(insert_cols))
             insert_round_query = f"""

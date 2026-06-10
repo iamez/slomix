@@ -54,6 +54,7 @@ async def get_maps(db: DatabaseAdapter = Depends(get_db)):
             FROM rounds r
             WHERE r.map_name IS NOT NULL
               AND r.round_number IN (1, 2)
+              AND r.is_valid
             GROUP BY r.map_name
         ),
         player_stats AS (
