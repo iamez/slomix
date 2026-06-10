@@ -1974,7 +1974,8 @@ export async function loadProximityView() {
 // (gravity/space/enabler 10/min, lurker + narratives 5/min) — so this panel
 // is NOT part of the loadScopedProximityData fanout. It loads lazily on
 // first expand and caches the payload per session date.
-const proximityInvisibleCache = {};
+const proximityInvisibleCache = new Map();
+let proximityInvisibleLoadId = 0;
 
 function bindInvisibleValuePanel() {
     const details = document.getElementById('proximity-invisible-details');
@@ -1994,10 +1995,13 @@ async function loadInvisibleValuePanel() {
         if (statusEl) statusEl.textContent = 'No session selected.';
         return;
     }
-    if (proximityInvisibleCache[sessionDate]) {
-        renderInvisibleValue(proximityInvisibleCache[sessionDate], sessionDate);
+    if (proximityInvisibleCache.has(sessionDate)) {
+        renderInvisibleValue(proximityInvisibleCache.get(sessionDate), sessionDate);
         return;
     }
+    // Guard against overlapping loads: a quick session switch while the panel
+    // is open must not let an older response overwrite the newer render.
+    const loadId = ++proximityInvisibleLoadId;
     if (statusEl) statusEl.textContent = `Loading session ${formatDateLabel(sessionDate)}... (first load can take a few seconds)`;
     try {
         const qs = `session_date=${encodeURIComponent(sessionDate)}`;
@@ -2009,10 +2013,13 @@ async function loadInvisibleValuePanel() {
             fetchJSON(`${API_BASE}/storytelling/player-narratives?${qs}`),
         ]);
         const payload = { gravity, space, enabler, lurker, narratives };
-        proximityInvisibleCache[sessionDate] = payload;
+        proximityInvisibleCache.set(sessionDate, payload);
+        if (loadId !== proximityInvisibleLoadId
+            || proximityScopeState.sessionDate !== sessionDate) return;
         renderInvisibleValue(payload, sessionDate);
     } catch (err) {
         console.error('[proximity] invisible value load failed', err);
+        if (loadId !== proximityInvisibleLoadId) return;
         if (statusEl) statusEl.textContent = 'Unable to load (rate limit or server error) — try again in a minute.';
     }
 }

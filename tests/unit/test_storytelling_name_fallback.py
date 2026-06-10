@@ -116,15 +116,18 @@ async def test_kis_names_win_over_fallback() -> None:
 async def test_lurker_profile_reports_coverage() -> None:
     svc = StorytellingService(db=AsyncMock())
     path = '[{"time": 0, "x": 0, "y": 0}, {"time": 1000, "x": 10, "y": 10}]'
+    # The SQL already filters `path IS NOT NULL`, so the realistic skip cases
+    # the worker sees are an empty array and unparseable JSON — use those.
     svc.db.fetch_all = AsyncMock(return_value=[
         (GUID32, "^6S^2uper^6B^2oyy", "AXIS", 1781000000, 0, 5000, 5000, path),
-        (KILLER32, "^3w^7ise^3B^7oy", "AXIS", 1781000000, 0, 5000, 5000, None),
+        (KILLER32, "^3w^7ise^3B^7oy", "AXIS", 1781000000, 0, 5000, 5000, "[]"),
+        (KILLER32, "^3w^7ise^3B^7oy", "AXIS", 1781000000, 0, 5000, 5000, "{corrupt"),
     ])
 
     result = await svc.compute_lurker_profile(SD)
 
     assert result["coverage"] == {
-        "tracks_fetched": 2,
+        "tracks_fetched": 3,
         "tracks_used": 1,
-        "tracks_skipped": 1,
-    }, "NULL-path tracks must be counted as skipped, not silently dropped"
+        "tracks_skipped": 2,
+    }, "empty/unparseable-path tracks must be counted as skipped, not silently dropped"

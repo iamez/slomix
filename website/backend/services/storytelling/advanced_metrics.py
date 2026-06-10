@@ -143,14 +143,27 @@ class _AdvancedMetricsMixin:
         KIS request for the session). Until then every player rendered as
         ``#GUID8``. This fallback uses the same always-present source as
         ``compute_gravity`` so names resolve regardless of KIS state.
+
+        Covers both sides of an engagement: a player who only ever appears as
+        a killer (never engaged as a target) still resolves.
         """
         rows = await self.db.fetch_all("""
-            SELECT LEFT(target_guid, 8), MAX(target_name)
+            SELECT LEFT(target_guid, 8) AS g8, MAX(target_name) AS nm
             FROM combat_engagement
             WHERE session_date = $1 AND target_guid IS NOT NULL
             GROUP BY LEFT(target_guid, 8)
+            UNION ALL
+            SELECT LEFT(killer_guid, 8) AS g8, MAX(killer_name) AS nm
+            FROM combat_engagement
+            WHERE session_date = $1
+              AND killer_guid IS NOT NULL AND killer_name IS NOT NULL
+            GROUP BY LEFT(killer_guid, 8)
         """, (sd,))
-        return {r[0]: strip_et_colors(r[1] or r[0]) for r in (rows or []) if r[0]}
+        names: dict[str, str] = {}
+        for r in (rows or []):
+            if r[0] and r[0] not in names:
+                names[r[0]] = strip_et_colors(r[1] or r[0])
+        return names
 
     async def compute_gravity(self, session_date: str | date) -> dict:
         """Compute Gravity Score: how much enemy attention each player attracts.
