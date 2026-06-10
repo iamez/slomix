@@ -2154,6 +2154,134 @@
                     </div>
                 </div>
 
+                <!-- Invisible Value — the four storytelling metrics that never
+                     made it to the legacy dashboard (gravity / space created /
+                     enabler / lurker) + per-player narratives. Session-wide by
+                     design (the /storytelling endpoints take only session_date)
+                     and rate-limited (5-10/min), so the panel loads lazily on
+                     first expand and caches per session in JS. -->
+                <details id="proximity-invisible-details" class="mt-6">
+                    <summary class="cursor-pointer select-none text-sm font-bold text-slate-400 mb-3">Invisible Value — what the scoreboard doesn't show ▾</summary>
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Invisible Value</div>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-brand-cyan/10 text-brand-cyan">session-wide</span>
+                        </div>
+                        <div id="proximity-invisible-status" class="text-[11px] text-slate-500 mb-4">Expand to load.</div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                            <div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Share of alive time spent under enemy attention (engagement duration weighted by attackers). Drawing heat creates space for teammates.">Gravity</div>
+                                <div class="text-[10px] text-slate-600 mb-2">who pulls enemy attention</div>
+                                <div id="proximity-invisible-gravity" class="space-y-1"></div>
+                            </div>
+                            <div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Share of deaths where teammates capitalized within 10s — productive deaths vs wasted deaths.">Space Created</div>
+                                <div class="text-[10px] text-slate-600 mb-2">whose deaths the team converts</div>
+                                <div id="proximity-invisible-space" class="space-y-1"></div>
+                            </div>
+                            <div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Teammate kills enabled per minute alive — nearby kills (±5s, ≤500u) plus trades.">Enabler</div>
+                                <div class="text-[10px] text-slate-600 mb-2">who creates kills for others</div>
+                                <div id="proximity-invisible-enabler" class="space-y-1"></div>
+                            </div>
+                            <div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Share of alive time spent 500+ units from the nearest teammate.">Lurker</div>
+                                <div class="text-[10px] text-slate-600 mb-2">who operates alone</div>
+                                <div id="proximity-invisible-lurker" class="space-y-1"></div>
+                            </div>
+                        </div>
+                        <div class="mt-6">
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Player Narratives</div>
+                            <div id="proximity-invisible-narratives" class="grid grid-cols-1 lg:grid-cols-2 gap-3 text-xs text-slate-300"></div>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- Player Journey — every spawn→death life of one player in
+                     one round, with kills/deaths, spawn-timing usage, solo
+                     segments and objective overlap. Backend:
+                     GET /api/proximity/player-journey (per-round scoped). -->
+                <div class="glass-panel p-6 rounded-xl mt-6">
+                    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                        <div class="text-sm font-bold text-slate-400">Player Journey</div>
+                        <div class="flex items-center gap-2">
+                            <select id="proximity-journey-player" aria-label="Journey player" class="w-56 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200"></select>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-brand-emerald/10 text-brand-emerald">per round</span>
+                        </div>
+                    </div>
+                    <div id="proximity-journey-status" class="text-[11px] text-slate-500 mb-3">Pick a round in Scope above, then a player — every life gets traced on the map.</div>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <div class="lg:col-span-2">
+                            <canvas id="proximity-journey-canvas" class="w-full rounded-lg border border-white/10 bg-slate-950/40" style="height: 360px;"></canvas>
+                            <div class="flex flex-wrap gap-3 mt-2 text-[10px] text-slate-500">
+                                <span><span class="inline-block w-2 h-2 rounded-full" style="background: rgb(34,211,238)"></span> safe (enemy far)</span>
+                                <span><span class="inline-block w-2 h-2 rounded-full" style="background: rgb(244,63,94)"></span> danger (enemy ≤500u)</span>
+                                <span>▲ kill</span><span>✖ death</span><span>● spawn</span>
+                                <span class="border-b border-dashed border-slate-500">solo segment (no teammate ≤500u)</span>
+                            </div>
+                            <!-- Per-life timeline: 1s bands — danger (enemy ≤500u) /
+                                 solo / grouped, with kill/death/objective markers. -->
+                            <div id="proximity-journey-timeline" class="relative flex w-full h-6 rounded overflow-hidden border border-white/10 mt-2 hidden"></div>
+                            <div id="proximity-journey-timeline-caption" class="text-[10px] text-slate-500 mt-1"></div>
+                            <div id="proximity-journey-narrative" class="text-[11px] text-slate-400 mt-2"></div>
+                        </div>
+                        <div id="proximity-journey-lives" class="space-y-1 max-h-[420px] overflow-y-auto pr-1"></div>
+                    </div>
+                </div>
+
+                <!-- Stopwatch Competitive — esports-benchmark metrics native to
+                     ET wave-respawn play (docs/ANALYTICS_BENCHMARK_2026-06.md):
+                     stagger index, first-blood conversion, wave-cycle fight
+                     ledger (round-scoped), personal-best session cards.
+                     Backend: /api/proximity/competitive/* -->
+                <div class="glass-panel p-6 rounded-xl mt-6">
+                    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                        <div class="text-sm font-bold text-slate-400">Stopwatch Competitive</div>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-brand-amber/10 text-brand-amber">wave meta</span>
+                    </div>
+                    <div id="proximity-competitive-summary" class="flex flex-wrap gap-3 mb-4"></div>
+                    <!-- Wave-cycle fight ledger (visible when a round is selected) -->
+                    <div id="proximity-wave-ledger-wrap" class="mb-5 hidden">
+                        <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="The round segmented at every reinforcement-wave landing. Each cycle is scored by kills and denied respawn time.">Wave-Cycle Fight Ledger</div>
+                        <div id="proximity-wave-ledger" class="flex w-full h-10 rounded overflow-hidden border border-white/10"></div>
+                        <div id="proximity-wave-ledger-caption" class="text-[10px] text-slate-500 mt-1"></div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Stagger kill = the victim loses 80%+ of their spawn wave. The costliest kill in stopwatch.">Stagger Leaders</div>
+                            <div class="text-[10px] text-slate-600 mb-2">kills that erase a whole enemy wave</div>
+                            <div id="proximity-competitive-stagger" class="space-y-1"></div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Who draws first blood — and how often their team converts it into the round win.">First Blood</div>
+                            <div class="text-[10px] text-slate-600 mb-2">opening picks per player (picks / first deaths)</div>
+                            <div id="proximity-competitive-firstblood" class="space-y-1"></div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="New personal records set in this session, vs the player's own history.">Personal Bests</div>
+                            <div class="text-[10px] text-slate-600 mb-2">records broken this session</div>
+                            <div id="proximity-competitive-pbs" class="space-y-2"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- v7 Capture Roadmap — the four dormant Lua 6.10 capture
+                     capabilities (docs/LUA_V7_CAPTURE_RESEARCH_2026-06.md).
+                     Cards flip from "awaiting deploy" to live row counts the
+                     moment the owner enables a flag on the game server. -->
+                <details class="mt-6">
+                    <summary class="cursor-pointer select-none text-sm font-bold text-slate-400 mb-3">v7 Capture Roadmap — what's coming next ▾</summary>
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">v7 Capture Capabilities</div>
+                            <span id="proximity-v7-badge" class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-700/40 text-slate-400">checking...</span>
+                        </div>
+                        <div id="proximity-v7-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="text-[11px] text-slate-500">Loading...</div>
+                        </div>
+                    </div>
+                </details>
+
                 <!-- ===== ③ Map Context — this map's blood & objective pull ===== -->
                 <!-- Phase 4 IA: Engagement Timeline sparkline removed (blueprint
                      CUT). Map Context (hotzone heatmap) is now full-width. -->

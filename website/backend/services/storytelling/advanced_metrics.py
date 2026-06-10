@@ -135,6 +135,36 @@ def _compute_lurker_solo(track_rows: list) -> tuple[dict, dict]:
 class _AdvancedMetricsMixin:
     """Advanced Metrics methods for StorytellingService."""
 
+    async def _fallback_canonical_names(self, sd: date) -> dict[str, str]:
+        """Names keyed by 8-char canonical guid, sourced from combat_engagement.
+
+        ``compute_space_created``/``compute_enabler`` resolve names from
+        ``storytelling_kill_impact``, but that table is populated lazily (first
+        KIS request for the session). Until then every player rendered as
+        ``#GUID8``. This fallback uses the same always-present source as
+        ``compute_gravity`` so names resolve regardless of KIS state.
+
+        Covers both sides of an engagement: a player who only ever appears as
+        a killer (never engaged as a target) still resolves.
+        """
+        rows = await self.db.fetch_all("""
+            SELECT LEFT(target_guid, 8) AS g8, MAX(target_name) AS nm
+            FROM combat_engagement
+            WHERE session_date = $1 AND target_guid IS NOT NULL
+            GROUP BY LEFT(target_guid, 8)
+            UNION ALL
+            SELECT LEFT(killer_guid, 8) AS g8, MAX(killer_name) AS nm
+            FROM combat_engagement
+            WHERE session_date = $1
+              AND killer_guid IS NOT NULL AND killer_name IS NOT NULL
+            GROUP BY LEFT(killer_guid, 8)
+        """, (sd,))
+        names: dict[str, str] = {}
+        for r in (rows or []):
+            if r[0] and r[0] not in names:
+                names[r[0]] = strip_et_colors(r[1] or r[0])
+        return names
+
     async def compute_gravity(self, session_date: str | date) -> dict:
         """Compute Gravity Score: how much enemy attention each player attracts.
 
@@ -277,14 +307,16 @@ class _AdvancedMetricsMixin:
                     player_stats[victim_short]["productive"] += 1
                     player_stats[victim_short]["teammate_kills_after"] += teammate_kills
 
-        # Resolve names
+        # Resolve names (KIS table first, combat_engagement fallback — KIS is
+        # lazily populated, see _fallback_canonical_names)
         name_rows = await self.db.fetch_all("""
             SELECT killer_guid_canonical, MAX(killer_name)
             FROM storytelling_kill_impact
             WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
             GROUP BY killer_guid_canonical
         """, (sd,))
-        name_map = {r[0]: strip_et_colors(r[1] or r[0]) for r in (name_rows or [])}
+        name_map = await self._fallback_canonical_names(sd)
+        name_map.update({r[0]: strip_et_colors(r[1] or r[0]) for r in (name_rows or [])})
 
         players = []
         for guid, stats in player_stats.items():
@@ -423,14 +455,16 @@ class _AdvancedMetricsMixin:
             if r[0] in player_stats:
                 player_stats[r[0]]["trade_assists"] = int(r[1] or 0)
 
-        # Resolve names + compute score
+        # Resolve names + compute score (KIS table first, combat_engagement
+        # fallback — KIS is lazily populated, see _fallback_canonical_names)
         name_rows = await self.db.fetch_all("""
             SELECT killer_guid_canonical, MAX(killer_name)
             FROM storytelling_kill_impact
             WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
             GROUP BY killer_guid_canonical
         """, (sd,))
-        name_map = {r[0]: strip_et_colors(r[1] or r[0]) for r in (name_rows or [])}
+        name_map = await self._fallback_canonical_names(sd)
+        name_map.update({r[0]: strip_et_colors(r[1] or r[0]) for r in (name_rows or [])})
 
         # Alive time for normalization
         alive_rows = await self.db.fetch_all("""
@@ -533,6 +567,10 @@ class _AdvancedMetricsMixin:
 
         players.sort(key=lambda p: p["solo_pct"], reverse=True)
 
+        # Coverage: the worker silently skips tracks with unparseable/empty
+        # paths — surface how much data actually fed the metric so the UI can
+        # show confidence (0 skips today per E2E verification 2026-06-10).
+        tracks_used = sum(s["tracks"] for s in player_stats.values())
         return {
             "status": "ok",
             "session_date": str(sd),
@@ -540,6 +578,11 @@ class _AdvancedMetricsMixin:
             "description": f"Percentage of alive time spent >={SOLO_RADIUS}u from nearest teammate.",
             "solo_radius": SOLO_RADIUS,
             "downsample_ms": DOWNSAMPLE_MS,
+            "coverage": {
+                "tracks_fetched": len(track_rows),
+                "tracks_used": tracks_used,
+                "tracks_skipped": len(track_rows) - tracks_used,
+            },
             "players": players,
         }
 
