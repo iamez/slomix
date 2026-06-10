@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.19.0](https://github.com/iamez/slomix/compare/v1.18.0...v1.19.0) (2026-06-10)
+
+
+### Features
+
+* **proximity:** vision sweep — E2E audit, Invisible Value panel, Player Journey + fixes ([#376](https://github.com/iamez/slomix/issues/376)) ([d2558a8](https://github.com/iamez/slomix/commit/d2558a8eef45a17d593f07c02a7e3d7973963ca7))
+
 ## [1.18.0](https://github.com/iamez/slomix/compare/v1.17.0...v1.18.0) (2026-06-10)
 
 
