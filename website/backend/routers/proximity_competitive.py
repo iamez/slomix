@@ -859,3 +859,120 @@ async def get_side_splits(
         ),
         "players": out,
     }
+
+
+@router.get("/proximity/competitive/player-card")
+async def get_player_card(
+    player_guid: str = Query(..., min_length=8, max_length=32),
+    range_days: int = 90,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Player passport card: one player's competitive profile in one call.
+
+    Stagger and side splits cover range_days; clutch and man-advantage are
+    computed over the last 30 days (they need full-round timelines, which is
+    the expensive part — 30 days bounds it).
+    """
+    guid = player_guid.strip().upper()
+
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, None, None, None, None,
+    )
+    params.append(STAGGER_THRESHOLD)
+    thr = len(params)
+    params.append(guid + "%")
+    g = len(params)
+    stagger_row = await db.fetch_one(
+        f"""
+        SELECT MAX(killer_name), COUNT(*),
+               COUNT(*) FILTER (
+                   WHERE enemy_spawn_interval > 0
+                     AND time_to_next_spawn >= ${thr}::float8 * enemy_spawn_interval
+               ),
+               SUM(time_to_next_spawn), AVG(spawn_timing_score)
+        FROM proximity_spawn_timing
+        {where_sql} AND killer_guid LIKE ${g} AND killer_guid <> victim_guid
+        """,  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
+        tuple(params),
+    )
+    kills = int(stagger_row[1] or 0) if stagger_row else 0
+    if not kills:
+        return {
+            "status": "ok", "player": None, "scope": scope,
+            "message": "No competitive data for this player in range.",
+        }
+    name = strip_et_colors(stagger_row[0] or guid[:8])
+    stagger = {
+        "kills": kills,
+        "stagger_kills": int(stagger_row[2] or 0),
+        "stagger_rate": round(int(stagger_row[2] or 0) / kills * 100, 1),
+        "denied_s": round(int(stagger_row[3] or 0) / 1000, 1),
+        "avg_score": round(float(stagger_row[4] or 0), 3),
+    }
+
+    side_where, side_params, _ = _build_proximity_where_clause(
+        range_days, None, None, None, None, alias="st",
+    )
+    side_params.append(guid + "%")
+    sg = len(side_params)
+    side_rows = await db.fetch_all(
+        f"""
+        SELECT CASE WHEN (CASE st.killer_team WHEN 'AXIS' THEN 1 WHEN 'ALLIES' THEN 2 END) = r.defender_team
+                    THEN 'defense' ELSE 'attack' END AS side,
+               COUNT(*), SUM(st.time_to_next_spawn)
+        FROM proximity_spawn_timing st
+        JOIN rounds r ON r.id = st.round_id
+        {side_where} AND st.killer_guid LIKE ${sg}
+          AND st.killer_guid <> st.victim_guid AND r.defender_team IN (1, 2)
+        GROUP BY side
+        """,  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
+        tuple(side_params),
+    )
+    sides = {
+        r[0]: {"kills": int(r[1]), "denied_s": round(int(r[2] or 0) / 1000, 1)}
+        for r in (side_rows or [])
+    }
+
+    # Full-round timelines for clutch + man-advantage (bounded to 30 days).
+    tl_where, tl_params, _ = _build_proximity_where_clause(30, None, None, None, None)
+    rounds = await _fetch_round_lives_and_kills(db, tl_where, tl_params)
+    clutch = {"situations": 0, "wins": 0, "best": None}
+    ma_conversions = 0
+    for data in rounds.values():
+        if not data["lives"]:
+            continue
+        for w in _advantage_windows(data["lives"], data["kills"], data["end_ms"]):
+            if w["converted"] and (w["converter_guid"] or "").upper().startswith(guid):
+                ma_conversions += 1
+        if not data["clocks"]:
+            continue
+        for sit in _detect_clutches(
+            data["lives"], data["kills"], data["clocks"], data["end_ms"]
+        ):
+            if not sit["guid"].upper().startswith(guid):
+                continue
+            clutch["situations"] += 1
+            if sit["won"]:
+                clutch["wins"] += 1
+                best = clutch["best"]
+                if best is None or (sit["enemies"], sit["kills"]) > (best["enemies"], best["kills"]):
+                    clutch["best"] = {
+                        "enemies": sit["enemies"], "kills": sit["kills"],
+                        "survived": sit["survived"],
+                    }
+    clutch["win_pct"] = (
+        round(clutch["wins"] / clutch["situations"] * 100, 1)
+        if clutch["situations"] else 0.0
+    )
+
+    return {
+        "status": "ok",
+        "scope": scope,
+        "player": {"guid": guid, "name": name},
+        "range_days": range_days,
+        "timeline_range_days": 30,
+        "stagger": stagger,
+        "sides": sides,
+        "clutch": clutch,
+        "man_advantage": {"conversions": ma_conversions},
+    }
