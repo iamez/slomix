@@ -2197,6 +2197,34 @@
                     </div>
                 </details>
 
+                <!-- Player Journey — every spawn→death life of one player in
+                     one round, with kills/deaths, spawn-timing usage, solo
+                     segments and objective overlap. Backend:
+                     GET /api/proximity/player-journey (per-round scoped). -->
+                <div class="glass-panel p-6 rounded-xl mt-6">
+                    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                        <div class="text-sm font-bold text-slate-400">Player Journey</div>
+                        <div class="flex items-center gap-2">
+                            <select id="proximity-journey-player" aria-label="Journey player" class="w-56 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200"></select>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-brand-emerald/10 text-brand-emerald">per round</span>
+                        </div>
+                    </div>
+                    <div id="proximity-journey-status" class="text-[11px] text-slate-500 mb-3">Pick a round in Scope above, then a player — every life gets traced on the map.</div>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <div class="lg:col-span-2">
+                            <canvas id="proximity-journey-canvas" class="w-full rounded-lg border border-white/10 bg-slate-950/40" style="height: 360px;"></canvas>
+                            <div class="flex flex-wrap gap-3 mt-2 text-[10px] text-slate-500">
+                                <span><span class="inline-block w-2 h-2 rounded-full" style="background: rgb(34,211,238)"></span> safe (enemy far)</span>
+                                <span><span class="inline-block w-2 h-2 rounded-full" style="background: rgb(244,63,94)"></span> danger (enemy ≤500u)</span>
+                                <span>▲ kill</span><span>✖ death</span><span>● spawn</span>
+                                <span class="border-b border-dashed border-slate-500">solo segment (no teammate ≤500u)</span>
+                            </div>
+                            <div id="proximity-journey-narrative" class="text-[11px] text-slate-400 mt-2"></div>
+                        </div>
+                        <div id="proximity-journey-lives" class="space-y-1 max-h-[420px] overflow-y-auto pr-1"></div>
+                    </div>
+                </div>
+
                 <!-- ===== ③ Map Context — this map's blood & objective pull ===== -->
                 <!-- Phase 4 IA: Engagement Timeline sparkline removed (blueprint
                      CUT). Map Context (hotzone heatmap) is now full-width. -->

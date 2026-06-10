@@ -1820,6 +1820,7 @@ async function loadScopedProximityData() {
                 renderCombatPositionStats(combatPosStatsRes.value);
             }
             bindV52PanelEvents();
+            bindJourneyPanel();
             // Reload leaderboards with current scope
             loadLeaderboardData();
         }
@@ -2049,6 +2050,268 @@ function renderInvisibleValue(payload, sessionDate) {
                     <div class="text-[11px] text-slate-400">${escapeHtml(n.narrative || '')}</div>
                 </div>`).join('')
             : '<div class="text-[11px] text-slate-500">No narratives for this session yet.</div>';
+    }
+}
+
+/* ===== PLAYER JOURNEY (per-round spawn→death traces with context) ===== */
+
+const proximityJourneyState = {
+    guid: '',
+    payload: null,
+    selectedLife: 1,
+    scopeKey: '',
+};
+
+function journeyScopeKey() {
+    return [
+        proximityScopeState.sessionDate,
+        proximityScopeState.mapName,
+        proximityScopeState.roundNumber,
+        proximityScopeState.roundStartUnix,
+    ].join('|');
+}
+
+function bindJourneyPanel() {
+    const select = document.getElementById('proximity-journey-player');
+    if (!select) return;
+    if (!select.dataset.bound) {
+        select.dataset.bound = '1';
+        select.onchange = () => {
+            proximityJourneyState.guid = select.value || '';
+            proximityJourneyState.payload = null;
+            void loadPlayerJourney();
+        };
+    }
+    // Repopulate on every scoped load; invalidate stale payload on scope change.
+    const key = journeyScopeKey();
+    if (key !== proximityJourneyState.scopeKey) {
+        proximityJourneyState.scopeKey = key;
+        proximityJourneyState.payload = null;
+    }
+    void (async () => {
+        try {
+            const data = await fetchJSON(scopedUrl('/proximity/players', { includeRange: false }));
+            const players = Array.isArray(data?.players) ? data.players : [];
+            const opts = [{ value: '', label: '— select player —' }].concat(
+                players.map((p) => ({ value: p.guid, label: stripEtColors(p.name || p.guid) })),
+            );
+            setSelectOptions(select, opts, proximityJourneyState.guid || '');
+        } catch (err) {
+            console.warn('[proximity] journey players load failed', err);
+        }
+        void loadPlayerJourney();
+    })();
+}
+
+async function loadPlayerJourney() {
+    const statusEl = document.getElementById('proximity-journey-status');
+    const livesEl = document.getElementById('proximity-journey-lives');
+    const { sessionDate, mapName, roundNumber, roundStartUnix } = proximityScopeState;
+    if (!sessionDate || !mapName || roundNumber == null) {
+        if (statusEl) statusEl.textContent = 'Pick a round in Scope above, then a player — every life gets traced on the map.';
+        if (livesEl) livesEl.innerHTML = '';
+        clearJourneyCanvas();
+        return;
+    }
+    if (!proximityJourneyState.guid) {
+        if (statusEl) statusEl.textContent = 'Pick a player to trace their lives in this round.';
+        if (livesEl) livesEl.innerHTML = '';
+        clearJourneyCanvas();
+        return;
+    }
+    if (statusEl) statusEl.textContent = 'Loading journey...';
+    try {
+        const params = new URLSearchParams({
+            session_date: sessionDate,
+            map_name: mapName,
+            round_number: String(roundNumber),
+            player_guid: proximityJourneyState.guid,
+        });
+        if (roundStartUnix != null) params.set('round_start_unix', String(roundStartUnix));
+        const payload = await fetchJSON(`${API_BASE}/proximity/player-journey?${params.toString()}`);
+        proximityJourneyState.payload = payload;
+        proximityJourneyState.selectedLife = 1;
+        renderJourney(payload);
+    } catch (err) {
+        console.error('[proximity] journey load failed', err);
+        if (statusEl) statusEl.textContent = 'Unable to load journey for this selection.';
+    }
+}
+
+function renderJourney(payload) {
+    const statusEl = document.getElementById('proximity-journey-status');
+    const livesEl = document.getElementById('proximity-journey-lives');
+    const lives = payload?.lives || [];
+    if (!lives.length) {
+        if (statusEl) statusEl.textContent = payload?.message || 'No tracks for this player in the selected round.';
+        if (livesEl) livesEl.innerHTML = '';
+        clearJourneyCanvas();
+        return;
+    }
+    const s = payload.summary || {};
+    const name = stripEtColors(payload.player?.name || '');
+    if (statusEl) {
+        statusEl.textContent = `${name} — ${s.lives} lives, ${s.kills} kills / ${s.deaths} deaths, avg life ${s.avg_life_s}s. Click a life to trace it.`;
+    }
+    if (livesEl) {
+        livesEl.innerHTML = lives.map((life) => {
+            const dur = (life.duration_ms / 1000).toFixed(0);
+            const kd = `${(life.kills || []).length}K${life.death ? '/1D' : ''}`;
+            const solo = life.solo_pct != null ? `${life.solo_pct.toFixed(0)}% solo` : '';
+            const obj = (life.objective_events || []).length ? ' • obj' : '';
+            const active = life.life_index === proximityJourneyState.selectedLife;
+            return `
+                <button class="journey-life-row w-full text-left px-2 py-1.5 rounded border text-[11px] transition ${active
+                    ? 'bg-brand-emerald/10 border-brand-emerald/40 text-slate-200'
+                    : 'bg-slate-900/50 border-white/10 text-slate-400 hover:text-slate-200'}"
+                    data-life="${life.life_index}">
+                    <span class="font-bold">#${life.life_index}</span>
+                    <span class="text-slate-500">${escapeHtml(String(life.player_class || '').toLowerCase())}</span>
+                    ${dur}s • ${kd}${solo ? ` • ${solo}` : ''}${obj}
+                </button>`;
+        }).join('');
+        livesEl.querySelectorAll('.journey-life-row').forEach((btn) => {
+            btn.onclick = () => {
+                proximityJourneyState.selectedLife = Number(btn.dataset.life) || 1;
+                renderJourney(proximityJourneyState.payload);
+            };
+        });
+    }
+    const life = lives.find((l) => l.life_index === proximityJourneyState.selectedLife) || lives[0];
+    const narrativeEl = document.getElementById('proximity-journey-narrative');
+    if (narrativeEl) narrativeEl.textContent = life.narrative || '';
+    void drawJourneyLife(life, payload.scope?.map_name || proximityScopeState.mapName);
+}
+
+function clearJourneyCanvas() {
+    const canvas = document.getElementById('proximity-journey-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const narrativeEl = document.getElementById('proximity-journey-narrative');
+    if (narrativeEl) narrativeEl.textContent = '';
+}
+
+// Color a path point by enemy distance: cyan (safe) → rose (enemy ≤500u).
+function journeyDangerColor(enemyDist, alpha = 0.9) {
+    if (!Number.isFinite(enemyDist)) return `rgba(34, 211, 238, ${alpha})`;
+    const t = clamp(1 - enemyDist / 1500, 0, 1);
+    const r = Math.round(34 + (244 - 34) * t);
+    const g = Math.round(211 + (63 - 211) * t);
+    const b = Math.round(238 + (94 - 238) * t);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+async function drawJourneyLife(life, mapName) {
+    const canvas = document.getElementById('proximity-journey-canvas');
+    if (!canvas || !life) return;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth || 640;
+    const height = canvas.clientHeight || 360;
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, width, height);
+
+    await ensureMapTransformConfig();
+    const transform = getMapTransformEntry(mapName);
+    const worldBounds = getWorldBounds(transform);
+    const mapImage = await preloadMapImage(transform?.image || null);
+    if (mapImage) {
+        ctx.save();
+        ctx.globalAlpha = 0.3;
+        ctx.drawImage(mapImage, 0, 0, width, height);
+        ctx.restore();
+    }
+    if (!worldBounds) {
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.8)';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('Map not calibrated — journey path unavailable for this map.', 12, 20);
+        return;
+    }
+
+    await ensureObjectiveZonesConfig();
+    if (proximityVizState.showObjectiveZones) {
+        const zones = getObjectiveZonesForMap(mapName).filter(shouldRenderObjectiveZone);
+        drawObjectiveZones(ctx, width, height, worldBounds, zones);
+    }
+
+    // 1s lookup of the proximity series for danger color + solo dashes.
+    const seriesByBucket = new Map();
+    for (const sample of life.proximity_series || []) {
+        seriesByBucket.set(Math.round(sample.t / 1000), sample);
+    }
+    const seriesAt = (t) => seriesByBucket.get(Math.round(t / 1000))
+        || seriesByBucket.get(Math.round(t / 1000) - 1)
+        || null;
+
+    const path = (life.path || []).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+    for (let i = 1; i < path.length; i += 1) {
+        const a = worldToCanvasPoint(path[i - 1].x, path[i - 1].y, width, height, worldBounds);
+        const b = worldToCanvasPoint(path[i].x, path[i].y, width, height, worldBounds);
+        if (!a || !b) continue;
+        const ctxSample = seriesAt(path[i].t);
+        const solo = ctxSample && Number.isFinite(ctxSample.nearest_teammate)
+            ? ctxSample.nearest_teammate > 500
+            : false;
+        ctx.save();
+        ctx.strokeStyle = journeyDangerColor(ctxSample?.nearest_enemy);
+        ctx.lineWidth = solo ? 1.4 : 2.2;
+        ctx.setLineDash(solo ? [4, 3] : []);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // Spawn marker
+    if (path.length) {
+        const sp = worldToCanvasPoint(path[0].x, path[0].y, width, height, worldBounds);
+        if (sp) {
+            ctx.fillStyle = 'rgba(34, 197, 94, 0.95)';
+            ctx.beginPath();
+            ctx.arc(sp.x, sp.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    // Kill markers (▲) at the nearest path point to each kill time.
+    const pointAt = (t) => {
+        let best = null;
+        let bestDt = Infinity;
+        for (const p of path) {
+            const dt = Math.abs(p.t - t);
+            if (dt < bestDt) { bestDt = dt; best = p; }
+        }
+        return best;
+    };
+    for (const kill of life.kills || []) {
+        const p = pointAt(kill.time);
+        const cp = p && worldToCanvasPoint(p.x, p.y, width, height, worldBounds);
+        if (!cp) continue;
+        ctx.fillStyle = 'rgba(251, 191, 36, 0.95)';
+        ctx.beginPath();
+        ctx.moveTo(cp.x, cp.y - 6);
+        ctx.lineTo(cp.x - 5, cp.y + 4);
+        ctx.lineTo(cp.x + 5, cp.y + 4);
+        ctx.closePath();
+        ctx.fill();
+    }
+    // Death marker (✖)
+    if (life.death && path.length) {
+        const p = pointAt(life.death.time);
+        const cp = p && worldToCanvasPoint(p.x, p.y, width, height, worldBounds);
+        if (cp) {
+            ctx.strokeStyle = 'rgba(244, 63, 94, 0.95)';
+            ctx.lineWidth = 2.4;
+            ctx.beginPath();
+            ctx.moveTo(cp.x - 5, cp.y - 5);
+            ctx.lineTo(cp.x + 5, cp.y + 5);
+            ctx.moveTo(cp.x + 5, cp.y - 5);
+            ctx.lineTo(cp.x - 5, cp.y + 5);
+            ctx.stroke();
+        }
     }
 }
 
