@@ -3363,22 +3363,28 @@ local function outputDataInner()
     end
 
     -- ===== SKILL_SNAPSHOT (v7 draft, 6.10) =====
-    -- One row per tracked player at round end: the 7 sess.skill values
+    -- One row per connected team player at round end: the 7 sess.skill values
     -- (SK_BATTLE_SENSE..SK_COVERTOPS, indices 0-6 per the Lua docs).
+    -- Iterates connected clients, NOT tracker.player_tracks — by output time
+    -- every live track has been closed into completed_tracks and
+    -- player_tracks is empty (verified in the 2026-06-11 testmode probe).
     if isFeatureEnabled("skill_snapshot") then
         local rows = {}
         local seen = {}
-        for clientnum, track in pairs(tracker.player_tracks) do
-            if track.guid and not seen[track.guid] and isValidClient(clientnum) then
-                seen[track.guid] = true
-                local skills = {}
-                for i = 0, 6 do
-                    skills[#skills + 1] = tostring(
-                        math.tointeger(tonumber(safe_gentity_get(clientnum, "sess.skill", i)) or 0) or 0)
+        for clientnum = 0, get_max_clients() - 1 do
+            if isPlayerActive(clientnum) then
+                local guid = getPlayerGUID(clientnum)
+                if guid and guid ~= "" and not seen[guid] then
+                    seen[guid] = true
+                    local skills = {}
+                    for i = 0, 6 do
+                        skills[#skills + 1] = tostring(
+                            math.tointeger(tonumber(safe_gentity_get(clientnum, "sess.skill", i)) or 0) or 0)
+                    end
+                    rows[#rows + 1] = string.format("%s;%s;%s;%s\n",
+                        guid, getPlayerName(clientnum), getPlayerTeam(clientnum),
+                        table.concat(skills, ";"))
                 end
-                rows[#rows + 1] = string.format("%s;%s;%s;%s\n",
-                    track.guid, track.name, track.team,
-                    table.concat(skills, ";"))
             end
         end
         if #rows > 0 then
