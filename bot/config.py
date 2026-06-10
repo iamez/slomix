@@ -165,6 +165,15 @@ class BotConfig:
         # MUST be less than session_gap_minutes to avoid cross-session matching
         self.round_match_window_minutes: int = int(self._get_config('ROUND_MATCH_WINDOW_MINUTES', '45'))
 
+        # Non-competitive "filler" maps played while waiting for a substitution
+        # (e.g. mp_sillyctf, a CTF map). Rounds on these maps are flagged
+        # rounds.is_valid = FALSE at import and excluded from all stats/leaderboards.
+        # Comma-separated, case-insensitive. See bot/core/round_contract.is_filler_map.
+        _excluded = self._get_config('EXCLUDED_MAPS', 'mp_sillyctf') or ''
+        self.excluded_maps: set[str] = {
+            m.strip().lower() for m in str(_excluded).split(',') if m.strip()
+        }
+
         # Monitoring grace period: Keep checking for files after voice channel empties
         # Default matches round_match_window_minutes for consistency
         self.monitoring_grace_period_minutes: int = int(self._get_config('MONITORING_GRACE_PERIOD_MINUTES', '45'))

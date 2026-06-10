@@ -156,6 +156,7 @@ class SessionStatsAggregator:
                 WHERE p.round_id IN ({session_ids_str})
                   AND r.round_number IN (1, 2)
                   AND (r.round_status = 'completed' OR r.round_status IS NULL)
+                  AND r.is_valid
                 GROUP BY p.team
             """
             return await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
@@ -171,6 +172,7 @@ class SessionStatsAggregator:
             WHERE p.round_id IN ({session_ids_str})
               AND r.round_number IN (1, 2)
               AND (r.round_status = 'completed' OR r.round_status IS NULL)
+              AND r.is_valid
             GROUP BY p.player_guid
         """
         player_stats = await self.db_adapter.fetch_all(query.format(session_ids_str=session_ids_str), tuple(session_ids))
@@ -225,6 +227,7 @@ class SessionStatsAggregator:
               AND round_number IN (1, 2)
               AND winner_team > 0
               AND (round_status = 'completed' OR round_status IS NULL)
+              AND is_valid
             GROUP BY winner_team
             ORDER BY winner_team
         """
