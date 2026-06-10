@@ -2225,6 +2225,42 @@
                     </div>
                 </div>
 
+                <!-- Stopwatch Competitive — esports-benchmark metrics native to
+                     ET wave-respawn play (docs/ANALYTICS_BENCHMARK_2026-06.md):
+                     stagger index, first-blood conversion, wave-cycle fight
+                     ledger (round-scoped), personal-best session cards.
+                     Backend: /api/proximity/competitive/* -->
+                <div class="glass-panel p-6 rounded-xl mt-6">
+                    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                        <div class="text-sm font-bold text-slate-400">Stopwatch Competitive</div>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-brand-amber/10 text-brand-amber">wave meta</span>
+                    </div>
+                    <div id="proximity-competitive-summary" class="flex flex-wrap gap-3 mb-4"></div>
+                    <!-- Wave-cycle fight ledger (visible when a round is selected) -->
+                    <div id="proximity-wave-ledger-wrap" class="mb-5 hidden">
+                        <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="The round segmented at every reinforcement-wave landing. Each cycle is scored by kills and denied respawn time.">Wave-Cycle Fight Ledger</div>
+                        <div id="proximity-wave-ledger" class="flex w-full h-10 rounded overflow-hidden border border-white/10"></div>
+                        <div id="proximity-wave-ledger-caption" class="text-[10px] text-slate-500 mt-1"></div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Stagger kill = the victim loses 80%+ of their spawn wave. The costliest kill in stopwatch.">Stagger Leaders</div>
+                            <div class="text-[10px] text-slate-600 mb-2">kills that erase a whole enemy wave</div>
+                            <div id="proximity-competitive-stagger" class="space-y-1"></div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Who draws first blood — and how often their team converts it into the round win.">First Blood</div>
+                            <div class="text-[10px] text-slate-600 mb-2">opening picks per player (picks / first deaths)</div>
+                            <div id="proximity-competitive-firstblood" class="space-y-1"></div>
+                        </div>
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="New personal records set in this session, vs the player's own history.">Personal Bests</div>
+                            <div class="text-[10px] text-slate-600 mb-2">records broken this session</div>
+                            <div id="proximity-competitive-pbs" class="space-y-2"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- ===== ③ Map Context — this map's blood & objective pull ===== -->
                 <!-- Phase 4 IA: Engagement Timeline sparkline removed (blueprint
                      CUT). Map Context (hotzone heatmap) is now full-width. -->

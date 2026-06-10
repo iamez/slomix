@@ -8,6 +8,7 @@ from fastapi import APIRouter
 
 from website.backend.routers.proximity_combat import router as combat_router
 from website.backend.routers.proximity_dashboard import router as dashboard_router
+from website.backend.routers.proximity_competitive import router as competitive_router
 from website.backend.routers.proximity_events import router as events_router
 from website.backend.routers.proximity_journey import router as journey_router
 from website.backend.routers.proximity_movement import router as movement_router
@@ -34,4 +35,5 @@ router.include_router(positions_router)
 router.include_router(support_router)
 router.include_router(events_router)
 router.include_router(journey_router)
+router.include_router(competitive_router)
 router.include_router(movement_router)

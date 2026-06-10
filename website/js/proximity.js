@@ -1821,6 +1821,7 @@ async function loadScopedProximityData() {
             }
             bindV52PanelEvents();
             bindJourneyPanel();
+            loadCompetitivePanel().catch((err) => console.warn('[proximity] competitive panel load failed', err));
             // Reload leaderboards with current scope
             loadLeaderboardData();
         }
@@ -2319,6 +2320,118 @@ async function drawJourneyLife(life, mapName) {
             ctx.lineTo(cp.x - 5, cp.y + 5);
             ctx.stroke();
         }
+    }
+}
+
+/* ===== STOPWATCH COMPETITIVE (stagger / first blood / wave ledger / PBs) ===== */
+
+let proximityCompetitiveLoadId = 0;
+
+async function loadCompetitivePanel() {
+    const summaryEl = document.getElementById('proximity-competitive-summary');
+    if (!summaryEl) return;
+    const loadId = ++proximityCompetitiveLoadId;
+    const { sessionDate, mapName, roundNumber, roundStartUnix } = proximityScopeState;
+
+    const requests = [
+        fetchJSON(scopedUrl('/proximity/competitive/stagger', { includeRange: false })),
+        fetchJSON(scopedUrl('/proximity/competitive/first-blood', { includeRange: false })),
+        sessionDate
+            ? fetchJSON(`${API_BASE}/proximity/competitive/personal-bests?session_date=${encodeURIComponent(sessionDate)}`)
+            : Promise.resolve(null),
+        (sessionDate && mapName && roundNumber != null)
+            ? fetchJSON(scopedUrl('/proximity/competitive/wave-cycles', { includeRange: false }))
+            : Promise.resolve(null),
+    ];
+    const [staggerRes, fbRes, pbRes, wavesRes] = await Promise.allSettled(requests);
+    if (loadId !== proximityCompetitiveLoadId) return;
+
+    const stagger = staggerRes.status === 'fulfilled' ? staggerRes.value : null;
+    const fb = fbRes.status === 'fulfilled' ? fbRes.value : null;
+    const pbs = pbRes.status === 'fulfilled' ? pbRes.value : null;
+    const waves = wavesRes.status === 'fulfilled' ? wavesRes.value : null;
+
+    // Summary chips
+    summaryEl.textContent = '';
+    const chips = [];
+    if (fb?.conversion_pct != null) {
+        chips.push({ label: 'First blood → round win', value: `${fb.conversion_pct}% (${fb.converted}/${fb.decided_rounds})`, cls: 'text-brand-amber' });
+    }
+    const topStagger = stagger?.players?.[0];
+    if (topStagger) {
+        chips.push({ label: 'Top staggerer', value: `${topStagger.name} (${topStagger.stagger_kills})`, cls: 'text-brand-rose' });
+        const denied = stagger.players.reduce((acc, p) => acc + (p.denied_s || 0), 0);
+        chips.push({ label: 'Respawn time denied', value: `${formatNumber(Math.round(denied))}s`, cls: 'text-brand-cyan' });
+    }
+    if (waves?.summary) {
+        chips.push({ label: 'Cycles won (Axis/Allies)', value: `${waves.summary.axis_won} / ${waves.summary.allies_won}`, cls: 'text-white' });
+    }
+    chips.forEach((c) => summaryEl.appendChild(_buildStatCard(c.label, c.value, c.cls, 'text-lg')));
+
+    renderLeaderList('proximity-competitive-stagger', (stagger?.players || []).slice(0, 8),
+        (row) => `${row.stagger_kills} stagger (${row.stagger_rate}%) • ${formatNumber(Math.round(row.denied_s))}s denied`,
+        'No spawn-timing data in scope');
+    renderLeaderList('proximity-competitive-firstblood', (fb?.players || []).slice(0, 8),
+        (row) => `${row.first_picks} picks / ${row.first_deaths} first deaths`,
+        'No rounds in scope');
+    renderCompetitivePbs(pbs);
+    renderWaveLedger(waves);
+}
+
+function renderCompetitivePbs(pbs) {
+    const el = document.getElementById('proximity-competitive-pbs');
+    if (!el) return;
+    const cards = pbs?.cards || [];
+    if (!cards.length) {
+        el.innerHTML = '<div class="text-[11px] text-slate-500">No records broken this session.</div>';
+        return;
+    }
+    el.innerHTML = cards.slice(0, 8).map((c) => `
+        <div class="glass-card rounded-lg border border-brand-amber/30 p-2">
+            <div class="text-[11px] font-bold text-slate-200">🏆 ${escapeHtml(c.name)}</div>
+            <div class="text-[10px] text-slate-400">${escapeHtml(c.label)}: <span class="text-brand-amber font-bold">${escapeHtml(String(c.value))}</span>
+                <span class="text-slate-600">(prev ${escapeHtml(String(c.prev_best))} on ${escapeHtml(c.prev_best_date)})</span></div>
+        </div>`).join('');
+}
+
+const WAVE_LEDGER_COLORS = {
+    AXIS: 'rgba(239, 68, 68, 0.55)',
+    ALLIES: 'rgba(59, 130, 246, 0.55)',
+    null: 'rgba(100, 116, 139, 0.25)',
+};
+
+function renderWaveLedger(waves) {
+    const wrap = document.getElementById('proximity-wave-ledger-wrap');
+    const strip = document.getElementById('proximity-wave-ledger');
+    const caption = document.getElementById('proximity-wave-ledger-caption');
+    if (!wrap || !strip) return;
+    const cycles = waves?.cycles || [];
+    if (!cycles.length) {
+        wrap.classList.add('hidden');
+        return;
+    }
+    wrap.classList.remove('hidden');
+    const total = waves.round_len_ms || cycles[cycles.length - 1].end_ms || 1;
+    strip.innerHTML = cycles.map((c) => {
+        const widthPct = Math.max(((c.end_ms - c.start_ms) / total) * 100, 1.2);
+        const color = WAVE_LEDGER_COLORS[c.winner] || WAVE_LEDGER_COLORS.null;
+        const waveEdge = c.wave === 'AXIS' ? 'border-l-2 border-red-400/80'
+            : c.wave === 'ALLIES' ? 'border-l-2 border-blue-400/80' : '';
+        const tip = `${(c.start_ms / 1000).toFixed(0)}–${(c.end_ms / 1000).toFixed(0)}s`
+            + (c.wave ? ` • ${c.wave} wave lands` : ' • round start')
+            + ` • kills ${c.kills_axis}:${c.kills_allies}`
+            + ` • denied ${c.denied_axis_s}s:${c.denied_allies_s}s`
+            + (c.winner ? ` • ${c.winner} takes the cycle` : ' • contested');
+        const label = (c.kills_axis + c.kills_allies) > 0 ? `${c.kills_axis}:${c.kills_allies}` : '';
+        return `<div class="h-full flex items-center justify-center text-[9px] font-bold text-white/80 ${waveEdge}"
+            style="width:${widthPct}%;background:${color}" title="${escapeHtml(tip)}">${escapeHtml(label)}</div>`;
+    }).join('');
+    if (caption && waves.clocks) {
+        const clockTxt = Object.entries(waves.clocks)
+            .map(([team, c]) => `${team} wave every ${(c.interval_ms / 1000).toFixed(0)}s`)
+            .join(' • ');
+        const s = waves.summary || {};
+        caption.textContent = `${clockTxt} — Axis won ${s.axis_won}, Allies ${s.allies_won}, contested ${s.contested}. Hover a segment for detail; left edge marks whose wave lands.`;
     }
 }
 
