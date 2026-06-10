@@ -178,7 +178,7 @@ async def _fetch_lifetime(db, guid8: str) -> dict:
                      THEN 1 ELSE 0 END)            AS losses
         FROM player_comprehensive_stats p
         LEFT JOIN rounds r ON r.id = p.round_id
-        WHERE p.player_guid = $1 AND p.round_number IN (1, 2) AND r.is_valid IS NOT FALSE
+        WHERE p.player_guid = $1 AND p.round_number IN (1, 2) AND r.is_valid
         """,
         (guid8,),
     )
@@ -230,7 +230,7 @@ async def _fetch_streaks(db, guid8: str) -> dict:
         SELECT CASE WHEN p.team = r.winner_team THEN 'W' ELSE 'L' END AS res
         FROM player_comprehensive_stats p
         JOIN rounds r ON r.id = p.round_id
-        WHERE p.player_guid = $1 AND p.round_number IN (1, 2) AND r.is_valid IS NOT FALSE
+        WHERE p.player_guid = $1 AND p.round_number IN (1, 2) AND r.is_valid
           AND r.winner_team IN (1, 2)   -- exclude draws (0) so W/L streaks stay clean
         ORDER BY p.round_date ASC, p.round_id ASC
         """,
@@ -633,7 +633,7 @@ async def _fetch_maps(db, guid8: str) -> dict:
                SUM(p.time_played_seconds)                                   AS time_played
         FROM player_comprehensive_stats p
         LEFT JOIN rounds r ON r.id = p.round_id
-        WHERE p.player_guid = $1 AND p.round_number IN (1, 2) AND r.is_valid IS NOT FALSE
+        WHERE p.player_guid = $1 AND p.round_number IN (1, 2) AND r.is_valid
         GROUP BY p.map_name
         ORDER BY rounds DESC
         """,
@@ -670,7 +670,7 @@ async def _fetch_recent_matches(db, guid8: str, limit: int = 10) -> dict:
                p.team, r.winner_team
         FROM player_comprehensive_stats p
         LEFT JOIN rounds r ON r.id = p.round_id
-        WHERE p.player_guid = $1 AND p.round_number IN (1, 2) AND r.is_valid IS NOT FALSE
+        WHERE p.player_guid = $1 AND p.round_number IN (1, 2) AND r.is_valid
         ORDER BY p.round_date DESC, p.round_id DESC
         LIMIT $2
         """,  # round_id is monotonic with time → correct order on multi-match days

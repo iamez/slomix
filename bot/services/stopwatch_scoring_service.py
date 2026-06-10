@@ -848,13 +848,20 @@ class StopwatchScoringService:
                         'team_a_time': '',
                         'team_b_time': '',
                         'winner': 'tie',
-                        'emoji': '⚪',
+                        # ⚠ (not ⚪) so consumers that read emoji-only don't
+                        # mistake a roster-changed map for a plain tie/unscored.
+                        'emoji': '⚠',
                         'description': roster_note,
-                        'winner_side': r2.get('winner_team'),
+                        # Side attribution is genuinely unknown here (that's why
+                        # it's ambiguous) — don't surface the possibly-stale Lua
+                        # header winner. The note carries the time-based outcome.
+                        'winner_side': None,
                         'team_a_r1_side': None,
                         'team_a_r2_side': None,
                         'r1_defender_side': r1.get('defender_team'),
-                        'scoring_source': 'time_no_attribution',
+                        # Keep 'ambiguous' so downstream (sessions_router) still
+                        # classifies the map as incomplete/ambiguous as before.
+                        'scoring_source': 'ambiguous',
                         'counted': False,
                         'note': roster_note
                     })

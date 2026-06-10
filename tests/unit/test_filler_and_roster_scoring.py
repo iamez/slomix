@@ -86,7 +86,12 @@ async def test_roster_change_shows_winner_by_time_not_blank():
     assert "roster changed" in m["note"].lower()
     assert "R2 attackers won" in m["note"]
     assert "1:54" in m["note"]
-    assert m["scoring_source"] == "time_no_attribution"
+    # Keep 'ambiguous' so downstream (sessions_router) still flags it incomplete.
+    assert m["scoring_source"] == "ambiguous"
+    # ⚠ (not ⚪) distinguishes roster-changed from a plain tie for emoji-only consumers.
+    assert m["emoji"] == "⚠"
+    # winner_side unknown (ambiguous) — not the stale Lua header value.
+    assert m["winner_side"] is None
     # Not attributed to a persistent team → not added to the tally.
     assert m["counted"] is False
     assert res["team_a_maps"] == 0
