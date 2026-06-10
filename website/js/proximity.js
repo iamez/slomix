@@ -1576,6 +1576,8 @@ async function loadScopedProximityData() {
     resetProximityValues();
     const stateEl = document.getElementById('proximity-state');
     updateScopeUIText();
+    // Session-wide panel: no-op while collapsed, cached per session when open.
+    loadInvisibleValuePanel();
 
     if (stateEl) {
         stateEl.innerHTML = `
@@ -1949,6 +1951,7 @@ export async function loadProximityView() {
         resetProximityValues();
         bindScopeEvents();
         bindVisualizationControls();
+        bindInvisibleValuePanel();
         await loadScopeHierarchy();
         await loadScopedProximityData();
 
@@ -1961,6 +1964,91 @@ export async function loadProximityView() {
         await proximityViewLoadPromise;
     } finally {
         proximityViewLoadPromise = null;
+    }
+}
+
+/* ===== INVISIBLE VALUE (storytelling metrics, session-wide) ===== */
+
+// The /storytelling endpoints take only session_date and are rate-limited
+// (gravity/space/enabler 10/min, lurker + narratives 5/min) — so this panel
+// is NOT part of the loadScopedProximityData fanout. It loads lazily on
+// first expand and caches the payload per session date.
+const proximityInvisibleCache = {};
+
+function bindInvisibleValuePanel() {
+    const details = document.getElementById('proximity-invisible-details');
+    if (!details || details.dataset.bound) return;
+    details.dataset.bound = '1';
+    details.addEventListener('toggle', () => {
+        if (details.open) loadInvisibleValuePanel();
+    });
+}
+
+async function loadInvisibleValuePanel() {
+    const details = document.getElementById('proximity-invisible-details');
+    if (!details || !details.open) return;
+    const sessionDate = proximityScopeState.sessionDate;
+    const statusEl = document.getElementById('proximity-invisible-status');
+    if (!sessionDate) {
+        if (statusEl) statusEl.textContent = 'No session selected.';
+        return;
+    }
+    if (proximityInvisibleCache[sessionDate]) {
+        renderInvisibleValue(proximityInvisibleCache[sessionDate], sessionDate);
+        return;
+    }
+    if (statusEl) statusEl.textContent = `Loading session ${formatDateLabel(sessionDate)}... (first load can take a few seconds)`;
+    try {
+        const qs = `session_date=${encodeURIComponent(sessionDate)}`;
+        const [gravity, space, enabler, lurker, narratives] = await Promise.all([
+            fetchJSON(`${API_BASE}/storytelling/gravity?${qs}`),
+            fetchJSON(`${API_BASE}/storytelling/space-created?${qs}`),
+            fetchJSON(`${API_BASE}/storytelling/enabler?${qs}`),
+            fetchJSON(`${API_BASE}/storytelling/lurker-profile?${qs}`),
+            fetchJSON(`${API_BASE}/storytelling/player-narratives?${qs}`),
+        ]);
+        const payload = { gravity, space, enabler, lurker, narratives };
+        proximityInvisibleCache[sessionDate] = payload;
+        renderInvisibleValue(payload, sessionDate);
+    } catch (err) {
+        console.error('[proximity] invisible value load failed', err);
+        if (statusEl) statusEl.textContent = 'Unable to load (rate limit or server error) — try again in a minute.';
+    }
+}
+
+function renderInvisibleValue(payload, sessionDate) {
+    const statusEl = document.getElementById('proximity-invisible-status');
+    if (statusEl) {
+        statusEl.textContent = `Session ${formatDateLabel(sessionDate)} — session-wide metrics; map/round selection does not narrow these.`;
+    }
+    // gravity_score is attention-ms per minute alive (max 60000) — display as
+    // % of alive time under enemy attention (E2E verification finding F3).
+    renderLeaderList('proximity-invisible-gravity', (payload.gravity?.players || []).slice(0, 8),
+        (row) => `${((Number(row.gravity_score) || 0) / 600).toFixed(1)}% attention`,
+        'No engagement data yet');
+    renderLeaderList('proximity-invisible-space', (payload.space?.players || []).slice(0, 8),
+        (row) => `${Math.round((Number(row.space_score) || 0) * 100)}% productive (${row.productive_deaths ?? 0}/${row.total_deaths ?? 0})`,
+        'No death data yet');
+    renderLeaderList('proximity-invisible-enabler', (payload.enabler?.players || []).slice(0, 8),
+        (row) => `${Number(row.enabler_score || 0).toFixed(1)}/min (${row.total_assists ?? 0} assists)`,
+        'No assist data yet');
+    renderLeaderList('proximity-invisible-lurker', (payload.lurker?.players || []).slice(0, 8),
+        (row) => `${Number(row.solo_pct || 0).toFixed(1)}% solo (~${Math.round((Number(row.solo_time_est_s) || 0) / 60)}min)`,
+        'No track data yet');
+
+    const narrativesEl = document.getElementById('proximity-invisible-narratives');
+    if (narrativesEl) {
+        const items = payload.narratives?.player_narratives || [];
+        narrativesEl.innerHTML = items.length
+            ? items.map((n) => `
+                <div class="glass-card rounded-lg border border-white/10 p-3">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="text-xs font-bold text-slate-200">${escapeHtml(stripEtColors(n.name || ''))}</span>
+                        ${n.archetype ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-brand-cyan/10 text-brand-cyan">${escapeHtml(n.archetype)}</span>` : ''}
+                    </div>
+                    <div class="text-[11px] text-slate-400">${escapeHtml(n.narrative || '')}</div>
+                </div>`).join('')
+            : '<div class="text-[11px] text-slate-500">No narratives for this session yet.</div>';
     }
 }
 

@@ -2154,6 +2154,49 @@
                     </div>
                 </div>
 
+                <!-- Invisible Value — the four storytelling metrics that never
+                     made it to the legacy dashboard (gravity / space created /
+                     enabler / lurker) + per-player narratives. Session-wide by
+                     design (the /storytelling endpoints take only session_date)
+                     and rate-limited (5-10/min), so the panel loads lazily on
+                     first expand and caches per session in JS. -->
+                <details id="proximity-invisible-details" class="mt-6">
+                    <summary class="cursor-pointer select-none text-sm font-bold text-slate-400 mb-3">Invisible Value — what the scoreboard doesn't show ▾</summary>
+                    <div class="glass-panel p-6 rounded-xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="text-sm font-bold text-slate-400">Invisible Value</div>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-brand-cyan/10 text-brand-cyan">session-wide</span>
+                        </div>
+                        <div id="proximity-invisible-status" class="text-[11px] text-slate-500 mb-4">Expand to load.</div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                            <div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Share of alive time spent under enemy attention (engagement duration weighted by attackers). Drawing heat creates space for teammates.">Gravity</div>
+                                <div class="text-[10px] text-slate-600 mb-2">who pulls enemy attention</div>
+                                <div id="proximity-invisible-gravity" class="space-y-1"></div>
+                            </div>
+                            <div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Share of deaths where teammates capitalized within 10s — productive deaths vs wasted deaths.">Space Created</div>
+                                <div class="text-[10px] text-slate-600 mb-2">whose deaths the team converts</div>
+                                <div id="proximity-invisible-space" class="space-y-1"></div>
+                            </div>
+                            <div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Teammate kills enabled per minute alive — nearby kills (±5s, ≤500u) plus trades.">Enabler</div>
+                                <div class="text-[10px] text-slate-600 mb-2">who creates kills for others</div>
+                                <div id="proximity-invisible-enabler" class="space-y-1"></div>
+                            </div>
+                            <div>
+                                <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Share of alive time spent 500+ units from the nearest teammate.">Lurker</div>
+                                <div class="text-[10px] text-slate-600 mb-2">who operates alone</div>
+                                <div id="proximity-invisible-lurker" class="space-y-1"></div>
+                            </div>
+                        </div>
+                        <div class="mt-6">
+                            <div class="text-[11px] font-bold text-slate-500 uppercase mb-2">Player Narratives</div>
+                            <div id="proximity-invisible-narratives" class="grid grid-cols-1 lg:grid-cols-2 gap-3 text-xs text-slate-300"></div>
+                        </div>
+                    </div>
+                </details>
+
                 <!-- ===== ③ Map Context — this map's blood & objective pull ===== -->
                 <!-- Phase 4 IA: Engagement Timeline sparkline removed (blueprint
                      CUT). Map Context (hotzone heatmap) is now full-width. -->

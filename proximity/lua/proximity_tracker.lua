@@ -1525,7 +1525,7 @@ local function recordSpawnTiming(killer_slot, victim_slot, kill_time)
         -- subtraction, harmless only while start_time≈0 (map-load); the RCA-2 re-anchor
         -- exposes it. Mirrors calculateSpawnTimingScore which uses kill_time directly.
         local elapsed = kill_time
-        local reinf_offset = (killer_team_num == 1) and (tracker.spawn.axis_offset or 0) or (tracker.spawn.allies_offset or 0)
+        local reinf_offset = (killer_team_num == 1) and (tracker.spawn.axis_reinf_offset or 0) or (tracker.spawn.allies_reinf_offset or 0)
         killer_reinf_ms = killer_interval - ((reinf_offset + elapsed) % killer_interval)
     end
     local victim_reinf_ms = time_to_next  -- already calculated above
