@@ -56,13 +56,15 @@ async def get_stagger_index(
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
     )
+    params.append(STAGGER_THRESHOLD)
+    threshold_param = len(params)
     rows = await db.fetch_all(
         f"""
         SELECT killer_guid, MAX(killer_name), MAX(killer_team),
                COUNT(*) AS kills,
                COUNT(*) FILTER (
                    WHERE enemy_spawn_interval > 0
-                     AND time_to_next_spawn >= {STAGGER_THRESHOLD} * enemy_spawn_interval
+                     AND time_to_next_spawn >= ${threshold_param}::float8 * enemy_spawn_interval
                ) AS stagger_kills,
                SUM(time_to_next_spawn) AS denied_ms,
                AVG(spawn_timing_score) AS avg_score
@@ -71,7 +73,7 @@ async def get_stagger_index(
         GROUP BY killer_guid
         HAVING COUNT(*) >= 3
         ORDER BY 5 DESC, 6 DESC
-        """,
+        """,  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
         tuple(params),
     )
     players = [
@@ -121,7 +123,7 @@ async def get_first_blood_conversion(
         FROM proximity_spawn_timing
         {where_sql} AND round_start_unix > 0 AND killer_guid <> victim_guid
         ORDER BY round_start_unix, kill_time
-        """,
+        """,  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
         tuple(params),
     )
     first_bloods = {int(r[0]): r for r in (rows or [])}
@@ -226,7 +228,7 @@ async def get_wave_cycles(
         FROM proximity_spawn_timing
         {where_sql} AND killer_guid <> victim_guid
         ORDER BY kill_time
-        """,
+        """,  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
         tuple(params),
     )
     if not st_rows:
@@ -320,12 +322,12 @@ async def get_personal_bests(
     """Leetify-style PB cards: new per-session records vs the player's history."""
     sd = _parse_iso_date(session_date)
     rows = await db.fetch_all(
-        f"""
+        """
         SELECT killer_guid, MAX(killer_name) AS name, session_date,
                COUNT(*) AS kills,
                COUNT(*) FILTER (
                    WHERE enemy_spawn_interval > 0
-                     AND time_to_next_spawn >= {STAGGER_THRESHOLD} * enemy_spawn_interval
+                     AND time_to_next_spawn >= $1::float8 * enemy_spawn_interval
                ) AS stagger_kills,
                SUM(time_to_next_spawn) AS denied_ms,
                MAX(time_to_next_spawn) AS best_denial_ms
@@ -333,7 +335,7 @@ async def get_personal_bests(
         WHERE killer_guid <> victim_guid
         GROUP BY killer_guid, session_date
         """,
-        (),
+        (STAGGER_THRESHOLD,),
     )
     by_player: dict[str, list] = defaultdict(list)
     for r in (rows or []):
@@ -432,7 +434,7 @@ async def get_v7_status(db: DatabaseAdapter = Depends(get_db)):
         rounds = 0
         try:
             row = await db.fetch_one(
-                f"SELECT COUNT(*), COUNT(DISTINCT round_start_unix) FROM {table}"  # noqa: S608 — table from module literal
+                f"SELECT COUNT(*), COUNT(DISTINCT round_start_unix) FROM {table}"  # noqa: S608 # nosec B608 - table from module-literal _V7_CAPABILITIES with membership guard; no user data
             )
             rows, rounds = int(row[0] or 0), int(row[1] or 0)
         except Exception:

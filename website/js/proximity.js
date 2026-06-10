@@ -2383,7 +2383,7 @@ async function loadCompetitivePanel() {
     const summaryEl = document.getElementById('proximity-competitive-summary');
     if (!summaryEl) return;
     const loadId = ++proximityCompetitiveLoadId;
-    const { sessionDate, mapName, roundNumber, roundStartUnix } = proximityScopeState;
+    const { sessionDate, mapName, roundNumber } = proximityScopeState;
 
     const requests = [
         fetchJSON(scopedUrl('/proximity/competitive/stagger', { includeRange: false })),

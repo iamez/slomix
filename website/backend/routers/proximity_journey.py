@@ -156,7 +156,7 @@ async def get_player_journey(
         FROM player_track
         {where_sql}
         ORDER BY spawn_time_ms
-        """,
+        """,  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
         tuple(params),
     )
 
@@ -187,7 +187,7 @@ async def get_player_journey(
         FROM proximity_kill_outcome
         {where_sql} AND (killer_guid = ${gp} OR victim_guid = ${gp})
         ORDER BY kill_time
-        """,
+        """,  # nosec B608 - where_sql/gp are $N-parameterized; no user data interpolated
         tuple(guid_params),
     )
     st_rows = await db.fetch_all(
@@ -197,7 +197,7 @@ async def get_player_journey(
         FROM proximity_spawn_timing
         {where_sql} AND (killer_guid = ${gp} OR victim_guid = ${gp})
         ORDER BY kill_time
-        """,
+        """,  # nosec B608 - where_sql/gp are $N-parameterized; no user data interpolated
         tuple(guid_params),
     )
     st_by_kill = {(int(r[0]), r[1], r[2]): r for r in (st_rows or [])}
@@ -211,7 +211,7 @@ async def get_player_journey(
             FROM proximity_carrier_event
             {where_sql} AND carrier_guid = ${gp}
             ORDER BY pickup_time
-            """,
+            """,  # nosec B608 - where_sql/gp are $N-parameterized; no user data interpolated
             tuple(guid_params),
         )
         objective_events += [
@@ -227,7 +227,7 @@ async def get_player_journey(
             FROM proximity_objective_run
             {where_sql} AND engineer_guid = ${gp}
             ORDER BY action_time
-            """,
+            """,  # nosec B608 - where_sql/gp are $N-parameterized; no user data interpolated
             tuple(guid_params),
         )
         objective_events += [
@@ -243,7 +243,7 @@ async def get_player_journey(
             FROM proximity_construction_event
             {where_sql} AND player_guid = ${gp}
             ORDER BY event_time
-            """,
+            """,  # nosec B608 - where_sql/gp are $N-parameterized; no user data interpolated
             tuple(guid_params),
         )
         objective_events += [
