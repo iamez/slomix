@@ -20,10 +20,11 @@ offset = (interval - time_to_next_spawn - kill_time) mod interval, constant
 per round (numerically verified in the E2E audit).
 """
 
+import re
 from collections import Counter, defaultdict
 from itertools import groupby
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -572,7 +573,9 @@ def _detect_clutches(
             if t < busy_until.get(survivor, 0):
                 continue
             offset, interval = clock
-            t_wave = ((t + offset) // interval + 1) * interval - offset
+            # Ceiling wave landing (>= t): a death exactly on a wave landing
+            # means reinforcements are immediate, not a full interval away.
+            t_wave = -((-(t + offset)) // interval) * interval - offset
             if t_wave - t < CLUTCH_MIN_WAVE_WAIT_MS:
                 continue
             t_wave = min(t_wave, round_end_ms)
@@ -637,7 +640,15 @@ async def _fetch_round_lives_and_kills(
         )
         rounds[key]["st"].append(r)
     for data in rounds.values():
-        ends = [d or 0 for _, _, _, d in data["lives"]] + [k[0] for k in data["kills"]]
+        # Round end from spawns AND deaths (a survivor's death_ms is None) AND
+        # kill times — death-only would truncate windows on survivor-heavy
+        # rounds. Kills sorted so the converter pick is deterministic.
+        data["kills"].sort(key=lambda k: k[0])
+        ends = (
+            [s for _, _, s, _ in data["lives"]]
+            + [d for _, _, _, d in data["lives"] if d]
+            + [k[0] for k in data["kills"]]
+        )
         data["end_ms"] = max(ends) if ends else 0
         data["clocks"] = _implied_offsets([
             (r[8], r[4], r[9], r[10]) for r in data["st"]
@@ -874,6 +885,10 @@ async def get_player_card(
     the expensive part — 30 days bounds it).
     """
     guid = player_guid.strip().upper()
+    # Alphanumeric only (ET guids are hex, bot guids OMNIBOT...) — also keeps
+    # LIKE wildcards (%/_) out of the prefix pattern below.
+    if not re.fullmatch(r"[A-Z0-9]{8,32}", guid):
+        raise HTTPException(status_code=400, detail="player_guid must be 8-32 alphanumeric chars")
 
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, None, None, None, None,

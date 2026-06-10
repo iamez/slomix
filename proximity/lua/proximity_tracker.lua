@@ -372,8 +372,14 @@ end
 
 -- ===== SAFE ENTITY ACCESS =====
 local last_gentity_error_time = 0
+-- Fields this engine build does not expose ("tried to get invalid gentity
+-- field"): remember them and stop retrying/logging. 2.83.1 lacks e.g.
+-- sess.spawnObjectiveIndex (documented only in newer Lua API docs) — the
+-- 2026-06-11 probe spammed the console on every spawn without this.
+local unsupported_gentity_fields = {}
 
 local function safe_gentity_get(clientnum, field, index)
+    if unsupported_gentity_fields[field] then return nil end
     local ok, value
     if index ~= nil then
         ok, value = pcall(et.gentity_get, clientnum, field, index)
@@ -381,6 +387,13 @@ local function safe_gentity_get(clientnum, field, index)
         ok, value = pcall(et.gentity_get, clientnum, field)
     end
     if ok then return value end
+    if tostring(value):find("invalid gentity field") then
+        unsupported_gentity_fields[field] = true
+        et.G_Print(string.format(
+            "[proximity] field %s not supported by this engine build — disabled for this session\n",
+            field))
+        return nil
+    end
     local now = (et.trap_Milliseconds and et.trap_Milliseconds()) or (os.time() * 1000)
     if now - last_gentity_error_time > 5000 then
         local idx = index ~= nil and ("[" .. tostring(index) .. "]") or ""
@@ -1170,8 +1183,15 @@ local function sampleAimLocks(now)
                 local target_guid = visible and tracker.player_tracks[best_num]
                     and tracker.player_tracks[best_num].guid or nil
                 if target_guid then
-                    if lock and lock.target_guid ~= target_guid then
-                        closeAimLock(clientnum, now)
+                    -- A stale lock (e.g. the player died, the track left
+                    -- player_tracks and the lock was never revisited until
+                    -- respawn) must not silently extend across the gap —
+                    -- close it at the last confirmed sample. Probe finding
+                    -- 2026-06-11: duration 31s with samples=2.
+                    local gap = (config.aim_lock.interval_ms or 400) * 2
+                    if lock and (lock.target_guid ~= target_guid
+                            or (lock.last_seen and now - lock.last_seen > gap)) then
+                        closeAimLock(clientnum, lock.last_seen or now)
                         lock = nil
                     end
                     if not lock then
@@ -1186,14 +1206,25 @@ local function sampleAimLocks(now)
                     lock.samples = lock.samples + 1
                     lock.err_sum = lock.err_sum + best_err
                     lock.dist_sum = lock.dist_sum + best_dist
+                    lock.last_seen = now
                 elseif lock then
-                    closeAimLock(clientnum, now)
+                    closeAimLock(clientnum, lock.last_seen or now)
                 end
             elseif lock then
-                closeAimLock(clientnum, now)
+                closeAimLock(clientnum, lock.last_seen or now)
             end
         elseif tracker.aim_lock.active[clientnum] then
-            closeAimLock(clientnum, now)
+            local l = tracker.aim_lock.active[clientnum]
+            closeAimLock(clientnum, l.last_seen or now)
+        end
+    end
+
+    -- Sweep locks whose owner no longer has a live track (death/disconnect
+    -- removes the clientnum from player_tracks, so the loop above never
+    -- revisits them).
+    for clientnum, l in pairs(tracker.aim_lock.active) do
+        if not tracker.player_tracks[clientnum] then
+            closeAimLock(clientnum, l.last_seen or now)
         end
     end
 end

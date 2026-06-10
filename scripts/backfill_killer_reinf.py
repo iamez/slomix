@@ -24,7 +24,7 @@ Idempotent: recomputing already-correct rows yields the same value.
 
 Usage:
     python3 -m scripts.backfill_killer_reinf                 # dry-run
-    python3 -m scripts.backfill_killer_reinf --apply
+    python3 -m scripts.backfill_killer_reinf --apply --i-have-a-backup
     python3 -m scripts.backfill_killer_reinf --before 2026-06-10
 """
 from __future__ import annotations
@@ -104,6 +104,7 @@ def _connect():
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true", help="write changes (else dry-run)")
+    ap.add_argument("--i-have-a-backup", action="store_true", help="required with --apply")
     ap.add_argument(
         "--before",
         default=DEFAULT_BEFORE,
@@ -166,8 +167,13 @@ def main() -> int:
         print("Nothing to do.")
         return 0
     if not args.apply:
-        print("\nDRY-RUN — no changes written. Re-run with --apply to write.")
+        print("\nDRY-RUN — no changes written. Re-run with --apply --i-have-a-backup to write.")
         return 0
+    if not args.i_have_a_backup:
+        print("\nREFUSING --apply without --i-have-a-backup.")
+        print("Take a backup first, e.g.:")
+        print("  pg_dump -h localhost -U etlegacy_user etlegacy | gzip > etlegacy_pre_killer_reinf.sql.gz")
+        return 1
 
     _, execute_values = _pg_modules()
     execute_values(
