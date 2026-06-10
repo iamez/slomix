@@ -1576,6 +1576,8 @@ async function loadScopedProximityData() {
     resetProximityValues();
     const stateEl = document.getElementById('proximity-state');
     updateScopeUIText();
+    // Session-wide panel: no-op while collapsed, cached per session when open.
+    loadInvisibleValuePanel();
 
     if (stateEl) {
         stateEl.innerHTML = `
@@ -1818,6 +1820,9 @@ async function loadScopedProximityData() {
                 renderCombatPositionStats(combatPosStatsRes.value);
             }
             bindV52PanelEvents();
+            bindJourneyPanel();
+            loadCompetitivePanel().catch((err) => console.warn('[proximity] competitive panel load failed', err));
+            loadV7RoadmapPanel().catch((err) => console.warn('[proximity] v7 roadmap load failed', err));
             // Reload leaderboards with current scope
             loadLeaderboardData();
         }
@@ -1949,6 +1954,7 @@ export async function loadProximityView() {
         resetProximityValues();
         bindScopeEvents();
         bindVisualizationControls();
+        bindInvisibleValuePanel();
         await loadScopeHierarchy();
         await loadScopedProximityData();
 
@@ -1961,6 +1967,559 @@ export async function loadProximityView() {
         await proximityViewLoadPromise;
     } finally {
         proximityViewLoadPromise = null;
+    }
+}
+
+/* ===== INVISIBLE VALUE (storytelling metrics, session-wide) ===== */
+
+// The /storytelling endpoints take only session_date and are rate-limited
+// (gravity/space/enabler 10/min, lurker + narratives 5/min) — so this panel
+// is NOT part of the loadScopedProximityData fanout. It loads lazily on
+// first expand and caches the payload per session date.
+const proximityInvisibleCache = new Map();
+let proximityInvisibleLoadId = 0;
+
+function bindInvisibleValuePanel() {
+    const details = document.getElementById('proximity-invisible-details');
+    if (!details || details.dataset.bound) return;
+    details.dataset.bound = '1';
+    details.addEventListener('toggle', () => {
+        if (details.open) loadInvisibleValuePanel();
+    });
+}
+
+async function loadInvisibleValuePanel() {
+    const details = document.getElementById('proximity-invisible-details');
+    if (!details || !details.open) return;
+    const sessionDate = proximityScopeState.sessionDate;
+    const statusEl = document.getElementById('proximity-invisible-status');
+    if (!sessionDate) {
+        if (statusEl) statusEl.textContent = 'No session selected.';
+        return;
+    }
+    if (proximityInvisibleCache.has(sessionDate)) {
+        renderInvisibleValue(proximityInvisibleCache.get(sessionDate), sessionDate);
+        return;
+    }
+    // Guard against overlapping loads: a quick session switch while the panel
+    // is open must not let an older response overwrite the newer render.
+    const loadId = ++proximityInvisibleLoadId;
+    if (statusEl) statusEl.textContent = `Loading session ${formatDateLabel(sessionDate)}... (first load can take a few seconds)`;
+    try {
+        const qs = `session_date=${encodeURIComponent(sessionDate)}`;
+        const [gravity, space, enabler, lurker, narratives] = await Promise.all([
+            fetchJSON(`${API_BASE}/storytelling/gravity?${qs}`),
+            fetchJSON(`${API_BASE}/storytelling/space-created?${qs}`),
+            fetchJSON(`${API_BASE}/storytelling/enabler?${qs}`),
+            fetchJSON(`${API_BASE}/storytelling/lurker-profile?${qs}`),
+            fetchJSON(`${API_BASE}/storytelling/player-narratives?${qs}`),
+        ]);
+        const payload = { gravity, space, enabler, lurker, narratives };
+        proximityInvisibleCache.set(sessionDate, payload);
+        if (loadId !== proximityInvisibleLoadId
+            || proximityScopeState.sessionDate !== sessionDate) return;
+        renderInvisibleValue(payload, sessionDate);
+    } catch (err) {
+        console.error('[proximity] invisible value load failed', err);
+        if (loadId !== proximityInvisibleLoadId) return;
+        if (statusEl) statusEl.textContent = 'Unable to load (rate limit or server error) — try again in a minute.';
+    }
+}
+
+function renderInvisibleValue(payload, sessionDate) {
+    const statusEl = document.getElementById('proximity-invisible-status');
+    if (statusEl) {
+        statusEl.textContent = `Session ${formatDateLabel(sessionDate)} — session-wide metrics; map/round selection does not narrow these.`;
+    }
+    // gravity_score is attention-ms per minute alive (max 60000) — display as
+    // % of alive time under enemy attention (E2E verification finding F3).
+    renderLeaderList('proximity-invisible-gravity', (payload.gravity?.players || []).slice(0, 8),
+        (row) => `${((Number(row.gravity_score) || 0) / 600).toFixed(1)}% attention`,
+        'No engagement data yet');
+    renderLeaderList('proximity-invisible-space', (payload.space?.players || []).slice(0, 8),
+        (row) => `${Math.round((Number(row.space_score) || 0) * 100)}% productive (${row.productive_deaths ?? 0}/${row.total_deaths ?? 0})`,
+        'No death data yet');
+    renderLeaderList('proximity-invisible-enabler', (payload.enabler?.players || []).slice(0, 8),
+        (row) => `${Number(row.enabler_score || 0).toFixed(1)}/min (${row.total_assists ?? 0} assists)`,
+        'No assist data yet');
+    renderLeaderList('proximity-invisible-lurker', (payload.lurker?.players || []).slice(0, 8),
+        (row) => `${Number(row.solo_pct || 0).toFixed(1)}% solo (~${Math.round((Number(row.solo_time_est_s) || 0) / 60)}min)`,
+        'No track data yet');
+
+    const narrativesEl = document.getElementById('proximity-invisible-narratives');
+    if (narrativesEl) {
+        const items = payload.narratives?.player_narratives || [];
+        narrativesEl.innerHTML = items.length
+            ? items.map((n) => `
+                <div class="glass-card rounded-lg border border-white/10 p-3">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="text-xs font-bold text-slate-200">${escapeHtml(stripEtColors(n.name || ''))}</span>
+                        ${n.archetype ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-brand-cyan/10 text-brand-cyan">${escapeHtml(n.archetype)}</span>` : ''}
+                    </div>
+                    <div class="text-[11px] text-slate-400">${escapeHtml(n.narrative || '')}</div>
+                </div>`).join('')
+            : '<div class="text-[11px] text-slate-500">No narratives for this session yet.</div>';
+    }
+}
+
+/* ===== PLAYER JOURNEY (per-round spawn→death traces with context) ===== */
+
+const proximityJourneyState = {
+    guid: '',
+    payload: null,
+    selectedLife: 1,
+    scopeKey: '',
+};
+
+function journeyScopeKey() {
+    return [
+        proximityScopeState.sessionDate,
+        proximityScopeState.mapName,
+        proximityScopeState.roundNumber,
+        proximityScopeState.roundStartUnix,
+    ].join('|');
+}
+
+function bindJourneyPanel() {
+    const select = document.getElementById('proximity-journey-player');
+    if (!select) return;
+    if (!select.dataset.bound) {
+        select.dataset.bound = '1';
+        select.onchange = () => {
+            proximityJourneyState.guid = select.value || '';
+            proximityJourneyState.payload = null;
+            void loadPlayerJourney();
+        };
+    }
+    // Repopulate on every scoped load; invalidate stale payload on scope change.
+    const key = journeyScopeKey();
+    if (key !== proximityJourneyState.scopeKey) {
+        proximityJourneyState.scopeKey = key;
+        proximityJourneyState.payload = null;
+    }
+    void (async () => {
+        try {
+            const data = await fetchJSON(scopedUrl('/proximity/players', { includeRange: false }));
+            const players = Array.isArray(data?.players) ? data.players : [];
+            const opts = [{ value: '', label: '— select player —' }].concat(
+                players.map((p) => ({ value: p.guid, label: stripEtColors(p.name || p.guid) })),
+            );
+            setSelectOptions(select, opts, proximityJourneyState.guid || '');
+        } catch (err) {
+            console.warn('[proximity] journey players load failed', err);
+        }
+        void loadPlayerJourney();
+    })();
+}
+
+async function loadPlayerJourney() {
+    const statusEl = document.getElementById('proximity-journey-status');
+    const livesEl = document.getElementById('proximity-journey-lives');
+    const { sessionDate, mapName, roundNumber, roundStartUnix } = proximityScopeState;
+    if (!sessionDate || !mapName || roundNumber == null) {
+        if (statusEl) statusEl.textContent = 'Pick a round in Scope above, then a player — every life gets traced on the map.';
+        if (livesEl) livesEl.innerHTML = '';
+        clearJourneyCanvas();
+        return;
+    }
+    if (!proximityJourneyState.guid) {
+        if (statusEl) statusEl.textContent = 'Pick a player to trace their lives in this round.';
+        if (livesEl) livesEl.innerHTML = '';
+        clearJourneyCanvas();
+        return;
+    }
+    if (statusEl) statusEl.textContent = 'Loading journey...';
+    try {
+        const params = new URLSearchParams({
+            session_date: sessionDate,
+            map_name: mapName,
+            round_number: String(roundNumber),
+            player_guid: proximityJourneyState.guid,
+        });
+        if (roundStartUnix != null) params.set('round_start_unix', String(roundStartUnix));
+        const payload = await fetchJSON(`${API_BASE}/proximity/player-journey?${params.toString()}`);
+        proximityJourneyState.payload = payload;
+        proximityJourneyState.selectedLife = 1;
+        renderJourney(payload);
+    } catch (err) {
+        console.error('[proximity] journey load failed', err);
+        if (statusEl) statusEl.textContent = 'Unable to load journey for this selection.';
+    }
+}
+
+function renderJourney(payload) {
+    const statusEl = document.getElementById('proximity-journey-status');
+    const livesEl = document.getElementById('proximity-journey-lives');
+    const lives = payload?.lives || [];
+    if (!lives.length) {
+        if (statusEl) statusEl.textContent = payload?.message || 'No tracks for this player in the selected round.';
+        if (livesEl) livesEl.innerHTML = '';
+        clearJourneyCanvas();
+        return;
+    }
+    const s = payload.summary || {};
+    const name = stripEtColors(payload.player?.name || '');
+    if (statusEl) {
+        statusEl.textContent = `${name} — ${s.lives} lives, ${s.kills} kills / ${s.deaths} deaths, avg life ${s.avg_life_s}s. Click a life to trace it.`;
+    }
+    if (livesEl) {
+        livesEl.innerHTML = lives.map((life) => {
+            const dur = (life.duration_ms / 1000).toFixed(0);
+            const kd = `${(life.kills || []).length}K${life.death ? '/1D' : ''}`;
+            const solo = life.solo_pct != null ? `${life.solo_pct.toFixed(0)}% solo` : '';
+            const obj = (life.objective_events || []).length ? ' • obj' : '';
+            const active = life.life_index === proximityJourneyState.selectedLife;
+            return `
+                <button class="journey-life-row w-full text-left px-2 py-1.5 rounded border text-[11px] transition ${active
+                    ? 'bg-brand-emerald/10 border-brand-emerald/40 text-slate-200'
+                    : 'bg-slate-900/50 border-white/10 text-slate-400 hover:text-slate-200'}"
+                    data-life="${life.life_index}">
+                    <span class="font-bold">#${life.life_index}</span>
+                    <span class="text-slate-500">${escapeHtml(String(life.player_class || '').toLowerCase())}</span>
+                    ${dur}s • ${kd}${solo ? ` • ${solo}` : ''}${obj}
+                </button>`;
+        }).join('');
+        livesEl.querySelectorAll('.journey-life-row').forEach((btn) => {
+            btn.onclick = () => {
+                proximityJourneyState.selectedLife = Number(btn.dataset.life) || 1;
+                renderJourney(proximityJourneyState.payload);
+            };
+        });
+    }
+    const life = lives.find((l) => l.life_index === proximityJourneyState.selectedLife) || lives[0];
+    const narrativeEl = document.getElementById('proximity-journey-narrative');
+    if (narrativeEl) narrativeEl.textContent = life.narrative || '';
+    renderJourneyTimeline(life);
+    void drawJourneyLife(life, payload.scope?.map_name || proximityScopeState.mapName);
+}
+
+// Per-life timeline strip: one band per 1s proximity sample — danger when an
+// enemy is within 500u, solo when no teammate is, neutral otherwise — with
+// kill (▲), death (✖) and objective (◆) markers positioned on the life span.
+function renderJourneyTimeline(life) {
+    const strip = document.getElementById('proximity-journey-timeline');
+    const caption = document.getElementById('proximity-journey-timeline-caption');
+    if (!strip) return;
+    const series = life?.proximity_series || [];
+    if (!series.length) {
+        strip.classList.add('hidden');
+        if (caption) caption.textContent = '';
+        return;
+    }
+    strip.classList.remove('hidden');
+    const start = life.spawn_time_ms;
+    const end = life.death_time_ms != null ? life.death_time_ms : series[series.length - 1].t;
+    const span = Math.max(end - start, 1);
+
+    const bands = series.map((s) => {
+        const danger = Number.isFinite(s.nearest_enemy) && s.nearest_enemy != null && s.nearest_enemy <= 500;
+        const solo = s.nearest_teammate == null || s.nearest_teammate > 500;
+        const color = danger ? 'rgba(244, 63, 94, 0.55)'
+            : solo ? 'rgba(251, 191, 36, 0.4)'
+                : 'rgba(100, 116, 139, 0.25)';
+        const state = danger ? 'enemy ≤500u' : solo ? 'solo' : 'with team';
+        const tip = `${((s.t - start) / 1000).toFixed(0)}s • ${state}`
+            + (s.nearest_enemy != null ? ` • enemy ${Math.round(s.nearest_enemy)}u` : '')
+            + (s.nearest_teammate != null ? ` • teammate ${Math.round(s.nearest_teammate)}u` : '');
+        return `<div class="h-full" style="flex:1;background:${color}" title="${escapeHtml(tip)}"></div>`;
+    }).join('');
+
+    const markers = [];
+    for (const kill of life.kills || []) {
+        const pct = clamp(((kill.time - start) / span) * 100, 0, 100);
+        markers.push(`<span class="absolute top-0 text-[9px] leading-6 text-amber-300 font-bold" style="left:${pct.toFixed(1)}%" title="${escapeHtml(`kill: ${stripEtColors(kill.victim_name || '')}`)}">▲</span>`);
+    }
+    if (life.death) {
+        const pct = clamp(((life.death.time - start) / span) * 100, 0, 98);
+        markers.push(`<span class="absolute top-0 text-[9px] leading-6 text-rose-400 font-bold" style="left:${pct.toFixed(1)}%" title="${escapeHtml(`death: ${stripEtColors(life.death.killer_name || '')}`)}">✖</span>`);
+    }
+    for (const ev of life.objective_events || []) {
+        const pct = clamp(((ev.time - start) / span) * 100, 0, 100);
+        markers.push(`<span class="absolute top-0 text-[9px] leading-6 text-emerald-300 font-bold" style="left:${pct.toFixed(1)}%" title="${escapeHtml(`${ev.type}${ev.objective ? `: ${ev.objective}` : ''}`)}">◆</span>`);
+    }
+    strip.innerHTML = bands + markers.join('');
+    if (caption) {
+        caption.textContent = 'Life timeline: red = enemy within 500u, amber = solo, grey = with team • ▲ kill ✖ death ◆ objective';
+    }
+}
+
+function clearJourneyCanvas() {
+    const canvas = document.getElementById('proximity-journey-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const narrativeEl = document.getElementById('proximity-journey-narrative');
+    if (narrativeEl) narrativeEl.textContent = '';
+}
+
+// Color a path point by enemy distance: cyan (safe) → rose (enemy ≤500u).
+function journeyDangerColor(enemyDist, alpha = 0.9) {
+    if (!Number.isFinite(enemyDist)) return `rgba(34, 211, 238, ${alpha})`;
+    const t = clamp(1 - enemyDist / 1500, 0, 1);
+    const r = Math.round(34 + (244 - 34) * t);
+    const g = Math.round(211 + (63 - 211) * t);
+    const b = Math.round(238 + (94 - 238) * t);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+async function drawJourneyLife(life, mapName) {
+    const canvas = document.getElementById('proximity-journey-canvas');
+    if (!canvas || !life) return;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth || 640;
+    const height = canvas.clientHeight || 360;
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, width, height);
+
+    await ensureMapTransformConfig();
+    const transform = getMapTransformEntry(mapName);
+    const worldBounds = getWorldBounds(transform);
+    const mapImage = await preloadMapImage(transform?.image || null);
+    if (mapImage) {
+        ctx.save();
+        ctx.globalAlpha = 0.3;
+        ctx.drawImage(mapImage, 0, 0, width, height);
+        ctx.restore();
+    }
+    if (!worldBounds) {
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.8)';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('Map not calibrated — journey path unavailable for this map.', 12, 20);
+        return;
+    }
+
+    await ensureObjectiveZonesConfig();
+    if (proximityVizState.showObjectiveZones) {
+        const zones = getObjectiveZonesForMap(mapName).filter(shouldRenderObjectiveZone);
+        drawObjectiveZones(ctx, width, height, worldBounds, zones);
+    }
+
+    // 1s lookup of the proximity series for danger color + solo dashes.
+    const seriesByBucket = new Map();
+    for (const sample of life.proximity_series || []) {
+        seriesByBucket.set(Math.round(sample.t / 1000), sample);
+    }
+    const seriesAt = (t) => seriesByBucket.get(Math.round(t / 1000))
+        || seriesByBucket.get(Math.round(t / 1000) - 1)
+        || null;
+
+    const path = (life.path || []).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+    for (let i = 1; i < path.length; i += 1) {
+        const a = worldToCanvasPoint(path[i - 1].x, path[i - 1].y, width, height, worldBounds);
+        const b = worldToCanvasPoint(path[i].x, path[i].y, width, height, worldBounds);
+        if (!a || !b) continue;
+        const ctxSample = seriesAt(path[i].t);
+        const solo = ctxSample && Number.isFinite(ctxSample.nearest_teammate)
+            ? ctxSample.nearest_teammate > 500
+            : false;
+        ctx.save();
+        ctx.strokeStyle = journeyDangerColor(ctxSample?.nearest_enemy);
+        ctx.lineWidth = solo ? 1.4 : 2.2;
+        ctx.setLineDash(solo ? [4, 3] : []);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // Spawn marker
+    if (path.length) {
+        const sp = worldToCanvasPoint(path[0].x, path[0].y, width, height, worldBounds);
+        if (sp) {
+            ctx.fillStyle = 'rgba(34, 197, 94, 0.95)';
+            ctx.beginPath();
+            ctx.arc(sp.x, sp.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    // Kill markers (▲) at the nearest path point to each kill time.
+    const pointAt = (t) => {
+        let best = null;
+        let bestDt = Infinity;
+        for (const p of path) {
+            const dt = Math.abs(p.t - t);
+            if (dt < bestDt) { bestDt = dt; best = p; }
+        }
+        return best;
+    };
+    for (const kill of life.kills || []) {
+        const p = pointAt(kill.time);
+        const cp = p && worldToCanvasPoint(p.x, p.y, width, height, worldBounds);
+        if (!cp) continue;
+        ctx.fillStyle = 'rgba(251, 191, 36, 0.95)';
+        ctx.beginPath();
+        ctx.moveTo(cp.x, cp.y - 6);
+        ctx.lineTo(cp.x - 5, cp.y + 4);
+        ctx.lineTo(cp.x + 5, cp.y + 4);
+        ctx.closePath();
+        ctx.fill();
+    }
+    // Death marker (✖)
+    if (life.death && path.length) {
+        const p = pointAt(life.death.time);
+        const cp = p && worldToCanvasPoint(p.x, p.y, width, height, worldBounds);
+        if (cp) {
+            ctx.strokeStyle = 'rgba(244, 63, 94, 0.95)';
+            ctx.lineWidth = 2.4;
+            ctx.beginPath();
+            ctx.moveTo(cp.x - 5, cp.y - 5);
+            ctx.lineTo(cp.x + 5, cp.y + 5);
+            ctx.moveTo(cp.x + 5, cp.y - 5);
+            ctx.lineTo(cp.x - 5, cp.y + 5);
+            ctx.stroke();
+        }
+    }
+}
+
+/* ===== STOPWATCH COMPETITIVE (stagger / first blood / wave ledger / PBs) ===== */
+
+let proximityCompetitiveLoadId = 0;
+
+async function loadCompetitivePanel() {
+    const summaryEl = document.getElementById('proximity-competitive-summary');
+    if (!summaryEl) return;
+    const loadId = ++proximityCompetitiveLoadId;
+    const { sessionDate, mapName, roundNumber } = proximityScopeState;
+
+    const requests = [
+        fetchJSON(scopedUrl('/proximity/competitive/stagger', { includeRange: false })),
+        fetchJSON(scopedUrl('/proximity/competitive/first-blood', { includeRange: false })),
+        sessionDate
+            ? fetchJSON(`${API_BASE}/proximity/competitive/personal-bests?session_date=${encodeURIComponent(sessionDate)}`)
+            : Promise.resolve(null),
+        (sessionDate && mapName && roundNumber != null)
+            ? fetchJSON(scopedUrl('/proximity/competitive/wave-cycles', { includeRange: false }))
+            : Promise.resolve(null),
+    ];
+    const [staggerRes, fbRes, pbRes, wavesRes] = await Promise.allSettled(requests);
+    if (loadId !== proximityCompetitiveLoadId) return;
+
+    const stagger = staggerRes.status === 'fulfilled' ? staggerRes.value : null;
+    const fb = fbRes.status === 'fulfilled' ? fbRes.value : null;
+    const pbs = pbRes.status === 'fulfilled' ? pbRes.value : null;
+    const waves = wavesRes.status === 'fulfilled' ? wavesRes.value : null;
+
+    // Summary chips
+    summaryEl.textContent = '';
+    const chips = [];
+    if (fb?.conversion_pct != null) {
+        chips.push({ label: 'First blood → round win', value: `${fb.conversion_pct}% (${fb.converted}/${fb.decided_rounds})`, cls: 'text-brand-amber' });
+    }
+    const topStagger = stagger?.players?.[0];
+    if (topStagger) {
+        chips.push({ label: 'Top staggerer', value: `${topStagger.name} (${topStagger.stagger_kills})`, cls: 'text-brand-rose' });
+        const denied = stagger.players.reduce((acc, p) => acc + (p.denied_s || 0), 0);
+        chips.push({ label: 'Respawn time denied', value: `${formatNumber(Math.round(denied))}s`, cls: 'text-brand-cyan' });
+    }
+    if (waves?.summary) {
+        chips.push({ label: 'Cycles won (Axis/Allies)', value: `${waves.summary.axis_won} / ${waves.summary.allies_won}`, cls: 'text-white' });
+    }
+    chips.forEach((c) => summaryEl.appendChild(_buildStatCard(c.label, c.value, c.cls, 'text-lg')));
+
+    renderLeaderList('proximity-competitive-stagger', (stagger?.players || []).slice(0, 8),
+        (row) => `${row.stagger_kills} stagger (${row.stagger_rate}%) • ${formatNumber(Math.round(row.denied_s))}s denied`,
+        'No spawn-timing data in scope');
+    renderLeaderList('proximity-competitive-firstblood', (fb?.players || []).slice(0, 8),
+        (row) => `${row.first_picks} picks / ${row.first_deaths} first deaths`,
+        'No rounds in scope');
+    renderCompetitivePbs(pbs);
+    renderWaveLedger(waves);
+}
+
+function renderCompetitivePbs(pbs) {
+    const el = document.getElementById('proximity-competitive-pbs');
+    if (!el) return;
+    const cards = pbs?.cards || [];
+    if (!cards.length) {
+        el.innerHTML = '<div class="text-[11px] text-slate-500">No records broken this session.</div>';
+        return;
+    }
+    el.innerHTML = cards.slice(0, 8).map((c) => `
+        <div class="glass-card rounded-lg border border-brand-amber/30 p-2">
+            <div class="text-[11px] font-bold text-slate-200">🏆 ${escapeHtml(c.name)}</div>
+            <div class="text-[10px] text-slate-400">${escapeHtml(c.label)}: <span class="text-brand-amber font-bold">${escapeHtml(String(c.value))}</span>
+                <span class="text-slate-600">(prev ${escapeHtml(String(c.prev_best))} on ${escapeHtml(c.prev_best_date)})</span></div>
+        </div>`).join('');
+}
+
+const WAVE_LEDGER_COLORS = {
+    AXIS: 'rgba(239, 68, 68, 0.55)',
+    ALLIES: 'rgba(59, 130, 246, 0.55)',
+    null: 'rgba(100, 116, 139, 0.25)',
+};
+
+function renderWaveLedger(waves) {
+    const wrap = document.getElementById('proximity-wave-ledger-wrap');
+    const strip = document.getElementById('proximity-wave-ledger');
+    const caption = document.getElementById('proximity-wave-ledger-caption');
+    if (!wrap || !strip) return;
+    const cycles = waves?.cycles || [];
+    if (!cycles.length) {
+        wrap.classList.add('hidden');
+        return;
+    }
+    wrap.classList.remove('hidden');
+    const total = waves.round_len_ms || cycles[cycles.length - 1].end_ms || 1;
+    strip.innerHTML = cycles.map((c) => {
+        const widthPct = Math.max(((c.end_ms - c.start_ms) / total) * 100, 1.2);
+        const color = WAVE_LEDGER_COLORS[c.winner] || WAVE_LEDGER_COLORS.null;
+        const waveEdge = c.wave === 'AXIS' ? 'border-l-2 border-red-400/80'
+            : c.wave === 'ALLIES' ? 'border-l-2 border-blue-400/80' : '';
+        const tip = `${(c.start_ms / 1000).toFixed(0)}–${(c.end_ms / 1000).toFixed(0)}s`
+            + (c.wave ? ` • ${c.wave} wave lands` : ' • round start')
+            + ` • kills ${c.kills_axis}:${c.kills_allies}`
+            + ` • denied ${c.denied_axis_s}s:${c.denied_allies_s}s`
+            + (c.winner ? ` • ${c.winner} takes the cycle` : ' • contested');
+        const label = (c.kills_axis + c.kills_allies) > 0 ? `${c.kills_axis}:${c.kills_allies}` : '';
+        return `<div class="h-full flex items-center justify-center text-[9px] font-bold text-white/80 ${waveEdge}"
+            style="width:${widthPct}%;background:${color}" title="${escapeHtml(tip)}">${escapeHtml(label)}</div>`;
+    }).join('');
+    if (caption && waves.clocks) {
+        const clockTxt = Object.entries(waves.clocks)
+            .map(([team, c]) => `${team} wave every ${(c.interval_ms / 1000).toFixed(0)}s`)
+            .join(' • ');
+        const s = waves.summary || {};
+        caption.textContent = `${clockTxt} — Axis won ${s.axis_won}, Allies ${s.allies_won}, contested ${s.contested}. Hover a segment for detail; left edge marks whose wave lands.`;
+    }
+}
+
+/* ===== v7 CAPTURE ROADMAP (dormant capabilities status) ===== */
+
+let proximityV7Loaded = false;
+
+async function loadV7RoadmapPanel() {
+    if (proximityV7Loaded) return;
+    const grid = document.getElementById('proximity-v7-grid');
+    const badge = document.getElementById('proximity-v7-badge');
+    if (!grid) return;
+    proximityV7Loaded = true;
+    try {
+        const data = await fetchJSON(`${API_BASE}/proximity/v7-status`);
+        if (badge) {
+            badge.textContent = data.deployed ? 'LIVE DATA' : `dormant (Lua ${data.lua_version_draft} draft)`;
+            badge.className = data.deployed
+                ? 'text-[10px] font-bold px-2 py-0.5 rounded bg-brand-emerald/10 text-brand-emerald'
+                : 'text-[10px] font-bold px-2 py-0.5 rounded bg-slate-700/40 text-slate-400';
+        }
+        grid.innerHTML = (data.capabilities || []).map((c) => `
+            <div class="glass-card rounded-lg border ${c.live ? 'border-brand-emerald/40' : 'border-white/10'} p-3">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs font-bold text-slate-200">${escapeHtml(c.title)}</span>
+                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${c.live
+                        ? 'bg-brand-emerald/10 text-brand-emerald' : 'bg-slate-700/40 text-slate-500'}">
+                        ${c.live ? `${formatNumber(c.rows)} rows / ${formatNumber(c.rounds)} rounds` : 'awaiting deploy'}</span>
+                </div>
+                <div class="text-[10px] text-slate-400 mb-2">${escapeHtml(c.what)}</div>
+                <div class="text-[9px] text-slate-600 font-mono">${escapeHtml(c.api)}</div>
+            </div>`).join('');
+    } catch (err) {
+        console.warn('[proximity] v7 roadmap load failed', err);
+        proximityV7Loaded = false;
+        grid.innerHTML = '<div class="text-[11px] text-slate-500">Unable to load v7 status.</div>';
     }
 }
 

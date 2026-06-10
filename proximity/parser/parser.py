@@ -393,6 +393,64 @@ class ShotFired:
 
 
 @dataclass
+class AimLock:
+    """v7 draft (Lua 6.10 AIM_LOCK). Crosshair-on-enemy lock window —
+    emitted on lock close, not per sample. Dormant until the Lua feature
+    flag is enabled; absent files yield an empty list."""
+    start_time: int
+    end_time: int
+    duration_ms: int
+    guid: str
+    name: str
+    team: str
+    target_guid: str
+    target_name: str
+    avg_err_deg: float
+    avg_dist: int
+    samples: int
+
+
+@dataclass
+class SpawnSelect:
+    """v7 draft (Lua 6.10 SPAWN_SELECT). Which spawn point the player had
+    selected at each real spawn (sess.spawnObjectiveIndex)."""
+    time: int
+    guid: str
+    name: str
+    team: str
+    spawn_index: int
+    last_spawn_time: int
+
+
+@dataclass
+class SkillSnapshot:
+    """v7 draft (Lua 6.10 SKILL_SNAPSHOT). sess.skill array per player at
+    round end (SK_* indices 0-6)."""
+    guid: str
+    name: str
+    team: str
+    battle_sense: int
+    engineering: int
+    first_aid: int
+    signals: int
+    light_weapons: int
+    heavy_weapons: int
+    covertops: int
+
+
+@dataclass
+class CommEvent:
+    """v7 draft (Lua 6.10 COMM_EVENTS). Voice-macro/chat-type usage —
+    command type + macro id only, never free chat text."""
+    time: int
+    guid: str
+    name: str
+    team: str
+    cmd: str
+    arg: str
+
+
+@dataclass
 class CarrierEvent:
     carrier_guid: str
     carrier_name: str
@@ -542,6 +600,11 @@ class ProximityParserV4:
         self.hit_regions: list[HitRegionEvent] = []
         self.combat_positions: list[CombatPosition] = []
         self.shot_fired: list[ShotFired] = []
+        # v7 draft (Lua 6.10, dormant sections)
+        self.aim_locks: list[AimLock] = []
+        self.spawn_selects: list[SpawnSelect] = []
+        self.skill_snapshots: list[SkillSnapshot] = []
+        self.comm_events: list[CommEvent] = []
         # v6 carrier intelligence
         self.carrier_events: list[CarrierEvent] = []
         self.carrier_kills: list[CarrierKill] = []
@@ -719,6 +782,10 @@ class ProximityParserV4:
         self.hit_regions = []
         self.combat_positions = []
         self.shot_fired = []
+        self.aim_locks = []
+        self.spawn_selects = []
+        self.skill_snapshots = []
+        self.comm_events = []
         self.carrier_events = []
         self.carrier_kills = []
         self.carrier_returns = []
@@ -826,6 +893,18 @@ class ProximityParserV4:
                     if line.startswith('# SHOT_FIRED'):
                         section = 'shot_fired'
                         continue
+                    if line.startswith('# AIM_LOCK'):
+                        section = 'aim_lock'
+                        continue
+                    if line.startswith('# SPAWN_SELECT'):
+                        section = 'spawn_select'
+                        continue
+                    if line.startswith('# SKILL_SNAPSHOT'):
+                        section = 'skill_snapshot'
+                        continue
+                    if line.startswith('# COMM_EVENTS'):
+                        section = 'comm_events'
+                        continue
                     if line.startswith('# CARRIER_EVENTS'):
                         section = 'carrier_events'
                         continue
@@ -908,6 +987,14 @@ class ProximityParserV4:
                         self._parse_combat_position_line(line)
                     elif section == 'shot_fired':
                         self._parse_shot_fired_line(line)
+                    elif section == 'aim_lock':
+                        self._parse_aim_lock_line(line)
+                    elif section == 'spawn_select':
+                        self._parse_spawn_select_line(line)
+                    elif section == 'skill_snapshot':
+                        self._parse_skill_snapshot_line(line)
+                    elif section == 'comm_events':
+                        self._parse_comm_event_line(line)
                     elif section == 'carrier_events':
                         self._parse_carrier_event_line(line)
                     elif section == 'carrier_kills':
@@ -1453,6 +1540,15 @@ class ProximityParserV4:
                 await self._import_combat_positions(session_date)
             if self.shot_fired:
                 await self._import_shots_fired(session_date)
+            # v7 draft (Lua 6.10, dormant sections)
+            if self.aim_locks:
+                await self._import_aim_locks(session_date)
+            if self.spawn_selects:
+                await self._import_spawn_selects(session_date)
+            if self.skill_snapshots:
+                await self._import_skill_snapshots(session_date)
+            if self.comm_events:
+                await self._import_comm_events(session_date)
             # v6 carrier intelligence
             if self.carrier_events:
                 await self._import_carrier_events(session_date)
@@ -2332,6 +2428,83 @@ class ProximityParserV4:
         except (ValueError, IndexError) as e:
             self.logger.debug(f"Skip shot_fired line: {e}")
 
+    def _parse_aim_lock_line(self, line: str):
+        """v7: start;end;duration;guid;name;team;target_guid;target_name;avg_err;avg_dist;samples."""
+        try:
+            parts = line.split(';')
+            if len(parts) < 11:
+                return
+            self.aim_locks.append(AimLock(
+                start_time=int(parts[0]),
+                end_time=int(parts[1]),
+                duration_ms=int(parts[2]),
+                guid=parts[3],
+                name=parts[4],
+                team=parts[5],
+                target_guid=parts[6],
+                target_name=parts[7],
+                avg_err_deg=float(parts[8]),
+                avg_dist=int(float(parts[9])),
+                samples=int(parts[10]),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip aim_lock line: {e}")
+
+    def _parse_spawn_select_line(self, line: str):
+        """v7: time;guid;name;team;spawn_index;last_spawn_time."""
+        try:
+            parts = line.split(';')
+            if len(parts) < 6:
+                return
+            self.spawn_selects.append(SpawnSelect(
+                time=int(parts[0]),
+                guid=parts[1],
+                name=parts[2],
+                team=parts[3],
+                spawn_index=int(parts[4]),
+                last_spawn_time=int(parts[5]),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip spawn_select line: {e}")
+
+    def _parse_skill_snapshot_line(self, line: str):
+        """v7: guid;name;team;7x skill ints (SK_* 0-6)."""
+        try:
+            parts = line.split(';')
+            if len(parts) < 10:
+                return
+            self.skill_snapshots.append(SkillSnapshot(
+                guid=parts[0],
+                name=parts[1],
+                team=parts[2],
+                battle_sense=int(parts[3]),
+                engineering=int(parts[4]),
+                first_aid=int(parts[5]),
+                signals=int(parts[6]),
+                light_weapons=int(parts[7]),
+                heavy_weapons=int(parts[8]),
+                covertops=int(parts[9]),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip skill_snapshot line: {e}")
+
+    def _parse_comm_event_line(self, line: str):
+        """v7: time;guid;name;team;cmd;arg."""
+        try:
+            parts = line.split(';')
+            if len(parts) < 6:
+                return
+            self.comm_events.append(CommEvent(
+                time=int(parts[0]),
+                guid=parts[1],
+                name=parts[2],
+                team=parts[3],
+                cmd=parts[4],
+                arg=parts[5],
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip comm_event line: {e}")
+
     def _parse_carrier_event_line(self, line: str):
         try:
             parts = line.split(';')
@@ -2583,6 +2756,110 @@ class ProximityParserV4:
                 INSERT INTO proximity_shot_fired ({", ".join(columns)})
                 VALUES ({placeholders})
                 ON CONFLICT (session_date, round_number, round_start_unix, event_time, guid, weapon_id)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _v7_base_columns_values(self, session_date):
+        """Shared scope columns for the four v7 tables."""
+        columns = ["session_date", "round_number", "round_start_unix", "round_end_unix", "map_name"]
+        values = [
+            session_date,
+            self.metadata['round_num'],
+            self.metadata.get('round_start_unix', 0),
+            self.metadata.get('round_end_unix', 0),
+            self.metadata['map_name'],
+        ]
+        return columns, values
+
+    async def _import_aim_locks(self, session_date):
+        """v7 AIM_LOCK -> proximity_aim_lock. No-op if the table is absent."""
+        if not await self._table_has_column('proximity_aim_lock', 'guid'):
+            return
+        for al in self.aim_locks:
+            columns, values = await self._v7_base_columns_values(session_date)
+            columns += ["start_time", "end_time", "duration_ms", "guid", "player_name",
+                        "team", "target_guid", "target_name", "avg_err_deg", "avg_dist", "samples"]
+            values += [al.start_time, al.end_time, al.duration_ms, al.guid, al.name,
+                       al.team, al.target_guid, al.target_name, al.avg_err_deg, al.avg_dist, al.samples]
+            await self._append_round_link_columns("proximity_aim_lock", columns, values)
+            await self._append_canonical_guid_columns(
+                "proximity_aim_lock", columns, values,
+                {"guid_canonical": al.guid, "target_guid_canonical": al.target_guid},
+            )
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_aim_lock ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, start_time, guid, target_guid)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_spawn_selects(self, session_date):
+        """v7 SPAWN_SELECT -> proximity_spawn_select."""
+        if not await self._table_has_column('proximity_spawn_select', 'guid'):
+            return
+        for ss in self.spawn_selects:
+            columns, values = await self._v7_base_columns_values(session_date)
+            columns += ["event_time", "guid", "player_name", "team", "spawn_index", "last_spawn_time"]
+            values += [ss.time, ss.guid, ss.name, ss.team, ss.spawn_index, ss.last_spawn_time]
+            await self._append_round_link_columns("proximity_spawn_select", columns, values)
+            await self._append_canonical_guid_columns(
+                "proximity_spawn_select", columns, values,
+                {"guid_canonical": ss.guid},
+            )
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_spawn_select ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, event_time, guid)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_skill_snapshots(self, session_date):
+        """v7 SKILL_SNAPSHOT -> proximity_skill_snapshot (one row per player/round)."""
+        if not await self._table_has_column('proximity_skill_snapshot', 'guid'):
+            return
+        for sk in self.skill_snapshots:
+            columns, values = await self._v7_base_columns_values(session_date)
+            columns += ["guid", "player_name", "team", "battle_sense", "engineering",
+                        "first_aid", "signals", "light_weapons", "heavy_weapons", "covertops"]
+            values += [sk.guid, sk.name, sk.team, sk.battle_sense, sk.engineering,
+                       sk.first_aid, sk.signals, sk.light_weapons, sk.heavy_weapons, sk.covertops]
+            await self._append_round_link_columns("proximity_skill_snapshot", columns, values)
+            await self._append_canonical_guid_columns(
+                "proximity_skill_snapshot", columns, values,
+                {"guid_canonical": sk.guid},
+            )
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_skill_snapshot ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, guid)
+                DO NOTHING
+            """
+            await self.db_adapter.execute(query, tuple(values))
+
+    async def _import_comm_events(self, session_date):
+        """v7 COMM_EVENTS -> proximity_comm_event."""
+        if not await self._table_has_column('proximity_comm_event', 'guid'):
+            return
+        for cm in self.comm_events:
+            columns, values = await self._v7_base_columns_values(session_date)
+            columns += ["event_time", "guid", "player_name", "team", "cmd", "arg"]
+            values += [cm.time, cm.guid, cm.name, cm.team, cm.cmd, cm.arg]
+            await self._append_round_link_columns("proximity_comm_event", columns, values)
+            await self._append_canonical_guid_columns(
+                "proximity_comm_event", columns, values,
+                {"guid_canonical": cm.guid},
+            )
+            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
+            query = f"""
+                INSERT INTO proximity_comm_event ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT (session_date, round_number, round_start_unix, event_time, guid, cmd)
                 DO NOTHING
             """
             await self.db_adapter.execute(query, tuple(values))
