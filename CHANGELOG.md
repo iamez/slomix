@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.19.0](https://github.com/iamez/slomix/compare/v1.18.0...v1.19.0) (2026-06-11)
+
+
+### Features
+
+* **proximity:** competitive wave 2 — man-advantage, clutch 1vN, side splits, player passport + killer_reinf backfill ([#378](https://github.com/iamez/slomix/issues/378)) ([e678de1](https://github.com/iamez/slomix/commit/e678de16f18642d6e9b7ccbe67ed89b17c26569e))
+* **proximity:** vision sweep — E2E audit, Invisible Value panel, Player Journey + fixes ([#376](https://github.com/iamez/slomix/issues/376)) ([d2558a8](https://github.com/iamez/slomix/commit/d2558a8eef45a17d593f07c02a7e3d7973963ca7))
+
 ## [1.18.0](https://github.com/iamez/slomix/compare/v1.17.0...v1.18.0) (2026-06-10)
 
 
