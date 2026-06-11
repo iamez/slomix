@@ -364,16 +364,210 @@ function _createMomentumChart(canvas, round, idx) {
     });
 }
 
+// Session-wide (team) momentum view state
+let _momentumMode = 'round'; // 'round' | 'session'
+const _momentumSessionCache = new Map(); // sessionDate -> payload
+let _momentumLastData = null;
+
+const TEAM_A_COLOR = 'rgba(245, 158, 11, 0.9)';  // amber
+const TEAM_B_COLOR = 'rgba(34, 211, 238, 0.9)';  // cyan
+
+// Inline Chart.js plugin: vertical round-boundary lines + map labels.
+const _roundBoundaryPlugin = {
+    id: 'roundBoundaries',
+    afterDraw(chart) {
+        const bounds = chart.$roundBoundaries;
+        if (!bounds || !bounds.length) return;
+        const { ctx, chartArea, scales } = chart;
+        ctx.save();
+        ctx.font = '9px sans-serif';
+        bounds.forEach((b) => {
+            const x = scales.x.getPixelForValue(b.index);
+            if (!Number.isFinite(x) || x < chartArea.left - 1 || x > chartArea.right + 1) return;
+            ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.moveTo(x, chartArea.top);
+            ctx.lineTo(x, chartArea.bottom);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(148, 163, 184, 0.55)';
+            ctx.fillText(b.label, x + 3, chartArea.top + 10);
+        });
+        ctx.restore();
+    },
+};
+
+function _createSessionMomentumChart(canvas, sess) {
+    const points = Array.isArray(sess.points) ? sess.points : [];
+    if (points.length === 0) return null;
+    const labels = points.map(pt => ((pt.t_ms || 0) / 60000).toFixed(1));
+    const teamAName = stripEtColors(sess.teams?.team_a?.label || 'Team A');
+    const teamBName = stripEtColors(sess.teams?.team_b?.label || 'Team B');
+
+    // Map each boundary x_ms to the index of its first point.
+    const boundaries = (sess.round_boundaries || []).map((b) => {
+        let index = points.findIndex(pt => (pt.t_ms || 0) >= (b.x_ms || 0));
+        if (index < 0) index = points.length - 1;
+        return { index, label: `${b.map_name || ''} R${b.round_number || '?'}`.trim() };
+    });
+
+    const chart = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: teamAName,
+                    data: points.map(pt => pt.team_a ?? 0),
+                    borderColor: TEAM_A_COLOR,
+                    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    tension: 0.3,
+                    fill: false,
+                },
+                {
+                    label: teamBName,
+                    data: points.map(pt => pt.team_b ?? 0),
+                    borderColor: TEAM_B_COLOR,
+                    backgroundColor: 'rgba(34, 211, 238, 0.08)',
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    tension: 0.3,
+                    fill: false,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: { color: 'rgba(148, 163, 184, 0.7)', font: { size: 10 }, boxWidth: 12, padding: 8 },
+                },
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Session time (min)', color: 'rgba(148, 163, 184, 0.5)', font: { size: 9 } },
+                    ticks: { color: 'rgba(148, 163, 184, 0.4)', font: { size: 9 }, maxTicksLimit: 12 },
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                },
+                y: {
+                    min: 0,
+                    max: 100,
+                    title: { display: true, text: 'Momentum', color: 'rgba(148, 163, 184, 0.5)', font: { size: 9 } },
+                    ticks: { color: 'rgba(148, 163, 184, 0.4)', font: { size: 9 } },
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                },
+            },
+        },
+        plugins: [_roundBoundaryPlugin],
+    });
+    chart.$roundBoundaries = boundaries;
+    return chart;
+}
+
+async function _renderSessionMomentum(container) {
+    const sessionDate = storyState.sessionDate;
+    const wrapper = container.querySelector('.momentum-chart-wrapper');
+    if (!wrapper || !sessionDate) return;
+    wrapper.textContent = '';
+    wrapper.style.height = '240px';
+    wrapper.innerHTML = '<div class="text-[11px] text-slate-500 p-3">Loading session momentum…</div>';
+
+    let sess = _momentumSessionCache.get(sessionDate);
+    if (!sess) {
+        try {
+            sess = await fetchJSON(`${API_BASE}/storytelling/momentum-session?session_date=${encodeURIComponent(sessionDate)}`);
+            _momentumSessionCache.set(sessionDate, sess);
+        } catch (err) {
+            wrapper.innerHTML = '<div class="text-[11px] text-slate-500 p-3">Failed to load session momentum</div>';
+            return;
+        }
+    }
+    if (sessionDate !== storyState.sessionDate || _momentumMode !== 'session') return; // stale
+    if (sess.status !== 'ok' || !(sess.points || []).length) {
+        wrapper.textContent = '';
+        wrapper.appendChild(_el('div', 'text-[11px] text-slate-500 p-3',
+            `Team view unavailable (${sess.reason || sess.status || 'no data'})`));
+        return;
+    }
+    wrapper.textContent = '';
+    const canvas = document.createElement('canvas');
+    wrapper.appendChild(canvas);
+    if (_momentumChart) { _momentumChart.destroy(); _momentumChart = null; }
+    _momentumChart = _createSessionMomentumChart(canvas, sess);
+
+    // Roster + data-quality footnote under the chart (DOM nodes, no innerHTML).
+    const old = container.querySelector('.momentum-session-meta');
+    if (old) old.remove();
+    const rosterA = (sess.teams?.team_a?.players || []).map(stripEtColors).join(', ');
+    const rosterB = (sess.teams?.team_b?.players || []).map(stripEtColors).join(', ');
+    const meta = sess.meta || {};
+    const note = _el('div', 'momentum-session-meta text-[10px] text-slate-500 mt-2');
+    const swatch = (color) => {
+        const s = document.createElement('span');
+        s.style.color = color;
+        s.textContent = '■ ';
+        return s;
+    };
+    note.appendChild(swatch(TEAM_A_COLOR));
+    note.appendChild(document.createTextNode(`${rosterA}   `));
+    note.appendChild(swatch(TEAM_B_COLOR));
+    note.appendChild(document.createTextNode(
+        `${rosterB} • ${meta.rounds || 0} rounds stitched (faction swaps resolved by roster overlap)`));
+    if (meta.defaulted_players_count > 0 || meta.unmapped_rounds > 0) {
+        const w = _el('span', 'text-amber-400',
+            ` • ⚠ ${meta.unmapped_rounds || 0} unmapped rounds, ${meta.defaulted_players_count || 0} defaulted players`);
+        note.appendChild(w);
+    }
+    container.appendChild(note);
+}
+
 function renderMomentum(data) {
     const container = document.getElementById('story-momentum');
     if (!container) return;
     container.textContent = '';
+    _momentumLastData = data;
 
     const rounds = Array.isArray(data?.rounds) ? data.rounds : [];
     if (rounds.length === 0) return;
 
-    const heading = _el('h3', 'text-sm font-bold text-amber-400 tracking-widest uppercase mb-3', 'Momentum');
-    container.appendChild(heading);
+    const headRow = _el('div', 'flex items-center justify-between mb-3 flex-wrap gap-2');
+    const heading = _el('h3', 'text-sm font-bold text-amber-400 tracking-widest uppercase', 'Momentum');
+    headRow.appendChild(heading);
+
+    // Per-round vs whole-session (logical teams) toggle.
+    const modeBar = _el('div', 'flex gap-1');
+    [['round', 'Per round'], ['session', 'Whole session (teams)']].forEach(([mode, label]) => {
+        const btn = _el('button', '', label);
+        btn.className = _momentumMode === mode
+            ? 'px-3 py-1 text-xs rounded-lg bg-white/10 text-white border border-white/20'
+            : 'px-3 py-1 text-xs rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/5';
+        btn.title = mode === 'session'
+            ? 'One timeline for the whole session. Lines follow the LOGICAL teams (rosters), not axis/allies — stopwatch side swaps are resolved automatically.'
+            : 'One chart per round, axis vs allies.';
+        btn.addEventListener('click', () => {
+            if (_momentumMode === mode) return;
+            _momentumMode = mode;
+            renderMomentum(_momentumLastData);
+        });
+        modeBar.appendChild(btn);
+    });
+    headRow.appendChild(modeBar);
+    container.appendChild(headRow);
+
+    if (_momentumMode === 'session') {
+        const wrapper = _el('div', 'rounded-xl border border-white/[0.08] bg-white/[0.03] p-4 momentum-chart-wrapper');
+        wrapper.style.overflow = 'hidden';
+        wrapper.style.height = '240px';
+        container.appendChild(wrapper);
+        _renderSessionMomentum(container);
+        return;
+    }
 
     // Tab bar (hidden if only 1 round)
     if (rounds.length > 1) {

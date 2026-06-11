@@ -145,15 +145,19 @@ const PODIUM_STYLES = {
  * @param {string} [opts.unit] - Unit label (e.g. "kills", "DPM")
  * @returns {string} HTML string
  */
-export function PodiumCard({ rank, name, value, unit }) {
+export function PodiumCard({ rank, name, value, unit, href, badge }) {
     const style = PODIUM_STYLES[rank] || { border: 'border-white/10', bg: 'bg-white/5', text: 'text-slate-400', label: `#${rank}`, icon: '' };
+    const nameHtml = href
+        ? `<a href="${escapeHtml(href)}" class="hover:text-brand-cyan transition-colors">${escapeHtml(name)}</a>`
+        : escapeHtml(name);
     return `
         <div class="glass-panel rounded-xl p-5 ${style.border} ${style.bg} text-center">
             <div class="flex items-center justify-center gap-1.5 mb-3">
                 ${style.icon ? `<span class="${style.text}">${style.icon}</span>` : ''}
                 <span class="text-xs font-bold ${style.text} uppercase tracking-wider">${style.label}</span>
+                ${badge || ''}
             </div>
-            <div class="text-base font-bold text-white mb-1 truncate">${escapeHtml(name)}</div>
+            <div class="text-base font-bold text-white mb-1 truncate">${nameHtml}</div>
             <div class="text-2xl font-black font-mono ${style.text}">${escapeHtml(String(value))}</div>
             ${unit ? `<div class="text-[10px] text-slate-500 uppercase tracking-widest mt-1">${escapeHtml(unit)}</div>` : ''}
         </div>`;
