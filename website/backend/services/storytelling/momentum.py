@@ -21,6 +21,24 @@ class _MomentumMixin:
         Returns dual-line data (AXIS vs ALLIES) normalized to 0-100 per round.
         """
         sd = _to_date(session_date)
+        internal = await self._momentum_rounds(sd)
+        if internal is None:
+            return {"status": "no_data", "session_date": str(sd), "rounds": []}
+        return {
+            "status": "ok",
+            "session_date": str(sd),
+            "rounds": [
+                {
+                    "round_number": r["round_number"],
+                    "map_name": r["map_name"],
+                    "points": r["points"],
+                }
+                for r in internal
+            ],
+        }
+
+    async def _momentum_rounds(self, sd: date) -> list[dict] | None:
+        """Per-round momentum series, with round_start_unix kept for stitching."""
 
         # 1. Get all kills with team info
         kills = await self.db.fetch_all("""
@@ -32,7 +50,7 @@ class _MomentumMixin:
         """, (sd,))
 
         if not kills:
-            return {"status": "no_data", "session_date": str(sd), "rounds": []}
+            return None
 
         # 2. Build team map from PCS
         rtm = await self._build_round_team_map(sd)
@@ -209,12 +227,105 @@ class _MomentumMixin:
             result_rounds.append({
                 "round_number": rn,
                 "map_name": rd["map_name"],
+                "round_start_unix": start_unix,
                 "points": normalized,
             })
+
+        return result_rounds
+
+    async def compute_momentum_session(self, session_date: str | date) -> dict:
+        """Whole-session momentum by LOGICAL team (stopwatch-aware).
+
+        Faction lines are meaningless across a session — rosters swap sides
+        between R1 and R2 — so each round's axis/allies series is remapped to
+        team_a/team_b via the synergy player-group round_map (first-R1 anchor
+        + per-round guid-overlap voting), then stitched onto one cumulative
+        timeline (sum of round durations, not wall clock — map breaks would
+        stretch the chart).
+        """
+        sd = _to_date(session_date)
+        internal = await self._momentum_rounds(sd)
+        if internal is None:
+            return {"status": "no_data", "session_date": str(sd), "points": []}
+
+        groups = await self._build_player_groups(sd)
+        if not groups or groups.get("_status") == "partial_data":
+            return {
+                "status": "no_team_data",
+                "session_date": str(sd),
+                "reason": (groups or {}).get("_reason", "no_pcs_rows"),
+                "points": [],
+            }
+
+        round_map = groups["round_map"]
+        labels = await self._team_labels(sd, groups)
+
+        WINDOW_MS = 30_000
+        points: list[dict] = []
+        boundaries: list[dict] = []
+        unmapped_rounds = 0
+        offset = 0
+        for r in sorted(internal, key=lambda x: (x["round_start_unix"], x["round_number"])):
+            rsu = r["round_start_unix"]
+            axis_group = round_map.get((rsu, "AXIS"))
+            if axis_group is None:
+                # Round exists in proximity data but not in PCS (orphan) —
+                # skip rather than guess, and report it.
+                unmapped_rounds += 1
+                continue
+            axis_is_a = axis_group == "group_a"
+            boundaries.append({
+                "x_ms": offset,
+                "map_name": r["map_name"],
+                "round_number": r["round_number"],
+            })
+            points.extend(
+                {
+                    "t_ms": offset + p["t_ms"],
+                    "team_a": p["axis"] if axis_is_a else p["allies"],
+                    "team_b": p["allies"] if axis_is_a else p["axis"],
+                }
+                for p in r["points"]
+            )
+            duration = (r["points"][-1]["t_ms"] + WINDOW_MS) if r["points"] else 0
+            offset += duration
 
         return {
             "status": "ok",
             "session_date": str(sd),
-            "rounds": result_rounds,
+            "teams": {
+                "team_a": {"label": labels["team_a"], "players": groups["group_a_players"]},
+                "team_b": {"label": labels["team_b"], "players": groups["group_b_players"]},
+            },
+            "points": points,
+            "round_boundaries": boundaries,
+            "meta": {
+                "rounds": len(boundaries),
+                "unmapped_rounds": unmapped_rounds,
+                "defaulted_players_count": groups.get("defaulted_players_count", 0),
+            },
+        }
+
+    async def _team_labels(self, sd: date, groups: dict) -> dict[str, str]:
+        """Name each logical team after its two highest-kill players."""
+        rows = await self.db.fetch_all(
+            """
+            SELECT pcs.player_guid, MAX(pcs.player_name), SUM(pcs.kills) AS kills
+            FROM player_comprehensive_stats pcs
+            WHERE pcs.round_date = $1
+            GROUP BY pcs.player_guid
+            ORDER BY kills DESC NULLS LAST
+            """,
+            (str(sd),),
+        )
+        guid_to_group = groups.get("guid_to_group", {})
+        top: dict[str, list[str]] = {"group_a": [], "group_b": []}
+        for guid, name, _kills in (rows or []):
+            grp = guid_to_group.get(guid)
+            if grp and len(top[grp]) < 2:
+                top[grp].append(name or guid[:8])
+        return {
+            "team_a": " & ".join(top["group_a"]) or "Team A",
+            "team_b": " & ".join(top["group_b"]) or "Team B",
         }
 

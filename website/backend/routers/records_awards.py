@@ -617,172 +617,207 @@ async def get_hall_of_fame(
         param_idx += 1
     # else: all_time - no date filter
 
-    limit_param = f"${param_idx}"
-    params.append(limit)
-
     try:
-        categories = {}
+        categories = await _hof_compute_categories(db, date_filter, params, param_idx, limit)
 
-        # --- Simple aggregation categories ---
-        simple_cats = {
-            "most_active": ("COUNT(*)", "rounds"),
-            "most_damage": ("SUM(pcs.damage_given)", "damage"),
-            "most_kills": ("SUM(pcs.kills)", "kills"),
-            "most_revives": ("SUM(pcs.revives_given)", "revives"),
-            "most_xp": ("SUM(pcs.xp)", "xp"),
-            "most_assists": ("SUM(pcs.kill_assists)", "assists"),
-            "most_deaths": ("SUM(pcs.deaths)", "deaths"),
-            "most_selfkills": ("SUM(pcs.self_kills)", "selfkills"),
-            "most_full_selfkills": ("SUM(pcs.full_selfkills)", "full_selfkills"),
-        }
-
-        for cat_name, (agg_expr, unit) in simple_cats.items():
-            # nosec B608 - agg_expr and date_filter are static/controlled strings
-            query = f"""
-                SELECT pcs.player_guid, MAX(pcs.player_name) as player_name,
-                       {agg_expr} as value
-                FROM player_comprehensive_stats pcs
-                WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0 {date_filter}
-                GROUP BY pcs.player_guid
-                ORDER BY value DESC
-                LIMIT {limit_param}
-            """
-            rows = await db.fetch_all(query, tuple(params))
-            name_map = await batch_resolve_display_names(
-                db, [(row[0], row[1] or "Unknown") for row in rows]
+        # Rank deltas vs the PREVIOUS equal-length window (rolling periods
+        # only — no snapshots needed). positive = climbed, negative = fell.
+        delta_days = {"7d": 7, "14d": 14, "30d": 30, "90d": 90}.get(period)
+        if delta_days:
+            prev_start = (datetime.now() - timedelta(days=2 * delta_days)).strftime("%Y-%m-%d")  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
+            prev_end = (datetime.now() - timedelta(days=delta_days)).strftime("%Y-%m-%d")  # noqa: DTZ005 naive datetime for date-string arithmetic / SQL date filter / log timestamp display
+            prev_filter = "AND pcs.round_date >= $1 AND pcs.round_date < $2"
+            prev_categories = await _hof_compute_categories(
+                db, prev_filter, [prev_start, prev_end], 3, 100,
             )
-            entries = []
-            for rank, row in enumerate(rows, 1):
-                entries.append({
-                    "rank": rank,
-                    "player_guid": row[0],
-                    "player_name": name_map.get(row[0], "Unknown"),
-                    "value": int(row[2]) if row[2] is not None else 0,
-                    "unit": unit,
-                })
-            categories[cat_name] = entries
-
-        # --- most_wins: join with rounds to check winner_team ---
-        wins_query = f"""
-            SELECT pcs.player_guid, MAX(pcs.player_name) as player_name,
-                   COUNT(*) as value
-            FROM player_comprehensive_stats pcs
-            JOIN rounds r ON pcs.round_id = r.id
-            WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0
-              AND r.winner_team != 0
-              AND pcs.team = r.winner_team
-              {date_filter}
-            GROUP BY pcs.player_guid
-            ORDER BY value DESC
-            LIMIT {limit_param}
-        """
-        rows = await db.fetch_all(wins_query, tuple(params))
-        name_map = await batch_resolve_display_names(
-            db, [(row[0], row[1] or "Unknown") for row in rows]
-        )
-        entries = []
-        for rank, row in enumerate(rows, 1):
-            entries.append({
-                "rank": rank,
-                "player_guid": row[0],
-                "player_name": name_map.get(row[0], "Unknown"),
-                "value": int(row[2]) if row[2] is not None else 0,
-                "unit": "wins",
-            })
-        categories["most_wins"] = entries
-
-        # --- most_dpm: damage per minute with min 10 rounds ---
-        dpm_min_rounds_param = f"${param_idx + 1}"
-        dpm_params = list(params) + [10]
-        dpm_query = f"""
-            SELECT pcs.player_guid, MAX(pcs.player_name) as player_name,
-                   ROUND((SUM(pcs.damage_given)::numeric / NULLIF(SUM(pcs.time_played_seconds) / 60.0, 0)), 2) as value,
-                   COUNT(*) as rounds_played
-            FROM player_comprehensive_stats pcs
-            WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0 {date_filter}
-            GROUP BY pcs.player_guid
-            HAVING COUNT(*) >= {dpm_min_rounds_param}
-            ORDER BY value DESC
-            LIMIT {limit_param}
-        """
-        rows = await db.fetch_all(dpm_query, tuple(dpm_params))
-        name_map = await batch_resolve_display_names(
-            db, [(row[0], row[1] or "Unknown") for row in rows]
-        )
-        entries = []
-        for rank, row in enumerate(rows, 1):
-            entries.append({
-                "rank": rank,
-                "player_guid": row[0],
-                "player_name": name_map.get(row[0], "Unknown"),
-                "value": float(row[2]) if row[2] is not None else 0.0,
-                "unit": "dpm",
-            })
-        categories["most_dpm"] = entries
-
-        # --- most_consecutive_games: consecutive gaming sessions ---
-        # gaming_session_id lives on rounds, not player_comprehensive_stats
-        consec_query = f"""
-            WITH player_sessions AS (
-                SELECT pcs.player_guid, MAX(pcs.player_name) as player_name,
-                       r.gaming_session_id
-                FROM player_comprehensive_stats pcs
-                JOIN rounds r ON pcs.round_id = r.id
-                WHERE pcs.time_played_seconds > 0
-                  AND r.gaming_session_id IS NOT NULL
-                  {date_filter}
-                GROUP BY pcs.player_guid, r.gaming_session_id
-            ),
-            all_sessions AS (
-                SELECT DISTINCT r2.gaming_session_id
-                FROM rounds r2
-                JOIN player_comprehensive_stats pcs2 ON pcs2.round_id = r2.id
-                WHERE r2.gaming_session_id IS NOT NULL
-                  AND pcs2.time_played_seconds > 0
-                  {date_filter.replace('pcs.', 'pcs2.')}
-                ORDER BY r2.gaming_session_id
-            ),
-            numbered AS (
-                SELECT ps.player_guid, ps.player_name, ps.gaming_session_id,
-                       ROW_NUMBER() OVER (ORDER BY a.gaming_session_id) as global_rank,
-                       ROW_NUMBER() OVER (PARTITION BY ps.player_guid ORDER BY ps.gaming_session_id) as player_rank
-                FROM player_sessions ps
-                JOIN all_sessions a ON ps.gaming_session_id = a.gaming_session_id
-            ),
-            streaks AS (
-                SELECT player_guid, MAX(player_name) as player_name,
-                       COUNT(*) as streak_len
-                FROM numbered
-                GROUP BY player_guid, (global_rank - player_rank)
-            )
-            SELECT player_guid, MAX(player_name) as player_name,
-                   MAX(streak_len) as value
-            FROM streaks
-            GROUP BY player_guid
-            ORDER BY value DESC
-            LIMIT {limit_param}
-        """
-        rows = await db.fetch_all(consec_query, tuple(params))
-        name_map = await batch_resolve_display_names(
-            db, [(row[0], row[1] or "Unknown") for row in rows]
-        )
-        entries = []
-        for rank, row in enumerate(rows, 1):
-            entries.append({
-                "rank": rank,
-                "player_guid": row[0],
-                "player_name": name_map.get(row[0], "Unknown"),
-                "value": int(row[2]) if row[2] is not None else 0,
-                "unit": "sessions",
-            })
-        categories["most_consecutive_games"] = entries
+            for cat_name, entries in categories.items():
+                prev_rank = {
+                    e["player_guid"]: e["rank"]
+                    for e in prev_categories.get(cat_name, [])
+                }
+                for e in entries:
+                    prev = prev_rank.get(e["player_guid"])
+                    if prev is None:
+                        e["rank_delta"] = None
+                        e["is_new"] = True
+                    else:
+                        e["rank_delta"] = prev - e["rank"]
+                        e["is_new"] = False
 
         return {
             "categories": categories,
             "period": period,
+            "delta_window_days": delta_days,
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
     except Exception as e:
         logger.error(f"Hall of Fame query failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate Hall of Fame data")
+
+
+async def _hof_compute_categories(
+    db: DatabaseAdapter, date_filter: str, base_params: list, param_idx: int, limit: int,
+) -> dict:
+    """All Hall of Fame category leaderboards for one date window."""
+    params = list(base_params)
+    limit_param = f"${param_idx}"
+    params.append(limit)
+
+    categories = {}
+
+    # --- Simple aggregation categories ---
+    simple_cats = {
+        "most_active": ("COUNT(*)", "rounds"),
+        "most_damage": ("SUM(pcs.damage_given)", "damage"),
+        "most_kills": ("SUM(pcs.kills)", "kills"),
+        "most_revives": ("SUM(pcs.revives_given)", "revives"),
+        "most_xp": ("SUM(pcs.xp)", "xp"),
+        "most_assists": ("SUM(pcs.kill_assists)", "assists"),
+        "most_deaths": ("SUM(pcs.deaths)", "deaths"),
+        "most_selfkills": ("SUM(pcs.self_kills)", "selfkills"),
+        "most_full_selfkills": ("SUM(pcs.full_selfkills)", "full_selfkills"),
+    }
+
+    for cat_name, (agg_expr, unit) in simple_cats.items():
+        # nosec B608 - agg_expr and date_filter are static/controlled strings
+        query = f"""
+            SELECT pcs.player_guid, MAX(pcs.player_name) as player_name,
+                   {agg_expr} as value
+            FROM player_comprehensive_stats pcs
+            WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0 {date_filter}
+            GROUP BY pcs.player_guid
+            ORDER BY value DESC
+            LIMIT {limit_param}
+        """
+        rows = await db.fetch_all(query, tuple(params))
+        name_map = await batch_resolve_display_names(
+            db, [(row[0], row[1] or "Unknown") for row in rows]
+        )
+        entries = []
+        for rank, row in enumerate(rows, 1):
+            entries.append({
+                "rank": rank,
+                "player_guid": row[0],
+                "player_name": name_map.get(row[0], "Unknown"),
+                "value": int(row[2]) if row[2] is not None else 0,
+                "unit": unit,
+            })
+        categories[cat_name] = entries
+
+    # --- most_wins: join with rounds to check winner_team ---
+    wins_query = f"""
+        SELECT pcs.player_guid, MAX(pcs.player_name) as player_name,
+               COUNT(*) as value
+        FROM player_comprehensive_stats pcs
+        JOIN rounds r ON pcs.round_id = r.id
+        WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0
+          AND r.winner_team != 0
+          AND pcs.team = r.winner_team
+          {date_filter}
+        GROUP BY pcs.player_guid
+        ORDER BY value DESC
+        LIMIT {limit_param}
+    """
+    rows = await db.fetch_all(wins_query, tuple(params))
+    name_map = await batch_resolve_display_names(
+        db, [(row[0], row[1] or "Unknown") for row in rows]
+    )
+    entries = []
+    for rank, row in enumerate(rows, 1):
+        entries.append({
+            "rank": rank,
+            "player_guid": row[0],
+            "player_name": name_map.get(row[0], "Unknown"),
+            "value": int(row[2]) if row[2] is not None else 0,
+            "unit": "wins",
+        })
+    categories["most_wins"] = entries
+
+    # --- most_dpm: damage per minute with min 10 rounds ---
+    dpm_min_rounds_param = f"${param_idx + 1}"
+    dpm_params = list(params) + [10]
+    dpm_query = f"""
+        SELECT pcs.player_guid, MAX(pcs.player_name) as player_name,
+               ROUND((SUM(pcs.damage_given)::numeric / NULLIF(SUM(pcs.time_played_seconds) / 60.0, 0)), 2) as value,
+               COUNT(*) as rounds_played
+        FROM player_comprehensive_stats pcs
+        WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0 {date_filter}
+        GROUP BY pcs.player_guid
+        HAVING COUNT(*) >= {dpm_min_rounds_param}
+        ORDER BY value DESC
+        LIMIT {limit_param}
+    """
+    rows = await db.fetch_all(dpm_query, tuple(dpm_params))
+    name_map = await batch_resolve_display_names(
+        db, [(row[0], row[1] or "Unknown") for row in rows]
+    )
+    entries = []
+    for rank, row in enumerate(rows, 1):
+        entries.append({
+            "rank": rank,
+            "player_guid": row[0],
+            "player_name": name_map.get(row[0], "Unknown"),
+            "value": float(row[2]) if row[2] is not None else 0.0,
+            "unit": "dpm",
+        })
+    categories["most_dpm"] = entries
+
+    # --- most_consecutive_games: consecutive gaming sessions ---
+    # gaming_session_id lives on rounds, not player_comprehensive_stats
+    consec_query = f"""
+        WITH player_sessions AS (
+            SELECT pcs.player_guid, MAX(pcs.player_name) as player_name,
+                   r.gaming_session_id
+            FROM player_comprehensive_stats pcs
+            JOIN rounds r ON pcs.round_id = r.id
+            WHERE pcs.time_played_seconds > 0
+              AND r.gaming_session_id IS NOT NULL
+              {date_filter}
+            GROUP BY pcs.player_guid, r.gaming_session_id
+        ),
+        all_sessions AS (
+            SELECT DISTINCT r2.gaming_session_id
+            FROM rounds r2
+            JOIN player_comprehensive_stats pcs2 ON pcs2.round_id = r2.id
+            WHERE r2.gaming_session_id IS NOT NULL
+              AND pcs2.time_played_seconds > 0
+              {date_filter.replace('pcs.', 'pcs2.')}
+            ORDER BY r2.gaming_session_id
+        ),
+        numbered AS (
+            SELECT ps.player_guid, ps.player_name, ps.gaming_session_id,
+                   ROW_NUMBER() OVER (ORDER BY a.gaming_session_id) as global_rank,
+                   ROW_NUMBER() OVER (PARTITION BY ps.player_guid ORDER BY ps.gaming_session_id) as player_rank
+            FROM player_sessions ps
+            JOIN all_sessions a ON ps.gaming_session_id = a.gaming_session_id
+        ),
+        streaks AS (
+            SELECT player_guid, MAX(player_name) as player_name,
+                   COUNT(*) as streak_len
+            FROM numbered
+            GROUP BY player_guid, (global_rank - player_rank)
+        )
+        SELECT player_guid, MAX(player_name) as player_name,
+               MAX(streak_len) as value
+        FROM streaks
+        GROUP BY player_guid
+        ORDER BY value DESC
+        LIMIT {limit_param}
+    """
+    rows = await db.fetch_all(consec_query, tuple(params))
+    name_map = await batch_resolve_display_names(
+        db, [(row[0], row[1] or "Unknown") for row in rows]
+    )
+    entries = []
+    for rank, row in enumerate(rows, 1):
+        entries.append({
+            "rank": rank,
+            "player_guid": row[0],
+            "player_name": name_map.get(row[0], "Unknown"),
+            "value": int(row[2]) if row[2] is not None else 0,
+            "unit": "sessions",
+        })
+    categories["most_consecutive_games"] = entries
+
+    return categories

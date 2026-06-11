@@ -4,9 +4,25 @@
  * @module hall-of-fame
  */
 
-import { API_BASE, fetchJSON, escapeHtml, formatNumber } from './utils.js';
+import { API_BASE, fetchJSON, escapeHtml, formatNumber, safeInsertHTML } from './utils.js';
 import { PageHeader, PodiumCard, LoadingSkeleton, EmptyState } from './components.js';
 import { renderFilterBar, getFilterState, onFilterChange } from './filters.js';
+
+// Plain-language metric definitions (hover tooltips on category headers).
+const CATEGORY_DESCRIPTIONS = {
+    most_active: 'Rounds played (R1+R2 halves each count once).',
+    most_wins: 'Rounds finished on the winning side.',
+    most_damage: 'Total damage dealt to enemies.',
+    most_kills: 'Total enemy kills.',
+    most_revives: 'Teammates revived with the medic syringe.',
+    most_xp: 'Total experience points earned.',
+    most_assists: 'Kill assists — damaged an enemy a teammate finished.',
+    most_dpm: 'Damage per minute actually played (min 10 rounds).',
+    most_deaths: 'Total deaths. Not always a bad sign — entry fraggers die a lot.',
+    most_selfkills: 'Deaths by own hand (/kill) — usually tactical respawn timing.',
+    most_full_selfkills: 'Self-kills with no enemy contact shortly before — pure respawn resets.',
+    most_consecutive_games: 'Longest streak of gaming sessions attended in a row.',
+};
 
 // Category metadata: key, label, icon SVG, accent color
 const CATEGORIES = [
@@ -91,42 +107,78 @@ async function fetchAndRender() {
     if (!grid) return;
 
     // Show loading skeletons
-    grid.innerHTML = LoadingSkeleton('card', 12);
+    grid.textContent = '';
+    safeInsertHTML(grid, 'beforeend', LoadingSkeleton('card', 12));
 
     try {
         const data = await fetchJSON(buildApiUrl());
 
         if (!data || !data.categories) {
-            grid.innerHTML = `<div class="col-span-full">${EmptyState('No data available for this period')}</div>`;
+            grid.textContent = '';
+            safeInsertHTML(grid, 'beforeend', `<div class="col-span-full">${EmptyState(`No data available ${_periodLabel()}`)}</div>`);
             return;
         }
 
-        grid.innerHTML = CATEGORIES.map(cat => {
+        // All card HTML is built from escapeHtml-sanitized values; insert via
+        // the shared safeInsertHTML helper after clearing.
+        grid.textContent = '';
+        safeInsertHTML(grid, 'beforeend', CATEGORIES.map(cat => {
             const entries = data.categories[cat.key] || [];
-            return renderCategoryCard(cat, entries);
-        }).join('');
+            return renderCategoryCard(cat, entries, data.delta_window_days);
+        }).join(''));
 
         // Wire expand buttons
         wireExpandButtons(grid);
 
     } catch (err) {
         console.error('Hall of Fame fetch failed:', err);
-        grid.innerHTML = `<div class="col-span-full">${EmptyState('Failed to load Hall of Fame data')}</div>`;
+        grid.textContent = '';
+        safeInsertHTML(grid, 'beforeend', `<div class="col-span-full">${EmptyState('Failed to load Hall of Fame data')}</div>`);
     }
+}
+
+/**
+ * Human label for the current period filter (contextual empty states).
+ */
+function _periodLabel() {
+    const period = getFilterState().period;
+    const map = {
+        '7d': 'in the last 7 days', '14d': 'in the last 14 days',
+        '30d': 'in the last 30 days', '90d': 'in the last 90 days',
+        'season': 'this season', 'custom': 'in the selected date range',
+    };
+    return map[period] || 'yet';
+}
+
+/**
+ * ↗/↘ rank movement vs the previous equal-length window (rolling periods).
+ */
+function _deltaBadge(entry, deltaWindow) {
+    if (!deltaWindow) return '';
+    if (entry.is_new) {
+        return `<span class="text-[9px] font-bold px-1 py-0.5 rounded bg-brand-amber/15 text-brand-amber" title="Not on this board in the previous ${deltaWindow} days">NEW</span>`;
+    }
+    const d = entry.rank_delta;
+    if (!d) return '';
+    const up = d > 0;
+    return `<span class="text-[10px] font-bold ${up ? 'text-emerald-400' : 'text-rose-400'}" title="${up ? 'Up' : 'Down'} ${Math.abs(d)} rank${Math.abs(d) === 1 ? '' : 's'} vs the previous ${deltaWindow} days">${up ? '↗' : '↘'}${Math.abs(d)}</span>`;
 }
 
 /**
  * Render a single category card with podium + expandable list.
  */
-function renderCategoryCard(cat, entries) {
+function renderCategoryCard(cat, entries, deltaWindow) {
+    const headerHtml = `
+        <div class="flex items-center gap-2.5 mb-4" title="${escapeHtml(CATEGORY_DESCRIPTIONS[cat.key] || '')}">
+            <span class="text-brand-${cat.accent}/70">${cat.icon}</span>
+            <h3 class="text-sm font-bold text-white border-b border-dotted border-slate-600 cursor-help">${escapeHtml(cat.label)}</h3>
+        </div>`;
+
     if (entries.length === 0) {
         return `
             <div class="glass-card rounded-xl p-5">
-                <div class="flex items-center gap-2.5 mb-4">
-                    <span class="text-brand-${cat.accent}/70">${cat.icon}</span>
-                    <h3 class="text-sm font-bold text-white">${escapeHtml(cat.label)}</h3>
-                </div>
-                ${EmptyState('No data for this period')}
+                ${headerHtml}
+                ${EmptyState(`No data ${_periodLabel()}`)}
             </div>`;
     }
 
@@ -142,6 +194,8 @@ function renderCategoryCard(cat, entries) {
                 name: entry.player_name,
                 value: cat.key === 'most_dpm' ? entry.value : formatNumber(entry.value),
                 unit: entry.unit,
+                href: entry.player_guid ? `#/profile/${encodeURIComponent(entry.player_guid)}` : null,
+                badge: _deltaBadge(entry, deltaWindow),
             })).join('')}
         </div>`;
 
@@ -155,11 +209,11 @@ function renderCategoryCard(cat, entries) {
         listHtml = `<div class="border-t border-white/5 pt-3 mt-1">`;
         listHtml += `<div class="space-y-1">`;
         visibleItems.forEach(entry => {
-            listHtml += renderListRow(entry, cat.key === 'most_dpm');
+            listHtml += renderListRow(entry, cat.key === 'most_dpm', deltaWindow);
         });
         if (hiddenItems.length > 0) {
             hiddenItems.forEach(entry => {
-                listHtml += `<div class="hidden" data-expand-group="${expandId}">${renderListRow(entry, cat.key === 'most_dpm')}</div>`;
+                listHtml += `<div class="hidden" data-expand-group="${expandId}">${renderListRow(entry, cat.key === 'most_dpm', deltaWindow)}</div>`;
             });
             listHtml += `</div>`;
             listHtml += `<button data-expand-btn="${expandId}"
@@ -174,10 +228,7 @@ function renderCategoryCard(cat, entries) {
 
     return `
         <div class="glass-card rounded-xl p-5">
-            <div class="flex items-center gap-2.5 mb-4">
-                <span class="text-brand-${cat.accent}/70">${cat.icon}</span>
-                <h3 class="text-sm font-bold text-white">${escapeHtml(cat.label)}</h3>
-            </div>
+            ${headerHtml}
             ${podiumHtml}
             ${listHtml}
         </div>`;
@@ -186,13 +237,17 @@ function renderCategoryCard(cat, entries) {
 /**
  * Render a compact row for ranks 4+.
  */
-function renderListRow(entry, isDpm) {
+function renderListRow(entry, isDpm, deltaWindow) {
     const val = isDpm ? entry.value : formatNumber(entry.value);
+    const nameHtml = entry.player_guid
+        ? `<a href="#/profile/${encodeURIComponent(entry.player_guid)}" class="text-sm text-slate-300 truncate hover:text-brand-cyan transition-colors">${escapeHtml(entry.player_name)}</a>`
+        : `<span class="text-sm text-slate-300 truncate">${escapeHtml(entry.player_name)}</span>`;
     return `
         <div class="flex items-center justify-between py-1.5 px-2 rounded hover:bg-white/5 transition">
             <div class="flex items-center gap-2.5 min-w-0">
                 <span class="text-[11px] font-mono text-slate-600 w-5 text-right shrink-0">${escapeHtml(String(entry.rank))}</span>
-                <span class="text-sm text-slate-300 truncate">${escapeHtml(entry.player_name)}</span>
+                ${nameHtml}
+                ${_deltaBadge(entry, deltaWindow)}
             </div>
             <span class="text-sm font-mono font-bold text-white shrink-0 ml-3">${escapeHtml(String(val))}</span>
         </div>`;

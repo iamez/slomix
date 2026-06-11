@@ -334,6 +334,19 @@ async def get_momentum(
     return await svc.compute_momentum(sd)
 
 
+@router.get("/storytelling/momentum-session")
+@limiter.limit("10/minute")
+async def get_momentum_session(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Whole-session momentum by logical team (stopwatch roster tracking)."""
+    sd = _parse_date(session_date)
+    svc = StorytellingService(db)
+    return await svc.compute_momentum_session(sd)
+
+
 @router.get("/storytelling/narrative")
 @limiter.limit("10/minute")
 async def get_narrative(
