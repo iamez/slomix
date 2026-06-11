@@ -488,6 +488,43 @@ export async function loadEnhancedProfileSections(playerIdentifier) {
         ? data.maps.maps.map(m => m.map).filter(Boolean)
         : [];
     wireAimRose(data.guid, mapList);
+
+    // Stopwatch Competitive card loads separately (own endpoint, like aim).
+    loadCompetitiveCard(root, data.guid).catch((e) =>
+        console.warn('competitive card load failed', e));
+}
+
+// ── Stopwatch Competitive card (player passport) ────────────────────────────
+
+async function loadCompetitiveCard(root, guid) {
+    if (!guid) return;
+    const card = await fetchJSON(
+        `${API_BASE}/proximity/competitive/player-card?player_guid=${encodeURIComponent(guid)}`);
+    if (!card || !card.player) return;
+    const st = card.stagger || {};
+    const cl = card.clutch || {};
+    const att = (card.sides || {}).attack;
+    const def = (card.sides || {}).defense;
+    const cells = [
+        _statCell('Stagger Kills', `${_num(st.stagger_kills)} (${_num(st.stagger_rate, 1)}%)`, 'text-rose-300'),
+        _statCell('Respawn Denied', `${_num(st.denied_s)}s`, 'text-cyan-300'),
+        _statCell('Clutch 1vN', cl.situations
+            ? `${_num(cl.wins)}/${_num(cl.situations)} (${_num(cl.win_pct, 1)}%)`
+            : '--', 'text-amber-300'),
+        _statCell('Advantage Conversions', _num((card.man_advantage || {}).conversions), 'text-emerald-300'),
+        _statCell('Attack Kills', att ? _num(att.kills) : '--'),
+        _statCell('Defense Kills', def ? _num(def.kills) : '--'),
+    ].join('');
+    const best = cl.best
+        ? `<p class="text-[11px] text-slate-500 mt-2">Best clutch: 1v${cl.best.enemies}, ${cl.best.kills} kill${cl.best.kills === 1 ? '' : 's'}${cl.best.survived ? ', survived to the wave' : ''}.</p>`
+        : '';
+    const html = _panel('Stopwatch Competitive', 'swords', `
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">${cells}</div>
+        ${best}
+        <p class="text-[11px] text-slate-500 mt-2">Stagger/sides over ${_num(card.range_days)} days; clutch + advantage over ${_num(card.timeline_range_days)} days. Stagger = kill that costs the victim 80%+ of their spawn wave.</p>
+    `);
+    safeInsertHTML(root, 'beforeend', html);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function renderSkillAndLifetime(data) {

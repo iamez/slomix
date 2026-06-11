@@ -372,8 +372,14 @@ end
 
 -- ===== SAFE ENTITY ACCESS =====
 local last_gentity_error_time = 0
+-- Fields this engine build does not expose ("tried to get invalid gentity
+-- field"): remember them and stop retrying/logging. 2.83.1 lacks e.g.
+-- sess.spawnObjectiveIndex (documented only in newer Lua API docs) — the
+-- 2026-06-11 probe spammed the console on every spawn without this.
+local unsupported_gentity_fields = {}
 
 local function safe_gentity_get(clientnum, field, index)
+    if unsupported_gentity_fields[field] then return nil end
     local ok, value
     if index ~= nil then
         ok, value = pcall(et.gentity_get, clientnum, field, index)
@@ -381,6 +387,13 @@ local function safe_gentity_get(clientnum, field, index)
         ok, value = pcall(et.gentity_get, clientnum, field)
     end
     if ok then return value end
+    if tostring(value):find("invalid gentity field") then
+        unsupported_gentity_fields[field] = true
+        et.G_Print(string.format(
+            "[proximity] field %s not supported by this engine build — disabled for this session\n",
+            field))
+        return nil
+    end
     local now = (et.trap_Milliseconds and et.trap_Milliseconds()) or (os.time() * 1000)
     if now - last_gentity_error_time > 5000 then
         local idx = index ~= nil and ("[" .. tostring(index) .. "]") or ""
@@ -1170,8 +1183,15 @@ local function sampleAimLocks(now)
                 local target_guid = visible and tracker.player_tracks[best_num]
                     and tracker.player_tracks[best_num].guid or nil
                 if target_guid then
-                    if lock and lock.target_guid ~= target_guid then
-                        closeAimLock(clientnum, now)
+                    -- A stale lock (e.g. the player died, the track left
+                    -- player_tracks and the lock was never revisited until
+                    -- respawn) must not silently extend across the gap —
+                    -- close it at the last confirmed sample. Probe finding
+                    -- 2026-06-11: duration 31s with samples=2.
+                    local gap = (config.aim_lock.interval_ms or 400) * 2
+                    if lock and (lock.target_guid ~= target_guid
+                            or (lock.last_seen and now - lock.last_seen > gap)) then
+                        closeAimLock(clientnum, lock.last_seen or now)
                         lock = nil
                     end
                     if not lock then
@@ -1186,15 +1206,32 @@ local function sampleAimLocks(now)
                     lock.samples = lock.samples + 1
                     lock.err_sum = lock.err_sum + best_err
                     lock.dist_sum = lock.dist_sum + best_dist
+                    lock.last_seen = now
                 elseif lock then
-                    closeAimLock(clientnum, now)
+                    closeAimLock(clientnum, lock.last_seen or now)
                 end
             elseif lock then
-                closeAimLock(clientnum, now)
+                closeAimLock(clientnum, lock.last_seen or now)
             end
         elseif tracker.aim_lock.active[clientnum] then
-            closeAimLock(clientnum, now)
+            local l = tracker.aim_lock.active[clientnum]
+            closeAimLock(clientnum, l.last_seen or now)
         end
+    end
+
+    -- Sweep locks whose owner no longer has a live track (death/disconnect
+    -- removes the clientnum from player_tracks, so the loop above never
+    -- revisits them). Two passes: collect, then close — keeps the pairs()
+    -- traversal free of table mutation.
+    local stale = {}
+    for clientnum in pairs(tracker.aim_lock.active) do
+        if not tracker.player_tracks[clientnum] then
+            stale[#stale + 1] = clientnum
+        end
+    end
+    for _, clientnum in ipairs(stale) do
+        local l = tracker.aim_lock.active[clientnum]
+        closeAimLock(clientnum, (l and l.last_seen) or now)
     end
 end
 
@@ -3363,22 +3400,28 @@ local function outputDataInner()
     end
 
     -- ===== SKILL_SNAPSHOT (v7 draft, 6.10) =====
-    -- One row per tracked player at round end: the 7 sess.skill values
+    -- One row per connected team player at round end: the 7 sess.skill values
     -- (SK_BATTLE_SENSE..SK_COVERTOPS, indices 0-6 per the Lua docs).
+    -- Iterates connected clients, NOT tracker.player_tracks — by output time
+    -- every live track has been closed into completed_tracks and
+    -- player_tracks is empty (verified in the 2026-06-11 testmode probe).
     if isFeatureEnabled("skill_snapshot") then
         local rows = {}
         local seen = {}
-        for clientnum, track in pairs(tracker.player_tracks) do
-            if track.guid and not seen[track.guid] and isValidClient(clientnum) then
-                seen[track.guid] = true
-                local skills = {}
-                for i = 0, 6 do
-                    skills[#skills + 1] = tostring(
-                        math.tointeger(tonumber(safe_gentity_get(clientnum, "sess.skill", i)) or 0) or 0)
+        for clientnum = 0, get_max_clients() - 1 do
+            if isPlayerActive(clientnum) then
+                local guid = getPlayerGUID(clientnum)
+                if guid and guid ~= "" and not seen[guid] then
+                    seen[guid] = true
+                    local skills = {}
+                    for i = 0, 6 do
+                        skills[#skills + 1] = tostring(
+                            math.tointeger(tonumber(safe_gentity_get(clientnum, "sess.skill", i)) or 0) or 0)
+                    end
+                    rows[#rows + 1] = string.format("%s;%s;%s;%s\n",
+                        guid, getPlayerName(clientnum), getPlayerTeam(clientnum),
+                        table.concat(skills, ";"))
                 end
-                rows[#rows + 1] = string.format("%s;%s;%s;%s\n",
-                    track.guid, track.name, track.team,
-                    table.concat(skills, ";"))
             end
         end
         if #rows > 0 then

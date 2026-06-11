@@ -186,7 +186,7 @@ ABC123DEF456	Player1	1	1185000	953000	232000	45000	0	8	7	33142	180000	42000
 **Issue**: Clicking the "Watch" button on an uploaded clip does nothing.
 **Expected**: Should open an inline video player or navigate to a watch page.
 **Investigation**: Code looks correct — calls `window.openVideoPlayer()` which creates a modal with a `<video>` element. Should work. Needs browser DevTools debugging.
-**Status**: Open
+**Status**: RESOLVED (verified 2026-06-02 audit). Production serves **legacy JS** (`website/js/`, not the React build). In `website/js/uploads.js` the Watch button (`onclick=window.openVideoPlayer`) is wired and `openVideoPlayer` is defined + exposed on `window` → opens the `<video>` modal correctly. The entry above was stale.
 
 ### Upload Library - "Download" Streams Instead of Downloading
 
@@ -194,7 +194,7 @@ ABC123DEF456	Player1	1	1185000	953000	232000	45000	0	8	7	33142	180000	42000
 **Expected**: Should prompt a browser file download (`Content-Disposition: attachment`).
 **Root Cause**: Backend's download endpoint serves MP4s with `Content-Disposition: inline` (line 376 in `uploads.py`), which tells the browser to play it rather than download. Non-video files correctly use `Content-Disposition: attachment`.
 **Fix**: Add a `?force_download=true` query param or add the `download` attribute to the `<a>` tag.
-**Status**: Open — root cause identified
+**Status**: RESOLVED in production (verified 2026-06-02 audit). The live **legacy JS** download link already uses `?force_download=true` + the `download` attribute (`website/js/uploads.js:400,645`), so it prompts a file download. The backend `inline` default is intentional (inline playback + Range seeking for Watch). Only the non-deployed React `UploadDetail.tsx` lacks the param — fix there if/when React ships. Entry above reflected the old legacy state.
 
 ### Upload Library - "Share" Opens Video Player
 
@@ -218,9 +218,19 @@ ABC123DEF456	Player1	1	1185000	953000	232000	45000	0	8	7	33142	180000	42000
 
 ---
 
-## Time Dead Anomalies (Dec 16, 2025) - Low Priority
+## Time Dead Anomalies (Dec 16, 2025; re-measured 2026-06-02) - Mitigated
 
-**Issue**: 13 player records show `time_dead_minutes > time_played_minutes` by small margins (0.06 to 2.06 minutes).
+> **2026-06-02 update (deep audit, `docs/AUDIT_2026-05-29.md` RCA-1):** the real
+> magnitude is far larger than the original 13 records — **211-301 player-rows**
+> with `time_dead > time_played`, **max overage ~573 min (9.7 h)**. Root cause is
+> the game server sitting **idle on a stale map** after a session (engine keeps
+> accumulating time) + buggy c0rnp0rn Lua time stats. **Mitigated** at read-time:
+> all user-facing consumers now `LEAST(time_dead, time_played)` cap (PR #350, #352);
+> the idle-map root is addressed by the FM6 watchdog (PR #354, full `map` reload).
+> The true upstream fix remains the planned **Lua Time Stats Overhaul** (above).
+> No DB backfill (user decision) — stored rows untouched, capped on display.
+
+**Issue (original)**: 13 player records show `time_dead_minutes > time_played_minutes` by small margins (0.06 to 2.06 minutes).
 
 **Investigation**:
 - Parser correctly uses round duration for stopwatch mode (design intent)

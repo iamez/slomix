@@ -2394,14 +2394,20 @@ async function loadCompetitivePanel() {
         (sessionDate && mapName && roundNumber != null)
             ? fetchJSON(scopedUrl('/proximity/competitive/wave-cycles', { includeRange: false }))
             : Promise.resolve(null),
+        fetchJSON(scopedUrl('/proximity/competitive/man-advantage', { includeRange: false })),
+        fetchJSON(scopedUrl('/proximity/competitive/clutch', { includeRange: false })),
+        fetchJSON(scopedUrl('/proximity/competitive/side-splits', { includeRange: false })),
     ];
-    const [staggerRes, fbRes, pbRes, wavesRes] = await Promise.allSettled(requests);
+    const [staggerRes, fbRes, pbRes, wavesRes, manAdvRes, clutchRes, sidesRes] = await Promise.allSettled(requests);
     if (loadId !== proximityCompetitiveLoadId) return;
 
     const stagger = staggerRes.status === 'fulfilled' ? staggerRes.value : null;
     const fb = fbRes.status === 'fulfilled' ? fbRes.value : null;
     const pbs = pbRes.status === 'fulfilled' ? pbRes.value : null;
     const waves = wavesRes.status === 'fulfilled' ? wavesRes.value : null;
+    const manAdv = manAdvRes.status === 'fulfilled' ? manAdvRes.value : null;
+    const clutch = clutchRes.status === 'fulfilled' ? clutchRes.value : null;
+    const sides = sidesRes.status === 'fulfilled' ? sidesRes.value : null;
 
     // Summary chips
     summaryEl.textContent = '';
@@ -2428,6 +2434,44 @@ async function loadCompetitivePanel() {
         'No rounds in scope');
     renderCompetitivePbs(pbs);
     renderWaveLedger(waves);
+    renderManAdvantage(manAdv);
+    renderLeaderList('proximity-competitive-clutch', (clutch?.players || []).slice(0, 8),
+        (row) => {
+            const best = row.best ? ` • best 1v${row.best.enemies} (${row.best.kills}K${row.best.survived ? ', survived' : ''})` : '';
+            return `${row.wins}/${row.situations} won (${row.win_pct}%)${best}`;
+        },
+        'No clutch situations in scope');
+    renderLeaderList('proximity-competitive-sides', (sides?.players || []).slice(0, 8),
+        (row) => {
+            const att = row.attack ? `${row.attack.kpm ?? '—'} kpm / ${row.attack.kills}K` : '—';
+            const def = row.defense ? `${row.defense.kpm ?? '—'} kpm / ${row.defense.kills}K` : '—';
+            return `ATT ${att} • DEF ${def}`;
+        },
+        'No side-linked rounds in scope');
+}
+
+function renderManAdvantage(manAdv) {
+    const el = document.getElementById('proximity-competitive-manadv');
+    if (!el) return;
+    const teams = manAdv?.teams;
+    if (!teams || !manAdv.total_windows) {
+        el.innerHTML = '<div class="text-[11px] text-slate-500">No advantage windows in scope</div>';
+        return;
+    }
+    const teamRow = (label, t, cls) => `
+        <div class="flex items-center justify-between text-[11px] text-slate-300">
+            <span class="${cls}">${label}</span>
+            <span class="text-slate-500">${t.converted}/${t.windows} converted (${t.conversion_pct}%)</span>
+        </div>
+        <div class="text-[10px] text-slate-600 mb-1">+1: ${t.by_size['1'].converted}/${t.by_size['1'].windows} • +2: ${t.by_size['2'].converted}/${t.by_size['2'].windows} • +3: ${t.by_size['3+'].converted}/${t.by_size['3+'].windows}</div>`;
+    const top = (manAdv.top_converters || []).slice(0, 5).map((c) => `
+        <div class="flex items-center justify-between text-[11px] text-slate-300">
+            <span>${escapeHtml(stripEtColors(c.name || ''))}</span>
+            <span class="text-slate-500">${c.conversions} conversions</span>
+        </div>`).join('');
+    el.innerHTML = teamRow('Axis', teams.AXIS, 'text-brand-rose')
+        + teamRow('Allies', teams.ALLIES, 'text-brand-cyan')
+        + (top ? `<div class="text-[10px] font-bold text-slate-500 uppercase mt-2 mb-1">Top converters</div>${top}` : '');
 }
 
 function renderCompetitivePbs(pbs) {
