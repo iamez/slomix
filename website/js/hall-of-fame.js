@@ -4,7 +4,7 @@
  * @module hall-of-fame
  */
 
-import { API_BASE, fetchJSON, escapeHtml, formatNumber } from './utils.js';
+import { API_BASE, fetchJSON, escapeHtml, formatNumber, safeInsertHTML } from './utils.js';
 import { PageHeader, PodiumCard, LoadingSkeleton, EmptyState } from './components.js';
 import { renderFilterBar, getFilterState, onFilterChange } from './filters.js';
 
@@ -117,10 +117,13 @@ async function fetchAndRender() {
             return;
         }
 
-        grid.innerHTML = CATEGORIES.map(cat => {
+        // All card HTML is built from escapeHtml-sanitized values; insert via
+        // the shared safeInsertHTML helper after clearing.
+        grid.textContent = '';
+        safeInsertHTML(grid, 'beforeend', CATEGORIES.map(cat => {
             const entries = data.categories[cat.key] || [];
             return renderCategoryCard(cat, entries, data.delta_window_days);
-        }).join('');
+        }).join(''));
 
         // Wire expand buttons
         wireExpandButtons(grid);

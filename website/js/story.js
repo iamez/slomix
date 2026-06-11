@@ -490,7 +490,9 @@ async function _renderSessionMomentum(container) {
     }
     if (sessionDate !== storyState.sessionDate || _momentumMode !== 'session') return; // stale
     if (sess.status !== 'ok' || !(sess.points || []).length) {
-        wrapper.innerHTML = `<div class="text-[11px] text-slate-500 p-3">Team view unavailable (${escapeHtml(sess.reason || sess.status || 'no data')})</div>`;
+        wrapper.textContent = '';
+        wrapper.appendChild(_el('div', 'text-[11px] text-slate-500 p-3',
+            `Team view unavailable (${sess.reason || sess.status || 'no data'})`));
         return;
     }
     wrapper.textContent = '';
@@ -499,16 +501,29 @@ async function _renderSessionMomentum(container) {
     if (_momentumChart) { _momentumChart.destroy(); _momentumChart = null; }
     _momentumChart = _createSessionMomentumChart(canvas, sess);
 
-    // Roster + data-quality footnote under the chart.
+    // Roster + data-quality footnote under the chart (DOM nodes, no innerHTML).
     const old = container.querySelector('.momentum-session-meta');
     if (old) old.remove();
     const rosterA = (sess.teams?.team_a?.players || []).map(stripEtColors).join(', ');
     const rosterB = (sess.teams?.team_b?.players || []).map(stripEtColors).join(', ');
     const meta = sess.meta || {};
-    const warn = (meta.defaulted_players_count > 0 || meta.unmapped_rounds > 0)
-        ? ` • <span class="text-amber-400">⚠ ${meta.unmapped_rounds || 0} unmapped rounds, ${meta.defaulted_players_count || 0} defaulted players</span>` : '';
     const note = _el('div', 'momentum-session-meta text-[10px] text-slate-500 mt-2');
-    note.innerHTML = `<span style="color:${TEAM_A_COLOR}">■</span> ${escapeHtml(rosterA)} &nbsp; <span style="color:${TEAM_B_COLOR}">■</span> ${escapeHtml(rosterB)} • ${meta.rounds || 0} rounds stitched (faction swaps resolved by roster overlap)${warn}`;
+    const swatch = (color) => {
+        const s = document.createElement('span');
+        s.style.color = color;
+        s.textContent = '■ ';
+        return s;
+    };
+    note.appendChild(swatch(TEAM_A_COLOR));
+    note.appendChild(document.createTextNode(`${rosterA}   `));
+    note.appendChild(swatch(TEAM_B_COLOR));
+    note.appendChild(document.createTextNode(
+        `${rosterB} • ${meta.rounds || 0} rounds stitched (faction swaps resolved by roster overlap)`));
+    if (meta.defaulted_players_count > 0 || meta.unmapped_rounds > 0) {
+        const w = _el('span', 'text-amber-400',
+            ` • ⚠ ${meta.unmapped_rounds || 0} unmapped rounds, ${meta.defaulted_players_count || 0} defaulted players`);
+        note.appendChild(w);
+    }
     container.appendChild(note);
 }
 

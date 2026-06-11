@@ -422,8 +422,13 @@ function renderPagination(total) {
     const rangeText = `Page ${currentPage} of ${Math.max(pages, 1)} • showing ${rangeStart}–${rangeEnd} of ${total} upload${total !== 1 ? 's' : ''}`;
 
     if (pages <= 1) {
-        container.innerHTML = total > 0
-            ? `<div class="text-[11px] text-slate-600">${rangeText}</div>` : '';
+        container.textContent = '';
+        if (total > 0) {
+            const info = document.createElement('div');
+            info.className = 'text-[11px] text-slate-600';
+            info.textContent = rangeText;
+            container.appendChild(info);
+        }
         return;
     }
 
