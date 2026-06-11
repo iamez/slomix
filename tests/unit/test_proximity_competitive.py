@@ -180,6 +180,19 @@ class TestAdvantageWindows:
         lives = [(A1, "AXIS", 0, None), (B1, "ALLIES", 5000, None)]
         assert _advantage_windows(lives, [], 30000) == []
 
+    def test_boundary_kill_at_window_end_not_a_conversion(self):
+        # Window is half-open [start, end): the respawn at 20s closes the
+        # edge, so an advantaged-team kill at exactly 20s must not convert.
+        lives = [
+            (A1, "AXIS", 0, None),
+            (B1, "ALLIES", 0, 10000), (B1, "ALLIES", 20000, None),
+        ]
+        kills = [_kill(10000, "AXIS"), _kill(20000, "AXIS")]
+        windows = _advantage_windows(lives, kills, 30000)
+        assert len(windows) == 1
+        assert (windows[0]["start"], windows[0]["end"]) == (10000, 20000)
+        assert windows[0]["converted"] is False
+
 
 class TestDetectClutches:
     def test_won_by_surviving_with_kill(self):

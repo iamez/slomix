@@ -21,8 +21,8 @@
 > **Proces:** FAZA A (plan) → **FAZA B (feasibility audit proti živi kodi)** → FAZA C (koda).
 > NE pišemo kode dokler vsak fix ni označen **GREEN** v FAZI B.
 
-## Globalne omejitve (veljajo za VSE fixe)
-- ❌ **Brez backfilla** zgodovinskih podatkov (odločitev uporabnika). Vse forward-only / read-time.
+## Globalne omejitve (veljajo za VSE fixe v TEM planu)
+- ❌ **Brez backfilla** zgodovinskih podatkov (odločitev uporabnika za session-lifecycle fixe iz tega plana; ni repo-wide pravilo — ločeni, izrecno owner-gated backfilli, npr. `scripts/backfill_killer_reinf.py`, imajo svojo odločitev). Vse forward-only / read-time.
 - ❌ **Brez `map_restart`/`lua_restart`** — vedno poln `map <ime>` load ([[feedback_lua_restart]]).
 - ❌ **Brez restarta storitev** brez vprašanja ([[feedback_no_service_restart]]).
 - ✅ Produkcija = **legacy JS** (`website/js/`), NE React build ([[feedback_no_react_build]]).

@@ -1221,11 +1221,17 @@ local function sampleAimLocks(now)
 
     -- Sweep locks whose owner no longer has a live track (death/disconnect
     -- removes the clientnum from player_tracks, so the loop above never
-    -- revisits them).
-    for clientnum, l in pairs(tracker.aim_lock.active) do
+    -- revisits them). Two passes: collect, then close — keeps the pairs()
+    -- traversal free of table mutation.
+    local stale = {}
+    for clientnum in pairs(tracker.aim_lock.active) do
         if not tracker.player_tracks[clientnum] then
-            closeAimLock(clientnum, l.last_seen or now)
+            stale[#stale + 1] = clientnum
         end
+    end
+    for _, clientnum in ipairs(stale) do
+        local l = tracker.aim_lock.active[clientnum]
+        closeAimLock(clientnum, (l and l.last_seen) or now)
     end
 end
 

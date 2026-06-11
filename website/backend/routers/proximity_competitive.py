@@ -515,12 +515,14 @@ def _advantage_windows(lives: list, kills: list, round_end_ms: int) -> list[dict
         windows.append(current)
 
     for w in windows:
+        # Half-open [start, end): events at `end` are what removed the edge,
+        # so a kill at exactly `end` happened with the edge already gone.
         converter = next(
             (
                 k for k in kills
                 if k[1] == w["team"]
                 and k[4] == _OTHER_TEAM[w["team"]]
-                and w["start"] + ADV_KILL_EPSILON_MS < k[0] <= w["end"]
+                and w["start"] + ADV_KILL_EPSILON_MS < k[0] < w["end"]
             ),
             None,
         )
