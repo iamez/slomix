@@ -211,17 +211,30 @@ async def upload_file(
 # GET /api/uploads  —  Browse/search uploads (public)
 # ---------------------------------------------------------------------------
 
+# sort key -> ORDER BY clause (whitelist — never interpolate user input).
+_UPLOAD_SORTS = {
+    "newest": "u.created_at DESC",
+    "oldest": "u.created_at ASC",
+    "downloads": "u.download_count DESC, u.created_at DESC",
+    "size": "u.file_size_bytes DESC, u.created_at DESC",
+    "title": "LOWER(u.title) ASC",
+}
+
+
 @router.get("")
 async def list_uploads(
     category: str | None = Query(None, max_length=20),
     tag: str | None = Query(None, max_length=50),
     search: str | None = Query(None, max_length=100),
     uploader: int | None = None,
+    sort: str = Query(default="newest", max_length=12),
     limit: int = Query(default=50, le=100, ge=1),
     offset: int = Query(default=0, ge=0),
     db=Depends(get_db),
 ):
     """Browse public uploads with optional filters."""
+    if sort not in _UPLOAD_SORTS:
+        raise HTTPException(status_code=400, detail=f"Invalid sort. Allowed: {sorted(_UPLOAD_SORTS)}")
     conditions = ["u.status = 'active'"]
     params: list = []
     idx = 1
@@ -259,12 +272,12 @@ async def list_uploads(
     data_q = f"""
         SELECT u.id, u.title, u.original_filename, u.category, u.extension,
                u.file_size_bytes, u.uploader_name, u.uploader_discord_id,
-               u.download_count, u.created_at
+               u.download_count, u.created_at, LEFT(COALESCE(u.description, ''), 160)
         FROM uploads u
         WHERE {where}
-        ORDER BY u.created_at DESC
+        ORDER BY {_UPLOAD_SORTS[sort]}
         LIMIT ${idx} OFFSET ${idx + 1}
-    """
+    """  # nosec B608 - where built from whitelisted clauses, sort from _UPLOAD_SORTS literal map; all values $N-bound
 
     rows = await db.fetch_all(data_q, tuple(params))
 
@@ -280,12 +293,13 @@ async def list_uploads(
             "uploader_discord_id": r[7],
             "download_count": r[8],
             "created_at": str(r[9]) if r[9] else None,
+            "description_preview": r[10] or None,
             "share_url": f"/share/{r[0]}",
         }
         for r in rows
     ]
 
-    return {"items": items, "total": total or 0, "limit": limit, "offset": offset}
+    return {"items": items, "total": total or 0, "limit": limit, "offset": offset, "sort": sort}
 
 
 # ---------------------------------------------------------------------------

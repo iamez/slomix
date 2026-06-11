@@ -7,6 +7,7 @@ import { API_BASE, fetchJSON, escapeHtml, escapeJsString } from './utils.js';
 
 let currentCategory = '';
 let currentOffset = 0;
+let currentSort = 'newest';
 const PAGE_SIZE = 50;
 
 // Category config: colors, icons (SVG paths), glow colors
@@ -299,7 +300,7 @@ async function loadUploadsList() {
     grid.innerHTML = renderSkeletonCards(6);
 
     const search = document.getElementById('upload-search-input')?.value || '';
-    const params = new URLSearchParams({ limit: PAGE_SIZE, offset: currentOffset });
+    const params = new URLSearchParams({ limit: PAGE_SIZE, offset: currentOffset, sort: currentSort });
     if (currentCategory) params.set('category', currentCategory);
     if (search.trim()) params.set('search', search.trim());
 
@@ -383,6 +384,8 @@ function renderUploadCard(item, index = 0) {
                         ${item.download_count || 0}
                     </span>
                 </div>
+                ${item.description_preview ? `
+                <div class="text-[11px] text-slate-500 leading-snug" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escapeHtml(item.description_preview)}</div>` : ''}
 
                 <!-- Actions -->
                 <div class="mt-auto flex gap-2 pt-1">
@@ -414,9 +417,13 @@ function renderPagination(total) {
 
     const pages = Math.ceil(total / PAGE_SIZE);
     const currentPage = Math.floor(currentOffset / PAGE_SIZE) + 1;
+    const rangeStart = total === 0 ? 0 : currentOffset + 1;
+    const rangeEnd = Math.min(currentOffset + PAGE_SIZE, total);
+    const rangeText = `Page ${currentPage} of ${Math.max(pages, 1)} • showing ${rangeStart}–${rangeEnd} of ${total} upload${total !== 1 ? 's' : ''}`;
 
     if (pages <= 1) {
-        container.innerHTML = '';
+        container.innerHTML = total > 0
+            ? `<div class="text-[11px] text-slate-600">${rangeText}</div>` : '';
         return;
     }
 
@@ -444,9 +451,16 @@ function renderPagination(total) {
     }
 
     html += '</div>';
-    html += `<div class="text-[11px] text-slate-600">${total} upload${total !== 1 ? 's' : ''}</div>`;
+    html += `<div class="text-[11px] text-slate-600">${rangeText}</div>`;
 
     container.innerHTML = html;
+}
+
+function setUploadSort(sort) {
+    if (sort === currentSort) return;
+    currentSort = sort;
+    currentOffset = 0;
+    loadUploadsList();
 }
 
 // ============================================================================
@@ -656,10 +670,13 @@ export async function loadUploadDetail(uploadId) {
                             ${escapeHtml(data.filename)}
                         </div>
                     </div>
-                    <span class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase border ${cat.color}">
-                        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
-                        ${escapeHtml(cat.label)}
-                    </span>
+                    <div class="shrink-0 flex items-center gap-2">
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase border ${cat.color}">
+                            <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+                            ${escapeHtml(cat.label)}
+                        </span>
+                        <span id="upload-detail-owner-actions"></span>
+                    </div>
                 </div>
 
                 ${data.description ? `
@@ -740,6 +757,7 @@ export async function loadUploadDetail(uploadId) {
                 </div>
             </div>
         `;
+        _maybeShowOwnerDelete(data);
     } catch (err) {
         container.innerHTML = `
             <div class="glass-card rounded-xl p-12 text-center" style="animation: fadeSlideUp 0.4s ease-out both;">
@@ -749,6 +767,38 @@ export async function loadUploadDetail(uploadId) {
                 <a href="#/uploads" class="inline-block mt-4 text-xs text-brand-cyan hover:text-white transition">Browse all uploads</a>
             </div>`;
     }
+}
+
+// Owner-only delete: the DELETE endpoint always existed, but there was no UI
+// for it. Shown only when /auth/me matches the uploader; double-gated by an
+// explicit confirmation (the file is gone for good).
+async function _maybeShowOwnerDelete(data) {
+    try {
+        const r = await fetch('/auth/me', { credentials: 'same-origin' });
+        if (!r.ok) return;
+        const user = await r.json();
+        if (!user || String(user.id) !== String(data.uploader_discord_id)) return;
+        const host = document.getElementById('upload-detail-owner-actions');
+        if (!host) return;
+        host.innerHTML = `
+            <button class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold uppercase border text-brand-rose border-brand-rose/30 bg-brand-rose/10 hover:bg-brand-rose/20 transition">
+                Delete
+            </button>`;
+        host.querySelector('button').addEventListener('click', async () => {
+            const label = data.title || data.filename || 'this upload';
+            if (!window.confirm(`Delete "${label}" permanently?\n\nThis cannot be undone.`)) return;
+            try {
+                const resp = await fetch(`${API_BASE}/uploads/${encodeURIComponent(data.id)}`, {
+                    method: 'DELETE', credentials: 'same-origin',
+                });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                showToast('Upload deleted', 'success');
+                window.location.hash = '#/uploads';
+            } catch (e) {
+                showToast(`Delete failed: ${e.message}`, 'error');
+            }
+        });
+    } catch { /* not logged in — no owner actions */ }
 }
 
 function copyShareLink() {
@@ -803,6 +853,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ============================================================================
 
 window.filterUploads = filterUploads;
+window.setUploadSort = setUploadSort;
 window.filterUploadsByTag = filterUploadsByTag;
 window.uploadPage = uploadPage;
 window.openVideoPlayer = openVideoPlayer;
