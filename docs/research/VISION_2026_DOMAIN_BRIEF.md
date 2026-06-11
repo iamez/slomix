@@ -11,8 +11,9 @@ plana `docs/vision-2026`.
   umrl pri objectivu — 8s kasneje vid vzel objective") + številke zraven.
   "Stories WITH numbers", ne stories namesto številk.
 - Nova izjava (2026-06-11): **website postane primarni interface**, bot ostane
-  pipeline/import/monitoring/notifikacije. Roadmap v docs/WEBSITE_FIRST_ROADMAP
-  je lastnik označil kot premajhen — hoče research-driven vizijo.
+  pipeline/import/monitoring/notifikacije. Roadmap v
+  `docs/WEBSITE_FIRST_ROADMAP_2026-06.md` je lastnik označil kot premajhen —
+  hoče research-driven vizijo.
 
 ## 2. Kje smo tehnično unikatni (ANALYTICS_BENCHMARK_2026-06, PROXIMITY_*)
 - Per-igralec pozicije @200ms za vsako rundo; spawn-wave clocki (offseti

@@ -1,12 +1,15 @@
-# Slomix 2027 — dom naše scene
+# Slomix — dom naše scene (vizija 2026 → ciljno stanje 2027)
 
-> Produktno-strateška vizija (2026-06-11). Sinteza: lastnikova filozofija
+> Produktno-strateška vizija, zapisana 2026-06-11; opisuje ciljno stanje
+> platforme do konca 2027. Sinteza: lastnikova filozofija
 > ([domain brief](research/VISION_2026_DOMAIN_BRIEF.md)) + 4 research reporti:
 > [R1 engagement](research/VISION_2026_R1_ENGAGEMENT.md) ·
 > [R2 UX](research/VISION_2026_R2_UX.md) ·
 > [R3 ET ekosistem](research/VISION_2026_R3_ET_ECOSYSTEM.md) ·
 > [R4 male skupnosti](research/VISION_2026_R4_SMALL_COMMUNITIES.md).
-> Vsaka trditev ima vir ali oznako [hipoteza].
+> Vsaka trditev ima vir ali eksplicitno oznako negotovosti — dopustni
+> obliki sta [hipoteza] (naša domneva) in [inferenca]/[naša izpeljava]
+> (sklep iz virov, ki ga vir neposredno ne potrjuje).
 
 ## Severnica
 

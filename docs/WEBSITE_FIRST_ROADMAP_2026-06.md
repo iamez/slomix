@@ -1,9 +1,11 @@
 # Website-first roadmap v2 (2026-06-11)
 
 > Izvedbeni načrt za [VISION_2026.md](VISION_2026.md). v2 nadomešča prvotni
-> gap-analysis roadmap (isti dan) — zdaj research-informed (R1-R4 reporti v
-> docs/research/). Bot ostane pipeline/ops/notifikacije; website postane dom.
-> Vsak sprint = en shippable PR set; reuse-first (obstoječi API-ji/tabele).
+> gap-analysis roadmap (isti dan, committan na PR #380 pod isto potjo) — zdaj
+> research-informed (R1-R4 reporti v docs/research/). **Merge opomba**: ob
+> konfliktu s #380 verzijo te datoteke velja TA (v2) verzija. Bot ostane
+> pipeline/ops/notifikacije; website postane dom. Vsak sprint = en shippable
+> PR set; reuse-first (obstoječi API-ji/tabele).
 
 ## Sprint S1 — "JUTRO" (push layer; največ vrednosti/trud)
 Cilj: druga engagement seansa na vsak igralni večer.
