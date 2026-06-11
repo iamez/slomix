@@ -4,7 +4,7 @@
  * @module story
  */
 
-import { API_BASE, escapeHtml, fetchJSON, formatNumber } from './utils.js';
+import { API_BASE, fetchJSON, formatNumber } from './utils.js';
 
 function stripEtColors(text) {
     if (!text) return '';

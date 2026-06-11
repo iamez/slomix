@@ -107,13 +107,15 @@ async function fetchAndRender() {
     if (!grid) return;
 
     // Show loading skeletons
-    grid.innerHTML = LoadingSkeleton('card', 12);
+    grid.textContent = '';
+    safeInsertHTML(grid, 'beforeend', LoadingSkeleton('card', 12));
 
     try {
         const data = await fetchJSON(buildApiUrl());
 
         if (!data || !data.categories) {
-            grid.innerHTML = `<div class="col-span-full">${EmptyState(`No data available ${_periodLabel()}`)}</div>`;
+            grid.textContent = '';
+            safeInsertHTML(grid, 'beforeend', `<div class="col-span-full">${EmptyState(`No data available ${_periodLabel()}`)}</div>`);
             return;
         }
 
@@ -130,7 +132,8 @@ async function fetchAndRender() {
 
     } catch (err) {
         console.error('Hall of Fame fetch failed:', err);
-        grid.innerHTML = `<div class="col-span-full">${EmptyState('Failed to load Hall of Fame data')}</div>`;
+        grid.textContent = '';
+        safeInsertHTML(grid, 'beforeend', `<div class="col-span-full">${EmptyState('Failed to load Hall of Fame data')}</div>`);
     }
 }
 
