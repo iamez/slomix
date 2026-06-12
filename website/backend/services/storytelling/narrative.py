@@ -394,12 +394,15 @@ class _NarrativeMixin:
         # Own-history baselines (VISION_2026 writing rule: numbers carry
         # their delta vs the player's usual, not just the session avg).
         from .baseline import format_with_baseline, trailing_averages
-        own_baseline: dict[str, dict] = {}
-        for guid in all_guids:
-            try:
-                own_baseline[guid] = await trailing_averages(self.db, guid[:8])
-            except Exception:  # noqa: BLE001 - baseline is enrichment, never fatal
-                own_baseline[guid] = {}
+        guid_list = sorted(all_guids)
+        baseline_results = await asyncio.gather(
+            *(trailing_averages(self.db, g[:8]) for g in guid_list),
+            return_exceptions=True,
+        )
+        own_baseline: dict[str, dict] = {
+            g: (res if isinstance(res, dict) else {})
+            for g, res in zip(guid_list, baseline_results)
+        }
 
         for guid in sorted(all_guids):
             g = g_map.get(guid, {})

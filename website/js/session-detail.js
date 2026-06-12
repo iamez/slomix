@@ -378,6 +378,13 @@ export async function loadSessionDetailView({ sessionId, sessionDate, tab } = {}
 // VERDICT STRIP (S1.4) — per player vs OWN form, gentle by design
 // ============================================================
 
+function _ordinal(n) {
+    const mod100 = n % 100;
+    if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+    const suffix = { 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th';
+    return `${n}${suffix}`;
+}
+
 const _VERDICT_STYLES = {
     Great: 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10',
     Good: 'text-brand-cyan border-brand-cyan/30 bg-brand-cyan/10',
@@ -404,9 +411,9 @@ async function _loadVerdictStrip() {
     const chips = players.map(p => {
         const style = _VERDICT_STYLES[p.label] || _VERDICT_STYLES.Average;
         const pct = p.percentile != null
-            ? `<span class="text-[10px] text-slate-500">${p.percentile}th pct of own ${p.sessions_in_baseline} sessions</span>`
+            ? `<span class="text-[10px] text-slate-500">${_ordinal(p.percentile)} pct of own ${p.sessions_in_baseline} sessions</span>`
             : `<span class="text-[10px] text-slate-500">first nights — no baseline yet</span>`;
-        const delta = (p.avg_dpm && p.dpm)
+        const delta = (p.avg_dpm != null && p.dpm != null)
             ? `<span class="text-[10px] text-slate-500">${p.dpm} DPM (usual ${p.avg_dpm})</span>`
             : `<span class="text-[10px] text-slate-500">${p.dpm} DPM</span>`;
         return `

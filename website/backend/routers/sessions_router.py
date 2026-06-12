@@ -1729,7 +1729,7 @@ async def get_session_verdicts(
             })
             continue
         below = sum(1 for h in hist if h < cur["dpm"])
-        pct = below / len(hist) * 100
+        pct = round(below / len(hist) * 100)
         avg = sum(hist) / len(hist)
         players.append({
             "guid": guid,
@@ -1738,7 +1738,7 @@ async def get_session_verdicts(
             "avg_dpm": round(avg, 1),
             "kills": cur["kills"],
             "first_night": False,
-            "percentile": round(pct),
+            "percentile": pct,
             "label": _label(pct),
             "sessions_in_baseline": len(hist),
         })
