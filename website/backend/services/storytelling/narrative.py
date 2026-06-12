@@ -391,6 +391,19 @@ class _NarrativeMixin:
                 return f" ({pct_above:.0f}% more than avg)"
             return ""
 
+        # Own-history baselines (VISION_2026 writing rule: numbers carry
+        # their delta vs the player's usual, not just the session avg).
+        from .baseline import format_with_baseline, trailing_averages
+        guid_list = sorted(all_guids)
+        baseline_results = await asyncio.gather(
+            *(trailing_averages(self.db, g[:8]) for g in guid_list),
+            return_exceptions=True,
+        )
+        own_baseline: dict[str, dict] = {
+            g: (res if isinstance(res, dict) else {})
+            for g, res in zip(guid_list, baseline_results)
+        }
+
         for guid in sorted(all_guids):
             g = g_map.get(guid, {})
             s = s_map.get(guid, {})
@@ -483,8 +496,11 @@ class _NarrativeMixin:
                         f"{e.get('total_assists', 0)} teammate frags."
                     )
                 elif kills > 0:
+                    kills_txt = format_with_baseline(
+                        kills, own_baseline.get(guid, {}).get("kills")
+                    )
                     parts.append(
-                        f"Fragged {kills} ({total_kis:.0f} KIS) as {archetype}."
+                        f"Fragged {kills_txt} ({total_kis:.0f} KIS) as {archetype}."
                     )
 
             # ── Enabler: made teammates look good ──

@@ -202,6 +202,18 @@ class BotConfig:
         # ==================== AUTOMATION SYSTEM ====================
         self.automation_enabled: bool = self._get_config('AUTOMATION_ENABLED', 'false').lower() == 'true'
 
+        # ==================== MORNING SESSION DIGEST (VISION_2026 S1.1) ====================
+        # Auto-posted recap embed after a session ends. OFF by default —
+        # owner enables on prod once content is validated.
+        self.session_digest_enabled: bool = self._get_config('SESSION_DIGEST_ENABLED', 'false').lower() == 'true'
+        # Website API used for KIS MVP / PB enrichment (digest degrades
+        # gracefully if unreachable). Prod runs the web on port 7000.
+        self.website_api_base: str = self._get_config('WEBSITE_API_BASE', 'http://127.0.0.1:8000/api').rstrip('/')
+        # Public base for deep links in Discord embeds.
+        self.website_public_base: str = self._get_config('WEBSITE_PUBLIC_BASE', 'https://www.slomix.fyi').rstrip('/')
+        # Skip digest for stub sessions (false session-end trigger guard).
+        self.session_digest_min_rounds: int = int(self._get_config('SESSION_DIGEST_MIN_ROUNDS', '4'))
+
         # File processing startup lookback window (hours)
         # When bot restarts, only process files within this window before startup time
         # Default: 168 hours (7 days) - prevents re-importing ancient history while

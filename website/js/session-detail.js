@@ -367,10 +367,78 @@ export async function loadSessionDetailView({ sessionId, sessionDate, tab } = {}
 
         _renderShell(container);
         _activateTab(_initialTab);
+        _loadVerdictStrip().catch((e) => console.warn('verdict strip failed', e));
     } catch (e) {
         console.error('Failed to load session detail:', e);
         container.innerHTML = '<div class="text-center text-red-500 py-12">Failed to load session</div>';
     }
+}
+
+// ============================================================
+// VERDICT STRIP (S1.4) — per player vs OWN form, gentle by design
+// ============================================================
+
+function _ordinal(n) {
+    const mod100 = n % 100;
+    if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+    const suffix = { 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th';
+    return `${n}${suffix}`;
+}
+
+const _VERDICT_STYLES = {
+    Great: 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10',
+    Good: 'text-brand-cyan border-brand-cyan/30 bg-brand-cyan/10',
+    Average: 'text-slate-300 border-white/15 bg-white/5',
+    Subpar: 'text-amber-400 border-amber-400/30 bg-amber-400/10',
+    New: 'text-brand-purple border-brand-purple/30 bg-brand-purple/10',
+};
+
+async function _loadVerdictStrip() {
+    const host = document.getElementById('sd-verdict-strip');
+    if (!host || !_sessionId) return;
+    let data;
+    try {
+        data = await fetchJSON(`${API_BASE}/stats/session/${_sessionId}/verdicts`);
+    } catch (_) {
+        return; // strip is optional enrichment — never block the page
+    }
+    const players = data?.players || [];
+    if (!players.length) return;
+
+    const rated = players.filter(p => p.percentile != null);
+    const quietNight = rated.length >= 3 && rated.every(p => p.percentile < 50);
+
+    const chips = players.map(p => {
+        const style = _VERDICT_STYLES[p.label] || _VERDICT_STYLES.Average;
+        const pct = p.percentile != null
+            ? `<span class="text-[10px] text-slate-500">${_ordinal(p.percentile)} pct of own ${p.sessions_in_baseline} sessions</span>`
+            : `<span class="text-[10px] text-slate-500">first nights — no baseline yet</span>`;
+        const delta = (p.avg_dpm != null && p.dpm != null)
+            ? `<span class="text-[10px] text-slate-500">${p.dpm} DPM (usual ${p.avg_dpm})</span>`
+            : `<span class="text-[10px] text-slate-500">${p.dpm} DPM</span>`;
+        return `
+            <a href="#/profile/${encodeURIComponent(p.guid)}"
+               class="flex flex-col gap-0.5 px-3 py-2 rounded-lg border ${style} hover:brightness-125 transition shrink-0">
+                <span class="flex items-center gap-2">
+                    <span class="text-sm font-bold text-white">${escapeHtml(p.name)}</span>
+                    <span class="text-[10px] font-black uppercase tracking-wide">${escapeHtml(p.label)}</span>
+                </span>
+                ${pct}
+                ${delta}
+            </a>`;
+    }).join('');
+
+    host.innerHTML = `
+        <div class="glass-panel rounded-xl p-4">
+            <div class="flex items-center gap-3 mb-3">
+                <div class="text-[11px] uppercase tracking-wider text-slate-500 font-bold"
+                     title="Each player's night graded against their OWN previous sessions (DPM percentile) — never against each other.">
+                    Night verdicts · vs own form
+                </div>
+                ${quietNight ? '<span class="text-[10px] text-slate-500">quiet night for everyone — happens to the best of groups</span>' : ''}
+            </div>
+            <div class="flex gap-2 overflow-x-auto pb-1">${chips}</div>
+        </div>`;
 }
 
 // ============================================================
@@ -531,6 +599,9 @@ function _renderShell(container) {
                 </div>
             </div>
         </div>
+
+        <!-- Verdict strip: how was the night, per player vs OWN form (S1.4) -->
+        <div id="sd-verdict-strip" class="mb-6"></div>
 
         <div class="flex gap-2 mb-6 p-1 bg-slate-900/40 rounded-2xl flex-wrap" id="sd-tab-nav" role="tablist">
             ${[

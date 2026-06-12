@@ -1656,3 +1656,96 @@ async def get_stats_session_detail(
     }
 
 
+
+
+@router.get("/stats/session/{gaming_session_id}/verdicts")
+async def get_session_verdicts(
+    gaming_session_id: int,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Per-player 'how was your night' verdicts for one session (S1.4).
+
+    Verdict = percentile of tonight's DPM within the player's OWN previous
+    sessions (rank-vs-self, VISION_2026 anti-goals) — complete data for every
+    player, unlike lazily-computed KIS. Labels follow the Leetify bands.
+    Players with no history are flagged first_night instead of judged.
+    """
+    rows = await db.fetch_all(
+        """
+        SELECT pcs.player_guid,
+               MAX(pcs.player_name) AS player_name,
+               r.gaming_session_id,
+               SUM(pcs.kills) AS kills,
+               SUM(pcs.damage_given)::float
+                   / NULLIF(SUM(pcs.time_played_seconds) / 60.0, 0) AS dpm
+        FROM player_comprehensive_stats pcs
+        JOIN rounds r ON r.id = pcs.round_id
+        WHERE r.gaming_session_id IS NOT NULL
+          AND r.gaming_session_id <= $1
+          AND pcs.time_played_seconds > 0
+          AND pcs.player_guid IN (
+              SELECT DISTINCT pcs2.player_guid
+              FROM player_comprehensive_stats pcs2
+              JOIN rounds r2 ON r2.id = pcs2.round_id
+              WHERE r2.gaming_session_id = $1 AND pcs2.time_played_seconds > 0
+          )
+        GROUP BY pcs.player_guid, r.gaming_session_id
+        """,
+        (gaming_session_id,),
+    )
+    if not rows:
+        return {"status": "ok", "gaming_session_id": gaming_session_id, "players": []}
+
+    current: dict[str, dict] = {}
+    history: dict[str, list[float]] = {}
+    for guid, name, sid, kills, dpm in rows:
+        if int(sid) == gaming_session_id:
+            current[guid] = {"name": name, "kills": int(kills or 0), "dpm": float(dpm or 0)}
+        else:
+            history.setdefault(guid, []).append(float(dpm or 0))
+
+    def _label(pct: float) -> str:
+        if pct >= 80:
+            return "Great"
+        if pct >= 55:
+            return "Good"
+        if pct >= 30:
+            return "Average"
+        return "Subpar"
+
+    players = []
+    for guid, cur in current.items():
+        hist = history.get(guid, [])
+        if len(hist) < 3:
+            players.append({
+                "guid": guid,
+                "name": cur["name"],
+                "dpm": round(cur["dpm"], 1),
+                "kills": cur["kills"],
+                "first_night": True,
+                "percentile": None,
+                "label": "New",
+                "sessions_in_baseline": len(hist),
+            })
+            continue
+        below = sum(1 for h in hist if h < cur["dpm"])
+        pct = round(below / len(hist) * 100)
+        avg = sum(hist) / len(hist)
+        players.append({
+            "guid": guid,
+            "name": cur["name"],
+            "dpm": round(cur["dpm"], 1),
+            "avg_dpm": round(avg, 1),
+            "kills": cur["kills"],
+            "first_night": False,
+            "percentile": pct,
+            "label": _label(pct),
+            "sessions_in_baseline": len(hist),
+        })
+    players.sort(key=lambda p: (p["percentile"] is None, -(p["percentile"] or 0)))
+    return {
+        "status": "ok",
+        "gaming_session_id": gaming_session_id,
+        "baseline": "own previous sessions, DPM percentile",
+        "players": players,
+    }

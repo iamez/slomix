@@ -456,3 +456,100 @@ async def get_composite_stats(
             },
         },
     }
+
+
+@router.get("/skill/movers")
+async def get_movers(
+    top: int = 3,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Form movers for the home page: last session vs each player's OWN baseline.
+
+    VISION_2026 anti-goal compliance: this is rank-vs-self, not a global
+    ladder — the delta is against the player's trailing-10-session DPM, so a
+    bottom-half player on a hot night tops the movers list.
+    """
+    top = max(1, min(top, 10))
+    rows = await db.fetch_all(
+        """
+        WITH recent_sessions AS (
+            SELECT DISTINCT gaming_session_id
+            FROM rounds
+            WHERE gaming_session_id IS NOT NULL
+            ORDER BY gaming_session_id DESC
+            LIMIT 11
+        ),
+        per_session AS (
+            SELECT pcs.player_guid,
+                   MAX(pcs.player_name) AS player_name,
+                   r.gaming_session_id,
+                   SUM(pcs.kills) AS kills,
+                   SUM(pcs.damage_given)::float
+                       / NULLIF(SUM(pcs.time_played_seconds) / 60.0, 0) AS dpm
+            FROM player_comprehensive_stats pcs
+            JOIN rounds r ON r.id = pcs.round_id
+            WHERE r.gaming_session_id IN (SELECT gaming_session_id FROM recent_sessions)
+              AND pcs.time_played_seconds > 0
+            GROUP BY pcs.player_guid, r.gaming_session_id
+        )
+        SELECT player_guid, player_name, gaming_session_id, kills, dpm
+        FROM per_session
+        ORDER BY gaming_session_id DESC
+        """,
+        (),
+    )
+    if not rows:
+        return {"status": "ok", "session_id": None, "movers_up": [], "movers_down": []}
+
+    latest_sid = max(int(r[2]) for r in rows)
+    latest_date = await db.fetch_val(
+        "SELECT MAX(round_date) FROM rounds WHERE gaming_session_id = $1",
+        (latest_sid,),
+    )
+
+    latest: dict[str, dict] = {}
+    history: dict[str, list[float]] = {}
+    for guid, name, sid, kills, dpm in rows:
+        if int(sid) == latest_sid:
+            latest[guid] = {"name": name, "kills": int(kills or 0), "dpm": float(dpm or 0)}
+        else:
+            history.setdefault(guid, []).append(float(dpm or 0))
+
+    movers = []
+    for guid, cur in latest.items():
+        hist = history.get(guid)
+        if not hist:
+            movers.append({
+                "guid": guid, "name": cur["name"], "dpm": round(cur["dpm"], 1),
+                "avg_dpm": None, "delta_pct": None, "is_new": True,
+            })
+            continue
+        avg = sum(hist) / len(hist)
+        if avg <= 0:
+            continue
+        movers.append({
+            "guid": guid, "name": cur["name"], "dpm": round(cur["dpm"], 1),
+            "avg_dpm": round(avg, 1),
+            "delta_pct": round((cur["dpm"] - avg) / avg * 100, 1),
+            "is_new": False,
+        })
+
+    ranked = sorted(
+        (m for m in movers if m["delta_pct"] is not None),
+        key=lambda m: m["delta_pct"], reverse=True,
+    )
+    movers_up = [m for m in ranked[:top] if m["delta_pct"] > 0]
+    up_guids = {m["guid"] for m in movers_up}
+    movers_down = [
+        m for m in reversed(ranked[-top:])
+        if m["delta_pct"] < 0 and m["guid"] not in up_guids
+    ]
+    return {
+        "status": "ok",
+        "session_id": latest_sid,
+        "session_date": str(latest_date) if latest_date else None,
+        "baseline": "own trailing-10-session DPM",
+        "movers_up": movers_up,
+        "movers_down": movers_down,
+        "new_players": [m for m in movers if m.get("is_new")],
+    }

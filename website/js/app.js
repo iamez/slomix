@@ -16,6 +16,7 @@ import { initLivePolling, initLiveStatusPolling, updateLiveSession } from './liv
 import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchDetails } from './player-profile.js?v=20260608-aimv2';
 import { loadLeaderboard, loadQuickLeaders, loadRecentMatches, setNavigateTo as setLeaderboardNavigateTo, initLeaderboardDefaults } from './leaderboard.js';
 import { loadSeasonInfo, loadLastSession, loadSessionsView, loadSessionMVP, toggleSeasonDetails } from './sessions.js';
+import { loadHomePulseCards } from './home.js';
 import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from './matches.js';
 
 import { loadRecordsView } from './records.js';
@@ -736,6 +737,7 @@ async function initApp() {
     const criticalLoads = [checkLoginStatus];
     if (legacyHomeEnabled) {
         criticalLoads.unshift(
+            loadHomePulseCards,
             loadOverviewStats,
             updateLiveSession,
             loadQuickLeaders,
