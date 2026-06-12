@@ -1682,12 +1682,15 @@ async def get_session_verdicts(
         JOIN rounds r ON r.id = pcs.round_id
         WHERE r.gaming_session_id IS NOT NULL
           AND r.gaming_session_id <= $1
+          AND r.is_valid IS DISTINCT FROM FALSE
           AND pcs.time_played_seconds > 0
           AND pcs.player_guid IN (
               SELECT DISTINCT pcs2.player_guid
               FROM player_comprehensive_stats pcs2
               JOIN rounds r2 ON r2.id = pcs2.round_id
-              WHERE r2.gaming_session_id = $1 AND pcs2.time_played_seconds > 0
+              WHERE r2.gaming_session_id = $1
+                AND r2.is_valid IS DISTINCT FROM FALSE
+                AND pcs2.time_played_seconds > 0
           )
         GROUP BY pcs.player_guid, r.gaming_session_id
         """,
