@@ -359,6 +359,16 @@ class VoiceSessionService:
             # Finalize session results for team W/L tracking
             await self._finalize_session_results()
 
+            # Morning digest (VISION_2026 S1.1) — flag-gated, never blocks
+            # session teardown.
+            if getattr(self.config, "session_digest_enabled", False):
+                try:
+                    from bot.services.session_digest_service import SessionDigestService
+                    digest = SessionDigestService(self.bot, self.db_adapter, self.config)
+                    await digest.generate_and_post()
+                except Exception as e:
+                    logger.error(f"❌ Session digest failed (non-fatal): {e}", exc_info=True)
+
             # Reset session state
             self.session_active = False
             self.session_start_time = None
