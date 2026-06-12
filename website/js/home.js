@@ -1,0 +1,100 @@
+/**
+ * Home pulse cards (VISION_2026 S1.2) — the returning member's three
+ * questions, above the fold: when do we play next? what happened last
+ * night? who's in form? (HLTV three-zone pattern, R2 §4.1-4.2)
+ * @module home
+ */
+
+import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
+
+function _card({ title, accent, bodyHtml, href, cta }) {
+    const link = href
+        ? `<a href="${escapeHtml(href)}" class="mt-3 inline-block text-xs font-bold text-brand-${accent} hover:text-white transition">${escapeHtml(cta || 'Open')} →</a>`
+        : '';
+    return `
+        <div class="glass-panel p-5 rounded-xl border-l-4 border-brand-${accent}/60 hover:border-brand-${accent} transition-colors">
+            <div class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-2">${escapeHtml(title)}</div>
+            ${bodyHtml}
+            ${link}
+        </div>`;
+}
+
+function _nextSessionCard(avail) {
+    const days = (avail?.days || []).filter(d => (d.total || 0) > 0);
+    if (!days.length) {
+        return _card({
+            title: 'Next session', accent: 'cyan',
+            bodyHtml: '<div class="text-sm text-slate-400">No votes yet — pick a night.</div>',
+            href: '#/availability', cta: 'Vote availability',
+        });
+    }
+    const d = days[0];
+    const c = d.counts || {};
+    const committed = (c.LOOKING || 0) + (c.AVAILABLE || 0);
+    const date = new Date(d.date + 'T12:00:00');
+    const label = date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    return _card({
+        title: 'Next session', accent: 'cyan',
+        bodyHtml: `
+            <div class="text-lg font-black text-white">${escapeHtml(label)}</div>
+            <div class="text-sm text-slate-400 mt-1">${committed} in${c.MAYBE ? ` · ${c.MAYBE} maybe` : ''}</div>`,
+        href: '#/availability', cta: 'Vote / join',
+    });
+}
+
+function _lastSessionCard(sessions) {
+    const s = Array.isArray(sessions) ? sessions[0] : null;
+    if (!s) {
+        return _card({
+            title: 'Last session', accent: 'amber',
+            bodyHtml: '<div class="text-sm text-slate-400">No sessions yet.</div>',
+        });
+    }
+    const maps = (s.maps_played || []).slice(0, 3).join(', ');
+    return _card({
+        title: `Last session · ${s.time_ago || s.date}`, accent: 'amber',
+        bodyHtml: `
+            <div class="text-lg font-black text-white">${s.rounds} rounds · ${s.players} players</div>
+            <div class="text-sm text-slate-400 mt-1">${escapeHtml(maps)}${s.maps > 3 ? '…' : ''} · ${s.total_kills} kills</div>`,
+        href: s.session_id ? `#/session-detail/${s.session_id}` : `#/session-detail/date/${encodeURIComponent(s.date)}`,
+        cta: 'Full recap',
+    });
+}
+
+function _moversCard(movers) {
+    const rows = [];
+    (movers?.movers_up || []).slice(0, 2).forEach(m => rows.push(
+        `<div class="flex justify-between text-sm"><a class="text-slate-300 hover:text-brand-cyan transition" href="#/profile/${encodeURIComponent(m.guid)}">${escapeHtml(m.name)}</a><span class="text-emerald-400 font-mono">▲ ${m.delta_pct > 0 ? '+' : ''}${m.delta_pct}%</span></div>`));
+    (movers?.movers_down || []).slice(0, 2).forEach(m => rows.push(
+        `<div class="flex justify-between text-sm"><a class="text-slate-300 hover:text-brand-cyan transition" href="#/profile/${encodeURIComponent(m.guid)}">${escapeHtml(m.name)}</a><span class="text-rose-400 font-mono">▼ ${m.delta_pct}%</span></div>`));
+    (movers?.new_players || []).slice(0, 1).forEach(m => rows.push(
+        `<div class="flex justify-between text-sm"><a class="text-slate-300 hover:text-brand-cyan transition" href="#/profile/${encodeURIComponent(m.guid)}">${escapeHtml(m.name)}</a><span class="text-amber-400 font-mono text-xs">FIRST NIGHT</span></div>`));
+    if (!rows.length) {
+        return _card({
+            title: 'Movers', accent: 'purple',
+            bodyHtml: '<div class="text-sm text-slate-400">Form data appears after the next session.</div>',
+        });
+    }
+    return _card({
+        title: 'Movers · vs own form', accent: 'purple',
+        bodyHtml: `<div class="space-y-1.5">${rows.join('')}</div>`,
+        href: '#/leaderboards', cta: 'Leaderboards',
+    });
+}
+
+export async function loadHomePulseCards() {
+    const host = document.getElementById('home-pulse-cards');
+    if (!host) return;
+    const [availRes, sessRes, moversRes] = await Promise.allSettled([
+        fetchJSON(`${API_BASE}/availability`),
+        fetchJSON(`${API_BASE}/sessions?limit=1`),
+        fetchJSON(`${API_BASE}/skill/movers`),
+    ]);
+    const avail = availRes.status === 'fulfilled' ? availRes.value : null;
+    const sessions = sessRes.status === 'fulfilled' ? sessRes.value : null;
+    const movers = moversRes.status === 'fulfilled' ? moversRes.value : null;
+
+    host.textContent = '';
+    safeInsertHTML(host, 'beforeend',
+        _nextSessionCard(avail) + _lastSessionCard(sessions) + _moversCard(movers));
+}
