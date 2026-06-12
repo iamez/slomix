@@ -876,10 +876,13 @@ _DISPLAY_NAME_MAX = 32
 async def get_my_aliases(request: Request, db: DatabaseAdapter = Depends(get_db)):
     """Aliases of the session user's linked player (web !myaliases)."""
     user = _require_session_user(request)
+    discord_id = _safe_int(user.get("id"))
+    if discord_id is None:
+        raise HTTPException(status_code=401, detail="Malformed session")
     link = await db.fetch_one(
         "SELECT player_guid, player_name, display_name, display_name_source "
-        "FROM player_links WHERE discord_id = $1",
-        (int(user["id"]),),
+        "FROM player_links WHERE discord_id = ?",
+        (discord_id,),
     )
     if not link:
         return {"status": "ok", "linked": False, "aliases": []}
@@ -888,7 +891,7 @@ async def get_my_aliases(request: Request, db: DatabaseAdapter = Depends(get_db)
         """
         SELECT alias, times_seen, last_seen
         FROM player_aliases
-        WHERE guid = $1
+        WHERE guid = ?
         ORDER BY last_seen DESC
         LIMIT 25
         """,
@@ -918,15 +921,20 @@ async def set_my_display_name(
     'alias' must match one of the player's recorded aliases; 'reset' returns
     to automatic resolution. Audited like link events.
     """
+    _require_ajax_csrf_header(request)
     user = _require_session_user(request)
+    discord_id = _safe_int(user.get("id"))
+    if discord_id is None:
+        raise HTTPException(status_code=401, detail="Malformed session")
+    website_user_id = _safe_int(user.get("website_user_id")) or discord_id
     action = (payload or {}).get("action")
     name = ((payload or {}).get("name") or "").strip()
     if action not in ("custom", "alias", "reset"):
         raise HTTPException(status_code=400, detail="action must be custom|alias|reset")
 
     link = await db.fetch_one(
-        "SELECT player_guid FROM player_links WHERE discord_id = $1",
-        (int(user["id"]),),
+        "SELECT player_guid FROM player_links WHERE discord_id = ?",
+        (discord_id,),
     )
     if not link:
         raise HTTPException(status_code=400, detail="No linked player — link first.")
@@ -942,7 +950,7 @@ async def set_my_display_name(
             )
         if action == "alias":
             owned = await db.fetch_one(
-                "SELECT 1 FROM player_aliases WHERE guid = $1 AND alias = $2",
+                "SELECT 1 FROM player_aliases WHERE guid = ? AND alias = ?",
                 (guid, name),
             )
             if not owned:
@@ -954,18 +962,18 @@ async def set_my_display_name(
     await db.execute(
         """
         UPDATE player_links
-        SET display_name = $1, display_name_source = $2,
+        SET display_name = ?, display_name_source = ?,
             display_name_updated_at = CURRENT_TIMESTAMP
-        WHERE discord_id = $3
+        WHERE discord_id = ?
         """,
-        (new_name, source, int(user["id"])),
+        (new_name, source, discord_id),
     )
     await _audit_link_event(
         db,
-        user_id=int(user["id"]),
-        discord_user_id=int(user["id"]),
+        user_id=website_user_id,
+        discord_user_id=discord_id,
         action="display_name_set",
-        actor_discord_id=int(user["id"]),
+        actor_discord_id=discord_id,
         metadata={"source": source, "name": new_name, "player_guid": guid},
     )
     return {"status": "ok", "display_name": new_name, "source": source}

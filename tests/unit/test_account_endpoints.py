@@ -17,6 +17,10 @@ from website.backend.routers.auth import get_my_aliases, set_my_display_name
 def _request(user=None):
     req = MagicMock()
     req.session = {"user": user} if user else {}
+    # write endpoints enforce the AJAX CSRF header (real Starlette headers
+    # are case-insensitive; the plain-dict mock must use the lowercase key
+    # the helper reads)
+    req.headers = {"x-requested-with": "XMLHttpRequest"}
     return req
 
 
@@ -103,3 +107,13 @@ async def test_require_tier_enforces_rank():
         db.fetch_one = AsyncMock(return_value=None)
         with pytest.raises(HTTPException):
             await dep(_request(USER))
+
+
+@pytest.mark.asyncio
+async def test_display_name_requires_csrf_header():
+    db = AsyncMock()
+    req = _request(USER)
+    req.headers = {}  # missing X-Requested-With
+    with pytest.raises(HTTPException) as e:
+        await set_my_display_name(req, {"action": "reset"}, db=db)
+    assert e.value.status_code == 403

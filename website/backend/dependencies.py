@@ -138,7 +138,7 @@ _TIER_RANK = {"moderator": 1, "admin": 2, "root": 3}
 async def require_user(request: Request) -> dict:
     """Protected endpoint dependency — returns the session user or 401."""
     user = request.session.get("user")
-    if not user:
+    if not user or user.get("id") is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
 
@@ -149,12 +149,16 @@ def require_tier(minimum: str):
 
     async def _dep(request: Request) -> dict:
         user = await require_user(request)
+        try:
+            discord_id = int(user["id"])
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=401, detail="Malformed session")
         db = get_db_pool()
         if db is None:
             raise HTTPException(status_code=503, detail="Database unavailable")
         row = await db.fetch_one(
-            "SELECT tier FROM user_permissions WHERE discord_id = $1",
-            (int(user.get("id", 0)),),
+            "SELECT tier FROM user_permissions WHERE discord_id = ?",
+            (discord_id,),
         )
         tier = row[0] if row else None
         if _TIER_RANK.get(tier or "", 0) < _TIER_RANK.get(minimum, 99):

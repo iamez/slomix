@@ -90,6 +90,8 @@ async function refreshProfileLinkCard() {
                 : 'text-xl font-black text-slate-500';
 
         if (!authenticated) {
+            const dnBlockGuest = document.getElementById('profile-display-name-block');
+            if (dnBlockGuest) dnBlockGuest.classList.add('hidden');
             setProfileLinkStatusMessage('Log in with Discord to link your player profile.');
             toggleHidden('profile-discord-link-btn', false);
             toggleHidden('profile-player-change-btn', true);
