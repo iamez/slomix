@@ -164,9 +164,13 @@ class LastSessionCog(commands.Cog):
                         offense_img,
                         filename=f"session_{latest_date}_offense.png"
                     )
+                    web_base = getattr(self.bot.config, "website_public_base", "https://www.slomix.fyi")
                     embed1 = discord.Embed(
                         title=f"COMBAT STATS (OFFENSE)  -  {latest_date}",
-                        description=f"Kills/Deaths, Damage, K/D, DPM - Top players across {total_maps} maps",
+                        description=(
+                            f"Kills/Deaths, Damage, K/D, DPM - Top players across {total_maps} maps\n"
+                            f"📱 Full breakdown: {web_base}/#/session-detail/date/{latest_date}"
+                        ),
                         color=0x5865F2,
                         timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                     )
