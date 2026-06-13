@@ -122,3 +122,51 @@ def require_admin_user(request: Request) -> dict:
         raise HTTPException(status_code=403, detail="Admin privileges required")
 
     return user
+
+
+# ============================================================================
+# AUTH DEPENDENCIES (VISION_2026 S2) — session + role gating
+# ============================================================================
+# Single sanctioned implementations: new protected endpoints depend on these
+# instead of re-implementing the session check per router (uploads/predictions
+# carry older local copies — migrate opportunistically).
+
+
+_TIER_RANK = {"moderator": 1, "admin": 2, "root": 3}
+
+
+async def require_user(request: Request) -> dict:
+    """Protected endpoint dependency — returns the session user or 401."""
+    user = request.session.get("user")
+    if not user or user.get("id") is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
+
+def require_tier(minimum: str):
+    """Dependency factory: session user must hold at least `minimum` tier
+    in user_permissions (managed by the bot's !admin_add)."""
+
+    async def _dep(request: Request) -> dict:
+        user = await require_user(request)
+        try:
+            discord_id = int(user["id"])
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=401, detail="Malformed session")
+        db = get_db_pool()
+        if db is None:
+            raise HTTPException(status_code=503, detail="Database unavailable")
+        row = await db.fetch_one(
+            "SELECT tier FROM user_permissions WHERE discord_id = ?",
+            (discord_id,),
+        )
+        tier = row[0] if row else None
+        if _TIER_RANK.get(tier or "", 0) < _TIER_RANK.get(minimum, 99):
+            raise HTTPException(status_code=403, detail=f"Requires {minimum} access")
+        user["permission_tier"] = tier
+        return user
+
+    return _dep
+
+
+require_admin = require_tier("admin")

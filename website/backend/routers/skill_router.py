@@ -476,6 +476,7 @@ async def get_movers(
             SELECT DISTINCT gaming_session_id
             FROM rounds
             WHERE gaming_session_id IS NOT NULL
+              AND is_valid IS DISTINCT FROM FALSE
             ORDER BY gaming_session_id DESC
             LIMIT 11
         ),
@@ -489,6 +490,7 @@ async def get_movers(
             FROM player_comprehensive_stats pcs
             JOIN rounds r ON r.id = pcs.round_id
             WHERE r.gaming_session_id IN (SELECT gaming_session_id FROM recent_sessions)
+              AND r.is_valid IS DISTINCT FROM FALSE
               AND pcs.time_played_seconds > 0
             GROUP BY pcs.player_guid, r.gaming_session_id
         )

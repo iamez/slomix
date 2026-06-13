@@ -90,6 +90,8 @@ async function refreshProfileLinkCard() {
                 : 'text-xl font-black text-slate-500';
 
         if (!authenticated) {
+            const dnBlockGuest = document.getElementById('profile-display-name-block');
+            if (dnBlockGuest) dnBlockGuest.classList.add('hidden');
             setProfileLinkStatusMessage('Log in with Discord to link your player profile.');
             toggleHidden('profile-discord-link-btn', false);
             toggleHidden('profile-player-change-btn', true);
@@ -102,11 +104,14 @@ async function refreshProfileLinkCard() {
         if (playerLinked) {
             const linkedName = status?.linked_player?.name || 'Linked player';
             setProfileLinkStatusMessage(`Linked player: ${linkedName}`);
+            void refreshDisplayNameBlock();
             toggleHidden('profile-discord-link-btn', true);
             toggleHidden('profile-player-change-btn', false);
             toggleHidden('profile-player-unlink-btn', false);
             toggleHidden('profile-discord-unlink-btn', false);
         } else {
+            const dnBlock = document.getElementById('profile-display-name-block');
+            if (dnBlock) dnBlock.classList.add('hidden');
             setProfileLinkStatusMessage('Link your Discord account to a player profile to use availability and subscriptions.');
             toggleHidden('profile-discord-link-btn', false);
             toggleHidden('profile-player-change-btn', false);
@@ -641,3 +646,103 @@ window.unlinkDiscordAccount = unlinkDiscordAccount;
 window.createAvailabilityLinkToken = createAvailabilityLinkToken;
 window.unlinkAvailabilityChannel = unlinkAvailabilityChannel;
 window.savePromotionPreferences = savePromotionPreferences;
+
+// ============================================================================
+// DISPLAY NAME MANAGEMENT (VISION_2026 S2 — web !setname / !myaliases)
+// ============================================================================
+
+let _aliasCache = null;
+
+async function _postDisplayName(action, name) {
+    const res = await fetch(`${AUTH_BASE}/account/display-name`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ action, name })
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to update display name');
+    }
+    _aliasCache = null;
+    await refreshDisplayNameBlock();
+    await checkLoginStatus();
+}
+
+export async function refreshDisplayNameBlock() {
+    const block = document.getElementById('profile-display-name-block');
+    if (!block) return;
+    try {
+        const data = await fetchJSON(`${AUTH_BASE}/account/aliases`);
+        if (!data?.linked) {
+            block.classList.add('hidden');
+            return;
+        }
+        _aliasCache = data.aliases || [];
+        block.classList.remove('hidden');
+        const cur = document.getElementById('profile-display-name-current');
+        const src = document.getElementById('profile-display-name-source');
+        if (cur) cur.textContent = data.current_display_name || '--';
+        if (src) src.textContent = data.display_name_source || 'auto';
+    } catch (_err) {
+        block.classList.add('hidden');
+    }
+}
+
+export async function setCustomDisplayName() {
+    const name = prompt('Custom display name (max 32 chars):');
+    if (name == null) return;
+    try {
+        await _postDisplayName('custom', name.trim());
+    } catch (e) {
+        alert(e.message);
+    }
+}
+
+export async function resetDisplayName() {
+    try {
+        await _postDisplayName('reset', '');
+    } catch (e) {
+        alert(e.message);
+    }
+}
+
+export async function toggleAliasPicker() {
+    const list = document.getElementById('profile-alias-list');
+    if (!list) return;
+    if (!list.classList.contains('hidden')) {
+        list.classList.add('hidden');
+        return;
+    }
+    list.classList.remove('hidden');
+    const aliases = _aliasCache || [];
+    if (!aliases.length) {
+        list.innerHTML = '<div class="text-slate-500">No recorded aliases yet.</div>';
+        return;
+    }
+    list.innerHTML = '';
+    aliases.forEach((a) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'w-full text-left rounded-lg border border-white/10 bg-slate-950/30 px-3 py-2 hover:border-brand-purple/40 transition flex justify-between';
+        row.innerHTML = `
+            <span class="text-slate-200">${escapeHtml(a.alias)}</span>
+            <span class="text-[10px] text-slate-500">seen ${a.times_seen}×</span>`;
+        row.addEventListener('click', async () => {
+            try {
+                await _postDisplayName('alias', a.alias);
+                list.classList.add('hidden');
+            } catch (e) {
+                alert(e.message);
+            }
+        });
+        list.appendChild(row);
+    });
+}
+
+window.setCustomDisplayName = setCustomDisplayName;
+window.resetDisplayName = resetDisplayName;
+window.toggleAliasPicker = toggleAliasPicker;
