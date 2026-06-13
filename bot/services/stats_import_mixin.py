@@ -274,9 +274,16 @@ class _StatsImportMixin:
                 #   is_bot_round flag only caught 100%-bot rounds, so a human
                 #   joining the test session leaked it into stats, see the
                 #   2026-06-11 session-123 incident). Default TRUE.
-                from bot.core.round_contract import is_filler_map
+                from bot.core.round_contract import is_filler_map, round_has_bots
                 excluded = getattr(self.config, "excluded_maps", set())
-                has_bots = int(stats_data.get("bot_player_count", 0) or 0) > 0
+                # Detect bots from the player list directly, NOT from
+                # bot_player_count alone: session 123 on prod was all-bots yet
+                # had bot_player_count=0 (the field isn't always populated on
+                # this import path).
+                has_bots = (
+                    int(stats_data.get("bot_player_count", 0) or 0) > 0
+                    or round_has_bots(stats_data.get("players"))
+                )
                 insert_cols.append("is_valid")
                 insert_vals.append(
                     not is_filler_map(stats_data.get("map_name"), excluded)
