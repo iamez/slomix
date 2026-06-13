@@ -34,15 +34,28 @@ def test_greedy_balance_single():
 
 
 @pytest.mark.asyncio
-async def test_ping_requires_thread():
+async def test_ping_requires_linked_identity():
+    # Unlinked logged-in user (no linked_player) must be rejected before any ping.
+    db = AsyncMock()
+    db.fetch_one = AsyncMock(return_value=None)
+    req = MagicMock()
+    req.headers = {"x-requested-with": "XMLHttpRequest"}
+    req.session = {"user": {"id": "1"}}  # no linked_player → unlinked
+    with pytest.raises(HTTPException) as e:
+        await pl.ping_need_more(req, db=db)
+    assert e.value.status_code == 403  # linked Discord required
+
+
+@pytest.mark.asyncio
+async def test_ping_linked_but_no_thread():
     db = AsyncMock()
     db.fetch_one = AsyncMock(return_value=None)  # no planning session today
     req = MagicMock()
     req.headers = {"x-requested-with": "XMLHttpRequest"}
-    req.session = {"user": {"id": "1"}}
+    req.session = {"user": {"id": "1", "linked_player": "foo", "website_user_id": 1}}
     with pytest.raises(HTTPException) as e:
         await pl.ping_need_more(req, db=db)
-    assert e.value.status_code == 400
+    assert e.value.status_code == 400  # linked, but no thread yet
 
 
 @pytest.mark.asyncio
@@ -51,7 +64,7 @@ async def test_balanced_teams_needs_two(monkeypatch):
         {"user_id": 1, "display_name": "solo", "status": "LOOKING"},
     ]))
     req = MagicMock()
-    req.session = {"user": {"id": "1"}}
+    req.session = {"user": {"id": "1", "linked_player": "foo", "website_user_id": 1}}
     res = await pl.suggest_balanced_teams(req, db=AsyncMock())
     assert res["side_a"] == [] and "at least 2" in res["message"]
 
@@ -67,7 +80,7 @@ async def test_balanced_teams_uses_ratings(monkeypatch):
     db = AsyncMock()
     db.fetch_all = AsyncMock(return_value=[(1, 1.4), (2, 1.3), (3, 0.6), (4, 0.5)])
     req = MagicMock()
-    req.session = {"user": {"id": "1"}}
+    req.session = {"user": {"id": "1", "linked_player": "foo", "website_user_id": 1}}
     res = await pl.suggest_balanced_teams(req, db=db)
     assert res["rating_gap"] == 0.0
     assert sorted(res["side_a"] + res["side_b"]) == [1, 2, 3, 4]

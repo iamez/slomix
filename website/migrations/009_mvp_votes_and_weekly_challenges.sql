@@ -13,7 +13,7 @@
 CREATE TABLE IF NOT EXISTS session_mvp_votes (
     id BIGSERIAL PRIMARY KEY,
     gaming_session_id INTEGER NOT NULL,
-    voter_user_id BIGINT NOT NULL,
+    voter_user_id BIGINT NOT NULL REFERENCES website_users(id) ON DELETE CASCADE,
     nominated_guid TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS weekly_challenges (
     week_start_date DATE NOT NULL UNIQUE,   -- Monday of the ISO week
     title TEXT NOT NULL,
     description TEXT,
-    created_by_user_id BIGINT,
+    created_by_user_id BIGINT REFERENCES website_users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -42,7 +42,7 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'website_app') THEN
         GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
             session_mvp_votes, weekly_challenges TO website_app;
-        GRANT USAGE, SELECT ON SEQUENCE
+        GRANT USAGE, SELECT, UPDATE ON SEQUENCE
             session_mvp_votes_id_seq, weekly_challenges_id_seq TO website_app;
     END IF;
 END;

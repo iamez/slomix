@@ -84,9 +84,10 @@ async def test_mvp_post_one_changeable_vote(monkeypatch):
     res = await sr.post_session_mvp(
         _req(), 50, {"nominated_guid": "AAAA0001"}, user={"id": "42"}, db=db,
     )
-    # delete-then-insert: exactly one DELETE + one INSERT
-    calls = [c.args[0].split()[0].upper() for c in db.execute.call_args_list]
-    assert calls == ["DELETE", "INSERT"]
+    # single atomic upsert (no delete-then-insert race window)
+    assert db.execute.call_count == 1
+    sql = db.execute.call_args[0][0]
+    assert sql.strip().upper().startswith("INSERT") and "ON CONFLICT" in sql.upper()
     assert res["my_vote"] == "AAAA0001"
 
 

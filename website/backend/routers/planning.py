@@ -1005,7 +1005,9 @@ async def suggest_balanced_teams(request: Request, db=Depends(get_db)):
     Confirmed = LOOKING/AVAILABLE. Players without a rating get the roster
     average so they're still placed. The user saves via the existing /teams.
     """
-    _require_user(request)
+    # Linked identity required — this returns the roster, same privacy
+    # contract as _planning_state (unlinked logins can't enumerate players).
+    await _require_linked_identity(request, db)
     target_date = datetime.now(timezone.utc).date()
     participants = await _participants_for_date(db, target_date)
     confirmed = [p for p in participants if p["status"] in PLANNING_COMMITTED_STATUSES]
@@ -1047,7 +1049,9 @@ async def suggest_balanced_teams(request: Request, db=Depends(get_db)):
 async def ping_need_more(request: Request, db=Depends(get_db)):
     """User-triggered "need N more" ping to today's planning thread."""
     _require_ajax_csrf_header(request)
-    _require_user(request)
+    # Linked identity required — match the planning room's "can submit = linked"
+    # contract and reduce the Discord-ping spam surface.
+    await _require_linked_identity(request, db)
     target_date = datetime.now(timezone.utc).date()
     session_row = await _session_row_for_date(db, target_date)
     if not session_row or not session_row[3]:  # discord_thread_id

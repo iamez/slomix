@@ -1828,6 +1828,8 @@ async def get_session_mvp(
             SELECT killer_guid, SUM(total_impact) AS kis
             FROM storytelling_kill_impact
             WHERE session_date = ?
+              AND killer_guid NOT LIKE 'OMNIBOT%'
+              AND killer_name NOT LIKE '[BOT]%'
             GROUP BY killer_guid
             ORDER BY kis DESC
             """,
@@ -1893,7 +1895,7 @@ async def post_session_mvp(
     try:
         voter_id = int(user["id"])
     except (TypeError, ValueError):
-        raise HTTPException(status_code=401, detail="Malformed session")
+        raise HTTPException(status_code=401, detail="Malformed user session")
 
     nominated = ((payload or {}).get("nominated_guid") or "").strip()
     if not nominated:
@@ -1905,14 +1907,16 @@ async def post_session_mvp(
     if nominated not in {p["guid"] for p in pool}:
         raise HTTPException(status_code=400, detail="Nominee did not play this session")
 
-    # One changeable vote per (session, voter): delete-then-insert.
+    # One changeable vote per (session, voter): atomic upsert (no UNIQUE-
+    # violation window under rapid double-submits).
     await db.execute(
-        "DELETE FROM session_mvp_votes WHERE gaming_session_id = ? AND voter_user_id = ?",
-        (gaming_session_id, voter_id),
-    )
-    await db.execute(
-        "INSERT INTO session_mvp_votes (gaming_session_id, voter_user_id, nominated_guid) "
-        "VALUES (?, ?, ?)",
+        """
+        INSERT INTO session_mvp_votes (gaming_session_id, voter_user_id, nominated_guid)
+        VALUES (?, ?, ?)
+        ON CONFLICT (gaming_session_id, voter_user_id) DO UPDATE
+        SET nominated_guid = EXCLUDED.nominated_guid,
+            updated_at = CURRENT_TIMESTAMP
+        """,
         (gaming_session_id, voter_id, nominated),
     )
     tally = await _mvp_tally(db, gaming_session_id)
