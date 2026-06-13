@@ -368,6 +368,7 @@ export async function loadSessionDetailView({ sessionId, sessionDate, tab } = {}
         _renderShell(container);
         _activateTab(_initialTab);
         _loadVerdictStrip().catch((e) => console.warn('verdict strip failed', e));
+        _loadMvpPanel().catch((e) => console.warn('mvp panel failed', e));
     } catch (e) {
         console.error('Failed to load session detail:', e);
         container.innerHTML = '<div class="text-center text-red-500 py-12">Failed to load session</div>';
@@ -383,6 +384,81 @@ function _ordinal(n) {
     if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
     const suffix = { 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th';
     return `${n}${suffix}`;
+}
+
+// ── MVP voting panel (S3) — peer recognition for this session ───────────────
+async function _loadMvpPanel() {
+    const host = document.getElementById('sd-mvp-panel');
+    if (!host || !_sessionId) return;
+    let data;
+    try {
+        data = await fetchJSON(`${API_BASE}/stats/session/${_sessionId}/mvp`);
+    } catch (_) {
+        return; // optional enrichment
+    }
+    const candidates = data?.candidates || [];
+    if (!candidates.length) return;
+    _renderMvpPanel(host, data);
+}
+
+function _renderMvpPanel(host, data) {
+    const candidates = data.candidates || [];
+    const myVote = data.my_vote || null;
+    const underrated = data.most_underrated_guid || null;
+    const totalVotes = data.total_votes || 0;
+
+    const chips = candidates.map((c) => {
+        const mine = c.guid === myVote;
+        const isUnder = c.guid === underrated;
+        return `
+            <button data-mvp-guid="${escapeHtml(c.guid)}"
+                class="flex items-center gap-2 px-3 py-2 rounded-lg border transition shrink-0
+                       ${mine ? 'border-brand-emerald/60 bg-brand-emerald/15' : 'border-white/10 bg-slate-950/35 hover:border-brand-cyan/40'}">
+                <span class="text-sm font-bold text-white">${escapeHtml(c.name)}</span>
+                <span class="text-[11px] text-slate-400">${c.votes} ${c.votes === 1 ? 'vote' : 'votes'}</span>
+                ${isUnder ? '<span class="text-[9px] font-black uppercase text-brand-amber" title="Lots of peer votes despite a low scoreboard impact — the team saw value the stats missed.">underrated</span>' : ''}
+                ${mine ? '<span class="text-[10px] text-brand-emerald">✓ your pick</span>' : ''}
+            </button>`;
+    }).join('');
+
+    host.innerHTML = `
+        <div class="glass-panel rounded-xl p-4">
+            <div class="flex items-center gap-3 mb-3">
+                <div class="text-[11px] uppercase tracking-wider text-slate-500 font-bold"
+                     title="Vote for who carried tonight. Peer recognition — not a computed score.">
+                    MVP vote · ${totalVotes} cast
+                </div>
+                <span id="sd-mvp-status" class="text-[10px] text-slate-500"></span>
+            </div>
+            <div class="flex gap-2 overflow-x-auto pb-1">${chips}</div>
+        </div>`;
+
+    host.querySelectorAll('[data-mvp-guid]').forEach((btn) => {
+        btn.addEventListener('click', () => _castMvpVote(btn.dataset.mvpGuid, host));
+    });
+}
+
+async function _castMvpVote(guid, host) {
+    const statusEl = document.getElementById('sd-mvp-status');
+    try {
+        const res = await fetch(`${API_BASE}/stats/session/${_sessionId}/mvp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ nominated_guid: guid }),
+        });
+        if (res.status === 401) { if (statusEl) statusEl.textContent = 'Log in to vote.'; return; }
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            if (statusEl) statusEl.textContent = err.detail || 'Vote failed.';
+            return;
+        }
+        // Re-fetch to refresh tallies + underrated.
+        const data = await fetchJSON(`${API_BASE}/stats/session/${_sessionId}/mvp`);
+        _renderMvpPanel(host, data);
+    } catch (e) {
+        if (statusEl) statusEl.textContent = 'Vote failed.';
+    }
 }
 
 const _VERDICT_STYLES = {
@@ -602,6 +678,9 @@ function _renderShell(container) {
 
         <!-- Verdict strip: how was the night, per player vs OWN form (S1.4) -->
         <div id="sd-verdict-strip" class="mb-6"></div>
+
+        <!-- MVP vote: peer recognition for this session (S3) -->
+        <div id="sd-mvp-panel" class="mb-6"></div>
 
         <div class="flex gap-2 mb-6 p-1 bg-slate-900/40 rounded-2xl flex-wrap" id="sd-tab-nav" role="tablist">
             ${[

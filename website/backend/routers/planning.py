@@ -502,6 +502,10 @@ async def _planning_state(
     threshold, looking_count, ready = await _today_readiness(db, target_date)
     participants = await _participants_for_date(db, target_date)
     committed = [row for row in participants if row["status"] in PLANNING_COMMITTED_STATUSES]
+    # S3 lobby: confirmed (LOOKING/AVAILABLE) vs standby (MAYBE); need_count is
+    # how many more confirmed are needed to fill two teams of threshold/2.
+    standby = [row for row in participants if row["status"] == "MAYBE"]
+    need_count = max(0, threshold - len(committed))
 
     display_name_cache = {int(p["user_id"]): str(p["display_name"]) for p in participants}
 
@@ -525,6 +529,9 @@ async def _planning_state(
         "participant_count": len(participants),
         "participants": participants if viewer_linked else [],
         "committed_count": len(committed),
+        "confirmed_count": len(committed),
+        "standby_count": len(standby),
+        "need_count": need_count,
         "viewer": {
             "authenticated": bool(user),
             "linked_discord": viewer_linked,
@@ -969,3 +976,96 @@ async def save_planning_teams(request: Request, db=Depends(get_db)):
         "success": True,
         "state": await _planning_state(db, request=request, target_date=target_date, session_row=session_row),
     }
+
+
+def _greedy_balance(rated: list[tuple[int, float]]) -> tuple[list[int], list[int], float]:
+    """Snake-draft split of (user_id, rating) into two rating-balanced teams.
+
+    Sort by rating desc, then assign each next player to whichever side has the
+    lower running total. Returns (side_a, side_b, rating_gap).
+    """
+    order = sorted(rated, key=lambda x: -x[1])
+    a: list[int] = []
+    b: list[int] = []
+    sum_a = sum_b = 0.0
+    for uid, rating in order:
+        if sum_a <= sum_b:
+            a.append(uid)
+            sum_a += rating
+        else:
+            b.append(uid)
+            sum_b += rating
+    return a, b, round(abs(sum_a - sum_b), 3)
+
+
+@router.post("/today/balanced-teams")
+async def suggest_balanced_teams(request: Request, db=Depends(get_db)):
+    """Read-only ET-rating balanced split of today's confirmed players.
+
+    Confirmed = LOOKING/AVAILABLE. Players without a rating get the roster
+    average so they're still placed. The user saves via the existing /teams.
+    """
+    # Linked identity required — this returns the roster, same privacy
+    # contract as _planning_state (unlinked logins can't enumerate players).
+    await _require_linked_identity(request, db)
+    target_date = datetime.now(timezone.utc).date()
+    participants = await _participants_for_date(db, target_date)
+    confirmed = [p for p in participants if p["status"] in PLANNING_COMMITTED_STATUSES]
+    if len(confirmed) < 2:
+        return {"status": "ok", "side_a": [], "side_b": [], "rating_gap": 0.0,
+                "message": "Need at least 2 confirmed players."}
+
+    discord_ids = [int(p["user_id"]) for p in confirmed]
+    placeholders = ",".join(["?"] * len(discord_ids))
+    rows = await db.fetch_all(
+        f"""
+        SELECT pl.discord_id, psr.et_rating
+        FROM player_links pl
+        LEFT JOIN player_skill_ratings psr ON psr.player_guid = pl.player_guid
+        WHERE pl.discord_id IN ({placeholders})
+        """,  # nosec B608 - placeholders are ?-bound; ids are ints
+        tuple(discord_ids),
+    )
+    rating_by_id = {int(r[0]): float(r[1]) for r in (rows or []) if r[1] is not None}
+    if rating_by_id:
+        avg = sum(rating_by_id.values()) / len(rating_by_id)
+    else:
+        avg = 1.0
+    rated = [(uid, rating_by_id.get(uid, avg)) for uid in discord_ids]
+
+    side_a, side_b, gap = _greedy_balance(rated)
+    names = {int(p["user_id"]): p["display_name"] for p in confirmed}
+    return {
+        "status": "ok",
+        "side_a": side_a,
+        "side_b": side_b,
+        "rating_gap": gap,
+        "rated_count": len(rating_by_id),
+        "names": names,
+    }
+
+
+@router.post("/today/ping")
+async def ping_need_more(request: Request, db=Depends(get_db)):
+    """User-triggered "need N more" ping to today's planning thread."""
+    _require_ajax_csrf_header(request)
+    # Linked identity required — match the planning room's "can submit = linked"
+    # contract and reduce the Discord-ping spam surface.
+    await _require_linked_identity(request, db)
+    target_date = datetime.now(timezone.utc).date()
+    session_row = await _session_row_for_date(db, target_date)
+    if not session_row or not session_row[3]:  # discord_thread_id
+        raise HTTPException(status_code=400, detail="No planning thread for today yet.")
+
+    threshold, looking_count, _ready = await _today_readiness(db, target_date)
+    participants = await _participants_for_date(db, target_date)
+    confirmed = sum(1 for p in participants if p["status"] in PLANNING_COMMITTED_STATUSES)
+    need = max(0, threshold - confirmed)
+    if need <= 0:
+        return {"status": "ok", "pinged": False, "need_count": 0, "message": "Already full."}
+
+    bridge = PlanningDiscordBridge.from_env()
+    ok = await bridge.post_need_ping(
+        thread_id=str(session_row[3]), need_count=need, looking_count=confirmed
+    )
+    return {"status": "ok", "pinged": bool(ok), "need_count": need}

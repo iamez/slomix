@@ -96,3 +96,35 @@ class PlanningDiscordBridge:
             return None
 
         return thread_id
+
+    async def post_need_ping(self, *, thread_id: str, need_count: int, looking_count: int) -> bool:
+        """Post a "need N more" message to an existing planning thread.
+
+        User-triggered only (no auto-spam). Returns True on success.
+        """
+        if not self.enabled or not self.bot_token or not thread_id:
+            return False
+        n = max(1, int(need_count))
+        content = (
+            f"🎯 **Need {n} more** for tonight — {int(looking_count)} confirmed so far. "
+            f"Mark yourself **Looking** on slomix.fyi to lock it in!"
+        )
+        headers = {
+            "Authorization": f"Bot {self.bot_token}",
+            "Content-Type": "application/json",
+            "X-Audit-Log-Reason": "Planning room need-more ping",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                response = await client.post(
+                    f"{self.api_base_url}/channels/{thread_id}/messages",
+                    json={"content": content},
+                    headers=headers,
+                )
+        except Exception as exc:
+            logger.warning("Planning need-ping request failed: %s", exc)
+            return False
+        if response.status_code not in {200, 201}:
+            logger.warning("Planning need-ping failed (status=%s)", response.status_code)
+            return False
+        return True

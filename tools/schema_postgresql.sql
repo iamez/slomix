@@ -8666,3 +8666,26 @@ ALTER TABLE ONLY public.weapon_comprehensive_stats
 --
 
 
+
+-- ===== VISION_2026 Sprint S3 (migration website/009) =====
+CREATE TABLE IF NOT EXISTS session_mvp_votes (
+    id BIGSERIAL PRIMARY KEY,
+    gaming_session_id INTEGER NOT NULL,
+    voter_user_id BIGINT NOT NULL REFERENCES website_users(id) ON DELETE CASCADE,
+    nominated_guid TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (gaming_session_id, voter_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_session_mvp_votes_session ON session_mvp_votes (gaming_session_id);
+CREATE INDEX IF NOT EXISTS idx_session_mvp_votes_nominee ON session_mvp_votes (gaming_session_id, nominated_guid);
+CREATE TABLE IF NOT EXISTS weekly_challenges (
+    id BIGSERIAL PRIMARY KEY,
+    week_start_date DATE NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    description TEXT,
+    created_by_user_id BIGINT REFERENCES website_users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_weekly_challenges_week ON weekly_challenges (week_start_date DESC);
