@@ -153,6 +153,20 @@ class SessionDigestService:
         if kis_line:
             embed.add_field(name="💥 Highest impact (KIS)", value=kis_line, inline=False)
 
+        # MVP vote (S3): always open after a session — peer recognition.
+        gsid = await self._gaming_session_id(latest_date)
+        if gsid is not None:
+            embed.add_field(
+                name="🗳️ MVP vote open",
+                value=f"Who carried tonight? [Cast your vote]({web}/#/session-detail/{gsid})",
+                inline=False,
+            )
+
+        # Challenge of the week (S3): admin-defined, read straight from DB.
+        challenge = await self._fetch_weekly_challenge()
+        if challenge:
+            embed.add_field(name="🏆 Challenge of the week", value=challenge, inline=False)
+
         embed.add_field(
             name="🔗 Deep dive",
             value=(
@@ -164,6 +178,37 @@ class SessionDigestService:
         )
         embed.set_footer(text="Slomix morning report — see you on the server 🎮")
         return embed
+
+    async def _gaming_session_id(self, session_date) -> int | None:
+        """Resolve the gaming_session_id for the session date (for vote link)."""
+        try:
+            row = await self.db_adapter.fetch_one(
+                "SELECT gaming_session_id FROM rounds WHERE round_date = ? "
+                "AND gaming_session_id IS NOT NULL ORDER BY gaming_session_id DESC LIMIT 1",
+                (str(session_date),),
+            )
+            return int(row[0]) if row and row[0] is not None else None
+        except Exception:
+            logger.debug("digest: gaming_session_id lookup failed", exc_info=True)
+            return None
+
+    async def _fetch_weekly_challenge(self) -> str | None:
+        """Current ISO-week challenge straight from the DB (best-effort)."""
+        from datetime import datetime, timedelta
+        try:
+            today = datetime.now().date()  # noqa: DTZ005 local week boundary
+            monday = today - timedelta(days=today.weekday())
+            row = await self.db_adapter.fetch_one(
+                "SELECT title, description FROM weekly_challenges WHERE week_start_date = ?",
+                (monday,),
+            )
+            if not row:
+                return None
+            title, desc = row[0], row[1]
+            return f"**{title}**" + (f" — {desc}" if desc else "")
+        except Exception:
+            logger.debug("digest: weekly challenge lookup failed", exc_info=True)
+            return None
 
     async def _fetch_kis_top(self, session_date) -> str | None:
         """Top kill-impact player via the website API (optional, 10s budget)."""

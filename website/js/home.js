@@ -97,4 +97,31 @@ export async function loadHomePulseCards() {
     host.textContent = '';
     safeInsertHTML(host, 'beforeend',
         _nextSessionCard(avail) + _lastSessionCard(sessions) + _moversCard(movers));
+
+    loadChallengeCard().catch((e) => console.warn('challenge card failed', e));
+}
+
+// Challenge of the week (S3) — admin-defined, surfaced for everyone.
+export async function loadChallengeCard() {
+    const host = document.getElementById('home-challenge-card');
+    if (!host) return;
+    let data;
+    try {
+        data = await fetchJSON(`${API_BASE}/challenges/current`);
+    } catch (_) {
+        host.textContent = '';
+        return;
+    }
+    const ch = data?.challenge;
+    if (!ch) {
+        host.textContent = '';
+        return;
+    }
+    host.textContent = '';
+    safeInsertHTML(host, 'beforeend', `
+        <div class="glass-panel p-5 rounded-xl border-l-4 border-brand-amber/60">
+            <div class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-2">🏆 Challenge of the week</div>
+            <div class="text-lg font-black text-white">${escapeHtml(ch.title)}</div>
+            ${ch.description ? `<div class="text-sm text-slate-400 mt-1">${escapeHtml(ch.description)}</div>` : ''}
+        </div>`);
 }

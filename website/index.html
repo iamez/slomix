@@ -1366,6 +1366,8 @@
 
                     <!-- Pulse cards: next session / last night / movers (VISION_2026 S1.2) -->
                     <div id="home-pulse-cards" class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-12 max-w-5xl mx-auto text-left"></div>
+                    <!-- Challenge of the week (S3) -->
+                    <div id="home-challenge-card" class="mt-4 max-w-5xl mx-auto text-left"></div>
 
                     <!-- Stats Preview - Dynamic -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-16 max-w-5xl mx-auto">
@@ -3713,6 +3715,16 @@
                                     <button id="availability-planning-auto-draft-btn" data-click-action="window.autoDraftAvailabilityPlanningTeams()"
                                         class="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-brand-amber/40 text-brand-amber hover:bg-brand-amber/10 transition">
                                         Auto-draft
+                                    </button>
+                                    <button id="availability-planning-balance-btn" data-click-action="window.balanceAvailabilityPlanningTeams()"
+                                        class="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/10 transition"
+                                        title="Suggest two rating-balanced teams from the confirmed players (ET rating).">
+                                        Balance by rating
+                                    </button>
+                                    <button id="availability-planning-ping-btn" data-click-action="window.pingAvailabilityPlanningNeed()"
+                                        class="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-brand-rose/40 text-brand-rose hover:bg-brand-rose/10 transition"
+                                        title="Ping the planning thread that we need N more.">
+                                        Need more?
                                     </button>
                                     <button id="availability-planning-save-teams-btn" data-click-action="window.saveAvailabilityPlanningTeams()"
                                         class="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-brand-purple/40 text-brand-purple hover:bg-brand-purple/10 transition">
