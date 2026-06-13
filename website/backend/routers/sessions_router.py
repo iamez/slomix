@@ -8,15 +8,16 @@ import math
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from shared.config import load_config
 from shared.services.session_stats_aggregator import SessionStatsAggregator
 from shared.services.stopwatch_scoring_service import StopwatchScoringService
 from shared.utils import escape_like_pattern
-from website.backend.dependencies import get_db
+from website.backend.dependencies import get_db, require_user
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
+from website.backend.middleware.auth_helpers import require_ajax_csrf_header
 from website.backend.routers.api_helpers import (
     normalize_map_name as _normalize_map_name,
 )
@@ -1753,4 +1754,172 @@ async def get_session_verdicts(
         "gaming_session_id": gaming_session_id,
         "baseline": "own previous sessions, DPM percentile",
         "players": players,
+    }
+
+
+# ============================================================================
+# MVP voting (VISION_2026 S3) — peer recognition for a finished session.
+# ============================================================================
+
+async def _session_player_pool(db, gaming_session_id: int) -> list[dict]:
+    """Players who actually played the session (valid rounds only)."""
+    rows = await db.fetch_all(
+        """
+        SELECT pcs.player_guid, MAX(pcs.player_name) AS name,
+               SUM(pcs.kills) AS kills,
+               SUM(pcs.damage_given)::float
+                   / NULLIF(SUM(pcs.time_played_seconds) / 60.0, 0) AS dpm
+        FROM player_comprehensive_stats pcs
+        JOIN rounds r ON r.id = pcs.round_id
+        WHERE r.gaming_session_id = ?
+          AND r.is_valid IS DISTINCT FROM FALSE
+          AND pcs.time_played_seconds > 0
+        GROUP BY pcs.player_guid
+        ORDER BY kills DESC
+        """,
+        (gaming_session_id,),
+    )
+    return [
+        {"guid": r[0], "name": r[1] or (r[0] or "")[:8], "kills": int(r[2] or 0),
+         "dpm": round(float(r[3] or 0), 1)}
+        for r in (rows or [])
+    ]
+
+
+async def _mvp_tally(db, gaming_session_id: int) -> dict[str, int]:
+    rows = await db.fetch_all(
+        "SELECT nominated_guid, COUNT(*) FROM session_mvp_votes "
+        "WHERE gaming_session_id = ? GROUP BY nominated_guid",
+        (gaming_session_id,),
+    )
+    return {r[0]: int(r[1]) for r in (rows or [])}
+
+
+@router.get("/stats/session/{gaming_session_id}/mvp")
+async def get_session_mvp(
+    request: Request,
+    gaming_session_id: int,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """MVP candidates + current tally + 'most underrated' (votes vs KIS rank)."""
+    pool = await _session_player_pool(db, gaming_session_id)
+    if not pool:
+        return {"status": "ok", "gaming_session_id": gaming_session_id, "candidates": []}
+
+    tally = await _mvp_tally(db, gaming_session_id)
+    total_votes = sum(tally.values())
+
+    # KIS rank for the session (lower index = higher impact). Scope is the
+    # session DATE; bot/testmode names are filtered out of the rank.
+    sdate = await db.fetch_val(
+        "SELECT MIN(round_date) FROM rounds WHERE gaming_session_id = ?",
+        (gaming_session_id,),
+    )
+    kis_rank: dict[str, int] = {}
+    sdate_obj = None
+    if sdate is not None:
+        try:
+            sdate_obj = datetime.strptime(str(sdate)[:10], "%Y-%m-%d").date()  # noqa: DTZ007
+        except ValueError:
+            sdate_obj = None
+    if sdate_obj is not None:
+        kis_rows = await db.fetch_all(
+            """
+            SELECT killer_guid, SUM(total_impact) AS kis
+            FROM storytelling_kill_impact
+            WHERE session_date = ?
+            GROUP BY killer_guid
+            ORDER BY kis DESC
+            """,
+            (sdate_obj,),  # session_date is a DATE column — bind a date object
+        )
+        for i, kr in enumerate(kis_rows or []):
+            kis_rank[kr[0]] = i
+
+    # Resolve viewer's existing vote (if logged in) — best-effort, no auth required to read.
+    my_vote = None
+    user = request.session.get("user") if hasattr(request, "session") else None
+    if user and user.get("id") is not None:
+        try:
+            row = await db.fetch_one(
+                "SELECT nominated_guid FROM session_mvp_votes "
+                "WHERE gaming_session_id = ? AND voter_user_id = ?",
+                (gaming_session_id, int(user["id"])),
+            )
+            my_vote = row[0] if row else None
+        except (TypeError, ValueError):
+            my_vote = None
+
+    candidates = []
+    for p in pool:
+        votes = tally.get(p["guid"], 0)
+        candidates.append({
+            **p,
+            "votes": votes,
+            "vote_pct": round(votes / total_votes * 100, 1) if total_votes else 0.0,
+            "kis_rank": kis_rank.get(p["guid"]),
+        })
+    candidates.sort(key=lambda c: (-c["votes"], -c["kills"]))
+
+    # "Most underrated": got votes but ranks low on KIS (peers saw value the
+    # scoreboard didn't). Only meaningful once votes exist and KIS rank known.
+    underrated = None
+    rated = [c for c in candidates if c["votes"] > 0 and c["kis_rank"] is not None]
+    if rated:
+        pick = max(rated, key=lambda c: (c["votes"], c["kis_rank"]))
+        if pick["kis_rank"] >= max(2, len(pool) // 2):
+            underrated = pick["guid"]
+
+    return {
+        "status": "ok",
+        "gaming_session_id": gaming_session_id,
+        "total_votes": total_votes,
+        "my_vote": my_vote,
+        "most_underrated_guid": underrated,
+        "candidates": candidates,
+    }
+
+
+@router.post("/stats/session/{gaming_session_id}/mvp")
+async def post_session_mvp(
+    request: Request,
+    gaming_session_id: int,
+    payload: dict,
+    user: dict = Depends(require_user),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Cast or change the viewer's MVP vote (one per session, peer-voted)."""
+    require_ajax_csrf_header(request)
+    try:
+        voter_id = int(user["id"])
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Malformed session")
+
+    nominated = ((payload or {}).get("nominated_guid") or "").strip()
+    if not nominated:
+        raise HTTPException(status_code=400, detail="nominated_guid required")
+
+    pool = await _session_player_pool(db, gaming_session_id)
+    if not pool:
+        raise HTTPException(status_code=404, detail="No players for this session")
+    if nominated not in {p["guid"] for p in pool}:
+        raise HTTPException(status_code=400, detail="Nominee did not play this session")
+
+    # One changeable vote per (session, voter): delete-then-insert.
+    await db.execute(
+        "DELETE FROM session_mvp_votes WHERE gaming_session_id = ? AND voter_user_id = ?",
+        (gaming_session_id, voter_id),
+    )
+    await db.execute(
+        "INSERT INTO session_mvp_votes (gaming_session_id, voter_user_id, nominated_guid) "
+        "VALUES (?, ?, ?)",
+        (gaming_session_id, voter_id, nominated),
+    )
+    tally = await _mvp_tally(db, gaming_session_id)
+    return {
+        "status": "ok",
+        "gaming_session_id": gaming_session_id,
+        "my_vote": nominated,
+        "votes_for_pick": tally.get(nominated, 0),
+        "total_votes": sum(tally.values()),
     }

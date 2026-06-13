@@ -8666,3 +8666,23 @@ ALTER TABLE ONLY public.weapon_comprehensive_stats
 --
 
 
+
+-- ===== VISION_2026 Sprint S3 (migration website/009) =====
+CREATE TABLE IF NOT EXISTS session_mvp_votes (
+    id BIGSERIAL PRIMARY KEY,
+    gaming_session_id INTEGER NOT NULL,
+    voter_user_id BIGINT NOT NULL,
+    nominated_guid TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (gaming_session_id, voter_user_id)
+);
+CREATE TABLE IF NOT EXISTS weekly_challenges (
+    id BIGSERIAL PRIMARY KEY,
+    week_start_date DATE NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    description TEXT,
+    created_by_user_id BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

@@ -627,9 +627,14 @@ function renderPlanningRoom() {
         openBtn.textContent = planningState.panelOpen ? 'Hide planning room' : 'Open planning room';
         openBtn.classList.remove('opacity-60', 'cursor-not-allowed');
         const threadSuffix = session.discord_thread_id ? `, thread: ${session.discord_thread_id}` : '';
+        // S3 lobby: surface confirmed/standby/need split.
+        const confirmed = Number(data.confirmed_count ?? 0);
+        const standby = Number(data.standby_count ?? 0);
+        const need = Number(data.need_count ?? 0);
+        const split = `${confirmed} confirmed${standby ? `, ${standby} standby` : ''}${need > 0 ? ` — need ${need} more` : ''}`;
         statusEl.textContent = isMock
-            ? `Test planning room active for ${String(data.date || '--')} (${participants.length} participants).`
-            : `Session active for ${String(data.date || '--')} (${participants.length} participants${threadSuffix}).`;
+            ? `Test planning room active for ${String(data.date || '--')} (${split}).`
+            : `Session active for ${String(data.date || '--')} (${split}${threadSuffix}).`;
     } else if (unlocked) {
         openBtn.disabled = false;
         openBtn.textContent = 'Create planning room';
@@ -1466,6 +1471,50 @@ function autoDraftAvailabilityPlanningTeams() {
     renderPlanningRoom();
 }
 
+// S3: ET-rating balanced suggestion (server-computed greedy snake-draft).
+async function balanceAvailabilityPlanningTeams() {
+    if (!canManagePlanningTeams(planningState.data?.session) || planningActionInFlight) return;
+    planningActionInFlight = true;
+    try {
+        const payload = await postPlanningJson('/today/balanced-teams', {});
+        const a = Array.isArray(payload?.side_a) ? payload.side_a : [];
+        const b = Array.isArray(payload?.side_b) ? payload.side_b : [];
+        if (!a.length && !b.length) {
+            planningState.actionStatus = { message: payload?.message || 'Not enough confirmed players.', error: true };
+        } else {
+            planningState.assignments = new Map();
+            a.forEach((uid) => planningState.assignments.set(Number(uid), 'A'));
+            b.forEach((uid) => planningState.assignments.set(Number(uid), 'B'));
+            const gap = payload?.rating_gap;
+            planningState.actionStatus = {
+                message: `Balanced by ET rating (gap ${gap ?? '?'}). Save to persist.`, error: false,
+            };
+        }
+    } catch (err) {
+        planningState.actionStatus = { message: `Balance failed: ${String(err?.message || err)}`, error: true };
+    } finally {
+        planningActionInFlight = false;
+        renderPlanningRoom();
+    }
+}
+
+// S3: user-triggered "need N more" ping to the planning thread.
+async function pingAvailabilityPlanningNeed() {
+    if (planningActionInFlight) return;
+    planningActionInFlight = true;
+    try {
+        const payload = await postPlanningJson('/today/ping', {});
+        planningState.actionStatus = payload?.pinged
+            ? { message: `Pinged for ${payload.need_count} more.`, error: false }
+            : { message: payload?.message || 'Nothing to ping (roster full or no thread).', error: false };
+    } catch (err) {
+        planningState.actionStatus = { message: `Ping failed: ${String(err?.message || err)}`, error: true };
+    } finally {
+        planningActionInFlight = false;
+        renderPlanningRoom();
+    }
+}
+
 async function saveAvailabilityPlanningTeams() {
     if (!canManagePlanningTeams(planningState.data?.session) || planningActionInFlight) return;
     const participants = Array.isArray(planningState.data?.participants) ? planningState.data.participants : [];
@@ -2129,6 +2178,8 @@ window.submitAvailabilityPlanningSuggestion = submitAvailabilityPlanningSuggesti
 window.voteAvailabilityPlanningSuggestion = voteAvailabilityPlanningSuggestion;
 window.cycleAvailabilityPlanningAssignment = cycleAvailabilityPlanningAssignment;
 window.autoDraftAvailabilityPlanningTeams = autoDraftAvailabilityPlanningTeams;
+window.balanceAvailabilityPlanningTeams = balanceAvailabilityPlanningTeams;
+window.pingAvailabilityPlanningNeed = pingAvailabilityPlanningNeed;
 window.saveAvailabilityPlanningTeams = saveAvailabilityPlanningTeams;
 window.availabilityPrevMonth = availabilityPrevMonth;
 window.availabilityNextMonth = availabilityNextMonth;
