@@ -3,7 +3,7 @@
  * Today-first availability UI backed by /api/availability.
  */
 
-import { API_BASE, AUTH_BASE, fetchJSON, escapeHtml } from './utils.js';
+import { API_BASE, AUTH_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 
 const NO_STORE_FETCH = { cachePolicy: 'no-store', credentials: 'same-origin' };
 
@@ -2226,14 +2226,15 @@ function renderBetsSection() {
     // No market: only admins see the "open" control; everyone else gets nothing.
     if (!market) {
         if (!isAdmin) { host.textContent = ''; return; }
-        host.innerHTML = `
+        host.textContent = '';
+        safeInsertHTML(host, 'beforeend', `
             <div class="glass-panel rounded-2xl border border-brand-amber/30 bg-brand-amber/5 px-6 py-4">
                 <div class="flex items-center justify-between gap-3 flex-wrap">
                     <div class="text-sm text-slate-300">🎲 No betting market is open.</div>
                     <button data-click-action="window.openAvailabilityBetMarket()" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-brand-amber/20 text-brand-amber hover:bg-brand-amber/30 transition">Open session market</button>
                 </div>
                 ${_betStatusHtml()}
-            </div>`;
+            </div>`);
         return;
     }
 
@@ -2281,7 +2282,8 @@ function renderBetsSection() {
         ? `<div class="text-xs font-bold text-brand-amber mb-1">Result: ${market.outcome === 'team_a' ? aLabel : market.outcome === 'team_b' ? bLabel : 'Void (refunded)'}</div>`
         : '';
 
-    host.innerHTML = `
+    host.textContent = '';
+    safeInsertHTML(host, 'beforeend', `
         <div class="glass-panel rounded-2xl border border-brand-amber/30 bg-brand-amber/5 px-6 py-4">
             <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
                 <div class="text-sm font-black text-white">🎲 Tonight's bet ${settled ? '<span class="text-xs text-slate-500 font-normal">(settled)</span>' : ''}</div>
@@ -2303,8 +2305,7 @@ function renderBetsSection() {
             ${betControls}
             ${adminControls}
             ${_betStatusHtml()}
-            <a href="#/leaderboards" class="hidden"></a>
-        </div>`;
+        </div>`);
 }
 
 function _betStatusHtml() {

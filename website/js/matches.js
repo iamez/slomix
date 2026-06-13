@@ -3,7 +3,7 @@
  * @module matches
  */
 
-import { API_BASE, fetchJSON, escapeHtml } from './utils.js';
+import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 import { openModal } from './auth.js';
 
 function formatClockTime(seconds) {
@@ -146,11 +146,12 @@ async function loadMapObjectiveRecords() {
             </span>
         </div>`).join('');
 
-    host.innerHTML = `
+    host.textContent = '';
+    safeInsertHTML(host, 'beforeend', `
         <div class="glass-panel rounded-2xl border border-brand-amber/30 bg-brand-amber/5 p-5">
             <div class="text-xs uppercase tracking-widest text-brand-amber font-bold mb-3">⏱️ Fastest objective completions</div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${rows}</div>
-        </div>`;
+        </div>`);
 }
 
 let mapsCache = [];
