@@ -116,3 +116,35 @@ async def test_clean_rosters_still_attribute_normally():
     assert "roster changed" not in (m.get("note") or "").lower()
     # One team should have won the map (R2 attackers faster).
     assert res["team_a_maps"] + res["team_b_maps"] == 1
+
+
+# ---------------------------------------------------------------------------
+# round_has_bots — bot detection independent of bot_player_count (session-123)
+# ---------------------------------------------------------------------------
+from bot.core.round_contract import round_has_bots  # noqa: E402
+
+
+def test_round_has_bots_by_is_bot_flag():
+    assert round_has_bots([{"name": "real", "is_bot": False},
+                           {"name": "x", "is_bot": True}]) is True
+
+
+def test_round_has_bots_by_omnibot_guid():
+    # The session-123 case: is_bot flag missing, count would be 0,
+    # but the guid betrays the Omni-bot.
+    assert round_has_bots([{"name": "[BOT]vid", "guid": "OMNIBOT06c000"}]) is True
+    assert round_has_bots([{"name": "vid", "guid": "omnibot06c"}]) is True  # case-insensitive
+
+
+def test_round_has_bots_by_name_prefix():
+    assert round_has_bots([{"name": "[BOT]wajs", "guid": ""}]) is True
+
+
+def test_round_has_bots_all_humans():
+    assert round_has_bots([{"name": "vid", "guid": "D8423F90"},
+                           {"name": "olz", "guid": "5D989160"}]) is False
+
+
+def test_round_has_bots_empty_or_none():
+    assert round_has_bots([]) is False
+    assert round_has_bots(None) is False

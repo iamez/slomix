@@ -41,6 +41,7 @@ async def trailing_averages(
         FROM player_comprehensive_stats pcs
         JOIN rounds r ON r.id = pcs.round_id
         WHERE pcs.player_guid = $1 AND r.gaming_session_id IS NOT NULL
+          AND r.is_valid IS DISTINCT FROM FALSE
           AND pcs.time_played_seconds > 0 {before_sql}
         GROUP BY r.gaming_session_id
         ORDER BY r.gaming_session_id DESC

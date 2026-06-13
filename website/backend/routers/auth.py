@@ -863,3 +863,117 @@ async def unlink_discord_account(request: Request, db: DatabaseAdapter = Depends
         "session", path="/", httponly=True, samesite="lax", secure=_SESSION_HTTPS_ONLY
     )
     return response
+
+
+# ============================================================================
+# MY ACCOUNT (VISION_2026 S2) — display name + aliases for the linked player
+# ============================================================================
+
+_DISPLAY_NAME_MAX = 32
+
+
+@router.get("/account/aliases")
+async def get_my_aliases(request: Request, db: DatabaseAdapter = Depends(get_db)):
+    """Aliases of the session user's linked player (web !myaliases)."""
+    user = _require_session_user(request)
+    discord_id = _safe_int(user.get("id"))
+    if discord_id is None:
+        raise HTTPException(status_code=401, detail="Malformed session")
+    link = await db.fetch_one(
+        "SELECT player_guid, player_name, display_name, display_name_source "
+        "FROM player_links WHERE discord_id = ?",
+        (discord_id,),
+    )
+    if not link:
+        return {"status": "ok", "linked": False, "aliases": []}
+    guid = link[0]
+    rows = await db.fetch_all(
+        """
+        SELECT alias, times_seen, last_seen
+        FROM player_aliases
+        WHERE guid = ?
+        ORDER BY last_seen DESC
+        LIMIT 25
+        """,
+        (guid,),
+    )
+    return {
+        "status": "ok",
+        "linked": True,
+        "player_guid": guid,
+        "current_display_name": link[2] or link[1],
+        "display_name_source": link[3] or "auto",
+        "aliases": [
+            {"alias": r[0], "times_seen": int(r[1] or 0),
+             "last_seen": str(r[2]) if r[2] else None}
+            for r in (rows or [])
+        ],
+    }
+
+
+@router.post("/account/display-name")
+async def set_my_display_name(
+    request: Request, payload: dict, db: DatabaseAdapter = Depends(get_db)
+):
+    """Set the linked player's display name (web !setname).
+
+    payload: {"action": "custom"|"alias"|"reset", "name": "..."}.
+    'alias' must match one of the player's recorded aliases; 'reset' returns
+    to automatic resolution. Audited like link events.
+    """
+    _require_ajax_csrf_header(request)
+    user = _require_session_user(request)
+    discord_id = _safe_int(user.get("id"))
+    if discord_id is None:
+        raise HTTPException(status_code=401, detail="Malformed session")
+    website_user_id = _safe_int(user.get("website_user_id")) or discord_id
+    action = (payload or {}).get("action")
+    name = ((payload or {}).get("name") or "").strip()
+    if action not in ("custom", "alias", "reset"):
+        raise HTTPException(status_code=400, detail="action must be custom|alias|reset")
+
+    link = await db.fetch_one(
+        "SELECT player_guid FROM player_links WHERE discord_id = ?",
+        (discord_id,),
+    )
+    if not link:
+        raise HTTPException(status_code=400, detail="No linked player — link first.")
+    guid = link[0]
+
+    if action == "reset":
+        new_name, source = None, "auto"
+    else:
+        if not name or len(name) > _DISPLAY_NAME_MAX:
+            raise HTTPException(
+                status_code=400,
+                detail=f"name required, max {_DISPLAY_NAME_MAX} chars",
+            )
+        if action == "alias":
+            owned = await db.fetch_one(
+                "SELECT 1 FROM player_aliases WHERE guid = ? AND alias = ?",
+                (guid, name),
+            )
+            if not owned:
+                raise HTTPException(
+                    status_code=400, detail="That alias is not recorded for your player."
+                )
+        new_name, source = name, action
+
+    await db.execute(
+        """
+        UPDATE player_links
+        SET display_name = ?, display_name_source = ?,
+            display_name_updated_at = CURRENT_TIMESTAMP
+        WHERE discord_id = ?
+        """,
+        (new_name, source, discord_id),
+    )
+    await _audit_link_event(
+        db,
+        user_id=website_user_id,
+        discord_user_id=discord_id,
+        action="display_name_set",
+        actor_discord_id=discord_id,
+        metadata={"source": source, "name": new_name, "player_guid": guid},
+    )
+    return {"status": "ok", "display_name": new_name, "source": source}

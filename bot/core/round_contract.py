@@ -31,6 +31,25 @@ def is_filler_map(map_name: str | None, excluded_maps: Iterable[str]) -> bool:
     return any(name == str(m).strip().lower() for m in excluded_maps)
 
 
+def round_has_bots(players: Iterable[dict] | None) -> bool:
+    """Return True if any participant is an Omni-bot.
+
+    Detects bots from the parsed player list directly — NOT from the
+    round-level bot_player_count, which prod showed can be 0 even for an
+    all-bot session (the 2026-06-11 session-123 incident). Owner intent:
+    bot/testmode rounds never count for stats, so the importer flags them
+    is_valid = FALSE. Pure + unit-testable; callers pass the players list.
+    """
+    for p in players or []:
+        if p.get("is_bot"):
+            return True
+        if str(p.get("guid", "")).upper().startswith("OMNIBOT"):
+            return True
+        if str(p.get("name", "")).startswith("[BOT]"):
+            return True
+    return False
+
+
 _SIDE_VALUE_MAP = {
     "axis": 1,
     "1": 1,

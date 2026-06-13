@@ -476,6 +476,7 @@ async def get_sessions_list(
             FROM rounds r
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
+              AND r.is_valid IS DISTINCT FROM FALSE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -489,6 +490,7 @@ async def get_sessions_list(
                 ON p.round_id = r.id
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
+              AND r.is_valid IS DISTINCT FROM FALSE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         )
@@ -505,7 +507,7 @@ async def get_sessions_list(
             sr.draws
         FROM session_rounds sr
         LEFT JOIN session_players sp ON sr.gaming_session_id = sp.gaming_session_id
-        ORDER BY sr.session_date DESC
+        ORDER BY sr.session_date DESC, sr.gaming_session_id DESC
         LIMIT $1 OFFSET $2
     """
 
@@ -1682,12 +1684,15 @@ async def get_session_verdicts(
         JOIN rounds r ON r.id = pcs.round_id
         WHERE r.gaming_session_id IS NOT NULL
           AND r.gaming_session_id <= $1
+          AND r.is_valid IS DISTINCT FROM FALSE
           AND pcs.time_played_seconds > 0
           AND pcs.player_guid IN (
               SELECT DISTINCT pcs2.player_guid
               FROM player_comprehensive_stats pcs2
               JOIN rounds r2 ON r2.id = pcs2.round_id
-              WHERE r2.gaming_session_id = $1 AND pcs2.time_played_seconds > 0
+              WHERE r2.gaming_session_id = $1
+                AND r2.is_valid IS DISTINCT FROM FALSE
+                AND pcs2.time_played_seconds > 0
           )
         GROUP BY pcs.player_guid, r.gaming_session_id
         """,
