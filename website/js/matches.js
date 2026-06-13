@@ -113,12 +113,44 @@ export async function loadMapsView() {
 
         renderMapsSummary(mapsCache);
         renderMapsGrid();
+        loadMapObjectiveRecords().catch(err => console.warn('objective records failed', err));
 
         if (typeof lucide !== 'undefined') lucide.createIcons();
     } catch (e) {
         console.error('Failed to load maps:', e);
         grid.innerHTML = '<div class="text-center text-red-500 py-12">Failed to load map statistics</div>';
     }
+}
+
+// Fastest objective-completion record per map (S4-D stopwatch record board).
+async function loadMapObjectiveRecords() {
+    const host = document.getElementById('maps-objective-records');
+    if (!host) return;
+    let data;
+    try {
+        data = await fetchJSON(`${API_BASE}/records/maps/segments`);
+    } catch (_) {
+        host.textContent = '';
+        return;
+    }
+    const records = data?.records || [];
+    if (!records.length) { host.textContent = ''; return; }
+
+    const rows = records.map(r => `
+        <div class="flex items-center justify-between px-4 py-2.5 rounded-lg bg-black/20 border border-white/5">
+            <span class="text-sm font-semibold text-slate-200">${escapeHtml(r.map_name)}</span>
+            <span class="flex items-center gap-3">
+                <span class="text-xs ${r.winner_team === 1 ? 'text-brand-cyan' : r.winner_team === 2 ? 'text-brand-purple' : 'text-slate-500'}">${escapeHtml(r.winner_side)}</span>
+                <span class="text-base font-black font-mono text-brand-amber">${escapeHtml(r.fastest_time)}</span>
+                <span class="text-[11px] text-slate-500">${escapeHtml(r.played || '')}</span>
+            </span>
+        </div>`).join('');
+
+    host.innerHTML = `
+        <div class="glass-panel rounded-2xl border border-brand-amber/30 bg-brand-amber/5 p-5">
+            <div class="text-xs uppercase tracking-widest text-brand-amber font-bold mb-3">⏱️ Fastest objective completions</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${rows}</div>
+        </div>`;
 }
 
 let mapsCache = [];
