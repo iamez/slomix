@@ -476,6 +476,7 @@ async def get_sessions_list(
             FROM rounds r
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
+              AND r.is_valid IS DISTINCT FROM FALSE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -489,6 +490,7 @@ async def get_sessions_list(
                 ON p.round_id = r.id
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
+              AND r.is_valid IS DISTINCT FROM FALSE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         )
@@ -505,7 +507,7 @@ async def get_sessions_list(
             sr.draws
         FROM session_rounds sr
         LEFT JOIN session_players sp ON sr.gaming_session_id = sp.gaming_session_id
-        ORDER BY sr.session_date DESC
+        ORDER BY sr.session_date DESC, sr.gaming_session_id DESC
         LIMIT $1 OFFSET $2
     """
 
