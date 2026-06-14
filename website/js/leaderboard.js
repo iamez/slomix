@@ -9,6 +9,14 @@ import { API_BASE, fetchJSON, escapeHtml, formatNumber } from './utils.js';
 let currentLbStat = 'games';
 let currentLbPeriod = 'season';
 
+// User-facing labels per stat key (shared by the column header + the mobile
+// card `data-label`, so the stacked-card view never shows raw keys like WIN_RATE).
+const LB_STAT_LABELS = {
+    dpm: 'DPM', kills: 'Kills', kd: 'K/D', damage: 'Damage',
+    headshots: 'Headshots', accuracy: 'Accuracy (%)', revives: 'Revives',
+    gibs: 'Gibs', games: 'Rounds',
+};
+
 // Navigation function (set by app.js)
 let navigateToFn = null;
 
@@ -73,10 +81,12 @@ export async function loadLeaderboard() {
 
             const tdRank = document.createElement('td');
             tdRank.className = 'px-6 py-4 font-mono text-slate-500';
+            tdRank.dataset.label = 'Rank';
             tdRank.textContent = `#${row.rank}`;
 
             const tdPlayer = document.createElement('td');
             tdPlayer.className = 'px-6 py-4';
+            tdPlayer.dataset.label = 'Player';
             const playerWrap = document.createElement('div');
             playerWrap.className = 'flex items-center gap-3';
             const avatar = document.createElement('div');
@@ -96,18 +106,22 @@ export async function loadLeaderboard() {
 
             const tdValue = document.createElement('td');
             tdValue.className = `px-6 py-4 text-right font-mono ${valueClass}`;
+            tdValue.dataset.label = LB_STAT_LABELS[currentLbStat] || String(currentLbStat).toUpperCase();
             tdValue.textContent = String(valueText);
 
             const tdRounds = document.createElement('td');
             tdRounds.className = 'px-6 py-4 text-right text-slate-400';
+            tdRounds.dataset.label = 'Rounds';
             tdRounds.textContent = String(row.rounds ?? 0);
 
             const tdKills = document.createElement('td');
             tdKills.className = 'px-6 py-4 text-right text-slate-400';
+            tdKills.dataset.label = 'Kills';
             tdKills.textContent = String(row.kills ?? 0);
 
             const tdKd = document.createElement('td');
             tdKd.className = 'px-6 py-4 text-right font-mono text-slate-300';
+            tdKd.dataset.label = 'K/D';
             tdKd.textContent = String(row.kd ?? 0);
 
             tr.appendChild(tdRank);
@@ -145,18 +159,7 @@ export function updateLeaderboardFilter(type, value, options = {}) {
         // Update column header
         const colHeader = document.getElementById('lb-col-value');
         if (colHeader) {
-            const labelMap = {
-                dpm: 'DPM',
-                kills: 'Kills',
-                kd: 'K/D',
-                damage: 'Damage',
-                headshots: 'Headshots',
-                accuracy: 'Accuracy (%)',
-                revives: 'Revives',
-                gibs: 'Gibs',
-                games: 'Rounds'
-            };
-            colHeader.textContent = labelMap[value] || value.toUpperCase();
+            colHeader.textContent = LB_STAT_LABELS[value] || value.toUpperCase();
         }
     }
 

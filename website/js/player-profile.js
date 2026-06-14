@@ -419,14 +419,195 @@ export async function loadPlayerWeaponChart(playerName) {
 
 const _AIM_YAW_BUCKETS = 16;
 
-function _panel(title, icon, bodyHtml) {
+function _panel(title, icon, bodyHtml, tab = 'overview') {
     return `
-        <div class="glass-panel p-6 rounded-xl">
+        <div class="glass-panel p-6 rounded-xl" data-pf-tab="${tab}">
             <h3 class="font-bold text-white mb-5 flex items-center gap-2">
                 <i data-lucide="${icon}" class="w-5 h-5 text-brand-cyan"></i> ${escapeHtml(title)}
             </h3>
             ${bodyHtml}
         </div>`;
+}
+
+// S5 IDENTITETA — tab categories for the profile panels (IA reorganization).
+const _PF_TABS = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'combat', label: 'Combat' },
+    { key: 'timing', label: 'Timing' },
+    { key: 'movement', label: 'Movement' },
+    { key: 'history', label: 'History' },
+];
+
+function _renderPfTabBar() {
+    const btns = _PF_TABS.map((t, i) => `
+        <button data-pf-tabbtn="${t.key}"
+                class="px-3 py-1.5 rounded-lg text-xs font-bold transition ${i === 0
+                    ? 'bg-brand-cyan/20 text-brand-cyan'
+                    : 'bg-white/5 text-slate-400 hover:bg-white/10'}">${t.label}</button>`).join('');
+    return `<div id="pf-tabbar" class="flex flex-wrap gap-2 mb-4">${btns}</div>`;
+}
+
+let _pfActiveTab = 'overview';
+
+// Apply the active tab to ALL panels (incl. async-appended competitive/history).
+function _applyActivePfTab() {
+    document.querySelectorAll('[data-pf-tab]').forEach(el => {
+        el.classList.toggle('hidden', el.getAttribute('data-pf-tab') !== _pfActiveTab);
+    });
+    // The rating sparkline can only size correctly once its panel is visible.
+    if (_pfActiveTab === 'history') _drawRatingSparkline('pf-rating-spark');
+    const bar = document.getElementById('pf-tabbar');
+    if (bar) {
+        bar.querySelectorAll('[data-pf-tabbtn]').forEach(b => {
+            const active = b.getAttribute('data-pf-tabbtn') === _pfActiveTab;
+            b.classList.toggle('bg-brand-cyan/20', active);
+            b.classList.toggle('text-brand-cyan', active);
+            b.classList.toggle('bg-white/5', !active);
+            b.classList.toggle('text-slate-400', !active);
+        });
+    }
+}
+
+function _wirePfTabs() {
+    const bar = document.getElementById('pf-tabbar');
+    if (!bar) return;
+    _pfActiveTab = 'overview';
+    bar.querySelectorAll('[data-pf-tabbtn]').forEach(b => {
+        b.addEventListener('click', () => {
+            _pfActiveTab = b.getAttribute('data-pf-tabbtn');
+            _applyActivePfTab();
+        });
+    });
+    _applyActivePfTab();
+}
+
+// S5 IDENTITETA — archetype (strongest percentile) + focus line (weakest), both
+// derived from the ET-Rating components the composite already returns.
+const _ARCHETYPE_LABEL = {
+    dpm: 'Pressure Engine', kpr: 'Fragger', accuracy: 'Marksman',
+    revive_rate: 'Medic Anchor', survival_rate: 'Survivor',
+    useful_kill_rate: 'Efficient Killer', objective_rate: 'Objective Specialist',
+    denied_playtime_pm: 'Wall Breaker', kill_quality: 'Impact Player',
+    crossfire_rate: 'Crossfire Specialist', trade_rate: 'Trade Master',
+    kill_permanence: 'Executioner', clutch_factor: 'Clutch Master',
+    spawn_timing_eff: 'Wave Timer',
+};
+const _FOCUS_LABEL = {
+    dpm: 'damage output', kpr: 'frag rate', accuracy: 'accuracy',
+    revive_rate: 'revive rate', survival_rate: 'survival',
+    useful_kill_rate: 'kill efficiency', objective_rate: 'objective play',
+    denied_playtime_pm: 'spawn denial', kill_quality: 'kill impact',
+    crossfire_rate: 'crossfire setups', trade_rate: 'trade-kill rate',
+    kill_permanence: 'kill permanence', clutch_factor: 'clutch play',
+    spawn_timing_eff: 'spawn timing',
+};
+
+function _ordinal(n) {
+    const s = ['th', 'st', 'nd', 'rd'];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function _renderIdentityStrip(data) {
+    const host = document.getElementById('profile-identity-strip');
+    if (!host) return;
+    const skill = data.skill || {};
+    const streaks = data.streaks || {};
+    const comps = (skill.components && typeof skill.components === 'object') ? skill.components : null;
+    let archetype = null, focusMetric = null, hi = -1, lo = 2;
+    if (comps) {
+        for (const [m, c] of Object.entries(comps)) {
+            if (m === 'dpr' || !c || c.percentile == null) continue;
+            if (c.percentile > hi) { hi = c.percentile; archetype = m; }
+            if (c.percentile < lo) { lo = c.percentile; focusMetric = m; }
+        }
+    }
+    const chips = [];
+    if (skill.et_rating != null) {
+        chips.push(`<span class="px-2.5 py-1 rounded-lg bg-brand-amber/15 text-brand-amber text-xs font-bold">ET Rating ${Math.round(skill.et_rating * 1000)}${skill.tier ? ` · ${escapeHtml(String(skill.tier))}` : ''}</span>`);
+    }
+    if (archetype) {
+        chips.push(`<span class="px-2.5 py-1 rounded-lg bg-brand-purple/15 text-brand-purple text-xs font-bold">${escapeHtml(_ARCHETYPE_LABEL[archetype] || 'All-Rounder')}</span>`);
+    }
+    if (streaks && streaks.current_streak) {
+        const won = streaks.current_type === 'W';
+        chips.push(`<span class="px-2.5 py-1 rounded-lg ${won ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'} text-xs font-bold">${streaks.current_streak}${won ? 'W' : 'L'} streak</span>`);
+    }
+    const focus = focusMetric
+        ? `<div class="text-xs text-slate-400 mt-2">🎯 Focus: your <span class="text-slate-200">${escapeHtml(_FOCUS_LABEL[focusMetric] || focusMetric)}</span> sits in the <span class="text-brand-cyan font-bold">${_ordinal(Math.round(lo * 100))}</span> percentile — your area to climb.</div>`
+        : '';
+    host.textContent = '';
+    if (!chips.length && !focus) return;
+    safeInsertHTML(host, 'beforeend', `<div class="flex flex-wrap gap-2">${chips.join('')}</div>${focus}`);
+}
+
+// S5-C — career timeline: ET-Rating sparkline + engraved season awards (History tab).
+async function loadCareerHistory(root, guid) {
+    if (!root || !guid) return;
+    const [histRes, awardsRes] = await Promise.allSettled([
+        fetchJSON(`${API_BASE}/skill/player/${encodeURIComponent(guid)}/history`),
+        fetchJSON(`${API_BASE}/players/${encodeURIComponent(guid)}/awards`),
+    ]);
+    const hist = histRes.status === 'fulfilled' ? histRes.value : null;
+    const awardsData = awardsRes.status === 'fulfilled' ? awardsRes.value : null;
+    const sessions = Array.isArray(hist) ? hist : (hist?.sessions || hist?.history || []);
+    const awards = awardsData?.awards || [];
+    if (!sessions.length && !awards.length) return;
+
+    const awardBadges = awards.map(a =>
+        `<div class="glass-card px-3 py-2 rounded-lg border-l-2 border-brand-amber/60">
+            <div class="text-xs font-black text-brand-amber">🏆 ${escapeHtml(a.label)}</div>
+            <div class="text-[11px] text-slate-400">${escapeHtml(a.season_name || a.season_id)}${a.value_text ? ` · ${escapeHtml(a.value_text)}` : ''}</div>
+        </div>`).join('');
+
+    const html = _panel('Career Timeline', 'line-chart', `
+        ${sessions.length ? '<canvas id="pf-rating-spark" height="80" class="w-full mb-4"></canvas>' : ''}
+        ${awards.length
+            ? `<div class="text-[11px] uppercase tracking-widest text-slate-500 font-bold mb-2">Engraved season awards</div>
+               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${awardBadges}</div>`
+            : '<p class="text-xs text-slate-500">No season awards engraved yet.</p>'}
+    `, 'history');
+    safeInsertHTML(root, 'beforeend', html);
+    _applyActivePfTab();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    if (sessions.length) {
+        _drawRatingSparkline('pf-rating-spark',
+            sessions.map(s => Number(s.session_rating ?? s.rating ?? 0)));
+    }
+}
+
+// Cached series so the sparkline can be (re)drawn when the History tab becomes
+// visible — a hidden canvas reports clientWidth 0, which would size it wrong.
+let _sparkValues = null;
+
+function _drawRatingSparkline(canvasId, values) {
+    if (values) _sparkValues = values;
+    const cv = document.getElementById(canvasId);
+    if (!cv || !_sparkValues || !_sparkValues.length) return;
+    const w = cv.clientWidth;
+    if (!w) return;  // panel hidden → defer; _applyActivePfTab redraws on activation
+    const h = cv.height || 80;
+    cv.width = w;
+    const vals = _sparkValues;
+    const ctx = cv.getContext('2d');
+    if (!ctx) return;
+    const pad = 6;
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const span = (max - min) || 1;
+    const x = (i) => pad + (w - 2 * pad) * (vals.length === 1 ? 0.5 : i / (vals.length - 1));
+    const y = (v) => h - pad - (h - 2 * pad) * ((v - min) / span);
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = '#06b6d4';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    vals.forEach((v, i) => { i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)); });
+    ctx.stroke();
+    // last-point dot
+    ctx.fillStyle = '#22d3ee';
+    ctx.beginPath();
+    ctx.arc(x(vals.length - 1), y(vals[vals.length - 1]), 3, 0, Math.PI * 2);
+    ctx.fill();
 }
 
 function _statCell(label, value, color = 'text-white') {
@@ -464,23 +645,34 @@ export async function loadEnhancedProfileSections(playerIdentifier) {
         return;
     }
 
+    // S5: populate the identity strip (rating/tier/archetype/focus/streak) from
+    // the composite — header is filled by the base loader, this adds the IA bits.
+    _renderIdentityStrip(data);
+
+    // Tag each panel with its tab category (panels default to data-pf-tab="overview";
+    // replace the first occurrence per section). No change to the render functions.
+    const _tag = (html, tab) => (html || '').replace('data-pf-tab="overview"', `data-pf-tab="${tab}"`);
     const sections = [
-        renderGatherSummary(data),
-        renderSkillAndLifetime(data),
-        renderWeapons(data.weapons),
-        renderHitRegions(data.hit_regions),
-        renderCombatTiming(data.combat_timing),
-        renderAimSection(data.aim, data.guid),
-        renderMovement(data.movement),
-        renderRelationships(data.relationships),
-        renderMapsTable(data.maps),
-        renderNickHistory(data.nick_history),
+        _tag(renderGatherSummary(data), 'overview'),
+        _tag(renderSkillAndLifetime(data), 'overview'),
+        _tag(renderMapsTable(data.maps), 'overview'),
+        _tag(renderRelationships(data.relationships), 'overview'),
+        _tag(renderWeapons(data.weapons), 'combat'),
+        _tag(renderHitRegions(data.hit_regions), 'combat'),
+        _tag(renderAimSection(data.aim, data.guid), 'combat'),
+        _tag(renderCombatTiming(data.combat_timing), 'timing'),
+        _tag(renderMovement(data.movement), 'movement'),
+        _tag(renderNickHistory(data.nick_history), 'history'),
     ];
     // All section HTML is built from escapeHtml-sanitized values; insert via
     // the shared safeInsertHTML helper (utils.js) after clearing.
     root.innerHTML = '';
-    safeInsertHTML(root, 'beforeend', sections.filter(Boolean).join(''));
+    safeInsertHTML(root, 'beforeend', _renderPfTabBar() + sections.filter(Boolean).join(''));
+    _wirePfTabs();
     if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    // History tab: rating sparkline + engraved season awards (S5-C, async).
+    loadCareerHistory(root, data.guid).catch((e) => console.warn('career history failed', e));
 
     // Wire the aim map dropdown (rose) after the DOM exists. Pass the
     // structured map list directly (most-played first) — no DOM scraping.
@@ -522,8 +714,9 @@ async function loadCompetitiveCard(root, guid) {
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">${cells}</div>
         ${best}
         <p class="text-[11px] text-slate-500 mt-2">Stagger/sides over ${_num(card.range_days)} days; clutch + advantage over ${_num(card.timeline_range_days)} days. Stagger = kill that costs the victim 80%+ of their spawn wave.</p>
-    `);
+    `, 'combat');
     safeInsertHTML(root, 'beforeend', html);
+    _applyActivePfTab();
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -748,8 +941,8 @@ function renderRelationships(rel) {
     const cols = [
         _relList('Top Killers (kill you most)', rel.top_killers, p => `${_num(p.kills_on_player)}`, 'text-rose-400'),
         _relList('Top Victims (you kill most)', rel.top_victims, p => `${_num(p.kills_by_player)}`, 'text-emerald-400'),
-        _relList('Best Teammates (synergy)', rel.best_teammates, p => `${p.synergy >= 0 ? '+' : ''}${_num(p.synergy, 1)}`, 'text-emerald-400'),
-        _relList('Worst Teammates', rel.worst_teammates, p => `${p.synergy >= 0 ? '+' : ''}${_num(p.synergy, 1)}`, 'text-rose-400'),
+        _relList('Best Teammates (synergy)', rel.best_teammates, p => `${p.synergy >= 0 ? '+' : ''}${_num(p.synergy, 1)}${p.win_rate_with != null ? ` · ${_num(p.win_rate_with, 0)}% W` : ''}`, 'text-emerald-400'),
+        _relList('Worst Teammates', rel.worst_teammates, p => `${p.synergy >= 0 ? '+' : ''}${_num(p.synergy, 1)}${p.win_rate_with != null ? ` · ${_num(p.win_rate_with, 0)}% W` : ''}`, 'text-rose-400'),
         _relList('Hardest Opponents', rel.hardest_opponents, p => `${_num((p.win_rate || 0) * 100, 0)}%`, 'text-rose-400'),
         _relList('Easiest Opponents', rel.easiest_opponents, p => `${_num((p.win_rate || 0) * 100, 0)}%`, 'text-emerald-400'),
     ].filter(Boolean).join('');
