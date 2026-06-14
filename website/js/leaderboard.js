@@ -9,6 +9,14 @@ import { API_BASE, fetchJSON, escapeHtml, formatNumber } from './utils.js';
 let currentLbStat = 'games';
 let currentLbPeriod = 'season';
 
+// User-facing labels per stat key (shared by the column header + the mobile
+// card `data-label`, so the stacked-card view never shows raw keys like WIN_RATE).
+const LB_STAT_LABELS = {
+    dpm: 'DPM', kills: 'Kills', kd: 'K/D', damage: 'Damage',
+    headshots: 'Headshots', accuracy: 'Accuracy (%)', revives: 'Revives',
+    gibs: 'Gibs', games: 'Rounds',
+};
+
 // Navigation function (set by app.js)
 let navigateToFn = null;
 
@@ -98,7 +106,7 @@ export async function loadLeaderboard() {
 
             const tdValue = document.createElement('td');
             tdValue.className = `px-6 py-4 text-right font-mono ${valueClass}`;
-            tdValue.dataset.label = String(currentLbStat).toUpperCase();
+            tdValue.dataset.label = LB_STAT_LABELS[currentLbStat] || String(currentLbStat).toUpperCase();
             tdValue.textContent = String(valueText);
 
             const tdRounds = document.createElement('td');
@@ -151,18 +159,7 @@ export function updateLeaderboardFilter(type, value, options = {}) {
         // Update column header
         const colHeader = document.getElementById('lb-col-value');
         if (colHeader) {
-            const labelMap = {
-                dpm: 'DPM',
-                kills: 'Kills',
-                kd: 'K/D',
-                damage: 'Damage',
-                headshots: 'Headshots',
-                accuracy: 'Accuracy (%)',
-                revives: 'Revives',
-                gibs: 'Gibs',
-                games: 'Rounds'
-            };
-            colHeader.textContent = labelMap[value] || value.toUpperCase();
+            colHeader.textContent = LB_STAT_LABELS[value] || value.toUpperCase();
         }
     }
 

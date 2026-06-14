@@ -1186,8 +1186,16 @@
         /* S5: keep the mobile bottom nav from covering the last rows of content */
         @media (max-width: 767px) {
             .view-section { padding-bottom: 5rem; }
-            /* Leaderboard: collapse the wide table into stacked cards on phones */
-            #leaderboard-table thead { display: none; }
+            /* Leaderboard: collapse the wide table into stacked cards on phones.
+               Hide the header VISUALLY (not display:none) so screen readers keep
+               the column semantics. */
+            #leaderboard-table thead {
+                position: absolute;
+                width: 1px; height: 1px;
+                padding: 0; margin: -1px;
+                overflow: hidden; clip: rect(0, 0, 0, 0);
+                white-space: nowrap; border: 0;
+            }
             #leaderboard-table tbody,
             #leaderboard-table tr,
             #leaderboard-table td { display: block; width: 100%; }

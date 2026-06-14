@@ -454,6 +454,8 @@ function _applyActivePfTab() {
     document.querySelectorAll('[data-pf-tab]').forEach(el => {
         el.classList.toggle('hidden', el.getAttribute('data-pf-tab') !== _pfActiveTab);
     });
+    // The rating sparkline can only size correctly once its panel is visible.
+    if (_pfActiveTab === 'history') _drawRatingSparkline('pf-rating-spark');
     const bar = document.getElementById('pf-tabbar');
     if (bar) {
         bar.querySelectorAll('[data-pf-tabbtn]').forEach(b => {
@@ -575,28 +577,36 @@ async function loadCareerHistory(root, guid) {
     }
 }
 
+// Cached series so the sparkline can be (re)drawn when the History tab becomes
+// visible — a hidden canvas reports clientWidth 0, which would size it wrong.
+let _sparkValues = null;
+
 function _drawRatingSparkline(canvasId, values) {
+    if (values) _sparkValues = values;
     const cv = document.getElementById(canvasId);
-    if (!cv || !values.length) return;
-    const w = cv.clientWidth || 600, h = cv.height || 80;
+    if (!cv || !_sparkValues || !_sparkValues.length) return;
+    const w = cv.clientWidth;
+    if (!w) return;  // panel hidden → defer; _applyActivePfTab redraws on activation
+    const h = cv.height || 80;
     cv.width = w;
+    const vals = _sparkValues;
     const ctx = cv.getContext('2d');
     if (!ctx) return;
     const pad = 6;
-    const min = Math.min(...values), max = Math.max(...values);
+    const min = Math.min(...vals), max = Math.max(...vals);
     const span = (max - min) || 1;
-    const x = (i) => pad + (w - 2 * pad) * (values.length === 1 ? 0.5 : i / (values.length - 1));
+    const x = (i) => pad + (w - 2 * pad) * (vals.length === 1 ? 0.5 : i / (vals.length - 1));
     const y = (v) => h - pad - (h - 2 * pad) * ((v - min) / span);
     ctx.clearRect(0, 0, w, h);
     ctx.strokeStyle = '#06b6d4';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    values.forEach((v, i) => { i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)); });
+    vals.forEach((v, i) => { i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)); });
     ctx.stroke();
     // last-point dot
     ctx.fillStyle = '#22d3ee';
     ctx.beginPath();
-    ctx.arc(x(values.length - 1), y(values[values.length - 1]), 3, 0, Math.PI * 2);
+    ctx.arc(x(vals.length - 1), y(vals[vals.length - 1]), 3, 0, Math.PI * 2);
     ctx.fill();
 }
 
