@@ -56,7 +56,7 @@ holds, sweeps, and looks while shooting.**
 - 🔬 **Research-grounded design** — methodology cross-checked against esports analytics (Leetify, scope.gg), circular-statistics literature, NBA hex-bin shot-chart practice, and spatial-DB downsampling patterns before a line of code was written (`docs/PROXIMITY_AIM_ANALYTICS_PLAN.md`)
 - ✅ **Validated on real all-night session** — 30,905 shots from 6 distinct humans across 8 maps; yaw spans `[−180,180]`, pitch `[−71,88]`, **both-zero = 0%** ⇒ `ps.viewangles` binding rock-solid on humans, not just bots
 
-### **🗺️ v1.15.0: Proximity Page Major Redesign + Lua 5.4 Production-Grade (May 14-19)** 🆕
+### **🗺️ v1.15.0: Proximity Page Major Redesign + Lua 5.4 Production-Grade (May 14-19)**
 
 **The biggest single proximity push since v6.01: map-first information architecture, every audit finding closed, and two latent Lua-5.4 incompatibilities shipped + caught + fixed under live load.**
 
@@ -161,7 +161,7 @@ holds, sweeps, and looks while shooting.**
 ## ✨ What Makes This Special
 
 - 🎬 **Round Replay Timeline** — Dual-pane viewer: event feed + 2D map canvas + scrubber, 420+ events per round, player positions at 200ms precision
-- 🧠 **Smart Storytelling** — Kill Impact Score (7 multipliers), 11 moment detectors, 9 player archetypes, auto-generated session narratives
+- 🧠 **Smart Storytelling** — Kill Impact Score (10+ multipliers), 11 moment detectors, 9 player archetypes, auto-generated session narratives
 - ⚖️ **Bayesian MVP + WIS v2** — Fairness-first scoring with shrinkage prior and harmonic confidence weighting; late-joiners don't steal MVP
 - 🎯 **Proximity Teamplay Analytics** — Lua v6.10 telemetry: engagements, crossfire, cohesion, trade kills, spawn timing, objective intelligence
 - ⚔️ **Player Rivalries** — H2H stats, nemesis/prey classification, per-map drill-down, rivalry leaderboard
@@ -232,7 +232,7 @@ that needs daily manual feeding. Every new page replaces or merges an old one �
 | **Unique Players** | 59 |
 | **Stats Per Player Per Round** | 57 fields |
 | **Discord Commands** | 100+ across 20 cogs |
-| **Database Tables** | 90 (managed via committed SQL migrations) |
+| **Database Tables** | 101 (managed via committed SQL migrations) |
 | **Test Coverage** | 3,246 tests, CI green |
 | **Data Span** | Jan 2025 — Jun 2026 (18 months) |
 
@@ -262,7 +262,7 @@ that needs daily manual feeding. Every new page replaces or merges an old one �
 │                          │                                     │
 │                  ┌───────▼───────┐                             │
 │                  │  PostgreSQL   │                             │
-│                  │  90 Tables    │                             │
+│                  │  101 Tables   │                             │
 │                  └───────────────┘                             │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -309,14 +309,14 @@ that needs daily manual feeding. Every new page replaces or merges an old one �
 ┌──────────────────────────────────────────────────┐
 │  Layer 5-6: PostgreSQL (ACID) + Constraints      │
 │  ✓ Transaction safety  ✓ FK/NOT NULL/UNIQUE      │
-│  90 tables  |  57 columns per player per round    │
+│  101 tables  |  57 columns per player per round   │
 └──────────────────────┬───────────────────────────┘
                        │
               ┌────────┼────────┐
               ▼        ▼        ▼
          Discord    Website   Background
           Bot       Dashboard  Workers
-        (~99 cmds) (FastAPI)  (Analysis,
+        (100+ cmds)(FastAPI)  (Analysis,
                               Render)
 ```
 
@@ -375,7 +375,7 @@ ET:Legacy stopwatch maps have two rounds where teams swap attack/defense. Slomix
 
 ## 🌟 Features
 
-### **🎬 Greatshot — Demo Highlight Scanner** 🆕
+### **🎬 Greatshot — Demo Highlight Scanner**
 
 Upload ET:Legacy `.dm_84` demo files through the website. The system will:
 
@@ -391,9 +391,9 @@ Upload ET:Legacy `.dm_84` demo files through the website. The system will:
 
 ---
 
-### **🎯 Proximity Analytics — Teamplay Intelligence** 🆕
+### **🎯 Proximity Analytics — Teamplay Intelligence**
 
-Real-time Lua telemetry (v6.10) tracks every player position, engagement, and objective interaction on the game server. The data flows through a dedicated parser into 22+ database tables, powering deep teamplay analytics:
+Real-time Lua telemetry (v6.10) tracks every player position, engagement, and objective interaction on the game server. The data flows through a dedicated parser into 30+ database tables, powering deep teamplay analytics:
 
 - 📍 **Combat Engagements** — Every 1v1/NvN encounter with distance, duration, and outcome
 - 🔥 **Crossfire Detection** — LOS-verified crossfire angles with execution tracking
@@ -412,7 +412,7 @@ Real-time Lua telemetry (v6.10) tracks every player position, engagement, and ob
 
 ---
 
-### **📈 ET Rating — Skill Rating System** 🆕
+### **📈 ET Rating — Skill Rating System**
 
 A 9-metric percentile-based skill rating formula that captures the full picture of competitive ET:Legacy performance:
 
@@ -421,11 +421,11 @@ A 9-metric percentile-based skill rating formula that captures the full picture 
 - 🎯 **Confidence Indicator** — Low/Medium/High based on rounds played
 - 🏆 **Server-Side Tiers** — Bronze through Diamond rankings with auto-refresh when stale
 - 📈 **History Tracking** — Trend charts showing rating progression over time
-- 👥 **40 Players Rated** — Live leaderboard at `/api/skill/leaderboard`
+- 👥 **50 Players Rated** — Live leaderboard at `/api/skill/leaderboard`
 
 ---
 
-### **🎬 Round Replay Timeline** 🆕
+### **🎬 Round Replay Timeline**
 
 Relive every round with a full event replay viewer:
 
@@ -437,11 +437,11 @@ Relive every round with a full event replay viewer:
 
 ---
 
-### **🧠 Smart Storytelling Stats** 🆕
+### **🧠 Smart Storytelling Stats**
 
 Transform raw numbers into compelling competitive narratives:
 
-- 💥 **Kill Impact Score (KIS)** — Contextual kill scoring with 7 multipliers: carrier kills (3-5x), push kills (2x), crossfire (1.5x), spawn timing (1-2x), outcome weight, class bonus, distance factor
+- 💥 **Kill Impact Score (KIS)** — Contextual kill scoring with 10+ multipliers: carrier kills (3-5x), push quality, crossfire (1.5x), spawn timing (1-2x), outcome weight (gib/revive), class bonus, distance factor, low-health clutch, graduated reinforcement timing (0.70-1.40x)
 - 🎭 **9 Player Archetypes** — Server-side classification using DPM + denied_time + headshot% + KD + trades + revives: Pressure Engine, Medic Anchor, Silent Assassin, Objective Demon, Trade Specialist, Support Fortress, Flanker, All-Rounder, Wildcard
 - ⚡ **11 Match Moment Detectors** — Team wipe, multikill, kill streak, carrier chain, focus survival, push success, trade chain, objective secured, objective denied, objective run, multi-revive — each with per-kill breakdown (weapon names, timestamps, duration)
 - 📈 **Momentum Chart** — 30-second window momentum scoring with 0.85 decay factor, Canvas 2D dual-line chart (Axis vs Allies), per-round tab navigation
@@ -453,7 +453,7 @@ Transform raw numbers into compelling competitive narratives:
 
 ---
 
-### **⚔️ Player Rivalries** 🆕
+### **⚔️ Player Rivalries**
 
 Deep head-to-head competitive intelligence between any two players:
 
@@ -466,7 +466,7 @@ Deep head-to-head competitive intelligence between any two players:
 
 ---
 
-### **🏆 Win Contribution (PWC / WIS / WAA)** 🆕
+### **🏆 Win Contribution (PWC / WIS / WAA)**
 
 Quantify exactly how much each player contributed to a round win:
 
@@ -570,7 +570,7 @@ pip install -r requirements-dev.txt
 cp .env.example .env
 nano .env  # Set DISCORD_BOT_TOKEN, DB credentials, SSH settings
 
-# Setup database (90+ tables)
+# Setup database (100+ tables)
 python postgresql_database_manager.py  # Option 1: Create fresh
 
 # Run
@@ -584,13 +584,13 @@ python -m bot.ultimate_bot
 ### **Configuration**
 
 ```env
-# Required
+# Required — the bot reads POSTGRES_* names only (see .env.example)
 DISCORD_BOT_TOKEN=...
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=etlegacy
-DB_USER=etlegacy_user
-DB_PASSWORD=...
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DATABASE=etlegacy
+POSTGRES_USER=etlegacy_user
+POSTGRES_PASSWORD=...
 
 # Automation (optional but recommended)
 SSH_ENABLED=true
@@ -619,25 +619,25 @@ See `.env.example` for all options.
 ## 📋 Commands
 
 ### **🎯 Player Stats**
-`!stats <player>` · `!stats @user` · `!compare <p1> <p2>` · `!consistency` · `!map_stats` · `!playstyle` · `!fatigue`
+`!stats <player>` · `!stats @user` · `!compare <p1> <p2>` · `!consistency` · `!map_stats` · `!playstyle` · `!fatigue` · `!find_player`
 
 ### **🏆 Leaderboards**
-`!top_dpm` · `!top_kd` · `!top_accuracy` · `!top_efficiency` · + 7 more categories
+`!leaderboard <category>` (aliases `!lb`, `!top`) — dpm, kd, accuracy, efficiency, revives + more
 
 ### **📊 Sessions & Scoring**
-`!last_session` · `!last_session graphs` · `!sessions` · `!awards` · `!last_round`
+`!last_session` · `!last_session graphs` · `!session` · `!rounds` · `!session_score` · `!awards` · `!season_info`
 
-### **⚔️ Matchups, Rivalries & Predictions**
-`!matchup A vs B` · `!duo_perf p1 p2` · `!nemesis` · `!rivalry <p1> <p2>` · `!rivalry_leaderboard` · `!predictions` · `!prediction_stats` · `!prediction_trends` · `!prediction_leaderboard`
+### **⚔️ Matchups & Predictions** (rivalries live on the web at `/#/rivalries`)
+`!matchup A vs B` · `!duo_perf p1 p2` · `!nemesis` · `!head_to_head` · `!team_record` · `!predictions` · `!prediction_stats` · `!prediction_trends` · `!prediction_leaderboard` · `!map_predictions`
 
 ### **🔗 Account Management**
-`!link` · `!unlink` · `!whoami` · `!set_display_name` · `!achievements`
+`!link` · `!unlink` · `!setname` · `!myaliases` · `!achievements` · `!badges`
 
 ### **🎮 Server Control**
-`!server_status` · `!rcon <cmd>` · `!players` · `!map <name>`
+`!server_status` · `!rcon <cmd>` · `!list_players` · `!list_maps` · `!map_change <name>` · `!server_start` · `!server_stop`
 
 ### **🔧 Admin**
-`!sync_all` · `!sync_historical` · `!rebuild_sessions` · `!health` · `!suggest_teams`
+`!sync_all` · `!sync_historical` · `!sync_today` · `!assign_teams` · `!correlation_status` · `!backup_db` · `!health` · `!start_monitoring`
 
 **[📖 Full Command Reference: docs/COMMANDS.md](docs/COMMANDS.md)**
 
@@ -676,7 +676,7 @@ slomix/
 │   │   ├── routers/                 # api, auth, predictions, greatshot, proximity
 │   │   └── services/                # greatshot_store, greatshot_jobs
 │   ├── frontend/                    # React 19 + TypeScript 5.9 + Vite 7
-│   │   ├── src/pages/               # 19 route pages (Sessions, Proximity, Maps, etc.)
+│   │   ├── src/pages/               # 25 route pages (Sessions, Proximity, Maps, etc.)
 │   │   └── src/components/          # Shared components (GlassCard, DataTable, etc.)
 │   ├── static/modern/               # Built JS/CSS chunks (from npm run build)
 │   ├── js/                          # Legacy JS fallback modules
@@ -685,7 +685,7 @@ slomix/
 ├── 🎯 proximity/                    # Teamplay analytics engine (v6.10)
 │   ├── lua/                         # Game server Lua mod (positions, objectives, hit regions)
 │   ├── parser/                      # Engagement + objective data parser
-│   └── schema/                      # Database schema (22+ tables)
+│   └── schema/                      # Database schema (30+ tables)
 │
 ├── 🔧 bin/                          # Compiled binaries (UDT_json, UDT_cutter)
 ├── 📜 vps_scripts/                  # Game server Lua scripts
@@ -712,7 +712,7 @@ slomix/
 
 ## 🗄️ Database Schema
 
-### **PostgreSQL — 90 Tables**
+### **PostgreSQL — 101 Tables**
 
 ```sql
 -- Core Stats (7)
@@ -770,7 +770,7 @@ server_status_history, voice_members, availability_*, uploads_*
 
 ```bash
 python postgresql_database_manager.py
-# 1 - Create fresh database (90+ tables + indexes + seed data)
+# 1 - Create fresh database (100+ tables + indexes + seed data)
 # 2 - Import all files from local_stats/
 # 3 - Rebuild from scratch (wipes game data + re-imports)
 # 4 - Fix specific date range
@@ -813,7 +813,7 @@ pytest tests/test_greatshot_scanner_golden.py
 - [docs/reference/TIMING_DATA_SOURCES.md](docs/reference/TIMING_DATA_SOURCES.md) — Stats file vs Lua timing
 
 ### **Reference**
-- [docs/COMMANDS.md](docs/COMMANDS.md) — All ~99 bot commands
+- [docs/COMMANDS.md](docs/COMMANDS.md) — All 100+ bot commands
 - [CHANGELOG.md](CHANGELOG.md) — Version history (canonical)
 - [docs/CLAUDE.md](docs/CLAUDE.md) — Full technical reference
 
