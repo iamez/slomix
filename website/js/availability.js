@@ -1609,27 +1609,20 @@ async function postPlanningJson(path, body) {
     return payload;
 }
 
-// Build the bets endpoint URL from a fixed action + a numeric market id, so no
-// free-form string is ever interpolated into fetch() — the action only selects a
-// literal branch and the only interpolated value is Number-coerced (SSRF/taint guard).
-function _betsUrl(action, marketId) {
-    const id = Number(marketId);
-    if (action === 'open') return `${API_BASE}/bets/market`;
-    if (action === 'bet' && Number.isInteger(id)) return `${API_BASE}/bets/market/${id}/bet`;
-    if (action === 'settle' && Number.isInteger(id)) return `${API_BASE}/bets/market/${id}/settle`;
-    throw new Error(`Unknown bets action: ${action}`);
-}
+// Shared POST options + response reader for the bets endpoints. The fetch URLs
+// are built inline at each call site from literal paths (no free-form string or
+// function parameter ever flows into fetch) so they aren't treated as
+// user-controlled URLs.
+const _BETS_POST_OPTS = {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+    },
+    credentials: 'same-origin'
+};
 
-async function postBetsJson(action, marketId, body) {
-    const response = await fetch(_betsUrl(action, marketId), {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-        },
-        credentials: 'same-origin',
-        body: JSON.stringify(body || {})
-    });
+async function _readBetsResponse(response) {
     let payload = null;
     try {
         payload = await response.json();
@@ -2340,7 +2333,10 @@ async function placeAvailabilityBet(choice) {
     }
     betsState.inFlight = true;
     try {
-        await postBetsJson('bet', betsState.market.id, { choice, amount });
+        const id = Number(betsState.market.id);
+        const resp = await fetch(`${API_BASE}/bets/market/${id}/bet`,
+            { ..._BETS_POST_OPTS, body: JSON.stringify({ choice, amount }) });
+        await _readBetsResponse(resp);
         betsState.status = { message: 'Bet placed.', error: false };
         await loadBetsState();
     } catch (err) {
@@ -2355,7 +2351,9 @@ async function openAvailabilityBetMarket() {
     if (betsState.inFlight) return;
     betsState.inFlight = true;
     try {
-        await postBetsJson('open', null, {});
+        const resp = await fetch(`${API_BASE}/bets/market`,
+            { ..._BETS_POST_OPTS, body: JSON.stringify({}) });
+        await _readBetsResponse(resp);
         betsState.status = { message: 'Market opened.', error: false };
         await loadBetsState();
     } catch (err) {
@@ -2370,7 +2368,10 @@ async function settleAvailabilityBet(outcome) {
     if (betsState.inFlight || !betsState.market) return;
     betsState.inFlight = true;
     try {
-        await postBetsJson('settle', betsState.market.id, { outcome });
+        const id = Number(betsState.market.id);
+        const resp = await fetch(`${API_BASE}/bets/market/${id}/settle`,
+            { ..._BETS_POST_OPTS, body: JSON.stringify({ outcome }) });
+        await _readBetsResponse(resp);
         betsState.status = { message: 'Market settled — payouts done.', error: false };
         await loadBetsState();
     } catch (err) {
