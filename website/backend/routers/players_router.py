@@ -184,10 +184,12 @@ async def _hold_prob_curve(db, map_name: str) -> list[dict]:
     cap = secs[-1]
     total = len(secs)
     points = []
+    idx = 0  # single pointer over the sorted list → O(n + buckets)
     t = 0
     while t <= cap:
-        done = sum(1 for s in secs if s <= t)
-        points.append({"t": t, "p": round(done / total * 100, 1)})
+        while idx < total and secs[idx] <= t:
+            idx += 1
+        points.append({"t": t, "p": round(idx / total * 100, 1)})
         t += 30
     return points
 

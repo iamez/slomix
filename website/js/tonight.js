@@ -9,6 +9,7 @@ import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 
 const POLL_MS = 8000;
 let _interval = null;
+let _lifecycleBound = false;
 
 function _viewActive() {
     const v = document.getElementById('view-tonight');
@@ -32,9 +33,13 @@ export async function loadTonightView() {
     if (!host) return;
     await _refresh();
     _startPolling();
-    document.addEventListener('visibilitychange', () => {
-        if (_viewActive()) _startPolling(); else _stopPolling();
-    });
+    // Bind the visibility lifecycle once (loadTonightView runs on every entry).
+    if (!_lifecycleBound) {
+        _lifecycleBound = true;
+        document.addEventListener('visibilitychange', () => {
+            if (_viewActive()) _startPolling(); else _stopPolling();
+        });
+    }
 }
 
 function _mmss(sec) {
