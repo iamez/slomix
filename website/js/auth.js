@@ -212,9 +212,17 @@ export function setLoadPlayerProfile(fn) {
 /**
  * Check if user is logged in and update UI
  */
+// Cached current user (set by checkLoginStatus) — used by the mobile bottom nav
+// "Me" tab to deep-link to the logged-in player's profile (S5).
+let _currentUser = null;
+export function getCurrentUser() {
+    return _currentUser;
+}
+
 export async function checkLoginStatus() {
     try {
         const user = await fetchJSON(`${AUTH_BASE}/me`);
+        _currentUser = user;
 
         document.getElementById('auth-guest')?.classList.add('hidden');
         const userEl = document.getElementById('auth-user');
@@ -243,6 +251,7 @@ export async function checkLoginStatus() {
         await loadPromotionPreferences();
         return user;
     } catch (_e) {
+        _currentUser = null;
         document.getElementById('auth-guest')?.classList.remove('hidden');
         const userEl = document.getElementById('auth-user');
         if (userEl) {

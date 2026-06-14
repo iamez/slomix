@@ -73,10 +73,12 @@ export async function loadLeaderboard() {
 
             const tdRank = document.createElement('td');
             tdRank.className = 'px-6 py-4 font-mono text-slate-500';
+            tdRank.dataset.label = 'Rank';
             tdRank.textContent = `#${row.rank}`;
 
             const tdPlayer = document.createElement('td');
             tdPlayer.className = 'px-6 py-4';
+            tdPlayer.dataset.label = 'Player';
             const playerWrap = document.createElement('div');
             playerWrap.className = 'flex items-center gap-3';
             const avatar = document.createElement('div');
@@ -96,18 +98,22 @@ export async function loadLeaderboard() {
 
             const tdValue = document.createElement('td');
             tdValue.className = `px-6 py-4 text-right font-mono ${valueClass}`;
+            tdValue.dataset.label = String(currentLbStat).toUpperCase();
             tdValue.textContent = String(valueText);
 
             const tdRounds = document.createElement('td');
             tdRounds.className = 'px-6 py-4 text-right text-slate-400';
+            tdRounds.dataset.label = 'Rounds';
             tdRounds.textContent = String(row.rounds ?? 0);
 
             const tdKills = document.createElement('td');
             tdKills.className = 'px-6 py-4 text-right text-slate-400';
+            tdKills.dataset.label = 'Kills';
             tdKills.textContent = String(row.kills ?? 0);
 
             const tdKd = document.createElement('td');
             tdKd.className = 'px-6 py-4 text-right font-mono text-slate-300';
+            tdKd.dataset.label = 'K/D';
             tdKd.textContent = String(row.kd ?? 0);
 
             tr.appendChild(tdRank);
