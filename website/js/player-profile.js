@@ -536,6 +536,9 @@ function _renderIdentityStrip(data) {
     const focus = focusMetric
         ? `<div class="text-xs text-slate-400 mt-2">🎯 Focus: your <span class="text-slate-200">${escapeHtml(_FOCUS_LABEL[focusMetric] || focusMetric)}</span> sits in the <span class="text-brand-cyan font-bold">${_ordinal(Math.round(lo * 100))}</span> percentile — your area to climb.</div>`
         : '';
+    if (data.guid) {
+        chips.push(`<button data-click-action="openWrapped('${escapeHtml(String(data.guid))}')" class="px-2.5 py-1 rounded-lg bg-brand-emerald/15 text-brand-emerald text-xs font-bold hover:bg-brand-emerald/25 transition">🎁 Season Wrapped</button>`);
+    }
     host.textContent = '';
     if (!chips.length && !focus) return;
     safeInsertHTML(host, 'beforeend', `<div class="flex flex-wrap gap-2">${chips.join('')}</div>${focus}`);

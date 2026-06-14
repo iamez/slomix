@@ -1276,9 +1276,9 @@
                         <button id="link-rivalries" role="menuitem" tabindex="-1" data-click-action="navigateTo('rivalries')"
                             class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-2">
                             <span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span>Rivalries</button>
-                        <button id="link-records" role="menuitem" tabindex="-1" data-click-action="navigateTo('records')"
+                        <button id="link-record-book" role="menuitem" tabindex="-1" data-click-action="navigateTo('record-book')"
                             class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-2">
-                            <span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>Records</button>
+                            <span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>Record Book</button>
                         <button id="link-skill-rating" role="menuitem" tabindex="-1" data-click-action="navigateTo('skill-rating')"
                             class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-2">
                             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>ET Rating</button>
@@ -1289,8 +1289,6 @@
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Proximity</button>
                 <button id="link-greatshot" data-click-action="navigateTo('greatshot')"
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Greatshot</button>
-                <button id="link-hall-of-fame" data-click-action="navigateTo('hall-of-fame')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Hall of Fame</button>
                 <button id="link-uploads" data-click-action="navigateTo('uploads')"
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Uploads</button>
                 <button id="link-availability" data-click-action="navigateTo('availability')"
@@ -4220,25 +4218,43 @@
         </div>
 
         <!-- RECORDS VIEW -->
-        <div id="view-records" class="view-section">
+        <!-- RECORD BOOK (S6 SPOMIN) — consolidates Records + Hall of Fame + Season -->
+        <div id="view-record-book" class="view-section">
             <div class="max-w-7xl mx-auto px-6 py-12">
-                <div class="text-center mb-12">
-                    <h1 class="text-4xl font-black text-white mb-4">Server Records</h1>
-                    <p class="text-slate-400">All-time highest stats recorded on the server</p>
+                <div class="text-center mb-8">
+                    <h1 class="text-4xl font-black text-white mb-4">📖 Record Book</h1>
+                    <p class="text-slate-400">All-time records, the Hall of Fame, and season champions — in one place.</p>
                 </div>
 
-                <!-- Filter -->
-                <div class="flex justify-end mb-6">
-                    <div class="relative">
-                        <select id="records-map-filter" class="bg-slate-900 border border-white/10 text-white text-sm rounded-lg focus:ring-brand-blue focus:border-brand-blue block w-full p-2.5">
-                            <option value="">All Maps</option>
-                        </select>
+                <!-- Tabs -->
+                <div id="rb-tabbar" class="flex flex-wrap justify-center gap-2 mb-8">
+                    <button data-rb-tabbtn="records" class="px-4 py-2 rounded-lg text-sm font-bold bg-brand-cyan/20 text-brand-cyan transition">All-Time Records</button>
+                    <button data-rb-tabbtn="hof" class="px-4 py-2 rounded-lg text-sm font-bold bg-white/5 text-slate-400 hover:bg-white/10 transition">Hall of Fame</button>
+                    <button data-rb-tabbtn="season" class="px-4 py-2 rounded-lg text-sm font-bold bg-white/5 text-slate-400 hover:bg-white/10 transition">Season</button>
+                </div>
+
+                <!-- Tab: All-Time Records -->
+                <div data-rb-tab="records">
+                    <div class="flex justify-end mb-6">
+                        <div class="relative">
+                            <select id="records-map-filter" class="bg-slate-900 border border-white/10 text-white text-sm rounded-lg focus:ring-brand-blue focus:border-brand-blue block w-full p-2.5">
+                                <option value="">All Maps</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="records-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <!-- Populated by JS -->
                     </div>
                 </div>
 
-                <!-- Grid -->
-                <div id="records-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <!-- Populated by JS -->
+                <!-- Tab: Hall of Fame (hosts the existing loader's container) -->
+                <div data-rb-tab="hof" class="hidden">
+                    <div id="hall-of-fame-container"><!-- Populated by JS --></div>
+                </div>
+
+                <!-- Tab: Season -->
+                <div data-rb-tab="season" class="hidden">
+                    <div id="rb-season-content"><!-- Populated by JS --></div>
                 </div>
             </div>
         </div>
@@ -4653,11 +4669,7 @@
         </div>
 
         <!-- HALL OF FAME VIEW -->
-        <div id="view-hall-of-fame" class="view-section hidden">
-            <div class="max-w-7xl mx-auto px-6 py-12" id="hall-of-fame-container">
-                <!-- Populated by JS -->
-            </div>
-        </div>
+        <!-- (Hall of Fame consolidated into #view-record-book — S6 SPOMIN) -->
 
         <!-- RETRO VIZ VIEW -->
         <div id="view-retro-viz" class="view-section hidden">
