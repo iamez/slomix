@@ -101,7 +101,7 @@ class OnThisDayService:
             return None
 
         embed = discord.Embed(
-            title=f"📅 On this day — {today.strftime('%B %-d')}",
+            title=f"📅 On this day — {today.strftime('%B')} {today.day}",
             description="A throwback to what happened on this date in years past.",
             color=0x8B5CF6,
         )

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -1133,7 +1134,12 @@ async def get_player_wrapped(identifier: str, season: str = "current",
         raise HTTPException(status_code=404, detail="Player not found")
     from shared.season_manager import SeasonManager
     sm = SeasonManager()
-    sid = sm.get_current_season() if season in ("current", "", None) else season
+    if season in ("current", "", None):
+        sid = sm.get_current_season()
+    elif re.fullmatch(r"\d{4}-Q[1-4]", season):
+        sid = season
+    else:
+        raise HTTPException(status_code=400, detail="season must be 'current' or YYYY-QN")
     start, end = sm.get_season_dates(sid)
     # Pass date objects (asyncpg binds them as DATE for the BETWEEN comparison).
     s = start.date() if hasattr(start, "date") else start

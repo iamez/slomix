@@ -121,6 +121,9 @@ const ROUTE_DEFINITIONS = Object.freeze({
         surfaceType: 'read-heavy',
         migrationWave: 'A',
         buildHash: () => '#/record-book',
+        // The router dispatches by viewId (record-book), so tab selection must
+        // ride on params via parseHash (the alias load() is never invoked).
+        parseHash: (hash) => (hash === '#/records' ? { tab: 'records' } : null),
         load: ({ legacy }) => legacy.loadRecordBookView({ tab: 'records' }),
     },
     'record-book': {
@@ -261,6 +264,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
         surfaceType: 'read-heavy',
         migrationWave: 'B',
         buildHash: () => '#/record-book',
+        parseHash: (hash) => (hash === '#/hall-of-fame' ? { tab: 'hof' } : null),
         load: ({ legacy }) => legacy.loadRecordBookView({ tab: 'hof' }),
     },
     'retro-viz': {

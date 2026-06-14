@@ -3,7 +3,7 @@
  * 1080×1920 canvas with copy-image / download. First reusable share-card infra.
  * @module wrapped
  */
-import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
+import { API_BASE, fetchJSON, safeInsertHTML } from './utils.js';
 
 const W = 1080;
 const H = 1920;
@@ -66,6 +66,10 @@ export async function openWrapped(guid) {
         const status = overlay.querySelector('#wrapped-status');
         try {
             const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+            if (!blob) {
+                status.textContent = 'Could not export image — use Download instead.';
+                return;
+            }
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
             status.textContent = 'Copied! Paste it into Discord.';
         } catch (_e) {

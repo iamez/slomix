@@ -6,7 +6,7 @@ availability daily-poll scheduling pattern (5-min loop + time window + dedup).
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from discord.ext import commands, tasks
@@ -25,7 +25,11 @@ class OnThisDayCog(commands.Cog):
         try:
             self.timezone = ZoneInfo(self.config.on_this_day_timezone)
         except Exception:
-            self.timezone = ZoneInfo("Europe/Ljubljana")
+            # Fall back to UTC rather than another ZoneInfo (which can also raise
+            # if tzdata is missing) so the cog always starts.
+            logger.warning("on-this-day: bad timezone %s — using UTC",
+                           getattr(self.config, "on_this_day_timezone", "?"))
+            self.timezone = timezone.utc
         self.last_check_minute = None
         self.last_posted_date = None
         if self.config.on_this_day_enabled:
