@@ -133,43 +133,62 @@ async def place_bet(
     if amount <= 0:
         raise HTTPException(status_code=400, detail="amount must be positive")
 
-    market = await _market_row(db, market_id)
-    if not market:
-        raise HTTPException(status_code=404, detail="Market not found")
-    if market[5] != "open":
-        raise HTTPException(status_code=400, detail="Market is not open for betting")
+    # Everything below is one transaction: lock the market + wallet rows so the
+    # debit / bet upsert / pool update are atomic and concurrent bets (same user
+    # or settle-in-flight) can't race into a lost update or overspend.
+    async with db.transaction():
+        market = await db.fetch_one(
+            "SELECT id, status FROM parimutuel_markets WHERE id = ? FOR UPDATE",
+            (market_id,),
+        )
+        if not market:
+            raise HTTPException(status_code=404, detail="Market not found")
+        if market[1] != "open":
+            raise HTTPException(status_code=400, detail="Market is not open for betting")
 
-    wallet = await _wallet(db, uid)
-    existing = await db.fetch_one(
-        "SELECT amount FROM parimutuel_bets WHERE market_id = ? AND user_id = ?",
-        (market_id, uid),
-    )
-    # Changing a bet refunds the old stake first.
-    refund = int(existing[0]) if existing else 0
-    effective = wallet["balance"] + refund
-    if amount > effective:
-        raise HTTPException(status_code=400, detail=f"Insufficient points (have {effective})")
+        # Ensure the wallet row exists, then lock it (FOR UPDATE can't lock a
+        # missing row, so bootstrap first).
+        await db.execute(
+            "INSERT INTO user_points (user_id, balance) VALUES (?, ?) "
+            "ON CONFLICT (user_id) DO NOTHING",
+            (uid, STARTER_BALANCE),
+        )
+        wallet_row = await db.fetch_one(
+            "SELECT balance FROM user_points WHERE user_id = ? FOR UPDATE",
+            (uid,),
+        )
+        balance = int(wallet_row[0])
 
-    new_balance = effective - amount
-    await db.execute(
-        "UPDATE user_points SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
-        (new_balance, uid),
-    )
-    await db.execute(
-        """
-        INSERT INTO parimutuel_bets (market_id, user_id, choice, amount)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT (market_id, user_id) DO UPDATE
-        SET choice = EXCLUDED.choice, amount = EXCLUDED.amount,
-            updated_at = CURRENT_TIMESTAMP
-        """,
-        (market_id, uid, choice, amount),
-    )
-    split = await _pool_split(db, market_id)
-    await db.execute(
-        "UPDATE parimutuel_markets SET total_pool = ? WHERE id = ?",
-        (split["total_pool"], market_id),
-    )
+        existing = await db.fetch_one(
+            "SELECT amount FROM parimutuel_bets WHERE market_id = ? AND user_id = ?",
+            (market_id, uid),
+        )
+        # Changing a bet refunds the old stake first.
+        refund = int(existing[0]) if existing else 0
+        effective = balance + refund
+        if amount > effective:
+            raise HTTPException(status_code=400, detail=f"Insufficient points (have {effective})")
+
+        new_balance = effective - amount
+        await db.execute(
+            "UPDATE user_points SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
+            (new_balance, uid),
+        )
+        await db.execute(
+            """
+            INSERT INTO parimutuel_bets (market_id, user_id, choice, amount)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT (market_id, user_id) DO UPDATE
+            SET choice = EXCLUDED.choice, amount = EXCLUDED.amount,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (market_id, uid, choice, amount),
+        )
+        split = await _pool_split(db, market_id)
+        await db.execute(
+            "UPDATE parimutuel_markets SET total_pool = ? WHERE id = ?",
+            (split["total_pool"], market_id),
+        )
     return {"status": "ok", "balance": new_balance, "choice": choice,
             "amount": amount, "pool": split}
 
@@ -231,70 +250,95 @@ async def settle_market(
     user: dict = Depends(require_admin),
     db: DatabaseAdapter = Depends(get_db),
 ):
-    """Settle a market and pay out winners (admin). Idempotent guard on status."""
+    """Settle a market and pay out winners (admin). Atomic + race-safe."""
     require_ajax_csrf_header(request)
-    market = await _market_row(db, market_id)
-    if not market:
-        raise HTTPException(status_code=404, detail="Market not found")
-    if market[5] == "settled":
-        raise HTTPException(status_code=400, detail="Market already settled")
+    payload = payload or {}
 
-    outcome = ((payload or {}).get("outcome") or "").strip()
-    if not outcome and market[1]:
-        # Auto from session_results.winning_team (1 -> team_a, 2 -> team_b).
-        wr = await db.fetch_one(
-            "SELECT winning_team FROM session_results WHERE gaming_session_id = ? "
-            "ORDER BY session_end DESC NULLS LAST LIMIT 1",
-            (int(market[1]),),
+    # One transaction: lock the market row up front so two concurrent settles
+    # can't both pass the status check (double-pay) and a mid-loop failure rolls
+    # back every payout instead of leaving the market half-settled.
+    async with db.transaction():
+        market = await db.fetch_one(
+            "SELECT id, gaming_session_id, status FROM parimutuel_markets "
+            "WHERE id = ? FOR UPDATE",
+            (market_id,),
         )
-        if wr and wr[0] in (1, 2):
-            outcome = "team_a" if int(wr[0]) == 1 else "team_b"
-    if outcome not in (*_CHOICES, "void"):
-        raise HTTPException(status_code=400, detail="outcome must be team_a|team_b|void (or resolvable)")
+        if not market:
+            raise HTTPException(status_code=404, detail="Market not found")
+        if market[2] == "settled":
+            raise HTTPException(status_code=400, detail="Market already settled")
+        gsid = market[1]
 
-    bets = await db.fetch_all(
-        "SELECT id, user_id, choice, amount FROM parimutuel_bets WHERE market_id = ?",
-        (market_id,),
-    )
-    bets = bets or []
-    total_pool = sum(int(b[3]) for b in bets)
-    winning_pool = sum(int(b[3]) for b in bets if b[2] == outcome)
-
-    # No winners (or void) -> refund every stake.
-    refund_all = outcome == "void" or winning_pool == 0
-
-    for bid, uid, choice, amount in bets:
-        amount = int(amount)
-        if refund_all:
-            payout, status, net = amount, "refunded", 0
-        elif choice == outcome:
-            payout = (amount * total_pool) // winning_pool  # parimutuel share
-            status, net = "won", payout - amount
-        else:
-            payout, status, net = 0, "lost", 0
-        await db.execute(
-            "UPDATE parimutuel_bets SET payout = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (payout, status, bid),
-        )
-        if payout > 0:
-            # Credit the wallet (bettor always has a row from place_bet; upsert is
-            # defensive). DO UPDATE adds onto the existing balance.
-            await db.execute(
-                """
-                INSERT INTO user_points (user_id, balance, lifetime_earned)
-                VALUES (?, ?, ?)
-                ON CONFLICT (user_id) DO UPDATE
-                SET balance = user_points.balance + EXCLUDED.balance,
-                    lifetime_earned = user_points.lifetime_earned + EXCLUDED.lifetime_earned,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (int(uid), payout, max(0, net)),
+        outcome = (payload.get("outcome") or "").strip()
+        if not outcome and gsid:
+            # Auto from session_results.winning_team (1 -> team_a, 2 -> team_b).
+            wr = await db.fetch_one(
+                "SELECT winning_team FROM session_results WHERE gaming_session_id = ? "
+                "ORDER BY session_end DESC NULLS LAST LIMIT 1",
+                (int(gsid),),
             )
+            if wr and wr[0] in (1, 2):
+                outcome = "team_a" if int(wr[0]) == 1 else "team_b"
+        if outcome not in (*_CHOICES, "void"):
+            raise HTTPException(status_code=400, detail="outcome must be team_a|team_b|void (or resolvable)")
 
-    await db.execute(
-        "UPDATE parimutuel_markets SET status = 'settled', outcome = ?, "
-        "settled_at = CURRENT_TIMESTAMP WHERE id = ?",
-        (outcome, market_id),
-    )
+        bets = await db.fetch_all(
+            "SELECT id, user_id, choice, amount FROM parimutuel_bets WHERE market_id = ?",
+            (market_id,),
+        )
+        bets = bets or []
+        total_pool = sum(int(b[3]) for b in bets)
+        winning_pool = sum(int(b[3]) for b in bets if b[2] == outcome)
+
+        # No winners (or void) -> refund every stake.
+        refund_all = outcome == "void" or winning_pool == 0
+
+        # Resolve each bet's payout. For the winner split, floor division leaves a
+        # remainder (< number of winners); hand it out +1 at a time to the largest
+        # stakes (tie-break by bet id) so sum(payouts) == total_pool exactly.
+        resolved = []  # (bid, uid, payout, status, net)
+        if refund_all:
+            for bid, uid, _choice, amount in bets:
+                resolved.append((bid, uid, int(amount), "refunded", 0))
+        else:
+            winners = [(b[0], b[1], int(b[3])) for b in bets if b[2] == outcome]
+            losers = [(b[0], b[1], int(b[3])) for b in bets if b[2] != outcome]
+            floor = {bid: (amount * total_pool) // winning_pool
+                     for bid, _uid, amount in winners}
+            remainder = total_pool - sum(floor.values())
+            order = sorted(winners, key=lambda w: (-w[2], w[0]))
+            for i in range(remainder):
+                floor[order[i % len(order)][0]] += 1
+            for bid, uid, amount in winners:
+                payout = floor[bid]
+                resolved.append((bid, uid, payout, "won", payout - amount))
+            for bid, uid, amount in losers:
+                resolved.append((bid, uid, 0, "lost", 0))
+
+        for bid, uid, payout, status, net in resolved:
+            await db.execute(
+                "UPDATE parimutuel_bets SET payout = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (payout, status, bid),
+            )
+            if payout > 0:
+                # Credit the wallet (bettor always has a row from place_bet; upsert
+                # is defensive). DO UPDATE adds onto the existing balance.
+                await db.execute(
+                    """
+                    INSERT INTO user_points (user_id, balance, lifetime_earned)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT (user_id) DO UPDATE
+                    SET balance = user_points.balance + EXCLUDED.balance,
+                        lifetime_earned = user_points.lifetime_earned + EXCLUDED.lifetime_earned,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (int(uid), payout, max(0, net)),
+                )
+
+        await db.execute(
+            "UPDATE parimutuel_markets SET status = 'settled', outcome = ?, "
+            "settled_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (outcome, market_id),
+        )
     return {"status": "ok", "outcome": outcome, "total_pool": total_pool,
             "winning_pool": winning_pool, "refunded": refund_all, "bets": len(bets)}

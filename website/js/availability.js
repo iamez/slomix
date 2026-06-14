@@ -2262,7 +2262,11 @@ function renderBetsSection() {
         }
     }
 
-    const canBet = Boolean(currentUser) && !settled;
+    // Bet buttons only when the market actually accepts bets — the backend
+    // rejects anything that isn't 'open' (e.g. a 'closed' market), so gate on
+    // status === 'open' rather than merely "not settled". Admin settle controls
+    // below still show for any non-settled market.
+    const canBet = Boolean(currentUser) && market.status === 'open';
     const betControls = canBet ? `
         <div class="flex items-center gap-2 mt-3 flex-wrap">
             <input id="availability-bet-amount" type="number" min="1" value="${myBet?.amount || 10}" class="w-20 px-2 py-1.5 rounded-lg bg-black/30 border border-white/10 text-sm text-white font-mono" />

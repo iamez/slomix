@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -18,6 +19,19 @@ from website.backend.routers.bets_router import (
 )
 
 
+def _db():
+    """AsyncMock db whose .transaction() is a no-op async CM yielding the db,
+    so `async with db.transaction():` works (all calls share the same mock)."""
+    db = AsyncMock()
+
+    @asynccontextmanager
+    async def _tx():
+        yield db
+
+    db.transaction = lambda: _tx()
+    return db
+
+
 def _req(uid=None):
     r = MagicMock()
     r.headers = {"x-requested-with": "XMLHttpRequest"}
@@ -25,9 +39,14 @@ def _req(uid=None):
     return r
 
 
-def _market(status="open", mid=1, gsid=None, total=0):
-    # id, gaming_session_id, session_date, a_label, b_label, status, outcome, total_pool
-    return (mid, gsid, None, "Reds", "Blues", status, None, total)
+def _pb_market(status="open", mid=1):
+    # place_bet locks: SELECT id, status ... FOR UPDATE
+    return (mid, status)
+
+
+def _settle_market(status="open", gsid=None, mid=1):
+    # settle_market locks: SELECT id, gaming_session_id, status ... FOR UPDATE
+    return (mid, gsid, status)
 
 
 @pytest.mark.asyncio
@@ -41,7 +60,7 @@ async def test_wallet_bootstraps_starter_balance():
 
 @pytest.mark.asyncio
 async def test_place_bet_rejects_bad_choice_and_amount():
-    db = AsyncMock()
+    db = _db()
     with pytest.raises(HTTPException) as e:
         await place_bet(_req(7), 1, {"choice": "team_c", "amount": 5}, {"id": 7}, db)
     assert e.value.status_code == 400
@@ -53,8 +72,8 @@ async def test_place_bet_rejects_bad_choice_and_amount():
 
 @pytest.mark.asyncio
 async def test_place_bet_requires_open_market():
-    db = AsyncMock()
-    db.fetch_one = AsyncMock(return_value=_market(status="settled"))
+    db = _db()
+    db.fetch_one = AsyncMock(return_value=_pb_market(status="settled"))
     with pytest.raises(HTTPException) as e:
         await place_bet(_req(7), 1, {"choice": "team_a", "amount": 5}, {"id": 7}, db)
     assert e.value.status_code == 400
@@ -65,18 +84,18 @@ async def test_place_bet_requires_csrf():
     req = _req(7)
     req.headers = {}
     with pytest.raises(HTTPException) as e:
-        await place_bet(req, 1, {"choice": "team_a", "amount": 5}, {"id": 7}, AsyncMock())
+        await place_bet(req, 1, {"choice": "team_a", "amount": 5}, {"id": 7}, _db())
     assert e.value.status_code == 403
 
 
 @pytest.mark.asyncio
 async def test_place_bet_insufficient_balance():
-    db = AsyncMock()
-    # market open, wallet=10, no existing bet, tries 50
+    db = _db()
+    # market(open, FOR UPDATE), wallet balance=10 (FOR UPDATE), no existing bet
     db.fetch_one = AsyncMock(side_effect=[
-        _market(),                       # _market_row
-        (10, 0),                         # _wallet
-        None,                            # existing bet
+        _pb_market(),    # market lock
+        (10,),           # wallet balance after bootstrap
+        None,            # existing bet
     ])
     with pytest.raises(HTTPException) as e:
         await place_bet(_req(7), 1, {"choice": "team_a", "amount": 50}, {"id": 7}, db)
@@ -86,11 +105,11 @@ async def test_place_bet_insufficient_balance():
 
 @pytest.mark.asyncio
 async def test_place_bet_change_refunds_old_stake():
-    db = AsyncMock()
+    db = _db()
     # market open, wallet balance=20, existing bet 60 -> effective=80, new bet 80 ok
     db.fetch_one = AsyncMock(side_effect=[
-        _market(),       # _market_row
-        (20, 0),         # _wallet
+        _pb_market(),    # market lock
+        (20,),           # wallet balance
         (60,),           # existing bet amount
     ])
     db.fetch_all = AsyncMock(return_value=[("team_a", 80, 1)])  # _pool_split after upsert
@@ -102,8 +121,8 @@ async def test_place_bet_change_refunds_old_stake():
 @pytest.mark.asyncio
 async def test_settle_proportional_payout():
     """U1 80 on team_a, U2 40 on team_b; team_a wins -> U1 gets full 120 pool."""
-    db = AsyncMock()
-    db.fetch_one = AsyncMock(return_value=_market(status="open"))
+    db = _db()
+    db.fetch_one = AsyncMock(return_value=_settle_market(status="open"))
     db.fetch_all = AsyncMock(return_value=[
         (10, 101, "team_a", 80),
         (11, 102, "team_b", 40),
@@ -119,9 +138,30 @@ async def test_settle_proportional_payout():
 
 
 @pytest.mark.asyncio
+async def test_settle_remainder_is_fully_distributed():
+    """3 equal winners (10 each) + 1 loser (5): pool 35, winning 30.
+    Floor = 35*10//30 = 11 each -> 33; remainder 2 -> +1 to two largest.
+    sum(payouts) must equal total_pool (35) exactly."""
+    db = _db()
+    db.fetch_one = AsyncMock(return_value=_settle_market(status="open"))
+    db.fetch_all = AsyncMock(return_value=[
+        (10, 101, "team_a", 10),
+        (11, 102, "team_a", 10),
+        (12, 103, "team_a", 10),
+        (13, 104, "team_b", 5),
+    ])
+    res = await settle_market(_req(101), 1, {"outcome": "team_a"}, {"id": 101}, db)
+    assert res["total_pool"] == 35
+    payouts = [c.args[1][1] for c in db.execute.await_args_list
+               if "INSERT INTO user_points" in c.args[0]]
+    assert sum(payouts) == 35  # no points vanish to floor division
+    assert sorted(payouts) == [11, 12, 12]  # remainder went to the two lowest bids
+
+
+@pytest.mark.asyncio
 async def test_settle_no_winner_refunds_all():
-    db = AsyncMock()
-    db.fetch_one = AsyncMock(return_value=_market(status="open"))
+    db = _db()
+    db.fetch_one = AsyncMock(return_value=_settle_market(status="open"))
     db.fetch_all = AsyncMock(return_value=[
         (10, 101, "team_a", 30),
         (11, 102, "team_a", 50),
@@ -136,9 +176,11 @@ async def test_settle_no_winner_refunds_all():
 
 
 @pytest.mark.asyncio
-async def test_settle_blocks_double_settle():
-    db = AsyncMock()
-    db.fetch_one = AsyncMock(return_value=_market(status="settled"))
+async def test_settle_blocks_double_settle_after_lock():
+    """The status re-check happens on the FOR UPDATE-locked row, so a second
+    concurrent settle sees 'settled' and is rejected (no double-pay)."""
+    db = _db()
+    db.fetch_one = AsyncMock(return_value=_settle_market(status="settled"))
     with pytest.raises(HTTPException) as e:
         await settle_market(_req(101), 1, {"outcome": "team_a"}, {"id": 101}, db)
     assert e.value.status_code == 400
@@ -146,10 +188,10 @@ async def test_settle_blocks_double_settle():
 
 @pytest.mark.asyncio
 async def test_settle_auto_outcome_from_session_results():
-    db = AsyncMock()
+    db = _db()
     db.fetch_one = AsyncMock(side_effect=[
-        _market(status="open", gsid=42),   # _market_row
-        (2,),                              # winning_team=2 -> team_b
+        _settle_market(status="open", gsid=42),   # market lock
+        (2,),                                      # winning_team=2 -> team_b
     ])
     db.fetch_all = AsyncMock(return_value=[])  # no bets
     res = await settle_market(_req(101), 1, {}, {"id": 101}, db)
@@ -158,8 +200,8 @@ async def test_settle_auto_outcome_from_session_results():
 
 @pytest.mark.asyncio
 async def test_settle_rejects_unresolvable_outcome():
-    db = AsyncMock()
-    db.fetch_one = AsyncMock(return_value=_market(status="open", gsid=None))
+    db = _db()
+    db.fetch_one = AsyncMock(return_value=_settle_market(status="open", gsid=None))
     with pytest.raises(HTTPException) as e:
         await settle_market(_req(101), 1, {}, {"id": 101}, db)
     assert e.value.status_code == 400

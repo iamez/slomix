@@ -123,3 +123,19 @@ async def test_compute_and_store_deletes_then_inserts(monkeypatch):
     statements = [c.args[0] for c in db.execute.await_args_list]
     assert any("DELETE FROM season_awards" in s for s in statements)
     assert any("INSERT INTO season_awards" in s for s in statements)
+
+
+@pytest.mark.asyncio
+async def test_compute_and_store_clears_stale_when_no_data(monkeypatch):
+    """A recompute that now finds nothing must still DELETE the prior computed
+    winners (un-engrave stale awards) and insert nothing."""
+    db = AsyncMock()
+    db.fetch_all = AsyncMock(return_value=[(7,)])
+    for fn in ("_compute_mvp", "_compute_iron_man", "_compute_most_improved", "_compute_oracle"):
+        monkeypatch.setattr(S, fn, AsyncMock(return_value=None))
+
+    res = await compute_and_store(db, "2026-Q2", 42)
+    assert res["awards"] == []
+    statements = [c.args[0] for c in db.execute.await_args_list]
+    assert any("DELETE FROM season_awards" in s for s in statements)  # cleared
+    assert not any("INSERT INTO season_awards" in s for s in statements)  # nothing new

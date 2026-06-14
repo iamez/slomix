@@ -193,15 +193,15 @@ async def compute_and_store(db, season_id: str | None, created_by: int | None) -
         if award:
             computed.append(award)
 
-    # Clear prior COMPUTED awards for this season (so a new winner replaces the
-    # old one); manual awards use other keys and are preserved. AWARD_KEYS is a
-    # fixed 4-tuple, so the placeholders are hardcoded (no string-built SQL).
-    if computed:
-        await db.execute(
-            "DELETE FROM season_awards WHERE season_id = ? "
-            "AND award_key IN (?, ?, ?, ?)",
-            (sid, *AWARD_KEYS),
-        )
+    # Clear prior COMPUTED awards for this season UNCONDITIONALLY (so a recompute
+    # that now finds no qualifying data also un-engraves stale winners); manual
+    # awards use other keys and are preserved. AWARD_KEYS is a fixed 4-tuple, so
+    # the placeholders are hardcoded (no string-built SQL).
+    await db.execute(
+        "DELETE FROM season_awards WHERE season_id = ? "
+        "AND award_key IN (?, ?, ?, ?)",
+        (sid, *AWARD_KEYS),
+    )
     for a in computed:
         await db.execute(
             """
