@@ -1609,8 +1609,19 @@ async function postPlanningJson(path, body) {
     return payload;
 }
 
-async function postBetsJson(path, body) {
-    const response = await fetch(`${API_BASE}/bets${path}`, {
+// Build the bets endpoint URL from a fixed action + a numeric market id, so no
+// free-form string is ever interpolated into fetch() — the action only selects a
+// literal branch and the only interpolated value is Number-coerced (SSRF/taint guard).
+function _betsUrl(action, marketId) {
+    const id = Number(marketId);
+    if (action === 'open') return `${API_BASE}/bets/market`;
+    if (action === 'bet' && Number.isInteger(id)) return `${API_BASE}/bets/market/${id}/bet`;
+    if (action === 'settle' && Number.isInteger(id)) return `${API_BASE}/bets/market/${id}/settle`;
+    throw new Error(`Unknown bets action: ${action}`);
+}
+
+async function postBetsJson(action, marketId, body) {
+    const response = await fetch(_betsUrl(action, marketId), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -2329,7 +2340,7 @@ async function placeAvailabilityBet(choice) {
     }
     betsState.inFlight = true;
     try {
-        await postBetsJson(`/market/${betsState.market.id}/bet`, { choice, amount });
+        await postBetsJson('bet', betsState.market.id, { choice, amount });
         betsState.status = { message: 'Bet placed.', error: false };
         await loadBetsState();
     } catch (err) {
@@ -2344,7 +2355,7 @@ async function openAvailabilityBetMarket() {
     if (betsState.inFlight) return;
     betsState.inFlight = true;
     try {
-        await postBetsJson('/market', {});
+        await postBetsJson('open', null, {});
         betsState.status = { message: 'Market opened.', error: false };
         await loadBetsState();
     } catch (err) {
@@ -2359,7 +2370,7 @@ async function settleAvailabilityBet(outcome) {
     if (betsState.inFlight || !betsState.market) return;
     betsState.inFlight = true;
     try {
-        await postBetsJson(`/market/${betsState.market.id}/settle`, { outcome });
+        await postBetsJson('settle', betsState.market.id, { outcome });
         betsState.status = { message: 'Market settled — payouts done.', error: false };
         await loadBetsState();
     } catch (err) {
