@@ -146,3 +146,51 @@ async def get_maps(db: DatabaseAdapter = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error fetching map stats: {e}")
         return []
+
+
+@router.get("/records/maps/segments")
+async def get_map_objective_records(db: DatabaseAdapter = Depends(get_db)):
+    """Fastest objective-completion time per map + when/which side held it.
+
+    Stopwatch record board (VISION_2026 S4-D): the single fastest valid full-hold
+    round per map. Reuses the M:SS -> seconds parse from /stats/maps; degenerate
+    0:00 rounds are excluded. is_valid filter keeps bot/filler rounds out.
+    """
+    query = """
+        SELECT DISTINCT ON (r.map_name)
+            r.map_name,
+            SPLIT_PART(r.actual_time, ':', 1)::int * 60
+                + SPLIT_PART(r.actual_time, ':', 2)::int AS seconds,
+            r.actual_time,
+            SUBSTR(CAST(r.round_date AS TEXT), 1, 10) AS played,
+            r.winner_team,
+            r.gaming_session_id
+        FROM rounds r
+        WHERE r.map_name IS NOT NULL
+          AND r.actual_time ~ '^[0-9]+:[0-9]+$'
+          AND r.round_number IN (1, 2)
+          AND r.is_valid IS DISTINCT FROM FALSE
+          AND (SPLIT_PART(r.actual_time, ':', 1)::int * 60
+               + SPLIT_PART(r.actual_time, ':', 2)::int) > 0
+        ORDER BY r.map_name, seconds ASC
+    """
+    try:
+        rows = await db.fetch_all(query)
+        records = []
+        for row in rows:
+            winner = row[4]
+            side = "Allies" if winner == 1 else "Axis" if winner == 2 else "Draw"
+            records.append({
+                "map_name": row[0],
+                "fastest_seconds": int(row[1]),
+                "fastest_time": row[2],
+                "played": row[3],
+                "winner_team": winner,
+                "winner_side": side,
+                "gaming_session_id": row[5],
+            })
+        records.sort(key=lambda r: r["map_name"])
+        return {"status": "ok", "records": records}
+    except Exception as e:
+        logger.error(f"Error fetching map objective records: {e}")
+        return {"status": "error", "records": []}

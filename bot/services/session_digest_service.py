@@ -153,6 +153,11 @@ class SessionDigestService:
         if kis_line:
             embed.add_field(name="💥 Highest impact (KIS)", value=kis_line, inline=False)
 
+        # New personal bests (S4-D): Leetify-style PB cards via the website API.
+        pb_line = await self._fetch_personal_bests(latest_date)
+        if pb_line:
+            embed.add_field(name="🥇 New personal bests", value=pb_line, inline=False)
+
         # MVP vote (S3): always open after a session — peer recognition.
         gsid = await self._gaming_session_id(latest_date)
         if gsid is not None:
@@ -161,6 +166,11 @@ class SessionDigestService:
                 value=f"Who carried tonight? [Cast your vote]({web}/#/session-detail/{gsid})",
                 inline=False,
             )
+
+        # Tonight's bet (S4-C): if an open parimutuel market exists, nudge to it.
+        bet_line = await self._fetch_open_market(web)
+        if bet_line:
+            embed.add_field(name="🎲 Bet on tonight", value=bet_line, inline=False)
 
         # Challenge of the week (S3): admin-defined, read straight from DB.
         challenge = await self._fetch_weekly_challenge()
@@ -209,6 +219,54 @@ class SessionDigestService:
         except Exception:
             logger.debug("digest: weekly challenge lookup failed", exc_info=True)
             return None
+
+    async def _fetch_open_market(self, web: str) -> str | None:
+        """Open parimutuel market straight from the DB (best-effort)."""
+        try:
+            row = await self.db_adapter.fetch_one(
+                "SELECT id, team_a_label, team_b_label FROM parimutuel_markets "
+                "WHERE status = 'open' ORDER BY id DESC LIMIT 1",
+            )
+            if not row:
+                return None
+            a, b = row[1], row[2]
+            return f"**{a}** vs **{b}** — [place your bet]({web}/#/availability)"
+        except Exception:
+            logger.debug("digest: open-market lookup failed", exc_info=True)
+            return None
+
+    async def _fetch_personal_bests(self, session_date) -> str | None:
+        """New personal bests this session via the website API (optional, 10s)."""
+        url = f"{self.config.website_api_base}/proximity/competitive/personal-bests"
+        try:
+            timeout = aiohttp.ClientTimeout(total=_HTTP_TIMEOUT_S)
+            async with aiohttp.ClientSession(timeout=timeout) as http, http.get(
+                url, params={"session_date": str(session_date)}
+            ) as resp:
+                if resp.status != 200:
+                    logger.info("digest: personal-bests HTTP %s — skipping PB block", resp.status)
+                    return None
+                data = await resp.json()
+        except Exception as e:
+            logger.info("digest: personal-bests unreachable (%s) — skipping PB block", e)
+            return None
+        cards = (data or {}).get("cards") or []
+        cards = [
+            c for c in cards
+            if "[BOT]" not in (c.get("name") or "")
+            and not (c.get("guid") or "").startswith("OMNIBOT")
+        ]
+        if not cards:
+            return None
+        # One line per player (best-labelled PB each), cap to keep the embed tidy.
+        seen: dict[str, str] = {}
+        for c in cards:
+            name = c.get("name") or "?"
+            if name not in seen:
+                seen[name] = f"**{name}** — {c.get('label', 'PB')} ({c.get('value')})"
+            if len(seen) >= 5:
+                break
+        return "\n".join(seen.values())
 
     async def _fetch_kis_top(self, session_date) -> str | None:
         """Top kill-impact player via the website API (optional, 10s budget)."""

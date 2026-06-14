@@ -49,14 +49,18 @@ export async function loadHallOfFameView() {
     const container = document.getElementById('hall-of-fame-container');
     if (!container) return;
 
-    // Render page shell: header + filter bar + grid placeholder
+    // Render page shell: header + season champions + filter bar + grid placeholder
     container.innerHTML = `
         ${PageHeader('Hall of Fame', 'Top players across every stat category')}
+        <div id="hof-season-champions" class="mb-8"></div>
         <div id="hof-filter-bar" class="mb-6"></div>
         <div id="hof-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             ${LoadingSkeleton('card', 12)}
         </div>
     `;
+
+    // Engraved season awards (S4) — independent of the period filter.
+    loadSeasonChampions().catch(e => console.warn('season champions failed', e));
 
     // Render filter bar
     renderFilterBar('hof-filter-bar', {
@@ -69,6 +73,44 @@ export async function loadHallOfFameView() {
     _filterUnsub = onFilterChange(() => fetchAndRender());
 
     await fetchAndRender();
+}
+
+// Season Champions (S4) — permanently engraved season awards.
+const _AWARD_EMOJI = {
+    mvp: '👑', iron_man: '🛡️', most_improved: '📈', oracle: '🔮',
+};
+
+async function loadSeasonChampions() {
+    const host = document.getElementById('hof-season-champions');
+    if (!host) return;
+    let data;
+    try {
+        data = await fetchJSON(`${API_BASE}/seasons/current/awards`);
+    } catch (_) {
+        host.textContent = '';
+        return;
+    }
+    const awards = data?.awards || [];
+    if (!awards.length) { host.textContent = ''; return; }
+
+    const cards = awards.map(a => {
+        const emoji = _AWARD_EMOJI[a.award_key] || '🏆';
+        const profile = a.player_guid ? `#/profile/${encodeURIComponent(String(a.player_guid).slice(0, 8))}` : null;
+        const nameHtml = profile
+            ? `<a href="${profile}" class="text-white font-black hover:text-brand-cyan transition">${escapeHtml(a.player_name || '?')}</a>`
+            : `<span class="text-white font-black">${escapeHtml(a.player_name || '?')}</span>`;
+        return `
+            <div class="glass-panel p-4 rounded-xl border-l-4 border-brand-amber/60">
+                <div class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">${emoji} ${escapeHtml(a.label)}</div>
+                <div class="text-base">${nameHtml}</div>
+                ${a.value_text ? `<div class="text-xs text-slate-400 mt-0.5">${escapeHtml(a.value_text)}</div>` : ''}
+            </div>`;
+    }).join('');
+
+    host.textContent = '';
+    safeInsertHTML(host, 'beforeend', `
+        <div class="text-xs uppercase tracking-widest text-brand-amber font-bold mb-3">🏟️ ${escapeHtml(data.season_name || data.season_id)} — Season Champions</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">${cards}</div>`);
 }
 
 /**
