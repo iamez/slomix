@@ -64,6 +64,7 @@ from website.backend.dependencies import close_db_pool, get_db_pool, init_db_poo
 from website.backend.routers import (
     auth,
     availability,
+    bets_router,
     challenges_router,
     diagnostics_router,
     greatshot,
@@ -76,6 +77,7 @@ from website.backend.routers import (
     records_router,
     replay_router,
     rivalries_router,
+    season_awards_router,
     sessions_router,
     skill_router,
     storytelling_router,
@@ -304,6 +306,8 @@ app.include_router(uploads.router, prefix="/api/uploads", tags=["Uploads"])
 app.include_router(availability.router, prefix="/api/availability", tags=["Availability"])
 app.include_router(planning.router, prefix="/api/planning", tags=["Planning"])
 app.include_router(challenges_router.router, prefix="/api", tags=["Challenges"])
+app.include_router(season_awards_router.router, prefix="/api", tags=["Season Awards"])
+app.include_router(bets_router.router, prefix="/api/bets", tags=["Parimutuel"])
 app.include_router(proximity_router.router, prefix="/api", tags=["Proximity"])
 app.include_router(diagnostics_router.router, prefix="/api", tags=["Diagnostics"])
 app.include_router(sessions_router.router, prefix="/api", tags=["Sessions"])

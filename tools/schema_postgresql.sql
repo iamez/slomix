@@ -8689,3 +8689,55 @@ CREATE TABLE IF NOT EXISTS weekly_challenges (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_weekly_challenges_week ON weekly_challenges (week_start_date DESC);
+
+-- ===== VISION_2026 Sprint S4 (migration website/010) =====
+CREATE TABLE IF NOT EXISTS season_awards (
+    id BIGSERIAL PRIMARY KEY,
+    season_id TEXT NOT NULL,
+    award_key TEXT NOT NULL,
+    player_guid TEXT NOT NULL,
+    player_name TEXT,
+    value_text TEXT,
+    value_num REAL,
+    source JSONB DEFAULT '{}'::jsonb,
+    created_by_user_id BIGINT REFERENCES website_users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (season_id, award_key, player_guid)
+);
+CREATE INDEX IF NOT EXISTS idx_season_awards_season ON season_awards (season_id, award_key);
+CREATE TABLE IF NOT EXISTS user_points (
+    user_id BIGINT PRIMARY KEY REFERENCES website_users(id) ON DELETE CASCADE,
+    balance INTEGER NOT NULL DEFAULT 100,
+    lifetime_earned INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS parimutuel_markets (
+    id BIGSERIAL PRIMARY KEY,
+    gaming_session_id INTEGER,
+    session_date DATE,
+    market_type TEXT NOT NULL DEFAULT 'session_winner',
+    team_a_label TEXT NOT NULL DEFAULT 'Team A',
+    team_b_label TEXT NOT NULL DEFAULT 'Team B',
+    status TEXT NOT NULL DEFAULT 'open',
+    outcome TEXT,
+    total_pool INTEGER NOT NULL DEFAULT 0,
+    created_by_user_id BIGINT REFERENCES website_users(id) ON DELETE SET NULL,
+    opens_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    closes_at TIMESTAMP,
+    settled_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_parimutuel_markets_status ON parimutuel_markets (status, id DESC);
+CREATE TABLE IF NOT EXISTS parimutuel_bets (
+    id BIGSERIAL PRIMARY KEY,
+    market_id BIGINT NOT NULL REFERENCES parimutuel_markets(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES website_users(id) ON DELETE CASCADE,
+    choice TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    payout INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'open',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (market_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_parimutuel_bets_market ON parimutuel_bets (market_id, choice);

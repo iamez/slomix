@@ -99,6 +99,40 @@ export async function loadHomePulseCards() {
         _nextSessionCard(avail) + _lastSessionCard(sessions) + _moversCard(movers));
 
     loadChallengeCard().catch((e) => console.warn('challenge card failed', e));
+    loadSeasonCard().catch((e) => console.warn('season card failed', e));
+}
+
+// Season card (S4) — current quarterly season + top damage leaders + days left.
+export async function loadSeasonCard() {
+    const host = document.getElementById('home-season-card');
+    if (!host) return;
+    const [seasonRes, leadersRes] = await Promise.allSettled([
+        fetchJSON(`${API_BASE}/seasons/current`),
+        fetchJSON(`${API_BASE}/seasons/current/leaders`),
+    ]);
+    const season = seasonRes.status === 'fulfilled' ? seasonRes.value : null;
+    const leaders = leadersRes.status === 'fulfilled' ? leadersRes.value?.leaders : null;
+    if (!season) { host.textContent = ''; return; }
+
+    const top = [];
+    const dmg = leaders?.damage_given;
+    const kills = leaders?.kills;
+    const dpm = leaders?.dpm;
+    if (dmg) top.push(`<div class="flex justify-between text-sm"><span class="text-slate-500">Most damage</span><span class="text-slate-200 font-semibold">${escapeHtml(dmg.player)} · ${dmg.value.toLocaleString()}</span></div>`);
+    if (kills) top.push(`<div class="flex justify-between text-sm"><span class="text-slate-500">Most kills</span><span class="text-slate-200 font-semibold">${escapeHtml(kills.player)} · ${kills.value}</span></div>`);
+    if (dpm) top.push(`<div class="flex justify-between text-sm"><span class="text-slate-500">Top DPM</span><span class="text-slate-200 font-semibold">${escapeHtml(dpm.player)} · ${Math.round(dpm.value)}</span></div>`);
+
+    const daysLeft = Number.isFinite(season.days_left) ? season.days_left : null;
+    host.textContent = '';
+    safeInsertHTML(host, 'beforeend', `
+        <div class="glass-panel p-5 rounded-xl border-l-4 border-brand-cyan/60">
+            <div class="flex items-center justify-between mb-2">
+                <div class="text-[10px] uppercase tracking-widest text-slate-500 font-bold">🏟️ ${escapeHtml(season.name || season.id)}</div>
+                ${daysLeft !== null ? `<div class="text-[10px] uppercase tracking-widest text-brand-cyan font-bold">${daysLeft} days left</div>` : ''}
+            </div>
+            ${top.length ? `<div class="space-y-1.5">${top.join('')}</div>` : '<div class="text-sm text-slate-400">Season standings appear after the first matches.</div>'}
+            <a href="#/leaderboards?period=season" class="mt-3 inline-block text-xs font-bold text-brand-cyan hover:text-white transition">Season leaderboard →</a>
+        </div>`);
 }
 
 // Challenge of the week (S3) — admin-defined, surfaced for everyone.

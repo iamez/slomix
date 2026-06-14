@@ -3,7 +3,7 @@
  * Today-first availability UI backed by /api/availability.
  */
 
-import { API_BASE, AUTH_BASE, fetchJSON, escapeHtml } from './utils.js';
+import { API_BASE, AUTH_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 
 const NO_STORE_FETCH = { cachePolicy: 'no-store', credentials: 'same-origin' };
 
@@ -105,6 +105,14 @@ let planningState = {
     error: ''
 };
 
+// Parimutuel betting (S4) — session-winner market.
+let betsState = {
+    wallet: null,
+    market: null,
+    status: { message: '', error: false },
+    inFlight: false,
+};
+
 let responseStatus = { message: '', error: false };
 let prefsStatus = { message: '', error: false };
 let adminStatus = { message: '', error: false };
@@ -151,6 +159,7 @@ async function refreshAvailabilityView() {
         await loadAvailabilityRange();
         await loadPromotionCampaignState();
         await loadPlanningState();
+        await loadBetsState();
 
         if (accessState.authenticated && accessState.linkedDiscord) {
             await loadSettings();
@@ -267,6 +276,26 @@ async function loadPlanningState() {
     }
 }
 
+async function loadBetsState() {
+    betsState.status = { message: '', error: false };
+    try {
+        const marketRes = await fetchJSON(`${API_BASE}/bets/market/current`, NO_STORE_FETCH);
+        betsState.market = marketRes?.market || null;
+    } catch (_err) {
+        betsState.market = null;
+    }
+    // Wallet only for logged-in users.
+    if (currentUser) {
+        try {
+            betsState.wallet = await fetchJSON(`${API_BASE}/bets/wallet`, NO_STORE_FETCH);
+        } catch (_err) {
+            betsState.wallet = null;
+        }
+    } else {
+        betsState.wallet = null;
+    }
+}
+
 async function loadSettings() {
     try {
         const payload = await fetchJSON(`${API_BASE}/availability/settings`, NO_STORE_FETCH);
@@ -300,6 +329,7 @@ function renderAll() {
     renderPromoteControls();
     renderCampaignStatus();
     renderPlanningRoom();
+    renderBetsSection();
     renderCalendarVisibility();
     renderCalendar();
     renderQuickView();
@@ -1579,6 +1609,32 @@ async function postPlanningJson(path, body) {
     return payload;
 }
 
+// Shared POST options + response reader for the bets endpoints. The fetch URLs
+// are built inline at each call site from literal paths (no free-form string or
+// function parameter ever flows into fetch) so they aren't treated as
+// user-controlled URLs.
+const _BETS_POST_OPTS = {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+    },
+    credentials: 'same-origin'
+};
+
+async function _readBetsResponse(response) {
+    let payload = null;
+    try {
+        payload = await response.json();
+    } catch (_err) {
+        payload = null;
+    }
+    if (!response.ok) {
+        throw new Error(payload?.detail || `HTTP ${response.status}`);
+    }
+    return payload;
+}
+
 // ============================================================================
 // ACTIONS
 // ============================================================================
@@ -2157,9 +2213,182 @@ function saveReadySoundState(state) {
 }
 
 // ============================================================================
+// PARIMUTUEL BETTING (S4)
+// ============================================================================
+
+function _betPctBar(pool, total, accent) {
+    const pct = total > 0 ? Math.round((pool / total) * 100) : 0;
+    return `<div class="h-1.5 rounded-full bg-white/10 overflow-hidden mt-1"><div class="h-full bg-brand-${accent}" style="width:${pct}%"></div></div>`;
+}
+
+function renderBetsSection() {
+    const host = document.getElementById('availability-bets-section');
+    if (!host) return;
+    const market = betsState.market;
+    const isAdmin = Boolean(accessState.isAdmin);
+
+    // No market: only admins see the "open" control; everyone else gets nothing.
+    if (!market) {
+        if (!isAdmin) { host.textContent = ''; return; }
+        host.textContent = '';
+        safeInsertHTML(host, 'beforeend', `
+            <div class="glass-panel rounded-2xl border border-brand-amber/30 bg-brand-amber/5 px-6 py-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <div class="text-sm text-slate-300">🎲 No betting market is open.</div>
+                    <button data-click-action="window.openAvailabilityBetMarket()" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-brand-amber/20 text-brand-amber hover:bg-brand-amber/30 transition">Open session market</button>
+                </div>
+                ${_betStatusHtml()}
+            </div>`);
+        return;
+    }
+
+    const pool = market.pool || { team_a: { pool: 0, bets: 0 }, team_b: { pool: 0, bets: 0 }, total_pool: 0 };
+    const total = pool.total_pool || 0;
+    const aLabel = escapeHtml(market.team_a_label || 'Team A');
+    const bLabel = escapeHtml(market.team_b_label || 'Team B');
+    const settled = market.status === 'settled';
+    const myBet = market.my_bet;
+    const wallet = betsState.wallet;
+
+    const walletHtml = wallet
+        ? `<span class="text-xs text-slate-400">Your balance: <span class="text-brand-cyan font-bold font-mono">${wallet.balance}</span> pts</span>`
+        : (currentUser ? '' : '<span class="text-xs text-slate-500">Log in to place a bet.</span>');
+
+    let myBetHtml = '';
+    if (myBet) {
+        const side = myBet.choice === 'team_a' ? aLabel : bLabel;
+        if (settled) {
+            const won = myBet.status === 'won';
+            const refunded = myBet.status === 'refunded';
+            myBetHtml = `<div class="text-xs mt-2 ${won ? 'text-emerald-400' : refunded ? 'text-slate-300' : 'text-rose-400'}">You bet ${myBet.amount} on ${side} — ${won ? `won ${myBet.payout}` : refunded ? 'refunded' : 'lost'}.</div>`;
+        } else {
+            myBetHtml = `<div class="text-xs mt-2 text-slate-300">Your bet: <span class="font-bold">${myBet.amount}</span> on ${side} <span class="text-slate-500">(change any time before lock)</span></div>`;
+        }
+    }
+
+    // Bet buttons only when the market actually accepts bets — the backend
+    // rejects anything that isn't 'open' (e.g. a 'closed' market), so gate on
+    // status === 'open' rather than merely "not settled". Admin settle controls
+    // below still show for any non-settled market.
+    const canBet = Boolean(currentUser) && market.status === 'open';
+    const betControls = canBet ? `
+        <div class="flex items-center gap-2 mt-3 flex-wrap">
+            <input id="availability-bet-amount" type="number" min="1" value="${myBet?.amount || 10}" class="w-20 px-2 py-1.5 rounded-lg bg-black/30 border border-white/10 text-sm text-white font-mono" />
+            <button data-click-action="window.placeAvailabilityBet('team_a')" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-brand-cyan/20 text-brand-cyan hover:bg-brand-cyan/30 transition">Bet ${aLabel}</button>
+            <button data-click-action="window.placeAvailabilityBet('team_b')" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-brand-purple/20 text-brand-purple hover:bg-brand-purple/30 transition">Bet ${bLabel}</button>
+        </div>` : '';
+
+    const adminControls = (isAdmin && !settled) ? `
+        <div class="flex items-center gap-2 mt-3 pt-3 border-t border-white/5 flex-wrap">
+            <span class="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Admin</span>
+            <button data-click-action="window.settleAvailabilityBet('team_a')" class="text-xs px-2.5 py-1 rounded-lg bg-white/5 text-slate-300 hover:bg-white/10 transition">Settle: ${aLabel}</button>
+            <button data-click-action="window.settleAvailabilityBet('team_b')" class="text-xs px-2.5 py-1 rounded-lg bg-white/5 text-slate-300 hover:bg-white/10 transition">Settle: ${bLabel}</button>
+            <button data-click-action="window.settleAvailabilityBet('void')" class="text-xs px-2.5 py-1 rounded-lg bg-white/5 text-slate-500 hover:bg-white/10 transition">Void</button>
+        </div>` : '';
+
+    const outcomeHtml = settled
+        ? `<div class="text-xs font-bold text-brand-amber mb-1">Result: ${market.outcome === 'team_a' ? aLabel : market.outcome === 'team_b' ? bLabel : 'Void (refunded)'}</div>`
+        : '';
+
+    host.textContent = '';
+    safeInsertHTML(host, 'beforeend', `
+        <div class="glass-panel rounded-2xl border border-brand-amber/30 bg-brand-amber/5 px-6 py-4">
+            <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div class="text-sm font-black text-white">🎲 Tonight's bet ${settled ? '<span class="text-xs text-slate-500 font-normal">(settled)</span>' : ''}</div>
+                ${walletHtml}
+            </div>
+            ${outcomeHtml}
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <div class="flex justify-between text-sm"><span class="text-brand-cyan font-bold">${aLabel}</span><span class="text-slate-400 font-mono">${pool.team_a.pool} (${pool.team_a.bets})</span></div>
+                    ${_betPctBar(pool.team_a.pool, total, 'cyan')}
+                </div>
+                <div>
+                    <div class="flex justify-between text-sm"><span class="text-brand-purple font-bold">${bLabel}</span><span class="text-slate-400 font-mono">${pool.team_b.pool} (${pool.team_b.bets})</span></div>
+                    ${_betPctBar(pool.team_b.pool, total, 'purple')}
+                </div>
+            </div>
+            <div class="text-[11px] text-slate-500 mt-2">Total pool: ${total} pts · winners split it. Points are just for fun.</div>
+            ${myBetHtml}
+            ${betControls}
+            ${adminControls}
+            ${_betStatusHtml()}
+        </div>`);
+}
+
+function _betStatusHtml() {
+    const s = betsState.status;
+    if (!s.message) return '';
+    return `<div class="text-xs mt-2 ${s.error ? 'text-brand-rose' : 'text-emerald-400'}">${escapeHtml(s.message)}</div>`;
+}
+
+async function placeAvailabilityBet(choice) {
+    if (betsState.inFlight || !betsState.market) return;
+    const input = document.getElementById('availability-bet-amount');
+    const amount = parseInt(input?.value, 10);
+    if (!Number.isFinite(amount) || amount <= 0) {
+        betsState.status = { message: 'Enter a positive amount.', error: true };
+        renderBetsSection();
+        return;
+    }
+    betsState.inFlight = true;
+    try {
+        const id = Number(betsState.market.id);
+        const resp = await fetch(`${API_BASE}/bets/market/${id}/bet`,
+            { ..._BETS_POST_OPTS, body: JSON.stringify({ choice, amount }) });
+        await _readBetsResponse(resp);
+        betsState.status = { message: 'Bet placed.', error: false };
+        await loadBetsState();
+    } catch (err) {
+        betsState.status = { message: formatErrorMessage(err, 'Bet failed'), error: true };
+    } finally {
+        betsState.inFlight = false;
+        renderBetsSection();
+    }
+}
+
+async function openAvailabilityBetMarket() {
+    if (betsState.inFlight) return;
+    betsState.inFlight = true;
+    try {
+        const resp = await fetch(`${API_BASE}/bets/market`,
+            { ..._BETS_POST_OPTS, body: JSON.stringify({}) });
+        await _readBetsResponse(resp);
+        betsState.status = { message: 'Market opened.', error: false };
+        await loadBetsState();
+    } catch (err) {
+        betsState.status = { message: formatErrorMessage(err, 'Failed to open market'), error: true };
+    } finally {
+        betsState.inFlight = false;
+        renderBetsSection();
+    }
+}
+
+async function settleAvailabilityBet(outcome) {
+    if (betsState.inFlight || !betsState.market) return;
+    betsState.inFlight = true;
+    try {
+        const id = Number(betsState.market.id);
+        const resp = await fetch(`${API_BASE}/bets/market/${id}/settle`,
+            { ..._BETS_POST_OPTS, body: JSON.stringify({ outcome }) });
+        await _readBetsResponse(resp);
+        betsState.status = { message: 'Market settled — payouts done.', error: false };
+        await loadBetsState();
+    } catch (err) {
+        betsState.status = { message: formatErrorMessage(err, 'Settle failed'), error: true };
+    } finally {
+        betsState.inFlight = false;
+        renderBetsSection();
+    }
+}
+
+// ============================================================================
 // EXPOSE TO WINDOW
 // ============================================================================
 
+window.placeAvailabilityBet = placeAvailabilityBet;
+window.openAvailabilityBetMarket = openAvailabilityBetMarket;
+window.settleAvailabilityBet = settleAvailabilityBet;
 window.saveAvailabilityPrefs = saveAvailabilityPrefs;
 window.createTodayPoll = createTodayPoll;
 window.submitAvailabilityResponse = submitAvailabilityResponse;

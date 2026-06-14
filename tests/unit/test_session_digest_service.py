@@ -111,3 +111,54 @@ async def test_build_failure_never_raises(mock_data_cls, mock_scoring_cls):
     )
     svc, _ = _service()
     assert await svc.generate_and_post() is False
+
+
+@pytest.mark.asyncio
+async def test_fetch_open_market_formats_line():
+    svc, _ = _service()
+    svc.db_adapter.fetch_one = AsyncMock(return_value=(1, "Reds", "Blues"))
+    line = await svc._fetch_open_market("https://www.slomix.fyi")
+    assert "Reds" in line and "Blues" in line and "place your bet" in line
+
+
+@pytest.mark.asyncio
+async def test_fetch_open_market_none_when_no_market():
+    svc, _ = _service()
+    svc.db_adapter.fetch_one = AsyncMock(return_value=None)
+    assert await svc._fetch_open_market("https://x") is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_open_market_swallows_db_error():
+    svc, _ = _service()
+    svc.db_adapter.fetch_one = AsyncMock(side_effect=RuntimeError("boom"))
+    assert await svc._fetch_open_market("https://x") is None
+
+
+@pytest.mark.asyncio
+async def test_personal_bests_filters_bots_and_caps(monkeypatch):
+    svc, _ = _service()
+    cards = (
+        [{"guid": "OMNIBOT_1", "name": "bot", "label": "Most kills", "value": 9}]
+        + [{"guid": f"G{i}", "name": "[BOT] x", "label": "L", "value": 1} for i in range(2)]
+        + [{"guid": f"H{i}", "name": f"P{i}", "label": "Most kills", "value": 30 + i}
+           for i in range(7)]
+    )
+
+    class _Resp:
+        status = 200
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def json(self): return {"cards": cards}
+
+    class _Sess:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        def get(self, *a, **k): return _Resp()
+
+    monkeypatch.setattr(
+        "bot.services.session_digest_service.aiohttp.ClientSession", lambda *a, **k: _Sess()
+    )
+    line = await svc._fetch_personal_bests("2026-06-11")
+    assert "bot" not in line and "[BOT]" not in line
+    assert line.count("\n") == 4  # 5 players max -> 4 newlines
