@@ -50,6 +50,7 @@ import { loadHallOfFameView } from './hall-of-fame.js';
 import { loadRetroVizView } from './retro-viz.js?v=20260513-v142-cf-bust';
 import { loadSessions2View } from './sessions2.js?v=20260513-v142-cf-bust';
 import { loadSessionDetailView } from './session-detail.js?v=20260513-v142-cf-bust';
+import { initMobileNav } from './mobile-nav.js';
 
 // ============================================================================
 // NAVIGATION
@@ -701,6 +702,7 @@ function scheduleDeferredLoads(tasks) {
 async function initApp() {
     console.log('🚀 Slomix App Initializing...');
     initNavDropdowns();
+    initMobileNav(navigateTo);
     initGreatshotModule();
 
     // Prototype banner for initial view

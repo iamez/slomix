@@ -461,8 +461,11 @@ async def _fetch_relationships(db, guid8: str, guid32: str | None) -> dict:
             SELECT tm.player_guid,
                    MAX(tm.player_name)                                          AS name,
                    COUNT(*)                                                     AS rounds_together,
-                   AVG(me.damage_given * 60.0 / NULLIF(me.time_played_seconds, 0)) AS my_dpm_with
+                   AVG(me.damage_given * 60.0 / NULLIF(me.time_played_seconds, 0)) AS my_dpm_with,
+                   COUNT(*) FILTER (WHERE r.winner_team IN (1, 2))              AS decided,
+                   COUNT(*) FILTER (WHERE r.winner_team = mr.team)             AS wins
             FROM my_rounds mr
+            JOIN rounds r ON r.id = mr.round_id
             JOIN player_comprehensive_stats tm
                  ON tm.round_id = mr.round_id AND tm.team = mr.team
                  AND tm.player_guid <> $1 AND tm.round_number IN (1, 2)
@@ -478,12 +481,16 @@ async def _fetch_relationships(db, guid8: str, guid32: str | None) -> dict:
         mates = []
         for r in (tm_rows or []):
             dpm_with = _f(r[3])
+            decided = _i(r[4])
+            wins = _i(r[5])
             mates.append({
                 "guid": r[0],
                 "name": (r[1] or r[0][:8]),
                 "rounds_together": _i(r[2]),
                 "dpm_with": round(dpm_with, 1),
                 "synergy": round(dpm_with - baseline, 1),
+                "win_rate_with": round(wins / decided * 100, 1) if decided else None,
+                "decided_together": decided,
             })
         mates.sort(key=lambda m: m["synergy"], reverse=True)
         out["best_teammates"] = mates[:5]
@@ -1084,3 +1091,33 @@ async def get_player_profile(
         "nick_history": _ok(nick_history, "nick_history"),
         "combat_timing": _ok(combat_timing, "combat_timing"),
     }
+
+
+_AWARD_LABELS = {
+    "mvp": "Season MVP", "iron_man": "Iron Man",
+    "most_improved": "Most Improved", "oracle": "Oracle",
+}
+
+
+@router.get("/players/{identifier}/awards")
+async def get_player_awards(identifier: str, db: DatabaseAdapter = Depends(get_db)):
+    """Engraved season awards for a player (career timeline / History tab)."""
+    guid8 = await resolve_player_guid(db, identifier)
+    if not guid8:
+        raise HTTPException(status_code=404, detail="Player not found")
+    rows = await db.fetch_all(
+        "SELECT season_id, award_key, value_text, value_num "
+        "FROM season_awards WHERE player_guid = ? ORDER BY season_id DESC, award_key",
+        (guid8,),
+    )
+    from shared.season_manager import SeasonManager
+    sm = SeasonManager()
+    awards = [{
+        "season_id": r[0],
+        "season_name": sm.get_season_name(r[0]),
+        "award_key": r[1],
+        "label": _AWARD_LABELS.get(r[1], str(r[1]).replace("_", " ").title()),
+        "value_text": r[2],
+        "value_num": r[3],
+    } for r in (rows or [])]
+    return {"status": "ok", "guid": guid8, "awards": awards}
