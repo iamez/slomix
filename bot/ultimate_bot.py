@@ -614,6 +614,14 @@ class UltimateETLegacyBot(
         except Exception as e:
             logger.error(f'Failed to load Team Management Cog: {e}', exc_info=True)
 
+        # Load On This Day Cog (VISION_2026 S6 — daily throwback; self-gates on flag)
+        try:
+            from bot.cogs.on_this_day_cog import OnThisDayCog
+            await self.add_cog(OnThisDayCog(self))
+            logger.info('On This Day Cog loaded (daily throwback, gated by ON_THIS_DAY_ENABLED)')
+        except Exception as e:
+            logger.error(f'Failed to load On This Day Cog: {e}', exc_info=True)
+
         # Load Team System Cog (comprehensive team tracking)
         try:
             from bot.cogs.team_cog import TeamCog

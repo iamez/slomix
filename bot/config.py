@@ -214,6 +214,15 @@ class BotConfig:
         # Skip digest for stub sessions (false session-end trigger guard).
         self.session_digest_min_rounds: int = int(self._get_config('SESSION_DIGEST_MIN_ROUNDS', '4'))
 
+        # ==================== "ON THIS DAY" DAILY POST (VISION_2026 S6 SPOMIN) ====================
+        # A daily throwback embed: sessions/results from the same calendar day in
+        # prior years. OFF by default — owner enables on prod. Scheduled (not event).
+        self.on_this_day_enabled: bool = self._get_config('ON_THIS_DAY_ENABLED', 'false').lower() == 'true'
+        self.on_this_day_channel_id: int = int(
+            self._get_config('ON_THIS_DAY_CHANNEL_ID', str(self.stats_channel_id or 0)))
+        self.on_this_day_post_time: str = self._get_config('ON_THIS_DAY_POST_TIME', '09:00')
+        self.on_this_day_timezone: str = self._get_config('ON_THIS_DAY_TIMEZONE', 'Europe/Ljubljana')
+
         # File processing startup lookback window (hours)
         # When bot restarts, only process files within this window before startup time
         # Default: 168 hours (7 days) - prevents re-importing ancient history while

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -1121,3 +1122,108 @@ async def get_player_awards(identifier: str, db: DatabaseAdapter = Depends(get_d
         "value_num": r[3],
     } for r in (rows or [])]
     return {"status": "ok", "guid": guid8, "awards": awards}
+
+
+@router.get("/players/{identifier}/wrapped")
+async def get_player_wrapped(identifier: str, season: str = "current",
+                             db: DatabaseAdapter = Depends(get_db)):
+    """Season 'Wrapped' card facts (S6 SPOMIN) — season-scoped highlights for a
+    shareable card. All facts come from existing tables, scoped to the season."""
+    guid8 = await resolve_player_guid(db, identifier)
+    if not guid8:
+        raise HTTPException(status_code=404, detail="Player not found")
+    from shared.season_manager import SeasonManager
+    sm = SeasonManager()
+    if season in ("current", "", None):
+        sid = sm.get_current_season()
+    elif re.fullmatch(r"\d{4}-Q[1-4]", season):
+        sid = season
+    else:
+        raise HTTPException(status_code=400, detail="season must be 'current' or YYYY-QN")
+    start, end = sm.get_season_dates(sid)
+    # Pass date objects (asyncpg binds them as DATE for the BETWEEN comparison).
+    s = start.date() if hasattr(start, "date") else start
+    e = end.date() if hasattr(end, "date") else end
+    name = await resolve_display_name(db, guid8, guid8[:8])
+
+    # Common season-scoped predicate for player_comprehensive_stats JOIN rounds.
+    base = (
+        "FROM player_comprehensive_stats pcs JOIN rounds r ON r.id = pcs.round_id "
+        "WHERE pcs.player_guid = ? AND r.round_number IN (1,2) "
+        "AND r.is_valid IS DISTINCT FROM FALSE "
+        "AND CAST(r.round_date AS DATE) BETWEEN ? AND ?"
+    )
+    pa = (guid8, s, e)
+
+    totals = await db.fetch_one(
+        f"SELECT COUNT(*) AS rounds, COALESCE(SUM(pcs.kills),0) AS kills, "  # noqa: S608 - base is literal
+        f"COALESCE(SUM(pcs.deaths),0) AS deaths, "
+        f"COUNT(*) FILTER (WHERE r.winner_team IN (1,2)) AS decided, "
+        f"COUNT(*) FILTER (WHERE r.winner_team = pcs.team) AS wins, "
+        f"ROUND(COALESCE(SUM(pcs.damage_given)::numeric,0) / NULLIF(SUM(pcs.time_played_seconds)/60.0,0),0) AS dpm "
+        f"{base}", pa,
+    )
+    rounds = _i(totals[0]) if totals else 0
+    if not rounds:
+        return {"status": "ok", "guid": guid8, "season_id": sid,
+                "season_name": sm.get_season_name(sid), "player_name": name, "cards": []}
+
+    kills, deaths = _i(totals[1]), _i(totals[2])
+    decided, wins, dpm = _i(totals[3]), _i(totals[4]), _i(totals[5])
+
+    sig_map = await db.fetch_one(
+        f"SELECT pcs.map_name, COUNT(*) AS rnds, "  # noqa: S608 - base is literal
+        f"ROUND(100.0*COUNT(*) FILTER (WHERE r.winner_team = pcs.team)"
+        f"/NULLIF(COUNT(*) FILTER (WHERE r.winner_team IN (1,2)),0),0) AS winpct "
+        f"{base} AND pcs.map_name IS NOT NULL GROUP BY pcs.map_name ORDER BY rnds DESC LIMIT 1", pa,
+    )
+    top_weapon = await db.fetch_one(
+        "SELECT weapon_name, SUM(kills) AS k FROM weapon_comprehensive_stats w "
+        "JOIN rounds r ON r.id = w.round_id "
+        "WHERE w.player_guid = ? AND r.round_number IN (1,2) "
+        "AND r.is_valid IS DISTINCT FROM FALSE "
+        "AND CAST(r.round_date AS DATE) BETWEEN ? AND ? "
+        "AND weapon_name IS NOT NULL GROUP BY weapon_name ORDER BY k DESC LIMIT 1", pa,
+    )
+    best_round = await db.fetch_one(
+        f"SELECT ROUND((pcs.damage_given*60.0/NULLIF(pcs.time_played_seconds,0))::numeric,0) AS rdpm, "  # noqa: S608
+        f"pcs.map_name, CAST(r.round_date AS DATE) AS d {base} AND pcs.time_played_seconds > 120 "
+        f"ORDER BY rdpm DESC LIMIT 1", pa,
+    )
+    best_mate = await db.fetch_one(
+        "WITH mine AS (SELECT round_id, team FROM player_comprehensive_stats "
+        "  WHERE player_guid = ? AND round_number IN (1,2)) "
+        "SELECT MAX(tm.player_name) AS nm, COUNT(*) AS n, "
+        "  ROUND(100.0*COUNT(*) FILTER (WHERE r.winner_team = mine.team)"
+        "  /NULLIF(COUNT(*) FILTER (WHERE r.winner_team IN (1,2)),0),0) AS winpct "
+        "FROM mine JOIN rounds r ON r.id = mine.round_id "
+        "JOIN player_comprehensive_stats tm ON tm.round_id = mine.round_id "
+        "  AND tm.team = mine.team AND tm.player_guid <> ? AND tm.round_number IN (1,2) "
+        "WHERE tm.player_guid NOT LIKE 'OMNIBOT%' "
+        "  AND CAST(r.round_date AS DATE) BETWEEN ? AND ? "
+        "GROUP BY tm.player_guid HAVING COUNT(*) >= 5 ORDER BY winpct DESC NULLS LAST, n DESC LIMIT 1",
+        (guid8, guid8, s, e),
+    )
+
+    win_rate = round(wins / decided * 100, 1) if decided else 0.0
+    cards = [
+        {"key": "rounds", "label": "Rounds played", "value": str(rounds)},
+        {"key": "win_rate", "label": "Win rate", "value": f"{win_rate:.0f}%"},
+        {"key": "kills", "label": "Total kills", "value": str(kills),
+         "sub": f"{round(kills/max(deaths,1),2)} K/D"},
+        {"key": "dpm", "label": "Avg DPM", "value": str(dpm)},
+    ]
+    if sig_map:
+        cards.append({"key": "signature_map", "label": "Signature map",
+                      "value": sig_map[0], "sub": f"{_i(sig_map[1])} rounds · {_i(sig_map[2])}% won"})
+    if top_weapon and top_weapon[1]:
+        cards.append({"key": "weapon", "label": "Weapon of choice",
+                      "value": top_weapon[0], "sub": f"{_i(top_weapon[1])} kills"})
+    if best_mate and best_mate[0]:
+        cards.append({"key": "best_teammate", "label": "Best teammate",
+                      "value": best_mate[0], "sub": f"{_i(best_mate[2])}% W over {_i(best_mate[1])} rounds"})
+    if best_round and best_round[0]:
+        cards.append({"key": "best_round", "label": "Best round",
+                      "value": f"{_i(best_round[0])} DPM", "sub": f"{best_round[1]} · {best_round[2]}"})
+    return {"status": "ok", "guid": guid8, "season_id": sid,
+            "season_name": sm.get_season_name(sid), "player_name": name, "cards": cards}
