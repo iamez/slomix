@@ -112,14 +112,28 @@ const ROUTE_DEFINITIONS = Object.freeze({
                 : undefined
         ),
     },
+    // S6: 'records' is now an alias that opens the consolidated Record Book on its
+    // Records tab (viewId points at #view-record-book; old #/records deep links resolve).
     records: {
-        viewId: 'records',
+        viewId: 'record-book',
         label: 'Records',
         mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'A',
-        buildHash: () => '#/records',
-        load: ({ legacy }) => legacy.loadRecordsView(),
+        buildHash: () => '#/record-book',
+        // The router dispatches by viewId (record-book), so tab selection must
+        // ride on params via parseHash (the alias load() is never invoked).
+        parseHash: (hash) => (hash === '#/records' ? { tab: 'records' } : null),
+        load: ({ legacy }) => legacy.loadRecordBookView({ tab: 'records' }),
+    },
+    'record-book': {
+        viewId: 'record-book',
+        label: 'Record Book',
+        mode: VIEW_MODE.LEGACY,
+        surfaceType: 'read-heavy',
+        migrationWave: 'A',
+        buildHash: () => '#/record-book',
+        load: ({ legacy, params }) => legacy.loadRecordBookView(params || {}),
     },
     awards: {
         viewId: 'awards',
@@ -242,14 +256,16 @@ const ROUTE_DEFINITIONS = Object.freeze({
         buildHash: () => '#/admin',
         load: ({ legacy }) => legacy.loadAdminPanelView(),
     },
+    // S6: 'hall-of-fame' now opens the consolidated Record Book on its Hall of Fame tab.
     'hall-of-fame': {
-        viewId: 'hall-of-fame',
+        viewId: 'record-book',
         label: 'Hall of Fame',
         mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'B',
-        buildHash: () => '#/hall-of-fame',
-        load: ({ legacy }) => legacy.loadHallOfFameView(),
+        buildHash: () => '#/record-book',
+        parseHash: (hash) => (hash === '#/hall-of-fame' ? { tab: 'hof' } : null),
+        load: ({ legacy }) => legacy.loadRecordBookView({ tab: 'hof' }),
     },
     'retro-viz': {
         viewId: 'retro-viz',
