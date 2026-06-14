@@ -6,7 +6,7 @@ Extracted from api.py to reduce file size and improve maintainability.
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from shared.season_manager import SeasonManager
@@ -193,10 +193,11 @@ async def _hold_prob_curve(db, map_name: str) -> list[dict]:
 
 
 @router.get("/stats/hold-probability")
-async def get_hold_probability(map: str, db: DatabaseAdapter = Depends(get_db)):
+async def get_hold_probability(map_name: str = Query(alias="map"),
+                               db: DatabaseAdapter = Depends(get_db)):
     """Historical attack-completion-time curve for a single map."""
-    curve = await _hold_prob_curve(db, map)
-    return {"status": "ok", "map": map, "curve": curve}
+    curve = await _hold_prob_curve(db, map_name)
+    return {"status": "ok", "map": map_name, "curve": curve}
 
 
 @router.get("/stats/tonight")
