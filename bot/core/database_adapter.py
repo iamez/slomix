@@ -62,6 +62,17 @@ class DatabaseAdapter(ABC):
         """Translate query syntax if needed (override in subclasses)."""
         return query
 
+    @asynccontextmanager
+    async def advisory_lock(self, key: int):
+        """Best-effort mutual-exclusion lock, yielding True when acquired.
+
+        Default implementation is a no-op that always yields True (degrade
+        open) for adapters that lack advisory locks. PostgreSQL overrides
+        this with a real session-level lock held on a single pinned
+        connection. See ``PostgreSQLAdapter.advisory_lock``.
+        """
+        yield True
+
 
 class PostgreSQLAdapter(DatabaseAdapter):
     """PostgreSQL database adapter using asyncpg connection pooling."""
@@ -260,6 +271,40 @@ class PostgreSQLAdapter(DatabaseAdapter):
         finally:
             self._active_tx_conn.reset(token)
             await self.pool.release(conn)
+
+    @asynccontextmanager
+    async def advisory_lock(self, key: int):
+        """Hold a PostgreSQL session-level advisory lock on a SINGLE pinned
+        connection for the duration of the block.
+
+        PostgreSQL advisory locks are session-scoped (tied to one backend
+        connection). With a connection pool, acquiring the lock on one
+        pooled connection and releasing it on another is a no-op that emits
+        ``WARNING: you don't own a lock of type ExclusiveLock`` — and the
+        lock is silently dropped the moment the acquiring connection is
+        returned to the pool (asyncpg runs ``pg_advisory_unlock_all()`` on
+        reset). Reusing ``connection()`` keeps the same connection checked
+        out for the whole ``async with`` block, so lock and unlock land on
+        the same backend and the lock genuinely serialises the body across
+        instances sharing the database.
+
+        Yields ``True`` when the lock was acquired, ``False`` otherwise. The
+        unlock only runs when we actually hold the lock, so a contended
+        attempt never emits the spurious ownership warning.
+        """
+        async with self.connection() as conn:
+            acquired = bool(await conn.fetchval("SELECT pg_try_advisory_lock($1)", key))
+            try:
+                yield acquired
+            finally:
+                if acquired:
+                    try:
+                        await conn.fetchval("SELECT pg_advisory_unlock($1)", key)
+                    except Exception:
+                        logger.debug(
+                            "advisory_unlock best-effort (auto-released on pool reset)",
+                            exc_info=True,
+                        )
 
     async def execute(self, query: str, params: tuple | None = None, *extra):
         """Execute query on PostgreSQL."""

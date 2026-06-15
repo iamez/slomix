@@ -380,3 +380,54 @@ def test_recipient_outside_quiet_window():
         now_utc=datetime(2026, 5, 7, 12, 0, tzinfo=timezone.utc),
     )
     assert out is False
+
+
+# ---------------------------------------------------------------------------
+# _run_scheduler_with_lock — advisory-lock gating (log-sweep remediation)
+# ---------------------------------------------------------------------------
+#
+# The scheduler now runs its body inside `db_adapter.advisory_lock(...)`, an
+# async CM yielding True when the lock is held. When NOT acquired (another
+# instance owns it) the body must be skipped entirely; when acquired it runs.
+
+from contextlib import asynccontextmanager  # noqa: E402
+from unittest.mock import AsyncMock, MagicMock  # noqa: E402
+
+
+def _scheduler_self(acquired: bool):
+    @asynccontextmanager
+    async def _lock(_key):
+        yield acquired
+
+    s = MagicMock()
+    s.bot.db_adapter.advisory_lock = _lock
+    s.scheduler_lock_key = 875211
+    s.promotion_enabled = True
+    s.last_daily_reminder_date = None
+    s._is_reminder_due = MagicMock(return_value=False)
+    s._send_daily_reminder = AsyncMock()
+    s._check_session_ready = AsyncMock()
+    s._process_promotion_jobs = AsyncMock()
+    return s
+
+
+@pytest.mark.asyncio
+async def test_run_scheduler_skips_body_when_lock_not_acquired():
+    """Lock held by another instance → body never runs (cross-instance guard)."""
+    s = _scheduler_self(acquired=False)
+    await _AvailabilitySchedulerMixin._run_scheduler_with_lock(
+        s, datetime(2026, 5, 7, 9, 0, tzinfo=timezone.utc)
+    )
+    s._check_session_ready.assert_not_awaited()
+    s._process_promotion_jobs.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_scheduler_runs_body_when_lock_acquired():
+    """Lock acquired → session-ready check + promotion jobs run."""
+    s = _scheduler_self(acquired=True)
+    await _AvailabilitySchedulerMixin._run_scheduler_with_lock(
+        s, datetime(2026, 5, 7, 9, 0, tzinfo=timezone.utc)
+    )
+    s._check_session_ready.assert_awaited_once()
+    s._process_promotion_jobs.assert_awaited_once()

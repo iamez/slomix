@@ -7,9 +7,19 @@ All methods live on UltimateETLegacyBot via mixin inheritance.
 from __future__ import annotations
 
 from bot.logging_config import get_logger
+from bot.services.webhook_event_queue import WebhookHandlerSoftFail
 
 logger = get_logger("bot.core")
 webhook_logger = get_logger("bot.webhook")
+
+
+class StatsFetchSoftFail(WebhookHandlerSoftFail):
+    """Expected, transient STATS_READY outcome: Lua team/spawn data was
+    persisted but the stats file wasn't available yet (Lua webhook beat the
+    SSH poll). Raised so ``WebhookEventQueue`` clears the dedup key for a
+    retry — NOT a real error, so it is logged at WARNING and does not count
+    toward the worker error circuit breaker.
+    """
 
 
 class _StatsReadyMixin:
@@ -195,12 +205,18 @@ class _StatsReadyMixin:
             # re-enter and potentially catch the stats file on a fresh
             # fetch attempt.
             if not fetched:
-                raise RuntimeError(
+                raise StatsFetchSoftFail(
                     f"stats fetch soft-fail for "
                     f"{round_metadata.get('map_name')} R{round_metadata.get('round_number')} "
                     f"— Lua capture persisted, SSH poll will retry via queued metadata"
                 )
 
+        except StatsFetchSoftFail as e:
+            # Designed retry path, not an error: log at WARNING and skip the
+            # circuit breaker so a backlog of expected soft-fails can't trip
+            # it. Still re-raise so WebhookEventQueue clears the dedup key.
+            webhook_logger.warning("⏳ STATS_READY soft-fail: %s", e)
+            raise
         except Exception as e:
             # Log + alert admin BEFORE re-raising so track_error gets the
             # context. Re-raising is critical: WebhookEventQueue's worker
