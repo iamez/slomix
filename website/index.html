@@ -1285,6 +1285,8 @@
                     </div>
                 </div>
 
+                <button id="link-tonight" data-click-action="navigateTo('tonight')"
+                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Tonight</button>
                 <button id="link-proximity" data-click-action="navigateTo('proximity')"
                     class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Proximity</button>
                 <button id="link-greatshot" data-click-action="navigateTo('greatshot')"
@@ -1403,7 +1405,9 @@
                     </div>
 
                     <!-- Pulse cards: next session / last night / movers (VISION_2026 S1.2) -->
-                    <div id="home-pulse-cards" class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-12 max-w-5xl mx-auto text-left"></div>
+                    <!-- Tonight live card (S7) — appears only during a live session -->
+                    <div id="home-tonight-card" class="mt-12 max-w-5xl mx-auto text-left"></div>
+                    <div id="home-pulse-cards" class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 max-w-5xl mx-auto text-left"></div>
                     <!-- Challenge of the week (S3) -->
                     <div id="home-challenge-card" class="mt-4 max-w-5xl mx-auto text-left"></div>
                     <!-- Season card (S4) -->
@@ -4218,6 +4222,17 @@
         </div>
 
         <!-- RECORDS VIEW -->
+        <!-- TONIGHT LIVE HUB (S7 LIVE) -->
+        <div id="view-tonight" class="view-section hidden">
+            <div class="max-w-4xl mx-auto px-6 py-12">
+                <div class="text-center mb-8">
+                    <h1 class="text-4xl font-black text-white mb-2">🔴 Tonight</h1>
+                    <p class="text-slate-400">Live score, momentum and map flow while the games are on.</p>
+                </div>
+                <div id="tonight-content"></div>
+            </div>
+        </div>
+
         <!-- RECORD BOOK (S6 SPOMIN) — consolidates Records + Hall of Fame + Season -->
         <div id="view-record-book" class="view-section">
             <div class="max-w-7xl mx-auto px-6 py-12">

@@ -6,6 +6,7 @@
  */
 
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
+import { loadHomeTonightCard } from './tonight.js';
 
 function _card({ title, accent, bodyHtml, href, cta }) {
     const link = href
@@ -100,6 +101,7 @@ export async function loadHomePulseCards() {
 
     loadChallengeCard().catch((e) => console.warn('challenge card failed', e));
     loadSeasonCard().catch((e) => console.warn('season card failed', e));
+    loadHomeTonightCard().catch((e) => console.warn('tonight card failed', e));
 }
 
 // Season card (S4) — current quarterly season + top damage leaders + days left.
