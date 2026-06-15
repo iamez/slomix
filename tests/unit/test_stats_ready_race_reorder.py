@@ -70,7 +70,7 @@ async def test_soft_fail_still_persists_lua_capture():
     with the new rounds row. Regression pin for the codex P1 finding
     ("Persist Lua team/spawn data before raising soft fetch failures").
     """
-    from bot.services.stats_ready_mixin import _StatsReadyMixin
+    from bot.services.stats_ready_mixin import StatsFetchSoftFail, _StatsReadyMixin
 
     class _Bot(_StatsReadyMixin):
         def __init__(self):
@@ -90,7 +90,10 @@ async def test_soft_fail_still_persists_lua_capture():
         "round_end_unix": 1772746382,
         "_spawn_stats": [{"guid": "X", "spawns": 1}],
     }
-    with pytest.raises(RuntimeError, match="soft-fail"):
+    # Soft-fail is signalled with the dedicated StatsFetchSoftFail so the queue
+    # clears the dedup key for a retry — but it's an EXPECTED path, so it must
+    # NOT trip the worker circuit breaker (track_error).
+    with pytest.raises(StatsFetchSoftFail, match="soft-fail"):
         await bot._process_stats_ready_round(metadata, msg)
 
     # Critical: capture methods still fired even though fetch failed
@@ -98,6 +101,8 @@ async def test_soft_fail_still_persists_lua_capture():
     bot._store_lua_spawn_stats.assert_awaited_once()
     # Message still deleted — Discord channel cleanup
     msg.delete.assert_awaited_once()
+    # Expected soft-fail does NOT count toward the error circuit breaker
+    bot.track_error.assert_not_awaited()
 
 
 @pytest.mark.asyncio
