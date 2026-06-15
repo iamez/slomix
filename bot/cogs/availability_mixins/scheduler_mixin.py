@@ -30,21 +30,15 @@ class _AvailabilitySchedulerMixin:
     """Daily reminder scheduler + promotion job dispatch + voice-check followup for AvailabilityPollCog."""
 
     async def _run_scheduler_with_lock(self, now: datetime) -> None:
-        lock_acquired = False
-        try:
-            lock_row = await self.bot.db_adapter.fetch_one(
-                "SELECT pg_try_advisory_lock($1)",
-                (self.scheduler_lock_key,),
-            )
-            lock_acquired = bool(lock_row and lock_row[0])
-        except Exception:
-            # SQLite/local adapters do not support advisory locks.
-            lock_acquired = True
+        # The advisory lock is held on a single pinned connection for the
+        # whole block (see DatabaseAdapter.advisory_lock), so it genuinely
+        # serialises the scheduler across instances sharing the database and
+        # auto-releases on exit — no stray "you don't own a lock" warning,
+        # and no lock dropped mid-body when a pooled connection resets.
+        async with self.bot.db_adapter.advisory_lock(self.scheduler_lock_key) as acquired:
+            if not acquired:
+                return
 
-        if not lock_acquired:
-            return
-
-        try:
             today = now.date()
             if self._is_reminder_due(now):
                 if self.last_daily_reminder_date != today:
@@ -53,14 +47,6 @@ class _AvailabilitySchedulerMixin:
             await self._check_session_ready(today)
             if self.promotion_enabled:
                 await self._process_promotion_jobs(now)
-        finally:
-            try:
-                await self.bot.db_adapter.fetch_one(
-                    "SELECT pg_advisory_unlock($1)",
-                    (self.scheduler_lock_key,),
-                )
-            except Exception:
-                logger.debug("Advisory unlock failed (best-effort; lock expires on disconnect)", exc_info=True)
 
     def _is_reminder_due(self, now: datetime) -> bool:
         try:

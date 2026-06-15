@@ -401,3 +401,118 @@ class TestConnectionPooling:
 
         # If connection pooling works, this should not create 5 connections
         # (Hard to verify without access to pool internals)
+
+
+class TestAdvisoryLock:
+    """Log-sweep remediation: session-level advisory lock must hold one
+    pinned connection for the whole block, so lock+unlock land on the SAME
+    backend connection. Otherwise PostgreSQL emits 2687×/day
+    'you don't own a lock of type ExclusiveLock' (acquire on pooled conn A,
+    unlock on pooled conn B) and the lock is silently dropped on pool reset.
+    These tests mock `connection()` so they need no live DB.
+    """
+
+    @staticmethod
+    def _adapter():
+        return PostgreSQLAdapter(
+            host="localhost", port=5432, database="x", user="u", password="p"
+        )
+
+    @staticmethod
+    def _patch_connection(adapter, conn):
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def _fake_connection():
+            yield conn
+
+        adapter.connection = _fake_connection
+
+    @pytest.mark.asyncio
+    async def test_acquired_unlocks_on_same_connection(self):
+        """Lock acquired → unlock runs on the SAME conn with the same key."""
+        from unittest.mock import AsyncMock
+
+        adapter = self._adapter()
+        conn = AsyncMock()
+        conn.fetchval = AsyncMock(side_effect=[True, 1])  # acquire→True, unlock→1
+        self._patch_connection(adapter, conn)
+
+        async with adapter.advisory_lock(875211) as acquired:
+            assert acquired is True
+
+        calls = [c.args for c in conn.fetchval.await_args_list]
+        assert calls == [
+            ("SELECT pg_try_advisory_lock($1)", 875211),
+            ("SELECT pg_advisory_unlock($1)", 875211),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_not_acquired_does_not_unlock(self):
+        """Contended lock (try returns False) → NO unlock call, so no stray
+        'you don't own a lock' warning."""
+        from unittest.mock import AsyncMock
+
+        adapter = self._adapter()
+        conn = AsyncMock()
+        conn.fetchval = AsyncMock(side_effect=[False])  # only the acquire attempt
+        self._patch_connection(adapter, conn)
+
+        async with adapter.advisory_lock(875211) as acquired:
+            assert acquired is False
+
+        assert conn.fetchval.await_count == 1  # acquire only, never unlock
+
+    @pytest.mark.asyncio
+    async def test_unlock_runs_even_when_body_raises(self):
+        """Body exception still releases the lock on the same connection."""
+        from unittest.mock import AsyncMock
+
+        adapter = self._adapter()
+        conn = AsyncMock()
+        conn.fetchval = AsyncMock(side_effect=[True, 1])
+        self._patch_connection(adapter, conn)
+
+        with pytest.raises(RuntimeError):
+            async with adapter.advisory_lock(1) as acquired:
+                assert acquired is True
+                raise RuntimeError("boom")
+
+        assert conn.fetchval.await_count == 2  # acquire + unlock
+
+    @pytest.mark.asyncio
+    async def test_abc_default_degrades_open(self):
+        """Adapters without advisory locks yield True (degrade open) so the
+        guarded body still runs."""
+        from contextlib import asynccontextmanager
+
+        from bot.core.database_adapter import DatabaseAdapter
+
+        class _StubAdapter(DatabaseAdapter):
+            async def connect(self):  # pragma: no cover - stub
+                pass
+
+            async def close(self):  # pragma: no cover - stub
+                pass
+
+            @asynccontextmanager
+            async def connection(self):  # pragma: no cover - stub
+                yield None
+
+            async def execute(self, query, params=None, *extra):  # pragma: no cover
+                pass
+
+            async def executemany(self, query, params_list):  # pragma: no cover
+                pass
+
+            async def fetch_one(self, query, params=None):  # pragma: no cover
+                return None
+
+            async def fetch_all(self, query, params=None):  # pragma: no cover
+                return []
+
+            async def fetch_val(self, query, params=None):  # pragma: no cover
+                return None
+
+        async with _StubAdapter().advisory_lock(123) as acquired:
+            assert acquired is True

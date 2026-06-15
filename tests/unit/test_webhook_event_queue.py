@@ -23,7 +23,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from bot.services.webhook_event_queue import WebhookEventQueue, _dedup_key
+from bot.services.webhook_event_queue import (
+    WebhookEventQueue,
+    WebhookHandlerSoftFail,
+    _dedup_key,
+)
 
 
 def _meta(map_name="te_escape2", rn=1, end=1772746382) -> dict:
@@ -212,5 +216,35 @@ async def test_handler_failure_clears_dedup_for_retry():
     await asyncio.sleep(0.05)
     await q.stop(timeout=2.0)
     assert q.stats()["handler_failures"] == 1
+    assert q.stats()["processed"] == 1
+    assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_soft_fail_clears_dedup_but_is_not_a_handler_failure():
+    """An EXPECTED soft-fail (WebhookHandlerSoftFail) clears the dedup key
+    for a retry just like a hard failure, but is counted separately as a
+    soft-fail and NOT as a handler failure — so a backlog of expected
+    soft-fails doesn't flood the error log or skew the failure counter."""
+    calls: list[int] = []
+
+    async def soft_then_ok(_metadata, _message):
+        calls.append(1)
+        if len(calls) == 1:
+            raise WebhookHandlerSoftFail("stats file not ready yet")
+        # 2nd call (the retry) succeeds
+
+    q = WebhookEventQueue(bot=None, handler=soft_then_ok)
+    q.start()
+    accepted_first, _ = q.enqueue(_meta(), object())
+    assert accepted_first is True
+    await asyncio.sleep(0.05)
+    # Dedup cleared → retry accepted, not silently rejected.
+    accepted_retry, reason = q.enqueue(_meta(), object())
+    assert accepted_retry is True, f"expected retry accepted after soft-fail, got {reason}"
+    await asyncio.sleep(0.05)
+    await q.stop(timeout=2.0)
+    assert q.stats()["soft_fails"] == 1
+    assert q.stats()["handler_failures"] == 0  # NOT counted as a failure
     assert q.stats()["processed"] == 1
     assert len(calls) == 2

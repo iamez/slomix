@@ -43,6 +43,16 @@ DEDUP_TTL_SECONDS = 120
 DEFAULT_QUEUE_SIZE = 50   # generous headroom; peak is ~1 webhook / 3 min today
 
 
+class WebhookHandlerSoftFail(Exception):
+    """Raised by a queue handler for an EXPECTED, transient outcome that
+    still needs the dedup key cleared so a retry can re-enter (e.g. the
+    stats file wasn't available yet). The worker clears dedup exactly like
+    a hard failure, but logs it quietly and does not count it as a handler
+    failure — so a backlog of expected soft-fails doesn't pollute the error
+    log or skew the failure counter.
+    """
+
+
 @dataclass
 class QueuedRound:
     """One pending STATS_READY round waiting for the worker."""
@@ -107,6 +117,7 @@ class WebhookEventQueue:
             "dropped_full": 0,
             "processed": 0,
             "handler_failures": 0,
+            "soft_fails": 0,
         }
 
     # ------------------------------------------------------------------
@@ -209,6 +220,18 @@ class WebhookEventQueue:
             try:
                 await self._handler(item.metadata, item.message)
                 self._stats["processed"] += 1
+            except WebhookHandlerSoftFail as exc:
+                # Expected transient outcome (e.g. stats file not ready yet):
+                # clear the dedup entry so a Lua retry is allowed through,
+                # but log quietly and don't count it as a handler failure.
+                self._stats["soft_fails"] += 1
+                if key is not None:
+                    self._seen.pop(key, None)
+                logger.debug(
+                    "webhook queue soft-fail for %s — dedup cleared, awaiting retry: %s",
+                    key,
+                    exc,
+                )
             except Exception:
                 # Handler failure: drop the dedup entry so the next Lua
                 # retry for this round is allowed through. Keeping the
