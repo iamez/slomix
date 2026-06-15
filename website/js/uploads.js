@@ -265,6 +265,7 @@ async function handleUpload(e) {
             xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
             xhr.open('POST', `${API_BASE}/uploads`);
             xhr.withCredentials = true;
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');  // CSRF
             xhr.send(formData);
         });
 
@@ -795,6 +796,7 @@ async function _maybeShowOwnerDelete(data) {
             try {
                 const resp = await fetch(`${API_BASE}/uploads/${encodeURIComponent(data.id)}`, {
                     method: 'DELETE', credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },  // CSRF
                 });
                 if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                 showToast('Upload deleted', 'success');
