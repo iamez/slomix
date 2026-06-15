@@ -132,6 +132,9 @@ class _StatsReadyMixin:
                 try:
                     await self._process_stats_ready_round(round_metadata, message)
                 except StatsFetchSoftFail:
+                    # Expected soft-fail with no queue to clear dedup for —
+                    # already logged at WARNING in _process_stats_ready_round;
+                    # nothing more to do (see block comment above).
                     pass
                 return
             accepted, reason = queue.enqueue(round_metadata, message)
