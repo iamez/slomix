@@ -22,15 +22,30 @@ async def test_tonight_inactive_when_no_rows():
     assert res["maps"] == []
 
 
+def _cols(map_name, rnum, winner, axis_p, allies_p, *, axis_sc, allies_sc,
+          start, end, cap, gsid=None):
+    """Build a row matching the tonight SQL column order."""
+    return (map_name, rnum, winner, 0, axis_sc, allies_sc, axis_p, allies_p,
+            start, end, cap, gsid)
+
+
 @pytest.mark.asyncio
-async def test_tonight_builds_strip_tally_and_momentum():
+async def test_tonight_resolves_logical_teams_through_side_swap():
+    """The core fix: score by LOGICAL TEAM, not Axis/Allies. In stopwatch the
+    same team swaps sides every round, so a team that wins on Axis (R1) and on
+    Allies (R2) must be credited as ONE team — never split across the side
+    labels. Team A = whoever opened the night on Axis."""
     now = int(datetime.now(timezone.utc).timestamp())
-    # 4 rounds: adlernest R1(allies), R2(axis); supply R1(axis), R2(axis)
+    A = [{"guid": "AAA1", "name": "alice"}, {"guid": "AAA2", "name": "bob"}]
+    B = [{"guid": "BBB1", "name": "carl"}, {"guid": "BBB2", "name": "dave"}]
+    # Team A wins all four rounds despite swapping sides each round.
+    # Map 1 (odd): R1 A=Axis(wins→1), R2 A=Allies(wins→2)
+    # Map 2 (even): R1 A=Allies(wins→2), R2 A=Axis(wins→1)
     tonight_rows = [
-        ("etl_adlernest", 1, 0, 1, 2, now - 600),
-        ("etl_adlernest", 2, 1, 0, 1, now - 500),
-        ("supply", 1, 1, 0, 1, now - 200),
-        ("supply", 2, 1, 0, 1, now - 10),   # last → recent → active
+        _cols("etl_adlernest", 1, 1, A, B, axis_sc=1, allies_sc=0, start=now - 940, end=now - 640, cap=now - 600),
+        _cols("etl_adlernest", 2, 2, B, A, axis_sc=0, allies_sc=1, start=now - 590, end=now - 300, cap=now - 500),
+        _cols("supply", 1, 2, B, A, axis_sc=0, allies_sc=1, start=now - 290, end=now - 40, cap=now - 200),
+        _cols("supply", 2, 1, A, B, axis_sc=1, allies_sc=0, start=now - 30, end=now - 5, cap=now - 10),
     ]
     holdprob_rows = [(120,), (180,), (240,), (300,)]
     db = AsyncMock()
@@ -39,15 +54,44 @@ async def test_tonight_builds_strip_tally_and_momentum():
 
     assert res["active"] is True
     assert res["current_map"] == "supply"
-    assert len(res["maps"]) == 4
-    assert res["maps"][0]["map"] == "etl_adlernest" and res["maps"][0]["round"] == 1
-    t = res["tally"]
-    assert t["axis_rounds"] == 3 and t["allies_rounds"] == 1
-    assert t["maps_played"] == 2  # two R2 rows
-    # momentum: ends with axis dominating (last 3 rounds axis) → axis > 50
-    assert res["momentum"][-1]["axis"] > 50
-    assert res["hold_probability"] is not None
+    # Rosters are clean + non-overlapping despite the swaps.
+    assert res["teams"]["a"]["roster"] == ["alice", "bob"]
+    assert res["teams"]["b"]["roster"] == ["carl", "dave"]
+    # Team A swept: 2 maps, 4 rounds; Team B nothing — NOT 2 axis / 2 allies.
+    s = res["score"]
+    assert s["a_maps"] == 2 and s["b_maps"] == 0
+    assert s["a_rounds"] == 4 and s["b_rounds"] == 0
+    assert s["maps_completed"] == 2
+    # Two completed maps, both won by team A (2 points each).
+    assert len(res["maps"]) == 2
+    assert all(m["winner"] == "a" and m["a_points"] == 2 for m in res["maps"])
+    # Momentum ends with team A dominating.
+    assert res["momentum"][-1]["a"] > 50
     assert res["hold_probability"]["map"] == "supply"
+    # Current map complete (R1+R2 both in).
+    assert res["current"]["round"] == 2 and res["current"]["r2_pending"] is False
+
+
+@pytest.mark.asyncio
+async def test_tonight_current_map_r2_chase():
+    """When only R1 of the current map has landed, surface the R2 time-to-beat."""
+    now = int(datetime.now(timezone.utc).timestamp())
+    A = [{"guid": "AAA1", "name": "alice"}]
+    B = [{"guid": "BBB1", "name": "carl"}]
+    rows = [
+        # complete map 1
+        _cols("supply", 1, 1, A, B, axis_sc=1, allies_sc=0, start=now - 700, end=now - 400, cap=now - 600),
+        _cols("supply", 2, 1, B, A, axis_sc=1, allies_sc=0, start=now - 390, end=now - 110, cap=now - 300),
+        # map 2: only R1 played so far → R2 pending, attack must beat R1's 255s
+        _cols("radar", 1, 1, A, B, axis_sc=1, allies_sc=0, start=now - 300, end=now - 45, cap=now - 20),
+    ]
+    db = AsyncMock()
+    db.fetch_all = AsyncMock(side_effect=[rows, [(120,), (180,), (240,)]])
+    res = await PR.get_tonight(db)
+    cur = res["current"]
+    assert cur["map"] == "radar" and cur["round"] == 1
+    assert cur["r2_pending"] is True
+    assert cur["beat_seconds"] == 255  # end-start of the radar R1
 
 
 @pytest.mark.asyncio
