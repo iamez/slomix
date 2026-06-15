@@ -4,6 +4,8 @@ Player-related endpoints: search, link, profile, compare, leaderboard, matches, 
 Extracted from api.py to reduce file size and improve maintainability.
 """
 
+import json
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -202,15 +204,81 @@ async def get_hold_probability(map_name: str = Query(alias="map"),
     return {"status": "ok", "map": map_name, "curve": curve}
 
 
+def _lua_players(val) -> list[dict]:
+    """Normalise the axis_players/allies_players jsonb (list of {guid, name})
+    whether asyncpg hands it back as a parsed list or a JSON string."""
+    if isinstance(val, str):
+        try:
+            val = json.loads(val)
+        except (ValueError, TypeError):
+            return []
+    return [p for p in (val or []) if isinstance(p, dict)]
+
+
+async def _tonight_team_names(db, gaming_session_id, anchor_a: set, anchor_b: set):
+    """Best-effort logical-team display names. In stopwatch mode the Axis/Allies
+    labels swap every round, so the only stable identity is the roster. If the
+    bot has already written session_teams for this session, map those names onto
+    the alpha/beta anchors by GUID overlap; otherwise fall back to Team A/Team B.
+
+    Defensive on purpose: names are cosmetic (the rosters are the real identity),
+    so any schema/data surprise falls back to the generic labels rather than
+    breaking the live payload. Note session_teams stores SHORT 8-char GUIDs while
+    the lua feed has full 32-char GUIDs — compare on the 8-char prefix.
+    """
+    default = ("Team A", "Team B")
+    if not gaming_session_id:
+        return default
+    short_a = {g[:8] for g in anchor_a if g}
+    short_b = {g[:8] for g in anchor_b if g}
+    try:
+        rows = await db.fetch_all(
+            "SELECT team_name, player_guids FROM session_teams WHERE gaming_session_id = $1",
+            (gaming_session_id,),
+        )
+        by_team: dict[str, set] = {}
+        for name, guids in (rows or []):
+            if not name:
+                continue
+            by_team.setdefault(name, set()).update(
+                g[:8] for g in _lua_guid_list(guids) if g
+            )
+        teams = sorted((kv for kv in by_team.items() if kv[1]), key=lambda kv: -len(kv[1]))[:2]
+        if len(teams) < 2:
+            return default
+        (n1, g1), (n2, g2) = teams
+        a_for_1 = len(g1 & short_a) - len(g1 & short_b)
+        a_for_2 = len(g2 & short_a) - len(g2 & short_b)
+        return (n1, n2) if a_for_1 >= a_for_2 else (n2, n1)
+    except Exception:
+        return default
+
+
+def _lua_guid_list(val) -> list[str]:
+    """Normalise a jsonb GUID array (session_teams.player_guids) to a list."""
+    if isinstance(val, str):
+        try:
+            val = json.loads(val)
+        except (ValueError, TypeError):
+            return []
+    return [g for g in (val or []) if isinstance(g, str)]
+
+
 @router.get("/stats/tonight")
 async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
-    """Consolidated live payload for the Tonight hub: tonight's rounds (map strip),
-    side tally, a light score-swing momentum, freshness, and the current map's
-    hold-probability curve. One poll (~8s). Reads the real-time lua_round_teams feed."""
+    """Consolidated live payload for the Tonight hub. Reads the real-time
+    lua_round_teams feed and resolves it into LOGICAL TEAMS (not Axis/Allies —
+    those swap every round in stopwatch mode). Returns per-map stopwatch results,
+    team round/map tallies, rosters, a team-momentum swing, the current map's
+    live status (incl. the R2 time-to-beat chase) and its hold-probability curve.
+    One poll (~8s)."""
     rows = await db.fetch_all(
         """
-        SELECT l.map_name, l.round_number, l.axis_score, l.allies_score, l.winner_team,
-               EXTRACT(EPOCH FROM l.captured_at)::bigint AS cap_unix
+        SELECT l.map_name, l.round_number, l.winner_team, l.defender_team,
+               l.axis_score, l.allies_score, l.axis_players, l.allies_players,
+               l.round_start_unix, l.round_end_unix,
+               EXTRACT(EPOCH FROM l.captured_at)::bigint AS cap_unix,
+               r.gaming_session_id
         FROM lua_round_teams l
         LEFT JOIN rounds r ON r.id = l.round_id
         WHERE l.captured_at::date = CURRENT_DATE
@@ -220,32 +288,145 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
     )
     rows = rows or []
     if not rows:
-        return {"status": "ok", "active": False, "maps": [], "momentum": [],
-                "tally": {}, "hold_probability": None}
+        return {"status": "ok", "active": False, "teams": {}, "maps": [],
+                "momentum": [], "score": {}, "current": None, "hold_probability": None}
 
-    maps, momentum = [], []
-    m = 50.0  # momentum: 100 = Axis dominating, 0 = Allies
-    axis_rounds = allies_rounds = 0
+    # --- Resolve logical teams with the stopwatch side-alternation model that
+    #     the rest of the site uses (see BOXScoringService): on odd maps Team A
+    #     starts on Axis (R1) and swaps to Allies (R2); on even maps it's
+    #     mirrored. This is deterministic (no fragile roster-overlap guessing)
+    #     and consistent with session-detail scoring. "Team A" = whoever opened
+    #     the night on Axis.
+    def _guids(players):
+        return {p.get("guid") for p in players if p.get("guid")}
+
+    def _alpha_side(map_no: int, rnd: int) -> int:
+        # 1 = Axis, 2 = Allies. Odd map: R1 alpha=Axis, R2 alpha=Allies.
+        if map_no % 2 == 1:
+            return 1 if rnd == 1 else 2
+        return 2 if rnd == 1 else 1
+
+    # Players sub in/out across a night, so attribute each guid to the team it
+    # played MOST rounds for (computed after the loop) — a clean, non-overlapping
+    # roster even when someone fills in for the other team for a map.
+    count_a: Counter = Counter()
+    count_b: Counter = Counter()
+    name_by_guid: dict[str, str] = {}
+
+    maps: dict[int, dict] = {}
+    momentum = []
+    m = 50.0  # 100 = Team A dominating, 0 = Team B
+    a_rounds = b_rounds = 0
+    map_number = 0
+    last_gsid = None
+
     for r in rows:
-        winner = r[4]
-        maps.append({
-            "map": r[0], "round": int(r[1] or 0),
-            "axis_score": int(r[2] or 0), "allies_score": int(r[3] or 0),
-            "winner_team": winner, "captured_unix": int(r[5] or 0),
-        })
-        if winner == 1:
-            axis_rounds += 1
-        elif winner == 2:
-            allies_rounds += 1
-        target = 100.0 if winner == 1 else (0.0 if winner == 2 else 50.0)
-        m = m * 0.7 + target * 0.3  # smooth swing toward the winning side
-        momentum.append({"axis": round(m, 1), "allies": round(100 - m, 1)})
+        map_name, rnum, winner, _defender = r[0], int(r[1] or 0), r[2], r[3]
+        axis_sc, allies_sc = int(r[4] or 0), int(r[5] or 0)
+        axis_p, allies_p = _lua_players(r[6]), _lua_players(r[7])
+        start_u, end_u = r[8], r[9]
+        if r[11]:
+            last_gsid = r[11]
 
-    last_unix = int(rows[-1][5] or 0)
+        if rnum == 1:
+            map_number += 1
+        a_on_axis = _alpha_side(map_number, rnum) == 1
+
+        # Tally each player's rounds per logical team for majority assignment.
+        for p in (axis_p if a_on_axis else allies_p):
+            if p.get("guid"):
+                count_a[p["guid"]] += 1
+                name_by_guid[p["guid"]] = p.get("name", name_by_guid.get(p["guid"], "?"))
+        for p in (allies_p if a_on_axis else axis_p):
+            if p.get("guid"):
+                count_b[p["guid"]] += 1
+                name_by_guid[p["guid"]] = p.get("name", name_by_guid.get(p["guid"], "?"))
+
+        # Round winner → logical team.
+        if winner == 1:
+            rteam = "a" if a_on_axis else "b"
+        elif winner == 2:
+            rteam = "b" if a_on_axis else "a"
+        else:
+            rteam = None
+        if rteam == "a":
+            a_rounds += 1
+        elif rteam == "b":
+            b_rounds += 1
+
+        target = 100.0 if rteam == "a" else (0.0 if rteam == "b" else 50.0)
+        m = m * 0.7 + target * 0.3
+        momentum.append({"a": round(m, 1), "b": round(100 - m, 1)})
+
+        mp = maps.setdefault(map_number, {"map_number": map_number, "map": map_name, "rounds": []})
+        duration = int(end_u - start_u) if (start_u and end_u and end_u > start_u) else None
+        mp["rounds"].append({
+            "round": rnum, "winner": rteam,
+            "axis_score": axis_sc, "allies_score": allies_sc,
+            "a_on_axis": a_on_axis, "duration": duration,
+        })
+
+    # --- Per-map stopwatch result in team terms. R2 is the decider; if only R1
+    #     has landed the map is still pending.
+    map_list = []
+    a_maps = b_maps = maps_completed = 0
+    for mn in sorted(maps):
+        mp = maps[mn]
+        by_round = {rr["round"]: rr for rr in mp["rounds"]}
+        r2 = by_round.get(2)
+        winner = "pending"
+        a_pts = b_pts = 0
+        if r2 and r2["winner"]:
+            winner = r2["winner"]  # R2 winner takes the map
+            if winner == "a":
+                a_pts, a_maps = 2, a_maps + 1
+            else:
+                b_pts, b_maps = 2, b_maps + 1
+            maps_completed += 1
+        elif r2 and not r2["winner"]:
+            winner = "draw"
+            maps_completed += 1
+        mp.update({"winner": winner, "a_points": a_pts, "b_points": b_pts})
+        map_list.append(mp)
+
+    last_unix = int(rows[-1][10] or 0)
     now_unix = int(datetime.now(timezone.utc).timestamp())
     age = max(0, now_unix - last_unix)
     current_map = rows[-1][0]
+    current_rnum = int(rows[-1][1] or 0)
+
+    # --- Current-map live status + R2 time-to-beat chase. lua rows land at round
+    #     END, so "live" means a fresh round just completed; if R1 just finished
+    #     we surface the time R2's attack must beat.
+    cur = maps[map_number]
+    cur_by_round = {rr["round"]: rr for rr in cur["rounds"]}
+    r2_pending = (1 in cur_by_round) and (2 not in cur_by_round)
+    beat = cur_by_round.get(1, {}).get("duration") if r2_pending else None
+    if r2_pending:
+        status = "R1 in the books — R2 to play"
+    elif current_rnum == 2:
+        status = "map complete"
+    else:
+        status = "in progress"
+    current = {
+        "map": current_map, "round": current_rnum, "status": status,
+        "r2_pending": r2_pending, "beat_seconds": beat,
+    }
+
+    # Majority assignment: each guid lands on the team it played most for (ties → A).
+    roster_a: dict[str, str] = {}
+    roster_b: dict[str, str] = {}
+    for guid in set(count_a) | set(count_b):
+        if count_a[guid] >= count_b[guid]:
+            roster_a[guid] = name_by_guid.get(guid, "?")
+        else:
+            roster_b[guid] = name_by_guid.get(guid, "?")
+
+    name_a, name_b = await _tonight_team_names(db, last_gsid, set(roster_a), set(roster_b))
     hold = await _hold_prob_curve(db, current_map) if current_map else []
+
+    def _roster(d):
+        return sorted(d.values(), key=str.lower)
 
     return {
         "status": "ok",
@@ -253,14 +434,18 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
         "current_map": current_map,
         "last_update_unix": last_unix,
         "age_seconds": age,
-        "maps": maps,
-        "momentum": momentum,
-        "tally": {
-            "rounds": len(maps),
-            "axis_rounds": axis_rounds,
-            "allies_rounds": allies_rounds,
-            "maps_played": sum(1 for x in maps if x["round"] == 2),
+        "teams": {
+            "a": {"name": name_a, "roster": _roster(roster_a)},
+            "b": {"name": name_b, "roster": _roster(roster_b)},
         },
+        "score": {
+            "a_maps": a_maps, "b_maps": b_maps,
+            "a_rounds": a_rounds, "b_rounds": b_rounds,
+            "maps_completed": maps_completed,
+        },
+        "maps": map_list,
+        "momentum": momentum,
+        "current": current,
         "hold_probability": {"map": current_map, "curve": hold} if hold else None,
     }
 
