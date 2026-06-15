@@ -2,7 +2,7 @@
 discord.py==2.6.4
 asyncpg==0.31.0
 aiosqlite==0.22.1
-python-dotenv==1.2.1
+python-dotenv==1.2.2
 pytz==2025.2
 itsdangerous==2.2.0
 fastapi==0.133.1
@@ -13,7 +13,7 @@ aiofiles==25.1.0
 paramiko==4.0.0
 scp==0.15.0
 websockets==16.0
-Pillow==12.1.1
+Pillow==12.2.0
 matplotlib==3.10.8
 watchdog==6.0.0
 trueskill==0.4.5

@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from website.backend.dependencies import get_db
 from website.backend.logging_config import get_app_logger
+from website.backend.middleware.auth_helpers import require_ajax_csrf_header
 
 logger = get_app_logger("uploads.api")
 
@@ -88,6 +89,7 @@ async def upload_file(
     db=Depends(get_db),
 ):
     """Upload a config, HUD, archive, or clip file."""
+    require_ajax_csrf_header(request)  # CSRF: state-changing, requires X-Requested-With
     user = _require_user(request)
     discord_id = int(user["id"])
     username = user.get("username", "Unknown")
@@ -476,6 +478,7 @@ async def download_upload(
 @router.delete("/{upload_id}")
 async def delete_upload(upload_id: str, request: Request, db=Depends(get_db)):
     """Soft-delete an upload (owner only)."""
+    require_ajax_csrf_header(request)  # CSRF: state-changing, requires X-Requested-With
     user = _require_user(request)
     discord_id = int(user["id"])
 

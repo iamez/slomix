@@ -689,3 +689,4 @@ proximity/map_rotation.txt
 # GEMINI WEBSITE (local dev, not part of this project)
 # ============================================
 gemini-website/
+.audit-venv/
