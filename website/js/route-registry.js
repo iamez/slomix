@@ -135,6 +135,15 @@ const ROUTE_DEFINITIONS = Object.freeze({
         buildHash: () => '#/record-book',
         load: ({ legacy, params }) => legacy.loadRecordBookView(params || {}),
     },
+    tonight: {
+        viewId: 'tonight',
+        label: 'Tonight',
+        mode: VIEW_MODE.LEGACY,
+        surfaceType: 'read-heavy',
+        migrationWave: 'A',
+        buildHash: () => '#/tonight',
+        load: ({ legacy }) => legacy.loadTonightView(),
+    },
     awards: {
         viewId: 'awards',
         label: 'Awards',

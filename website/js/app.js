@@ -49,6 +49,7 @@ import { loadSeasonLeaders, loadActivityCalendar, loadSeasonSummary } from './se
 import { loadHallOfFameView } from './hall-of-fame.js';
 import { loadRecordBookView } from './record-book.js';
 import { openWrapped } from './wrapped.js';
+import { loadTonightView } from './tonight.js';
 import { loadRetroVizView } from './retro-viz.js?v=20260513-v142-cf-bust';
 import { loadSessions2View } from './sessions2.js?v=20260513-v142-cf-bust';
 import { loadSessionDetailView } from './session-detail.js?v=20260513-v142-cf-bust';
@@ -106,6 +107,7 @@ const legacyRuntime = {
     loadAdminPanelView,
     loadHallOfFameView,
     loadRecordBookView,
+    loadTonightView,
     loadRetroVizView,
     loadSessions2View,
     loadSessionDetailView,

@@ -6,7 +6,7 @@ Extracted from api.py to reduce file size and improve maintainability.
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from shared.season_manager import SeasonManager
@@ -154,6 +154,114 @@ async def get_live_session(db: DatabaseAdapter = Depends(get_db)):
         "current_map": latest[0] if latest else "Unknown",
         "last_round_time": format_stopwatch_time(latest[2]) if latest else None,
         "last_update": str(result[0]),
+    }
+
+
+# ── Tonight live hub (VISION_2026 S7 LIVE) ─────────────────────────────────────
+_TONIGHT_ACTIVE_SECONDS = 40 * 60  # session is "live" if a round landed in 40 min
+
+
+async def _hold_prob_curve(db, map_name: str) -> list[dict]:
+    """Historical attack-completion curve for a map: P(attack done by time t),
+    from the distribution of actual_time (M:SS) across valid rounds."""
+    rows = await db.fetch_all(
+        """
+        SELECT SPLIT_PART(actual_time, ':', 1)::int * 60
+               + SPLIT_PART(actual_time, ':', 2)::int AS secs
+        FROM rounds
+        WHERE map_name = ?
+          AND actual_time ~ '^[0-9]+:[0-9]+$'
+          AND round_number IN (1, 2)
+          AND is_valid IS DISTINCT FROM FALSE
+          AND (SPLIT_PART(actual_time, ':', 1)::int * 60
+               + SPLIT_PART(actual_time, ':', 2)::int) > 0
+        """,
+        (map_name,),
+    )
+    secs = sorted(int(r[0]) for r in (rows or []))
+    if len(secs) < 3:
+        return []
+    cap = secs[-1]
+    total = len(secs)
+    points = []
+    idx = 0  # single pointer over the sorted list → O(n + buckets)
+    t = 0
+    while t <= cap:
+        while idx < total and secs[idx] <= t:
+            idx += 1
+        points.append({"t": t, "p": round(idx / total * 100, 1)})
+        t += 30
+    return points
+
+
+@router.get("/stats/hold-probability")
+async def get_hold_probability(map_name: str = Query(alias="map"),
+                               db: DatabaseAdapter = Depends(get_db)):
+    """Historical attack-completion-time curve for a single map."""
+    curve = await _hold_prob_curve(db, map_name)
+    return {"status": "ok", "map": map_name, "curve": curve}
+
+
+@router.get("/stats/tonight")
+async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
+    """Consolidated live payload for the Tonight hub: tonight's rounds (map strip),
+    side tally, a light score-swing momentum, freshness, and the current map's
+    hold-probability curve. One poll (~8s). Reads the real-time lua_round_teams feed."""
+    rows = await db.fetch_all(
+        """
+        SELECT l.map_name, l.round_number, l.axis_score, l.allies_score, l.winner_team,
+               EXTRACT(EPOCH FROM l.captured_at)::bigint AS cap_unix
+        FROM lua_round_teams l
+        LEFT JOIN rounds r ON r.id = l.round_id
+        WHERE l.captured_at::date = CURRENT_DATE
+          AND (r.id IS NULL OR r.is_valid IS DISTINCT FROM FALSE)
+        ORDER BY l.captured_at ASC
+        """,
+    )
+    rows = rows or []
+    if not rows:
+        return {"status": "ok", "active": False, "maps": [], "momentum": [],
+                "tally": {}, "hold_probability": None}
+
+    maps, momentum = [], []
+    m = 50.0  # momentum: 100 = Axis dominating, 0 = Allies
+    axis_rounds = allies_rounds = 0
+    for r in rows:
+        winner = r[4]
+        maps.append({
+            "map": r[0], "round": int(r[1] or 0),
+            "axis_score": int(r[2] or 0), "allies_score": int(r[3] or 0),
+            "winner_team": winner, "captured_unix": int(r[5] or 0),
+        })
+        if winner == 1:
+            axis_rounds += 1
+        elif winner == 2:
+            allies_rounds += 1
+        target = 100.0 if winner == 1 else (0.0 if winner == 2 else 50.0)
+        m = m * 0.7 + target * 0.3  # smooth swing toward the winning side
+        momentum.append({"axis": round(m, 1), "allies": round(100 - m, 1)})
+
+    last_unix = int(rows[-1][5] or 0)
+    now_unix = int(datetime.now(timezone.utc).timestamp())
+    age = max(0, now_unix - last_unix)
+    current_map = rows[-1][0]
+    hold = await _hold_prob_curve(db, current_map) if current_map else []
+
+    return {
+        "status": "ok",
+        "active": age <= _TONIGHT_ACTIVE_SECONDS,
+        "current_map": current_map,
+        "last_update_unix": last_unix,
+        "age_seconds": age,
+        "maps": maps,
+        "momentum": momentum,
+        "tally": {
+            "rounds": len(maps),
+            "axis_rounds": axis_rounds,
+            "allies_rounds": allies_rounds,
+            "maps_played": sum(1 for x in maps if x["round"] == 2),
+        },
+        "hold_probability": {"map": current_map, "curve": hold} if hold else None,
     }
 
 
