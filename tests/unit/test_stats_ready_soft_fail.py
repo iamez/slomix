@@ -79,6 +79,42 @@ async def test_soft_fail_is_a_webhook_soft_fail_so_queue_clears_dedup():
 
 
 @pytest.mark.asyncio
+async def test_queueless_fallback_swallows_soft_fail_no_error(caplog):
+    """When the queue isn't wired (tests / partial setup),
+    `_process_stats_ready_webhook` awaits the round inline. A soft-fail must
+    NOT escape to the broad handler (which would relog at ERROR) — it has no
+    dedup consumer here, so it is swallowed (already logged WARNING inside).
+    """
+    s = MagicMock()
+    s.webhook_event_queue = None
+    s._fields_to_metadata_map = MagicMock(return_value={})
+    s._build_round_metadata_from_map = MagicMock(return_value={
+        "map_name": "te_escape2", "round_number": 1, "round_end_unix": 1_700_000_000,
+        "winner_team": 0, "lua_playtime_seconds": 120, "lua_warmup_seconds": 0,
+        "lua_pause_count": 0, "surrender_team": 0, "axis_score": 0, "allies_score": 0,
+    })
+    s._parse_spawn_stats_from_metadata = MagicMock(return_value=[])
+    s._resolve_team_display_names = MagicMock(return_value="(none)")
+    s._queue_pending_metadata = MagicMock()
+    s.track_error = AsyncMock()
+    # The inline round handler soft-fails.
+    s._process_stats_ready_round = AsyncMock(side_effect=StatsFetchSoftFail("not ready"))
+
+    msg = MagicMock()
+    embed = MagicMock()
+    embed.fields = []
+    embed.footer = MagicMock(text=None)
+    msg.embeds = [embed]
+
+    with caplog.at_level(logging.ERROR, logger="bot.webhook"):
+        # Must NOT raise and must NOT log ERROR.
+        await _StatsReadyMixin._process_stats_ready_webhook(s, msg)
+
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+    s.track_error.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_genuine_error_logs_error_and_calls_track_error(caplog):
     """A real failure (DB write blows up) stays ERROR + trips track_error."""
     s = _make_self(fetched=True, store_raises=ValueError("db exploded"))

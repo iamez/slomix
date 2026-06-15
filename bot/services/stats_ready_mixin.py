@@ -123,7 +123,16 @@ class _StatsReadyMixin:
                 # Fallback for tests / partial setups that don't wire the queue.
                 # Awaits inline — callers that need fire-and-forget should
                 # wrap the webhook handler in _safe_create_task themselves.
-                await self._process_stats_ready_round(round_metadata, message)
+                # Without a queue there is no dedup key to clear, so the
+                # soft-fail re-raise has no consumer: swallow it (already
+                # logged at WARNING inside _process_stats_ready_round) rather
+                # than letting the broad except below relog it at ERROR +
+                # track_error. The SSH-poll path still recovers the stats
+                # file via the pending metadata queued above.
+                try:
+                    await self._process_stats_ready_round(round_metadata, message)
+                except StatsFetchSoftFail:
+                    pass
                 return
             accepted, reason = queue.enqueue(round_metadata, message)
             if not accepted:
