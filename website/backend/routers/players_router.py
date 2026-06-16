@@ -318,7 +318,7 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
     last_gsid = None
 
     for r in rows:
-        map_name, rnum, winner, _defender = r[0], int(r[1] or 0), r[2], r[3]
+        map_name, rnum, winner = r[0], int(r[1] or 0), r[2]
         axis_sc, allies_sc = int(r[4] or 0), int(r[5] or 0)
         axis_p, allies_p = _lua_players(r[6]), _lua_players(r[7])
         start_u, end_u = r[8], r[9]
