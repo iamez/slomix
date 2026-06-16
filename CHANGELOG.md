@@ -6,6 +6,29 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.19.0](https://github.com/iamez/slomix/compare/v1.18.0...v1.19.0) (2026-06-16)
+
+
+### Features
+
+* **proximity:** competitive wave 2 — man-advantage, clutch 1vN, side splits, player passport + killer_reinf backfill ([#378](https://github.com/iamez/slomix/issues/378)) ([e678de1](https://github.com/iamez/slomix/commit/e678de16f18642d6e9b7ccbe67ed89b17c26569e))
+* **proximity:** vision sweep — E2E audit, Invisible Value panel, Player Journey + fixes ([#376](https://github.com/iamez/slomix/issues/376)) ([d2558a8](https://github.com/iamez/slomix/commit/d2558a8eef45a17d593f07c02a7e3d7973963ca7))
+* Sprint S1 'JUTRO' — morning digest, home pulse cards, own-form verdicts & baselines ([#384](https://github.com/iamez/slomix/issues/384)) ([18ddf1c](https://github.com/iamez/slomix/commit/18ddf1c3efa50ff17e1729b758fd1fde33aba76f))
+* Sprint S2 'RAČUN' — web display-name & aliases + role-gating foundation ([#386](https://github.com/iamez/slomix/issues/386)) ([edd3f0f](https://github.com/iamez/slomix/commit/edd3f0f7f867cbc810d8c2c94d1fb983ae2fa18b))
+* Sprint S3 'VEČER' — MVP vote, weekly challenge, lobby & captain-draft polish ([#389](https://github.com/iamez/slomix/issues/389)) ([128bb6a](https://github.com/iamez/slomix/commit/128bb6a0cdf782e94b78279a8ebda2a5543c6e18))
+* Sprint S4 'TEKMA' — seasons, season awards+HoF, parimutuel betting, per-map records ([#391](https://github.com/iamez/slomix/issues/391)) ([e0b0a4e](https://github.com/iamez/slomix/commit/e0b0a4ea68150a14eeaa0fff62e2a85d5002328b))
+* Sprint S5 'IDENTITETA' — profile IA, archetype/focus/duo, career timeline, mobile ([#395](https://github.com/iamez/slomix/issues/395)) ([9f73cee](https://github.com/iamez/slomix/commit/9f73ceefebcd91828e47ded724323dee7e89a03e))
+* Sprint S6 'SPOMIN' — On This Day, Record Book, Slomix Wrapped ([#397](https://github.com/iamez/slomix/issues/397)) ([8d58df2](https://github.com/iamez/slomix/commit/8d58df226a0678da4a63242737daf7c4efb89f62))
+* Sprint S7 'LIVE' — Tonight hub (live score, momentum, hold-probability) ([#398](https://github.com/iamez/slomix/issues/398)) ([c3f1b8d](https://github.com/iamez/slomix/commit/c3f1b8d81aa21b6bb4da38ea77b6b8e38ee62023))
+* **website:** session team momentum + Uploads & Hall of Fame QoL ([#380](https://github.com/iamez/slomix/issues/380)) ([2a228b5](https://github.com/iamez/slomix/commit/2a228b5238d8475c96dc7c9675bb9accdeb4b845))
+* **website:** Tonight live hub — logical-team score (fix Axis/Allies) + richer live view ([#402](https://github.com/iamez/slomix/issues/402)) ([991064b](https://github.com/iamez/slomix/commit/991064b54efe6ee315f6fb7bf0fb4a247e2615ee))
+
+
+### Bug Fixes
+
+* **bot:** silence postgres advisory-lock warning + webhook soft-fail log level ([#400](https://github.com/iamez/slomix/issues/400)) ([a928dab](https://github.com/iamez/slomix/commit/a928dabdd4627a805838c2a991ad8aead7adc74c))
+* **security:** audit remediation — uploads CSRF + dependency CVE bumps + audit report ([#399](https://github.com/iamez/slomix/issues/399)) ([09d4e91](https://github.com/iamez/slomix/commit/09d4e9192d3414e873f807892f6dfd0fd285370c))
+
 ## [1.18.0](https://github.com/iamez/slomix/compare/v1.17.0...v1.18.0) (2026-06-10)
 
 
