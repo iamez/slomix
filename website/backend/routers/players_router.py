@@ -233,7 +233,7 @@ async def _tonight_team_names(db, gaming_session_id, anchor_a: set, anchor_b: se
     short_b = {g[:8] for g in anchor_b if g}
     try:
         rows = await db.fetch_all(
-            "SELECT team_name, player_guids FROM session_teams WHERE gaming_session_id = $1",
+            "SELECT team_name, player_guids FROM session_teams WHERE gaming_session_id = ?",
             (gaming_session_id,),
         )
         by_team: dict[str, set] = {}
@@ -297,9 +297,6 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
     #     mirrored. This is deterministic (no fragile roster-overlap guessing)
     #     and consistent with session-detail scoring. "Team A" = whoever opened
     #     the night on Axis.
-    def _guids(players):
-        return {p.get("guid") for p in players if p.get("guid")}
-
     def _alpha_side(map_no: int, rnd: int) -> int:
         # 1 = Axis, 2 = Allies. Odd map: R1 alpha=Axis, R2 alpha=Allies.
         if map_no % 2 == 1:
