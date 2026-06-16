@@ -52,6 +52,29 @@ function _mmss(sec) {
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+// Live server pulse from the UDP query (/live-status) — the actual "right now"
+// state, which the lua feed (round-end only) can't show. Empty string when the
+// server is offline so the strip simply doesn't render.
+function _serverStrip(gs) {
+    if (!gs || !gs.online) return '';
+    const map = escapeHtml(gs.map || '—');
+    const pc = gs.player_count || 0, mx = gs.max_players || 0;
+    const hostname = escapeHtml(gs.hostname || 'server');
+    const names = (gs.players || [])
+        .map(p => escapeHtml((p && p.name) || ''))
+        .filter(Boolean)
+        .join(' · ');
+    return `<div class="glass-panel p-4 rounded-xl mb-6 flex items-center justify-between flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-bold">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>SERVER LIVE
+            </span>
+            <span class="text-sm text-slate-300">${hostname} · <span class="text-white font-bold">${map}</span></span>
+        </div>
+        <span class="text-xs text-slate-400">${pc}/${mx} on server${names ? ` — ${names}` : ''}</span>
+    </div>`;
+}
+
 // One round's outcome as a small team-coloured pill (R1 · winner · time).
 function _roundPill(rd) {
     const color = rd.winner === 'a' ? A_COLOR : rd.winner === 'b' ? B_COLOR : '#64748b';
@@ -77,19 +100,39 @@ function _teamPanel(team, maps, rounds, lead, side) {
 async function _refresh() {
     const host = document.getElementById('tonight-content');
     if (!host) return;
-    let data;
-    try {
-        data = await fetchJSON(`${API_BASE}/stats/tonight`, { cachePolicy: 'no-store', credentials: 'same-origin' });
-    } catch (_e) {
+    // Fetch the round feed and the live server pulse in parallel — independent
+    // so the slow UDP server query never blocks (or breaks) the lua-based payload.
+    const [tRes, lRes] = await Promise.allSettled([
+        fetchJSON(`${API_BASE}/stats/tonight`, { cachePolicy: 'no-store', credentials: 'same-origin' }),
+        fetchJSON(`${API_BASE}/live-status`, { cachePolicy: 'no-store', credentials: 'same-origin' }),
+    ]);
+    const data = tRes.status === 'fulfilled' ? tRes.value : null;
+    const gs = (lRes.status === 'fulfilled' && lRes.value) ? lRes.value.game_server : null;
+
+    if (!data) {
         host.textContent = '';
         safeInsertHTML(host, 'beforeend', `<div class="glass-panel p-6 rounded-xl text-center text-slate-400">Live data unavailable right now.</div>`);
         return;
     }
 
-    if (!data || !data.active) {
+    const serverOnline = !!(gs && gs.online);
+    const serverPlayers = serverOnline ? (gs.player_count || 0) : 0;
+
+    if (!data.active) {
+        // Server has players but no completed round yet → keep polling, the
+        // results strip will fill in as rounds land. Otherwise truly idle.
+        if (serverPlayers > 0) {
+            host.textContent = '';
+            safeInsertHTML(host, 'beforeend', _serverStrip(gs) + `
+                <div class="glass-panel p-8 rounded-xl text-center">
+                    <div class="text-xl font-black text-white mb-1">Session warming up…</div>
+                    <div class="text-slate-400">Rounds will appear here as they complete.</div>
+                </div>`);
+            return;
+        }
         _stopPolling();
         host.textContent = '';
-        safeInsertHTML(host, 'beforeend', `
+        safeInsertHTML(host, 'beforeend', (serverOnline ? _serverStrip(gs) : '') + `
             <div class="glass-panel p-8 rounded-xl text-center">
                 <div class="text-2xl font-black text-white mb-2">No session live right now</div>
                 <div class="text-slate-400 mb-4">Come back when the games are on.</div>
@@ -131,7 +174,7 @@ async function _refresh() {
         : '';
 
     host.textContent = '';
-    safeInsertHTML(host, 'beforeend', `
+    safeInsertHTML(host, 'beforeend', _serverStrip(gs) + `
         <div class="glass-panel p-6 rounded-xl mb-6">
             <div class="flex items-center justify-between flex-wrap gap-3 mb-5">
                 <div class="flex items-center gap-3">
