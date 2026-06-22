@@ -176,21 +176,23 @@ async function loadStoryData() {
             .then(d => { if (loadId === storyLoadId) renderBoxScore(d); })
             .catch(() => renderBoxScore(null));
 
-        // Invisible Value — 4 parallel fetches
+        // Invisible Value — 5 parallel fetches
         Promise.allSettled([
             fetchJSON(`${API_BASE}/storytelling/gravity?session_date=${enc}`),
             fetchJSON(`${API_BASE}/storytelling/space-created?session_date=${enc}`),
             fetchJSON(`${API_BASE}/storytelling/enabler?session_date=${enc}`),
             fetchJSON(`${API_BASE}/storytelling/lurker-profile?session_date=${enc}`),
-        ]).then(([g, s, e, l]) => {
+            fetchJSON(`${API_BASE}/storytelling/useless-defense-deaths?session_date=${enc}`),
+        ]).then(([g, s, e, l, d]) => {
             if (loadId !== storyLoadId) return;
             renderInvisibleValue(
                 g.status === 'fulfilled' ? g.value : null,
                 s.status === 'fulfilled' ? s.value : null,
                 e.status === 'fulfilled' ? e.value : null,
-                l.status === 'fulfilled' ? l.value : null
+                l.status === 'fulfilled' ? l.value : null,
+                d.status === 'fulfilled' ? d.value : null
             );
-        }).catch(() => renderInvisibleValue(null, null, null, null));
+        }).catch(() => renderInvisibleValue(null, null, null, null, null));
     } catch (err) {
         console.error('Story data load failed:', err);
         renderEmpty('Failed to load Smart Stats');
@@ -1102,21 +1104,28 @@ function renderBoxScore(data) {
 
 const IV_TABS = [
     { key: 'gravity', label: 'GRAVITY', color: 'rose',   scoreField: 'gravity_score', scoreFmt: v => v.toFixed(0),
+      desc: 'Enemy attention pulled — engagements where you drew multiple attackers off your team.',
       cells: p => [['ENG', p.engagements], ['AVG ATK', (p.avg_attackers || 0).toFixed(1)], ['ATTN', formatMs(p.total_attention_ms)]] },
     { key: 'space',   label: 'SPACE',   color: 'purple', scoreField: 'space_score',   scoreFmt: v => (v * 100).toFixed(0) + '%',
+      desc: 'Deaths that created space your team converted into kills shortly after.',
       cells: p => [['PROD', p.productive_deaths], ['WASTE', p.wasted_deaths], ['TM KILLS', p.teammate_kills_after]] },
     { key: 'enabler', label: 'ENABLER', color: 'teal',   scoreField: 'enabler_score', scoreFmt: v => v.toFixed(1),
+      desc: 'Kills you set up for teammates through pressure, crossfire and trades.',
       cells: p => [['ENABLED', p.enabled_kills], ['CF', p.crossfire_assists], ['TRADE', p.trade_assists]] },
     { key: 'lurker',  label: 'LURKER',  color: 'cyan',   scoreField: 'solo_pct',      scoreFmt: v => v.toFixed(0) + '%',
+      desc: 'Time spent operating solo behind enemy lines, away from the team.',
       cells: p => [['SOLO', formatMs((p.solo_time_est_s || 0) * 1000)], ['LIVES', p.tracks], ['ALIVE', formatMs(p.alive_ms)]] },
+    { key: 'defense', label: 'DEFENSE', color: 'amber',  scoreField: 'useless_deaths', scoreFmt: v => v.toFixed(0),
+      desc: 'Defensive deaths that handed attackers free objective time — far next spawn (≥25s) and the killer was barely scratched (≥80 HP). Higher is worse.',
+      cells: p => [['RATE', ((p.rate || 0) * 100).toFixed(0) + '%'], ['OF DEF', p.total_defense_deaths]] },
 ];
 
-function renderInvisibleValue(gravity, space, enabler, lurker) {
+function renderInvisibleValue(gravity, space, enabler, lurker, defense) {
     const container = document.getElementById('story-invisible-value');
     if (!container) return;
     container.textContent = '';
 
-    const dataMap = { gravity, space, enabler, lurker };
+    const dataMap = { gravity, space, enabler, lurker, defense };
     const hasData = tab => {
         const d = dataMap[tab.key];
         return Array.isArray(d?.players) && d.players.length > 0;
@@ -1151,7 +1160,9 @@ function renderInvisibleValue(gravity, space, enabler, lurker) {
 
     // Content area
     const card = _el('div', 'rounded-xl border border-white/[0.08] bg-white/[0.03] p-5');
+    const subtitle = _el('div', 'text-[11px] text-slate-400 leading-snug mb-3');
     const content = _el('div');
+    card.appendChild(subtitle);
     card.appendChild(content);
     container.appendChild(card);
 
@@ -1164,6 +1175,9 @@ function renderInvisibleValue(gravity, space, enabler, lurker) {
         // Update badge
         activeBadge.className = `text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border border-${c}-400/30 bg-${c}-400/10 text-${c}-400`;
         activeBadge.textContent = tab.label;
+
+        // Update description subtitle
+        subtitle.textContent = tab.desc || '';
 
         // Update tab buttons
         IV_TABS.forEach(t => {
