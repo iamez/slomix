@@ -262,9 +262,9 @@ local config = {
         -- v9 true-aim (6.02): per-shot origin + view angles. DEFAULT OFF —
         -- high frequency; opt-in only. Production unchanged until enabled.
         shot_fired = false,
-        -- v7 draft (6.10): ALL DEFAULT OFF. Enable individually after the
-        -- gated testmode probe (docs/LUA_V7_CAPTURE_RESEARCH_2026-06.md).
-        aim_lock = false,         -- crosshair-on-enemy lock events
+        -- v7 draft (6.10): enable individually after the gated testmode probe
+        -- (docs/LUA_V7_CAPTURE_RESEARCH_2026-06.md).
+        aim_lock = true,          -- crosshair-on-enemy lock events (activated 2026-06-22)
         spawn_select = false,     -- chosen spawn point per spawn
         skill_snapshot = false,   -- sess.skill array at round end
         comm_events = false,      -- vsay/voice-macro usage
