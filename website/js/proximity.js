@@ -1509,6 +1509,7 @@ function resetProximityValues() {
     setHtml('lua-trades-summary', '');
     setHtml('lua-trades-leaders', '');
     setHtml('lua-trades-recent', '');
+    setHtml('aim-lock-leaders', '');
     renderObjectiveStateSummary([]);
     renderObjectiveTimelineStrip(null);
     renderClassReactionSummary([]);
@@ -1642,7 +1643,8 @@ async function loadScopedProximityData() {
                 focusFireRes,
                 objectiveFocusRes,
                 supportSummaryRes,
-                combatPosStatsRes
+                combatPosStatsRes,
+                aimLockRes
             ] = await Promise.allSettled([
                 fetchJSON(scopedUrl('/proximity/engagements')),
                 fetchJSON(scopedUrl('/proximity/hotzones')),
@@ -1677,7 +1679,8 @@ async function loadScopedProximityData() {
                 fetchJSON(scopedUrl('/proximity/focus-fire')),
                 fetchJSON(scopedUrl('/proximity/objective-focus')),
                 fetchJSON(scopedUrl('/proximity/support-summary')),
-                fetchJSON(scopedUrl('/proximity/combat-position-stats'))
+                fetchJSON(scopedUrl('/proximity/combat-position-stats')),
+                fetchJSON(scopedUrl('/proximity/aim-lock'))
             ]);
             if (loadId !== proximityScopedLoadId) return;
 
@@ -1751,6 +1754,9 @@ async function loadScopedProximityData() {
             }
             if (luaTradesRes.status === 'fulfilled') {
                 renderLuaTrades(luaTradesRes.value);
+            }
+            if (aimLockRes.status === 'fulfilled') {
+                renderAimLock(aimLockRes.value);
             }
             if (killOutcomesRes.status === 'fulfilled') {
                 renderKillOutcomes(killOutcomesRes.value);
@@ -2586,6 +2592,32 @@ function renderSpawnTimingLeaders(leaders) {
     el.innerHTML = '<ol class="list-decimal list-inside text-sm text-slate-300 space-y-1">' + leaders.map(l =>
         `<li><strong>${escapeHtml(stripEtColors(l.name))}</strong> — ${(l.avg_score * 100).toFixed(1)}% (${l.kills} kills, avg denial ${l.avg_denial_ms}ms)</li>`
     ).join('') + '</ol>';
+}
+
+/* ---- v7 Aim Lock ---- */
+function renderAimLock(data) {
+    const el = document.getElementById('aim-lock-leaders');
+    if (!el) return;
+    const leaders = (data && data.status === 'ok') ? (data.leaders || []) : [];
+    if (!leaders.length) { el.innerHTML = '<em class="text-slate-500">No aim-lock data in scope</em>'; return; }
+    const fmtSec = ms => (ms / 1000).toFixed(1) + 's';
+    el.innerHTML =
+        '<div class="grid grid-cols-12 gap-2 text-[10px] uppercase tracking-wider text-slate-500 px-2 mb-1">' +
+            '<div class="col-span-4">Player</div>' +
+            '<div class="col-span-2 text-right">Lock time</div>' +
+            '<div class="col-span-2 text-right">Locks</div>' +
+            '<div class="col-span-2 text-right">Avg err°</div>' +
+            '<div class="col-span-2 text-right">Avg dist</div>' +
+        '</div>' +
+        leaders.map((l, i) =>
+            `<div class="grid grid-cols-12 gap-2 items-center text-sm text-slate-300 rounded-lg px-2 py-1.5 ${i % 2 ? 'bg-white/[0.02]' : ''}">
+                <div class="col-span-4 truncate"><span class="text-slate-600 mr-1">${i + 1}.</span><strong>${escapeHtml(stripEtColors(l.name))}</strong></div>
+                <div class="col-span-2 text-right text-brand-amber font-bold tabular-nums">${fmtSec(l.total_lock_ms)}</div>
+                <div class="col-span-2 text-right tabular-nums">${l.locks} <span class="text-slate-500">(${l.avg_lock_ms}ms)</span></div>
+                <div class="col-span-2 text-right tabular-nums">${l.avg_err_deg.toFixed(1)}°</div>
+                <div class="col-span-2 text-right tabular-nums">${l.avg_dist}</div>
+            </div>`
+        ).join('');
 }
 
 /* ---- v5 Team Cohesion ---- */
