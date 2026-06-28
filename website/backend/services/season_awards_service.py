@@ -19,6 +19,16 @@ from shared.season_manager import SeasonManager
 
 AWARD_KEYS = ("mvp", "iron_man", "most_improved", "oracle")
 
+# Shared bot-exclusion predicate (canonical OMNIBOT%/[BOT]% convention used
+# across the codebase). Engraved season awards are permanent, so a bot leaking
+# into iron_man/most_improved would be a lasting "fabricated number" — and the
+# upstream is_bot_round detection has a known gap, so this per-row filter is the
+# only reliable guard. `pcs` is the player_comprehensive_stats alias.
+_BOT_EXCLUDE_PCS = (
+    "AND pcs.player_guid NOT LIKE 'OMNIBOT%' "
+    "AND pcs.player_name NOT LIKE '[BOT]%' "
+)
+
 
 def _season_bounds(season_id: str | None) -> tuple[str, str, str]:
     sm = SeasonManager()
@@ -67,7 +77,7 @@ async def _compute_mvp(db, session_ids: list[int]) -> dict | None:
 
 async def _compute_iron_man(db, start: str, end: str) -> dict | None:
     rows = await db.fetch_all(
-        """
+        f"""
         SELECT pcs.player_guid, MAX(pcs.player_name) AS name,
                COUNT(DISTINCT r.gaming_session_id) AS sessions
         FROM player_comprehensive_stats pcs
@@ -75,11 +85,12 @@ async def _compute_iron_man(db, start: str, end: str) -> dict | None:
         WHERE r.gaming_session_id IS NOT NULL
           AND r.is_valid IS DISTINCT FROM FALSE
           AND pcs.time_played_seconds > 0
+          {_BOT_EXCLUDE_PCS}
           AND SUBSTR(CAST(r.round_date AS TEXT), 1, 10) BETWEEN ? AND ?
         GROUP BY pcs.player_guid
         ORDER BY sessions DESC
         LIMIT 1
-        """,
+        """,  # nosec B608 - _BOT_EXCLUDE_PCS is a module literal; values are ?-bound
         (start, end),
     )
     if not rows:
@@ -94,7 +105,7 @@ async def _compute_iron_man(db, start: str, end: str) -> dict | None:
 async def _compute_most_improved(db, start: str, end: str) -> dict | None:
     # Per-player per-session DPM within the season; delta = last - first.
     rows = await db.fetch_all(
-        """
+        f"""
         SELECT pcs.player_guid, MAX(pcs.player_name) AS name,
                r.gaming_session_id,
                SUM(pcs.damage_given)::float
@@ -104,10 +115,11 @@ async def _compute_most_improved(db, start: str, end: str) -> dict | None:
         WHERE r.gaming_session_id IS NOT NULL
           AND r.is_valid IS DISTINCT FROM FALSE
           AND pcs.time_played_seconds > 0
+          {_BOT_EXCLUDE_PCS}
           AND SUBSTR(CAST(r.round_date AS TEXT), 1, 10) BETWEEN ? AND ?
         GROUP BY pcs.player_guid, r.gaming_session_id
         ORDER BY pcs.player_guid, r.gaming_session_id
-        """,
+        """,  # nosec B608 - _BOT_EXCLUDE_PCS is a module literal; values are ?-bound
         (start, end),
     )
     by_player: dict[str, dict] = {}

@@ -1774,6 +1774,8 @@ async def _session_player_pool(db, gaming_session_id: int) -> list[dict]:
         WHERE r.gaming_session_id = ?
           AND r.is_valid IS DISTINCT FROM FALSE
           AND pcs.time_played_seconds > 0
+          AND pcs.player_guid NOT LIKE 'OMNIBOT%'
+          AND pcs.player_name NOT LIKE '[BOT]%'
         GROUP BY pcs.player_guid
         ORDER BY kills DESC
         """,

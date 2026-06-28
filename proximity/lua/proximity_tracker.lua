@@ -1115,11 +1115,18 @@ local function closeAimLock(clientnum, end_time)
     if not lock then return end
     tracker.aim_lock.active[clientnum] = nil
     local duration = end_time - lock.start_time
+    -- Defense-in-depth: a lock can only legitimately span the samples that
+    -- confirmed it. Clamp duration to samples*interval + one interval of
+    -- grace so a bad end_time (e.g. a future round-end timestamp) can never
+    -- inflate the leaderboard, independent of the caller.
+    local interval = config.aim_lock.interval_ms or 400
+    local max_duration = math.max(lock.samples, 1) * interval + interval
+    if duration > max_duration then duration = max_duration end
     if duration < (config.aim_lock.min_duration_ms or 400) then return end
     local n = math.max(lock.samples, 1)
     tracker.aim_lock.events[#tracker.aim_lock.events + 1] = {
         start_time = lock.start_time,
-        end_time = end_time,
+        end_time = lock.start_time + duration,  -- keep end_time consistent with (possibly clamped) duration
         duration = duration,
         guid = lock.guid,
         name = lock.name,
@@ -3366,10 +3373,15 @@ local function outputDataInner()
 
     -- ===== AIM_LOCK (v7 draft, 6.10) =====
     if isFeatureEnabled("aim_lock") then
-        -- flush locks still open at round end
+        -- flush locks still open at round end. Close at the last CONFIRMED
+        -- sample (last_seen), not round-end `now` — otherwise a lock that
+        -- ended mid-round but was never explicitly closed gets credited all
+        -- the way to round end, inflating duration_ms (the headline leaderboard
+        -- metric). Matches the normal close paths in sampleAimLocks.
         local now = gameTime()
         for clientnum in pairs(tracker.aim_lock.active) do
-            closeAimLock(clientnum, now)
+            local lock = tracker.aim_lock.active[clientnum]
+            closeAimLock(clientnum, (lock and lock.last_seen) or now)
         end
         if #tracker.aim_lock.events > 0 then
             local al_header = "\n# AIM_LOCK\n" ..

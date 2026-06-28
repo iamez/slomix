@@ -395,8 +395,20 @@ class _NarrativeMixin:
         # their delta vs the player's usual, not just the session avg).
         from .baseline import format_with_baseline, trailing_averages
         guid_list = sorted(all_guids)
+        # Resolve the narrated night's earliest gaming_session_id so the
+        # baseline strictly PRECEDES it. Without this the trailing average
+        # would (a) include tonight in "your usual" and (b) for a historical
+        # session_date draw the baseline from sessions played AFTER it.
+        # A single calendar date can hold >1 gaming_session_id, so use MIN()
+        # as the cutoff to exclude every session of that night.
+        gsid_row = await self.db.fetch_one(
+            "SELECT MIN(gaming_session_id) FROM rounds "
+            "WHERE round_date = $1 AND gaming_session_id IS NOT NULL",
+            (_to_date_str(sd),))
+        before_gsid = gsid_row[0] if gsid_row else None
         baseline_results = await asyncio.gather(
-            *(trailing_averages(self.db, g[:8]) for g in guid_list),
+            *(trailing_averages(self.db, g[:8], before_session_id=before_gsid)
+              for g in guid_list),
             return_exceptions=True,
         )
         own_baseline: dict[str, dict] = {

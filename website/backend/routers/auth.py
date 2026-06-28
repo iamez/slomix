@@ -5,7 +5,11 @@ import os
 import secrets
 import time
 
-_SESSION_HTTPS_ONLY = os.getenv("SESSION_HTTPS_ONLY", "false").lower() == "true"
+# Secure-by-default: the session cookie carries the authenticated Discord
+# identity, so it must get the Secure flag unless explicitly opted out for
+# local HTTP dev (SESSION_HTTPS_ONLY=false). A prod deploy that forgets to set
+# this still gets a Secure cookie.
+_SESSION_HTTPS_ONLY = os.getenv("SESSION_HTTPS_ONLY", "true").lower() == "true"
 from collections import defaultdict, deque
 from typing import Any
 from urllib.parse import urlencode, urlsplit
@@ -871,6 +875,19 @@ async def unlink_discord_account(request: Request, db: DatabaseAdapter = Depends
 
 _DISPLAY_NAME_MAX = 32
 
+# Characters that let a custom display name inject Discord markdown — masked
+# links [x](url), bold/italics/spoilers, code, blockquote — when the stored
+# name is rendered into bot embeds (digest, leaderboards, session reports).
+# Stripped on the 'custom' path only; the 'alias' path is already safe because
+# it must match a recorded player_aliases row.
+_DISPLAY_NAME_STRIP = set("[]()*_~`|>") | {chr(c) for c in range(0x20)} | {"\x7f"}
+
+
+def _sanitize_custom_display_name(name: str) -> str:
+    """Strip markdown/control chars and collapse whitespace (defense-in-depth)."""
+    cleaned = "".join(ch for ch in name if ch not in _DISPLAY_NAME_STRIP)
+    return " ".join(cleaned.split())
+
 
 @router.get("/account/aliases")
 async def get_my_aliases(request: Request, db: DatabaseAdapter = Depends(get_db)):
@@ -957,7 +974,14 @@ async def set_my_display_name(
                 raise HTTPException(
                     status_code=400, detail="That alias is not recorded for your player."
                 )
-        new_name, source = name, action
+            new_name, source = name, action
+        else:  # custom — sanitize to block Discord-markdown injection in embeds
+            new_name = _sanitize_custom_display_name(name)
+            if not new_name:
+                raise HTTPException(
+                    status_code=400, detail="name has no usable characters",
+                )
+            source = action
 
     await db.execute(
         """
