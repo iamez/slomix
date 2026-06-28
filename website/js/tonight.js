@@ -173,6 +173,9 @@ async function _refresh() {
         ? `<div class="mt-3 text-sm"><span class="text-amber-300 font-bold">🏁 Attack must beat ${_mmss(cur.beat_seconds)}</span> <span class="text-slate-400">to take the map.</span></div>`
         : '';
 
+    // Preserve the maps strip horizontal scroll across the 8s poll's full
+    // DOM rebuild (otherwise it snaps back to the left every refresh).
+    const prevScroll = host.querySelector('[data-maps-strip]')?.scrollLeft || 0;
     host.textContent = '';
     safeInsertHTML(host, 'beforeend', _serverStrip(gs) + `
         <div class="glass-panel p-6 rounded-xl mb-6">
@@ -196,7 +199,7 @@ async function _refresh() {
 
         <div class="glass-panel p-5 rounded-xl mb-6">
             <div class="text-xs uppercase tracking-widest text-slate-500 font-bold mb-2">Tonight's maps</div>
-            <div class="flex gap-3 overflow-x-auto pb-1">${mapCards || '<span class="text-sm text-slate-500">No maps yet.</span>'}</div>
+            <div data-maps-strip class="flex gap-3 overflow-x-auto pb-1">${mapCards || '<span class="text-sm text-slate-500">No maps yet.</span>'}</div>
         </div>
 
         <div class="glass-panel p-5 rounded-xl mb-6">
@@ -212,6 +215,11 @@ async function _refresh() {
             <div class="text-[11px] text-slate-500 mb-2">Historical chance the attack has completed by a given time${cur.beat_seconds != null ? ` · tonight's R1 = ${_mmss(cur.beat_seconds)}` : ''}.</div>
             <canvas id="tonight-holdprob" height="120" class="w-full"></canvas>
         </div>`);
+
+    if (prevScroll) {
+        const strip = host.querySelector('[data-maps-strip]');
+        if (strip) strip.scrollLeft = prevScroll;
+    }
 
     _drawMomentum('tonight-momentum', data.momentum || []);
     _drawHoldProb('tonight-holdprob', (data.hold_probability && data.hold_probability.curve) || [], cur.beat_seconds);

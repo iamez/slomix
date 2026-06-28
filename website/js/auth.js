@@ -567,8 +567,12 @@ export async function searchHeroPlayer(query) {
                 const isString = typeof player === 'string';
                 const displayName = isString ? player : (player.name || player.canonical_name || 'Unknown');
                 const lookupId = isString ? displayName : (player.guid || player.name || displayName);
-                const div = document.createElement('div');
-                div.className = 'p-4 hover:bg-white/5 cursor-pointer flex justify-between items-center transition border-b border-white/5 last:border-0';
+                // <button> (not <div>) so the row is keyboard/screen-reader
+                // operable — Enter/Space fire onclick natively. w-full/text-left
+                // keep the original block layout.
+                const div = document.createElement('button');
+                div.type = 'button';
+                div.className = 'w-full text-left p-4 hover:bg-white/5 cursor-pointer flex justify-between items-center transition border-b border-white/5 last:border-0';
                 const safeName = escapeHtml(displayName);
                 const safeInitials = escapeHtml(displayName.replace(/\^./g, '').substring(0, 2).toUpperCase());
                 div.innerHTML = `
@@ -697,7 +701,11 @@ export async function refreshDisplayNameBlock() {
         if (cur) cur.textContent = data.current_display_name || '--';
         if (src) src.textContent = data.display_name_source || 'auto';
     } catch (_err) {
-        block.classList.add('hidden');
+        // Don't nuke the whole block on a transient API error. If it's already
+        // shown (user is linked), keep it and surface an inline error; only the
+        // explicit data.linked === false path above hides it.
+        if (block.classList.contains('hidden')) return;
+        setProfileLinkStatusMessage("Couldn't refresh display-name options — try again.", true);
     }
 }
 

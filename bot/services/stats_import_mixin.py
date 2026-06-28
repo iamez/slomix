@@ -875,30 +875,34 @@ class _StatsImportMixin:
                     f"Preparing to insert {len(weapon_stats)} weapon rows for {player.get('name')} (session {round_id})"
                 )
                 try:
+                    # Build all weapon rows up front, then one executemany —
+                    # collapses dozens of round-trips per player into one. The
+                    # savepoint still makes the set atomic (all weapons or none).
+                    weapon_rows = []
+                    for weapon_name, w in weapon_stats.items():
+                        w_hits = int(w.get("hits", 0) or 0)
+                        w_shots = int(w.get("shots", 0) or 0)
+                        w_kills = int(w.get("kills", 0) or 0)
+                        w_deaths = int(w.get("deaths", 0) or 0)
+                        w_headshots = int(w.get("headshots", 0) or 0)
+                        w_acc = (w_hits / w_shots * 100) if w_shots > 0 else 0.0
+                        weapon_rows.append((
+                            round_id,
+                            round_date,
+                            result.get("map_name"),
+                            result.get("round_num"),
+                            player.get("guid", "UNKNOWN"),
+                            player.get("name", "Unknown"),
+                            weapon_name,
+                            w_kills,
+                            w_deaths,
+                            w_headshots,
+                            w_hits,
+                            w_shots,
+                            w_acc,
+                        ))
                     async with self.db_adapter.transaction():
-                        for weapon_name, w in weapon_stats.items():
-                            w_hits = int(w.get("hits", 0) or 0)
-                            w_shots = int(w.get("shots", 0) or 0)
-                            w_kills = int(w.get("kills", 0) or 0)
-                            w_deaths = int(w.get("deaths", 0) or 0)
-                            w_headshots = int(w.get("headshots", 0) or 0)
-                            w_acc = (w_hits / w_shots * 100) if w_shots > 0 else 0.0
-
-                            await self.db_adapter.execute(insert_sql, (
-                                round_id,
-                                round_date,
-                                result.get("map_name"),
-                                result.get("round_num"),
-                                player.get("guid", "UNKNOWN"),
-                                player.get("name", "Unknown"),
-                                weapon_name,
-                                w_kills,
-                                w_deaths,
-                                w_headshots,
-                                w_hits,
-                                w_shots,
-                                w_acc,
-                            ))
+                        await self.db_adapter.executemany(insert_sql, weapon_rows)
                 except Exception as e:
                     # Weapon savepoint rolled back; player core write survives.
                     logger.error(

@@ -30,14 +30,19 @@ function _showTab(key) {
 
 function _ensureLoaded(key) {
     if (_loaded[key]) return;
-    _loaded[key] = true;
-    if (key === 'records') {
-        loadRecordsView().catch(e => console.warn('record book: records failed', e));
-    } else if (key === 'hof') {
-        loadHallOfFameView().catch(e => console.warn('record book: hof failed', e));
-    } else if (key === 'season') {
-        loadRecordBookSeason().catch(e => console.warn('record book: season failed', e));
-    }
+    const loaders = {
+        records: loadRecordsView,
+        hof: loadHallOfFameView,
+        season: loadRecordBookSeason,
+    };
+    const loader = loaders[key];
+    if (!loader) return;
+    // Mark loaded only AFTER the fetch succeeds — otherwise a transient failure
+    // leaves the tab permanently empty (the early `_loaded=true` blocked retry).
+    // Leaving it false on error means re-clicking the tab retries.
+    loader()
+        .then(() => { _loaded[key] = true; })
+        .catch(e => console.warn(`record book: ${key} failed`, e));
 }
 
 export async function loadRecordBookView(params = {}) {

@@ -25,7 +25,7 @@ export async function openWrapped(guid) {
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
     safeInsertHTML(overlay, 'beforeend', `
-        <div class="max-w-md w-full text-center">
+        <div class="max-w-md w-full text-center" role="dialog" aria-modal="true" aria-label="Slomix Wrapped">
             <div class="text-slate-400 text-sm mb-3">Generating your Slomix Wrapped…</div>
             <canvas id="wrapped-canvas" class="w-full rounded-xl shadow-2xl" style="max-height:80vh;"></canvas>
             <div class="flex justify-center gap-2 mt-4">
@@ -36,10 +36,33 @@ export async function openWrapped(guid) {
             <div id="wrapped-status" class="text-xs text-slate-500 mt-2"></div>
         </div>`);
 
-    overlay.querySelector('#wrapped-close').addEventListener('click', () => {
+    // Close via button, Escape, or backdrop click — with listener cleanup.
+    const onKey = (e) => { if (e.key === 'Escape') closeWrapped(); };
+    function closeWrapped() {
         overlay.classList.add('hidden');
         overlay.classList.remove('flex');
-    });
+        document.removeEventListener('keydown', onKey);
+        overlay.removeEventListener('click', onBackdrop);
+    }
+    const onBackdrop = (e) => { if (e.target === overlay) closeWrapped(); };
+    overlay.querySelector('#wrapped-close').addEventListener('click', closeWrapped);
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('click', onBackdrop);
+    overlay.querySelector('#wrapped-close').focus();
+
+    // Until the canvas is drawn, Copy/Download do nothing — don't let them look
+    // actionable. Re-enabled only on the success path below.
+    const _copyBtn = overlay.querySelector('#wrapped-copy');
+    const _dlBtn = overlay.querySelector('#wrapped-download');
+    const _setExportEnabled = (on) => {
+        for (const b of [_copyBtn, _dlBtn]) {
+            if (!b) continue;
+            b.disabled = !on;
+            b.classList.toggle('opacity-40', !on);
+            b.classList.toggle('cursor-not-allowed', !on);
+        }
+    };
+    _setExportEnabled(false);
 
     let data;
     try {
@@ -52,6 +75,7 @@ export async function openWrapped(guid) {
         overlay.querySelector('#wrapped-status').textContent = 'No season data for this player yet.';
         return;
     }
+    _setExportEnabled(true);
 
     const canvas = document.getElementById('wrapped-canvas');
     _drawWrapped(canvas, data);
