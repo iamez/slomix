@@ -7,6 +7,7 @@
  * @module tonight
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
+import { initTonightBetting } from './bets.js';
 
 const POLL_MS = 8000;
 let _interval = null;
@@ -37,6 +38,8 @@ export async function loadTonightView() {
     if (!host) return;
     await _refresh();
     _startPolling();
+    // Fun-betting panel lives in its own container with its own refresh loop.
+    initTonightBetting().catch(e => console.warn('tonight betting init failed', e));
     // Bind the visibility lifecycle once (loadTonightView runs on every entry).
     if (!_lifecycleBound) {
         _lifecycleBound = true;
