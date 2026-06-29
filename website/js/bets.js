@@ -129,13 +129,14 @@ async function _placeBet(choice) {
         if (msg) { msg.textContent = 'Bet placed!'; msg.className = 'text-xs ml-auto text-emerald-300'; }
         await _loadAndRender();
     } catch (e) {
-        if (msg) { msg.textContent = escapeHtml(e.message || 'Bet failed'); msg.className = 'text-xs ml-auto text-rose-300'; }
+        // textContent escapes on its own — do NOT escapeHtml here or entities double-escape.
+        if (msg) { msg.textContent = e.message || 'Bet failed'; msg.className = 'text-xs ml-auto text-rose-300'; }
     }
 }
 
 async function _renderLeaderboard(el) {
     try {
-        const data = await fetchJSON(`${BETS_BASE}/leaderboard?limit=5`);
+        const data = await fetchJSON(`${BETS_BASE}/leaderboard?limit=5`, { cachePolicy: 'no-store' });
         const players = (data && data.players) || [];
         if (!players.length) { el.innerHTML = ''; return; }
         el.innerHTML = `
@@ -158,7 +159,7 @@ async function _loadAndRender() {
 
     let market = null;
     try {
-        const data = await fetchJSON(`${BETS_BASE}/market/current`, { credentials: 'same-origin' });
+        const data = await fetchJSON(`${BETS_BASE}/market/current`, { cachePolicy: 'no-store', credentials: 'same-origin' });
         market = data && data.market;
     } catch (_e) {
         body.innerHTML = '<div class="text-slate-500">Bets unavailable right now.</div>';
@@ -178,7 +179,7 @@ async function _loadAndRender() {
         walletEl.textContent = '';
         if (getCurrentUser()) {
             try {
-                const w = await fetchJSON(`${BETS_BASE}/wallet`, { credentials: 'same-origin' });
+                const w = await fetchJSON(`${BETS_BASE}/wallet`, { cachePolicy: 'no-store', credentials: 'same-origin' });
                 walletEl.textContent = `Wallet: ${w.balance} pts`;
             } catch (_e) { /* not logged in / transient */ }
         }
