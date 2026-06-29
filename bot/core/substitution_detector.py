@@ -9,6 +9,19 @@ Analyzes round-by-round team rosters to detect:
 
 This helps improve team detection accuracy by understanding
 roster changes throughout the session.
+
+.. deprecated::
+    DO NOT re-enable without fixing the scoping first. This module is currently
+    DEAD CODE (imported only by tests/archive — never by a production cog,
+    team_manager.py, or any service). Its queries scope by ``round_date LIKE``
+    and key rosters by ``round_number`` (which only ever holds {0,1,2} — the
+    half-of-match index, NOT a per-session round counter), so they collapse an
+    ENTIRE calendar day — including multiple distinct gaming sessions — into 2-3
+    buckets and would fabricate late_joiners/early_leavers/substitutions for any
+    normal multi-match day. Before wiring this into team detection, scope every
+    query by ``gaming_session_id`` (JOIN rounds ON round_id) and key rosters by a
+    true per-match identifier (gaming_session_id + match_id/round_start_unix).
+    See docs/research/DEEP_AUDIT_2026-06-27/WAVE2_MASTER.md (W2 finding).
 """
 
 import logging

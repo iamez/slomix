@@ -470,24 +470,30 @@ class C0RNP0RN3StatsParser:
                     logger.debug(f"  → Found {len(found)} same-day Round 1 file(s)")
                 potential_files.extend(found)
 
-        # STEP 3: If no same-day files, check previous date (midnight-crossing)
-        if not potential_files:
-            try:
-                date_obj = datetime.strptime(date, '%Y-%m-%d')  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
-                prev_date = (date_obj - timedelta(days=1)).strftime('%Y-%m-%d')
-                prev_pattern = f"{prev_date}-*-{map_name}-round-1.txt"
+        # STEP 3: ALWAYS also check the previous date (midnight-crossing). This
+        # used to be gated on `not potential_files`, but on a re-import/backfill
+        # where the same map was also played LATER on the R2's own day, STEP 2
+        # finds those after-R2 R1s, suppresses this search, and the downstream
+        # `r1_datetime < r2_datetime` filter then rejects them all — leaving the
+        # true previous-day R1 undiscovered and the R2 stored as raw cumulative.
+        # The downstream filter picks the best R1 strictly before R2 within the
+        # window, so merging extra candidates here is safe.
+        try:
+            date_obj = datetime.strptime(date, '%Y-%m-%d')  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
+            prev_date = (date_obj - timedelta(days=1)).strftime('%Y-%m-%d')
+            prev_pattern = f"{prev_date}-*-{map_name}-round-1.txt"
 
-                logger.debug(f"  → No same-day found, checking previous date: {prev_pattern}")
+            logger.debug(f"  → Also checking previous date (midnight-crossing): {prev_pattern}")
 
-                for search_dir in search_dirs:
-                    if os.path.exists(search_dir):
-                        pattern_path = os.path.join(search_dir, prev_pattern)
-                        found = glob.glob(pattern_path)
-                        if found:
-                            logger.debug(f"  → Found {len(found)} previous-day file(s) (midnight-crossing)")
-                        potential_files.extend(found)
-            except ValueError:  # nosec B110
-                pass  # Invalid date format, skip this file
+            for search_dir in search_dirs:
+                if os.path.exists(search_dir):
+                    pattern_path = os.path.join(search_dir, prev_pattern)
+                    found = glob.glob(pattern_path)
+                    if found:
+                        logger.debug(f"  → Found {len(found)} previous-day file(s) (midnight-crossing)")
+                    potential_files.extend(found)
+        except ValueError:  # nosec B110
+            pass  # Invalid date format, skip this file
 
         if not potential_files:
             return None
