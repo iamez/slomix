@@ -30,14 +30,15 @@ def svc():
 # ---------------------------------------------------------------------------
 
 
-def test_team_name_allies_for_1(svc):
-    """Team int=1 → "Allies". Pin the convention used across the website."""
-    assert svc._team_name(1) == "Allies"
+def test_team_name_axis_for_1(svc):
+    """Team int=1 → "Axis" (engine convention TEAM_AXIS=1; matches session-detail.js).
+    Was previously inverted to "Allies" — see WAVE2 winner_team fix."""
+    assert svc._team_name(1) == "Axis"
 
 
-def test_team_name_axis_for_2(svc):
-    """Team int=2 → "Axis"."""
-    assert svc._team_name(2) == "Axis"
+def test_team_name_allies_for_2(svc):
+    """Team int=2 → "Allies"."""
+    assert svc._team_name(2) == "Allies"
 
 
 @pytest.mark.parametrize("team_int", [0, -1, 3, None])

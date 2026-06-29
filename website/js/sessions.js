@@ -1451,8 +1451,9 @@ let currentGraphTab = 'offense';
  * Load expanded session details
  */
 function winnerTeamLabel(winnerTeam) {
-    if (winnerTeam === 1) return 'Allies';
-    if (winnerTeam === 2) return 'Axis';
+    // winner_team 1 = Axis, 2 = Allies (TEAM_AXIS=1; matches session-detail.js).
+    if (winnerTeam === 1) return 'Axis';
+    if (winnerTeam === 2) return 'Allies';
     return 'Draw';
 }
 
@@ -1707,7 +1708,8 @@ async function loadSessionDetailsExpanded(date) {
                 let winnerColor = 'text-slate-400';
                 if (round.winner_team !== undefined) {
                     winnerLabel = winnerTeamLabel(round.winner_team);
-                    winnerColor = round.winner_team === 1 ? 'text-brand-blue' : round.winner_team === 2 ? 'text-brand-rose' : 'text-slate-400';
+                    // 1 = Axis (rose), 2 = Allies (blue) — matches session-detail.js.
+                    winnerColor = round.winner_team === 1 ? 'text-brand-rose' : round.winner_team === 2 ? 'text-brand-blue' : 'text-slate-400';
                 } else if (round.winner) {
                     winnerLabel = round.winner;
                     winnerColor = round.winner === 'Allies' ? 'text-brand-blue' : round.winner === 'Axis' ? 'text-brand-rose' : 'text-slate-400';
