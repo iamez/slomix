@@ -218,7 +218,7 @@ async def test_settle_blocks_double_settle_after_lock():
 
 @pytest.mark.asyncio
 async def test_settle_auto_outcome_from_session_results():
-    bets._roster_cols_present = None  # not yet cached → _has_roster_cols re-checks
+    bets._roster_cols_cache.clear()  # not yet cached → _has_roster_cols re-checks
     db = _db()
     db.fetch_one = AsyncMock(side_effect=[
         _settle_market(status="open", gsid=42),    # market lock
@@ -228,7 +228,7 @@ async def test_settle_auto_outcome_from_session_results():
     db.fetch_all = AsyncMock(return_value=[])  # no bets
     res = await settle_market(_req(101), 1, {}, {"id": 101}, db)
     assert res["outcome"] == "team_b"  # legacy positional fallback
-    bets._roster_cols_present = None  # reset cache so it doesn't leak into later tests
+    bets._roster_cols_cache.clear()  # reset cache so it doesn't leak into later tests
 
 
 @pytest.mark.asyncio
@@ -236,7 +236,7 @@ async def test_settle_roster_bound_outcome_overrides_position():
     """When rosters are bound (migration 011), the winner is resolved by roster
     overlap — so winning_team=1 maps to team_b if team_b holds that roster, not
     the positional team_a."""
-    bets._roster_cols_present = True
+    bets._roster_cols_cache["present"] = True
     db = _db()
     db.fetch_one = AsyncMock(side_effect=[
         _settle_market(status="open", gsid=42),                 # market lock
@@ -248,7 +248,7 @@ async def test_settle_roster_bound_outcome_overrides_position():
     # winning roster (AAAA/BBBB) overlaps market team_b, so outcome is team_b
     # even though winning_team==1 would be team_a positionally.
     assert res["outcome"] == "team_b"
-    bets._roster_cols_present = None  # reset cache for other tests
+    bets._roster_cols_cache.clear()  # reset cache for other tests
 
 
 @pytest.mark.asyncio

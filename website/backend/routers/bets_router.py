@@ -22,8 +22,10 @@ _CHOICES = ("team_a", "team_b")
 
 # Cached presence of the roster columns added in migration 011 (so the code is
 # safe to deploy before the migration is applied — it just falls back to the
-# legacy positional winning_team mapping until the columns exist).
-_roster_cols_present: bool | None = None
+# legacy positional winning_team mapping until the columns exist). A mutable
+# container (not a reassigned `global`) so we mutate, never rebind, the module
+# name — avoids CodeQL's unused-global false positive.
+_roster_cols_cache: dict[str, bool] = {}
 
 
 async def _has_roster_cols(db) -> bool:
@@ -32,8 +34,7 @@ async def _has_roster_cols(db) -> bool:
     # roster-binding activates WITHOUT needing a web-process restart. On any error
     # (e.g. a non-PostgreSQL adapter where information_schema isn't queryable) we
     # return False and fall back to the legacy positional mapping.
-    global _roster_cols_present
-    if _roster_cols_present:
+    if _roster_cols_cache.get("present"):
         return True
     try:
         row = await db.fetch_one(
@@ -46,7 +47,7 @@ async def _has_roster_cols(db) -> bool:
     except Exception:
         present = False
     if present:
-        _roster_cols_present = True
+        _roster_cols_cache["present"] = True
     return present
 
 
