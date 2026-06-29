@@ -690,7 +690,10 @@ async def get_session_graph_stats(
         where_clause = "r.gaming_session_id = $1"
         params = (gaming_session_id,)
     else:
-        where_clause = "SUBSTRING(p.round_date, 1, 10) = $1"
+        # round_date is stored as a 10-char 'YYYY-MM-DD' string, so the old
+        # SUBSTRING(...,1,10) wrapper was a no-op that also made the predicate
+        # non-sargable. Plain equality is equivalent and sargable.
+        where_clause = "p.round_date = $1"
         params = (date,)
 
     query = f"""
