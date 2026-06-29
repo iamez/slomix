@@ -39,9 +39,11 @@ def _req(uid=None):
     return r
 
 
-def _pb_market(status="open", mid=1):
-    # place_bet locks: SELECT id, status ... FOR UPDATE
-    return (mid, status)
+def _pb_market(status="open", mid=1, closes_at=None, gsid=None):
+    # place_bet locks: SELECT id, status, closes_at, gaming_session_id ... FOR UPDATE
+    # Default gsid=None so the hindsight-cutoff result-known check is skipped
+    # (no extra fetch_one) on the happy path.
+    return (mid, status, closes_at, gsid)
 
 
 def _settle_market(status="open", gsid=None, mid=1):
@@ -77,6 +79,33 @@ async def test_place_bet_requires_open_market():
     with pytest.raises(HTTPException) as e:
         await place_bet(_req(7), 1, {"choice": "team_a", "amount": 5}, {"id": 7}, db)
     assert e.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_place_bet_rejects_after_closes_at():
+    """Hindsight cutoff: an open market past its closes_at takes no new bets."""
+    from datetime import datetime, timedelta
+    db = _db()
+    past = datetime.now() - timedelta(minutes=5)  # noqa: DTZ005 - naive col
+    db.fetch_one = AsyncMock(return_value=_pb_market(closes_at=past))
+    with pytest.raises(HTTPException) as e:
+        await place_bet(_req(7), 1, {"choice": "team_a", "amount": 5}, {"id": 7}, db)
+    assert e.value.status_code == 400
+    assert "closed" in e.value.detail.lower()
+
+
+@pytest.mark.asyncio
+async def test_place_bet_rejects_when_result_known():
+    """Hindsight cutoff: once session_results has a winner, betting is closed."""
+    db = _db()
+    db.fetch_one = AsyncMock(side_effect=[
+        _pb_market(gsid=42),   # market lock (open, no closes_at)
+        (1,),                  # session_results result-known probe
+    ])
+    with pytest.raises(HTTPException) as e:
+        await place_bet(_req(7), 1, {"choice": "team_a", "amount": 5}, {"id": 7}, db)
+    assert e.value.status_code == 400
+    assert "Result is in" in e.value.detail
 
 
 @pytest.mark.asyncio

@@ -524,7 +524,7 @@ function _renderIdentityStrip(data) {
     }
     const chips = [];
     if (skill.et_rating != null) {
-        chips.push(`<span class="px-2.5 py-1 rounded-lg bg-brand-amber/15 text-brand-amber text-xs font-bold">ET Rating ${Math.round(skill.et_rating * 1000)}${skill.tier ? ` · ${escapeHtml(String(skill.tier))}` : ''}</span>`);
+        chips.push(`<span class="px-2.5 py-1 rounded-lg bg-brand-amber/15 text-brand-amber text-xs font-bold">ET Rating ${_num(skill.et_rating, 3)}${skill.tier ? ` · ${escapeHtml(String(skill.tier))}` : ''}</span>`);
     }
     if (archetype) {
         chips.push(`<span class="px-2.5 py-1 rounded-lg bg-brand-purple/15 text-brand-purple text-xs font-bold">${escapeHtml(_ARCHETYPE_LABEL[archetype] || 'All-Rounder')}</span>`);

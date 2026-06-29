@@ -23,8 +23,9 @@ async def get_maps(db: DatabaseAdapter = Depends(get_db)):
                 r.map_name,
                 COUNT(*) as total_rounds,
                 COUNT(*) / 2 as matches_played,
-                SUM(CASE WHEN r.winner_team = 1 THEN 1 ELSE 0 END) as allies_wins,
-                SUM(CASE WHEN r.winner_team = 2 THEN 1 ELSE 0 END) as axis_wins,
+                -- winner_team 1 = Axis, 2 = Allies (TEAM_AXIS=1). Aliases were inverted.
+                SUM(CASE WHEN r.winner_team = 2 THEN 1 ELSE 0 END) as allies_wins,
+                SUM(CASE WHEN r.winner_team = 1 THEN 1 ELSE 0 END) as axis_wins,
                 MAX(SUBSTR(CAST(r.round_date AS TEXT), 1, 10)) as last_played,
                 -- Parse M:SS format to seconds, then avg/min/max
                 AVG(
@@ -179,7 +180,8 @@ async def get_map_objective_records(db: DatabaseAdapter = Depends(get_db)):
         records = []
         for row in rows:
             winner = row[4]
-            side = "Allies" if winner == 1 else "Axis" if winner == 2 else "Draw"
+            # winner_team 1 = Axis, 2 = Allies (TEAM_AXIS=1). Was inverted.
+            side = "Axis" if winner == 1 else "Allies" if winner == 2 else "Draw"
             records.append({
                 "map_name": row[0],
                 "fastest_seconds": int(row[1]),

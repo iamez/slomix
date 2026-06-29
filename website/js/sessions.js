@@ -13,7 +13,20 @@ let expandedSessions = new Set();
 let sessionsSearchQuery = '';
 let sessionsSearchTimer = null;
 
+// NOTE: this page uses the top-down PROXIMITY minimaps (assets/maps/proximity/),
+// a deliberately different image set from session-detail.js, which uses the
+// levelshots loading-screen art (assets/maps/levelshots/). They are NOT the same
+// images, so the two MAP_IMAGE_MAPs are intentionally separate — do not "de-dup"
+// them into one. The only real bug was the 6 keys below missing here (battery,
+// fueldump, goldrush, oasis, radar, railgun), which made those maps fall back to
+// the generic placeholder even though their proximity minimap exists.
 const MAP_IMAGE_MAP = {
+    "battery": "assets/maps/proximity/battery.png",
+    "fueldump": "assets/maps/proximity/fueldump.png",
+    "goldrush": "assets/maps/proximity/goldrush.png",
+    "oasis": "assets/maps/proximity/oasis.png",
+    "radar": "assets/maps/proximity/radar.png",
+    "railgun": "assets/maps/proximity/railgun.png",
     "supply": "assets/maps/proximity/supply.png",
     "etl_supply": "assets/maps/proximity/supply.png",
     "adlernest": "assets/maps/proximity/adlernest.png",
@@ -1451,8 +1464,9 @@ let currentGraphTab = 'offense';
  * Load expanded session details
  */
 function winnerTeamLabel(winnerTeam) {
-    if (winnerTeam === 1) return 'Allies';
-    if (winnerTeam === 2) return 'Axis';
+    // winner_team 1 = Axis, 2 = Allies (TEAM_AXIS=1; matches session-detail.js).
+    if (winnerTeam === 1) return 'Axis';
+    if (winnerTeam === 2) return 'Allies';
     return 'Draw';
 }
 
@@ -1707,7 +1721,8 @@ async function loadSessionDetailsExpanded(date) {
                 let winnerColor = 'text-slate-400';
                 if (round.winner_team !== undefined) {
                     winnerLabel = winnerTeamLabel(round.winner_team);
-                    winnerColor = round.winner_team === 1 ? 'text-brand-blue' : round.winner_team === 2 ? 'text-brand-rose' : 'text-slate-400';
+                    // 1 = Axis (rose), 2 = Allies (blue) — matches session-detail.js.
+                    winnerColor = round.winner_team === 1 ? 'text-brand-rose' : round.winner_team === 2 ? 'text-brand-blue' : 'text-slate-400';
                 } else if (round.winner) {
                     winnerLabel = round.winner;
                     winnerColor = round.winner === 'Allies' ? 'text-brand-blue' : round.winner === 'Axis' ? 'text-brand-rose' : 'text-slate-400';

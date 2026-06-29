@@ -21,8 +21,8 @@ import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from
 
 import { loadRecordsView } from './records.js';
 import { loadAwardsView } from './awards.js';
-import { loadProximityView } from './proximity.js';
-import { loadStoryView } from './story.js?v=20260607-aim';
+import { loadProximityView } from './proximity.js?v=20260623-aimlock';
+import { loadStoryView } from './story.js?v=20260623-aimlock';
 import { loadReplayView } from './replay.js';
 import { loadRivalriesView } from './rivalries.js';
 import { loadSmartStatsDiagView } from './smart-stats-diag.js?v=20260607-aim';

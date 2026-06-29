@@ -973,6 +973,7 @@ class SessionViewHandlers:
                 display_map_name = map_name
 
             # Query with time_played and denied_playtime
+            map_ids_str = ",".join("?" for _ in map_session_ids)
             query = """
                 WITH target_rounds AS (
                     SELECT id FROM rounds WHERE id IN ({map_ids_str})
@@ -1001,7 +1002,8 @@ class SessionViewHandlers:
                 ORDER BY kills DESC
             """
 
-            players = await self.db_adapter.fetch_all(query, tuple(map_session_ids))
+            players = await self.db_adapter.fetch_all(
+                query.format(map_ids_str=map_ids_str), tuple(map_session_ids))
 
             if not players:
                 continue
@@ -1203,6 +1205,7 @@ class SessionViewHandlers:
         """
 
         # Using CTE to avoid duplicate placeholder references
+        round_ids_str = ",".join("?" for _ in round_session_ids)
         query = """
             WITH target_rounds AS (
                 SELECT id FROM rounds WHERE id IN ({round_ids_str})
@@ -1231,7 +1234,8 @@ class SessionViewHandlers:
             ORDER BY kills DESC
         """
 
-        players = await self.db_adapter.fetch_all(query, tuple(round_session_ids))
+        players = await self.db_adapter.fetch_all(
+            query.format(round_ids_str=round_ids_str), tuple(round_session_ids))
 
         if not players:
             return

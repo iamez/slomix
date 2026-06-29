@@ -65,6 +65,7 @@ async def test_balanced_teams_needs_two(monkeypatch):
     ]))
     req = MagicMock()
     req.session = {"user": {"id": "1", "linked_player": "foo", "website_user_id": 1}}
+    req.headers = {"x-requested-with": "XMLHttpRequest"}
     res = await pl.suggest_balanced_teams(req, db=AsyncMock())
     assert res["side_a"] == [] and "at least 2" in res["message"]
 
@@ -81,6 +82,7 @@ async def test_balanced_teams_uses_ratings(monkeypatch):
     db.fetch_all = AsyncMock(return_value=[(1, 1.4), (2, 1.3), (3, 0.6), (4, 0.5)])
     req = MagicMock()
     req.session = {"user": {"id": "1", "linked_player": "foo", "website_user_id": 1}}
+    req.headers = {"x-requested-with": "XMLHttpRequest"}
     res = await pl.suggest_balanced_teams(req, db=db)
     assert res["rating_gap"] == 0.0
     assert sorted(res["side_a"] + res["side_b"]) == [1, 2, 3, 4]

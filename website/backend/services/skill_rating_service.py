@@ -477,7 +477,17 @@ async def compute_session_ratings(db, player_guid: str, session_date: str,
         ) as denied_playtime_pm,
         COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
         FROM player_comprehensive_stats
-        WHERE player_guid = $1 AND round_date = $2 AND round_number > 0
+        WHERE player_guid = $1 AND round_number > 0
+          -- Midnight-safe: scope to gaming sessions that STARTED on $2 (keyed by
+          -- gaming_session_id, not round_date), so a session crossing midnight
+          -- stays whole and is never double-counted across two date entries.
+          AND round_id IN (
+              SELECT id FROM rounds WHERE gaming_session_id IN (
+                  SELECT gaming_session_id FROM rounds
+                  WHERE gaming_session_id IS NOT NULL
+                  GROUP BY gaming_session_id HAVING MIN(round_date) = $2
+              )
+          )
     """, (player_guid, session_date))
 
     if not row or int(row[0]) == 0:
@@ -531,7 +541,15 @@ async def compute_session_map_ratings(db, player_guid: str, session_date: str,
         ) as denied_playtime_pm,
         COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
         FROM player_comprehensive_stats
-        WHERE player_guid = $1 AND round_date = $2 AND round_number > 0
+        WHERE player_guid = $1 AND round_number > 0
+          -- Midnight-safe: gaming sessions that STARTED on $2 (see compute_session_ratings).
+          AND round_id IN (
+              SELECT id FROM rounds WHERE gaming_session_id IN (
+                  SELECT gaming_session_id FROM rounds
+                  WHERE gaming_session_id IS NOT NULL
+                  GROUP BY gaming_session_id HAVING MIN(round_date) = $2
+              )
+          )
         GROUP BY map_name
         ORDER BY map_name
     """, (player_guid, session_date))
@@ -563,15 +581,22 @@ async def get_player_session_history(db, player_guid: str,
     if not percentiles:
         return []
 
-    # Get all session dates for this player within range
-    # round_date is TEXT (ISO format), so compare as string
+    # One entry per gaming SESSION the player played, labelled by the session's
+    # START date (MIN round_date over its gaming_session_id). Using the start
+    # date — not every distinct round_date — keeps a session that crosses
+    # midnight as a single entry instead of two half-entries, and matches the
+    # midnight-safe scoping in compute_session_ratings. round_date is TEXT (ISO).
     date_rows = await db.fetch_all("""
-        SELECT DISTINCT round_date
-        FROM player_comprehensive_stats
-        WHERE player_guid = $1
-          AND round_number > 0
-          AND round_date >= TO_CHAR(CURRENT_DATE - $2::INTEGER, 'YYYY-MM-DD')
-        ORDER BY round_date ASC
+        SELECT DISTINCT start_date FROM (
+            SELECT r.gaming_session_id, MIN(r.round_date) AS start_date
+            FROM rounds r
+            JOIN player_comprehensive_stats pcs ON pcs.round_id = r.id
+            WHERE pcs.player_guid = $1 AND pcs.round_number > 0
+              AND r.gaming_session_id IS NOT NULL
+            GROUP BY r.gaming_session_id
+        ) s
+        WHERE start_date >= TO_CHAR(CURRENT_DATE - $2::INTEGER, 'YYYY-MM-DD')
+        ORDER BY start_date ASC
     """, (player_guid, range_days))
 
     sessions = []
@@ -611,7 +636,18 @@ async def get_player_session_history(db, player_guid: str,
             ) as denied_playtime_pm,
             COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
             FROM player_comprehensive_stats
-            WHERE player_guid = $1 AND round_date <= $2 AND round_number > 0
+            WHERE player_guid = $1 AND round_number > 0
+              -- Midnight-safe (matches per-session scoping): include every round of
+              -- every gaming session that STARTED on or before $2, so a session that
+              -- crosses midnight contributes both halves to the cumulative — not just
+              -- the pre-midnight rounds that a bare `round_date <= $2` would catch.
+              AND round_id IN (
+                  SELECT id FROM rounds WHERE gaming_session_id IN (
+                      SELECT gaming_session_id FROM rounds
+                      WHERE gaming_session_id IS NOT NULL
+                      GROUP BY gaming_session_id HAVING MIN(round_date) <= $2
+                  )
+              )
         """, (player_guid, date_str))
 
         cum_rating = None

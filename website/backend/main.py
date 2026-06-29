@@ -98,7 +98,8 @@ from website.backend.services.weapon_stats_mv_refresh import (
 WEBSITE_PORT = getenv_int("WEBSITE_PORT", 7000)
 WEBSITE_HOST = os.getenv("WEBSITE_HOST", "0.0.0.0")
 SESSION_SECRET = os.getenv("SESSION_SECRET")
-SESSION_HTTPS_ONLY = os.getenv("SESSION_HTTPS_ONLY", "false").lower() == "true"
+# Secure-by-default (see auth.py): opt out only for local HTTP dev.
+SESSION_HTTPS_ONLY = os.getenv("SESSION_HTTPS_ONLY", "true").lower() == "true"
 CORS_ORIGINS = os.getenv(
     "CORS_ORIGINS", "http://localhost:7000,http://127.0.0.1:7000"
 ).split(",")

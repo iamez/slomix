@@ -278,7 +278,7 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
                l.axis_score, l.allies_score, l.axis_players, l.allies_players,
                l.round_start_unix, l.round_end_unix,
                EXTRACT(EPOCH FROM l.captured_at)::bigint AS cap_unix,
-               r.gaming_session_id
+               r.gaming_session_id, r.round_outcome, r.actual_duration_seconds
         FROM lua_round_teams l
         LEFT JOIN rounds r ON r.id = l.round_id
         WHERE l.captured_at::date = CURRENT_DATE
@@ -356,11 +356,20 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
         momentum.append({"a": round(m, 1), "b": round(100 - m, 1)})
 
         mp = maps.setdefault(map_number, {"map_number": map_number, "map": map_name, "rounds": []})
-        duration = int(end_u - start_u) if (start_u and end_u and end_u > start_u) else None
+        # Prefer actual_duration_seconds (excludes pauses, what the stopwatch
+        # time-to-beat is measured in) over wall-clock end-start; fall back to
+        # wall-clock for a live/unlinked round whose rounds row isn't there yet.
+        actual_dur = r[13] if len(r) > 13 else None
+        duration = (
+            int(actual_dur) if actual_dur
+            else (int(end_u - start_u) if (start_u and end_u and end_u > start_u) else None)
+        )
+        round_outcome = r[12] if len(r) > 12 else None
         mp["rounds"].append({
             "round": rnum, "winner": rteam,
             "axis_score": axis_sc, "allies_score": allies_sc,
             "a_on_axis": a_on_axis, "duration": duration,
+            "is_fullhold": bool(round_outcome) and round_outcome.lower() == "fullhold",
         })
 
     # --- Per-map stopwatch result in team terms. R2 is the decider; if only R1
@@ -370,19 +379,28 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
     for mn in sorted(maps):
         mp = maps[mn]
         by_round = {rr["round"]: rr for rr in mp["rounds"]}
+        r1 = by_round.get(1)
         r2 = by_round.get(2)
         winner = "pending"
         a_pts = b_pts = 0
-        if r2 and r2["winner"]:
-            winner = r2["winner"]  # R2 winner takes the map
-            if winner == "a":
-                a_pts, a_maps = 2, a_maps + 1
+        if r2:
+            if r1 and r1.get("is_fullhold") and r2.get("is_fullhold"):
+                # Double fullhold — both defenders held the full time; 1 pt each
+                # (draw, no map win to either side). Mirrors
+                # BOXScoringService.score_map so Tonight matches session-detail.
+                winner = "draw"
+                a_pts = b_pts = 1
+                maps_completed += 1
+            elif r2["winner"]:
+                winner = r2["winner"]  # R2 decider takes the map — 2 points
+                if winner == "a":
+                    a_pts, a_maps = 2, a_maps + 1
+                else:
+                    b_pts, b_maps = 2, b_maps + 1
+                maps_completed += 1
             else:
-                b_pts, b_maps = 2, b_maps + 1
-            maps_completed += 1
-        elif r2 and not r2["winner"]:
-            winner = "draw"
-            maps_completed += 1
+                winner = "draw"
+                maps_completed += 1
         mp.update({"winner": winner, "a_points": a_pts, "b_points": b_pts})
         map_list.append(mp)
 
