@@ -27,18 +27,27 @@ _roster_cols_present: bool | None = None
 
 
 async def _has_roster_cols(db) -> bool:
+    # Cache ONLY the positive result: while the columns are absent we re-check
+    # each call (open/settle are infrequent), so once migration 011 is applied
+    # roster-binding activates WITHOUT needing a web-process restart. On any error
+    # (e.g. a non-PostgreSQL adapter where information_schema isn't queryable) we
+    # return False and fall back to the legacy positional mapping.
     global _roster_cols_present
-    if _roster_cols_present is None:
-        try:
-            row = await db.fetch_one(
-                "SELECT COUNT(*) FROM information_schema.columns "
-                "WHERE table_name = 'parimutuel_markets' "
-                "AND column_name IN ('team_a_guids', 'team_b_guids')"
-            )
-            _roster_cols_present = bool(row and int(row[0]) >= 2)
-        except Exception:
-            _roster_cols_present = False
-    return _roster_cols_present
+    if _roster_cols_present:
+        return True
+    try:
+        row = await db.fetch_one(
+            "SELECT COUNT(*) FROM information_schema.columns "
+            "WHERE table_schema = current_schema() "
+            "AND table_name = 'parimutuel_markets' "
+            "AND column_name IN ('team_a_guids', 'team_b_guids')"
+        )
+        present = bool(row and int(row[0]) >= 2)
+    except Exception:
+        present = False
+    if present:
+        _roster_cols_present = True
+    return present
 
 
 def _parse_guids(raw) -> set[str]:
@@ -59,6 +68,17 @@ def _parse_guids(raw) -> set[str]:
         else:
             items = [p for p in s.replace(";", ",").split(",")]
     return {str(g).strip()[:8].upper() for g in items if str(g).strip()}
+
+
+def _serialize_roster(v):
+    """Store a roster for the DB. Lists/tuples are JSON-encoded; a string is
+    kept verbatim (it may already be JSON or a comma list — _parse_guids reads
+    both). Avoids json.dumps turning 'A,B' into the unparseable '"A,B"'."""
+    if v is None:
+        return None
+    if isinstance(v, (list, tuple)):
+        return json.dumps(list(v))
+    return str(v)
 
 
 async def _resolve_outcome(db, market_id: int, winning_team: int,
@@ -325,8 +345,8 @@ async def open_market(
     # (migration 011). Guarded so this is safe before the migration is applied.
     if await _has_roster_cols(db):
         cols += ["team_a_guids", "team_b_guids"]
-        vals += [json.dumps(p["team_a_guids"]) if p.get("team_a_guids") else None,
-                 json.dumps(p["team_b_guids"]) if p.get("team_b_guids") else None]
+        vals += [_serialize_roster(p.get("team_a_guids")),
+                 _serialize_roster(p.get("team_b_guids"))]
     placeholders = ", ".join(["?"] * len(cols))
     row = await db.fetch_one(
         f"INSERT INTO parimutuel_markets ({', '.join(cols)}) VALUES ({placeholders}) RETURNING id",  # nosec B608 - cols are hardcoded literals

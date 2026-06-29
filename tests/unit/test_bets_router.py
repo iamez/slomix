@@ -218,15 +218,17 @@ async def test_settle_blocks_double_settle_after_lock():
 
 @pytest.mark.asyncio
 async def test_settle_auto_outcome_from_session_results():
-    bets._roster_cols_present = False  # force legacy positional path (no roster cols)
+    bets._roster_cols_present = None  # not yet cached → _has_roster_cols re-checks
     db = _db()
     db.fetch_one = AsyncMock(side_effect=[
         _settle_market(status="open", gsid=42),    # market lock
         (2, None, None),                           # winning_team=2 -> team_b (no rosters)
+        (0,),                                      # information_schema: roster cols absent
     ])
     db.fetch_all = AsyncMock(return_value=[])  # no bets
     res = await settle_market(_req(101), 1, {}, {"id": 101}, db)
-    assert res["outcome"] == "team_b"
+    assert res["outcome"] == "team_b"  # legacy positional fallback
+    bets._roster_cols_present = None  # reset cache so it doesn't leak into later tests
 
 
 @pytest.mark.asyncio
