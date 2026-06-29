@@ -13,7 +13,20 @@ let expandedSessions = new Set();
 let sessionsSearchQuery = '';
 let sessionsSearchTimer = null;
 
+// NOTE: this page uses the top-down PROXIMITY minimaps (assets/maps/proximity/),
+// a deliberately different image set from session-detail.js, which uses the
+// levelshots loading-screen art (assets/maps/levelshots/). They are NOT the same
+// images, so the two MAP_IMAGE_MAPs are intentionally separate — do not "de-dup"
+// them into one. The only real bug was the 6 keys below missing here (battery,
+// fueldump, goldrush, oasis, radar, railgun), which made those maps fall back to
+// the generic placeholder even though their proximity minimap exists.
 const MAP_IMAGE_MAP = {
+    "battery": "assets/maps/proximity/battery.png",
+    "fueldump": "assets/maps/proximity/fueldump.png",
+    "goldrush": "assets/maps/proximity/goldrush.png",
+    "oasis": "assets/maps/proximity/oasis.png",
+    "radar": "assets/maps/proximity/radar.png",
+    "railgun": "assets/maps/proximity/railgun.png",
     "supply": "assets/maps/proximity/supply.png",
     "etl_supply": "assets/maps/proximity/supply.png",
     "adlernest": "assets/maps/proximity/adlernest.png",
