@@ -278,7 +278,7 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
                l.axis_score, l.allies_score, l.axis_players, l.allies_players,
                l.round_start_unix, l.round_end_unix,
                EXTRACT(EPOCH FROM l.captured_at)::bigint AS cap_unix,
-               r.gaming_session_id, r.round_outcome
+               r.gaming_session_id, r.round_outcome, r.actual_duration_seconds
         FROM lua_round_teams l
         LEFT JOIN rounds r ON r.id = l.round_id
         WHERE l.captured_at::date = CURRENT_DATE
@@ -356,7 +356,14 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
         momentum.append({"a": round(m, 1), "b": round(100 - m, 1)})
 
         mp = maps.setdefault(map_number, {"map_number": map_number, "map": map_name, "rounds": []})
-        duration = int(end_u - start_u) if (start_u and end_u and end_u > start_u) else None
+        # Prefer actual_duration_seconds (excludes pauses, what the stopwatch
+        # time-to-beat is measured in) over wall-clock end-start; fall back to
+        # wall-clock for a live/unlinked round whose rounds row isn't there yet.
+        actual_dur = r[13] if len(r) > 13 else None
+        duration = (
+            int(actual_dur) if actual_dur
+            else (int(end_u - start_u) if (start_u and end_u and end_u > start_u) else None)
+        )
         round_outcome = r[12] if len(r) > 12 else None
         mp["rounds"].append({
             "round": rnum, "winner": rteam,
