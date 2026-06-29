@@ -6,6 +6,7 @@ value — pure engagement (vision R1 §3.1, Twitch-style parimutuel).
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -18,6 +19,96 @@ router = APIRouter()
 
 STARTER_BALANCE = 100
 _CHOICES = ("team_a", "team_b")
+
+# Cached presence of the roster columns added in migration 011 (so the code is
+# safe to deploy before the migration is applied — it just falls back to the
+# legacy positional winning_team mapping until the columns exist). A mutable
+# container (not a reassigned `global`) so we mutate, never rebind, the module
+# name — avoids CodeQL's unused-global false positive.
+_roster_cols_cache: dict[str, bool] = {}
+
+
+async def _has_roster_cols(db) -> bool:
+    # Cache ONLY the positive result: while the columns are absent we re-check
+    # each call (open/settle are infrequent), so once migration 011 is applied
+    # roster-binding activates WITHOUT needing a web-process restart. On any error
+    # (e.g. a non-PostgreSQL adapter where information_schema isn't queryable) we
+    # return False and fall back to the legacy positional mapping.
+    if _roster_cols_cache.get("present"):
+        return True
+    try:
+        row = await db.fetch_one(
+            "SELECT COUNT(*) FROM information_schema.columns "
+            "WHERE table_schema = current_schema() "
+            "AND table_name = 'parimutuel_markets' "
+            "AND column_name IN ('team_a_guids', 'team_b_guids')"
+        )
+        present = bool(row and int(row[0]) >= 2)
+    except Exception:
+        present = False
+    if present:
+        _roster_cols_cache["present"] = True
+    return present
+
+
+def _parse_guids(raw) -> set[str]:
+    """Parse a stored roster (JSON array or comma list of GUIDs) into a set of
+    short (8-char) GUIDs for overlap matching."""
+    if not raw:
+        return set()
+    items: list = []
+    if isinstance(raw, (list, tuple)):
+        items = list(raw)
+    else:
+        s = str(raw).strip()
+        if s.startswith("["):
+            try:
+                items = json.loads(s)
+            except (ValueError, TypeError):
+                items = []
+        else:
+            items = [p for p in s.replace(";", ",").split(",")]
+    return {str(g).strip()[:8].upper() for g in items if str(g).strip()}
+
+
+def _serialize_roster(v):
+    """Store a roster for the DB. Lists/tuples are JSON-encoded; a string is
+    kept verbatim (it may already be JSON or a comma list — _parse_guids reads
+    both). Avoids json.dumps turning 'A,B' into the unparseable '"A,B"'."""
+    if v is None:
+        return None
+    if isinstance(v, (list, tuple)):
+        return json.dumps(list(v))
+    return str(v)
+
+
+async def _resolve_outcome(db, market_id: int, winning_team: int,
+                           team_1_guids, team_2_guids) -> str:
+    """Map a session's winning_team to the market's team_a/team_b.
+
+    Roster-bound when the market stored its rosters (migration 011): match the
+    winning roster against team_a_guids/team_b_guids by GUID overlap, so a
+    wrong-side payout can't happen from the positional winning_team=1->team_a
+    assumption. Falls back to that positional mapping when no rosters are bound
+    (pre-migration, market opened without rosters, or an ambiguous tie).
+    """
+    positional = "team_a" if winning_team == 1 else "team_b"
+    if not await _has_roster_cols(db):
+        return positional
+    mrow = await db.fetch_one(
+        "SELECT team_a_guids, team_b_guids FROM parimutuel_markets WHERE id = ?",
+        (market_id,),
+    )
+    if not mrow or not (mrow[0] or mrow[1]):
+        return positional
+    a_set, b_set = _parse_guids(mrow[0]), _parse_guids(mrow[1])
+    win_set = _parse_guids(team_1_guids if winning_team == 1 else team_2_guids)
+    if not win_set or not (a_set or b_set):
+        return positional
+    overlap_a, overlap_b = len(win_set & a_set), len(win_set & b_set)
+    if overlap_a == overlap_b:
+        return positional
+    return "team_a" if overlap_a > overlap_b else "team_b"
 
 
 async def _wallet(db, user_id: int) -> dict:
@@ -247,16 +338,20 @@ async def open_market(
     except (TypeError, ValueError):
         created_by = None
     gsid = p.get("gaming_session_id")
+    cols = ["gaming_session_id", "session_date", "team_a_label", "team_b_label", "created_by_user_id"]
+    vals = [int(gsid) if gsid else None, p.get("session_date"),
+            (p.get("team_a_label") or "Team A").strip()[:40],
+            (p.get("team_b_label") or "Team B").strip()[:40], created_by]
+    # Bind rosters so settle resolves the winner by overlap, not position
+    # (migration 011). Guarded so this is safe before the migration is applied.
+    if await _has_roster_cols(db):
+        cols += ["team_a_guids", "team_b_guids"]
+        vals += [_serialize_roster(p.get("team_a_guids")),
+                 _serialize_roster(p.get("team_b_guids"))]
+    placeholders = ", ".join(["?"] * len(cols))
     row = await db.fetch_one(
-        """
-        INSERT INTO parimutuel_markets
-            (gaming_session_id, session_date, team_a_label, team_b_label, created_by_user_id)
-        VALUES (?, ?, ?, ?, ?)
-        RETURNING id
-        """,
-        (int(gsid) if gsid else None, p.get("session_date"),
-         (p.get("team_a_label") or "Team A").strip()[:40],
-         (p.get("team_b_label") or "Team B").strip()[:40], created_by),
+        f"INSERT INTO parimutuel_markets ({', '.join(cols)}) VALUES ({placeholders}) RETURNING id",  # nosec B608 - cols are hardcoded literals
+        tuple(vals),
     )
     return {"status": "ok", "market_id": int(row[0])}
 
@@ -290,14 +385,16 @@ async def settle_market(
 
         outcome = (payload.get("outcome") or "").strip()
         if not outcome and gsid:
-            # Auto from session_results.winning_team (1 -> team_a, 2 -> team_b).
+            # Auto-resolve from session_results, roster-bound when available
+            # (not a positional winning_team=1->team_a assumption — see
+            # _resolve_outcome / migration 011).
             wr = await db.fetch_one(
-                "SELECT winning_team FROM session_results WHERE gaming_session_id = ? "
-                "ORDER BY session_end DESC NULLS LAST LIMIT 1",
+                "SELECT winning_team, team_1_guids, team_2_guids FROM session_results "
+                "WHERE gaming_session_id = ? ORDER BY session_end DESC NULLS LAST LIMIT 1",
                 (int(gsid),),
             )
             if wr and wr[0] in (1, 2):
-                outcome = "team_a" if int(wr[0]) == 1 else "team_b"
+                outcome = await _resolve_outcome(db, market_id, int(wr[0]), wr[1], wr[2])
         if outcome not in (*_CHOICES, "void"):
             raise HTTPException(status_code=400, detail="outcome must be team_a|team_b|void (or resolvable)")
 
