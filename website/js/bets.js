@@ -7,8 +7,16 @@
  * Production frontend = legacy JS.
  * @module bets
  */
-import { API_BASE, fetchJSON, escapeHtml } from './utils.js';
+import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 import { getCurrentUser } from './auth.js';
+
+// Set element content from a template whose user-controlled parts are already
+// escapeHtml()'d. Uses the project's safeInsertHTML (insertAdjacentHTML) wrapper
+// rather than raw .innerHTML (Codacy-flagged anti-pattern).
+function _set(el, html) {
+    el.textContent = '';
+    safeInsertHTML(el, 'beforeend', html);
+}
 
 const BETS_BASE = `${API_BASE}/bets`;
 const POLL_MS = 12000;     // own cadence; the static shell is never rebuilt
@@ -36,7 +44,7 @@ function _mult(total, side) {
 }
 
 function _shell(host) {
-    host.innerHTML = `
+    _set(host, `
         <div class="glass-panel p-5 rounded-xl mb-6" aria-label="Session betting">
             <div class="flex items-center justify-between mb-1">
                 <div class="text-xs uppercase tracking-widest text-slate-500 font-bold">🎲 Session bets <span class="text-slate-600 normal-case tracking-normal">· fun points, no money</span></div>
@@ -44,7 +52,7 @@ function _shell(host) {
             </div>
             <div id="bets-body" class="mt-3 text-sm text-slate-500">Loading…</div>
             <div id="bets-leaderboard" class="mt-4"></div>
-        </div>`;
+        </div>`);
 }
 
 function _renderClosed(body, market, outcome) {
@@ -52,10 +60,10 @@ function _renderClosed(body, market, outcome) {
     const bWon = outcome === 'team_b';
     const tag = (label, won) =>
         `<span class="px-2 py-1 rounded text-xs font-bold ${won ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/5 text-slate-400'}">${escapeHtml(label)}${won ? ' ✓' : ''}</span>`;
-    body.innerHTML = `
+    _set(body, `
         <div class="text-slate-400">Betting is closed for this market.</div>
         <div class="flex gap-2 mt-2">${tag(market.team_a_label || 'Team A', aWon)} ${tag(market.team_b_label || 'Team B', bWon)}</div>
-        ${outcome === 'void' ? '<div class="text-xs text-slate-500 mt-2">Voided — stakes refunded.</div>' : ''}`;
+        ${outcome === 'void' ? '<div class="text-xs text-slate-500 mt-2">Voided — stakes refunded.</div>' : ''}`);
 }
 
 function _renderOpen(body, market, wallet) {
@@ -89,14 +97,14 @@ function _renderOpen(body, market, wallet) {
         </div>`
         : `<div class="text-xs text-slate-500 mt-3">Log in with Discord to place a fun bet.</div>`;
 
-    body.innerHTML = `
+    _set(body, `
         <div class="text-xs text-slate-500 mb-2">Total pool <span class="text-white font-bold">${total} pts</span> · winners split it proportionally.</div>
         <div class="flex gap-2">
             ${sideCard('team_a', market.team_a_label || 'Team A', A_COLOR, aPool, aMult)}
             ${sideCard('team_b', market.team_b_label || 'Team B', B_COLOR, bPool, bMult)}
         </div>
         ${myLine}
-        ${controls}`;
+        ${controls}`);
 
     if (loggedIn) {
         body.querySelectorAll('[data-bet-side]').forEach(btn => {
@@ -138,16 +146,16 @@ async function _renderLeaderboard(el) {
     try {
         const data = await fetchJSON(`${BETS_BASE}/leaderboard?limit=5`, { cachePolicy: 'no-store' });
         const players = (data && data.players) || [];
-        if (!players.length) { el.innerHTML = ''; return; }
-        el.innerHTML = `
+        if (!players.length) { el.textContent = ''; return; }
+        _set(el, `
             <div class="text-[11px] uppercase tracking-widest text-slate-500 font-bold mb-2">Points leaders</div>
             <div class="space-y-1">${players.map((p, i) => `
                 <div class="flex items-center justify-between text-xs">
                     <span class="text-slate-300">${i + 1}. ${escapeHtml(p.name || 'Player')}</span>
                     <span class="text-slate-400">${p.balance} pts <span class="text-slate-600">(${p.lifetime_earned >= 0 ? '+' : ''}${p.lifetime_earned})</span></span>
-                </div>`).join('')}</div>`;
+                </div>`).join('')}</div>`);
     } catch (_e) {
-        el.innerHTML = '';
+        el.textContent = '';
     }
 }
 
@@ -162,12 +170,12 @@ async function _loadAndRender() {
         const data = await fetchJSON(`${BETS_BASE}/market/current`, { cachePolicy: 'no-store', credentials: 'same-origin' });
         market = data && data.market;
     } catch (_e) {
-        body.innerHTML = '<div class="text-slate-500">Bets unavailable right now.</div>';
+        _set(body, '<div class="text-slate-500">Bets unavailable right now.</div>');
         return;
     }
 
     if (!market) {
-        body.innerHTML = '<div class="text-slate-500">No market open yet — bets open when a session starts.</div>';
+        _set(body, '<div class="text-slate-500">No market open yet — bets open when a session starts.</div>');
         if (walletEl) walletEl.textContent = '';
         if (lbEl) await _renderLeaderboard(lbEl);
         return;

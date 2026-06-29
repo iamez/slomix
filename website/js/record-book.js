@@ -30,12 +30,11 @@ function _showTab(key) {
 
 function _ensureLoaded(key) {
     if (_loaded[key]) return;
-    const loaders = {
-        records: loadRecordsView,
-        hof: loadHallOfFameView,
-        season: loadRecordBookSeason,
-    };
-    const loader = loaders[key];
+    // Explicit dispatch (no dynamic object[key]() lookup — Codacy anti-pattern).
+    let loader = null;
+    if (key === 'records') loader = loadRecordsView;
+    else if (key === 'hof') loader = loadHallOfFameView;
+    else if (key === 'season') loader = loadRecordBookSeason;
     if (!loader) return;
     // Mark loaded only AFTER the fetch succeeds — otherwise a transient failure
     // leaves the tab permanently empty (the early `_loaded=true` blocked retry).
