@@ -548,9 +548,14 @@ class C0RNP0RN3StatsParser:
         if not round_1_file_path:
             logger.warning(f"Could not find Round 1 file for {os.path.basename(round_2_file_path)}")
             logger.warning("   Parsing as regular file (treating as Round 2)")
-            # Parse as regular file but force round_num to 2
+            # Parse as regular file but force round_num to 2. The differential
+            # could NOT be computed, so this row holds RAW CUMULATIVE (R1+R2)
+            # stats — inflated vs a real R2. Mark it so the importer can stamp
+            # round_status='orphan_r2' and every consumer can exclude it centrally
+            # instead of each re-deriving a NOT EXISTS guard.
             result = self.parse_regular_stats_file(round_2_file_path)
             result['round_num'] = 2  # Force Round 2 even if header says otherwise
+            result['is_orphan_r2'] = True
             return result
 
         logger.info(f"[R1] Found Round 1 file: {os.path.basename(round_1_file_path)}")
