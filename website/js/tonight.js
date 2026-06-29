@@ -92,9 +92,15 @@ function _roundPill(rd) {
 function _teamPanel(team, maps, rounds, lead, side) {
     const color = side === 'a' ? A_COLOR : B_COLOR;
     const roster = (team.roster || []).map(n => escapeHtml(n)).join(' · ') || '—';
-    return `<div class="flex-1 text-center ${lead ? '' : 'opacity-80'}">
-        <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-1">${escapeHtml(team.name || 'Team')}</div>
-        <div class="text-5xl font-black leading-none" style="color:${color}">${maps}</div>
+    // The leading team gets a soft team-coloured glow + ring so the live score
+    // reads at a glance; the trailing team dims back.
+    const wrapStyle = lead
+        ? ` style="box-shadow: inset 0 0 0 1px ${color}40, 0 0 26px -10px ${color}; border-radius:0.75rem"`
+        : '';
+    const scoreStyle = lead ? `color:${color};text-shadow:0 0 22px ${color}66` : `color:${color}`;
+    return `<div class="flex-1 text-center p-3 ${lead ? 'bg-white/[0.03]' : 'opacity-75'}"${wrapStyle}>
+        <div class="text-[10px] uppercase tracking-widest text-slate-500 mb-1">${escapeHtml(team.name || 'Team')}${lead ? ` <span style="color:${color}">▲</span>` : ''}</div>
+        <div class="text-6xl font-black leading-none" style="${scoreStyle}">${maps}</div>
         <div class="text-[10px] uppercase tracking-widest text-slate-500 mt-1">maps · ${rounds} rounds</div>
         <div class="text-[11px] text-slate-400 mt-2 leading-snug">${roster}</div>
     </div>`;
