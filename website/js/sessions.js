@@ -1346,8 +1346,8 @@ function renderSessionCard(session) {
 
     return `
         <div class="glass-panel rounded-xl overflow-hidden session-card" data-date="${safeDate}" data-date-key="${dateKey}">
-            <!-- Session Header (clickable) -->
-            <div class="p-6 cursor-pointer hover:bg-white/5 transition" onclick="toggleSession('${safeDateJs}')">
+            <!-- Session Header (clickable; keyboard + screen-reader operable) -->
+            <div class="p-6 cursor-pointer hover:bg-white/5 transition session-card-header" role="button" tabindex="0" aria-expanded="${isExpanded ? 'true' : 'false'}" onclick="toggleSession('${safeDateJs}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSession('${safeDateJs}')}">
                 <div class="flex flex-wrap items-center justify-between gap-4">
                     <!-- Left: Date & Time Ago -->
                     <div class="flex items-center gap-4">
@@ -1431,6 +1431,8 @@ export async function toggleSession(date) {
     if (!detailsEl) return;
 
     const isHidden = detailsEl.classList.contains('hidden');
+    // Keep the header's aria-expanded in sync for screen readers.
+    cardEl?.querySelector('.session-card-header')?.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
 
     if (isHidden) {
         // Expand
