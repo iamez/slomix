@@ -551,19 +551,37 @@ async def get_prox_scores(
     range_days: int = 30,
     player_guid: str | None = None,
     limit: int = 50,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
     Proximity composite scores: prox_combat, prox_team, prox_gamesense, prox_overall.
     Percentile-based scoring across all proximity metrics.
+
+    Honours the scope the UI sends (session_date/map_name/round_number) instead of
+    silently always returning the range_days window — previously a selected
+    date/map made prox_overall *look* scoped while showing the 30-day global score.
     """
     from website.backend.services.prox_scoring import compute_prox_scores
+    parsed_date = _parse_iso_date(session_date) if isinstance(session_date, str) else session_date
     try:
-        results = await compute_prox_scores(db, range_days, player_guid)
+        results = await compute_prox_scores(
+            db, range_days, player_guid,
+            session_date=parsed_date, map_name=map_name, round_number=round_number,
+        )
+        scoped = bool(parsed_date or map_name or round_number is not None)
         return {
             "status": "ok",
             "version": "1.0",
             "range_days": range_days,
+            "scope": {
+                "scoped": scoped,
+                "session_date": str(parsed_date) if parsed_date else None,
+                "map_name": map_name,
+                "round_number": round_number,
+            },
             "player_count": len(results),
             "players": results[:limit],
         }
