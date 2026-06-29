@@ -232,10 +232,13 @@ class BOXScoringService:
             return []
 
         # Assign map_number sequentially.
-        # A new map starts when we see round_number=1 (a fresh R1).
-        # This handles the same map_name appearing multiple times in a session.
+        # A new map starts when we see round_number=1 (a fresh R1) OR when the
+        # current bucket already holds an R2 — otherwise a second/orphan R2 (no
+        # R1 between them) collapses into the previous map's bucket and silently
+        # overwrites its real R2 (maps[map_number][round_number] = r downstream).
         results: list[RoundResult] = []
         map_number = 0
+        current_has_r2 = False
 
         for r in rows:
             round_id = r[0]
@@ -247,9 +250,13 @@ class BOXScoringService:
             actual_duration = r[6]
             time_to_beat = r[7]
 
-            # New map whenever we encounter round_number 1
-            if round_num == 1:
+            # New map on a fresh R1, or when another round arrives after the
+            # current map already saw its R2 (a dangling/duplicate R2).
+            if round_num == 1 or current_has_r2:
                 map_number += 1
+                current_has_r2 = False
+            if round_num == 2:
+                current_has_r2 = True
 
             is_fullhold = round_outcome.lower() == "fullhold" if round_outcome else False
 
