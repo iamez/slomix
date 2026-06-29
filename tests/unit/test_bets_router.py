@@ -11,6 +11,7 @@ from fastapi import HTTPException
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from website.backend.routers import bets_router as bets
 from website.backend.routers.bets_router import (
     STARTER_BALANCE,
     _wallet,
@@ -217,14 +218,35 @@ async def test_settle_blocks_double_settle_after_lock():
 
 @pytest.mark.asyncio
 async def test_settle_auto_outcome_from_session_results():
+    bets._roster_cols_present = False  # force legacy positional path (no roster cols)
     db = _db()
     db.fetch_one = AsyncMock(side_effect=[
-        _settle_market(status="open", gsid=42),   # market lock
-        (2,),                                      # winning_team=2 -> team_b
+        _settle_market(status="open", gsid=42),    # market lock
+        (2, None, None),                           # winning_team=2 -> team_b (no rosters)
     ])
     db.fetch_all = AsyncMock(return_value=[])  # no bets
     res = await settle_market(_req(101), 1, {}, {"id": 101}, db)
     assert res["outcome"] == "team_b"
+
+
+@pytest.mark.asyncio
+async def test_settle_roster_bound_outcome_overrides_position():
+    """When rosters are bound (migration 011), the winner is resolved by roster
+    overlap — so winning_team=1 maps to team_b if team_b holds that roster, not
+    the positional team_a."""
+    bets._roster_cols_present = True
+    db = _db()
+    db.fetch_one = AsyncMock(side_effect=[
+        _settle_market(status="open", gsid=42),                 # market lock
+        (1, "AAAA1111,BBBB2222", "CCCC3333"),                   # winner=team_1 roster
+        ("CCCC3333", "AAAA1111,BBBB2222"),                      # market team_a_guids, team_b_guids
+    ])
+    db.fetch_all = AsyncMock(return_value=[])
+    res = await settle_market(_req(101), 1, {}, {"id": 101}, db)
+    # winning roster (AAAA/BBBB) overlaps market team_b, so outcome is team_b
+    # even though winning_team==1 would be team_a positionally.
+    assert res["outcome"] == "team_b"
+    bets._roster_cols_present = None  # reset cache for other tests
 
 
 @pytest.mark.asyncio
