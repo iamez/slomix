@@ -189,11 +189,11 @@ async def get_proximity_aim_lock(
         HAVING COUNT(*) >= 3
         ORDER BY total_lock_ms DESC
         LIMIT 20
-        """,
+        """,  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
         query_params,
     )
     total_row = await db.fetch_one(
-        f"SELECT COUNT(*) FROM proximity_aim_lock {where_sql}",
+        f"SELECT COUNT(*) FROM proximity_aim_lock {where_sql}",  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
         query_params,
     )
     return {
