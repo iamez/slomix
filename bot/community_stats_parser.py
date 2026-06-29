@@ -470,24 +470,30 @@ class C0RNP0RN3StatsParser:
                     logger.debug(f"  → Found {len(found)} same-day Round 1 file(s)")
                 potential_files.extend(found)
 
-        # STEP 3: If no same-day files, check previous date (midnight-crossing)
-        if not potential_files:
-            try:
-                date_obj = datetime.strptime(date, '%Y-%m-%d')  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
-                prev_date = (date_obj - timedelta(days=1)).strftime('%Y-%m-%d')
-                prev_pattern = f"{prev_date}-*-{map_name}-round-1.txt"
+        # STEP 3: ALWAYS also check the previous date (midnight-crossing). This
+        # used to be gated on `not potential_files`, but on a re-import/backfill
+        # where the same map was also played LATER on the R2's own day, STEP 2
+        # finds those after-R2 R1s, suppresses this search, and the downstream
+        # `r1_datetime < r2_datetime` filter then rejects them all — leaving the
+        # true previous-day R1 undiscovered and the R2 stored as raw cumulative.
+        # The downstream filter picks the best R1 strictly before R2 within the
+        # window, so merging extra candidates here is safe.
+        try:
+            date_obj = datetime.strptime(date, '%Y-%m-%d')  # noqa: DTZ007 local-naive convention for CET-time filename and match_id parsing
+            prev_date = (date_obj - timedelta(days=1)).strftime('%Y-%m-%d')
+            prev_pattern = f"{prev_date}-*-{map_name}-round-1.txt"
 
-                logger.debug(f"  → No same-day found, checking previous date: {prev_pattern}")
+            logger.debug(f"  → Also checking previous date (midnight-crossing): {prev_pattern}")
 
-                for search_dir in search_dirs:
-                    if os.path.exists(search_dir):
-                        pattern_path = os.path.join(search_dir, prev_pattern)
-                        found = glob.glob(pattern_path)
-                        if found:
-                            logger.debug(f"  → Found {len(found)} previous-day file(s) (midnight-crossing)")
-                        potential_files.extend(found)
-            except ValueError:  # nosec B110
-                pass  # Invalid date format, skip this file
+            for search_dir in search_dirs:
+                if os.path.exists(search_dir):
+                    pattern_path = os.path.join(search_dir, prev_pattern)
+                    found = glob.glob(pattern_path)
+                    if found:
+                        logger.debug(f"  → Found {len(found)} previous-day file(s) (midnight-crossing)")
+                    potential_files.extend(found)
+        except ValueError:  # nosec B110
+            pass  # Invalid date format, skip this file
 
         if not potential_files:
             return None
@@ -542,9 +548,14 @@ class C0RNP0RN3StatsParser:
         if not round_1_file_path:
             logger.warning(f"Could not find Round 1 file for {os.path.basename(round_2_file_path)}")
             logger.warning("   Parsing as regular file (treating as Round 2)")
-            # Parse as regular file but force round_num to 2
+            # Parse as regular file but force round_num to 2. The differential
+            # could NOT be computed, so this row holds RAW CUMULATIVE (R1+R2)
+            # stats — inflated vs a real R2. Mark it so the importer can stamp
+            # round_status='orphan_r2' and every consumer can exclude it centrally
+            # instead of each re-deriving a NOT EXISTS guard.
             result = self.parse_regular_stats_file(round_2_file_path)
             result['round_num'] = 2  # Force Round 2 even if header says otherwise
+            result['is_orphan_r2'] = True
             return result
 
         logger.info(f"[R1] Found Round 1 file: {os.path.basename(round_1_file_path)}")

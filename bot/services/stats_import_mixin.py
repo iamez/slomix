@@ -244,6 +244,13 @@ class _StatsImportMixin:
             if "round_outcome" in self._rounds_columns:
                 insert_cols.append("round_outcome")
                 insert_vals.append(round_outcome)
+            if "round_status" in self._rounds_columns and stats_data.get("is_orphan_r2"):
+                # Parser could not find R1, so this R2 row holds RAW CUMULATIVE
+                # (R1+R2) stats — inflated vs a real differential R2. Stamp it
+                # (DB default is 'completed') so consumers can exclude it with a
+                # single `round_status <> 'orphan_r2'` instead of a NOT EXISTS guard.
+                insert_cols.append("round_status")
+                insert_vals.append("orphan_r2")
             if "score_confidence" in self._rounds_columns:
                 insert_cols.append("score_confidence")
                 insert_vals.append(score_confidence)
@@ -274,6 +281,10 @@ class _StatsImportMixin:
                 #   is_bot_round flag only caught 100%-bot rounds, so a human
                 #   joining the test session leaked it into stats, see the
                 #   2026-06-11 session-123 incident). Default TRUE.
+                # - orphan R2 (R1 not found → raw-cumulative inflated stats):
+                #   route it through the SAME central is_valid gate so every
+                #   aggregate that already filters is_valid excludes it too,
+                #   without each consumer adding a NOT EXISTS guard.
                 from bot.core.round_contract import is_filler_map, round_has_bots
                 excluded = getattr(self.config, "excluded_maps", set())
                 # Detect bots from the player list directly, NOT from
@@ -288,6 +299,7 @@ class _StatsImportMixin:
                 insert_vals.append(
                     not is_filler_map(stats_data.get("map_name"), excluded)
                     and not has_bots
+                    and not stats_data.get("is_orphan_r2")
                 )
 
             placeholders = ", ".join(["?"] * len(insert_cols))

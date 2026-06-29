@@ -138,15 +138,21 @@ def _compute_category_score(
     return round(score, 2), breakdown
 
 
-async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None = None):
+async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None = None,
+                              *, session_date=None, map_name: str | None = None,
+                              round_number: int | None = None):
     """
     Main entry point. Computes prox_combat, prox_team, prox_gamesense, prox_overall
-    for all players (or one player) within range_days.
+    for all players (or one player) within range_days — or, when session_date/
+    map_name/round_number are supplied, scoped to exactly that selection.
 
     Returns list of player score dicts.
     """
     range_days = max(1, min(int(range_days), 365))
-    raw_data = await _fetch_raw_metrics(db, range_days)
+    raw_data = await _fetch_raw_metrics(
+        db, range_days, session_date=session_date,
+        map_name=map_name, round_number=round_number,
+    )
 
     if not raw_data:
         return []
@@ -244,7 +250,9 @@ def _sub_score(breakdowns: dict, cat_key: str, metric_keys: list[str]) -> float:
 # DATA FETCHING — one query per source table
 # ═══════════════════════════════════════════════════════════════════════════
 
-async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
+async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
+                             map_name: str | None = None,
+                             round_number: int | None = None) -> dict[str, dict]:
     """
     Fetch raw per-player metric values from all source tables.
     Returns {guid: {metric_key: value, ...}} merged dict.
@@ -253,8 +261,30 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
     `asyncio.gather(..., return_exceptions=True)` so one slow table
     doesn't gate the rest. Results merge sequentially into `players`
     afterwards (no shared-state race).
+
+    Scope: by default the trailing `range_days` window. When session_date/
+    map_name/round_number are given, the queries are filtered to exactly that
+    scope instead — so a date/map/round selected in the UI actually changes the
+    scores rather than being silently ignored (all 9 source tables carry these
+    three columns). The scope WHERE clause is built once and `.format()`-ed into
+    every query (same $N params reused, incl. the two crossfire subqueries).
     """
-    since_date = datetime.now(timezone.utc).date() - timedelta(days=int(range_days))
+    parts: list[str] = []
+    params: list = []
+    if session_date is not None:
+        params.append(session_date)
+        parts.append(f"session_date = ${len(params)}")
+    else:
+        params.append(datetime.now(timezone.utc).date() - timedelta(days=int(range_days)))
+        parts.append(f"session_date >= ${len(params)}")
+    if map_name:
+        params.append(map_name)
+        parts.append(f"map_name = ${len(params)}")
+    if round_number is not None:
+        params.append(round_number)
+        parts.append(f"round_number = ${len(params)}")
+    scope_sql = "WHERE " + " AND ".join(parts)
+    scope_params = tuple(params)
     players: dict[str, dict] = {}
 
     def _merge(guid: str, name: str, data: dict):
@@ -276,7 +306,7 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
                    SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END)::REAL
                      / NULLIF(COUNT(*), 0) as escape_rate
             FROM combat_engagement
-            WHERE session_date >= $1
+            {scope}
             GROUP BY target_guid
         """),
         ("proximity_reaction_metric", """
@@ -285,7 +315,7 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
                    AVG(dodge_reaction_ms) as avg_dodge,
                    AVG(support_reaction_ms) as avg_support
             FROM proximity_reaction_metric
-            WHERE session_date >= $1
+            {scope}
             GROUP BY target_guid
         """),
         ("proximity_spawn_timing", """
@@ -293,7 +323,7 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
                    AVG(spawn_timing_score) as avg_score,
                    COUNT(*) as timed_kills
             FROM proximity_spawn_timing
-            WHERE session_date >= $1
+            {scope}
             GROUP BY killer_guid
         """),
         ("player_track", """
@@ -308,7 +338,7 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
                    AVG(stance_crouching_sec) as avg_crouching,
                    AVG(stance_prone_sec) as avg_prone
             FROM player_track
-            WHERE session_date >= $1
+            {scope}
               AND peak_speed IS NOT NULL
             GROUP BY player_guid
         """),
@@ -319,7 +349,7 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
                    SUM(CASE WHEN outcome = 'revived' THEN 1 ELSE 0 END) as revived_against,
                    AVG(effective_denied_ms) as avg_denied
             FROM proximity_kill_outcome
-            WHERE session_date >= $1
+            {scope}
             GROUP BY killer_guid
             HAVING COUNT(*) >= 3
         """),
@@ -328,7 +358,7 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
                    COUNT(*) as times_killed,
                    SUM(CASE WHEN outcome = 'revived' THEN 1 ELSE 0 END) as times_revived
             FROM proximity_kill_outcome
-            WHERE session_date >= $1
+            {scope}
             GROUP BY victim_guid
             HAVING COUNT(*) >= 3
         """),
@@ -337,7 +367,7 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
                    SUM(CASE WHEN hit_region = 0 THEN 1 ELSE 0 END) as head_hits,
                    COUNT(*) as total_hits
             FROM proximity_hit_region
-            WHERE session_date >= $1
+            {scope}
             GROUP BY attacker_guid
             HAVING COUNT(*) >= 20
         """),
@@ -347,14 +377,14 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
                        COUNT(*) as cf_total,
                        SUM(CASE WHEN was_executed THEN 1 ELSE 0 END) as cf_executed
                 FROM proximity_crossfire_opportunity
-                WHERE session_date >= $1
+                {scope}
                 GROUP BY teammate1_guid
                 UNION ALL
                 SELECT teammate2_guid,
                        COUNT(*),
                        SUM(CASE WHEN was_executed THEN 1 ELSE 0 END)
                 FROM proximity_crossfire_opportunity
-                WHERE session_date >= $1
+                {scope}
                 GROUP BY teammate2_guid
             ) sub
         """),
@@ -363,7 +393,7 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
                    COUNT(*) as trades,
                    COUNT(DISTINCT session_date) as sessions
             FROM proximity_lua_trade_kill
-            WHERE session_date >= $1
+            {scope}
             GROUP BY trader_guid
         """),
         ("proximity_focus_fire", """
@@ -371,14 +401,14 @@ async def _fetch_raw_metrics(db, range_days: int) -> dict[str, dict]:
                    COUNT(*) as times_focused,
                    AVG(focus_score) as avg_focus_score
             FROM proximity_focus_fire
-            WHERE session_date >= $1
+            {scope}
             GROUP BY target_guid
             HAVING COUNT(*) >= 3
         """),
     ]
 
     results = await asyncio.gather(
-        *(db.fetch_all(q, (since_date,)) for _, q in queries),
+        *(db.fetch_all(q.format(scope=scope_sql), scope_params) for _, q in queries),
         return_exceptions=True,
     )
 

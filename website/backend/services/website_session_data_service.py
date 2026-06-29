@@ -11,11 +11,13 @@ class WebsiteSessionDataService(SessionDataService):
     """
 
     def _team_name(self, team_int) -> str:
-        """Convert team integer to name"""
+        """Convert team integer to name. winner_team/defender_team 1 = Axis,
+        2 = Allies (engine convention TEAM_AXIS=1; see lua/parser). This mapping
+        was previously inverted, disagreeing with session-detail.js."""
         if team_int == 1:
-            return "Allies"
-        elif team_int == 2:
             return "Axis"
+        elif team_int == 2:
+            return "Allies"
         return "Unknown"
 
     def _time_ago(self, date_val) -> str:
@@ -144,8 +146,9 @@ class WebsiteSessionDataService(SessionDataService):
 
             team1_players = []
             team2_players = []
-            team1_name = "Allies"
-            team2_name = "Axis"
+            # team1 == side 1 == Axis (see player bucketing below: side==1 -> team1).
+            team1_name = "Axis"
+            team2_name = "Allies"
             winner_team_name = None
 
             guid_to_team = {}
@@ -199,8 +202,8 @@ class WebsiteSessionDataService(SessionDataService):
                 mid_point = len(all_players) // 2
                 team1_players = sorted(all_players)[:mid_point]
                 team2_players = sorted(all_players)[mid_point:]
-                team1_name = "Allies"
-                team2_name = "Axis"
+                team1_name = "Axis"
+                team2_name = "Allies"
 
             player_count = len(team1_players) + len(team2_players)
             format_tag = self._get_format_tag(player_count)
@@ -216,8 +219,9 @@ class WebsiteSessionDataService(SessionDataService):
                 side_to_team[2] = team1_name if sc1[2] > sc2[2] else team2_name
             winner_team_name = side_to_team.get(winner_side) if winner_side in (1, 2) else None
 
-            allies_team_name = side_to_team.get(1) or "Allies"
-            axis_team_name = side_to_team.get(2) or "Axis"
+            # side 1 = Axis, side 2 = Allies (TEAM_AXIS=1). Was inverted.
+            axis_team_name = side_to_team.get(1) or "Axis"
+            allies_team_name = side_to_team.get(2) or "Allies"
             score_display = None
             if axis_score is not None or allies_score is not None:
                 a_score = int(allies_score or 0)
