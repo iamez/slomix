@@ -315,6 +315,23 @@ async def test_calculate_session_picks_winner_beta_when_higher():
 
 
 @pytest.mark.asyncio
+async def test_orphan_r2_does_not_overwrite_previous_map():
+    """A dangling/duplicate R2 (no R1 between) must start a fresh map bucket, not
+    collapse into and silently overwrite the previous map's real R2."""
+    rows = [
+        (1, "oasis", 1, 1, 2, "Stopwatch", 300, 600),   # map1 R1
+        (2, "oasis", 2, 2, 1, "Stopwatch", 280, 600),   # map1 R2 → alpha takes map (2 pts)
+        (3, "supply", 2, 1, 2, "Stopwatch", 290, 600),  # orphan R2, no R1
+    ]
+    out = await BOXScoringService(_FakeDb(round_rows=rows)).calculate_session_score(99)
+    # map1 preserved (alpha 2 pts); orphan R2 lands in its own R1-less bucket and
+    # is skipped, so it neither overwrites map1's R2 nor inflates the score.
+    assert out.alpha_score == 2
+    assert out.beta_score == 0
+    assert out.maps_completed == 1
+
+
+@pytest.mark.asyncio
 async def test_calculate_session_winner_is_draw_when_scores_tie():
     """Equal scores AND maps_completed > 0 → winner='draw'.
     Pinned because a regression that drops the explicit 'draw' string

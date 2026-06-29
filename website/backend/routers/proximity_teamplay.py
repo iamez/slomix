@@ -152,6 +152,69 @@ async def get_proximity_spawn_timing(
         ],
     }
 
+@router.get("/proximity/aim-lock")
+@handle_router_errors("Proximity endpoint error")
+async def get_proximity_aim_lock(
+    range_days: int = 30,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    player_guid: str | None = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Aim-lock leaderboard (v7): crosshair-on-enemy tracking windows.
+
+    Each row in proximity_aim_lock is one window where a player held their
+    crosshair on an enemy. We rank players by how often and how long they
+    track targets, plus how tight (avg_err_deg, lower = better) and at what
+    range (avg_dist). Closes the loop between shot data and real targets.
+    """
+    where_sql, params, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, round_number, round_start_unix,
+        player_guid=player_guid, player_guid_columns=["guid", "target_guid"],
+    )
+    query_params = tuple(params)
+    leaders = await db.fetch_all(
+        f"""
+        SELECT guid, MAX(player_name) AS name,
+               COUNT(*) AS locks,
+               ROUND(AVG(duration_ms)::numeric, 0) AS avg_lock_ms,
+               SUM(duration_ms) AS total_lock_ms,
+               ROUND(AVG(avg_err_deg)::numeric, 2) AS avg_err_deg,
+               ROUND(AVG(avg_dist)::numeric, 0) AS avg_dist,
+               COUNT(DISTINCT target_guid) AS targets
+        FROM proximity_aim_lock {where_sql}
+        GROUP BY guid
+        HAVING COUNT(*) >= 3
+        ORDER BY total_lock_ms DESC
+        LIMIT 20
+        """,  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
+        query_params,
+    )
+    total_row = await db.fetch_one(
+        f"SELECT COUNT(*) FROM proximity_aim_lock {where_sql}",  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
+        query_params,
+    )
+    return {
+        "status": "ok",
+        "scope": scope,
+        "total_events": int(total_row[0]) if total_row else 0,
+        "leaders": [
+            {
+                "guid": r[0], "name": r[1],
+                "locks": int(r[2] or 0),
+                "avg_lock_ms": int(r[3] or 0),
+                "total_lock_ms": int(r[4] or 0),
+                "avg_err_deg": float(r[5] or 0),
+                "avg_dist": int(r[6] or 0),
+                "targets": int(r[7] or 0),
+            }
+            for r in (leaders or [])
+        ],
+    }
+
+
 @router.get("/proximity/cohesion")
 @handle_router_errors("Proximity endpoint error")
 async def get_proximity_cohesion(

@@ -1,0 +1,629 @@
+{
+ "confirmed": [
+  {
+   "severity": "low",
+   "dimension": "security",
+   "area": "s1_s2_morning_account",
+   "file": "/home/samba/share/slomix_discord/website/backend/routers/auth.py",
+   "line": "914-979",
+   "title": "Custom display name accepts arbitrary content (no sanitization) and is surfaced into Discord embeds + site name resolution",
+   "evidence": "set_my_display_name() only validates length (`if not name or len(name) > _DISPLAY_NAME_MAX:` where _DISPLAY_NAME_MAX=32) and the action enum. It does NOT sanitize content, then writes the raw string to player_links.display_name (UPDATE player_links SET display_name = ? ...). That column is read back by the bot's PlayerDisplayNameService.get_display_name (bot/services/player_display_name_service.py:50 'SELECT display_name ... FROM player_links') and by the website's resolve_display_name (website/backend/routers/api_helpers.py:315 'SELECT COALESCE(display_name, player_name) ...') \u2014 the latter only strips ET color codes (^1..^9), not markdown/HTML/control chars. A linked user can therefore set their own name to e.g. a Discord masked link `[x](https://evil)` (<=32 chars) which renders as a clickable link in any bot embed listing that player (morning digest, leaderboards, session reports). resolve_display_name output is also fanned out to ~10 callers across the website; legacy JS escapes it (escapeHtml in auth.js:148/331/572) and React auto-escapes, so web XSS is not proven, but the stored value is untrusted-by-construction.",
+   "fix_proposal": "In set_my_display_name, after the length check, reject or strip control/markdown characters from `name` for action=='custom' (e.g. allow a conservative printable set, strip `[]()` `*_~|>` backtick and C0 controls, collapse whitespace). The 'alias' path is already safe because it must match a recorded player_aliases row. Defense-in-depth even though the community is trusted.",
+   "effort": "small",
+   "why": "Untrusted user input is stored without sanitization and rendered into Discord embed markdown (proven masked-link injection) and across name-resolution surfaces; only length is validated.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "medium",
+    "refutation": "Could not refute the core claim. set_my_display_name (auth.py:946) validates only length (max 32) + action enum, then stores name verbatim for action=='custom' (line 960). Verified the value is read back unsanitized by PlayerDisplayNameService.get_display_name (auth read returns link_result[0] raw) and get_display_names_batch, and those names flow into Discord embeds (last_session_cog.py:424 -> build_session_overview_embed; ssh_monitor.py:718/986; session_cog.py:329). Discord renders markdown/masked links in embed field values/descriptions, so a <=32-char [text](url) is injectable. resolve_display_name (api_helpers.py:319) strips only ET color codes. Mitigations that reduce but do not eliminate it: web XSS is NOT exploitable (escapeHtml in legacy JS + React auto-escape, finding concedes this); requires an authenticated Discord-linked user; self-targeting only; trusted ~30-50 player community. The alias path is correctly guarded against arbitrary input.",
+    "ground_truth_check": "Read auth.py:914-979 (only length+enum validation, raw UPDATE), confirmed _DISPLAY_NAME_MAX=32 at line 872. Read player_display_name_service.py (get_display_name returns raw link_result[0]; batch returns raw row[1]). Read api_helpers.py:300-339 (resolve_display_name strips only ET colors). Confirmed embed consumers via grep: last_session_cog.py:424, ssh_monitor.py:718/986, session_cog.py:329, and read last_session_cog.py:420-456 showing display names substituted into build_session_overview_embed. Grepped prior audit doc WHOLE_CODEBASE_AUDIT_2026-06-15.md for display_name/sanitize/masked link: no hits, so this is not a duplicate.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "security",
+   "area": "s1_s2_morning_account",
+   "file": "/home/samba/share/slomix_discord/website/backend/routers/auth.py",
+   "line": "8",
+   "title": "Authenticated session cookie lacks Secure flag by default (SESSION_HTTPS_ONLY defaults to false)",
+   "evidence": "auth.py:8 `_SESSION_HTTPS_ONLY = os.getenv(\"SESSION_HTTPS_ONLY\", \"false\").lower() == \"true\"` and the matching SessionMiddleware in website/backend/main.py:225 `https_only=SESSION_HTTPS_ONLY` (default \"false\", main.py:101) plus the logout/discord-unlink cookie deletions (auth.py:483, auth.py:863 `secure=_SESSION_HTTPS_ONLY`). The session cookie carries the authenticated Discord identity (request.session['user'] set in callback, auth.py:460). If SESSION_HTTPS_ONLY is not explicitly set in the production .env, the cookie is issued without the Secure attribute and can be transmitted over plain HTTP, enabling network-level session theft. The code respects the env var, so this is an insecure default, not a hard bug; real-world risk is reduced by Cloudflare always-HTTPS in front of slomix.fyi.",
+   "fix_proposal": "Default SESSION_HTTPS_ONLY to true (opt-out for local dev via SESSION_HTTPS_ONLY=false) so production is secure-by-default, or assert it is true when a production indicator (e.g. FRONTEND_ORIGIN starts with https) is detected at startup. Ensure prod .env sets SESSION_HTTPS_ONLY=true regardless.",
+   "effort": "trivial",
+   "why": "Insecure-by-default for the cookie that authenticates the user; correctness depends on remembering to set an env var in every deployment.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. The cited code is exactly as described: auth.py:8 and main.py:101 both default SESSION_HTTPS_ONLY to \"false\"; main.py:225 passes https_only=SESSION_HTTPS_ONLY into SessionMiddleware; auth.py:483/863 use secure=_SESSION_HTTPS_ONLY on cookie deletion. The session stores authenticated Discord identity (auth.py:460 request.session[\"user\"] = _build_session_user(...)). Mitigating factors exist but do not neutralize the insecure default: cookie is httponly=True and samesite=\"lax\", and Cloudflare fronts slomix.fyi with always-HTTPS \u2014 but without the Secure attribute the browser will still attach the cookie to any plaintext http:// request made before a redirect, allowing leakage. Notably .env.example:31 ships SESSION_HTTPS_ONLY=false, so a deployment copying the example inherits the insecure value, reinforcing the \"must remember to set an env var\" risk the finding describes.",
+    "ground_truth_check": "Read auth.py:1-15 and the cited cookie-deletion lines (483, 863) plus session-set line (460). Read main.py:95-110 and 220-230 (SessionMiddleware config). Grepped SESSION_HTTPS_ONLY across .env* and website/: only .env.example sets it (=false); no production override visible in repo. Confirmed the prior scanner audit (docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md) does NOT cover this (no SESSION_HTTPS/Secure flag/https_only hits) \u2014 this is a new finding, not a re-report.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "correctness",
+   "area": "s1_s2_morning_account",
+   "file": "website/backend/services/storytelling/narrative.py",
+   "line": "398-401 (root cause spans website/backend/services/storytelling/baseline.py:22-33)",
+   "title": "Per-player baseline includes the session being narrated (and newer ones) \u2014 delta vs \"your usual\" is wrong",
+   "evidence": "baseline.py:22-30 defines trailing_averages(..., before_session_id) and documents it precisely: \"before_session_id: exclude that session and anything newer (so 'tonight' is compared against history, not against itself).\" The only production caller, narrative.generate_player_narratives, calls it WITHOUT that arg: `trailing_averages(self.db, g[:8])` (narrative.py:399). trailing_averages then takes the 10 most-recent sessions by `gaming_session_id DESC` (baseline.py:46-51) with no upper bound. So: (a) for the latest session, tonight is averaged into its own baseline (~1/N=10% self-dilution, systematically understating the headline delta); (b) for any HISTORICAL session_date \u2014 and session_date is a free public query param (storytelling_router.py:68,88,118) \u2014 the baseline is drawn from sessions PLAYED AFTER the narrated one, i.e. \"X above your usual\" compares a 2026-03 game against the player's 2026-06 form. The computed kills `k.get(\"kills\")` (narrative.py:423,499-501) is then formatted by format_with_baseline against this contaminated average.",
+   "fix_proposal": "Resolve the narrated session's gaming_session_id once (generate_narrative already does this at narrative.py:277-281 via `SELECT gaming_session_id FROM rounds WHERE round_date=$1`) and pass before_session_id=that_gsid into every trailing_averages call in generate_player_narratives so the baseline strictly precedes the narrated session.",
+   "effort": "small",
+   "why": "The delta vs baseline is the headline value of the whole S1.3 baseline feature ('no raw number without its delta'); a baseline drawn from the same or future sessions makes that delta quantitatively wrong, directly violating the 'no fabricated numbers' rule.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. I tried three refutation angles, all failed: (1) No guard/override elsewhere \u2014 grep shows trailing_averages is called from exactly one site (narrative.py:399) and before_session_id is never passed anywhere in the repo, so the documented exclusion is dead. (2) The query genuinely lacks an upper bound (baseline.py:43-48, ORDER BY gaming_session_id DESC LIMIT n, with before_sql empty in this call path), so the narrated + newer sessions ARE included. (3) session_date is a free public param validated only for date range (storytelling_router.py:455 -> _parse_date 2020..today+1), so historical dates pull future-session baselines. The narrated session's kills (get_kis_leaderboard(sd)) are session-scoped while the baseline avg is contaminated, and the result feeds format_with_baseline.",
+    "ground_truth_check": "Read baseline.py (full): confirmed before_session_id docstring + unbounded DESC/LIMIT query. Read narrative.py:260-520: confirmed generate_player_narratives calls trailing_averages without before_session_id (line 399), and own_baseline is consumed only once via format_with_baseline in the solo-lurker branch (lines 499-501). Read storytelling_router.py (full): confirmed session_date is a public query param with only range validation, and generate_narrative resolves gaming_session_id via SELECT...FROM rounds WHERE round_date (the exact pattern the fix proposal cites, narrative.py:277-281). Grep confirmed trailing_averages/before_session_id have no other callers and before_session_id is never supplied in tests or code. The one overstatement in the finding: format_with_baseline affects a single narrative sentence in one branch, not the whole feature's headline.",
+    "adjusted_severity": "medium"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "correctness",
+   "area": "s1_s2_morning_account",
+   "file": "website/backend/services/storytelling/narrative.py",
+   "line": "350-361, 499-501",
+   "title": "Baseline granularity mismatch: session-DATE kill totals compared against a per-gaming_session average",
+   "evidence": "The 'tonight' value comes from get_kis_leaderboard(sd) keyed on session_DATE (narrative.py:350), so k.get('kills') is the sum over the whole calendar date. trailing_averages groups strictly `GROUP BY r.gaming_session_id` (baseline.py:47), i.e. its average is per gaming session. When a single date contains more than one gaming_session_id, the two scopes diverge. Live DB confirms this happens: session_results shows dates 2026-06-15 and 2026-05-26 each map to 2 distinct gaming_session_id values. On such dates 'tonight' sums two sessions' kills while 'your usual' is a single-session average, inflating the delta.",
+   "fix_proposal": "Compare like-for-like: either compute the 'tonight' kills per gaming_session_id (matching the baseline grain) or have trailing_averages aggregate per session_date when the narrative scope is a date. Simplest: scope both to gaming_session_id.",
+   "effort": "small",
+   "why": "On multi-session days the 'above your usual' figure is overstated, mildly misrepresenting the player's night against the no-fabricated-numbers philosophy.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "medium",
+    "refutation": "Could not refute. The grain mismatch is real: get_kis_leaderboard (narrative.py:350 -> archetypes.py:36) sums kills over the whole calendar date (WHERE session_date=$1), while trailing_averages (baseline.py:46) returns a per-gaming_session average (GROUP BY r.gaming_session_id). format_with_baseline at narrative.py:499-501 compares the two directly. No guard normalizes the grain. The only thing that softens it is rarity + a narrow code path.",
+    "ground_truth_check": "Read narrative.py:331-505 (generate_player_narratives), archetypes.py:20-67 (get_kis_leaderboard uses WHERE session_date=$1, kills=COUNT(*)), baseline.py full (trailing_averages GROUP BY r.gaming_session_id, called without before_session_id so it includes tonight). DB query confirmed 8 multi-session dates exist (e.g. 2026-03-25 has 4 gaming_session_ids; 2026-06-21/06-16/06-11/05-27 have 2). The reviewer's exact dates differ (they read session_results, I read rounds.round_date) but the multi-session phenomenon is confirmed. Not present in WHOLE_CODEBASE_AUDIT_2026-06-15.md.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "correctness",
+   "area": "s1_s2_morning_account",
+   "file": "bot/services/on_this_day_service.py",
+   "line": "46-69",
+   "title": "On-This-Day day score conflates multiple gaming sessions / different rosters on the same date",
+   "evidence": "_fetch_day_history groups session_results by `CAST(session_date AS DATE)` and reports MAX(team_1_name)/MAX(team_2_name) with SUM(winning_team=1)/SUM(winning_team=2) (lines 50-60). session_results is one row PER MAP per gaming session (schema: map_name NOT NULL, gaming_session_id column), and winning_team=1/2 is relative to that row's team_1_guids/team_2_guids \u2014 which differ across gaming sessions. When a date has >1 gaming session (confirmed for 2026-06-15 and 2026-05-26 in the live DB) the throwback line 'TeamA n\u2013m TeamB' blends distinct teams/sides and MAX() picks an arbitrary name, so the displayed historical score can be wrong. Also note the query reads the nullable singular columns team_1_name/team_2_name (the NOT NULL plural team_1_names/team_2_names exist too); older rows with NULL singulars silently fall back to the 'N maps played' branch (lines 113-116).",
+   "fix_proposal": "Group by gaming_session_id (not date) and render one line per gaming session, or restrict to dates with a single gaming_session_id; pick team names consistently with the winning side rather than MAX().",
+   "effort": "small",
+   "why": "Surfaced as a factual historical result ('on this day, X beat Y n\u2013m'); on multi-session days it can present a fabricated score, contrary to the archive-as-memory intent.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "medium",
+    "refutation": "The core mechanism is real: `_fetch_day_history` (bot/services/on_this_day_service.py:50-60) groups `session_results` by `CAST(session_date AS DATE)` and SUMs `winning_team=1/2` across all rows for that date. Confirmed via DB that two calendar dates have >1 gaming_session_id (text dates 2026-06-16 \u2192 sessions 125+126, and 2026-05-27). For such a day the throwback line blends two distinct gaming sessions into one count, e.g. 'Team A 1\u20131 Team B', which merges two separate matchups whose 'team_1' rosters differ \u2014 a genuine (if minor) misrepresentation in an archive feature.\\n\\nHOWEVER, most of the finding's supporting evidence is wrong or moot against actual data, which sharply limits the impact:\\n1. 'one row PER MAP per gaming session' is FALSE \u2014 all 33 rows have map_name='ALL'; session_results is one aggregated row per gaming_session (not per map). So a multi-session day produces a tiny N (2), not an inflated map-level tally.\\n2. 'MAX() picks an arbitrary name' is MOOT \u2014 there is exactly one distinct team_1_name ('Team A') and one team_2_name ('Team B') across all 33 rows; MAX always returns the same generic placeholder, and team_1_names/team_2_names are '[]'. No real roster is ever misattributed.\\n3. 'older rows with NULL singulars silently fall back to N maps played' is unsubstantiated \u2014 0 of 33 rows have NULL team_1_name/team_2_name, so that branch is never hit in practice.",
+    "ground_truth_check": "Read on_this_day_service.py fully (query at 50-64, render at 108-121). Read schema_postgresql.sql:3933-3964 \u2014 confirmed map_name NOT NULL, gaming_session_id nullable, team_1_name/team_2_name nullable singulars exist alongside NOT NULL plural team_1_names/team_2_names. Ran DB queries: (a) dates with >1 gaming_session_id exist (2 such dates); (b) ALL 33 rows have map_name='ALL' (refutes per-map premise); (c) 0 NULL singular team names, distinct team_1_name=1 ('Team A'), distinct team_2_name=1 ('Team B') (refutes MAX-arbitrary and NULL-fallback claims).",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "ux",
+   "area": "s1_s2_morning_account",
+   "file": "website/js/auth.js",
+   "line": "570-588 (also 328-336)",
+   "title": "Player-search result rows are clickable <div>s \u2014 not keyboard/screen-reader accessible",
+   "evidence": "searchHeroPlayer() (live on the homepage hero) builds each result as `const div = document.createElement('div')` with `cursor-pointer` class and `div.onclick=...` (auth.js:570-588). The legacy searchPlayer() does the same (auth.js:328-336). Neither sets role=\"button\", tabindex, an Enter/Space keydown handler, or aria. A keyboard or screen-reader user can type a query but cannot select any returned player. Inconsistent with the S2 link picker renderLinkCandidates() (auth.js:144-155) which correctly uses real <button> elements for the same purpose. Not covered in WHOLE_CODEBASE_AUDIT_2026-06-15.md.",
+   "fix_proposal": "Render each result as a `<button type=\"button\">` (as renderLinkCandidates already does), or at minimum add role=\"button\", tabindex=\"0\" and an Enter/Space keydown handler mirroring onclick. Keep existing Tailwind classes so visuals are unchanged.",
+   "effort": "small",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. Verified all three cited locations: searchHeroPlayer (auth.js:570-588) and searchPlayer (auth.js:328-336) both build result rows as createElement('div') with cursor-pointer + div.onclick, with no role/tabindex/keydown/aria. renderLinkCandidates (auth.js:144-155) for the same player-pick task correctly uses createElement('button') with type='button' and addEventListener('click'). So both the a11y gap and the internal-inconsistency claims hold. No guard elsewhere neutralizes this \u2014 the div onclick is the only selection path.",
+    "ground_truth_check": "Read auth.js:120-180, 310-355, 555-596 directly. Confirmed line-exact: div.onclick on hero results (583-587) and legacy claim results (332-335); button element in renderLinkCandidates (144-154). escapeHtml is used in all three so this is purely accessibility, not an XSS angle. Not present in WHOLE_CODEBASE_AUDIT_2026-06-15.md (a11y was out of scope there).",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "ux",
+   "area": "s1_s2_morning_account",
+   "file": "website/js/auth.js",
+   "line": "684-702",
+   "title": "Display-name management block silently disappears on any transient API error",
+   "evidence": "refreshDisplayNameBlock() catch body is just `block.classList.add('hidden'); return;` (auth.js:699-701). For a linked user, a transient /account/aliases failure makes the entire 'set name / aliases' UI vanish with zero feedback. The same hide path also handles the legitimate not-linked case (auth.js:690-692), so the user cannot distinguish 'feature unavailable' from 'feature broken right now' \u2014 an error state presented as feature absence. Other functions in the same file (refreshProfileLinkCard auth.js:121-126, loadPromotionPreferences auth.js:198-202) show an explicit error message in this situation, so this is the outlier. Not in WHOLE_CODEBASE_AUDIT_2026-06-15.md.",
+   "fix_proposal": "In the catch, when the user is known linked, keep the block visible and surface a short inline error (mirroring setProfileLinkStatusMessage's error styling) instead of hiding the whole block. Only hide when data.linked is explicitly false.",
+   "effort": "small",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. The cited code is verbatim: refreshDisplayNameBlock() at auth.js:684-702 has a catch at 699-701 that does only `block.classList.add('hidden')` with no user feedback, and the not-linked branch at 690-692 uses the identical hide path \u2014 so a transient /account/aliases failure is indistinguishable from the feature being unavailable. The claimed contrast with siblings also holds: refreshProfileLinkCard (121-126) calls setProfileLinkStatusMessage(... , true) on error, loadPromotionPreferences (198-202) writes a 'Promotion settings unavailable' message, and fetchPlayerSuggestions (165-167) renders an explicit error row. So this function is genuinely the outlier in error handling.",
+    "ground_truth_check": "Read auth.js:670-719 (the target function + its callers _postDisplayName/setCustomDisplayName/resetDisplayName) and auth.js:110-203 (the cited sibling functions). Confirmed the catch swallows the error and hides the block, that the not-linked case shares that hide path, and that three other functions in the same file surface explicit error UI. No guard or alternate error-display path exists for this function. This is a frontend-only UX consistency issue \u2014 no data-correctness or security impact; the block degrades gracefully (hides) rather than showing stale/fabricated data.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "ux",
+   "area": "s1_s2_morning_account",
+   "file": "website/js/auth.js",
+   "line": "351, 705",
+   "title": "S2 account flow uses native prompt()/confirm()/alert() instead of the site's own modal system",
+   "evidence": "setCustomDisplayName() uses `prompt('Custom display name (max 32 chars):')` (auth.js:705); linkPlayer/unlink use `confirm(...)` and surface errors via `alert(...)` (auth.js:351, 372, 377, 390, 409). The site already ships a themed modal system (openModal/closeModal in this same file auth.js:301-311, used by modal-match-details/modal-player-compare in index.html:4771,4796). Native dialogs are unstyled OS popups that break the dark visual identity, can't preview ET color codes or live-validate the 32-char limit before submit, and render as blocking system popups on mobile. This is the one place a player customizes their public identity. Not in WHOLE_CODEBASE_AUDIT_2026-06-15.md.",
+   "fix_proposal": "Reuse the existing modal/inline pattern: a small input bound to profile-display-name-block with a Save button + live char counter, reporting success/error via setProfileLinkStatusMessage instead of alert(). No new framework needed.",
+   "effort": "medium",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. Every cited line is accurate: auth.js:705 uses prompt() in setCustomDisplayName; auth.js:351/377 use confirm() and 372/390/409 use alert() in linkPlayer/unlinkPlayerProfile/unlinkDiscordAccount. The site does ship a themed modal system (openModal/closeModal at auth.js:301-311) which is genuinely used by modal-match-details (index.html:4763) and modal-player-compare (index.html:4789). So the inconsistency the reviewer describes is real and not neutralized by any guard. The only basis to challenge it is that it is purely cosmetic/stylistic, not a functional or data-correctness defect \u2014 the native dialogs work.",
+    "ground_truth_check": "Read auth.js:290-411 and 690-720 directly \u2014 confirmed prompt/confirm/alert usage at all cited lines and the openModal/closeModal helpers. Grepped index.html and confirmed the themed modal markup (modal-match-details, modal-player-compare with closeModal click-actions) at lines 4763/4789. Not present in WHOLE_CODEBASE_AUDIT_2026-06-15.md as claimed (it is a UX, not scanner-type, finding).",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "security",
+   "area": "s3_s4_betting_seasons",
+   "file": "website/backend/routers/bets_router.py",
+   "line": "110-147, 245-284",
+   "title": "Parimutuel market has no betting cutoff \u2014 hindsight bets game the points leaderboard and the permanent 'Oracle' season award",
+   "evidence": "A market only ever transitions open -> settled. `place_bet` accepts/changes a bet whenever `market.status == 'open'` (bets_router.py:146-147). Nothing in the codebase ever sets `status='closed'` or checks `parimutuel_markets.closes_at` (grep for 'closed'/'closes_at' across website/backend returns no enforcement; the columns from migration 010 lines 41,46 are dead). Meanwhile `settle_market` auto-resolves the outcome by reading the already-recorded result: `SELECT winning_team FROM session_results ... ` (bets_router.py:274-281). Session results are surfaced publicly on the site, so a logged-in user who sees the real winner can place/change a bet onto the known-winning side at any time before an admin clicks settle, guaranteeing they land in the winning pool. `season_awards_service._compute_oracle` (season_awards_service.py:136-166) then engraves a permanent season 'Oracle' award to the bettor with the best net winnings \u2014 so this sniping directly fabricates a persistent award, violating the 'no fabricated numbers' philosophy, plus pads the public points leaderboard (bets_router.py:196-213).",
+   "fix_proposal": "Add a real betting cutoff: (1) enforce `closes_at` in `place_bet` (reject when `closes_at IS NOT NULL AND now() >= closes_at`), and/or require an admin `close` step that sets status='closed' before settle; (2) in `settle_market`, refuse to settle a market still in 'open' (require it be 'closed' first) so the result-known window is eliminated; (3) consider auto-closing the market the moment a `session_results` row exists for its `gaming_session_id`. This removes the hindsight-betting path without adding scale/complexity.",
+   "why": "Undermines the integrity of a permanent engraved season award and the points leaderboard with a concrete, no-mitigation exploit path; data-integrity is ranked as high as security in this project.",
+   "effort": "small",
+   "external_ref": "Distinct from the atomicity/payout class noted already fixed in docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md:35 \u2014 this is betting-window/outcome integrity, not payout math.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. The claimed gap is genuine: place_bet (bets_router.py:139-147) gates only on status=='open'; grep across website/backend, bot, and scripts shows the schema column closes_at (tools/schema_postgresql.sql:8726) is never read or written, no code ever sets status='closed', and settle_market is invoked only by a manual admin POST (no scheduled/auto settle). settle_market auto-derives the outcome from the already-recorded session_results.winning_team (bets_router.py:272-283), and since session results are published on the site there is a real open window between result-publication and admin settle during which a user can free-rebet onto the known winner via the upsert (bets_router.py:177-186). _compute_oracle (season_awards_service.py:135-166) then engraves a permanent season award from net winnings. The only inaccuracy in the finding is the schema citation: the closes_at/opens_at columns live in tools/schema_postgresql.sql:8725-8726, not 'migration 010' (which is an unrelated proximity migration). That is a wrong reference, not a refutation \u2014 the column genuinely exists and is dead.",
+    "ground_truth_check": "Read bets_router.py in full (place_bet 110-193, settle_market 245-344, leaderboard 196-213). Grepped website/backend, bot, scripts for closes_at / 'closed' / settle automation \u2014 only matches are the manual /settle route itself; no enforcement or auto-close exists. Confirmed parimutuel_markets schema (tools/schema_postgresql.sql:8714-8729) has closes_at defined but unused, and status defaults to 'open' with no 'closed' transition. Verified migration 010 is 010_add_proximity_support_summary.sql (unrelated to betting) \u2014 finding's migration line citation is incorrect. Read season_awards_service.py:135-166 (_compute_oracle) confirming permanent 'oracle' award written to season_awards from net bet winnings.",
+    "adjusted_severity": "medium"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "security",
+   "area": "s3_s4_betting_seasons",
+   "file": "website/backend/routers/planning.py",
+   "line": "1001-1010",
+   "title": "`/today/balanced-teams` POST is the only planning write-shaped endpoint missing the CSRF header check",
+   "evidence": "Every other POST in planning.py calls `_require_ajax_csrf_header(request)` (create:560, join:636, suggestions:693, vote:769, teams:836, ping:1051), and all bets/challenges/season POSTs do too. `suggest_balanced_teams` (planning.py:1001) only calls `_require_linked_identity` and omits the CSRF header guard. Impact is limited because the handler performs no DB writes (read-only roster + ET-rating enumeration) and CORS blocks cross-origin reading of the credentialed response, but it is an inconsistent contract that exposes the linked roster + ratings to a forced same-cookie cross-site request.",
+   "fix_proposal": "Add `_require_ajax_csrf_header(request)` at the top of `suggest_balanced_teams` to match the rest of the router's contract (one line).",
+   "why": "Defense-in-depth consistency; the deviation is the kind of drift that becomes a real gap if the endpoint later gains a write.",
+   "effort": "trivial",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute the factual claim: planning.py:1001-1010 (suggest_balanced_teams) is indeed the only POST in the router that omits _require_ajax_csrf_header \u2014 all six sibling POSTs (create:560, join:636, suggestions:693, vote:769, teams:836, ping:1051) call it. The one mitigating angle is that the CSRF guard exists to protect state-changing routes, and this endpoint is read-only (only a SELECT at 1018-1045, no writes) with CORS blocking cross-origin reads, so the real-world exploit value is effectively zero. That makes it a genuine consistency/defense-in-depth nit rather than a live vulnerability \u2014 but the deviation itself is real and the reviewer scoped it honestly.",
+    "ground_truth_check": "Read planning.py:990-1059 (confirmed suggest_balanced_teams calls only _require_linked_identity, no CSRF guard; handler is read-only SELECT). Grepped all @router.post + _require_ajax_csrf_header occurrences in planning.py \u2014 confirmed every other POST guards, only balanced-teams omits. Read auth_helpers.py:47-50 \u2014 require_ajax_csrf_header enforces X-Requested-With: XMLHttpRequest header (standard non-simple-header CSRF defense for state-changing routes).",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "correctness",
+   "area": "s3_s4_betting_seasons",
+   "file": "/home/samba/share/slomix_discord/website/backend/services/season_awards_service.py",
+   "line": "68-133",
+   "title": "Season Iron Man / Most Improved awards do not exclude bots (OMNIBOT/[BOT]); MVP path does",
+   "evidence": "_compute_iron_man (lines 68-91) and _compute_most_improved (lines 94-133) aggregate player_comprehensive_stats joined to rounds with only `is_valid IS DISTINCT FROM FALSE` and `time_played_seconds > 0` \u2014 no bot filter. The MVP/KIS query in sessions_router.py:1831-1832 deliberately filters `killer_guid NOT LIKE 'OMNIBOT%' AND killer_name NOT LIKE '[BOT]%'`, proving the codebase knows bots pollute these aggregates, but the season-award computation omits the same guard. Live DB proof: 810 player_comprehensive_stats rows for OMNIBOT/[BOT] players sit in valid rounds with time_played>0, and re-running the exact most_improved DPM-delta query for 2026-Q2 ranks `[BOT]wajs` (OMNIBOT0b84bf80...) #4 (delta 28.4, just behind humans 46.1/45.8/36.0). A season with more bot-test activity would engrave a bot as 'Most Improved'/'Iron Man'. The MVP candidate pool (_session_player_pool, sessions_router.py:1764-1786) likewise includes bots, so a bot can also be a nominee.",
+   "fix_proposal": "Add `AND pcs.player_guid NOT LIKE 'OMNIBOT%' AND pcs.player_name NOT LIKE '[BOT]%'` (matching the MVP/KIS convention) to the WHERE clauses of _compute_iron_man and _compute_most_improved in season_awards_service.py, and to _session_player_pool so bots can't be MVP candidates. Consider a shared helper for the bot-exclusion predicate to avoid further drift.",
+   "effort": "small",
+   "why": "Engraving a bot as a permanent season award directly violates the 'no fabricated numbers' core philosophy; awards are permanent (season_awards is keyed and meant to be HoF-style).",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. The cited lines lack any bot-exclusion predicate, while the same '[BOT]%'/'OMNIBOT%' guard appears 11x elsewhere in the backend (sessions_router.py, players_profile_router.py, rivalries_service.py), confirming an established convention the season-award path drifts from. The only inaccuracy is the framing that 'MVP path filters bots' \u2014 the actual MVP candidate pool (_session_player_pool) and _compute_mvp (session_mvp_votes) do NOT filter bots either; only the KIS-rank sub-query at sessions_router.py:1831-1832 does. The finding itself notes this, so the core claim stands.",
+    "ground_truth_check": "Read season_awards_service.py:1-223 (confirmed _compute_iron_man/_compute_most_improved/_session_player_pool have no bot filter). Read sessions_router.py:1755-1844 (KIS sub-query filters bots; candidate pool does not). grep -rn 'OMNIBOT%' website/backend = 11 hits across 3 files. DB: 810 bot PCS rows / 30 GUIDs sit in valid rounds (is_valid IS DISTINCT FROM FALSE) with time_played>0. Re-ran exact most_improved query for 2026-04-01..06-30: [BOT]wajs (OMNIBOT0b84bf80...) ranks #4 delta 28.4 vs humans 46.1/45.8/36.0 \u2014 near-miss, not winning. iron_man for same window: top is human 'vid' 20 sessions, no bot in top 8 (bots have 3 sessions each). All 810 bot rows are in rounds with is_bot_round=false, so the is_bot_round flag does NOT catch them \u2014 per-player GUID/name filter (the proposed fix) is the correct/only reliable guard.",
+    "adjusted_severity": "medium"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "correctness",
+   "area": "s3_s4_betting_seasons",
+   "file": "/home/samba/share/slomix_discord/website/backend/routers/bets_router.py",
+   "line": "272-283",
+   "title": "Parimutuel auto-settle maps session winning_team to team_a/team_b with no binding to the market's labels",
+   "evidence": "settle_market resolves an empty outcome from `session_results.winning_team` as `team_a if winning_team==1 else team_b` (lines 280-281). session_results.winning_team is the persistent-team index (schema comment line 3992: '1 = Team 1 won, 2 = Team 2 won, 0 = draw'), computed by bot/services/stopwatch_scoring_service.py from team_1_guids/team_2_guids. The parimutuel_markets row stores only free-text `team_a_label`/`team_b_label` (set by the admin in open_market, lines 238-240) and NO roster/team-id linking team_a to session Team 1. So auto-settle silently assumes the admin happened to label team_a == the scoring service's Team 1. If the labels were entered in the other order, every payout in settle (lines 300-336) goes to the wrong side with no warning. Draws (winning_team==0) fall through and force a manual outcome (acceptable), but the 1/2 mismatch is undetectable.",
+   "fix_proposal": "Bind the market to the roster: store team_a_guids/team_b_guids (or the resolved team index) when opening the market, then resolve the outcome by intersecting session_results.team_1_guids/team_2_guids with the stored rosters instead of assuming positional 1->a/2->b. Until then, drop the auto-resolution (or require the admin to confirm an explicit outcome) so a wrong-side payout can't happen implicitly.",
+   "effort": "medium",
+   "why": "Silently paying the wrong winners is a data-correctness/trust bug even with valueless points; the Oracle season award is derived from these net winnings, so a mis-settle also corrupts a permanent award.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Tried to refute by looking for (a) a roster/team-id binding on the market, (b) any label-to-name matching in settle, and (c) a deterministic admin-predictable definition of session 'Team 1'. All three failed. open_market (bets_router.py:231-241) stores only free-text team_a_label/team_b_label; settle_market (272-283) maps winning_team positionally (1->team_a, 2->team_b) with no name/roster comparison. In stopwatch_scoring_service.py the 'Team 1'/'Team 2' identity is derived non-deterministically: team_names_list comes from a DISTINCT query with no ORDER BY (288-302) and team_mapping flips on an arbitrary R1 sample player's side (358-370). Since session_results doesn't exist at market-open time and the positional assignment is post-hoc/unstable, even a careful admin cannot pre-align labels. The only real mitigations are the optional explicit `outcome` override and valueless points \u2014 they reduce but don't eliminate the silent wrong-side payout on the auto-resolve path. Bug is genuine, not neutralized by any guard.",
+    "ground_truth_check": "Read bets_router.py lines 1-345 (open_market, place_bet, settle_market). Read schema_postgresql.sql 8714-8744 (parimutuel_markets has no roster columns; only team_a_label/team_b_label) and 3940-3992 (session_results has team_1_guids/team_2_guids/team_1_name/team_2_name; winning_team comment '1=Team 1, 2=Team 2, 0=draw'). Read stopwatch_scoring_service.py 200-419 confirming team_1/team_2 ordering is derived from session_teams (no ORDER BY) + sample-player side flip, i.e. not stable/admin-predictable. Grepped frontend (React src + legacy js) \u2014 no client code binds team_a to a roster either. Checked docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md: only parimutuel atomicity/payout was previously reviewed (line 35), not this label-binding correctness gap, so this is net-new depth.",
+    "adjusted_severity": "medium"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "ux",
+   "area": "s5_s7_identity_memory_live",
+   "file": "/home/samba/share/slomix_discord/website/js/player-profile.js",
+   "line": "527",
+   "title": "ET Rating shown on two different scales on the same profile page (\"342\" vs \"0.342\")",
+   "evidence": "The S5 identity strip renders the rating as an integer: `ET Rating ${Math.round(skill.et_rating * 1000)}` (player-profile.js:527) \u2192 e.g. \"ET Rating 342\". The existing Skill panel directly below renders the SAME `skill.et_rating` via `${_num(skill.et_rating, 3)}` (player-profile.js:751) \u2192 \"0.342\". The composite endpoint returns the value as a 0.0\u20131.0 float (`players_profile_router.py:531` `round(rating,3)`), and the canonical site-wide display is `toFixed(3)` (React SkillRating.tsx:117/291 `et_rating.toFixed(3)`, leaderboard same). So a visitor sees a header badge reading \"342\" and a panel reading \"0.342\" for the identical metric on one screen \u2014 a fabricated-looking discrepancy that contradicts the 'no confusing numbers' philosophy.",
+   "fix_proposal": "Display the rating consistently with the rest of the site. Replace `Math.round(skill.et_rating * 1000)` in the identity-strip chip with the same formatting used elsewhere, e.g. `_num(skill.et_rating, 3)` (or `skill.et_rating.toFixed(3)`), so the header chip reads \"ET Rating 0.342 \u00b7 <tier>\" matching the Skill panel and the SkillRating page. If an integer ladder-style number is genuinely desired, change it everywhere (panel + leaderboard + React) \u2014 but the cheap, correct fix is to match the existing 3-decimal convention here.",
+   "effort": "trivial",
+   "why": "Self-contradicting numbers on the flagship profile page undermine trust in the stats and look like a bug to every user who scrolls down.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. Verified player-profile.js:514 and :728 both source `skill` from the same `data.skill` object, and both functions are invoked for the same page in the same render call (line 653 `_renderIdentityStrip(data)` for the header chip; line 660 `renderSkillAndLifetime(data)` for the overview tab). Line 527 renders `Math.round(skill.et_rating * 1000)` while line 751 renders `_num(skill.et_rating, 3)`. Same metric, same value, two scales on one screen. No guard, conditional, or alternate code path neutralizes this \u2014 there is exactly one ET-Rating chip render and one panel render, and they disagree.",
+    "ground_truth_check": "Read player-profile.js lines 515-539 (identity strip chip) and 740-757 (skill panel). Grepped all `et_rating` occurrences (only :527 and :751) and confirmed both `skill` vars derive from `data.skill` (:514, :728). Confirmed call sites via grep: `_renderIdentityStrip` at :653 and `renderSkillAndLifetime` at :660 are both in the same render flow. The two formatters (`Math.round(*1000)` vs `_num(...,3)`) produce 342 vs 0.342 for an identical value. Finding's cross-references (composite endpoint returning a 0-1 float, React toFixed(3) convention) are consistent with the 3-decimal canonical display; the integer chip is the outlier.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "ux",
+   "area": "s5_s7_identity_memory_live",
+   "file": "/home/samba/share/slomix_discord/website/js/record-book.js",
+   "line": "31",
+   "title": "Record Book tab marks itself loaded BEFORE the fetch, so a transient failure leaves the tab permanently empty",
+   "evidence": "`_ensureLoaded` sets `_loaded[key] = true;` (line 33) before invoking the loader, and the loader's rejection is only swallowed with `.catch(e => console.warn(...))` (lines 35/37/39). If the first load of a tab (records/hof/season) fails for any transient reason (network blip, slow backend), the flag stays true and re-clicking the tab calls `_ensureLoaded`, which returns early at line 32 \u2014 the tab shows nothing with no error message and never retries until a full page reload.",
+   "fix_proposal": "Set `_loaded[key] = true` only on success: move the assignment into a `.then()` after the loader resolves, and on `.catch` keep it false and render a small inline 'Couldn't load \u2014 tap to retry' message in the tab's container so re-clicking retries.",
+   "effort": "small",
+   "why": "Live data feeds occasionally hiccup; a permanently-blank tab with no error state is a confusing dead-end for the user.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "I tried to refute this by reading the actual code and looking for any retry/reset mechanism, but the finding holds. _ensureLoaded (lines 31-41) does `if (_loaded[key]) return;` (line 32) then unconditionally `_loaded[key] = true;` (line 33) BEFORE calling the loader. The loaders' rejections are only swallowed with `.catch(e => console.warn(...))` (lines 35/37/39), with no reset of the flag and no inline error/retry UI. So a transient first-load failure permanently latches the tab as 'loaded' \u2014 re-clicking calls _showTab -> _ensureLoaded which returns early at line 32, showing nothing until a full page reload. No guard elsewhere neutralizes this; the flag is module-level state mutated only here.",
+    "ground_truth_check": "Read website/js/record-book.js lines 1-60. Confirmed: _loaded module object at line 12 (records/hof/season all false), the early-return + premature true-set in _ensureLoaded (lines 31-33), and the three swallow-only catches (lines 35/37/39). The loaders (loadRecordsView, loadHallOfFameView, loadRecordBookSeason) are awaited only via the catch chain; nothing resets _loaded on failure. Behavior described is accurate.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "ux",
+   "area": "s5_s7_identity_memory_live",
+   "file": "/home/samba/share/slomix_discord/website/js/tonight.js",
+   "line": "176",
+   "title": "Tonight hub rebuilds its entire DOM every 8s poll, resetting horizontal scroll of the maps strip",
+   "evidence": "`_refresh` does `host.textContent = ''` then re-inserts the whole hub via `safeInsertHTML` on every 8s poll (tonight.js:176-218). The 'Tonight's maps' strip is `overflow-x-auto` (line 199). A user who scrolls right to view later maps \u2014 especially on mobile \u2014 has that scroll position (and any hover/focus) discarded every 8 seconds when the panel is wiped and recreated, plus the momentum/hold-prob canvases flicker on each rebuild.",
+   "fix_proposal": "Either preserve the horizontal scrollLeft of `.overflow-x-auto` across refresh (read before wipe, restore after insert), or render the static shell once and update only the changing text/score/canvas nodes in place rather than replacing the whole `host`. Lightweight: capture `const sl = stripEl?.scrollLeft` before clearing and reapply after re-insert.",
+   "effort": "small",
+   "why": "A live hub people watch should not yank the view out from under them on every tick; small but noticeable polish gap on the new S7 page.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. The cited behavior is exactly what the code does. tonight.js:11 sets POLL_MS=8000; lines 29-32 call _refresh() on that interval whenever the view is active; _refresh() at line 176 executes host.textContent='' followed by safeInsertHTML(host,'beforeend',...) which re-renders the ENTIRE hub, including the maps strip and both canvases. There is no scroll-preservation logic anywhere (grep for scrollLeft returns nothing). The maps strip is overflow-x-auto (line 199) with fixed w-40 cards, so when enough maps accumulate to overflow (plausible on mobile / a long evening), any user-applied horizontal scroll is reset to 0 every 8s, and the momentum/hold-prob canvases (lines 207/213) are recreated and redrawn (216-217) each tick. No guard neutralizes this.",
+    "ground_truth_check": "Read tonight.js lines 20-47 (polling lifecycle) and 160-218 (the _refresh render path). Grepped the file for setInterval, host.textContent, scrollLeft, overflow-x-auto: confirmed 8s interval, full-DOM wipe at lines 113/125/134/176/284, no scrollLeft handling at all. The strip is genuinely overflow-x-auto with flex-shrink-0 w-40 cards (line 162), so overflow is real. This is a frontend-only UX polish issue; not in the prior scanner audit scope (that focused on security/deps). Matches project context note that tonight.js is a recently-shipped S7 live page.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "ux",
+   "area": "s5_s7_identity_memory_live",
+   "file": "/home/samba/share/slomix_discord/website/js/wrapped.js",
+   "line": "21",
+   "title": "Wrapped share-card modal: no Escape/backdrop close, no dialog semantics, inert buttons on error",
+   "evidence": "The Wrapped overlay (wrapped.js:21-79) is a full-screen modal but only closes via the explicit Close button (line 39); there is no Escape-key handler, no click-on-backdrop dismissal, and the container has no `role=\"dialog\"`/`aria-modal`/focus management. Additionally, the Copy/Download buttons are rendered up-front but their click listeners are only attached after the fetch succeeds (lines 59/65); on the error paths (lines 48 / 53 set a status message and `return`) the Copy and Download buttons remain visible and clickable but do nothing.",
+   "fix_proposal": "Add an Escape keydown handler and a backdrop-click handler (close when `e.target === overlay`) bound when opening and removed on close; set `role=\"dialog\" aria-modal=\"true\"` on the panel and move initial focus to Close. On the error/no-data paths, hide or disable the Copy/Download buttons (e.g. add `disabled`/`hidden`) so they don't appear actionable.",
+   "effort": "small",
+   "why": "Modal keyboard-dismiss and backdrop-close are baseline expectations; inert-looking action buttons on error read as broken to the user.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "I could not refute the core factual claims; they accurately describe the code. However, the finding is genuinely low-impact polish, not a correctness or security issue. The \"inert buttons on error\" part is the only real bug-like aspect, and even that is mild: on the two error paths (line 48 and 53) the function returns before binding the Copy/Download listeners, so those buttons are visible but no-ops. The Escape/backdrop/role=dialog points are accessibility/UX niceties, not defects.",
+    "ground_truth_check": "Read /home/samba/share/slomix_discord/website/js/wrapped.js in full. Confirmed: overlay built at line 11-19 with class bg-black/80 (full-screen modal), no role/aria attributes. Only close handler is the explicit #wrapped-close button (line 39-42) \u2014 no keydown(Escape) and no overlay click handler anywhere in the file. Copy/Download buttons are rendered in the initial safeInsertHTML (lines 32-33), but their addEventListener calls are at lines 59 and 65, AFTER the fetch (line 46) and the two early-return error paths at lines 48 and 53. So on fetch failure or empty data, the buttons remain clickable but unbound. All claims in the finding match the code exactly.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "correctness",
+   "area": "s5_s7_identity_memory_live",
+   "file": "website/backend/routers/players_profile_router.py",
+   "line": "248-275",
+   "title": "bait_score mixes full-coverage lifetime deaths with proximity-only avenged count \u2192 systematically deflated, meaningless number presented as real",
+   "evidence": "_fetch_advanced computes `untraded = max(0, lifetime_deaths - avenged)` (line 273). `lifetime_deaths` comes from _fetch_lifetime which sums deaths over ALL valid rounds (1797 rounds), but `avenged` and `trades_made` come from proximity_lua_trade_kill, which exists for only ~29% of rounds (verified: 521 of 1797 rounds have any trade rows). So the denominator (trades + untraded) is dominated by deaths from rounds that have NO trade tracking at all and therefore could never be 'avenged'. Verified on the top player (guid 5D989160): lifetime_deaths=13732, avenged=487, trades_made=459 \u2192 bait_score = 459/(459+13245)*100 = 3.3%. Every player collapses to ~trades/deaths, a value that varies with each player's proximity-coverage fraction rather than with their actual trade involvement. bait_score returns available:True with this misleading percentage, violating the project's 'no fabricated numbers' rule. The metric docstring (player_profile_metrics.py:85-109) even codifies the wrong intent ('total_deaths - deaths_avenged_for_player').",
+   "fix_proposal": "Count deaths over the SAME round set that has trade-kill coverage (e.g., restrict lifetime_deaths to rounds present in proximity_lua_trade_kill / proximity-covered rounds for this player), so numerator and denominator share one population. Alternatively derive untraded_deaths directly from proximity death rows (e.g., proximity_kill_outcome victim rows) minus avenged, all within proximity-covered rounds. Mark the section approximate and surface the coverage % like _fetch_combat_timing does.",
+   "effort": "medium",
+   "why": "Profile 'advanced' teamplay metric shows a real-looking percentage that is wrong for every player and biased by data coverage, not skill.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "I tried to refute this and could not. The mechanism is objectively proven in code and data. In players_profile_router.py:248-275, _fetch_advanced receives `lifetime_deaths` from _fetch_lifetime (line 140-185), which sums p.deaths over ALL valid rounds (player_comprehensive_stats JOIN rounds WHERE r.is_valid, no proximity restriction). But `trades_made` (line 262-263) and `avenged` (line 266-268) come exclusively from proximity_lua_trade_kill. Then untraded = max(0, lifetime_deaths - avenged) (line 273) and bait = bait_score(trades_made, untraded). Since bait_score = trades/(trades+untraded)*100 (player_profile_metrics.py:85-108), the denominator is dominated by deaths from rounds that have no trade tracking at all and thus can never be 'avenged'. This is a genuine apples-to-oranges population mismatch: a ~20%-coverage numerator divided by a near-full-coverage denominator. The only debatable point is severity, not validity \u2014 I could not find any guard, disclaimer, or coverage normalization neutralizing it. The bait_score returns available:True whenever denom>0 (almost always), and it is surfaced live in the legacy UI (website/js/player-profile.js:761,794) as a 'Bait Score' percentage stat cell with NO coverage caveat, so it is presented to users as a real number.",
+    "ground_truth_check": "Read players_profile_router.py:140-185 (_fetch_lifetime \u2014 confirmed lifetime deaths span all valid rounds, no proximity gate) and :248-275 (_fetch_advanced \u2014 confirmed trades/avenged are proximity-only). Read player_profile_metrics.py:83-109 (bait_score formula + docstring codifying 'total_deaths \u2212 deaths_avenged_for_player', i.e. the lifetime-deaths intent). Confirmed UI surfacing in website/js/player-profile.js:761 and :794 ('Bait Score' cell, no disclaimer). DB sanity checks via mcp__db__query: (1) coverage \u2014 only 521 of 2655 valid stat-bearing rounds (~20%) have any proximity_lua_trade_kill rows; (2) reproduced the cited top player (guid 5D989160): lifetime_deaths=13718, trades_made=459, avenged=487 \u2192 bait = 459/(459+13231)*100 = 3.4%, confirming the score collapses to ~trades/lifetime_deaths and is dominated by untracked deaths. Checked docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md \u2014 bait/trade_kill/untraded NOT mentioned, so this is not a duplicate of the prior scanner audit.",
+    "adjusted_severity": "medium"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "correctness",
+   "area": "s5_s7_identity_memory_live",
+   "file": "website/backend/routers/players_router.py",
+   "line": "375-388",
+   "title": "Tonight live hub mis-scores double-fullhold maps as a win instead of a 1-1 draw (diverges from canonical BOX scorer)",
+   "evidence": "get_tonight determines the map winner with `if r2 and r2[\"winner\"]: winner = r2[\"winner\"]` (lines 376-381) and only treats it as a draw when R2 has no round winner (`elif r2 and not r2[\"winner\"]`, line 383). It never inspects whether the rounds were fullholds, even though it already computes per-round `duration`. The canonical stopwatch scorers disagree: box_scoring_service.py score_map (lines 94-99) scores `r1.is_fullhold and r2.is_fullhold` as winner='draw' 1-1, and stopwatch_scoring_service.py (lines 891-901) explicitly handles 'Double fullhold: 1-1 draw'. In a double-fullhold map each defender wins their own round, so r2 has a winner_team and Tonight awards the whole map (2 pts, a_maps/b_maps++) to the R2 defender instead of scoring a draw. This makes the live a_maps/b_maps tally and per-map winner pills wrong for defense-heavy maps.",
+   "fix_proposal": "Mirror BOX score_map: compute is_fullhold per round (R1/R2 duration vs map time limit, or carry a fullhold flag from lua), and when both R1 and R2 are fullholds emit winner='draw' with no map point to either side. Reuse BOXScoringService.get_expected_alpha_side/score_map instead of the ad-hoc 'R2 winner takes the map' branch so Tonight stays consistent with session-detail scoring.",
+   "effort": "small",
+   "why": "Live 'Tonight' score is the headline of the LIVE sprint; a double-fullhold map silently flips a draw into a 2-0 map for one team.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. The Tonight scorer (players_router.py:376-381) awards 2 points + a_maps/b_maps++ to the R2 round winner with no fullhold check, while the canonical BOXScoringService.score_map (box_scoring_service.py:94-99) scores r1.is_fullhold and r2.is_fullhold as a 1-1 draw. The Tonight SQL doesn't even fetch round_outcome, so it cannot detect fullholds. I confirmed the bug fires on real, valid (is_valid != FALSE) data: many double-fullhold map pairs have both R1 and R2 lua_round_teams.winner_team set non-zero (e.g. session 119 r1_id=10640 R1 winner=2/R2 winner=1, session 121 r1_id=10670, session 117 r1_id=10583, plus many sw_goldrush_te/supply maps), so r2['winner'] is truthy and Tonight mis-awards a 2-0 map. The only divergence is the double-fullhold case; I verified the other three round-outcome combinations resolve identically in both scorers, so the finding is precisely scoped.",
+    "ground_truth_check": "Read players_router.py get_tonight (lines 267-388): scoring branch and the SQL that omits round_outcome. Read box_scoring_service.py score_map (73-114) and _fetch_session_rounds (204-268): confirmed fullhold derived from rounds.round_outcome and double-fullhold => draw. Ran DB queries joining rounds+lua_round_teams: confirmed real valid double-fullhold maps with both rounds' winner_team non-zero across sessions 107-128. Grepped prior audit (WHOLE_CODEBASE_AUDIT_2026-06-15.md) for fullhold/tonight \u2014 not previously reported.",
+    "adjusted_severity": "medium"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "correctness",
+   "area": "s5_s7_identity_memory_live",
+   "file": "website/backend/routers/players_router.py",
+   "line": "284",
+   "title": "Tonight uses UTC date boundary (captured_at::date = CURRENT_DATE) which splits an evening session that runs past local midnight",
+   "evidence": "get_tonight filters `WHERE l.captured_at::date = CURRENT_DATE`. captured_at is `timestamp with time zone` and the DB session timezone is Etc/UTC (verified: current_setting('TimeZone')='Etc/UTC'). The community plays CEST evenings; a session running past ~02:00 CEST crosses UTC midnight (00:00 UTC = 02:00 CEST), so the night's early maps fall on the previous UTC date and drop out of the 'maps'/score payload once CURRENT_DATE flips, even though the gather is one continuous evening. This is the same UTC-vs-local class of bug already fixed once in the round linker.",
+   "fix_proposal": "Anchor the Tonight window on the live gaming_session_id (group by r.gaming_session_id of the most recent active session) or on a local-time-adjusted day boundary / a rolling lookback window, rather than the UTC calendar date, so a session that crosses local midnight stays intact.",
+   "effort": "small",
+   "why": "On long nights the live map list and team-map tally truncate mid-session, contradicting the at-a-glance 'what's happening tonight' purpose.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. The query at players_router.py:284 uses `WHERE l.captured_at::date = CURRENT_DATE` as the only temporal boundary; `last_gsid` (line 326) is captured but never used to widen the window. captured_at is timestamptz and the DB session TZ is Etc/UTC, so the cast resolves in UTC. The whole Tonight payload is derived solely from rows passing this filter, so there is no compensating guard.",
+    "ground_truth_check": "Verified TZ via mcp__db__query: current_setting('TimeZone')='Etc/UTC'. Verified lua_round_teams hour distribution: peak 19-23 UTC (=21:00-01:00 CEST), with 13 rows at UTC hour 0 (=02:00 CEST), confirming evenings can cross 00:00 UTC. Found gaming_session_ids whose lua rows span two distinct captured_at::date values. Read players_router.py:267-418 to confirm no gaming_session_id-based widening of the query. The 'round linker UTC vs local' fix referenced in the finding matches CLAUDE.md's documented bug fix, supporting the same-class claim.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "performance",
+   "area": "s5_s7_identity_memory_live",
+   "file": "website/backend/middleware/http_cache_middleware.py",
+   "line": "31-51 (cacheable_prefixes) + 261-285 (_ttl_for_path)",
+   "title": "Tonight live hub endpoint (/api/stats/tonight) and /api/stats/hold-probability bypass the HTTP cache while the sibling /api/stats/live-session is cached",
+   "evidence": "cacheable_prefixes (http_cache_middleware.py:31-51) lists '/api/stats/live-session' (and gives it live_ttl=15s via _ttl_for_path:264/282) but does NOT list '/api/stats/tonight' or '/api/stats/hold-probability'. Any path not matching a prefix gets 'private, no-store' (dispatch line ~83), so the server returns nothing cacheable. The Tonight hub is the new S7 LIVE feature explicitly designed as a hot poll: tonight.js declares POLL_MS = 8000 and polls `${API_BASE}/stats/tonight` every 8s (tonight.js:11,29-32,106), AND the home page loads the same endpoint via loadHomeTonightCard (tonight.js:271-276). Each poll runs get_tonight (players_router.py:267) which fires 3 DB round-trips per call (main lua_round_teams scan at :284, _tonight_team_names session_teams query at :235, and _hold_prob_curve regex scan of rounds at :169). With no server-side cache there is zero cross-client coalescing: N viewers during an active night = N*3 queries every 8s, even though the data only changes once per completed round. live-session, the older equivalent live endpoint polled the same way, is cached at live_ttl=15s \u2014 tonight was simply left out.",
+   "fix_proposal": "Add '/api/stats/tonight' and '/api/stats/hold-probability' to cacheable_prefixes, and add '/api/stats/tonight' to the live_prefixes tuple in _ttl_for_path so it gets the 15s live_ttl (matching live-session). A 10-15s server TTL collapses all viewers' 8s polls into one DB read per window without hurting the 'right now' feel. The frontend's per-client cachePolicy:'no-store' (tonight.js:106) only affects the browser cache; it does not stop the shared server-side cache from coalescing requests across clients.",
+   "why": "The Tonight hub is the marquee S7 live feature polled every 8s by every viewer plus the home card; leaving it out of the HTTP cache means redundant DB work scales linearly with concurrent viewers on the busiest moments (active game nights), exactly when the DB is also ingesting rounds.",
+   "effort": "trivial",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. The omission is verified in code: http_cache_middleware.py cacheable_prefixes (lines 31-51) lists /api/stats/live-session but not /api/stats/tonight or /api/stats/hold-probability; _ttl_for_path live_prefixes (262-267) gives live-session the 15s live_ttl. Endpoints confirmed at players_router.py:199 (/stats/hold-probability) and :267 (/stats/tonight), mounted under /api (main.py:314). tonight.js:11 sets POLL_MS=8000, :106 polls /stats/tonight, :271-276 home card uses the same endpoint. get_tonight does 3 DB round-trips (:284 lua_round_teams date scan, :218 team-names, :166 hold-prob regex scan). Non-matching paths skip the cache entirely (dispatch line 78 returns call_next with no Cache-Control). No guard elsewhere coalesces these requests. The frontend no-store only affects the browser, not a server-side cache. One minor wording error in the finding: non-matching paths get no Cache-Control header, not the 'private, no-store' set at line 83 (which only fires for authed/cookie requests on matched prefixes) \u2014 does not change the conclusion.",
+    "ground_truth_check": "Read http_cache_middleware.py in full (prefixes 31-51, dispatch 60-88, _ttl_for_path 261-285). Grepped players_router.py for tonight/hold-probability (199, 267) and read _hold_prob_curve (166-204) and the main tonight query (280-292). Confirmed router mount prefix /api in main.py:314. Verified tonight.js POLL_MS=8000 and the two fetch sites (106, 276). Adjusted severity down because at the project's stated scale (~30-50 players, few concurrent spectators, small rounds/lua_round_teams tables) the redundant DB work is a few queries/sec on small tables \u2014 a real but low-impact consistency/perf nit with a trivial fix, not a medium structural risk.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "high",
+   "dimension": "correctness",
+   "area": "proximity_v7",
+   "file": "proximity/lua/proximity_tracker.lua",
+   "line": "3372",
+   "title": "Aim-lock round-end flush uses round-end time (not last_seen), inflating duration_ms by ~20% of total leaderboard lock-time",
+   "evidence": "closeAimLock() computes `duration = end_time - lock.start_time` (line 1117). EVERY normal close path passes `last_seen` (in-loop closes lines 1194/1211/1214/1218 and the stale-owner sweep line 1234). The ONLY exception is the round-end flush at line 3371-3373: `for clientnum in pairs(tracker.aim_lock.active) do closeAimLock(clientnum, now) end`, where `now = gameTime()` (round end). So any lock still 'active' when sampling stops (pause/intermission/last tick) is stamped end_time = round-end, stretching its duration from one observation up to tens of seconds. The 2026-06-11 probe comment at lines 1186-1190 ('duration 31s with samples=2') shows this class of bug was known and only the in-loop gap path (1192-1196) was patched \u2014 the flush path was missed. Live DB (proximity_aim_lock, 3921 rows) confirms it: rows with samples=1 and duration_ms=28800/25600, samples=2 and duration_ms=42800. SQL: 54 rows where duration_ms > samples*400+800 carry 795,250 ms = 20.4% of total SUM(duration_ms). The endpoint /api/proximity/aim-lock ranks the leaderboard by `total_lock_ms = SUM(duration_ms)` and shows it as the headline 'Lock time' column (proximity_teamplay.py:185, proximity.js renderAimLock), so the primary ranking metric is ~20% phantom time and avg_lock_ms is likewise skewed.",
+   "fix_proposal": "In the round-end flush (line 3372) close at the last confirmed sample like every other path: `local l = tracker.aim_lock.active[clientnum]; closeAimLock(clientnum, (l and l.last_seen) or now)`. Optionally add a sanity cap in closeAimLock (e.g. clamp duration to samples*interval_ms + interval_ms) as defense in depth. After deploy, backfill/refresh existing rows or note that pre-fix data over-counts.",
+   "effort": "small",
+   "why": "The 'no fabricated numbers' core: the headline leaderboard metric (total lock time) and avg lock ms are materially wrong (~20% inflated) and can reorder the ranking, because a single 400 ms observation can be credited as 28 s of 'crosshair-on-enemy' time.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. Tried: (1) checking whether another close path already neutralizes the flush \u2014 no, the round-end flush at proximity_tracker.lua:3371-3373 is the unique path passing `now` instead of `last_seen`; the 2026-06-11 gap fix (lines 1186-1196) and the stale sweep (1234) all use last_seen. (2) Checking whether the duration formula or a cap clamps it \u2014 closeAimLock() line 1117 is a raw `end_time - lock.start_time` with only a min_duration_ms floor (1118), no upper clamp. (3) Checking whether the endpoint avoids ranking by the inflated sum \u2014 it does NOT: proximity_teamplay.py:183/190 selects SUM(duration_ms) AS total_lock_ms and ORDER BY total_lock_ms DESC, the headline column. (4) DB sanity: the reviewer's exact figures reproduce (54 phantom rows, 795,250 ms = 20.4% of 3,892,725 total; samples=1/duration_ms=28800 row exists). The feature is live (commit 'chore(lua): activate v7 aim_lock capture flag' + endpoint shipped), 3921 rows present.",
+    "ground_truth_check": "Read proximity_tracker.lua:1107-1236 (all closeAimLock call sites) and 3340-3399 (flush). Confirmed line 3372 `closeAimLock(clientnum, now)` with now=gameTime() at 3370, vs every other site using `lock.last_seen or now`. Read proximity_teamplay.py:155-208 confirming ORDER BY total_lock_ms and avg_lock_ms exposure. Ran mcp__db__query: total=3892725ms, phantom(>samples*400+800)=795250ms across 54 rows = 20.4%; extreme rows incl samples=1\u219228800ms, samples=2\u219242800ms. Rank-impact query: real-player top-5 unaffected (corrected==tot), but OMNIBOT rows drop several ranks and human ranks 6/7/8 (DB00AA45, EDBB5DA9, 7B84BE88) shift up by 1 when corrected \u2014 so leaderboard does reorder, though milder for humans than headline 20% suggests. Not present in WHOLE_CODEBASE_AUDIT_2026-06-15.md (new finding).",
+    "adjusted_severity": "high"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "correctness",
+   "area": "proximity_v7",
+   "file": "website/backend/routers/proximity_teamplay.py",
+   "line": "184-185",
+   "title": "avg_err_deg / avg_dist are an unweighted mean-of-means across lock windows",
+   "evidence": "The endpoint computes `ROUND(AVG(avg_err_deg)...)` and `ROUND(AVG(avg_dist)...)` over rows of proximity_aim_lock. Each row's avg_err_deg/avg_dist is itself a per-window average over `samples` (Lua closeAimLock lines 1129-1130: err_sum/n). Averaging those per-window averages gives a 1-sample window the same weight as a 14-sample window. Verified against live DB: for top players mean-of-means vs SUM(avg_err_deg*samples)/SUM(samples) differs only ~0.03-0.2 deg (vid 2.758 vs 2.725), so impact is small at current sample sizes \u2014 but it is presented as the headline 'Avg err' tracking-tightness metric.",
+   "fix_proposal": "Use sample-weighted aggregation: `SUM(avg_err_deg*samples)/NULLIF(SUM(samples),0)` and likewise for avg_dist. The proximity_aim_lock.samples column is already stored for exactly this.",
+   "effort": "trivial",
+   "why": "Statistically incorrect aggregation presented as a precise per-player figure; magnitude is small today but grows if window sample counts diverge.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. The cited code at website/backend/routers/proximity_teamplay.py:184-185 does compute ROUND(AVG(avg_err_deg)) and ROUND(AVG(avg_dist)) grouped by guid, with no sample weighting. There is no guard or correction elsewhere \u2014 the SELECT is the final aggregation returned to the client as avg_err_deg/avg_dist. The mean-of-means is statistically incorrect for a tracking-tightness metric; the correct aggregate is sample-weighted SUM(x*samples)/SUM(samples). The only thing arguing against it is magnitude, not correctness.",
+    "ground_truth_check": "Read proximity_teamplay.py lines 140-219: confirmed the aim-lock leaderboard query uses AVG(avg_err_deg) and AVG(avg_dist) over rows grouped by guid (lines 184-185). Read tools/schema_postgresql.sql lines 2365-2390: confirmed proximity_aim_lock has avg_err_deg (real, per-window avg), avg_dist (integer, per-window avg), and samples (integer) columns \u2014 so each row already is a per-window average and the samples weight needed for a correct aggregate is stored but unused. The fix proposal (SUM(avg_err_deg*samples)/NULLIF(SUM(samples),0)) is valid against this schema. Finding self-reports tiny live-DB delta (~0.03-0.2 deg), consistent with low magnitude.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "correctness",
+   "area": "proximity_v7",
+   "file": "website/backend/routers/proximity_teamplay.py",
+   "line": "176-201",
+   "title": "Aim-lock leaderboard surfaces omni-bot players and orphan (unlinked) rounds as real human leaders",
+   "evidence": "The query selects from proximity_aim_lock with no exclusion of bot players (OMNIBOT* guids / '[BOT]' names) and no round-validity join. Live DB shows the leaderboard's top entries include OMNIBOT0400... '[BOT]endekk' (72 locks) and '[BOT]vid' (92 locks), and the largest single durations all belong to '[BOT]wajs/lagger/carniee/vid'. All current proximity_aim_lock rounds are flagged rounds.is_bot_round=false despite being omni-bot test sessions (the known is_bot_round detection gap), and ~396 locks have round_id IS NULL (orphan/unlinked rounds) yet are still counted because the scope filter is date-based only. Net: the v7 'Aim Lock' panel's only real-world data so far is bot-test-heavy and is presented as a genuine player leaderboard. (Bot inclusion is systemic across proximity routers \u2014 none filter OMNIBOT \u2014 so this is a surfacing of a pre-existing gap, not unique to this endpoint.)",
+   "fix_proposal": "Exclude bot actors (e.g. `WHERE guid NOT LIKE 'OMNIBOT%'`, or join rounds and require is_bot_round = false once that flag is fixed) consistently across proximity leaderboards; consider requiring round_id IS NOT NULL (or is_valid) to drop orphan captures. Independently, fix the upstream is_bot_round detection so omni-bot rounds are flagged.",
+   "effort": "small",
+   "why": "Presenting bot/test rows as a real leaderboard violates the 'no fabricated numbers' philosophy; users will see [BOT] names topping the v7 panel.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute the core claim. Confirmed at proximity_teamplay.py:178-194 that the aim-lock leaderboard query has no OMNIBOT/[BOT] exclusion and no rounds.is_bot_round / round_id validity join; the only filtering comes from _build_proximity_where_clause (proximity_helpers.py:136-202) which is date/map/round/guid only. No other proximity router filters OMNIBOT either. However, the finding's framing is overstated: the live leaderboard top-5 are all real humans (^pvid 519600ms, wiseBoy 423125ms, .olz 419600ms) with 4-5x any bot total; bots appear interspersed at ranks ~6 ([BOT]endekk) and ~8 ([BOT]vid), not 'topping' the panel. 'Largest single durations all belong to bots' and 'only data so far is bot-test-heavy' are false against ground truth \u2014 bots are ~10% of locks (377/3921) and do not lead.",
+    "ground_truth_check": "Read proximity_teamplay.py:155-215 (aim-lock endpoint) and proximity_helpers.py:136-202 (where-clause builder) \u2014 no bot or round-validity filter present. grep confirmed no OMNIBOT filter in any proximity_*.py router. Live DB (mcp__db__query) on proximity_aim_lock: total 3921 locks, 377 OMNIBOT% locks, 396 round_id IS NULL; leaderboard ordering by SUM(duration_ms) shows OMNIBOT0400 ([BOT]endekk, 228800ms) and OMNIBOT0300 ([BOT]vid, 214000ms) within top 20, but real humans occupy ranks 1-5. Finding NOT present in prior audit doc WHOLE_CODEBASE_AUDIT_2026-06-15.md.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "performance",
+   "area": "proximity_v7",
+   "file": "proximity/parser/parser.py",
+   "line": "2775-2865",
+   "title": "v7 import methods do row-by-row INSERTs instead of using the available executemany batch API",
+   "evidence": "The four newly-added v7 import methods (_import_aim_locks 2779, _import_spawn_selects 2803, _import_skill_snapshots 2825, _import_comm_events 2849) each `for ... in self.aim_locks:` and issue one `await self.db_adapter.execute(query, tuple(values))` per row (e.g. line 2797). The per-row helpers (_v7_base_columns_values, _append_round_link_columns, _append_canonical_guid_columns) are pure/cached (no per-row DB query \u2014 _table_has_column uses self._schema_cache, round-link context resolved once per file), so the column set is identical for every row in a given import. The adapter already exposes a true batching `executemany` (bot/core/database_adapter.py:348 -> asyncpg conn.executemany). Per the commit, one session emitted 1367 aim_lock rows for 11 rounds, i.e. ~1367 sequential INSERT round-trips on the import path for that one table alone (current table is 3921 rows).",
+   "why": "Each row is a separate await/round-trip to Postgres in the async import path; with ON CONFLICT DO NOTHING and a stable column set the whole list could go through one executemany, cutting per-file import latency. This mirrors the legacy parser pattern (player_track imports far more rows the same way and works in production), so impact is modest and this is acceptable at current volume \u2014 but it is new code and the batch helper exists, so it is the one concrete efficiency gap in the v7 changes.",
+   "fix_proposal": "Within each v7 import method, build a single `columns` list once (the schema-cache lookups are deterministic per file) plus a `params_list` of value tuples across all rows, then call `await self.db_adapter.executemany(insert_sql, params_list)` once instead of looping with execute(). Keep the ON CONFLICT DO NOTHING clause. Optionally apply the same to the other proximity import loops if revisited.",
+   "effort": "small",
+   "external_ref": "Not covered by docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md (no batch-insert/N+1 parser mention found there)",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Tried to refute on three fronts and all failed. (1) Code: lines 2797/2819/2843/2865 do issue one execute() per row inside `for ... in self.<list>` loops \u2014 verified, not a misread. (2) Batch API exists: database_adapter.py:348 `executemany` wraps asyncpg conn.executemany \u2014 verified, so the alternative is genuinely available. (3) Feasibility: I checked whether the helpers do per-row DB work that would block batching \u2014 `_table_has_column` (parser.py:1029-1046) is backed by `self._schema_cache` so the schema lookups are pure after the first row, and `_append_round_link_columns`/`_append_canonical_guid_columns` only consult that cache plus already-resolved per-file metadata. So the column set is identical for every row and a single executemany is viable. No guard or batching elsewhere neutralizes the row-by-row pattern.",
+    "ground_truth_check": "Read parser.py:2760-2879 (all four v7 import methods + _v7_base_columns_values), confirmed per-row execute() calls and ON CONFLICT DO NOTHING clauses. Read database_adapter.py:330-362, confirmed executemany exists and is a true asyncpg batch. Grepped parser.py for the helper definitions and confirmed _schema_cache caching (lines 618, 1029-1046) making the helpers pure per file. The same row-by-row pattern is used by the older proximity imports (combat_engagement, player_track, kill_outcome, etc.) which run in production \u2014 consistent with the reviewer's note that impact is modest.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "correctness",
+   "area": "bot_reliability",
+   "file": "bot/cogs/availability_mixins/scheduler_mixin.py",
+   "line": "233-395",
+   "title": "Promotion job claimed to 'running' is never recovered if the bot restarts mid-dispatch (no stale-job reaper)",
+   "evidence": "In `_process_promotion_jobs` the work is selected with `WHERE status = 'pending' AND run_at <= $1` (lines 235-245), then atomically claimed with `UPDATE ... SET status='running' ... WHERE id=$1 AND status='pending' RETURNING attempts,max_attempts` (lines 254-265). The job is only moved out of 'running' by the in-process success/skip updates (lines 312-373) or the `except` block (lines 374-386). If the process dies AFTER the claim commits but BEFORE one of those terminal updates (e.g. a crash, or the documented daily 20:00 systemd restart landing during the 20:45/21:00 Discord-DM dispatch loop in `_dispatch_promotion_notification`), the row is left at status='running'. The selector only ever picks `status='pending'`, and `grep` confirms no reaper/requeue resets stale 'running' rows anywhere in bot/cogs/availability_mixins/ \u2014 so the session reminder/start notification is silently never sent and never retried. The advisory_lock refactor (a928dab) wraps this body but did not introduce or address the gap; it is pre-existing.",
+   "fix_proposal": "Add a stale-claim reaper at the top of `_process_promotion_jobs` (inside the advisory lock so it stays single-flight): `UPDATE availability_promotion_jobs SET status='pending', last_error='requeued (stale running)' WHERE status='running' AND updated_at < NOW() - INTERVAL '10 minutes' AND COALESCE(attempts,0) < COALESCE(max_attempts, <default>)` (rows past max_attempts \u2192 'failed'). This lets a crashed-mid-dispatch job be retried on the next tick, with dispatch idempotency already provided by `notifier` event_key dedup.",
+   "effort": "small",
+   "why": "A missed 21:00 session-start promotion notification with no retry undermines the availability/promotion feature; impact is bounded (one community, infrequent campaigns) but the failure is silent and permanent for that campaign.",
+   "external_ref": "Not in WHOLE_CODEBASE_AUDIT_2026-06-15.md",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "I tried to refute this on three fronts and failed on all three: (1) a recovery/reaper elsewhere, (2) a surrounding transaction that would roll back the claim on crash, and (3) job re-creation that would re-schedule a stuck campaign. None exist. The mechanism holds. The only nitpick is the finding's mention of the 'documented daily 20:00 systemd restart landing during the 20:45/21:00 dispatch' \u2014 the daily restart at 20:00 is actually BEFORE the dispatch window, so that exact scenario is not the trigger; but any crash/OOM/deploy during the few-second DM-dispatch loop is, so the core defect stands regardless.",
+    "ground_truth_check": "Read scheduler_mixin.py lines 233-395: the SELECT (line 239) filters `status='pending'` only; the claim UPDATE (lines 256-262) sets `status='running'` guarded by `status='pending'`; terminal updates to sent/skipped/failed/pending all live inside the try/except body. grep across bot/, website/, scripts/ for `availability_promotion_jobs` UPDATEs and for `stale|reaper|requeue|orphan|'running'` found NO code that ever resets a stale 'running' row back to 'pending' \u2014 only external_channels_mixin references 'running' in read-only status-IN filters. Confirmed commit durability in database_adapter.py: `_process_promotion_jobs` does not use `transaction()`; each `execute`/`fetch_one` runs via `connection()` (pool.acquire) under asyncpg implicit per-statement auto-commit, so the claim commits immediately and survives a subsequent process death before the terminal update. Index `idx_promotion_jobs_due ON (status, run_at)` confirms the pending-only access path. Not present in WHOLE_CODEBASE_AUDIT_2026-06-15.md.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "performance",
+   "area": "bot_reliability",
+   "file": "/home/samba/share/slomix_discord/bot/services/stats_import_mixin.py",
+   "line": "877-901",
+   "title": "Weapon stats inserted one-row-per-await (N+1) instead of executemany within the player import loop",
+   "evidence": "In _insert_player_stats, weapon rows are written with a per-weapon `await self.db_adapter.execute(insert_sql, (...))` inside `for weapon_name, w in weapon_stats.items():` (lines 879-901), itself nested inside the per-player `async with self.db_adapter.transaction()`. The adapter already exposes `executemany` (database_adapter.py:348) used elsewhere, but it is not used here. For a typical round (~10-12 players, each ~6-10 weapons) this issues ~60-120 separate awaited DB round-trips per round file, in addition to one separate transaction()/connection-acquire per player (line 832). The static INSERT and the savepoint isolation are fully compatible with a single executemany call.",
+   "fix_proposal": "Build the weapon tuples into a list inside the savepoint and replace the per-weapon `execute` loop with one `await self.db_adapter.executemany(insert_sql, weapon_rows)` call. This preserves the existing savepoint atomicity (all-or-none weapons for the player) while collapsing dozens of round-trips into one. No behavioral change beyond fewer round-trips.",
+   "effort": "small",
+   "why": "Import-path only and at ~30-50 player / handful-of-rounds-per-evening scale this is not a bottleneck, so severity is low; but it is a clear, real N+1 the performance lens explicitly flags, and the fix is a drop-in use of the adapter's existing executemany.",
+   "external_ref": "Not covered in docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md (grep for executemany/weapon/N+1 returned nothing).",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Tried to refute on two fronts and both failed. (1) The N+1 is exactly as described: stats_import_mixin.py:879-901 awaits db_adapter.execute once per weapon inside the per-player transaction() savepoint. (2) I checked whether the proposed executemany fix would break the savepoint atomicity the surrounding comments rely on \u2014 it does not: executemany (database_adapter.py:348-356) acquires its connection via self.connection(), and connection() (lines 222-225) yields the active _active_tx_conn when one is set, so calling executemany while still inside the existing `async with transaction()` runs on the same connection within the savepoint, preserving all-or-none weapon semantics. So the fix is a valid drop-in and the finding stands.",
+    "ground_truth_check": "Read stats_import_mixin.py:820-914 (confirmed per-weapon execute loop inside transaction(), static INSERT SQL). Read database_adapter.py:220-361 confirming connection() reuses _active_tx_conn, transaction() does savepoint nesting, executemany() exists and reuses connection() (so it works inside an active tx). Noted executemany() skips _normalize_params (execute() applies it) \u2014 irrelevant for these int/float/str weapon tuples but a real difference. Not present in docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md per the finding's grep claim; nothing contradicts that.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "correctness",
+   "area": "data_integrity",
+   "file": "/home/samba/share/slomix_discord/bot/core/stopwatch_pairing.py",
+   "line": "158-169 (_parse_dt_unix), 141-155 (_sort_key)",
+   "title": "Stopwatch pairing mixes UTC-epoch (round_start_unix) with host-local-naive parse of CET filenames \u2014 mispairs mixed-source sessions on a non-CET host",
+   "evidence": "round_start_unix is an absolute UTC epoch (verified: round id at round_date=2026-02-11 round_time=212900 has round_start_unix=1770841218 = 20:20:18 UTC, i.e. 21:29 CET file time minus the +1h winter offset). _parse_dt_unix() builds the fallback timeline via datetime.strptime(date+time).timestamp(), which interprets the naive CET wall-clock string in the HOST's local tz. _sort_key() places both kinds of round in the SAME sort group (group 0) on this single axis. They only agree when host tz == game-server tz (CET). On a UTC host the parsed value is shifted +1h(winter)/+2h(summer) relative to round_start_unix. I simulated session 88 (a real mixed session) on a UTC host: the parsed-only R2 rounds sort ~1h late, so the chronological R1->R2 walk pairs etl_adlernest R1 with the wrong R2 and orphans most maps. DB confirms 4 real mixed-source sessions exist (gaming_session_id 88,89,90,96: each has both round_start_unix IS NULL and IS NOT NULL R1/R2 rows; 1154 of 1797 play-rounds lack round_start_unix). The module docstring/_gap_seconds claim 'consistent within a session \u2014 absolute offset is irrelevant', which is false once unix and parsed rounds interleave. The codebase itself disagrees on the host tz: round_linker.py:257 says 'CET game server + UTC prod (PR #216)', while ultimate_bot.py:1737 says 'Both machines are CET \u2014 do NOT change to utcfromtimestamp()'. The only runtime caller is scripts/backfill_match_id_stopwatch.py (pair_rounds at line 143), which then rewrites rounds.match_id AND lua_round_teams.match_id; running it on a UTC host would silently mis-key these 4 sessions while presenting itself as 'deterministic'.",
+   "fix_proposal": "Make the fallback parse timezone-explicit instead of host-dependent so it lands on the same UTC-epoch axis as round_start_unix: parse the filename wall-clock in the game-server zone, e.g. datetime.strptime(...).replace(tzinfo=ZoneInfo('Europe/Berlin')).timestamp() (or convert round_start_unix to the same naive-local basis for both). Then drop the inaccurate 'absolute offset is irrelevant' comment. Add a unit test that feeds a mixed unix/no-unix session and asserts identical pairing under TZ=UTC and TZ=Europe/Berlin (e.g. via a tz-injectable parse). Also reconcile the contradictory tz comments in round_linker.py:257 vs ultimate_bot.py:1737.",
+   "effort": "small",
+   "why": "Core philosophy is 'no fabricated numbers'; a host-tz-dependent pairing silently produces wrong R1<->R2 match_id groupings (and re-keys lua_round_teams) for 4 known sessions, presented as authoritative/deterministic. Bounded scope and the dev host being CET keep it from being high.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. I reproduced the exact failure on real DB data. _sort_key (stopwatch_pairing.py:150-154) mixes round_start_unix (true UTC epoch) and _parse_dt_unix (naive strptime().timestamp(), host-local) in the same group-0 axis. Running pair_rounds on real session 88 (16 rounds: 6 without unix, 10 with) gives 8/8 complete pairs under TZ=Europe/Berlin but only 1 complete + 7 abandoned_r1 + 7 orphan_r2 under TZ=UTC \u2014 proving the pairing is host-tz-dependent for mixed-source sessions. The docstring claim 'absolute offset is irrelevant' (line 160) is false once unix and parsed rounds interleave. The one mitigation (dry-run by default + --i-have-a-backup gate in backfill_match_id_stopwatch.py) reduces blast radius but does not neutralize the bug: dry-run on a UTC host shows the *broken* pairing as authoritative, and --apply rewrites rounds.match_id + lua_round_teams.match_id (lines 229-245).",
+    "ground_truth_check": "Inspected: (1) stopwatch_pairing.py:141-169 full logic; (2) DB query confirming 4 mixed sessions exist (88,89,90,96); (3) DB query of all 16 session-88 rounds confirming round_start_unix is UTC epoch (9818: 212900 CET -> 1770841218 ~20:20 UTC); (4) Python simulation of pair_rounds on real session-88 data under TZ=Europe/Berlin (8 complete) vs TZ=UTC (1 complete, 14 orphans) \u2014 bug reproduced; (5) the contradictory tz comments at round_linker.py:257 ('UTC prod, PR #216') and ultimate_bot.py:1737 ('Both machines are CET'); (6) the sole caller scripts/backfill_match_id_stopwatch.py:142-245 which rewrites rounds.match_id and lua_round_teams.match_id; (7) confirmed dev host is Europe/Ljubljana (CEST), so the bug is dormant here but live on the UTC prod the code's own comment describes.",
+    "adjusted_severity": "medium"
+   }
+  }
+ ],
+ "dropped": [
+  {
+   "severity": "low",
+   "dimension": "performance",
+   "area": "s5_s7_identity_memory_live",
+   "file": "website/backend/routers/players_router.py",
+   "line": "284",
+   "title": "get_tonight filters lua_round_teams with captured_at::date = CURRENT_DATE, a non-sargable cast that bypasses idx_lua_round_teams_captured_at",
+   "evidence": "players_router.py:284 uses `WHERE l.captured_at::date = CURRENT_DATE`. The schema has idx_lua_round_teams_captured_at as a plain btree(captured_at) (schema_postgresql.sql:6941), but wrapping the column in ::date makes the predicate non-sargable, forcing a sequential scan on every poll. lua_round_teams is small today (44 rows in dev) so the cost is negligible now, but this is a hot endpoint polled every 8s (see related cache finding) and the table grows a few rows per round indefinitely, so the seq scan cost trends up over the 18-month-plus history.",
+   "fix_proposal": "Rewrite as a half-open range that the existing index can use: `WHERE l.captured_at >= CURRENT_DATE::timestamptz AND l.captured_at < (CURRENT_DATE + 1)::timestamptz`. Combined with server-side caching of the endpoint this fully removes the per-poll scan.",
+   "why": "Index-defeating expression on a continuously-growing table that is polled on a fixed 8s timer; cheap to fix and pairs with the cache finding.",
+   "effort": "trivial",
+   "_verify": {
+    "is_real": false,
+    "confidence": "high",
+    "refutation": "Cast exists but table is only 694 rows so Postgres seq-scans regardless of sargability; fix would not change the plan. Negligible bounded micro-perf, no user param.",
+    "ground_truth_check": "Read players_router.py 267-329; grepped schema 6938-6941 (plain btree); queried lua_round_teams = 694 rows, tiny metadata table.",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "correctness",
+   "area": "proximity_v7",
+   "file": "website/backend/routers/proximity_teamplay.py",
+   "line": "174-191",
+   "title": "player_guid filter OR's guid/target_guid then GROUP BY guid, polluting a player-scoped query with other players",
+   "evidence": "_build_proximity_where_clause is called with player_guid_columns=[\"guid\", \"target_guid\"], producing `(guid = $n OR target_guid = $n)` (proximity_helpers.py:184-186). The query then GROUP BY guid. So when player_guid=X is supplied, rows where X was the TARGET (someone else locked onto X) are grouped under those other players' guids, returning a leaderboard of everyone who aimed at X mixed with X's own locking row \u2014 not 'X's aim-lock stats'. The legacy frontend never passes player_guid for this endpoint (proximity.js scopedUrl('/proximity/aim-lock')), so it is latent, and the same pattern already exists in spawn-timing (line 105), but the public API param invites misuse.",
+   "fix_proposal": "For a player-scoped view, filter on the actor column only (player_guid_columns=[\"guid\"]) so the result is the named player's locks; keep the OR form only if the intent is genuinely 'X involved as locker or target' and then GROUP BY the involved guid accordingly.",
+   "effort": "trivial",
+   "why": "A player-scoped API call would return data about other players, silently misattributed.",
+   "_verify": {
+    "is_real": false,
+    "confidence": "medium",
+    "refutation": "The code behavior is accurately described (proximity_helpers.py:184-186 builds `(guid = $n OR target_guid = $n)`, and proximity_teamplay.py:188 does `GROUP BY guid`), but the \"bug\" characterization rests on an unproven intent contract. Three reasons this is not a real correctness defect: (1) Per-guid stats are NOT fabricated or misattributed \u2014 each returned row's metrics (avg_lock_ms, avg_err_deg, etc.) are correctly computed for that row's actual actor guid; only the SET of rows in scope is broader than a naive reader of the param name might expect. (2) It is fully latent and proven so: buildScopeParams (proximity.js:187-198) only emits range/session/map/round, and the aim-lock fetch (proximity.js:1683 `scopedUrl('/proximity/aim-lock')`) passes no `extra`, so player_guid is never sent. (3) The OR-across-involvement-columns is a deliberate, repo-wide convention \u2014 spawn-timing (proximity_teamplay.py:105) uses the identical pattern with `[\"killer_guid\",\"victim_guid\"]`. Read as an \"engagements involving X\" filter (X as locker or as target), the GROUP BY guid result is coherent (\"who locked onto X, plus X's own locks\"), not broken. There is no documented contract that player_guid on this leaderboard means \"only X's own locks\", so calling it pollution is speculative about intent.",
+    "ground_truth_check": "Read proximity_teamplay.py:90-215 (both spawn-timing and aim-lock endpoints) and proximity_helpers.py:150-202 (the WHERE-clause builder, confirming the OR/single-column logic). Confirmed the frontend never sends player_guid for these endpoints: read proximity.js buildScopeParams (187-198) and scopedUrl (200-203), and grepped the aim-lock/spawn-timing call sites (1658, 1683) \u2014 no extra params passed. Verified parameterization is safe ($n placeholders). Confirmed spawn-timing uses the same OR pattern, establishing it as an intentional convention rather than a one-off mistake.",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "correctness",
+   "area": "data_integrity",
+   "file": "/home/samba/share/slomix_discord/bot/services/stopwatch_scoring_service.py",
+   "line": "97-118 (calculate_map_score limit<=0 branch + tie-break), used at 916-932 (live tally) and 832-843 (roster-change note)",
+   "title": "calculate_map_score treats a fullhold as a completion when time_limit is unrecorded \u2014 double-fullhold scored 1-0 instead of 1-1 in the time-fallback path",
+   "evidence": "When limit_sec <= 0 the code sets r1/r2_attackers_succeed = (actual_sec > 0), i.e. ANY positive actual_time counts as 'objective completed'. But fullholds are stored with the full round duration as actual_time, not as empty: DB shows actual_time='12:00' x140 and '10:00' x39 among completed valid R1/R2 rounds that have time_limit='0' (and 1357 of 1628 completed valid play-rounds have time_limit '0'/NULL = 83%). So a genuine double-fullhold (both actual='12:00') passes both succeed checks and the r1_sec <= r2_sec tie-break awards team1 a 1-0 win instead of a 1-1 draw. The main team-aware path catches double-fullholds via header (lines 891-901) only when winner_team is in (1,2) for BOTH rounds; 81 of 814 completed valid R2 rounds have a missing/non (1,2) winner_team and fall through to this time-based fallback (lines 916-932), feeding the !last_session team tally. The same calculate_map_score result is also surfaced verbatim in the new (last-month, PR #372) roster-change note (lines 832-843) as 'R1 attackers won (12:00)' for what is actually a double fullhold tie.",
+   "fix_proposal": "In calculate_map_score, do not infer completion from actual_time alone when limit is unknown. Treat actual_time >= the map duration (or a sentinel/empty/'fullhold') as a NON-completion, and when both sides fullhold return (0,0) or an explicit tie rather than awarding team1. Better: pass the round's defender/winner header (or round_stopwatch_state from round_contract.derive_stopwatch_contract) into the fallback so a fullhold is identified by state, not by a positive timer. Add tests for: double fullhold with time_limit='0' -> tie; one fullhold + one completion -> completer wins.",
+   "effort": "small",
+   "why": "Affects the live !last_session map tally and a user-facing roster-change note; with 83% of rounds missing time_limit and fullholds stored as full-duration timers, the time fallback can fabricate a 1-0 result for a genuine 1-1 double hold.",
+   "_verify": {
+    "is_real": false,
+    "confidence": "high",
+    "refutation": "The finding's core mechanism is real CODE but its claimed live impact is refuted by the actual data. The bug requires the `limit_sec <= 0` branch of `calculate_map_score` (lines 97-100) to be hit on the tally-feeding path. That path is the time-based fallback at lines 916-932, which is reached ONLY when `r2.winner_team NOT IN (1,2)` (the elif at 905 requires r2.winner_team in (1,2), and team_a_r1_side is always forced into (1,2) by the fallback at 875-883). I confirmed there are exactly 81 such completed/valid R2 rounds \u2014 matching the finding. BUT every one of those 81 rounds carries a REAL, non-zero `time_limit` (DB: r2_limit_zero=0), and crucially `calculate_map_score` uses R1's `time_limit` as its limit, and ZERO of these fallback maps have a paired R1 with `time_limit` '0'/NULL (INNER JOIN returned []; the \"4\" seen in an earlier LEFT JOIN were rows with NO paired R1, i.e. NULL from the outer join, not real limit-zero R1s). Therefore the `limit_sec <= 0` branch is NEVER executed on the tally path \u2014 the double-positive precondition count is 0. The 885 paired maps that DO have R1 time_limit='0' with both actuals positive all have a populated r2.winner_team in (1,2), so they take the header path (905-915) \u2014 which never calls calculate_map_score and correctly detects double-fullholds at lines 897-901. The two preconditions (limit=0 vs missing winner_team) are anti-correlated by data era: old sessions (68-81) have winner_team=0 + real limits; newer sessions have winner_team populated + limit='0'. The only remaining call to the limit<=0 branch is the roster-change note path (832-843), which is purely cosmetic: it sets team_a_points=0/team_b_points=0/counted=False and the note explicitly says 'not attributed to a team', so it cannot corrupt the !last_session tally. So the headline claim ('genuine double-fullhold scored 1-0 instead of 1-1 in the live tally / can fabricate a 1-0') has zero real occurrences.",
+    "ground_truth_check": "Read stopwatch_scoring_service.py lines 70-138 (calculate_map_score) and 760-959 (calculate_session_scores_with_teams: ambiguous path 825-873, double-fullhold header detection 891-915, time fallback 916-932). Verified fallback reachability condition: only r2.winner_team not in (1,2). DB queries (mcp__db__query): (1) 814 completed valid R2, 81 with bad winner_team \u2014 matches finding; (2) fullholds ARE stored with positive actual_time (e.g. winner=defender rows with actual '12:00'x171, '10:00'x41) \u2014 confirms the finding's storage premise; (3) of the 81 fallback rounds, r2_limit_zero=0 and both-positive-with-limit-zero=0; (4) INNER JOIN of bad-winner R2 to its R1 with R1 limit in ('0','',NULL) returned [] \u2014 no fallback map has a limit-zero R1, so the limit<=0 branch is unreachable on the tally path; (5) across all 1089 paired maps, 885 have R1 limit='0'+both actuals positive, but those go through the header path (winner_team populated), not the fallback.",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "performance",
+   "area": "data_integrity",
+   "file": "bot/services/stopwatch_scoring_service.py",
+   "line": "757-763",
+   "title": "N+1 per-map side query in calculate_session_scores_with_teams when a batched resolver already exists",
+   "evidence": "In calculate_session_scores_with_teams (def at line 618) the loop `for map_data in complete_maps:` issues one query per map: line 763 `r1_players = await self.db.fetch_all(sample_query, (r1['round_id'],))` where sample_query (lines 746-750) is `SELECT player_guid, team FROM player_comprehensive_stats WHERE round_id = $1`. complete_maps has one entry per map played in the session (DB shows up to 19 maps/session, e.g. gaming_session_id 99), so a single !last_session render fires up to ~19 sequential round-trips. The same module already contains build_round_side_to_team_mapping (def at line 1048) which performs the identical side->team majority computation for ALL round_ids in ONE query (lines 1092-1098: `SELECT round_id, player_guid, team FROM player_comprehensive_stats WHERE round_id IN (...)`), but the complete_maps loop does not use it. Note: this loop predates the audit window (git blame: 2026-02), and at current scale each query is a fast indexed lookup (idx_player_stats_round on player_comprehensive_stats.round_id, schema line 7137), so impact is small.",
+   "fix_proposal": "Before the loop, collect r1 round_ids from complete_maps and call the existing build_round_side_to_team_mapping(round_ids, team_rosters, team_a_name, team_b_name) once, then index its result by round_id inside the loop instead of re-querying per map. This collapses up to ~19 round-trips into a single batched query and reuses already-tested majority-side logic.",
+   "effort": "small",
+   "why": "Redundant N+1 query pattern explicitly called out in the performance lens; a batched alternative already exists in the same file so the fix is a near drop-in. Low severity because the rounds/players tables are tiny and the per-query lookup is indexed, so user-visible latency on the manual !last_session command is currently negligible at this community scale.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "The N+1 pattern is factually accurate: the complete_maps loop (757-763) fires one player_comprehensive_stats query per map, and a batched helper build_round_side_to_team_mapping (1048-1124) doing the same side->team computation in a single WHERE round_id IN (...) query does exist in the same file. So the pattern is genuinely present and the finding's facts hold. However, two things undercut acting on it: (1) Per the project's explicit performance rubric for a ~50-user community, this is a non-finding-grade case \u2014 the query is bounded (round_ids from a single session, ~max 19), uses the idx_player_stats_round index, and runs only on the manually-invoked !last_session command. The finding itself admits 'user-visible latency... is currently negligible.' (2) The proposed fix is NOT the pure drop-in claimed: the loop uses per-team majority with a Team-B inverse fallback on ties, whereas the batched helper uses a different combined score (side1_favors_a = (s1_a - s1_b) + (s2_b - s2_a)), so swapping in the helper would subtly change tie/ambiguity handling \u2014 a behavior change the fix proposal does not acknowledge.",
+    "ground_truth_check": "Read stopwatch_scoring_service.py lines 618-787 (calculate_session_scores_with_teams: confirmed sample_query at 746-750 and per-map fetch_all at 763) and lines 1048-1125 (build_round_side_to_team_mapping: confirmed single batched IN-query at 1092-1098 and the distinct scoring algorithm at 1117). Verified the two code paths compute majority side differently. No DB query needed; the structural claims are all confirmable in source.",
+    "adjusted_severity": "drop"
+   }
+  }
+ ],
+ "synthesis": "## Executive Summary\n\nLast month's work (S1-S7 sprints, betting/seasons, proximity v7, bot reliability) is **broadly healthy**: every confirmed finding was adversarially verified, and there are **zero criticals and no exploitable web XSS or SQLi** \u2014 the parameterized-query and output-escaping conventions held everywhere they were checked. The single **high** is a data-correctness bug in the brand-new proximity v7 aim-lock feature (round-end flush stamps `duration_ms` with round-end time instead of `last_seen`, inflating the headline \"lock time\" leaderboard by ~20% / 795k ms of phantom time). The dominant pattern is **not security but quantitative correctness**: roughly half the findings are \"a real-looking number that is silently wrong\" \u2014 contaminated baselines, grain mismatches, bot-polluted season awards, double-fullhold mis-scoring, and a coverage-biased bait score \u2014 which matter precisely because \"no fabricated numbers\" is the project's north star. Security findings are all **low-to-medium and mostly defense-in-depth or insecure-defaults** (Secure-cookie default, one missing CSRF header on a read-only route, unsanitized display name), with the one genuine integrity gap being the **parimutuel betting market having no cutoff**, allowing hindsight bets to fabricate a permanent \"Oracle\" season award. UX findings are consistently **small polish/accessibility gaps in newly-shipped legacy-JS pages** (Tonight, Wrapped, Record Book, auth). Performance findings are real N+1 / cache-omission patterns but correctly self-scoped as low-impact at 30-50 players. Overall: ship-quality work, but the new live/proximity/awards surfaces need a correctness pass before their numbers are trusted as \"memory.\"\n\n## Cross-Cutting Themes\n\n1. **Population/grain mismatches in aggregates** (the most recurring class). The same conceptual error appears across S1, S5, awards, and proximity: numerator and denominator are drawn from different row populations or different time grains.\n   - Baseline includes the session being narrated *and future sessions* (`narrative.py:399` drops `before_session_id`).\n   - Session-DATE kills compared against per-`gaming_session_id` baseline averages (`baseline.py:47`).\n   - On-This-Day SUMs winners across multiple gaming sessions on one date (`on_this_day_service.py:50-60`).\n   - bait_score divides full-coverage lifetime deaths by proximity-only (~20%-coverage) avenged counts (`players_profile_router.py:273`).\n   - **Root lesson:** scope everything to `gaming_session_id` and to the *same* round-coverage set \u2014 exactly the convention CLAUDE.md already mandates but these new surfaces drift from.\n\n2. **Bot/test-data not excluded from new aggregates.** The `OMNIBOT%` / `[BOT]%` exclusion is applied 11x in older routers but was *omitted* in season awards (`season_awards_service.py:68-133`) and the proximity aim-lock leaderboard. The upstream `is_bot_round=false` detection gap (a known, documented issue) means the per-GUID/name filter is the *only* reliable guard, so its absence in new code directly risks engraving a bot as a permanent award.\n\n3. **UTC-vs-local timezone drift, recurring.** Two independent instances (`players_router.py:284` Tonight date boundary; `stopwatch_pairing.py:141-169` mixed-source pairing) repeat a bug class the codebase has *already fixed once* in the round linker \u2014 and the code even contradicts itself on host TZ (`round_linker.py:257` \"UTC prod\" vs `ultimate_bot.py:1737` \"Both machines are CET\"). This contradiction should be reconciled centrally.\n\n4. **The `executemany` batch helper exists but new import code uses row-by-row `execute`.** Both v7 parser imports (`parser.py:2775-2865`) and weapon-stat imports (`stats_import_mixin.py:877-901`) loop one await per row despite `database_adapter.py:348`. Low impact at current scale, but it's a consistent missed-convention.\n\n5. **Legacy-JS UX consistency drift on freshly-shipped pages.** New pages (Tonight, Wrapped, Record Book) and the account flow reuse ad-hoc patterns (`div.onclick`, native `prompt`/`alert`, hide-on-error, premature `_loaded=true`) instead of the file's own established helpers (real `<button>`s in `renderLinkCandidates`, `openModal`, inline error messaging). The right fixes already exist in the same files.\n\n## Top Priority Fixes \u2014 Suggested Bundled PR Waves\n\n### Wave 1 \u2014 Data Correctness (highest value; defends the \"no fabricated numbers\" north star)\nBundle these; they are the trust-critical bugs:\n- **[HIGH] proximity aim-lock round-end flush** (`proximity_tracker.lua:3372`) \u2014 close at `last_seen`, add a duration clamp as defense-in-depth. *Note: requires Lua deploy (full map reload, owner-gated) + backfill/flag of pre-fix rows.*\n- **[MED] narrative baseline contamination** (`narrative.py:399`) \u2014 pass `before_session_id` (the gsid is already resolved at `narrative.py:277-281`).\n- **[MED] season awards bot pollution** (`season_awards_service.py:68-133` + `_session_player_pool`) \u2014 add the shared `OMNIBOT%`/`[BOT]%` predicate (extract a helper to stop the drift).\n- **[MED] Tonight double-fullhold mis-score** (`players_router.py:375-388`) \u2014 mirror `BOXScoringService.score_map`'s draw handling.\n- **[MED] parimutuel auto-settle label binding** (`bets_router.py:272-283`) \u2014 bind market to roster (or require explicit admin outcome) so 1\u2192a/2\u2192b isn't a silent assumption.\n- *(Lower in the same wave, cheap to include):* baseline grain mismatch (`baseline.py`), On-This-Day per-session grouping, bait_score coverage scoping, aim-lock sample-weighted means, aim-lock bot/orphan exclusion.\n\n### Wave 2 \u2014 Security + Integrity (small, mostly trivial)\n- **[MED] betting cutoff** (`bets_router.py:110-147`) \u2014 enforce `closes_at` / require a `closed` state before settle; this also protects the permanent Oracle award (overlaps Wave 1 in spirit).\n- **[LOW] Secure-cookie default** (`auth.py:8`) \u2014 default `SESSION_HTTPS_ONLY=true`, opt-out for local dev.\n- **[LOW] display-name sanitization** (`auth.py:946`) \u2014 strip markdown/control chars on the `custom` path.\n- **[LOW] missing CSRF header** (`planning.py:1001`) \u2014 one-line `_require_ajax_csrf_header`.\n\n### Wave 3 \u2014 Performance + Cache (low-impact, do opportunistically)\n- **[LOW] Tonight/hold-probability HTTP cache** (`http_cache_middleware.py:31-51`) \u2014 add to `cacheable_prefixes` + 15s live TTL (trivial, coalesces 8s polls).\n- **[LOW] v7 parser executemany** (`parser.py:2775-2865`) and **weapon-stats executemany** (`stats_import_mixin.py:877-901`) \u2014 drop-in batch (savepoint atomicity preserved).\n\n### Wave 4 \u2014 UX Polish (legacy JS; reuse existing in-file patterns)\n- ET Rating scale mismatch (`player-profile.js:527` \u2192 use `_num(...,3)`) \u2014 the most visible (looks like a bug to every visitor).\n- Record Book `_loaded=true`-before-fetch (`record-book.js:31`); display-name block hide-on-error (`auth.js:699`); Tonight scroll reset (`tonight.js:176`); a11y `<button>` for search results (`auth.js:570`); Wrapped modal Escape/backdrop + inert error buttons (`wrapped.js:21`); native `prompt/alert` \u2192 themed modal (`auth.js:705`).\n\n### Separate / owner-gated\n- **[MED] stopwatch pairing host-TZ dependence** (`stopwatch_pairing.py`) \u2014 fix only matters when the backfill script runs on a non-CET host; pair the TZ-explicit parse with reconciling the contradictory TZ comments. Dormant on the CET dev host, live risk on UTC prod.\n- **[LOW] promotion-job stale-claim reaper** (`scheduler_mixin.py:233-395`) \u2014 add a requeue for `status='running'` orphaned by a mid-dispatch restart.\n\n## Risky-Looking, Checked Out Clean (confidence signal)\n\nThese were investigated and **proven not to be bugs** \u2014 worth recording so they aren't re-flagged:\n- **No web XSS** despite the unsanitized display name and several `innerHTML`-shaped paths: legacy JS `escapeHtml` (auth.js:148/331/572) and React auto-escaping neutralize it. The display-name issue is real only for **Discord embed markdown**, not the website.\n- **No SQLi**: every flagged query is parameterized via the `?`\u2192`$n` adapter.\n- **The `alias` display-name path is correctly guarded** (must match a recorded `player_aliases` row) \u2014 only the `custom` path is the gap.\n- **On-This-Day \"per-map inflation\" and \"MAX picks arbitrary roster\" sub-claims are false** against real data (all 33 rows are `map_name='ALL'`, one distinct team name each); only the multi-gaming-session conflation is real and minor.\n- **Aim-lock \"bots top the leaderboard\" is overstated** \u2014 real humans hold ranks 1-5 at 4-5x bot totals; bots are ~10% of rows at ranks 6/8. Still worth filtering, but not \"the panel is bot-test data.\"\n- **executemany fixes are safe inside existing savepoints** \u2014 `connection()` reuses the active tx connection, so atomicity is preserved (verified, not assumed).\n- **The promotion-job 20:00 daily restart is NOT the trigger** for the stale-claim bug (restart precedes the dispatch window); only an ad-hoc crash/deploy during dispatch triggers it \u2014 the defect stands but the cited scenario doesn't.\n\nNet: the team's new code is solid on the hard guarantees (no injection, no escaping holes, safe transactions). The work needed is a **correctness sweep of the new aggregate/live surfaces** to align them with the project's own scoping conventions \u2014 concentrated, cheap fixes, none requiring any of the scale/architecture machinery the project explicitly rejects.",
+ "perArea": [
+  {
+   "area": "s1_s2_morning_account",
+   "confirmed": 8,
+   "dropped": 0
+  },
+  {
+   "area": "s3_s4_betting_seasons",
+   "confirmed": 4,
+   "dropped": 0
+  },
+  {
+   "area": "s5_s7_identity_memory_live",
+   "confirmed": 8,
+   "dropped": 1
+  },
+  {
+   "area": "proximity_v7",
+   "confirmed": 4,
+   "dropped": 1
+  },
+  {
+   "area": "bot_reliability",
+   "confirmed": 2,
+   "dropped": 0
+  },
+  {
+   "area": "data_integrity",
+   "confirmed": 1,
+   "dropped": 2
+  }
+ ]
+}

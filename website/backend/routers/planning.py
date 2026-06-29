@@ -1007,6 +1007,7 @@ async def suggest_balanced_teams(request: Request, db=Depends(get_db)):
     """
     # Linked identity required — this returns the roster, same privacy
     # contract as _planning_state (unlinked logins can't enumerate players).
+    _require_ajax_csrf_header(request)  # match the rest of the router's POST contract
     await _require_linked_identity(request, db)
     target_date = datetime.now(timezone.utc).date()
     participants = await _participants_for_date(db, target_date)

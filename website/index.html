@@ -2653,6 +2653,17 @@
                     <div id="lua-trades-recent"></div>
                 </div>
 
+                <!-- v7 Aim Lock -->
+                <div class="glass-card p-6 rounded-xl border border-white/5 mt-6">
+                    <h3 class="text-lg font-bold text-white mb-1">
+                        <i data-lucide="crosshair" class="w-5 h-5 inline text-brand-amber"></i>
+                        Aim Lock
+                        <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-amber/10 text-brand-amber align-middle">v7</span>
+                    </h3>
+                    <p class="text-xs text-slate-400 mb-3">Crosshair-on-enemy tracking windows — who holds aim on targets, for how long, how tightly (avg error°, lower is better) and at what range.</p>
+                    <div id="aim-lock-leaders"></div>
+                </div>
+
                 <!-- v5.2 Kill Outcomes -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
                     <div class="glass-panel p-6 rounded-xl">
@@ -4230,6 +4241,8 @@
                     <p class="text-slate-400">Live score, momentum and map flow while the games are on.</p>
                 </div>
                 <div id="tonight-content"></div>
+                <!-- Fun-betting panel (own container — NOT wiped by the 8s tonight-content rebuild) -->
+                <div id="tonight-betting"></div>
             </div>
         </div>
 
@@ -4873,7 +4886,7 @@
     </nav>
 
     <!-- JavaScript (ES6 Modules) -->
-    <script type="module" src="js/app.js?v=20260513-v142-cf-bust"></script>
+    <script type="module" src="js/app.js?v=20260623-aimlock"></script>
     <script type="module" src="js/inline-actions.js?v=20260513-v142-cf-bust"></script>
     <script src="js/diagnostics.js?v=20260513-v142-cf-bust"></script>
     <script src="js/lucide-init.js?v=20260513-v142-cf-bust"></script>

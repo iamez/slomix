@@ -31,6 +31,8 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
         self.cacheable_prefixes = (
             "/api/live-status",
             "/api/stats/live-session",
+            "/api/stats/tonight",
+            "/api/stats/hold-probability",
             "/api/monitoring/status",
             "/api/server-activity/history",
             "/api/voice-activity/history",
@@ -262,6 +264,8 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
         live_prefixes = (
             "/api/live-status",
             "/api/stats/live-session",
+            "/api/stats/tonight",
+            "/api/stats/hold-probability",
             "/api/monitoring/",
             "/api/voice-activity/current",
         )

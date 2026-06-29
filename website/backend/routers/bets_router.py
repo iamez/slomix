@@ -6,6 +6,8 @@ value — pure engagement (vision R1 §3.1, Twitch-style parimutuel).
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from website.backend.dependencies import get_db, require_admin, require_user
@@ -138,13 +140,30 @@ async def place_bet(
     # or settle-in-flight) can't race into a lost update or overspend.
     async with db.transaction():
         market = await db.fetch_one(
-            "SELECT id, status FROM parimutuel_markets WHERE id = ? FOR UPDATE",
+            "SELECT id, status, closes_at, gaming_session_id "
+            "FROM parimutuel_markets WHERE id = ? FOR UPDATE",
             (market_id,),
         )
         if not market:
             raise HTTPException(status_code=404, detail="Market not found")
         if market[1] != "open":
             raise HTTPException(status_code=400, detail="Market is not open for betting")
+        # Hindsight-betting cutoff: a market that is still 'open' but whose
+        # close time has passed — or whose session result is already recorded —
+        # would let someone bet with the outcome known, fabricating points and a
+        # permanent 'Oracle' season award. Block new/changed bets in that window.
+        closes_at = market[2]
+        if closes_at is not None and datetime.now() >= closes_at:  # noqa: DTZ005 - naive column
+            raise HTTPException(status_code=400, detail="Betting has closed for this market")
+        m_gsid = market[3]
+        if m_gsid:
+            result_known = await db.fetch_one(
+                "SELECT 1 FROM session_results WHERE gaming_session_id = ? "
+                "AND winning_team IN (1, 2) LIMIT 1",
+                (int(m_gsid),),
+            )
+            if result_known:
+                raise HTTPException(status_code=400, detail="Result is in — betting is closed")
 
         # Ensure the wallet row exists, then lock it (FOR UPDATE can't lock a
         # missing row, so bootstrap first).

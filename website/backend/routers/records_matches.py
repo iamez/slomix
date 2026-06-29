@@ -197,13 +197,14 @@ async def get_match_details(match_id: str, db: DatabaseAdapter = Depends(get_db)
             "gaming_session_id": gaming_session_id,
         },
         "team1": {
-            "name": "Allies",
+            # team1 == side 1 == Axis (players bucketed by row[6]==1 above).
+            "name": "Axis",
             "players": team1_players,
             "totals": team_totals(team1_players),
             "is_winner": winner_team == 1,
         },
         "team2": {
-            "name": "Axis",
+            "name": "Allies",
             "players": team2_players,
             "totals": team_totals(team2_players),
             "is_winner": winner_team == 2,

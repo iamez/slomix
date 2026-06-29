@@ -2776,6 +2776,11 @@ class ProximityParserV4:
         """v7 AIM_LOCK -> proximity_aim_lock. No-op if the table is absent."""
         if not await self._table_has_column('proximity_aim_lock', 'guid'):
             return
+        # Column set is invariant across rows (deterministic _table_has_column +
+        # fixed canonical keys), so collect every row's values and issue ONE
+        # executemany instead of one round-trip per lock.
+        columns = None
+        params_list = []
         for al in self.aim_locks:
             columns, values = await self._v7_base_columns_values(session_date)
             columns += ["start_time", "end_time", "duration_ms", "guid", "player_name",
@@ -2787,19 +2792,24 @@ class ProximityParserV4:
                 "proximity_aim_lock", columns, values,
                 {"guid_canonical": al.guid, "target_guid_canonical": al.target_guid},
             )
-            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
-            query = f"""
-                INSERT INTO proximity_aim_lock ({", ".join(columns)})
-                VALUES ({placeholders})
-                ON CONFLICT (session_date, round_number, round_start_unix, start_time, guid, target_guid)
-                DO NOTHING
-            """
-            await self.db_adapter.execute(query, tuple(values))
+            params_list.append(tuple(values))
+        if not params_list:
+            return
+        placeholders = ", ".join(f"${i}" for i in range(1, len(columns) + 1))
+        query = f"""
+            INSERT INTO proximity_aim_lock ({", ".join(columns)})
+            VALUES ({placeholders})
+            ON CONFLICT (session_date, round_number, round_start_unix, start_time, guid, target_guid)
+            DO NOTHING
+        """
+        await self.db_adapter.executemany(query, params_list)
 
     async def _import_spawn_selects(self, session_date):
         """v7 SPAWN_SELECT -> proximity_spawn_select."""
         if not await self._table_has_column('proximity_spawn_select', 'guid'):
             return
+        columns = None
+        params_list = []
         for ss in self.spawn_selects:
             columns, values = await self._v7_base_columns_values(session_date)
             columns += ["event_time", "guid", "player_name", "team", "spawn_index", "last_spawn_time"]
@@ -2809,19 +2819,24 @@ class ProximityParserV4:
                 "proximity_spawn_select", columns, values,
                 {"guid_canonical": ss.guid},
             )
-            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
-            query = f"""
-                INSERT INTO proximity_spawn_select ({", ".join(columns)})
-                VALUES ({placeholders})
-                ON CONFLICT (session_date, round_number, round_start_unix, event_time, guid)
-                DO NOTHING
-            """
-            await self.db_adapter.execute(query, tuple(values))
+            params_list.append(tuple(values))
+        if not params_list:
+            return
+        placeholders = ", ".join(f"${i}" for i in range(1, len(columns) + 1))
+        query = f"""
+            INSERT INTO proximity_spawn_select ({", ".join(columns)})
+            VALUES ({placeholders})
+            ON CONFLICT (session_date, round_number, round_start_unix, event_time, guid)
+            DO NOTHING
+        """
+        await self.db_adapter.executemany(query, params_list)
 
     async def _import_skill_snapshots(self, session_date):
         """v7 SKILL_SNAPSHOT -> proximity_skill_snapshot (one row per player/round)."""
         if not await self._table_has_column('proximity_skill_snapshot', 'guid'):
             return
+        columns = None
+        params_list = []
         for sk in self.skill_snapshots:
             columns, values = await self._v7_base_columns_values(session_date)
             columns += ["guid", "player_name", "team", "battle_sense", "engineering",
@@ -2833,19 +2848,24 @@ class ProximityParserV4:
                 "proximity_skill_snapshot", columns, values,
                 {"guid_canonical": sk.guid},
             )
-            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
-            query = f"""
-                INSERT INTO proximity_skill_snapshot ({", ".join(columns)})
-                VALUES ({placeholders})
-                ON CONFLICT (session_date, round_number, round_start_unix, guid)
-                DO NOTHING
-            """
-            await self.db_adapter.execute(query, tuple(values))
+            params_list.append(tuple(values))
+        if not params_list:
+            return
+        placeholders = ", ".join(f"${i}" for i in range(1, len(columns) + 1))
+        query = f"""
+            INSERT INTO proximity_skill_snapshot ({", ".join(columns)})
+            VALUES ({placeholders})
+            ON CONFLICT (session_date, round_number, round_start_unix, guid)
+            DO NOTHING
+        """
+        await self.db_adapter.executemany(query, params_list)
 
     async def _import_comm_events(self, session_date):
         """v7 COMM_EVENTS -> proximity_comm_event."""
         if not await self._table_has_column('proximity_comm_event', 'guid'):
             return
+        columns = None
+        params_list = []
         for cm in self.comm_events:
             columns, values = await self._v7_base_columns_values(session_date)
             columns += ["event_time", "guid", "player_name", "team", "cmd", "arg"]
@@ -2855,14 +2875,17 @@ class ProximityParserV4:
                 "proximity_comm_event", columns, values,
                 {"guid_canonical": cm.guid},
             )
-            placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
-            query = f"""
-                INSERT INTO proximity_comm_event ({", ".join(columns)})
-                VALUES ({placeholders})
-                ON CONFLICT (session_date, round_number, round_start_unix, event_time, guid, cmd)
-                DO NOTHING
-            """
-            await self.db_adapter.execute(query, tuple(values))
+            params_list.append(tuple(values))
+        if not params_list:
+            return
+        placeholders = ", ".join(f"${i}" for i in range(1, len(columns) + 1))
+        query = f"""
+            INSERT INTO proximity_comm_event ({", ".join(columns)})
+            VALUES ({placeholders})
+            ON CONFLICT (session_date, round_number, round_start_unix, event_time, guid, cmd)
+            DO NOTHING
+        """
+        await self.db_adapter.executemany(query, params_list)
 
     async def _import_carrier_events(self, session_date):
         """Import v6 carrier event data"""

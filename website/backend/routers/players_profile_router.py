@@ -245,7 +245,7 @@ async def _fetch_streaks(db, guid8: str) -> dict:
     return out
 
 
-async def _fetch_advanced(db, guid8: str, lifetime_deaths: int) -> dict:
+async def _fetch_advanced(db, guid8: str) -> dict:
     """UTRO + bait_score (proximity-derived; degrades if no proximity rows)."""
     waits_rows = await db.fetch_all(
         """
@@ -268,9 +268,21 @@ async def _fetch_advanced(db, guid8: str, lifetime_deaths: int) -> dict:
         "SELECT COUNT(*) FROM proximity_lua_trade_kill WHERE LEFT(original_victim_guid, 8) = $1",
         (guid8,),
     )
+    # Deaths must be counted over the SAME proximity-covered round set as the
+    # avenged count (trade-kill rows only exist for proximity rounds, ~20% of
+    # play). Using full-coverage lifetime_deaths here inflated `untraded` with
+    # deaths from non-proximity rounds, systematically deflating bait_score —
+    # a meaningless number presented as real. combat_engagement(outcome=killed)
+    # is the player's proximity-covered deaths (same population as avenged).
+    prox_deaths_row = await db.fetch_one(
+        "SELECT COUNT(*) FROM combat_engagement "
+        "WHERE LEFT(target_guid, 8) = $1 AND outcome = 'killed'",
+        (guid8,),
+    )
     trades_made = _i(trades_row[0]) if trades_row else 0
     avenged = _i(avenged_row[0]) if avenged_row else 0
-    untraded = max(0, lifetime_deaths - avenged)
+    prox_deaths = _i(prox_deaths_row[0]) if prox_deaths_row else 0
+    untraded = max(0, prox_deaths - avenged)
     bait = bait_score(trades_made, untraded)
     return {"available": True, "utro": utro, "bait": bait}
 
@@ -1031,11 +1043,10 @@ async def get_player_profile(
 
     guid32 = await _resolve_guid32(db, guid8)
 
-    # Lifetime first (advanced bait_score needs its death total); the rest fan out.
+    # Lifetime first (identity gate — 404 if the player has no stats); the rest fan out.
     lifetime = await _fetch_lifetime(db, guid8)
     if not lifetime.get("available"):
         raise HTTPException(status_code=404, detail="Player not found")
-    deaths = _i(lifetime.get("deaths"))
 
     # Bound per-request DB concurrency: each section may run several queries on
     # the shared asyncpg pool, so 11 unbounded sections × N concurrent requests
@@ -1052,7 +1063,7 @@ async def get_player_profile(
      gather_summary, nick_history, combat_timing) = await asyncio.gather(
         _guard(_fetch_identity(db, guid8, identifier)),
         _guard(_fetch_streaks(db, guid8)),
-        _guard(_fetch_advanced(db, guid8, deaths)),
+        _guard(_fetch_advanced(db, guid8)),
         _guard(_fetch_movement(db, guid8)),
         _guard(_fetch_weapons(db, guid8)),
         _guard(_fetch_hit_regions(db, guid8)),

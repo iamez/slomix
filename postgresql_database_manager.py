@@ -3193,6 +3193,6 @@ if __name__ == "__main__":
         logger.error("   1. Check PostgreSQL is running: psql -U postgres -l")
         logger.error("   2. Verify bot_config.json has correct credentials")
         logger.error("   3. Ensure database exists: CREATE DATABASE etlegacy;")
-        logger.error("   4. Check schema is applied: psql -d etlegacy -f bot/schema_postgresql.sql")
+        logger.error("   4. Check schema is applied: psql -d etlegacy -f tools/schema_postgresql.sql")
         logger.error("\n📝 See postgresql_manager.log for full details")
         sys.exit(1)

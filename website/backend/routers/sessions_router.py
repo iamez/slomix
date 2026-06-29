@@ -471,8 +471,10 @@ async def get_sessions_list(
                 COUNT(r.id) as round_count,
                 COUNT(DISTINCT r.map_name) as map_count,
                 STRING_AGG(DISTINCT r.map_name, ', ' ORDER BY r.map_name) as maps_played,
-                COUNT(CASE WHEN r.round_number = 1 AND r.winner_team = 1 THEN 1 END) as allies_wins,
-                COUNT(CASE WHEN r.round_number = 1 AND r.winner_team = 2 THEN 1 END) as axis_wins,
+                -- winner_team 1 = Axis, 2 = Allies (engine convention TEAM_AXIS=1;
+                -- see lua TEAM_AXIS / parser). These aliases were previously inverted.
+                COUNT(CASE WHEN r.round_number = 1 AND r.winner_team = 2 THEN 1 END) as allies_wins,
+                COUNT(CASE WHEN r.round_number = 1 AND r.winner_team = 1 THEN 1 END) as axis_wins,
                 COUNT(CASE WHEN r.round_number = 1 AND (r.winner_team NOT IN (1, 2) OR r.winner_team IS NULL) THEN 1 END) as draws
             FROM rounds r
             WHERE r.gaming_session_id IS NOT NULL
@@ -1228,8 +1230,9 @@ async def get_stats_sessions(
                 MAX(r.round_time) as last_time,
                 COUNT(r.id) as round_count,
                 STRING_AGG(DISTINCT r.map_name, ', ' ORDER BY r.map_name) as maps_played,
-                COUNT(CASE WHEN r.round_number = 1 AND r.winner_team = 1 THEN 1 END) as allies_wins,
-                COUNT(CASE WHEN r.round_number = 1 AND r.winner_team = 2 THEN 1 END) as axis_wins
+                -- winner_team 1 = Axis, 2 = Allies (TEAM_AXIS=1). Aliases were inverted.
+                COUNT(CASE WHEN r.round_number = 1 AND r.winner_team = 2 THEN 1 END) as allies_wins,
+                COUNT(CASE WHEN r.round_number = 1 AND r.winner_team = 1 THEN 1 END) as axis_wins
             FROM rounds r
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
@@ -1774,6 +1777,8 @@ async def _session_player_pool(db, gaming_session_id: int) -> list[dict]:
         WHERE r.gaming_session_id = ?
           AND r.is_valid IS DISTINCT FROM FALSE
           AND pcs.time_played_seconds > 0
+          AND pcs.player_guid NOT LIKE 'OMNIBOT%'
+          AND pcs.player_name NOT LIKE '[BOT]%'
         GROUP BY pcs.player_guid
         ORDER BY kills DESC
         """,

@@ -1,0 +1,953 @@
+{
+ "confirmed": [
+  {
+   "severity": "low",
+   "dimension": "correctness",
+   "area": "data_pipeline_core",
+   "file": "bot/core/substitution_detector.py",
+   "line": "164-230",
+   "title": "Substitution detector collapses every match in a calendar day into 2-3 round buckets and is keyed on round_date, not gaming_session_id",
+   "evidence": "_get_player_activity (lines 164-175) and _get_round_rosters (lines 202-230) query `... WHERE round_date LIKE $1` with `f\"{session_date}%\"` and then key rosters/activity by `round_number`. I confirmed via DB that player_comprehensive_stats.round_number only ever holds {0,1,2} (0:5615, 1:5910, 2:5851 rows) \u2014 it is the half-of-match index, NOT a per-session round counter. So `round_rosters` has at most 3 keys for an ENTIRE calendar day. _detect_roster_changes (lines 240-275) then diffs roster[round 1] vs roster[round 2], merging all matches of the day into one comparison. DB also shows multiple gaming_session_id values share a single round_date (e.g. 2026-03-25 = 4 sessions/75 rounds, 2026-06-16 = 2 sessions/26 rounds), so even the date scoping mixes distinct evenings. Output (late_joiners/early_leavers/substitutions) is therefore fabricated for any normal multi-match day. Violates the project rule 'ALWAYS use gaming_session_id for session queries (NOT dates)'. Mitigating: grep shows SubstitutionDetector is imported only by tests/ and archive/scripts/ \u2014 never by production cogs or team_manager \u2014 so this is currently latent dead code.",
+   "why": "If ever re-wired into team detection it would silently produce wrong rosters/substitutions; it also contradicts the documented session/round contract, so it is a correctness trap for future maintainers.",
+   "fix_proposal": "Scope both queries by gaming_session_id (join rounds on round_id) instead of `round_date LIKE`, and key rosters by a true per-match identifier (gaming_session_id + match_id/round_start_unix) rather than round_number. Until then, mark the module deprecated/unused so it is not re-enabled by mistake.",
+   "effort": "medium",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute the technical claims \u2014 all verified. Lines 171 & 209 do use `round_date LIKE $1`; DB confirms player_comprehensive_stats.round_number only ever holds {0,1,2} (5627/5922/5863), so rosters collapse to \u22643 keys per day; multiple gaming_session_id share one round_date (2026-03-25 = 4 sessions). The code, if run, would produce wrong rosters. I could not refute that the logic is broken. What tempers it: the module is genuinely dead \u2014 grep shows SubstitutionDetector is imported ONLY by tests/unit/test_substitution_detector.py, a Nov-2025 backup dir, and archive/scripts/; no production cog, team_manager.py, or service imports it. So the bug fabricates nothing today. (Finding even understates the breakage: keying by game_team/side means stopwatch side-swap R1\u2194R2 would flag nearly all players as sub'd \u2014 but still only if revived.)",
+    "ground_truth_check": "Read full bot/core/substitution_detector.py (queries at 164-230, diff logic 232-312). Grepped whole repo for SubstitutionDetector/analyze_session_roster_changes/adjust_team_detection \u2014 only tests, backups/2025-11, archive/scripts. Verified bot/core/CLAUDE.md lists it but team_manager.py is the single team-detection source. DB: round_number distribution = {0:5627,1:5922,2:5863}; rounds grouped by round_date show 2026-03-25 has 4 sessions/75 rounds confirming date scoping mixes sessions.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "correctness",
+   "area": "data_pipeline_core",
+   "file": "bot/community_stats_parser.py",
+   "line": "473-491",
+   "title": "Midnight-crossover R1 lookup skips the previous-day search whenever any same-day R1 of the map exists, even if none precede the R2",
+   "evidence": "find_corresponding_round_1_file runs STEP 3 (previous-day glob for midnight crossings) only `if not potential_files` (line 474). potential_files is populated in STEP 2 by globbing `{date}-*-{map}-round-1.txt` for the SAME date as the R2 (lines 461-471). For an R2 whose filename date is N+1 (round ended just after midnight) whose true R1 is on date N, if any later same-map R1 already exists on date N+1 (e.g. a subsequent match during batch reprocessing/backfill), STEP 3 is skipped. The day-N+1 R1 candidates are all AFTER the R2, so the `r1_datetime < r2_datetime` filter (line 516) rejects them, best_r1_file stays None, and the function returns None \u2014 even though the correct previous-day R1 exists.",
+   "why": "When the R1 is not found, parse_round_2_with_differential stores the R2 as raw cumulative (R1+R2) instead of the differential, inflating that round's numbers. Narrow (mainly affects re-import/backfill ordering, not the live one-file-at-a-time path), hence low.",
+   "fix_proposal": "Always run the previous-day search and merge its results into potential_files (or run STEP 3 whenever STEP 2 produced no candidate strictly before the R2 within the window), rather than gating it on potential_files being empty.",
+   "effort": "small",
+   "_verify": {
+    "is_real": true,
+    "confidence": "medium",
+    "refutation": "I tried to refute this but the code logic holds. find_corresponding_round_1_file at bot/community_stats_parser.py:461-491 populates potential_files from STEP 2 using ONLY the R2's own date glob ({date}-*-{map}-round-1.txt), and STEP 3 (previous-day midnight glob) is gated behind `if not potential_files` (line 474). For a midnight-crossover R2 (filename date N+1, true R1 on date N) where the same map was also played later on day N+1, STEP 2 finds that later same-day R1, suppresses STEP 3, and the candidate-time filter `r1_datetime < r2_datetime` (line 516) then rejects all the after-R2 same-day candidates, so best_r1_file stays None and the function returns None. parse_round_2_with_differential (lines 542-548) then falls back to storing the R2 as raw cumulative (round_num forced to 2), inflating that round. STEP 1 (exact timestamp match, line 450) does not help across midnight since timestamps differ. The fallback path that masks the failure is real, not a defensive no-op.",
+    "ground_truth_check": "Read bot/community_stats_parser.py lines 390-559 (parse dispatch, find_corresponding_round_1_file STEP 1/2/3, candidate filter, R2 differential fallback). Confirmed line citations: STEP 3 gate at 474, same-day glob 461-471, r1_datetime<r2_datetime at 516, raw-cumulative fallback at 542-548. Verified callers via grep: only bot/community_stats_parser.py:407 (live dispatch) and scripts/archive/audit_round_pairs.py:88 plus tests. Listed bot/local_stats/ (304 accumulated files across many dates/maps) confirming that a full re-parse glob can see later-dated same-map R1 files, making the bug reachable in backfill/re-import; live one-file-at-a-time path is safe because future R1 files do not yet exist on disk. Not covered by the two prior audits (those target CVEs/uploads/CI and last-month features; this is foundational parser logic).",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "high",
+   "dimension": "correctness",
+   "area": "god_files_backend",
+   "file": "bot/services/session_view_handlers.py",
+   "line": "976-1004, 1206-1234",
+   "title": "`!last_session maps` / `maps full` always crash \u2014 SQL placeholder `{map_ids_str}`/`{round_ids_str}` is never substituted",
+   "evidence": "In `show_maps_view` the query string (line 976, NOT an f-string) contains a literal CTE `SELECT id FROM rounds WHERE id IN ({map_ids_str})`, then is run via `fetch_all(query, tuple(map_session_ids))` at line 1004 with NO `.format(...)` call. `_send_round_stats` has the identical defect with `{round_ids_str}` (line 1208 / fetch_all line 1234). Every OTHER query in this file (lines 583,595,698,751,807,848,891,1396,1593) correctly calls `query.format(session_ids_str=session_ids_str)` \u2014 only these two omit it. I ran the exact CTE against Postgres via the db tool: `SELECT id FROM rounds WHERE id IN ({map_ids_str})` -> `syntax error at or near \"{\"`. Additionally the query has zero `?`/`$N` placeholders yet receives params, which asyncpg also rejects. Both methods are live-wired: last_session_cog.py:257-259 and session_cog.py:186-188 route `!last_session maps`, `!last_session maps full`, `!session ... maps` to them, with no surrounding try/except, so the command errors out for the user. Introduced 2026-02-28 (commit cbea046 'fix: resolve ruff lint errors') \u2014 a botched de-f-stringing that dropped both the `f` prefix and the substitution.",
+   "fix_proposal": "Mirror the working siblings: build `placeholders = ','.join('?' * len(map_session_ids))`, change the CTE to `... WHERE id IN ({placeholders})`, and call `fetch_all(query.format(placeholders=placeholders), tuple(map_session_ids))` (same for `_send_round_stats` with round_session_ids). Or drop the CTE and inline `WHERE p.round_id IN ({placeholders})`. Add a smoke test that actually executes `!last_session maps` against a seeded session so a missing `.format()` regresses CI.",
+   "effort": "trivial",
+   "why": "Two user-facing session commands have been completely broken for ~4 months; users get an error instead of map stats.",
+   "external_ref": "",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "I tried to refute this on three fronts and all failed. (1) Hidden substitution at the adapter layer: bot/core/database_adapter.py only translates `?`\u2192`$N` (_translate_placeholders, line ~438); it does no `.format()` / brace substitution, so the literal `{map_ids_str}`/`{round_ids_str}` passes straight to asyncpg and the query also has zero `?` placeholders. (2) Outer error handling that masks/recovers: last_session_cog.py has a top-level try at line 98 with except at 491, but it merely sends '\u274c Error...' to the user \u2014 it does not fix the query, confirming user-facing breakage rather than refuting it. (3) Dead code / unreachable: both methods are wired \u2014 last_session_cog.py:257-259 (maps / maps full) and session_cog.py:181-186 (session ... maps / maps full). show_maps_view loops over map_matches and crashes on the first iteration whenever the session has any maps (always true with data). All sibling queries in the same file correctly call .format(session_ids_str=...), making these two the lone omissions.",
+    "ground_truth_check": "Read session_view_handlers.py lines 960-1018 and 1190-1249: confirmed literal {map_ids_str} (978) and {round_ids_str} (1208) with fetch_all at 1004/1234 and no .format(). Grepped .format() usages (8 sibling queries all use it) and confirmed only 978/1208 omit it. git log -L on the query line shows commit cbea046 (2026-02-28 'fix: resolve ruff lint errors'); diffing cbea046^ vs cbea046 shows the pre-commit version had `map_ids_str = ','.join('?' * len(map_session_ids))` (line 973) + an f-string, both removed by the commit \u2014 a botched de-f-stringing. Verified adapter only handles `?`\u2192`$N`, no brace substitution. Verified cog routing in last_session_cog.py:253-259 and session_cog.py:181-186, plus the wrapping try/except at lines 98/491 that surfaces the error to the user. Date introduced and 4-month breakage window are accurate.",
+    "adjusted_severity": "high"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "performance",
+   "area": "god_files_backend",
+   "file": "/home/samba/share/slomix_discord/website/backend/routers/availability.py",
+   "line": "1127-1163",
+   "title": "N+1 query in _collect_campaign_recipients (2 extra queries per recipient)",
+   "evidence": "After one fetch_all of availability_entries for a date (line 1105), the loop runs `await _load_subscription_preference_row(db, discord_user_id)` (line 1137 -> single-row SELECT on subscription_preferences) AND `await db.fetch_one(... player_links ... WHERE discord_id=$1)` (line 1160) for EVERY recipient row. So a campaign send issues 1 + 2*N round-trips. Bounded by daily availability entries (~30-50 for this community) and only triggered by a manual promoter 'send campaign' action, so real-world impact is small.",
+   "fix_proposal": "Collapse into the initial query with two LEFT JOINs: `availability_entries ae LEFT JOIN subscription_preferences sp ON sp.user_id = ae.user_id LEFT JOIN player_links pl ON pl.discord_id = ae.user_id WHERE ae.entry_date = $1 AND ae.status IN (...)`. One round-trip instead of 1+2N; per-row Python logic (channel selection, decrypt, dedup) stays unchanged.",
+   "effort": "small",
+   "why": "Eliminates per-recipient DB round-trips on the promotion path; cleaner and removes a latency spike that scales linearly with the night's roster.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. The cited N+1 pattern exists exactly as described. Line 1105 does one fetch_all of availability_entries; the loop body calls _load_subscription_preference_row (defined at line 1054, a single-row SELECT on subscription_preferences) at line 1137 and db.fetch_one on player_links at line 1160 for each recipient row, yielding 1 + 2N round-trips. No batching/JOIN guard exists elsewhere. The only mitigating reality is scale: the row set is bounded by daily availability entries (~30-50 for this ~50-player community) and the path is triggered solely by a manual promoter 'send campaign' action, so practical impact is negligible. The proposed LEFT JOIN consolidation is valid and preserves per-row Python logic. The finding itself accurately self-scopes the impact as small.",
+    "ground_truth_check": "Read availability.py lines 1054-1083 (_load_subscription_preference_row helper) and 1090-1186 (_collect_campaign_recipients). Confirmed: 1x fetch_all at 1105, per-row subscription_preferences fetch_one via helper at 1137, per-row player_links fetch_one at 1160. grep confirmed helper definition and call sites. Pattern matches claim precisely. Not covered by WHOLE_CODEBASE_AUDIT_2026-06-15 (scanner/CVE focus) or DEEP_AUDIT_2026-06-27 (last-month features); this is foundational backend code.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "performance",
+   "area": "god_files_backend",
+   "file": "/home/samba/share/slomix_discord/website/backend/routers/sessions_router.py",
+   "line": "691",
+   "title": "Non-sargable SUBSTRING(round_date,1,10) fallback seq-scans the largest table",
+   "evidence": "In get_session_graph_stats the fallback branch (no gaming_session_id) filters `SUBSTRING(p.round_date, 1, 10) = $1` on player_comprehensive_stats. EXPLAIN ANALYZE confirms a Seq Scan on player_comprehensive_stats with 'Rows Removed by Filter: 17376' (the wrapping function defeats any index on round_date; none exists anyway). Currently 3.9ms because the table is only 17k rows, and the primary code path uses the indexed `r.gaming_session_id = $1` branch (line 688), so this only bites when the frontend omits gaming_session_id.",
+   "fix_proposal": "Prefer the gaming_session_id branch (already sargable). For the date fallback, query rounds by `round_date` (which IS indexed via idx_rounds_date) and join to PCS on the indexed round_id, e.g. filter `r.round_date LIKE $1 || '%'` / a range predicate rather than `SUBSTRING(p.round_date,...)` on the big table. Avoids the full PCS scan if the table ever grows.",
+   "effort": "small",
+   "why": "Removes a function-wrapped predicate on the largest table; negligible now but a cheap, correct sargable rewrite that won't degrade as history grows.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute the code claim: sessions_router.py:691 genuinely filters SUBSTRING(p.round_date,1,10)=$1 on player_comprehensive_stats in the no-gaming_session_id fallback, which is non-sargable and has no supporting index. The only thing that 'refutes' its importance is scale: 17k-row table, ~3.9ms, fallback-only path, and a community growth rate (a handful of rounds/week) that means the seq scan will never become a real problem within this project's lifetime. The sargable primary branch (r.gaming_session_id, line 688) already handles the common case.",
+    "ground_truth_check": "Read sessions_router.py lines 650-758: confirmed the if/else where_clause (688 sargable gaming_session_id vs 691 SUBSTRING fallback) and the FROM player_comprehensive_stats p JOIN rounds r query. Checked tools/schema_postgresql.sql: player_comprehensive_stats.round_date is text NOT NULL with no index; rounds.round_date has idx_rounds_date (line 7599) and a composite idx_rounds_map_round_date_time (7627), confirming the proposed r.round_date LIKE prefix rewrite would be sargable. Finding's technical claims all hold.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "maintainability",
+   "area": "god_files_backend",
+   "file": "bot/services/session_view_handlers.py",
+   "line": "107-162, 555-573, 163-477",
+   "title": "~150 lines of helper logic duplicated near-byte-for-byte between session_view_handlers and session_graph_generator",
+   "evidence": "session_view_handlers.py and bot/services/session_graph_generator.py carry the same private helpers with effectively identical bodies: `_parse_time_to_seconds` (view 78-95 vs graph 81-99), `_row_get` (view 98-105 vs graph 101-108), `_call_service_method`+`_normalize_round_factor_payload` (view 107-162 vs graph 110-164 \u2014 diff is a single blank line), and `_get_player_stats_columns` (view 555-573 vs graph 61-80 \u2014 only a `@staticmethod` decorator differs). `diff` over view 78-162 vs graph 81-164 reports only 3 changed lines across ~85 lines. The larger timing helpers `_get_round_timing_shadow` (view 163-311 vs graph 165-266) and `get_session_timing_dual_by_guid` (view 313-477 vs graph 266-385) started from the same source and have since DIVERGED (view added round_rows / missing_reason fields the graph version lacks), so timing fixes must be made twice and are already drifting.",
+   "fix_proposal": "Extract the stable helpers (`_parse_time_to_seconds`, `_row_get`, `_call_service_method`, `_normalize_round_factor_payload`, `_get_player_stats_columns`) into one `SessionTimingMixin` or module `bot/services/session_timing_helpers.py` shared by both classes, then reconcile the two timing-shadow / dual-by-guid implementations into one parameterized method.",
+   "effort": "medium",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute the core claim. Read both files and diffed the cited regions: `_parse_time_to_seconds`, `_row_get`, `_call_service_method`, `_normalize_round_factor_payload`, and `_get_player_stats_columns` are near-byte-for-byte duplicated (diff of view 78-162 vs graph 81-164 = only 2 changed lines: a docstring and a blank line). The timing helpers `_get_round_timing_shadow` and `get_session_timing_dual_by_guid` have genuinely diverged (view emits round_rows/diff_seconds/missing_reason/rounds_played that the graph versions omit), confirming the two-places-to-fix drift risk. One evidence detail is wrong: the finding says `_get_player_stats_columns` differs by a `@staticmethod` decorator, but neither copy has that decorator \u2014 they are fully identical (more duplication, not less). That inaccuracy does not change the conclusion.",
+    "ground_truth_check": "Read bot/services/session_view_handlers.py (lines 1-480, 540-573) and bot/services/session_graph_generator.py (lines 1-400). Ran diff on view 78-162 vs graph 81-164 (2 differing lines). Grepped @staticmethod/_get_player_stats_columns in both files to verify the decorator claim (neither method is static). Confirmed the divergence: view _get_round_timing_shadow populates result['round_rows'] (lines 294-301) and view get_session_timing_dual_by_guid adds missing_reason/rounds_played/telemetry_rounds, all absent from the graph counterparts.",
+    "adjusted_severity": "medium"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "maintainability",
+   "area": "god_files_backend",
+   "file": "postgresql_database_manager.py",
+   "line": "338-1002",
+   "title": "Full table DDL embedded as inline Python strings duplicates tools/schema_postgresql.sql (two schema sources of truth)",
+   "evidence": "`_create_schema_if_missing` (lines 338-1002, ~660 lines) hand-writes 25 `CREATE TABLE IF NOT EXISTS` statements as Python triple-quoted strings (e.g. the 57-column player_comprehensive_stats DDL at lines 393-450). The canonical tools/schema_postgresql.sql defines 101 `CREATE TABLE`s. The manager never reads that .sql file (no grep reference), so it creates only a partial subset and maintains column definitions in parallel; any column added in the .sql or a migration is invisible here and vice-versa.",
+   "fix_proposal": "Make tools/schema_postgresql.sql the single source of truth: have `_create_schema_if_missing` load and execute that file instead of inlining DDL, or delete the inline DDL for tables already defined in the .sql and document the authoritative file.",
+   "effort": "medium",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Attempted to refute by checking whether the manager loads tools/schema_postgresql.sql (it does not \u2014 only a stale, wrong-path log string references it), and whether install/bootstrap uses the .sql directly (install.sh lines 669-677 bootstraps via the manager's inline DDL, not the canonical file). Both checks confirm the duplication rather than refute it. Counts verified: 25 inline CREATE TABLE IF NOT EXISTS in postgresql_database_manager.py vs 101 CREATE TABLE in tools/schema_postgresql.sql. Line range 338-1002 for _create_schema_if_missing is accurate (next def at 1003). The dual-source-of-truth claim stands.",
+    "ground_truth_check": "Read postgresql_database_manager.py:338-450 and 880-904 (inline DDL + indexes). grep -c CREATE TABLE: 25 inline vs 101 in tools/schema_postgresql.sql. grep for schema_postgresql refs in .py: only a stale log line at 3196 pointing to wrong path bot/schema_postgresql.sql. Confirmed install.sh:669-677 initializes schema by running the manager (inline path), and 60 migration files plus _migrate_schema_if_needed (line 1003) layer additional tables. Not covered by WHOLE_CODEBASE_AUDIT_2026-06-15 or DEEP_AUDIT_2026-06-27.",
+    "adjusted_severity": "medium"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "maintainability",
+   "area": "god_files_backend",
+   "file": "postgresql_database_manager.py",
+   "line": "1003-1344",
+   "title": "Second, frozen migration system competes with migrations/*.sql + scripts/apply_migrations.py",
+   "evidence": "`_migrate_schema_if_needed` (lines 1003-1344) is a hand-rolled runner with 11 numbered migrations (`# Migration 1`..`# Migration 11`, lines 1021-1316), each doing its own information_schema check + ALTER, and it runs on EVERY `connect()` (line 216) plus create_fresh (line 259). Separately the repo has the canonical migrations/ directory (60 numbered .sql files) applied by scripts/apply_migrations.py. Changes #1-#11 live in Python, #12+ in SQL files; the inline list is frozen with no shared version ledger between the two mechanisms.",
+   "fix_proposal": "Retire the inline ladder: confirm migrations 1-11 exist as numbered files under migrations/, then delete `_migrate_schema_if_needed` and route the manager through the same apply_migrations path. One runner, one ordering source.",
+   "effort": "medium",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute the core factual claims \u2014 the inline ladder, its execution sites, and the parallel migrations/*.sql + apply_migrations.py system all exist as described, and three inline migrations (3,4,8) literally duplicate SQL files 006/007/008. However, the practical harm is minimal: every inline migration is guarded by information_schema/pg_constraint existence checks (idempotent, no conflict), the inline list is frozen at 11 so divergence does not grow, and at normal bot runtime the manager reuses the bot's existing asyncpg pool (ultimate_bot.py:1019-1020) so the inline ladder is skipped \u2014 it mainly runs for the interactive CLI (main() connect() at line 3091). No data-correctness or schema-drift bug results today. The fix proposal also overstates 1:1 file correspondence (numbering is offset, and inline #1/#2/#10/#11 lack clean SQL twins).",
+    "ground_truth_check": "Read postgresql_database_manager.py:1003-1344 (full inline ladder, 11 migrations all with existence guards), :200-274 (connect() line 216 and create_fresh_database line 259 call sites), and confirmed CLI main() connect() at line 3091. Listed migrations/ (60 .sql files) and confirmed content overlap by reading headers of 006_add_full_selfkills.sql, 007_add_round_id_to_lua_round_teams.sql, 008_add_bot_round_flags.sql against inline Migrations 3/4/8. Confirmed scripts/apply_migrations.py maintains a separate schema_migrations ledger table (lines 100-114). Traced runtime usage in bot/ultimate_bot.py:1006-1028 showing the manager normally reuses the bot pool and only calls connect() (triggering the inline ladder) when no pool exists. Not covered by WHOLE_CODEBASE_AUDIT_2026-06-15 or DEEP_AUDIT_2026-06-27.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "maintainability",
+   "area": "god_files_backend",
+   "file": "website/backend/routers/sessions_router.py",
+   "line": "129,346,395,567,1180,1379",
+   "title": "Overlapping session-summary endpoints each re-derive map_counts/scoring instead of sharing one path",
+   "evidence": "sessions_router.py (1931 lines) exposes ~6 overlapping session-summary endpoints: /stats/last-session (129), /stats/session-leaderboard (346), /stats/session-score/{date} (395), /sessions/{date} (567), /stats/sessions (1180), /stats/session/{gaming_session_id}/detail (1379). Some key by date (fetch_session_data_by_date), some by gaming_session_id, despite the project rule 'ALWAYS use gaming_session_id (NOT dates)'. The map_counts accumulation loop is copy-pasted at 162-164 and 644-646. build_session_scoring is already factored out (good) but the fetch+aggregate+score sequence repeats per endpoint.",
+   "fix_proposal": "Collapse date-keyed and id-keyed paths onto one internal `_load_session_summary(gaming_session_id)` helper (date endpoints already resolve date->gaming_session_ids) and factor the map_counts loop into a shared helper, nudging the API toward canonical gaming_session_id keying.",
+   "effort": "medium",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "I attempted to refute but the facts hold. sessions_router.py is 1931 lines. The six cited endpoints all exist at the stated lines: /stats/last-session (129), /stats/session-leaderboard (346), /stats/session-score/{date} (395), /sessions/{date} (567), /stats/sessions (1180), /stats/session/{gaming_session_id}/detail (1379). The map_counts accumulation loop is verbatim-duplicated at lines 162-164 and 644-646 (identical `map_counts[map_name] = map_counts.get(map_name, 0) + 1` over the same 4-tuple unpack). build_session_scoring IS factored out and reused (lines 173, 411, 611, 1633), which the finding correctly acknowledges as good. Date-keyed endpoints (395, 567) call service.fetch_session_data_by_date while the detail/sessions endpoints key by gaming_session_id, confirming the mixed keying claim. Nothing refutes the description.",
+    "ground_truth_check": "Ran wc -l (1931 lines) and grep for @router/def/map_counts/build_session_scoring/fetch_session_data_by_date across the file; Read lines 160-168 and 642-649 to confirm the two map_counts loops are byte-identical. The only minor caveat: the project's \"use gaming_session_id not dates\" rule is about internal DB session-bucketing logic, not public REST URL keys; the date-keyed endpoints resolve date->session_ids internally, so this is a maintainability/consistency nit, not a correctness violation. The duplication and overlap are genuine but low-impact for a ~50-user app.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "maintainability",
+   "area": "god_files_backend",
+   "file": "postgresql_database_manager.py",
+   "line": "3196",
+   "title": "Fatal-error troubleshooting message points at a non-existent schema path",
+   "evidence": "The top-level exception handler prints `Check schema is applied: psql -d etlegacy -f bot/schema_postgresql.sql` (line 3196), but `bot/schema_postgresql.sql` does not exist (ls confirms); the file is tools/schema_postgresql.sql. An operator hitting a startup failure is sent to a dead path.",
+   "fix_proposal": "Update the message to `tools/schema_postgresql.sql`.",
+   "effort": "trivial",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. Line 3196 logs the path bot/schema_postgresql.sql which does not exist; the real file is tools/schema_postgresql.sql. Cosmetic only (operator hint in fatal-error handler), no runtime impact.",
+    "ground_truth_check": "Read postgresql_database_manager.py lines 3185-3198; ls confirms bot/schema_postgresql.sql absent and tools/schema_postgresql.sql present (259458 bytes); CLAUDE.md lists tools/schema_postgresql.sql as canonical.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "ux",
+   "area": "god_files_frontend",
+   "file": "website/js/sessions.js",
+   "line": "16-117",
+   "title": "50-entry MAP_IMAGE_MAP + map helpers duplicated verbatim across 3 production JS files (asset drift)",
+   "evidence": "`const MAP_IMAGE_MAP`, `function normalizeMapKey`, `function mapImageFor`, `function mapLabel` are duplicated byte-for-byte in js/sessions.js, js/session-detail.js and js/sessions2.js (grep: MAP_IMAGE_MAP defined in 3 files; normalizeMapKey in 4 incl. proximity.js; mapImageFor in 3; formatDuration in 5 files: live-status, sessions, session-detail, season-stats, proximity). Adding/renaming a map (a recurring task \u2014 the map list grows) requires editing the same 50-line table in 3+ places; missing one yields a generic-tile fallback in one view but the real thumbnail in another, an inconsistency users see directly.",
+   "fix_proposal": "Extract the map-image table + normalizeMapKey/mapImageFor/mapLabel/formatDuration into a shared module (e.g. js/map-utils.js, alongside existing js/utils.js) and import from sessions.js, session-detail.js, sessions2.js, proximity.js. No framework change; pure de-dup of an already-modular ESM codebase.",
+   "effort": "small",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute the existence of duplication (MAP_IMAGE_MAP + normalizeMapKey/mapImageFor/mapLabel present in 3 JS files; formatDuration in 5), but DID refute the finding's central characterization. The claim 'duplicated byte-for-byte' is false: I diffed the blocks and sessions.js uses assets/maps/proximity/*.png while session-detail.js/sessions2.js use assets/maps/levelshots/*.png and carry 6 extra base-map keys (battery/fueldump/goldrush/oasis/radar/railgun). Both directories exist on disk and hold different images, so the two tables are intentionally divergent, not identical. formatDuration likewise already diverged (only sessions.js+session-detail.js hash-match; live-status/season-stats/proximity each differ). Consequence: the proposed 'extract one shared module' fix is not drop-in \u2014 it must parameterize the image directory or it changes which thumbnails render. The DRY concern is genuine and drift is already manifested (sessions.js lacks plain goldrush/oasis/fueldump/railgun keys -> generic-tile fallback that session-detail resolves), but the severity and the 'byte-for-byte' premise are overstated.",
+    "ground_truth_check": "Read sessions.js:1-130 (confirmed cited lines 16-117). grep -l across website/js confirmed file counts. awk+md5sum diff of MAP_IMAGE_MAP blocks proved divergence (proximity/ vs levelshots/ dirs, differing entry sets). Verified both assets/maps/proximity (30 files) and assets/maps/levelshots (26 files) exist. Hashed normalizeMapKey and formatDuration across files: all already drifted. grep -c confirmed sessions.js missing plain goldrush/oasis/fueldump/railgun keys that session-detail.js has. Not covered by WHOLE_CODEBASE_AUDIT_2026-06-15 or DEEP_AUDIT_2026-06-27.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "ux",
+   "area": "god_files_frontend",
+   "file": "website/js/sessions.js",
+   "line": "1335-1443",
+   "title": "Collapsible session card and clickable rows are mouse-only (no keyboard/aria), inconsistent with availability.js",
+   "evidence": "Session card header toggles via onclick on a plain div: sessions.js:1337 `<div class=\"p-6 cursor-pointer ...\" onclick=\"toggleSession(...)\">` with no role, tabindex, key handler, or aria-expanded (the chevron flips visually only). Player/leaderboard/match rows are also onclick `<tr>`/`<div>` (sessions.js:1489,1582,1603,1723). grep across sessions.js+session-detail.js: 17 cursor-pointer click targets, 0 occurrences of role=\"button\"/tabindex. By contrast availability.js renders real `<button>`s with aria-pressed (renderActionCard) and aria-expanded (renderCalendarVisibility), so the inconsistency is internal. Keyboard and screen-reader users cannot expand a session or open a profile.",
+   "fix_proposal": "Make the session-card header a `<button>` (or add role=\"button\" tabindex=\"0\" + Enter/Space handler) and set aria-expanded to mirror expandedSessions state; give clickable rows the same treatment (the existing delegated/inline-action pattern in inline-actions.js can carry keydown). Mirror the accessible-button approach already used in availability.js.",
+   "effort": "medium",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute the factual core. sessions.js:1337 is indeed a plain div with onclick toggleSession() and no role/tabindex/aria-expanded; rows at 1488/1581/1602/1722 are likewise onclick-only. grep confirms 0 role=button/tabindex/keydown across sessions.js + session-detail.js. availability.js really does emit accessible <button>s with aria-pressed (l.906) and aria-expanded (l.1010), and inline-actions.js binds only 'click' (l.114) with no keydown fallback, so no global delegation rescues these. The internal inconsistency and mouse-only operation are both true as described. The only correction is severity: this is a frontend-only a11y nicety with zero data-correctness/security impact, on a deliberately tiny invite-only community site with an explicit anti-growth stance, and all data remains reachable by mouse \u2014 so 'medium' overstates real-world impact.",
+    "ground_truth_check": "Read sessions.js:1335-1374 (confirmed plain-div onclick header, no aria). Grepped cursor-pointer/role/tabindex/aria across sessions.js + session-detail.js (17 click targets, 0 a11y attrs). Grepped availability.js (confirmed <button> + aria-pressed l.906 + aria-expanded l.1010). Inspected inline-actions.js (only 'click' listener l.114, ACTION_ATTR data-click-action; no keydown). Confirmed toggleSession defined sessions.js:1412 and exposed on window. Project context: deliberately small ~30-50 player community, anti-growth/anti-SEO; legacy JS in website/js is production.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "ux",
+   "area": "god_files_frontend",
+   "file": "website/js/sessions.js",
+   "line": "1376-1379",
+   "title": "Collapsed session-card 'Score' uses R1-only side wins, disagreeing with the team-aware score shown when expanded",
+   "evidence": "renderSessionCard shows Score as `${session.allies_wins} - ${session.axis_wins}` (sessions.js:1377). Backend computes those as COUNT(round_number=1 AND winner_team=1/2) only \u2014 sessions_router.py:474-475 \u2014 i.e. Round-1 wins by map *side*, ignoring R2 and the stopwatch team-aware scoring. The expanded view (renderSessionDetails, sessions.js:271-289 and loadSessionDetailsExpanded series header) uses scoring.maps / team_a_score-team_b_score. So a user sees one Score on the collapsed card and a different, correct Score after expanding the same session \u2014 'numbers that don't match' for a community that prizes no-fabrication.",
+   "fix_proposal": "Either surface the team-aware scoring summary (already returned by the detail/scoring payload) on the collapsed card, or relabel the collapsed metric as 'R1 side wins' so it isn't read as the match/series score.",
+   "effort": "small",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Attempted refutation failed: the two views provably consume different endpoints/quantities. Collapsed renderSessionCard (sessions.js:1377) prints session.allies_wins - session.axis_wins labeled 'Score', fed by /stats/sessions where those columns are COUNT(round_number=1 AND winner_team=1/2) only (sessions_router.py:474-475) \u2014 R1 wins by map side, ignoring R2 and stopwatch scoring. Expanded renderSessionDetails (sessions.js:259-289) hits /sessions/{date} and prefers the team-aware scoring.maps / team_a_score-team_b_score payload. In ET stopwatch these can legitimately differ, so the same session can show two different scores. Not a false positive; not duplicated by the two prior audits.",
+    "ground_truth_check": "Read sessions.js:1350-1407 (renderSessionCard, line 1377 Score), sessions.js:255-314 (renderSessionDetails team-aware scoring at 259-289), and grepped usages (line 1242 /stats/sessions list, 1569 /sessions/{date} detail, 1619 detail scoring). Read sessions_router.py:460-519: allies_wins/axis_wins are COUNT(round_number=1 AND winner_team=1/2). Confirmed the collapsed metric is R1-side-only while the expanded is team-aware/stopwatch \u2014 genuinely different numbers under one 'Score' label.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "correctness",
+   "area": "god_files_frontend",
+   "file": "website/js/sessions.js",
+   "line": "1453-1457, 1708-1710",
+   "title": "winner_team Axis/Allies mapping is INVERTED on legacy sessions page",
+   "evidence": "sessions.js winnerTeamLabel() maps winner_team===1 -> 'Allies' and ===2 -> 'Axis' (lines 1454-1455), and the colour branch at 1710 maps 1->brand-blue / 2->brand-rose. Ground truth proves the opposite: the Lua webhook hard-codes TEAM_AXIS=1 / TEAM_ALLIES=2 (vps_scripts/stats_discord_webhook.lua:199-200, get_winner_team() returns 1=Axis,2=Allies at :829-838) and the parser comments 'defender_team defaults to 1 (Axis)' (bot/community_stats_parser.py:113). DB cross-check confirms rounds.winner_team agrees with lua_round_teams.winner_team on the same scale (winner_team=1 -> 275/278 lua=1; =2 -> 383/388 lua=2). The sibling god-file session-detail.js:567 maps the SAME column correctly: winnerTeam===1 -> 'Axis', ===2 -> 'Allies' (and colour 1->rose/2->blue at :568) \u2014 i.e. the two production JS files render the identical rounds.winner_team value with OPPOSITE side labels and OPPOSITE colours. The upstream backend helper website_session_data_service._team_name (:13-19) shares sessions.js's inverted mapping (1->'Allies'), so the round 'winner' string fed to sessions.js is already flipped, making the wrong side visible to users.",
+   "why": "Violates the project's 'no fabricated numbers' core: every round/map winner shown on the legacy sessions page reports the wrong side (Axis games labelled Allies and vice-versa), and the colour coding reinforces the wrong attribution.",
+   "fix_proposal": "Flip winnerTeamLabel to 1->'Axis', 2->'Allies' and swap the colour branch at line 1710 to match session-detail.js:567-568. Also fix the shared backend inversion in website_session_data_service._team_name (and the allies_wins/axis_wins CASE labels in sessions_router.py:474-475) so the whole sessions path uses the canonical 1=Axis,2=Allies; add a single shared constant to stop the convention drifting again.",
+   "effort": "small",
+   "external_ref": "",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Tried to refute on three fronts and failed each: (1) Canonical scale \u2014 DB proves winner_team=1 is Axis (281 axis-won vs 3) and =2 is Allies (391 allies-won vs 5), matching Lua (TEAM_AXIS=1/TEAM_ALLIES=2, get_winner_team comment) and the parser comment; so sessions.js (1->'Allies') is genuinely inverted. (2) Dead-code defense \u2014 sessions.js is NOT dead: route-registry.js:62-69 wires #/sessions to loadSessionsView and app.js:18 imports it; the /stats/session/{id}/detail endpoint (sessions_router.py:1450-1454) passes raw numeric winner_team straight to the inverting winnerTeamLabel. (3) Self-consistency defense \u2014 even if internally consistent, it still contradicts DB ground truth and its sibling session-detail.js:567-568 which maps the identical column correctly. Backend _team_name (:13-19) and sessions_router win tallies (:474-475) share the same inversion. Could not refute.",
+    "ground_truth_check": "Read sessions.js:1453-1457 and 1708-1714 (1->Allies/blue, 2->Axis/rose). Read session-detail.js:567-568 (1->Axis/rose, 2->Allies/blue) \u2014 opposite. Read Lua webhook :199-200 and :829-841 (1=Axis,2=Allies). Read parser :108-115. Read website_session_data_service.py:13-19 (_team_name 1->Allies, inverted) and :209-238 (winner fallback uses _team_name). Read sessions_router.py:470-476 (allies_wins=winner_team 1, inverted) and :1415-1461 (detail endpoint emits raw numeric winner_team). Confirmed reachability via route-registry.js:62-69 + app.js:18. DB queries: rounds.winner_team JOIN lua_round_teams scores -> winner_team=1 axis_won 281/3, =2 allies_won 391/5. sessions2.js does not render winner_team directly. Not covered by the two prior audits.",
+    "adjusted_severity": "medium"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "correctness",
+   "area": "god_files_frontend",
+   "file": "website/js/sessions.js",
+   "line": "1680-1690",
+   "title": "Running map score overlay desyncs when a map has an odd round count (orphan R1/R2)",
+   "evidence": "numPlays = Math.max(1, Math.floor(mapMatch.rounds.length / 2)) assumes every map play is exactly R1+R2. For each play it advances scoringMapIdx through scoringMaps and accumulates runningA/runningB (1685-1690). When a map block contains an odd number of rounds (orphan R2 / abandoned R1 \u2014 a documented condition in this codebase, e.g. memory notes 'orphan R2' and stopwatch_pairing), floor() under- or mis-counts the plays consumed, so scoringMapIdx drifts and the cumulative A:B badge shown on this and every subsequent map is attributed to the wrong map.",
+   "why": "Produces a visibly wrong running scoreboard for any session containing an orphan/abandoned round, which is exactly the edge case this community hits.",
+   "fix_proposal": "Match scoring entries to rounds by a stable key (map_name + round_start_unix or round_id) instead of floor(rounds.length/2); or count only completed R1+R2 pairs and skip orphan rounds when advancing scoringMapIdx.",
+   "effort": "medium",
+   "external_ref": "",
+   "_verify": {
+    "is_real": true,
+    "confidence": "medium",
+    "refutation": "Could not fully refute: the drift mechanism is provable. /stats/session/{id}/detail (sessions_router.py:1463-1478) groups a standalone orphan round into a 1-round match block; scoring.maps excludes orphans (stopwatch_scoring_service.py:259-263); and sessions.js:1680 forces numPlays = Math.max(1, floor(1/2)) = 1, so it consumes a scoring entry that doesn't belong to that block, over-advancing scoringMapIdx and mis-attributing the running A:B badge (rendered at line 1744) for that and subsequent maps. BUT the finding is overstated/partly misattributed: (1) the common odd case \u2014 a 3-round block (R1+R2+stray-R2 or R1+R1+R2) \u2014 yields floor(3/2)=1, which correctly matches the single complete pair scored, so it does NOT drift; only standalone 1-round orphan blocks (or pathological R1R1R2R2 orderings) drift. (2) The cited root cause is slightly wrong: floor() correctly returns 0 for a 1-round block; it is the Math.max(1, ...) minimum-of-1 that over-counts. Net symptom still matches.",
+    "ground_truth_check": "Read sessions.js:1600-1755 (numPlays heuristic + scoringMapIdx accumulation + badge render at 1744, and authoritative series header at 1628-1629 using scoring.team_a_score directly). Read sessions_router.py get_stats_session_detail (1379-1484): matches grouped by consecutive same-map rounds, new match when R1 follows R2 \u2014 so normal blocks are exactly R1+R2. Read bot/services/stopwatch_scoring_service.py (204-263): scoring.maps filtered to complete R1+R2 pairs only, orphans excluded. Confirmed standalone-orphan map blocks (documented in this codebase: ~56 abandoned_r1 + ~49 orphan_r2 historically) cause the running badge to drift. Authoritative header score is unaffected. Not covered by the two prior audits.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "maintainability",
+   "area": "god_files_frontend",
+   "file": "website/js/sessions.js",
+   "line": "16",
+   "title": "MAP_IMAGE_MAP copy-pasted across 3 modules and has drifted \u2014 Sessions list shows generic placeholder for maps that Session Detail renders correctly",
+   "evidence": "The MAP_IMAGE_MAP lookup table is duplicated verbatim in sessions.js:16, session-detail.js:19, and sessions2.js:9. The copies have DIVERGED: session-detail.js/sessions2.js each define 40 entries including the bare keys `battery`, `fueldump`, `goldrush`, `oasis`, `radar`, `railgun`, while sessions.js only has 34 and is missing those 6. `radar` and `railgun` have no `etl_`/`sw_`/`et_` variant either, so for a round named e.g. \"radar\" or \"railgun\" the sessions-list mapImageFor() falls through to the generic placeholder, while the identical map in the session-detail view shows the real thumbnail. This is a user-visible inconsistency caused purely by copy-paste drift, not a logic difference.",
+   "fix_proposal": "Move MAP_IMAGE_MAP plus mapImageFor()/mapLabel()/normalizeMapKey() into a single shared module (e.g. website/js/maps.js) and import it in sessions.js, session-detail.js, and sessions2.js. All three already `import { ... } from './utils.js'`, so wiring a second shared import is trivial and eliminates the drift class entirely.",
+   "effort": "small",
+   "why": "A single source of truth removes an entire category of silent UI drift bugs; the 6 missing keys are proof the duplication already bit.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Partly refuted on details, core confirmed but impact is tiny. (1) The tables are NOT 'duplicated verbatim': sessions.js maps to assets/maps/proximity/*.png while session-detail.js (line 19) and sessions2.js (line 9) map to assets/maps/levelshots/*.png \u2014 different asset directories, not identical copies. (2) Counts are off: sessions.js has 33 entries (not 34), the others 39 (not 40). (3) The 6 missing bare keys do NOT all break: mapImageFor()'s fuzzy fallback (sessions.js:103-114, `mapKey.includes(key)`) resolves bare oasis\u2192etl_oasis, goldrush\u2192etl_goldrush, battery\u2192etl_battery. Only radar, railgun, fueldump have no related key and truly fall through to assets/maps/map_generic.svg. (4) Of those three, only `radar` actually exists in the DB (3 rounds; railgun=0, fueldump=0). So the genuine user-visible effect is: 3 'radar' rounds show the generic placeholder on the #/sessions list (sessions.js) while session-detail and #/sessions2 show the thumbnail. (5) Asset note: website/assets/maps/proximity/radar.png DOES exist, so the real fix is adding the key in sessions.js' own proximity path, not importing the levelshots variant.",
+    "ground_truth_check": "Read sessions.js:16-115 (33 entries, proximity/ paths, mapImageFor fuzzy fallback), session-detail.js:19-98 (39 entries incl 6 bare keys, levelshots/ paths), sessions2.js:9-94 (39 entries, levelshots/ paths). Confirmed all three are loaded in prod: app.js:18 imports loadSessionsView from sessions.js (route 'sessions' in route-registry.js:62-69), app.js:54 imports loadSessions2View from sessions2.js (route 'sessions2'), session-detail.js used by detail view. DB query on rounds.map_name: 'radar'=3 rounds present; no bare battery/fueldump/goldrush/oasis/railgun rows. Verified asset files: levelshots/ has radar.png/railgun.png/etc.; proximity/ also has radar.png and railgun.png. Traced mapImageFor('radar') in sessions.js: not in map, no etl_/sw_/et_ variant, no fuzzy substring match among its 33 keys \u2192 returns map_generic.svg.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "maintainability",
+   "area": "god_files_frontend",
+   "file": "website/js/session-detail.js",
+   "line": "102",
+   "title": "Byte-identical helpers (formatDuration, coerceRoundId, mapImageFor, mapLabel) duplicated despite both files already importing utils.js",
+   "evidence": "formatDuration() (sessions.js:154 vs session-detail.js:102) and coerceRoundId() (sessions.js:148 vs session-detail.js:110) are byte-for-byte identical. mapImageFor()/mapLabel() are functionally identical (only whitespace differs) across sessions.js, session-detail.js, sessions2.js. Both files already do `import { API_BASE, fetchJSON, escapeHtml, escapeJsString } from './utils.js'`, so the shared-module mechanism exists and is unused for these helpers. utils.js even has a related-but-different formatStopwatchTime(), increasing confusion about which duration formatter to use.",
+   "fix_proposal": "Hoist formatDuration, coerceRoundId, mapLabel, mapImageFor (and MAP_IMAGE_MAP per the high finding) into utils.js or a maps.js shim and import them. Removes ~80 duplicated lines and prevents future drift.",
+   "effort": "trivial",
+   "why": "Cheap dedup of already-shared infrastructure; reduces surface for the drift bug already documented above.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute. Verified every claim: (1) formatDuration() is byte-for-byte identical at session-detail.js:102-108 and sessions.js:154-160 (same body, only the order relative to coerceRoundId differs). (2) coerceRoundId() is byte-for-byte identical at session-detail.js:110-114 and sessions.js:148-152. (3) MAP_IMAGE_MAP + mapLabel + mapImageFor are duplicated across all three files (session-detail.js:19/70/84, sessions.js:16/72/80, sessions2.js:9/67/75) with only minor whitespace/var-name differences (e.g. `c`/`mk`/`mp` vs `candidate`/`mapKey`/`mapPath`). (4) All three files do import the shared module: `import { API_BASE, fetchJSON, escapeHtml, escapeJsString } from './utils.js'` at line 6, so the shared-module mechanism exists and is unused for these helpers. (5) utils.js exports a different formatStopwatchTime() at line 182, confirming the duplicate-formatter confusion claim. The only inaccuracy is cosmetic: the finding pins the title to line 102 (formatDuration) which is correct for session-detail.js.",
+    "ground_truth_check": "Read session-detail.js:102-114 and sessions.js:148-160 directly (byte-identical confirmed). Grepped all three session JS files for the four helpers + MAP_IMAGE_MAP. Grepped utils.js for the helper names (only formatStopwatchTime present, not formatDuration/coerceRoundId/mapLabel/mapImageFor). Confirmed identical utils.js import line in all three files. Not covered by the two prior audits (scanner-driven CVE/CSRF audit and last-month feature audit); this is a foundational frontend dedup observation.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "maintainability",
+   "area": "god_files_frontend",
+   "file": "website/js/proximity.js",
+   "line": "1",
+   "title": "Frontend god-files (proximity.js 4573 lines / 125 functions, session-detail.js 3740, availability.js 2415, sessions.js 2343) exceed maintainable size",
+   "evidence": "proximity.js is 4573 lines (214 KB) with 125 top-level functions spanning clearly separable concerns: scope/config helpers (lines ~59-308), canvas/world-projection + heatmaps (~543-606, 3181-3554), leaderboard tabs (3816-3945), player-journey panel (2080-2388), competitive panel (2388-2544), v7/teamplay panels (2544-2754), kill-outcome/hit-region/aim panels (2811-3816), and objective-intel renderers (4076-4573). session-detail.js (3740), availability.js (2415), and sessions.js (2343) are similarly oversized. Files this large are hard to review, slow to load into an editor, and concentrate merge-conflict risk.",
+   "fix_proposal": "Pragmatic, low-risk ES-module splits along the existing section boundaries (the functions are already grouped). e.g. proximity.js -> proximity-scope.js (scope/config/selectors), proximity-canvas.js (world projection, danger zones, heatmaps, aim glyphs), proximity-panels.js (combat/hit-region/journey/competitive renderers), proximity-objective.js (carrier/vehicle/objective-run intel), with proximity.js as the thin entrypoint that imports and wires them. No behavior change, no React rewrite \u2014 just file boundaries. Do one file per PR, leaning on the existing import/export setup.",
+   "effort": "large",
+   "why": "These four files are the bulk of the legacy JS maintenance burden; splitting along already-present seams makes review and future edits tractable for a small team without architectural overhead.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute the factual claims. wc -l confirms exact line counts: proximity.js 4573, session-detail.js 3740, availability.js 2415, sessions.js 2343. grep confirms 125 top-level function definitions in proximity.js. The file already uses ES module syntax (import from './utils.js' at line 6, export async function loadProximityView at line 1954), so the proposed module-split fix is feasible without architectural change. The finding is accurate. The only thing I downgrade is severity: this is pure maintainability with no correctness/security/behavior impact, and for a ~30-50 user community with few contributors the merge-conflict/review burden is modest while the proposed split is a large effort. The reviewer correctly avoids over-engineering (no React rewrite, just file boundaries along existing seams).",
+    "ground_truth_check": "Ran wc -l on all four cited files (counts match exactly). Ran grep for function definitions in proximity.js (125, matches claim). Grepped for import/export usage (confirmed ES modules already in use, so split is low-risk). Checked index.html reference to proximity.js. No prior audit (WHOLE_CODEBASE_AUDIT_2026-06-15 = scanners/CVEs; DEEP_AUDIT_2026-06-27 = last-month features) covers frontend god-file size.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "correctness",
+   "area": "skill_storytelling",
+   "file": "/home/samba/share/slomix_discord/website/backend/services/box_scoring_service.py",
+   "line": "234-266",
+   "title": "BOX scoring collapses orphan/duplicate R2 rounds into one map_number, silently dropping real rounds and pairing mismatched maps",
+   "evidence": "_fetch_session_rounds() assigns map_number by incrementing ONLY when round_number==1 ('if round_num == 1: map_number += 1'), then calculate_session_score() groups with 'maps.setdefault(r.map_number, {})[r.round_number] = r'. When a session contains R2 rounds with no preceding R1 (orphan R2) or two R2s in a row, every such R2 keeps the previous map_number and overwrites dict slot [2]. DB confirms this is common: gaming_session_id 51 is 5 consecutive orphan R2 rows (supply, te_escape2, sw_goldrush_te, etl_frostbite, erdenberg_t2, all round_number=2, no R1), so all 5 land on map_number=0; maps[0] keeps only the LAST R2 and score_map returns immediately because r1 is None -> the entire session (5 decisive maps incl. a Fullhold and Completeds) scores 0-0. A query for R2 whose prior round in time-order is also R2/none found 9 affected sessions (ids 99,51,84 each with 5; 50,41,44,56,47,42 with 2). In mixed sessions the surviving R2 is paired with an R1 from a DIFFERENT map, so winner_team is checked against the wrong alpha_side and the map score is fabricated.",
+   "fix_proposal": "Pair rounds deterministically by the existing match/round-linker key (map_name + match_id / round_start_unix), not 'increment on R1'. At minimum start a new map_number whenever round_number==1 OR the current map_number already holds a round_number==2 (so a second R2 starts a fresh bucket), and skip/flag orphan R2 instead of overwriting. Surface a 'rounds_dropped' count in the API response.",
+   "effort": "medium",
+   "why": "BOX score is the canonical 'who won the evening' number shown on /tonight and session pages; dropping real R2 rounds or pairing mismatched maps produces a wrong scoreline, violating the no-fabricated-numbers rule.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "I tried to refute this finding and could not. The code at box_scoring_service.py:240-266 (_fetch_session_rounds) increments map_number ONLY when round_num==1 ('if round_num == 1: map_number += 1'), and calculate_session_score (line 135) groups via 'maps.setdefault(r.map_number, {})[r.round_number] = r', which overwrites slot [2] for every consecutive R2. Both failure modes reproduce against live data:\\n\\n(1) Orphan-only collapse -> 0-0: gaming_session_id 51 (2025-05-10) has exactly 5 rounds with round_number=2 and NO R1 rows at all (only round_number 0 and 2 exist; ids 9294/9296/9298/9300/9302 = supply, te_escape2, sw_goldrush_te, etl_frostbite, erdenberg_t2, including a Fullhold and two Completeds). All keep map_number=0, maps[0] retains only the last R2, and score_map hits 'if not r1: continue' (line 141) -> session scores 0-0, maps_completed=0, winner=None. Decisive maps silently dropped.\\n\\n(2) Mismatched-map pairing -> fabricated score: gaming_session_id 41 traces to map_number=1 holding R1=etl_adlernest (id 9200) paired with R2=etl_sp_delivery (id 9205, an orphan R2), because supply R2 (9203) then delivery R2 (9205) overwrite the real adlernest R2 (9201) in slot [2]. The MapScore is labeled etl_adlernest but scored from etl_sp_delivery's winner_team, and adlernest's actual R2 (Fullhold) plus supply's R2 are dropped. winner_team is thus checked against the wrong alpha_side for a different map -> fabricated scoreline.\\n\\nThe endpoint is live: GET /api/storytelling/box-score?session_date=... (storytelling_router.py:464-484) calls calculate_session_score directly, so any historical session page hitting these dates returns the wrong score. The only correction to the finding's numbers: it claimed 9 affected sessions; the real count is 21 sessions with >=1 orphan/double R2 (ids 51,84,99 with 5 each; 41,42,44,47,50,56 with 2; plus 11 with 1). Direction and severity of the bug are understated, not overstated.",
+    "ground_truth_check": "Read box_scoring_service.py lines 1-269 (full scoring + _fetch_session_rounds). Confirmed map_number increments only on round_number==1 and the dict overwrite on [round_number]. Confirmed score_map's 'if not r1: continue' path. Verified the endpoint wiring: grep shows calculate_session_score is called from storytelling_router.py:483 (live /storytelling/box-score endpoint). DB queries: session 51 has only round_number 0+2 rows (no R1) for 5 distinct maps, all is_valid=true; session 41 interleaves real R1/R2 pairs with two orphan R2 rows (9203 supply, 9205 delivery) between the adlernest R1/R2 pair, proving the slot-[2] overwrite collapses three maps into one bucket. A LAG window query counted 21 sessions (not 9) with an R2 whose prior in-session round is R2/none. Not covered by the two prior audits (CVE/uploads scanner audit and last-month feature audit); BOX scoring is from the Mar 29-30 work and is in scope for the full-history pass.",
+    "adjusted_severity": "medium"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "correctness",
+   "area": "skill_storytelling",
+   "file": "/home/samba/share/slomix_discord/website/backend/services/skill_rating_service.py",
+   "line": "440-481",
+   "title": "Per-session skill rating keyed on round_date conflates multiple distinct gaming sessions played on the same calendar day",
+   "evidence": "compute_session_ratings(), compute_session_map_ratings() and get_player_session_history() scope a 'session' with 'WHERE ... round_date = $2' / 'round_date <= $2' (TEXT date), and the docstring calls round_date a 'gaming session proxy'. This violates the project CRITICAL RULE 'ALWAYS use gaming_session_id for session queries (NOT dates)'. DB shows the conflation is real: round_date 2026-03-25 maps to 4 distinct gaming_session_id values, and 2026-06-21/06-16/06-11/05-27/2025-12-21/2025-05-11/2025-01-07 each map to 2. On those days the 'session rating' merges 2-4 separate evenings' aggregates (SUM(kills)/COUNT rounds across all of them), producing a per-session number and history delta that correspond to no actual gaming session.",
+   "fix_proposal": "Scope these queries by gaming_session_id (join rounds r ON pcs.round_id = r.id and filter r.gaming_session_id), and key history/percentile lookups on gaming_session_id rather than round_date. If a date-based API contract must be kept, return one entry per gaming_session_id within the date.",
+   "effort": "medium",
+   "why": "Directly contradicts the documented session rule and yields merged, non-reproducible per-session ratings on 8+ known dates (worst case 4 sessions in one day).",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "I tried to refute this but could not. The code at skill_rating_service.py:440-481 (compute_session_ratings), 498-537 (compute_session_map_ratings) and 554-575 (get_player_session_history) all scope a \"session\" via WHERE player_guid=$1 AND round_date=$2 (and round_date>=... for history), never via gaming_session_id. The docstring at line 443 explicitly admits round_date is a \"gaming session proxy\", and skill_router.py:204-214 exposes this as a date-keyed session drill-down (session_date ISO date). This directly violates the documented CRITICAL RULE \"ALWAYS use gaming_session_id for session queries (NOT dates)\". I confirmed pcs/rounds carry gaming_session_id, so the correct grouping is available. The only mitigating angle (that a per-calendar-day sparkline is a defensible UX choice) does not hold because the API and function names assert \"session\" semantics, not \"day\".",
+    "ground_truth_check": "Read skill_rating_service.py:400-599 and skill_router.py:180-225 to confirm the date-based scoping and the public contract. Ran read-only DB queries against `rounds`: 8 of 148 distinct round_dates map to >1 gaming_session_id (2026-03-25 \u2192 4 sessions; 2025-05-11, 2025-12-21, 2026-05-27, 2026-06-11, 2026-06-16, 2025-01-07, 2026-06-21 \u2192 2 each). Total 128 gaming sessions across 148 dates. So on those 8 dates (~5.4%) the per-session rating and history delta SUM/AVG-merge 2-4 separate evenings, matching the finding exactly.",
+    "adjusted_severity": "medium"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "correctness",
+   "area": "skill_storytelling",
+   "file": "/home/samba/share/slomix_discord/website/backend/services/skill_rating_service.py",
+   "line": "211-217",
+   "title": "pcs_only rating scaling leaves CONSTANT unscaled, so session ratings are systematically below global ratings (contradicting the stated intent)",
+   "evidence": "calculate_et_rating() scales metric weights by 'scale = 1.0 / pcs_weight_sum' for pcs_only but leaves CONSTANT=0.15 unscaled; the comment claims this makes 'an average PCS-only player score ~0.50, same as an average global player.' Working it through: global average player ~ 0.15 + 0.5*sum(all signed weights=0.84) = 0.57; pcs_only average ~ 0.15 + 0.5*(scale*pcs_signed_sum=0.75) = 0.525. So session/map ratings sit ~0.045 below the global average and below the documented 0.50 center, the exact systematic offset the scaling was meant to remove, which also shifts get_tier() boundaries for session/map views.",
+   "fix_proposal": "Scale CONSTANT consistently in pcs_only mode, or recompute CONSTANT/scale so both global and pcs_only average players land on the same target (e.g. 0.50). Add a unit test asserting an all-0.5-percentile player yields the same rating in both modes.",
+   "effort": "small",
+   "why": "Cross-scope comparisons (global vs session/map tiers) are biased, undermining trust in the rating, though magnitude is small.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "I tried to refute by re-deriving the weight sums from WEIGHTS (lines 32-54) and checking whether re-baselining washes out the offset. It does not: session/map scope (calculate_et_rating pcs_only=True at lines 487/542/621) uses the SAME global population percentiles (compute_population_percentiles, line 505), so a player whose session stats equal their global average lands at ~0.5 percentile in both modes yet rates 0.525 (pcs_only) vs 0.57 (global) \u2014 a real ~0.045 systematic offset. The math in the finding is exactly correct. get_tier() is shared across scopes, so the shift can flip tiers near the 0.55 boundary. The docstring (lines 203-206) explicitly claims both average players land ~0.50, which is false on two counts (global is 0.57, pcs_only is 0.525). Could not refute.",
+    "ground_truth_check": "Read skill_rating_service.py lines 32-99 (WEIGHTS, CONSTANT=0.15, PCS/PROXIMITY metric sets, TIERS, get_tier) and 198-242 (calculate_et_rating scaling). Verified pcs_weight_sum=0.64 (abs), PCS signed sum=0.48, total signed=0.84. Confirmed callers: session rating line 487, per-map 542, cumulative 621 all use pcs_only=True with global percentiles (line 505). get_tier shared in skill_router.py and players_profile_router.py. Not duplicated in the two prior audits (scanner pass / last-month feature pass).",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "performance",
+   "area": "skill_storytelling",
+   "file": "/home/samba/share/slomix_discord/website/backend/services/skill_rating_service.py",
+   "line": "554-630",
+   "title": "Skill history endpoint is N+1 with O(N^2) cumulative full-history rescans (range_days up to 3650)",
+   "evidence": "get_player_session_history() iterates every distinct round_date for a player and, per date, fires TWO awaited queries: compute_session_ratings() (one per-date aggregate, line 584) and a cumulative aggregate that rescans ALL rows WHERE round_date <= $2 (lines 589-615). The cumulative slice grows every iteration, so total work is O(rounds^2). It is exposed publicly/uncached via GET /skill/player/{id}/history, and skill_router.py:197 clamps range_days only at 3650 (UI offers an all-time option). DB ground truth: top player D8423F90 has 126 distinct round_dates / 1506 rows -> a single all-time request fans out to ~253 sequential queries and re-aggregates ~95k row-slices. There is no composite index either: only idx_player_stats_guid (player_guid alone) exists, so each cumulative query filters round_date in-heap. The 30-day default keeps the common case small (~8-12 dates), but the worst case is a public request.",
+   "fix_proposal": "Replace the per-date loop with a single GROUP BY round_date query to get all per-session aggregates in one pass, and compute the cumulative line with SQL window functions (running SUMs over round_date) or a single cumulative scan in Python, instead of one cumulative query per date. Alternatively cache the result per (guid, range_days) with a short TTL like the moments cache. Optionally add a (player_guid, round_date) index if cumulative SQL is retained.",
+   "effort": "medium",
+   "why": "A single unauthenticated all-time request issues hundreds of sequential awaited queries and quadratic row work; on the shared FastAPI worker this blocks other requests far longer than the small data set warrants.",
+   "external_ref": "skill_router.py:197,217",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute the structural claims \u2014 all verified against code and DB. The loop at skill_rating_service.py:580-628 genuinely fires two awaited queries per distinct round_date, and the cumulative query (lines 589-615) rescans a round_date<=$2 slice that grows each iteration, producing O(rounds^2) work. range_days is clamped only at 3650 (skill_router.py:197), the /skill/player/{id}/history endpoint has no auth and no cache (only Depends(get_db); grep for cache/lru/ttl returns nothing), and only idx_player_stats_guid (player_guid alone) exists \u2014 no (player_guid, round_date) composite. The one overstatement is impact: each cumulative query is bounded by the player's own ~1520 rows via the player_guid index (not a 95k full scan), and the per-iteration awaits let asyncio interleave other requests rather than hard-blocking the worker, so worst-case wall time is roughly sub-second on localhost.",
+    "ground_truth_check": "Read skill_rating_service.py lines 440-630 (compute_session_ratings, get_player_session_history) and skill_router.py lines 170-225 (the public history endpoint, range_days clamp, no cache). Grepped schema_postgresql.sql: confirmed only idx_player_stats_guid (player_guid) and idx_player_stats_round (round_id) on player_comprehensive_stats \u2014 no (player_guid, round_date) composite. DB query confirmed top player D8423F90 has 127 distinct round_dates / 1520 rows (finding's 126/1506 essentially correct), so an all-time request fans out to ~254 sequential queries. Verified percentiles are computed once (line 562), not per-iteration, so that part is not an additional N+1.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "performance",
+   "area": "skill_storytelling",
+   "file": "/home/samba/share/slomix_discord/website/backend/services/skill_rating_service.py",
+   "line": "312-340",
+   "title": "compute_all_ratings scans proximity_kill_outcome twice for two derivable metrics",
+   "evidence": "Two separate LEFT JOIN subqueries both full-scan proximity_kill_outcome grouped by killer_guid_canonical: prox_quality (AVG gib-weighted outcome, lines 312-324) and prox_perm (gib_rate = COUNT FILTER gibbed / COUNT, lines 333-340). Both kill_quality and gib_rate are computable in a single grouped pass over the same table. This is the all-player rating rebuild (compute_and_store_ratings, admin/scheduled), so it runs infrequently, but it doubles the scan of one of the larger proximity tables on every rebuild.",
+   "fix_proposal": "Merge prox_quality and prox_perm into one subquery selecting both AVG(CASE outcome...) and COUNT(*) FILTER (WHERE outcome='gibbed')::REAL / NULLIF(COUNT(*),0) grouped by killer_guid_canonical, and join once.",
+   "effort": "trivial",
+   "why": "Halves one redundant full-table aggregation in the rating rebuild; cheap correctness-neutral win.",
+   "external_ref": "",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute the factual claim: lines 312-324 (prox_quality) and 333-340 (prox_perm) are indeed two distinct LEFT JOIN subqueries each performing a full grouped scan of proximity_kill_outcome on killer_guid_canonical, and both derived metrics (kill_quality AVG-of-CASE, gib_rate COUNT FILTER/COUNT) are computable in a single pass. The only mitigant is impact, not correctness: it is an infrequent admin/scheduled all-player rebuild over a small table (~29k rows), so the redundant scan costs milliseconds. No guard or reason makes the duplication necessary \u2014 they could simply be one subquery.",
+    "ground_truth_check": "Read skill_rating_service.py lines 280-369: confirmed both subqueries scan proximity_kill_outcome grouped by killer_guid_canonical with the exact predicates described, joined separately as prox_quality and prox_perm, and both columns referenced in the SELECT/GROUP BY. Queried the DB: proximity_kill_outcome has 29,094 rows (all with non-null killer_guid_canonical), confirming it is a small table and the double scan is cheap. No two prior audits cover this specific micro-optimization.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "ux",
+   "area": "dual_frontend_debt",
+   "file": "website/js/modern-route-host.js",
+   "line": "35-110",
+   "title": "4 production React routes depend on a gitignored, untracked, 3-month-stale build; absence renders a user-facing \"Modern Route Offline\" error panel",
+   "evidence": "route-registry.js marks exactly 4 viewIds as VIEW_MODE.MODERN (lines 168,181,194,291: proximity-player, proximity-replay, proximity-teams, skill-rating). These mount React from /static/modern/route-host.js. But `git ls-files website/static/modern/` returns 0 (the dir is gitignored: .gitignore:49 `website/static/modern/`). The on-disk build is dated Mar 31 09:01 while SkillRating.tsx has commits on Apr 1 (8d3ef81, 8bd889b 'ET Rating v2') AFTER the build \u2014 so the deployed skill-rating page is stale by the entire ET Rating v2 change. If prod is deployed without a manual `vite build` (and the artifact is not in git), loadModernRuntime() fails and renderUnavailable() (modern-route-host.js:35) shows users a literal 'Modern Route Offline / The modern renderer is not built yet' panel (modern-route-host.js:38) instead of the page.",
+   "fix_proposal": "Pick ONE canonical surface for these 4 routes. Lowest-risk given 'legacy JS is production' + no-page-proliferation: fold them back to legacy (player-profile.js already renders the proximity-player aim/hit-region/heatmap surfaces; proximity.js covers replay/teams) and flip their mode to VIEW_MODE.LEGACY, then delete the modern-route-host plumbing. If React must stay, add `website/static/modern/` to a build step in deploy (deploy_release.sh) and to CI so the artifact is never missing/stale, and check the build into the release path. Do not leave a gitignored build as the only renderer for live routes.",
+   "effort": "medium",
+   "why": "Users on skill-rating or proximity sub-pages can get a stale page or a raw 'Offline' error panel depending on whether someone remembered to run vite build on the box; this is exactly the silent-deploy-gap class that already caused the 2026-06-25 'Offline' incident.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "I tried to refute this by hunting for (a) the build being tracked in git, (b) a deploy/CI step that builds it, or (c) the routes falling back to legacy \u2014 none exist. All core claims hold: route-registry.js sets exactly 4 routes to VIEW_MODE.MODERN (proximity-player:168, proximity-replay:181, proximity-teams:194, skill-rating:291), which load from /static/modern/ (vite.config.ts:6 outputs to ../static/modern). `git ls-files website/static/modern/` returns 0 files; .gitignore:49 lists `website/static/modern/`. modern-route-host.js:35-48 renderUnavailable() renders the literal \"Modern Route Offline / The modern renderer is not built yet\" panel on import failure (lines 108-110 catch). The on-disk build is dated 2026-03-31 09:01, while the ET Rating v2 source (commit f63c3bb + Codacy fixes 8bd889b/8d3ef81) landed 2026-04-01 \u2014 AFTER the build, so the dev artifact is provably stale w.r.t. SkillRating.tsx. I could NOT fully confirm prod is currently broken (the dev box still has a valid route-host.js bundle present), so the user-facing failure is conditional on a deploy that skips the manual `vite build` \u2014 which is plausible given the precedent but not observed live.",
+    "ground_truth_check": "Confirmed: grep of scripts/deploy_release.sh shows ZERO frontend/vite/npm/build/modern references; no .github/workflows file references vite/npm run build/static/modern; package.json only has a manual `build: vite build`. So nothing automates building the gitignored artifact \u2014 it relies entirely on someone running vite build on the box. Neither prior audit (docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md, docs/research/DEEP_AUDIT_2026-06-27/) mentions static/modern, modern-route-host, or VIEW_MODE.MODERN, so this is novel and not double-reported. The 2026-06-25 \"Offline\" incident in memory was a different mechanism (missing tracked legacy JS modules via partial deploy), but it confirms the silent-deploy-gap failure class is real for this project.",
+    "adjusted_severity": "medium"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "ux",
+   "area": "dual_frontend_debt",
+   "file": "website/frontend/src/runtime/catalog.ts",
+   "line": "18-42",
+   "title": "React route-mode catalog contradicts the production router (claims ~19 'modern' routes; reality is 4) \u2014 abandoned strangler migration left misleading state",
+   "evidence": "catalog.ts declares mode:'modern' for home, leaderboards, maps, records, awards, profile, weapons, proximity, hall-of-fame, retro-viz, sessions2, session-detail, greatshot, greatshot-demo, uploads, upload-detail, availability, admin, skill-rating (~19). The authoritative production router website/js/route-registry.js marks only 4 as VIEW_MODE.MODERN; every other listed viewId is VIEW_MODE.LEGACY and loads a legacy `loadXView()`. catalog.ts last changed Apr 1 (f63c3bb); route-registry.js last changed Jun 15 (c3f1b8d). The old memory note 'react-migration COMPLETE 19/19' is contradicted by the live router \u2014 the migration was effectively reverted to legacy without updating the React-side metadata.",
+   "fix_proposal": "Treat route-registry.js as the single source of truth. Either delete catalog.ts/route-host.tsx mode metadata or regenerate it from route-registry so the two cannot drift. Document in AI_COMPREHENSIVE_SYSTEM_GUIDE.md that legacy JS is canonical and only 4 proximity/skill routes are React, so future contributors don't 'fix' the wrong twin.",
+   "effort": "small",
+   "why": "The drift makes anyone (human or AI) reading the React tree believe ~19 pages are live React when they are dead; that wastes effort and risks edits to a surface users never see.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "The literal claim is accurate: website/frontend/src/runtime/catalog.ts:18-42 lists 19 routes as mode:'modern', while the authoritative router website/js/route-registry.js marks only 4 as VIEW_MODE.MODERN (proximity-player, proximity-replay, proximity-teams, skill-rating) and everything else (including 'proximity' itself, 'home', 'leaderboards', etc.) as VIEW_MODE.LEGACY dispatching loadXView(). The drift is real and provable. BUT the finding overstates impact: catalog.ts does NOT 'contradict the production router' in any functional sense \u2014 its sole consumer is preview-main.tsx, a standalone Vite preview/dev tool whose own rendered text states 'This Vite app is for isolated route work. The production website still runs through website/index.html and the legacy hash router.' route-host.tsx imports only the ModernRouteContext type, not the catalog data. The 'mode' field is descriptive chip metadata in a dev card grid with zero runtime or user-facing effect. The 'misleading state / fix the wrong twin' risk is already mitigated by the explicit disclaimer plus established project conventions (legacy JS in website/js = production). This is harmless dev-only stale metadata, not a 'ux' issue users ever encounter.",
+    "ground_truth_check": "Read website/frontend/src/runtime/catalog.ts in full (19 'modern' + 4 'legacy' confirmed). Read website/js/route-registry.js in full: ROUTE_DEFINITIONS has VIEW_MODE.MODERN only on proximity-player, proximity-replay, proximity-teams, skill-rating (4); 'proximity', 'home', 'leaderboards', 'maps', 'records', 'awards', 'profile', etc. are all VIEW_MODE.LEGACY with legacy.loadXView() loaders. Grepped website/frontend/src for catalog usage: only preview-main.tsx imports routeCatalog (a card grid), and route-host.tsx imports the type alias only. Read preview-main.tsx: it explicitly labels itself non-production and points to the legacy hash router as production.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "ux",
+   "area": "dual_frontend_debt",
+   "file": "website/frontend/src/pages/Proximity.tsx",
+   "line": "1-1980",
+   "title": "~21 React page components (~10k LOC) duplicate live legacy-JS surfaces but are unreachable in production \u2014 divergence means fixes land in only one twin",
+   "evidence": "route-host.tsx maps 25 viewIds to lazy React pages, but route-registry.js routes all but 4 to legacy JS, so ~21 React pages are compiled into static/modern/chunks (Mar 31) yet never mounted. They duplicate the production files: Proximity.tsx(1980 LOC)\u2194proximity.js(214KB, Jun 23), SessionDetail.tsx(1578)\u2194session-detail.js(184KB, Jun 13), Availability.tsx(692)\u2194availability.js(94KB, Jun 14), Admin.tsx(683)\u2194admin-panel.js, Home.tsx(466)\u2194home.js+tonight.js, Profile.tsx(352)\u2194player-profile.js(Jun 28), plus Leaderboards/Records/Awards/Greatshot/Uploads/RetroViz/HallOfFame/Weapons/Maps. Legacy got 51 commits in 90 days vs 25 for frontend/src; last React page edit Jun 2 vs legacy Jun 28 \u2014 the twins have already diverged (e.g. player-profile.js gained the aim-lock/true-aim surfaces the React Profile.tsx lacks).",
+   "fix_proposal": "Decide canonical = legacy JS (matches north star: small community, no page proliferation, no React build mandated). Delete the unreachable React page set (or move frontend/ to an archived/ dir clearly marked non-production) and keep only what backs the 4 still-modern routes until those are folded to legacy. This removes ~10k LOC of drift-prone dead code and the false impression of a maintained React app.",
+   "effort": "medium",
+   "why": "Two parallel implementations of the same 21 screens, one of them dead, guarantees future bugfixes/feature work get applied to the wrong copy and never reach users \u2014 the opposite of 'the website is the memory'.",
+   "_verify": {
+    "adjusted_severity": "low",
+    "confidence": "high",
+    "is_real": true,
+    "ground_truth_check": "Read website/frontend/src/route-host.tsx: routeComponents maps 25 viewIds to lazy React pages (lines 13-39). Read website/js/route-registry.js: only 4 routes carry mode:VIEW_MODE.MODERN (proximity-player L168, proximity-replay L181, proximity-teams L194, skill-rating L291); all others are VIEW_MODE.LEGACY with load:({legacy})=>legacy.* handlers. Confirmed loadRoute (L455-456) only calls runtime.modern.mountRoute for MODERN mode; app.js:165 dispatchRoute resets the modern host for non-MODERN. So 25-4 = 21 React pages are compiled but never mounted in production. Build artifacts exist (website/static/modern/chunks, Mar 31). LOC verified: Proximity.tsx 1980, SessionDetail.tsx 1578, Availability.tsx 692, Home.tsx 466, Profile.tsx 352; ~11k total across src/pages. ls website/js confirms the live legacy twins exist (proximity.js, session-detail.js, availability.js, admin-panel.js, home.js, tonight.js, player-profile.js, etc.). The factual core of the finding is accurate.",
+    "refutation": "Could not refute the factual claims \u2014 the routing code proves 21 React pages are unreachable while their legacy-JS twins serve production. However, severity is overstated. This is a KNOWN and INTENTIONALLY-ACCEPTED state, not an undiscovered defect: CLAUDE.md/audit conventions explicitly say 'Legacy JS in website/js/ is PRODUCTION; React in website/frontend/ is secondary' and 'Do NOT propose React rewrites'; session memory documents the React strangler migration as paused with legacy canonical (react-migration.md, feedback_no_react_build.md, feedback_spa_urls.md). Impact is low: the dead React is never on the active code path, so it causes zero user-facing or correctness/data/security harm \u2014 the audit's primary concerns. The 'fixes land in the wrong twin' risk is real in principle but already mitigated because maintainers know legacy is the live surface (they have been actively editing legacy: proximity.js, player-profile.js, tonight.js this month, not the React pages). Not covered by the two prior audits, so not a duplicate, but it is documented tech debt rather than a bug. Recommend keeping as a low-priority cleanup note, downgraded from medium to low."
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "ux",
+   "area": "dual_frontend_debt",
+   "file": "website/js/modern-route-host.js",
+   "line": "1",
+   "title": "Inconsistent / stale cache-bust versioning across the dual frontend invites Cloudflare 24h drift",
+   "evidence": "modern-route-host.js:1 pins BUILD_VERSION='20260323-skill-rating-v1' (Mar 23) for the React entry/CSS \u2014 older than both the on-disk build (Mar 31) and source (Apr 1), so a content change would not bust the `?v=` query. Meanwhile index.html and app.js use ad-hoc per-file strings: app.js?v=20260623-aimlock, route-registry.js?v=20260513-v142-cf-bust, player-profile.js?v=20260608-aimv2, smart-stats-diag.js?v=20260607-aim, proximity.js?v=20260623-aimlock. There is no single release version; each file is bumped by hand. The memory note feedback_cloudflare_cache_buster and the 2026-06-25 incident both record CF caching JS for 24h on a fixed ?v=.",
+   "fix_proposal": "Adopt one release-version constant (e.g. read package version / git short-sha) appended as `?v=` to ALL JS/CSS including the modern build entry, set once per release in deploy_release.sh. Drop the hand-maintained per-file strings so a release can never ship a page that loads a stale module.",
+   "effort": "small",
+   "why": "Mixed/stale cache-bust strings are the documented root cause of UI drift and the 'Offline' incident on slomix.fyi; unifying them prevents users seeing half-old, half-new JS after a deploy.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "medium",
+    "refutation": "I tried to refute this and the finding's HEADLINE framing is partly wrong, but a real (and sharper) bug survives. WRONG part of the claim: the reviewer says the per-file `?v=` strings are \"bumped by hand\" with \"no single release version.\" That is refuted by scripts/deploy_release.sh step 3b (lines 299-308), which at every deploy runs `sed -i \"s|?v=[A-Za-z0-9._-]\\+|?v=$SHA|g\" website/index.html website/js/*.js` plus injection seds \u2014 i.e. it ALREADY rewrites every literal `?v=...` in index.html and all js/*.js to the current git SHA uniformly. So the committed strings (20260623-aimlock, 20260513-v142-cf-bust, etc.) are just last-committed state; at deploy they all collapse to one $SHA. The reviewer's proposed fix (\"adopt one release-version constant set once per release in deploy_release.sh\") therefore largely already exists.\\n\\nWhat SURVIVES and is genuinely real: the modern/React build entry is the one file the auto-buster cannot reach. website/js/modern-route-host.js:1-3 builds its URLs as `/static/modern/route-host.js?v=${BUILD_VERSION}` with `BUILD_VERSION='20260323-skill-rating-v1'`. I copied the file to /tmp and ran the exact deploy sed against it: the line is unchanged, because the sed pattern `?v=[A-Za-z0-9._-]+` does not match `?v=${...}` (next char is `$`), and the BUILD_VERSION literal has no `?v=` prefix. So the modern entry ships a FIXED cache key on EVERY deploy. The on-disk build (website/static/modern/route-host.js + chunks/) is dated 20260331, already newer than the Mar-23 version string, confirming a content change that the cache key never reflected. The internal chunks are Vite content-hashed (route-host-BN5ST2qc.js, etc.), so route-host.js's 88-byte import line changes when the build changes \u2014 but if CF serves the stale-keyed route-host.js, it imports an old (possibly deleted) chunk hash \u2192 404 \u2192 broken route. That is exactly the 2026-06-25 incident class (a single 404 ES module breaking the app). 4 routes use VIEW_MODE.MODERN (route-registry.js:168,181,194,291), so this path is live, though it is the secondary frontend (legacy JS is primary).",
+    "ground_truth_check": "Read website/js/modern-route-host.js:1-3 (BUILD_VERSION + template-literal URLs). Read website/index.html (4 ?v= refs) and grepped app.js/session-detail.js for per-file version strings. Inspected scripts/deploy_release.sh lines 242-308 (step 3b auto-buster seds). Reproduced the deploy sed in /tmp against a copy of modern-route-host.js \u2014 confirmed the template-literal `?v=${BUILD_VERSION}` is NOT rewritten. Listed website/static/modern/ (route-host.js/css dated 20260331, chunks content-hashed) confirming build is newer than the Mar-23 BUILD_VERSION. Counted VIEW_MODE.MODERN routes in route-registry.js (4 live modern routes at 168/181/194/291).",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "maintainability",
+   "area": "dual_frontend_debt",
+   "file": "website/frontend/src/route-host.tsx",
+   "line": "14-38",
+   "title": "~9,200 lines of React page components are built/maintained but unreachable in production (only 4 of 29 routes are MODERN)",
+   "evidence": "route-host.tsx:14-38 registers 25 React page components (lazy imports). But the production router website/js/route-registry.js dispatches only 4 viewIds to React: proximity-player (line 168), proximity-replay (181), proximity-teams (194), skill-rating (291). The other 25 routes use mode: VIEW_MODE.LEGACY and call legacy.loadXView() (grep -c: 4 MODERN vs 25 LEGACY). Production serves website/index.html + website/js/ (backend/main.py:335-336,372-373); React only mounts lazily via js/modern-route-host.js when a route is MODERN. So React pages NOT among those 4 are never reached. Measured dead/duplicate page lines: Proximity.tsx 1980, SessionDetail.tsx 1578, Availability.tsx 692, Admin.tsx 683, Home.tsx 466, RetroViz.tsx 387, GreatshotDemo.tsx 364, Profile.tsx 352, Greatshot.tsx 344, Weapons.tsx 272, Records.tsx 271, Uploads.tsx 271, Awards.tsx 286, Sessions2.tsx 267, Story.tsx 242, Maps.tsx 224, Leaderboards.tsx 197, UploadDetail.tsx 181, HallOfFame.tsx 144 (Rivalries.tsx/Replay.tsx already collapsed to 3-line 'not yet migrated' stubs) = ~9,207 lines. Each duplicates a live legacy file (SessionDetail.tsx 1578 vs js/session-detail.js 3740; Proximity.tsx 1980 vs js/proximity.js 4573).",
+   "fix_proposal": "Pick ONE canonical stack. Pragmatic here: treat legacy js/ as canonical (it is what ships) and DELETE the ~9,200 lines of unreachable React pages plus their route-host.tsx:14-38 registrations, keeping only the 4 served React pages (ProximityPlayer, ProximityReplay, ProximityTeams, SkillRating). No user-visible change, removes a whole rotting parallel codebase (Rivalries/Replay already rotted to stubs). If instead finishing the migration, flip each route to MODERN incrementally and delete its legacy counterpart in the SAME PR \u2014 never leave both live-and-dead.",
+   "effort": "medium",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "I tried to refute this but the factual core holds up. (1) route-host.tsx:13-39 registers 27 lazy React page components (the finding says 25 plus the 2 stubbed rivalries/replay). (2) route-registry.js dispatch: grep confirms exactly 4 VIEW_MODE.MODERN entries (viewId proximity-player:166/168, proximity-replay:179/181, proximity-teams:192/194, skill-rating:289/291) vs 25 VIEW_MODE.LEGACY. (3) loadRoute() at route-registry.js:450-464 only calls runtime.modern.mountRoute for MODERN; LEGACY routes call definition.load (legacy renderer), so the other ~25 React pages are unreachable at runtime in production. (4) main.py confirms production serves website/index.html (line 335-336) + website/js static mount (line 373), the legacy stack. (5) Line counts confirmed: 11,040 total React page lines, of which the 4 reachable pages are a minority -> ~9,200 unreachable, matching the finding. Legacy counterparts exist and are larger (js/proximity.js, js/session-detail.js present). The numbers and the architecture claim are accurate. I could not find any alternate entry point that mounts the other React pages. What I push back on is only the severity, not the existence.",
+    "ground_truth_check": "Inspected website/frontend/src/route-host.tsx (lazy registry), website/js/route-registry.js (grep VIEW_MODE counts + loadRoute dispatch at 450-464), website/backend/main.py (lines 335-336, 373 confirm legacy index.html + static js serving), and wc -l on website/frontend/src/pages/*.tsx (11,040 total; Proximity 1980, SessionDetail 1578, etc.). Cross-checked legacy counterparts js/proximity.js and js/session-detail.js exist. Confirmed only 4 of 29 routes reach React. This is a real, verifiable maintainability/dead-code finding, not covered by the two prior audits (which were scanner/CVE/docs-drift and last-month-feature focused). However, project conventions explicitly designate legacy js/ as canonical production and React as secondary, so the dual-frontend split is a known deliberate strangler-migration state, not a latent bug. No functional, data-correctness, or security impact. For a deliberately small (~30-50 user) hobby project, ~9,200 lines of unreachable-but-compiled React is genuine maintenance/confusion debt but not high-priority; the fix proposal (delete dead pages OR finish migration + delete legacy in same PR) is sound and not over-engineering.",
+    "adjusted_severity": "medium"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "maintainability",
+   "area": "dual_frontend_debt",
+   "file": "website/frontend/src/pages/SessionDetail.tsx",
+   "line": "1",
+   "title": "Display/business logic duplicated across both stacks; the React copy diverges silently because it is not served",
+   "evidence": "Same domain logic implemented twice: color-strip / name cleaning in legacy js/matches.js and js/session-detail.js AND in React frontend/src/pages/Proximity.tsx and components/story/PlayerStoryCard.tsx (grep stripColor/cleanName/shortGuid). For LEGACY-routed pages, the React equivalent (SessionDetail.tsx, Proximity.tsx) never executes in production, so a scoring/formatting fix in the legacy file has no signal forcing the React twin to update \u2014 divergence is invisible. A dev who edits the React file (reasonably, since docs say migration is complete) ships changes users never see.",
+   "fix_proposal": "After removing the dead React pages (prior finding) this duplication vanishes for those routes. For the few concerns that must exist in both surviving stacks (color strip, GUID shortening, name cleaning), extract one tiny vanilla-JS util under website/js/ and import it from both legacy js and the 4 surviving React pages, instead of two copies.",
+   "effort": "small",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "Could not refute the core facts. Production routing in website/js/route-registry.js (consumed by js/app.js, gated at app.js:165 `if (definition.mode !== VIEW_MODE.MODERN) resetModernRouteHost()`) marks both `proximity` (line 159) and `session-detail` (line 345) as VIEW_MODE.LEGACY, loading them via legacy.loadProximityView()/loadSessionDetailView(). So the React twins Proximity.tsx and SessionDetail.tsx are not served for those routes \u2014 the premise holds. Duplication is also real (stripColors at js/session-detail.js:3063 vs Proximity.tsx:86 and PlayerStoryCard.tsx:27). However the finding overstates scope: it claims duplicated 'scoring/business logic' but only proves trivial formatting one-liners (regex color strip, GUID slice). The dual-frontend reality is already explicitly documented in project conventions/memory ('legacy JS is production, React is secondary'), so the team is aware, and there is zero user-facing impact \u2014 the served legacy path works correctly. This is genuine but low-impact developer-confusion debt, not a correctness/security defect.",
+    "ground_truth_check": "Read website/frontend/src/runtime/catalog.ts (marks session-detail+proximity as mode:'modern'), website/frontend/src/route-host.tsx (registers React lazy components for both), website/js/route-registry.js (production: marks BOTH as VIEW_MODE.LEGACY with legacy.load* handlers), website/js/app.js:160-167 (mode gate). Grepped stripColor/cleanName/shortGuid across both stacks: confirmed impls in js/session-detail.js:3063, js/matches.js:554, frontend Proximity.tsx:86, PlayerStoryCard.tsx:27. Found an additional unflagged inconsistency: catalog.ts says 'modern' while production route-registry.js says 'legacy', which actually reinforces the silent-divergence argument.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "maintainability",
+   "area": "dual_frontend_debt",
+   "file": "website/index.html",
+   "line": "1",
+   "title": "Canonical stack's own god-files: index.html 4894 lines holds all 27 view containers; proximity.js 4573, session-detail.js 3740",
+   "evidence": "The production stack carries its own large files: website/index.html is 4894 lines with ~27 view containers (grep => 27) holding every route's markup in one template; website/js/proximity.js is 4573 lines and website/js/session-detail.js 3740 (wc -l). Legacy js/ totals 29,395 lines over 40 files. These exceed the 1500-line god-file threshold and are the files actually maintained.",
+   "fix_proposal": "Low priority for a small team: opportunistically split index.html into per-view HTML partials fetched on demand (route-registry already lazy-loads view logic), and carve proximity.js into its existing conceptual sub-panels (leaderboard/replay/aim). Do it when next touching those files, not as a standalone sprint.",
+   "effort": "large",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "I attempted to refute by re-measuring. The claims are factually accurate: website/index.html = 4896 lines (claimed 4894), website/js/proximity.js = 4573 (exact), website/js/session-detail.js = 3740 (exact), 41 JS files totaling 29615 lines (claimed 40/29395 \u2014 slightly off but immaterial), and 26 view containers via id=\"view-...\" (claimed 27, close). The files genuinely exceed the 1500-line god-file threshold and are the production-maintained stack (legacy JS is production per project conventions, NOT React). I could not refute the factual basis. The only mitigating point is that this is a pure size/maintainability observation, not a correctness/data/security bug, and the finding itself correctly self-scopes as low priority with a non-over-engineered, opportunistic fix (no React rewrite proposed, aligns with small-team anti-goals).",
+    "ground_truth_check": "Ran wc -l on the three cited files (4896/4573/3740 \u2014 all match within rounding), counted JS files (41) and total lines (29615), and counted view containers via grep -oE 'id=\"view-...\"' (26). class=\"view\" returned 0 so the containers use id-based markers. No prior audit (WHOLE_CODEBASE_AUDIT_2026-06-15 = scanner/CVE/CSRF; DEEP_AUDIT_2026-06-27 = last-month features) covers frontend god-file size, so not a duplicate. Verified against project convention that legacy website/js/ is production.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "maintainability",
+   "area": "ci_backlog_security",
+   "file": "/home/samba/share/slomix_discord/pyproject.toml",
+   "line": "8-65",
+   "title": "Dead flake8/pylint/pycodestyle config blocks for tools that are never installed or run",
+   "evidence": "pyproject.toml configures [tool.pycodestyle] (line 8), [tool.flake8] (line 17) and [tool.pylint] (line 34) with ~58 lines of ignore-lists. None of these linters appear in requirements-dev.txt (only ruff==0.15.4, pre-commit), none are invoked in any workflow under .github/workflows/ (tests.yml line 57 + repo-hygiene.yml line 21 run only `ruff check`), and .pre-commit-config.yaml only runs ruff/detect-secrets. The project standardized on ruff (CLAUDE.md: 'Ruff 0 errors'). These three config blocks are stale and mislead contributors into believing flake8/pylint gate the repo.",
+   "fix_proposal": "Delete the [tool.pycodestyle], [tool.flake8], and [tool.pylint] sections (lines 8-65). All their concerns are already expressed in [tool.ruff.lint] ignore/select. Keeps one source of truth for linting.",
+   "effort": "trivial",
+   "why": "Stale tool config invites confusion and accidental divergence (someone tweaks the flake8 ignore-list expecting it to take effect; it never runs).",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "I attempted to refute by checking whether flake8/pylint/pycodestyle are installed or invoked anywhere. They are not: requirements-dev.txt lists only ruff==0.15.4 and pre-commit==4.5.1; grep across .github/ and .pre-commit-config.yaml found zero references to flake8/pylint/pycodestyle; no requirements*.txt references them. So the three [tool.*] blocks in pyproject.toml (lines 8-65) are genuinely dead config. The finding stands as stated \u2014 I could not refute it. It is, however, purely cosmetic: dead config has no runtime or security impact; it cannot cause a wrong number or a failure. The 'misleads contributors' rationale is plausible but speculative.",
+    "ground_truth_check": "Read pyproject.toml lines 1-80 (confirmed [tool.pycodestyle] L8, [tool.flake8] L17, [tool.pylint.format] L34, ruff config begins L67). Inspected requirements-dev.txt (ruff + pre-commit + pytest only). Grepped .github/ workflows and .pre-commit-config.yaml plus requirements*.txt for the three linter names: no hits. CLAUDE.md states the project standardized on Ruff. Not covered by the two prior audits (which addressed CVEs, CSRF, CI gaps, docs drift).",
+    "adjusted_severity": "low"
+   }
+  }
+ ],
+ "dropped": [
+  {
+   "severity": "medium",
+   "dimension": "correctness",
+   "area": "data_pipeline_core",
+   "file": "bot/community_stats_parser.py",
+   "line": "542-548",
+   "title": "R2 stored as raw cumulative (no differential, no marker) when the R1 file cannot be found",
+   "evidence": "When find_corresponding_round_1_file returns None, the parser logs a warning and does `result = self.parse_regular_stats_file(round_2_file_path); result['round_num'] = 2; return result` (lines 545-548). This result is the CUMULATIVE R1+R2 file content and, unlike the real differential path (line 975 sets 'differential_calculation': True), carries no flag distinguishing it from a genuine R2. It is inserted into rounds/player_comprehensive_stats identically to a normal R2 (round_status ends up 'completed'; DB shows no 'orphan_r2'/'abandoned' status \u2014 only completed/cancelled/substitution exist). The only protection observed is per-query: leaderboard_cog.py guards with `NOT (round_number=2 AND NOT EXISTS (R1 same map+session))`. Consumers that do not replicate that guard (website endpoints, skill rating, records, session aggregators) read the inflated cumulative R2 totals. This is the parser-level root cause of the orphan-R2 inflation noted in docs/AUDIT_2026-05-29; the new angle is that there is no DB-level marker so each consumer must re-implement the guard.",
+   "why": "Directly undermines the 'no fabricated numbers' invariant for any consumer lacking the ad-hoc orphan-R2 filter; a cumulative R2 roughly doubles a player's per-round kills/damage/time for that round.",
+   "fix_proposal": "Persist an explicit marker on the round when the differential could not be computed (e.g. round_status='orphan_r2' or a boolean is_cumulative_r2 column) and have all stat consumers exclude or correct such rows centrally, instead of relying on each query's NOT EXISTS subquery.",
+   "effort": "medium",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "The code behavior is genuine and I confirmed every claim: parser lines 542-548 store cumulative R2 as a round_num=2 result with no differential flag when R1 is missing; the DB has 36 such orphan R2 rounds all at round_status='completed' with no marker on the rounds table; and only leaderboard_cog carries the NOT EXISTS orphan guard while skill_rating/records/sessions consumers (round_number>0 or round_status-only filters) read the inflated cumulative totals. So I cannot refute the technical substance. What I CAN refute is the novelty: this is a near-verbatim re-report of FM4 in docs/AUDIT_2026-05-29.md (already marked VERIFIED/High), which cites the identical parser:541-548 lines, quantifies the same ~+23-26% inflation, and already proposes both the is_orphan_r2 marker AND the refined fix of reusing round_correlations linkage. The finding's advertised 'new angle' (no DB marker, per-consumer guard duplication) is itself already discussed in that audit. Minor inaccuracy: a partial DB-level orphan marker DOES exist (round_assemblies.orphan_r2, round_correlations.r1_round_id IS NULL) \u2014 just not on the rounds table.",
+    "ground_truth_check": "Read bot/community_stats_parser.py:500-609 (orphan path 542-548, real diff flag at 975). Grepped round_status/orphan markers across bot/, website/backend/, schema, migrations. Confirmed rounds.round_status has no orphan value; round_assemblies.orphan_r2 and round_correlations.r1_round_id exist as separate correlation-layer markers. DB queries: round_status distribution (2498 completed/151 cancelled/15 substitution) and 36 orphan R2 rounds (R2 with no R1 same map+session). Verified only leaderboard_cog applies the NOT EXISTS guard; skill_rating_service uses round_number>0 only; records_seasons/sessions_router use round_status filter only. Read docs/AUDIT_2026-05-29.md lines 224-394 \u2014 FM4 already documents this exact issue (same lines, same inflation, same proposed fix and refinement).",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "performance",
+   "area": "data_pipeline_core",
+   "file": "bot/services/round_correlation_service.py",
+   "line": "256-263, 294-303",
+   "title": "round_correlations.map_name has no index; Strategy 1/2 lookups seq-scan + sort on every pipeline event",
+   "evidence": "_find_nearby_correlation_id runs `SELECT correlation_id, match_id, r1_round_id FROM round_correlations WHERE map_name = ? ORDER BY created_at DESC LIMIT 20` (and a second variant for Strategy 2). schema_postgresql.sql defines only idx_round_corr_match_id, idx_round_corr_status, and the r1_r2 partial unique index \u2014 there is NO index on map_name nor on created_at. This query fires once per source event (on_round_imported / on_lua_teams_stored / on_gametime_processed / on_endstats_processed / on_proximity_imported), i.e. 4-8+ times per match, each doing a full seq scan of round_correlations plus a sort. Verified table size via DB: round_correlations = 799 rows.",
+   "fix_proposal": "Add `CREATE INDEX idx_round_corr_map_created ON round_correlations (map_name, created_at DESC);` to back both the WHERE filter and the ORDER BY/LIMIT. Honest caveat: at 799 rows (and ~50 rows/month growth) the current seq scan costs sub-millisecond, so this is a cleanliness/forward-proofing change, not a live bottleneck \u2014 do not treat as urgent.",
+   "effort": "trivial",
+   "why": "A repeatedly-queried column on a hot pipeline path lacks an index; the fix is one btree, but impact at current scale is negligible.",
+   "_verify": {
+    "is_real": false,
+    "confidence": "high",
+    "refutation": "The factual claims are all correct (code matches, no map_name/created_at index exists), but there is no real performance defect. At 799 rows the Postgres planner seq-scans regardless of any index \u2014 a btree on such a tiny table would not even be used \u2014 so the proposed fix is a no-op in practice. The reviewer themselves admit it is sub-millisecond and 'not urgent, do not treat as a live bottleneck.' Growth is ~50 rows/month, so even years out the table stays trivially small. Per project anti-over-engineering guidance (judge against real ~50-user scale, do not forward-proof), this is a cleanliness suggestion, not an issue worth acting on.",
+    "ground_truth_check": "Read bot/services/round_correlation_service.py lines 240-320: confirmed both queries (Strategy 1 SELECT ... WHERE map_name=? ORDER BY created_at DESC LIMIT 20, and Strategy 2 with has_r1_stats/has_r2_lua_teams filter LIMIT 5) exist verbatim. Grepped tools/schema_postgresql.sql for round_correlations indexes: only idx_round_corr_match_id (7557), idx_round_corr_status (7564), partial unique round_correlations_r1_r2_unique (8110), PK, and FK indexes \u2014 confirmed NO index on map_name or created_at. Checked migrations/: 051 adds r1/r2_round_id indexes, 036 adds match_id/status, none on map_name. Table size 799 rows accepted as stated.",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "performance",
+   "area": "data_pipeline_core",
+   "file": "bot/core/substitution_detector.py",
+   "line": "164-175, 202-213",
+   "title": "SubstitutionDetector scans entire player_comprehensive_stats twice via unindexed round_date LIKE (currently dead code)",
+   "evidence": "_get_player_activity and _get_round_rosters both run `... FROM player_comprehensive_stats WHERE round_date LIKE $1` with param f\"{session_date}%\". player_comprehensive_stats has indexes only on player_guid (idx_player_stats_guid) and round_id (idx_player_stats_round) \u2014 there is no index on round_date, so each call is a full seq scan (DB shows pcs = 17,376 rows), and analyze_session_roster_changes triggers two such scans per invocation. This also violates the project convention of scoping by gaming_session_id rather than dates. A repo-wide grep found NO callers of analyze_session_roster_changes / _get_round_rosters / adjust_team_detection_for_substitutions / SubstitutionDetector outside this module, so it is presently unreachable dead code.",
+   "fix_proposal": "If/when this module is wired up, scope queries by gaming_session_id (join rounds) instead of `round_date LIKE`, or add an index on player_comprehensive_stats(round_date). Until then, prefer deleting the unused module to avoid resurrecting a full-scan pattern. No action needed for live performance since it is not invoked.",
+   "effort": "small",
+   "why": "The query pattern would full-scan the largest pipeline table twice, but it is currently dead code so there is zero runtime impact today.",
+   "_verify": {
+    "is_real": false,
+    "confidence": "high",
+    "refutation": "All technical facts verified accurate, but as a PERFORMANCE finding it self-refutes: the module is dead code (no production callers), so the unindexed round_date LIKE scans never execute and runtime impact is zero. Verified substitution_detector.py:164-175 and :202-213 query player_comprehensive_stats WHERE round_date LIKE $1; pcs has only idx_player_stats_guid and idx_player_stats_round (no round_date index); grep finds only tests calling pure-logic methods, no production caller of the DB-scanning path. Real issue is a minor cleanup/dead-code nit, not a performance problem; the reviewer itself concedes zero runtime impact.",
+    "ground_truth_check": "Read substitution_detector.py 1-230 (both LIKE queries confirmed). Grepped repo: analyze_session_roster_changes/_get_round_rosters/adjust_team_detection_for_substitutions/SubstitutionDetector appear only in the module and tests/unit/test_substitution_detector.py (pure-logic, MagicMock db). Schema: pcs indexed on player_guid and round_id only; round_date indexed only on rounds table (idx_rounds_date). Facts hold; performance classification does not since code never runs.",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "correctness",
+   "area": "god_files_backend",
+   "file": "postgresql_database_manager.py",
+   "line": "2071-2110",
+   "title": "gaming_session_id gap computed against the GLOBAL latest round, not the chronological neighbor \u2014 out-of-order/backfill imports mislabel sessions",
+   "evidence": "`_get_or_create_gaming_session_id` selects the single most-recent stored round (`ORDER BY round_date DESC, round_time DESC LIMIT 1`) and computes `gap_minutes = (current_datetime - last_datetime)/60`, then `if gap_minutes > 60: new session else: continue last_gaming_session_id`. This is only correct when files arrive in strict chronological order. If a round OLDER than the latest stored round is imported (delayed file, re-import, or a backfill run), the gap is negative, so `gap_minutes > 60` is False and the old round is silently assigned the *newest* gaming_session_id (line 2110). Because the INSERT uses `ON CONFLICT (match_id, round_number) DO UPDATE SET gaming_session_id = EXCLUDED.gaming_session_id` (line 2185), a re-import can also overwrite a previously-correct session id with the wrong one. Session-scoped stats group by gaming_session_id, so a mislabeled round inflates/contaminates whichever session it lands in.",
+   "fix_proposal": "Compute the session boundary relative to the chronological neighbor of the round being inserted, not the global max: query the nearest round with `round_datetime < current` (and optionally the nearest after) and assign/split based on that gap; if a round lands between two existing rounds of different sessions, derive the id from its neighbors rather than always appending to the latest. At minimum, guard against negative gaps (treat |gap|>threshold or any backward jump as 'needs explicit session resolution') and log a warning instead of silently continuing the latest session.",
+   "effort": "medium",
+   "why": "Live in-order imports are fine, but any backfill/re-import or delayed file can silently bucket rounds into the wrong gaming session, corrupting per-session aggregates that the whole site keys on.",
+   "external_ref": "",
+   "_verify": {
+    "is_real": false,
+    "confidence": "high",
+    "refutation": "The code at postgresql_database_manager.py:2071-2110 does compute the 60-min gap against the GLOBAL latest stored round (ORDER BY round_date DESC, round_time DESC LIMIT 1) rather than the chronological neighbor, so the algorithm is fragile in the abstract. But every actual code path feeds files chronologically and re-imports are guarded, refuting the finding's concrete harms: (1) Live monitor iterates `for filename in sorted(remote_files)` (bot/services/monitor_tasks_mixin.py:202); filenames are YYYY-MM-DD-HHMMSS-prefixed (regex at line 2152), so lexical sort == chronological, and across cycles only newer files appear. (2) Bulk import sorts: `all_files = sorted(self.stats_dir.glob('*.txt'))` (line 2713) \u2014 the 'backfill run' does not process out of order. (3) Rebuild wipes then runs the sorted import. (4) Re-imports are skipped before reaching _create_round_postgresql by is_file_processed (line 1515) and the payload-hash duplicate check (line 1521), so the claimed ON CONFLICT overwrite of a prior-correct gaming_session_id cannot be triggered via re-import. The only residual case \u2014 a delayed game-server file arriving later with an older-by->60min timestamp \u2014 is theoretically possible but unproven and implausible for sequential round emission. Net: a valid hardening suggestion (add a negative-gap guard), not a proven active corruption bug.",
+    "ground_truth_check": "Read _get_or_create_gaming_session_id (lines 2055-2114) and confirmed the global-max query and gap logic exactly as cited. Read _create_round_postgresql (2116-2219): confirmed ON CONFLICT (match_id, round_number) DO UPDATE SET gaming_session_id = EXCLUDED.gaming_session_id at line 2185 and the timestamp-prefixed filename regex at line 2152. Read process_file (1489-1608): confirmed is_file_processed skip at line 1515 and hash-duplicate skip at line 1521 occur before round creation. Read import_all_files (2695-2740): confirmed sorted glob at line 2713. Read monitor_tasks_mixin.py:198-217: confirmed sorted(remote_files) iteration in the live SSH poll. Grepped for file-iteration/sort sites across bot/cogs, bot/core, bot/services.",
+    "adjusted_severity": "low"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "performance",
+   "area": "god_files_backend",
+   "file": "/home/samba/share/slomix_discord/bot/services/session_view_handlers.py",
+   "line": "245-278",
+   "title": "Per-round N+1 in _get_round_timing_shadow compat path",
+   "evidence": "After fetching all rounds for a session in one query (line 240), the loop calls `await self.timing_shadow_service.fetch_stats_file_data(round_id)` (line 256) and `await self.timing_shadow_service.fetch_lua_data(round_id, ...)` (line 269) once per round \u2014 up to ~2 DB round-trips per round (a session is typically 10-30 rounds). This is only the compatibility fallback (used when the service lacks compare_session) and runs from a paced Discord command, so latency is hidden behind Discord interaction time, not a web hot path.",
+   "fix_proposal": "Batch both lookups: fetch all stats-file and lua-timing rows for the round_id set in two `WHERE round_id IN (...)` queries (round_id is indexed via idx_lua_round_teams_round_id / idx_player_stats_round), then index the results into dicts and iterate in memory.",
+   "effort": "small",
+   "why": "Turns 2N serial round-trips into 2 queries; minor today but tidies a clear N+1 in the timing path.",
+   "_verify": {
+    "is_real": false,
+    "confidence": "high",
+    "refutation": "The N+1 loop at lines 245-301 is unreachable under production wiring, so it has no performance impact. Both consumers (bot/cogs/session_cog.py:54-65 and bot/cogs/last_session_cog.py:46-65) construct SessionViewHandlers with timing_shadow_service = SessionTimingShadowService. That class (bot/services/session_timing_shadow_service.py) exposes compare_session/get_player_summary/get_player_rounds and internal _fetch_* helpers but NOT fetch_lua_data or fetch_stats_file_data. In _get_round_timing_shadow, line 228 checks hasattr(self.timing_shadow_service, 'fetch_lua_data') and, finding it False, returns early at line 230 ('Timing service does not expose round comparison data') BEFORE entering the loop. The methods fetch_lua_data/fetch_stats_file_data live only on TimingComparisonService (timing_comparison_service.py:121,199), which grep confirms is never passed into SessionViewHandlers. The three preferred-API method names tried at lines 194-198 also exist on no service. Thus the cited loop is dead code in practice; the finding's claim that it 'runs from a paced Discord command' is incorrect.",
+    "ground_truth_check": "Read session_view_handlers.py lines 150-311 (the full _get_round_timing_shadow function). Grepped method definitions in session_timing_shadow_service.py and timing_comparison_service.py: fetch_lua_data/fetch_stats_file_data exist only on TimingComparisonService. Grepped all timing_shadow_service bindings and SessionViewHandlers instantiations: only SessionTimingShadowService is wired (session_cog.py, last_session_cog.py). Confirmed last_session_cog.py:47,65 passes bot.session_timing_shadow_service (a SessionTimingShadowService) which lacks fetch_lua_data, triggering early return at line 230.",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "high",
+   "dimension": "ux",
+   "area": "god_files_frontend",
+   "file": "website/js/app.js",
+   "line": "18,31",
+   "title": "sessions.js and availability.js loaded without ?v= cache-bust while peers have it (stale-module SPA breakage)",
+   "evidence": "In app.js the module graph is cache-busted inconsistently: line 24 `import {...} from './proximity.js?v=20260623-aimlock'`, line 55 `'./session-detail.js?v=20260513-v142-cf-bust'`, line 54 sessions2.js with `?v=`, line 13 utils.js with `?v=`. But line 18 `from './sessions.js'` and line 31 `from './availability.js'` have NO version query (also leaderboard.js, matches.js, home.js, tonight.js). ES-module specifiers do not inherit the entry file's `?v=`, so these are fetched at their bare URL. Per the team's own postmortem (memory: incident_2026-06-25_missing_js_modules.md), Cloudflare caches JS for 24h with a fixed key and a single stale/404 ES module silently halts app.js, leaving hard-coded 'Offline' / empty cards. sessions.js (home Last-Session widget + the entire Sessions browser) and availability.js (the 'evening is the product' core surface) are exactly the modules most damaging to serve stale.",
+   "fix_proposal": "Adopt one consistent versioning scheme for ALL local ES-module import specifiers in app.js (and nested imports), bumped per release \u2014 e.g. append the same `?v=<release>` to every `./*.js` specifier, or generate the import map at build/deploy. At minimum add `?v=` to sessions.js and availability.js to match their peers. Confirm the deploy script (scripts/etl_update.sh / deploy_release.sh) rewrites every specifier, not just app.js.",
+   "effort": "small",
+   "_verify": {
+    "is_real": false,
+    "confidence": "high",
+    "refutation": "The finding claims sessions.js/availability.js ship without cache-busting while \"peers have it,\" risking stale-module SPA breakage. This is refuted by the deploy pipeline. scripts/deploy_release.sh step 3b (lines 299-308) auto-injects ?v=$SHA into EVERY bare local import/src specifier across all website/js/*.js and index.html at deploy time. Lines 303-306 run: (1) sed bumping any existing ?v= to ?v=$SHA, and (2) sed injecting ?v=$SHA into bare specifiers via regexes that explicitly cover `from './x.js'`, `from \"./x.js\"`, `import './x.js'`, `import \"./x.js\"`. So `from './sessions.js'` and `from './availability.js'` both receive ?v=$SHA on every release. The committed-source inconsistency is cosmetic (only ~10 of 32 imports carry a manual ?v= from recent dev; the OTHER 22 also lack one \u2014 so the \"peers have it\" framing is inaccurate, the majority lack it). The deployed artifact is uniformly versioned. The referenced 2026-06-25 incident was a PARTIAL deploy with 4 missing files (404s), not stale unversioned modules; its remediation was to use clean deploy_release.sh \u2014 the exact script that already implements the proposed fix.",
+    "ground_truth_check": "Read website/js/app.js lines 1-70 (confirmed line 18 sessions.js and line 31 availability.js have no ?v=, and ~22 of 32 local imports lack ?v=). Confirmed index.html line 4889 loads app.js?v=20260623-aimlock. Inspected scripts/deploy_release.sh lines 242-308: step 3b sed commands inject ?v=$SHA into all website/js/*.js bare imports + index.html src refs every release. etl_update.sh is the game-server updater (unrelated to web JS).",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "ux",
+   "area": "god_files_frontend",
+   "file": "website/frontend/src/pages/Sessions2.tsx",
+   "line": "n/a",
+   "title": "Triple-implemented sessions surface (legacy x2 + React) \u2014 page proliferation with no canonical owner",
+   "evidence": "The sessions surface exists three times: js/sessions.js (2343 lines), js/sessions2.js (356 lines, the redesign) and frontend/src/pages/Sessions2.tsx; session detail twice (js/session-detail.js 3740 lines + SessionDetail.tsx); proximity in js/proximity.js (4573 lines) plus Proximity.tsx/ProximityPlayer.tsx/ProximityTeams.tsx/ProximityReplay.tsx; availability in js/availability.js (2415 lines) + Availability.tsx. frontend/src/pages has 26 files mirroring the legacy JS that CLAUDE.md/memory designate as the production surface. This is exactly the 'no page proliferation' anti-goal: every feature change risks being made in one surface and silently diverging in the others (e.g. the cache-bust split above already left proximity/session-detail versioned but sessions un-versioned).",
+   "fix_proposal": "Declare legacy js/* the canonical surface (per project memory feedback_no_react_build) and (a) document which React pages are actually mounted vs dead mirrors, (b) delete or clearly archive the unmounted React mirrors and the older of sessions.js/sessions2.js, (c) add a CONTRIBUTING note that the sessions/availability/proximity surfaces have a single owning file. Do NOT introduce a React build step; this is a removal/consolidation task.",
+   "effort": "large",
+   "_verify": {
+    "is_real": false,
+    "confidence": "medium",
+    "refutation": "The file inventory is factually accurate (line counts and 26 .tsx mirrors confirmed), but this is not a provable defect \u2014 it restates a known, deliberately-chosen architecture. backend/main.py:372-373 mounts website/ and serves website/index.html; there is no frontend/dist or build, so the React .tsx files are dead/unbuilt mirrors that no production user ever loads (zero actual UX impact, contradicting the medium/ux rating). The dual surface is explicitly documented in CLAUDE.md, project memory (feedback_no_react_build, react-migration, feedback_spa_urls) AND in the audit's own context block ('Legacy JS is PRODUCTION; React is secondary'), so the auditors already know about it. The 'silent divergence' risk is speculative \u2014 no concrete divergence bug is proven; the only concrete example (cache-bust versioning) is a recent last-month nit out of scope for this full-history pass. The 'no page proliferation' anti-goal targets NEW user-facing pages, not invisible strangler-migration leftovers. At most this is accepted tech debt, not a finding.",
+    "ground_truth_check": "Listed website/frontend/src/pages/ (26 files incl Sessions2.tsx, SessionDetail.tsx, Proximity*.tsx, Availability.tsx). wc -l confirmed legacy line counts (sessions.js 2343, sessions2.js 356, session-detail.js 3740, proximity.js 4573, availability.js 2415). Checked backend/main.py: static mount of website/ (line 372-373) + FileResponse on website/index.html (335-336); no frontend/dist or frontend/build exists -> React not built/served. git ls-files confirms both Sessions2.tsx and sessions2.js are tracked; last commit touching any frontend tsx was 2026-06-02 (#358 hygiene chore, not active feature dev). Cross-referenced CLAUDE.md and memory notes documenting legacy-as-production / React-secondary as a deliberate decision.",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "ux",
+   "area": "god_files_frontend",
+   "file": "website/js/sessions.js",
+   "line": "1111-1116",
+   "title": "Session MVP widget ignores its date argument and always fetches the global session leaderboard",
+   "evidence": "`export async function loadSessionMVP(sessionDate)` declares sessionDate but never uses it; it fetches `${API_BASE}/stats/session-leaderboard?limit=1` (sessions.js:1116) with no scope param. It is invoked as `loadSessionMVP()` from renderSessionDetails (sessions.js:685). So the 'Session MVP' shown beneath a specific session's charts is whatever the global/last session-leaderboard returns, not necessarily the MVP of the session being rendered \u2014 a silent scope mismatch.",
+   "fix_proposal": "Either pass and apply the session scope (e.g. session_id/date) to the session-leaderboard request so the MVP matches the rendered session, or remove the unused parameter and rename/label the widget to reflect it is the latest-session MVP.",
+   "effort": "small",
+   "_verify": {
+    "is_real": false,
+    "confidence": "high",
+    "refutation": "The unused-parameter observation is correct (sessions.js:1111 declares sessionDate but never uses it; line 1116 fetches session-leaderboard?limit=1 unscoped), but the asserted bug does not occur. The session-mvp-widget is only produced by renderSessionDetails (HTML at sessions.js:339), invoked from a single caller loadLastSession() (sessions.js:241), which fetches /stats/last-session, i.e. it only renders the LATEST gaming session. The separate browse view loadSessionsView/loadSessions never uses this widget. On the backend, session-leaderboard with no session_id falls back to get_latest_session_date() (sessions_router.py:371-377), returning the LATEST session leaderboard, not a global/all-time aggregate as the title claims. So the rendered session and the fetched MVP always coincide; no silent scope mismatch and no wrong data. The dead sessionDate parameter is a trivial cosmetic nit only.",
+    "ground_truth_check": "Read sessions.js:1111-1154 (loadSessionMVP): sessionDate unused, fetch unscoped. Read sessions.js:660-688: loadSessionMVP() called inside renderSessionDetails with no arg. grep confirmed renderSessionDetails called only at sessions.js:241 from loadLastSession() which fetches /stats/last-session (latest session). DOM id session-mvp-widget appears only at sessions.js:339 (inside renderSessionDetails), not in the loadSessionsView/loadSessions browse path. Read sessions_router.py:346-392: with session_id None the endpoint uses get_latest_session_date() (latest session), not an all-time aggregate.",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "maintainability",
+   "area": "god_files_frontend",
+   "file": "website/js/proximity.js",
+   "line": "74",
+   "title": "normalizeMapKey() has the same name but different semantics in proximity.js vs the session modules",
+   "evidence": "proximity.js:74 defines `normalizeMapKey(m){ return stripEtColors(m||'').trim().toLowerCase(); }` \u2014 only lowercase/trim. sessions.js:58, session-detail.js:77, and sessions2.js:56 define a same-named function that ALSO strips `maps/` prefixes, `.bsp/.pk3/.arena` suffixes, and slugifies non-alphanumerics to underscores. Two functions with an identical name but materially different output is a maintenance trap: any developer (or future shared-helper extraction) who assumes they are interchangeable will introduce a map-keying mismatch bug.",
+   "fix_proposal": "Rename proximity.js's variant to reflect its narrower contract (e.g. normalizeProxMapName) or, preferably, consolidate to the canonical slug version in the shared maps.js module and have proximity call it explicitly. At minimum add a one-line comment documenting why proximity needs different behavior.",
+   "effort": "small",
+   "why": "Same-name/different-behavior helpers are exactly what makes a refactor that 'should be safe' break in production.",
+   "_verify": {
+    "is_real": false,
+    "confidence": "high",
+    "refutation": "The textual observation is accurate (proximity.js:74 is lowercase/trim only; sessions.js:58, session-detail.js:77, sessions2.js:56 slugify), but the claimed hazard is refuted. All four files are ES modules imported in website/js/app.js (lines 18/24/54/55), and normalizeMapKey is NOT exported from any of them. It is therefore strictly module-private in each file \u2014 no global shadowing, no runtime collision, and no way to accidentally use the wrong one. The 'refactor that should be safe will break' scenario cannot occur via the module system; it would require a developer to deliberately copy/export code. Additionally, the proposed fix points to a 'shared maps.js module' that does not exist in website/js/. The remaining concern is a purely cosmetic same-name nit, far below medium severity, and forced consolidation runs against the project's anti-overengineering north star.",
+    "ground_truth_check": "Read proximity.js:74-76 (stripEtColors+trim+lowercase) and sessions.js:58-70 (full slugify). Confirmed identical pattern in session-detail.js and sessions2.js via grep. Verified app.js imports all four as ES modules (import statements at lines 18,24,54,55). grep confirmed normalizeMapKey is never exported in any of the four files. Confirmed website/js/maps.js does not exist. Confirmed index.html loads only app.js/inline-actions.js/diagnostics.js/lucide-init.js as script tags; the proximity/session files load via module imports, each with its own scope.",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "maintainability",
+   "area": "dual_frontend_debt",
+   "file": "docs/AI_COMPREHENSIVE_SYSTEM_GUIDE.md",
+   "line": "n/a",
+   "title": "Docs/memory claim 'React migration COMPLETE \u2014 19/19 routes' but ground truth is 4 of 29 routes served by React",
+   "evidence": "CLAUDE.md memory index says 'react-migration.md \u2014 React 19 strangler migration (COMPLETE \u2014 19/19 routes)'. Ground truth: website/js/route-registry.js has 25 routes VIEW_MODE.LEGACY and only 4 VIEW_MODE.MODERN. Production entry is the legacy website/index.html (4894 lines) + website/js/ static mount (backend/main.py:335-336,372-373), not a React app. The corrective in-repo note feedback_no_react_build.md ('legacy JS je produkcija, ne React') exists precisely because the 'complete' claim is misleading.",
+   "fix_proposal": "Update the guide/memory to the real state: 'Hybrid frontend \u2014 legacy vanilla JS in website/js/ is canonical/served; React covers 4 routes only (proximity player/replay/teams + skill-rating); migration is paused, not complete.' Accurate docs stop future devs from editing unreachable React files.",
+   "effort": "trivial",
+   "_verify": {
+    "is_real": false,
+    "confidence": "high",
+    "refutation": "The finding's core kernel (route-registry.js has 4 MODERN vs 25 LEGACY routes; legacy vanilla JS is the served production surface) is verifiable, but the finding itself does not hold up as written. (1) The cited file docs/AI_COMPREHENSIVE_SYSTEM_GUIDE.md contains NO React/migration/\"19/19\"/\"strangler\" text whatsoever (grep empty) \u2014 the primary citation is false. (2) The \"19/19 routes complete\" claim actually refers to the standalone website/frontend/ React SPA (which genuinely migrated 19 routes, now 25 pages), a DIFFERENT surface from the website/js/ route-registry MODERN/LEGACY embed split. The finding conflates two distinct React contexts, so \"ground truth is 4 of 29\" is a category mismatch, not a contradiction. (3) Where the claim does live in-repo \u2014 docs/ARCHITECTURE_AUDIT_2026-03-20.md:119 (a dated/frozen audit) and docs/PRODUCT_MAP.md:167 \u2014 PRODUCT_MAP already supplies accurate nuance. (4) The \"CLAUDE.md memory index\" quote is actually the user's private auto-memory file, not a repo artifact. This is a trivial documentation-drift nit, not a code/data/security issue.",
+    "ground_truth_check": "Verified route-registry.js: 4 VIEW_MODE.MODERN (lines 168,181,194,291), 25 VIEW_MODE.LEGACY. Confirmed website/backend/main.py:335 serves website/index.html and :373 mounts website/ static dir (legacy is production). Grepped docs/AI_COMPREHENSIVE_SYSTEM_GUIDE.md for react/frontend/19-19/strangler/migration \u2014 zero hits, so the cited file does not contain the claim. Located the actual \"19/19\" claims in docs/ARCHITECTURE_AUDIT_2026-03-20.md:119, docs/PRODUCT_MAP.md:167, CHANGELOG.md (auto-gen frozen). Confirmed prior audit docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md M3 (line 77) already covers \"Docs drift vs ground truth\" as a backlog category.",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "security",
+   "area": "ci_backlog_security",
+   "file": "requirements.txt",
+   "line": "11",
+   "title": "python-multipart still pinned to vulnerable 0.0.22 (CVE-2026-40347 / CVE-2026-42561) \u2014 backlog item from #399 still open",
+   "evidence": "requirements.txt:11 pins `python-multipart==0.0.22`. git log shows the 2026-06-15 audit remediation (commit 09d4e91, PR #399) bumped only Pillow/python-dotenv/pytest and explicitly deferred multipart (docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md:47 lists 0.0.22 \u2192 fix 0.0.27, 'med \u2014 test before bump'). 13 days later the pin is unchanged. python-multipart is the body parser FastAPI uses for the public upload endpoints: website/backend/routers/uploads.py:81-92 (`@router.post(\"\")`, `file: UploadFile = File(...)`) and website/backend/routers/greatshot.py. The multipart body is parsed at the framework layer (to populate `File(...)`) before the in-handler `require_ajax_csrf_header`/`_require_user` checks at uploads.py:92-93 run, so a malformed/abusive multipart payload reaches the vulnerable parser pre-auth.",
+   "fix_proposal": "Bump `python-multipart==0.0.27` in requirements.txt, run the upload test suite (tests covering uploads.py / greatshot.py) to confirm FastAPI 0.133.1 compatibility, then deploy. This is the lower-risk half of the H1 backlog (starlette is the higher-risk half \u2014 see separate finding).",
+   "effort": "small",
+   "why": "Public, internet-facing upload endpoints feed untrusted multipart bodies straight into a parser with two assigned CVEs; the fix is a one-line pin bump with an available patched release.",
+   "external_ref": "CVE-2026-40347, CVE-2026-42561; docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md (H1)",
+   "_verify": {
+    "is_real": true,
+    "confidence": "medium",
+    "refutation": "The factual core is accurate but this is NOT a new finding \u2014 it is a verbatim re-report of an item the prior audit already owns. requirements.txt:11 confirms `python-multipart==0.0.22` is still pinned, and the 2026-06-15 audit (WHOLE_CODEBASE_AUDIT_2026-06-15.md:47-52, H1) already lists this exact package/version/CVE pair (CVE-2026-40347, CVE-2026-42561), the exact fix target (0.0.27), the exact reason for deferral ('med \u2014 FastAPI 0.133.1 dep graph; test before bump'), and explicitly places it in the 'Owner-gated backlog' (line 126-128: 'H1 multipart+starlette (FastAPI upgrade + compat test)'). The instructions state: 'If a prior audit already covers it, mark drop.' This is squarely covered. The only added 'depth' is the pre-auth parsing argument (multipart body parsed at framework layer before in-handler CSRF/auth checks at uploads.py:92-93). That is technically plausible but is a generic property of all FastAPI File(...) endpoints, not a Slomix-specific code defect, and does not change the remediation (still a one-line pin bump gated on a FastAPI compat decision the owner already chose to defer). Note: the two cited CVE IDs are post my knowledge cutoff (Jan 2026), so I rely on the prior audit's pip-audit signal rather than independent confirmation of their existence/severity.",
+    "ground_truth_check": "Read requirements.txt \u2014 line 11 confirmed `python-multipart==0.0.22` (also starlette is transitive via fastapi==0.133.1, not pinned directly here). Read docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md in full \u2014 H1 table (lines 39-52) and remediation plan (lines 120-128) already document this exact item as deferred owner-gated backlog, with the safe subset (Pillow/python-dotenv/pytest) shipped and multipart/starlette explicitly held for a FastAPI-version bump + compat test. The finding's own evidence even cites this same audit doc, confirming it is a duplicate. Could not independently verify CVE-2026-40347/CVE-2026-42561 (post knowledge cutoff).",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "security",
+   "area": "ci_backlog_security",
+   "file": ".github/workflows/tests.yml",
+   "line": "56-69",
+   "title": "No dependency-CVE scanning in CI (no pip-audit, no dependabot) \u2014 root cause that lets pinned CVEs persist silently",
+   "evidence": "The CI workflow (tests.yml) runs only `ruff check bot/ website/backend/` (line 57) and pytest (line 69); there is no pip-audit / dependabot / safety step. No `.github/dependabot.yml` exists (verified: 'no dependabot'). mypy is fully configured in pyproject.toml:150-166 but is never invoked by any workflow (.github/workflows/*.yml). codeql.yml scans source but not the dependency manifest for known CVEs. This is the exact gap the prior audit flagged (WHOLE_CODEBASE_AUDIT_2026-06-15.md:51 '5 Whys: no pip-audit/dependabot in CI \u2192 CVEs land silently' and M1 at line 68-71) and it is still unaddressed \u2014 which is precisely why the multipart 0.0.22 pin survived a release cycle.",
+   "fix_proposal": "Add a lightweight `pip-audit -r requirements.txt -r requirements-dev.txt` step to tests.yml (or commit a minimal `.github/dependabot.yml` for the pip ecosystem, weekly). Optionally add `mypy bot/ website/backend/ --explicit-package-bases` as a non-blocking job since the config already exists. No new infra needed \u2014 fits the small-community scale.",
+   "effort": "small",
+   "why": "Without a manifest scanner, every future dependency CVE lands unnoticed exactly as the multipart one did; one CI step closes the feedback loop cheaply.",
+   "external_ref": "docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md (M1, L3)",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "The factual claims are all verifiable and correct: tests.yml runs only `ruff check bot/ website/backend/` (Lint step) and `pytest` \u2014 no pip-audit/safety/dependabot step. `.github/dependabot.yml` does not exist (confirmed: ls returns No such file). codeql.yml installs requirements.txt for analysis but performs source-code CodeQL analysis (security-and-quality queries), NOT a dependency-manifest CVE scan \u2014 so it does not close this gap. mypy is configured in pyproject.toml but invoked by no workflow. So the technical gap is real and proven. HOWEVER, this finding is a duplicate, not new depth: the prior audit WHOLE_CODEBASE_AUDIT_2026-06-15.md already raised it verbatim. Line 51: '5 Whys: no `pip-audit`/dependabot in CI \u2192 CVEs land silently'; M1 at lines 68-71: 'CI has no `pip-audit` (\u2192 H1 went uncaught) ... Fix: add a `pip-audit` (or dependabot) CI step; optionally widen ruff. Backlog.' The finding even cites this as its own external_ref and states 'This is the exact gap the prior audit flagged.' It adds no investigation beyond M1 (the mypy-not-invoked note is incidental). Per the verifier rule 'If a prior audit already covers it, mark drop,' this is covered.",
+    "ground_truth_check": "Read .github/workflows/tests.yml (full): only Lint=ruff and Test=pytest steps; confirmed no pip-audit/safety/dependabot. Confirmed `.github/dependabot.yml` absent via ls. Read .github/workflows/codeql.yml: source CodeQL scan with security-and-quality queries, not a manifest CVE scanner. Listed .github/workflows/ (codeql, publish-images, release, repo-hygiene, tests) \u2014 none run pip-audit. Grepped WHOLE_CODEBASE_AUDIT_2026-06-15.md: lines 51 and 68-71 already document this identical gap as M1 with the same proposed fix, and H1 lists the surviving CVE pins (incl. python-multipart 0.0.22). Finding is technically accurate but a re-report of an existing, already-flagged backlog item.",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "security",
+   "area": "ci_backlog_security",
+   "file": "requirements.txt",
+   "line": "8",
+   "title": "starlette transitive CVE (PYSEC-2026-161) still unpatched \u2014 pinned by fastapi==0.133.1, backlog open",
+   "evidence": "requirements.txt:8 pins `fastapi==0.133.1`, which transitively pins starlette; starlette is not listed in requirements.txt so it cannot be bumped independently. The prior audit (WHOLE_CODEBASE_AUDIT_2026-06-15.md:48) recorded starlette 0.52.1 affected by PYSEC-2026-161 with fix in 1.0.1 requiring a FastAPI major upgrade, classified 'high \u2014 MAJOR'. As of today fastapi==0.133.1 is unchanged, so the underlying starlette remains vulnerable. (Note: the local dev venv reports starlette 0.37.2, an even older build \u2014 a stale environment that does not reflect the production pin, worth aligning.)",
+   "fix_proposal": "Plan a FastAPI upgrade to a release whose starlette floor is >=1.0.1, behind the upload/auth integration tests, then re-pin. Until then, ensure the deployed venv actually resolves the fastapi-mandated starlette (not the stale 0.37.2 seen locally) and track the advisory. Owner-gated due to the major-version compat surface.",
+   "effort": "medium",
+   "why": "A core HTTP framework dependency with a published advisory underlies every web request; the only remediation path is a coordinated FastAPI bump, so it needs to stay tracked rather than silently lapse.",
+   "external_ref": "PYSEC-2026-161; docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md (H1)",
+   "_verify": {
+    "is_real": false,
+    "confidence": "high",
+    "refutation": "Duplicate of prior audit. WHOLE_CODEBASE_AUDIT_2026-06-15.md H1 (line 48) already records starlette 0.52.1 / PYSEC-2026-161, fix in 1.0.1, transitively pinned by fastapi==0.133.1, classified 'high \u2014 MAJOR', and explicitly tracked as a backlog item requiring a FastAPI version bump. This finding re-reports exactly that (and cites the same audit as external_ref) without adding new depth. Its only novel content \u2014 that the local venv shows starlette 0.37.2 \u2014 describes a stale DEV venv, not the production-deployed resolution, so it is not a production vulnerability signal. Task rules say to drop findings already covered by a prior audit unless they go deeper; this one does not.",
+    "ground_truth_check": "Read requirements.txt: line 8 = `fastapi==0.133.1`; starlette absent (transitive) \u2014 confirmed. Ran `pip show fastapi` -> Requires lists starlette (transitive dep confirmed). Ran `pip show starlette` -> 0.37.2 (local dev venv only, not production). Read WHOLE_CODEBASE_AUDIT_2026-06-15.md HIGH section: H1 table line 48 already covers starlette PYSEC-2026-161 with identical remediation guidance and backlog status; the finding cites it directly as external_ref.",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "security",
+   "area": "ci_backlog_security",
+   "file": "tools/migrate_from_samba.py",
+   "line": "53,60",
+   "title": "paramiko AutoAddPolicy (blind host-key trust) still present in dev/ops SSH tools \u2014 MITM on first connect",
+   "evidence": "Production SSH paths correctly enforce strict host-key checking (bot/automation/ssh_handler.py:62 `RejectPolicy()` + load_host_keys; tools/sync_stats.py:40, tools/ssh_monitoring_implementation.py:19, tools/check_missing_rounds.py:18 all use RejectPolicy). However four dev/ops tools still call `set_missing_host_key_policy(paramiko.AutoAddPolicy())`: tools/migrate_from_samba.py:53 and :60, tools/verify_db_sync.py:27, tools/vm_ssh.py:24, tools/sync_from_samba.py:95. AutoAddPolicy silently trusts any unknown host key, so a MITM on first connection to the game/prod host is undetected. This is exactly M2 from the prior audit (WHOLE_CODEBASE_AUDIT_2026-06-15.md:72), still unremediated.",
+   "fix_proposal": "Replace AutoAddPolicy with RejectPolicy + load_system_host_keys()/load_host_keys(~/.ssh/known_hosts) in these four tools, matching the already-correct ssh_handler.py pattern; pre-seed known_hosts via ssh-keyscan as the other tools document. Low priority since these are manually-run dev/ops scripts, not the bot runtime.",
+   "effort": "small",
+   "why": "These scripts connect to the same production hosts that hold game stats and DB; blind key acceptance defeats the strict-host-checking already enforced everywhere else, for no benefit.",
+   "external_ref": "bandit B507; docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md (M2)",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "The code facts are accurate and verifiable: tools/migrate_from_samba.py:53 and :60, tools/verify_db_sync.py:27, tools/vm_ssh.py:24, and tools/sync_from_samba.py:95 all call set_missing_host_key_policy(paramiko.AutoAddPolicy()), while the production paths (bot/automation/ssh_handler.py:62, tools/sync_stats.py:40, tools/ssh_monitoring_implementation.py:19, tools/check_missing_rounds.py:18) correctly use RejectPolicy()+host-key loading. So the technical claim is real. However, this is an exact, already-documented duplicate of M2 from the prior WHOLE_CODEBASE_AUDIT_2026-06-15.md \u2014 same four files, same line numbers (doc line 72-76), same fix recommendation ('switch to RejectPolicy + known_hosts, or document as accepted ops risk. Backlog.'). The finding adds no new depth beyond what the prior audit already filed and consciously deferred as backlog. Per the verification rules ('If a prior audit already covers it, mark drop'), this should be dropped. Real-risk context also caps it: these are manually-run, operator-invoked dev/ops scripts (not bot/web runtime), connecting to hosts the operator already controls, where the operator would notice connection anomalies; first-connect MITM on a 30-50-player community's ops scripts is a marginal threat.",
+    "ground_truth_check": "Grepped all four cited tools and confirmed AutoAddPolicy at the exact lines stated. Grepped the four 'correct' production files and confirmed RejectPolicy + load_system_host_keys/load_host_keys. Grepped docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md: M2 (lines 72-76) covers precisely these four files with identical line numbers and an identical fix/backlog recommendation; bandit B507 row at line 24 also already flags this exact issue.",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "maintainability",
+   "area": "ci_backlog_security",
+   "file": "/home/samba/share/slomix_discord/pyproject.toml",
+   "line": "150-167",
+   "title": "mypy is configured in pyproject and claimed in docs, but is not installed or enforced anywhere",
+   "evidence": "[tool.mypy] with check_untyped_defs/no_implicit_optional/per-module overrides exists at pyproject.toml lines 150-167, and CLAUDE.md:261 states 'Code quality: Ruff 0 errors, 2,989 tests, mypy configured'. However mypy is absent from requirements-dev.txt (pytest*, ruff, pre-commit only), absent from .pre-commit-config.yaml, and never invoked in .github/workflows/tests.yml. So the type-checking the config implies is never actually executed. The prior 2026-06-15 audit noted mypy 'not enforced'; the added depth here is that both a full config block AND a docs claim assert it works, making it affirmatively misleading rather than merely absent.",
+   "fix_proposal": "Pick one: (a) add `mypy==<ver>` to requirements-dev.txt and a `mypy bot/ website/backend/ --explicit-package-bases` step to tests.yml (start non-blocking), or (b) delete the [tool.mypy] block and drop 'mypy configured' from CLAUDE.md:261. Don't leave config + doc claim with no runner.",
+   "effort": "small",
+   "why": "Config/claim without enforcement gives false confidence that type regressions are caught when they are not.",
+   "_verify": {
+    "is_real": true,
+    "confidence": "high",
+    "refutation": "The factual claims are all correct: pyproject.toml:150-167 has a full [tool.mypy] block, mypy is absent from requirements-dev.txt, .pre-commit-config.yaml, and tests.yml, and CLAUDE.md:261 says \"mypy configured\". So the type-checking implied by the config is indeed never executed. BUT this is already covered, with more depth, by the prior 2026-06-15 audit: line 27 (\"mypy | not runnable as-is ... not enforced\"), line 69 (\"no mypy\" in CI), and L3 (\"mypy not enforceable without --explicit-package-bases + __init__ fixes\"). That prior audit even diagnoses the root cause (package-base error / missing __init__), which this finding does not. The finding's only novel angle is that CLAUDE.md \"affirmatively misleads\" \u2014 but \"mypy configured\" is literally accurate (a config block does exist; it does not claim mypy runs or is enforced), so the added depth is thin and the framing is weak. This is a duplicate of an existing audit finding.",
+    "ground_truth_check": "Read pyproject.toml:140-167 (confirmed [tool.mypy] block with overrides). Ran grep for mypy across .txt/.yml/.toml/.cfg/.ini/.sh: only pyproject.toml + an rsync exclude for .mypy_cache. Read requirements-dev.txt (pytest*, ruff==0.15.4, pre-commit==4.5.1 only \u2014 no mypy). Read .pre-commit-config.yaml (pre-commit-hooks, detect-secrets, ruff \u2014 no mypy). Read .github/workflows/tests.yml (steps: ruff check, pytest \u2014 no mypy). grep CLAUDE.md: line 261 \"mypy configured\". grep prior audit docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md: lines 4, 27, 69, 92 all already document mypy not enforced/not runnable with root-cause detail.",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "medium",
+   "dimension": "maintainability",
+   "area": "ci_backlog_security",
+   "file": "/home/samba/share/slomix_discord/.github/workflows/tests.yml",
+   "line": "12-77",
+   "title": "No dependency-vulnerability gate in CI; 2026-06-15 backlog CVEs (multipart, starlette) still unremediated",
+   "evidence": "No .github/dependabot.yml exists and no workflow runs pip-audit (grep over .github/workflows/* and requirements*.txt finds none). As a direct consequence the two backlog CVEs from the 2026-06-15 audit are STILL open on this branch: requirements.txt:11 pins python-multipart==0.0.22 (CVE-2026-40347/42561, fix 0.0.27) and requirements.txt:8 pins fastapi==0.133.1 with no direct starlette pin, so starlette resolves to the transitively-pinned 0.52.1 (PYSEC-2026-161). The 3 low-risk bumps from that audit DID land (Pillow 12.2.0, python-dotenv 1.2.2, pytest 9.0.3), confirming the easy items were done but the gated ones plus the CI gate were not.",
+   "fix_proposal": "Add a lightweight dependabot.yml (pip + github-actions ecosystems) OR a non-blocking `pip-audit -r requirements.txt` CI step so future CVEs surface automatically. Separately, schedule the FastAPI version bump needed to clear multipart/starlette behind a compat test. This is status-tracking of prior M1/H1, not a new vuln.",
+   "effort": "small",
+   "why": "Without an automated gate, CVE pins silently rot (these two have now persisted ~2 weeks past the audit that flagged them).",
+   "_verify": {
+    "is_real": false,
+    "confidence": "high",
+    "refutation": "The technical facts are all true (no dependabot.yml, no pip-audit in any of the 5 workflows, python-multipart==0.0.22, fastapi==0.133.1 with no direct starlette pin, three easy bumps landed), but this is a duplicate of the prior 2026-06-15 audit rather than a new finding. That audit's H1 (lines 39-52) already names python-multipart 0.0.22\u21920.0.27, starlette 0.52.1/PYSEC-2026-161 transitively pinned by fastapi==0.133.1, and flags them as owner-gated backlog needing a FastAPI upgrade + compat test; its M1 (lines 68-71) and 5-Whys (line 51) already prescribe adding a pip-audit/dependabot CI step. The finding adds no new depth \u2014 it merely confirms the documented backlog is still open ~2 weeks later \u2014 and explicitly admits 'This is status-tracking of prior M1/H1, not a new vuln.' Task rules say to drop anything a prior audit already covers.",
+    "ground_truth_check": "Verified: ls .github/dependabot.yml = not found. grep over .github/ shows pip-audit/dependabot only in copilot-instructions.md and codacy.instructions.md docs, never as a workflow step; the 5 workflows are codeql/publish-images/release/repo-hygiene/tests. codeql.yml is CodeQL SAST (python+javascript), not dependency scanning. requirements.txt confirms python-multipart==0.0.22 (l11), fastapi==0.133.1 (l8), no starlette line; Pillow==12.2.0, python-dotenv==1.2.2 present; pytest==9.0.3 in requirements-dev.txt. Prior audit docs/research/WHOLE_CODEBASE_AUDIT_2026-06-15.md lines 39-52, 68-71, 126-127 explicitly cover H1 (multipart/starlette CVEs, backlog) and M1 (no pip-audit/dependabot CI gate).",
+    "adjusted_severity": "drop"
+   }
+  },
+  {
+   "severity": "low",
+   "dimension": "maintainability",
+   "area": "ci_backlog_security",
+   "file": "/home/samba/share/slomix_discord/tools/migrate_from_samba.py",
+   "line": "53,60",
+   "title": "Inconsistent paramiko host-key policy across tools/ (AutoAddPolicy vs RejectPolicy in same directory)",
+   "evidence": "Within tools/, 4 scripts use the insecure paramiko.AutoAddPolicy() (migrate_from_samba.py:53 and :60, vm_ssh.py:24, sync_from_samba.py:95, verify_db_sync.py:27) while 7 sibling scripts use the safe paramiko.RejectPolicy() (ssh_sync_and_import.py:44, check_missing_rounds.py:18, ssh_monitoring_implementation.py:19, sync_stats.py:40, check_ssh_connection.py:93, install_pubkey.py:73, and the production path bot/automation/ssh_handler.py:62). The prior audit (M2) flagged only migrate_from_samba.py; the added depth is the full enumeration plus the within-directory inconsistency. These are dev/ops tools, not the live bot path, so MITM exposure is dev-only.",
+   "fix_proposal": "Standardize tools/ on paramiko.RejectPolicy() + known_hosts (mirror bot/automation/ssh_handler.py). If a tool genuinely needs first-connect TOFU, isolate it and comment why. A grep gate (ruff S507 or a repo-hygiene grep) could prevent regressions.",
+   "effort": "small",
+   "why": "Same operation implemented two opposite ways in one folder is a maintenance trap and a security inconsistency a contributor will copy from the wrong example.",
+   "_verify": null
+  },
+  {
+   "severity": "low",
+   "dimension": "maintainability",
+   "area": "ci_backlog_security",
+   "file": "/home/samba/share/slomix_discord/docs/CLAUDE.md",
+   "line": "1-266",
+   "title": "docs/CLAUDE.md is a byte-identical duplicate of root CLAUDE.md",
+   "evidence": "`diff CLAUDE.md docs/CLAUDE.md` returns 0 changed lines; both files are exactly 266 lines. Two identical 266-line copies of the project guide will inevitably drift (one gets edited, the other doesn't). Both also carry the same unverified claim at line 261 ('2,989 tests') while the repo actually contains ~2673 `def test_` functions, and the same file's feature section says '476 total' tests (line 212 in docs/CLAUDE.md) \u2014 internal inconsistency that doubling the file doubles the maintenance cost of fixing.",
+   "fix_proposal": "Delete docs/CLAUDE.md (the root CLAUDE.md is the canonical one Claude Code loads) or replace it with a one-line pointer to ../CLAUDE.md. Reconcile the test-count claim while at it.",
+   "effort": "trivial",
+   "why": "Duplicated docs guarantee future drift and double the surface for stale claims.",
+   "_verify": null
+  }
+ ],
+ "synthesis": null,
+ "perArea": [
+  {
+   "area": "data_pipeline_core",
+   "confirmed": 2,
+   "dropped": 3
+  },
+  {
+   "area": "god_files_backend",
+   "confirmed": 8,
+   "dropped": 2
+  },
+  {
+   "area": "god_files_frontend",
+   "confirmed": 8,
+   "dropped": 4
+  },
+  {
+   "area": "skill_storytelling",
+   "confirmed": 5,
+   "dropped": 0
+  },
+  {
+   "area": "dual_frontend_debt",
+   "confirmed": 7,
+   "dropped": 1
+  },
+  {
+   "area": "ci_backlog_security",
+   "confirmed": 1,
+   "dropped": 8
+  }
+ ]
+}
