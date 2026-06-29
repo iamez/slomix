@@ -140,18 +140,19 @@ def _compute_category_score(
 
 async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None = None,
                               *, session_date=None, map_name: str | None = None,
-                              round_number: int | None = None):
+                              round_number: int | None = None, round_start_unix: int | None = None):
     """
     Main entry point. Computes prox_combat, prox_team, prox_gamesense, prox_overall
     for all players (or one player) within range_days — or, when session_date/
-    map_name/round_number are supplied, scoped to exactly that selection.
+    map_name/round_number/round_start_unix are supplied, scoped to exactly that
+    selection (round_start_unix disambiguates a map/round played more than once).
 
     Returns list of player score dicts.
     """
     range_days = max(1, min(int(range_days), 365))
     raw_data = await _fetch_raw_metrics(
         db, range_days, session_date=session_date,
-        map_name=map_name, round_number=round_number,
+        map_name=map_name, round_number=round_number, round_start_unix=round_start_unix,
     )
 
     if not raw_data:
@@ -252,7 +253,8 @@ def _sub_score(breakdowns: dict, cat_key: str, metric_keys: list[str]) -> float:
 
 async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
                              map_name: str | None = None,
-                             round_number: int | None = None) -> dict[str, dict]:
+                             round_number: int | None = None,
+                             round_start_unix: int | None = None) -> dict[str, dict]:
     """
     Fetch raw per-player metric values from all source tables.
     Returns {guid: {metric_key: value, ...}} merged dict.
@@ -283,6 +285,11 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
     if round_number is not None:
         params.append(round_number)
         parts.append(f"round_number = ${len(params)}")
+    if round_start_unix is not None:
+        # Disambiguates a map/round played more than once in the same session,
+        # matching what buildScopeParams() sends from the Scope UI.
+        params.append(round_start_unix)
+        parts.append(f"round_start_unix = ${len(params)}")
     scope_sql = "WHERE " + " AND ".join(parts)
     scope_params = tuple(params)
     players: dict[str, dict] = {}

@@ -636,7 +636,18 @@ async def get_player_session_history(db, player_guid: str,
             ) as denied_playtime_pm,
             COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
             FROM player_comprehensive_stats
-            WHERE player_guid = $1 AND round_date <= $2 AND round_number > 0
+            WHERE player_guid = $1 AND round_number > 0
+              -- Midnight-safe (matches per-session scoping): include every round of
+              -- every gaming session that STARTED on or before $2, so a session that
+              -- crosses midnight contributes both halves to the cumulative — not just
+              -- the pre-midnight rounds that a bare `round_date <= $2` would catch.
+              AND round_id IN (
+                  SELECT id FROM rounds WHERE gaming_session_id IN (
+                      SELECT gaming_session_id FROM rounds
+                      WHERE gaming_session_id IS NOT NULL
+                      GROUP BY gaming_session_id HAVING MIN(round_date) <= $2
+                  )
+              )
         """, (player_guid, date_str))
 
         cum_rating = None
