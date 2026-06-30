@@ -2,10 +2,13 @@
 
 The site uses a **strangler-fig** migration: `website/js/route-registry.js` routes
 each view to either legacy JS (`VIEW_MODE.LEGACY`) or this React app
-(`VIEW_MODE.MODERN`). `src/route-host.tsx` lazy-imports **all** pages here so any
-route can be flipped to MODERN by changing only its `mode` in the route registry —
-no code move required. **Nothing here is dead code**; the not-yet-routed pages are
-the staged, ready-to-activate side of the migration.
+(`VIEW_MODE.MODERN`). A route can be flipped to MODERN by changing its `mode` in
+the route registry **provided its `viewId` has a React page wired in
+`src/route-host.tsx`'s `routeComponents` map**. Most legacy views do (the staged
+set below); a few legacy-only viewIds do **not** yet have a React page (e.g.
+`record-book`, `tonight`) and would need one added first. **Nothing here is dead
+code** — the not-yet-routed pages are the staged, ready-to-activate side of the
+migration.
 
 ## Currently served by React (MODERN routes)
 - `ProximityPlayer.tsx`  → route `proximity-player`
