@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""Backfill round_status='orphan_r2' + is_valid=FALSE for historical orphan R2 rounds.
+
+An "orphan R2" is a Round-2 row with no matching Round-1 in the same map + gaming
+session — its stats are RAW CUMULATIVE (R1+R2), not a differential, so they inflate
+aggregates. New imports are flagged at parse/import time (community_stats_parser +
+stats_import_mixin, the 2026-06 Wave-2 fix); this one-off marks the history so the
+same central `is_valid` filter excludes them too.
+
+DRY-RUN by default (prints what would change). Pass --apply to write.
+Idempotent: rows already round_status='orphan_r2' are skipped.
+
+Usage:
+    python -m scripts.backfill_orphan_r2            # dry-run
+    python -m scripts.backfill_orphan_r2 --apply
+
+Run scripts/db_backup.sh first.
+"""
+from __future__ import annotations
+
+import argparse
+import contextlib
+import os
+import sys
+
+try:
+    import psycopg2 as _pg
+except ImportError:  # pragma: no cover - environment-dependent
+    try:
+        import psycopg as _pg  # psycopg3
+    except ImportError:  # pragma: no cover
+        raise SystemExit(
+            "This script needs a PostgreSQL driver: pip install psycopg2-binary"
+        ) from None
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# An R2 with no R1 of the same map within the same gaming session. Scoped to
+# rounds that actually have a gaming_session_id (the canonical session key) to
+# avoid mis-flagging NULL-session legacy rows.
+_ORPHAN_PREDICATE = """
+    FROM rounds r2
+    WHERE r2.round_number = 2
+      AND r2.gaming_session_id IS NOT NULL
+      AND r2.round_status IS DISTINCT FROM 'orphan_r2'
+      AND NOT EXISTS (
+          SELECT 1 FROM rounds r1
+          WHERE r1.round_number = 1
+            AND r1.map_name = r2.map_name
+            AND r1.gaming_session_id = r2.gaming_session_id
+      )
+"""
+
+
+def _connect():
+    with contextlib.suppress(Exception):
+        from dotenv import load_dotenv
+        load_dotenv()
+    return _pg.connect(
+        host=os.getenv("POSTGRES_HOST", "localhost"),
+        port=int(os.getenv("POSTGRES_PORT", "5432")),
+        dbname=os.getenv("POSTGRES_DATABASE", "etlegacy"),
+        user=os.getenv("POSTGRES_USER", "etlegacy_user"),
+        password=os.getenv("POSTGRES_PASSWORD", ""),
+    )
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--apply", action="store_true", help="write changes (else dry-run)")
+    args = ap.parse_args()
+
+    conn = _connect()
+    conn.autocommit = False
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT r2.map_name, COUNT(*) " + _ORPHAN_PREDICATE
+        + " GROUP BY r2.map_name ORDER BY COUNT(*) DESC"
+    )
+    pending = cur.fetchall()
+
+    print("=" * 60)
+    print("orphan-R2 BACKFILL — " + ("APPLY" if args.apply else "DRY-RUN"))
+    print("=" * 60)
+    total = sum(n for _m, n in pending)
+    if not pending:
+        print("No orphan R2 rounds found — already consistent. ✅")
+        cur.close()
+        conn.close()
+        return 0
+    for map_name, n in pending:
+        print(f"  would mark orphan_r2 + is_valid=FALSE: {map_name}  ({n} rounds)")
+    print(f"Total R2 rounds to mark: {total}")
+
+    if not args.apply:
+        print("\nDRY-RUN — no changes written. Run scripts/db_backup.sh, then re-run with --apply.")
+        cur.close()
+        conn.close()
+        return 0
+
+    cur.execute(
+        "UPDATE rounds SET round_status = 'orphan_r2', is_valid = FALSE "
+        "WHERE id IN (SELECT r2.id " + _ORPHAN_PREDICATE + ")"
+    )
+    conn.commit()
+    print(f"\n✅ Committed. {cur.rowcount} R2 rounds marked orphan_r2 / is_valid=FALSE.")
+    cur.close()
+    conn.close()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
