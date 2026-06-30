@@ -37,8 +37,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # An R2 with no R1 of the same map within the same gaming session. Scoped to
 # rounds that actually have a gaming_session_id (the canonical session key) to
-# avoid mis-flagging NULL-session legacy rows.
-_ORPHAN_PREDICATE = """
+# avoid mis-flagging NULL-session legacy rows. Both statements below are fully
+# static SQL literals (no parameters, no string building) — the orphan predicate
+# is duplicated verbatim rather than concatenated so there is provably no dynamic
+# query construction.
+_COUNT_QUERY = """
+    SELECT r2.map_name, COUNT(*)
     FROM rounds r2
     WHERE r2.round_number = 2
       AND r2.gaming_session_id IS NOT NULL
@@ -49,6 +53,25 @@ _ORPHAN_PREDICATE = """
             AND r1.map_name = r2.map_name
             AND r1.gaming_session_id = r2.gaming_session_id
       )
+    GROUP BY r2.map_name
+    ORDER BY COUNT(*) DESC
+"""
+
+_UPDATE_QUERY = """
+    UPDATE rounds SET round_status = 'orphan_r2', is_valid = FALSE
+    WHERE id IN (
+        SELECT r2.id
+        FROM rounds r2
+        WHERE r2.round_number = 2
+          AND r2.gaming_session_id IS NOT NULL
+          AND r2.round_status IS DISTINCT FROM 'orphan_r2'
+          AND NOT EXISTS (
+              SELECT 1 FROM rounds r1
+              WHERE r1.round_number = 1
+                AND r1.map_name = r2.map_name
+                AND r1.gaming_session_id = r2.gaming_session_id
+          )
+    )
 """
 
 
@@ -74,10 +97,7 @@ def main() -> int:
     conn.autocommit = False
     cur = conn.cursor()
 
-    cur.execute(
-        "SELECT r2.map_name, COUNT(*) " + _ORPHAN_PREDICATE
-        + " GROUP BY r2.map_name ORDER BY COUNT(*) DESC"
-    )
+    cur.execute(_COUNT_QUERY)
     pending = cur.fetchall()
 
     print("=" * 60)
@@ -99,10 +119,7 @@ def main() -> int:
         conn.close()
         return 0
 
-    cur.execute(
-        "UPDATE rounds SET round_status = 'orphan_r2', is_valid = FALSE "
-        "WHERE id IN (SELECT r2.id " + _ORPHAN_PREDICATE + ")"
-    )
+    cur.execute(_UPDATE_QUERY)
     conn.commit()
     print(f"\n✅ Committed. {cur.rowcount} R2 rounds marked orphan_r2 / is_valid=FALSE.")
     cur.close()

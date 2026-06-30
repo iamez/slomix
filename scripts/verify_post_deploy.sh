@@ -22,7 +22,11 @@ echo "== verify_post_deploy against $BASE_URL =="
 echo "[1] modern build assets"
 for f in /static/modern/route-host.js /static/modern/route-host.css; do
   code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL$f" || echo 000)
-  [ "$code" = "200" ] && ok "$f ($code)" || bad "$f ($code) — React routes would show 'Offline'"
+  if [ "$code" = "200" ]; then
+    ok "$f ($code)"
+  else
+    bad "$f ($code) — React routes would show 'Offline'"
+  fi
 done
 
 # 2) Key API endpoints respond 200 with status ok.
@@ -47,7 +51,11 @@ sd=$(curl -s "$BASE_URL/api/sessions" | grep -oE '"session_date":"[0-9-]+"' | he
 if [ -n "$sd" ]; then
   g=$(curl -s "$BASE_URL/api/proximity/prox-scores?range_days=3650" | grep -oE '"player_count":[0-9]+' | grep -oE '[0-9]+')
   s=$(curl -s "$BASE_URL/api/proximity/prox-scores?session_date=$sd" | grep -oE '"scoped":(true|false)')
-  [ "$s" = '"scoped":true' ] && ok "scope echoed (session_date=$sd, global players=$g)" || bad "scope not echoed for $sd"
+  if [ "$s" = '"scoped":true' ]; then
+    ok "scope echoed (session_date=$sd, global players=$g)"
+  else
+    bad "scope not echoed for $sd"
+  fi
 else
   echo "  (no session_date found to test scope — skip)"
 fi
