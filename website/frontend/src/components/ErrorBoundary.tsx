@@ -14,7 +14,9 @@ interface Props {
 function isChunkLoadError(error: unknown): boolean {
   const e = error as { message?: unknown; name?: unknown } | null | undefined;
   const text = String((e && (e.message ?? e.name)) || '');
-  return /loading (?:css )?chunk|chunkloaderror|dynamically imported module|failed to fetch dynamically imported/i.test(text);
+  // Covers Chrome/Firefox ("Loading chunk… failed", "Failed to fetch dynamically
+  // imported module") AND Safari/WebKit ("Importing a module script failed").
+  return /loading (?:css )?chunk|chunkloaderror|dynamically imported module|failed to fetch dynamically imported|importing a module script failed/i.test(text);
 }
 
 interface State {
