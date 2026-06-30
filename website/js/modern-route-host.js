@@ -29,14 +29,22 @@ function ensureHost(viewElement) {
     return host;
 }
 
-function ensureStylesheet() {
-    if (document.querySelector(`link[data-modern-route-css="${MODERN_STYLESHEET_URL}"]`)) {
+function ensureStylesheet(forceFresh = false) {
+    if (forceFresh) {
+        // A fresh retry after a deploy may need to re-fetch the CSS too — drop any
+        // existing (possibly failed) modern <link> so we don't early-return on a
+        // stale/broken one, and re-add with a cache-buster.
+        for (const el of document.querySelectorAll('link[data-modern-route-css]')) {
+            el.remove();
+        }
+    }
+    if (document.querySelector('link[data-modern-route-css]')) {
         return;
     }
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = MODERN_STYLESHEET_URL;
-    link.dataset.modernRouteCss = MODERN_STYLESHEET_URL;
+    link.href = forceFresh ? `${MODERN_STYLESHEET_URL}&_=${Date.now()}` : MODERN_STYLESHEET_URL;
+    link.dataset.modernRouteCss = '1';
     document.head.appendChild(link);
 }
 
@@ -109,10 +117,10 @@ export async function mountModernRoute({ viewId, params = {}, viewElement }) {
         activeMount = null;
     }
 
-    ensureStylesheet();
     const host = ensureHost(viewElement);
 
     const attempt = async (forceFresh) => {
+        ensureStylesheet(forceFresh);  // refresh CSS too on a fresh retry
         const runtime = await loadModernRuntime(forceFresh);
         if (!runtime || typeof runtime.mountRoute !== 'function') {
             throw new Error('The modern route host did not export mountRoute().');
