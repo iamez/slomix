@@ -307,6 +307,38 @@ run_remote "cd $VM_PATH && \
   echo \"  unique busters now in index.html:\" && \
   grep -hoE '\\?v=[A-Za-z0-9._-]+' website/index.html | sort -u"
 
+# ─── 3c. Build the React (modern) frontend + atomic verify + SHA cache-bust ────
+# The 4 MODERN routes (proximity-player/replay/teams, skill-rating) load
+# /static/modern/route-host.js, which is gitignored and produced ONLY by the
+# Vite build (website/frontend). Nothing built it on deploy before, so a fresh
+# checkout served "Modern Route Offline". Build it here into a STAGING dir, verify
+# the entry exists and is non-empty, then swap atomically (keep the previous build
+# on any failure so a broken/missing build never replaces a working one). Finally
+# set modern-route-host.js's BUILD_VERSION const to $SHA so the modern entry gets
+# the same cache-buster the legacy assets got in 3b (the 3b `?v=` sed can't match
+# its `?v=${BUILD_VERSION}` template). Non-fatal: a build failure logs and keeps
+# the previous build — legacy routes deploy regardless.
+log "3c/8 Build modern (React) frontend + atomic verify + SHA cache-bust"
+run_remote "cd $VM_PATH && \
+  SHA=\$(git rev-parse --short HEAD) && \
+  if command -v npm >/dev/null 2>&1; then \
+    echo '  building website/frontend (vite) → static/modern.new' && \
+    ( cd website/frontend && npm ci --no-audit --no-fund && npm run build -- --outDir ../static/modern.new --emptyOutDir ) || echo '  WARN: modern build failed (non-fatal)'; \
+    if [ -s website/static/modern.new/route-host.js ]; then \
+      echo '  build OK — atomic swap into static/modern' && \
+      rm -rf website/static/modern.prev && \
+      { [ -d website/static/modern ] && mv website/static/modern website/static/modern.prev || true; } && \
+      mv website/static/modern.new website/static/modern && \
+      sed -i \"s|const BUILD_VERSION = '[^']*'|const BUILD_VERSION = '\$SHA'|\" website/js/modern-route-host.js && \
+      echo \"  modern BUILD_VERSION set to \$SHA\"; \
+    else \
+      echo '  keeping previous static/modern (no fresh build)' >&2 && \
+      rm -rf website/static/modern.new || true; \
+    fi; \
+  else \
+    echo '  WARN: npm not found on VM — skipping modern build (React routes keep previous build)' >&2; \
+  fi"
+
 # ─── 4. Stop services (clean restart) ─────────────────────────────────────────
 log "4/8  Stop services before migration"
 sudo_run "systemctl stop slomix-web slomix-bot"
