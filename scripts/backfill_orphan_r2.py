@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 """Backfill round_status='orphan_r2' + is_valid=FALSE for historical orphan R2 rounds.
 
-An "orphan R2" is a Round-2 row with no matching Round-1 in the same map + gaming
-session — its stats are RAW CUMULATIVE (R1+R2), not a differential, so they inflate
-aggregates. New imports are flagged at parse/import time (community_stats_parser +
+An "orphan R2" is a Round-2 row with no matching Round-1 *for the same match* — its
+stats are RAW CUMULATIVE (R1+R2), not a differential, so they inflate aggregates.
+New imports are flagged at parse/import time (community_stats_parser +
 stats_import_mixin, the 2026-06 Wave-2 fix); this one-off marks the history so the
 same central `is_valid` filter excludes them too.
+
+Pairing is keyed on `match_id` (the canonical R1<->R2 pairing key, 100% populated
+and deterministic since the stopwatch-pairer backfill, PR #370). A map+session
+predicate would miss orphans in sessions where the same map is played more than
+once: an unrelated R1 of that map exists, so the broken R2 looks "paired". Keying
+on match_id pairs each R2 to its own R1 and catches those (e.g. an adlernest R2 at
+21:40 whose R1 is missing, while a separate adlernest R1 at 21:48 exists).
 
 DRY-RUN by default (prints what would change). Pass --apply to write.
 Idempotent: rows already round_status='orphan_r2' are skipped.
@@ -35,23 +42,22 @@ except ImportError:  # pragma: no cover - environment-dependent
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# An R2 with no R1 of the same map within the same gaming session. Scoped to
-# rounds that actually have a gaming_session_id (the canonical session key) to
-# avoid mis-flagging NULL-session legacy rows. Both statements below are fully
-# static SQL literals (no parameters, no string building) — the orphan predicate
-# is duplicated verbatim rather than concatenated so there is provably no dynamic
-# query construction.
+# An R2 with no R1 sharing its match_id. Scoped to rows that actually carry a
+# match_id (skip the unpairable rather than mis-flag it). Both statements below
+# are fully static SQL literals (no parameters, no string building) — the orphan
+# predicate is duplicated verbatim rather than concatenated so there is provably
+# no dynamic query construction.
 _COUNT_QUERY = """
     SELECT r2.map_name, COUNT(*)
     FROM rounds r2
     WHERE r2.round_number = 2
-      AND r2.gaming_session_id IS NOT NULL
+      AND r2.match_id IS NOT NULL
+      AND r2.match_id <> ''
       AND r2.round_status IS DISTINCT FROM 'orphan_r2'
       AND NOT EXISTS (
           SELECT 1 FROM rounds r1
           WHERE r1.round_number = 1
-            AND r1.map_name = r2.map_name
-            AND r1.gaming_session_id = r2.gaming_session_id
+            AND r1.match_id = r2.match_id
       )
     GROUP BY r2.map_name
     ORDER BY COUNT(*) DESC
@@ -63,13 +69,13 @@ _UPDATE_QUERY = """
         SELECT r2.id
         FROM rounds r2
         WHERE r2.round_number = 2
-          AND r2.gaming_session_id IS NOT NULL
+          AND r2.match_id IS NOT NULL
+          AND r2.match_id <> ''
           AND r2.round_status IS DISTINCT FROM 'orphan_r2'
           AND NOT EXISTS (
               SELECT 1 FROM rounds r1
               WHERE r1.round_number = 1
-                AND r1.map_name = r2.map_name
-                AND r1.gaming_session_id = r2.gaming_session_id
+                AND r1.match_id = r2.match_id
           )
     )
 """

@@ -29,14 +29,20 @@ for f in /static/modern/route-host.js /static/modern/route-host.css; do
   fi
 done
 
-# 2) Key API endpoints respond 200 with status ok.
+# 2) Key API endpoints respond 200 with a JSON body. These endpoints have
+#    different shapes (some return an object, some a bare array — e.g.
+#    /api/sessions is an array), so this is a shape-agnostic smoke: HTTP 200 +
+#    the body starts with a JSON container ('{' or '[').
 echo "[2] API endpoints"
 check_json() { # url, label
-  local body; body=$(curl -s "$BASE_URL$1" || echo '')
-  if echo "$body" | grep -q '"status"\s*:\s*"ok"' 2>/dev/null || echo "$body" | grep -q '"status":"ok"'; then
-    ok "$2"
+  local code body
+  body=$(curl -s -w '\n%{http_code}' "$BASE_URL$1" 2>/dev/null || printf '\n000')
+  code=$(printf '%s' "$body" | tail -n1)
+  body=$(printf '%s' "$body" | sed '$d')
+  if [ "$code" = "200" ] && printf '%s' "$body" | grep -qE '^[[:space:]]*[][{]'; then
+    ok "$2 ($code)"
   else
-    bad "$2 — $(echo "$body" | head -c 120)"
+    bad "$2 ($code) — $(printf '%s' "$body" | head -c 120)"
   fi
 }
 check_json "/api/stats/tonight" "Tonight live hub"
@@ -45,9 +51,10 @@ check_json "/api/proximity/prox-scores?range_days=30" "prox-scores (global)"
 check_json "/api/sessions" "sessions list"
 check_json "/api/skill/leaderboard" "skill leaderboard"
 
-# 3) prox-scores scope actually filters (pick a real session_date if any).
+# 3) prox-scores scope actually filters (pick a real date if any).
+#    /api/sessions returns an array of objects keyed "date" (YYYY-MM-DD).
 echo "[3] prox-scores scope honored"
-sd=$(curl -s "$BASE_URL/api/sessions" | grep -oE '"session_date":"[0-9-]+"' | head -1 | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}')
+sd=$(curl -s "$BASE_URL/api/sessions" | grep -oE '"date":"[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1 | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}')
 if [ -n "$sd" ]; then
   g=$(curl -s "$BASE_URL/api/proximity/prox-scores?range_days=3650" | grep -oE '"player_count":[0-9]+' | grep -oE '[0-9]+')
   s=$(curl -s "$BASE_URL/api/proximity/prox-scores?session_date=$sd" | grep -oE '"scoped":(true|false)')

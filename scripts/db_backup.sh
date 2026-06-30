@@ -15,14 +15,19 @@
 # =============================================================================
 set -euo pipefail
 
+# Anchor paths to the repo root (script lives in <repo>/scripts/) so the script
+# works regardless of the caller's current working directory.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 # Load .env (POSTGRES_* creds) if present — same vars bot/web use.
-if [ -f .env ]; then set -a; . ./.env; set +a; fi
+if [ -f "$REPO_ROOT/.env" ]; then set -a; . "$REPO_ROOT/.env"; set +a; fi
 
 PGHOST="${POSTGRES_HOST:-127.0.0.1}"
 PGPORT="${POSTGRES_PORT:-5432}"
 PGDB="${POSTGRES_DATABASE:-etlegacy}"
 PGUSER="${POSTGRES_USER:-etlegacy_user}"
-BACKUP_DIR="${BACKUP_DIR:-backups}"
+BACKUP_DIR="${BACKUP_DIR:-$REPO_ROOT/backups}"
 TS="$(date '+%Y%m%d-%H%M%S')"
 OUT="$BACKUP_DIR/${PGDB}_${TS}.sql.gz"
 
