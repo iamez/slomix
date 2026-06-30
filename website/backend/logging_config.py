@@ -217,9 +217,10 @@ def setup_logging(
     # Create log directory with secure permissions
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Set directory permissions (owner read/write/execute only)
+    # Set directory permissions to owner-only (rwx); logs may contain request
+    # metadata, so deny group/other access.
     try:
-        os.chmod(LOG_DIR, 0o750)  # nosec B103 - intentional: owner+group only, not world-accessible
+        os.chmod(LOG_DIR, 0o700)
     except OSError:
         pass  # May fail on some systems, continue anyway
 

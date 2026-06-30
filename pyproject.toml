@@ -172,6 +172,6 @@ exclude_dirs = ["tests", "tools", "scripts", "migrations", ".venv", "node_module
 # every flagged site interpolates only whitelisted column/table identifiers or config
 # literals, never user input (audited 2026-05-11 b2_sql_injection_audit + 06-15 sweep);
 # values are always passed as query parameters. Genuinely-intentional one-off sites
-# (B601 paramiko, B103 dir perms, B104 bind-all) carry targeted `# nosec` comments,
-# so any NEW occurrence of those classes still fails the gate.
+# (B601 paramiko admin commands, B104 bind-all behind a reverse proxy) carry targeted
+# `# nosec` comments, so any NEW occurrence of those classes still fails the gate.
 skips = ["B608"]
