@@ -12,7 +12,8 @@ interface Props {
 // route-host.js + current chunk hashes. Guarded so a genuinely-missing chunk
 // can't reload-loop (at most once per 15s).
 function isChunkLoadError(error: unknown): boolean {
-  const text = String((error as Error)?.message || (error as Error)?.name || '');
+  const e = error as { message?: unknown; name?: unknown } | null | undefined;
+  const text = String((e && (e.message ?? e.name)) || '');
   return /loading (?:css )?chunk|chunkloaderror|dynamically imported module|failed to fetch dynamically imported/i.test(text);
 }
 
@@ -62,13 +63,13 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="mt-4 flex items-center justify-center gap-2">
             <button
               className="px-4 py-2 bg-brand-blue/20 text-brand-blue rounded-lg hover:bg-brand-blue/30 transition"
-              onClick={() => this.setState({ hasError: false, error: null })}
+              onClick={() => { this.setState({ hasError: false, error: null }); }}
             >
               Try again
             </button>
             <button
               className="px-4 py-2 bg-white/10 text-slate-200 rounded-lg hover:bg-white/20 transition"
-              onClick={() => window.location.reload()}
+              onClick={() => { window.location.reload(); }}
             >
               Reload page
             </button>
