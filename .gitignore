@@ -47,6 +47,11 @@ gemini-website/dist/
 gemini-website/.next/
 build/
 website/static/modern/
+# Deploy staging/rollback dirs for the modern build (deploy_release.sh step 3c).
+# MUST be ignored: the deploy's clean-tree guard aborts on any untracked path,
+# so an un-ignored static/modern.prev left after a deploy would break the next one.
+website/static/modern.new/
+website/static/modern.prev/
 
 # ============================================
 # DATABASE FILES (NEVER COMMIT)
