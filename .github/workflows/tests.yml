@@ -124,8 +124,11 @@ jobs:
       - name: Static security scan (bandit)
         # Config in pyproject.toml [tool.bandit]: -ll = medium+ severity. B608 is a
         # documented SQL false-positive class (whitelisted identifiers, parameterized
-        # values); intentional B601/B103/B104 sites carry targeted `# nosec`.
-        run: bandit -c pyproject.toml -r bot website/backend -ll
+        # values); intentional B601/B104 sites carry targeted `# nosec`. Targets cover
+        # every runtime Python package (bot, website backend, proximity parser,
+        # greatshot, the root DB manager); tests/tools/scripts/migrations are excluded
+        # via pyproject's [tool.bandit] exclude_dirs.
+        run: bandit -c pyproject.toml -r bot website/backend proximity greatshot postgresql_database_manager.py -ll
 
   docker-build:
     name: Docker Build
