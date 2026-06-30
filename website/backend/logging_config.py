@@ -14,6 +14,7 @@ import logging
 import logging.handlers
 import os
 import re
+import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -217,10 +218,11 @@ def setup_logging(
     # Create log directory with secure permissions
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Set directory permissions to owner-only (rwx); logs may contain request
-    # metadata, so deny group/other access.
+    # Set directory permissions to owner-only (rwx — the x bit is required to
+    # traverse the directory); logs may contain request metadata, so deny
+    # group/other access.
     try:
-        os.chmod(LOG_DIR, 0o700)
+        os.chmod(LOG_DIR, stat.S_IRWXU)
     except OSError:
         pass  # May fail on some systems, continue anyway
 
