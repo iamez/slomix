@@ -5,6 +5,17 @@ interface Props {
   viewId?: string;
 }
 
+// A lazy page chunk that 404s (e.g. a stale index referencing the previous
+// deploy's hashed chunks) surfaces here, NOT in modern-route-host's mount catch,
+// because React.lazy fetches the chunk later under Suspense. Detect that and do
+// a one-time, cache-busted full reload so the browser pulls the fresh
+// route-host.js + current chunk hashes. Guarded so a genuinely-missing chunk
+// can't reload-loop (at most once per 15s).
+function isChunkLoadError(error: unknown): boolean {
+  const text = String((error as Error)?.message || (error as Error)?.name || '');
+  return /loading (?:css )?chunk|chunkloaderror|dynamically imported module|failed to fetch dynamically imported/i.test(text);
+}
+
 interface State {
   hasError: boolean;
   error: Error | null;
@@ -22,6 +33,19 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error(`[ErrorBoundary] ${this.props.viewId ?? 'unknown'}:`, error, errorInfo);
+    if (isChunkLoadError(error)) {
+      try {
+        const KEY = 'modern-chunk-reload-at';
+        const now = Date.now();
+        const last = Number(sessionStorage.getItem(KEY) || 0);
+        if (now - last > 15000) {
+          sessionStorage.setItem(KEY, String(now));
+          window.location.reload();
+        }
+      } catch {
+        /* sessionStorage unavailable — fall through to the error panel */
+      }
+    }
   }
 
   render() {
@@ -35,12 +59,20 @@ export class ErrorBoundary extends Component<Props, State> {
           <pre className="text-xs text-slate-500 bg-slate-950/80 rounded-xl p-4 overflow-auto text-left max-h-40">
             {this.state.error?.message}
           </pre>
-          <button
-            className="mt-4 px-4 py-2 bg-brand-blue/20 text-brand-blue rounded-lg hover:bg-brand-blue/30 transition"
-            onClick={() => this.setState({ hasError: false, error: null })}
-          >
-            Try again
-          </button>
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <button
+              className="px-4 py-2 bg-brand-blue/20 text-brand-blue rounded-lg hover:bg-brand-blue/30 transition"
+              onClick={() => this.setState({ hasError: false, error: null })}
+            >
+              Try again
+            </button>
+            <button
+              className="px-4 py-2 bg-white/10 text-slate-200 rounded-lg hover:bg-white/20 transition"
+              onClick={() => window.location.reload()}
+            >
+              Reload page
+            </button>
+          </div>
         </div>
       );
     }

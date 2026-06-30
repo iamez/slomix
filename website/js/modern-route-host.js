@@ -5,6 +5,14 @@ const MODERN_STYLESHEET_URL = `/static/modern/route-host.css?v=${BUILD_VERSION}`
 let runtimePromise = null;
 let activeMount = null;
 
+// Local HTML-escape for the failure panel (viewId / error text are interpolated
+// into innerHTML; escape them so any user-influenced string can't inject markup).
+function esc(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function ensureHost(viewElement) {
     let host = viewElement.querySelector('[data-modern-route-root]');
     if (!host) {
@@ -36,7 +44,7 @@ function renderUnavailable(host, viewId, error = null) {
     host.innerHTML = `
         <div class="glass-panel border border-slate-700 rounded-2xl p-6 mt-6">
             <div class="text-xs font-bold uppercase tracking-[0.3em] text-brand-amber">Couldn't load this view</div>
-            <div class="mt-3 text-2xl font-black text-white">${viewId}</div>
+            <div class="mt-3 text-2xl font-black text-white">${esc(viewId)}</div>
             <p class="mt-3 text-sm text-slate-300">
                 This view failed to load (it may be mid-deploy or a temporary network hiccup).
                 Try reloading — if it persists it usually clears after the next deploy.
@@ -45,7 +53,7 @@ function renderUnavailable(host, viewId, error = null) {
                 class="mt-4 px-4 py-2 rounded-lg text-sm font-bold bg-brand-cyan/20 text-brand-cyan hover:bg-brand-cyan/30">
                 Reload
             </button>
-            ${error ? `<pre class="mt-4 rounded-xl bg-slate-950/80 p-4 text-xs text-slate-400 overflow-auto">${String(error.message || error)}</pre>` : ''}
+            ${error ? `<pre class="mt-4 rounded-xl bg-slate-950/80 p-4 text-xs text-slate-400 overflow-auto">${esc(error.message || error)}</pre>` : ''}
         </div>
     `;
 }
