@@ -219,7 +219,7 @@ def setup_logging(
 
     # Set directory permissions (owner read/write/execute only)
     try:
-        os.chmod(LOG_DIR, 0o750)
+        os.chmod(LOG_DIR, 0o750)  # nosec B103 - intentional: owner+group only, not world-accessible
     except OSError:
         pass  # May fail on some systems, continue anyway
 

@@ -96,7 +96,7 @@ from website.backend.services.weapon_stats_mv_refresh import (
 
 # Configuration from environment
 WEBSITE_PORT = getenv_int("WEBSITE_PORT", 7000)
-WEBSITE_HOST = os.getenv("WEBSITE_HOST", "0.0.0.0")
+WEBSITE_HOST = os.getenv("WEBSITE_HOST", "0.0.0.0")  # nosec B104 - bind-all intentional; service runs behind nginx reverse proxy
 SESSION_SECRET = os.getenv("SESSION_SECRET")
 # Secure-by-default (see auth.py): opt out only for local HTTP dev.
 SESSION_HTTPS_ONLY = os.getenv("SESSION_HTTPS_ONLY", "true").lower() == "true"
