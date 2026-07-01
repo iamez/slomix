@@ -59,12 +59,20 @@ check_json "/api/skill/formula" "skill router (formula, read-only)"
 echo "[3] prox-scores scope honored"
 sd=$(curl -s "$BASE_URL/api/sessions" | grep -oE '"date":"[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1 | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}')
 if [ -n "$sd" ]; then
-  g=$(curl -s "$BASE_URL/api/proximity/prox-scores?range_days=3650" | grep -oE '"player_count":[0-9]+' | grep -oE '[0-9]+')
-  s=$(curl -s "$BASE_URL/api/proximity/prox-scores?session_date=$sd" | grep -oE '"scoped":(true|false)')
-  if [ "$s" = '"scoped":true' ]; then
-    ok "scope echoed (session_date=$sd, global players=$g)"
+  g=$(curl -s "$BASE_URL/api/proximity/prox-scores?range_days=3650" | grep -oE '"player_count":[0-9]+' | grep -oE '[0-9]+' | head -1)
+  sbody=$(curl -s "$BASE_URL/api/proximity/prox-scores?session_date=$sd")
+  sf=$(printf '%s' "$sbody" | grep -oE '"scoped":(true|false)')
+  sc=$(printf '%s' "$sbody" | grep -oE '"player_count":[0-9]+' | grep -oE '[0-9]+' | head -1)
+  # Verify the RESULTS are actually filtered, not just that the flag echoes back:
+  # a single session's roster is a strict subset of the all-time player set, so
+  # scoped_count must be >0 and < global. scoped_count == global would mean the
+  # session_date filter regressed (returned everyone) despite "scoped":true.
+  if [ "$sf" = '"scoped":true' ] && [ -n "$sc" ] && [ -n "$g" ] && [ "$sc" -gt 0 ] && [ "$sc" -lt "$g" ]; then
+    ok "scope filters results: $sc players for $sd < $g global"
+  elif [ "$sf" = '"scoped":true' ] && [ -n "$sc" ] && [ "$sc" = "$g" ]; then
+    bad "scoped flag set but scoped count ($sc) == global ($g) — session_date filter may have regressed"
   else
-    bad "scope not echoed for $sd"
+    bad "scope not honored for $sd (scoped=$sf, scoped_count=$sc, global=$g)"
   fi
 else
   echo "  (no session_date found to test scope — skip)"
