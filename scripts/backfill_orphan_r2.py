@@ -15,7 +15,10 @@ on match_id pairs each R2 to its own R1 and catches those (e.g. an adlernest R2 
 21:40 whose R1 is missing, while a separate adlernest R1 at 21:48 exists).
 
 DRY-RUN by default (prints what would change). Pass --apply to write.
-Idempotent: rows already round_status='orphan_r2' are skipped.
+Idempotent: the guard is on `is_valid` (not round_status), so a re-run skips only
+rows already excluded (is_valid=FALSE). This also repairs any row an older importer
+tagged round_status='orphan_r2' while leaving is_valid=TRUE — consumers filter on
+is_valid, so status alone would let it keep counting.
 
 Usage:
     python -m scripts.backfill_orphan_r2            # dry-run
@@ -53,7 +56,7 @@ _COUNT_QUERY = """
     WHERE r2.round_number = 2
       AND r2.match_id IS NOT NULL
       AND r2.match_id <> ''
-      AND r2.round_status IS DISTINCT FROM 'orphan_r2'
+      AND r2.is_valid IS DISTINCT FROM FALSE
       AND NOT EXISTS (
           SELECT 1 FROM rounds r1
           WHERE r1.round_number = 1
@@ -71,7 +74,7 @@ _UPDATE_QUERY = """
         WHERE r2.round_number = 2
           AND r2.match_id IS NOT NULL
           AND r2.match_id <> ''
-          AND r2.round_status IS DISTINCT FROM 'orphan_r2'
+          AND r2.is_valid IS DISTINCT FROM FALSE
           AND NOT EXISTS (
               SELECT 1 FROM rounds r1
               WHERE r1.round_number = 1

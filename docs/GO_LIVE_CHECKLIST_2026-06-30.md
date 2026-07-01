@@ -60,7 +60,7 @@ basepath (the live module path on puran).
 Forward-fix is already active after A2–A4; this only corrects HISTORY. Both default to
 DRY-RUN; run `db_backup.sh` first, then `--apply`.
 ```
-python -m scripts.backfill_orphan_r2            # dry-run (≈49 R2 rounds today, match_id-paired)
+python -m scripts.backfill_orphan_r2            # dry-run (≈48 R2 rounds today, match_id-paired)
 python -m scripts.backfill_orphan_r2 --apply    # marks round_status='orphan_r2' + is_valid=FALSE
 python -m scripts.backfill_aim_lock_clamp       # dry-run (≈56 rows, ~726k phantom ms today)
 python -m scripts.backfill_aim_lock_clamp --apply
