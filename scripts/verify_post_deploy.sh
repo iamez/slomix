@@ -49,7 +49,10 @@ check_json "/api/stats/tonight" "Tonight live hub"
 check_json "/api/bets/market/current" "betting market/current"
 check_json "/api/proximity/prox-scores?range_days=30" "prox-scores (global)"
 check_json "/api/sessions" "sessions list"
-check_json "/api/skill/leaderboard" "skill leaderboard"
+# NOTE: /api/skill/leaderboard is NOT read-only — it auto-runs compute_and_store_ratings
+# when empty/stale (>1h), writing player_skill_ratings + player_skill_history. Use the
+# static, read-only /api/skill/formula to confirm the skill router is mounted instead.
+check_json "/api/skill/formula" "skill router (formula, read-only)"
 
 # 3) prox-scores scope actually filters (pick a real date if any).
 #    /api/sessions returns an array of objects keyed "date" (YYYY-MM-DD).
