@@ -40,6 +40,10 @@ logger = get_app_logger("services.bets_lifecycle")
 # plus a round in progress). Env-overridable.
 _DEFAULT_LIVE_WITHIN = 90 * 60
 
+# Namespace for the per-session pg_advisory_xact_lock that serializes concurrent
+# auto-opens (int4). Arbitrary fixed constant.
+_BETS_LOCK_NS = 0x6265747
+
 
 def _label_from_names(names: Any, fallback: str) -> str:
     """Human label from a jsonb player_names array (e.g. 'immoo{, .olz, wiseBoy'),
@@ -139,10 +143,6 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
         a_label, a_guids, b_label, b_guids = teams
         sess_date = await _session_date(db, gsid)
 
-        # Race-safe: the WHERE NOT EXISTS (matching ANY status) makes the insert a
-        # no-op if another tick/worker already opened — or an admin already
-        # settled — a market for this session between the check above and here, so
-        # we can never double-open or re-open a settled one.
         if await _has_roster_cols(db):
             sql = (
                 "INSERT INTO parimutuel_markets "
@@ -165,10 +165,23 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
             )
             params = (gsid, sess_date, a_label, b_label, gsid)
 
-        row = await db.fetch_one(sql, params)
-        if not row:
-            return None  # lost the race — another tick opened it
-        market_id = int(row[0])
+        # There's no unique constraint on gaming_session_id, and INSERT ... WHERE
+        # NOT EXISTS is NOT atomic across concurrent transactions (under READ
+        # COMMITTED both can see no row and both insert). Serialize the check+insert
+        # per session with a transaction-scoped advisory lock, so multiple web
+        # workers / ticks can't split bets across duplicate open markets. The
+        # in-lock re-check (and the WHERE NOT EXISTS) make it idempotent.
+        async with db.transaction():
+            await db.execute("SELECT pg_advisory_xact_lock(?, ?)", (_BETS_LOCK_NS, int(gsid)))
+            if await db.fetch_one(
+                "SELECT id FROM parimutuel_markets WHERE gaming_session_id = ? LIMIT 1",
+                (gsid,),
+            ):
+                return None
+            row = await db.fetch_one(sql, params)
+            if not row:
+                return None
+            market_id = int(row[0])
         logger.info(
             "bets auto-open: opened market %s for gsid %s (%s vs %s)",
             market_id, gsid, a_label, b_label,

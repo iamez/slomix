@@ -4,6 +4,7 @@ Pure helpers plus FakeDB-driven coverage of maybe_open_market's decision logic
 (live gating, existing-market no-op, two-team detection, roster vs legacy INSERT).
 """
 import time
+from contextlib import asynccontextmanager
 from datetime import date
 
 import pytest
@@ -51,6 +52,10 @@ class FakeDB:
 
     async def execute(self, query, params=()):
         return None
+
+    @asynccontextmanager
+    async def transaction(self):
+        yield self
 
 
 @pytest.fixture(autouse=True)
