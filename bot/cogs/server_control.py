@@ -223,7 +223,8 @@ class ServerControl(commands.Cog):
         """Execute SSH command and return (stdout, stderr, exit_code)"""
         ssh = self.get_ssh_client()
         try:
-            stdin, stdout, stderr = ssh.exec_command(command, timeout=timeout)
+            # admin-gated cog; commands are bot-constructed (RCON/config), never raw user input
+            stdin, stdout, stderr = ssh.exec_command(command, timeout=timeout)  # nosec B601
             exit_code = stdout.channel.recv_exit_status()
             output = stdout.read().decode('utf-8')
             error = stderr.read().decode('utf-8')
@@ -547,9 +548,9 @@ class ServerControl(commands.Cog):
             remote_path = f"{self.maps_path}/{sanitized_name}"
             sftp.put(temp_path, remote_path)
 
-            # Set proper permissions (use shlex.quote for safety)
+            # Set proper permissions; path is shlex.quote()'d below, admin-gated.
             safe_path = shlex.quote(remote_path)
-            ssh.exec_command(f"chmod 644 {safe_path}")
+            ssh.exec_command(f"chmod 644 {safe_path}")  # nosec B601
 
             embed = discord.Embed(
                 title="✅ Map Uploaded",
