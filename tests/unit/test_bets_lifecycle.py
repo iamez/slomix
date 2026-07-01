@@ -21,19 +21,23 @@ class FakeDB:
     """Minimal async DB stub that routes queries by content."""
 
     def __init__(self, *, latest_round=None, existing_market=None, teams_rows=None,
-                 session_date_row=("2026-06-30",), roster_cols=2, insert_returns=(99,)):
+                 session_date_row=("2026-06-30",), roster_cols=2, insert_returns=(99,),
+                 finalized=False):
         self.latest_round = latest_round        # (gsid, round_start_unix) | None
         self.existing_market = existing_market   # (id,) | None
         self.teams_rows = teams_rows or []       # list of (team_name, guids, names)
         self.session_date_row = session_date_row
         self.roster_cols = roster_cols
         self.insert_returns = insert_returns
+        self.finalized = finalized               # session_results row exists?
         self.inserts: list[tuple] = []
 
     async def fetch_one(self, query, params=()):
         q = query.lower()
         if "from rounds" in q and "order by round_start_unix" in q:
             return self.latest_round
+        if "from session_results" in q:
+            return (1,) if self.finalized else None
         if "select id from parimutuel_markets" in q:
             return self.existing_market
         if "max(round_date)" in q:
@@ -88,6 +92,14 @@ class TestMaybeOpenMarket:
     async def test_existing_market_noop(self):
         db = FakeDB(latest_round=(132, int(time.time())), existing_market=(7,),
                     teams_rows=_two_team_rows())
+        assert await maybe_open_market(db, 5400) is None
+        assert db.inserts == []
+
+    async def test_finalized_session_noop(self):
+        # Result already recorded (session_results) — don't open a market nobody
+        # can bet on, even if the session is still inside the live window.
+        db = FakeDB(latest_round=(132, int(time.time())), existing_market=None,
+                    teams_rows=_two_team_rows(), finalized=True)
         assert await maybe_open_market(db, 5400) is None
         assert db.inserts == []
 

@@ -136,6 +136,17 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
         )
         if existing:
             return None
+        # Don't open a market for a session whose result is already recorded — a web
+        # restart can land here while a finalized session's last round is still inside
+        # the live window, and place_bet rejects betting once session_results.winning_team
+        # exists (bets_router). Opening one would show an "open" market nobody can bet on.
+        if await db.fetch_one(
+            "SELECT 1 FROM session_results "
+            "WHERE gaming_session_id = ? AND winning_team IN (1, 2) LIMIT 1",
+            (gsid,),
+        ):
+            logger.debug("bets auto-open: gsid %s already finalized — skipping", gsid)
+            return None
         teams = await _two_teams(db, gsid)
         if teams is None:
             logger.debug("bets auto-open: gsid %s has no clean 2-team roster yet", gsid)
