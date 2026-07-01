@@ -167,7 +167,10 @@ ignore_missing_imports = true
 
 [tool.bandit]
 # Scan application code; tooling/migrations/tests are out of scope for the gate.
-exclude_dirs = ["tests", "tools", "scripts", "migrations", ".venv", "node_modules"]
+# Path-anchored globs (not bare substrings) so nested dirs inside the scan targets
+# are excluded WITHOUT accidentally matching the deployed `vps_scripts/` package
+# (bare "scripts" is a substring of "vps_scripts").
+exclude_dirs = ["*/tests/*", "*/tools/*", "*/scripts/*", "*/migrations/*", "*/.venv/*", "*/node_modules/*", "*/.mypy_cache/*"]
 # B608 (hardcoded_sql_expressions): documented FALSE-POSITIVE class for this repo —
 # every flagged site interpolates only whitelisted column/table identifiers or config
 # literals, never user input (audited 2026-05-11 b2_sql_injection_audit + 06-15 sweep);
