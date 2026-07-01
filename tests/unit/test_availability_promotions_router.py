@@ -199,6 +199,28 @@ class FakePromotionDB:
             return [(user_id, user_name, status) for (user_id, user_name, status, _updated_at) in rows]
 
         if (
+            "select user_id," in normalized
+            and "from subscription_preferences" in normalized
+            and "where user_id = any($1)" in normalized
+        ):
+            wanted = {int(uid) for uid in (params[0] or [])}
+            out = []
+            for user_id, pref in self.preferences.items():
+                if int(user_id) not in wanted:
+                    continue
+                out.append((
+                    int(user_id),
+                    bool(pref.get("allow_promotions", False)),
+                    str(pref.get("preferred_channel", "any")),
+                    pref.get("telegram_handle_encrypted"),
+                    pref.get("signal_handle_encrypted"),
+                    pref.get("quiet_hours") or {},
+                    str(pref.get("timezone", "Europe/Ljubljana")),
+                    int(pref.get("notify_threshold", 0)),
+                ))
+            return out
+
+        if (
             "select id, job_type, run_at, status, attempts, max_attempts, last_error, sent_at" in normalized
             and "from availability_promotion_jobs" in normalized
             and "where campaign_id = $1" in normalized
