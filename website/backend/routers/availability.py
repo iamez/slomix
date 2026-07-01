@@ -1069,6 +1069,30 @@ async def _load_subscription_preference_row(db, website_user_id: int):
     )
 
 
+async def _load_subscription_preference_rows(db, website_user_ids: list[int]) -> dict[int, tuple]:
+    """Batch-load subscription preferences for many users in one query (avoids the
+    per-recipient N+1 in _collect_campaign_recipients). Keyed by user_id; each value
+    is the same 7-column shape as _load_subscription_preference_row."""
+    if not website_user_ids:
+        return {}
+    rows = await db.fetch_all(
+        """
+        SELECT user_id,
+               allow_promotions,
+               preferred_channel,
+               telegram_handle_encrypted,
+               signal_handle_encrypted,
+               quiet_hours,
+               timezone,
+               notify_threshold
+        FROM subscription_preferences
+        WHERE user_id = ANY($1)
+        """,
+        (list(website_user_ids),),
+    )
+    return {int(r[0]): tuple(r[1:]) for r in (rows or [])}
+
+
 def _decode_json_dict(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
@@ -1119,6 +1143,12 @@ async def _collect_campaign_recipients(
     if include_maybe:
         allowed_statuses.add("MAYBE")
 
+    # Batch-load every candidate's subscription prefs up front (one query) instead
+    # of one lookup per recipient inside the loop.
+    prefs_by_id = await _load_subscription_preference_rows(
+        db, [int(r[0]) for r in (rows or [])]
+    )
+
     crypto = _contact_crypto()
     recipients: list[dict[str, Any]] = []
     channels_summary: dict[str, int] = dict.fromkeys(PROMOTION_CHANNEL_TYPES, 0)
@@ -1134,7 +1164,7 @@ async def _collect_campaign_recipients(
         if status not in allowed_statuses:
             continue
 
-        pref_row = await _load_subscription_preference_row(db, discord_user_id)
+        pref_row = prefs_by_id.get(discord_user_id)
         allow_promotions = bool(pref_row[0]) if pref_row else False
         if not allow_promotions:
             continue
