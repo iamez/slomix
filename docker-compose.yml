@@ -64,6 +64,10 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       PROMETHEUS_ENABLED: "true"
       RATE_LIMIT_ENABLED: "true"
+      # Betting auto-open loop (opt-in; 0 = disabled). Passed through so enabling
+      # it in .env actually reaches the api container.
+      BETS_LIFECYCLE_SECONDS: ${BETS_LIFECYCLE_SECONDS:-0}
+      BETS_LIVE_WITHIN_SECONDS: ${BETS_LIVE_WITHIN_SECONDS:-5400}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/status', timeout=5)\""]
       interval: 20s
