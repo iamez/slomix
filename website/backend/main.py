@@ -83,6 +83,7 @@ from website.backend.routers import (
     storytelling_router,
     uploads,
 )
+from website.backend.services.bets_lifecycle import bets_lifecycle_loop
 from website.backend.services.greatshot_jobs import (
     GreatshotJobService,
     get_greatshot_job_service,
@@ -395,6 +396,19 @@ async def startup_event():
             mv_refresh_seconds,
         )
 
+    # Faza B2: optional betting-market auto-open loop. Opt-in via
+    # BETS_LIFECYCLE_SECONDS > 0. Scheduled before the Greatshot early-return so it
+    # runs in either deployment mode. Best-effort + idempotent (see bets_lifecycle).
+    bets_lifecycle_seconds = getenv_int("BETS_LIFECYCLE_SECONDS", 0)
+    if bets_lifecycle_seconds > 0:
+        app.state.bets_lifecycle_task = asyncio.create_task(
+            bets_lifecycle_loop(get_db_pool, bets_lifecycle_seconds),
+            name="bets-lifecycle",
+        )
+        logger.info(
+            "bets lifecycle loop scheduled (interval=%ss)", bets_lifecycle_seconds
+        )
+
     greatshot_startup_enabled = os.getenv("GREATSHOT_STARTUP_ENABLED", "true").lower() in {
         "1",
         "true",
@@ -438,6 +452,8 @@ async def startup_event():
     # disabled to keep app.state attribute consistent.
     if not hasattr(app.state, "weapon_stats_mv_task"):
         app.state.weapon_stats_mv_task = None
+    if not hasattr(app.state, "bets_lifecycle_task"):
+        app.state.bets_lifecycle_task = None
 
     logger.info("✅ Slomix Website Backend Ready")
 
@@ -472,6 +488,15 @@ async def shutdown_event():
                 "weapon_stats_mv refresh task failed during shutdown",
                 exc_info=True,
             )
+    bets_task = getattr(app.state, "bets_lifecycle_task", None)
+    if bets_task is not None and not bets_task.done():
+        bets_task.cancel()
+        try:
+            await asyncio.wait_for(bets_task, timeout=2.0)
+        except asyncio.CancelledError:
+            pass  # Expected during shutdown
+        except Exception:
+            logger.debug("bets lifecycle task failed during shutdown", exc_info=True)
     await cache_backend.close()
     await close_db_pool()  # Clean up DB pool
     logger.info("✅ Slomix Website Backend Stopped")
