@@ -1,11 +1,116 @@
-"""Unit tests for betting auto-lifecycle pure helpers (Faza B2).
+"""Unit tests for betting auto-lifecycle (Faza B2).
 
-The DB paths (_live_gsid / _two_teams / maybe_open_market) are exercised
-end-to-end against a live database; here we cover the pure, DB-free helpers.
+Pure helpers plus FakeDB-driven coverage of maybe_open_market's decision logic
+(live gating, existing-market no-op, two-team detection, roster vs legacy INSERT).
 """
+import time
 from datetime import date
 
-from website.backend.services.bets_lifecycle import _coerce_date, _label_from_names
+import pytest
+
+from website.backend.routers.bets_router import _roster_cols_cache
+from website.backend.services.bets_lifecycle import (
+    _coerce_date,
+    _label_from_names,
+    maybe_open_market,
+)
+
+
+class FakeDB:
+    """Minimal async DB stub that routes queries by content."""
+
+    def __init__(self, *, latest_round=None, existing_market=None, teams_rows=None,
+                 session_date_row=("2026-06-30",), roster_cols=2, insert_returns=(99,)):
+        self.latest_round = latest_round        # (gsid, round_start_unix) | None
+        self.existing_market = existing_market   # (id,) | None
+        self.teams_rows = teams_rows or []       # list of (team_name, guids, names)
+        self.session_date_row = session_date_row
+        self.roster_cols = roster_cols
+        self.insert_returns = insert_returns
+        self.inserts: list[tuple] = []
+
+    async def fetch_one(self, query, params=()):
+        q = query.lower()
+        if "from rounds" in q and "order by round_start_unix" in q:
+            return self.latest_round
+        if "select id from parimutuel_markets" in q:
+            return self.existing_market
+        if "max(round_date)" in q:
+            return self.session_date_row
+        if "information_schema.columns" in q:
+            return (self.roster_cols,)
+        if "insert into parimutuel_markets" in q:
+            self.inserts.append((query, params))
+            return self.insert_returns
+        return None
+
+    async def fetch_all(self, query, params=()):
+        if "from session_teams" in query.lower():
+            return self.teams_rows
+        return []
+
+    async def execute(self, query, params=()):
+        return None
+
+
+@pytest.fixture(autouse=True)
+def _clear_roster_cache():
+    # _has_roster_cols caches a positive result on the module; reset between tests
+    # so the roster-cols vs legacy path is deterministic.
+    _roster_cols_cache.clear()
+    yield
+    _roster_cols_cache.clear()
+
+
+def _two_team_rows():
+    return [
+        ("Team A", '["42E142B3", "5D989160"]', '["immoo{", ".olz"]'),
+        ("Team B", '["1EDBF300", "EDBB5DA9"]', '["KaNii", "vid"]'),
+    ]
+
+
+class TestMaybeOpenMarket:
+    async def test_no_live_session(self):
+        db = FakeDB(latest_round=None)
+        assert await maybe_open_market(db, 5400) is None
+        assert db.inserts == []
+
+    async def test_stale_session_not_live(self):
+        db = FakeDB(latest_round=(132, int(time.time()) - 10_000))
+        assert await maybe_open_market(db, 5400) is None  # 10000s > 5400s window
+        assert db.inserts == []
+
+    async def test_existing_market_noop(self):
+        db = FakeDB(latest_round=(132, int(time.time())), existing_market=(7,),
+                    teams_rows=_two_team_rows())
+        assert await maybe_open_market(db, 5400) is None
+        assert db.inserts == []
+
+    async def test_no_clean_two_teams(self):
+        db = FakeDB(latest_round=(132, int(time.time())), existing_market=None,
+                    teams_rows=[("Team A", "[]", "[]")])  # only one row
+        assert await maybe_open_market(db, 5400) is None
+        assert db.inserts == []
+
+    async def test_happy_roster_path(self):
+        db = FakeDB(latest_round=(132, int(time.time())), existing_market=None,
+                    teams_rows=_two_team_rows(), roster_cols=2, insert_returns=(42,))
+        mid = await maybe_open_market(db, 5400)
+        assert mid == 42
+        assert len(db.inserts) == 1
+        sql, params = db.inserts[0]
+        assert "team_a_guids" in sql and "team_b_guids" in sql
+        # labels derived from player_names
+        assert "immoo{, .olz" in params and "KaNii, vid" in params
+
+    async def test_legacy_path_without_roster_cols(self):
+        db = FakeDB(latest_round=(132, int(time.time())), existing_market=None,
+                    teams_rows=_two_team_rows(), roster_cols=0, insert_returns=(43,))
+        mid = await maybe_open_market(db, 5400)
+        assert mid == 43
+        assert len(db.inserts) == 1
+        sql, _params = db.inserts[0]
+        assert "team_a_guids" not in sql
 
 
 class TestLabelFromNames:

@@ -58,12 +58,13 @@ def _label_from_names(names: Any, fallback: str) -> str:
 async def _live_gsid(db, live_within_seconds: int) -> int | None:
     """gaming_session_id of the most recent session whose latest round is within
     live_within_seconds of now, else None."""
+    # The single most-recent round's session IS the live session — take just that
+    # row (index-friendly) instead of aggregating the whole rounds table each tick.
     row = await db.fetch_one(
-        "SELECT gaming_session_id, MAX(round_start_unix) "
+        "SELECT gaming_session_id, round_start_unix "
         "FROM rounds "
         "WHERE gaming_session_id IS NOT NULL AND round_start_unix IS NOT NULL "
-        "GROUP BY gaming_session_id "
-        "ORDER BY MAX(round_start_unix) DESC LIMIT 1"
+        "ORDER BY round_start_unix DESC LIMIT 1"
     )
     if not row or row[1] is None:
         return None
@@ -121,9 +122,12 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
         gsid = await _live_gsid(db, live_within_seconds)
         if gsid is None:
             return None
+        # One market per session, EVER — match ANY status, not just 'open'. Guarding
+        # only on 'open' would re-open a fresh market if an admin settled/closed the
+        # session's market while its last round was still inside the live window.
         existing = await db.fetch_one(
             "SELECT id FROM parimutuel_markets "
-            "WHERE gaming_session_id = ? AND status = 'open' LIMIT 1",
+            "WHERE gaming_session_id = ? LIMIT 1",
             (gsid,),
         )
         if existing:
@@ -135,9 +139,10 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
         a_label, a_guids, b_label, b_guids = teams
         sess_date = await _session_date(db, gsid)
 
-        # Race-safe: the WHERE NOT EXISTS makes the insert a no-op if another tick
-        # or worker already opened a market for this session between the check above
-        # and here, so we can never double-open.
+        # Race-safe: the WHERE NOT EXISTS (matching ANY status) makes the insert a
+        # no-op if another tick/worker already opened — or an admin already
+        # settled — a market for this session between the check above and here, so
+        # we can never double-open or re-open a settled one.
         if await _has_roster_cols(db):
             sql = (
                 "INSERT INTO parimutuel_markets "
@@ -145,7 +150,7 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
                 " team_a_guids, team_b_guids, status) "
                 "SELECT ?, ?, ?, ?, ?, ?, 'open' "
                 "WHERE NOT EXISTS (SELECT 1 FROM parimutuel_markets "
-                "  WHERE gaming_session_id = ? AND status = 'open') "
+                "  WHERE gaming_session_id = ?) "
                 "RETURNING id"
             )
             params = (gsid, sess_date, a_label, b_label, a_guids, b_guids, gsid)
@@ -155,7 +160,7 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
                 "(gaming_session_id, session_date, team_a_label, team_b_label, status) "
                 "SELECT ?, ?, ?, ?, 'open' "
                 "WHERE NOT EXISTS (SELECT 1 FROM parimutuel_markets "
-                "  WHERE gaming_session_id = ? AND status = 'open') "
+                "  WHERE gaming_session_id = ?) "
                 "RETURNING id"
             )
             params = (gsid, sess_date, a_label, b_label, gsid)
@@ -169,6 +174,8 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
             market_id, gsid, a_label, b_label,
         )
         return market_id
+    except asyncio.CancelledError:
+        raise  # never swallow cancellation (it's BaseException, but be explicit)
     except Exception as exc:  # best-effort — never break the loop
         logger.warning("bets auto-open failed: %s", exc)
         return None
