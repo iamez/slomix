@@ -120,15 +120,20 @@ jobs:
             --ignore-vuln PYSEC-2026-248 \
             --ignore-vuln CVE-2026-48818 \
             --ignore-vuln CVE-2026-48817
+          # The website venv is built from its own manifest (rsync_deploy_vm.sh,
+          # slomix_vm_setup.sh) — audit it too so the web app can't lag on a
+          # vulnerable pin. It lists no starlette/paramiko, so no ignores needed.
+          pip-audit -r website/requirements.txt --progress-spinner=off
 
       - name: Static security scan (bandit)
         # Config in pyproject.toml [tool.bandit]: -ll = medium+ severity. B608 is a
         # documented SQL false-positive class (whitelisted identifiers, parameterized
         # values); intentional B601/B104 sites carry targeted `# nosec`. Targets cover
-        # every runtime Python package (bot, website backend, proximity parser,
-        # greatshot, the deployed vps_scripts watcher, the root DB manager);
-        # tests/tools/scripts/migrations are excluded via pyproject [tool.bandit].
-        run: bandit -c pyproject.toml -r bot website/backend proximity greatshot vps_scripts postgresql_database_manager.py -ll
+        # every runtime Python package (bot, website backend, the shared package
+        # imported by the backend, proximity parser, greatshot, the deployed
+        # vps_scripts watcher, the root DB manager); tests/tools/scripts/migrations
+        # are excluded via pyproject [tool.bandit].
+        run: bandit -c pyproject.toml -r bot website/backend shared proximity greatshot vps_scripts postgresql_database_manager.py -ll
 
   docker-build:
     name: Docker Build
