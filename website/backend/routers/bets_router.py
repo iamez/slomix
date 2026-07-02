@@ -387,7 +387,10 @@ async def settle_market_locked(db, market_id: int, outcome_override: str | None 
         raise SettleSkip("already_settled", "Market already settled")
     gsid = market[1]
 
-    outcome = (outcome_override or "").strip()
+    # Coerce first: callers pass raw JSON (payload.get('outcome')), which may be a
+    # non-string; str() keeps a bad value on the clean SettleSkip('unresolved')
+    # path instead of raising AttributeError -> 500.
+    outcome = str(outcome_override or "").strip()
     if not outcome and gsid:
         # Auto-resolve from session_results, roster-bound when available
         # (not a positional winning_team=1->team_a assumption — see
@@ -481,7 +484,8 @@ async def settle_market(
         async with db.transaction():
             return await settle_market_locked(db, market_id, payload.get("outcome"))
     except SettleSkip as exc:
+        # `from None`: expected control flow, don't chain a noisy internal traceback.
         raise HTTPException(
             status_code=404 if exc.code == "not_found" else 400,
             detail=exc.detail,
-        )
+        ) from None

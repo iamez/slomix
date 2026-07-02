@@ -215,17 +215,20 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
 async def maybe_settle_markets(db) -> int:
     """Auto-settle every still-open market whose gaming session already has a
     recorded result. Uses the shared settle_market_locked (same payout math as the
-    admin endpoint), one transaction per market. Returns how many were settled.
-    Best-effort — never raises out."""
+    admin endpoint), one transaction per market. A decisive result (winning_team
+    1/2) auto-resolves the winner; a draw (winning_team 0) settles as 'void' so the
+    stakes are refunded instead of leaving the market open forever. Returns how many
+    were settled. Best-effort — never raises out."""
     if db is None:
         return 0
     try:
         rows = await db.fetch_all(
-            "SELECT m.id FROM parimutuel_markets m "
-            "WHERE m.status = 'open' AND m.gaming_session_id IS NOT NULL "
-            "  AND EXISTS (SELECT 1 FROM session_results sr "
-            "              WHERE sr.gaming_session_id = m.gaming_session_id "
-            "                AND sr.winning_team IN (1, 2))"
+            "SELECT m.id, "
+            "  (SELECT sr.winning_team FROM session_results sr "
+            "   WHERE sr.gaming_session_id = m.gaming_session_id "
+            "   ORDER BY sr.session_end DESC NULLS LAST LIMIT 1) AS winning_team "
+            "FROM parimutuel_markets m "
+            "WHERE m.status = 'open' AND m.gaming_session_id IS NOT NULL"
         )
     except asyncio.CancelledError:
         raise
@@ -235,10 +238,15 @@ async def maybe_settle_markets(db) -> int:
 
     settled = 0
     for row in rows or []:
+        winning_team = row[1]
+        if winning_team is None:
+            continue  # session result not recorded yet — leave the market open
         market_id = int(row[0])
+        # 1/2 -> auto-resolve the winner; anything else (draw = 0) -> void/refund.
+        override = None if int(winning_team) in (1, 2) else "void"
         try:
             async with db.transaction():
-                result = await settle_market_locked(db, market_id)
+                result = await settle_market_locked(db, market_id, override)
             settled += 1
             logger.info(
                 "bets auto-settle: market %s -> %s (pool=%s, bets=%s)",

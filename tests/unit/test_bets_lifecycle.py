@@ -173,15 +173,17 @@ class TestCoerceDate:
 
 
 class _SettleFakeDB:
-    """Stub for maybe_settle_markets: returns canned open-market ids for the scan."""
+    """Stub for maybe_settle_markets: the scan returns (market_id, winning_team)
+    rows. `markets` is a list of (id, winning_team) tuples; winning_team None means
+    the session result isn't recorded yet."""
 
-    def __init__(self, open_market_ids):
-        self.open_market_ids = open_market_ids
+    def __init__(self, markets):
+        self.markets = markets
 
     async def fetch_all(self, query, params=()):
         q = query.lower()
         if "from parimutuel_markets m" in q and "status = 'open'" in q:
-            return [(mid,) for mid in self.open_market_ids]
+            return [(mid, wt) for (mid, wt) in self.markets]
         return []
 
     @asynccontextmanager
@@ -194,15 +196,34 @@ class TestMaybeSettleMarkets:
         calls = []
 
         async def fake_settle(db, market_id, outcome_override=None):
-            calls.append(market_id)
+            calls.append((market_id, outcome_override))
             return {"outcome": "team_a", "total_pool": 0, "bets": 0}
 
         monkeypatch.setattr(
             "website.backend.services.bets_lifecycle.settle_market_locked", fake_settle
         )
-        n = await maybe_settle_markets(_SettleFakeDB([10, 11]))
+        n = await maybe_settle_markets(_SettleFakeDB([(10, 1), (11, 2)]))
         assert n == 2
-        assert calls == [10, 11]
+        # decisive results auto-resolve (override None)
+        assert calls == [(10, None), (11, None)]
+
+    async def test_draw_settles_as_void(self, monkeypatch):
+        calls = []
+
+        async def fake_settle(db, market_id, outcome_override=None):
+            calls.append((market_id, outcome_override))
+            return {"outcome": "void", "total_pool": 0, "bets": 0}
+
+        monkeypatch.setattr(
+            "website.backend.services.bets_lifecycle.settle_market_locked", fake_settle
+        )
+        n = await maybe_settle_markets(_SettleFakeDB([(10, 0)]))
+        assert n == 1
+        assert calls == [(10, "void")]  # draw -> void/refund
+
+    async def test_unrecorded_result_skipped(self):
+        # winning_team None -> session result not in yet -> left open, not settled.
+        assert await maybe_settle_markets(_SettleFakeDB([(10, None)])) == 0
 
     async def test_nothing_to_settle(self):
         assert await maybe_settle_markets(_SettleFakeDB([])) == 0
@@ -215,4 +236,4 @@ class TestMaybeSettleMarkets:
             "website.backend.services.bets_lifecycle.settle_market_locked", fake_settle
         )
         # SettleSkip is swallowed per-market -> 0 settled, no raise.
-        assert await maybe_settle_markets(_SettleFakeDB([10])) == 0
+        assert await maybe_settle_markets(_SettleFakeDB([(10, 1)])) == 0
