@@ -288,14 +288,14 @@ async def compute_all_ratings(db) -> list[dict]:
             ) as denied_playtime_pm,
             COALESCE(AVG(pcs.accuracy) FILTER (WHERE pcs.accuracy IS NOT NULL AND pcs.accuracy > 0), 0) as avg_accuracy,
             -- Proximity metrics (6) ────────────────────────────────
-            COALESCE(prox_quality.kill_quality, 1.0) as kill_quality,
+            COALESCE(prox_outcome.kill_quality, 1.0) as kill_quality,
             COALESCE(
                 pts.crossfire_kills::REAL / NULLIF(SUM(pcs.kills), 0), 0
             ) as crossfire_rate,
             COALESCE(
                 prox_trades.trade_count::REAL / NULLIF(SUM(pcs.kills), 0), 0
             ) as trade_rate,
-            COALESCE(prox_perm.gib_rate, 0) as kill_permanence,
+            COALESCE(prox_outcome.gib_rate, 0) as kill_permanence,
             COALESCE(prox_clutch.clutch_rate, 0) as clutch_factor,
             COALESCE(prox_spawn.avg_timing_score, 0) as spawn_timing_eff
 
@@ -310,18 +310,22 @@ async def compute_all_ratings(db) -> list[dict]:
         ) pts ON pts.guid_c = pcs.player_guid
 
         LEFT JOIN (
-            -- Kill Quality Index: gib-weighted outcome average (simplified KIS)
+            -- One scan of proximity_kill_outcome for both proximity metrics:
+            --   kill_quality = gib-weighted outcome average (simplified KIS)
+            --   gib_rate     = gibbed / total (kill permanence)
             SELECT killer_guid_canonical as guid_c,
                 AVG(CASE outcome
                     WHEN 'gibbed' THEN 1.3
                     WHEN 'tapped_out' THEN 1.0
                     WHEN 'revived' THEN 0.5
                     ELSE 1.0
-                END) as kill_quality
+                END) as kill_quality,
+                COUNT(*) FILTER (WHERE outcome = 'gibbed')::REAL
+                / NULLIF(COUNT(*), 0) as gib_rate
             FROM proximity_kill_outcome
             WHERE killer_guid_canonical IS NOT NULL
             GROUP BY killer_guid_canonical
-        ) prox_quality ON prox_quality.guid_c = pcs.player_guid
+        ) prox_outcome ON prox_outcome.guid_c = pcs.player_guid
 
         LEFT JOIN (
             SELECT trader_guid_canonical as guid_c, COUNT(*) as trade_count
@@ -329,15 +333,6 @@ async def compute_all_ratings(db) -> list[dict]:
             WHERE trader_guid_canonical IS NOT NULL
             GROUP BY trader_guid_canonical
         ) prox_trades ON prox_trades.guid_c = pcs.player_guid
-
-        LEFT JOIN (
-            SELECT killer_guid_canonical as guid_c,
-                COUNT(*) FILTER (WHERE outcome = 'gibbed')::REAL
-                / NULLIF(COUNT(*), 0) as gib_rate
-            FROM proximity_kill_outcome
-            WHERE killer_guid_canonical IS NOT NULL
-            GROUP BY killer_guid_canonical
-        ) prox_perm ON prox_perm.guid_c = pcs.player_guid
 
         LEFT JOIN (
             -- Clutch: kills at low HP (<30) or outnumbered (team disadvantage)
@@ -360,9 +355,9 @@ async def compute_all_ratings(db) -> list[dict]:
         ) prox_spawn ON prox_spawn.guid_c = pcs.player_guid
 
         WHERE pcs.round_number > 0
-        GROUP BY pcs.player_guid, prox_quality.kill_quality,
+        GROUP BY pcs.player_guid, prox_outcome.kill_quality,
                  pts.crossfire_kills, prox_trades.trade_count,
-                 prox_perm.gib_rate, prox_clutch.clutch_rate,
+                 prox_outcome.gib_rate, prox_clutch.clutch_rate,
                  prox_spawn.avg_timing_score
         HAVING COUNT(*) >= $1
         ORDER BY pcs.player_guid
