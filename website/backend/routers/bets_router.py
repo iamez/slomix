@@ -356,6 +356,114 @@ async def open_market(
     return {"status": "ok", "market_id": int(row[0])}
 
 
+class SettleSkip(Exception):
+    """A settle precondition wasn't met (market missing / already settled /
+    outcome unresolvable). Non-fatal: the admin endpoint maps it to an HTTP error,
+    the auto-settle loop just skips the market. `code` is one of
+    'not_found' | 'already_settled' | 'unresolved'."""
+
+    def __init__(self, code: str, detail: str):
+        super().__init__(detail)
+        self.code = code
+        self.detail = detail
+
+
+async def settle_market_locked(db, market_id: int, outcome_override: str | None = None) -> dict:
+    """Core settle + payout for one market. MUST be called inside a
+    ``db.transaction()`` (the caller owns the transaction so a mid-payout failure
+    rolls back every write). Locks the market row, resolves the outcome (explicit
+    override else auto from session_results, roster-bound via _resolve_outcome),
+    pays winners / refunds on void-or-no-winners, marks the market settled.
+    Raises SettleSkip when a precondition isn't met. Shared by the admin endpoint
+    and the auto-settle loop so the payout math lives in exactly one place."""
+    market = await db.fetch_one(
+        "SELECT id, gaming_session_id, status FROM parimutuel_markets "
+        "WHERE id = ? FOR UPDATE",
+        (market_id,),
+    )
+    if not market:
+        raise SettleSkip("not_found", "Market not found")
+    if market[2] == "settled":
+        raise SettleSkip("already_settled", "Market already settled")
+    gsid = market[1]
+
+    outcome = (outcome_override or "").strip()
+    if not outcome and gsid:
+        # Auto-resolve from session_results, roster-bound when available
+        # (not a positional winning_team=1->team_a assumption — see
+        # _resolve_outcome / migration 011).
+        wr = await db.fetch_one(
+            "SELECT winning_team, team_1_guids, team_2_guids FROM session_results "
+            "WHERE gaming_session_id = ? ORDER BY session_end DESC NULLS LAST LIMIT 1",
+            (int(gsid),),
+        )
+        if wr and wr[0] in (1, 2):
+            outcome = await _resolve_outcome(db, market_id, int(wr[0]), wr[1], wr[2])
+    if outcome not in (*_CHOICES, "void"):
+        raise SettleSkip("unresolved", "outcome must be team_a|team_b|void (or resolvable)")
+
+    bets = await db.fetch_all(
+        "SELECT id, user_id, choice, amount FROM parimutuel_bets WHERE market_id = ?",
+        (market_id,),
+    )
+    bets = bets or []
+    total_pool = sum(int(b[3]) for b in bets)
+    winning_pool = sum(int(b[3]) for b in bets if b[2] == outcome)
+
+    # No winners (or void) -> refund every stake.
+    refund_all = outcome == "void" or winning_pool == 0
+
+    # Resolve each bet's payout. For the winner split, floor division leaves a
+    # remainder (< number of winners); hand it out +1 at a time to the largest
+    # stakes (tie-break by bet id) so sum(payouts) == total_pool exactly.
+    resolved = []  # (bid, uid, payout, status, net)
+    if refund_all:
+        for bid, uid, _choice, amount in bets:
+            resolved.append((bid, uid, int(amount), "refunded", 0))
+    else:
+        winners = [(b[0], b[1], int(b[3])) for b in bets if b[2] == outcome]
+        losers = [(b[0], b[1], int(b[3])) for b in bets if b[2] != outcome]
+        floor = {bid: (amount * total_pool) // winning_pool
+                 for bid, _uid, amount in winners}
+        remainder = total_pool - sum(floor.values())
+        order = sorted(winners, key=lambda w: (-w[2], w[0]))
+        for i in range(remainder):
+            floor[order[i % len(order)][0]] += 1
+        for bid, uid, amount in winners:
+            payout = floor[bid]
+            resolved.append((bid, uid, payout, "won", payout - amount))
+        for bid, uid, amount in losers:
+            resolved.append((bid, uid, 0, "lost", 0))
+
+    for bid, uid, payout, status, net in resolved:
+        await db.execute(
+            "UPDATE parimutuel_bets SET payout = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (payout, status, bid),
+        )
+        if payout > 0:
+            # Credit the wallet (bettor always has a row from place_bet; upsert
+            # is defensive). DO UPDATE adds onto the existing balance.
+            await db.execute(
+                """
+                INSERT INTO user_points (user_id, balance, lifetime_earned)
+                VALUES (?, ?, ?)
+                ON CONFLICT (user_id) DO UPDATE
+                SET balance = user_points.balance + EXCLUDED.balance,
+                    lifetime_earned = user_points.lifetime_earned + EXCLUDED.lifetime_earned,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (int(uid), payout, max(0, net)),
+            )
+
+    await db.execute(
+        "UPDATE parimutuel_markets SET status = 'settled', outcome = ?, "
+        "settled_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (outcome, market_id),
+    )
+    return {"status": "ok", "outcome": outcome, "total_pool": total_pool,
+            "winning_pool": winning_pool, "refunded": refund_all, "bets": len(bets)}
+
+
 @router.post("/market/{market_id}/settle")
 async def settle_market(
     request: Request,
@@ -367,94 +475,13 @@ async def settle_market(
     """Settle a market and pay out winners (admin). Atomic + race-safe."""
     require_ajax_csrf_header(request)
     payload = payload or {}
-
-    # One transaction: lock the market row up front so two concurrent settles
-    # can't both pass the status check (double-pay) and a mid-loop failure rolls
-    # back every payout instead of leaving the market half-settled.
-    async with db.transaction():
-        market = await db.fetch_one(
-            "SELECT id, gaming_session_id, status FROM parimutuel_markets "
-            "WHERE id = ? FOR UPDATE",
-            (market_id,),
+    # One transaction: the row lock in settle_market_locked stops two concurrent
+    # settles from double-paying, and a mid-payout failure rolls back every write.
+    try:
+        async with db.transaction():
+            return await settle_market_locked(db, market_id, payload.get("outcome"))
+    except SettleSkip as exc:
+        raise HTTPException(
+            status_code=404 if exc.code == "not_found" else 400,
+            detail=exc.detail,
         )
-        if not market:
-            raise HTTPException(status_code=404, detail="Market not found")
-        if market[2] == "settled":
-            raise HTTPException(status_code=400, detail="Market already settled")
-        gsid = market[1]
-
-        outcome = (payload.get("outcome") or "").strip()
-        if not outcome and gsid:
-            # Auto-resolve from session_results, roster-bound when available
-            # (not a positional winning_team=1->team_a assumption — see
-            # _resolve_outcome / migration 011).
-            wr = await db.fetch_one(
-                "SELECT winning_team, team_1_guids, team_2_guids FROM session_results "
-                "WHERE gaming_session_id = ? ORDER BY session_end DESC NULLS LAST LIMIT 1",
-                (int(gsid),),
-            )
-            if wr and wr[0] in (1, 2):
-                outcome = await _resolve_outcome(db, market_id, int(wr[0]), wr[1], wr[2])
-        if outcome not in (*_CHOICES, "void"):
-            raise HTTPException(status_code=400, detail="outcome must be team_a|team_b|void (or resolvable)")
-
-        bets = await db.fetch_all(
-            "SELECT id, user_id, choice, amount FROM parimutuel_bets WHERE market_id = ?",
-            (market_id,),
-        )
-        bets = bets or []
-        total_pool = sum(int(b[3]) for b in bets)
-        winning_pool = sum(int(b[3]) for b in bets if b[2] == outcome)
-
-        # No winners (or void) -> refund every stake.
-        refund_all = outcome == "void" or winning_pool == 0
-
-        # Resolve each bet's payout. For the winner split, floor division leaves a
-        # remainder (< number of winners); hand it out +1 at a time to the largest
-        # stakes (tie-break by bet id) so sum(payouts) == total_pool exactly.
-        resolved = []  # (bid, uid, payout, status, net)
-        if refund_all:
-            for bid, uid, _choice, amount in bets:
-                resolved.append((bid, uid, int(amount), "refunded", 0))
-        else:
-            winners = [(b[0], b[1], int(b[3])) for b in bets if b[2] == outcome]
-            losers = [(b[0], b[1], int(b[3])) for b in bets if b[2] != outcome]
-            floor = {bid: (amount * total_pool) // winning_pool
-                     for bid, _uid, amount in winners}
-            remainder = total_pool - sum(floor.values())
-            order = sorted(winners, key=lambda w: (-w[2], w[0]))
-            for i in range(remainder):
-                floor[order[i % len(order)][0]] += 1
-            for bid, uid, amount in winners:
-                payout = floor[bid]
-                resolved.append((bid, uid, payout, "won", payout - amount))
-            for bid, uid, amount in losers:
-                resolved.append((bid, uid, 0, "lost", 0))
-
-        for bid, uid, payout, status, net in resolved:
-            await db.execute(
-                "UPDATE parimutuel_bets SET payout = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (payout, status, bid),
-            )
-            if payout > 0:
-                # Credit the wallet (bettor always has a row from place_bet; upsert
-                # is defensive). DO UPDATE adds onto the existing balance.
-                await db.execute(
-                    """
-                    INSERT INTO user_points (user_id, balance, lifetime_earned)
-                    VALUES (?, ?, ?)
-                    ON CONFLICT (user_id) DO UPDATE
-                    SET balance = user_points.balance + EXCLUDED.balance,
-                        lifetime_earned = user_points.lifetime_earned + EXCLUDED.lifetime_earned,
-                        updated_at = CURRENT_TIMESTAMP
-                    """,
-                    (int(uid), payout, max(0, net)),
-                )
-
-        await db.execute(
-            "UPDATE parimutuel_markets SET status = 'settled', outcome = ?, "
-            "settled_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (outcome, market_id),
-        )
-    return {"status": "ok", "outcome": outcome, "total_pool": total_pool,
-            "winning_pool": winning_pool, "refunded": refund_all, "bets": len(bets)}

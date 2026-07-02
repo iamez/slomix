@@ -9,11 +9,12 @@ from datetime import date
 
 import pytest
 
-from website.backend.routers.bets_router import _roster_cols_cache
+from website.backend.routers.bets_router import SettleSkip, _roster_cols_cache
 from website.backend.services.bets_lifecycle import (
     _coerce_date,
     _label_from_names,
     maybe_open_market,
+    maybe_settle_markets,
 )
 
 
@@ -169,3 +170,49 @@ class TestCoerceDate:
 
     def test_garbage_returns_none(self):
         assert _coerce_date("not-a-date") is None
+
+
+class _SettleFakeDB:
+    """Stub for maybe_settle_markets: returns canned open-market ids for the scan."""
+
+    def __init__(self, open_market_ids):
+        self.open_market_ids = open_market_ids
+
+    async def fetch_all(self, query, params=()):
+        q = query.lower()
+        if "from parimutuel_markets m" in q and "status = 'open'" in q:
+            return [(mid,) for mid in self.open_market_ids]
+        return []
+
+    @asynccontextmanager
+    async def transaction(self):
+        yield self
+
+
+class TestMaybeSettleMarkets:
+    async def test_settles_each_open_finalized_market(self, monkeypatch):
+        calls = []
+
+        async def fake_settle(db, market_id, outcome_override=None):
+            calls.append(market_id)
+            return {"outcome": "team_a", "total_pool": 0, "bets": 0}
+
+        monkeypatch.setattr(
+            "website.backend.services.bets_lifecycle.settle_market_locked", fake_settle
+        )
+        n = await maybe_settle_markets(_SettleFakeDB([10, 11]))
+        assert n == 2
+        assert calls == [10, 11]
+
+    async def test_nothing_to_settle(self):
+        assert await maybe_settle_markets(_SettleFakeDB([])) == 0
+
+    async def test_skips_on_settleskip(self, monkeypatch):
+        async def fake_settle(db, market_id, outcome_override=None):
+            raise SettleSkip("already_settled", "already settled")
+
+        monkeypatch.setattr(
+            "website.backend.services.bets_lifecycle.settle_market_locked", fake_settle
+        )
+        # SettleSkip is swallowed per-market -> 0 settled, no raise.
+        assert await maybe_settle_markets(_SettleFakeDB([10])) == 0
