@@ -397,6 +397,14 @@ class PostgreSQLDatabaseManager:
                 )
             ''')
 
+            # Ensure the column exists before indexing it: on an OLDER pre-existing
+            # rounds table the CREATE TABLE IF NOT EXISTS above is a no-op, so the
+            # index would reference a missing column and abort the whole bootstrap
+            # before _migrate_schema_if_needed() could add it. ADD COLUMN IF NOT
+            # EXISTS is a no-op on a freshly-created table.
+            await conn.execute('''
+                ALTER TABLE rounds ADD COLUMN IF NOT EXISTS round_canonical_id VARCHAR(64)
+            ''')
             # Partial UNIQUE index on round_canonical_id (matches schema_postgresql.sql
             # uniq_rounds_canonical_id) — required for the INSERT ... ON CONFLICT
             # (round_canonical_id) pattern, else a fresh bootstrap allows duplicates.
