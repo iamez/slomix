@@ -1,21 +1,22 @@
 """Betting market auto-lifecycle (VISION_2026 Sprint S4 "TEKMA" — Faza B2).
 
-Web-side background loop that auto-OPENS a parimutuel session-winner market when a
-live gaming session with two teams is detected, so an admin no longer has to open
-one by hand every session. No bot changes, no cron, and — deliberately — no writes
-on any read endpoint (get_current_market stays read-only); the work runs in this
-loop instead.
+Web-side background loop that manages the full parimutuel session-winner lifecycle
+so an admin no longer has to touch it by hand:
+- auto-OPENS a market when a live gaming session with two teams is detected, and
+- auto-SETTLES a market once its session result is recorded.
+No bot changes, no cron, and — deliberately — no writes on any read endpoint
+(get_current_market stays read-only); the work runs in this loop instead.
 
 Everything here is best-effort and idempotent:
 - opens at most one market per gaming_session_id (race-safe INSERT ... WHERE NOT
-  EXISTS, so two workers / two ticks can't double-open),
-- only fires while the session is "live" (last round within BETS_LIVE_WITHIN_SECONDS),
+  EXISTS + a per-session advisory lock, so two workers / ticks can't double-open),
+- only opens while the session is "live" (last round within BETS_LIVE_WITHIN_SECONDS)
+  and its result isn't already recorded,
 - binds the real rosters (migration 011) so settle resolves the winner by overlap,
   falling back to a roster-less market when the columns aren't there yet,
+- settle reuses the admin endpoint's exact payout core (settle_market_locked), one
+  transaction per market,
 - never raises out of the loop.
-
-Auto-SETTLE is intentionally left to the existing admin endpoint for now (its payout
-split is unit-tested); wiring it into this loop is the natural follow-up.
 """
 from __future__ import annotations
 
@@ -30,8 +31,14 @@ from website.backend.env_utils import getenv_int
 from website.backend.logging_config import get_app_logger
 
 # Reuse the single source of truth for roster-column detection + serialization so
-# auto-open and the admin open_market can never diverge.
-from website.backend.routers.bets_router import _has_roster_cols, _serialize_roster
+# auto-open and the admin open_market can never diverge, and the shared settle core
+# so auto-settle uses the exact same payout math as the admin endpoint.
+from website.backend.routers.bets_router import (
+    SettleSkip,
+    _has_roster_cols,
+    _serialize_roster,
+    settle_market_locked,
+)
 
 logger = get_app_logger("services.bets_lifecycle")
 
@@ -205,8 +212,59 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
         return None
 
 
+async def maybe_settle_markets(db) -> int:
+    """Auto-settle every still-open market whose gaming session already has a
+    recorded result. Uses the shared settle_market_locked (same payout math as the
+    admin endpoint), one transaction per market. A decisive result (winning_team
+    1/2) auto-resolves the winner; a draw (winning_team 0) settles as 'void' so the
+    stakes are refunded instead of leaving the market open forever. Returns how many
+    were settled. Best-effort — never raises out."""
+    if db is None:
+        return 0
+    try:
+        rows = await db.fetch_all(
+            "SELECT m.id, "
+            "  (SELECT sr.winning_team FROM session_results sr "
+            "   WHERE sr.gaming_session_id = m.gaming_session_id "
+            "   ORDER BY sr.session_end DESC NULLS LAST LIMIT 1) AS winning_team "
+            "FROM parimutuel_markets m "
+            "WHERE m.status = 'open' AND m.gaming_session_id IS NOT NULL"
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.warning("bets auto-settle scan failed: %s", exc)
+        return 0
+
+    settled = 0
+    for row in rows or []:
+        winning_team = row[1]
+        if winning_team is None:
+            continue  # session result not recorded yet — leave the market open
+        market_id = int(row[0])
+        # 1/2 -> auto-resolve the winner; anything else (draw = 0) -> void/refund.
+        override = None if int(winning_team) in (1, 2) else "void"
+        try:
+            async with db.transaction():
+                result = await settle_market_locked(db, market_id, override)
+            settled += 1
+            logger.info(
+                "bets auto-settle: market %s -> %s (pool=%s, bets=%s)",
+                market_id, result.get("outcome"), result.get("total_pool"),
+                result.get("bets"),
+            )
+        except SettleSkip:
+            continue  # already settled / unresolved between scan and lock — skip
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # one bad market must not stop the rest
+            logger.warning("bets auto-settle failed for market %s: %s", market_id, exc)
+    return settled
+
+
 async def bets_lifecycle_loop(db_factory: Any, interval_seconds: int | None = None) -> None:
-    """Background loop that auto-opens betting markets on an interval.
+    """Background loop that auto-opens and auto-settles betting markets on an
+    interval.
 
     db_factory may be a DatabaseAdapter or a zero-arg callable returning one.
     Disabled when interval <= 0 (the default), so it's opt-in via
@@ -228,6 +286,8 @@ async def bets_lifecycle_loop(db_factory: Any, interval_seconds: int | None = No
             db = db_factory() if callable(db_factory) else db_factory
             with contextlib.suppress(Exception):
                 await maybe_open_market(db, live_within)
+            with contextlib.suppress(Exception):
+                await maybe_settle_markets(db)
             await asyncio.sleep(interval_seconds)
     except asyncio.CancelledError:
         logger.info("bets lifecycle loop cancelled")
