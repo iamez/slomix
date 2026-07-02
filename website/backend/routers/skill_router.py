@@ -577,16 +577,20 @@ async def get_movers(
     movers = []
     for guid, cur in latest.items():
         cur_val = cur["val"]
-        hist = history.get(guid)
-        hist_list = hist or []
-        series = ([*hist_list, round(cur_val, 2)] if cur_val is not None else list(hist_list))
-        if not hist or cur_val is None:
+        if cur_val is None:
+            # No value for this metric in the latest session (e.g. acc NULL) — can't
+            # rank, and it does NOT mean "new player". Skip rather than mislabel.
+            continue
+        hist_list = history.get(guid) or []
+        series = [*hist_list, round(cur_val, 2)]
+        if not hist_list:
+            # Genuinely new: played the latest session but has no prior history.
             movers.append({
-                "guid": guid, "name": cur["name"], "latest": None if cur_val is None else round(cur_val, digits),
+                "guid": guid, "name": cur["name"], "latest": round(cur_val, digits),
                 "baseline": None, "delta_pct": None, "series": series, "is_new": True,
             })
             continue
-        avg = sum(hist) / len(hist)
+        avg = sum(hist_list) / len(hist_list)
         if avg <= 0:
             continue
         movers.append({
@@ -632,8 +636,23 @@ async def get_player_form(
     """
     guid = await _resolve_guid(db, identifier)
     if not guid:
+        # Form comes from player_comprehensive_stats, so also resolve players who
+        # have PCS rows but no player_skill_ratings row yet (unrated, < MIN_ROUNDS).
+        row = await db.fetch_one(
+            "SELECT player_guid FROM player_comprehensive_stats WHERE player_guid = $1 LIMIT 1",
+            (identifier,),
+        )
+        if not row:
+            row = await db.fetch_one(
+                "SELECT player_guid FROM player_comprehensive_stats "
+                "WHERE LOWER(player_name) = LOWER($1) "
+                "GROUP BY player_guid ORDER BY COUNT(*) DESC LIMIT 1",
+                (identifier,),
+            )
+        guid = row[0] if row else None
+    if not guid:
         return {"status": "error", "detail": f"Player '{identifier}' not found"}
-    rows = await _form_rows(db, guid, 10)
+    rows = await _form_rows(db, guid, 11)
     if not rows:
         return {"status": "ok", "player_guid": guid, "session_id": None, "metrics": {}}
 

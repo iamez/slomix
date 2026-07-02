@@ -580,6 +580,9 @@ async function loadPlayerForm(root, guid) {
         ${rows}
     `, 'history');
     safeInsertHTML(root, 'beforeend', html);
+    // Re-apply the active tab so this History-only panel shows/hides correctly when
+    // it resolves after the initial render (mirrors loadCareerHistory).
+    _applyActivePfTab();
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 

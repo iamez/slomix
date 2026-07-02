@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from website.backend.routers.skill_router import get_movers
+from website.backend.routers.skill_router import get_movers, get_player_form
 
 
 def _row(guid, name, sid, kills, dpm, deaths=10, obj=0.0, acc=0.0):
@@ -94,3 +94,29 @@ async def test_movers_full_returns_all_up_and_down():
     res = await get_movers(top=1, full=True, db=db)
     assert len(res["movers_up"]) == 2
     assert len(res["movers_down"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_player_form_per_metric():
+    db = AsyncMock()
+    db.fetch_one = AsyncMock(return_value=("AAA",))  # _resolve_guid finds it
+    db.fetch_all = AsyncMock(return_value=[
+        _row("AAA", "hot", 124, 20, 400.0, deaths=10),  # latest: dpm 400, kd 2.0
+        _row("AAA", "hot", 123, 10, 300.0, deaths=10),  # hist:   dpm 300, kd 1.0
+    ])
+    db.fetch_val = AsyncMock(return_value="2026-06-11")
+    res = await get_player_form(identifier="AAA", db=db)
+    assert res["status"] == "ok"
+    assert res["player_guid"] == "AAA"
+    m = res["metrics"]
+    assert m["dpm"]["latest"] == 400 and m["dpm"]["delta_pct"] == 33.3
+    assert m["kd"]["latest"] == 2.0 and m["kd"]["delta_pct"] == 100.0
+    assert m["dpm"]["series"] == [300.0, 400.0]
+
+
+@pytest.mark.asyncio
+async def test_player_form_not_found():
+    db = AsyncMock()
+    db.fetch_one = AsyncMock(return_value=None)  # resolve + PCS fallback both miss
+    res = await get_player_form(identifier="nobody", db=db)
+    assert res["status"] == "error"
