@@ -1069,11 +1069,12 @@ async def _load_subscription_preference_row(db, website_user_id: int):
     )
 
 
-async def _load_subscription_preference_rows(db, website_user_ids: list[int]) -> dict[int, tuple]:
+async def _load_subscription_preference_rows(db, discord_user_ids: list[int]) -> dict[int, tuple]:
     """Batch-load subscription preferences for many users in one query (avoids the
-    per-recipient N+1 in _collect_campaign_recipients). Keyed by user_id; each value
-    is the same 7-column shape as _load_subscription_preference_row."""
-    if not website_user_ids:
+    per-recipient N+1 in _collect_campaign_recipients). The IDs are Discord user IDs
+    (the subscription_preferences.user_id column). Keyed by that id; each value is the
+    same 7-column shape as _load_subscription_preference_row."""
+    if not discord_user_ids:
         return {}
     rows = await db.fetch_all(
         """
@@ -1088,7 +1089,7 @@ async def _load_subscription_preference_rows(db, website_user_ids: list[int]) ->
         FROM subscription_preferences
         WHERE user_id = ANY($1)
         """,
-        (list(website_user_ids),),
+        (list(discord_user_ids),),
     )
     return {int(r[0]): tuple(r[1:]) for r in (rows or [])}
 
@@ -1143,11 +1144,19 @@ async def _collect_campaign_recipients(
     if include_maybe:
         allowed_statuses.add("MAYBE")
 
-    # Batch-load every candidate's subscription prefs up front (one query) instead
-    # of one lookup per recipient inside the loop.
-    prefs_by_id = await _load_subscription_preference_rows(
-        db, [int(r[0]) for r in (rows or [])]
-    )
+    # Batch-load subscription prefs up front in ONE query (instead of a per-recipient
+    # lookup in the loop) — but only for the distinct IDs that actually pass the
+    # status filter, so we don't fetch prefs for candidates we'll skip anyway.
+    eligible_ids: list[int] = []
+    seen_ids: set[int] = set()
+    for row in rows or []:
+        uid = int(row[0])
+        if uid in seen_ids:
+            continue
+        seen_ids.add(uid)
+        if str(row[2] or "").upper() in allowed_statuses:
+            eligible_ids.append(uid)
+    prefs_by_id = await _load_subscription_preference_rows(db, eligible_ids)
 
     crypto = _contact_crypto()
     recipients: list[dict[str, Any]] = []
