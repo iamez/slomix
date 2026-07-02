@@ -397,6 +397,15 @@ class PostgreSQLDatabaseManager:
                 )
             ''')
 
+            # Partial UNIQUE index on round_canonical_id (matches schema_postgresql.sql
+            # uniq_rounds_canonical_id) — required for the INSERT ... ON CONFLICT
+            # (round_canonical_id) pattern, else a fresh bootstrap allows duplicates.
+            await conn.execute('''
+                CREATE UNIQUE INDEX IF NOT EXISTS uniq_rounds_canonical_id
+                ON rounds (round_canonical_id)
+                WHERE round_canonical_id IS NOT NULL
+            ''')
+
             # 2. Player comprehensive stats
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS player_comprehensive_stats (

@@ -26,6 +26,17 @@ _CONSTRAINT_RE = re.compile(
 )
 
 
+def _create_schema_block(manager_text: str) -> str:
+    """Slice out just the _create_schema_if_missing method body, so migration-time
+    CREATE TABLE DDL elsewhere in the file (e.g. a second achievement_notification_
+    ledger inside _migrate_schema_if_needed) can't shadow or mask the bootstrap defs."""
+    start = manager_text.index("async def _create_schema_if_missing")
+    # end at the next method definition at the same (4-space) indentation
+    nxt = re.search(r"\n    async def (?!_create_schema_if_missing)\w", manager_text[start + 1:])
+    end = start + 1 + nxt.start() if nxt else len(manager_text)
+    return manager_text[start:end]
+
+
 def _tables_with_columns(text: str) -> dict[str, set[str]]:
     tables: dict[str, set[str]] = {}
     for m in _CREATE_RE.finditer(text):
@@ -46,11 +57,14 @@ def _tables_with_columns(text: str) -> dict[str, set[str]]:
 
 def test_inline_ddl_matches_canonical_schema():
     schema = _tables_with_columns(_SCHEMA_SQL.read_text())
-    inline = _tables_with_columns(_MANAGER.read_text())
+    inline = _tables_with_columns(_create_schema_block(_MANAGER.read_text()))
 
-    # Sanity: both parsed something (guards against a parser/format regression).
-    assert len(schema) >= 90, f"schema.sql parse looks wrong: {len(schema)} tables"
-    assert len(inline) >= 20, f"inline DDL parse looks wrong: {len(inline)} tables"
+    # Sanity: a known core table must be parsed on both sides with its columns
+    # (guards against a parser/format regression without a brittle count threshold).
+    for side, tables in (("schema.sql", schema), ("inline DDL", inline)):
+        assert "rounds" in tables and "round_canonical_id" in tables["rounds"], (
+            f"{side} parse looks wrong: 'rounds' not parsed with expected columns"
+        )
 
     problems: list[str] = []
     for table, inline_cols in sorted(inline.items()):
