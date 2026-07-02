@@ -6,6 +6,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.20.0](https://github.com/iamez/slomix/compare/v1.19.0...v1.20.0) (2026-07-02)
+
+
+### Features
+
+* **website:** auto-settle betting markets (Faza B2b) ([#419](https://github.com/iamez/slomix/issues/419)) ([b24957f](https://github.com/iamez/slomix/commit/b24957fe89a362b57607476ee0d5eefc307cd029))
+
+
+### Bug Fixes
+
+* **docs:** restore CLAUDE.md as a symlink to docs/CLAUDE.md ([#424](https://github.com/iamez/slomix/issues/424)) ([1026226](https://github.com/iamez/slomix/commit/10262268db1c36e7cb2fa3f13449dd1666a7ecc5))
+
+
+### Performance Improvements
+
+* **website:** micro-perf sweep — single kill-outcome scan + batch campaign prefs ([#417](https://github.com/iamez/slomix/issues/417)) ([f2c9b64](https://github.com/iamez/slomix/commit/f2c9b64bc0a5948084227036e37f157cf2a303f2))
+
 ## [1.19.0](https://github.com/iamez/slomix/compare/v1.18.0...v1.19.0) (2026-07-01)
 
 
