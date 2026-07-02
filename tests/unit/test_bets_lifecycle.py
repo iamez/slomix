@@ -9,11 +9,12 @@ from datetime import date
 
 import pytest
 
-from website.backend.routers.bets_router import _roster_cols_cache
+from website.backend.routers.bets_router import SettleSkip, _roster_cols_cache
 from website.backend.services.bets_lifecycle import (
     _coerce_date,
     _label_from_names,
     maybe_open_market,
+    maybe_settle_markets,
 )
 
 
@@ -169,3 +170,70 @@ class TestCoerceDate:
 
     def test_garbage_returns_none(self):
         assert _coerce_date("not-a-date") is None
+
+
+class _SettleFakeDB:
+    """Stub for maybe_settle_markets: the scan returns (market_id, winning_team)
+    rows. `markets` is a list of (id, winning_team) tuples; winning_team None means
+    the session result isn't recorded yet."""
+
+    def __init__(self, markets):
+        self.markets = markets
+
+    async def fetch_all(self, query, params=()):
+        q = query.lower()
+        if "from parimutuel_markets m" in q and "status = 'open'" in q:
+            return [(mid, wt) for (mid, wt) in self.markets]
+        return []
+
+    @asynccontextmanager
+    async def transaction(self):
+        yield self
+
+
+class TestMaybeSettleMarkets:
+    async def test_settles_each_open_finalized_market(self, monkeypatch):
+        calls = []
+
+        async def fake_settle(db, market_id, outcome_override=None):
+            calls.append((market_id, outcome_override))
+            return {"outcome": "team_a", "total_pool": 0, "bets": 0}
+
+        monkeypatch.setattr(
+            "website.backend.services.bets_lifecycle.settle_market_locked", fake_settle
+        )
+        n = await maybe_settle_markets(_SettleFakeDB([(10, 1), (11, 2)]))
+        assert n == 2
+        # decisive results auto-resolve (override None)
+        assert calls == [(10, None), (11, None)]
+
+    async def test_draw_settles_as_void(self, monkeypatch):
+        calls = []
+
+        async def fake_settle(db, market_id, outcome_override=None):
+            calls.append((market_id, outcome_override))
+            return {"outcome": "void", "total_pool": 0, "bets": 0}
+
+        monkeypatch.setattr(
+            "website.backend.services.bets_lifecycle.settle_market_locked", fake_settle
+        )
+        n = await maybe_settle_markets(_SettleFakeDB([(10, 0)]))
+        assert n == 1
+        assert calls == [(10, "void")]  # draw -> void/refund
+
+    async def test_unrecorded_result_skipped(self):
+        # winning_team None -> session result not in yet -> left open, not settled.
+        assert await maybe_settle_markets(_SettleFakeDB([(10, None)])) == 0
+
+    async def test_nothing_to_settle(self):
+        assert await maybe_settle_markets(_SettleFakeDB([])) == 0
+
+    async def test_skips_on_settleskip(self, monkeypatch):
+        async def fake_settle(db, market_id, outcome_override=None):
+            raise SettleSkip("already_settled", "already settled")
+
+        monkeypatch.setattr(
+            "website.backend.services.bets_lifecycle.settle_market_locked", fake_settle
+        )
+        # SettleSkip is swallowed per-market -> 0 settled, no raise.
+        assert await maybe_settle_markets(_SettleFakeDB([(10, 1)])) == 0
