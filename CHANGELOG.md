@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.21.0](https://github.com/iamez/slomix/compare/v1.20.0...v1.21.0) (2026-07-02)
+
+
+### Features
+
+* **website:** expand "Movers · vs own form" into a full Form feature ([#428](https://github.com/iamez/slomix/issues/428)) ([839ac28](https://github.com/iamez/slomix/commit/839ac28c0fdca507a4defec7f252e52438d48b2c))
+
 ## [1.20.0](https://github.com/iamez/slomix/compare/v1.19.0...v1.20.0) (2026-07-02)
 
 
