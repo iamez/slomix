@@ -10,6 +10,14 @@
 # re-applying an already-applied one is a safe no-op. The deploy also does a
 # pre-migration DB backup (step 2/8) and has a rollback trap.
 #
+# ⚠️ WEBSITE MIGRATIONS ARE NOT APPLIED BY THIS SCRIPT — it only runs root
+# migrations/ (psql -f migrations/$MIG). Verified 2026-07-02 (read-only prod
+# query): prod has website/migrations 001-006 but is MISSING 007-011
+# (planning_rooms, mvp_votes, weekly_challenges, season_awards, parimutuel_markets,
+# team_a_guids). The v1.20.0 code uses those tables, so apply them to the prod DB
+# manually as a separate step (backup first; mind multi-owner — 008 grants to
+# website_app, some tables website_app-owned). See docs/GO_LIVE_CHECKLIST.
+#
 # shellcheck shell=bash
 # shellcheck disable=SC2034
 
