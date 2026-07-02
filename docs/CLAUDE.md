@@ -258,7 +258,7 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 - Website: Upload library, availability polls, greatshot, storytelling, skill rating, BOX scoring
 - Automation: SSH monitoring, voice detection, Lua webhook (v1.7.0)
 - Lua: v6.01 with Oksii adoption (killer_health, alive_count, reinf timing)
-- Code quality: Ruff 0 errors, 2,989 tests, mypy configured
+- Code quality: Ruff 0 errors, 3,302 tests, mypy configured
 - Production Ready: Fully tested and validated
 
 ---
