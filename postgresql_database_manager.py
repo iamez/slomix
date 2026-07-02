@@ -385,6 +385,14 @@ class PostgreSQLDatabaseManager:
                     bot_player_count INTEGER DEFAULT 0,
                     human_player_count INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    -- Columns added by later migrations; kept here so a fresh
+                    -- bootstrap matches tools/schema_postgresql.sql (drift test).
+                    map_play_seq INTEGER,
+                    next_timelimit_minutes INTEGER,
+                    round_canonical_id VARCHAR(64),
+                    round_stopwatch_state VARCHAR(16),
+                    score_confidence VARCHAR(32),
+                    time_to_beat_seconds INTEGER,
                     UNIQUE(match_id, round_number)
                 )
             ''')
@@ -447,6 +455,9 @@ class PostgreSQLDatabaseManager:
                     killing_spree_best INTEGER DEFAULT 0,
                     death_spree_worst INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    -- Migration-added columns; kept in sync with schema_postgresql.sql.
+                    time_dead_minutes_original DOUBLE PRECISION,
+                    time_played_percent REAL DEFAULT 0,
                     FOREIGN KEY (round_id) REFERENCES rounds(id),
                     UNIQUE(round_id, player_guid)
                 )
@@ -637,6 +648,9 @@ class PostgreSQLDatabaseManager:
                     kills INTEGER NOT NULL DEFAULT 0,
                     deaths INTEGER NOT NULL DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    -- Migration-added columns; kept in sync with schema_postgresql.sql.
+                    subject_guid TEXT,
+                    subject_name TEXT,
                     FOREIGN KEY (round_id) REFERENCES rounds(id) ON DELETE CASCADE
                 )
             ''')
@@ -857,7 +871,9 @@ class PostgreSQLDatabaseManager:
                     metadata_json JSONB NOT NULL,
                     stats_json JSONB NOT NULL,
                     events_json JSONB NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    -- Migration-added column; kept in sync with schema_postgresql.sql.
+                    total_kills INTEGER DEFAULT 0
                 )
             ''')
 
