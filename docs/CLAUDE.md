@@ -21,7 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Database**: `etlegacy` on `localhost:5432` (user: `etlegacy_user`, password in `.env`)
 - Use `postgresql_database_manager.py` for ALL DB operations (NOT `database_manager.py`)
 - Use `?` for query parameters (NOT `{ph}` placeholders)
-- Schema: `tools/schema_postgresql.sql` (90 tables, 57 columns in player_comprehensive_stats)
+- Schema: `tools/schema_postgresql.sql` (101 tables, 57 columns in player_comprehensive_stats)
 - NEVER use SQLite syntax (`INSERT OR REPLACE`, `AUTOINCREMENT`, etc.)
 - `bot/core/database_adapter.py` may expose SQLite fallback paths for local/dev tooling, but production remains PostgreSQL-only.
 - See `docs/POSTGRESQL_MIGRATION_INDEX.md` for migration details
@@ -50,7 +50,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 ET:Legacy Game Server -> SSH Monitor -> Parser -> PostgreSQL -> Discord Bot -> Users
-                         (60s poll)    (57 fields)  (90 tables)  (80+ commands)
+                         (60s poll)    (57 fields)  (101 tables)  (80+ commands)
 ```
 
 ### Key Patterns
@@ -253,7 +253,7 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 ## System Status (Version 1.19.0) <!-- x-release-please-version -->
 
 - Parser: 100% functional, R2 differential validated, Oksii fields backward-compatible
-- Database: PostgreSQL (90 tables), no corruption
+- Database: PostgreSQL (101 tables), no corruption
 - Bot: 80+ commands across 20 Cogs, all functional
 - Website: Upload library, availability polls, greatshot, storytelling, skill rating, BOX scoring
 - Automation: SSH monitoring, voice detection, Lua webhook (v1.7.0)
