@@ -11,6 +11,7 @@ export const SESSION_DETAIL_TABS = ['summary', 'players', 'teamplay', 'charts'];
 const STATS_VIEWS = new Set([
     'sessions',
     'leaderboards',
+    'form',
     'maps',
     'weapons',
     'records',
@@ -85,6 +86,15 @@ const ROUTE_DEFINITIONS = Object.freeze({
         migrationWave: 'A',
         buildHash: () => '#/maps',
         load: ({ legacy }) => legacy.loadMapsView(),
+    },
+    form: {
+        viewId: 'form',
+        label: 'Form',
+        mode: VIEW_MODE.LEGACY,
+        surfaceType: 'read-heavy',
+        migrationWave: 'A',
+        buildHash: () => '#/form',
+        load: ({ legacy }) => legacy.loadFormView(),
     },
     weapons: {
         viewId: 'weapons',

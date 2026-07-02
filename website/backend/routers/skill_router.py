@@ -458,50 +458,105 @@ async def get_composite_stats(
     }
 
 
-@router.get("/skill/movers")
-async def get_movers(
-    top: int = 3,
-    db: DatabaseAdapter = Depends(get_db),
-):
-    """Form movers for the home page: last session vs each player's OWN baseline.
+# Form metrics: last session vs each player's OWN recent baseline. Cheap SQL
+# aggregates (no percentiles) so /skill/movers stays one query. label + higher_is_better
+# drive the UI copy + arrow direction (all current metrics: higher = better).
+_MOVER_METRICS = {
+    "dpm": {"label": "Damage / min", "unit": "dpm", "digits": 0},
+    "kd": {"label": "Kills / death", "unit": "K/D", "digits": 2},
+    "obj": {"label": "Objectives / round", "unit": "obj/rd", "digits": 2},
+    "acc": {"label": "Accuracy", "unit": "%", "digits": 1},
+    "kills": {"label": "Kills / session", "unit": "kills", "digits": 0},
+}
 
-    VISION_2026 anti-goal compliance: this is rank-vs-self, not a global
-    ladder — the delta is against the player's trailing-10-session DPM, so a
-    bottom-half player on a hot night tops the movers list.
-    """
-    top = max(1, min(top, 10))
-    rows = await db.fetch_all(
-        """
+
+def _metric_value(metric: str, kills, deaths, dpm, obj, acc):
+    """Pick one session's value for the chosen form metric (None when absent)."""
+    if metric == "dpm":
+        return None if dpm is None else float(dpm)
+    if metric == "kd":
+        d = int(deaths or 0)
+        return float(kills or 0) / d if d > 0 else float(kills or 0)
+    if metric == "obj":
+        return None if obj is None else float(obj)
+    if metric == "acc":
+        return None if acc is None else float(acc)
+    if metric == "kills":
+        return float(kills or 0)
+    return None if dpm is None else float(dpm)
+
+
+async def _form_rows(db, guid: str | None, session_limit: int):
+    """Per-session raw metric rows over the most recent sessions. When guid is
+    given, scope to that player's own sessions (for their profile form); else all
+    players over the recent global sessions (for the movers board). Ordered newest
+    session first."""
+    scope = "AND pcs.player_guid = $1" if guid else ""
+    params = (guid,) if guid else ()
+    return await db.fetch_all(
+        f"""
         WITH recent_sessions AS (
-            SELECT DISTINCT gaming_session_id
-            FROM rounds
-            WHERE gaming_session_id IS NOT NULL
-              AND is_valid IS DISTINCT FROM FALSE
-            ORDER BY gaming_session_id DESC
-            LIMIT 11
+            SELECT DISTINCT r.gaming_session_id
+            FROM rounds r
+            {"JOIN player_comprehensive_stats pcs ON pcs.round_id = r.id" if guid else ""}
+            WHERE r.gaming_session_id IS NOT NULL
+              AND r.is_valid IS DISTINCT FROM FALSE
+              {scope}
+            ORDER BY r.gaming_session_id DESC
+            LIMIT {int(session_limit)}
         ),
         per_session AS (
             SELECT pcs.player_guid,
                    MAX(pcs.player_name) AS player_name,
                    r.gaming_session_id,
                    SUM(pcs.kills) AS kills,
+                   SUM(pcs.deaths) AS deaths,
                    SUM(pcs.damage_given)::float
-                       / NULLIF(SUM(pcs.time_played_seconds) / 60.0, 0) AS dpm
+                       / NULLIF(SUM(pcs.time_played_seconds) / 60.0, 0) AS dpm,
+                   (SUM(pcs.objectives_completed) + SUM(pcs.objectives_destroyed)
+                    + SUM(pcs.objectives_stolen) + SUM(pcs.objectives_returned))::float
+                       / NULLIF(COUNT(*), 0) AS obj,
+                   AVG(pcs.accuracy) FILTER (WHERE pcs.accuracy IS NOT NULL AND pcs.accuracy > 0) AS acc
             FROM player_comprehensive_stats pcs
             JOIN rounds r ON r.id = pcs.round_id
             WHERE r.gaming_session_id IN (SELECT gaming_session_id FROM recent_sessions)
               AND r.is_valid IS DISTINCT FROM FALSE
               AND pcs.time_played_seconds > 0
+              {scope}
             GROUP BY pcs.player_guid, r.gaming_session_id
         )
-        SELECT player_guid, player_name, gaming_session_id, kills, dpm
+        SELECT player_guid, player_name, gaming_session_id, kills, deaths, dpm, obj, acc
         FROM per_session
         ORDER BY gaming_session_id DESC
         """,
-        (),
+        params,
     )
+
+
+@router.get("/skill/movers")
+async def get_movers(
+    top: int = 3,
+    metric: str = "dpm",
+    full: bool = False,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Form movers: last session vs each player's OWN recent baseline.
+
+    VISION_2026 anti-goal compliance: this is rank-vs-self, NOT a global ladder —
+    the delta is against the player's own trailing baseline for the chosen metric,
+    so a bottom-half player on a hot night tops the movers list.
+
+    metric: dpm | kd | obj | acc | kills.  full=true returns every mover (Form
+    page); otherwise the top N up/down (home card). Each mover carries `series`
+    (their per-session values, oldest→newest) for a sparkline.
+    """
+    if metric not in _MOVER_METRICS:
+        metric = "dpm"
+    top = max(1, min(top, 50 if full else 10))
+    rows = await _form_rows(db, None, 11)
     if not rows:
-        return {"status": "ok", "session_id": None, "movers_up": [], "movers_down": []}
+        return {"status": "ok", "session_id": None, "metric": metric,
+                "movers_up": [], "movers_down": [], "new_players": []}
 
     latest_sid = max(int(r[2]) for r in rows)
     latest_date = await db.fetch_val(
@@ -510,48 +565,132 @@ async def get_movers(
     )
 
     latest: dict[str, dict] = {}
-    history: dict[str, list[float]] = {}
-    for guid, name, sid, kills, dpm in rows:
+    history: dict[str, list[float]] = {}  # oldest→newest per guid (excl. latest)
+    for guid, name, sid, kills, deaths, dpm, obj, acc in rows:
+        val = _metric_value(metric, kills, deaths, dpm, obj, acc)
         if int(sid) == latest_sid:
-            latest[guid] = {"name": name, "kills": int(kills or 0), "dpm": float(dpm or 0)}
-        else:
-            history.setdefault(guid, []).append(float(dpm or 0))
+            latest[guid] = {"name": name, "val": val}
+        elif val is not None:
+            history.setdefault(guid, []).insert(0, round(val, 2))  # rows are DESC → prepend
 
+    digits = _MOVER_METRICS[metric]["digits"]
     movers = []
     for guid, cur in latest.items():
-        hist = history.get(guid)
-        if not hist:
+        cur_val = cur["val"]
+        if cur_val is None:
+            # No value for this metric in the latest session (e.g. acc NULL) — can't
+            # rank, and it does NOT mean "new player". Skip rather than mislabel.
+            continue
+        hist_list = history.get(guid) or []
+        series = [*hist_list, round(cur_val, 2)]
+        if not hist_list:
+            # Genuinely new: played the latest session but has no prior history.
             movers.append({
-                "guid": guid, "name": cur["name"], "dpm": round(cur["dpm"], 1),
-                "avg_dpm": None, "delta_pct": None, "is_new": True,
+                "guid": guid, "name": cur["name"], "latest": round(cur_val, digits),
+                "baseline": None, "delta_pct": None, "series": series, "is_new": True,
             })
             continue
-        avg = sum(hist) / len(hist)
+        avg = sum(hist_list) / len(hist_list)
         if avg <= 0:
             continue
         movers.append({
-            "guid": guid, "name": cur["name"], "dpm": round(cur["dpm"], 1),
-            "avg_dpm": round(avg, 1),
-            "delta_pct": round((cur["dpm"] - avg) / avg * 100, 1),
-            "is_new": False,
+            "guid": guid, "name": cur["name"],
+            "latest": round(cur_val, digits), "baseline": round(avg, digits),
+            "delta_pct": round((cur_val - avg) / avg * 100, 1),
+            "series": series, "is_new": False,
         })
 
     ranked = sorted(
         (m for m in movers if m["delta_pct"] is not None),
         key=lambda m: m["delta_pct"], reverse=True,
     )
-    movers_up = [m for m in ranked[:top] if m["delta_pct"] > 0]
-    up_guids = {m["guid"] for m in movers_up}
-    movers_down = [
-        m for m in reversed(ranked[-top:])
-        if m["delta_pct"] < 0 and m["guid"] not in up_guids
-    ]
+    up = [m for m in ranked if m["delta_pct"] > 0]
+    down = [m for m in ranked if m["delta_pct"] < 0]
+    if not full:
+        up = up[:top]
+        up_guids = {m["guid"] for m in up}
+        down = [m for m in reversed(down[-top:]) if m["guid"] not in up_guids]
+    else:
+        down = list(reversed(down))  # most-down first
     return {
         "status": "ok",
         "session_id": latest_sid,
         "session_date": str(latest_date) if latest_date else None,
-        "baseline": "own trailing-10-session DPM",
-        "movers_up": movers_up,
-        "movers_down": movers_down,
+        "metric": metric,
+        "metric_label": _MOVER_METRICS[metric]["label"],
+        "baseline": f"own trailing ~10-session {metric}",
+        "baseline_desc": "last session vs this player's own recent-session average (rank-vs-self, not a global ranking)",
+        "movers_up": up,
+        "movers_down": down,
         "new_players": [m for m in movers if m.get("is_new")],
+    }
+
+
+@router.get("/skill/player/{identifier}/form")
+async def get_player_form(
+    identifier: str,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """One player's form: latest session vs their OWN recent baseline, per metric,
+    with a per-metric series for a sparkline. Powers the 'Your form' profile section.
+    """
+    guid = await _resolve_guid(db, identifier)
+    if not guid:
+        # Form comes from player_comprehensive_stats, so also resolve players who
+        # have PCS rows but no player_skill_ratings row yet (unrated, < MIN_ROUNDS).
+        row = await db.fetch_one(
+            "SELECT player_guid FROM player_comprehensive_stats WHERE player_guid = $1 LIMIT 1",
+            (identifier,),
+        )
+        if not row:
+            row = await db.fetch_one(
+                "SELECT player_guid FROM player_comprehensive_stats "
+                "WHERE LOWER(player_name) = LOWER($1) "
+                "GROUP BY player_guid ORDER BY COUNT(*) DESC LIMIT 1",
+                (identifier,),
+            )
+        guid = row[0] if row else None
+    if not guid:
+        return {"status": "error", "detail": f"Player '{identifier}' not found"}
+    rows = await _form_rows(db, guid, 11)
+    if not rows:
+        return {"status": "ok", "player_guid": guid, "session_id": None, "metrics": {}}
+
+    latest_sid = max(int(r[2]) for r in rows)
+    latest_date = await db.fetch_val(
+        "SELECT MAX(round_date) FROM rounds WHERE gaming_session_id = $1",
+        (latest_sid,),
+    )
+    # rows are this player's sessions, newest first
+    metrics_out = {}
+    for key, meta in _MOVER_METRICS.items():
+        latest_val = None
+        hist: list[float] = []
+        for _guid, _name, sid, kills, deaths, dpm, obj, acc in rows:
+            val = _metric_value(key, kills, deaths, dpm, obj, acc)
+            if val is None:
+                continue
+            if int(sid) == latest_sid:
+                latest_val = val
+            else:
+                hist.insert(0, round(val, 2))
+        series = ([*hist, round(latest_val, 2)] if latest_val is not None else hist)
+        avg = (sum(hist) / len(hist)) if hist else None
+        metrics_out[key] = {
+            "label": meta["label"], "unit": meta["unit"],
+            "latest": None if latest_val is None else round(latest_val, meta["digits"]),
+            "baseline": None if not avg else round(avg, meta["digits"]),
+            "delta_pct": (round((latest_val - avg) / avg * 100, 1)
+                          if (avg and avg > 0 and latest_val is not None) else None),
+            "series": series,
+        }
+    name = rows[0][1]
+    return {
+        "status": "ok",
+        "player_guid": guid,
+        "player_name": name,
+        "session_id": latest_sid,
+        "session_date": str(latest_date) if latest_date else None,
+        "baseline_desc": "last session vs your own recent-session average (rank-vs-self)",
+        "metrics": metrics_out,
     }

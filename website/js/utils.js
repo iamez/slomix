@@ -205,3 +205,28 @@ export function getYouTubeID(url) {
     const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
     return match ? match[1] : null;
 }
+
+/**
+ * Tiny inline-SVG sparkline for a numeric series (oldest→newest). Returns an SVG
+ * string safe to drop into innerHTML (no canvas sizing/timing). Used by the Form
+ * page, the home "Movers · vs own form" card, and the profile "Your form" section.
+ * `up`: true → green, false → red, null → neutral purple. Values are numbers only
+ * (no user text), so the string needs no escaping.
+ */
+export function sparklineSVG(values, { width = 84, height = 22, up = null } = {}) {
+    const vals = (values || []).map(Number).filter((v) => Number.isFinite(v));
+    if (vals.length < 2) return '';
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const span = (max - min) || 1;
+    const pad = 2;
+    const x = (i) => pad + (width - 2 * pad) * (i / (vals.length - 1));
+    const y = (v) => height - pad - (height - 2 * pad) * ((v - min) / span);
+    const pts = vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const lastX = x(vals.length - 1).toFixed(1);
+    const lastY = y(vals[vals.length - 1]).toFixed(1);
+    const stroke = up === true ? '#34d399' : up === false ? '#fb7185' : '#a78bfa';
+    return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" class="inline-block align-middle" aria-hidden="true">`
+        + `<polyline fill="none" stroke="${stroke}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" points="${pts}"/>`
+        + `<circle cx="${lastX}" cy="${lastY}" r="1.9" fill="${stroke}"/></svg>`;
+}

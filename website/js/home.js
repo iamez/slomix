@@ -5,7 +5,7 @@
  * @module home
  */
 
-import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
+import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML, sparklineSVG } from './utils.js';
 import { loadHomeTonightCard } from './tonight.js';
 
 function _card({ title, accent, bodyHtml, href, cta }) {
@@ -62,24 +62,33 @@ function _lastSessionCard(sessions) {
     });
 }
 
+function _moverRow(m, kind) {
+    const spark = sparklineSVG(m.series, { up: kind === 'up' ? true : kind === 'down' ? false : null, width: 56, height: 16 });
+    const right = kind === 'new'
+        ? '<span class="text-amber-400 font-mono text-xs">FIRST NIGHT</span>'
+        : `<span class="${kind === 'up' ? 'text-emerald-400' : 'text-rose-400'} font-mono">${kind === 'up' ? '▲ +' : '▼ '}${m.delta_pct}%</span>`;
+    return `<div class="flex items-center justify-between text-sm gap-2">
+        <a class="text-slate-300 hover:text-brand-cyan transition truncate max-w-[7rem]" href="#/profile/${encodeURIComponent(m.guid)}">${escapeHtml(m.name)}</a>
+        <div class="flex items-center gap-2">${spark}${right}</div></div>`;
+}
+
 function _moversCard(movers) {
     const rows = [];
-    (movers?.movers_up || []).slice(0, 2).forEach(m => rows.push(
-        `<div class="flex justify-between text-sm"><a class="text-slate-300 hover:text-brand-cyan transition" href="#/profile/${encodeURIComponent(m.guid)}">${escapeHtml(m.name)}</a><span class="text-emerald-400 font-mono">▲ ${m.delta_pct > 0 ? '+' : ''}${m.delta_pct}%</span></div>`));
-    (movers?.movers_down || []).slice(0, 2).forEach(m => rows.push(
-        `<div class="flex justify-between text-sm"><a class="text-slate-300 hover:text-brand-cyan transition" href="#/profile/${encodeURIComponent(m.guid)}">${escapeHtml(m.name)}</a><span class="text-rose-400 font-mono">▼ ${m.delta_pct}%</span></div>`));
-    (movers?.new_players || []).slice(0, 1).forEach(m => rows.push(
-        `<div class="flex justify-between text-sm"><a class="text-slate-300 hover:text-brand-cyan transition" href="#/profile/${encodeURIComponent(m.guid)}">${escapeHtml(m.name)}</a><span class="text-amber-400 font-mono text-xs">FIRST NIGHT</span></div>`));
+    (movers?.movers_up || []).slice(0, 2).forEach(m => rows.push(_moverRow(m, 'up')));
+    (movers?.movers_down || []).slice(0, 2).forEach(m => rows.push(_moverRow(m, 'down')));
+    (movers?.new_players || []).slice(0, 1).forEach(m => rows.push(_moverRow(m, 'new')));
     if (!rows.length) {
         return _card({
-            title: 'Movers', accent: 'purple',
+            title: 'Movers · vs own form', accent: 'purple',
             bodyHtml: '<div class="text-sm text-slate-400">Form data appears after the next session.</div>',
+            href: '#/form', cta: 'What is form?',
         });
     }
     return _card({
         title: 'Movers · vs own form', accent: 'purple',
-        bodyHtml: `<div class="space-y-1.5">${rows.join('')}</div>`,
-        href: '#/leaderboards', cta: 'Leaderboards',
+        bodyHtml: `<div class="space-y-1.5">${rows.join('')}</div>`
+            + '<div class="text-[10px] text-slate-500 mt-2">Last session vs each player’s own recent average — not a global ranking.</div>',
+        href: '#/form', cta: 'Full form',
     });
 }
 
