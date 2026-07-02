@@ -65,23 +65,23 @@ function _section(title, accent, movers) {
 async function _render() {
     const list = document.getElementById('form-list');
     if (!list) return;
-    list.innerHTML = '<div class="text-sm text-slate-400 py-6 text-center">Loading form…</div>';
+    list.textContent = 'Loading form…';
     let data;
     try {
         data = await fetchJSON(`${API_BASE}/skill/movers?full=true&metric=${encodeURIComponent(_metric)}`);
     } catch {
-        list.innerHTML = '<div class="text-sm text-rose-400 py-6 text-center">Could not load form data.</div>';
+        list.textContent = 'Could not load form data.';
         return;
     }
     const up = data?.movers_up || [];
     const down = data?.movers_down || [];
     const fresh = data?.new_players || [];
     if (!up.length && !down.length && !fresh.length) {
-        list.innerHTML = '<div class="text-sm text-slate-400 py-6 text-center">Form data appears after the next session.</div>';
+        list.textContent = 'Form data appears after the next session.';
         return;
     }
     const dateTxt = data.session_date ? ` · last session ${escapeHtml(String(data.session_date))}` : '';
-    list.innerHTML = '';
+    list.textContent = '';
     safeInsertHTML(list, 'beforeend',
         `<div class="text-xs text-slate-500 mb-3">Metric: <span class="text-slate-300 font-semibold">${escapeHtml(data.metric_label || _metric)}</span>${dateTxt}</div>`
         + _section('Heating up · above own average', 'purple', up)
@@ -92,7 +92,8 @@ async function _render() {
 export async function loadFormView() {
     const host = document.getElementById('view-form');
     if (!host) return;
-    host.innerHTML = `
+    host.textContent = '';
+    safeInsertHTML(host, 'beforeend', `
         <div class="max-w-3xl mx-auto px-4 py-6">
             <h1 class="text-2xl font-black text-white mb-1">Form <span class="text-brand-purple">· vs own baseline</span></h1>
             <p class="text-sm text-slate-400 mb-4 leading-relaxed">
@@ -105,14 +106,15 @@ export async function loadFormView() {
             </p>
             <div id="form-metric-tabs" class="flex flex-wrap gap-2 mb-5">${_tabsHtml()}</div>
             <div id="form-list"></div>
-        </div>`;
+        </div>`);
     const tabs = document.getElementById('form-metric-tabs');
     if (tabs) {
         tabs.addEventListener('click', (e) => {
             const btn = e.target.closest('button[data-metric]');
             if (!btn) return;
             _metric = btn.dataset.metric;
-            tabs.innerHTML = _tabsHtml();
+            tabs.textContent = '';
+            safeInsertHTML(tabs, 'beforeend', _tabsHtml());
             _render().catch(() => {});
         });
     }
