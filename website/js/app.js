@@ -18,6 +18,7 @@ import { loadLeaderboard, loadQuickLeaders, loadRecentMatches, setNavigateTo as 
 import { loadSeasonInfo, loadLastSession, loadSessionsView, loadSessionMVP, toggleSeasonDetails } from './sessions.js';
 import { loadHomePulseCards } from './home.js';
 import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from './matches.js';
+import { loadFormView } from './form.js';
 
 import { loadRecordsView } from './records.js';
 import { loadAwardsView } from './awards.js';
@@ -90,6 +91,7 @@ const legacyRuntime = {
     loadPlayerProfile,
     loadSessionsView,
     initLeaderboardDefaults,
+    loadFormView,
     loadMapsView,
     loadWeaponsView,
     loadRecordsView,

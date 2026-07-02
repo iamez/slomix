@@ -3,7 +3,7 @@
  * @module player-profile
  */
 
-import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
+import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML, sparklineSVG } from './utils.js';
 
 // Chart instances
 let sessionChartInstance = null;
@@ -544,6 +544,48 @@ function _renderIdentityStrip(data) {
     safeInsertHTML(host, 'beforeend', `<div class="flex flex-wrap gap-2">${chips.join('')}</div>${focus}`);
 }
 
+// "Your form" — this player's last session vs their OWN recent baseline, per
+// metric, with a trend sparkline (rank-vs-self, mirrors the Form page / home card).
+async function loadPlayerForm(root, guid) {
+    if (!root || !guid) return;
+    let data;
+    try {
+        data = await fetchJSON(`${API_BASE}/skill/player/${encodeURIComponent(guid)}/form`);
+    } catch {
+        return;
+    }
+    const metrics = data?.metrics || {};
+    const keys = Object.keys(metrics).filter(k => metrics[k] && metrics[k].latest != null);
+    if (!keys.length) return;
+
+    const rows = keys.map((k) => {
+        const m = metrics[k];
+        const hasDelta = m.delta_pct != null;
+        const up = hasDelta && m.delta_pct > 0;
+        const deltaCls = !hasDelta ? 'text-slate-500' : up ? 'text-emerald-400' : 'text-rose-400';
+        const deltaTxt = !hasDelta ? '—' : `${up ? '▲ +' : '▼ '}${m.delta_pct}%`;
+        const spark = sparklineSVG(m.series, { up: hasDelta ? up : null, width: 72, height: 20 });
+        const base = m.baseline != null ? `${m.latest} <span class="text-slate-600">vs</span> ${m.baseline} <span class="text-slate-600">${escapeHtml(m.unit || '')}</span>` : `${m.latest}`;
+        return `<div class="flex items-center justify-between gap-3 py-2 border-b border-white/5">
+            <span class="text-slate-400 text-xs font-bold uppercase tracking-wide w-28">${escapeHtml(m.label || k)}</span>
+            <div class="flex items-center gap-3">
+                <span class="text-slate-300 text-xs font-mono hidden sm:inline">${base}</span>
+                ${spark}
+                <span class="font-mono text-sm ${deltaCls} w-20 text-right">${escapeHtml(deltaTxt)}</span>
+            </div></div>`;
+    }).join('');
+
+    const html = _panel('Your form · vs own baseline', 'activity', `
+        <p class="text-[11px] text-slate-500 mb-3">Last session vs your own recent-session average (~10 sessions) — rank-vs-self, not a global ranking. ▲ above your usual, ▼ below.</p>
+        ${rows}
+    `, 'history');
+    safeInsertHTML(root, 'beforeend', html);
+    // Re-apply the active tab so this History-only panel shows/hides correctly when
+    // it resolves after the initial render (mirrors loadCareerHistory).
+    _applyActivePfTab();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
 // S5-C — career timeline: ET-Rating sparkline + engraved season awards (History tab).
 async function loadCareerHistory(root, guid) {
     if (!root || !guid) return;
@@ -676,6 +718,7 @@ export async function loadEnhancedProfileSections(playerIdentifier) {
 
     // History tab: rating sparkline + engraved season awards (S5-C, async).
     loadCareerHistory(root, data.guid).catch((e) => console.warn('career history failed', e));
+    loadPlayerForm(root, data.guid).catch((e) => console.warn('player form failed', e));
 
     // Wire the aim map dropdown (rose) after the DOM exists. Pass the
     // structured map list directly (most-played first) — no DOM scraping.
