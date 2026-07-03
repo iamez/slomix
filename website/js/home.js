@@ -66,7 +66,7 @@ function _moverRow(m, kind) {
     const spark = sparklineSVG(m.series, { up: kind === 'up' ? true : kind === 'down' ? false : null, width: 56, height: 16 });
     const right = kind === 'new'
         ? '<span class="text-amber-400 font-mono text-xs">FIRST NIGHT</span>'
-        : `<span class="${kind === 'up' ? 'text-emerald-400' : 'text-rose-400'} font-mono">${kind === 'up' ? '▲ +' : '▼ '}${m.delta_pct}%</span>`;
+        : `<span class="${kind === 'up' ? 'text-emerald-400' : 'text-rose-400'} font-mono">${kind === 'up' ? '▲ +' : '▼ '}${Math.abs(m.delta_pct)}%</span>`;
     return `<div class="flex items-center justify-between text-sm gap-2">
         <a class="text-slate-300 hover:text-brand-cyan transition truncate max-w-[7rem]" href="#/profile/${encodeURIComponent(m.guid)}">${escapeHtml(m.name)}</a>
         <div class="flex items-center gap-2">${spark}${right}</div></div>`;

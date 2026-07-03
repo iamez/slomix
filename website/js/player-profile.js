@@ -558,13 +558,52 @@ async function loadPlayerForm(root, guid) {
     const keys = Object.keys(metrics).filter(k => metrics[k] && metrics[k].latest != null);
     if (!keys.length) return;
 
+    // Composite headline — ONE form number (100% = this player's own usual),
+    // blending every metric below; chips show what pushed it up/down.
+    const comp = data?.composite;
+    let headline = '';
+    if (comp && comp.latest != null) {
+        const cFlat = comp.delta_pct === 0;
+        const cUp = comp.delta_pct != null && comp.delta_pct > 0;
+        const cCls = cFlat ? 'text-slate-400' : cUp ? 'text-emerald-400' : 'text-rose-400';
+        const cTxt = comp.delta_pct == null ? ''
+            : cFlat ? '±0%' : `${cUp ? '▲ +' : '▼ '}${Math.abs(comp.delta_pct)}%`;
+        const cSpark = sparklineSVG(comp.series, { up: cFlat ? null : cUp, width: 110, height: 26 });
+        const SHORT = { dpm: 'DPM', kd: 'K/D', obj: 'OBJ', acc: 'ACC', kills: 'K', impact: 'IMP' };
+        const chips = (comp.breakdown || [])
+            .filter((b) => b.delta_pct != null)
+            .map((b) => {
+                const bFlat = b.delta_pct === 0;
+                const bUp = b.delta_pct > 0;
+                const bCls = bFlat ? 'text-slate-500' : bUp ? 'text-emerald-400/90' : 'text-rose-400/90';
+                const bTxt = bFlat ? '±0' : `${bUp ? '+' : '-'}${Math.abs(b.delta_pct)}`;
+                return `<span class="${bCls}">${SHORT[b.metric] || b.metric} ${bTxt}%</span>`;
+            })
+            .join('<span class="text-slate-600"> · </span>');
+        headline = `
+            <div class="mb-3 pb-3 border-b border-white/10">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <span class="text-2xl font-black text-white">${comp.latest}%</span>
+                        <span class="font-mono text-sm ${cCls} ml-2">${escapeHtml(cTxt)}</span>
+                    </div>
+                    ${cSpark}
+                </div>
+                <div class="text-[11px] text-slate-500 mt-1">Overall form — 100% = your usual, all metrics blended</div>
+                ${chips ? `<div class="text-[11px] font-mono mt-1">${chips}</div>` : ''}
+            </div>`;
+    }
+
     const rows = keys.map((k) => {
         const m = metrics[k];
         const hasDelta = m.delta_pct != null;
+        const flat = hasDelta && m.delta_pct === 0;
         const up = hasDelta && m.delta_pct > 0;
-        const deltaCls = !hasDelta ? 'text-slate-500' : up ? 'text-emerald-400' : 'text-rose-400';
-        const deltaTxt = !hasDelta ? '—' : `${up ? '▲ +' : '▼ '}${m.delta_pct}%`;
-        const spark = sparklineSVG(m.series, { up: hasDelta ? up : null, width: 72, height: 20 });
+        const deltaCls = !hasDelta ? 'text-slate-500' : flat ? 'text-slate-400'
+            : up ? 'text-emerald-400' : 'text-rose-400';
+        const deltaTxt = !hasDelta ? '—'
+            : flat ? '±0%' : `${up ? '▲ +' : '▼ '}${Math.abs(m.delta_pct)}%`;
+        const spark = sparklineSVG(m.series, { up: (hasDelta && !flat) ? up : null, width: 72, height: 20 });
         const base = m.baseline != null ? `${m.latest} <span class="text-slate-600">vs</span> ${m.baseline} <span class="text-slate-600">${escapeHtml(m.unit || '')}</span>` : `${m.latest}`;
         return `<div class="flex items-center justify-between gap-3 py-2 border-b border-white/5">
             <span class="text-slate-400 text-xs font-bold uppercase tracking-wide w-28">${escapeHtml(m.label || k)}</span>
@@ -577,6 +616,7 @@ async function loadPlayerForm(root, guid) {
 
     const html = _panel('Your form · vs own baseline', 'activity', `
         <p class="text-[11px] text-slate-500 mb-3">Last session vs your own recent-session average (~10 sessions) — rank-vs-self, not a global ranking. ▲ above your usual, ▼ below.</p>
+        ${headline}
         ${rows}
     `, 'history');
     safeInsertHTML(root, 'beforeend', html);
