@@ -248,6 +248,23 @@ async def test_player_form_per_metric():
 
 
 @pytest.mark.asyncio
+async def test_player_form_zero_baseline_is_not_missing():
+    # A 0.0 trailing average (e.g. zero objectives in every prior session) is a
+    # real baseline — it must surface as 0.0, not null. delta stays None (div/0).
+    db = AsyncMock()
+    db.fetch_one = AsyncMock(return_value=("AAA",))
+    db.fetch_all = AsyncMock(return_value=[
+        _row("AAA", "hot", 124, 20, 400.0, deaths=10, obj=2.0),
+        _row("AAA", "hot", 123, 10, 300.0, deaths=10, obj=0.0),
+    ])
+    db.fetch_val = AsyncMock(return_value="2026-06-11")
+    res = await get_player_form(identifier="AAA", db=db)
+    obj = res["metrics"]["obj"]
+    assert obj["baseline"] == 0.0  # present, not null
+    assert obj["delta_pct"] is None  # guarded: no division by zero
+
+
+@pytest.mark.asyncio
 async def test_player_form_not_found():
     db = AsyncMock()
     db.fetch_one = AsyncMock(return_value=None)  # resolve + PCS fallback both miss

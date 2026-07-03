@@ -42,10 +42,12 @@ function _breakdownChips(breakdown) {
     const chips = breakdown
         .filter((b) => b.delta_pct != null)
         .map((b) => {
+            const flat = b.delta_pct === 0;
             const bUp = b.delta_pct > 0;
-            const cls = bUp ? 'text-emerald-400/90' : 'text-rose-400/90';
+            const cls = flat ? 'text-slate-500' : bUp ? 'text-emerald-400/90' : 'text-rose-400/90';
             const short = _METRIC_SHORT[b.metric] || b.metric;
-            return `<span class="${cls}">${short} ${bUp ? '+' : ''}${b.delta_pct}%</span>`;
+            const txt = flat ? '±0' : `${bUp ? '+' : '-'}${Math.abs(b.delta_pct)}`;
+            return `<span class="${cls}">${short} ${txt}%</span>`;
         })
         .join('<span class="text-slate-600"> · </span>');
     return chips ? `<div class="text-[11px] font-mono mt-1">${chips}</div>` : '';
@@ -54,11 +56,14 @@ function _breakdownChips(breakdown) {
 function _moverRow(m) {
     const overall = _metric === 'overall';
     const isNew = !!m.is_new;
+    const flat = !isNew && m.delta_pct === 0;
     const up = m.delta_pct != null && m.delta_pct > 0;
-    const deltaCls = isNew ? 'text-amber-400' : up ? 'text-emerald-400' : 'text-rose-400';
+    const deltaCls = isNew ? 'text-amber-400' : flat ? 'text-slate-400'
+        : up ? 'text-emerald-400' : 'text-rose-400';
     const deltaTxt = isNew
         ? 'FIRST NIGHT'
-        : `${up ? '▲ +' : '▼ '}${m.delta_pct}%`;
+        : flat ? '±0%'
+            : `${up ? '▲ +' : '▼ '}${Math.abs(m.delta_pct)}%`;
     let baseline;
     if (overall) {
         baseline = (m.latest != null) ? `${m.latest}% <span class="text-slate-600">vs</span> 100%` : '';
@@ -67,7 +72,7 @@ function _moverRow(m) {
             ? `${m.latest} <span class="text-slate-600">vs</span> ${m.baseline}`
             : (m.latest != null ? `${m.latest}` : '');
     }
-    const spark = sparklineSVG(m.series, { up: isNew ? null : up });
+    const spark = sparklineSVG(m.series, { up: (isNew || flat) ? null : up });
     const chips = overall ? _breakdownChips(m.breakdown) : '';
     return `
         <div class="py-2 border-b border-white/5">

@@ -553,6 +553,7 @@ async def _form_rows(db, guid: str | None, session_limit: int):
             FROM proximity_kill_outcome pko
             JOIN rounds r2 ON r2.id = pko.round_id
             WHERE r2.gaming_session_id IN (SELECT gaming_session_id FROM recent_sessions)
+              AND r2.is_valid IS DISTINCT FROM FALSE
               AND pko.killer_guid_canonical IS NOT NULL
             GROUP BY r2.gaming_session_id, pko.killer_guid_canonical
         ),
@@ -562,6 +563,7 @@ async def _form_rows(db, guid: str | None, session_limit: int):
             FROM proximity_lua_trade_kill t
             JOIN rounds r2 ON r2.id = t.round_id
             WHERE r2.gaming_session_id IN (SELECT gaming_session_id FROM recent_sessions)
+              AND r2.is_valid IS DISTINCT FROM FALSE
               AND t.trader_guid_canonical IS NOT NULL
             GROUP BY r2.gaming_session_id, t.trader_guid_canonical
         ),
@@ -576,6 +578,7 @@ async def _form_rows(db, guid: str | None, session_limit: int):
             FROM proximity_combat_position c
             JOIN rounds r2 ON r2.id = c.round_id
             WHERE r2.gaming_session_id IN (SELECT gaming_session_id FROM recent_sessions)
+              AND r2.is_valid IS DISTINCT FROM FALSE
               AND c.event_type = 'kill'
               AND c.attacker_guid_canonical IS NOT NULL
             GROUP BY r2.gaming_session_id, c.attacker_guid_canonical
@@ -638,10 +641,13 @@ def _per_player_metrics(rows, latest_sid: int) -> dict:
             metrics[key] = {
                 "latest": None if latest_val is None else round(latest_val, meta["digits"]),
                 "latest_raw": latest_val,
-                "baseline": None if not avg else round(avg, meta["digits"]),
+                # avg is None ≠ avg == 0.0: a 0.0 trailing average (e.g. zero
+                # objectives) is a real baseline, not a missing one.
+                "baseline": None if avg is None else round(avg, meta["digits"]),
                 "baseline_raw": avg,
                 "delta_pct": (round((latest_val - avg) / avg * 100, 1)
-                              if (avg and avg > 0 and latest_val is not None) else None),
+                              if (avg is not None and avg > 0 and latest_val is not None)
+                              else None),
                 "series": [round(v, 2) for v in series],
             }
         out[guid] = {
