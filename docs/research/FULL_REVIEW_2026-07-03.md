@@ -68,7 +68,9 @@ untracked — en `rm -rf` od izgube. → commit (glej §6, postavka 0).
 
 ### Še odprto (LOW razred + operativa) — glej §6 za rešitve
 - On-This-Day grupira po datumu, ne gaming_session_id (`on_this_day_service.py:60`)
-- MAP_IMAGE_MAP + helperji še vedno ×3 JS datoteke (W2-22/26/27)
+- JS helper dedup (W2-27): `formatDuration`/`coerceRoundId` ipd. še podvojeni. **Pozor:** sam
+  MAP_IMAGE_MAP del najdbe je bil false premise — sessions.js (proximity/ minimape) in
+  session-detail.js (levelshots/) namerno uporabljata RAZLIČNA slikovna seta; NE združevati
 - prod: **42 orphan R2 rund še valid** (backfill A5 `--apply` ni bil pognan)
 - betting auto-open ne nastavi `closes_at` (cutoff pade na "rezultat obstaja" guard)
 - Wave 2 Val B/C/D delno (mixin ✅, a11y del ✅; dedup JS in dual-frontend odločitev odprta)
@@ -129,7 +131,7 @@ Celoten katalog: **`docs/research/PROXIMITY_IDEAS_2026-07.md`**. Bistvo:
 
 **6. On-This-Day date-grain** → GROUP BY gaming_session_id; če je na datum več sej, prikaži največjo ali obe ločeno. Effort: trivialen.
 
-**7. JS dedup (W2-22/26/27)** → `website/js/lib/map-assets.js` (MAP_IMAGE_MAP + mapImageFor + formatDuration…), import v sessions/session-detail/sessions2. Effort: majhen PR, nizko tveganje.
+**7. JS helper dedup (samo W2-27)** → skupni modul za byte-identične helperje (`formatDuration`, `coerceRoundId` …). MAP_IMAGE_MAP pusti pri miru — slikovna seta sta namerno različna (proximity minimape vs levelshots; potrjeno 2026-06-29). Effort: majhen PR.
 
 **8. Dual-frontend dolg** (~10k LOC nedosegljivega Reacta) → po #407/#411 modern route delujejo; priporočilo: **obdrži 4 modern route** (zdaj build ob deployu), **arhiviraj ~21 nedosegljivih React strani** (git mv v `website/frontend/archive/` ali izbris — git zgodovina ostane). Owner odloči; ne blokira ničesar.
 
