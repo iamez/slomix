@@ -467,7 +467,21 @@ _MOVER_METRICS = {
     "obj": {"label": "Objectives / round", "unit": "obj/rd", "digits": 2},
     "acc": {"label": "Accuracy", "unit": "%", "digits": 1},
     "kills": {"label": "Kills / session", "unit": "kills", "digits": 0},
+    # Impact = per-session proximity blend: gib-weighted kill quality (the same
+    # simplified-KIS proxy ET Rating uses) + trade rate + clutch rate. Only present
+    # for sessions with proximity coverage; the composite renormalizes without it.
+    "impact": {"label": "Impact (kills that stick)", "unit": "idx", "digits": 2},
 }
+
+# Composite "Form Index": blend all per-metric self-relative ratios into ONE number
+# (100 = the player's own usual across every metric). Impact-weighted; dpm & kills
+# overlap so kills is weighted low. Weights are shown in the UI explainer for
+# transparency. Ratios are clamped so a tiny baseline can't blow up the index.
+_FORM_METRIC_KEYS = tuple(_MOVER_METRICS)
+_FORM_WEIGHTS = {"dpm": 0.25, "kd": 0.20, "obj": 0.15, "acc": 0.10,
+                 "kills": 0.05, "impact": 0.25}
+_FORM_RATIO_CLAMP = (0.4, 2.5)
+_OVERALL_LABEL = "Overall form"
 
 
 def _metric_value(metric: str, kills, deaths, dpm, obj, acc):
@@ -525,33 +539,206 @@ async def _form_rows(db, guid: str | None, session_limit: int):
               {scope}
             GROUP BY pcs.player_guid, r.gaming_session_id
         )
-        SELECT player_guid, player_name, gaming_session_id, kills, deaths, dpm, obj, acc
-        FROM per_session
-        ORDER BY gaming_session_id DESC
+        ,
+        prox_quality AS (
+            -- Gib-weighted kill quality per (player, session) — the simplified-KIS
+            -- proxy used by ET Rating, here scoped per session via round_id.
+            SELECT r2.gaming_session_id, pko.killer_guid_canonical AS guid,
+                   AVG(CASE pko.outcome
+                       WHEN 'gibbed' THEN 1.3
+                       WHEN 'tapped_out' THEN 1.0
+                       WHEN 'revived' THEN 0.5
+                       ELSE 1.0
+                   END) AS kill_quality
+            FROM proximity_kill_outcome pko
+            JOIN rounds r2 ON r2.id = pko.round_id
+            WHERE r2.gaming_session_id IN (SELECT gaming_session_id FROM recent_sessions)
+              AND r2.is_valid IS DISTINCT FROM FALSE
+              AND pko.killer_guid_canonical IS NOT NULL
+            GROUP BY r2.gaming_session_id, pko.killer_guid_canonical
+        ),
+        prox_trades AS (
+            SELECT r2.gaming_session_id, t.trader_guid_canonical AS guid,
+                   COUNT(*) AS trades
+            FROM proximity_lua_trade_kill t
+            JOIN rounds r2 ON r2.id = t.round_id
+            WHERE r2.gaming_session_id IN (SELECT gaming_session_id FROM recent_sessions)
+              AND r2.is_valid IS DISTINCT FROM FALSE
+              AND t.trader_guid_canonical IS NOT NULL
+            GROUP BY r2.gaming_session_id, t.trader_guid_canonical
+        ),
+        prox_clutch AS (
+            -- Clutch: kills at low HP or outnumbered (same definition as ET Rating).
+            SELECT r2.gaming_session_id, c.attacker_guid_canonical AS guid,
+                   COUNT(*) FILTER (
+                       WHERE (c.killer_health > 0 AND c.killer_health < 30)
+                          OR (c.attacker_team = 'AXIS' AND c.axis_alive < c.allies_alive)
+                          OR (c.attacker_team = 'ALLIES' AND c.allies_alive < c.axis_alive)
+                   )::REAL / NULLIF(COUNT(*), 0) AS clutch_rate
+            FROM proximity_combat_position c
+            JOIN rounds r2 ON r2.id = c.round_id
+            WHERE r2.gaming_session_id IN (SELECT gaming_session_id FROM recent_sessions)
+              AND r2.is_valid IS DISTINCT FROM FALSE
+              AND c.event_type = 'kill'
+              AND c.attacker_guid_canonical IS NOT NULL
+            GROUP BY r2.gaming_session_id, c.attacker_guid_canonical
+        )
+        SELECT ps.player_guid, ps.player_name, ps.gaming_session_id,
+               ps.kills, ps.deaths, ps.dpm, ps.obj, ps.acc,
+               pq.kill_quality, pt.trades, pc.clutch_rate
+        FROM per_session ps
+        LEFT JOIN prox_quality pq
+            ON pq.guid = ps.player_guid AND pq.gaming_session_id = ps.gaming_session_id
+        LEFT JOIN prox_trades pt
+            ON pt.guid = ps.player_guid AND pt.gaming_session_id = ps.gaming_session_id
+        LEFT JOIN prox_clutch pc
+            ON pc.guid = ps.player_guid AND pc.gaming_session_id = ps.gaming_session_id
+        ORDER BY ps.gaming_session_id DESC
         """,
         params,
     )
 
 
+def _per_player_metrics(rows, latest_sid: int) -> dict:
+    """Fold _form_rows output into per-player per-metric form data (one pass, reused
+    by both the movers board and a single player's form). Returns
+    ``dict[guid] -> {name, latest_sid, sessions: {sid: {key: raw_val}}, metrics}``
+    where ``metrics[key] = {latest, latest_raw, baseline, baseline_raw, delta_pct, series}``.
+    ``series`` is oldest→newest raw values; ``baseline`` is the own trailing average
+    (prior sessions only); delta is latest-vs-baseline (rank-vs-self)."""
+    players: dict[str, dict] = {}
+    for guid, name, sid, kills, deaths, dpm, obj, acc, kq, trades, clutch in rows:
+        sid = int(sid)
+        p = players.setdefault(guid, {"name": name, "latest_name": None, "sessions": {}})
+        vals = {}
+        for key in _FORM_METRIC_KEYS:
+            if key == "impact":
+                # Impact only exists for sessions with proximity coverage — kill
+                # quality is the anchor (≈0.5-1.3); trade + clutch rates add on top.
+                if kq is None:
+                    continue
+                k = float(kills or 0)
+                trade_rate = (float(trades or 0) / k) if k > 0 else 0.0
+                vals[key] = float(kq) + trade_rate + float(clutch or 0.0)
+                continue
+            v = _metric_value(key, kills, deaths, dpm, obj, acc)
+            if v is not None:
+                vals[key] = v
+        p["sessions"][sid] = vals
+        if sid == latest_sid:
+            p["latest_name"] = name
+
+    out: dict[str, dict] = {}
+    for guid, p in players.items():
+        sids = sorted(p["sessions"].keys())  # oldest→newest
+        metrics = {}
+        for key, meta in _MOVER_METRICS.items():
+            series = [p["sessions"][s][key] for s in sids if key in p["sessions"][s]]
+            latest_val = p["sessions"].get(latest_sid, {}).get(key)
+            hist = [p["sessions"][s][key] for s in sids
+                    if s != latest_sid and key in p["sessions"][s]]
+            avg = (sum(hist) / len(hist)) if hist else None
+            metrics[key] = {
+                "latest": None if latest_val is None else round(latest_val, meta["digits"]),
+                "latest_raw": latest_val,
+                # avg is None ≠ avg == 0.0: a 0.0 trailing average (e.g. zero
+                # objectives) is a real baseline, not a missing one.
+                "baseline": None if avg is None else round(avg, meta["digits"]),
+                "baseline_raw": avg,
+                "delta_pct": (round((latest_val - avg) / avg * 100, 1)
+                              if (avg is not None and avg > 0 and latest_val is not None)
+                              else None),
+                "series": [round(v, 2) for v in series],
+            }
+        out[guid] = {
+            "name": p["latest_name"] or p["name"],
+            "latest_sid": latest_sid,
+            "sessions": {s: p["sessions"][s] for s in sids},
+            "metrics": metrics,
+        }
+    return out
+
+
+def _composite_form(player: dict) -> dict | None:
+    """Blend a player's per-metric ratios into a single Form Index (100 = their own
+    usual). Weights (``_FORM_WEIGHTS``) are renormalized over the metrics that have a
+    usable baseline, so a missing metric (e.g. acc NULL) just drops out. Returns None
+    when the player has no usable data at all; ``is_new=True`` when they played the
+    latest session but have no prior baseline."""
+    metrics = player["metrics"]
+    baselines = {k: m["baseline_raw"] for k, m in metrics.items()
+                 if m.get("baseline_raw") and m["baseline_raw"] > 0}
+    has_latest = any(m.get("latest_raw") is not None for m in metrics.values())
+    has_prior = any(s != player["latest_sid"] for s in player["sessions"])
+    if not baselines:
+        if has_latest and not has_prior:
+            # Genuinely new: the latest session is their only session.
+            return {"latest": None, "baseline": 100, "delta_pct": None,
+                    "series": [], "breakdown": [], "is_new": True}
+        # Prior sessions exist but every baseline is zero/missing — can't rank
+        # vs self, and it is NOT a first night. No composite.
+        return None
+
+    lo, hi = _FORM_RATIO_CLAMP
+
+    def _blend(vals: dict) -> float | None:
+        num = wsum = 0.0
+        for key, base in baselines.items():
+            v = vals.get(key)
+            if v is None:
+                continue
+            ratio = max(lo, min(hi, v / base))
+            w = _FORM_WEIGHTS[key]
+            num += w * ratio
+            wsum += w
+        return (100.0 * num / wsum) if wsum > 0 else None
+
+    series = []
+    for s in sorted(player["sessions"].keys()):  # oldest→newest
+        idx = _blend(player["sessions"][s])
+        if idx is not None:
+            series.append(round(idx, 1))
+
+    latest_idx = _blend(player["sessions"].get(player["latest_sid"], {}))
+    if latest_idx is None:
+        return {"latest": None, "baseline": 100, "delta_pct": None,
+                "series": series, "breakdown": [], "is_new": False}
+
+    breakdown = [
+        {"metric": k, "label": _MOVER_METRICS[k]["label"], "delta_pct": m["delta_pct"],
+         "latest": m["latest"], "baseline": m["baseline"]}
+        for k, m in metrics.items() if m.get("delta_pct") is not None
+    ]
+    return {
+        "latest": round(latest_idx, 1),
+        "baseline": 100,
+        "delta_pct": round(latest_idx - 100.0, 1),
+        "series": series,
+        "breakdown": breakdown,
+        "is_new": False,
+    }
+
+
 @router.get("/skill/movers")
 async def get_movers(
     top: int = 3,
-    metric: str = "dpm",
+    metric: str = "overall",
     full: bool = False,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Form movers: last session vs each player's OWN recent baseline.
 
     VISION_2026 anti-goal compliance: this is rank-vs-self, NOT a global ladder —
-    the delta is against the player's own trailing baseline for the chosen metric,
-    so a bottom-half player on a hot night tops the movers list.
+    the delta is against the player's own trailing baseline, so a bottom-half player
+    on a hot night tops the movers list.
 
-    metric: dpm | kd | obj | acc | kills.  full=true returns every mover (Form
-    page); otherwise the top N up/down (home card). Each mover carries `series`
-    (their per-session values, oldest→newest) for a sparkline.
+    metric: overall (composite Form Index — the default) | dpm | kd | obj | acc |
+    kills (per-metric drill-down). full=true returns every mover (Form page); otherwise
+    the top N up/down (home card). Each mover carries `series` (per-session values,
+    oldest→newest) for a sparkline; overall movers also carry `breakdown` (per-metric
+    deltas that make up the composite).
     """
-    if metric not in _MOVER_METRICS:
-        metric = "dpm"
+    metric = metric if (metric == "overall" or metric in _MOVER_METRICS) else "overall"
     top = max(1, min(top, 50 if full else 10))
     rows = await _form_rows(db, None, 11)
     if not rows:
@@ -563,42 +750,33 @@ async def get_movers(
         "SELECT MAX(round_date) FROM rounds WHERE gaming_session_id = $1",
         (latest_sid,),
     )
+    per_player = _per_player_metrics(rows, latest_sid)
 
-    latest: dict[str, dict] = {}
-    history: dict[str, list[float]] = {}  # oldest→newest per guid (excl. latest)
-    for guid, name, sid, kills, deaths, dpm, obj, acc in rows:
-        val = _metric_value(metric, kills, deaths, dpm, obj, acc)
-        if int(sid) == latest_sid:
-            latest[guid] = {"name": name, "val": val}
-        elif val is not None:
-            history.setdefault(guid, []).insert(0, round(val, 2))  # rows are DESC → prepend
-
-    digits = _MOVER_METRICS[metric]["digits"]
     movers = []
-    for guid, cur in latest.items():
-        cur_val = cur["val"]
-        if cur_val is None:
-            # No value for this metric in the latest session (e.g. acc NULL) — can't
-            # rank, and it does NOT mean "new player". Skip rather than mislabel.
+    for guid, p in per_player.items():
+        if metric == "overall":
+            comp = _composite_form(p)
+            if comp is None:
+                continue
+            entry = {"guid": guid, "name": p["name"], **{
+                k: comp[k] for k in ("latest", "baseline", "delta_pct", "series", "is_new")},
+                "breakdown": comp["breakdown"]}
+        else:
+            m = p["metrics"][metric]
+            if m["latest_raw"] is None:
+                # No value for this metric in the latest session (e.g. acc NULL) — can't
+                # rank, and it does NOT mean "new player". Skip rather than mislabel.
+                continue
+            if m["baseline_raw"] is None and any(s != latest_sid for s in p["sessions"]):
+                # Prior sessions exist but none carried this metric — no baseline to
+                # rank against, and NOT a first night either. Skip rather than mislabel.
+                continue
+            entry = {"guid": guid, "name": p["name"], "latest": m["latest"],
+                     "baseline": m["baseline"], "delta_pct": m["delta_pct"],
+                     "series": m["series"], "is_new": m["baseline_raw"] is None}
+        if entry["delta_pct"] is None and not entry["is_new"]:
             continue
-        hist_list = history.get(guid) or []
-        series = [*hist_list, round(cur_val, 2)]
-        if not hist_list:
-            # Genuinely new: played the latest session but has no prior history.
-            movers.append({
-                "guid": guid, "name": cur["name"], "latest": round(cur_val, digits),
-                "baseline": None, "delta_pct": None, "series": series, "is_new": True,
-            })
-            continue
-        avg = sum(hist_list) / len(hist_list)
-        if avg <= 0:
-            continue
-        movers.append({
-            "guid": guid, "name": cur["name"],
-            "latest": round(cur_val, digits), "baseline": round(avg, digits),
-            "delta_pct": round((cur_val - avg) / avg * 100, 1),
-            "series": series, "is_new": False,
-        })
+        movers.append(entry)
 
     ranked = sorted(
         (m for m in movers if m["delta_pct"] is not None),
@@ -617,9 +795,11 @@ async def get_movers(
         "session_id": latest_sid,
         "session_date": str(latest_date) if latest_date else None,
         "metric": metric,
-        "metric_label": _MOVER_METRICS[metric]["label"],
-        "baseline": f"own trailing ~10-session {metric}",
+        "metric_label": _OVERALL_LABEL if metric == "overall" else _MOVER_METRICS[metric]["label"],
+        "baseline": ("own trailing ~10-session form index (100 = usual)"
+                     if metric == "overall" else f"own trailing ~10-session {metric}"),
         "baseline_desc": "last session vs this player's own recent-session average (rank-vs-self, not a global ranking)",
+        "form_weights": _FORM_WEIGHTS,
         "movers_up": up,
         "movers_down": down,
         "new_players": [m for m in movers if m.get("is_new")],
@@ -654,43 +834,36 @@ async def get_player_form(
         return {"status": "error", "detail": f"Player '{identifier}' not found"}
     rows = await _form_rows(db, guid, 11)
     if not rows:
-        return {"status": "ok", "player_guid": guid, "session_id": None, "metrics": {}}
+        return {"status": "ok", "player_guid": guid, "session_id": None,
+                "metrics": {}, "composite": None}
 
     latest_sid = max(int(r[2]) for r in rows)
     latest_date = await db.fetch_val(
         "SELECT MAX(round_date) FROM rounds WHERE gaming_session_id = $1",
         (latest_sid,),
     )
-    # rows are this player's sessions, newest first
+    per_player = _per_player_metrics(rows, latest_sid)
+    p = per_player.get(guid)
+    if not p:
+        return {"status": "ok", "player_guid": guid, "session_id": latest_sid,
+                "metrics": {}, "composite": None}
+
     metrics_out = {}
     for key, meta in _MOVER_METRICS.items():
-        latest_val = None
-        hist: list[float] = []
-        for _guid, _name, sid, kills, deaths, dpm, obj, acc in rows:
-            val = _metric_value(key, kills, deaths, dpm, obj, acc)
-            if val is None:
-                continue
-            if int(sid) == latest_sid:
-                latest_val = val
-            else:
-                hist.insert(0, round(val, 2))
-        series = ([*hist, round(latest_val, 2)] if latest_val is not None else hist)
-        avg = (sum(hist) / len(hist)) if hist else None
+        m = p["metrics"][key]
         metrics_out[key] = {
             "label": meta["label"], "unit": meta["unit"],
-            "latest": None if latest_val is None else round(latest_val, meta["digits"]),
-            "baseline": None if not avg else round(avg, meta["digits"]),
-            "delta_pct": (round((latest_val - avg) / avg * 100, 1)
-                          if (avg and avg > 0 and latest_val is not None) else None),
-            "series": series,
+            "latest": m["latest"], "baseline": m["baseline"],
+            "delta_pct": m["delta_pct"], "series": m["series"],
         }
-    name = rows[0][1]
     return {
         "status": "ok",
         "player_guid": guid,
-        "player_name": name,
+        "player_name": p["name"],
         "session_id": latest_sid,
         "session_date": str(latest_date) if latest_date else None,
         "baseline_desc": "last session vs your own recent-session average (rank-vs-self)",
+        "form_weights": _FORM_WEIGHTS,
+        "composite": _composite_form(p),
         "metrics": metrics_out,
     }
