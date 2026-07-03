@@ -191,6 +191,43 @@ async def test_overall_without_proximity_skips_impact():
 
 
 @pytest.mark.asyncio
+async def test_overall_zero_baseline_history_is_not_first_night():
+    # Player HAS a prior session, but it was all zeros (0 kills/damage/obj, no acc)
+    # → no positive baseline to rank against. They must NOT be labeled FIRST NIGHT
+    # (they have history) and must not appear in up/down (nothing to compare).
+    db = AsyncMock()
+    db.fetch_all = AsyncMock(return_value=[
+        _row("AAA", "ghost", 124, 20, 300.0, deaths=10, obj=1.0, acc=30.0),
+        _row("AAA", "ghost", 123, 0, 0.0, deaths=10, obj=0.0, acc=None),
+    ])
+    db.fetch_val = AsyncMock(return_value="2026-06-11")
+    res = await get_movers(db=db)
+    assert res["new_players"] == []
+    assert res["movers_up"] == [] and res["movers_down"] == []
+
+
+@pytest.mark.asyncio
+async def test_metric_without_prior_values_is_not_first_night():
+    # Per-metric drill-down: prior sessions exist but never carried this metric
+    # (acc NULL throughout) → skip on the acc tab, don't mislabel as FIRST NIGHT.
+    db = AsyncMock()
+    db.fetch_all = AsyncMock(return_value=[
+        _row("AAA", "vet", 124, 20, 300.0, deaths=10, obj=1.0, acc=40.0),
+        _row("AAA", "vet", 123, 15, 280.0, deaths=10, obj=1.0, acc=None),
+    ])
+    db.fetch_val = AsyncMock(return_value="2026-06-11")
+    res = await get_movers(metric="acc", db=db)
+    assert res["new_players"] == []
+    assert res["movers_up"] == [] and res["movers_down"] == []
+    # sanity: a truly new player still gets flagged on the same tab
+    db.fetch_all = AsyncMock(return_value=[
+        _row("BBB", "fresh", 124, 20, 300.0, deaths=10, obj=1.0, acc=40.0),
+    ])
+    res2 = await get_movers(metric="acc", db=db)
+    assert [m["name"] for m in res2["new_players"]] == ["fresh"]
+
+
+@pytest.mark.asyncio
 async def test_overall_ratio_clamped_on_tiny_baseline():
     # A near-zero historical baseline would make a raw ratio explode; the clamp keeps
     # the composite index bounded well under a runaway value.

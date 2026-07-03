@@ -669,10 +669,14 @@ def _composite_form(player: dict) -> dict | None:
     baselines = {k: m["baseline_raw"] for k, m in metrics.items()
                  if m.get("baseline_raw") and m["baseline_raw"] > 0}
     has_latest = any(m.get("latest_raw") is not None for m in metrics.values())
+    has_prior = any(s != player["latest_sid"] for s in player["sessions"])
     if not baselines:
-        if has_latest:
+        if has_latest and not has_prior:
+            # Genuinely new: the latest session is their only session.
             return {"latest": None, "baseline": 100, "delta_pct": None,
                     "series": [], "breakdown": [], "is_new": True}
+        # Prior sessions exist but every baseline is zero/missing — can't rank
+        # vs self, and it is NOT a first night. No composite.
         return None
 
     lo, hi = _FORM_RATIO_CLAMP
@@ -762,6 +766,10 @@ async def get_movers(
             if m["latest_raw"] is None:
                 # No value for this metric in the latest session (e.g. acc NULL) — can't
                 # rank, and it does NOT mean "new player". Skip rather than mislabel.
+                continue
+            if m["baseline_raw"] is None and any(s != latest_sid for s in p["sessions"]):
+                # Prior sessions exist but none carried this metric — no baseline to
+                # rank against, and NOT a first night either. Skip rather than mislabel.
                 continue
             entry = {"guid": guid, "name": p["name"], "latest": m["latest"],
                      "baseline": m["baseline"], "delta_pct": m["delta_pct"],
