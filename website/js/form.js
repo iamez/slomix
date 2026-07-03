@@ -10,14 +10,19 @@
 import { API_BASE, escapeHtml, fetchJSON, safeInsertHTML, sparklineSVG } from './utils.js';
 
 const METRICS = [
+    { key: 'overall', label: 'Overall' },
     { key: 'dpm', label: 'Damage / min' },
     { key: 'kd', label: 'Kills / death' },
     { key: 'obj', label: 'Objectives / round' },
     { key: 'acc', label: 'Accuracy' },
     { key: 'kills', label: 'Kills / session' },
+    { key: 'impact', label: 'Impact' },
 ];
 
-let _metric = 'dpm';
+// Short labels for the composite breakdown chips (Overall mode).
+const _METRIC_SHORT = { dpm: 'DPM', kd: 'K/D', obj: 'OBJ', acc: 'ACC', kills: 'K', impact: 'IMP' };
+
+let _metric = 'overall';
 
 function _tabsHtml() {
     return METRICS.map((m) => {
@@ -30,26 +35,52 @@ function _tabsHtml() {
     }).join('');
 }
 
+// Per-metric contribution chips shown under an Overall row: "DPM +18 · K/D +9 …".
+// Values are numbers/known labels only (no user text), so no escaping needed here.
+function _breakdownChips(breakdown) {
+    if (!breakdown || !breakdown.length) return '';
+    const chips = breakdown
+        .filter((b) => b.delta_pct != null)
+        .map((b) => {
+            const bUp = b.delta_pct > 0;
+            const cls = bUp ? 'text-emerald-400/90' : 'text-rose-400/90';
+            const short = _METRIC_SHORT[b.metric] || b.metric;
+            return `<span class="${cls}">${short} ${bUp ? '+' : ''}${b.delta_pct}%</span>`;
+        })
+        .join('<span class="text-slate-600"> · </span>');
+    return chips ? `<div class="text-[11px] font-mono mt-1">${chips}</div>` : '';
+}
+
 function _moverRow(m) {
+    const overall = _metric === 'overall';
     const isNew = !!m.is_new;
     const up = m.delta_pct != null && m.delta_pct > 0;
     const deltaCls = isNew ? 'text-amber-400' : up ? 'text-emerald-400' : 'text-rose-400';
     const deltaTxt = isNew
         ? 'FIRST NIGHT'
         : `${up ? '▲ +' : '▼ '}${m.delta_pct}%`;
-    const baseline = (m.latest != null && m.baseline != null)
-        ? `${m.latest} <span class="text-slate-600">vs</span> ${m.baseline}`
-        : (m.latest != null ? `${m.latest}` : '');
+    let baseline;
+    if (overall) {
+        baseline = (m.latest != null) ? `${m.latest}% <span class="text-slate-600">vs</span> 100%` : '';
+    } else {
+        baseline = (m.latest != null && m.baseline != null)
+            ? `${m.latest} <span class="text-slate-600">vs</span> ${m.baseline}`
+            : (m.latest != null ? `${m.latest}` : '');
+    }
     const spark = sparklineSVG(m.series, { up: isNew ? null : up });
+    const chips = overall ? _breakdownChips(m.breakdown) : '';
     return `
-        <div class="flex items-center justify-between gap-3 py-2 border-b border-white/5">
-            <a class="text-slate-200 hover:text-brand-cyan transition font-medium truncate max-w-[10rem]"
-               href="#/profile/${encodeURIComponent(m.guid)}">${escapeHtml(m.name)}</a>
-            <div class="flex items-center gap-3">
-                <span class="text-slate-500 text-xs font-mono hidden sm:inline">${baseline}</span>
-                ${spark}
-                <span class="font-mono text-sm ${deltaCls} w-24 text-right">${escapeHtml(deltaTxt)}</span>
+        <div class="py-2 border-b border-white/5">
+            <div class="flex items-center justify-between gap-3">
+                <a class="text-slate-200 hover:text-brand-cyan transition font-medium truncate max-w-[10rem]"
+                   href="#/profile/${encodeURIComponent(m.guid)}">${escapeHtml(m.name)}</a>
+                <div class="flex items-center gap-3">
+                    <span class="text-slate-500 text-xs font-mono hidden sm:inline">${baseline}</span>
+                    ${spark}
+                    <span class="font-mono text-sm ${deltaCls} w-24 text-right">${escapeHtml(deltaTxt)}</span>
+                </div>
             </div>
+            ${chips}
         </div>`;
 }
 
@@ -96,13 +127,21 @@ export async function loadFormView() {
     safeInsertHTML(host, 'beforeend', `
         <div class="max-w-3xl mx-auto px-4 py-6">
             <h1 class="text-2xl font-black text-white mb-1">Form <span class="text-brand-purple">· vs own baseline</span></h1>
-            <p class="text-sm text-slate-400 mb-4 leading-relaxed">
-                <span class="text-slate-300 font-semibold">What is this?</span> Form compares each player's
-                <span class="text-slate-300">last session</span> to <span class="text-slate-300">their own recent-session average</span>
-                (trailing ~10 sessions) for the chosen metric. It's <span class="text-slate-300">rank-vs-self</span>,
-                <span class="italic">not</span> a global ranking — a mid-table player having a great night can top
-                the list. <span class="text-emerald-400">▲</span> = above their usual, <span class="text-rose-400">▼</span> = below.
-                The little line is their trend across recent sessions.
+            <p class="text-sm text-slate-400 mb-3 leading-relaxed">
+                <span class="text-slate-300 font-semibold">What is this?</span> <span class="text-slate-300">Overall form</span>
+                rolls <span class="text-slate-300">all</span> the stats below into <span class="text-slate-300">one number</span>
+                for a player's <span class="text-slate-300">last session</span>:
+                <span class="text-slate-300 font-semibold">100% = exactly their own usual</span>, higher = a hot night,
+                lower = off form. Each stat is measured against <span class="text-slate-300">that player's own recent-session
+                average</span> (trailing ~10 sessions), then blended: damage 25% · impact 25% · K/D 20% · objectives 15% ·
+                accuracy 10% · kills 5%. <span class="text-slate-300">Impact</span> = kills that stick — gibs, trade kills
+                and clutch kills from proximity data. It's <span class="text-slate-300">rank-vs-self</span>,
+                <span class="italic">not</span> a global ranking — a mid-table player having a great night can top the list.
+            </p>
+            <p class="text-xs text-slate-500 mb-4 leading-relaxed">
+                <span class="text-emerald-400">▲</span> = above their usual, <span class="text-rose-400">▼</span> = below;
+                the little line is their trend across recent sessions. Switch tabs to see the <span class="text-slate-400">single stat</span>
+                that's driving the move — the chips under each name show how each one contributed.
             </p>
             <div id="form-metric-tabs" class="flex flex-wrap gap-2 mb-5">${_tabsHtml()}</div>
             <div id="form-list"></div>

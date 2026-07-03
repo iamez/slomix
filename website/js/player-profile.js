@@ -558,6 +558,37 @@ async function loadPlayerForm(root, guid) {
     const keys = Object.keys(metrics).filter(k => metrics[k] && metrics[k].latest != null);
     if (!keys.length) return;
 
+    // Composite headline — ONE form number (100% = this player's own usual),
+    // blending every metric below; chips show what pushed it up/down.
+    const comp = data?.composite;
+    let headline = '';
+    if (comp && comp.latest != null) {
+        const cUp = comp.delta_pct != null && comp.delta_pct > 0;
+        const cCls = cUp ? 'text-emerald-400' : 'text-rose-400';
+        const cTxt = comp.delta_pct == null ? '' : `${cUp ? '▲ +' : '▼ '}${comp.delta_pct}%`;
+        const cSpark = sparklineSVG(comp.series, { up: cUp, width: 110, height: 26 });
+        const SHORT = { dpm: 'DPM', kd: 'K/D', obj: 'OBJ', acc: 'ACC', kills: 'K', impact: 'IMP' };
+        const chips = (comp.breakdown || [])
+            .filter((b) => b.delta_pct != null)
+            .map((b) => {
+                const bUp = b.delta_pct > 0;
+                return `<span class="${bUp ? 'text-emerald-400/90' : 'text-rose-400/90'}">${SHORT[b.metric] || b.metric} ${bUp ? '+' : ''}${b.delta_pct}%</span>`;
+            })
+            .join('<span class="text-slate-600"> · </span>');
+        headline = `
+            <div class="mb-3 pb-3 border-b border-white/10">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <span class="text-2xl font-black text-white">${comp.latest}%</span>
+                        <span class="font-mono text-sm ${cCls} ml-2">${escapeHtml(cTxt)}</span>
+                    </div>
+                    ${cSpark}
+                </div>
+                <div class="text-[11px] text-slate-500 mt-1">Overall form — 100% = your usual, all metrics blended</div>
+                ${chips ? `<div class="text-[11px] font-mono mt-1">${chips}</div>` : ''}
+            </div>`;
+    }
+
     const rows = keys.map((k) => {
         const m = metrics[k];
         const hasDelta = m.delta_pct != null;
@@ -577,6 +608,7 @@ async function loadPlayerForm(root, guid) {
 
     const html = _panel('Your form · vs own baseline', 'activity', `
         <p class="text-[11px] text-slate-500 mb-3">Last session vs your own recent-session average (~10 sessions) — rank-vs-self, not a global ranking. ▲ above your usual, ▼ below.</p>
+        ${headline}
         ${rows}
     `, 'history');
     safeInsertHTML(root, 'beforeend', html);
