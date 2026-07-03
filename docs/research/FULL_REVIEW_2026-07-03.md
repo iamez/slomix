@@ -74,12 +74,18 @@ untracked — en `rm -rf` od izgube. → commit (glej §6, postavka 0).
 - prod: **42 orphan R2 rund še valid** (backfill A5 `--apply` ni bil pognan)
 - betting auto-open ne nastavi `closes_at` (cutoff pade na "rezultat obstaja" guard)
 - Wave 2 Val B/C/D delno (mixin ✅, a11y del ✅; dedup JS in dual-frontend odločitev odprta)
+- **Feature flagi na prod ne obstajajo** → auto-betting lifecycle, morning digest, On This Day dormant (glej spodaj — korekcija)
+- Iz KNOWN_ISSUES (znano & parkirano, ne novo): Lua Time Stats Overhaul (velik planiran feature, upstream fix za time_dead>time_played anomalije — te so read-side mitigiranje z LEAST cap), Availability stran UI premislek ("spreadsheet, ne lobby"), VM drobnarije (prometheus_client, apex A-record)
 
 ### Sveže preverbe (dev+prod, 2026-07-03)
 - prod = v1.21.0, slomix-bot + slomix-web active; #430 composite Form še NI na prod (čaka release 1.22.0, PR #431 odprt) — **naslednji deploy = 1.22.0**
 - verify_post_deploy proti slomix.fyi: **ALL GREEN** (modern assets, Tonight, betting, prox scope)
 - aim_lock živ in ČIST na obeh (6.9k vrstic, clamp deluje); shot_fired živ
-- betting: prod 0 marketov (deploy 07-02 > zadnja seja 06-30 → auto-open še netestiran v živo; **prvi pravi test = naslednji igralni večer**); dev ima 1 star testni market (06-13, brez session_date) — pospraviti
+- betting: prod 0 marketov — ampak **POZOR (korekcija):** auto-open/auto-settle lifecycle je gated
+  z `BETS_LIFECYCLE_SECONDS` (default **0 = izklopljeno**) in prod `.env` flaga NIMA → loop na
+  produkciji **sploh ne teče**. Enako dormant: `SESSION_DIGEST_ENABLED=false` (morning digest) in
+  `ON_THIS_DAY_ENABLED=false`. Vsi trije so shipped+testirani, a **čakajo owner flag-flip** —
+  brez tega "naslednji igralni večer" ne bo auto-marketa. Dev ima 1 star testni market — pospraviti
 - testi: 363 form/movers/composite testov passed
 - ⚠️ dev backend na :8000 teče **staro kodo** (movers vrača pre-#428 obliko) — restart ob priložnosti (nisem restartal brez vprašanja)
 
@@ -154,7 +160,10 @@ Iz Good Night plana (§Open questions) + operativa:
 1. **Housekeeping PR** (ta teden): vizija v git + README + §6.2/3/6/7 mikro-fixi (en bundled PR po feedback_bundle_small_prs)
 2. **Scoring poenotenje** (§6.1) — največji trust-win pred novimi featurji
 3. **Phase 0 backtest** (Good Night Index + KROGT/TDS nad zadnjimi 20–30 sejami, read-only skripta + owner review) — vrata v Good Night fazo 1 in proximity rezino ③
-4. Ob naslednjem igralnem večeru: opazuj **prvi živi auto-open/auto-settle** betting cikel (prod še ni imel priložnosti)
+4. **Flag-flip na prod** (owner, 3 vrstice v `/opt/slomix/.env` + restart): `BETS_LIFECYCLE_SECONDS=60`,
+   `SESSION_DIGEST_ENABLED=true`, `ON_THIS_DAY_ENABLED=true` — brez tega auto-betting, jutranji digest
+   in On This Day na produkciji NE tečejo (vsi trije shipped+testirani, default off). Nato ob naslednjem
+   igralnem večeru opazuj prvi živi auto-open → auto-settle cikel
 
 ---
 *Pripravil: Claude (Fable 5), 2026-07-03. Vse preverbe read-only; brez sprememb runtime kode.*
