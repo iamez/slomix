@@ -254,7 +254,7 @@ async def resolve_round_id_with_reason(
                     if target_dt.tzinfo is not None:
                         now_ref = datetime.now(target_dt.tzinfo)
                     else:
-                        now_ref = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
+                        now_ref = datetime.now()  # noqa: DTZ005 naive datetime intentional — naive means host-local by convention; game server AND prod host both run Europe/Ljubljana (timedatectl-verified 2026-07-04; the old "UTC prod" note here was wrong). See PR #216 rationale
                     age_seconds = int(
                         (now_ref - target_dt).total_seconds()
                     )
