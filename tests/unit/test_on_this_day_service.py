@@ -65,6 +65,21 @@ async def test_two_sessions_same_date_render_separately():
 
 
 @pytest.mark.asyncio
+async def test_top_fragger_query_excludes_match_summary_rows():
+    """round_number=0 rows are cumulative map summaries; counting them roughly
+    doubles the kill total (codex P2 round 3, PR #434)."""
+    db = AsyncMock()
+    db.fetch_all = AsyncMock(return_value=[
+        (datetime.date(2025, 6, 14), 2, "puran", "sWat", 1, 1),
+    ])
+    db.fetch_one = AsyncMock(return_value=None)
+    svc = OnThisDayService(bot=None, db_adapter=db, config=_Cfg())
+    await svc.build_embed(datetime.date(2026, 6, 14))
+    fragger_query = db.fetch_one.call_args.args[0]
+    assert "round_number IN (1, 2)" in fragger_query
+
+
+@pytest.mark.asyncio
 async def test_build_embed_survives_fragger_failure():
     db = AsyncMock()
     db.fetch_all = AsyncMock(return_value=[

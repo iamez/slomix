@@ -89,6 +89,9 @@ class OnThisDayService:
                 FROM player_comprehensive_stats pcs
                 JOIN rounds r ON r.id = pcs.round_id
                 WHERE r.is_valid IS DISTINCT FROM FALSE
+                  -- played rounds only: round_number=0 match-summary rows carry
+                  -- cumulative map totals and would ~double the kill sum
+                  AND r.round_number IN (1, 2)
                   AND pcs.player_guid NOT LIKE 'OMNIBOT%'
                   AND pcs.player_name NOT LIKE '[BOT]%'
                   AND EXTRACT(MONTH FROM CAST(r.round_date AS DATE)) = ?
