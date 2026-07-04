@@ -319,8 +319,14 @@ const ROUTE_DEFINITIONS = Object.freeze({
         mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'C',
-        buildHash: () => '#/story',
-        load: ({ legacy }) => legacy.loadStoryView(),
+        buildHash: ({ date } = {}) => (
+            date ? `#/story/date/${encodeURIComponent(date)}` : '#/story'
+        ),
+        parseHash: (hash) => {
+            const m = hash.match(/^#\/story\/date\/([^/]+)$/);
+            return m ? { date: safeDecode(m[1]) } : null;
+        },
+        load: ({ legacy, params }) => legacy.loadStoryView({ date: params && params.date }),
     },
     replay: {
         viewId: 'replay',

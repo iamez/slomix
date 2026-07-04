@@ -91,6 +91,16 @@ function renderSessionSelector() {
     if (!select) return;
 
     select.textContent = '';
+    // A deep-linked date can fall outside the scopes window — keep the
+    // selector honest by showing it as an explicit option.
+    if (storyState.sessionDate
+        && !storyState.sessions.some(s => s.session_date === storyState.sessionDate)) {
+        const opt = document.createElement('option');
+        opt.value = storyState.sessionDate;
+        opt.textContent = storyState.sessionDate;
+        opt.selected = true;
+        select.appendChild(opt);
+    }
     storyState.sessions.forEach(s => {
         const d = s.session_date;
         const count = s.maps?.length || 0;
@@ -1691,7 +1701,11 @@ async function openKisDetailsModal(playerGuid, playerName) {
     });
 }
 
-export async function loadStoryView() {
+export async function loadStoryView({ date } = {}) {
+    // Deep-link support (#/story/date/YYYY-MM-DD) — e.g. Session Detail's
+    // "Full story" link. loadStoryScopes only defaults sessionDate when unset,
+    // so a requested date survives the scopes load.
+    if (date) storyState.sessionDate = date;
     await loadStoryScopes();
     await loadStoryData();
 }
