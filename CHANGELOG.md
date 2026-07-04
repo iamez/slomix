@@ -6,6 +6,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.22.0](https://github.com/iamez/slomix/compare/v1.21.0...v1.22.0) (2026-07-04)
+
+
+### Features
+
+* **website:** composite Form Index — one trackable form number per player ([#430](https://github.com/iamez/slomix/issues/430)) ([41cf5e0](https://github.com/iamez/slomix/commit/41cf5e04b03c8a28301452a163b208c9da025d69))
+* **website:** Session Detail 'Moments of the night' strip (proximity slice 1) ([#435](https://github.com/iamez/slomix/issues/435)) ([becd301](https://github.com/iamez/slomix/commit/becd30141867746f7844fa3a63495b0f0253dc91))
+
+
+### Bug Fixes
+
+* **bot:** housekeeping — bot-round majority rule, On-This-Day session grain, TZ note, Phase-0 backtest ([#434](https://github.com/iamez/slomix/issues/434)) ([d428c6b](https://github.com/iamez/slomix/commit/d428c6b68de3817d19e32a7a9acc141a4539f109))
+
 ## [1.21.0](https://github.com/iamez/slomix/compare/v1.20.0...v1.21.0) (2026-07-02)
 
 

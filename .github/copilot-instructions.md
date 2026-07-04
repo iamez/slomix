@@ -3,7 +3,7 @@
 ## Project Identity
 **Enemy Territory: Legacy Discord Stats Bot** - Comprehensive stats tracking for Wolfenstein: ET with PostgreSQL/SQLite hybrid backend. This is a mature, production-ready system (~2,100 lines main bot after the mega-audit refactor split the god file into cog mixins).
 
-**Version:** 1.21.0 <!-- x-release-please-version --> (Updated May 2026)
+**Version:** 1.22.0 <!-- x-release-please-version --> (Updated May 2026)
 **Status:** Production-ready, deployed on VPS with PostgreSQL
 
 ## Ecosystem Overview
