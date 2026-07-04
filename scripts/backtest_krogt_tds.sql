@@ -6,7 +6,7 @@
 --    because there a round IS one life; in ET with respawns the K component is
 --    trivially true. v2 must move to per-LIFE grain (kill_outcome + spawn_timing)
 --    or a contribution-diversity score. Sub-components DO discriminate
---    (R 64-87%, T 37-50%, O 23-36%) and are usable standalone.
+--    (post R0-filter rerun: R 56-83%, T 56-75%, O 17-27%) and are usable standalone.
 --  * TDS discriminates (10.8-24.4%) and its input is clean (median denied 7.3s,
 --    max 57.8s, no negatives) BUT (a) only ~66% of valid rounds have kill_outcome
 --    coverage — a production implementation must scope the denominator to covered
@@ -32,6 +32,9 @@ rr AS (
   JOIN rounds r ON r.id = pcs.round_id
   WHERE r.gaming_session_id IN (SELECT gsid FROM last_sessions)
     AND r.is_valid IS DISTINCT FROM FALSE
+    -- played rounds only: round_number=0 match-summary rows are cumulative
+    -- duplicates and would double-count each map (codex P2, PR #434)
+    AND r.round_number IN (1, 2)
     AND pcs.player_guid NOT LIKE 'OMNIBOT%' AND pcs.player_name NOT LIKE '[BOT]%'
   GROUP BY pcs.player_guid, r.id
 ),
@@ -70,6 +73,7 @@ JOIN rounds r ON r.id = p.round_id
 LEFT JOIN k ON k.round_id = r.id AND k.g8 = UPPER(LEFT(p.player_guid,8))
 WHERE r.gaming_session_id IN (SELECT gsid FROM last_sessions)
   AND r.is_valid IS DISTINCT FROM FALSE
+  AND r.round_number IN (1, 2)  -- exclude round_number=0 match-summary rows
   AND p.player_guid NOT LIKE 'OMNIBOT%' AND p.player_name NOT LIKE '[BOT]%'
 GROUP BY p.player_guid
 HAVING COUNT(*) >= 20
