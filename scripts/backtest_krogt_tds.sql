@@ -15,7 +15,8 @@
 --    DPM, so ship it as a complement/divergence highlight, not a headline, and
 --    integrate with the existing KPR (kill permanence) from ET Rating v2 rather
 --    than adding a third kill-value formula.
-\echo '=== KROGT (% rounds with Kill/Revive/Objective/Gib/Traded contribution), min 20 rounds ==='
+-- (plain SELECT headers instead of psql \echo so non-psql SQL linters can parse this file)
+SELECT '=== KROGT (% rounds with K/R/O/G/T contribution), min 20 rounds ===' AS section;
 WITH last_sessions AS (
   SELECT DISTINCT gaming_session_id AS gsid FROM rounds
   WHERE is_valid IS DISTINCT FROM FALSE AND gaming_session_id IS NOT NULL
@@ -51,8 +52,7 @@ GROUP BY rr.player_guid
 HAVING COUNT(*) >= 20
 ORDER BY krogt_pct DESC;
 
-\echo ''
-\echo '=== TDS (Team Denial Score: effective denied seconds / played round seconds, %), min 20 rounds ==='
+SELECT '=== TDS (effective denied seconds / played round seconds, %), min 20 rounds ===' AS section;
 WITH last_sessions AS (
   SELECT DISTINCT gaming_session_id AS gsid FROM rounds
   WHERE is_valid IS DISTINCT FROM FALSE AND gaming_session_id IS NOT NULL

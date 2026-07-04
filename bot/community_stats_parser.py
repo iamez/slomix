@@ -996,6 +996,13 @@ class C0RNP0RN3StatsParser:
             'total_players': len(round_2_only_players),
             'timestamp': datetime.now().isoformat(),  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             'differential_calculation': True,  # Flag to indicate this was calculated
+            # Propagate bot-round classification from the cumulative R2 parse —
+            # without this the differential result dict silently dropped it and
+            # the round_number=2 row of a bot test match was stored with the
+            # default is_bot_round=FALSE (codex P2, PR #434).
+            'bot_player_count': round_2_cumulative_data.get('bot_player_count', 0),
+            'human_player_count': round_2_cumulative_data.get('human_player_count', 0),
+            'is_bot_round': round_2_cumulative_data.get('is_bot_round', False),
         }
 
     def parse_regular_stats_file(self, file_path: str) -> dict[str, Any]:
