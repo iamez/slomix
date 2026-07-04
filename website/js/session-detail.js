@@ -368,6 +368,7 @@ export async function loadSessionDetailView({ sessionId, sessionDate, tab } = {}
         _renderShell(container);
         _activateTab(_initialTab);
         _loadVerdictStrip().catch((e) => console.warn('verdict strip failed', e));
+        _loadMomentsStrip().catch((e) => console.warn('moments strip failed', e));
         _loadMvpPanel().catch((e) => console.warn('mvp panel failed', e));
     } catch (e) {
         console.error('Failed to load session detail:', e);
@@ -514,6 +515,71 @@ async function _loadVerdictStrip() {
                 ${quietNight ? '<span class="text-[10px] text-slate-500">quiet night for everyone — happens to the best of groups</span>' : ''}
             </div>
             <div class="flex gap-2 overflow-x-auto pb-1">${chips}</div>
+        </div>`;
+}
+
+// ============================================================
+// MOMENTS STRIP (proximity productization slice 1) — the evening's
+// auto-detected highlights, told straight. Optional enrichment: any
+// failure or empty result leaves the page untouched.
+// ============================================================
+
+const _MOMENT_TYPE_LABELS = {
+    kill_streak: 'Kill streak',
+    multikill: 'Multi-kill',
+    multi_revive: 'Medic work',
+    team_wipe: 'Team wipe',
+    carrier_chain: 'Carrier stop',
+    focus_survival: 'Under fire',
+    push_success: 'Push',
+    trade_chain: 'Trade chain',
+    objective_secured: 'Objective',
+    objective_run: 'Engineer work',
+    objective_denied: 'Objective denied',
+};
+
+async function _loadMomentsStrip() {
+    const host = document.getElementById('sd-moments-strip');
+    if (!host || !_sessionDate) return;
+    let data;
+    try {
+        data = await fetchJSON(
+            `${API_BASE}/storytelling/moments?session_date=${encodeURIComponent(_sessionDate)}&limit=5`);
+    } catch (_) {
+        return; // optional enrichment — never block the page
+    }
+    const moments = data?.moments || [];
+    if (!moments.length) return;
+
+    const cards = moments.map(m => {
+        const stars = Math.max(1, Math.min(5, num(m.impact_stars, 1)));
+        const typeLabel = _MOMENT_TYPE_LABELS[m.type] || String(m.type || '').replace(/_/g, ' ');
+        const meta = [
+            mapLabel(m.map_name),
+            m.round_number ? `R${m.round_number}` : '',
+            m.time_formatted || '',
+        ].filter(Boolean).join(' · ');
+        return `
+            <div class="flex flex-col gap-1 px-3 py-2 rounded-lg border border-slate-700/60 bg-slate-900/40 shrink-0 max-w-xs">
+                <span class="flex items-center gap-2">
+                    <span class="text-amber-400 text-xs tracking-tight">${'★'.repeat(stars)}<span class="text-slate-600">${'★'.repeat(5 - stars)}</span></span>
+                    <span class="text-[10px] font-black uppercase tracking-wide text-slate-400">${escapeHtml(typeLabel)}</span>
+                </span>
+                <span class="text-sm text-white leading-snug">${escapeHtml(m.narrative || '')}</span>
+                <span class="text-[10px] text-slate-500">${escapeHtml(meta)}</span>
+            </div>`;
+    }).join('');
+
+    host.innerHTML = `
+        <div class="glass-panel rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+                <div class="text-[11px] uppercase tracking-wider text-slate-500 font-bold"
+                     title="Auto-detected highlights of the evening, straight from the round telemetry.">
+                    Moments of the night
+                </div>
+                <a href="#/story" class="text-[11px] text-brand-blue hover:underline">Full story →</a>
+            </div>
+            <div class="flex gap-2 overflow-x-auto pb-1">${cards}</div>
         </div>`;
 }
 
@@ -678,6 +744,9 @@ function _renderShell(container) {
 
         <!-- Verdict strip: how was the night, per player vs OWN form (S1.4) -->
         <div id="sd-verdict-strip" class="mb-6"></div>
+
+        <!-- Moments strip: the evening's auto-detected highlights (proximity slice 1) -->
+        <div id="sd-moments-strip" class="mb-6"></div>
 
         <!-- MVP vote: peer recognition for this session (S3) -->
         <div id="sd-mvp-panel" class="mb-6"></div>
