@@ -17,11 +17,12 @@ A **production-grade** Discord bot + web dashboard + demo analysis pipeline with
 
 ## 🔥 Recent Updates (June 2026)
 
-### **🧭 VISION_2026 — Sprints S1–S4 Shipped (June 2026)** 🆕
+### **🧭 VISION_2026 — Sprints S1–S7 + Trust Hardening (June 2026)** 🆕
 
 **The platform pivoted from "stats viewer" to *the operating system of a 20-year
 community* — the website becomes the memory of every game night, the bot becomes
-the pipeline. Four research-driven sprints shipped back-to-back.** See the
+the pipeline. Seven research-driven sprints shipped, followed by targeted
+correctness, UX, and deploy hardening.** See the
 [Vision & Roadmap](#-vision--roadmap) section below.
 
 - 🌅 **S1 · JUTRO / Morning** (#384) — **Morning Discord digest** posted after every
@@ -42,6 +43,28 @@ the pipeline. Four research-driven sprints shipped back-to-back.** See the
   **parimutuel session-winner betting** (valueless points, pool-split payout, atomic
   `FOR UPDATE` settlement) that pulls the bench and non-players in, and **per-map
   fastest-objective records** ("segments") + a personal-best digest line
+- 🪪 **S5 · IDENTITETA / Identity** (#395) — Profile IA changed from "big stats table"
+  into a career surface: identity strip, ET Rating/tier, archetype, one focus line,
+  duo synergy, History tab with rating sparkline + season awards, and a mobile bottom
+  nav with `Home / Last Session / Me / Boards`
+- 🗄️ **S6 · SPOMIN / Memory** (#397) — **On This Day** throwback service, consolidated
+  **Record Book** (Records + Hall of Fame + Season Champions in one tabbed surface),
+  and **Slomix Wrapped** canvas cards from season-scoped player facts
+- 🔴 **S7 · LIVE / Tonight** (#398, #402) — Dedicated `/#/tonight` hub with logical-team
+  stopwatch scoring, live server pulse, map strip, rosters, momentum graph, R2
+  time-to-beat chase, hold-probability curve, and a Home live card
+- 🎲 **Tonight fun-betting stage 2** (#403, #406) — Betting panel moved into the live
+  Tonight flow, cache staleness fixed, hindsight bets blocked, and roster-bound settle
+  added so payouts follow the actual team roster instead of fragile positional labels
+- 🔬 **Deep audit remediation** (#403, #405, #409) — Correctness/security/UX sweep:
+  aim-lock duration inflation fixed, bot-polluted season awards excluded, `prox_overall`
+  now honors session/map/round scope, orphan R2 imports are marked invalid instead of
+  inflating aggregates, Sessions gained keyboard/a11y fixes, and duplicated session
+  timing helpers moved into a shared mixin
+- 🧱 **Dual-frontend deploy resilience** (#407, #411) — React modern-route assets are
+  built during deploy, cache-busted by git SHA, swapped atomically, retried once on
+  transient chunk/CSS failures, and show a user-facing reload panel instead of a
+  developer-only "Modern Route Offline" dead end
 
 ### **🎯 v1.16.0: Full Aim Analytics — v9 True-Aim Shipped (May 19-20)**
 
@@ -163,14 +186,16 @@ holds, sweeps, and looks while shooting.**
 - 🎬 **Round Replay Timeline** — Dual-pane viewer: event feed + 2D map canvas + scrubber, 420+ events per round, player positions at 200ms precision
 - 🧠 **Smart Storytelling** — Kill Impact Score (10+ multipliers), 11 moment detectors, 9 player archetypes, auto-generated session narratives
 - ⚖️ **Bayesian MVP + WIS v2** — Fairness-first scoring with shrinkage prior and harmonic confidence weighting; late-joiners don't steal MVP
-- 🎯 **Proximity Teamplay Analytics** — Lua v6.10 telemetry: engagements, crossfire, cohesion, trade kills, spawn timing, objective intelligence
+- 🔴 **Tonight Live Hub** — Logical-team stopwatch score, live server pulse, map strip, R2 time-to-beat chase, momentum, hold-probability curve, and optional fun-betting
+- 🎯 **Proximity Teamplay Analytics** — Lua v6.10+ telemetry: engagements, crossfire, cohesion, trade kills, spawn timing, objective intelligence, aim-lock, and scope-aware composite scores
 - ⚔️ **Player Rivalries** — H2H stats, nemesis/prey classification, per-map drill-down, rivalry leaderboard
 - 📈 **ET Rating System** — 9-metric percentile skill rating with per-session drill-down and confidence indicator
 - 🔮 **AI Match Predictions** — 4-factor algorithm (H2H, form, map performance, substitutions) with auto voice-channel detection
 - 🎬 **Demo Highlight Scanner** — Upload demos, detect multi-kills/sprees, cut clips, ready-to-render highlights
 - 🔒 **6-Layer Data Integrity** — Transaction safety, ACID guarantees, per-insert verification, schema drift zero
 - 🌅 **Morning Digest & Own-Form Verdicts** — Post-session Discord recap (winner, MVP, new PBs, narrative) + Leetify-style "rate your night vs your own form" verdicts (VISION_2026 S1)
-- 🏟️ **Seasons, Awards & Parimutuel Betting** — Quarterly seasons, engraved Hall-of-Fame champions (peer-voted MVP, Iron Man, Oracle), and valueless-points session betting that pulls in the bench (VISION_2026 S4)
+- 🪪 **Identity & Memory Surfaces** — Career-style profiles, archetype/focus lines, duo synergy, Record Book, On This Day, and shareable Slomix Wrapped cards
+- 🏟️ **Seasons, Awards & Parimutuel Betting** — Quarterly seasons, engraved Hall-of-Fame champions, peer-voted MVP, Oracle points, and roster-bound valueless betting that pulls in the bench
 - 🤖 **Full Automation** — SSH monitoring, auto-download, auto-import, auto-post (60s cycle) + real-time Lua webhook (~3s latency)
 
 **[📊 Data Pipeline](docs/DATA_PIPELINE.md)** | **[🔒 Safety & Validation](docs/SAFETY_VALIDATION_SYSTEMS.md)** | **[🧭 Vision & Roadmap](#-vision--roadmap)** | **[📖 Changelog](CHANGELOG.md)**
@@ -203,12 +228,21 @@ deep-link away from Discord. Full write-up: **[docs/VISION_2026.md](docs/VISION_
 - **S2 · Account** — display names & aliases, unified session + role gating
 - **S3 · Evening** — peer-voted MVP, weekly challenge, lobby tiers + "need N more", captain ET-Rating draft
 - **S4 · Competition** — quarterly seasons, engraved HoF awards, parimutuel betting, per-map fastest-objective records
+- **S5 · Identity** — career profile IA, identity strip, archetype/focus, duo synergy, History tab, mobile bottom nav
+- **S6 · Memory** — On This Day, consolidated Record Book, Season Champions tab, Slomix Wrapped canvas card
+- **S7 · Live** — Tonight hub with logical-team score, live server pulse, map strip, momentum, hold-probability, R2 chase
 
 ### What's coming 🔜
 
-- **S5 · Identity** — career profile IA: identity header + archetype, a single "focus" line ("trade-kill rate 34th percentile — 50th flips 2 rounds"), duo synergy ("with SuperBoyy you win 71%, without 44%"), career timeline
-- **S6 · Memory** — "On this day" push, all-time record book, **Slomix Wrapped** (6-8 season cards per player), LAN/meetup page, historical imports (SupaStats 2024)
-- **S7 · Live** — Tonight hub: live score + map strip + a single momentum graph (5-10s polling), later a hold-probability curve from spawn/stagger data
+- **Community homepage revamp** — make Home a returning-member dashboard, not a
+  marketing hero: Tonight, Last Session, My Stats, Archive/Record Book, and one
+  source of truth for session summaries
+- **Good Night / session story engine** — turn raw stats into a friendly evening
+  recap for older long-running friend-group sessions: best save, stubborn hold,
+  repeat duel, comeback attempt, and map memory
+- **Proximity productization** — keep raw Proximity as a power-user tool, but add
+  visible scope badges, degrade labels, ET:L stopwatch objective context, and
+  session/map/player story extracts for normal users
 - 🎯 **Signature bet — demo↔stats fusion:** no one in the ET ecosystem has ever linked a kill line to a rendered demo clip. We have the Greatshot pipeline *and* the moment detectors — auto-queue a clip from a session's best moments straight into the morning digest
 
 ### Anti-goals (what we deliberately **don't** build)
@@ -270,10 +304,10 @@ that needs daily manual feeding. Every new page replaces or merges an old one �
 | Project | Status | Description |
 |---------|--------|-------------|
 | **Discord Bot** (this repo) | ✅ Production | 100+ commands, 20 cogs, full automation, AI predictions |
-| **Website** (`/website/`) | ✅ Production | FastAPI + React 19/TypeScript SPA: profiles, sessions, leaderboards, proximity, greatshot |
-| **Lua Webhook** (`vps_scripts/`) | ✅ Production | Real-time round notifications, surrender timing fix, team capture |
+| **Website** (`/website/`) | ✅ Production | FastAPI + legacy JS + React 19 modern routes: Home, Tonight, sessions/archive, profiles, Record Book, proximity, Greatshot |
+| **Lua Webhook** (`vps_scripts/`) | ✅ Production | Real-time round notifications, stopwatch timing, logical-team feed, pause/team capture |
 | **Greatshot** (`/greatshot/`) | ✅ Production | Demo upload, highlight detection, clip extraction, render pipeline |
-| **Proximity** (`/proximity/`) | ✅ Production | Lua v6.10+ teamplay analytics — engagement, cohesion, crossfire, trade kills, objective intelligence, Oksii-adopted fields (killer_health, alive_count, reinf timing) |
+| **Proximity** (`/proximity/`) | ✅ Production telemetry / power-user UI | Lua v6.10+ analytics — engagement, cohesion, crossfire, trade kills, objective intelligence, aim-lock, scoped composite scores, Oksii-adopted fields |
 
 ---
 
@@ -408,7 +442,7 @@ Real-time Lua telemetry (v6.10) tracks every player position, engagement, and ob
 
 **Pipeline:** STATS_READY webhook triggers proximity import → re-linker task fixes orphaned data → 2min fallback polling. Eliminates 60% of historical linkage failures.
 
-**Website:** Full React dashboard with scope filtering (session/map/round), 7 leaderboard categories, metric tooltips, and GUID→name resolution.
+**Website:** Power-user dashboard with session/map/round scope filtering, leaderboard categories, metric tooltips, GUID→name resolution, legacy main page, and React deep routes. Recent hardening made `prox_overall`/composite scores honor the same selected scope instead of silently falling back to a 30-day window.
 
 ---
 
