@@ -44,10 +44,17 @@ class OnThisDayService:
         return True
 
     async def _fetch_day_history(self, month: int, day: int, this_year: int) -> list[dict]:
-        """Sessions that happened on this month-day in PRIOR years, newest first."""
+        """Sessions that happened on this month-day in PRIOR years, newest first.
+
+        Grouped per gaming_session_id (audit W1: grouping by DATE alone summed
+        winners across distinct gaming sessions on the same date, fabricating a
+        combined score no evening actually produced). The extra DATE key keeps
+        pre-gsid legacy rows (gaming_session_id IS NULL) merged per-date as
+        before instead of collapsing them into one NULL bucket across years.
+        """
         rows = await self.db_adapter.fetch_all(
             """
-            SELECT CAST(session_date AS DATE) AS sd,
+            SELECT MIN(CAST(session_date AS DATE)) AS sd,
                    COUNT(*)                                  AS maps,
                    MAX(team_1_name)                          AS t1,
                    MAX(team_2_name)                          AS t2,
@@ -57,7 +64,7 @@ class OnThisDayService:
             WHERE EXTRACT(MONTH FROM CAST(session_date AS DATE)) = ?
               AND EXTRACT(DAY   FROM CAST(session_date AS DATE)) = ?
               AND EXTRACT(YEAR  FROM CAST(session_date AS DATE)) < ?
-            GROUP BY CAST(session_date AS DATE)
+            GROUP BY gaming_session_id, CAST(session_date AS DATE)
             ORDER BY sd DESC
             """,
             (month, day, this_year),
@@ -69,20 +76,25 @@ class OnThisDayService:
         } for r in (rows or [])]
 
     async def _top_fragger(self, month: int, day: int, this_year: int) -> dict | None:
-        """Best single-day kill total on this month-day in prior years (flavor)."""
+        """Best single-SESSION kill total on this month-day in prior years (flavor).
+
+        Same W1 grain fix as _fetch_day_history: per gaming_session_id, so two
+        sessions on one date don't merge into a kill total nobody actually shot.
+        """
         try:
             row = await self.db_adapter.fetch_one(
                 """
                 SELECT MAX(pcs.player_name) AS name, SUM(pcs.kills) AS kills,
-                       CAST(r.round_date AS DATE) AS sd
+                       MIN(CAST(r.round_date AS DATE)) AS sd
                 FROM player_comprehensive_stats pcs
                 JOIN rounds r ON r.id = pcs.round_id
                 WHERE r.is_valid IS DISTINCT FROM FALSE
                   AND pcs.player_guid NOT LIKE 'OMNIBOT%'
+                  AND pcs.player_name NOT LIKE '[BOT]%'
                   AND EXTRACT(MONTH FROM CAST(r.round_date AS DATE)) = ?
                   AND EXTRACT(DAY   FROM CAST(r.round_date AS DATE)) = ?
                   AND EXTRACT(YEAR  FROM CAST(r.round_date AS DATE)) < ?
-                GROUP BY pcs.player_guid, CAST(r.round_date AS DATE)
+                GROUP BY pcs.player_guid, r.gaming_session_id, CAST(r.round_date AS DATE)
                 ORDER BY kills DESC
                 LIMIT 1
                 """,

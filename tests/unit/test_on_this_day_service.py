@@ -45,6 +45,26 @@ async def test_build_embed_renders_history_and_fragger():
 
 
 @pytest.mark.asyncio
+async def test_two_sessions_same_date_render_separately():
+    """W1 grain fix: two gaming sessions on one historical date must appear as
+    two separate fields (per-gsid rows), not a merged score nobody played."""
+    db = AsyncMock()
+    db.fetch_all = AsyncMock(return_value=[
+        (datetime.date(2025, 6, 14), 4, "puran", "sWat", 3, 1),
+        (datetime.date(2025, 6, 14), 2, "kava", "mix", 0, 2),
+    ])
+    db.fetch_one = AsyncMock(return_value=None)
+    svc = OnThisDayService(bot=None, db_adapter=db, config=_Cfg())
+    embed = await svc.build_embed(datetime.date(2026, 6, 14))
+    assert embed is not None
+    field_text = " ".join(f.name + " " + str(f.value) for f in embed.fields)
+    assert "puran 3–1 sWat" in field_text
+    assert "kava 0–2 mix" in field_text
+    query = db.fetch_all.call_args.args[0]
+    assert "GROUP BY gaming_session_id" in query
+
+
+@pytest.mark.asyncio
 async def test_build_embed_survives_fragger_failure():
     db = AsyncMock()
     db.fetch_all = AsyncMock(return_value=[

@@ -105,6 +105,18 @@ C0RNP0RN3_WEAPONS = {
 }
 
 
+def is_bot_dominated_round(bot_player_count: int, human_player_count: int) -> bool:
+    """A round is a "bot round" when bots are the only players OR the strict
+    majority. Owner test sessions run 1 human + N omni-bots; the old
+    human_count==0 rule left those is_bot_round=FALSE, so they leaked into
+    aggregates until flagged is_valid by hand (2026-06-21 functional test,
+    rounds 10791/10792). Per-GUID OMNIBOT%/[BOT]% filters remain in consumers
+    as defense-in-depth."""
+    return bot_player_count > 0 and (
+        human_player_count == 0 or bot_player_count > human_player_count
+    )
+
+
 def _parse_side_fields(header_parts: list[str]) -> tuple[int, int, dict[str, Any]]:
     """
     Parse defender/winner side fields and return diagnostics for fallback reasons.
@@ -1037,10 +1049,10 @@ class C0RNP0RN3StatsParser:
                     if player_data:
                         players.append(player_data)
 
-            # Bot/human counts (for bot-only session labeling)
+            # Bot/human counts (majority rule — see is_bot_dominated_round)
             bot_player_count = sum(1 for p in players if p.get('is_bot'))
             human_player_count = max(0, len(players) - bot_player_count)
-            is_bot_round = bot_player_count > 0 and human_player_count == 0
+            is_bot_round = is_bot_dominated_round(bot_player_count, human_player_count)
 
             # Calculate time in SECONDS (primary storage format)
             if actual_playtime_seconds is not None:
