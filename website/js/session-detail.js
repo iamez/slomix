@@ -552,7 +552,9 @@ async function _loadMomentsStrip() {
     if (!moments.length) return;
 
     const cards = moments.map(m => {
-        const stars = Math.max(1, Math.min(5, num(m.impact_stars, 1)));
+        // Same 0–5 clamp as the Story page (story.js) — no forced minimum,
+        // a zero-impact moment should look like one.
+        const stars = Math.min(Math.max(Math.round(num(m.impact_stars, 0)), 0), 5);
         const typeLabel = _MOMENT_TYPE_LABELS[m.type] || String(m.type || '').replace(/_/g, ' ');
         const meta = [
             mapLabel(m.map_name),
@@ -577,7 +579,7 @@ async function _loadMomentsStrip() {
                      title="Auto-detected highlights of the evening, straight from the round telemetry.">
                     Moments of the night
                 </div>
-                <a href="#/story" class="text-[11px] text-brand-blue hover:underline">Full story →</a>
+                <a href="#/story/date/${encodeURIComponent(_sessionDate)}" class="text-[11px] text-brand-blue hover:underline">Full story →</a>
             </div>
             <div class="flex gap-2 overflow-x-auto pb-1">${cards}</div>
         </div>`;
