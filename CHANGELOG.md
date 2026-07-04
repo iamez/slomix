@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.22.0](https://github.com/iamez/slomix/compare/v1.21.0...v1.22.0) (2026-07-04)
+
+
+### Features
+
+* **website:** composite Form Index — one trackable form number per player ([#430](https://github.com/iamez/slomix/issues/430)) ([41cf5e0](https://github.com/iamez/slomix/commit/41cf5e04b03c8a28301452a163b208c9da025d69))
+
 ## [1.21.0](https://github.com/iamez/slomix/compare/v1.20.0...v1.21.0) (2026-07-02)
 
 
