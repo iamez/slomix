@@ -18,8 +18,11 @@
 -- (plain SELECT headers instead of psql \echo so non-psql SQL linters can parse this file)
 SELECT '=== KROGT (% rounds with K/R/O/G/T contribution), min 20 rounds ===' AS section;
 WITH last_sessions AS (
+  -- played rounds only here too: a session whose only valid row is an R0
+  -- match summary must not consume one of the 25 slots (codex P2, PR #434)
   SELECT DISTINCT gaming_session_id AS gsid FROM rounds
   WHERE is_valid IS DISTINCT FROM FALSE AND gaming_session_id IS NOT NULL
+    AND round_number IN (1, 2)
   ORDER BY gsid DESC LIMIT 25
 ),
 rr AS (
@@ -57,8 +60,11 @@ ORDER BY krogt_pct DESC;
 
 SELECT '=== TDS (effective denied seconds / played round seconds, %), min 20 rounds ===' AS section;
 WITH last_sessions AS (
+  -- played rounds only here too: a session whose only valid row is an R0
+  -- match summary must not consume one of the 25 slots (codex P2, PR #434)
   SELECT DISTINCT gaming_session_id AS gsid FROM rounds
   WHERE is_valid IS DISTINCT FROM FALSE AND gaming_session_id IS NOT NULL
+    AND round_number IN (1, 2)
   ORDER BY gsid DESC LIMIT 25
 ),
 k AS (
