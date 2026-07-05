@@ -153,14 +153,14 @@ def test_parse_time_negative_or_zero_seconds(svc):
 
 
 def test_calc_both_complete_team1_faster_wins(svc):
-    """Both finished; T1 faster → 1-0 to Team1."""
+    """Both finished; T1 faster → 2-0 to Team1 (BOX scale)."""
     t1, t2, desc = svc.calculate_map_score("10:00", "5:00", "7:00")
     assert (t1, t2) == (2, 0)
     assert "R1 attackers 5:00" in desc
 
 
 def test_calc_both_complete_team2_faster_wins(svc):
-    """T2 faster → 0-1 to Team2."""
+    """T2 faster → 0-2 to Team2 (BOX scale)."""
     t1, t2, desc = svc.calculate_map_score("10:00", "8:00", "5:00")
     assert (t1, t2) == (0, 2)
     assert "R2 attackers 5:00" in desc
@@ -174,29 +174,29 @@ def test_calc_both_complete_tie_goes_to_team1(svc):
 
 
 def test_calc_team1_completes_team2_fullhold(svc):
-    """T1 finishes; T2 doesn't (time >= limit) → 1-0 Team1."""
+    """T1 finishes; T2 doesn't (time >= limit) → 2-0 Team1."""
     t1, t2, desc = svc.calculate_map_score("10:00", "8:30", "10:00")
     assert (t1, t2) == (2, 0)
     assert "R2 fullhold" in desc
 
 
 def test_calc_team2_completes_team1_fullhold(svc):
-    """T2 finishes; T1 doesn't → 0-1 Team2."""
+    """T2 finishes; T1 doesn't → 0-2 Team2."""
     t1, t2, desc = svc.calculate_map_score("10:00", "10:00", "8:30")
     assert (t1, t2) == (0, 2)
     assert "R1 fullhold" in desc
 
 
 def test_calc_double_fullhold_is_tie(svc):
-    """Both teams fail to complete → 0-0 (no-points tie). Pin the
-    symmetric-defence case so it never silently awards a default."""
+    """Both teams fail to complete → 1-1 draw (BOX scale). Pin the
+    symmetric-defence case so it never silently awards a 2-0 default."""
     t1, t2, desc = svc.calculate_map_score("10:00", "10:00", "10:00")
     assert (t1, t2) == (1, 1)
     assert "no completion" in desc.lower()
 
 
 def test_calc_no_actual_times_is_tie(svc):
-    """Both R1 and R2 have empty actual_time → 0-0."""
+    """Both R1 and R2 have empty actual_time → 1-1 draw."""
     t1, t2, _ = svc.calculate_map_score("10:00", "", "")
     assert (t1, t2) == (1, 1)
 
@@ -221,7 +221,7 @@ def test_calc_at_exact_limit_is_fullhold(svc):
     Pin so a clock-exactly-zero edge doesn't flip a fullhold into
     a time win."""
     t1, t2, _ = svc.calculate_map_score("10:00", "10:00", "")
-    # T1 == limit → fullhold; T2 empty → fullhold → 0-0
+    # T1 == limit → fullhold; T2 empty → fullhold → 1-1 draw
     assert (t1, t2) == (1, 1)
 
 

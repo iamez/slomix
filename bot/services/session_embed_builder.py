@@ -591,9 +591,9 @@ class SessionEmbedBuilder:
         analytics_desc = "Comprehensive team performance comparison"
         if hardcoded_teams and team_1_score + team_2_score > 0:
             if team_1_score == team_2_score:
-                analytics_desc += f"\n\n🤝 **Maps Won: {team_1_score} - {team_2_score} (PERFECT TIE)**"
+                analytics_desc += f"\n\n🤝 **Score: {team_1_score} - {team_2_score} (PERFECT TIE)**"
             else:
-                analytics_desc += f"\n\n🏆 **Maps Won: {team_1_score} - {team_2_score}**"
+                analytics_desc += f"\n\n🏆 **Score: {team_1_score} - {team_2_score}**"
 
         embed = discord.Embed(
             title=f"⚔️ Team Analytics - {team_1_name} vs {team_2_name}",
@@ -717,9 +717,9 @@ class SessionEmbedBuilder:
 
         if hardcoded_teams and team_1_score + team_2_score > 0:
             if team_1_score == team_2_score:
-                session_info += f"\n🤝 **Maps Won**: {team_1_name} {team_1_score} - {team_2_score} {team_2_name} (TIE)"
+                session_info += f"\n🤝 **Score**: {team_1_name} {team_1_score} - {team_2_score} {team_2_name} (TIE)"
             else:
-                session_info += f"\n🏆 **Maps Won**: {team_1_name} {team_1_score} - {team_2_score} {team_2_name}"
+                session_info += f"\n🏆 **Score**: {team_1_name} {team_1_score} - {team_2_score} {team_2_name}"
 
         embed.add_field(name="📊 Round Info", value=session_info, inline=False)
         embed.set_footer(text=f"Round: {latest_date}")
