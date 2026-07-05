@@ -58,6 +58,11 @@ class StopwatchScoringService:
         Legacy rows without a match_id keep the previous sequential
         same-map pairing.
         """
+        if round_num not in (1, 2):
+            # R0 match-summary rows share the pair's match_id (99 such rows on
+            # dev) — without this guard one would fill the round2 slot when the
+            # real R2 is missing (Copilot, PR #443 follow-up).
+            return
         if match_id:
             key = f"match:{match_id}"
             entry = maps_dict.setdefault(key, {
@@ -234,6 +239,7 @@ class StopwatchScoringService:
                     WHERE id IN ({placeholders})
                     AND round_status = 'completed'
                     AND is_valid
+                    AND round_number IN (1, 2)
                     ORDER BY gaming_session_id,
                              round_date,
                              CAST(REPLACE(round_time, ':', '') AS INTEGER),
@@ -249,6 +255,7 @@ class StopwatchScoringService:
                     WHERE SUBSTRING(round_date, 1, 10) = $1
                     AND round_status = 'completed'
                     AND is_valid
+                    AND round_number IN (1, 2)
                     ORDER BY gaming_session_id,
                              round_date,
                              CAST(REPLACE(round_time, ':', '') AS INTEGER),
@@ -699,6 +706,7 @@ class StopwatchScoringService:
                 WHERE r.id IN ({placeholders})
                 AND r.round_status = 'completed'
                 AND r.is_valid
+                AND r.round_number IN (1, 2)
                 ORDER BY r.gaming_session_id,
                          r.round_date,
                          CAST(REPLACE(r.round_time, ':', '') AS INTEGER),
