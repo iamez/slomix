@@ -536,8 +536,136 @@ async def get_proximity_leaderboards(
                 ],
             }
 
+        elif category == "krogt":
+            # Per-LIFE KROGT — % of lives with a Kill/Revive/Objective/Gib/Traded
+            # contribution. ET translation of KAST/KOST (a CS/R6 round == one
+            # life); per-round saturates here because everyone frags in a 10min
+            # round. Lives come from player_track (one row per spawn->death,
+            # including selfkill/world deaths). Validated + tuned in
+            # scripts/backtest_krogt_perlife.py (owner-reviewed 2026-07-05).
+            # round_start_unix narrows the LIVES query only (player_track has
+            # the column; proximity_revive does NOT — filtering it there would
+            # be an undefined-column error, codex P2 round 2). Event queries
+            # don't need it: they join lives by (round_id, guid), so events
+            # from other rounds can never credit a selected round's lives.
+            scope_where, scope_params, rsu_idx = _lb_scope("pt", has_round_number=True)
+            if round_start_unix is not None:
+                scope_where += f" AND pt.round_start_unix = ${rsu_idx}"
+                scope_params = (*scope_params, round_start_unix)
+            lives_rows = await db.fetch_all(
+                f"""
+                SELECT pt.round_id, UPPER(LEFT(pt.player_guid, 8)),
+                       MAX(pt.player_name), pt.spawn_time_ms, pt.death_time_ms
+                FROM player_track pt
+                WHERE {scope_where}
+                  AND pt.round_id IS NOT NULL
+                  AND pt.player_guid NOT LIKE 'OMNIBOT%'
+                  AND pt.player_name NOT LIKE '[BOT]%'
+                GROUP BY pt.round_id, UPPER(LEFT(pt.player_guid, 8)),
+                         pt.spawn_time_ms, pt.death_time_ms
+                """,
+                scope_params,
+            )
+            if not lives_rows:
+                return {"status": "ok", "category": "krogt", "entries": []}
+
+            async def _krogt_events(sql: str, alias: str, has_rn: bool) -> list:
+                where_sql, params, _idx = _lb_scope(alias, has_round_number=has_rn)
+                return await db.fetch_all(sql.format(scope=where_sql), params)
+
+            events: list = []
+            events += await _krogt_events(
+                "SELECT cp.round_id, UPPER(LEFT(cp.attacker_guid, 8)), cp.event_time "
+                "FROM proximity_combat_position cp WHERE {scope} "
+                "AND cp.round_id IS NOT NULL AND cp.attacker_guid IS NOT NULL "
+                "AND cp.attacker_team <> cp.victim_team", "cp", True)
+            events += await _krogt_events(
+                "SELECT rv.round_id, UPPER(LEFT(rv.medic_guid, 8)), rv.revive_time "
+                "FROM proximity_revive rv WHERE {scope} "
+                "AND rv.round_id IS NOT NULL AND rv.medic_guid IS NOT NULL", "rv", False)
+            events += await _krogt_events(
+                "SELECT orun.round_id, UPPER(LEFT(orun.engineer_guid, 8)), orun.action_time "
+                "FROM proximity_objective_run orun WHERE {scope} "
+                "AND orun.round_id IS NOT NULL AND orun.engineer_guid IS NOT NULL "
+                "AND COALESCE(orun.action_type, '') <> 'approach_killed' "
+                "AND COALESCE(orun.run_type, '') <> 'denied'", "orun", True)
+            events += await _krogt_events(
+                "SELECT ko.round_id, UPPER(LEFT(ko.gibber_guid, 8)), ko.outcome_time "
+                "FROM proximity_kill_outcome ko WHERE {scope} "
+                "AND ko.round_id IS NOT NULL AND ko.outcome = 'gibbed' "
+                "AND ko.gibber_guid IS NOT NULL", "ko", True)
+            traded_rows = await _krogt_events(
+                "SELECT tk.round_id, UPPER(LEFT(tk.original_victim_guid, 8)), tk.original_kill_time "
+                "FROM proximity_lua_trade_kill tk WHERE {scope} "
+                "AND tk.round_id IS NOT NULL", "tk", True)
+
+            ev_by: dict[tuple, list] = {}
+            for rid, gg, t in events:
+                if t is not None:
+                    ev_by.setdefault((rid, gg), []).append(int(t))
+            traded_by: dict[tuple, list] = {}
+            for rid, gg, t in traded_rows:
+                if t is not None:
+                    traded_by.setdefault((rid, gg), []).append(int(t))
+
+            # death_time_ms is intentionally NULL for a survived-to-round-end
+            # life (proximity schema) — those lives belong in the denominator
+            # (codex P2 round 2); close them at the round's actual duration.
+            null_death_rids = {r[0] for r in lives_rows if r[4] is None}
+            durations: dict[int, int] = {}
+            if null_death_rids:
+                dur_rows = await db.fetch_all(
+                    "SELECT id, COALESCE(actual_duration_seconds, 0) * 1000 "
+                    "FROM rounds WHERE id = ANY($1)",
+                    (list(null_death_rids),),
+                )
+                durations = {r[0]: int(r[1] or 0) for r in (dur_rows or [])}
+
+            per_player: dict[str, dict] = {}
+            lives_by: dict[tuple, list] = {}
+            for rid, gg, name, spawn_ms, death_ms in lives_rows:
+                if spawn_ms is None:
+                    continue
+                hi = int(death_ms) if death_ms is not None else durations.get(rid, 0)
+                if hi <= int(spawn_ms):
+                    continue
+                lives_by.setdefault((rid, gg), []).append((int(spawn_ms), hi))
+                per_player.setdefault(gg, {"name": name, "lives": 0, "contrib": 0})
+                if name:
+                    per_player[gg]["name"] = name
+
+            for (rid, gg), windows in lives_by.items():
+                windows.sort()
+                evs = sorted(ev_by.get((rid, gg), []))
+                traded_times = traded_by.get((rid, gg), [])
+                ei = 0
+                for lo, hi in windows:
+                    per_player[gg]["lives"] += 1
+                    while ei < len(evs) and evs[ei] <= lo:
+                        ei += 1
+                    contributed = ei < len(evs) and evs[ei] <= hi
+                    # traded death ends the life within +/-1s (different Lua clocks)
+                    if not contributed and any(abs(t - hi) <= 1000 for t in traded_times):
+                        contributed = True
+                    if contributed:
+                        per_player[gg]["contrib"] += 1
+
+            scoped = (parsed_date or map_name or round_number is not None
+                      or round_start_unix is not None)
+            min_lives = 10 if scoped else 50
+            entries = [
+                {
+                    "guid": gg, "name": p["name"] or gg,
+                    "value": round(100.0 * p["contrib"] / p["lives"], 1),
+                    "lives": p["lives"],
+                }
+                for gg, p in per_player.items() if p["lives"] >= min_lives
+            ]
+            entries.sort(key=lambda e: -e["value"])
+            return {"status": "ok", "category": "krogt", "entries": entries[:safe_limit]}
+
         else:
-            return {"status": "error", "detail": f"Unknown category: {category}. Valid: power, spawn, crossfire, trades, reactions, survivors, movement, focus_fire"}
+            return {"status": "error", "detail": f"Unknown category: {category}. Valid: power, spawn, crossfire, trades, reactions, survivors, movement, focus_fire, krogt"}
 
     except Exception:
         logger.exception("leaderboards failed")
