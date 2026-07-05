@@ -1,4 +1,10 @@
-# Proximity — idejni katalog + formule (2026-07-03)
+# Proximity — idejni katalog + formule (2026-07-03; statusi osveženi 2026-07-05)
+
+> **STATUS REZOV (2026-07-05):** ① session moments strip **SHIPPED** (PR #435, Session Detail).
+> ② "where pushes die" overlay **SHIPPED** (PR #437 + dedup #439, Combat Heatmap perspektiva).
+> ③ KROGT/TDS: **backtest opravljen** — per-round KROGT saturira (98–100 %), per-LIFE KROGT
+> diskriminira (52,6–67,7 %, `scripts/backtest_krogt_perlife.py`); TDS deluje (11–24 %), a tesno
+> sledi DPM → dopolnilo, ne headline; pred UI čaka ownerjev tone review rezultatov.
 
 > **Namen:** proximity je naš "skriti adut" — zajem podatkov je bogat in stabilen, manjka pa
 > produkt: kaj in kako prikazati. Ta dokument konsolidira VSE obstoječe vire idej
