@@ -6,6 +6,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.23.0](https://github.com/iamez/slomix/compare/v1.22.0...v1.23.0) (2026-07-05)
+
+
+### Features
+
+* **proximity:** 'Where pushes die' map overlay (slice 2) ([#437](https://github.com/iamez/slomix/issues/437)) ([23f1849](https://github.com/iamez/slomix/commit/23f1849697564ec51f15f3212a36369283760738))
+* **proximity:** KROGT per-life leaderboard category (slice 3 productization) ([#442](https://github.com/iamez/slomix/issues/442)) ([5c283a9](https://github.com/iamez/slomix/commit/5c283a9f3797c0bc693ebe5ba88bcee8e9d9acef))
+* **proximity:** per-life KROGT backtest (slice 3, Phase-0) + catalog status refresh ([#441](https://github.com/iamez/slomix/issues/441)) ([83de6be](https://github.com/iamez/slomix/commit/83de6beaa59aa2b0587b26dc217b74bff43a4ca5))
+
+
+### Bug Fixes
+
+* **proximity:** de-duplicate carrier deaths inside push windows (codex P2, PR [#437](https://github.com/iamez/slomix/issues/437)) ([#439](https://github.com/iamez/slomix/issues/439)) ([04f3ca2](https://github.com/iamez/slomix/commit/04f3ca200ddc009a95712a47debe533f8c3eec98))
+
 ## [1.22.0](https://github.com/iamez/slomix/compare/v1.21.0...v1.22.0) (2026-07-04)
 
 
