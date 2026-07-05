@@ -223,6 +223,12 @@ class BOXScoringService:
             FROM rounds
             WHERE gaming_session_id = $1
               AND round_number IN (1, 2)
+              -- central validity gate (audit W1): bot-test/filler/orphan-R2
+              -- rounds are excluded via is_valid everywhere else — BOX was the
+              -- one scorer missing it (a 1-human bot match scored 1-1 in
+              -- gsid 127). Cancelled rounds likewise must not score.
+              AND is_valid IS DISTINCT FROM FALSE
+              AND round_status = 'completed'
             ORDER BY round_date, round_time, id
             """,
             (gaming_session_id,),
