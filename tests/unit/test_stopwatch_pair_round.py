@@ -1,9 +1,9 @@
 """StopwatchScoringService._pair_round — match_id-canonical R1<->R2 pairing.
 
 Owner rule (2026-07-05): EVERY finished map is its own map — a repeated map
-name within one session is a separate match. Only match_id keys that correctly
-when abandoned R1s or orphan R2s interleave; the old sequential same-map
-pairing mispaired those (root of the bot-vs-BOX session score divergence).
+name within one session is a separate match. Only the match_id key pairs that
+correctly when abandoned R1s or orphan R2s interleave; the old sequential
+same-map pairing mispaired those (root of the bot-vs-BOX score divergence).
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def _pair(rows):
     """rows: (match_id, gsid, map_name, round_num, tag)"""
     maps_dict, pending, counts = {}, {}, {}
     for match_id, gsid, map_name, rn, tag in rows:
-        StopwatchScoringService._pair_round(
+        StopwatchScoringService._pair_round(  # noqa: SLF001 - unit under test
             maps_dict, pending, counts,
             match_id=match_id, gaming_session_id=gsid,
             map_name=map_name, round_num=rn, round_data={'tag': tag},
@@ -50,6 +50,16 @@ def test_abandoned_r1_does_not_steal_the_next_matches_r2():
 
 def test_orphan_r2_with_match_id_never_completes():
     maps = _pair([("mZ", 9, "etl_adlernest", 2, "orphan")])
+    assert _complete(maps) == []
+
+
+def test_r0_summary_row_never_fills_a_slot():
+    # R0 match-summary rows share the pair's match_id — they must not
+    # complete a pair whose real R2 is missing (Copilot, PR #443 follow-up)
+    maps = _pair([
+        ("m1", 9, "supply", 1, "r1"),
+        ("m1", 9, "supply", 0, "summary"),
+    ])
     assert _complete(maps) == []
 
 
