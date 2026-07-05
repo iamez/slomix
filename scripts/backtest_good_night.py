@@ -5,7 +5,6 @@ good_night = .25*balance + .20*tension + .15*attendance + .15*story_density
            + .10*flow + .10*variety + .05*participation
 """
 import asyncio
-import datetime as dt
 import json
 import os
 
@@ -98,11 +97,12 @@ async def main():
         hours = max(0.5, (t1 - t0) / 3600.0)
 
         # --- story density: high-impact kills (KIS spikes) + carrier kills per hour ---
+        # round_start_unix alone scopes the session — a calendar-date predicate
+        # would drop the after-midnight half of a midnight-spanning session
         moments = await conn.fetchval("""
             SELECT COUNT(*) FROM storytelling_kill_impact
-            WHERE session_date=$1 AND round_start_unix = ANY($2)
+            WHERE round_start_unix = ANY($1)
               AND (total_impact >= 3.0 OR is_carrier_kill)""",
-            dt.date.fromisoformat(d),
             [r["round_start_unix"] for r in stamped])
         story = clamp((moments or 0) / hours * 18 / 4)  # /4: KIS-spike proxy is denser than curated moments
 
