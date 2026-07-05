@@ -27,15 +27,22 @@ player-rounds, so zero-death rounds contribute their survived life (rare in
 ET — rerun shifted totals by only +1-4 lives/player, ordering unchanged).
 """
 import os
+import sys
 from collections import defaultdict
 
 import psycopg2
 
 conn = psycopg2.connect(
-    host="127.0.0.1", port=5432, dbname="etlegacy",
-    user="etlegacy_user", password=os.environ.get("PGPASSWORD", ""),
+    host=os.environ.get("POSTGRES_HOST", "127.0.0.1"),
+    port=int(os.environ.get("POSTGRES_PORT", "5432")),
+    dbname=os.environ.get("POSTGRES_DATABASE", "etlegacy"),
+    user=os.environ.get("POSTGRES_USER", "etlegacy_user"),
+    password=os.environ.get("POSTGRES_PASSWORD") or os.environ.get("PGPASSWORD", ""),
 )
 cur = conn.cursor()
+# Enforce the read-only promise at the session level — an accidental write
+# raises instead of committing.
+cur.execute("SET default_transaction_read_only = on")
 
 # Covered, played rounds of the last 25 sessions (same scope as round-level backtest)
 cur.execute("""
@@ -54,6 +61,10 @@ cur.execute("""
 round_end = {rid: int(end_ms) for rid, end_ms in cur.fetchall()}
 rids = tuple(round_end.keys())
 print(f"covered rounds: {len(rids)}")
+if not rids:
+    # Postgres rejects `IN ()` — bail out cleanly on an empty/uncovered DB.
+    print("no proximity-covered rounds in scope — nothing to backtest")
+    sys.exit(0)
 
 def fetch(q, params=()):
     cur.execute(q, params)
@@ -125,12 +136,15 @@ for rid, gg in player_rounds:
     end = max(round_end.get(rid, 0), dts[-1] if dts else 0)
     bounds = [0, *dts, end]  # life i = (bounds[i], bounds[i+1]]
     evs = sorted(ev_by.get((rid, gg), []))
+    ei = 0  # bounds and evs are both sorted — advance a single index, O(lives+events)
     for i in range(len(bounds) - 1):
         lo, hi = bounds[i], bounds[i + 1]
         if hi <= lo:
             continue
         stats[gg][0] += 1
-        contributed = any(lo < t <= hi for t in evs)
+        while ei < len(evs) and evs[ei] <= lo:
+            ei += 1
+        contributed = ei < len(evs) and evs[ei] <= hi
         # a life ended by a TRADED death counts (i < len(dts) means it ended in a death)
         if not contributed and i < len(dts) and (rid, gg, dts[i]) in traded_deaths:
             contributed = True
