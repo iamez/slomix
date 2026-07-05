@@ -22,7 +22,9 @@ First-run findings (dev, 2026-07-05, 373 covered rounds / last 25 sessions,
 - Traded-death credit is real but small (12-185 saved lives per player).
 Limitations (v0): lives only from proximity-covered rounds (~66%); the
 survived-to-end life is counted even for late joiners; traded credit keys
-on exact original_kill_time match.
+on exact original_kill_time match. Life accounting is seeded from ALL PCS
+player-rounds, so zero-death rounds contribute their survived life (rare in
+ET — rerun shifted totals by only +1-4 lives/player, ordering unchanged).
 """
 import os
 from collections import defaultdict
@@ -95,6 +97,17 @@ names = dict(fetch("""
     GROUP BY UPPER(LEFT(player_guid, 8))
 """, (rids,)))
 
+# Seed life accounting from ALL player-rounds (PCS), not just rounds where the
+# player died — otherwise a zero-death round contributes no survived-to-end
+# life at all and full-round survivors drop out of both numerator and
+# denominator (codex P2, PR #441).
+player_rounds = fetch("""
+    SELECT DISTINCT p.round_id, UPPER(LEFT(p.player_guid, 8))
+    FROM player_comprehensive_stats p
+    WHERE p.round_id IN %s
+      AND p.player_guid NOT LIKE 'OMNIBOT%%' AND p.player_name NOT LIKE '[BOT]%%'
+""", (rids,))
+
 deaths_by = defaultdict(list)
 for rid, gg, kt in deaths:
     if gg in names and kt is not None:
@@ -105,9 +118,11 @@ for rid, gg, t in events:
         ev_by[(rid, gg)].append(int(t))
 
 stats = defaultdict(lambda: [0, 0, 0])  # guid -> [lives, contributing_lives, traded_lives]
-for (rid, gg), dts in deaths_by.items():
-    dts = sorted(dts)
-    end = max(round_end.get(rid, 0), dts[-1])
+for rid, gg in player_rounds:
+    if gg not in names:
+        continue
+    dts = sorted(deaths_by.get((rid, gg), []))
+    end = max(round_end.get(rid, 0), dts[-1] if dts else 0)
     bounds = [0, *dts, end]  # life i = (bounds[i], bounds[i+1]]
     evs = sorted(ev_by.get((rid, gg), []))
     for i in range(len(bounds) - 1):
