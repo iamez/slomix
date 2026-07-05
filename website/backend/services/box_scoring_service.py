@@ -227,7 +227,10 @@ class BOXScoringService:
               -- rounds are excluded via is_valid everywhere else — BOX was the
               -- one scorer missing it (a 1-human bot match scored 1-1 in
               -- gsid 127). Cancelled rounds likewise must not score.
-              AND is_valid IS DISTINCT FROM FALSE
+              -- Plain `AND is_valid` (not IS DISTINCT FROM FALSE): portable to
+              -- the SQLite dev fallback, matches the sibling stopwatch-scorer
+              -- queries, and rounds.is_valid has zero NULLs (checked 2026-07-05).
+              AND is_valid
               AND round_status = 'completed'
             ORDER BY round_date, round_time, id
             """,
