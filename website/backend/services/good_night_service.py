@@ -50,6 +50,8 @@ class GoodNightService:
                 stamped.append((int(start_unix), int(secs or 0)))
             if match_id:
                 pairs.setdefault(match_id, {})[int(rn)] = (map_name, int(secs or 0))
+        # maps whose duration data is missing on BOTH rounds must not enter
+        # the tightness math as fake 0-vs-0 photo-finishes (codex, PR #451)
         matches = [p for p in pairs.values() if 1 in p and 2 in p]
         if not matches or not stamped:
             return None
@@ -79,8 +81,9 @@ class GoodNightService:
 
         # balance (neutral 50 when the win/loss signal is unavailable)
         map_closeness = (100 - min(100, abs(wins_a - wins_b) * 25)) if has_details else 50
-        diffs = [abs(p[1][1] - p[2][1]) for p in matches]
-        round_closeness = sum(100 - min(100, d / 6) for d in diffs) / len(diffs)
+        timed = [p for p in matches if p[1][1] > 0 or p[2][1] > 0]
+        diffs = [abs(p[1][1] - p[2][1]) for p in timed]
+        round_closeness = (sum(100 - min(100, d / 6) for d in diffs) / len(diffs)) if diffs else 50
         balance = 0.6 * map_closeness + 0.4 * round_closeness
 
         # tension
@@ -96,6 +99,9 @@ class GoodNightService:
             FROM player_comprehensive_stats p
             JOIN rounds r ON r.id = p.round_id
             WHERE r.gaming_session_id = $1 AND r.is_valid
+              AND (r.round_status IN ('completed', 'substitution')
+                   OR r.round_status IS NULL)
+              AND r.round_number IN (1, 2)
               AND p.player_guid NOT LIKE 'OMNIBOT%'
               AND p.player_name NOT LIKE '[BOT]%'
             """,
