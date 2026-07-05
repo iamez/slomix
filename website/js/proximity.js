@@ -3229,14 +3229,24 @@ async function renderCombatHeatmap(mapName, perspective) {
     const canvas = document.getElementById('combat-heatmap-canvas');
     if (!canvas) return;
 
-    const params1 = buildScopeParams({ extra: { map_name: mapName, perspective: perspective || 'kills' } });
+    // 'pushes' = "Where pushes die" (proximity slice 2): deaths of the pushing
+    // team during objective-directed pushes + carrier deaths, own endpoint,
+    // no kill lines (they'd be attacker-anchored noise on this view).
+    const isPushView = perspective === 'pushes';
+    const params1 = isPushView
+        ? buildScopeParams({ extra: { map_name: mapName } })
+        : buildScopeParams({ extra: { map_name: mapName, perspective: perspective || 'kills' } });
     const params2 = buildScopeParams({ extra: { map_name: mapName, limit: 200 } });
 
     let heatRes, lineRes;
     try {
         [heatRes, lineRes] = await Promise.allSettled([
-            fetchJSON(`${API_BASE}/proximity/combat-positions/heatmap?${params1}`),
-            fetchJSON(`${API_BASE}/proximity/combat-positions/kill-lines?${params2}`),
+            fetchJSON(isPushView
+                ? `${API_BASE}/proximity/push-deaths/heatmap?${params1}`
+                : `${API_BASE}/proximity/combat-positions/heatmap?${params1}`),
+            isPushView
+                ? Promise.resolve({ lines: [] })
+                : fetchJSON(`${API_BASE}/proximity/combat-positions/kill-lines?${params2}`),
         ]);
     } catch (err) {
         console.warn('Proximity heatmap fetch failed:', err);
@@ -3277,7 +3287,10 @@ async function renderCombatHeatmap(mapName, perspective) {
         ctx.fillStyle = '#64748b';
         ctx.font = '12px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('No combat data for this map yet', W / 2, H / 2);
+        ctx.fillText(
+            isPushView ? 'No push data for this map yet' : 'No combat data for this map yet',
+            W / 2, H / 2,
+        );
         return;
     }
 
@@ -3340,9 +3353,11 @@ async function renderCombatHeatmap(mapName, perspective) {
 
         const intensity = clamp(Number(hz.count || 0) / maxCount, 0, 1);
         const alpha = 0.2 + intensity * 0.6;
-        const fill = perspective === 'deaths'
-            ? `rgba(96, 165, 250, ${alpha})`
-            : `rgba(239, 68, 68, ${alpha})`;
+        const fill = isPushView
+            ? `rgba(251, 146, 60, ${alpha})`
+            : perspective === 'deaths'
+                ? `rgba(96, 165, 250, ${alpha})`
+                : `rgba(239, 68, 68, ${alpha})`;
 
         const worldX = (gx + 0.5) * gridSize;
         const worldY = (gy + 0.5) * gridSize;
