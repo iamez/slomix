@@ -543,7 +543,19 @@ async def get_proximity_leaderboards(
             # round. Lives come from player_track (one row per spawn->death,
             # including selfkill/world deaths). Validated + tuned in
             # scripts/backtest_krogt_perlife.py (owner-reviewed 2026-07-05).
-            scope_where, scope_params, _ = _lb_scope("pt", has_round_number=True)
+            def _krogt_scope(alias: str, has_rn: bool):
+                # _lb_scope ignores round_start_unix; every table this branch
+                # touches carries the column, and a fully scoped round (same
+                # map+round_number twice in a session) must not aggregate both
+                # (codex P2, PR #442).
+                where_sql, params, idx = _lb_scope(alias, has_round_number=has_rn)
+                if round_start_unix is not None:
+                    where_sql += f" AND {alias}.round_start_unix = ${idx}"
+                    params = (*params, round_start_unix)
+                    idx += 1
+                return where_sql, params, idx
+
+            scope_where, scope_params, _ = _krogt_scope("pt", has_rn=True)
             lives_rows = await db.fetch_all(
                 f"""
                 SELECT pt.round_id, UPPER(LEFT(pt.player_guid, 8)),
@@ -562,7 +574,7 @@ async def get_proximity_leaderboards(
                 return {"status": "ok", "category": "krogt", "entries": []}
 
             async def _krogt_events(sql: str, alias: str, has_rn: bool) -> list:
-                where_sql, params, _idx = _lb_scope(alias, has_round_number=has_rn)
+                where_sql, params, _idx = _krogt_scope(alias, has_rn=has_rn)
                 return await db.fetch_all(sql.format(scope=where_sql), params)
 
             events: list = []

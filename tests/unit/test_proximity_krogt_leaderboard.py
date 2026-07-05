@@ -26,10 +26,14 @@ class FakeKrogtDB:
         self.objectives = objectives or []
         self.gibs = gibs or []
         self.traded = traded or []
+        self.lives_sql = ""
+        self.lives_params = ()
 
     async def fetch_all(self, query: str, params=None):
         n = " ".join(query.strip().lower().split())
         if "from player_track" in n:
+            self.lives_sql = n
+            self.lives_params = tuple(params or ())
             return list(self.lives)
         if "from proximity_combat_position" in n:
             return list(self.kills)
@@ -96,6 +100,20 @@ async def test_min_lives_cutoff_scoped():
     db = FakeKrogtDB(lives=[(7, G1, "PlayerOne", 0, 900)])  # 1 life < 10 cutoff
     resp = await _get(db, {"category": "krogt", "session_date": "2026-06-30"})
     assert resp.json()["entries"] == []
+
+
+@pytest.mark.asyncio
+async def test_round_start_unix_scopes_the_queries():
+    """Fully scoped round (same map+round_number twice in a session) must not
+    aggregate both rounds (codex P2, PR #442)."""
+    db = FakeKrogtDB()
+    resp = await _get(db, {
+        "category": "krogt", "session_date": "2026-06-30",
+        "map_name": "supply", "round_number": 1, "round_start_unix": 1751300000,
+    })
+    assert resp.status_code == 200
+    assert "pt.round_start_unix = $" in db.lives_sql
+    assert 1751300000 in db.lives_params
 
 
 @pytest.mark.asyncio
