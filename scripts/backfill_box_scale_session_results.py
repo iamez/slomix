@@ -14,16 +14,18 @@ DRY-RUN by default. Usage:
     python -m scripts.backfill_box_scale_session_results          # dry-run
     python -m scripts.backfill_box_scale_session_results --apply
 
-Run scripts/db_backup.sh first. Needs psycopg2 (dev) — on prod run the
-printed UPDATEs via psql, or install psycopg2-binary into a venv.
+Run scripts/db_backup.sh first. Uses asyncpg — the driver the bot itself
+ships with (requirements.txt), so the script runs as-is in the prod venvs
+(unlike the psycopg2-based backfills, which prod cannot run).
 """
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 
-import psycopg2
+import asyncpg
 
 
 def _transform(map_results: list[dict]) -> tuple[int, int, bool]:
@@ -60,25 +62,22 @@ def _transform(map_results: list[dict]) -> tuple[int, int, bool]:
     return new_t1, new_t2, not saw_two
 
 
-def main() -> int:
+async def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true", help="write changes (else dry-run)")
     args = ap.parse_args()
 
-    conn = psycopg2.connect(
+    conn = await asyncpg.connect(
         host=os.environ.get("POSTGRES_HOST", "127.0.0.1"),
         port=int(os.environ.get("POSTGRES_PORT", "5432")),
-        dbname=os.environ.get("POSTGRES_DATABASE", "etlegacy"),
+        database=os.environ.get("POSTGRES_DATABASE", "etlegacy"),
         user=os.environ.get("POSTGRES_USER", "etlegacy_user"),
         password=os.environ.get("POSTGRES_PASSWORD") or os.environ.get("PGPASSWORD", ""),
     )
-    conn.autocommit = False
-    cur = conn.cursor()
-    cur.execute(
+    rows = await conn.fetch(
         "SELECT id, session_date, team_1_score, team_2_score, round_details "
         "FROM session_results ORDER BY id"
     )
-    rows = cur.fetchall()
 
     changes = []
     skipped_no_details = 0
@@ -103,19 +102,19 @@ def main() -> int:
 
     if not args.apply:
         print("\nDRY-RUN — nothing written. Run scripts/db_backup.sh, then --apply.")
-        conn.close()
+        await conn.close()
         return 0
 
-    for rid, _sdate, _t1, _t2, n1, n2 in changes:
-        cur.execute(
-            "UPDATE session_results SET team_1_score = %s, team_2_score = %s WHERE id = %s",
-            (n1, n2, rid),
-        )
-    conn.commit()
+    async with conn.transaction():
+        for rid, _sdate, _t1, _t2, n1, n2 in changes:
+            await conn.execute(
+                "UPDATE session_results SET team_1_score = $1, team_2_score = $2 WHERE id = $3",
+                n1, n2, rid,
+            )
     print(f"\nCommitted {len(changes)} rows.")
-    conn.close()
+    await conn.close()
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(asyncio.run(main()))
