@@ -52,25 +52,30 @@ async def test_map_name_required():
 
 
 @pytest.mark.asyncio
-async def test_merges_push_and_carrier_sources_per_cell():
+async def test_merges_sources_and_dedupes_shared_combat_event():
+    # rows are (combat_position.id, victim_x, victim_y)
     db = FakePushDeathsDB(
-        push_rows=[(1, 2, 10), (0, 0, 3)],
-        carrier_rows=[(1, 2, 4), (5, 5, 1)],  # (1,2) overlaps a push cell
+        push_rows=[(101, 700.0, 1100.0), (102, 900.0, 1200.0), (103, 10.0, 10.0)],
+        carrier_rows=[
+            (101, 700.0, 1100.0),   # SAME event as push row — carrier died inside own push
+            (200, 2700.0, 2900.0),
+        ],
     )
     resp = await _get(db, {"map_name": "sw_goldrush_te"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["grid_size"] == 512
     assert body["perspective"] == "pushes"
+    assert body["push_deaths"] == 3
+    assert body["carrier_deaths"] == 2
+    assert body["unique_deaths"] == 4  # 5 rows, one shared cp.id counted once
     zones = {(z["x"], z["y"]): z["count"] for z in body["hotzones"]}
-    assert zones[(1, 2)] == 14  # 10 push + 4 carrier summed in one cell
-    assert zones[(0, 0)] == 3
+    # 700/512=1, 1100/512=2; 900/512=1, 1200/512=2 -> two DISTINCT events in cell (1,2)
+    assert zones[(1, 2)] == 2
+    assert zones[(0, 0)] == 1
     assert zones[(5, 5)] == 1
-    # sorted by count desc
     counts = [z["count"] for z in body["hotzones"]]
     assert counts == sorted(counts, reverse=True)
-    assert body["push_death_cells"] == 2
-    assert body["carrier_death_cells"] == 2
 
 
 @pytest.mark.asyncio

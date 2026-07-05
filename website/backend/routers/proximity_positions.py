@@ -551,15 +551,18 @@ async def get_proximity_push_deaths_heatmap(
     if not map_name or not map_name.strip():
         raise HTTPException(status_code=400, detail="map_name is required")
 
+    # Both sources SELECT the underlying combat_position event id so a carrier
+    # killed inside their own team's push window (the common docs/flag scenario
+    # — both queries match the same cp row) is counted ONCE (codex P2, PR #437).
+    # Volumes are small (low thousands per map), so dedup + 512u binning happen
+    # here rather than in SQL, which would need cross-query param renumbering.
     where_push, params_push, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
         alias="tp",
     )
     push_rows = await db.fetch_all(
         f"""
-        SELECT FLOOR(cp.victim_x / 512.0)::int AS gx,
-               FLOOR(cp.victim_y / 512.0)::int AS gy,
-               COUNT(*) AS cnt
+        SELECT cp.id, cp.victim_x, cp.victim_y
         FROM proximity_team_push tp
         JOIN proximity_combat_position cp
           ON cp.round_id = tp.round_id
@@ -569,7 +572,6 @@ async def get_proximity_push_deaths_heatmap(
           AND tp.round_id IS NOT NULL
           AND tp.toward_objective IS NOT NULL
           AND tp.toward_objective NOT IN ('NO', 'N/A', '')
-        GROUP BY gx, gy
         """,
         tuple(params_push),
     )
@@ -580,9 +582,7 @@ async def get_proximity_push_deaths_heatmap(
     )
     carrier_rows = await db.fetch_all(
         f"""
-        SELECT FLOOR(cp.victim_x / 512.0)::int AS gx,
-               FLOOR(cp.victim_y / 512.0)::int AS gy,
-               COUNT(*) AS cnt
+        SELECT cp.id, cp.victim_x, cp.victim_y
         FROM proximity_carrier_kill ck
         JOIN proximity_combat_position cp
           ON cp.round_id = ck.round_id
@@ -590,16 +590,21 @@ async def get_proximity_push_deaths_heatmap(
          AND ABS(cp.event_time - ck.kill_time) <= 1500
         {where_carrier}
           AND ck.round_id IS NOT NULL
-        GROUP BY gx, gy
         """,
         tuple(params_carrier),
     )
 
-    merged: dict[tuple[int, int], int] = {}
+    deaths: dict[int, tuple[float, float]] = {}
     for rows in (push_rows, carrier_rows):
         for r in (rows or []):
-            key = (int(r[0] or 0), int(r[1] or 0))
-            merged[key] = merged.get(key, 0) + int(r[2] or 0)
+            if r[0] is None:
+                continue
+            deaths[int(r[0])] = (float(r[1] or 0), float(r[2] or 0))
+
+    merged: dict[tuple[int, int], int] = {}
+    for x, y in deaths.values():
+        key = (int(math.floor(x / 512.0)), int(math.floor(y / 512.0)))
+        merged[key] = merged.get(key, 0) + 1
 
     return {
         "status": "ok",
@@ -607,8 +612,9 @@ async def get_proximity_push_deaths_heatmap(
         "grid_size": 512,
         "perspective": "pushes",
         "scope": scope,
-        "push_death_cells": len(push_rows or []),
-        "carrier_death_cells": len(carrier_rows or []),
+        "push_deaths": len(push_rows or []),
+        "carrier_deaths": len(carrier_rows or []),
+        "unique_deaths": len(deaths),
         "hotzones": [
             {"x": gx, "y": gy, "count": cnt}
             for (gx, gy), cnt in sorted(merged.items(), key=lambda kv: -kv[1])
