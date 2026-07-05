@@ -3824,6 +3824,7 @@ const LB_TABS = [
     { key: 'survivors', label: 'Survivors' },
     { key: 'movement', label: 'Movement' },
     { key: 'focus_fire', label: 'Focus Fire' },
+    { key: 'krogt', label: 'KROGT' },
 ];
 let lbActiveTab = 'power';
 let lbRangeDays = 30;
@@ -3891,6 +3892,8 @@ function loadLeaderboardData() {
             else if (lbActiveTab === 'reactions') val = `${e.value}ms`;
             else if (lbActiveTab === 'survivors') val = `${e.value}%`;
             else if (lbActiveTab === 'movement') val = `${e.value} u/s`;
+            // KROGT = % of LIVES with a Kill/Revive/Objective/Gib/Traded contribution
+            else if (lbActiveTab === 'krogt') val = `${e.value}% · ${e.lives} lives`;
             const row = document.createElement('div');
             row.className = 'flex items-center justify-between text-[11px] text-slate-300 py-0.5';
             const left = document.createElement('span');
