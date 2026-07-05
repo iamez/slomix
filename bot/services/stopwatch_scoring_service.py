@@ -36,6 +36,63 @@ def normalize_side(value) -> int | None:
 class StopwatchScoringService:
     """Calculate Stopwatch mode map scores (async PostgreSQL version)"""
 
+    @staticmethod
+    def _pair_round(
+        maps_dict: dict,
+        pending_r1: dict,
+        map_play_count: dict,
+        *,
+        match_id,
+        gaming_session_id,
+        map_name,
+        round_num,
+        round_data,
+    ) -> None:
+        """Assign one round into maps_dict, pairing R1<->R2 per MATCH.
+
+        Canonical key = match_id (deterministic and 100% populated since the
+        PR #370 stopwatch pairer). Owner rule (2026-07-05): EVERY finished map
+        is its own map — a repeated map name in one session is a separate
+        match, and only match_id keeps that correct when abandoned R1s or
+        orphan R2s interleave (the sequential fallback mispairs those).
+        Legacy rows without a match_id keep the previous sequential
+        same-map pairing.
+        """
+        if match_id:
+            key = f"match:{match_id}"
+            entry = maps_dict.setdefault(key, {
+                'map_name': map_name,
+                'gaming_session_id': gaming_session_id,
+                'round1': None,
+                'round2': None,
+            })
+            slot = 'round1' if round_num == 1 else 'round2'
+            if entry[slot] is None:
+                entry[slot] = round_data
+            return
+
+        base_key = f"{gaming_session_id}:{map_name}"
+        if round_num == 1:
+            map_play_count[base_key] = map_play_count.get(base_key, 0) + 1
+            map_key = f"{base_key}:play{map_play_count[base_key]}"
+            maps_dict[map_key] = {
+                'map_name': map_name,
+                'gaming_session_id': gaming_session_id,
+                'round1': round_data,
+                'round2': None,
+            }
+            pending_r1[base_key] = map_key
+        elif round_num == 2:
+            if base_key in pending_r1:
+                map_key = pending_r1[base_key]
+                if map_key in maps_dict:
+                    maps_dict[map_key]['round2'] = round_data
+                del pending_r1[base_key]
+            else:
+                logger.debug(
+                    "R2 without R1 for %s in session %s", map_name, gaming_session_id
+                )
+
     def __init__(self, db_adapter):
         """
         Initialize with database adapter.
@@ -149,8 +206,10 @@ class StopwatchScoringService:
         - Round 1: Team A attacks, Team B defends
         - Round 2: Team B attacks, Team A defends (sides swap)
 
-        We must group rounds by (gaming_session_id, map_name) to pair R1+R2,
-        NOT by match_id (which is unique per file/round).
+        Rounds are paired into matches by match_id (canonical since the
+        PR #370 stopwatch pairer); legacy rows without one fall back to
+        sequential same-map pairing. Every finished map counts as its own
+        map, including a repeated map name within the session (owner rule).
 
         Args:
             session_date: Session date (YYYY-MM-DD)
@@ -170,7 +229,7 @@ class StopwatchScoringService:
                 rounds_query = f"""
                     SELECT map_name, gaming_session_id, round_number,
                            defender_team, winner_team, time_limit, actual_time,
-                           round_date, round_time
+                           round_date, round_time, match_id
                     FROM rounds
                     WHERE id IN ({placeholders})
                     AND round_status = 'completed'
@@ -185,7 +244,7 @@ class StopwatchScoringService:
                 rounds_query = """
                     SELECT map_name, gaming_session_id, round_number,
                            defender_team, winner_team, time_limit, actual_time,
-                           round_date, round_time
+                           round_date, round_time, match_id
                     FROM rounds
                     WHERE SUBSTRING(round_date, 1, 10) = $1
                     AND round_status = 'completed'
@@ -201,19 +260,14 @@ class StopwatchScoringService:
                 logger.debug(f"No rounds found for {session_date}")
                 return None
 
-            # Group rounds by (gaming_session_id, map_name) for proper R1+R2
-            # Handle repeated maps: pair each R1 with its subsequent R2
-            # Rounds are ordered by gaming_session_id, map_name, round_number
+            # Pair rounds into matches — match_id canonical, sequential fallback
             maps_dict: dict[str, dict] = {}
-            pending_r1: dict[str, str] = {}  # base_key -> map_key waiting for R2
-            map_play_count: dict[str, int] = {}  # Plays per map in session
+            pending_r1: dict[str, str] = {}  # legacy fallback: base_key -> map_key
+            map_play_count: dict[str, int] = {}  # legacy fallback: plays per map
 
             for row in rows:
                 (map_name, gaming_session_id, round_num, defender, winner,
-                 time_limit, actual_time, round_date, round_time) = row
-
-                # Base key for this map within the gaming session
-                base_key = f"{gaming_session_id}:{map_name}"
+                 time_limit, actual_time, round_date, round_time, match_id) = row
 
                 round_data = {
                     'defender': defender,
@@ -223,38 +277,11 @@ class StopwatchScoringService:
                     'round_date': round_date,
                     'round_time': round_time
                 }
-
-                if round_num == 1:
-                    # Track how many times this map has been played
-                    if base_key not in map_play_count:
-                        map_play_count[base_key] = 0
-                    map_play_count[base_key] += 1
-                    play_num = map_play_count[base_key]
-
-                    # Create unique key for this specific map play
-                    map_key = f"{base_key}:play{play_num}"
-                    maps_dict[map_key] = {
-                        'map_name': map_name,
-                        'gaming_session_id': gaming_session_id,
-                        'round1': round_data,
-                        'round2': None
-                    }
-                    # Mark this R1 as pending, waiting for its R2
-                    pending_r1[base_key] = map_key
-
-                elif round_num == 2:
-                    # Find the pending R1 for this map
-                    if base_key in pending_r1:
-                        map_key = pending_r1[base_key]
-                        if map_key in maps_dict:
-                            maps_dict[map_key]['round2'] = round_data
-                        # R1 is no longer pending
-                        del pending_r1[base_key]
-                    else:
-                        # R2 without a matching R1 - create partial entry
-                        logger.debug(
-                            f"R2 without R1 for {map_name} in session {gaming_session_id}"
-                        )
+                self._pair_round(
+                    maps_dict, pending_r1, map_play_count,
+                    match_id=match_id, gaming_session_id=gaming_session_id,
+                    map_name=map_name, round_num=round_num, round_data=round_data,
+                )
 
             # Filter to complete maps only (both R1 and R2)
             maps = [
@@ -667,7 +694,7 @@ class StopwatchScoringService:
             rounds_query = f"""
                 SELECT r.id, r.map_name, r.gaming_session_id, r.round_number,
                        r.defender_team, r.winner_team, r.time_limit, r.actual_time,
-                       r.round_date, r.round_time
+                       r.round_date, r.round_time, r.match_id
                 FROM rounds r
                 WHERE r.id IN ({placeholders})
                 AND r.round_status = 'completed'
@@ -683,7 +710,7 @@ class StopwatchScoringService:
                 logger.debug("No completed rounds found for session %s", str(session_date).replace('\n', '')[:30])
                 return None
 
-            # Group rounds into map pairs (R1 + R2)
+            # Pair rounds into matches — match_id canonical, sequential fallback
             maps_dict: dict[str, dict] = {}
             pending_r1: dict[str, str] = {}
             map_play_count: dict[str, int] = {}
@@ -691,9 +718,7 @@ class StopwatchScoringService:
             for row in rows:
                 (round_id, map_name, gaming_session_id, round_num,
                  defender_team, winner_team, time_limit, actual_time,
-                 round_date, round_time) = row
-
-                base_key = f"{gaming_session_id}:{map_name}"
+                 round_date, round_time, match_id) = row
 
                 round_data = {
                     'round_id': round_id,
@@ -704,28 +729,11 @@ class StopwatchScoringService:
                     'round_date': round_date,
                     'round_time': round_time
                 }
-
-                if round_num == 1:
-                    if base_key not in map_play_count:
-                        map_play_count[base_key] = 0
-                    map_play_count[base_key] += 1
-                    play_num = map_play_count[base_key]
-
-                    map_key = f"{base_key}:play{play_num}"
-                    maps_dict[map_key] = {
-                        'map_name': map_name,
-                        'gaming_session_id': gaming_session_id,
-                        'round1': round_data,
-                        'round2': None
-                    }
-                    pending_r1[base_key] = map_key
-
-                elif round_num == 2:
-                    if base_key in pending_r1:
-                        map_key = pending_r1[base_key]
-                        if map_key in maps_dict:
-                            maps_dict[map_key]['round2'] = round_data
-                        del pending_r1[base_key]
+                self._pair_round(
+                    maps_dict, pending_r1, map_play_count,
+                    match_id=match_id, gaming_session_id=gaming_session_id,
+                    map_name=map_name, round_num=round_num, round_data=round_data,
+                )
 
             # Separate complete and incomplete map pairs
             complete_maps = [
