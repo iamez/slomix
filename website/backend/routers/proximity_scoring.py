@@ -543,19 +543,15 @@ async def get_proximity_leaderboards(
             # round. Lives come from player_track (one row per spawn->death,
             # including selfkill/world deaths). Validated + tuned in
             # scripts/backtest_krogt_perlife.py (owner-reviewed 2026-07-05).
-            def _krogt_scope(alias: str, has_rn: bool):
-                # _lb_scope ignores round_start_unix; every table this branch
-                # touches carries the column, and a fully scoped round (same
-                # map+round_number twice in a session) must not aggregate both
-                # (codex P2, PR #442).
-                where_sql, params, idx = _lb_scope(alias, has_round_number=has_rn)
-                if round_start_unix is not None:
-                    where_sql += f" AND {alias}.round_start_unix = ${idx}"
-                    params = (*params, round_start_unix)
-                    idx += 1
-                return where_sql, params, idx
-
-            scope_where, scope_params, _ = _krogt_scope("pt", has_rn=True)
+            # round_start_unix narrows the LIVES query only (player_track has
+            # the column; proximity_revive does NOT — filtering it there would
+            # be an undefined-column error, codex P2 round 2). Event queries
+            # don't need it: they join lives by (round_id, guid), so events
+            # from other rounds can never credit a selected round's lives.
+            scope_where, scope_params, rsu_idx = _lb_scope("pt", has_round_number=True)
+            if round_start_unix is not None:
+                scope_where += f" AND pt.round_start_unix = ${rsu_idx}"
+                scope_params = (*scope_params, round_start_unix)
             lives_rows = await db.fetch_all(
                 f"""
                 SELECT pt.round_id, UPPER(LEFT(pt.player_guid, 8)),
@@ -574,7 +570,7 @@ async def get_proximity_leaderboards(
                 return {"status": "ok", "category": "krogt", "entries": []}
 
             async def _krogt_events(sql: str, alias: str, has_rn: bool) -> list:
-                where_sql, params, _idx = _krogt_scope(alias, has_rn=has_rn)
+                where_sql, params, _idx = _lb_scope(alias, has_round_number=has_rn)
                 return await db.fetch_all(sql.format(scope=where_sql), params)
 
             events: list = []
@@ -612,12 +608,28 @@ async def get_proximity_leaderboards(
                 if t is not None:
                     traded_by.setdefault((rid, gg), []).append(int(t))
 
+            # death_time_ms is intentionally NULL for a survived-to-round-end
+            # life (proximity schema) — those lives belong in the denominator
+            # (codex P2 round 2); close them at the round's actual duration.
+            null_death_rids = {r[0] for r in lives_rows if r[4] is None}
+            durations: dict[int, int] = {}
+            if null_death_rids:
+                dur_rows = await db.fetch_all(
+                    "SELECT id, COALESCE(actual_duration_seconds, 0) * 1000 "
+                    "FROM rounds WHERE id = ANY($1)",
+                    (list(null_death_rids),),
+                )
+                durations = {r[0]: int(r[1] or 0) for r in (dur_rows or [])}
+
             per_player: dict[str, dict] = {}
             lives_by: dict[tuple, list] = {}
             for rid, gg, name, spawn_ms, death_ms in lives_rows:
-                if death_ms is None or spawn_ms is None or int(death_ms) <= int(spawn_ms):
+                if spawn_ms is None:
                     continue
-                lives_by.setdefault((rid, gg), []).append((int(spawn_ms), int(death_ms)))
+                hi = int(death_ms) if death_ms is not None else durations.get(rid, 0)
+                if hi <= int(spawn_ms):
+                    continue
+                lives_by.setdefault((rid, gg), []).append((int(spawn_ms), hi))
                 per_player.setdefault(gg, {"name": name, "lives": 0, "contrib": 0})
                 if name:
                     per_player[gg]["name"] = name
@@ -638,7 +650,9 @@ async def get_proximity_leaderboards(
                     if contributed:
                         per_player[gg]["contrib"] += 1
 
-            min_lives = 10 if (parsed_date or map_name) else 50
+            scoped = (parsed_date or map_name or round_number is not None
+                      or round_start_unix is not None)
+            min_lives = 10 if scoped else 50
             entries = [
                 {
                     "guid": gg, "name": p["name"] or gg,

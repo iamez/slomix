@@ -19,15 +19,17 @@ class FakeKrogtDB:
     """lives: (round_id, guid8, name, spawn_ms, death_ms); events: (round_id, guid8, t)."""
 
     def __init__(self, *, lives=None, kills=None, revives=None, objectives=None,
-                 gibs=None, traded=None):
+                 gibs=None, traded=None, durations=None):
         self.lives = lives or []
         self.kills = kills or []
         self.revives = revives or []
         self.objectives = objectives or []
         self.gibs = gibs or []
         self.traded = traded or []
+        self.durations = durations or []  # (round_id, duration_ms)
         self.lives_sql = ""
         self.lives_params = ()
+        self.revive_sql = ""
 
     async def fetch_all(self, query: str, params=None):
         n = " ".join(query.strip().lower().split())
@@ -38,7 +40,10 @@ class FakeKrogtDB:
         if "from proximity_combat_position" in n:
             return list(self.kills)
         if "from proximity_revive" in n:
+            self.revive_sql = n
             return list(self.revives)
+        if "from rounds" in n:
+            return list(self.durations)
         if "from proximity_objective_run" in n:
             return list(self.objectives)
         if "from proximity_kill_outcome" in n:
@@ -85,7 +90,8 @@ async def test_krogt_counts_contributing_lives_only():
 
 @pytest.mark.asyncio
 async def test_traded_death_credits_the_life_that_ended():
-    # One life (0..5000); no direct events, but the ending death was traded at 5400 (+/-1s)
+    # 10 lives with no direct events; only the FIRST life's ending death
+    # (at 5000) is traded at 5400, within the +/-1s window
     db = FakeKrogtDB(
         lives=[(7, G1, "PlayerOne", i * 10000, i * 10000 + 5000) for i in range(10)],
         traded=[(7, G1, 5400)],
@@ -114,6 +120,27 @@ async def test_round_start_unix_scopes_the_queries():
     assert resp.status_code == 200
     assert "pt.round_start_unix = $" in db.lives_sql
     assert 1751300000 in db.lives_params
+    # proximity_revive has NO round_start_unix column — the predicate must
+    # never reach event queries (they join lives by round_id instead)
+    assert "round_start_unix" not in db.revive_sql
+
+
+@pytest.mark.asyncio
+async def test_survived_life_counts_in_denominator():
+    """death_time_ms is NULL for a survived-to-round-end life — it must land
+    in the denominator, closed at the round's actual duration."""
+    db = FakeKrogtDB(
+        lives=[
+            *[(7, G1, "PlayerOne", i * 1000, i * 1000 + 900) for i in range(9)],
+            (7, G1, "PlayerOne", 9000, None),  # survived, no contribution
+        ],
+        kills=[(7, G1, 500)],
+        durations=[(7, 600000)],
+    )
+    resp = await _get(db, {"category": "krogt", "session_date": "2026-06-30"})
+    entry = resp.json()["entries"][0]
+    assert entry["lives"] == 10  # survived life included
+    assert entry["value"] == 10.0  # 1 contributing of 10
 
 
 @pytest.mark.asyncio
