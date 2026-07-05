@@ -525,6 +525,97 @@ async def get_proximity_combat_positions_heatmap(
     }
 
 
+@router.get("/proximity/push-deaths/heatmap")
+@handle_router_errors("Proximity push-deaths heatmap error")
+async def get_proximity_push_deaths_heatmap(
+    range_days: int = 30,
+    session_date: str | None = None,
+    map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Where-pushes-die heatmap — grid-binned death positions of the pushing team.
+
+    Two point sources, binned together on the same 512u grid as
+    /combat-positions/heatmap so the frontend renderer is reused as-is:
+    1. deaths of the pushing team inside an objective-directed push window
+       (proximity_team_push joined to proximity_combat_position on
+       round_id + team + event_time; toward_objective 'NO' = not toward an
+       objective and 'N/A' = Lua could not classify — both excluded), and
+    2. carrier deaths (proximity_carrier_kill has no coordinates of its own,
+       so each is located via the matching combat_position kill event).
+
+    Proximity productization slice 2 (docs/research/PROXIMITY_IDEAS_2026-07.md B1).
+    """
+    if not map_name or not map_name.strip():
+        raise HTTPException(status_code=400, detail="map_name is required")
+
+    where_push, params_push, scope = _build_proximity_where_clause(
+        range_days, session_date, map_name, round_number, round_start_unix,
+        alias="tp",
+    )
+    push_rows = await db.fetch_all(
+        f"""
+        SELECT FLOOR(cp.victim_x / 512.0)::int AS gx,
+               FLOOR(cp.victim_y / 512.0)::int AS gy,
+               COUNT(*) AS cnt
+        FROM proximity_team_push tp
+        JOIN proximity_combat_position cp
+          ON cp.round_id = tp.round_id
+         AND cp.victim_team = tp.team
+         AND cp.event_time BETWEEN tp.start_time AND tp.end_time
+        {where_push}
+          AND tp.round_id IS NOT NULL
+          AND tp.toward_objective IS NOT NULL
+          AND tp.toward_objective NOT IN ('NO', 'N/A', '')
+        GROUP BY gx, gy
+        """,
+        tuple(params_push),
+    )
+
+    where_carrier, params_carrier, _ = _build_proximity_where_clause(
+        range_days, session_date, map_name, round_number, round_start_unix,
+        alias="ck",
+    )
+    carrier_rows = await db.fetch_all(
+        f"""
+        SELECT FLOOR(cp.victim_x / 512.0)::int AS gx,
+               FLOOR(cp.victim_y / 512.0)::int AS gy,
+               COUNT(*) AS cnt
+        FROM proximity_carrier_kill ck
+        JOIN proximity_combat_position cp
+          ON cp.round_id = ck.round_id
+         AND cp.victim_guid = ck.carrier_guid
+         AND ABS(cp.event_time - ck.kill_time) <= 1500
+        {where_carrier}
+          AND ck.round_id IS NOT NULL
+        GROUP BY gx, gy
+        """,
+        tuple(params_carrier),
+    )
+
+    merged: dict[tuple[int, int], int] = {}
+    for rows in (push_rows, carrier_rows):
+        for r in (rows or []):
+            key = (int(r[0] or 0), int(r[1] or 0))
+            merged[key] = merged.get(key, 0) + int(r[2] or 0)
+
+    return {
+        "status": "ok",
+        "map_name": map_name.strip(),
+        "grid_size": 512,
+        "perspective": "pushes",
+        "scope": scope,
+        "push_death_cells": len(push_rows or []),
+        "carrier_death_cells": len(carrier_rows or []),
+        "hotzones": [
+            {"x": gx, "y": gy, "count": cnt}
+            for (gx, gy), cnt in sorted(merged.items(), key=lambda kv: -kv[1])
+        ],
+    }
+
+
 @router.get("/proximity/player-heatmap")
 @handle_router_errors("Proximity player-heatmap error")
 async def get_proximity_player_heatmap(
