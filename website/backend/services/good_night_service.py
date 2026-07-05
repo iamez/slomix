@@ -34,7 +34,11 @@ class GoodNightService:
                    COALESCE(actual_duration_seconds, 0), round_start_unix
             FROM rounds
             WHERE gaming_session_id = $1 AND is_valid
-              AND round_status = 'completed' AND round_number IN (1, 2)
+              -- same legal-round predicate as the session-detail endpoints:
+              -- 'substitution' rounds and legacy NULL statuses still count
+              AND (round_status IN ('completed', 'substitution')
+                   OR round_status IS NULL)
+              AND round_number IN (1, 2)
             ORDER BY round_start_unix
             """,
             (gaming_session_id,),
@@ -106,15 +110,19 @@ class GoodNightService:
 
         # story density — KIS spikes + carrier kills per hour (v0 proxy;
         # midnight-safe via round_start_unix, bots excluded)
+        # portable IN(...) placeholders instead of PG-only ANY($1) — the
+        # local SQLite adapter executes SQL verbatim
+        starts = [s for s, _ in stamped]
+        ph = ", ".join(f"${i + 2}" for i in range(len(starts)))
         mom = await self.db.fetch_one(
-            """
+            f"""
             SELECT COUNT(*) FROM storytelling_kill_impact
-            WHERE round_start_unix = ANY($1)
-              AND (total_impact >= 3.0 OR is_carrier_kill)
+            WHERE (total_impact >= $1 OR is_carrier_kill)
+              AND round_start_unix IN ({ph})
               AND killer_guid NOT LIKE 'OMNIBOT%'
               AND killer_name NOT LIKE '[BOT]%'
             """,
-            ([s for s, _ in stamped],),
+            (3.0, *starts),
         )
         moments = int(mom[0] or 0) if mom else 0
         story = _clamp(moments / hours * 18 / 4)
