@@ -102,7 +102,9 @@ async def main():
         moments = await conn.fetchval("""
             SELECT COUNT(*) FROM storytelling_kill_impact
             WHERE round_start_unix = ANY($1)
-              AND (total_impact >= 3.0 OR is_carrier_kill)""",
+              AND (total_impact >= 3.0 OR is_carrier_kill)
+              AND killer_guid NOT LIKE 'OMNIBOT%'
+              AND killer_name NOT LIKE '[BOT]%'""",
             [r["round_start_unix"] for r in stamped])
         story = clamp((moments or 0) / hours * 18 / 4)  # /4: KIS-spike proxy is denser than curated moments
 
