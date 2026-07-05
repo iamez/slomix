@@ -1489,6 +1489,10 @@ class TeamManager:
                     a_score, b_score = t2_score, t1_score
                     a_expected_winner = 2
 
+                # session_results.team_x_score holds BOX POINTS (2 per map,
+                # 1-1 draws) for sessions saved after 2026-07-05 and 1-per-map
+                # values before that — these sums are points, not map counts
+                # (displayed as "Points"; historical backfill can renormalize).
                 team_a_maps += a_score
                 team_b_maps += b_score
 

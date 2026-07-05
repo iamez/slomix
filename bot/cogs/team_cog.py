@@ -696,7 +696,7 @@ class TeamCog(commands.Cog):
 
             # Map record
             embed.add_field(
-                name="🗺️ Maps Won",
+                name="🗺️ Points",
                 value=(
                     f"**{team_a}**: {h2h['team_a_maps_won']}\n"
                     f"**{team_b}**: {h2h['team_b_maps_won']}"
