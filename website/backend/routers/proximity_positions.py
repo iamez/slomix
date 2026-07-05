@@ -535,14 +535,14 @@ async def get_proximity_push_deaths_heatmap(
     round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
-    """"Where pushes die" — grid-binned death positions of the pushing team.
+    """Where-pushes-die heatmap — grid-binned death positions of the pushing team.
 
     Two point sources, binned together on the same 512u grid as
     /combat-positions/heatmap so the frontend renderer is reused as-is:
     1. deaths of the pushing team inside an objective-directed push window
        (proximity_team_push joined to proximity_combat_position on
-       round_id + team + event_time; toward_objective='NO' rows are the
-       non-objective pushes and are excluded), and
+       round_id + team + event_time; toward_objective 'NO' = not toward an
+       objective and 'N/A' = Lua could not classify — both excluded), and
     2. carrier deaths (proximity_carrier_kill has no coordinates of its own,
        so each is located via the matching combat_position kill event).
 
@@ -568,7 +568,7 @@ async def get_proximity_push_deaths_heatmap(
         {where_push}
           AND tp.round_id IS NOT NULL
           AND tp.toward_objective IS NOT NULL
-          AND tp.toward_objective NOT IN ('NO', '')
+          AND tp.toward_objective NOT IN ('NO', 'N/A', '')
         GROUP BY gx, gy
         """,
         tuple(params_push),

@@ -78,7 +78,7 @@ async def test_push_query_excludes_non_objective_pushes_and_scopes_map():
     db = FakePushDeathsDB()
     resp = await _get(db, {"map_name": "supply", "session_date": "2026-06-30"})
     assert resp.status_code == 200
-    assert "not in ('no', '')" in db.push_sql
+    assert "not in ('no', 'n/a', '')" in db.push_sql
     assert "tp.map_name" in db.push_sql
     assert "tp.session_date" in db.push_sql
     # carrier source scoped the same way
