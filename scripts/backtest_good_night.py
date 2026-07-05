@@ -18,8 +18,11 @@ def clamp(v, lo=0.0, hi=100.0):
 
 async def main():
     conn = await asyncpg.connect(
-        host="127.0.0.1", port=5432, database="etlegacy",
-        user="etlegacy_user", password=os.environ.get("PGPASSWORD", ""))
+        host=os.environ.get("POSTGRES_HOST", "127.0.0.1"),
+        port=int(os.environ.get("POSTGRES_PORT", "5432")),
+        database=os.environ.get("POSTGRES_DATABASE", "etlegacy"),
+        user=os.environ.get("POSTGRES_USER", "etlegacy_user"),
+        password=os.environ.get("POSTGRES_PASSWORD") or os.environ.get("PGPASSWORD", ""))
     await conn.execute("SET default_transaction_read_only = on")
 
     sess = await conn.fetch("""
@@ -38,6 +41,8 @@ async def main():
               AND round_number IN (1,2) ORDER BY round_start_unix""", gsid)
         pairs = {}
         for r in rounds:
+            if not r["match_id"]:  # NULL keys would merge into one pseudo-match
+                continue
             pairs.setdefault(r["match_id"], {})[r["round_number"]] = r
         matches = [p for p in pairs.values() if 1 in p and 2 in p]
         n_maps = len(matches)
@@ -49,7 +54,8 @@ async def main():
             "SELECT team_1_score, team_2_score, round_details FROM session_results "
             "WHERE gaming_session_id=$1 ORDER BY id DESC LIMIT 1", gsid)
         wins_a = wins_b = draws = 0
-        if sr and sr["round_details"]:
+        has_details = bool(sr and sr["round_details"])
+        if has_details:
             for m in json.loads(sr["round_details"]):
                 if m.get("counted") is False:
                     continue
@@ -62,8 +68,8 @@ async def main():
                 else:
                     draws += 1
 
-        # --- balance ---
-        map_closeness = 100 - min(100, abs(wins_a - wins_b) * 25)
+        # --- balance --- (neutral 50 when the win/loss signal is unavailable)
+        map_closeness = (100 - min(100, abs(wins_a - wins_b) * 25)) if has_details else 50
         diffs = [abs(p[2]["secs"] - p[1]["secs"]) for p in
                  [{1: m[1], 2: m[2]} for m in matches]]
         round_closeness = (sum(100 - min(100, dd / 6) for dd in diffs) / len(diffs)) if diffs else 50
@@ -72,7 +78,7 @@ async def main():
         # --- tension ---
         close_maps = sum(1 for dd in diffs if dd <= 30)
         stomp_maps = sum(1 for dd in diffs if dd >= 240)
-        decider = 15 if abs(wins_a - wins_b) <= 1 else 0
+        decider = 15 if (has_details and abs(wins_a - wins_b) <= 1) else 0
         tension = clamp(close_maps * 18 + draws * 22 + decider - stomp_maps * 12)
 
         # --- attendance ---
@@ -84,22 +90,28 @@ async def main():
         attendance = 100 if players >= 10 else 85 if players >= 8 else 70 if players >= 6 else 45
 
         # --- hours ---
-        t0 = min(r["round_start_unix"] for r in rounds if r["round_start_unix"])
-        t1 = max(r["round_start_unix"] + r["secs"] for r in rounds if r["round_start_unix"])
+        stamped = [r for r in rounds if r["round_start_unix"]]
+        if not stamped or not d:
+            continue  # can't time-scope this session — skip rather than guess
+        t0 = min(r["round_start_unix"] for r in stamped)
+        t1 = max(r["round_start_unix"] + r["secs"] for r in stamped)
         hours = max(0.5, (t1 - t0) / 3600.0)
 
         # --- story density: high-impact kills (KIS spikes) + carrier kills per hour ---
         moments = await conn.fetchval("""
             SELECT COUNT(*) FROM storytelling_kill_impact
-            WHERE session_date=$1 AND (total_impact >= 3.0 OR is_carrier_kill)""",
-            dt.date.fromisoformat(d))
+            WHERE session_date=$1 AND round_start_unix = ANY($2)
+              AND (total_impact >= 3.0 OR is_carrier_kill)""",
+            dt.date.fromisoformat(d),
+            [r["round_start_unix"] for r in stamped])
         story = clamp((moments or 0) / hours * 18 / 4)  # /4: KIS-spike proxy is denser than curated moments
 
         # --- flow ---
         invalid = await conn.fetchval(
             "SELECT COUNT(*) FROM rounds WHERE gaming_session_id=$1 AND is_valid IS FALSE", gsid)
-        starts = sorted(r["round_start_unix"] for r in rounds if r["round_start_unix"])
-        long_gaps = sum(1 for a, b in zip(starts, starts[1:]) if b - a > 25 * 60)
+        # gap = end of round A -> start of round B (long rounds are not gaps)
+        spans = sorted((r["round_start_unix"], r["round_start_unix"] + r["secs"]) for r in stamped)
+        long_gaps = sum(1 for (a, b) in zip(spans, spans[1:]) if b[0] - a[1] > 25 * 60)
         flow = clamp(100 - (invalid or 0) * 20 - long_gaps * 10)
 
         # --- variety ---
