@@ -9,7 +9,9 @@ Replacement for tools/stopwatch_scoring.py (sync SQLite version).
         - Prefer R2 header winner side (map winner) when available.
         - If header winner is missing, fall back to time comparison.
 
-Map score = 1 point to the map winner (0-0 for tie).
+Map score (BOX scale, owner rule 2026-07-05): 2 points to the map winner,
+1-1 on a tie (double fullhold / no completion) — matches BOXScoringService
+and the website, so every surface reports the same session totals.
 """
 
 import json
@@ -137,9 +139,9 @@ class StopwatchScoringService:
         Stopwatch scoring rules (map winner):
         - Team1 = Round 1 attackers
         - Team2 = Round 2 attackers
-        - If both complete, faster time wins (tie goes to Team1)
-        - If only one completes, that team wins
-        - If neither completes or time is unknown, map is a tie
+        - If both complete, faster time wins 2-0 (equal times go to Team1)
+        - If only one completes, that team wins 2-0
+        - If neither completes (double fullhold / no data), 1-1 draw
 
         Args:
             round1_time_limit: Max map time (MM:SS)
@@ -171,31 +173,33 @@ class StopwatchScoringService:
         if r1_attackers_succeed and r2_attackers_succeed:
             # Both teams completed; faster time wins (tie -> Team1)
             if r1_sec <= r2_sec:
-                team1_points = 1
+                team1_points = 2
                 desc = (
                     f"Map win: R1 attackers {round1_actual_time} "
                     f"vs {round2_actual_time}"
                 )
             else:
-                team2_points = 1
+                team2_points = 2
                 desc = (
                     f"Map win: R2 attackers {round2_actual_time} "
                     f"vs {round1_actual_time}"
                 )
         elif r1_attackers_succeed and not r2_attackers_succeed:
-            team1_points = 1
+            team1_points = 2
             desc = (
                 f"Map win: R1 attackers set time {round1_actual_time} "
                 f"(R2 fullhold)"
             )
         elif r2_attackers_succeed and not r1_attackers_succeed:
-            team2_points = 1
+            team2_points = 2
             desc = (
                 f"Map win: R2 attackers completed {round2_actual_time} "
                 f"(R1 fullhold)"
             )
         else:
-            desc = "Map tie: no completion or time data"
+            team1_points = 1
+            team2_points = 1
+            desc = "Map tie 1-1: no completion (double fullhold) or no time data"
 
         return (team1_points, team2_points, desc)
 
@@ -370,7 +374,7 @@ class StopwatchScoringService:
                     JOIN rounds r ON r.id = p.round_id
                     WHERE r.gaming_session_id = ?
                       AND p.round_number = 1
-                    ORDER BY p.round_date, p.round_time
+                    ORDER BY r.round_date, r.round_time
                     LIMIT 1
                 """
                 sample_player = await self.db.fetch_one(sample_query, (resolved_session_id,))
@@ -923,10 +927,10 @@ class StopwatchScoringService:
                     winner_side = r2.get('winner_team')
                     team_a_r2_side = 2 if team_a_r1_side == 1 else 1
                     if winner_side == team_a_r2_side:
-                        team_a_pts = 1
+                        team_a_pts = 2
                         desc = f"Map win: side {winner_side} (R2 winner)"
                     else:
-                        team_b_pts = 1
+                        team_b_pts = 2
                         desc = f"Map win: side {winner_side} (R2 winner)"
                     scoring_source = "header"
                 else:

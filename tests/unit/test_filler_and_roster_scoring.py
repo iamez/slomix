@@ -115,7 +115,7 @@ async def test_clean_rosters_still_attribute_normally():
     assert m["counted"] is True
     assert "roster changed" not in (m.get("note") or "").lower()
     # One team should have won the map (R2 attackers faster).
-    assert res["team_a_maps"] + res["team_b_maps"] == 1
+    assert res["team_a_maps"] + res["team_b_maps"] == 2  # BOX scale: every map is worth 2 points
 
 
 # ---------------------------------------------------------------------------
