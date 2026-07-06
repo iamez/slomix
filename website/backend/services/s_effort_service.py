@@ -139,7 +139,7 @@ class SEffortService:
             eff = s_effort(float(sess), pool) if pool else None
             perf = s_performance(eff, life[g][1]) if eff is not None else None
             out.append({
-                "player_guid": g, "name": life[g][0],
+                "player_guid": life[g][2], "name": life[g][0],
                 "session_rating": round(float(sess), 4),
                 "lifetime_rating": round(life[g][1], 4),
                 "pool_strength": round(pool, 4) if pool else None,

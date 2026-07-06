@@ -234,6 +234,13 @@ async def get_s_effort(session_date: str, db=Depends(get_db)):
     svc = SEffortService(db)
     rows = await svc.compute_session(session_date)
     if not rows:
+        # still clear any stale persisted rows for the date (roster may have
+        # been invalidated since the last persist)
+        try:
+            await svc.persist_session(session_date, rows=[])
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("s.effort stale-clear failed")
         return {"status": "ok", "available": False, "session_date": session_date}
     try:
         await svc.persist_session(session_date, rows=rows)

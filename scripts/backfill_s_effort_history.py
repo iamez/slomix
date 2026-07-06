@@ -43,6 +43,10 @@ class Shim:
     async def execute(self, q, params=()):
         return await self.conn.execute(_tr(q), *params)
 
+    def transaction(self):
+        # exposes asyncpg's transaction so persist_session runs atomically
+        return self.conn.transaction()
+
 
 async def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
