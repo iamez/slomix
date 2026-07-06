@@ -179,6 +179,16 @@ class SEffortService:
         d = _dt.date.fromisoformat(str(session_date)[:10])
 
         async def _write():
+            # serialize concurrent persists of the same date (advisory lock,
+            # same pattern as bets_lifecycle) — two callers otherwise
+            # interleave DELETE+INSERT and duplicate rows
+            try:
+                await self.db.execute(
+                    "SELECT pg_advisory_xact_lock(20260706, hashtext(?))",
+                    (str(d),),
+                )
+            except Exception:  # noqa: BLE001 - SQLite fallback has no advisory locks
+                logger.debug("advisory lock unavailable (non-PG adapter)")
             await self.db.execute(
                 "DELETE FROM player_skill_history "
                 "WHERE scope = 'session' AND session_date = ?",

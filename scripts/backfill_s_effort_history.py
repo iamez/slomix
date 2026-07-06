@@ -68,9 +68,14 @@ async def main() -> int:
         await conn.execute("SET default_transaction_read_only = on")
     svc = SEffortService(Shim(conn))
 
-    dates = [r[0] for r in await conn.fetch(
-        "SELECT DISTINCT session_date FROM session_results "
-        "WHERE team_1_guids IS NOT NULL ORDER BY session_date")]
+    # iterate session START dates (MIN(round_date) per gaming session) — the
+    # same scoping the rating and the roster fix use; session_results dates
+    # can finalize across midnight (codex, PR #455 round 5)
+    dates = [str(r[0])[:10] for r in await conn.fetch(
+        "SELECT MIN(SUBSTRING(round_date, 1, 10)) AS d FROM rounds "
+        "WHERE gaming_session_id IS NOT NULL "
+        "GROUP BY gaming_session_id ORDER BY d")]
+    dates = sorted(set(dates))
     mode = "APPLY" if args.apply else "DRY-RUN"
     print(f"=== s.effort history backfill — {mode}  {FORMULA_VERSION} ===")
     print(f"sessions_with_rosters={len(dates)}")
