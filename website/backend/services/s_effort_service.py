@@ -34,6 +34,11 @@ POOL_NEUTRAL = 0.564
 SRS_ITERATIONS = 5
 
 
+def _norm_date(session_date) -> str:
+    """Normalize any accepted date input to strict YYYY-MM-DD (raises on junk)."""
+    return _dt.date.fromisoformat(str(session_date).strip()[:10]).isoformat()
+
+
 def s_effort(session_rating: float, pool_strength: float) -> float | None:
     if not pool_strength or pool_strength <= 0:
         return None
@@ -89,6 +94,7 @@ class SEffortService:
         self.db = db
 
     async def _roster(self, session_date: str) -> list[str] | None:
+        session_date = _norm_date(session_date)
         # UNION across ALL session_results rows for the date: on dates with
         # more than one gaming session, compute_session_ratings scores the
         # whole date (MIN(round_date) scoping), so the pool must match it
@@ -123,6 +129,7 @@ class SEffortService:
             compute_population_percentiles,
             compute_session_ratings,
         )
+        session_date = _norm_date(session_date)
         roster = await self._roster(session_date)
         if not roster:
             return None
@@ -167,6 +174,7 @@ class SEffortService:
         dropped out of a corrected roster don't leave stale entries; wrapped
         in a transaction when the adapter supports one (atomicity).
         """
+        session_date = _norm_date(session_date)
         if rows is None:
             rows = await self.compute_session(session_date)
         rows = rows or []
