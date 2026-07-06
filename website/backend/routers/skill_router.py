@@ -225,6 +225,38 @@ async def get_player_skill_history(
     }
 
 
+@router.get("/skill/s-effort")
+async def get_s_effort(session_date: str, db=Depends(get_db)):
+    """s.effort / s.performance for one session (SuperBoyy's pool-adjusted
+    performance; pool variant A leave-one-out per owner decision). Computes
+    live and idempotently persists scope='session' history rows."""
+    from website.backend.services.s_effort_service import FORMULA_VERSION, SEffortService
+    svc = SEffortService(db)
+    rows = await svc.compute_session(session_date)
+    if not rows:
+        return {"status": "ok", "available": False, "session_date": session_date}
+    try:
+        await svc.persist_session(session_date)
+    except Exception:  # persist is best-effort; the response is the compute
+        import logging
+        logging.getLogger(__name__).exception("s.effort persist failed")
+    rows.sort(key=lambda r: -(r.get("s_performance") or 0))
+    return {"status": "ok", "available": True, "session_date": session_date,
+            "formula_version": FORMULA_VERSION, "players": rows}
+
+
+@router.get("/skill/adjusted-lifetime")
+async def get_adjusted_lifetime(db=Depends(get_db)):
+    """Pool-adjusted lifetime rating (SRS iteration over persisted session
+    rows; AVG per owner correction — volume cannot inflate it). Requires
+    scope='session' history (run /skill/s-effort per session or the backfill
+    script first)."""
+    from website.backend.services.s_effort_service import FORMULA_VERSION, SEffortService
+    rows = await SEffortService(db).compute_adjusted_lifetime()
+    return {"status": "ok", "available": bool(rows),
+            "formula_version": FORMULA_VERSION, "players": rows}
+
+
 @router.get("/skill/formula")
 async def get_skill_formula():
     """Return the current rating formula details (transparency)."""
