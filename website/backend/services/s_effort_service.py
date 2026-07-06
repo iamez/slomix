@@ -120,7 +120,10 @@ class SEffortService:
             return None
         life_rows = await self.db.fetch_all(
             "SELECT player_guid, display_name, et_rating FROM player_skill_ratings")
-        life = {r[0].upper(): (r[1], float(r[2])) for r in (life_rows or [])}
+        # UPPER is only the MATCH KEY — the ORIGINAL guid (as stored in
+        # player_skill_ratings) is what downstream lookups receive, so a
+        # lower/mixed-case guid still resolves (codex, PR #455).
+        life = {r[0].upper(): (r[1], float(r[2]), r[0]) for r in (life_rows or [])}
         rated = [g for g in roster if g in life]
         if len(rated) < 3:
             return None
@@ -128,7 +131,7 @@ class SEffortService:
         all_lifetimes = [life[g][1] for g in rated]
         out = []
         for g in rated:
-            sr = await compute_session_ratings(self.db, g, session_date, percentiles)
+            sr = await compute_session_ratings(self.db, life[g][2], session_date, percentiles)
             sess = (sr or {}).get("session_rating") if isinstance(sr, dict) else None
             if sess is None:
                 continue
