@@ -95,32 +95,27 @@ class SEffortService:
 
     async def _roster(self, session_date: str) -> list[str] | None:
         session_date = _norm_date(session_date)
-        # UNION across ALL session_results rows for the date: on dates with
-        # more than one gaming session, compute_session_ratings scores the
-        # whole date (MIN(round_date) scoping), so the pool must match it
-        # (codex, PR #455).
-        # midnight-safe: resolve the gaming sessions the RATING scope covers
-        # (MIN(round_date) == date) and fetch rosters by gaming_session_id —
-        # session_results.session_date can be finalized on the other side of
-        # midnight (codex, PR #455 round 4).
+        # Pool variant A = ALL participants, so the roster is simply everyone
+        # who actually PLAYED the scored scope: distinct players with rounds
+        # in the gaming sessions whose start date (MIN(round_date)) matches —
+        # the exact scoping compute_session_ratings uses. No session_results
+        # dependency: that table misses unfinalized sessions and can finalize
+        # across midnight (codex, PR #455 rounds 4+7).
         rows = await self.db.fetch_all(
-            "SELECT sr.team_1_guids, sr.team_2_guids FROM session_results sr "
-            "WHERE sr.team_1_guids IS NOT NULL AND sr.gaming_session_id IN ("
-            "  SELECT gaming_session_id FROM rounds "
-            "  WHERE gaming_session_id IS NOT NULL "
-            "  GROUP BY gaming_session_id "
-            "  HAVING MIN(SUBSTRING(round_date, 1, 10)) = ?)",
+            "SELECT DISTINCT p.player_guid "
+            "FROM player_comprehensive_stats p "
+            "JOIN rounds r ON r.id = p.round_id "
+            "WHERE r.is_valid AND r.round_number IN (1, 2) "
+            "  AND p.player_guid NOT LIKE 'OMNIBOT%' "
+            "  AND p.player_name NOT LIKE '[BOT]%' "
+            "  AND r.gaming_session_id IN ("
+            "    SELECT gaming_session_id FROM rounds "
+            "    WHERE gaming_session_id IS NOT NULL "
+            "    GROUP BY gaming_session_id "
+            "    HAVING MIN(SUBSTRING(round_date, 1, 10)) = ?)",
             (session_date,),
         )
-        out: list[str] = []
-        seen = set()
-        for row in (rows or []):
-            for col in (row[0], row[1]):
-                for g in json.loads(col):
-                    gu = (g or "").upper()
-                    if gu and gu not in seen:
-                        seen.add(gu)
-                        out.append(gu)
+        out = [(r[0] or "").upper() for r in (rows or []) if r[0]]
         return out or None
 
     async def compute_session(self, session_date: str) -> list[dict] | None:
