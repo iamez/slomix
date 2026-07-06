@@ -141,3 +141,55 @@ ET Rating v2 later adds it as one weighted metric.
 2. Non-kill KIS credits: agree engineers/doc-returners should earn KIS-scale value?
 3. Reflex boards: public or profile-private? (hardware caveat text included either way)
 4. aim_lock↔kill linkage: worth a Lua tweak, or post-hoc join first?
+
+
+## 7. s.effort — session pool-adjusted performance (SuperBoyy; K-B1 RESULTS)
+
+Named **s.effort** by owner decree. Initial hypothesis `s.effort = sess_rating /
+pool_strength`, `s.performance = s.effort / (lifetime / POOL_NEUTRAL)` with
+POOL_NEUTRAL = 0.564 (population avg of et_rating, range [0.24, 0.76]). The
+pool_strength definition was NOT assumed — four leave-one-out variants were
+backtested side by side (`scripts/backtest_s_effort.py`, s.effort-v0.1):
+
+- SAMPLE: 35 roster sessions, 15 players, 11 over the >=5-session threshold,
+  178 player-sessions. CSV/MD saved with formula_version.
+- Ladder (perf, variant C=opponents): vid 1.033 > endekk 0.998 > SuperBoyy
+  0.988 > ... > KaNii 0.757. Variants A/B/C give near-identical ordering
+  (robust); D (opponent/team ratio) systematically inflates (+0.09) — advised
+  against.
+- Sanity gates: (a) corr(perf, pool faced) = +0.51 PASS (hard pools do not
+  punish); (b) no weak-in-easy-pool boost (n=0, trivially — pools are close);
+  (c) volume: corr(perf, n_sessions) = +0.34 VS corr(lifetime, n) = +0.54 —
+  volume correlation is mostly "better players play more"; buckets 5-9: 0.877,
+  10-19: 0.918, 20+: 0.983 (flagged CHECK).
+- Changed-most vs current rating: endekk lifetime#9 -> perf#2 (current rating
+  underrates him), bronzelow #1 -> #8, vid #2 -> #1.
+- Pool-adjusted LIFETIME (W2) formula, owner-corrected: AVG over sessions (never
+  a sum — volume bias), harder pool = PLUS:
+  `adj(p) = AVG_s[sess_rating(p,s) + (avg_pool_adj(s) - NEUTRAL)]`, iterated
+  4-5 rounds (SRS pattern). Implementation only after owner picks the pool
+  variant and green-lights K-D (persist must be idempotent + formula_version).
+
+## 8. Defender availability — objective-phase dead-time (K-B2 RESULTS)
+
+SuperBoyy hypothesis, tested case-control (owner's hindsight guard) with TRUE
+player_track spawn/death windows and dead FRACTION of the defending roster
+(`scripts/backtest_obj_phase_deadtime.py`, obj-deadtime-v0.1; 540 rounds):
+
+| group | n | dead_frac T-5s | baseline T-60s | delta |
+|---|---|---|---|---|
+| ADVANCE (destroyed/complete) | 1052 | 0.259 | 0.247 | +0.012 |
+| NEAR-MISS (dynamite defused) | 102 | 0.204 | 0.264 | **-0.060** |
+
+Case-control diff **+0.072 -> INFORMATIVE**. The discriminator is defender
+ALIVENESS at the critical moment: pushes die exactly when defenders come back
+up (dead_frac drops before a defuse) and advance when they stay down. This
+gives the xOV/stake model an empirically grounded "defender availability"
+component. Positioning penalties remain role-gated (v0 positive credit only).
+
+## 9. Naming corrections (owner)
+- aim_lock->kill is **"target acquisition"** (crosshair placement, pre-aim,
+  tracking, ping, tick, surprise, distance, weapon all mix in) — relative
+  metric only; return_fire/dodge stay separate as "reaction under fire";
+  never one blended "reflex" number.
+- 200ms quantization rules of constraint #5 apply to all of the above.
