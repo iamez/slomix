@@ -109,7 +109,20 @@ class _KisMixin:
                                       combat_positions)
             scored.append(impact)
 
-        # 4. Store in DB (delete old, batch insert new)
+        # 4. Store in DB (delete old, batch insert new) — atomically, so a
+        # failed insert can't leave the session's KIS cache empty and starve
+        # Smart Stats / Good Night / moments until the next recompute.
+        tx = getattr(self.db, "transaction", None)
+        if callable(tx):
+            async with tx():
+                await self._store_scored_kills(sd, scored)
+        else:  # SQLite dev adapter has no transaction context
+            await self._store_scored_kills(sd, scored)
+
+        logger.info("KIS computed for %s: %d kills scored", sd, len(scored))
+        return {"status": "computed", "kills_scored": len(scored)}
+
+    async def _store_scored_kills(self, sd: date, scored: list) -> None:
         await self.db.execute(
             "DELETE FROM storytelling_kill_impact WHERE session_date = $1", (sd,)
         )
@@ -141,9 +154,6 @@ class _KisMixin:
                  kill_time_ms, killer_guid_canonical)
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
             """, batch)
-
-        logger.info("KIS computed for %s: %d kills scored", sd, len(scored))
-        return {"status": "computed", "kills_scored": len(scored)}
 
     def _score_kill(self, kill, carrier_kills, carrier_returns, pushes, crossfires,
                     spawn_timings, victim_classes, combat_positions=None):
