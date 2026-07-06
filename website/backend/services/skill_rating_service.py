@@ -543,7 +543,7 @@ async def compute_session_map_ratings(db, player_guid: str, session_date: str,
         WHERE player_guid = $1 AND round_number > 0
           -- Midnight-safe: gaming sessions that STARTED on $2 (see compute_session_ratings).
           AND round_id IN (
-              SELECT id FROM rounds WHERE gaming_session_id IN (
+              SELECT id FROM rounds WHERE is_valid AND gaming_session_id IN (
                   SELECT gaming_session_id FROM rounds
                   WHERE gaming_session_id IS NOT NULL
                   GROUP BY gaming_session_id HAVING MIN(round_date) = $2
@@ -641,7 +641,7 @@ async def get_player_session_history(db, player_guid: str,
               -- crosses midnight contributes both halves to the cumulative — not just
               -- the pre-midnight rounds that a bare `round_date <= $2` would catch.
               AND round_id IN (
-                  SELECT id FROM rounds WHERE gaming_session_id IN (
+                  SELECT id FROM rounds WHERE is_valid AND gaming_session_id IN (
                       SELECT gaming_session_id FROM rounds
                       WHERE gaming_session_id IS NOT NULL
                       GROUP BY gaming_session_id HAVING MIN(round_date) <= $2
