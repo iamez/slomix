@@ -26,7 +26,11 @@ def _mmss_to_seconds(text) -> int | None:
         if ":" in t:
             m, sec = t.split(":", 1)
             return int(m) * 60 + int(sec)
-        return int(float(t)) if t else None
+        if "." in t:
+            # decimal legacy format is MINUTES ("1.5" -> 90s), matching
+            # StopwatchScoringService.parse_time_to_seconds
+            return int(float(t) * 60)
+        return int(t) if t else None
     except (ValueError, TypeError):
         return None
 
