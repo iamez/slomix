@@ -22,6 +22,7 @@ seeded with current et_rating, iterated to convergence (<=5 rounds).
 """
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import logging
 from statistics import mean
@@ -160,14 +161,18 @@ class SEffortService:
         if not rows:
             return 0
 
+        # player_skill_history.session_date is a DATE column (migration 031)
+        # — the PG adapter needs a date object, not a string (codex, PR #455)
+        d = _dt.date.fromisoformat(str(session_date)[:10])
+
         async def _write():
             await self.db.execute(
                 "DELETE FROM player_skill_history "
                 "WHERE scope = 'session' AND session_date = ?",
-                (session_date,),
+                (d,),
             )
             for r in rows:
-                await self._insert_row(session_date, r)
+                await self._insert_row(d, r)
 
         tx = getattr(self.db, "transaction", None)
         if callable(tx):
@@ -177,7 +182,7 @@ class SEffortService:
             await _write()
         return len(rows)
 
-    async def _insert_row(self, session_date: str, r: dict) -> None:
+    async def _insert_row(self, session_date, r: dict) -> None:
         await self.db.execute(
                 "INSERT INTO player_skill_history "
                 "(player_guid, scope, session_date, et_rating, rounds_in_scope, components) "
