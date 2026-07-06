@@ -160,7 +160,6 @@ async def cmd_status():
                 status, marker = "APPLIED", "  "
             elif filename in failed:
                 status, marker = "FAILED", "!!"
-                pending += 1
             else:
                 status, marker = "PENDING", ">>"
                 pending += 1
