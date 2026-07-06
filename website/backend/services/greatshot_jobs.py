@@ -37,6 +37,12 @@ class GreatshotJobService:
         self.storage.ensure_storage_tree()
         await self.storage.ensure_schema(self.db)
 
+        try:
+            await self._recover_stalled_jobs()
+        except Exception:
+            logger.error("Greatshot job recovery failed (continuing startup)\n%s",
+                         traceback.format_exc())
+
         for idx in range(max(1, analysis_workers)):
             task = asyncio.create_task(self._analysis_worker(idx), name=f"greatshot-analysis-{idx}")
             self.analysis_workers.append(task)
@@ -66,6 +72,45 @@ class GreatshotJobService:
         self.render_workers = []
         self.started = False
         logger.info("🛑 Greatshot job service stopped")
+
+    async def _recover_stalled_jobs(self) -> None:
+        """Re-enqueue work stranded by a restart.
+
+        The queues are in-memory, so a restart after the DB insert but before
+        job completion leaves rows stuck forever: demos at 'uploaded' (never
+        picked up) or 'scanning' (worker died mid-scan), renders at 'queued'
+        or 'rendering'. At startup no job is in flight in this process, so
+        every such row is recoverable.
+        """
+        stalled_scans = await self.db.fetch_all(
+            "UPDATE greatshot_demos SET status = 'uploaded', "
+            "updated_at = CURRENT_TIMESTAMP "
+            "WHERE status = 'scanning' RETURNING id"
+        )
+        pending_demos = await self.db.fetch_all(
+            "SELECT id FROM greatshot_demos WHERE status = 'uploaded'"
+        )
+        stalled_renders = await self.db.fetch_all(
+            "UPDATE greatshot_renders SET status = 'queued', "
+            "updated_at = CURRENT_TIMESTAMP "
+            "WHERE status = 'rendering' RETURNING id"
+        )
+        pending_renders = await self.db.fetch_all(
+            "SELECT id FROM greatshot_renders WHERE status = 'queued'"
+        )
+
+        for row in pending_demos or []:
+            await self.analysis_queue.put(str(row[0]))
+        for row in pending_renders or []:
+            await self.render_queue.put(str(row[0]))
+
+        if pending_demos or pending_renders or stalled_scans or stalled_renders:
+            logger.info(
+                "♻️ Greatshot recovery: re-enqueued %d demo(s) (%d were mid-scan) "
+                "and %d render(s) (%d were mid-render)",
+                len(pending_demos or []), len(stalled_scans or []),
+                len(pending_renders or []), len(stalled_renders or []),
+            )
 
     async def enqueue_analysis(self, demo_id: str) -> None:
         await self.analysis_queue.put(demo_id)
@@ -443,40 +488,57 @@ class GreatshotJobService:
                 demo_duration_ms=demo_end_ms,
             )
 
-            # Hold a row lock for the full check/cut/update sequence.
-            # This prevents concurrent workers from extracting the same clip at once.
+            # The cutter is an external process that can run for minutes —
+            # never hold a DB row lock across it. Pattern: check without a
+            # lock, cut into a job-unique temp file, then adopt or discard the
+            # result in a short FOR UPDATE transaction (concurrent workers
+            # race harmlessly; the loser deletes its temp file).
             clip_demo_path = None
-            async with self.db.connection() as conn, conn.transaction():
-                locked_highlight = await conn.fetchrow(
-                    "SELECT clip_demo_path FROM greatshot_highlights WHERE id = $1 FOR UPDATE",
-                    highlight_id,
-                )
+            existing_row = await self.db.fetch_one(
+                "SELECT clip_demo_path FROM greatshot_highlights WHERE id = $1",
+                (highlight_id,),
+            )
+            existing_clip = str(existing_row[0]) if existing_row and existing_row[0] else None
+            if existing_clip and Path(existing_clip).is_file():
+                clip_demo_path = existing_clip
+            else:
+                clips_dir = self.storage.clips_dir(demo_id)
+                clips_dir.mkdir(parents=True, exist_ok=True)
+                final_clip = clips_dir / f"{highlight_id}{extension}"
+                tmp_clip = clips_dir / f"{highlight_id}.{render_id}.tmp{extension}"
 
-                locked_clip_path = locked_highlight[0] if locked_highlight else None
-                clip_demo_path = str(locked_clip_path) if locked_clip_path else None
-                clip_missing = not clip_demo_path or not Path(clip_demo_path).is_file()
-
-                if clip_missing:
-                    clips_dir = self.storage.clips_dir(demo_id)
-                    clips_dir.mkdir(parents=True, exist_ok=True)
-                    clip_demo = clips_dir / f"{highlight_id}{extension}"
-
+                try:
                     await asyncio.to_thread(
                         cut_demo,
                         stored_path,
                         clip_start,
                         clip_end,
-                        clip_demo,
+                        tmp_clip,
                         None,
                         GREATSHOT_CONFIG.cutter_timeout_seconds,
                     )
 
-                    clip_demo_path = str(clip_demo)
-                    await conn.execute(
-                        "UPDATE greatshot_highlights SET clip_demo_path = $2 WHERE id = $1",
-                        highlight_id,
-                        clip_demo_path,
-                    )
+                    # Short transaction: re-check under lock, adopt or discard.
+                    async with self.db.connection() as conn, conn.transaction():
+                        locked_highlight = await conn.fetchrow(
+                            "SELECT clip_demo_path FROM greatshot_highlights "
+                            "WHERE id = $1 FOR UPDATE",
+                            highlight_id,
+                        )
+                        locked_clip = locked_highlight[0] if locked_highlight else None
+                        if locked_clip and Path(str(locked_clip)).is_file():
+                            clip_demo_path = str(locked_clip)  # concurrent worker won
+                        else:
+                            tmp_clip.replace(final_clip)
+                            clip_demo_path = str(final_clip)
+                            await conn.execute(
+                                "UPDATE greatshot_highlights "
+                                "SET clip_demo_path = $2 WHERE id = $1",
+                                highlight_id,
+                                clip_demo_path,
+                            )
+                finally:
+                    tmp_clip.unlink(missing_ok=True)
 
             if not clip_demo_path:
                 raise RuntimeError(
