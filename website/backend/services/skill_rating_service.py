@@ -477,7 +477,11 @@ async def compute_session_ratings(db, player_guid: str, session_date: str,
           -- gaming_session_id, not round_date), so a session crossing midnight
           -- stays whole and is never double-counted across two date entries.
           AND round_id IN (
-              SELECT id FROM rounds WHERE gaming_session_id IN (
+              -- is_valid gate: filler/orphan/bot-test rounds must not
+              -- contaminate a session rating (they are excluded by every
+              -- other aggregate; s.effort persists these ratings, so the
+              -- gap would flow into adjusted lifetime — PR #455)
+              SELECT id FROM rounds WHERE is_valid AND gaming_session_id IN (
                   SELECT gaming_session_id FROM rounds
                   WHERE gaming_session_id IS NOT NULL
                   GROUP BY gaming_session_id HAVING MIN(round_date) = $2
