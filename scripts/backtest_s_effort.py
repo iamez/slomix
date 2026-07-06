@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+"""K-B1: s.effort backtest (READ-ONLY). formula_version = s.effort-v0.1
+
+Initial hypothesis (SuperBoyy, name fixed by owner): s.effort = sess_rating /
+pool_strength ; s.performance = s.effort / (lifetime / POOL_NEUTRAL).
+pool_strength is NOT decided yet — this backtest compares 4 variants
+(leave-one-out where the player would otherwise rate himself):
+  A all participants (excl self)   B own team (excl self)
+  C opponents only                 D opponent/team ratio (team-diff)
+POOL_NEUTRAL = 0.564 (population avg of player_skill_ratings, not theoretical 1).
+
+Owner requirements baked in: sample sizes printed; min-sessions threshold;
+sanity checks PASS/FAIL (hard-pool no punish / easy-pool no boost / volume not
+the main driver + session-count buckets); CSV + Markdown saved with
+formula_version; top20 / bottom20 / changed-most-vs-current tables.
+"""
+from __future__ import annotations
+
+import asyncio
+import csv
+import json
+import os
+import statistics as st
+import sys
+
+sys.path.insert(0, "/home/samba/share/slomix_discord")
+
+import asyncpg  # noqa: E402
+
+from website.backend.services.skill_rating_service import (  # noqa: E402
+    compute_population_percentiles,
+    compute_session_ratings,
+)
+
+FORMULA_VERSION = "s.effort-v0.1"
+POOL_NEUTRAL = 0.564
+MIN_SESSIONS = 5
+OUT = "/tmp/claude-1000/-home-samba-share-slomix-discord/acd3206d-a016-4841-809a-21f32d7b8acb/scratchpad/s_effort_v01"
+
+
+def _tr(q):
+    out, i = [], 0
+    for ch in q:
+        if ch == "?":
+            i += 1
+            out.append(f"${i}")
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+class Shim:
+    def __init__(self, conn):
+        self.conn = conn
+
+    async def fetch_all(self, q, params=()):
+        return await self.conn.fetch(_tr(q), *params)
+
+    async def fetch_one(self, q, params=()):
+        return await self.conn.fetchrow(_tr(q), *params)
+
+
+def g8(guid):
+    return (guid or "")[:8].upper()
+
+
+def corr(xs, ys):
+    if len(xs) < 3 or st.pstdev(xs) == 0 or st.pstdev(ys) == 0:
+        return 0.0
+    mx, my = st.mean(xs), st.mean(ys)
+    num = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    den = (sum((x - mx) ** 2 for x in xs) * sum((y - my) ** 2 for y in ys)) ** 0.5
+    return num / den if den else 0.0
+
+
+async def main():
+    conn = await asyncpg.connect(
+        host=os.environ.get("POSTGRES_HOST", "127.0.0.1"),
+        port=int(os.environ.get("POSTGRES_PORT", "5432")),
+        database=os.environ.get("POSTGRES_DATABASE", "etlegacy"),
+        user=os.environ.get("POSTGRES_USER", "etlegacy_user"),
+        password=os.environ.get("POSTGRES_PASSWORD") or os.environ.get("PGPASSWORD", ""))
+    await conn.execute("SET default_transaction_read_only = on")
+    db = Shim(conn)
+
+    life = {}   # g8 -> (name, lifetime_rating, full_guid)
+    for r in await conn.fetch(
+            "SELECT player_guid, display_name, et_rating FROM player_skill_ratings"):
+        life[g8(r[0])] = (r[1] or g8(r[0]), float(r[2]), r[0])
+
+    percentiles = await compute_population_percentiles(db)
+
+    sessions = await conn.fetch("""
+        SELECT gaming_session_id, session_date, team_1_guids, team_2_guids
+        FROM session_results
+        WHERE team_1_guids IS NOT NULL AND team_2_guids IS NOT NULL
+        ORDER BY gaming_session_id""")
+
+    per_player = {}          # g8 -> list of dicts per session
+    n_sessions_used = 0
+    for s in sessions:
+        t1 = [g8(x) for x in json.loads(s["team_1_guids"]) if g8(x) in life]
+        t2 = [g8(x) for x in json.loads(s["team_2_guids"]) if g8(x) in life]
+        if len(t1) < 2 or len(t2) < 2:
+            continue
+        n_sessions_used += 1
+        date = str(s["session_date"])[:10]
+        for team, opp in ((t1, t2), (t2, t1)):
+            opp_avg = st.mean(life[g][1] for g in opp)
+            for p in team:
+                try:
+                    sr = await compute_session_ratings(db, life[p][2], date, percentiles)
+                except Exception:
+                    continue
+                sess = (sr or {}).get("session_rating") if isinstance(sr, dict) else None
+                if sess is None:
+                    continue
+                mates = [g for g in team if g != p]
+                team_loo = st.mean(life[g][1] for g in mates) if mates else POOL_NEUTRAL
+                pools = {
+                    "A_all": st.mean([life[g][1] for g in mates] + [life[g][1] for g in opp]),
+                    "B_team": team_loo,
+                    "C_opp": opp_avg,
+                    "D_diff": POOL_NEUTRAL * (opp_avg / team_loo) if team_loo else POOL_NEUTRAL,
+                }
+                rec = {"sess": float(sess), "pools": pools, "date": date}
+                per_player.setdefault(p, []).append(rec)
+
+    variants = ["A_all", "B_team", "C_opp", "D_diff"]
+    rows = []
+    for p, recs in per_player.items():
+        if len(recs) < MIN_SESSIONS:
+            continue
+        name, lt, _full = life[p]
+        row = {"player": name, "g8": p, "lifetime": lt, "n_sessions": len(recs)}
+        for v in variants:
+            efforts = [r["sess"] / r["pools"][v] * POOL_NEUTRAL / POOL_NEUTRAL for r in recs]
+            # s.effort scaled so pool==NEUTRAL leaves sess/NEUTRAL scale-free:
+            efforts = [r["sess"] / (r["pools"][v] or POOL_NEUTRAL) for r in recs]
+            perf = [e / (lt / POOL_NEUTRAL) for e in efforts]
+            row[f"eff_{v}"] = st.mean(efforts)
+            row[f"perf_{v}"] = st.mean(perf)
+            row[f"stab_{v}"] = st.pstdev(perf)
+            row[f"pool_{v}"] = st.mean(r["pools"][v] for r in recs)
+        rows.append(row)
+
+    total_players_all = len(per_player)
+    rows.sort(key=lambda r: -r["perf_C_opp"])
+
+    print(f"=== s.effort backtest  formula_version={FORMULA_VERSION} ===")
+    print(f"SAMPLE SIZE: sessions_with_rosters={n_sessions_used} "
+          f"players_any={total_players_all} players>=min{MIN_SESSIONS}sess={len(rows)} "
+          f"player_sessions={sum(r['n_sessions'] for r in rows)}")
+
+    hdr = (f"{'player':<14}{'n':>3}{'life':>6} | "
+           + "".join(f"{'perf_' + v[:1]:>8}" for v in variants)
+           + " | " + "".join(f"{'eff_' + v[:1]:>7}" for v in variants)
+           + f"{'stabC':>7}")
+    print(hdr)
+    for r in rows:
+        print(f"{r['player'][:13]:<14}{r['n_sessions']:>3}{r['lifetime']:>6.3f} | "
+              + "".join(f"{r['perf_' + v]:>8.3f}" for v in variants)
+              + " | " + "".join(f"{r['eff_' + v]:>7.3f}" for v in variants)
+              + f"{r['stab_C_opp']:>7.3f}")
+
+    # ---- sanity checks
+    print("\n=== SANITY CHECKS ===")
+    perfs = [r["perf_C_opp"] for r in rows]
+    pools = [r["pool_C_opp"] for r in rows]
+    ns = [r["n_sessions"] for r in rows]
+    lts = [r["lifetime"] for r in rows]
+    c_pool = corr(perfs, pools)
+    print(f"(a) hard-pool-no-punish: corr(perf_C, avg_pool_faced) = {c_pool:+.3f} "
+          f"-> {'PASS' if c_pool > -0.35 else 'FAIL'} (strongly negative would punish hard pools)")
+    weak_easy = [r for r in rows if r["lifetime"] < POOL_NEUTRAL and r["pool_C_opp"] < POOL_NEUTRAL]
+    boost = max((r["perf_C_opp"] for r in weak_easy), default=0)
+    print(f"(b) easy-pool-no-boost: max perf of below-avg players in below-avg pools = "
+          f"{boost:.3f} -> {'PASS' if boost < 1.25 else 'CHECK'} (n={len(weak_easy)})")
+    c_vol = corr(perfs, ns)
+    print(f"(c) volume-not-main-driver: corr(perf_C, n_sessions) = {c_vol:+.3f} "
+          f"(context: corr(lifetime, n_sessions) = {corr(lts, ns):+.3f})")
+    buckets = {}
+    for r in rows:
+        b = "5-9" if r["n_sessions"] < 10 else ("10-19" if r["n_sessions"] < 20 else "20+")
+        buckets.setdefault(b, []).append(r["perf_C_opp"])
+    for b in ("5-9", "10-19", "20+"):
+        if b in buckets:
+            print(f"    bucket {b:>5} sessions: n={len(buckets[b])} avg_perf={st.mean(buckets[b]):.3f}")
+
+    # ---- changed most vs current rating (rank by perf_C vs rank by lifetime)
+    by_perf = {r["g8"]: i for i, r in enumerate(rows)}
+    by_life = {r["g8"]: i for i, r in enumerate(sorted(rows, key=lambda x: -x["lifetime"]))}
+    moved = sorted(rows, key=lambda r: -(abs(by_life[r["g8"]] - by_perf[r["g8"]])))
+    print("\n=== CHANGED MOST vs current lifetime ranking (perf_C) ===")
+    for r in moved[:8]:
+        print(f"  {r['player'][:14]:<15} lifetime#{by_life[r['g8']] + 1:>2} -> perf#{by_perf[r['g8']] + 1:>2}")
+
+    # ---- CSV + MD
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    with open(OUT + ".csv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0].keys()) + ["formula_version"])
+        w.writeheader()
+        for r in rows:
+            w.writerow({**{k: (f"{v:.4f}" if isinstance(v, float) else v) for k, v in r.items()},
+                        "formula_version": FORMULA_VERSION})
+    with open(OUT + ".md", "w") as f:
+        f.write(f"# s.effort {FORMULA_VERSION}\n\nsessions={n_sessions_used} "
+                f"players={len(rows)} (min {MIN_SESSIONS} sessions)\n\n")
+        f.write("|player|n|lifetime|" + "|".join(f"perf_{v}" for v in variants) + "|\n")
+        f.write("|" + "---|" * (3 + len(variants)) + "\n")
+        for r in rows:
+            f.write(f"|{r['player']}|{r['n_sessions']}|{r['lifetime']:.3f}|"
+                    + "|".join(f"{r['perf_' + v]:.3f}" for v in variants) + "|\n")
+    print(f"\nSaved: {OUT}.csv / .md")
+    await conn.close()
+
+asyncio.run(main())
