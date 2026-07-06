@@ -1667,6 +1667,22 @@ async def get_stats_session_detail(
 
 
 
+@router.get("/stats/session/{gaming_session_id}/good-night")
+async def get_session_good_night(
+    gaming_session_id: int,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Good Night Index — rate the EVENING, not the players (plan family 1,
+    Phase 1). One 0-100 score + friendship-safe reason chips; computed on
+    read from existing tables, no schema."""
+    from website.backend.services.good_night_service import GoodNightService
+    result = await GoodNightService(db).compute(gaming_session_id)
+    if result is None:
+        return {"status": "ok", "available": False,
+                "gaming_session_id": gaming_session_id}
+    return {"status": "ok", "available": True, **result}
+
+
 @router.get("/stats/session/{gaming_session_id}/verdicts")
 async def get_session_verdicts(
     gaming_session_id: int,
