@@ -110,7 +110,8 @@ async def main():
             for p in team:
                 try:
                     sr = await compute_session_ratings(db, life[p][2], date, percentiles)
-                except Exception:
+                except Exception as e:  # noqa: BLE001 - backtest: skip player-session, keep going
+                    print(f"  skip {life[p][0]} {date}: {e}", file=sys.stderr)
                     continue
                 sess = (sr or {}).get("session_rating") if isinstance(sr, dict) else None
                 if sess is None:
