@@ -93,9 +93,17 @@ class SEffortService:
         # more than one gaming session, compute_session_ratings scores the
         # whole date (MIN(round_date) scoping), so the pool must match it
         # (codex, PR #455).
+        # midnight-safe: resolve the gaming sessions the RATING scope covers
+        # (MIN(round_date) == date) and fetch rosters by gaming_session_id —
+        # session_results.session_date can be finalized on the other side of
+        # midnight (codex, PR #455 round 4).
         rows = await self.db.fetch_all(
-            "SELECT team_1_guids, team_2_guids FROM session_results "
-            "WHERE session_date = ? AND team_1_guids IS NOT NULL",
+            "SELECT sr.team_1_guids, sr.team_2_guids FROM session_results sr "
+            "WHERE sr.team_1_guids IS NOT NULL AND sr.gaming_session_id IN ("
+            "  SELECT gaming_session_id FROM rounds "
+            "  WHERE gaming_session_id IS NOT NULL "
+            "  GROUP BY gaming_session_id "
+            "  HAVING MIN(SUBSTRING(round_date, 1, 10)) = ?)",
             (session_date,),
         )
         out: list[str] = []
@@ -221,7 +229,7 @@ class SEffortService:
                 hist.append(r)
         life_rows = await self.db.fetch_all(
             "SELECT player_guid, display_name, et_rating FROM player_skill_ratings")
-        life = {r[0].upper(): (r[1], float(r[2])) for r in (life_rows or [])}
+        life = {r[0].upper(): (r[1], float(r[2]), r[0]) for r in (life_rows or [])}
         sess_by_p: dict[str, list] = {}
         parts: dict[str, list] = {}
         for r in (hist or []):
@@ -232,7 +240,8 @@ class SEffortService:
             return []
         seed = {p: life.get(p, (None, POOL_NEUTRAL))[1] for p in sess_by_p}
         adj = adjusted_lifetime(sess_by_p, seed, parts)
-        out = [{"player_guid": p, "name": life.get(p, (p, 0))[0],
+        out = [{"player_guid": life[p][2] if p in life else p,
+                "name": life.get(p, (p, 0))[0],
                 "lifetime_rating": round(life[p][1], 4) if p in life else None,
                 "adjusted_lifetime": round(v, 4),
                 "n_sessions": len(sess_by_p[p]),
