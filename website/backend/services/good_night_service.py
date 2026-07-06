@@ -31,9 +31,9 @@ class GoodNightService:
         rounds = await self.db.fetch_all(
             """
             SELECT round_number, match_id, map_name,
-                   COALESCE(actual_duration_seconds, 0), round_start_unix
+                   actual_duration_seconds, round_start_unix
             FROM rounds
-            WHERE gaming_session_id = $1 AND is_valid
+            WHERE gaming_session_id = ? AND is_valid
               -- same legal-round predicate as the session-detail endpoints:
               -- 'substitution' rounds and legacy NULL statuses still count
               AND (round_status IN ('completed', 'substitution')
@@ -49,7 +49,8 @@ class GoodNightService:
             if start_unix:
                 stamped.append((int(start_unix), int(secs or 0)))
             if match_id:
-                pairs.setdefault(match_id, {})[int(rn)] = (map_name, int(secs or 0))
+                pairs.setdefault(match_id, {})[int(rn)] = (
+                    map_name, int(secs) if secs is not None else None)
         # maps whose duration data is missing on BOTH rounds must not enter
         # the tightness math as fake 0-vs-0 photo-finishes (codex, PR #451)
         matches = [p for p in pairs.values() if 1 in p and 2 in p]
@@ -61,7 +62,7 @@ class GoodNightService:
 
         sr = await self.db.fetch_one(
             "SELECT round_details FROM session_results "
-            "WHERE gaming_session_id = $1 ORDER BY id DESC LIMIT 1",
+            "WHERE gaming_session_id = ? ORDER BY id DESC LIMIT 1",
             (gaming_session_id,),
         )
         wins_a = wins_b = draws = 0
@@ -84,7 +85,9 @@ class GoodNightService:
 
         # balance (neutral 50 when the win/loss signal is unavailable)
         map_closeness = (100 - min(100, abs(wins_a - wins_b) * 25)) if has_details else 50
-        timed = [p for p in matches if p[1][1] > 0 or p[2][1] > 0]
+        timed = [p for p in matches
+                 if p[1][1] is not None and p[2][1] is not None
+                 and (p[1][1] > 0 or p[2][1] > 0)]
         diffs = [abs(p[1][1] - p[2][1]) for p in timed]
         round_closeness = (sum(100 - min(100, d / 6) for d in diffs) / len(diffs)) if diffs else 50
         balance = 0.6 * map_closeness + 0.4 * round_closeness
@@ -101,7 +104,7 @@ class GoodNightService:
             SELECT COUNT(DISTINCT p.player_guid)
             FROM player_comprehensive_stats p
             JOIN rounds r ON r.id = p.round_id
-            WHERE r.gaming_session_id = $1 AND r.is_valid
+            WHERE r.gaming_session_id = ? AND r.is_valid
               AND (r.round_status IN ('completed', 'substitution')
                    OR r.round_status IS NULL)
               AND r.round_number IN (1, 2)
@@ -119,14 +122,14 @@ class GoodNightService:
 
         # story density — KIS spikes + carrier kills per hour (v0 proxy;
         # midnight-safe via round_start_unix, bots excluded)
-        # portable IN(...) placeholders instead of PG-only ANY($1) — the
+        # portable ?-placeholders (CLAUDE.md convention; adapters translate) — the
         # local SQLite adapter executes SQL verbatim
         starts = [s for s, _ in stamped]
-        ph = ", ".join(f"${i + 2}" for i in range(len(starts)))
+        ph = ", ".join("?" for _ in starts)
         mom = await self.db.fetch_one(
             f"""
             SELECT COUNT(*) FROM storytelling_kill_impact
-            WHERE (total_impact >= $1 OR is_carrier_kill)
+            WHERE (total_impact >= ? OR is_carrier_kill)
               AND round_start_unix IN ({ph})
               AND killer_guid NOT LIKE 'OMNIBOT%'
               AND killer_name NOT LIKE '[BOT]%'
@@ -138,7 +141,7 @@ class GoodNightService:
 
         # flow — invalid rounds + long between-round gaps (end -> next start)
         inv = await self.db.fetch_one(
-            "SELECT COUNT(*) FROM rounds WHERE gaming_session_id = $1 AND is_valid IS FALSE",
+            "SELECT COUNT(*) FROM rounds WHERE gaming_session_id = ? AND is_valid IS FALSE",
             (gaming_session_id,),
         )
         spans = sorted((s, s + d) for s, d in stamped)
@@ -152,13 +155,13 @@ class GoodNightService:
 
         # participation (MVP votes + bets)
         votes = await self.db.fetch_one(
-            "SELECT COUNT(*) FROM session_mvp_votes WHERE gaming_session_id = $1",
+            "SELECT COUNT(*) FROM session_mvp_votes WHERE gaming_session_id = ?",
             (gaming_session_id,),
         )
         bets = await self.db.fetch_one(
             "SELECT COUNT(*) FROM parimutuel_bets b "
             "JOIN parimutuel_markets m ON m.id = b.market_id "
-            "WHERE m.gaming_session_id = $1",
+            "WHERE m.gaming_session_id = ?",
             (gaming_session_id,),
         )
         participation = _clamp((int(votes[0] or 0) + int(bets[0] or 0)) * 10)
