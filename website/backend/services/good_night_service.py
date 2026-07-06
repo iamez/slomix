@@ -53,7 +53,10 @@ class GoodNightService:
         # maps whose duration data is missing on BOTH rounds must not enter
         # the tightness math as fake 0-vs-0 photo-finishes (codex, PR #451)
         matches = [p for p in pairs.values() if 1 in p and 2 in p]
-        if not matches or not stamped:
+        # PARTIAL timestamps are as bad as none: hours/KIS/gaps would cover
+        # only the stamped subset while maps count everything -> inflated
+        # story density and missed gaps (codex, PR #449). Report unavailable.
+        if not matches or not stamped or len(stamped) != len(rounds):
             return None
 
         sr = await self.db.fetch_one(

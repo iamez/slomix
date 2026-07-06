@@ -58,6 +58,17 @@ async def test_unavailable_without_complete_matches():
 
 
 @pytest.mark.asyncio
+async def test_partial_timestamps_report_unavailable():
+    """A session where only SOME rounds carry round_start_unix must be skipped
+    — time-scoped components would cover a subset while maps count everything
+    (codex, PR #449)."""
+    rows = _rounds(3)
+    rows[2] = (rows[2][0], rows[2][1], rows[2][2], rows[2][3], None)  # one unstamped
+    svc = GoodNightService(FakeDB(rounds=rows, details=None))
+    assert await svc.compute(9) is None
+
+
+@pytest.mark.asyncio
 async def test_close_night_scores_high_with_safe_reasons():
     details = [{"team_a_points": 2, "team_b_points": 0}] * 3 \
         + [{"team_a_points": 0, "team_b_points": 2}] * 3 \
