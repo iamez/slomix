@@ -90,6 +90,26 @@ jobs:
       - name: Lint JavaScript
         run: npm run lint:js
 
+  react-frontend:
+    name: React Typecheck + Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website/frontend
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.13.1"
+          cache: "npm"
+          cache-dependency-path: website/frontend/package-lock.json
+      - name: Install React frontend dependencies
+        run: npm ci
+      - name: Typecheck (tsc --noEmit)
+        run: npm run typecheck
+      - name: Unit tests (vitest)
+        run: npm test
+
   security:
     name: Security (pip-audit + bandit)
     runs-on: ubuntu-latest
