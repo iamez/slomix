@@ -161,8 +161,10 @@ class SEffortService:
         """
         if rows is None:
             rows = await self.compute_session(session_date)
-        if not rows:
-            return 0
+        rows = rows or []
+        # NOTE: the DELETE below runs even when the recompute came back empty —
+        # a date whose roster was invalidated must not keep stale persisted
+        # rows (codex, PR #455).
 
         # player_skill_history.session_date is a DATE column (migration 031)
         # — the PG adapter needs a date object, not a string (codex, PR #455)
