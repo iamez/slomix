@@ -19,6 +19,18 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _mmss_to_seconds(text) -> int | None:
+    """Parse the legacy MM:SS actual_time fallback (same as Session Detail)."""
+    try:
+        t = str(text or "").strip()
+        if ":" in t:
+            m, sec = t.split(":", 1)
+            return int(m) * 60 + int(sec)
+        return int(float(t)) if t else None
+    except (ValueError, TypeError):
+        return None
+
+
 def _clamp(v: float, lo: float = 0.0, hi: float = 100.0) -> float:
     return max(lo, min(hi, v))
 
@@ -31,7 +43,7 @@ class GoodNightService:
         rounds = await self.db.fetch_all(
             """
             SELECT round_number, match_id, map_name,
-                   actual_duration_seconds, round_start_unix
+                   actual_duration_seconds, round_start_unix, actual_time
             FROM rounds
             WHERE gaming_session_id = ? AND is_valid
               -- same legal-round predicate as the session-detail endpoints:
@@ -45,7 +57,11 @@ class GoodNightService:
         )
         pairs: dict[str, dict[int, tuple]] = {}
         stamped = []
-        for rn, match_id, map_name, secs, start_unix in rounds or []:
+        for rn, match_id, map_name, secs, start_unix, actual_time in rounds or []:
+            # same duration fallback as Session Detail: actual_time (MM:SS)
+            # when actual_duration_seconds is missing (codex, PR #451 r5)
+            if secs is None:
+                secs = _mmss_to_seconds(actual_time)
             if start_unix:
                 stamped.append((int(start_unix), int(secs or 0)))
             if match_id:
