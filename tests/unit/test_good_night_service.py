@@ -43,17 +43,18 @@ class FakeDB:
 
 
 def _rounds(n_maps, secs_diff=0, base=1_751_300_000):
+    # (round_number, match_id, map_name, duration_secs, start_unix, actual_time)
     rows = []
     for i in range(n_maps):
         s = base + i * 900
-        rows.append((1, f"m{i}", f"map{i}", 300, s))
-        rows.append((2, f"m{i}", f"map{i}", 300 + secs_diff, s + 400))
+        rows.append((1, f"m{i}", f"map{i}", 300, s, "5:00"))
+        rows.append((2, f"m{i}", f"map{i}", 300 + secs_diff, s + 400, "5:00"))
     return rows
 
 
 @pytest.mark.asyncio
 async def test_unavailable_without_complete_matches():
-    svc = GoodNightService(FakeDB(rounds=[(1, "m1", "supply", 300, 1_751_300_000)]))
+    svc = GoodNightService(FakeDB(rounds=[(1, "m1", "supply", 300, 1_751_300_000, "5:00")]))
     assert await svc.compute(9) is None
 
 
@@ -63,7 +64,7 @@ async def test_partial_timestamps_report_unavailable():
     — time-scoped components would cover a subset while maps count everything
     (codex, PR #449)."""
     rows = _rounds(3)
-    rows[2] = (rows[2][0], rows[2][1], rows[2][2], rows[2][3], None)  # one unstamped
+    rows[2] = (rows[2][0], rows[2][1], rows[2][2], rows[2][3], None, "5:00")  # one unstamped
     svc = GoodNightService(FakeDB(rounds=rows, details=None))
     assert await svc.compute(9) is None
 
