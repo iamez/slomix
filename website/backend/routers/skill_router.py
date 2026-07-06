@@ -236,7 +236,7 @@ async def get_s_effort(session_date: str, db=Depends(get_db)):
     if not rows:
         return {"status": "ok", "available": False, "session_date": session_date}
     try:
-        await svc.persist_session(session_date)
+        await svc.persist_session(session_date, rows=rows)
     except Exception:  # persist is best-effort; the response is the compute
         import logging
         logging.getLogger(__name__).exception("s.effort persist failed")

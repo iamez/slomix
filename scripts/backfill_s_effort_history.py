@@ -47,7 +47,12 @@ class Shim:
 async def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true", help="write (else dry-run)")
+    ap.add_argument("--i-have-a-backup", action="store_true",
+                    help="required with --apply: confirms db_backup.sh was run")
     args = ap.parse_args()
+    if args.apply and not args.i_have_a_backup:
+        print("Refusing --apply without --i-have-a-backup (run scripts/db_backup.sh first).")
+        return 1
 
     conn = await asyncpg.connect(
         host=os.environ.get("POSTGRES_HOST", "127.0.0.1"),

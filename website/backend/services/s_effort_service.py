@@ -48,10 +48,8 @@ def s_performance(effort: float, lifetime_rating: float) -> float | None:
 def pool_strength_A(all_ratings: list[float], own_rating: float) -> float | None:
     """Variant A: mean lifetime rating of ALL participants, leave-one-out."""
     others = list(all_ratings)
-    try:
-        others.remove(own_rating)  # remove one instance of self
-    except ValueError:
-        pass
+    if own_rating in others:
+        others.remove(own_rating)  # leave-one-out: drop one instance of self
     return mean(others) if others else None
 
 
@@ -90,17 +88,24 @@ class SEffortService:
         self.db = db
 
     async def _roster(self, session_date: str) -> list[str] | None:
-        row = await self.db.fetch_one(
+        # UNION across ALL session_results rows for the date: on dates with
+        # more than one gaming session, compute_session_ratings scores the
+        # whole date (MIN(round_date) scoping), so the pool must match it
+        # (codex, PR #455).
+        rows = await self.db.fetch_all(
             "SELECT team_1_guids, team_2_guids FROM session_results "
-            "WHERE session_date = ? AND team_1_guids IS NOT NULL "
-            "ORDER BY id DESC LIMIT 1",
+            "WHERE session_date = ? AND team_1_guids IS NOT NULL",
             (session_date,),
         )
-        if not row:
-            return None
-        out = []
-        for col in (row[0], row[1]):
-            out += [g.upper() for g in json.loads(col) if g]
+        out: list[str] = []
+        seen = set()
+        for row in (rows or []):
+            for col in (row[0], row[1]):
+                for g in json.loads(col):
+                    gu = (g or "").upper()
+                    if gu and gu not in seen:
+                        seen.add(gu)
+                        out.append(gu)
         return out or None
 
     async def compute_session(self, session_date: str) -> list[dict] | None:
@@ -141,18 +146,39 @@ class SEffortService:
             })
         return out or None
 
-    async def persist_session(self, session_date: str) -> int:
-        """Idempotent persist into player_skill_history scope='session'."""
-        rows = await self.compute_session(session_date)
+    async def persist_session(self, session_date: str,
+                              rows: list[dict] | None = None) -> int:
+        """Idempotent persist into player_skill_history scope='session'.
+
+        Accepts precomputed rows (endpoint passes them — no double compute).
+        Deletes ALL of the date's scope='session' rows first so players who
+        dropped out of a corrected roster don't leave stale entries; wrapped
+        in a transaction when the adapter supports one (atomicity).
+        """
+        if rows is None:
+            rows = await self.compute_session(session_date)
         if not rows:
             return 0
-        for r in rows:
+
+        async def _write():
             await self.db.execute(
                 "DELETE FROM player_skill_history "
-                "WHERE player_guid = ? AND scope = 'session' AND session_date = ?",
-                (r["player_guid"], session_date),
+                "WHERE scope = 'session' AND session_date = ?",
+                (session_date,),
             )
-            await self.db.execute(
+            for r in rows:
+                await self._insert_row(session_date, r)
+
+        tx = getattr(self.db, "transaction", None)
+        if callable(tx):
+            async with tx():
+                await _write()
+        else:
+            await _write()
+        return len(rows)
+
+    async def _insert_row(self, session_date: str, r: dict) -> None:
+        await self.db.execute(
                 "INSERT INTO player_skill_history "
                 "(player_guid, scope, session_date, et_rating, rounds_in_scope, components) "
                 "VALUES (?, 'session', ?, ?, ?, ?)",
@@ -166,13 +192,23 @@ class SEffortService:
                      "formula_version": FORMULA_VERSION,
                  })),
             )
-        return len(rows)
 
     async def compute_adjusted_lifetime(self) -> list[dict]:
         """SRS adjusted lifetime from PERSISTED scope='session' rows."""
-        hist = await self.db.fetch_all(
-            "SELECT player_guid, session_date, et_rating FROM player_skill_history "
+        hist_all = await self.db.fetch_all(
+            "SELECT player_guid, session_date, et_rating, components "
+            "FROM player_skill_history "
             "WHERE scope = 'session' AND session_date IS NOT NULL")
+        # only rows written by the CURRENT formula — the version guarantee
+        # must hold on read, not just on write (Copilot, PR #455)
+        hist = []
+        for r in (hist_all or []):
+            try:
+                comp = json.loads(r[3]) if isinstance(r[3], str) else (r[3] or {})
+            except (TypeError, ValueError):
+                comp = {}
+            if comp.get("formula_version") == FORMULA_VERSION:
+                hist.append(r)
         life_rows = await self.db.fetch_all(
             "SELECT player_guid, display_name, et_rating FROM player_skill_ratings")
         life = {r[0].upper(): (r[1], float(r[2])) for r in (life_rows or [])}
