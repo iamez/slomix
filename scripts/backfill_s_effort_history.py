@@ -73,7 +73,7 @@ async def main() -> int:
     # can finalize across midnight (codex, PR #455 round 5)
     dates = [str(r[0])[:10] for r in await conn.fetch(
         "SELECT MIN(SUBSTRING(round_date, 1, 10)) AS d FROM rounds "
-        "WHERE gaming_session_id IS NOT NULL "
+        "WHERE gaming_session_id IS NOT NULL AND is_valid "
         "GROUP BY gaming_session_id ORDER BY d")]
     dates = sorted(set(dates))
     mode = "APPLY" if args.apply else "DRY-RUN"

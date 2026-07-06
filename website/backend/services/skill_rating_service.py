@@ -483,7 +483,7 @@ async def compute_session_ratings(db, player_guid: str, session_date: str,
               -- gap would flow into adjusted lifetime — PR #455)
               SELECT id FROM rounds WHERE is_valid AND gaming_session_id IN (
                   SELECT gaming_session_id FROM rounds
-                  WHERE gaming_session_id IS NOT NULL
+                  WHERE gaming_session_id IS NOT NULL AND is_valid
                   GROUP BY gaming_session_id HAVING MIN(round_date) = $2
               )
           )
@@ -545,7 +545,7 @@ async def compute_session_map_ratings(db, player_guid: str, session_date: str,
           AND round_id IN (
               SELECT id FROM rounds WHERE is_valid AND gaming_session_id IN (
                   SELECT gaming_session_id FROM rounds
-                  WHERE gaming_session_id IS NOT NULL
+                  WHERE gaming_session_id IS NOT NULL AND is_valid
                   GROUP BY gaming_session_id HAVING MIN(round_date) = $2
               )
           )
@@ -643,7 +643,7 @@ async def get_player_session_history(db, player_guid: str,
               AND round_id IN (
                   SELECT id FROM rounds WHERE is_valid AND gaming_session_id IN (
                       SELECT gaming_session_id FROM rounds
-                      WHERE gaming_session_id IS NOT NULL
+                      WHERE gaming_session_id IS NOT NULL AND is_valid
                       GROUP BY gaming_session_id HAVING MIN(round_date) <= $2
                   )
               )

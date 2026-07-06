@@ -110,7 +110,7 @@ class SEffortService:
             "  AND p.player_name NOT LIKE '[BOT]%' "
             "  AND r.gaming_session_id IN ("
             "    SELECT gaming_session_id FROM rounds "
-            "    WHERE gaming_session_id IS NOT NULL "
+            "    WHERE gaming_session_id IS NOT NULL AND is_valid "
             "    GROUP BY gaming_session_id "
             "    HAVING MIN(SUBSTRING(round_date, 1, 10)) = ?)",
             (session_date,),
