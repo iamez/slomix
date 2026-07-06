@@ -20,20 +20,30 @@
    3 kills in 13.25s as last man alive**.
 2. `proximity_combat_position` streams ONLY kill events — "3 enemies entered the
    room" requires `player_track.path` replay (200ms) + geo-test against the Lua's
-   hardcoded objective coords (escape2 documents @ −676,672,108, r=500).
+   hardcoded objective coords (escape2 documents @ -676,672,108, r=500).
 3. Engine limits (koš D): no fireteam API, partial comms; crosshair-target trace
    unverified. v7 `spawn_select/skill_snapshot/comm_events` dormant. `aim_lock` IS
    live (since 06-22) but is NOT linked to kill events yet → reflex-TTK is a gap.
 4. Hardware latency ≈50ms swings → reflex metrics are RELATIVE within our group,
    never absolute; and decision quality > raw speed below elite (research: pros
    140–180ms; consistency beats peak).
+5. **200ms sampling quantization (owner call-out):** `player_track.path` and every
+   metric derived from it (dodge_reaction_ms via ≥45° direction change,
+   time_to_first_move_ms, any path-replay area-entry) tick at the Lua's 200ms
+   `et_RunFrame` sampler → ±200ms resolution. Kill/damage/spawn events
+   (et_Obituary/et_Damage/et_ClientSpawn) are event-driven and exact.
+   Consequences: (a) never rank reflexes on differences <200ms — use buckets or
+   medians over many samples; (b) return_fire_ms (damage-event based) is finer
+   than dodge_reaction_ms (path based) — don't mix them in one number;
+   (c) time-joins between event tables and path data need ≥±200ms tolerance
+   (our kill_impact↔combat_position join uses ±300ms for this reason).
 
 ## 1. What already exists (extend, don't rebuild)
 
 | Building block | Where | State |
 |---|---|---|
-| **1vN clutch detector** (fight-scoped: death leaves 1 vs ≥2, friendly wave ≥5s away; won = survive/trade-up) | `proximity_competitive.py:535 _detect_clutches` + `/competitive/clutch` | HTTP-only, never persisted/aggregated |
-| **Per-player situational card** (clutch+man-advantage+stagger+side-splits) | `proximity_competitive.py:877 /player-card` | nascent "Comp Skill card", HTTP-only |
+| **1vN clutch detector** (fight-scoped: death leaves 1 vs ≥2, friendly wave ≥5s away; won = survive/trade-up) | `website/backend/routers/proximity_competitive.py:535 _detect_clutches` + `GET /api/proximity/competitive/clutch` | HTTP-only, never persisted/aggregated |
+| **Per-player situational card** (clutch+man-advantage+stagger+side-splits) | `website/backend/routers/proximity_competitive.py:877` (`GET /api/proximity/competitive/player-card`) | nascent "Comp Skill card", HTTP-only |
 | **KIS v2** — per-kill contextual value (carrier 3.0 / chain 5.0, push, crossfire, spawn, outcome, class, health <30→1.3, alive 1v3+→2.0, 7-tier reinf) | `storytelling/kis.py:148`, constants `base.py:47-95` | shipped, persisted per kill with all sub-multipliers; `distance_multiplier` + `is_objective_area` slots STUBBED |
 | **Doc return by player + timestamp** | `proximity_carrier_return` (419 rows; e.g. immoo 325ms after drop) | captured, unscored |
 | **Combat reflex under fire** — `return_fire_ms`, `dodge_reaction_ms`, `support_reaction_ms`, `num_attackers`, outcome | `proximity_reaction_metric` (87k rows) | captured, scored NOWHERE |

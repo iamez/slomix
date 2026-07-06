@@ -90,24 +90,30 @@ async def main() -> None:
     """):
         returns[r[0]].append((r[1], int(r[2] or 0)))
 
-    # ---- chain detection: consecutive kills, same killer+round, side alive==1
-    chains = []
-    cur = None
+    # ---- chain detection: group per (round, killer) FIRST, then chain in time.
+    # Chaining over the global chronological stream fragments a player's chain
+    # whenever ANOTHER player's kill interleaves (owner error-check, 2026-07-06).
+    by_killer: dict = defaultdict(list)
     for r in rows:
         side_alive = r["axis_alive"] if r["team"] == "AXIS" else r["allies_alive"]
         if side_alive != 1:
-            cur = None
             continue
-        enemies = r["allies_alive"] if r["team"] == "AXIS" else r["axis_alive"]
-        key = (r["round_start_unix"], r["g8"])
-        if cur and cur["key"] == key and r["kill_time_ms"] - cur["t1"] <= CHAIN_WINDOW_MS:
-            cur["kills"].append(r)
-            cur["t1"] = r["kill_time_ms"]
-            cur["max_enemies"] = max(cur["max_enemies"], enemies)
-        else:
-            cur = {"key": key, "t0": r["kill_time_ms"], "t1": r["kill_time_ms"],
-                   "kills": [r], "max_enemies": enemies, "meta": r}
-            chains.append(cur)
+        by_killer[(r["round_start_unix"], r["g8"])].append(r)
+
+    chains = []
+    for _key, krows in by_killer.items():
+        krows.sort(key=lambda r: r["kill_time_ms"])
+        cur = None
+        for r in krows:
+            enemies = r["allies_alive"] if r["team"] == "AXIS" else r["axis_alive"]
+            if cur and r["kill_time_ms"] - cur["t1"] <= CHAIN_WINDOW_MS:
+                cur["kills"].append(r)
+                cur["t1"] = r["kill_time_ms"]
+                cur["max_enemies"] = max(cur["max_enemies"], enemies)
+            else:
+                cur = {"t0": r["kill_time_ms"], "t1": r["kill_time_ms"],
+                       "kills": [r], "max_enemies": enemies, "meta": r}
+                chains.append(cur)
 
     scored = []
     for c in chains:
@@ -127,7 +133,7 @@ async def main() -> None:
             OUT_LOSS if rsu in winner else 1.0)
         value = kis_sum * n_mult(c["max_enemies"]) * stake * out
         ret_note = ""
-        for fteam, rt in returns.get(rsu, []):
+        for _fteam, rt in returns.get(rsu, []):
             if 0 <= rt - c["t1"] <= 30_000:
                 value *= 1 + RETURN_BONUS
                 ret_note = " +docs returned"
