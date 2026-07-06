@@ -90,8 +90,11 @@ async def main():
 
         # --- hours ---
         stamped = [r for r in rounds if r["round_start_unix"]]
-        if not stamped or not d:
-            continue  # can't time-scope this session — skip rather than guess
+        # PARTIAL stamps are as bad as none: hours/KIS/gaps would cover only
+        # the stamped subset while maps count everything -> inflated story
+        # density and missed gaps (codex, PR #449). Skip rather than guess.
+        if len(stamped) != len(rounds) or not stamped or not d:
+            continue
         t0 = min(r["round_start_unix"] for r in stamped)
         t1 = max(r["round_start_unix"] + r["secs"] for r in stamped)
         hours = max(0.5, (t1 - t0) / 3600.0)

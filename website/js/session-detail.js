@@ -367,6 +367,7 @@ export async function loadSessionDetailView({ sessionId, sessionDate, tab } = {}
 
         _renderShell(container);
         _activateTab(_initialTab);
+        _loadGoodNightCard().catch((e) => console.warn('good night card failed', e));
         _loadVerdictStrip().catch((e) => console.warn('verdict strip failed', e));
         _loadMomentsStrip().catch((e) => console.warn('moments strip failed', e));
         _loadMvpPanel().catch((e) => console.warn('mvp panel failed', e));
@@ -469,6 +470,35 @@ const _VERDICT_STYLES = {
     Subpar: 'text-amber-400 border-amber-400/30 bg-amber-400/10',
     New: 'text-brand-purple border-brand-purple/30 bg-brand-purple/10',
 };
+
+// Good Night Index — rates the EVENING (not players): one score + reason
+// chips. Optional enrichment like the verdict/moments strips: any failure or
+// unavailable result leaves the page untouched.
+async function _loadGoodNightCard() {
+    const host = document.getElementById('sd-good-night');
+    if (!host || !_sessionId) return;
+    let data;
+    try {
+        data = await fetchJSON(`${API_BASE}/stats/session/${_sessionId}/good-night`);
+    } catch (_) {
+        return;
+    }
+    if (!data?.available) return;
+    const score = num(data.score, 0);
+    const tone = score >= 80 ? 'text-emerald-400' : score >= 60 ? 'text-brand-cyan' : 'text-slate-300';
+    const chips = (data.reasons || []).map(r => `
+        <span class="text-[10px] px-2 py-1 rounded-full bg-slate-800/80 border border-white/10 text-slate-300 shrink-0">${escapeHtml(r)}</span>`).join('');
+    host.innerHTML = `
+        <div class="glass-panel rounded-xl p-4 flex items-center gap-4 flex-wrap">
+            <div class="flex items-baseline gap-2"
+                 title="How good was the evening itself — team balance, tension, turnout, moments, flow and variety. Rates the night, never a player.">
+                <span class="text-[11px] uppercase tracking-wider text-slate-500 font-bold">Good Night</span>
+                <span class="text-2xl font-black ${tone}">${score}</span>
+                <span class="text-xs text-slate-500">/100</span>
+            </div>
+            <div class="flex gap-1.5 overflow-x-auto">${chips}</div>
+        </div>`;
+}
 
 async function _loadVerdictStrip() {
     const host = document.getElementById('sd-verdict-strip');
@@ -743,6 +773,9 @@ function _renderShell(container) {
                 </div>
             </div>
         </div>
+
+        <!-- Good Night: one score for the EVENING itself (Good Night plan, Phase 1) -->
+        <div id="sd-good-night" class="mb-6"></div>
 
         <!-- Verdict strip: how was the night, per player vs OWN form (S1.4) -->
         <div id="sd-verdict-strip" class="mb-6"></div>
