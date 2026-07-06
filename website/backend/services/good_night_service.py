@@ -82,6 +82,10 @@ class GoodNightService:
                         draws += 1
             except (TypeError, ValueError):
                 has_details = False
+            # all maps uncounted (e.g. roster-ambiguous night) carries no
+            # win/loss signal — treat like missing details (codex round 4)
+            if wins_a + wins_b + draws == 0:
+                has_details = False
 
         # balance (neutral 50 when the win/loss signal is unavailable)
         map_closeness = (100 - min(100, abs(wins_a - wins_b) * 25)) if has_details else 50
