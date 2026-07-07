@@ -1020,6 +1020,10 @@ class UltimateETLegacyBot(
                     db_manager.pool = self.db_adapter.pool
                 else:
                     await db_manager.connect()
+                    # connect() no longer migrates implicitly (#461): this
+                    # fallback WRITES via process_file(), so keep the
+                    # migrated-before-write guarantee explicitly
+                    await db_manager.migrate_schema()
 
                 success, message = await db_manager.process_file(Path(local_path))
 

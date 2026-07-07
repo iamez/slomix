@@ -225,6 +225,11 @@ class PostgreSQLDatabaseManager:
 
     async def migrate_schema(self):
         """Explicitly apply in-manager schema migrations (owner-visible step)."""
+        if not self.pool:
+            raise RuntimeError(
+                "migrate_schema() requires a connection — call connect() "
+                "(or inject a pool) first"
+            )
         await self._migrate_schema_if_needed()
 
     async def disconnect(self):
@@ -1364,7 +1369,7 @@ class PostgreSQLDatabaseManager:
             if has_processed_endstats:
                 # Keep only the newest row per round_id before creating unique index.
                 dupes = await conn.fetchval("""
-                    SELECT COUNT(*) FROM processed_endstats_files older
+                    SELECT COUNT(DISTINCT older.id) FROM processed_endstats_files older
                     JOIN processed_endstats_files newer
                       ON newer.round_id = older.round_id
                      AND newer.id > older.id
@@ -3141,9 +3146,10 @@ async def main():
     manager = PostgreSQLDatabaseManager()
     await manager.connect()
 
-    # Schema migrations are explicit now: run them for flows that create or
-    # import data; "validate" (5) stays strictly read-only.
-    if choice in {"1", "2", "3", "4", "6"}:
+    # Schema migrations are explicit now: run them for flows that import
+    # data; "validate" (5) stays strictly read-only and option 1
+    # (create_fresh_database) already migrates internally.
+    if choice in {"2", "3", "4", "6"}:
         await manager.migrate_schema()
 
     try:
