@@ -174,11 +174,16 @@ async function loadStoryData() {
             if (loadId === storyLoadId) renderWinContribution(pwcData);
         }).catch(() => renderWinContribution(null));
 
-        fetchJSON(
-            `${API_BASE}/skill/composite?session_date=${encodeURIComponent(storyState.sessionDate)}`
-        ).then(compData => {
-            if (loadId === storyLoadId) renderAdvancedMetrics(compData);
-        }).catch(() => renderAdvancedMetrics(null));
+        // Advanced metrics + Comp Skill board render into the SAME container,
+        // sequentially (renderAdvancedMetrics clears it) — so fetch together.
+        Promise.allSettled([
+            fetchJSON(`${API_BASE}/skill/composite?session_date=${encodeURIComponent(storyState.sessionDate)}`),
+            fetchJSON(`${API_BASE}/skill/ssr`),
+        ]).then(([comp, ssr]) => {
+            if (loadId !== storyLoadId) return;
+            renderAdvancedMetrics(comp.status === 'fulfilled' ? comp.value : null);
+            renderCompSkillBoard(ssr.status === 'fulfilled' ? ssr.value : null);
+        });
 
         // Box Score
         const enc = encodeURIComponent(storyState.sessionDate);
@@ -1255,6 +1260,42 @@ const PWC_COMPONENTS = [
     { key: 'trade',      label: 'Trades',     color: 'bg-orange-500' },
     { key: 'clutch',     label: 'Clutch',     color: 'bg-pink-500' },
 ];
+
+function renderCompSkillBoard(data) {
+    // Comp Skill (SSR v0) + reactions in Smart Stats (owner answer A3:
+    // "bi rad videl tudi to v nekih statsih"). ALL-TIME and group-relative —
+    // appended below the per-session Advanced Metrics, clearly labeled.
+    const container = document.getElementById('story-advanced-metrics');
+    if (!container || !data?.players?.length) return;
+
+    const header = _el('div', 'flex items-center gap-3 mb-4 mt-8');
+    header.appendChild(_el('div', 'w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-rose-600 flex items-center justify-center text-white text-sm font-bold', 'CS'));
+    const headerText = _el('div', '');
+    headerText.appendChild(_el('h3', 'text-lg font-bold text-white', 'Comp Skill & Reactions'));
+    headerText.appendChild(_el('p', 'text-xs text-slate-400',
+        `Situational Skill Rating ${data.formula_version || ''} — all-time, percentile vs rated group (min ${data.min_sessions} sessions)`));
+    header.appendChild(headerText);
+    container.appendChild(header);
+
+    const ms = (comp) => (comp && comp.raw != null) ? `${Math.round(comp.raw)}ms` : '—';
+    data.players.slice(0, 10).forEach((p, i) => {
+        const row = _el('div', 'glass-card rounded-xl px-4 py-2 mb-2 flex items-center justify-between');
+        const left = _el('div', 'flex items-center gap-3');
+        left.appendChild(_el('span', 'text-xs font-mono text-slate-500 w-5', `${i + 1}.`));
+        left.appendChild(_el('span', 'text-sm font-bold text-white', stripEtColors(p.name || p.player_guid)));
+        left.appendChild(_el('span', 'text-[10px] text-slate-500', p.coverage));
+        row.appendChild(left);
+        const right = _el('div', 'flex items-center gap-4 font-mono text-xs');
+        const c = p.components || {};
+        right.appendChild(_el('span', 'text-cyan-300', `acq ${ms(c.target_acq_ms)}`));
+        right.appendChild(_el('span', 'text-emerald-300', `spawn ${ms(c.spawn_ready_ms)}`));
+        right.appendChild(_el('span', 'text-amber-300 font-bold text-sm', Number(p.ssr).toFixed(3)));
+        row.appendChild(right);
+        container.appendChild(row);
+    });
+    container.appendChild(_el('p', 'text-[10px] text-slate-600 mt-1',
+        'Reaction medians ride a ~200ms telemetry grid and mix ping/hardware — compare ranks, not milliseconds.'));
+}
 
 function renderWinContribution(data) {
     const container = document.getElementById('story-win-contribution');
