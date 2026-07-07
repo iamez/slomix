@@ -502,6 +502,24 @@ async def get_lua_webhook_diagnostics(
     return payload
 
 
+@router.get("/formulas")
+async def list_formulas(_admin=Depends(require_admin_user)):
+    """Central formula registry: every scoring formula, its live version,
+    code location, surface and status (live/research/proposed). Owner answer
+    B6 (2026-07-07) — versions are imported from the owning modules so this
+    endpoint cannot drift from the code."""
+    from website.backend.services.formula_registry import (
+        REGISTRY_VERSION,
+        get_registry,
+    )
+    formulas = get_registry()
+    return {
+        "registry_version": REGISTRY_VERSION,
+        "count": len(formulas),
+        "formulas": formulas,
+    }
+
+
 @router.get("/diagnostics/round-linkage")
 async def get_round_linkage_diagnostics(
     sample_limit: int = Query(default=20, ge=1, le=200),
