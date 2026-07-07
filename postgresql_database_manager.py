@@ -196,7 +196,14 @@ class PostgreSQLDatabaseManager:
     # =========================================================================
 
     async def connect(self):
-        """Connect to PostgreSQL"""
+        """Connect to PostgreSQL (connection ONLY — no schema mutation).
+
+        Schema migrations used to run implicitly here, so merely opening a
+        connection could ALTER tables and delete duplicate rows (Codex audit
+        finding 3). Mutation is now an explicit step: call migrate_schema()
+        where the flow actually needs it (the interactive CLI does this for
+        import/rebuild flows; validate stays read-only).
+        """
         if self.pool:
             return
 
@@ -212,12 +219,18 @@ class PostgreSQLDatabaseManager:
             )
             logger.info(f"✅ Connected to PostgreSQL: {self.config.postgres_host}/{self.config.postgres_database}")
 
-            # Run schema migrations after connecting
-            await self._migrate_schema_if_needed()
-
         except Exception as e:
             logger.error(f"❌ Failed to connect to PostgreSQL: {e}")
             raise
+
+    async def migrate_schema(self):
+        """Explicitly apply in-manager schema migrations (owner-visible step)."""
+        if not self.pool:
+            raise RuntimeError(
+                "migrate_schema() requires a connection — call connect() "
+                "(or inject a pool) first"
+            )
+        await self._migrate_schema_if_needed()
 
     async def disconnect(self):
         """Disconnect from PostgreSQL"""
@@ -1355,6 +1368,16 @@ class PostgreSQLDatabaseManager:
             """)
             if has_processed_endstats:
                 # Keep only the newest row per round_id before creating unique index.
+                dupes = await conn.fetchval("""
+                    SELECT COUNT(DISTINCT older.id) FROM processed_endstats_files older
+                    JOIN processed_endstats_files newer
+                      ON newer.round_id = older.round_id
+                     AND newer.id > older.id
+                    WHERE older.round_id IS NOT NULL
+                      AND older.success = TRUE AND newer.success = TRUE
+                """)
+                if dupes:
+                    logger.info(f"   🔧 processed_endstats_files dedupe will delete {dupes} duplicate row(s)")
                 dedupe_result = await conn.execute("""
                     DELETE FROM processed_endstats_files older
                     USING processed_endstats_files newer
@@ -3122,6 +3145,12 @@ async def main():
 
     manager = PostgreSQLDatabaseManager()
     await manager.connect()
+
+    # Schema migrations are explicit now: run them for flows that import
+    # data; "validate" (5) stays strictly read-only and option 1
+    # (create_fresh_database) already migrates internally.
+    if choice in {"2", "3", "4", "6"}:
+        await manager.migrate_schema()
 
     try:
         if choice == "1":
