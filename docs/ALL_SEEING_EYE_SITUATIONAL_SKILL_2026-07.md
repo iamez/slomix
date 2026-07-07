@@ -151,10 +151,13 @@ quantization grid AND the split-half (session-parity) ordering is stable.
 
 | metric | rated | events | spread | split-half | verdict |
 |---|---|---|---|---|---|
-| Target acquisition (aim-lock onset→kill, since 2026-06-11) | 10 | 1,433 | 275 ms | +0.60 (n=6) | **USABLE** |
-| Reaction under fire — return fire | 15 | 37,265 | 100 ms | +0.62 (n=13) | not usable alone (spread < grid) |
-| Reaction under fire — dodge | 15 | 55,351 | 154 ms | +1.00 (n=13) | not usable alone (spread < grid) |
-| Spawn readiness (time to first move) | 17 | 40,188 | 327 ms | +0.98 (n=13) | **USABLE** |
+| Target acquisition (aim-lock onset→kill, since 2026-06-11) | 10 | 1,433 | 275 ms | +0.70 (n=6) | **USABLE** |
+| Reaction under fire — return fire | 15 | 37,265 | 100 ms | +0.70 (n=13) | not usable alone (spread < grid) |
+| Reaction under fire — dodge | 15 | 55,351 | 154 ms | n/a (fully tied medians) | not usable alone (spread < grid) |
+| Spawn readiness (time to first move) | 17 | 40,188 | 327 ms | +0.85 (n=13) | **USABLE** |
+
+Stability values are tie-aware Spearman (average ranks); fully tied grid-level
+medians report n/a rather than a spurious +1.00 (codex, PR #458).
 
 Highlights (medians): target acquisition KaNii 850 ms fastest → qmr 1,125 ms;
 return fire bronze 200 ms → ownator 300 ms (ordering stable but differences

@@ -66,16 +66,28 @@ def _rank_map(items: list[tuple[str, float]]) -> dict[str, float]:
 
 
 def _spearman(xs: list[float], ys: list[float]) -> float | None:
-    """Spearman rank correlation without scipy (n>=4 to mean anything)."""
+    """Tie-aware Spearman (average ranks) without scipy.
+
+    Returns None below n=4 or when either half has no distinct values —
+    with ~200ms-quantized telemetry fully-tied medians are common, and
+    insertion-order ranks would report a false +1.00 "stability".
+    """
     n = len(xs)
-    if n < 4:
+    if n < 4 or len(set(xs)) < 2 or len(set(ys)) < 2:
         return None
 
     def ranks(v):
         order = sorted(range(n), key=lambda i: v[i])
         r = [0.0] * n
-        for pos, i in enumerate(order):
-            r[i] = pos + 1.0
+        pos = 0
+        while pos < n:
+            end = pos
+            while end + 1 < n and v[order[end + 1]] == v[order[pos]]:
+                end += 1
+            avg = (pos + end) / 2 + 1.0  # average rank across the tie run
+            for k in range(pos, end + 1):
+                r[order[k]] = avg
+            pos = end + 1
         return r
 
     rx, ry = ranks(xs), ranks(ys)
@@ -101,13 +113,20 @@ async def load_events(conn) -> dict[str, dict]:
         FROM proximity_aim_lock al
         JOIN proximity_kill_outcome ko
           ON ko.round_start_unix = al.round_start_unix
+         AND ko.session_date = al.session_date
+         AND ko.round_number = al.round_number
          AND ko.killer_guid_canonical = al.guid_canonical
          AND UPPER(SUBSTRING(ko.victim_guid, 1, 8)) =
              UPPER(SUBSTRING(al.target_guid, 1, 8))
          AND ko.kill_time BETWEEN al.start_time
                               AND al.end_time + {ACQ_KILL_WINDOW_MS}
         LEFT JOIN rounds r ON r.id = al.round_id
+        LEFT JOIN rounds rk ON rk.id = ko.round_id
         WHERE (r.id IS NULL OR r.is_valid)
+          AND (rk.id IS NULL OR rk.is_valid)
+          -- 0 = missing round metadata; such buckets conflate unrelated
+          -- rounds (see round-linker regression coverage) — never join them
+          AND al.round_start_unix > 0
           AND al.guid NOT LIKE $1 AND al.player_name NOT LIKE $2
           AND ko.kill_time > al.start_time
         GROUP BY al.id, al.guid_canonical, al.session_date, ko.kill_time
@@ -180,10 +199,17 @@ def summarize(metric: str, data: dict, min_events: int,
     return rated
 
 
-def stability(data: dict, min_events: int) -> tuple[float | None, int]:
-    """Split-half: odd/even session parity medians, Spearman across players."""
+def stability(data: dict, min_events: int,
+              rated_guids: set[str]) -> tuple[float | None, int]:
+    """Split-half: odd/even session parity medians, Spearman across players.
+
+    Restricted to the SAME player set as the rated leaderboard (total
+    n >= min_events), then additionally requires enough events per half.
+    """
     xs, ys = [], []
-    for d in data.values():
+    for g, d in data.items():
+        if g not in rated_guids:
+            continue
         by_sess: dict[str, list[float]] = defaultdict(list)
         for sd, v in d["events"]:
             by_sess[sd].append(v)
@@ -203,7 +229,7 @@ def print_table(title: str, rated: list[dict], unit: str = "ms") -> list[str]:
     for i, r in enumerate(rated):
         lines.append(
             f"{i + 1:>3} {(_clean(r['name']) or r['guid'])[:20]:<20} "
-            f"{r['median']:>7.0f}{unit[0]} {r['p25']:>7.0f} {r['p75']:>7.0f} "
+            f"{r['median']:>6.0f}{unit} {r['p25']:>7.0f} {r['p75']:>7.0f} "
             f"{r['n']:>6} {r['sessions']:>5} {r['pct_rank']:>6.3f}")
     print("\n".join(lines))
     return lines
@@ -255,8 +281,8 @@ async def main() -> int:
             dline = (f"   median spread best->worst: {spread:.0f}ms -> {disc}")
             print(dline)
             md.append(dline)
-        corr, n_pairs = stability(data[key], mn)
-        verdict = ("n/a (too few players)" if corr is None else
+        corr, n_pairs = stability(data[key], mn, {r["guid"] for r in rated})
+        verdict = ("n/a (too few players or fully tied medians)" if corr is None else
                    f"{corr:+.2f} ({'STABLE' if corr >= 0.5 else 'WEAK — treat as descriptive'})")
         line = f"   split-half stability (session parity, n={n_pairs} players): {verdict}"
         print(line)
@@ -270,10 +296,12 @@ async def main() -> int:
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     csv_path = out / "target_acq_v01.csv"
+    fieldnames = ["metric", "guid", "name", "n", "sessions", "median",
+                  "p25", "p75", "pct_rank", "formula_version"]
     with csv_path.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(csv_rows[0].keys()))
+        w = csv.DictWriter(f, fieldnames=fieldnames)
         w.writeheader()
-        w.writerows(csv_rows)
+        w.writerows(csv_rows)  # header-only file when nothing met thresholds
     md_path = out / "target_acq_v01.md"
     md_path.write_text("\n".join(md) + "\n")
     print(f"\nwrote {csv_path} and {md_path}")
