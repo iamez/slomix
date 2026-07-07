@@ -25,6 +25,8 @@ from __future__ import annotations
 import datetime as _dt
 from datetime import date
 
+from website.backend.utils.et_constants import strip_et_colors
+
 FORMULA_VERSION = "ois-v0.1"
 
 DOC_RETURN_BASE = 3.0
@@ -115,11 +117,16 @@ class OisService:
         )
         kill_times: dict[int, list[int]] = {}
         for k in kills or []:
-            kill_times.setdefault(int(k[0] or 0), []).append(int(k[1] or 0))
+            if k[0]:  # skip unknown-round kills (see _contested)
+                kill_times.setdefault(int(k[0]), []).append(int(k[1] or 0))
 
         def _contested(rsu, t) -> bool:
+            # unknown round identity (0/None) must never bucket cross-round
+            # kills together — treat as not contested
+            if not rsu:
+                return False
             return any(abs(kt - int(t or 0)) <= CONTESTED_WINDOW_MS
-                       for kt in kill_times.get(int(rsu or 0), ()))
+                       for kt in kill_times.get(int(rsu), ()))
 
         players: dict[str, dict] = {}
 
@@ -129,10 +136,10 @@ class OisService:
                 "doc_returns": 0, "defuses": 0, "constructions": 0,
                 "formula_version": FORMULA_VERSION,
             })
-            p["ois_total"] = round(p["ois_total"] + score, 3)
+            p["ois_total"] += score  # raw float; rounded once at the end
             p[kind] += 1
             if name:
-                p["name"] = name
+                p["name"] = strip_et_colors(name)
 
         for r in returns or []:
             _acc(r[0], r[1], "doc_returns", doc_return_score(r[2]))
@@ -143,5 +150,7 @@ class OisService:
                 _acc(e[0], e[1], "constructions",
                      construction_score(_contested(e[3], e[4])))
 
+        for p in players.values():
+            p["ois_total"] = round(p["ois_total"], 3)
         out = sorted(players.values(), key=lambda p: -p["ois_total"])
         return out
