@@ -28,7 +28,9 @@ Shrani pot — restore točka za A3/A4.
 ```
 # Nova release tag NIMA scripts/release_configs/<TAG>.sh — brez obeh skip
 # flagov se deploy ustavi pred checkoutom (per-release-config guard):
-./scripts/deploy_release.sh <TAG> --skip-migrations --skip-flags
+# brez NOPASSWD sudoja MORA biti SUDO_PASS nastavljen, sicer se deploy
+# ustavi na service stop/start koraku ("re-run with SUDO_PASS=<pass>"):
+SUDO_PASS='<sudo geslo VM userja>' ./scripts/deploy_release.sh <TAG> --skip-migrations --skip-flags
 BASE_URL=https://www.slomix.fyi ./scripts/verify_post_deploy.sh
 ```
 Opombe:
@@ -47,6 +49,7 @@ s.effort (codexov P1 na tem checklistu). Predpogoj: PostgreSQL driver
 ```
 ssh slomix-vm
 cd /opt/slomix
+set -a; . .env; set +a          # skripte berejo POSTGRES_* iz okolja!
 venv-web/bin/python scripts/backfill_orphan_r2.py            # dry-run (~42 rund)
 venv-web/bin/python scripts/backfill_orphan_r2.py --apply
 ```
@@ -59,7 +62,7 @@ teči nad prečiščenimi ratingi:
 ```
 # curl NI dovolj: auto-refresh teče samo ob stale >1h, torej lahko po deployu
 # vrne stare vrstice. Recompute FORSIRAJ direktno (piše v DB):
-cd /opt/slomix && venv-web/bin/python -c "
+cd /opt/slomix && set -a && . .env && set +a && venv-web/bin/python -c "
 import asyncio
 from website.backend.dependencies import get_db_pool, init_db_pool
 from website.backend.services.skill_rating_service import compute_and_store_ratings
@@ -76,6 +79,7 @@ psql ... -c "SELECT COUNT(*) FILTER (WHERE player_guid LIKE 'OMNIBOT%'), MAX(las
 ```
 ssh slomix-vm
 cd /opt/slomix
+set -a; . .env; set +a          # backfill bere POSTGRES_* iz okolja (P1!)
 # s.effort session history (v0.2; idempotenten, formula_version stamped)
 venv-web/bin/python scripts/backfill_s_effort_history.py                  # dry-run najprej
 venv-web/bin/python scripts/backfill_s_effort_history.py --apply --i-have-a-backup
