@@ -34,15 +34,26 @@ Opombe:
   populated-DB-brez-trackinga zdaj ODKLONI apply (na prod tracking obstaja,
   torej brez spremembe).
 
-## A2b — ET Rating refresh (OBVEZNO PRED s.effort backfillom!)
-s.effort bere lifetime rating iz `player_skill_ratings`; prvi refresh po
-deployu prečisti OMNIBOT vnose in preračuna percentile brez botov (ratingi
-±0.13, populacija ~40→~26 ljudi — pričakovano, C7). Backfill MORA teči nad
-prečiščenimi ratingi, sicer persistira s.effort proti starim vrednostim:
+## A2b — Orphan R2 označevanje (PRED vsakim rating preračunom!)
+Orphan R2 vrstice so do označbe `is_valid=TRUE` in bi ušle v percentile ter
+s.effort (codexov P1 na tem checklistu). Predpogoj: PostgreSQL driver
+`psycopg2`/`psycopg` ni pinned v requirements — preveri
+`python3 -c "import psycopg2"` (sicer `pip install psycopg2-binary` v venv).
+```
+cd /opt/slomix
+venv/bin/python scripts/backfill_orphan_r2.py            # dry-run (~42 rund)
+venv/bin/python scripts/backfill_orphan_r2.py --apply
+```
+
+## A2c — ET Rating refresh (OBVEZNO PRED s.effort backfillom!)
+s.effort bere lifetime rating iz `player_skill_ratings`; forsiran recompute
+prečisti OMNIBOT vnose in preračuna percentile brez botov in brez orphan rund
+(ratingi ±0.13, populacija ~40→~26 ljudi — pričakovano, C7). Backfill MORA
+teči nad prečiščenimi ratingi:
 ```
 # curl NI dovolj: auto-refresh teče samo ob stale >1h, torej lahko po deployu
 # vrne stare vrstice. Recompute FORSIRAJ direktno (piše v DB):
-cd /home/etbot/slomix_discord && venv/bin/python -c "
+cd /opt/slomix && venv/bin/python -c "
 import asyncio
 from website.backend.dependencies import get_db_pool, init_db_pool
 from website.backend.services.skill_rating_service import compute_and_store_ratings
@@ -55,22 +66,17 @@ asyncio.run(main())"
 psql ... -c "SELECT COUNT(*) FILTER (WHERE player_guid LIKE 'OMNIBOT%'), MAX(last_rated_at) FROM player_skill_ratings"
 ```
 
-## A3 — Prod backfilli (owner-gated, po A1 backupu IN A2b refreshu)
-Predpogoj za orphan skripto: PostgreSQL driver `psycopg2`/`psycopg` ni pinned
-v requirements — preveri `python3 -c "import psycopg2"` (sicer
-`pip install psycopg2-binary` v venv).
+## A3 — s.effort backfill (owner-gated; po A1 backupu, A2b orphanih in A2c refreshu)
 ```
-# 1) s.effort session history (v0.2; idempotenten, formula_version stamped)
-python3 scripts/backfill_s_effort_history.py                  # dry-run najprej
-python3 scripts/backfill_s_effort_history.py --apply --i-have-a-backup
+cd /opt/slomix
+# s.effort session history (v0.2; idempotenten, formula_version stamped)
+venv/bin/python scripts/backfill_s_effort_history.py                  # dry-run najprej
+venv/bin/python scripts/backfill_s_effort_history.py --apply --i-have-a-backup
 # dev referenca: 819 vrstic / 29 igralcev / 118 sej
 
-# 2) orphan R2 označevanje (C4 — ~42 rund na prod)
-python3 scripts/backfill_orphan_r2.py                         # dry-run najprej
-python3 scripts/backfill_orphan_r2.py --apply
 ```
 
-## A4 — Verifikacija (read-only: leaderboard je bil osvežen že v A2b)
+## A4 — Verifikacija (read-only: recompute je bil forsiran že v A2c)
 ```
 curl -s "https://www.slomix.fyi/api/skill/leaderboard" | head -c 200   # brez OMNIBOT
 curl -s "https://www.slomix.fyi/api/skill/s-effort?session_date=<zadnja seja>"
