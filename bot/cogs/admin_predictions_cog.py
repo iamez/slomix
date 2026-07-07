@@ -50,11 +50,12 @@ class AdminPredictionsCog(commands.Cog, name="Admin Predictions"):
         owner decision 2026-07-07: require the admin channel plus the same
         user_permissions tier the rest of the admin surface checks.
         """
-        if ctx.channel.id not in self.config.admin_channels:
-            return False
-
+        # Root bypass first — the owner is not channel-gated
         if ctx.author.id == getattr(ctx.bot, 'owner_user_id', 0):
             return True
+
+        if ctx.channel.id not in self.config.admin_channels:
+            return False
 
         try:
             result = await self.db.fetch_one(
@@ -62,8 +63,8 @@ class AdminPredictionsCog(commands.Cog, name="Admin Predictions"):
                 (ctx.author.id,)
             )
             return bool(result and result[0] in ('admin', 'moderator'))
-        except Exception as e:
-            logger.error(f"admin_predictions permission check failed: {e}")
+        except Exception:
+            logger.error("admin_predictions permission check failed", exc_info=True)
             return False
 
     @commands.command(name='admin_predictions')

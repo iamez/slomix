@@ -489,8 +489,15 @@ class ServerControl(commands.Cog):
                 self._maps_cache = (time.monotonic(), maps)
             except Exception as e:
                 logger.error(f"Error listing maps: {e}", exc_info=True)
-                await ctx.send(f"❌ Error listing maps: {sanitize_error_message(e)}")
-                return
+                if cached:
+                    # SSH hiccup with a stale cache on hand: serve the stale
+                    # list (and keep the old timestamp so a later call retries
+                    # SSH) instead of failing the command
+                    maps = cached[1]
+                    await ctx.send("⚠️ Refresh failed — showing the last cached list.")
+                else:
+                    await ctx.send(f"❌ Error listing maps: {sanitize_error_message(e)}")
+                    return
 
         try:
 
@@ -586,6 +593,7 @@ class ServerControl(commands.Cog):
 
             await ctx.send(embed=embed)
             await self.log_action(ctx, "Map Upload Success", f"{sanitized_name} - MD5: {file_hash}")
+            self._maps_cache = None  # map set changed — next !maps refetches
 
         except Exception as e:
             logger.error(f"Error uploading map: {e}", exc_info=True)
@@ -683,6 +691,7 @@ class ServerControl(commands.Cog):
                 )
                 await ctx.send(embed=embed)
                 await self.log_action(ctx, "Map Delete Success", map_name)
+                self._maps_cache = None  # map set changed — next !maps refetches
             else:
                 await ctx.send(
                     f"❌ Failed to delete map. Error: {sanitize_error_message(error)}")
