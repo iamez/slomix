@@ -16,15 +16,18 @@ from __future__ import annotations
 REGISTRY_VERSION = "1.0"
 
 
-def _live_version(module: str, attr: str) -> str:
-    """Read a FORMULA_VERSION-style constant from the owning module.
+def _s_effort_version() -> str:
+    """Live version straight from the owning module — deliberately NO
+    fallback: a broken import fails loudly instead of reporting a stale
+    hand-copied version (codex, PR #463). Static imports (no importlib)
+    keep security scanners happy."""
+    from website.backend.services.s_effort_service import FORMULA_VERSION
+    return FORMULA_VERSION
 
-    Deliberately NO fallback: if the import breaks, the registry must fail
-    loudly instead of reporting a stale hand-copied version (codex, PR #463).
-    Both referenced modules are first-party website services.
-    """
-    import importlib
-    return str(getattr(importlib.import_module(module), attr))
+
+def _prox_version() -> str:
+    from website.backend.services.prox_scoring import FORMULA_VERSION
+    return FORMULA_VERSION
 
 
 def get_registry() -> list[dict]:
@@ -40,9 +43,7 @@ def get_registry() -> list[dict]:
         },
         {
             "name": "s_effort",
-            "version": _live_version(
-                "website.backend.services.s_effort_service",
-                "FORMULA_VERSION"),
+            "version": _s_effort_version(),
             "status": "live",
             "module": "website/backend/services/s_effort_service.py",
             "surface": "/api/skill/s-effort, player_skill_history scope='session'",
@@ -51,9 +52,7 @@ def get_registry() -> list[dict]:
         },
         {
             "name": "adjusted_lifetime",
-            "version": _live_version(
-                "website.backend.services.s_effort_service",
-                "FORMULA_VERSION"),
+            "version": _s_effort_version(),
             "status": "live",
             "module": "website/backend/services/s_effort_service.py",
             "surface": "/api/skill/adjusted-lifetime",
@@ -89,9 +88,7 @@ def get_registry() -> list[dict]:
         },
         {
             "name": "prox_score_web",
-            "version": _live_version(
-                "website.backend.services.prox_scoring",
-                "FORMULA_VERSION"),
+            "version": _prox_version(),
             "status": "live",
             "module": "website/backend/services/prox_scoring.py",
             "surface": "/api/proximity scoring endpoints",
