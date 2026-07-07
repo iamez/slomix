@@ -113,12 +113,16 @@ async def load_events(conn) -> dict[str, dict]:
     # A) TARGET ACQUISITION: aim_lock onset -> linked kill on the same target.
     #    Join by round identity + canonical killer + victim guid8 (kill_outcome
     #    has no victim canonical column); kill inside lock window (+ slack).
+    # DISTINCT ON (ko.id): a lock that flickers off and reacquires emits
+    # several aim_lock rows whose slackened windows can all cover one kill —
+    # each kill must count exactly once, against the LATEST eligible lock
     rows = await conn.fetch(f"""
-        SELECT al.guid_canonical, MAX(al.player_name) AS name,
+        SELECT DISTINCT ON (ko.id)
+               al.guid_canonical, al.player_name AS name,
                COALESCE(r.gaming_session_id::text,
                         'd:' || al.session_date::text) AS session_key,
                (ko.kill_time - al.start_time) AS acq_ms,
-               AVG(al.avg_err_deg) AS err_deg
+               al.avg_err_deg AS err_deg
         FROM proximity_aim_lock al
         JOIN proximity_kill_outcome ko
           ON ko.round_start_unix = al.round_start_unix
@@ -145,8 +149,7 @@ async def load_events(conn) -> dict[str, dict]:
           AND ko.victim_guid NOT LIKE $1
           AND COALESCE(ko.victim_name, '') NOT LIKE $2
           AND ko.kill_time > al.start_time
-        GROUP BY al.id, al.guid_canonical, r.gaming_session_id,
-                 al.session_date, ko.kill_time
+        ORDER BY ko.id, al.start_time DESC
     """, *BOT_FILTER)
     for r in rows:
         g = r["guid_canonical"].upper()
