@@ -66,20 +66,31 @@ async def main() -> int:
           AND ki.killer_guid NOT LIKE 'OMNIBOT%'
           AND ki.victim_guid NOT LIKE 'OMNIBOT%'
           AND ki.killer_name NOT LIKE '[BOT]%'
+          AND COALESCE(ki.victim_name, '') NOT LIKE '[BOT]%'
         ORDER BY ki.round_start_unix, ki.round_number, ki.kill_time_ms
     """)
 
     # rounds present per player (denominator): distinct rounds with any kill
     # involvement in kill_impact — pragmatic presence proxy for this source
+    # denominator carries the SAME is_valid + bot gates as the numerator —
+    # a mismatched presence count would silently dilute/inflate the rates
     presence_rows = await conn.fetch("""
         SELECT g8, COUNT(*) FROM (
-            SELECT UPPER(LEFT(killer_guid, 8)) AS g8,
-                   round_start_unix, round_number
-            FROM storytelling_kill_impact WHERE round_start_unix > 0
+            SELECT UPPER(LEFT(ki.killer_guid, 8)) AS g8,
+                   ki.round_start_unix, ki.round_number
+            FROM storytelling_kill_impact ki
+            LEFT JOIN rounds r ON r.round_start_unix = ki.round_start_unix
+                              AND r.round_number = ki.round_number
+            WHERE ki.round_start_unix > 0 AND (r.id IS NULL OR r.is_valid)
+              AND ki.killer_name NOT LIKE '[BOT]%'
             UNION
-            SELECT UPPER(LEFT(victim_guid, 8)),
-                   round_start_unix, round_number
-            FROM storytelling_kill_impact WHERE round_start_unix > 0
+            SELECT UPPER(LEFT(ki.victim_guid, 8)),
+                   ki.round_start_unix, ki.round_number
+            FROM storytelling_kill_impact ki
+            LEFT JOIN rounds r ON r.round_start_unix = ki.round_start_unix
+                              AND r.round_number = ki.round_number
+            WHERE ki.round_start_unix > 0 AND (r.id IS NULL OR r.is_valid)
+              AND COALESCE(ki.victim_name, '') NOT LIKE '[BOT]%'
         ) x WHERE g8 NOT LIKE 'OMNIBOT%' GROUP BY g8
     """)
     presence = {r[0]: int(r[1]) for r in presence_rows}
