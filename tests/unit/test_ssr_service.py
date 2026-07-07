@@ -50,13 +50,24 @@ class FakeDB:
             return [("AAAA1111", 850.0), ("CCCC3333", 1100.0)]
         if "player_track" in query:
             return [("AAAA1111", 225.0), ("BBBB2222", 150.0)]
+        if "DISTINCT ON (ki.round_start_unix" in query:
+            # openings: alpha wins one, charlie loses one
+            return [("AAAA1111", "CCCC3333")]
+        if "UNION" in query:
+            # presence: both above the duel gate
+            return [("AAAA1111", 40), ("CCCC3333", 40)]
+        if "proximity_lua_trade_kill" in query:
+            return [("BBBB2222", 20)]
+        if "proximity_kill_outcome" in query:
+            # deaths (trade discipline denominator)
+            return [("BBBB2222", 40), ("AAAA1111", 50)]
         return []
 
 
 @pytest.mark.asyncio
 async def test_compute_aggregates_group_relative():
     res = await SsrService(FakeDB()).compute()
-    assert res["formula_version"] == "ssr-v0.1"
+    assert res["formula_version"] == "ssr-v0.2"
     by = {p["player_guid"]: p for p in res["players"]}
 
     assert "DDDD4444" not in by, "below min-session gate must not be rated"
@@ -64,7 +75,12 @@ async def test_compute_aggregates_group_relative():
 
     alpha = by["AAAA1111"]
     # alpha has every component except OIS (no objective events in fixture)
-    assert alpha["coverage"] == "5/6"
+    assert alpha["coverage"] == "7/8"
+    # v0.2 duel components: alpha won the only opening, charlie lost it
+    assert alpha["components"]["opening_net"]["pct"] == 1.0
+    assert by["CCCC3333"]["components"]["opening_net"]["pct"] == 0.0
+    # trade discipline: bravo 20/40 avenged beats alpha 0/50
+    assert by["BBBB2222"]["components"]["trade_discipline"]["pct"] == 1.0
     assert alpha["components"]["ois_ps"]["pct"] is None
     # bravo is the only OIS holder -> pct 1.0
     assert by["BBBB2222"]["components"]["ois_ps"]["pct"] == 1.0
@@ -79,8 +95,8 @@ async def test_compute_aggregates_group_relative():
 
     charlie = by["CCCC3333"]
     assert charlie["name"] == "charlie" or "^" not in charlie["name"]
-    # charlie lacks share/ois/spawn -> partial coverage, still rated
-    assert charlie["coverage"] != "6/6"
+    # charlie lacks share/ois/spawn/trades -> partial coverage, still rated
+    assert charlie["coverage"] != "8/8"
     assert 0.0 <= charlie["ssr"] <= 1.0
 
     ssrs = [p["ssr"] for p in res["players"]]

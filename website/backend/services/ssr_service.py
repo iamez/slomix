@@ -29,11 +29,14 @@ import datetime as _dt
 
 from website.backend.utils.et_constants import strip_et_colors
 
-FORMULA_VERSION = "ssr-v0.1"
+FORMULA_VERSION = "ssr-v0.2"  # v0.2: +opening_net, +trade_discipline (owner-
+                              # approved tables, PR #467 merged)
 MIN_SESSIONS = 5           # owner answer A6
 MIN_COMPONENTS = 3         # a 1-component player must not top the board
 MIN_ACQ_EVENTS = 15
 MIN_SPAWN_LIVES = 50
+MIN_DUEL_ROUNDS = 30
+MIN_DEATHS = 30
 ALIVE_CONTEXT_SINCE = "2026-04-01"
 AIM_LOCK_LIVE_SINCE = "2026-06-22"
 
@@ -198,6 +201,82 @@ class SsrService:
         )
         return {r[0]: float(r[1]) for r in (rows or [])}
 
+    async def _opening_net(self) -> dict[str, float]:
+        """Net first-kill rate per rounds present (duels-v0.1, PR #467)."""
+        openings = await self.db.fetch_all(
+            "SELECT killer, victim FROM ("
+            "  SELECT DISTINCT ON (ki.round_start_unix, ki.round_number)"
+            "         UPPER(LEFT(ki.killer_guid, 8)) AS killer,"
+            "         UPPER(LEFT(ki.victim_guid, 8)) AS victim "
+            "  FROM storytelling_kill_impact ki "
+            "  LEFT JOIN rounds r ON r.round_start_unix = ki.round_start_unix "
+            "                    AND r.round_number = ki.round_number "
+            "  WHERE ki.round_start_unix > 0 AND (r.id IS NULL OR r.is_valid) "
+            "    AND ki.killer_guid NOT LIKE ? AND ki.victim_guid NOT LIKE ? "
+            "    AND ki.killer_name NOT LIKE ? "
+            "    AND COALESCE(ki.victim_name, '') NOT LIKE ? "
+            "  ORDER BY ki.round_start_unix, ki.round_number, ki.kill_time_ms"
+            ") o",
+            (_BOTS[0], _BOTS[0], _BOTS[1], _BOTS[1]),
+        )
+        presence_rows = await self.db.fetch_all(
+            "SELECT g8, COUNT(*) FROM ("
+            "  SELECT UPPER(LEFT(ki.killer_guid, 8)) AS g8,"
+            "         ki.round_start_unix, ki.round_number "
+            "  FROM storytelling_kill_impact ki "
+            "  LEFT JOIN rounds r ON r.round_start_unix = ki.round_start_unix "
+            "                    AND r.round_number = ki.round_number "
+            "  WHERE ki.round_start_unix > 0 AND (r.id IS NULL OR r.is_valid) "
+            "    AND ki.killer_name NOT LIKE ? "
+            "  UNION "
+            "  SELECT UPPER(LEFT(ki.victim_guid, 8)),"
+            "         ki.round_start_unix, ki.round_number "
+            "  FROM storytelling_kill_impact ki "
+            "  LEFT JOIN rounds r ON r.round_start_unix = ki.round_start_unix "
+            "                    AND r.round_number = ki.round_number "
+            "  WHERE ki.round_start_unix > 0 AND (r.id IS NULL OR r.is_valid) "
+            "    AND COALESCE(ki.victim_name, '') NOT LIKE ? "
+            ") x WHERE g8 NOT LIKE ? GROUP BY g8",
+            (_BOTS[1], _BOTS[1], _BOTS[0]),
+        )
+        wins: dict[str, int] = {}
+        losses: dict[str, int] = {}
+        for o in openings or []:
+            wins[o[0]] = wins.get(o[0], 0) + 1
+            losses[o[1]] = losses.get(o[1], 0) + 1
+        out = {}
+        for row in presence_rows or []:
+            g8, n = row[0], int(row[1])
+            if n >= MIN_DUEL_ROUNDS:
+                out[g8] = (wins.get(g8, 0) - losses.get(g8, 0)) / n
+        return out
+
+    async def _trade_discipline(self) -> dict[str, float]:
+        """Share of own deaths avenged in the trade window (duels-v0.1)."""
+        deaths = await self.db.fetch_all(
+            "SELECT UPPER(LEFT(ko.victim_guid, 8)) AS g8, COUNT(*) "
+            "FROM proximity_kill_outcome ko "
+            "LEFT JOIN rounds r ON r.id = ko.round_id "
+            "WHERE (r.id IS NULL OR r.is_valid) "
+            "  AND ko.victim_guid NOT LIKE ? AND ko.victim_name NOT LIKE ? "
+            "GROUP BY UPPER(LEFT(ko.victim_guid, 8)) HAVING COUNT(*) >= ?",
+            (*_BOTS, MIN_DEATHS),
+        )
+        avenged = await self.db.fetch_all(
+            "SELECT UPPER(LEFT(tk.original_victim_guid, 8)),"
+            "       COUNT(DISTINCT (tk.round_start_unix, tk.original_kill_time)) "
+            "FROM proximity_lua_trade_kill tk "
+            "LEFT JOIN rounds r ON r.id = tk.round_id "
+            "WHERE (r.id IS NULL OR r.is_valid) "
+            "  AND tk.original_victim_guid IS NOT NULL "
+            "  AND tk.original_victim_guid NOT LIKE ? "
+            "GROUP BY 1",
+            (_BOTS[0],),
+        )
+        av = {r[0]: int(r[1]) for r in (avenged or [])}
+        return {r[0]: min(av.get(r[0], 0), int(r[1])) / int(r[1])
+                for r in (deaths or [])}
+
     async def compute(self) -> dict:
         """Rated SSR list + meta. Group-relative; see module docstring."""
         sessions = await self._sessions()
@@ -209,6 +288,8 @@ class SsrService:
         perm = await self._permanence()
         acq = await self._target_acq()
         spawn = await self._spawn_ready()
+        duels = await self._opening_net()
+        trades = await self._trade_discipline()
 
         def _per_session(m: dict[str, float]) -> dict[str, float]:
             return {g: v / sessions[g][1] for g, v in m.items() if g in rated}
@@ -220,6 +301,8 @@ class SsrService:
             "permanence": {g: v for g, v in perm.items() if g in rated},
             "target_acq_ms": {g: v for g, v in acq.items() if g in rated},
             "spawn_ready_ms": {g: v for g, v in spawn.items() if g in rated},
+            "opening_net": {g: v for g, v in duels.items() if g in rated},
+            "trade_discipline": {g: v for g, v in trades.items() if g in rated},
         }
         lower_better = {"target_acq_ms", "spawn_ready_ms"}
         comp_pcts = {
