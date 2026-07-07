@@ -194,6 +194,10 @@ async def load_events(conn) -> dict[str, dict]:
           AND pt.player_guid NOT LIKE $1 AND pt.player_name NOT LIKE $2
           AND pt.time_to_first_move_ms > 0
           AND pt.time_to_first_move_ms <= {SANE_MS_MAX}
+          -- pre-Feb-21 tracker rows carry negative spawn_time_ms and produce
+          -- 4-6s bogus readiness values (KNOWN_ISSUES.md) — same guard as the
+          -- production spawn-reaction API queries
+          AND pt.spawn_time_ms >= 0
         GROUP BY pt.id, pt.player_guid, r.gaming_session_id, pt.session_date,
                  pt.time_to_first_move_ms
     """, *BOT_FILTER)
