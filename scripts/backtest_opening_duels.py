@@ -139,8 +139,11 @@ async def main() -> int:
         GROUP BY UPPER(LEFT(ko.victim_guid, 8))
         HAVING COUNT(*) >= $1
     """, MIN_DEATHS)
+    # DISTINCT deaths, not trade rows: several teammates can avenge the
+    # same death and each writes a trade row (codex, PR #467)
     avenged = {r[0]: int(r[1]) for r in await conn.fetch("""
-        SELECT UPPER(LEFT(tk.original_victim_guid, 8)), COUNT(*)
+        SELECT UPPER(LEFT(tk.original_victim_guid, 8)),
+               COUNT(DISTINCT (tk.round_start_unix, tk.original_kill_time))
         FROM proximity_lua_trade_kill tk
         LEFT JOIN rounds r ON r.id = tk.round_id
         WHERE (r.id IS NULL OR r.is_valid)
