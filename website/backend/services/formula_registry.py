@@ -218,11 +218,12 @@ def get_registry() -> list[dict]:
             "module": "website/backend/services/ssr_service.py",
             "surface": "/api/skill/ssr; proximity Comp Skill tab; profile "
                        "Reactions card; Smart Stats board",
-            "summary": "Per-player aggregate of group-relative percentiles: "
-                       "clutch KIS/session + situational KIS share + OIS/session "
-                       "+ kill permanence + target acquisition + spawn readiness "
-                       "(min 5 sessions, partial coverage averaged over what "
-                       "exists). Owner answer A4.",
+            "summary": "Per-player aggregate of group-relative percentiles "
+                       "(8 components): clutch KIS/session, situational KIS "
+                       "share, OIS/session, kill permanence, target "
+                       "acquisition, spawn readiness, opening net, trade "
+                       "discipline (min 5 sessions / 3 components; partial "
+                       "coverage averaged over what exists). Owner answer A4.",
         },
     ]
 
