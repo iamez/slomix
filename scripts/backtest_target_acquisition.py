@@ -39,6 +39,8 @@ MIN_ACQ_EVENTS = 15           # linked aim_lock->kill events to be rated
 MIN_REACTION_EVENTS = 30      # return-fire samples to be rated
 MIN_SPAWN_LIVES = 50          # player_track lives to be rated
 SANE_MS_MAX = 5000            # drop degenerate reaction values above this
+AIM_LOCK_LIVE_SINCE = "2026-06-22"  # v7 probe rows before activation are
+                                    # experimental — never rate them
 BOT_FILTER = ("OMNIBOT%", "[BOT]%")
 
 
@@ -134,6 +136,7 @@ async def load_events(conn) -> dict[str, dict]:
           -- 0 = missing round metadata; such buckets conflate unrelated
           -- rounds (see round-linker regression coverage) — never join them
           AND al.round_start_unix > 0
+          AND al.session_date >= '{AIM_LOCK_LIVE_SINCE}'::date
           AND al.guid NOT LIKE $1 AND al.player_name NOT LIKE $2
           -- the TARGET must be human too: locking a bot and killing it must
           -- not feed a human-skill median (codex, PR #458 round 2)
@@ -242,7 +245,9 @@ def stability(data: dict, min_events: int,
         by_sess: dict[str, list[float]] = defaultdict(list)
         for sd, v in d["events"]:
             by_sess[sd].append(v)
-        sessions = sorted(by_sess)
+        # numeric ids sort numerically ('99' < '100'); date-fallback keys after
+        sessions = sorted(by_sess, key=lambda k: (0, int(k)) if k.isdigit()
+                          else (1, k))
         a = [v for s in sessions[0::2] for v in by_sess[s]]
         b = [v for s in sessions[1::2] for v in by_sess[s]]
         if len(a) >= min_events // 2 and len(b) >= min_events // 2:
@@ -293,7 +298,7 @@ async def main() -> int:
 
     md = [f"# K-E backtest — {FORMULA_VERSION}", ""]
     specs = [
-        ("TARGET ACQUISITION (aim-lock onset → kill; since 2026-06-11)",
+        (f"TARGET ACQUISITION (aim-lock onset → kill; live since {AIM_LOCK_LIVE_SINCE})",
          "acq", MIN_ACQ_EVENTS),
         ("REACTION UNDER FIRE — return fire", "return_fire", MIN_REACTION_EVENTS),
         ("REACTION UNDER FIRE — dodge", "dodge", MIN_REACTION_EVENTS),

@@ -151,17 +151,20 @@ quantization grid AND the split-half (session-parity) ordering is stable.
 
 | metric | rated | events | spread | split-half | verdict |
 |---|---|---|---|---|---|
-| Target acquisition (aim-lock onset→kill, since 2026-06-11) | 10 | 1,433 | 275 ms | +0.81 (n=6) | **USABLE** |
-| Reaction under fire — return fire | 15 | 37,265 | 100 ms | +0.29 (n=13) | not usable alone (spread < grid, weak stability) |
+| Target acquisition (aim-lock onset→kill, live since 2026-06-22) | 10 | 1,433 | 275 ms | +0.81 (n=6) | **USABLE** |
+| Reaction under fire — return fire | 15 | 37,265 | 100 ms | +0.45 (n=13) | not usable alone (spread < grid, weak stability) |
 | Reaction under fire — dodge | 15 | 55,351 | 154 ms | n/a (fully tied medians) | not usable alone (spread < grid) |
-| Spawn readiness (time to first move) | 17 | 40,188 | 327 ms | +0.85 (n=14) | **USABLE** |
+| Spawn readiness (time to first move) | 17 | 40,188 | 327 ms | +1.00 (n=13) | **USABLE** |
 
 Stability values are tie-aware Spearman (average ranks) over TRUE gaming
-sessions (gaming_session_id, calendar-date fallback for unlinked rows); fully
-tied grid-level medians report n/a rather than a spurious +1.00. Splitting by
-real sessions instead of calendar dates dropped return fire from an apparent
-+0.70 to +0.29 — its ordering is not session-stable, which seals the
-descriptive-only verdict (codex, PR #458 rounds 1-2).
+sessions (gaming_session_id sorted numerically, calendar-date fallback for
+unlinked rows); fully tied grid-level medians report n/a rather than a
+spurious +1.00. Splitting by real sessions instead of calendar dates dropped
+return fire from an apparent +0.70 to +0.45 — its ordering is not reliably
+session-stable, which seals the descriptive-only verdict. Pre-activation v7
+probe locks (before 2026-06-22) are explicitly excluded; on current dev data
+they never linked to kills anyway, so counts are unchanged (codex, PR #458
+rounds 1-3).
 
 Highlights (medians): target acquisition KaNii 850 ms fastest → qmr 1,125 ms;
 return fire bronze 200 ms → ownator 300 ms (differences sit inside the
