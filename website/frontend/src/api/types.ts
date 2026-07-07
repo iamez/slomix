@@ -1099,6 +1099,22 @@ export interface SkillLeaderboardResponse {
   };
 }
 
+export interface AdjustedLifetimeEntry {
+  player_guid: string;
+  name: string | null;
+  lifetime_rating: number | null;
+  adjusted_lifetime: number;
+  n_sessions: number;
+  formula_version: string;
+}
+
+export interface AdjustedLifetimeResponse {
+  status: string;
+  available: boolean;
+  formula_version: string;
+  players: AdjustedLifetimeEntry[];
+}
+
 export interface SkillFormulaResponse {
   status: string;
   version: string;

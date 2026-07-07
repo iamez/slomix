@@ -770,6 +770,39 @@ export async function loadEnhancedProfileSections(playerIdentifier) {
     // Stopwatch Competitive card loads separately (own endpoint, like aim).
     loadCompetitiveCard(root, data.guid).catch((e) =>
         console.warn('competitive card load failed', e));
+
+    // Reactions & Readiness (SSR components; owner answer A3 — profile surface).
+    loadReactionsCard(root, data.guid).catch((e) =>
+        console.warn('reactions card load failed', e));
+}
+
+// ── Reactions & Readiness card (SSR components, owner answer A3) ────────────
+
+async function loadReactionsCard(root, guid) {
+    if (!guid) return;
+    const ssr = await fetchJSON(`${API_BASE}/skill/ssr`);
+    const g8 = String(guid).slice(0, 8).toUpperCase();
+    const me = (ssr?.players || []).find(p => p.player_guid === g8);
+    if (!me) return; // below min sessions/components — no panel
+    const c = me.components || {};
+    const ms = (comp) => (comp && comp.raw != null) ? `${Math.round(comp.raw)}ms` : '--';
+    const pct = (comp) => (comp && comp.pct != null) ? `top ${Math.round((1 - comp.pct) * 100) || 1}%` : '';
+    const cells = [
+        _statCell('Target Acquisition', ms(c.target_acq_ms), 'text-cyan-300'),
+        _statCell('· vs group', pct(c.target_acq_ms) || '--'),
+        _statCell('Spawn Readiness', ms(c.spawn_ready_ms), 'text-emerald-300'),
+        _statCell('· vs group', pct(c.spawn_ready_ms) || '--'),
+        _statCell('Comp Skill (SSR)', Number(me.ssr).toFixed(3), 'text-amber-300'),
+        _statCell('Coverage', me.coverage),
+    ].join('');
+    const html = _panel('Reactions & Readiness', 'zap', `
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">${cells}</div>
+        <p class="text-[10px] text-slate-600 mt-2">Group-relative medians (~200ms telemetry grid).
+        Raw times mix crosshair placement, ping and hardware — compare ranks, not milliseconds.</p>
+    `, 'timing');
+    safeInsertHTML(root, 'beforeend', html);
+    _applyActivePfTab();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 // ── Stopwatch Competitive card (player passport) ────────────────────────────

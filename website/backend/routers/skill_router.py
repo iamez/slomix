@@ -264,6 +264,16 @@ async def get_adjusted_lifetime(db=Depends(get_db)):
             "formula_version": FORMULA_VERSION, "players": rows}
 
 
+@router.get("/skill/ssr")
+async def get_ssr(db=Depends(get_db)):
+    """Situational Skill Rating v0 (owner A4): group-relative aggregate of
+    clutch KIS, situational KIS share, OIS, permanence, target acquisition
+    and spawn readiness. Research surface — numbers are percentile-based
+    (0..1) within the rated cohort, min 5 sessions (A6)."""
+    from website.backend.services.ssr_service import SsrService
+    return {"status": "ok", **(await SsrService(db).compute())}
+
+
 @router.get("/skill/formula")
 async def get_skill_formula():
     """Return the current rating formula details (transparency)."""

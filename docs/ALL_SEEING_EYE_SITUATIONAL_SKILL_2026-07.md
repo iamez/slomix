@@ -183,3 +183,31 @@ answers §6 Q4: the post-hoc aim_lock↔kill join works today (1,360 linked
 events; the unlinked majority of locks is expected — most locks simply never
 end in a kill) — no Lua tweak
 needed for v0.
+
+## 8. W5 probe — help/harm ledger & clutch solo-duration (2026-07-07)
+
+Script: `scripts/backtest_help_harm_ledger.py` (`help-harm-v0.1`, read-only).
+Owner ask (A1): reward clutches and great plays; expose who helped their team
+AND who accidentally helped the opponent ("own goal"). Numbers first, weights
+later (owner: "vendar nevem kako").
+
+**Ledger (15 players ≥5 sessions).** Help side: KIS/session + OIS/session.
+Harm side: team kills, team gibs, team damage/min, docs lost as carrier,
+full selfkills — all per-session/minute rates. Highlights: KaNii is the
+high-risk/high-reward extreme (top help 106.6 KIS/s + 16.6 OIS/s, but also
+most docs lost 2.91/s and most FSK 2.18/s); Cru3lzor and olz lead team kills
+(8.2/s); carniee & v_kt_r show near-zero KIS (proximity coverage era gap —
+flagged, not judged).
+
+**Clutch solo-duration (103 chains ≥2 kills since 2026-04).** Time already
+spent alone (side alive == 1) before the FIRST chain kill: median 2.1 s,
+p75 4.5 s, max 21.6 s. 19% of chains start <1 s after the side hits 1 alive
+(instant clutch) vs 81% endured-solo. SuperBoyy owns 3 of the 8 longest-solo
+chains (21.6 s / 10.2 s / 9.7 s) — matching the owner's golden-moment
+intuition. → candidate clutch-v1 difficulty multiplier alongside the R2
+time-to-beat stake: e.g. `1 + min(1, solo_s / 15) * 0.5` (to be tuned on the
+top-20 table review).
+
+Open for v1 (needs design): teammate-proximity for NON-clutch plays (who was
+in position to help) requires path sampling; own-goal WEIGHTS need the owner's
+read of this table first.
