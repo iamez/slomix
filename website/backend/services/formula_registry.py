@@ -25,6 +25,16 @@ def _s_effort_version() -> str:
     return FORMULA_VERSION
 
 
+def _ois_version() -> str:
+    from website.backend.services.storytelling.ois import FORMULA_VERSION
+    return FORMULA_VERSION
+
+
+def _ssr_version() -> str:
+    from website.backend.services.ssr_service import FORMULA_VERSION
+    return FORMULA_VERSION
+
+
 def _prox_version() -> str:
     from website.backend.services.prox_scoring import FORMULA_VERSION
     return FORMULA_VERSION
@@ -171,25 +181,26 @@ def get_registry() -> list[dict]:
         },
         {
             "name": "ois",
-            "version": "v0-design",
-            "status": "proposed",
-            "module": "(planned) website/backend/services/storytelling/ois.py",
-            "surface": "(planned) Smart Stats + SSR input",
+            "version": _ois_version(),
+            "status": "research",
+            "module": "website/backend/services/storytelling/ois.py",
+            "surface": "SSR input (Smart Stats surface planned)",
             "summary": "Objective Impact Score — KIS-scale credit for NON-KILL "
-                       "objective acts (doc return, defuse, construction under "
-                       "fire). Kept OUTSIDE KIS so KIS stays a pure kill score "
-                       "(owner answer A2: my call, KIS = kill impact only).",
+                       "objective acts (doc return 3.0 x speed, defuse 2.5, "
+                       "construction 2.0 x contested). Kept OUTSIDE KIS so KIS "
+                       "stays a pure kill score (owner answer A2).",
         },
         {
             "name": "situational_skill_rating",
-            "version": "v0-design",
-            "status": "proposed",
-            "module": "(planned) website/backend/services/ssr_service.py",
-            "surface": "(planned) Comp Skill tab on proximity leaderboards",
-            "summary": "Per-player aggregate: clutch KIS + situational KIS "
-                       "share + OIS + kill permanence + target-acquisition and "
-                       "spawn-readiness percentiles (min 5 sessions). Owner "
-                       "answer A4: full green light.",
+            "version": _ssr_version(),
+            "status": "research",
+            "module": "website/backend/services/ssr_service.py",
+            "surface": "/api/skill/ssr (Comp Skill tab planned)",
+            "summary": "Per-player aggregate of group-relative percentiles: "
+                       "clutch KIS/session + situational KIS share + OIS/session "
+                       "+ kill permanence + target acquisition + spawn readiness "
+                       "(min 5 sessions, partial coverage averaged over what "
+                       "exists). Owner answer A4.",
         },
     ]
 

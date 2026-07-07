@@ -427,6 +427,15 @@ class VoiceSessionService:
                 saved = await scoring_service.save_session_results(scoring_result)
                 if saved:
                     logger.info(f"✅ Session results finalized for {latest_date}")
+                    # B4 phase 2: outcomes must accrue automatically or the
+                    # prediction calibration dataset never materializes
+                    if self.prediction_engine:
+                        try:
+                            await self.prediction_engine.auto_resolve_predictions(
+                                str(latest_date))
+                        except Exception:
+                            logger.error("auto_resolve_predictions failed",
+                                         exc_info=True)
                 else:
                     logger.warning(f"⚠️ Failed to finalize session results for {latest_date}")
             else:

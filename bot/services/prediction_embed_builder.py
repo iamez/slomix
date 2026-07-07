@@ -58,8 +58,11 @@ class PredictionEmbedBuilder:
             color = self.COLOR_LOW_CONFIDENCE
 
         # Create embed
+        # "Lean", not "probability": the engine outputs a bounded heuristic
+        # (30-70% band, uncalibrated). Until enough recorded outcomes exist
+        # to calibrate (owner answer B4), the copy must not claim probability.
         embed = discord.Embed(
-            title="🔮 Match Prediction",
+            title="🔮 Match Lean",
             description=f"**{split_data['format']}** Competitive Match",
             color=color,
             timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
@@ -74,13 +77,13 @@ class PredictionEmbedBuilder:
         team_b_bar = self._create_probability_bar(team_b_prob)
 
         embed.add_field(
-            name=f"🔵 Team A - {team_a_prob:.0%}",
+            name=f"🔵 Team A - lean {team_a_prob:.0%}",
             value=f"{team_a_bar}\n{self._format_team_roster(split_data['team_a_guids'], player_names)}",
             inline=False
         )
 
         embed.add_field(
-            name=f"🔴 Team B - {team_b_prob:.0%}",
+            name=f"🔴 Team B - lean {team_b_prob:.0%}",
             value=f"{team_b_bar}\n{self._format_team_roster(split_data['team_b_guids'], player_names)}",
             inline=False
         )
@@ -130,7 +133,7 @@ class PredictionEmbedBuilder:
         )
 
         # Footer
-        embed.set_footer(text="Competitive Analytics • Prediction accuracy tracked")
+        embed.set_footer(text="Competitive Analytics • heuristic lean (H2H/form/map), not a calibrated probability")
 
         return embed
 

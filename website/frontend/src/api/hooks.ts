@@ -337,6 +337,13 @@ export const useSkillLeaderboard = (limit = 50) =>
     staleTime: 60_000,
   });
 
+export const useAdjustedLifetime = () =>
+  useQuery({
+    queryKey: ['skill-adjusted-lifetime'],
+    queryFn: api.getAdjustedLifetime,
+    staleTime: 300_000,
+  });
+
 export const useSkillFormula = () =>
   useQuery({
     queryKey: ['skill-formula'],
