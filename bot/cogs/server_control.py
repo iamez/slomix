@@ -150,6 +150,7 @@ class ServerControl(commands.Cog):
         # audit finding 6; owner decision 2026-07-07: cached daily list).
         self._maps_cache: tuple[float, list] | None = None
         self._maps_cache_ttl = 24 * 3600
+        self._maps_cache_lock = asyncio.Lock()  # one SSH refresh at a time
 
         # SSH Configuration
         self.ssh_host = os.getenv('SSH_HOST')
@@ -455,54 +456,67 @@ class ServerControl(commands.Cog):
     # MAP MANAGEMENT
     # ========================================
 
+    async def _refresh_maps_cache(self, ctx) -> None:
+        """SSH-fetch the map list into _maps_cache (caller holds the lock).
+
+        On failure with a stale cache on hand, the stale entry's timestamp is
+        bumped just enough to serve it, while an error without any cache
+        reports to the user."""
+        await ctx.send("📂 Fetching map list...")
+        try:
+            list_command = f"ls -lh {self.maps_path}/*.pk3 2>/dev/null | awk '{{print $9, $5}}' || echo 'No maps found'"
+            output, error, exit_code = self.execute_ssh_command(list_command)
+
+            if "No maps found" in output or not output.strip():
+                # cache the negative result too — a fresh/misconfigured
+                # server must not turn every public call into an SSH probe
+                self._maps_cache = (time.monotonic(), [])
+                return
+
+            maps = []
+            for line in output.strip().split('\n'):
+                if line.strip():
+                    parts = line.rsplit(' ', 1)
+                    if len(parts) == 2:
+                        path, size = parts
+                        filename = os.path.basename(path)
+                        maps.append(f"• `{filename}` ({size})")
+
+            self._maps_cache = (time.monotonic(), maps)
+        except Exception as e:
+            logger.error(f"Error listing maps: {e}", exc_info=True)
+            if self._maps_cache:
+                # SSH hiccup with a stale cache: refresh its timestamp so the
+                # caller serves it now; a later call will retry SSH after TTL
+                await ctx.send("⚠️ Refresh failed — showing the last cached list.")
+                self._maps_cache = (time.monotonic() - self._maps_cache_ttl + 600,
+                                    self._maps_cache[1])
+            else:
+                await ctx.send(f"❌ Error listing maps: {sanitize_error_message(e)}")
+
     @commands.command(name='list_maps', aliases=['map_list', 'listmaps'])
     async def map_list(self, ctx):
         """📋 List available maps on server (cached; SSH at most 1x/day)"""
-        cached = self._maps_cache
-        if cached and (time.monotonic() - cached[0]) < self._maps_cache_ttl:
-            maps = cached[1]
-            if not maps:
-                await ctx.send("❌ No map files found in etmain folder (cached)")
-                return
-        else:
-            await ctx.send("📂 Fetching map list...")
-            try:
-                # List .pk3 files in etmain folder
-                list_command = f"ls -lh {self.maps_path}/*.pk3 2>/dev/null | awk '{{print $9, $5}}' || echo 'No maps found'"
-                output, error, exit_code = self.execute_ssh_command(list_command)
+        def _fresh():
+            c = self._maps_cache
+            return c if c and (time.monotonic() - c[0]) < self._maps_cache_ttl else None
 
-                if "No maps found" in output or not output.strip():
-                    # cache the negative result too — a fresh/misconfigured
-                    # server must not turn every public call into an SSH probe
-                    self._maps_cache = (time.monotonic(), [])
-                    await ctx.send("❌ No map files found in etmain folder")
-                    return
+        cached = _fresh()
+        if not cached:
+            # serialize cold-cache refreshes: concurrent public calls must
+            # collapse into ONE SSH fetch, not a burst
+            async with self._maps_cache_lock:
+                cached = _fresh()  # a waiter may find it filled by the winner
+                if not cached:
+                    await self._refresh_maps_cache(ctx)
+                    cached = _fresh()
+            if not cached:
+                return  # refresh failed and no stale cache — message already sent
 
-                # Parse output
-                maps = []
-                for line in output.strip().split('\n'):
-                    if line.strip():
-                        parts = line.rsplit(' ', 1)
-                        if len(parts) == 2:
-                            path, size = parts
-                            filename = os.path.basename(path)
-                            maps.append(f"• `{filename}` ({size})")
-
-                self._maps_cache = (time.monotonic(), maps)
-                if not maps:
-                    await ctx.send("❌ No maps found")
-                    return
-            except Exception as e:
-                logger.error(f"Error listing maps: {e}", exc_info=True)
-                if cached:
-                    # SSH hiccup with a stale cache on hand: serve the stale
-                    # list (and keep the old timestamp so a later call retries
-                    # SSH) instead of failing the command
-                    maps = cached[1]
-                    await ctx.send("⚠️ Refresh failed — showing the last cached list.")
-                else:
-                    await ctx.send(f"❌ Error listing maps: {sanitize_error_message(e)}")
-                    return
+        maps = cached[1]
+        if not maps:
+            await ctx.send("❌ No map files found in etmain folder (cached)")
+            return
 
         try:
 
