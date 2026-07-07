@@ -120,42 +120,70 @@ async def main():
     # Aggregate rosters BY START DATE: compute_session_ratings (and the
     # production persist) score date-wide — every gsid whose MIN(round_date)
     # matches — so two sessions sharing a start date must be ONE scoring unit
-    # here too, with unioned team rosters (codex, PR #463 round 5).
+    # here too, with unioned team rosters (codex, PR #463 rounds 5-6).
     by_date: dict = {}
+    date_gsids: dict = {}
     for s in sessions:
         date = str(s["session_date"])[:10]
         ent = by_date.setdefault(date, (set(), set()))
         ent[0].update(g8(x) for x in json.loads(s["team_1_guids"]) if g8(x) in life)
         ent[1].update(g8(x) for x in json.loads(s["team_2_guids"]) if g8(x) in life)
+        date_gsids.setdefault(date, set()).add(int(s["gaming_session_id"]))
+
+    # cohort completeness: the scorer includes EVERY valid gsid starting on
+    # the date — if session_results is missing rosters for one of them, the
+    # rating would include rounds whose players aren't in the pool. Skip such
+    # dates and say so (codex, PR #463 round 6).
+    all_gsids = {}
+    for r in await conn.fetch("""
+            SELECT MIN(SUBSTRING(round_date, 1, 10)) AS d,
+                   gaming_session_id
+            FROM rounds WHERE gaming_session_id IS NOT NULL AND is_valid
+            GROUP BY gaming_session_id"""):
+        all_gsids.setdefault(str(r["d"])[:10], set()).add(int(r["gaming_session_id"]))
+    incomplete = {d for d, g in date_gsids.items() if g != all_gsids.get(d, set())}
+    if incomplete:
+        print(f"skipped {len(incomplete)} date(s) with unfinalized sessions "
+              f"(rosters missing for some gsids): {sorted(incomplete)[:5]}...")
 
     per_player = {}          # g8 -> list of dicts per session-date
     n_sessions_used = 0
     for date, (t1set, t2set) in sorted(by_date.items()):
-        t1, t2 = sorted(t1set - t2set), sorted(t2set - t1set)
-        if len(t1) < 2 or len(t2) < 2:
+        if date in incomplete:
+            continue
+        participants = sorted(t1set | t2set)
+        ambiguous = t1set & t2set  # both sides across merged sessions
+        t1, t2 = sorted(t1set - ambiguous), sorted(t2set - ambiguous)
+        if len(participants) < 4:
             continue
         n_sessions_used += 1
-        for team, opp in ((t1, t2), (t2, t1)):
-            opp_avg = st.mean(life[g][1] for g in opp)
-            for p in team:
-                try:
-                    sr = await compute_session_ratings(db, life[p][2], date, percentiles)
-                except Exception as e:  # noqa: BLE001 - backtest: skip player-session, keep going
-                    print(f"  skip {life[p][0]} {date}: {e}", file=sys.stderr)
-                    continue
-                sess = (sr or {}).get("session_rating") if isinstance(sr, dict) else None
-                if sess is None:
-                    continue
+        team_ok = len(t1) >= 2 and len(t2) >= 2
+        for p in participants:
+            try:
+                sr = await compute_session_ratings(db, life[p][2], date, percentiles)
+            except Exception as e:  # noqa: BLE001 - backtest: skip player-session, keep going
+                print(f"  skip {life[p][0]} {date}: {e}", file=sys.stderr)
+                continue
+            sess = (sr or {}).get("session_rating") if isinstance(sr, dict) else None
+            if sess is None:
+                continue
+            others = [g for g in participants if g != p]
+            # variant A (the production pool) rates EVERYONE, including
+            # both-side players (codex, PR #463 round 6)
+            pools = {"A_all": st.mean(life[g][1] for g in others),
+                     "B_team": None, "C_opp": None, "D_diff": None}
+            if team_ok and p not in ambiguous:
+                team, opp = (t1, t2) if p in t1set else (t2, t1)
                 mates = [g for g in team if g != p]
                 team_loo = st.mean(life[g][1] for g in mates) if mates else POOL_NEUTRAL
-                pools = {
-                    "A_all": st.mean([life[g][1] for g in mates] + [life[g][1] for g in opp]),
+                opp_avg = st.mean(life[g][1] for g in opp)
+                pools.update({
                     "B_team": team_loo,
                     "C_opp": opp_avg,
                     "D_diff": POOL_NEUTRAL * (opp_avg / team_loo) if team_loo else POOL_NEUTRAL,
-                }
-                rec = {"sess": float(sess), "pools": pools, "date": date}
-                per_player.setdefault(p, []).append(rec)
+                })
+            rec = {"sess": float(sess), "pools": pools, "date": date}
+            per_player.setdefault(p, []).append(rec)
 
     variants = ["A_all", "B_team", "C_opp", "D_diff"]
     rows = []
@@ -165,17 +193,23 @@ async def main():
         name, lt, _full = life[p]
         row = {"player": name, "g8": p, "lifetime": lt, "n_sessions": len(recs)}
         for v in variants:
+            vrecs = [r for r in recs if r["pools"].get(v)]
+            if len(vrecs) < MIN_SESSIONS:
+                row[f"eff_{v}"] = row[f"perf_{v}"] = None
+                continue
             # s.effort scaled so pool==NEUTRAL leaves sess/NEUTRAL scale-free:
-            efforts = [r["sess"] / (r["pools"][v] or POOL_NEUTRAL) for r in recs]
+            efforts = [r["sess"] / r["pools"][v] for r in vrecs]
             perf = [e / (lt / POOL_NEUTRAL) for e in efforts]
             row[f"eff_{v}"] = st.mean(efforts)
             row[f"perf_{v}"] = st.mean(perf)
             row[f"stab_{v}"] = st.pstdev(perf)
-            row[f"pool_{v}"] = st.mean(r["pools"][v] for r in recs)
+            row[f"pool_{v}"] = st.mean(r["pools"][v] for r in vrecs)
         rows.append(row)
 
     total_players_all = len(per_player)
-    rows.sort(key=lambda r: -r["perf_C_opp"])
+    # sanity tables read variant C; players without enough team-attributed
+    # sessions (merged-date ambiguity) sink to the bottom instead of crashing
+    rows.sort(key=lambda r: -(r["perf_C_opp"] if r["perf_C_opp"] is not None else -9))
 
     print(f"=== s.effort backtest  formula_version={FORMULA_VERSION} ===")
     print(f"SAMPLE SIZE: sessions_with_rosters={n_sessions_used} "
@@ -187,22 +221,26 @@ async def main():
            + " | " + "".join(f"{'eff_' + v[:1]:>7}" for v in variants)
            + f"{'stabC':>7}")
     print(hdr)
+    def _f(x, w):
+        return f"{x:>{w}.3f}" if x is not None else f"{'—':>{w}}"
+
     for r in rows:
         print(f"{r['player'][:13]:<14}{r['n_sessions']:>3}{r['lifetime']:>6.3f} | "
-              + "".join(f"{r['perf_' + v]:>8.3f}" for v in variants)
-              + " | " + "".join(f"{r['eff_' + v]:>7.3f}" for v in variants)
-              + f"{r['stab_C_opp']:>7.3f}")
+              + "".join(_f(r['perf_' + v], 8) for v in variants)
+              + " | " + "".join(_f(r['eff_' + v], 7) for v in variants)
+              + _f(r.get('stab_C_opp'), 7))
 
     # ---- sanity checks
     print("\n=== SANITY CHECKS ===")
-    perfs = [r["perf_C_opp"] for r in rows]
-    pools = [r["pool_C_opp"] for r in rows]
-    ns = [r["n_sessions"] for r in rows]
-    lts = [r["lifetime"] for r in rows]
+    rows_c = [r for r in rows if r["perf_C_opp"] is not None]
+    perfs = [r["perf_C_opp"] for r in rows_c]
+    pools = [r["pool_C_opp"] for r in rows_c]
+    ns = [r["n_sessions"] for r in rows_c]
+    lts = [r["lifetime"] for r in rows_c]
     c_pool = corr(perfs, pools)
     print(f"(a) hard-pool-no-punish: corr(perf_C, avg_pool_faced) = {c_pool:+.3f} "
           f"-> {'PASS' if c_pool > -0.35 else 'FAIL'} (strongly negative would punish hard pools)")
-    weak_easy = [r for r in rows if r["lifetime"] < POOL_NEUTRAL and r["pool_C_opp"] < POOL_NEUTRAL]
+    weak_easy = [r for r in rows_c if r["lifetime"] < POOL_NEUTRAL and r["pool_C_opp"] < POOL_NEUTRAL]
     boost = max((r["perf_C_opp"] for r in weak_easy), default=0)
     print(f"(b) easy-pool-no-boost: max perf of below-avg players in below-avg pools = "
           f"{boost:.3f} -> {'PASS' if boost < 1.25 else 'CHECK'} (n={len(weak_easy)})")
@@ -210,7 +248,7 @@ async def main():
     print(f"(c) volume-not-main-driver: corr(perf_C, n_sessions) = {c_vol:+.3f} "
           f"(context: corr(lifetime, n_sessions) = {corr(lts, ns):+.3f})")
     buckets = {}
-    for r in rows:
+    for r in rows_c:
         b = "5-9" if r["n_sessions"] < 10 else ("10-19" if r["n_sessions"] < 20 else "20+")
         buckets.setdefault(b, []).append(r["perf_C_opp"])
     for b in ("5-9", "10-19", "20+"):
