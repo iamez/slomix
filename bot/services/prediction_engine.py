@@ -342,6 +342,82 @@ class PredictionEngine:
             logger.error(f"❌ Failed to update prediction outcome: {e}", exc_info=True)
             raise
 
+    async def auto_resolve_predictions(self, session_date: str) -> int:
+        """Resolve every unresolved prediction of a date against session_results.
+
+        Owner answer B4 phase 2 groundwork: outcomes must accrue WITHOUT the
+        manual !update_prediction_outcome step, or calibration data never
+        materializes. Roster matching is guid8-overlap based with orientation
+        detection (prediction team A may be session_results team 2); the
+        session winner follows the BOX canon — MAP wins tallied over the
+        date's session_results rows (owner: 2 points per map, draws split).
+
+        Returns the number of predictions resolved.
+        """
+        try:
+            pending = await self.db.fetch_all(
+                """SELECT id, team_a_guids, team_b_guids
+                   FROM match_predictions
+                   WHERE session_date = $1 AND actual_winner IS NULL""",
+                (session_date,),
+            )
+            if not pending:
+                return 0
+
+            results = await self.db.fetch_all(
+                """SELECT team_1_guids, team_2_guids, winning_team
+                   FROM session_results
+                   WHERE session_date = $1 AND winning_team IS NOT NULL""",
+                (session_date,),
+            )
+            if not results:
+                logger.debug("auto_resolve: no session_results yet for %s", session_date)
+                return 0
+
+            def g8set(raw) -> set:
+                vals = json.loads(raw) if isinstance(raw, str) else (raw or [])
+                return {str(g)[:8].upper() for g in vals if g}
+
+            resolved = 0
+            for pred in pending:
+                pred_id, a_set, b_set = pred[0], g8set(pred[1]), g8set(pred[2])
+                if not a_set or not b_set:
+                    continue
+                a_wins = b_wins = matched = 0
+                for row in results:
+                    t1, t2, winner = g8set(row[0]), g8set(row[1]), int(row[2])
+                    straight = len(a_set & t1) + len(b_set & t2)
+                    flipped = len(a_set & t2) + len(b_set & t1)
+                    best = max(straight, flipped)
+                    # require a real roster match, not coincidence: at least
+                    # half of the prediction's players must be accounted for
+                    if best * 2 < len(a_set) + len(b_set):
+                        continue
+                    matched += 1
+                    if winner == 0:
+                        a_wins += 0  # draw: no map point either way here;
+                        b_wins += 0  # BOX splits 1-1, net zero for A-vs-B
+                    elif (winner == 1) == (straight >= flipped):
+                        a_wins += 1
+                    else:
+                        b_wins += 1
+                if matched == 0:
+                    logger.debug("auto_resolve: prediction %s matched no maps", pred_id)
+                    continue
+                actual = 1 if a_wins > b_wins else 2 if b_wins > a_wins else 0
+                await self.update_prediction_outcome(
+                    pred_id, actual, a_wins, b_wins
+                )
+                resolved += 1
+
+            if resolved:
+                logger.info("✅ auto-resolved %d prediction(s) for %s",
+                            resolved, session_date)
+            return resolved
+        except Exception as e:
+            logger.error(f"❌ auto_resolve_predictions failed: {e}", exc_info=True)
+            return 0
+
     async def _analyze_head_to_head(
         self,
         team_a_guids: list[str],
