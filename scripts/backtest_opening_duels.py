@@ -53,45 +53,45 @@ async def main() -> int:
     # ---- opening duels ------------------------------------------------------
     # first kill per (round_start_unix, round_number) by kill_time_ms; rounds
     # with unknown identity (rsu=0) excluded — they conflate rounds
+    # ALL kills sharing the round's minimum kill_time (grenade/panzer multi
+    # openings credit every participant — no arbitrary DISTINCT ON pick);
+    # INNER JOIN rounds so orphan KIS rows can't fabricate openings.
     openings = await conn.fetch("""
-        SELECT DISTINCT ON (ki.round_start_unix, ki.round_number)
-               ki.round_start_unix, ki.round_number,
-               UPPER(LEFT(ki.killer_guid, 8)) AS killer,
-               UPPER(LEFT(ki.victim_guid, 8)) AS victim
-        FROM storytelling_kill_impact ki
-        LEFT JOIN rounds r ON r.round_start_unix = ki.round_start_unix
-                          AND r.round_number = ki.round_number
-        WHERE ki.round_start_unix > 0
-          AND (r.id IS NULL OR r.is_valid)
-          AND ki.killer_guid NOT LIKE 'OMNIBOT%'
-          AND ki.victim_guid NOT LIKE 'OMNIBOT%'
-          AND ki.killer_name NOT LIKE '[BOT]%'
-          AND COALESCE(ki.victim_name, '') NOT LIKE '[BOT]%'
-        ORDER BY ki.round_start_unix, ki.round_number, ki.kill_time_ms
+        WITH k AS (
+            SELECT ki.round_start_unix, ki.round_number, ki.kill_time_ms,
+                   UPPER(LEFT(ki.killer_guid, 8)) AS killer,
+                   UPPER(LEFT(ki.victim_guid, 8)) AS victim
+            FROM storytelling_kill_impact ki
+            JOIN rounds r ON r.round_start_unix = ki.round_start_unix
+                         AND r.round_number = ki.round_number
+                         AND r.is_valid
+                         AND NOT COALESCE(r.is_bot_round, FALSE)
+            WHERE ki.round_start_unix > 0
+              AND ki.killer_guid NOT LIKE 'OMNIBOT%'
+              AND ki.victim_guid NOT LIKE 'OMNIBOT%'
+              AND ki.killer_name NOT LIKE '[BOT]%'
+              AND COALESCE(ki.victim_name, '') NOT LIKE '[BOT]%'
+        )
+        SELECT killer, victim FROM k
+        WHERE (round_start_unix, round_number, kill_time_ms) IN (
+            SELECT round_start_unix, round_number, MIN(kill_time_ms)
+            FROM k GROUP BY round_start_unix, round_number)
     """)
 
     # rounds present per player (denominator): distinct rounds with any kill
     # involvement in kill_impact — pragmatic presence proxy for this source
-    # denominator carries the SAME is_valid + bot gates as the numerator —
-    # a mismatched presence count would silently dilute/inflate the rates
+    # denominator = rounds actually PLAYED (PCS x valid rounds) — a support
+    # player with no kill involvement still counts as present (codex, #467 r3)
     presence_rows = await conn.fetch("""
-        SELECT g8, COUNT(*) FROM (
-            SELECT UPPER(LEFT(ki.killer_guid, 8)) AS g8,
-                   ki.round_start_unix, ki.round_number
-            FROM storytelling_kill_impact ki
-            LEFT JOIN rounds r ON r.round_start_unix = ki.round_start_unix
-                              AND r.round_number = ki.round_number
-            WHERE ki.round_start_unix > 0 AND (r.id IS NULL OR r.is_valid)
-              AND ki.killer_name NOT LIKE '[BOT]%'
-            UNION
-            SELECT UPPER(LEFT(ki.victim_guid, 8)),
-                   ki.round_start_unix, ki.round_number
-            FROM storytelling_kill_impact ki
-            LEFT JOIN rounds r ON r.round_start_unix = ki.round_start_unix
-                              AND r.round_number = ki.round_number
-            WHERE ki.round_start_unix > 0 AND (r.id IS NULL OR r.is_valid)
-              AND COALESCE(ki.victim_name, '') NOT LIKE '[BOT]%'
-        ) x WHERE g8 NOT LIKE 'OMNIBOT%' GROUP BY g8
+        SELECT UPPER(LEFT(p.player_guid, 8)) AS g8, COUNT(*)
+        FROM player_comprehensive_stats p
+        JOIN rounds r ON r.id = p.round_id
+        WHERE r.is_valid AND NOT COALESCE(r.is_bot_round, FALSE)
+          AND r.round_start_unix > 0
+          AND p.round_number > 0
+          AND p.player_guid NOT LIKE 'OMNIBOT%'
+          AND p.player_name NOT LIKE '[BOT]%'
+        GROUP BY UPPER(LEFT(p.player_guid, 8))
     """)
     presence = {r[0]: int(r[1]) for r in presence_rows}
 
@@ -104,8 +104,8 @@ async def main() -> int:
     ok = defaultdict(int)
     od = defaultdict(int)
     for r in openings:
-        ok[r["killer"]] += 1
-        od[r["victim"]] += 1
+        ok[r[0]] += 1
+        od[r[1]] += 1
 
     duel_rows = []
     for g8, n in presence.items():
@@ -120,7 +120,7 @@ async def main() -> int:
     duel_rows.sort(key=lambda r: -r["net"])
 
     print(f"=== OPENING DUELS  {FORMULA_VERSION} ===")
-    print(f"SAMPLE: openings={len(openings)} players={len(duel_rows)} "
+    print(f"SAMPLE: opening_events={len(openings)} players={len(duel_rows)} "
           f"(>= {MIN_ROUNDS_PRESENT} rounds present)")
     print(f"{'player':<16}{'rounds':>7} | {'open-K%':>8}{'open-D%':>8}{'net':>8}")
     for r in duel_rows:
@@ -132,8 +132,8 @@ async def main() -> int:
     deaths_rows = await conn.fetch("""
         SELECT UPPER(LEFT(ko.victim_guid, 8)) AS g8, COUNT(*) AS deaths
         FROM proximity_kill_outcome ko
-        LEFT JOIN rounds r ON r.id = ko.round_id
-        WHERE (r.id IS NULL OR r.is_valid)
+        JOIN rounds r ON r.id = ko.round_id AND r.is_valid
+        WHERE TRUE
           AND ko.victim_guid NOT LIKE 'OMNIBOT%'
           AND ko.victim_name NOT LIKE '[BOT]%'
         GROUP BY UPPER(LEFT(ko.victim_guid, 8))
@@ -143,10 +143,10 @@ async def main() -> int:
     # same death and each writes a trade row (codex, PR #467)
     avenged = {r[0]: int(r[1]) for r in await conn.fetch("""
         SELECT UPPER(LEFT(tk.original_victim_guid, 8)),
-               COUNT(DISTINCT (tk.round_start_unix, tk.original_kill_time))
+               COUNT(DISTINCT (tk.round_id, tk.original_kill_time))
         FROM proximity_lua_trade_kill tk
-        LEFT JOIN rounds r ON r.id = tk.round_id
-        WHERE (r.id IS NULL OR r.is_valid)
+        JOIN rounds r ON r.id = tk.round_id AND r.is_valid
+        WHERE TRUE
           AND tk.original_victim_guid IS NOT NULL
           AND tk.original_victim_guid NOT LIKE 'OMNIBOT%'
         GROUP BY 1""")}
