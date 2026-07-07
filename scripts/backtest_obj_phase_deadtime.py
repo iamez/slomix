@@ -65,11 +65,16 @@ async def main() -> None:
         SELECT round_id, event_time, event_type, player_team
         FROM proximity_construction_event
         WHERE round_id IS NOT NULL
-          AND event_type IN ('objective_destroyed', 'construction_complete',
+          -- ADVANCE: objective_destroyed + flag_captured (checkpoint maps).
+          -- construction_complete is EXCLUDED: the Lua source logs it from
+          -- the generic Repair: message, so defensive/optional repairs would
+          -- contaminate the case group with the wrong "defender" side
+          -- (codex, PR #463 round 3).
+          AND event_type IN ('objective_destroyed', 'flag_captured',
                              'dynamite_defuse')
           AND player_team IN ('AXIS', 'ALLIES')""")
 
-    groups = {"ADVANCE": [], "NEAR-MISS(defuse)": []}
+    groups = {"ADVANCE": [], "NEAR-MISS(defuse)": []}  # advance=destroyed+flag
     for e in events:
         if e["event_type"] == "dynamite_defuse":
             # defuser IS the defender

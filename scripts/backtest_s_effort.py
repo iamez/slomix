@@ -99,6 +99,9 @@ async def main():
                gaming_session_id, session_date, team_1_guids, team_2_guids
         FROM session_results
         WHERE team_1_guids IS NOT NULL AND team_2_guids IS NOT NULL
+          -- legacy NULL-gsid rows would collapse into ONE DISTINCT group;
+          -- this backtest scores gsid-scoped sessions only (codex, PR #463)
+          AND gaming_session_id IS NOT NULL
         ORDER BY gaming_session_id""")
 
     per_player = {}          # g8 -> list of dicts per session
