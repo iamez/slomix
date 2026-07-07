@@ -40,10 +40,19 @@ deployu prečisti OMNIBOT vnose in preračuna percentile brez botov (ratingi
 ±0.13, populacija ~40→~26 ljudi — pričakovano, C7). Backfill MORA teči nad
 prečiščenimi ratingi, sicer persistira s.effort proti starim vrednostim:
 ```
-# POZOR: ta klic PIŠE v DB (auto-refresh ob stale >1h) — to je namen koraka
-curl -s "https://www.slomix.fyi/api/skill/leaderboard" >/dev/null
-# preveri: nič OMNIBOT vnosov
-psql ... -c "SELECT COUNT(*) FROM player_skill_ratings WHERE player_guid LIKE 'OMNIBOT%'"
+# curl NI dovolj: auto-refresh teče samo ob stale >1h, torej lahko po deployu
+# vrne stare vrstice. Recompute FORSIRAJ direktno (piše v DB):
+cd /home/etbot/slomix_discord && venv/bin/python -c "
+import asyncio
+from website.backend.dependencies import get_db_pool, init_db_pool
+from website.backend.services.skill_rating_service import compute_and_store_ratings
+async def main():
+    await init_db_pool()
+    n = await compute_and_store_ratings(get_db_pool())
+    print(f'ratings recomputed for {n} players')
+asyncio.run(main())"
+# preveri: nič OMNIBOT vnosov IN svež last_rated_at
+psql ... -c "SELECT COUNT(*) FILTER (WHERE player_guid LIKE 'OMNIBOT%'), MAX(last_rated_at) FROM player_skill_ratings"
 ```
 
 ## A3 — Prod backfilli (owner-gated, po A1 backupu IN A2b refreshu)
