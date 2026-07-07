@@ -99,7 +99,12 @@ def _spearman(xs: list[float], ys: list[float]) -> float | None:
 
 
 async def load_events(conn) -> dict[str, dict]:
-    """Per-metric: guid -> {name, events: [(session_date, value_ms)]}."""
+    """Per-metric: guid -> {name, events: [(session_key, value_ms)]}.
+
+    session_key = rounds.gaming_session_id when the row is linked to a valid
+    round, else 'd:<calendar date>' — two sessions on one day must not
+    collapse into a single split-half bucket (codex, PR #458 round 2).
+    """
     out: dict[str, dict] = {"acq": {}, "acq_err": {}, "return_fire": {},
                             "dodge": {}, "spawn": {}}
 
@@ -107,7 +112,9 @@ async def load_events(conn) -> dict[str, dict]:
     #    Join by round identity + canonical killer + victim guid8 (kill_outcome
     #    has no victim canonical column); kill inside lock window (+ slack).
     rows = await conn.fetch(f"""
-        SELECT al.guid_canonical, MAX(al.player_name) AS name, al.session_date,
+        SELECT al.guid_canonical, MAX(al.player_name) AS name,
+               COALESCE(r.gaming_session_id::text,
+                        'd:' || al.session_date::text) AS session_key,
                (ko.kill_time - al.start_time) AS acq_ms,
                AVG(al.avg_err_deg) AS err_deg
         FROM proximity_aim_lock al
@@ -128,31 +135,40 @@ async def load_events(conn) -> dict[str, dict]:
           -- rounds (see round-linker regression coverage) — never join them
           AND al.round_start_unix > 0
           AND al.guid NOT LIKE $1 AND al.player_name NOT LIKE $2
+          -- the TARGET must be human too: locking a bot and killing it must
+          -- not feed a human-skill median (codex, PR #458 round 2)
+          AND al.target_guid NOT LIKE $1
+          AND COALESCE(al.target_name, '') NOT LIKE $2
+          AND ko.victim_guid NOT LIKE $1
+          AND COALESCE(ko.victim_name, '') NOT LIKE $2
           AND ko.kill_time > al.start_time
-        GROUP BY al.id, al.guid_canonical, al.session_date, ko.kill_time
+        GROUP BY al.id, al.guid_canonical, r.gaming_session_id,
+                 al.session_date, ko.kill_time
     """, *BOT_FILTER)
     for r in rows:
         g = r["guid_canonical"].upper()
         d = out["acq"].setdefault(g, {"name": r["name"], "events": []})
-        d["events"].append((str(r["session_date"]), float(r["acq_ms"])))
+        d["events"].append((r["session_key"], float(r["acq_ms"])))
         e = out["acq_err"].setdefault(g, {"name": r["name"], "events": []})
-        e["events"].append((str(r["session_date"]), float(r["err_deg"] or 0)))
+        e["events"].append((r["session_key"], float(r["err_deg"] or 0)))
 
     # B) REACTION UNDER FIRE (victim-centric, separate metric family)
     rows = await conn.fetch("""
-        SELECT rm.target_guid, MAX(rm.target_name) AS name, rm.session_date,
+        SELECT rm.target_guid, MAX(rm.target_name) AS name,
+               COALESCE(r.gaming_session_id::text,
+                        'd:' || rm.session_date::text) AS session_key,
                rm.return_fire_ms, rm.dodge_reaction_ms
         FROM proximity_reaction_metric rm
         LEFT JOIN rounds r ON r.id = rm.round_id
         WHERE (r.id IS NULL OR r.is_valid)
           AND rm.target_guid NOT LIKE $1 AND rm.target_name NOT LIKE $2
           AND (rm.return_fire_ms > 0 OR rm.dodge_reaction_ms > 0)
-        GROUP BY rm.id, rm.target_guid, rm.session_date,
+        GROUP BY rm.id, rm.target_guid, r.gaming_session_id, rm.session_date,
                  rm.return_fire_ms, rm.dodge_reaction_ms
     """, *BOT_FILTER)
     for r in rows:
         g = r["target_guid"][:8].upper()
-        sd = str(r["session_date"])
+        sd = r["session_key"]
         if r["return_fire_ms"] and 0 < r["return_fire_ms"] <= SANE_MS_MAX:
             d = out["return_fire"].setdefault(g, {"name": r["name"], "events": []})
             d["events"].append((sd, float(r["return_fire_ms"])))
@@ -162,7 +178,9 @@ async def load_events(conn) -> dict[str, dict]:
 
     # C) SPAWN READINESS: time from spawn to first movement per life
     rows = await conn.fetch(f"""
-        SELECT pt.player_guid, MAX(pt.player_name) AS name, pt.session_date,
+        SELECT pt.player_guid, MAX(pt.player_name) AS name,
+               COALESCE(r.gaming_session_id::text,
+                        'd:' || pt.session_date::text) AS session_key,
                pt.time_to_first_move_ms
         FROM player_track pt
         LEFT JOIN rounds r ON r.id = pt.round_id
@@ -170,12 +188,13 @@ async def load_events(conn) -> dict[str, dict]:
           AND pt.player_guid NOT LIKE $1 AND pt.player_name NOT LIKE $2
           AND pt.time_to_first_move_ms > 0
           AND pt.time_to_first_move_ms <= {SANE_MS_MAX}
-        GROUP BY pt.id, pt.player_guid, pt.session_date, pt.time_to_first_move_ms
+        GROUP BY pt.id, pt.player_guid, r.gaming_session_id, pt.session_date,
+                 pt.time_to_first_move_ms
     """, *BOT_FILTER)
     for r in rows:
         g = r["player_guid"][:8].upper()
         d = out["spawn"].setdefault(g, {"name": r["name"], "events": []})
-        d["events"].append((str(r["session_date"]), float(r["time_to_first_move_ms"])))
+        d["events"].append((r["session_key"], float(r["time_to_first_move_ms"])))
 
     return out
 
@@ -194,8 +213,18 @@ def summarize(metric: str, data: dict, min_events: int,
         })
     rated.sort(key=lambda x: x["median"], reverse=not lower_is_better)
     n = len(rated)
-    for i, r in enumerate(rated):
-        r["pct_rank"] = round(1.0 - i / (n - 1), 3) if n > 1 else 1.0
+    # equal medians share one percentile (tie-group average) — quantized
+    # telemetry ties often, and insertion order must not fabricate rank
+    i = 0
+    while i < n:
+        j = i
+        while j + 1 < n and rated[j + 1]["median"] == rated[i]["median"]:
+            j += 1
+        pct = (sum(1.0 - k / (n - 1) for k in range(i, j + 1)) / (j - i + 1)
+               if n > 1 else 1.0)
+        for k in range(i, j + 1):
+            rated[k]["pct_rank"] = round(pct, 3)
+        i = j + 1
     return rated
 
 
