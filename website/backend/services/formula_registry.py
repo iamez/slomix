@@ -180,11 +180,32 @@ def get_registry() -> list[dict]:
                        "diff +0.072 (informative).",
         },
         {
+            "name": "opening_duels",
+            "version": "duels-v0.1",
+            "status": "research",
+            "module": "scripts/backtest_opening_duels.py",
+            "surface": "owner backtest tables; SSR candidate input",
+            "summary": "Entry stat: rate of scoring vs being the round's "
+                       "FIRST kill (net per rounds present). Owner B6 mandate "
+                       "('izmisli še kake formule'); dev table shows a real "
+                       "spread (bronzelow +13.8% .. KaNii -9.6%).",
+        },
+        {
+            "name": "trade_discipline",
+            "version": "duels-v0.1",
+            "status": "research",
+            "module": "scripts/backtest_opening_duels.py",
+            "surface": "owner backtest tables; SSR candidate input",
+            "summary": "Share of own deaths avenged within the trade window "
+                       "(lua_trade_kill original_victim / kill_outcome deaths) "
+                       "— the team-play view of dying.",
+        },
+        {
             "name": "ois",
             "version": _ois_version(),
-            "status": "research",
+            "status": "live",
             "module": "website/backend/services/storytelling/ois.py",
-            "surface": "SSR input (Smart Stats surface planned)",
+            "surface": "SSR input; Smart Stats Comp Skill board",
             "summary": "Objective Impact Score — KIS-scale credit for NON-KILL "
                        "objective acts (doc return 3.0 x speed, defuse 2.5, "
                        "construction 2.0 x contested). Kept OUTSIDE KIS so KIS "
@@ -193,9 +214,10 @@ def get_registry() -> list[dict]:
         {
             "name": "situational_skill_rating",
             "version": _ssr_version(),
-            "status": "research",
+            "status": "live",
             "module": "website/backend/services/ssr_service.py",
-            "surface": "/api/skill/ssr (Comp Skill tab planned)",
+            "surface": "/api/skill/ssr; proximity Comp Skill tab; profile "
+                       "Reactions card; Smart Stats board",
             "summary": "Per-player aggregate of group-relative percentiles: "
                        "clutch KIS/session + situational KIS share + OIS/session "
                        "+ kill permanence + target acquisition + spawn readiness "
