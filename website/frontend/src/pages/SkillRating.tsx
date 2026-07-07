@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Trophy, Target, Heart, Shield, Crosshair, Skull, Zap, Clock, Info, ChevronDown, ChevronRight } from 'lucide-react';
-import { useSkillLeaderboard, useSkillFormula } from '../api/hooks';
+import { useSkillLeaderboard, useSkillFormula, useAdjustedLifetime } from '../api/hooks';
 import type { RatedPlayer } from '../api/types';
 import { PageHeader } from '../components/PageHeader';
 import { GlassCard } from '../components/GlassCard';
@@ -258,7 +258,7 @@ function ExpandedRow({ player }: { player: RatedPlayer }) {
 
 /* ── Player Row ── */
 
-function PlayerRow({ player, isExpanded, onToggle }: { player: RatedPlayer; isExpanded: boolean; onToggle: () => void }) {
+function PlayerRow({ player, isExpanded, onToggle, adjusted }: { player: RatedPlayer; isExpanded: boolean; onToggle: () => void; adjusted?: number | null }) {
   const tier = getTier(player.et_rating);
   const isTop3 = player.rank <= 3;
   const medals = ['', '🥇', '🥈', '🥉'];
@@ -292,6 +292,21 @@ function PlayerRow({ player, isExpanded, onToggle }: { player: RatedPlayer; isEx
           </span>
         </span>
 
+        {/* Pool-adjusted lifetime (s.effort family): harder average pool
+            lifts it above the raw rating, easier pool lowers it */}
+        <span
+          className={cn(
+            'w-16 text-right text-xs font-mono tabular-nums shrink-0',
+            adjusted == null ? 'text-slate-700'
+              : adjusted > player.et_rating + 0.005 ? 'text-emerald-400'
+              : adjusted < player.et_rating - 0.005 ? 'text-rose-400'
+              : 'text-slate-500',
+          )}
+          title="Pool-adjusted lifetime (SRS iteration over session pools)"
+        >
+          {adjusted == null ? '—' : adjusted.toFixed(3)}
+        </span>
+
         {/* Tier badge */}
         <span className={cn(
           'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border shrink-0',
@@ -321,6 +336,13 @@ function PlayerRow({ player, isExpanded, onToggle }: { player: RatedPlayer; isEx
 export default function SkillRating() {
   const { data, isLoading, isError } = useSkillLeaderboard(50);
   const { data: formula } = useSkillFormula();
+  const { data: adjusted } = useAdjustedLifetime();
+  const adjustedByGuid = useMemo(() => {
+    if (!adjusted?.players?.length) return null;
+    return new Map(adjusted.players.map((a) => [
+      a.player_guid.slice(0, 8).toUpperCase(), a.adjusted_lifetime,
+    ]));
+  }, [adjusted]);
   const [expandedGuid, setExpandedGuid] = useState<string | null>(null);
   const [showFormula, setShowFormula] = useState(false);
 
@@ -395,6 +417,7 @@ export default function SkillRating() {
           <span className="flex-1">Player</span>
           <span className="w-32 text-center">Rating</span>
           <span className="w-24 text-center">Tier</span>
+          <span className="w-16 text-right" title="Pool-adjusted lifetime">Adj</span>
           <span className="w-16 text-right">Rounds</span>
           <span className="w-4" />
         </div>
@@ -406,6 +429,7 @@ export default function SkillRating() {
             player={p}
             isExpanded={expandedGuid === p.player_guid}
             onToggle={() => { setExpandedGuid(expandedGuid === p.player_guid ? null : p.player_guid); }}
+            adjusted={adjustedByGuid?.get(p.player_guid.slice(0, 8).toUpperCase()) ?? null}
           />
         ))}
       </div>

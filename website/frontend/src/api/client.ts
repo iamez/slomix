@@ -482,6 +482,8 @@ export const api = {
     get<import('./types').SkillLeaderboardResponse>(`/skill/leaderboard?limit=${limit}`),
   getSkillFormula: () =>
     get<import('./types').SkillFormulaResponse>('/skill/formula'),
+  getAdjustedLifetime: () =>
+    get<import('./types').AdjustedLifetimeResponse>('/skill/adjusted-lifetime'),
   getSkillHistory: (identifier: string, rangeDays = 30, sessionDate?: string) => {
     const params = new URLSearchParams({ range_days: String(rangeDays) });
     if (sessionDate) params.set('session_date', sessionDate);

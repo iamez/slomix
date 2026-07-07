@@ -3825,6 +3825,7 @@ const LB_TABS = [
     { key: 'movement', label: 'Movement' },
     { key: 'focus_fire', label: 'Focus Fire' },
     { key: 'krogt', label: 'KROGT' },
+    { key: 'comp_skill', label: 'Comp Skill' },
 ];
 let lbActiveTab = 'power';
 let lbRangeDays = 30;
@@ -3849,6 +3850,46 @@ function loadLeaderboardData() {
     const contentEl = document.getElementById('leaderboard-content');
     if (!contentEl) return;
     contentEl.innerHTML = '<div class="text-[11px] text-slate-500">Loading...</div>';
+
+    // Comp Skill (SSR v0) is all-time and group-relative — it has its own
+    // endpoint and ignores range/scope entirely (owner answer A4).
+    if (lbActiveTab === 'comp_skill') {
+        const rangeBtns = document.getElementById('lb-range-btns');
+        if (rangeBtns) rangeBtns.style.display = 'none';
+        fetchJSON(`${API_BASE}/skill/ssr`).then(data => {
+            const players = data?.players ?? [];
+            if (players.length === 0) {
+                contentEl.innerHTML = '<div class="text-[11px] text-slate-500">No rated players yet (min 5 sessions, 3 components).</div>';
+                return;
+            }
+            contentEl.textContent = '';
+            const note = document.createElement('div');
+            note.className = 'text-[10px] text-slate-500 pb-1';
+            note.textContent = `Situational Skill Rating ${data.formula_version || ''} · all-time · percentile vs rated group (min ${data.min_sessions} sessions)`;
+            contentEl.appendChild(note);
+            players.slice(0, 10).forEach((p, i) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center justify-between text-[11px] text-slate-300 py-0.5';
+                const left = document.createElement('span');
+                const rank = document.createElement('span');
+                rank.className = 'text-slate-600 mr-2';
+                rank.textContent = `${i + 1}.`;
+                left.appendChild(rank);
+                left.appendChild(document.createTextNode(stripEtColors(p.name || p.player_guid)));
+                const right = document.createElement('span');
+                right.className = 'text-brand-cyan font-mono';
+                right.textContent = `${Number(p.ssr).toFixed(3)} · ${p.coverage}`;
+                right.title = 'SSR · component coverage';
+                row.appendChild(left);
+                row.appendChild(right);
+                contentEl.appendChild(row);
+            });
+        }).catch(() => {
+            contentEl.innerHTML = '<div class="text-[11px] text-slate-500">Comp Skill unavailable.</div>';
+        });
+        return;
+    }
+
     const hasScope = proximityScopeState.mapName || proximityScopeState.roundNumber != null;
 
     // Hide range buttons when scope is active (range is meaningless for scoped queries)
