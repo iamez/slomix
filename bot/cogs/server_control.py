@@ -461,6 +461,9 @@ class ServerControl(commands.Cog):
         cached = self._maps_cache
         if cached and (time.monotonic() - cached[0]) < self._maps_cache_ttl:
             maps = cached[1]
+            if not maps:
+                await ctx.send("❌ No map files found in etmain folder (cached)")
+                return
         else:
             await ctx.send("📂 Fetching map list...")
             try:
@@ -469,6 +472,9 @@ class ServerControl(commands.Cog):
                 output, error, exit_code = self.execute_ssh_command(list_command)
 
                 if "No maps found" in output or not output.strip():
+                    # cache the negative result too — a fresh/misconfigured
+                    # server must not turn every public call into an SSH probe
+                    self._maps_cache = (time.monotonic(), [])
                     await ctx.send("❌ No map files found in etmain folder")
                     return
 
@@ -482,11 +488,10 @@ class ServerControl(commands.Cog):
                             filename = os.path.basename(path)
                             maps.append(f"• `{filename}` ({size})")
 
+                self._maps_cache = (time.monotonic(), maps)
                 if not maps:
                     await ctx.send("❌ No maps found")
                     return
-
-                self._maps_cache = (time.monotonic(), maps)
             except Exception as e:
                 logger.error(f"Error listing maps: {e}", exc_info=True)
                 if cached:
