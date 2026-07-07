@@ -43,6 +43,14 @@ async def test_connect_does_not_run_migrations():
 @pytest.mark.asyncio
 async def test_migrate_schema_is_the_explicit_path():
     mgr = _manager()
+    mgr.pool = object()  # migrate requires a connection
     mgr._migrate_schema_if_needed = AsyncMock()  # noqa: SLF001
     await mgr.migrate_schema()
     mgr._migrate_schema_if_needed.assert_awaited_once()  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_migrate_schema_without_pool_raises_clear_error():
+    mgr = _manager()
+    with pytest.raises(RuntimeError, match="requires a connection"):
+        await mgr.migrate_schema()
