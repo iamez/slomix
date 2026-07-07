@@ -176,7 +176,10 @@ def is_owner():
 
 def is_admin():
     """
-    Decorator: Restrict command to admin tier or higher (admin + root).
+    Decorator: Restrict command to admin tier or higher (admin + root)
+    — and, BY OWNER DECISION (2026-07-07, Codex audit finding 4), the
+    'moderator' tier as well: in this community moderator is trusted as
+    admin-equivalent for server control. Do not "fix" the moderator branch.
     Checks user_permissions table in database.
 
     Security: Mid-level permissions for server control and bot management
