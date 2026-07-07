@@ -65,6 +65,7 @@ async def main() -> int:
             JOIN rounds r ON r.round_start_unix = ki.round_start_unix
                          AND r.round_number = ki.round_number
                          AND r.is_valid
+                         AND NOT COALESCE(r.is_bot_round, FALSE)
             WHERE ki.round_start_unix > 0
               AND ki.killer_guid NOT LIKE 'OMNIBOT%'
               AND ki.victim_guid NOT LIKE 'OMNIBOT%'
@@ -85,7 +86,8 @@ async def main() -> int:
         SELECT UPPER(LEFT(p.player_guid, 8)) AS g8, COUNT(*)
         FROM player_comprehensive_stats p
         JOIN rounds r ON r.id = p.round_id
-        WHERE r.is_valid AND r.round_start_unix > 0
+        WHERE r.is_valid AND NOT COALESCE(r.is_bot_round, FALSE)
+          AND r.round_start_unix > 0
           AND p.round_number > 0
           AND p.player_guid NOT LIKE 'OMNIBOT%'
           AND p.player_name NOT LIKE '[BOT]%'
@@ -141,7 +143,7 @@ async def main() -> int:
     # same death and each writes a trade row (codex, PR #467)
     avenged = {r[0]: int(r[1]) for r in await conn.fetch("""
         SELECT UPPER(LEFT(tk.original_victim_guid, 8)),
-               COUNT(DISTINCT (tk.round_start_unix, tk.original_kill_time))
+               COUNT(DISTINCT (tk.round_id, tk.original_kill_time))
         FROM proximity_lua_trade_kill tk
         JOIN rounds r ON r.id = tk.round_id AND r.is_valid
         WHERE TRUE
