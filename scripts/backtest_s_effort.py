@@ -93,16 +93,29 @@ async def main():
 
     # DISTINCT ON: session_results has one row per (date, map, session) —
     # iterating raw rows would score the same player-session once per map
-    # and inflate n_sessions_used and every table (codex, PR #463)
+    # and inflate n_sessions_used and every table (codex, PR #463).
+    # The scoring DATE comes from rounds (MIN(round_date) per gsid), NOT from
+    # session_results.session_date: results can finalize across midnight and
+    # compute_session_ratings scopes sessions by their START date — the same
+    # derivation the production s.effort backfill uses (codex, round 4).
     sessions = await conn.fetch("""
-        SELECT DISTINCT ON (gaming_session_id)
-               gaming_session_id, session_date, team_1_guids, team_2_guids
-        FROM session_results
-        WHERE team_1_guids IS NOT NULL AND team_2_guids IS NOT NULL
+        SELECT DISTINCT ON (sr.gaming_session_id)
+               sr.gaming_session_id,
+               rd.start_date AS session_date,
+               sr.team_1_guids, sr.team_2_guids
+        FROM session_results sr
+        JOIN (
+            SELECT gaming_session_id,
+                   MIN(SUBSTRING(round_date, 1, 10)) AS start_date
+            FROM rounds
+            WHERE gaming_session_id IS NOT NULL AND is_valid
+            GROUP BY gaming_session_id
+        ) rd ON rd.gaming_session_id = sr.gaming_session_id
+        WHERE sr.team_1_guids IS NOT NULL AND sr.team_2_guids IS NOT NULL
           -- legacy NULL-gsid rows would collapse into ONE DISTINCT group;
           -- this backtest scores gsid-scoped sessions only (codex, PR #463)
-          AND gaming_session_id IS NOT NULL
-        ORDER BY gaming_session_id""")
+          AND sr.gaming_session_id IS NOT NULL
+        ORDER BY sr.gaming_session_id""")
 
     per_player = {}          # g8 -> list of dicts per session
     n_sessions_used = 0
