@@ -103,9 +103,12 @@ def _spearman(xs: list[float], ys: list[float]) -> float | None:
 async def load_events(conn) -> dict[str, dict]:
     """Per-metric: guid -> {name, events: [(session_key, value_ms)]}.
 
-    session_key = rounds.gaming_session_id when the row is linked to a valid
-    round, else 'd:<calendar date>' — two sessions on one day must not
-    collapse into a single split-half bucket (codex, PR #458 round 2).
+    Rows must link to a VALID round (INNER JOIN): unmatched proximity rows
+    stay round_id=NULL exactly for bot/surrender/subst-only rounds (migration
+    038), the same population the session rating code excludes.
+    session_key = rounds.gaming_session_id, 'd:<calendar date>' fallback when
+    the linked round carries no session id — two sessions on one day must not
+    collapse into a single split-half bucket (codex, PR #458 rounds 2+6).
     """
     out: dict[str, dict] = {"acq": {}, "acq_err": {}, "return_fire": {},
                             "dodge": {}, "spawn": {}}
@@ -133,10 +136,9 @@ async def load_events(conn) -> dict[str, dict]:
              UPPER(SUBSTRING(al.target_guid, 1, 8))
          AND ko.kill_time BETWEEN al.start_time
                               AND al.end_time + {ACQ_KILL_WINDOW_MS}
-        LEFT JOIN rounds r ON r.id = al.round_id
+        JOIN rounds r ON r.id = al.round_id AND r.is_valid
         LEFT JOIN rounds rk ON rk.id = ko.round_id
-        WHERE (r.id IS NULL OR r.is_valid)
-          AND (rk.id IS NULL OR rk.is_valid)
+        WHERE (rk.id IS NULL OR rk.is_valid)
           -- 0 = missing round metadata; such buckets conflate unrelated
           -- rounds (see round-linker regression coverage) — never join them
           AND al.round_start_unix > 0
@@ -165,9 +167,8 @@ async def load_events(conn) -> dict[str, dict]:
                         'd:' || rm.session_date::text) AS session_key,
                rm.return_fire_ms, rm.dodge_reaction_ms
         FROM proximity_reaction_metric rm
-        LEFT JOIN rounds r ON r.id = rm.round_id
-        WHERE (r.id IS NULL OR r.is_valid)
-          AND rm.target_guid NOT LIKE $1 AND rm.target_name NOT LIKE $2
+        JOIN rounds r ON r.id = rm.round_id AND r.is_valid
+        WHERE rm.target_guid NOT LIKE $1 AND rm.target_name NOT LIKE $2
           AND (rm.return_fire_ms > 0 OR rm.dodge_reaction_ms > 0)
         GROUP BY rm.id, rm.target_guid, r.gaming_session_id, rm.session_date,
                  rm.return_fire_ms, rm.dodge_reaction_ms
@@ -189,9 +190,8 @@ async def load_events(conn) -> dict[str, dict]:
                         'd:' || pt.session_date::text) AS session_key,
                pt.time_to_first_move_ms
         FROM player_track pt
-        LEFT JOIN rounds r ON r.id = pt.round_id
-        WHERE (r.id IS NULL OR r.is_valid)
-          AND pt.player_guid NOT LIKE $1 AND pt.player_name NOT LIKE $2
+        JOIN rounds r ON r.id = pt.round_id AND r.is_valid
+        WHERE pt.player_guid NOT LIKE $1 AND pt.player_name NOT LIKE $2
           AND pt.time_to_first_move_ms > 0
           AND pt.time_to_first_move_ms <= {SANE_MS_MAX}
           -- pre-Feb-21 tracker rows carry negative spawn_time_ms and produce
