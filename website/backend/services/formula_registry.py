@@ -16,13 +16,15 @@ from __future__ import annotations
 REGISTRY_VERSION = "1.0"
 
 
-def _live_version(module: str, attr: str, fallback: str) -> str:
-    """Read a FORMULA_VERSION-style constant without hard import coupling."""
-    try:
-        import importlib
-        return str(getattr(importlib.import_module(module), attr))
-    except Exception:
-        return fallback
+def _live_version(module: str, attr: str) -> str:
+    """Read a FORMULA_VERSION-style constant from the owning module.
+
+    Deliberately NO fallback: if the import breaks, the registry must fail
+    loudly instead of reporting a stale hand-copied version (codex, PR #463).
+    Both referenced modules are first-party website services.
+    """
+    import importlib
+    return str(getattr(importlib.import_module(module), attr))
 
 
 def get_registry() -> list[dict]:
@@ -40,7 +42,7 @@ def get_registry() -> list[dict]:
             "name": "s_effort",
             "version": _live_version(
                 "website.backend.services.s_effort_service",
-                "FORMULA_VERSION", "s.effort-v0.2"),
+                "FORMULA_VERSION"),
             "status": "live",
             "module": "website/backend/services/s_effort_service.py",
             "surface": "/api/skill/s-effort, player_skill_history scope='session'",
@@ -51,7 +53,7 @@ def get_registry() -> list[dict]:
             "name": "adjusted_lifetime",
             "version": _live_version(
                 "website.backend.services.s_effort_service",
-                "FORMULA_VERSION", "s.effort-v0.2"),
+                "FORMULA_VERSION"),
             "status": "live",
             "module": "website/backend/services/s_effort_service.py",
             "surface": "/api/skill/adjusted-lifetime",
@@ -89,7 +91,7 @@ def get_registry() -> list[dict]:
             "name": "prox_score_web",
             "version": _live_version(
                 "website.backend.services.prox_scoring",
-                "FORMULA_VERSION", "1.0"),
+                "FORMULA_VERSION"),
             "status": "live",
             "module": "website/backend/services/prox_scoring.py",
             "surface": "/api/proximity scoring endpoints",

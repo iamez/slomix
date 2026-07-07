@@ -22,8 +22,9 @@ import json
 import os
 import statistics as st
 import sys
+from pathlib import Path
 
-sys.path.insert(0, "/home/samba/share/slomix_discord")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import asyncpg  # noqa: E402
 
@@ -35,7 +36,7 @@ from website.backend.services.skill_rating_service import (  # noqa: E402
 FORMULA_VERSION = "s.effort-v0.1"
 POOL_NEUTRAL = 0.564
 MIN_SESSIONS = 5
-OUT = "/tmp/claude-1000/-home-samba-share-slomix-discord/acd3206d-a016-4841-809a-21f32d7b8acb/scratchpad/s_effort_v01"
+OUT = os.environ.get("S_EFFORT_OUT", "backtest_out/s_effort_v01")
 
 
 def _tr(q):
@@ -135,7 +136,6 @@ async def main():
         name, lt, _full = life[p]
         row = {"player": name, "g8": p, "lifetime": lt, "n_sessions": len(recs)}
         for v in variants:
-            efforts = [r["sess"] / r["pools"][v] * POOL_NEUTRAL / POOL_NEUTRAL for r in recs]
             # s.effort scaled so pool==NEUTRAL leaves sess/NEUTRAL scale-free:
             efforts = [r["sess"] / (r["pools"][v] or POOL_NEUTRAL) for r in recs]
             perf = [e / (lt / POOL_NEUTRAL) for e in efforts]
@@ -199,6 +199,9 @@ async def main():
     # ---- CSV + MD
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT + ".csv", "w", newline="") as f:
+        if not rows:
+            print("no players met MIN_SESSIONS — nothing to write")
+            return
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()) + ["formula_version"])
         w.writeheader()
         for r in rows:

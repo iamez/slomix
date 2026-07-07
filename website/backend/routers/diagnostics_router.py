@@ -503,7 +503,7 @@ async def get_lua_webhook_diagnostics(
 
 
 @router.get("/formulas")
-async def list_formulas():
+async def list_formulas(_admin=Depends(require_admin_user)):
     """Central formula registry: every scoring formula, its live version,
     code location, surface and status (live/research/proposed). Owner answer
     B6 (2026-07-07) — versions are imported from the owning modules so this

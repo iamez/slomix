@@ -45,7 +45,8 @@ async def main() -> None:
     rosters: dict = {}
     for r in tracks:
         key = (r["round_id"], r["team"])
-        lives.setdefault(key, []).append((int(r["spawn_time_ms"] or 0), int(r["death_ms"])))
+        lives.setdefault(key, []).append(
+            (int(r["spawn_time_ms"] or 0), int(r["death_ms"]), r["player_guid"][:8]))
         rosters.setdefault(key, set()).add(r["player_guid"][:8])
 
     def dead_frac(round_id: int, team: str, t_ms: int) -> float | None:
@@ -53,7 +54,9 @@ async def main() -> None:
         roster = rosters.get(key)
         if not roster or t_ms <= 0:
             return None
-        alive = sum(1 for s, d in lives[key] if s <= t_ms < d)
+        # DISTINCT players alive at t — duplicate/overlapping windows for
+        # one player must not count twice (codex, PR #463)
+        alive = len({g for s, d, g in lives[key] if s <= t_ms < d})
         return 1.0 - min(alive, len(roster)) / len(roster)
 
     # ADVANCE = attackers progressed a phase; CONTROL = near-miss (defused).
