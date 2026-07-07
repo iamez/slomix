@@ -6,6 +6,31 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.23.0](https://github.com/iamez/slomix/compare/v1.22.0...v1.23.0) (2026-07-07)
+
+
+### Features
+
+* All-Seeing Eye paket — OIS + SSR + Comp Skill/profil/Adj surfacing + Match Lean + help-harm probe (A1-A5, B4) ([#465](https://github.com/iamez/slomix/issues/465)) ([0de041a](https://github.com/iamez/slomix/commit/0de041af99ad29873297dae659f5f5902f91ecd4))
+* **bot,website:** adopt BOX point scale everywhere — 2 points per map, draws 1-1 ([#447](https://github.com/iamez/slomix/issues/447)) ([e255eab](https://github.com/iamez/slomix/commit/e255eab9ae1a6edcba73a60b038789ee39fc0d0d))
+* **proximity:** 'Where pushes die' map overlay (slice 2) ([#437](https://github.com/iamez/slomix/issues/437)) ([23f1849](https://github.com/iamez/slomix/commit/23f1849697564ec51f15f3212a36369283760738))
+* **proximity:** K-E backtest — target acquisition, reaction under fire, spawn readiness ([#458](https://github.com/iamez/slomix/issues/458)) ([521ba14](https://github.com/iamez/slomix/commit/521ba1499b58fa20afa65a2c4cb3e35e7892c2e6))
+* **proximity:** KROGT per-life leaderboard category (slice 3 productization) ([#442](https://github.com/iamez/slomix/issues/442)) ([5c283a9](https://github.com/iamez/slomix/commit/5c283a9f3797c0bc693ebe5ba88bcee8e9d9acef))
+* **proximity:** per-life KROGT backtest (slice 3, Phase-0) + catalog status refresh ([#441](https://github.com/iamez/slomix/issues/441)) ([83de6be](https://github.com/iamez/slomix/commit/83de6beaa59aa2b0587b26dc217b74bff43a4ca5))
+* **scripts:** Good Night Index v0 Phase-0 backtest ([#449](https://github.com/iamez/slomix/issues/449)) ([7ede8e8](https://github.com/iamez/slomix/commit/7ede8e8571826ec3545894c493e0450ac30dd81d))
+* **website:** formula registry + /api/formulas (B6) + rescue K-B backtest scripts ([#463](https://github.com/iamez/slomix/issues/463)) ([182a449](https://github.com/iamez/slomix/commit/182a44927b4ba4a4f8ee92266f0f142639954c15))
+* **website:** Good Night Index card on Session Detail (Phase 1) ([#451](https://github.com/iamez/slomix/issues/451)) ([a3c8484](https://github.com/iamez/slomix/commit/a3c848489c4d27767bb020c1bc19288adfa131fe))
+* **website:** s.effort + adjusted lifetime (K-D) ([#455](https://github.com/iamez/slomix/issues/455)) ([8d3096e](https://github.com/iamez/slomix/commit/8d3096e5f30f2bf4f22b42389a7e2b47d524f3a5))
+
+
+### Bug Fixes
+
+* **bot,website:** address PR [#443](https://github.com/iamez/slomix/issues/443) post-merge review (Copilot x3) ([#445](https://github.com/iamez/slomix/issues/445)) ([bd1d36f](https://github.com/iamez/slomix/commit/bd1d36f6a375ab619dceae651221ce60cd9135fc))
+* **bot,website:** unify session scoring — match_id pairing + BOX validity gate ([#443](https://github.com/iamez/slomix/issues/443)) ([b2d54aa](https://github.com/iamez/slomix/commit/b2d54aafc301dc99adcd8271018c2264e702124d))
+* **bot:** admin_predictions DB-tier gate + cached !maps + moderator policy doc (B1-B3) ([#460](https://github.com/iamez/slomix/issues/460)) ([d888f49](https://github.com/iamez/slomix/commit/d888f4994331bc1fbf4efe2af888942c9858c942))
+* Codex read-only audit remediation — confirmed P1/P2 findings (report.md) ([#457](https://github.com/iamez/slomix/issues/457)) ([17dad82](https://github.com/iamez/slomix/commit/17dad82b0c37d67ef4d8cbd09e734b3965857c9d))
+* **proximity:** de-duplicate carrier deaths inside push windows (codex P2, PR [#437](https://github.com/iamez/slomix/issues/437)) ([#439](https://github.com/iamez/slomix/issues/439)) ([04f3ca2](https://github.com/iamez/slomix/commit/04f3ca200ddc009a95712a47debe533f8c3eec98))
+
 ## [1.22.0](https://github.com/iamez/slomix/compare/v1.21.0...v1.22.0) (2026-07-04)
 
 
