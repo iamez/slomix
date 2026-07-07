@@ -20,6 +20,7 @@ import re
 import shlex
 import socket
 import tempfile
+import time
 from datetime import datetime
 
 import discord
@@ -143,6 +144,13 @@ class ServerControl(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+
+        # Public !maps cache: (monotonic_ts, rendered_lines). The command is
+        # public, so it must not trigger an SSH call per invocation (Codex
+        # audit finding 6; owner decision 2026-07-07: cached daily list).
+        self._maps_cache: tuple[float, list] | None = None
+        self._maps_cache_ttl = 24 * 3600
+        self._maps_cache_lock = asyncio.Lock()  # one SSH refresh at a time
 
         # SSH Configuration
         self.ssh_host = os.getenv('SSH_HOST')
@@ -448,21 +456,23 @@ class ServerControl(commands.Cog):
     # MAP MANAGEMENT
     # ========================================
 
-    @commands.command(name='list_maps', aliases=['map_list', 'listmaps'])
-    async def map_list(self, ctx):
-        """📋 List available maps on server"""
-        await ctx.send("📂 Fetching map list...")
+    async def _refresh_maps_cache(self, ctx) -> None:
+        """SSH-fetch the map list into _maps_cache (caller holds the lock).
 
+        On failure with a stale cache on hand, the stale entry's timestamp is
+        bumped just enough to serve it, while an error without any cache
+        reports to the user."""
+        await ctx.send("📂 Fetching map list...")
         try:
-            # List .pk3 files in etmain folder
             list_command = f"ls -lh {self.maps_path}/*.pk3 2>/dev/null | awk '{{print $9, $5}}' || echo 'No maps found'"
             output, error, exit_code = self.execute_ssh_command(list_command)
 
             if "No maps found" in output or not output.strip():
-                await ctx.send("❌ No map files found in etmain folder")
+                # cache the negative result too — a fresh/misconfigured
+                # server must not turn every public call into an SSH probe
+                self._maps_cache = (time.monotonic(), [])
                 return
 
-            # Parse output
             maps = []
             for line in output.strip().split('\n'):
                 if line.strip():
@@ -472,9 +482,43 @@ class ServerControl(commands.Cog):
                         filename = os.path.basename(path)
                         maps.append(f"• `{filename}` ({size})")
 
-            if not maps:
-                await ctx.send("❌ No maps found")
-                return
+            self._maps_cache = (time.monotonic(), maps)
+        except Exception as e:
+            logger.error(f"Error listing maps: {e}", exc_info=True)
+            if self._maps_cache:
+                # SSH hiccup with a stale cache: refresh its timestamp so the
+                # caller serves it now; a later call will retry SSH after TTL
+                await ctx.send("⚠️ Refresh failed — showing the last cached list.")
+                self._maps_cache = (time.monotonic() - self._maps_cache_ttl + 600,
+                                    self._maps_cache[1])
+            else:
+                await ctx.send(f"❌ Error listing maps: {sanitize_error_message(e)}")
+
+    @commands.command(name='list_maps', aliases=['map_list', 'listmaps'])
+    async def map_list(self, ctx):
+        """📋 List available maps on server (cached; SSH at most 1x/day)"""
+        def _fresh():
+            c = self._maps_cache
+            return c if c and (time.monotonic() - c[0]) < self._maps_cache_ttl else None
+
+        cached = _fresh()
+        if not cached:
+            # serialize cold-cache refreshes: concurrent public calls must
+            # collapse into ONE SSH fetch, not a burst
+            async with self._maps_cache_lock:
+                cached = _fresh()  # a waiter may find it filled by the winner
+                if not cached:
+                    await self._refresh_maps_cache(ctx)
+                    cached = _fresh()
+            if not cached:
+                return  # refresh failed and no stale cache — message already sent
+
+        maps = cached[1]
+        if not maps:
+            await ctx.send("❌ No map files found in etmain folder (cached)")
+            return
+
+        try:
 
             # Split into chunks if too many maps
             chunk_size = 20
@@ -486,11 +530,11 @@ class ServerControl(commands.Cog):
                     color=discord.Color.blue(),
                     timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 )
-                embed.set_footer(text=f"Path: {self.maps_path}")
+                embed.set_footer(text=f"Path: {self.maps_path} · cached, refreshes daily")
                 await ctx.send(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error listing maps: {e}", exc_info=True)
+            logger.error(f"Error rendering map list: {e}", exc_info=True)
             await ctx.send(f"❌ Error listing maps: {sanitize_error_message(e)}")
 
     @commands.command(name='map_add', aliases=['addmap', 'upload_map'])
@@ -568,6 +612,7 @@ class ServerControl(commands.Cog):
 
             await ctx.send(embed=embed)
             await self.log_action(ctx, "Map Upload Success", f"{sanitized_name} - MD5: {file_hash}")
+            self._maps_cache = None  # map set changed — next !maps refetches
 
         except Exception as e:
             logger.error(f"Error uploading map: {e}", exc_info=True)
@@ -665,6 +710,7 @@ class ServerControl(commands.Cog):
                 )
                 await ctx.send(embed=embed)
                 await self.log_action(ctx, "Map Delete Success", map_name)
+                self._maps_cache = None  # map set changed — next !maps refetches
             else:
                 await ctx.send(
                     f"❌ Failed to delete map. Error: {sanitize_error_message(error)}")
