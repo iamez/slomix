@@ -338,7 +338,7 @@ export default function SkillRating() {
   const { data: formula } = useSkillFormula();
   const { data: adjusted } = useAdjustedLifetime();
   const adjustedByGuid = useMemo(() => {
-    if (!adjusted?.players?.length) return null;
+    if (!adjusted?.players.length) return null;
     return new Map(adjusted.players.map((a) => [
       a.player_guid.slice(0, 8).toUpperCase(), a.adjusted_lifetime,
     ]));
