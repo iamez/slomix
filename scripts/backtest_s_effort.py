@@ -91,8 +91,12 @@ async def main():
 
     percentiles = await compute_population_percentiles(db)
 
+    # DISTINCT ON: session_results has one row per (date, map, session) —
+    # iterating raw rows would score the same player-session once per map
+    # and inflate n_sessions_used and every table (codex, PR #463)
     sessions = await conn.fetch("""
-        SELECT gaming_session_id, session_date, team_1_guids, team_2_guids
+        SELECT DISTINCT ON (gaming_session_id)
+               gaming_session_id, session_date, team_1_guids, team_2_guids
         FROM session_results
         WHERE team_1_guids IS NOT NULL AND team_2_guids IS NOT NULL
         ORDER BY gaming_session_id""")
