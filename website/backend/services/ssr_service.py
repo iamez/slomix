@@ -202,42 +202,38 @@ class SsrService:
         return {r[0]: float(r[1]) for r in (rows or [])}
 
     async def _opening_net(self) -> dict[str, float]:
-        """Net first-kill rate per rounds present (duels-v0.1, PR #467)."""
+        """Net first-kill rate per rounds PLAYED (duels-v0.1 + #467 r3 fixes:
+        matched valid rounds only, ALL kills tied at the round minimum credit
+        every participant, denominator from PCS presence)."""
         openings = await self.db.fetch_all(
-            "SELECT killer, victim FROM ("
-            "  SELECT DISTINCT ON (ki.round_start_unix, ki.round_number)"
+            "WITH k AS ("
+            "  SELECT ki.round_start_unix, ki.round_number, ki.kill_time_ms,"
             "         UPPER(LEFT(ki.killer_guid, 8)) AS killer,"
             "         UPPER(LEFT(ki.victim_guid, 8)) AS victim "
             "  FROM storytelling_kill_impact ki "
-            "  LEFT JOIN rounds r ON r.round_start_unix = ki.round_start_unix "
-            "                    AND r.round_number = ki.round_number "
-            "  WHERE ki.round_start_unix > 0 AND (r.id IS NULL OR r.is_valid) "
+            "  JOIN rounds r ON r.round_start_unix = ki.round_start_unix "
+            "               AND r.round_number = ki.round_number "
+            "               AND r.is_valid "
+            "  WHERE ki.round_start_unix > 0 "
             "    AND ki.killer_guid NOT LIKE ? AND ki.victim_guid NOT LIKE ? "
             "    AND ki.killer_name NOT LIKE ? "
             "    AND COALESCE(ki.victim_name, '') NOT LIKE ? "
-            "  ORDER BY ki.round_start_unix, ki.round_number, ki.kill_time_ms"
-            ") o",
+            ") "
+            "SELECT killer, victim FROM k "
+            "WHERE (round_start_unix, round_number, kill_time_ms) IN ("
+            "    SELECT round_start_unix, round_number, MIN(kill_time_ms) "
+            "    FROM k GROUP BY round_start_unix, round_number)",
             (_BOTS[0], _BOTS[0], _BOTS[1], _BOTS[1]),
         )
         presence_rows = await self.db.fetch_all(
-            "SELECT g8, COUNT(*) FROM ("
-            "  SELECT UPPER(LEFT(ki.killer_guid, 8)) AS g8,"
-            "         ki.round_start_unix, ki.round_number "
-            "  FROM storytelling_kill_impact ki "
-            "  LEFT JOIN rounds r ON r.round_start_unix = ki.round_start_unix "
-            "                    AND r.round_number = ki.round_number "
-            "  WHERE ki.round_start_unix > 0 AND (r.id IS NULL OR r.is_valid) "
-            "    AND ki.killer_name NOT LIKE ? "
-            "  UNION "
-            "  SELECT UPPER(LEFT(ki.victim_guid, 8)),"
-            "         ki.round_start_unix, ki.round_number "
-            "  FROM storytelling_kill_impact ki "
-            "  LEFT JOIN rounds r ON r.round_start_unix = ki.round_start_unix "
-            "                    AND r.round_number = ki.round_number "
-            "  WHERE ki.round_start_unix > 0 AND (r.id IS NULL OR r.is_valid) "
-            "    AND COALESCE(ki.victim_name, '') NOT LIKE ? "
-            ") x WHERE g8 NOT LIKE ? GROUP BY g8",
-            (_BOTS[1], _BOTS[1], _BOTS[0]),
+            "SELECT UPPER(LEFT(p.player_guid, 8)) AS g8, COUNT(*) "
+            "FROM player_comprehensive_stats p "
+            "JOIN rounds r ON r.id = p.round_id "
+            "WHERE r.is_valid AND r.round_start_unix > 0 "
+            "  AND p.round_number > 0 "
+            "  AND p.player_guid NOT LIKE ? AND p.player_name NOT LIKE ? "
+            "GROUP BY UPPER(LEFT(p.player_guid, 8))",
+            _BOTS,
         )
         wins: dict[str, int] = {}
         losses: dict[str, int] = {}
@@ -256,8 +252,8 @@ class SsrService:
         deaths = await self.db.fetch_all(
             "SELECT UPPER(LEFT(ko.victim_guid, 8)) AS g8, COUNT(*) "
             "FROM proximity_kill_outcome ko "
-            "LEFT JOIN rounds r ON r.id = ko.round_id "
-            "WHERE (r.id IS NULL OR r.is_valid) "
+            "JOIN rounds r ON r.id = ko.round_id AND r.is_valid "
+            "WHERE TRUE "
             "  AND ko.victim_guid NOT LIKE ? AND ko.victim_name NOT LIKE ? "
             "GROUP BY UPPER(LEFT(ko.victim_guid, 8)) HAVING COUNT(*) >= ?",
             (*_BOTS, MIN_DEATHS),
@@ -266,8 +262,8 @@ class SsrService:
             "SELECT UPPER(LEFT(tk.original_victim_guid, 8)),"
             "       COUNT(DISTINCT (tk.round_start_unix, tk.original_kill_time)) "
             "FROM proximity_lua_trade_kill tk "
-            "LEFT JOIN rounds r ON r.id = tk.round_id "
-            "WHERE (r.id IS NULL OR r.is_valid) "
+            "JOIN rounds r ON r.id = tk.round_id AND r.is_valid "
+            "WHERE TRUE "
             "  AND tk.original_victim_guid IS NOT NULL "
             "  AND tk.original_victim_guid NOT LIKE ? "
             "GROUP BY 1",

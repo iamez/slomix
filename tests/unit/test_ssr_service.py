@@ -50,11 +50,11 @@ class FakeDB:
             return [("AAAA1111", 850.0), ("CCCC3333", 1100.0)]
         if "player_track" in query:
             return [("AAAA1111", 225.0), ("BBBB2222", 150.0)]
-        if "DISTINCT ON (ki.round_start_unix" in query:
+        if "WITH k AS" in query:
             # openings: alpha wins one, charlie loses one
             return [("AAAA1111", "CCCC3333")]
-        if "UNION" in query:
-            # presence: both above the duel gate
+        if "FROM player_comprehensive_stats p" in query and "COUNT(*)" in query:
+            # presence (rounds actually played): both above the duel gate
             return [("AAAA1111", 40), ("CCCC3333", 40)]
         if "proximity_lua_trade_kill" in query:
             return [("BBBB2222", 20)]
