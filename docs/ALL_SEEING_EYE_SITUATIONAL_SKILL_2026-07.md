@@ -141,3 +141,45 @@ ET Rating v2 later adds it as one weighted metric.
 2. Non-kill KIS credits: agree engineers/doc-returners should earn KIS-scale value?
 3. Reflex boards: public or profile-private? (hardware caveat text included either way)
 4. aim_lock↔kill linkage: worth a Lua tweak, or post-hoc join first?
+
+## 7. K-E backtest results — target acquisition & reaction (2026-07-07)
+
+Script: `scripts/backtest_target_acquisition.py` (`target-acq-v0.1`, read-only).
+All values are group-RELATIVE medians; telemetry is ~200 ms quantized, so a
+metric only counts as usable when the best→worst median spread exceeds the
+quantization grid AND the split-half (session-parity) ordering is stable.
+
+| metric | rated | events | spread | split-half | verdict |
+|---|---|---|---|---|---|
+| Target acquisition (aim-lock onset→kill, live since 2026-06-22) | 10 | 1,360 | 275 ms | +0.81 (n=6) | **USABLE** |
+| Reaction under fire — return fire | 15 | 37,265 | 100 ms | +0.45 (n=13) | not usable alone (spread < grid, weak stability) |
+| Reaction under fire — dodge | 15 | 55,351 | 154 ms | n/a (fully tied medians) | not usable alone (spread < grid) |
+| Spawn readiness (time to first move) | 17 | 38,361 | 326 ms | +0.85 (n=13) | **USABLE** |
+
+Stability values are tie-aware Spearman (average ranks) over TRUE gaming
+sessions (gaming_session_id sorted numerically, calendar-date fallback for
+unlinked rows); fully tied grid-level medians report n/a rather than a
+spurious +1.00. Splitting by real sessions instead of calendar dates dropped
+return fire from an apparent +0.70 to +0.45 — its ordering is not reliably
+session-stable, which seals the descriptive-only verdict. Rows must link to a VALID round — unmatched
+proximity rows stay round_id=NULL exactly for bot/surrender/subst-only rounds
+(migration 038), the same population session ratings exclude. Pre-activation v7
+probe locks (before 2026-06-22) are explicitly excluded; on current dev data
+they never linked to kills anyway, so counts are unchanged (codex, PR #458
+rounds 1-3).
+
+Highlights (medians): target acquisition KaNii 850 ms fastest → qmr 1,125 ms;
+return fire bronze 200 ms → ownator 300 ms (differences sit inside the
+quantization grid and the ordering is not session-stable — descriptive only);
+spawn readiness is the
+most stable board, but its top two are single-session players (n_sess=1) —
+a session minimum belongs in any public surface.
+
+Consequences for the Situational Skill Rating: target acquisition and spawn
+readiness qualify as candidate inputs (relative percentiles, min-session
+gate); return-fire/dodge stay descriptive profile facts until either the Lua
+sampling grid tightens or an engagement-level model absorbs them. This also
+answers §6 Q4: the post-hoc aim_lock↔kill join works today (1,360 linked
+events; the unlinked majority of locks is expected — most locks simply never
+end in a kill) — no Lua tweak
+needed for v0.
