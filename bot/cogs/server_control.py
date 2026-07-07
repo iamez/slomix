@@ -20,6 +20,7 @@ import re
 import shlex
 import socket
 import tempfile
+import time
 from datetime import datetime
 
 import discord
@@ -143,6 +144,12 @@ class ServerControl(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+
+        # Public !maps cache: (monotonic_ts, rendered_lines). The command is
+        # public, so it must not trigger an SSH call per invocation (Codex
+        # audit finding 6; owner decision 2026-07-07: cached daily list).
+        self._maps_cache: tuple[float, list] | None = None
+        self._maps_cache_ttl = 24 * 3600
 
         # SSH Configuration
         self.ssh_host = os.getenv('SSH_HOST')
@@ -450,31 +457,42 @@ class ServerControl(commands.Cog):
 
     @commands.command(name='list_maps', aliases=['map_list', 'listmaps'])
     async def map_list(self, ctx):
-        """📋 List available maps on server"""
-        await ctx.send("📂 Fetching map list...")
+        """📋 List available maps on server (cached; SSH at most 1x/day)"""
+        cached = self._maps_cache
+        if cached and (time.monotonic() - cached[0]) < self._maps_cache_ttl:
+            maps = cached[1]
+        else:
+            await ctx.send("📂 Fetching map list...")
+            try:
+                # List .pk3 files in etmain folder
+                list_command = f"ls -lh {self.maps_path}/*.pk3 2>/dev/null | awk '{{print $9, $5}}' || echo 'No maps found'"
+                output, error, exit_code = self.execute_ssh_command(list_command)
+
+                if "No maps found" in output or not output.strip():
+                    await ctx.send("❌ No map files found in etmain folder")
+                    return
+
+                # Parse output
+                maps = []
+                for line in output.strip().split('\n'):
+                    if line.strip():
+                        parts = line.rsplit(' ', 1)
+                        if len(parts) == 2:
+                            path, size = parts
+                            filename = os.path.basename(path)
+                            maps.append(f"• `{filename}` ({size})")
+
+                if not maps:
+                    await ctx.send("❌ No maps found")
+                    return
+
+                self._maps_cache = (time.monotonic(), maps)
+            except Exception as e:
+                logger.error(f"Error listing maps: {e}", exc_info=True)
+                await ctx.send(f"❌ Error listing maps: {sanitize_error_message(e)}")
+                return
 
         try:
-            # List .pk3 files in etmain folder
-            list_command = f"ls -lh {self.maps_path}/*.pk3 2>/dev/null | awk '{{print $9, $5}}' || echo 'No maps found'"
-            output, error, exit_code = self.execute_ssh_command(list_command)
-
-            if "No maps found" in output or not output.strip():
-                await ctx.send("❌ No map files found in etmain folder")
-                return
-
-            # Parse output
-            maps = []
-            for line in output.strip().split('\n'):
-                if line.strip():
-                    parts = line.rsplit(' ', 1)
-                    if len(parts) == 2:
-                        path, size = parts
-                        filename = os.path.basename(path)
-                        maps.append(f"• `{filename}` ({size})")
-
-            if not maps:
-                await ctx.send("❌ No maps found")
-                return
 
             # Split into chunks if too many maps
             chunk_size = 20
@@ -486,11 +504,11 @@ class ServerControl(commands.Cog):
                     color=discord.Color.blue(),
                     timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 )
-                embed.set_footer(text=f"Path: {self.maps_path}")
+                embed.set_footer(text=f"Path: {self.maps_path} · cached, refreshes daily")
                 await ctx.send(embed=embed)
 
         except Exception as e:
-            logger.error(f"Error listing maps: {e}", exc_info=True)
+            logger.error(f"Error rendering map list: {e}", exc_info=True)
             await ctx.send(f"❌ Error listing maps: {sanitize_error_message(e)}")
 
     @commands.command(name='map_add', aliases=['addmap', 'upload_map'])

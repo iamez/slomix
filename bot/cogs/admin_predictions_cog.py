@@ -43,17 +43,28 @@ class AdminPredictionsCog(commands.Cog, name="Admin Predictions"):
 
         logger.info("✅ AdminPredictionsCog loaded")
 
-    def cog_check(self, ctx):
-        """Check if user has permission to use admin commands."""
-        # Check if user is in admin channels or has admin role
-        if ctx.channel.id in self.config.admin_channels:
+    async def cog_check(self, ctx):
+        """Admin channel AND DB permission tier (admin/moderator).
+
+        Channel membership alone used to grant access (Codex audit finding 5);
+        owner decision 2026-07-07: require the admin channel plus the same
+        user_permissions tier the rest of the admin surface checks.
+        """
+        if ctx.channel.id not in self.config.admin_channels:
+            return False
+
+        if ctx.author.id == getattr(ctx.bot, 'owner_user_id', 0):
             return True
 
-        # Check for admin/mod roles
-        if hasattr(ctx.author, 'guild_permissions'):
-            return ctx.author.guild_permissions.administrator
-
-        return False
+        try:
+            result = await self.db.fetch_one(
+                "SELECT tier FROM user_permissions WHERE discord_id = $1",
+                (ctx.author.id,)
+            )
+            return bool(result and result[0] in ('admin', 'moderator'))
+        except Exception as e:
+            logger.error(f"admin_predictions permission check failed: {e}")
+            return False
 
     @commands.command(name='admin_predictions')
     async def admin_predictions(self, ctx, status: str = "all", limit: int = 10):
