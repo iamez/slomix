@@ -13,9 +13,14 @@ privzeto. Zaporedje: P0 → A1 → A2 → A3 → A4 → verify.
 3. Prod `.env` sanity: `file .env` — če pokaže CRLF, `sed -i 's/\r$//' .env`
    (dev je imel CRLF in je `db_backup.sh` padel na sourcanju!).
 
-## A1 — Backup (vedno prvi)
+> **Kontekst ukazov:** A1–A4 tečejo NA PROD VM (`ssh slomix-vm`), v
+> `/opt/slomix`, s TAMKAJŠNJIMI venvi (`venv-web` za website skripte).
+> Edina izjema je `deploy_release.sh`, ki se požene z dev/deploy stroja.
+
+## A1 — Backup (vedno prvi, NA PROD VM!)
 ```
-./scripts/db_backup.sh        # pg_dump → backups/etlegacy_<ts>.sql.gz
+ssh slomix-vm "cd /opt/slomix && ./scripts/db_backup.sh"
+# pg_dump → /opt/slomix/backups/etlegacy_<ts>.sql.gz (prod baza, ne dev!)
 ```
 Shrani pot — restore točka za A3/A4.
 
@@ -38,11 +43,12 @@ Opombe:
 Orphan R2 vrstice so do označbe `is_valid=TRUE` in bi ušle v percentile ter
 s.effort (codexov P1 na tem checklistu). Predpogoj: PostgreSQL driver
 `psycopg2`/`psycopg` ni pinned v requirements — preveri
-`python3 -c "import psycopg2"` (sicer `pip install psycopg2-binary` v venv).
+`venv-web/bin/python -c "import psycopg2"` (sicer `pip install psycopg2-binary` v venv-web).
 ```
+ssh slomix-vm
 cd /opt/slomix
-venv/bin/python scripts/backfill_orphan_r2.py            # dry-run (~42 rund)
-venv/bin/python scripts/backfill_orphan_r2.py --apply
+venv-web/bin/python scripts/backfill_orphan_r2.py            # dry-run (~42 rund)
+venv-web/bin/python scripts/backfill_orphan_r2.py --apply
 ```
 
 ## A2c — ET Rating refresh (OBVEZNO PRED s.effort backfillom!)
@@ -53,7 +59,7 @@ teči nad prečiščenimi ratingi:
 ```
 # curl NI dovolj: auto-refresh teče samo ob stale >1h, torej lahko po deployu
 # vrne stare vrstice. Recompute FORSIRAJ direktno (piše v DB):
-cd /opt/slomix && venv/bin/python -c "
+cd /opt/slomix && venv-web/bin/python -c "
 import asyncio
 from website.backend.dependencies import get_db_pool, init_db_pool
 from website.backend.services.skill_rating_service import compute_and_store_ratings
@@ -68,10 +74,11 @@ psql ... -c "SELECT COUNT(*) FILTER (WHERE player_guid LIKE 'OMNIBOT%'), MAX(las
 
 ## A3 — s.effort backfill (owner-gated; po A1 backupu, A2b orphanih in A2c refreshu)
 ```
+ssh slomix-vm
 cd /opt/slomix
 # s.effort session history (v0.2; idempotenten, formula_version stamped)
-venv/bin/python scripts/backfill_s_effort_history.py                  # dry-run najprej
-venv/bin/python scripts/backfill_s_effort_history.py --apply --i-have-a-backup
+venv-web/bin/python scripts/backfill_s_effort_history.py                  # dry-run najprej
+venv-web/bin/python scripts/backfill_s_effort_history.py --apply --i-have-a-backup
 # dev referenca: 819 vrstic / 29 igralcev / 118 sej
 
 ```
