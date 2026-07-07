@@ -117,15 +117,24 @@ async def main():
           AND sr.gaming_session_id IS NOT NULL
         ORDER BY sr.gaming_session_id""")
 
-    per_player = {}          # g8 -> list of dicts per session
-    n_sessions_used = 0
+    # Aggregate rosters BY START DATE: compute_session_ratings (and the
+    # production persist) score date-wide — every gsid whose MIN(round_date)
+    # matches — so two sessions sharing a start date must be ONE scoring unit
+    # here too, with unioned team rosters (codex, PR #463 round 5).
+    by_date: dict = {}
     for s in sessions:
-        t1 = [g8(x) for x in json.loads(s["team_1_guids"]) if g8(x) in life]
-        t2 = [g8(x) for x in json.loads(s["team_2_guids"]) if g8(x) in life]
+        date = str(s["session_date"])[:10]
+        ent = by_date.setdefault(date, (set(), set()))
+        ent[0].update(g8(x) for x in json.loads(s["team_1_guids"]) if g8(x) in life)
+        ent[1].update(g8(x) for x in json.loads(s["team_2_guids"]) if g8(x) in life)
+
+    per_player = {}          # g8 -> list of dicts per session-date
+    n_sessions_used = 0
+    for date, (t1set, t2set) in sorted(by_date.items()):
+        t1, t2 = sorted(t1set - t2set), sorted(t2set - t1set)
         if len(t1) < 2 or len(t2) < 2:
             continue
         n_sessions_used += 1
-        date = str(s["session_date"])[:10]
         for team, opp in ((t1, t2), (t2, t1)):
             opp_avg = st.mean(life[g][1] for g in opp)
             for p in team:
