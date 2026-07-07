@@ -171,6 +171,12 @@ async def compute_population_percentiles(db) -> dict:
         COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
         FROM player_comprehensive_stats
         WHERE round_number > 0
+          -- same validity/bot gate as the global rating query below: filler/
+          -- orphan rounds and omni-bot rows must not shape the percentile
+          -- population every rating is ranked against (Codex audit finding 12)
+          AND round_id IN (SELECT id FROM rounds WHERE is_valid)
+          AND player_guid NOT LIKE 'OMNIBOT%'
+          AND player_name NOT LIKE '[BOT]%'
         GROUP BY player_guid
         HAVING COUNT(*) >= $1
     """, (MIN_ROUNDS,))
@@ -355,6 +361,11 @@ async def compute_all_ratings(db) -> list[dict]:
         ) prox_spawn ON prox_spawn.guid_c = pcs.player_guid
 
         WHERE pcs.round_number > 0
+          -- is_valid + bot gate (Codex audit finding 12): 822 bot rows and 16
+          -- invalid-round rows were feeding lifetime ratings and percentiles
+          AND pcs.round_id IN (SELECT id FROM rounds WHERE is_valid)
+          AND pcs.player_guid NOT LIKE 'OMNIBOT%'
+          AND pcs.player_name NOT LIKE '[BOT]%'
         GROUP BY pcs.player_guid, prox_outcome.kill_quality,
                  pts.crossfire_kills, prox_trades.trade_count,
                  prox_outcome.gib_rate, prox_clutch.clutch_rate,
@@ -394,6 +405,16 @@ async def compute_all_ratings(db) -> list[dict]:
 async def compute_and_store_ratings(db) -> int:
     """Compute all ratings and upsert into player_skill_ratings table."""
     results = await compute_all_ratings(db)
+
+    # Upserts never remove rows, so bot entries rated before the bot gate
+    # existed would sit in the table forever — self-heal on every refresh.
+    await db.execute(
+        "DELETE FROM player_skill_ratings "
+        "WHERE player_guid LIKE 'OMNIBOT%' OR display_name LIKE '[BOT]%'"
+    )
+    await db.execute(
+        "DELETE FROM player_skill_history WHERE player_guid LIKE 'OMNIBOT%'"
+    )
 
     for player in results:
         components_json = json.dumps(player["components"])

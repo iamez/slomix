@@ -6,8 +6,10 @@
 Pool variant chosen by owner after the 4-variant backtest
 (scripts/backtest_s_effort.py): **A — all session participants, leave-one-out**
 (closest to SuperBoyy's original sheet; A/B/C ordering was near-identical).
-POOL_NEUTRAL = population average of et_rating (measured 0.564, range
-[0.24, 0.76] — NOT a theoretical 1.0).
+POOL_NEUTRAL = population average of et_rating — NOT a theoretical 1.0.
+Re-measured 0.570 after the is_valid+bot gate landed in the global rating
+query (report.md finding 12); v0.1's 0.564 was measured against a population
+polluted by omni-bot rows.
 
 Persistence: player_skill_history rows with scope='session' (infra added by
 migration 031, unused until now). Idempotent: DELETE+INSERT per
@@ -29,8 +31,8 @@ from statistics import mean
 
 logger = logging.getLogger(__name__)
 
-FORMULA_VERSION = "s.effort-v0.1"
-POOL_NEUTRAL = 0.564
+FORMULA_VERSION = "s.effort-v0.2"  # v0.2: POOL_NEUTRAL re-measured post bot-gate
+POOL_NEUTRAL = 0.570
 SRS_ITERATIONS = 5
 
 

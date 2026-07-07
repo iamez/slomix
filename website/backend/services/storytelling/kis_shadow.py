@@ -473,6 +473,14 @@ class _KisShadowMixin:
         sd_date = _to_date(sd)
         lock_key = str(sd_date)
         async with _compute_locks.get(lock_key):
+            # Transaction so the up-front DELETE + bottom INSERT are atomic:
+            # a failed rerun rolls back and keeps the previous audit snapshot
+            # (early "no_data"/"no_overlap" returns still commit the DELETE,
+            # which is the intended stale-row clearing).
+            tx = getattr(self.db, "transaction", None)
+            if callable(tx):
+                async with tx():
+                    return await self._run_kis_shadow_audit_locked(sd_date)
             return await self._run_kis_shadow_audit_locked(sd_date)
 
     async def _run_kis_shadow_audit_locked(self, sd_date: date) -> dict:

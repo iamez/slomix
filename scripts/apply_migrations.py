@@ -111,7 +111,23 @@ async def ensure_tracking_table(conn: asyncpg.Connection):
 
 
 async def get_applied(conn: asyncpg.Connection) -> set[str]:
-    rows = await conn.fetch("SELECT filename FROM schema_migrations")
+    """Filenames recorded as successfully applied.
+
+    Rows with success = FALSE are failure records, not applied migrations —
+    counting them here made a once-failed migration permanently skipped
+    (Codex audit finding 1).
+    """
+    rows = await conn.fetch(
+        "SELECT filename FROM schema_migrations WHERE success = TRUE"
+    )
+    return {r["filename"] for r in rows}
+
+
+async def get_failed(conn: asyncpg.Connection) -> set[str]:
+    """Filenames whose last recorded attempt failed."""
+    rows = await conn.fetch(
+        "SELECT filename FROM schema_migrations WHERE success = FALSE"
+    )
     return {r["filename"] for r in rows}
 
 
@@ -132,6 +148,7 @@ async def cmd_status():
     try:
         await ensure_tracking_table(conn)
         applied = await get_applied(conn)
+        failed = await get_failed(conn)
         migrations = discover_migrations()
 
         print(f"\nMigrations directory: {MIGRATIONS_DIR}")
@@ -139,13 +156,20 @@ async def cmd_status():
 
         pending = 0
         for filename, path in migrations:
-            status = "APPLIED" if filename in applied else "PENDING"
-            if status == "PENDING":
+            if filename in applied:
+                status, marker = "APPLIED", "  "
+            elif filename in failed:
+                status, marker = "FAILED", "!!"
+            else:
+                status, marker = "PENDING", ">>"
                 pending += 1
-            marker = "  " if filename in applied else ">>"
             print(f"  {marker} [{status:7s}] {filename}")
 
-        print(f"\n  Applied: {len(applied)}, Pending: {pending}\n")
+        print(f"\n  Applied: {len(applied)}, Failed: {len(failed)}, Pending: {pending}")
+        if failed:
+            print("  FAILED migrations retry on next apply; if they were fixed "
+                  "manually via psql, reconcile with --mark.")
+        print()
     finally:
         await conn.close()
 
@@ -156,10 +180,17 @@ async def cmd_baseline():
     try:
         await ensure_tracking_table(conn)
         applied = await get_applied(conn)
+        failed = await get_failed(conn)
         migrations = discover_migrations()
 
         count = 0
         for filename, path in migrations:
+            if filename in failed:
+                # ON CONFLICT DO NOTHING below would silently leave the row at
+                # success=FALSE — reconciling a failure record needs --mark.
+                print(f"  [SKIP-FAILED] {filename} (has a failure record; "
+                      "reconcile with --mark after verifying)")
+                continue
             if filename not in applied:
                 version = _version_from_filename(filename)
                 checksum = _file_checksum(path)
@@ -186,22 +217,31 @@ async def cmd_apply():
     try:
         await ensure_tracking_table(conn)
         applied = await get_applied(conn)
+        failed = await get_failed(conn)
         migrations = discover_migrations()
 
-        # Auto-baseline: if tracking table is empty but DB has real tables,
-        # all existing migrations are pre-applied.
-        if not applied:
+        # Populated DB with an empty tracking table: refuse instead of silently
+        # baselining — an existing DB with schema drift would be marked fully
+        # migrated without any validation (Codex audit finding 2). The operator
+        # must run --baseline explicitly.
+        if not applied and not failed:
             has_tables = await conn.fetchval(
                 "SELECT EXISTS(SELECT 1 FROM information_schema.tables "
                 "WHERE table_name = 'player_comprehensive_stats')"
             )
             if has_tables:
                 print("  Populated database detected with empty tracking table.")
-                print("  Running auto-baseline for all existing migrations...\n")
-                await cmd_baseline_inner(conn, migrations)
-                applied = await get_applied(conn)
+                print("  Refusing to apply: this DB predates migration tracking, so")
+                print("  pending migrations may already be (partially) applied.")
+                print("  Verify the schema, then run:  apply_migrations.py --baseline\n")
+                sys.exit(1)
 
         pending = [(f, p) for f, p in migrations if f not in applied]
+        if failed:
+            print(f"  NOTE: {len(failed)} previously FAILED migration(s) will be retried:")
+            for f in sorted(failed):
+                print(f"    !! {f}")
+            print()
 
         if not pending:
             print("  No pending migrations.\n")
@@ -219,11 +259,17 @@ async def cmd_apply():
             try:
                 await conn.execute(sql)
                 elapsed_ms = int((time.monotonic() - start) * 1000)
+                # DO UPDATE, not DO NOTHING: a retried migration conflicts with
+                # its own earlier success=FALSE row, and the outcome must
+                # overwrite it or the retry's success is never recorded.
                 await conn.execute(
                     """INSERT INTO schema_migrations
                        (version, filename, checksum, applied_by, execution_ms, success)
                        VALUES ($1, $2, $3, 'cli', $4, TRUE)
-                       ON CONFLICT (filename) DO NOTHING""",
+                       ON CONFLICT (filename) DO UPDATE
+                       SET success = TRUE, checksum = EXCLUDED.checksum,
+                           applied_by = 'cli', execution_ms = EXCLUDED.execution_ms,
+                           applied_at = NOW()""",
                     version, filename, checksum, elapsed_ms,
                 )
                 print(f"OK ({elapsed_ms}ms)")
@@ -233,7 +279,10 @@ async def cmd_apply():
                     """INSERT INTO schema_migrations
                        (version, filename, checksum, applied_by, execution_ms, success)
                        VALUES ($1, $2, $3, 'cli', $4, FALSE)
-                       ON CONFLICT (filename) DO NOTHING""",
+                       ON CONFLICT (filename) DO UPDATE
+                       SET success = FALSE, checksum = EXCLUDED.checksum,
+                           applied_by = 'cli', execution_ms = EXCLUDED.execution_ms,
+                           applied_at = NOW()""",
                     version, filename, checksum, elapsed_ms,
                 )
                 print(f"FAILED ({elapsed_ms}ms)")

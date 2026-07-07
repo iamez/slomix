@@ -50,6 +50,7 @@ class _WinContributionMixin:
             WHERE pcs.round_date = $1
               AND pcs.round_number IN (1, 2)
               AND r.round_number IN (1, 2)
+              AND r.is_valid
               AND pcs.time_played_seconds > 0
             ORDER BY r.id, pcs.player_guid
         """, (sd_str,))
