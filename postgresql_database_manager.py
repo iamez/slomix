@@ -3144,15 +3144,15 @@ async def main():
     choice = input("Select option (1-6): ").strip()
 
     manager = PostgreSQLDatabaseManager()
-    await manager.connect()
-
-    # Schema migrations are explicit now: run them for flows that import
-    # data; "validate" (5) stays strictly read-only and option 1
-    # (create_fresh_database) already migrates internally.
-    if choice in {"2", "3", "4", "6"}:
-        await manager.migrate_schema()
-
     try:
+        await manager.connect()
+
+        # Schema migrations are explicit now: run them for flows that import
+        # data; "validate" (5) stays strictly read-only and option 1
+        # (create_fresh_database) already migrates internally.
+        if choice in {"2", "3", "4", "6"}:
+            await manager.migrate_schema()
+
         if choice == "1":
             await manager.create_fresh_database(backup_existing=True)
 

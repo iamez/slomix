@@ -530,7 +530,10 @@ class ServerControl(commands.Cog):
                     color=discord.Color.blue(),
                     timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                 )
-                embed.set_footer(text=f"Path: {self.maps_path} · cached, refreshes daily")
+                # public command — never leak the server filesystem path in
+                # the footer (codex follow-up audit); admins can still see
+                # the real path via server diagnostics if needed
+                embed.set_footer(text="Cached, refreshes daily")
                 await ctx.send(embed=embed)
 
         except Exception as e:

@@ -1016,20 +1016,28 @@ class UltimateETLegacyBot(
                     # internal attribute, not part of the manager's public API.
                     db_manager._correlation_service = self.correlation_service  # noqa: SLF001
                 # Reuse the bot's existing asyncpg pool instead of creating a new one
-                if hasattr(self, 'db_adapter') and hasattr(self.db_adapter, 'pool') and self.db_adapter.pool:
-                    db_manager.pool = self.db_adapter.pool
-                else:
-                    await db_manager.connect()
-                    # connect() no longer migrates implicitly (#461): this
-                    # fallback WRITES via process_file(), so keep the
-                    # migrated-before-write guarantee explicitly
-                    await db_manager.migrate_schema()
+                created_own_pool = not (
+                    hasattr(self, 'db_adapter') and hasattr(self.db_adapter, 'pool')
+                    and self.db_adapter.pool
+                )
+                try:
+                    if created_own_pool:
+                        await db_manager.connect()
+                        # connect() no longer migrates implicitly (#461): this
+                        # fallback WRITES via process_file(), so keep the
+                        # migrated-before-write guarantee explicitly
+                        await db_manager.migrate_schema()
+                    else:
+                        db_manager.pool = self.db_adapter.pool
 
-                success, message = await db_manager.process_file(Path(local_path))
-
-                # Only disconnect if we created our own pool
-                if not (hasattr(self, 'db_adapter') and hasattr(self.db_adapter, 'pool') and self.db_adapter.pool):
-                    await db_manager.disconnect()
+                    success, message = await db_manager.process_file(Path(local_path))
+                finally:
+                    # Only disconnect if we created our own pool — and always
+                    # do it, even if connect()/migrate_schema()/process_file()
+                    # raised, so a migration failure can't leak the pool
+                    # (codex follow-up audit).
+                    if created_own_pool:
+                        await db_manager.disconnect()
 
                 if not success:
                     # Mark parse failures as processed (with success=FALSE) to prevent
