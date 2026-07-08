@@ -7,18 +7,19 @@ player's kill count at that partial snapshot. The bot must delete the
 stale rows at session finalize so the next read recomputes fresh, and this
 must NEVER break finalization (DB hiccup, missing table, etc.).
 
-Covers 3 codex review findings (PR #482):
+Covers codex review findings (PR #482):
   1. invalidate EVERY distinct session_date the session's rounds touch
      (midnight-crossing sessions), not just the start date
-  2. re-delete after a delay to guard against an in-flight compute that
-     finishes (and re-inserts stale rows) after the first delete
+  2. (a delayed re-delete was tried to guard against an in-flight compute
+     finishing late, then reverted — see _invalidate_kis_cache's docstring
+     and the section below: it collided with SESSION_DIGEST_ENABLED's
+     legitimate post-session-end recompute)
   3. (gating-on-scoring-success is covered by the finalize-hook test in
      test_s_effort_session_hook.py — this file only tests the invalidation
      methods directly)
 """
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 
 import pytest
@@ -85,39 +86,33 @@ async def test_delete_truncates_full_timestamp_to_date():
 
 
 # ---------------------------------------------------------------------------
-# _invalidate_kis_cache — double-delete (immediate + delayed) wrapper
+# _invalidate_kis_cache — single delete only
+#
+# An earlier version of this hook also re-ran the delete after a delay to
+# catch an in-flight compute finishing late — but that unconditional
+# second delete collided with SESSION_DIGEST_ENABLED (live on prod), which
+# makes the morning-digest hook legitimately recompute fresh KIS rows
+# shortly after every session end; the delayed delete wiped those out too
+# (codex, PR #482, "Avoid deleting fresh KIS recomputes"). Reverted to a
+# single delete — see the method docstring for the full tradeoff.
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_invalidate_deletes_twice_with_a_delay_between(monkeypatch):
+async def test_invalidate_deletes_exactly_once_no_delay():
     svc = _svc()
     adapter = _FakeAdapter()
     svc.db_adapter = adapter
 
-    sleeps = []
-
-    async def _fake_sleep(seconds):
-        sleeps.append(seconds)
-
-    monkeypatch.setattr(asyncio, "sleep", _fake_sleep)
-
     await svc._invalidate_kis_cache("2026-07-07")  # noqa: SLF001
 
-    assert len(adapter.calls) == 2
+    assert len(adapter.calls) == 1
     assert adapter.calls[0][1] == (dt.date(2026, 7, 7),)
-    assert adapter.calls[1][1] == (dt.date(2026, 7, 7),)
-    assert sleeps == [10]
 
 
 @pytest.mark.asyncio
-async def test_invalidate_never_raises_even_if_both_deletes_fail(monkeypatch):
+async def test_invalidate_never_raises_on_db_failure():
     svc = _svc()
     svc.db_adapter = _FakeAdapter(raise_exc=RuntimeError("db down"))
-
-    async def _fake_sleep(_seconds):
-        return None
-
-    monkeypatch.setattr(asyncio, "sleep", _fake_sleep)
 
     await svc._invalidate_kis_cache("2026-07-07")  # noqa: SLF001
     # reaching here without an exception IS the assertion

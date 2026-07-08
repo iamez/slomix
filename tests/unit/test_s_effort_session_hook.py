@@ -133,12 +133,8 @@ async def _run_finalize(svc):
     import asyncio
     await svc._finalize_session_results()  # noqa: SLF001
     # the persist + KIS-invalidate calls run as background tasks — let them
-    # get scheduled, then cancel the KIS one so its 10s defensive re-delete
-    # sleep (see _invalidate_kis_cache) doesn't outlive the test.
+    # get scheduled and complete (both are a single fast DB call, no delay).
     await asyncio.sleep(0)
-    for task in asyncio.all_tasks():
-        if task.get_name() == "kis-cache-invalidate":
-            task.cancel()
 
 
 @pytest.mark.asyncio

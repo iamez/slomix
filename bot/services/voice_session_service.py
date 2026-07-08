@@ -503,19 +503,26 @@ class VoiceSessionService:
         next Story/Smart Stats read recomputes instead of serving a
         mid-session snapshot.
 
-        Runs the delete TWICE (immediate + delayed): compute_session_kis()
-        has no cross-process lock the bot can coordinate with, so a
-        Story/Smart Stats request that was already mid-compute when the
-        first delete ran can finish afterwards and INSERT its stale
-        snapshot, silently undoing the invalidation. The delayed re-delete
-        cleans that up for any compute that started before session end and
-        finished within the window (codex, PR #482, "Guard against
-        in-flight KIS recomputes restoring stale rows"). Not a full fix —
-        a rigorous one needs a DB-level advisory lock shared with the
-        website's compute path, out of scope for this bot-only change.
+        SINGLE delete only — a first attempt at this also re-ran the delete
+        after a delay to catch an in-flight compute that finishes late, but
+        that unconditional second delete collided with a MUCH more common
+        case: SESSION_DIGEST_ENABLED (live on prod) makes the morning-digest
+        hook call /storytelling/kill-impact shortly after every session end,
+        which legitimately recomputes fresh, complete rows — the delayed
+        delete then wiped those out too, leaving the table empty until yet
+        another consumer happened to trigger a recompute (codex, PR #482,
+        "Avoid deleting fresh KIS recomputes"). There is no cheap way to
+        tell "an old stale compute finishing late" apart from "a new
+        legitimate compute that started after this delete" from the DB
+        side alone — both just look like a fresh INSERT. A correct fix
+        needs a cross-process lock (e.g. a Postgres advisory lock) shared
+        with the website's compute path, out of scope for this bot-only
+        change; the residual race (a Story/Smart Stats request already
+        mid-compute at the exact moment this delete runs can still finish
+        and re-insert its stale snapshot) is accepted as a narrow,
+        self-healing edge case — the NEXT read after that will recompute
+        fresh again since nothing else re-freezes the cache once it does.
         Best-effort; must never raise."""
-        await self._delete_kis_rows(session_date)
-        await asyncio.sleep(10)
         await self._delete_kis_rows(session_date)
 
     async def _delete_kis_rows(self, session_date: str) -> None:
