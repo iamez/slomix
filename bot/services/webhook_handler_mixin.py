@@ -337,11 +337,16 @@ class _WebhookHandlerMixin:
             result = await self.process_gamestats_file(local_path, filename, override_metadata=override_metadata)
 
             if result and result.get('success'):
-                # Post to production stats channel
-                webhook_logger.info(f"📊 Posting stats: {result.get('player_count', 0)} players")
+                # Post to production stats channel when autopost is enabled.
+                webhook_logger.info(
+                    f"📊 Publishing stats if autopost enabled: {result.get('player_count', 0)} players"
+                )
                 try:
-                    await self.round_publisher.publish_round_stats(filename, result)
-                    webhook_logger.info(f"✅ Successfully processed and posted: {filename}")
+                    posted = await self.round_publisher.publish_round_stats(filename, result)
+                    if posted:
+                        webhook_logger.info(f"✅ Successfully processed and posted: {filename}")
+                    else:
+                        webhook_logger.info(f"✅ Successfully processed; round stats autopost skipped: {filename}")
                 except Exception as post_err:
                     webhook_logger.error(f"❌ Discord post FAILED for {filename}: {post_err}", exc_info=True)
                     await self.track_error("discord_posting", f"Failed to post {filename}: {post_err}", max_consecutive=2)

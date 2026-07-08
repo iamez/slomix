@@ -201,6 +201,9 @@ class BotConfig:
 
         # ==================== AUTOMATION SYSTEM ====================
         self.automation_enabled: bool = self._get_config('AUTOMATION_ENABLED', 'false').lower() == 'true'
+        self.round_stats_autopost_enabled: bool = (
+            self._get_config('ROUND_STATS_AUTOPOST_ENABLED', 'true').lower() == 'true'
+        )
 
         # ==================== MORNING SESSION DIGEST (VISION_2026 S1.1) ====================
         # Auto-posted recap embed after a session ends. OFF by default —

@@ -249,12 +249,17 @@ class _MonitorTasksMixin:
 
                             logger.info(f"⚙️ Processing completed in {process_time:.2f}s")
 
-                            # 🆕 AUTO-POST to Discord after processing!
+                            # 🆕 AUTO-POST to Discord after processing when enabled.
                             if result and result.get('success'):
-                                logger.info(f"📊 Posting to Discord: {result.get('player_count', 0)} players")
+                                logger.info(
+                                    f"📊 Publishing stats if autopost enabled: {result.get('player_count', 0)} players"
+                                )
                                 try:
-                                    await self.round_publisher.publish_round_stats(filename, result)
-                                    logger.info(f"✅ Successfully processed and posted: {filename}")
+                                    posted = await self.round_publisher.publish_round_stats(filename, result)
+                                    if posted:
+                                        logger.info(f"✅ Successfully processed and posted: {filename}")
+                                    else:
+                                        logger.info(f"✅ Successfully processed; round stats autopost skipped: {filename}")
                                 except Exception as post_err:
                                     logger.error(f"❌ Discord post FAILED for {filename}: {post_err}", exc_info=True)
                                     await self.track_error(
