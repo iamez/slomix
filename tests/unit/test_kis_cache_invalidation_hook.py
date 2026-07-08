@@ -6,9 +6,19 @@ the codebase — a Story/Smart Stats page viewed mid-session freezes every
 player's kill count at that partial snapshot. The bot must delete the
 stale rows at session finalize so the next read recomputes fresh, and this
 must NEVER break finalization (DB hiccup, missing table, etc.).
+
+Covers 3 codex review findings (PR #482):
+  1. invalidate EVERY distinct session_date the session's rounds touch
+     (midnight-crossing sessions), not just the start date
+  2. re-delete after a delay to guard against an in-flight compute that
+     finishes (and re-inserts stale rows) after the first delete
+  3. (gating-on-scoring-success is covered by the finalize-hook test in
+     test_s_effort_session_hook.py — this file only tests the invalidation
+     methods directly)
 """
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 
 import pytest
@@ -31,13 +41,17 @@ class _FakeAdapter:
             raise self._raise
 
 
+# ---------------------------------------------------------------------------
+# _delete_kis_rows — the atomic single-delete building block
+# ---------------------------------------------------------------------------
+
 @pytest.mark.asyncio
-async def test_invalidate_deletes_by_session_date_as_a_date_object():
+async def test_delete_deletes_by_session_date_as_a_date_object():
     svc = _svc()
     adapter = _FakeAdapter()
     svc.db_adapter = adapter
 
-    await svc._invalidate_kis_cache("2026-07-07")  # noqa: SLF001
+    await svc._delete_kis_rows("2026-07-07")  # noqa: SLF001
 
     assert len(adapter.calls) == 1
     query, params = adapter.calls[0]
@@ -50,21 +64,115 @@ async def test_invalidate_deletes_by_session_date_as_a_date_object():
 
 
 @pytest.mark.asyncio
-async def test_invalidate_never_raises_on_db_failure():
+async def test_delete_never_raises_on_db_failure():
     svc = _svc()
     svc.db_adapter = _FakeAdapter(raise_exc=RuntimeError("db down"))
+
+    await svc._delete_kis_rows("2026-07-07")  # noqa: SLF001
+    # reaching here without an exception IS the assertion
+
+
+@pytest.mark.asyncio
+async def test_delete_truncates_full_timestamp_to_date():
+    svc = _svc()
+    adapter = _FakeAdapter()
+    svc.db_adapter = adapter
+
+    await svc._delete_kis_rows("2026-07-07 23:59:00")  # noqa: SLF001
+
+    _, params = adapter.calls[0]
+    assert params == (dt.date(2026, 7, 7),)
+
+
+# ---------------------------------------------------------------------------
+# _invalidate_kis_cache — double-delete (immediate + delayed) wrapper
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_invalidate_deletes_twice_with_a_delay_between(monkeypatch):
+    svc = _svc()
+    adapter = _FakeAdapter()
+    svc.db_adapter = adapter
+
+    sleeps = []
+
+    async def _fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", _fake_sleep)
+
+    await svc._invalidate_kis_cache("2026-07-07")  # noqa: SLF001
+
+    assert len(adapter.calls) == 2
+    assert adapter.calls[0][1] == (dt.date(2026, 7, 7),)
+    assert adapter.calls[1][1] == (dt.date(2026, 7, 7),)
+    assert sleeps == [10]
+
+
+@pytest.mark.asyncio
+async def test_invalidate_never_raises_even_if_both_deletes_fail(monkeypatch):
+    svc = _svc()
+    svc.db_adapter = _FakeAdapter(raise_exc=RuntimeError("db down"))
+
+    async def _fake_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", _fake_sleep)
 
     await svc._invalidate_kis_cache("2026-07-07")  # noqa: SLF001
     # reaching here without an exception IS the assertion
 
 
+# ---------------------------------------------------------------------------
+# _session_dates_touched — midnight-crossing session support
+# ---------------------------------------------------------------------------
+
+class _DatesAdapter:
+    def __init__(self, rows):
+        self._rows = rows
+        self.query = None
+        self.params = None
+
+    async def fetch_all(self, query, params=()):
+        self.query = query
+        self.params = params
+        return self._rows
+
+
 @pytest.mark.asyncio
-async def test_invalidate_truncates_full_timestamp_to_date():
+async def test_dates_touched_returns_all_distinct_dates():
     svc = _svc()
-    adapter = _FakeAdapter()
+    adapter = _DatesAdapter([("2026-07-07",), ("2026-07-08",)])
     svc.db_adapter = adapter
 
-    await svc._invalidate_kis_cache("2026-07-07 23:59:00")  # noqa: SLF001
+    dates = await svc._session_dates_touched([9001, 9002, 9003])  # noqa: SLF001
 
-    _, params = adapter.calls[0]
-    assert params == (dt.date(2026, 7, 7),)
+    assert dates == ["2026-07-07", "2026-07-08"]
+    assert "DISTINCT" in adapter.query
+    assert "WHERE id IN" in adapter.query
+    assert "gaming_session_id" not in adapter.query
+    assert adapter.params == (9001, 9002, 9003)
+
+
+@pytest.mark.asyncio
+async def test_dates_touched_empty_round_ids_short_circuits():
+    svc = _svc()
+    svc.db_adapter = _DatesAdapter([])
+
+    dates = await svc._session_dates_touched([])  # noqa: SLF001
+
+    assert dates == []
+
+
+@pytest.mark.asyncio
+async def test_dates_touched_never_raises_on_db_failure():
+    svc = _svc()
+
+    class _Raising:
+        async def fetch_all(self, *a, **kw):
+            raise RuntimeError("db down")
+
+    svc.db_adapter = _Raising()
+
+    dates = await svc._session_dates_touched([9001])  # noqa: SLF001
+    assert dates == []

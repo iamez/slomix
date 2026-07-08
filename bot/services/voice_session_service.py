@@ -404,6 +404,25 @@ class VoiceSessionService:
                 logger.debug("No session data found for finalization")
                 return
 
+            start_date = await self._session_start_date(session_ids)
+
+            # KIS cache invalidation: scheduled as soon as session_ids are
+            # known, NOT gated on the scoring-finalization block below — a
+            # scoring exception must not leave a stale mid-session KIS
+            # snapshot in place (codex, PR #482, "Don't gate KIS invalidation
+            # on scoring finalization success"). Invalidates EVERY distinct
+            # calendar date this session's rounds touch, not just the start
+            # date — KIS is cached per calendar session_date, so a
+            # midnight-crossing session would otherwise leave the
+            # post-midnight date's cache stale (codex, "Invalidate all KIS
+            # dates touched by the session").
+            session_dates = await self._session_dates_touched(session_ids)
+            for sd in (session_dates or [start_date or str(latest_date)]):
+                asyncio.create_task(
+                    self._invalidate_kis_cache(sd),
+                    name="kis-cache-invalidate",
+                )
+
             # Try team-aware scoring first
             hardcoded_teams = await data_service.get_hardcoded_teams(session_ids)
             scoring_result = None
@@ -449,34 +468,57 @@ class VoiceSessionService:
             # scoped to the session START date (midnight-safe — the endpoint
             # ranks sessions by MIN(round_date)), and fired as a background
             # task so a slow/unreachable website can never hold teardown.
-            start_date = await self._session_start_date(session_ids)
             asyncio.create_task(
                 self._persist_s_effort(start_date or str(latest_date)),
                 name="s-effort-persist",
             )
 
-            # KIS cache invalidation: compute_session_kis() (website) caches
-            # storytelling_kill_impact permanently on first read for a date
-            # and is NEVER force-refreshed anywhere in the codebase — a
-            # Story/Smart Stats page viewed mid-session freezes every
-            # player's kill count at that partial snapshot while regular
-            # stats keep accumulating live (investigation 2026-07-08).
-            # Deleting the stale rows here makes the next read recompute
-            # fresh via the existing cache-miss path — no website/router
-            # changes needed. Direct DB write (not an HTTP call like
-            # s.effort) since this is a plain invalidation, not a compute.
-            asyncio.create_task(
-                self._invalidate_kis_cache(start_date or str(latest_date)),
-                name="kis-cache-invalidate",
-            )
-
         except Exception as e:
             logger.error(f"❌ Error finalizing session results: {e}", exc_info=True)
+
+    async def _session_dates_touched(self, round_ids) -> list[str]:
+        """Every distinct calendar date this session's rounds touch.
+
+        KIS is cached per calendar session_date (compute_session_kis reads
+        `proximity_kill_outcome WHERE session_date = $1`), so a
+        midnight-crossing session must invalidate ALL of them — a single
+        start_date misses rows filed under the post-midnight date (codex,
+        PR #482)."""
+        try:
+            if not round_ids:
+                return []
+            placeholders = ",".join("?" * len(round_ids))
+            rows = await self.db_adapter.fetch_all(
+                f"SELECT DISTINCT SUBSTRING(round_date, 1, 10) FROM rounds "
+                f"WHERE id IN ({placeholders})",  # noqa: S608 - placeholders only, values bound
+                tuple(round_ids),
+            )
+            return [str(r[0]) for r in (rows or []) if r and r[0]]
+        except Exception:
+            logger.warning("session dates-touched lookup failed", exc_info=True)
+            return []
 
     async def _invalidate_kis_cache(self, session_date: str) -> None:
         """Delete stale storytelling_kill_impact rows for session_date so the
         next Story/Smart Stats read recomputes instead of serving a
-        mid-session snapshot. Best-effort; must never raise."""
+        mid-session snapshot.
+
+        Runs the delete TWICE (immediate + delayed): compute_session_kis()
+        has no cross-process lock the bot can coordinate with, so a
+        Story/Smart Stats request that was already mid-compute when the
+        first delete ran can finish afterwards and INSERT its stale
+        snapshot, silently undoing the invalidation. The delayed re-delete
+        cleans that up for any compute that started before session end and
+        finished within the window (codex, PR #482, "Guard against
+        in-flight KIS recomputes restoring stale rows"). Not a full fix —
+        a rigorous one needs a DB-level advisory lock shared with the
+        website's compute path, out of scope for this bot-only change.
+        Best-effort; must never raise."""
+        await self._delete_kis_rows(session_date)
+        await asyncio.sleep(10)
+        await self._delete_kis_rows(session_date)
+
+    async def _delete_kis_rows(self, session_date: str) -> None:
         try:
             sd = datetime.fromisoformat(str(session_date)[:10]).date()
             await self.db_adapter.execute(
