@@ -458,26 +458,28 @@ class VoiceSessionService:
         except Exception as e:
             logger.error(f"❌ Error finalizing session results: {e}", exc_info=True)
 
-    async def _session_start_date(self, session_ids) -> str | None:
+    async def _session_start_date(self, round_ids) -> str | None:
         """MIN(round_date) over the session's rounds — the s.effort endpoint
         scopes sessions by their START date, not the last round's date.
 
-        `session_ids` here are `rounds.id` values (SessionDataService.
+        `round_ids` are `rounds.id` values (SessionDataService.
         fetch_session_data() returns round ids, not gaming_session_id — a
         WHERE gaming_session_id IN (round_ids) filter silently matches
         nothing). fetch_session_data() already scoped these ids to exactly
         the R1/R2 valid rounds of the single latest gaming session, so
         MIN(round_date) directly over `id IN (...)` is both simpler and
-        correct — no need to re-resolve gaming_session_id at all.
+        correct — no need to re-resolve gaming_session_id at all. Parameter
+        is named round_ids (not session_ids) specifically to keep this
+        distinction visible at every call site.
         """
         try:
-            if not session_ids:
+            if not round_ids:
                 return None
-            placeholders = ",".join("?" * len(session_ids))
+            placeholders = ",".join("?" * len(round_ids))
             row = await self.db_adapter.fetch_one(
                 f"SELECT MIN(SUBSTRING(round_date, 1, 10)) FROM rounds "
                 f"WHERE id IN ({placeholders})",  # noqa: S608 - placeholders only, values bound
-                tuple(session_ids),
+                tuple(round_ids),
             )
             return str(row[0]) if row and row[0] else None
         except Exception:
