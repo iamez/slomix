@@ -73,10 +73,17 @@ async def test_hook_never_raises_on_http_error_or_connect_failure():
 
 
 class _FakeAdapter:
-    """fetch_one for the session start-date lookup (midnight-safe scope)."""
+    """fetch_one for the session start-date lookup (midnight-safe scope).
+
+    session_ids are rounds.id values, so the lookup must filter by
+    `id IN (...)`, never `gaming_session_id IN (...)` (which would silently
+    match nothing since round ids and gaming_session_id are unrelated).
+    """
 
     async def fetch_one(self, query, params=()):
         assert "MIN(SUBSTRING(round_date" in query
+        assert "WHERE id IN" in query
+        assert "gaming_session_id" not in query
         return ("2026-07-07",)
 
 
@@ -98,7 +105,12 @@ def _fakes(save_ok=True, order=None):
         async def get_latest_session_date(self):
             return "2026-07-08"  # LAST round crossed midnight
         async def fetch_session_data(self, *_a):
-            return ([1], [133], "133", 6)
+            # session_ids are rounds.id values (real semantics — not a
+            # gaming_session_id) so use plausible round primary keys here.
+            # session_ids_str follows SessionDataService's actual contract:
+            # SQL placeholders ("?,?"), not a literal comma-joined id list.
+            round_ids = [9001, 9002]
+            return ([1], round_ids, ",".join("?" * len(round_ids)), 6)
         async def get_hardcoded_teams(self, *_a):
             return None
 
