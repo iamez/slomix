@@ -499,9 +499,8 @@ class VoiceSessionService:
             return []
 
     async def _invalidate_kis_cache(self, session_date: str) -> None:
-        """Delete stale storytelling_kill_impact rows for session_date so the
-        next Story/Smart Stats read recomputes instead of serving a
-        mid-session snapshot.
+        """Delete stale storytelling_kill_impact rows for session_date, then
+        proactively warm the cache with a fresh compute.
 
         SINGLE delete only — a first attempt at this also re-ran the delete
         after a delay to catch an in-flight compute that finishes late, but
@@ -514,16 +513,60 @@ class VoiceSessionService:
         "Avoid deleting fresh KIS recomputes"). There is no cheap way to
         tell "an old stale compute finishing late" apart from "a new
         legitimate compute that started after this delete" from the DB
-        side alone — both just look like a fresh INSERT. A correct fix
-        needs a cross-process lock (e.g. a Postgres advisory lock) shared
-        with the website's compute path, out of scope for this bot-only
-        change; the residual race (a Story/Smart Stats request already
-        mid-compute at the exact moment this delete runs can still finish
-        and re-insert its stale snapshot) is accepted as a narrow,
-        self-healing edge case — the NEXT read after that will recompute
-        fresh again since nothing else re-freezes the cache once it does.
-        Best-effort; must never raise."""
+        side alone — both just look like a fresh INSERT.
+
+        Why warm, not just delete: some website surfaces read
+        storytelling_kill_impact directly without ever calling
+        compute_session_kis (e.g. the session MVP endpoint,
+        sessions_router.py's kis_rank lookup) — a delete-only invalidation
+        left them with ZERO KIS data for as long as SESSION_DIGEST_ENABLED
+        is off or its HTTP call fails, since nothing else naturally
+        refreshes the cache (codex, "Warm direct KIS readers after
+        deleting the cache"). The warm call below mirrors
+        session_digest_service.py's _fetch_kis_top: a plain GET to the
+        existing public endpoint, whose own cache-miss path recomputes for
+        real now that the session has ended and every kill is in
+        proximity_kill_outcome.
+
+        Known residual race, NOT closed by the warm call (correcting a
+        prior version of this docstring that wrongly called it
+        self-healing): compute_session_kis() checks `COUNT(*) > 0` and
+        returns cached forever — `force=True` is never passed anywhere in
+        the codebase (verified against kis.py) — so if a Story/Smart Stats
+        request was ALREADY mid-compute when the delete above ran, it can
+        still finish and INSERT its stale snapshot AFTER our warm call's
+        own fresh insert, and nothing will ever correct that until a
+        manual force-recompute. Closing this needs either a `force` query
+        param on the public endpoint or a cross-process advisory lock in
+        the website's compute path — deliberately deferred: those are the
+        same files an in-flight internal-auth PR is touching, and this
+        bot-only change should not race with that (codex, "Serialize KIS
+        invalidation with in-flight computes"). Best-effort; must never
+        raise."""
         await self._delete_kis_rows(session_date)
+        await self._warm_kis_cache(session_date)
+
+    async def _warm_kis_cache(self, session_date: str) -> None:
+        """Proactively trigger a fresh KIS compute right after invalidation
+        (see _invalidate_kis_cache for why). Mirrors
+        session_digest_service.py's _fetch_kis_top call pattern.
+        Best-effort; must never raise."""
+        url = "(unbuilt)"
+        try:
+            import aiohttp
+            url = f"{self.config.website_api_base}/storytelling/kill-impact"
+            timeout = aiohttp.ClientTimeout(total=15)
+            async with aiohttp.ClientSession(timeout=timeout) as sess, \
+                    sess.get(url, params={"session_date": str(session_date)[:10],
+                                           "limit": 1}) as resp:
+                if resp.status == 200:
+                    logger.info("✅ KIS cache warmed for %s", session_date)
+                else:
+                    logger.warning("KIS cache warm HTTP %s for %s (url=%s)",
+                                    resp.status, session_date, url)
+        except Exception as e:
+            logger.warning("KIS cache warm failed for %s (url=%s): %s",
+                            session_date, url, e)
 
     async def _delete_kis_rows(self, session_date: str) -> None:
         try:
