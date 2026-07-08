@@ -110,27 +110,59 @@ async def main() -> None:
              "does NOT reconstruct as a 2+ last-man chain (see docstring)"))
 
     # Per-kill rows: KIS impact + situational flags + killer side + alive counts.
+    #
+    # DISTINCT ON (ki.id): a KIS row can match more than one combat_position
+    # row inside the +-300ms slack window (bursts / same-tick multi-kills).
+    # The old GROUP BY + MAX() aggregation silently blended fields from
+    # whichever rows matched instead of picking one deterministically — the
+    # SSR clutch query already guards this the same way. Ties broken by
+    # closest event-time match (codex, PR #473).
+    #
+    # is_valid: joined via rounds so filler/orphan/bot-test rounds can't
+    # contaminate the sample, matching every other backtest in this family.
+    #
+    # round_start_unix > 0: rows with the default/unlinked identity would
+    # collapse unrelated dates/rounds into one chain-detection bucket.
+    #
+    # victim bot filter: only the killer side was excluded before — a human
+    # killing bot opponents in a mixed round must not score as a human clutch.
+    #
+    # Enemy alive count: Lua records axis_alive/allies_alive AFTER handling
+    # the Obituary (victim already removed), so the raw value is the PRE-kill
+    # count MINUS the just-removed victim. Two consequences fixed here:
+    #   1. the WHERE clause used to require BOTH sides > 0, which silently
+    #      dropped the exact kill that wipes the enemy team to 0 (the actual
+    #      clutch payoff!) — now only the KILLER'S OWN side is required > 0
+    #      (they're alive, doing the kill; their count is unaffected by it).
+    #   2. "enemies faced at this kill" is computed as post_kill_count + 1
+    #      in Python below, adding the just-removed victim back — otherwise
+    #      every 1vN chain was silently understated by exactly one enemy.
     rows = await conn.fetch("""
-        SELECT ki.session_date, ki.round_start_unix, ki.round_number, ki.map_name,
-               UPPER(LEFT(ki.killer_guid, 8)) AS g8, MAX(ki.killer_name) AS name,
-               ki.kill_time_ms, MAX(ki.total_impact) AS kis,
-               BOOL_OR(ki.is_carrier_kill) AS carrier,
-               BOOL_OR(ki.is_objective_area) AS obj_area,
-               UPPER(MAX(cp.attacker_team)) AS team,
-               MAX(cp.axis_alive) AS axis_alive, MAX(cp.allies_alive) AS allies_alive
+        SELECT DISTINCT ON (ki.id)
+               ki.session_date, ki.round_start_unix, ki.round_number, ki.map_name,
+               UPPER(LEFT(ki.killer_guid, 8)) AS g8, ki.killer_name AS name,
+               ki.kill_time_ms, ki.total_impact AS kis,
+               ki.is_carrier_kill AS carrier, ki.is_objective_area AS obj_area,
+               UPPER(cp.attacker_team) AS team,
+               cp.axis_alive AS axis_alive, cp.allies_alive AS allies_alive
         FROM storytelling_kill_impact ki
+        JOIN rounds r ON r.round_start_unix = ki.round_start_unix
+                     AND r.round_number = ki.round_number AND r.is_valid
         JOIN proximity_combat_position cp
           ON cp.round_start_unix = ki.round_start_unix
          AND UPPER(LEFT(cp.attacker_guid, 8)) = UPPER(LEFT(ki.killer_guid, 8))
          AND ABS(cp.event_time - ki.kill_time_ms) <= 300
         WHERE ki.session_date >= '2026-04-01'
+          AND ki.round_start_unix > 0
           AND ki.killer_guid NOT LIKE 'OMNIBOT%'
           AND ki.killer_name NOT LIKE '[BOT]%'
-          AND cp.axis_alive > 0 AND cp.allies_alive > 0
-        GROUP BY ki.session_date, ki.round_start_unix, ki.round_number, ki.map_name,
-                 UPPER(LEFT(ki.killer_guid, 8)), ki.kill_time_ms
-        ORDER BY ki.round_start_unix, ki.kill_time_ms
+          AND ki.victim_guid NOT LIKE 'OMNIBOT%'
+          AND COALESCE(ki.victim_name, '') NOT LIKE '[BOT]%'
+          AND ((cp.attacker_team = 'AXIS' AND cp.axis_alive > 0)
+            OR (cp.attacker_team = 'ALLIES' AND cp.allies_alive > 0))
+        ORDER BY ki.id, ABS(cp.event_time - ki.kill_time_ms)
     """)
+    rows = sorted(rows, key=lambda r: (r["round_start_unix"], r["kill_time_ms"]))
 
     ttb = {}
     for r in await conn.fetch("""
@@ -194,7 +226,9 @@ async def main() -> None:
             return 0.0
         return max(0.0, (t_ms - last_mate) / 1000.0)
 
-    # ---- chain detection (unchanged from v0): per (round, killer) first ----
+    # ---- chain detection (per (round, killer) first) ----
+    # side_alive uses the killer's OWN team count directly (unaffected by
+    # their own kill, no adjustment needed).
     by_killer: dict = defaultdict(list)
     for r in rows:
         side_alive = r["axis_alive"] if r["team"] == "AXIS" else r["allies_alive"]
@@ -207,7 +241,12 @@ async def main() -> None:
         krows.sort(key=lambda r: r["kill_time_ms"])
         cur = None
         for r in krows:
-            enemies = r["allies_alive"] if r["team"] == "AXIS" else r["axis_alive"]
+            # PRE-kill enemy count: the recorded value is POST-Obituary (the
+            # victim of THIS kill is already removed), so add them back —
+            # otherwise every 1vN chain understates N by exactly one, and a
+            # full wipe's last kill (post-count 0) would show as "1v0".
+            enemies_post = r["allies_alive"] if r["team"] == "AXIS" else r["axis_alive"]
+            enemies = (enemies_post or 0) + 1
             if cur and r["kill_time_ms"] - cur["t1"] <= CHAIN_WINDOW_MS:
                 cur["kills"].append(r)
                 cur["t1"] = r["kill_time_ms"]

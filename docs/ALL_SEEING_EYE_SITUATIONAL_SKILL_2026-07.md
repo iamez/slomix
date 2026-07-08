@@ -260,3 +260,23 @@ intended clip for re-derivation.
 **Status:** tables only, as before — no formula registry entry, no SSR
 wiring. The difficulty multiplier is ready for owner review; own-goal stays
 blocked on Lua instrumentation, not on design effort.
+
+**Review round 1 corrections (codex, PR #473):** the query inherited two
+real bugs from the already-merged v0 script plus four new gaps introduced
+by v1. Fixed together: (a) combat_position join dedup via `DISTINCT ON`
+(a KIS row could match >1 position row in the ±300ms slack window, silently
+blending fields — the SSR clutch query already guarded this the same way);
+(b) `is_valid` rounds join added (filler/orphan rounds could contaminate the
+sample); (c) `round_start_unix > 0` guard (unlinked rows collapse unrelated
+dates into one chain bucket); (d) victim-side bot filter added (only killer
+was excluded before); (e) **enemy alive count is recorded POST-Obituary
+(victim already removed)** — every chain understated its "1vN" by exactly
+one, and the row where a clutch WIPES the enemy team (post-count 0) was
+being dropped entirely by the `> 0` filter, silently truncating every full
+wipe by its actual finishing kill. Fixed by relaxing the filter to only
+require the killer's own side alive, and computing enemy count as
+`post_kill_count + 1`. Net effect: 160 → 204 qualifying chains, 1vN labels
+shift up by one across the board (e.g. pvid's top chain was "1v2", is now
+correctly "1v3"), rankings otherwise stable (SuperBoyy still dominates the
+difficulty-driven rank gains). The doc-return bonus's own-side match (owner
+A1's docs-return intent) was fixed in the same round.
