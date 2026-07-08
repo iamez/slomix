@@ -436,13 +436,66 @@ class VoiceSessionService:
                         except Exception:
                             logger.error("auto_resolve_predictions failed",
                                          exc_info=True)
+
+
                 else:
                     logger.warning(f"⚠️ Failed to finalize session results for {latest_date}")
             else:
                 logger.debug(f"No scoring data available for session {latest_date}")
 
+            # s.effort session persist: the endpoint computes AND persists
+            # scope='session' rows. Runs REGARDLESS of stopwatch scoring
+            # success (player stats can be valid without a team result),
+            # scoped to the session START date (midnight-safe — the endpoint
+            # ranks sessions by MIN(round_date)), and fired as a background
+            # task so a slow/unreachable website can never hold teardown.
+            start_date = await self._session_start_date(session_ids)
+            asyncio.create_task(
+                self._persist_s_effort(start_date or str(latest_date)),
+                name="s-effort-persist",
+            )
+
         except Exception as e:
             logger.error(f"❌ Error finalizing session results: {e}", exc_info=True)
+
+    async def _session_start_date(self, session_ids) -> str | None:
+        """MIN(round_date) over the session's gsids — the s.effort endpoint
+        scopes sessions by their START date, not the last round's date."""
+        try:
+            if not session_ids:
+                return None
+            placeholders = ",".join("?" * len(session_ids))
+            row = await self.db_adapter.fetch_one(
+                f"SELECT MIN(SUBSTRING(round_date, 1, 10)) FROM rounds "
+                f"WHERE gaming_session_id IN ({placeholders})",  # noqa: S608 - placeholders only, values bound
+                tuple(session_ids),
+            )
+            return str(row[0]) if row and row[0] else None
+        except Exception:
+            logger.warning("session start-date lookup failed", exc_info=True)
+            return None
+
+    async def _persist_s_effort(self, session_date: str) -> None:
+        """Best-effort GET to /skill/s-effort so the session's pool-adjusted
+        ratings land in player_skill_history right at session end. Runs as a
+        background task; must never raise."""
+        url = "(unbuilt)"
+        try:
+            import aiohttp
+            url = (f"{self.config.website_api_base}/skill/s-effort"
+                   f"?session_date={session_date}")
+            timeout = aiohttp.ClientTimeout(total=15)
+            async with aiohttp.ClientSession(timeout=timeout) as sess, \
+                    sess.get(url) as resp:
+                if resp.status == 200:
+                    logger.info("✅ s.effort persisted for %s", session_date)
+                else:
+                    logger.warning("s.effort persist HTTP %s for %s "
+                                   "(old website build without the endpoint?)",
+                                   resp.status, session_date)
+        except Exception:
+            logger.warning("s.effort persist call failed (non-fatal): %s",
+                           url, exc_info=True)
 
     async def auto_end_session(self):
         """
