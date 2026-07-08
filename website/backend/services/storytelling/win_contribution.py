@@ -55,42 +55,46 @@ class _WinContributionMixin:
             ORDER BY r.id, pcs.player_guid
         """, (sd_str,))
 
-        # 1b. Fetch proximity data for proximity PWC components
+        # 1b. Fetch proximity data for proximity PWC components. Keys
+        # include round_number (not just round_start_unix, which is not
+        # guaranteed unique repo-wide) so add-ons can't blend into the
+        # wrong round of this session — codex, PR #478 follow-up audit
+        # finding #12.
         # Crossfire kills per player per round (via guid_canonical)
         xf_rows = await self.db.fetch_all("""
-            SELECT killer_guid_canonical, round_start_unix, COUNT(*) as xf_kills
+            SELECT killer_guid_canonical, round_start_unix, round_number, COUNT(*) as xf_kills
             FROM storytelling_kill_impact
             WHERE session_date = $1 AND is_crossfire = true AND killer_guid_canonical IS NOT NULL
-            GROUP BY killer_guid_canonical, round_start_unix
+            GROUP BY killer_guid_canonical, round_start_unix, round_number
         """, (sd_date,))
-        xf_map: dict[tuple[str, int], int] = {
-            (r[0], int(r[1])): int(r[2]) for r in xf_rows
+        xf_map: dict[tuple[str, int, int], int] = {
+            (r[0], int(r[1]), int(r[2])): int(r[3]) for r in xf_rows
         }
 
         # Trade kills per player per round (via guid_canonical)
         tr_rows = await self.db.fetch_all("""
-            SELECT trader_guid_canonical, round_start_unix, COUNT(*) as tr_kills
+            SELECT trader_guid_canonical, round_start_unix, round_number, COUNT(*) as tr_kills
             FROM proximity_lua_trade_kill
             WHERE session_date = $1 AND trader_guid_canonical IS NOT NULL
-            GROUP BY trader_guid_canonical, round_start_unix
+            GROUP BY trader_guid_canonical, round_start_unix, round_number
         """, (sd_date,))
-        tr_map: dict[tuple[str, int], int] = {
-            (r[0], int(r[1])): int(r[2]) for r in tr_rows
+        tr_map: dict[tuple[str, int, int], int] = {
+            (r[0], int(r[1]), int(r[2])): int(r[3]) for r in tr_rows
         }
 
         # Clutch kills per player per round (via guid_canonical)
         cl_rows = await self.db.fetch_all("""
-            SELECT attacker_guid_canonical, round_start_unix, COUNT(*) as cl_kills
+            SELECT attacker_guid_canonical, round_start_unix, round_number, COUNT(*) as cl_kills
             FROM proximity_combat_position
             WHERE session_date = $1 AND event_type = 'kill'
               AND attacker_guid_canonical IS NOT NULL
               AND ((killer_health > 0 AND killer_health < 30)
                    OR (attacker_team = 'AXIS' AND axis_alive < allies_alive)
                    OR (attacker_team = 'ALLIES' AND allies_alive < axis_alive))
-            GROUP BY attacker_guid_canonical, round_start_unix
+            GROUP BY attacker_guid_canonical, round_start_unix, round_number
         """, (sd_date,))
-        cl_map: dict[tuple[str, int], int] = {
-            (r[0], int(r[1])): int(r[2]) for r in cl_rows
+        cl_map: dict[tuple[str, int, int], int] = {
+            (r[0], int(r[1]), int(r[2])): int(r[3]) for r in cl_rows
         }
 
         if not rows:
@@ -136,9 +140,9 @@ class _WinContributionMixin:
                 team_alive[t] += float(r[10] or 0)
                 team_count[t] += 1
                 # Sum proximity per team for this round
-                team_crossfire[t] += xf_map.get((guid, round_start), 0)
-                team_trade[t] += tr_map.get((guid, round_start), 0)
-                team_clutch[t] += cl_map.get((guid, round_start), 0)
+                team_crossfire[t] += xf_map.get((guid, round_start, round_number), 0)
+                team_trade[t] += tr_map.get((guid, round_start, round_number), 0)
+                team_clutch[t] += cl_map.get((guid, round_start, round_number), 0)
 
             # Check if objectives are zero for ALL players in this round
             all_objectives_zero = all(int(r[8] or 0) == 0 for r in round_rows)
@@ -154,9 +158,9 @@ class _WinContributionMixin:
                 p_alive = float(r[10] or 0)
 
                 # Proximity per-player counts for this round
-                p_crossfire = xf_map.get((guid, round_start), 0)
-                p_trade = tr_map.get((guid, round_start), 0)
-                p_clutch = cl_map.get((guid, round_start), 0)
+                p_crossfire = xf_map.get((guid, round_start, round_number), 0)
+                p_trade = tr_map.get((guid, round_start, round_number), 0)
+                p_clutch = cl_map.get((guid, round_start, round_number), 0)
 
                 tk = team_kills[t]
                 td = team_damage[t]

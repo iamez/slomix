@@ -493,8 +493,10 @@ export const api = {
   },
 
   // Storytelling / Smart Stats
-  getStoryKillImpact: (sessionDate: string, limit = 20) =>
-    get<import('./types').KillImpactResponse>(`/storytelling/kill-impact?session_date=${sessionDate}&limit=${limit}`),
+  getStoryKillImpact: (sessionDate: string, limit = 20) => {
+    const params = new URLSearchParams({ session_date: sessionDate, limit: String(limit) });
+    return get<import('./types').KillImpactResponse>(`/storytelling/kill-impact?${params.toString()}`);
+  },
 
   getStoryMoments: (sessionDate: string, limit = 10) =>
     get<import('./types').MomentsResponse>(`/storytelling/moments?session_date=${sessionDate}&limit=${limit}`),
