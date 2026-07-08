@@ -106,8 +106,11 @@ def _fakes(save_ok=True, order=None):
             return "2026-07-08"  # LAST round crossed midnight
         async def fetch_session_data(self, *_a):
             # session_ids are rounds.id values (real semantics — not a
-            # gaming_session_id) so use plausible round primary keys here
-            return ([1], [9001, 9002], "9001,9002", 6)
+            # gaming_session_id) so use plausible round primary keys here.
+            # session_ids_str follows SessionDataService's actual contract:
+            # SQL placeholders ("?,?"), not a literal comma-joined id list.
+            round_ids = [9001, 9002]
+            return ([1], round_ids, ",".join("?" * len(round_ids)), 6)
         async def get_hardcoded_teams(self, *_a):
             return None
 
