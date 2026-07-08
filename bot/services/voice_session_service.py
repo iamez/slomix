@@ -455,8 +455,37 @@ class VoiceSessionService:
                 name="s-effort-persist",
             )
 
+            # KIS cache invalidation: compute_session_kis() (website) caches
+            # storytelling_kill_impact permanently on first read for a date
+            # and is NEVER force-refreshed anywhere in the codebase — a
+            # Story/Smart Stats page viewed mid-session freezes every
+            # player's kill count at that partial snapshot while regular
+            # stats keep accumulating live (investigation 2026-07-08).
+            # Deleting the stale rows here makes the next read recompute
+            # fresh via the existing cache-miss path — no website/router
+            # changes needed. Direct DB write (not an HTTP call like
+            # s.effort) since this is a plain invalidation, not a compute.
+            asyncio.create_task(
+                self._invalidate_kis_cache(start_date or str(latest_date)),
+                name="kis-cache-invalidate",
+            )
+
         except Exception as e:
             logger.error(f"❌ Error finalizing session results: {e}", exc_info=True)
+
+    async def _invalidate_kis_cache(self, session_date: str) -> None:
+        """Delete stale storytelling_kill_impact rows for session_date so the
+        next Story/Smart Stats read recomputes instead of serving a
+        mid-session snapshot. Best-effort; must never raise."""
+        try:
+            sd = datetime.fromisoformat(str(session_date)[:10]).date()
+            await self.db_adapter.execute(
+                "DELETE FROM storytelling_kill_impact WHERE session_date = ?",
+                (sd,),
+            )
+            logger.info("✅ KIS cache invalidated for %s (recomputes on next read)", session_date)
+        except Exception as e:
+            logger.warning("KIS cache invalidation failed for %s: %s", session_date, e)
 
     async def _session_start_date(self, round_ids) -> str | None:
         """MIN(round_date) over the session's rounds — the s.effort endpoint

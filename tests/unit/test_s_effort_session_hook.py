@@ -86,6 +86,11 @@ class _FakeAdapter:
         assert "gaming_session_id" not in query
         return ("2026-07-07",)
 
+    async def execute(self, query, params=()):
+        # KIS cache-invalidation background task also runs during finalize
+        # (test_kis_cache_invalidation_hook.py covers its behavior directly).
+        return None
+
 
 def _fakes(save_ok=True, order=None):
     order = order if order is not None else []
