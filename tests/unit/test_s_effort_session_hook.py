@@ -78,7 +78,7 @@ async def test_finalize_calls_hook_after_results_saved():
     svc.db_adapter = object()
     svc.bot = object()
     svc.prediction_engine = None
-    svc._persist_s_effort = AsyncMock()
+    svc._persist_s_effort = AsyncMock()  # noqa: SLF001
 
     class FakeScoring:
         def __init__(self, *a): ...
@@ -102,4 +102,4 @@ async def test_finalize_calls_hook_after_results_saved():
          patch("bot.services.voice_session_service.SessionDataService", FakeData):
         await svc._finalize_session_results()  # noqa: SLF001
 
-    svc._persist_s_effort.assert_awaited_once_with("2026-07-07")
+    svc._persist_s_effort.assert_awaited_once_with("2026-07-07")  # noqa: SLF001
