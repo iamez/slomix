@@ -416,8 +416,8 @@ export default function SkillRating() {
           <span className="w-10 text-center">Rank</span>
           <span className="flex-1">Player</span>
           <span className="w-32 text-center">Rating</span>
-          <span className="w-24 text-center">Tier</span>
           <span className="w-16 text-right" title="Pool-adjusted lifetime">Adj</span>
+          <span className="w-24 text-center">Tier</span>
           <span className="w-16 text-right">Rounds</span>
           <span className="w-4" />
         </div>
