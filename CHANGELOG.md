@@ -6,6 +6,22 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.24.0](https://github.com/iamez/slomix/compare/v1.23.0...v1.24.0) (2026-07-08)
+
+
+### Features
+
+* **bot:** ROUND_STATS_AUTOPOST_ENABLED toggle for production posting ([#478](https://github.com/iamez/slomix/issues/478)) ([3995433](https://github.com/iamez/slomix/commit/3995433edfb0d4acb449d9a48db5ca594bc38c84))
+* **proximity:** clutch-v1 backtest — difficulty multiplier + own-goal data-gap finding (A1) ([#473](https://github.com/iamez/slomix/issues/473)) ([b24cd98](https://github.com/iamez/slomix/commit/b24cd986a8e0690d984957065984982ce47fd02b))
+
+
+### Bug Fixes
+
+* 4 confirmed findings from codex follow-up audit (pool leaks, UI, path leak) ([#476](https://github.com/iamez/slomix/issues/476)) ([9c9198b](https://github.com/iamez/slomix/commit/9c9198b029c57fc986765270010ed2a9266e5a36))
+* **bot:** decouple proximity scan trigger from Discord publish outcome ([#480](https://github.com/iamez/slomix/issues/480)) ([d742970](https://github.com/iamez/slomix/commit/d742970f076f02d62946b78e868c4850509f432d))
+* **bot:** session start-date lookup filtered wrong column (missed in [#470](https://github.com/iamez/slomix/issues/470) merge) ([#471](https://github.com/iamez/slomix/issues/471)) ([fb023ce](https://github.com/iamez/slomix/commit/fb023ce0c211c5254d86c9edf0d8e181132e8c71))
+* **proximity:** clutch-v1 late-review follow-up — canonical key, victim match, side-switch, spawn cap ([#474](https://github.com/iamez/slomix/issues/474)) ([ab20cf9](https://github.com/iamez/slomix/commit/ab20cf9c5c5fc909b294fbb6e1c579f65ef91711))
+
 ## [1.23.0](https://github.com/iamez/slomix/compare/v1.22.0...v1.23.0) (2026-07-08)
 
 
