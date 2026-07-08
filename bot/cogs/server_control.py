@@ -465,7 +465,13 @@ class ServerControl(commands.Cog):
         await ctx.send("📂 Fetching map list...")
         try:
             list_command = f"ls -lh {self.maps_path}/*.pk3 2>/dev/null | awk '{{print $9, $5}}' || echo 'No maps found'"
-            output, error, exit_code = self.execute_ssh_command(list_command)
+            # !maps is the only PUBLIC (non-admin) command in this cog — a
+            # cold-cache call must not block the whole bot event loop for
+            # the duration of a sync SSH connect+exec (codex, PR #478
+            # follow-up audit finding #6).
+            output, error, exit_code = await asyncio.to_thread(
+                self.execute_ssh_command, list_command
+            )
 
             if "No maps found" in output or not output.strip():
                 # cache the negative result too — a fresh/misconfigured

@@ -100,6 +100,15 @@ class SsrService:
 
     async def _clutch_kis(self) -> dict[str, float]:
         # DISTINCT ON: the combat_position join can multi-match one kill
+        # within the +-300ms slack window (bursts / same-tick multi-kills).
+        # Canonical round key (round_start_unix, map_name, round_number,
+        # session_date) + victim match, and dropping the old "BOTH sides
+        # alive" pre-filter — round_start_unix alone is not guaranteed
+        # unique repo-wide, and requiring axis_alive>0 AND allies_alive>0
+        # silently excluded the exact kill that wipes the enemy side to 0
+        # (the actual last-man clutch payoff!). Same fixes already applied
+        # in scripts/backtest_clutch_v1.py (codex, PR #474/#478 follow-up
+        # audit finding #2).
         rows = await self.db.fetch_all(
             "SELECT g8, SUM(kis) FROM ("
             "  SELECT DISTINCT ON (ki.id)"
@@ -108,14 +117,17 @@ class SsrService:
             "  FROM storytelling_kill_impact ki "
             "  JOIN proximity_combat_position cp "
             "    ON cp.round_start_unix = ki.round_start_unix "
+            "   AND cp.session_date = ki.session_date "
+            "   AND cp.round_number = ki.round_number "
+            "   AND cp.map_name = ki.map_name "
             "   AND UPPER(LEFT(cp.attacker_guid, 8)) = UPPER(LEFT(ki.killer_guid, 8)) "
+            "   AND UPPER(LEFT(cp.victim_guid, 8)) = UPPER(LEFT(ki.victim_guid, 8)) "
             "   AND ABS(cp.event_time - ki.kill_time_ms) <= 300 "
             "  WHERE ki.session_date >= ?::date "
-            "    AND cp.axis_alive > 0 AND cp.allies_alive > 0 "
             "    AND ((cp.attacker_team = 'AXIS' AND cp.axis_alive = 1)"
             "      OR (cp.attacker_team = 'ALLIES' AND cp.allies_alive = 1)) "
             "    AND ki.killer_guid NOT LIKE ? AND ki.killer_name NOT LIKE ? "
-            "  ORDER BY ki.id"
+            "  ORDER BY ki.id, ABS(cp.event_time - ki.kill_time_ms)"
             ") solo GROUP BY g8",
             (_dt.date.fromisoformat(ALIVE_CONTEXT_SINCE), *_BOTS),
         )
@@ -204,15 +216,21 @@ class SsrService:
     async def _opening_net(self) -> dict[str, float]:
         """Net first-kill rate per rounds PLAYED (duels-v0.1 + #467 r3 fixes:
         matched valid rounds only, ALL kills tied at the round minimum credit
-        every participant, denominator from PCS presence)."""
+        every participant, denominator from PCS presence).
+
+        Canonical round key includes map_name (round_start_unix alone is
+        not guaranteed unique repo-wide — codex, PR #478 follow-up audit
+        finding #3)."""
         openings = await self.db.fetch_all(
             "WITH k AS ("
-            "  SELECT ki.round_start_unix, ki.round_number, ki.kill_time_ms,"
+            "  SELECT ki.round_start_unix, ki.round_number, ki.map_name,"
+            "         ki.kill_time_ms,"
             "         UPPER(LEFT(ki.killer_guid, 8)) AS killer,"
             "         UPPER(LEFT(ki.victim_guid, 8)) AS victim "
             "  FROM storytelling_kill_impact ki "
             "  JOIN rounds r ON r.round_start_unix = ki.round_start_unix "
             "               AND r.round_number = ki.round_number "
+            "               AND r.map_name = ki.map_name "
             "               AND r.is_valid "
             "               AND NOT COALESCE(r.is_bot_round, FALSE) "
             "  WHERE ki.round_start_unix > 0 "
@@ -221,9 +239,9 @@ class SsrService:
             "    AND COALESCE(ki.victim_name, '') NOT LIKE ? "
             ") "
             "SELECT killer, victim FROM k "
-            "WHERE (round_start_unix, round_number, kill_time_ms) IN ("
-            "    SELECT round_start_unix, round_number, MIN(kill_time_ms) "
-            "    FROM k GROUP BY round_start_unix, round_number)",
+            "WHERE (round_start_unix, map_name, round_number, kill_time_ms) IN ("
+            "    SELECT round_start_unix, map_name, round_number, MIN(kill_time_ms) "
+            "    FROM k GROUP BY round_start_unix, map_name, round_number)",
             (_BOTS[0], _BOTS[0], _BOTS[1], _BOTS[1]),
         )
         presence_rows = await self.db.fetch_all(

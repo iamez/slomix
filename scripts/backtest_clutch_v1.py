@@ -92,12 +92,20 @@ async def main() -> None:
           f"{tk_check} (expected 0 — confirms no per-event TK timing exists)")
 
     # ---- golden-check re-verification (qmr 2026-04-07 R2 te_escape2) ----
+    # Uses the SAME hardened join as the main scoring query below (canonical
+    # round key + victim match) so the printed golden-check verdict can't
+    # silently diverge from the actual scoring logic it's meant to sanity
+    # check (codex, PR #478 follow-up audit finding #5).
     qmr_alive = await conn.fetch("""
         SELECT MAX(cp.axis_alive) AS axis_alive
         FROM storytelling_kill_impact ki
         JOIN proximity_combat_position cp
           ON cp.round_start_unix = ki.round_start_unix
+         AND cp.session_date = ki.session_date
+         AND cp.round_number = ki.round_number
+         AND cp.map_name = ki.map_name
          AND UPPER(LEFT(cp.attacker_guid, 8)) = UPPER(LEFT(ki.killer_guid, 8))
+         AND UPPER(LEFT(cp.victim_guid, 8)) = UPPER(LEFT(ki.victim_guid, 8))
          AND ABS(cp.event_time - ki.kill_time_ms) <= 300
         WHERE ki.session_date = '2026-04-07' AND ki.map_name = 'te_escape2'
           AND ki.round_number = 2 AND ki.killer_name ILIKE '%qmr%'
