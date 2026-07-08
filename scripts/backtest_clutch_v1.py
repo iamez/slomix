@@ -137,6 +137,16 @@ async def main() -> None:
     #   2. "enemies faced at this kill" is computed as post_kill_count + 1
     #      in Python below, adding the just-removed victim back — otherwise
     #      every 1vN chain was silently understated by exactly one enemy.
+    #
+    # Canonical round key: round_start_unix alone is not guaranteed unique
+    # repo-wide (documented convention: (round_start_unix, map_name,
+    # round_number) is the real identity) — join on map_name too so a KIS
+    # row from an invalid/filler map can't validate against an unrelated
+    # round that happens to share a start time and round number.
+    #
+    # Victim match: the combat_position join keyed only on (round, killer,
+    # +-300ms) — an attacker with two victims inside that window could match
+    # either row nondeterministically. Match victim_guid8 too.
     rows = await conn.fetch("""
         SELECT DISTINCT ON (ki.id)
                ki.session_date, ki.round_start_unix, ki.round_number, ki.map_name,
@@ -147,10 +157,15 @@ async def main() -> None:
                cp.axis_alive AS axis_alive, cp.allies_alive AS allies_alive
         FROM storytelling_kill_impact ki
         JOIN rounds r ON r.round_start_unix = ki.round_start_unix
-                     AND r.round_number = ki.round_number AND r.is_valid
+                     AND r.round_number = ki.round_number
+                     AND r.map_name = ki.map_name AND r.is_valid
         JOIN proximity_combat_position cp
           ON cp.round_start_unix = ki.round_start_unix
+         AND cp.session_date = ki.session_date
+         AND cp.round_number = ki.round_number
+         AND cp.map_name = ki.map_name
          AND UPPER(LEFT(cp.attacker_guid, 8)) = UPPER(LEFT(ki.killer_guid, 8))
+         AND UPPER(LEFT(cp.victim_guid, 8)) = UPPER(LEFT(ki.victim_guid, 8))
          AND ABS(cp.event_time - ki.kill_time_ms) <= 300
         WHERE ki.session_date >= '2026-04-01'
           AND ki.round_start_unix > 0
@@ -162,24 +177,34 @@ async def main() -> None:
             OR (cp.attacker_team = 'ALLIES' AND cp.allies_alive > 0))
         ORDER BY ki.id, ABS(cp.event_time - ki.kill_time_ms)
     """)
-    rows = sorted(rows, key=lambda r: (r["round_start_unix"], r["kill_time_ms"]))
+    # Canonical round key used EVERYWHERE below (chain buckets, ttb, winner,
+    # doc returns, life windows) — round_start_unix alone is documented as
+    # non-unique repo-wide; every context lookup keyed by the bare int could
+    # otherwise pull another round's winner/pressure/returns/lives into a
+    # correctly-selected chain even after the main query itself is scoped
+    # correctly (codex, PR #474 round 3).
+    def rk(row) -> tuple:
+        return (row["round_start_unix"], row["map_name"], row["round_number"])
+
+    rows = sorted(rows, key=lambda r: (rk(r), r["kill_time_ms"]))
 
     ttb = {}
     for r in await conn.fetch("""
-        SELECT r2.round_start_unix, r1.actual_duration_seconds
+        SELECT r2.round_start_unix, r2.map_name, r2.round_number,
+               r1.actual_duration_seconds
         FROM rounds r2 JOIN rounds r1
           ON r1.match_id = r2.match_id AND r1.round_number = 1
         WHERE r2.round_number = 2 AND r2.round_start_unix IS NOT NULL
           AND r1.actual_duration_seconds IS NOT NULL
     """):
-        ttb[r[0]] = int(r[1])
+        ttb[(r[0], r[1], r[2])] = int(r[3])
 
     winner = {}
     for r in await conn.fetch("""
-        SELECT round_start_unix, winner_team FROM rounds
-        WHERE round_start_unix IS NOT NULL AND winner_team IN (1, 2)
+        SELECT round_start_unix, map_name, round_number, winner_team
+        FROM rounds WHERE round_start_unix IS NOT NULL AND winner_team IN (1, 2)
     """):
-        winner[r[0]] = int(r[1])
+        winner[(r[0], r[1], r[2])] = int(r[3])
 
     # flag_team is the document COLOR (redflag/blueflag), not a side — it
     # cannot be compared against the clutcher's AXIS/ALLIES team. Capture
@@ -189,15 +214,16 @@ async def main() -> None:
     # return in the round, including the opponent's).
     returns = defaultdict(list)
     for r in await conn.fetch("""
-        SELECT round_start_unix, UPPER(returner_team) AS returner_team, return_time
+        SELECT round_start_unix, map_name, round_number,
+               UPPER(returner_team) AS returner_team, return_time
         FROM proximity_carrier_return WHERE round_start_unix IS NOT NULL
     """):
-        returns[r[0]].append((r[1], int(r[2] or 0)))
+        returns[(r[0], r[1], r[2])].append((r[3], int(r[4] or 0)))
 
-    # life windows per (round, side) for the solo-duration difficulty factor
+    # life windows per (canonical round, side) for the solo-duration factor
     tracks = await conn.fetch("""
-        SELECT pt.round_start_unix AS rsu, pt.team,
-               UPPER(LEFT(pt.player_guid, 8)) AS g8,
+        SELECT pt.round_start_unix AS rsu, pt.map_name, pt.round_number,
+               pt.team, UPPER(LEFT(pt.player_guid, 8)) AS g8,
                pt.spawn_time_ms AS s, COALESCE(pt.death_time_ms, 2147483647) AS d
         FROM player_track pt
         JOIN rounds r ON r.id = pt.round_id AND r.is_valid
@@ -208,11 +234,11 @@ async def main() -> None:
     """)
     lives: dict = defaultdict(list)
     for t in tracks:
-        lives[(int(t["rsu"]), t["team"])].append(
+        lives[((int(t["rsu"]), t["map_name"], int(t["round_number"])), t["team"])].append(
             (int(t["s"]), int(t["d"]), t["g8"]))
 
-    def solo_since(rsu: int, team: str, g8: str, t_ms: int) -> float | None:
-        wins = lives.get((rsu, team))
+    def solo_since(round_key: tuple, team: str, g8: str, t_ms: int) -> float | None:
+        wins = lives.get((round_key, team))
         if not wins:
             return None
         others = [(s, d) for s, d, g in wins if g != g8]
@@ -224,17 +250,34 @@ async def main() -> None:
             return None
         if any(s <= t_ms < d for s, d in others):
             return 0.0
-        return max(0.0, (t_ms - last_mate) / 1000.0)
+        # player_track is per-life: cap the solo window at the CLUTCHER'S OWN
+        # spawn for the life containing t_ms — if their current life started
+        # after the last teammate died (a fresh respawn wave), time before
+        # they existed must not count as endured solo (codex, PR #473
+        # follow-up). t_ms == d is included (<=, not <): a trade-up or
+        # explosive kill can land exactly at the clutcher's own recorded
+        # death time, and excluding it would fall through to last_mate,
+        # reintroducing the exact bug this cap fixes (codex, PR #474 r3).
+        # Falls back to last_mate if no owning life is found (shouldn't
+        # happen — the clutcher is alive doing this kill).
+        own_spawn = next((s for s, d, g in wins if g == g8 and s <= t_ms <= d),
+                         None)
+        start = max(last_mate, own_spawn) if own_spawn is not None else last_mate
+        return max(0.0, (t_ms - start) / 1000.0)
 
-    # ---- chain detection (per (round, killer) first) ----
+    # ---- chain detection (per round, killer, SIDE first) ----
     # side_alive uses the killer's OWN team count directly (unaffected by
     # their own kill, no adjustment needed).
+    # Keying on team too: a player who switches sides mid-round (sub, class
+    # change edge case) must not have last-man kills from BOTH sides grouped
+    # into one chain — the later scoring picks one team for winner/doc-return
+    # bonus while still summing kills/enemy-counts from the other side.
     by_killer: dict = defaultdict(list)
     for r in rows:
         side_alive = r["axis_alive"] if r["team"] == "AXIS" else r["allies_alive"]
         if side_alive != 1:
             continue
-        by_killer[(r["round_start_unix"], r["g8"])].append(r)
+        by_killer[(rk(r), r["g8"], r["team"])].append(r)
 
     chains = []
     for krows in by_killer.values():
@@ -265,16 +308,16 @@ async def main() -> None:
         stake = 1.0
         if any(k["carrier"] for k in c["kills"]) or any(k["obj_area"] for k in c["kills"]):
             stake *= 1.5
-        rsu = m["round_start_unix"]
-        if m["round_number"] == 2 and rsu in ttb:
-            remaining = ttb[rsu] - c["t1"] / 1000.0
+        round_key = rk(m)
+        if m["round_number"] == 2 and round_key in ttb:
+            remaining = ttb[round_key] - c["t1"] / 1000.0
             stake *= 1.0 + max(0.0, min(1.0, 1.0 - remaining / 120.0))
         side_num = 1 if m["team"] == "AXIS" else 2
-        out = OUT_WIN if winner.get(rsu) == side_num else (
-            OUT_LOSS if rsu in winner else 1.0)
+        out = OUT_WIN if winner.get(round_key) == side_num else (
+            OUT_LOSS if round_key in winner else 1.0)
         v0_value = kis_sum * n_mult(c["max_enemies"]) * stake * out
         ret_note = ""
-        for returner_team, rt in returns.get(rsu, []):
+        for returner_team, rt in returns.get(round_key, []):
             # the bonus is for the CLUTCHER'S side recovering docs — an
             # opponent's return must not credit this chain (codex, PR #473)
             if returner_team != m["team"]:
@@ -284,7 +327,7 @@ async def main() -> None:
                 ret_note = " +docs"
                 break
 
-        solo_s = solo_since(rsu, m["team"], m["g8"], c["t0"])
+        solo_s = solo_since(round_key, m["team"], m["g8"], c["t0"])
         diff = difficulty_mult(solo_s)
         v1_value = v0_value * diff
 
