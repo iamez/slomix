@@ -211,3 +211,52 @@ top-20 table review).
 Open for v1 (needs design): teammate-proximity for NON-clutch plays (who was
 in position to help) requires path sampling; own-goal WEIGHTS need the owner's
 read of this table first.
+
+## 9. Clutch-v1 backtest — difficulty multiplier + own-goal data-gap finding (2026-07-08)
+
+Script: `scripts/backtest_clutch_v1.py` (`clutch-v1.0`, read-only). Extends
+the v0 formula (`scripts/backtest_clutch_detector.py`, PR #453) with a
+DIFFICULTY multiplier derived from the §8 solo-duration probe, and closes
+out the remaining owner A1 sub-asks with concrete findings.
+
+**Difficulty multiplier (NEW):** `1 + min(1, solo_before_first_kill_s / 15) * 0.5`
+— 1.0x for an instant clutch (kill lands right after the side drops to 1)
+up to 1.5x for an endured ≥15s solo. Applied on top of the unchanged v0
+value (KIS chain × N-mult × stake × outcome × doc-return bonus). Over 160
+qualifying chains, this reorders the board without inventing a competing
+formula — SuperBoyy climbs the most (3 of the top 8 rank gains: ranks
+127→101, 128→102, 119→103, all driven by 10–22s solo waits), matching the
+owner's memory of his big moments. carniee's single biggest riser has a
+55.1s solo wait — notably longer than the 21.6s max the §8 probe reported;
+the discrepancy is a real methodology difference (§8's ledger script uses a
+15s inter-kill chain window, this script inherits v0's 20s window, which can
+merge what the 15s window treats as separate chains into one with an
+earlier first-kill timestamp) rather than a data error — worth reconciling
+if/when this becomes a shipped component.
+
+**Own-goal (owner A1 part c) — DATA GAP, not a design choice.**
+`proximity_combat_position` logs 30,854 `event_type='kill'` rows and **zero**
+have `attacker_team = victim_team`: the Lua tracker does not emit team-kill
+events into the per-event combat log at all (filtered before it reaches the
+position stream). `team_kills`/`team_gibs` exist ONLY as per-round aggregate
+counts (`player_comprehensive_stats`), with no timestamp — so a "TK near an
+objective-critical moment" detector (the K-B2 case-control pattern the owner
+implicitly asked for) cannot be built today. The aggregate rate is already
+in the §8 ledger (KaNii: 2.91 docs lost/session + 2.18 FSK/session, both
+tops); it can only ever be a SESSION-level harm signal until the Lua tracker
+is extended to log TK events with timing. Flagged for the owner rather than
+silently worked around.
+
+**Golden-check re-verification.** The "qmr 2026-04-07 R2 te_escape2, 3 kills
+in 13.25s as last man" reference carried in K1's notes does NOT reconstruct:
+re-querying raw alive-count data shows qmr's side (AXIS) at
+`axis_alive IN (2, 2, 1, 3)` across their four R2 kills that round — only
+ONE kill happens while qmr is genuinely the side's last man. This isn't the
+join dropout the earlier note guessed; it's a real mismatch between the
+narrative and what last-man detection finds for this date. Left open rather
+than forced — worth chasing only if the owner can point at the exact
+intended clip for re-derivation.
+
+**Status:** tables only, as before — no formula registry entry, no SSR
+wiring. The difficulty multiplier is ready for owner review; own-goal stays
+blocked on Lua instrumentation, not on design effort.
