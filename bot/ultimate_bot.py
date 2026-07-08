@@ -865,10 +865,13 @@ class UltimateETLegacyBot(
             result = await self.process_gamestats_file(local_path, filename, override_metadata=override_metadata)
 
             if result and result.get('success'):
-                # Post to Discord via round publisher
+                # Publish to Discord via round publisher when autopost is enabled.
                 try:
-                    await self.round_publisher.publish_round_stats(filename, result)
-                    logger.info(f"✅ WebSocket-triggered import complete: {filename}")
+                    posted = await self.round_publisher.publish_round_stats(filename, result)
+                    if posted:
+                        logger.info(f"✅ WebSocket-triggered import complete and posted: {filename}")
+                    else:
+                        logger.info(f"✅ WebSocket-triggered import complete; round stats autopost skipped: {filename}")
                 except Exception as post_err:
                     logger.error(f"❌ Discord post FAILED for {filename}: {post_err}", exc_info=True)
                     await self.track_error("discord_posting", f"Failed to post {filename}: {post_err}", max_consecutive=2)
