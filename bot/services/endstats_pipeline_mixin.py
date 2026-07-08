@@ -183,14 +183,18 @@ class _EndstatsPipelineMixin:
                         webhook_logger.info(f"✅ Successfully processed and posted: {filename}")
                     else:
                         webhook_logger.info(f"✅ Successfully processed; round stats autopost skipped: {filename}")
-                    # Trigger proximity scan after stats creates the round in DB
-                    self._safe_create_task(
-                        self._trigger_proximity_scan_after_stats(),
-                        name="proximity_post_stats_scan"
-                    )
                 except Exception as post_err:
                     webhook_logger.error(f"❌ Discord post FAILED for {filename}: {post_err}", exc_info=True)
                     await self.track_error("discord_posting", f"Failed to post {filename}: {post_err}", max_consecutive=2)
+
+                # Trigger proximity scan after stats creates the round in DB —
+                # independent of the Discord post outcome above, so a publish
+                # failure/exception can't skip the proximity import for a
+                # round that's already safely in the DB (codex, PR #478).
+                self._safe_create_task(
+                    self._trigger_proximity_scan_after_stats(),
+                    name="proximity_post_stats_scan"
+                )
                 return True
             else:
                 error_msg = result.get('error', 'Unknown') if result else 'No result'
