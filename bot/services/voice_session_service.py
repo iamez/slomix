@@ -404,6 +404,25 @@ class VoiceSessionService:
                 logger.debug("No session data found for finalization")
                 return
 
+            start_date = await self._session_start_date(session_ids)
+
+            # KIS cache invalidation: scheduled as soon as session_ids are
+            # known, NOT gated on the scoring-finalization block below — a
+            # scoring exception must not leave a stale mid-session KIS
+            # snapshot in place (codex, PR #482, "Don't gate KIS invalidation
+            # on scoring finalization success"). Invalidates EVERY distinct
+            # calendar date this session's rounds touch, not just the start
+            # date — KIS is cached per calendar session_date, so a
+            # midnight-crossing session would otherwise leave the
+            # post-midnight date's cache stale (codex, "Invalidate all KIS
+            # dates touched by the session").
+            session_dates = await self._session_dates_touched(session_ids)
+            for sd in (session_dates or [start_date or str(latest_date)]):
+                asyncio.create_task(
+                    self._invalidate_kis_cache(sd),
+                    name="kis-cache-invalidate",
+                )
+
             # Try team-aware scoring first
             hardcoded_teams = await data_service.get_hardcoded_teams(session_ids)
             scoring_result = None
@@ -449,7 +468,6 @@ class VoiceSessionService:
             # scoped to the session START date (midnight-safe — the endpoint
             # ranks sessions by MIN(round_date)), and fired as a background
             # task so a slow/unreachable website can never hold teardown.
-            start_date = await self._session_start_date(session_ids)
             asyncio.create_task(
                 self._persist_s_effort(start_date or str(latest_date)),
                 name="s-effort-persist",
@@ -457,6 +475,109 @@ class VoiceSessionService:
 
         except Exception as e:
             logger.error(f"❌ Error finalizing session results: {e}", exc_info=True)
+
+    async def _session_dates_touched(self, round_ids) -> list[str]:
+        """Every distinct calendar date this session's rounds touch.
+
+        KIS is cached per calendar session_date (compute_session_kis reads
+        `proximity_kill_outcome WHERE session_date = $1`), so a
+        midnight-crossing session must invalidate ALL of them — a single
+        start_date misses rows filed under the post-midnight date (codex,
+        PR #482)."""
+        try:
+            if not round_ids:
+                return []
+            placeholders = ",".join("?" * len(round_ids))
+            rows = await self.db_adapter.fetch_all(
+                f"SELECT DISTINCT SUBSTRING(round_date, 1, 10) FROM rounds "
+                f"WHERE id IN ({placeholders})",  # noqa: S608 - placeholders only, values bound
+                tuple(round_ids),
+            )
+            return [str(r[0]) for r in (rows or []) if r and r[0]]
+        except Exception:
+            logger.warning("session dates-touched lookup failed", exc_info=True)
+            return []
+
+    async def _invalidate_kis_cache(self, session_date: str) -> None:
+        """Delete stale storytelling_kill_impact rows for session_date, then
+        proactively warm the cache with a fresh compute.
+
+        SINGLE delete only — a first attempt at this also re-ran the delete
+        after a delay to catch an in-flight compute that finishes late, but
+        that unconditional second delete collided with a MUCH more common
+        case: SESSION_DIGEST_ENABLED (live on prod) makes the morning-digest
+        hook call /storytelling/kill-impact shortly after every session end,
+        which legitimately recomputes fresh, complete rows — the delayed
+        delete then wiped those out too, leaving the table empty until yet
+        another consumer happened to trigger a recompute (codex, PR #482,
+        "Avoid deleting fresh KIS recomputes"). There is no cheap way to
+        tell "an old stale compute finishing late" apart from "a new
+        legitimate compute that started after this delete" from the DB
+        side alone — both just look like a fresh INSERT.
+
+        Why warm, not just delete: some website surfaces read
+        storytelling_kill_impact directly without ever calling
+        compute_session_kis (e.g. the session MVP endpoint,
+        sessions_router.py's kis_rank lookup) — a delete-only invalidation
+        left them with ZERO KIS data for as long as SESSION_DIGEST_ENABLED
+        is off or its HTTP call fails, since nothing else naturally
+        refreshes the cache (codex, "Warm direct KIS readers after
+        deleting the cache"). The warm call below mirrors
+        session_digest_service.py's _fetch_kis_top: a plain GET to the
+        existing public endpoint, whose own cache-miss path recomputes for
+        real now that the session has ended and every kill is in
+        proximity_kill_outcome.
+
+        Known residual race, NOT closed by the warm call (correcting a
+        prior version of this docstring that wrongly called it
+        self-healing): compute_session_kis() checks `COUNT(*) > 0` and
+        returns cached forever — `force=True` is never passed anywhere in
+        the codebase (verified against kis.py) — so if a Story/Smart Stats
+        request was ALREADY mid-compute when the delete above ran, it can
+        still finish and INSERT its stale snapshot AFTER our warm call's
+        own fresh insert, and nothing will ever correct that until a
+        manual force-recompute. Closing this needs either a `force` query
+        param on the public endpoint or a cross-process advisory lock in
+        the website's compute path — deliberately deferred: those are the
+        same files an in-flight internal-auth PR is touching, and this
+        bot-only change should not race with that (codex, "Serialize KIS
+        invalidation with in-flight computes"). Best-effort; must never
+        raise."""
+        await self._delete_kis_rows(session_date)
+        await self._warm_kis_cache(session_date)
+
+    async def _warm_kis_cache(self, session_date: str) -> None:
+        """Proactively trigger a fresh KIS compute right after invalidation
+        (see _invalidate_kis_cache for why). Mirrors
+        session_digest_service.py's _fetch_kis_top call pattern.
+        Best-effort; must never raise."""
+        url = "(unbuilt)"
+        try:
+            import aiohttp
+            url = f"{self.config.website_api_base}/storytelling/kill-impact"
+            timeout = aiohttp.ClientTimeout(total=15)
+            async with aiohttp.ClientSession(timeout=timeout) as sess, \
+                    sess.get(url, params={"session_date": str(session_date)[:10],
+                                           "limit": 1}) as resp:
+                if resp.status == 200:
+                    logger.info("✅ KIS cache warmed for %s", session_date)
+                else:
+                    logger.warning("KIS cache warm HTTP %s for %s (url=%s)",
+                                    resp.status, session_date, url)
+        except Exception as e:
+            logger.warning("KIS cache warm failed for %s (url=%s): %s",
+                            session_date, url, e)
+
+    async def _delete_kis_rows(self, session_date: str) -> None:
+        try:
+            sd = datetime.fromisoformat(str(session_date)[:10]).date()
+            await self.db_adapter.execute(
+                "DELETE FROM storytelling_kill_impact WHERE session_date = ?",
+                (sd,),
+            )
+            logger.info("✅ KIS cache invalidated for %s (recomputes on next read)", session_date)
+        except Exception as e:
+            logger.warning("KIS cache invalidation failed for %s: %s", session_date, e)
 
     async def _session_start_date(self, round_ids) -> str | None:
         """MIN(round_date) over the session's rounds — the s.effort endpoint

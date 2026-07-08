@@ -86,6 +86,18 @@ class _FakeAdapter:
         assert "gaming_session_id" not in query
         return ("2026-07-07",)
 
+    async def fetch_all(self, query, params=()):
+        # session_dates_touched lookup for KIS invalidation — return the
+        # single test date so the background task has something to no-op
+        # against (test_kis_cache_invalidation_hook.py covers its own
+        # behavior directly).
+        assert "DISTINCT SUBSTRING(round_date" in query
+        assert "WHERE id IN" in query
+        return [("2026-07-07",)]
+
+    async def execute(self, query, params=()):
+        return None
+
 
 def _fakes(save_ok=True, order=None):
     order = order if order is not None else []
@@ -120,7 +132,8 @@ def _fakes(save_ok=True, order=None):
 async def _run_finalize(svc):
     import asyncio
     await svc._finalize_session_results()  # noqa: SLF001
-    # the persist runs as a background task — let it get scheduled
+    # the persist + KIS-invalidate calls run as background tasks — let them
+    # get scheduled and complete (both are a single fast DB call, no delay).
     await asyncio.sleep(0)
 
 
