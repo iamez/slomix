@@ -176,10 +176,13 @@ class _EndstatsPipelineMixin:
             )
 
             if result and result.get('success'):
-                webhook_logger.info("📊 Posting stats with accurate timing data")
+                webhook_logger.info("📊 Publishing stats with accurate timing data if autopost is enabled")
                 try:
-                    await self.round_publisher.publish_round_stats(filename, result)
-                    webhook_logger.info(f"✅ Successfully processed: {filename}")
+                    posted = await self.round_publisher.publish_round_stats(filename, result)
+                    if posted:
+                        webhook_logger.info(f"✅ Successfully processed and posted: {filename}")
+                    else:
+                        webhook_logger.info(f"✅ Successfully processed; round stats autopost skipped: {filename}")
                     # Trigger proximity scan after stats creates the round in DB
                     self._safe_create_task(
                         self._trigger_proximity_scan_after_stats(),

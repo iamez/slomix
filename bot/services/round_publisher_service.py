@@ -189,7 +189,33 @@ class RoundPublisherService:
 
         logger.info("✅ RoundPublisherService initialized")
 
-    async def publish_round_stats(self, filename: str, result: dict):
+    def _round_stats_autopost_enabled(self) -> bool:
+        return bool(getattr(self.config, "round_stats_autopost_enabled", True))
+
+    async def _post_timing_diagnostics(self, round_id: int) -> None:
+        # Timing diagnostics are independently controlled by their own flags and
+        # target dev/debug channels, so production stats autopost can be off
+        # without disabling timing validation.
+        if self.timing_debug_service and self.timing_debug_service.enabled:
+            try:
+                await self.timing_debug_service.post_round_timing_comparison(
+                    round_id=round_id
+                )
+            except Exception as exc:
+                logger.error("Timing debug post failed for round %s: %s", round_id, exc, exc_info=True)
+
+        if (self.timing_comparison_service
+            and getattr(self.config, "timing_comparison_enabled", False)
+            and getattr(self.config, "dev_timing_channel_id", 0)):
+            try:
+                await self.timing_comparison_service.post_timing_comparison(
+                    round_id=round_id,
+                    dev_channel_id=self.config.dev_timing_channel_id
+                )
+            except Exception as exc:
+                logger.error("Timing comparison post failed for round %s: %s", round_id, exc, exc_info=True)
+
+    async def publish_round_stats(self, filename: str, result: dict) -> bool:
         """
         Auto-post round statistics to Discord after processing.
 
@@ -201,33 +227,43 @@ class RoundPublisherService:
             result: Processing result dict containing:
                 - round_id: Database round ID
                 - stats_data: Parser output (used for fallback values only)
+
+        Returns:
+            True if a production round stats embed was posted, False if it was skipped.
         """
         import uuid
         set_correlation_id(uuid.uuid4().hex[:8])
         try:
             logger.debug(f"📤 Preparing Discord post for {filename} [cid={get_correlation_id()}]")
 
+            round_id = result.get('round_id')
+            stats_data = result.get('stats_data', {})
+
+            if not round_id:
+                logger.warning(f"⚠️ No round_id for {filename}, skipping post")
+                return False
+
+            if not self._round_stats_autopost_enabled():
+                logger.info(
+                    "Round stats autopost disabled; skipping production Discord post for %s",
+                    filename,
+                )
+                await self._post_timing_diagnostics(round_id)
+                return False
+
             # Get the production channel
             if not self.config.production_channel_id:
                 logger.warning("⚠️ PRODUCTION_CHANNEL_ID not configured, skipping Discord post")
-                return
+                return False
 
             logger.debug(f"📡 Looking for production channel ID: {self.config.production_channel_id}")
             channel = self.bot.get_channel(self.config.production_channel_id)
             if not channel:
                 logger.error(f"❌ Production channel {self.config.production_channel_id} not found")
                 logger.error(f"   Available channels: {[c.id for c in self.bot.get_all_channels()][:10]}")
-                return
+                return False
 
             logger.debug(f"✅ Found channel: {channel.name}")
-
-            # Get round_id from result
-            round_id = result.get('round_id')
-            stats_data = result.get('stats_data', {})
-
-            if not round_id:
-                logger.warning(f"⚠️ No round_id for {filename}, skipping post")
-                return
 
             # Get basic round info from parser (for round outcome/winner)
             round_num = stats_data.get('round_num', stats_data.get('round', 1))
@@ -623,25 +659,20 @@ class RoundPublisherService:
             # 🗺️ Check if this was the last round for the map → post map summary
             await self._check_and_post_map_completion(round_id, map_name, round_num, channel)
 
-            # ⏱️ Post timing debug comparison (stats file vs Lua webhook)
-            if self.timing_debug_service and self.timing_debug_service.enabled:
-                await self.timing_debug_service.post_round_timing_comparison(
-                    round_id=round_id
-                )
-
-            # 👥 Post per-player timing comparison (dev channel)
-            if (self.timing_comparison_service and
-                self.config.timing_comparison_enabled and
-                self.config.dev_timing_channel_id):
-                await self.timing_comparison_service.post_timing_comparison(
-                    round_id=round_id,
-                    dev_channel_id=self.config.dev_timing_channel_id
-                )
+            await self._post_timing_diagnostics(round_id)
 
             logger.info("=" * 60)
+            return True
 
         except Exception as e:
+            # Re-raise (don't return False here): all 4 call sites wrap this
+            # method in their own try/except that calls track_error() on a
+            # real failure. Returning False would make an actual posting
+            # error indistinguishable from a deliberate autopost-disabled
+            # skip, and callers would log it as "skipped" while track_error
+            # never fires (Copilot, PR #478).
             logger.error(f"❌ Error posting round stats to Discord: {e}", exc_info=True)
+            raise
 
     async def _check_and_post_map_completion(self, round_id: int, map_name: str, current_round: int, channel):
         """
@@ -840,6 +871,13 @@ class RoundPublisherService:
         """
         try:
             logger.info(f"🏆 Publishing endstats for {filename}")
+
+            if not self._round_stats_autopost_enabled():
+                logger.info(
+                    "Round stats autopost disabled; skipping endstats Discord post for %s",
+                    filename,
+                )
+                return True
 
             # Get production channel
             if not self.config.production_channel_id:
