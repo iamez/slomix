@@ -436,6 +436,13 @@ class VoiceSessionService:
                         except Exception:
                             logger.error("auto_resolve_predictions failed",
                                          exc_info=True)
+
+                    # s.effort session persist: best-effort call to the website
+                    # API — the endpoint computes AND persists scope='session'
+                    # rows for the date (idempotent DELETE+INSERT). Without
+                    # this, new sessions only get s.effort via the manual
+                    # backfill script.
+                    await self._persist_s_effort(str(latest_date))
                 else:
                     logger.warning(f"⚠️ Failed to finalize session results for {latest_date}")
             else:
@@ -443,6 +450,26 @@ class VoiceSessionService:
 
         except Exception as e:
             logger.error(f"❌ Error finalizing session results: {e}", exc_info=True)
+
+    async def _persist_s_effort(self, session_date: str) -> None:
+        """Fire-and-forget GET to /skill/s-effort so the session's pool-
+        adjusted ratings land in player_skill_history right at session end."""
+        url = (f"{self.config.website_api_base}/skill/s-effort"
+               f"?session_date={session_date}")
+        try:
+            import aiohttp
+            timeout = aiohttp.ClientTimeout(total=60)
+            async with aiohttp.ClientSession(timeout=timeout) as sess, \
+                    sess.get(url) as resp:
+                if resp.status == 200:
+                    logger.info("✅ s.effort persisted for %s", session_date)
+                else:
+                    logger.warning("s.effort persist HTTP %s for %s "
+                                   "(old website build without the endpoint?)",
+                                   resp.status, session_date)
+        except Exception:
+            logger.warning("s.effort persist call failed (non-fatal): %s",
+                           url, exc_info=True)
 
     async def auto_end_session(self):
         """
