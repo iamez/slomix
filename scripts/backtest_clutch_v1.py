@@ -161,6 +161,9 @@ async def main() -> None:
                      AND r.map_name = ki.map_name AND r.is_valid
         JOIN proximity_combat_position cp
           ON cp.round_start_unix = ki.round_start_unix
+         AND cp.session_date = ki.session_date
+         AND cp.round_number = ki.round_number
+         AND cp.map_name = ki.map_name
          AND UPPER(LEFT(cp.attacker_guid, 8)) = UPPER(LEFT(ki.killer_guid, 8))
          AND UPPER(LEFT(cp.victim_guid, 8)) = UPPER(LEFT(ki.victim_guid, 8))
          AND ABS(cp.event_time - ki.kill_time_ms) <= 300
