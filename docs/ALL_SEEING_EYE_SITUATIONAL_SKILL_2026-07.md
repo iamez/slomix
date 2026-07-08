@@ -297,3 +297,22 @@ was counting pre-spawn time as "endured solo". 99% of player-round-team
 entries have 2+ lives (respawns are the norm), so the scenario is common,
 but it didn't happen to hit any of the current top-20/rank-gains chains —
 chain count and top rankings are unchanged (204 chains, same leaders).
+
+**Review round 3 corrections (codex, PR #474 — the canonical-key theme
+carried further than round 2 closed):** round 2 widened the `rounds`
+validation join and the combat_position join, but left every downstream
+context lookup (`ttb`, `winner`, `returns`, `lives`, and the chain-detection
+`by_killer` bucket) keyed by bare `round_start_unix`. In the collision
+scenario the earlier rounds document, a correctly-selected chain could still
+receive another round's winner/time-pressure/docs-return/life-window data.
+Fixed by introducing one canonical round key `(round_start_unix, map_name,
+round_number)` and threading it through every dict in the script — no more
+bare `round_start_unix` lookups anywhere kill-scoring depends on. Also
+closed a companion gap in the spawn-cap fix from round 2: the own-life
+lookup used `s <= t_ms < d` (exclusive of the death time), so a trade-up or
+explosive kill landing exactly at the clutcher's own recorded death time
+fell through to `last_mate` — reintroducing the exact bug the spawn cap was
+meant to fix. Changed to `s <= t_ms <= d`. Results unchanged (204 chains,
+same leaders) — no actual round_start_unix collision exists in current
+data; this is defensive tightening, not a correctness change on today's
+dataset.
