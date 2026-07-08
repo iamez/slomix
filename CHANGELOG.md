@@ -6,6 +6,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.24.1](https://github.com/iamez/slomix/compare/v1.24.0...v1.24.1) (2026-07-08)
+
+
+### Bug Fixes
+
+* **bot:** address 3 codex review findings on KIS cache invalidation ([cd5efd4](https://github.com/iamez/slomix/commit/cd5efd4312f3da31dbbfdd1654b1596810896aa6))
+* **bot:** invalidate KIS cache at session end (Smart Stats/Story kill-count freeze) ([0daaf63](https://github.com/iamez/slomix/commit/0daaf63a9848d99d124aac3648c1b14e48cd4d02))
+* **bot:** invalidate KIS cache at session end so Story/Smart Stats never freeze mid-session ([83802b3](https://github.com/iamez/slomix/commit/83802b3de4853a76ddde32962f1c248b2957f0e8))
+* **bot:** revert delayed second KIS delete — it wiped fresh digest recomputes ([a6ce10b](https://github.com/iamez/slomix/commit/a6ce10b647393513d6b6615279d04a7603d6d3d8))
+* **bot:** warm KIS cache after invalidation + correct false self-healing claim ([5bdfca5](https://github.com/iamez/slomix/commit/5bdfca5a6d0ea88ee69f4f8e1c1a28d91675e6c8))
+
 ## [1.24.0](https://github.com/iamez/slomix/compare/v1.23.0...v1.24.0) (2026-07-08)
 
 
