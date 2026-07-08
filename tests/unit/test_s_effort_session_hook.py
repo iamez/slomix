@@ -86,9 +86,16 @@ class _FakeAdapter:
         assert "gaming_session_id" not in query
         return ("2026-07-07",)
 
+    async def fetch_all(self, query, params=()):
+        # session_dates_touched lookup for KIS invalidation — return the
+        # single test date so the background task has something to no-op
+        # against (test_kis_cache_invalidation_hook.py covers its own
+        # behavior directly).
+        assert "DISTINCT SUBSTRING(round_date" in query
+        assert "WHERE id IN" in query
+        return [("2026-07-07",)]
+
     async def execute(self, query, params=()):
-        # KIS cache-invalidation background task also runs during finalize
-        # (test_kis_cache_invalidation_hook.py covers its behavior directly).
         return None
 
 
@@ -125,8 +132,13 @@ def _fakes(save_ok=True, order=None):
 async def _run_finalize(svc):
     import asyncio
     await svc._finalize_session_results()  # noqa: SLF001
-    # the persist runs as a background task — let it get scheduled
+    # the persist + KIS-invalidate calls run as background tasks — let them
+    # get scheduled, then cancel the KIS one so its 10s defensive re-delete
+    # sleep (see _invalidate_kis_cache) doesn't outlive the test.
     await asyncio.sleep(0)
+    for task in asyncio.all_tasks():
+        if task.get_name() == "kis-cache-invalidate":
+            task.cancel()
 
 
 @pytest.mark.asyncio
