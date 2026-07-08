@@ -6,6 +6,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.24.0](https://github.com/iamez/slomix/compare/v1.23.0...v1.24.0) (2026-07-08)
+
+
+### Features
+
+* **proximity:** clutch-v1 backtest — difficulty multiplier + own-goal data-gap finding (A1) ([#473](https://github.com/iamez/slomix/issues/473)) ([b24cd98](https://github.com/iamez/slomix/commit/b24cd986a8e0690d984957065984982ce47fd02b))
+
+
+### Bug Fixes
+
+* **bot:** session start-date lookup filtered wrong column (missed in [#470](https://github.com/iamez/slomix/issues/470) merge) ([#471](https://github.com/iamez/slomix/issues/471)) ([fb023ce](https://github.com/iamez/slomix/commit/fb023ce0c211c5254d86c9edf0d8e181132e8c71))
+* **proximity:** clutch-v1 late-review follow-up — canonical key, victim match, side-switch, spawn cap ([#474](https://github.com/iamez/slomix/issues/474)) ([ab20cf9](https://github.com/iamez/slomix/commit/ab20cf9c5c5fc909b294fbb6e1c579f65ef91711))
+
 ## [1.23.0](https://github.com/iamez/slomix/compare/v1.22.0...v1.23.0) (2026-07-08)
 
 
