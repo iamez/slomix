@@ -80,10 +80,13 @@ async def main() -> None:
     await conn.execute("SET default_transaction_read_only = on")
 
     # ---- sanity check the own-goal data gap up front (must be TRUE) ----
+    # attacker_team/victim_team can be '' (NOT NULL, empty string default) —
+    # an equality check without excluding '' would match empty-vs-empty rows
+    # and falsely inflate this count (codex, PR #473).
     tk_check = await conn.fetchval("""
         SELECT COUNT(*) FROM proximity_combat_position
         WHERE event_type = 'kill' AND attacker_team = victim_team
-          AND attacker_team IS NOT NULL
+          AND attacker_team IS NOT NULL AND attacker_team != ''
     """)
     print(f"own-goal data-gap check: team-kill events in combat_position = "
           f"{tk_check} (expected 0 — confirms no per-event TK timing exists)")
@@ -97,7 +100,7 @@ async def main() -> None:
          AND UPPER(LEFT(cp.attacker_guid, 8)) = UPPER(LEFT(ki.killer_guid, 8))
          AND ABS(cp.event_time - ki.kill_time_ms) <= 300
         WHERE ki.session_date = '2026-04-07' AND ki.map_name = 'te_escape2'
-          AND ki.round_number = 2 AND ki.killer_name LIKE '%qmr%'
+          AND ki.round_number = 2 AND ki.killer_name ILIKE '%qmr%'
         GROUP BY ki.kill_time_ms ORDER BY ki.kill_time_ms
     """)
     last_man_kills = sum(1 for r in qmr_alive if r["axis_alive"] == 1)
@@ -113,7 +116,7 @@ async def main() -> None:
                ki.kill_time_ms, MAX(ki.total_impact) AS kis,
                BOOL_OR(ki.is_carrier_kill) AS carrier,
                BOOL_OR(ki.is_objective_area) AS obj_area,
-               MAX(cp.attacker_team) AS team,
+               UPPER(MAX(cp.attacker_team)) AS team,
                MAX(cp.axis_alive) AS axis_alive, MAX(cp.allies_alive) AS allies_alive
         FROM storytelling_kill_impact ki
         JOIN proximity_combat_position cp
@@ -146,9 +149,15 @@ async def main() -> None:
     """):
         winner[r[0]] = int(r[1])
 
+    # flag_team is the document COLOR (redflag/blueflag), not a side — it
+    # cannot be compared against the clutcher's AXIS/ALLIES team. Capture
+    # returner_team (the actual side that performed the return) instead, so
+    # the bonus below can require it to match the clutcher's own side
+    # (codex, PR #473 — v0 discarded this and awarded the bonus for ANY
+    # return in the round, including the opponent's).
     returns = defaultdict(list)
     for r in await conn.fetch("""
-        SELECT round_start_unix, flag_team, return_time
+        SELECT round_start_unix, UPPER(returner_team) AS returner_team, return_time
         FROM proximity_carrier_return WHERE round_start_unix IS NOT NULL
     """):
         returns[r[0]].append((r[1], int(r[2] or 0)))
@@ -226,7 +235,11 @@ async def main() -> None:
             OUT_LOSS if rsu in winner else 1.0)
         v0_value = kis_sum * n_mult(c["max_enemies"]) * stake * out
         ret_note = ""
-        for _fteam, rt in returns.get(rsu, []):
+        for returner_team, rt in returns.get(rsu, []):
+            # the bonus is for the CLUTCHER'S side recovering docs — an
+            # opponent's return must not credit this chain (codex, PR #473)
+            if returner_team != m["team"]:
+                continue
             if 0 <= rt - c["t1"] <= 30_000:
                 v0_value *= 1 + RETURN_BONUS
                 ret_note = " +docs"
