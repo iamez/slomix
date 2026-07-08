@@ -665,8 +665,14 @@ class RoundPublisherService:
             return True
 
         except Exception as e:
+            # Re-raise (don't return False here): all 4 call sites wrap this
+            # method in their own try/except that calls track_error() on a
+            # real failure. Returning False would make an actual posting
+            # error indistinguishable from a deliberate autopost-disabled
+            # skip, and callers would log it as "skipped" while track_error
+            # never fires (Copilot, PR #478).
             logger.error(f"❌ Error posting round stats to Discord: {e}", exc_info=True)
-            return False
+            raise
 
     async def _check_and_post_map_completion(self, round_id: int, map_name: str, current_round: int, channel):
         """
