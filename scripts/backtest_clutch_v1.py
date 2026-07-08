@@ -137,6 +137,16 @@ async def main() -> None:
     #   2. "enemies faced at this kill" is computed as post_kill_count + 1
     #      in Python below, adding the just-removed victim back — otherwise
     #      every 1vN chain was silently understated by exactly one enemy.
+    #
+    # Canonical round key: round_start_unix alone is not guaranteed unique
+    # repo-wide (documented convention: (round_start_unix, map_name,
+    # round_number) is the real identity) — join on map_name too so a KIS
+    # row from an invalid/filler map can't validate against an unrelated
+    # round that happens to share a start time and round number.
+    #
+    # Victim match: the combat_position join keyed only on (round, killer,
+    # +-300ms) — an attacker with two victims inside that window could match
+    # either row nondeterministically. Match victim_guid8 too.
     rows = await conn.fetch("""
         SELECT DISTINCT ON (ki.id)
                ki.session_date, ki.round_start_unix, ki.round_number, ki.map_name,
@@ -147,10 +157,12 @@ async def main() -> None:
                cp.axis_alive AS axis_alive, cp.allies_alive AS allies_alive
         FROM storytelling_kill_impact ki
         JOIN rounds r ON r.round_start_unix = ki.round_start_unix
-                     AND r.round_number = ki.round_number AND r.is_valid
+                     AND r.round_number = ki.round_number
+                     AND r.map_name = ki.map_name AND r.is_valid
         JOIN proximity_combat_position cp
           ON cp.round_start_unix = ki.round_start_unix
          AND UPPER(LEFT(cp.attacker_guid, 8)) = UPPER(LEFT(ki.killer_guid, 8))
+         AND UPPER(LEFT(cp.victim_guid, 8)) = UPPER(LEFT(ki.victim_guid, 8))
          AND ABS(cp.event_time - ki.kill_time_ms) <= 300
         WHERE ki.session_date >= '2026-04-01'
           AND ki.round_start_unix > 0
@@ -224,17 +236,30 @@ async def main() -> None:
             return None
         if any(s <= t_ms < d for s, d in others):
             return 0.0
-        return max(0.0, (t_ms - last_mate) / 1000.0)
+        # player_track is per-life: cap the solo window at the CLUTCHER'S OWN
+        # spawn for the life containing t_ms — if their current life started
+        # after the last teammate died (a fresh respawn wave), time before
+        # they existed must not count as endured solo (codex, PR #473
+        # follow-up). Falls back to last_mate if no owning life is found
+        # (shouldn't happen — the clutcher is alive doing this kill).
+        own_spawn = next((s for s, d, g in wins if g == g8 and s <= t_ms < d),
+                         None)
+        start = max(last_mate, own_spawn) if own_spawn is not None else last_mate
+        return max(0.0, (t_ms - start) / 1000.0)
 
-    # ---- chain detection (per (round, killer) first) ----
+    # ---- chain detection (per round, killer, SIDE first) ----
     # side_alive uses the killer's OWN team count directly (unaffected by
     # their own kill, no adjustment needed).
+    # Keying on team too: a player who switches sides mid-round (sub, class
+    # change edge case) must not have last-man kills from BOTH sides grouped
+    # into one chain — the later scoring picks one team for winner/doc-return
+    # bonus while still summing kills/enemy-counts from the other side.
     by_killer: dict = defaultdict(list)
     for r in rows:
         side_alive = r["axis_alive"] if r["team"] == "AXIS" else r["allies_alive"]
         if side_alive != 1:
             continue
-        by_killer[(r["round_start_unix"], r["g8"])].append(r)
+        by_killer[(r["round_start_unix"], r["g8"], r["team"])].append(r)
 
     chains = []
     for krows in by_killer.values():

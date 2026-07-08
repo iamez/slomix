@@ -280,3 +280,20 @@ shift up by one across the board (e.g. pvid's top chain was "1v2", is now
 correctly "1v3"), rankings otherwise stable (SuperBoyy still dominates the
 difficulty-driven rank gains). The doc-return bonus's own-side match (owner
 A1's docs-return intent) was fixed in the same round.
+
+**Review round 2 corrections (codex, landed after merge — separate
+follow-up PR):** four more findings, addressed together with the round 1
+fixes: (a) canonical round key widened to `(round_start_unix, map_name,
+round_number)` — `round_start_unix` alone isn't guaranteed unique repo-wide,
+though no actual collision exists in current data (verified); (b) the
+combat_position join now matches `victim_guid` too, not just killer +
+±300ms window, so a double-kill inside that window can't nondeterministically
+pick the wrong row; (c) chains now key on `(round, killer, team)` — a
+mid-round side switch could otherwise merge last-man kills from both sides
+into one fabricated chain; (d) **solo-duration is capped at the clutcher's
+own spawn** for the life containing the first kill — `player_track` is
+per-life, and a fresh respawn wave starting after the last teammate died
+was counting pre-spawn time as "endured solo". 99% of player-round-team
+entries have 2+ lives (respawns are the norm), so the scenario is common,
+but it didn't happen to hit any of the current top-20/rank-gains chains —
+chain count and top rankings are unchanged (204 chains, same leaders).
