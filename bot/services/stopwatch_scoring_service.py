@@ -669,11 +669,13 @@ class StopwatchScoringService:
         Stopwatch Mode Logic (map-winner):
         - Round 1: Team A attacks (as Axis), Team B defends (as Allies)
         - Round 2: Teams swap sides - Team B attacks (as Axis), Team A defends (as Allies)
-        - Map winner by time:
-          - Both complete → faster time wins (tie goes to R1 attackers)
-          - Only one completes → that team wins
-          - Neither completes/unknown → tie
-        - Map points = 1 point to map winner (0-0 for tie)
+        - Map winner: prefer R2 header winner side; fall back to time
+          (both complete → faster time wins, tie goes to R1 attackers;
+          only one completes → that team wins; double fullhold → draw).
+        - Map points (BOX scale, owner rule 2026-07-05): 2 points to the
+          map winner, 1-1 on a double fullhold / draw — matches
+          BOXScoringService so every surface reports the same session
+          totals (verified 0/12 divergent totals on dev, 2026-07-09).
 
         Key insight: `defender_team` in R1 tells us which SIDE defended.
         We need to map that side to persistent team using player GUIDs.
