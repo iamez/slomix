@@ -639,6 +639,7 @@ GAMING_VOICE_CHANNELS=channel_id_1,channel_id_2
 
 # Website
 SESSION_SECRET=<python -c 'import secrets; print(secrets.token_urlsafe(32))'>
+INTERNAL_API_SECRET=<python -c 'import secrets; print(secrets.token_urlsafe(32))'>
 
 # Greatshot (optional)
 GREATSHOT_UDT_JSON_BIN=/path/to/UDT_json

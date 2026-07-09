@@ -1,5 +1,6 @@
 import logging
 import os
+import secrets
 import sys
 from typing import AsyncGenerator
 
@@ -122,6 +123,39 @@ def require_admin_user(request: Request) -> dict:
         raise HTTPException(status_code=403, detail="Admin privileges required")
 
     return user
+
+
+def _configured_internal_secret() -> str:
+    return os.getenv("INTERNAL_API_SECRET", "").strip()
+
+
+def _request_internal_token(request: Request) -> str | None:
+    token = request.headers.get("X-Internal-Token")
+    return token.strip() if token is not None else None
+
+
+async def get_internal_request_mode(request: Request) -> bool:
+    """Return True for authenticated internal API calls.
+
+    Public browser requests omit X-Internal-Token and remain read-only. A
+    present but invalid token is treated as a failed internal call instead of
+    silently falling back to public mode.
+    """
+    token = _request_internal_token(request)
+    if token is None:
+        return False
+
+    configured = _configured_internal_secret()
+    if configured and secrets.compare_digest(token, configured):
+        return True
+
+    raise HTTPException(status_code=401, detail="Internal API authentication required")
+
+
+async def require_internal_secret(request: Request) -> None:
+    """FastAPI dependency: require X-Internal-Token for write-through GETs."""
+    if not await get_internal_request_mode(request):
+        raise HTTPException(status_code=401, detail="Internal API authentication required")
 
 
 # ============================================================================
