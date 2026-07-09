@@ -35,6 +35,11 @@ def _ssr_version() -> str:
     return FORMULA_VERSION
 
 
+def _kis_version() -> str:
+    from website.backend.services.storytelling.kis import FORMULA_VERSION
+    return FORMULA_VERSION
+
+
 def _prox_version() -> str:
     from website.backend.services.prox_scoring import FORMULA_VERSION
     return FORMULA_VERSION
@@ -71,7 +76,7 @@ def get_registry() -> list[dict]:
         },
         {
             "name": "kis",
-            "version": "v2",
+            "version": _kis_version(),
             "status": "live",
             "module": "website/backend/services/storytelling/kis.py",
             "surface": "/api/storytelling/*, Smart Stats, Story, momentum",
