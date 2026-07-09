@@ -12,7 +12,8 @@ KIS cache-check). Vsi koraki spodaj so **owner-run**. Zaporedje: P0 → SECRET �
 ## P0 — Pred-priprava
 1. Mergaj **release-please PR** (nova verzija) → nastane tag.
 2. `gh pr list --state open` — potrdi, da so #484/#486/#487/#489 mergani (so).
-3. Prod `.env` CRLF sanity: `ssh slomix-vm "file /opt/slomix/.env"` → če CRLF, `sed -i 's/\r$//' .env`.
+3. Prod `.env` CRLF sanity: `ssh slomix-vm "file /opt/slomix/.env"` → če CRLF,
+   `ssh slomix-vm "sed -i 's/\r\$//' /opt/slomix/.env"` (absolutna pot — ne `cd`-odvisna).
 
 ## SECRET — INTERNAL_API_SECRET setup (NOVO, OBVEZNO PRED DEPLOYEM!)
 Po #487 ima website **fail-fast**: `main.py` NE bo startal brez `INTERNAL_API_SECRET`
@@ -39,12 +40,16 @@ ssh slomix-vm "cd /opt/slomix && ./scripts/db_backup.sh"   # pg_dump → backups
 ```
 # migr 060 (formula_version) je website-scoped — PREVERI ali je na produ PRED deployem:
 ssh slomix-vm 'cd /opt/slomix && set -a && . .env && set +a && \
-  psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DATABASE -tAc \
+  psql -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POSTGRES_DATABASE -tAc \
   "SELECT 1 FROM information_schema.columns WHERE table_name='"'"'storytelling_kill_impact'"'"' AND column_name='"'"'formula_version'"'"'"'
 # če prazno → migr 060 NI aplicirana → dodaj migracijski korak (ne --skip-migrations),
 # ali aplicaj migrations/060_add_kis_formula_version.sql ročno pred A2.
 
-SUDO_PASS='<sudo geslo>' ./scripts/deploy_release.sh <TAG> --skip-migrations --skip-flags
+# SUDO_PASS ne piši inline (pusti sled v shell history + process listing); preberi ga
+# interaktivno v spremenljivko, ki velja SAMO za ta klic (brez export, brez history):
+read -rs SUDO_PASS && export SUDO_PASS
+./scripts/deploy_release.sh <TAG> --skip-migrations --skip-flags
+unset SUDO_PASS
 BASE_URL=https://www.slomix.fyi ./scripts/verify_post_deploy.sh
 ```
 Opombe: root `migrations/` NIMA novih; edini schema-touch je website-scoped migr 060 (glej zgoraj).
@@ -65,12 +70,14 @@ venv-web/bin/python /tmp/kis_probe.py   # pričakovano: STALE 0/N
 curl -s "https://www.slomix.fyi/api/skill/leaderboard" | head -c 200
 # s-effort je zdaj internal-only (401 brez headerja — pravilno):
 curl -s -o /dev/null -w "%{http_code}\n" "https://www.slomix.fyi/api/skill/s-effort?session_date=<seja>"   # 401
-curl -s -H "X-Internal-Token: <SECRET>" "https://www.slomix.fyi/api/skill/s-effort?session_date=<seja>"      # 200
+# token referenciraj iz okolja (NE prilepi raw secreta v ukaz → shell history):
+SECRET=$(ssh slomix-vm 'set -a && . /opt/slomix/.env && set +a && printf %s "$INTERNAL_API_SECRET")
+curl -s -H "X-Internal-Token: $SECRET" "https://www.slomix.fyi/api/skill/s-effort?session_date=<seja>"      # 200
 # public storytelling ostane read-only (compute=read_only brez headerja):
 curl -s "https://www.slomix.fyi/api/storytelling/kill-impact?session_date=<seja>&limit=3" | head -c 200
 sudo systemctl status slomix-web slomix-bot
 # po PRVI seji po deployu preveri, da warm hook DELA (ne skipne):
-sudo journalctl -u slomix-bot --since "-1h" | grep -iE "KIS cache warmed|warm skipped|s.effort persisted|persist skipped"
+sudo journalctl -u slomix-bot --since "-1h" | grep -iE "KIS cache warmed|warm skipped|s\.effort persisted|persist skipped"
 #   pričakovano: "warmed"/"persisted" (NE "skipped") — sicer INTERNAL_API_SECRET manjka/napačen
 ```
 
