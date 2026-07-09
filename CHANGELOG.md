@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.26.0](https://github.com/iamez/slomix/compare/v1.25.0...v1.26.0) (2026-07-09)
+
+
+### Features
+
+* **proximity:** data trust quality endpoint ([#494](https://github.com/iamez/slomix/issues/494)) ([b29977c](https://github.com/iamez/slomix/commit/b29977c0652f28aa16ca9a3a47005e4335ba2392))
+
 ## [1.25.0](https://github.com/iamez/slomix/compare/v1.24.0...v1.25.0) (2026-07-09)
 
 
