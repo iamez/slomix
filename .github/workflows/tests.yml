@@ -66,6 +66,7 @@ jobs:
           CACHE_BACKEND: memory
           PROMETHEUS_ENABLED: "false"
           SESSION_SECRET: ci-test-secret-not-for-production
+          INTERNAL_API_SECRET: ci-test-secret-not-for-production
         run: pytest tests/ -v --tb=short --cov=bot --cov=website/backend --cov-report=xml --cov-report=term
 
       - name: Upload coverage to Codecov
@@ -166,5 +167,6 @@ jobs:
           cp website/.env.example .env 2>/dev/null || cp .env.example .env 2>/dev/null || true
           echo "POSTGRES_PASSWORD=ci_placeholder" >> .env
           echo "SESSION_SECRET=ci_placeholder" >> .env
+          echo "INTERNAL_API_SECRET=ci_placeholder" >> .env
           echo "DISCORD_BOT_TOKEN=ci_placeholder" >> .env
           docker compose build api website

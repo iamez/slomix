@@ -20,6 +20,7 @@ Services:
 
 Security Notes:
     - SESSION_SECRET must be set (no defaults allowed)
+    - INTERNAL_API_SECRET must be set for bot-to-website write-through calls
     - CORS restricted to specific origins
     - All SQL uses parameterized queries
     - Input validation on all endpoints

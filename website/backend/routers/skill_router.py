@@ -8,7 +8,7 @@ import json
 
 from fastapi import APIRouter, Depends
 
-from website.backend.dependencies import get_db
+from website.backend.dependencies import get_db, require_internal_secret
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 from website.backend.services.skill_rating_service import (
@@ -226,7 +226,11 @@ async def get_player_skill_history(
 
 
 @router.get("/skill/s-effort")
-async def get_s_effort(session_date: str, db=Depends(get_db)):
+async def get_s_effort(
+    session_date: str,
+    _internal: None = Depends(require_internal_secret),
+    db=Depends(get_db),
+):
     """s.effort / s.performance for one session (SuperBoyy's pool-adjusted
     performance; pool variant A leave-one-out per owner decision). Computes
     live and idempotently persists scope='session' history rows."""
