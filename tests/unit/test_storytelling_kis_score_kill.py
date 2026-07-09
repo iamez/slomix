@@ -112,7 +112,7 @@ def test_carrier_kill_with_no_return_uses_kill_multiplier(svc):
     kt = 10_000
     result = svc._score_kill(
         kill=_kill(kill_time=kt),
-        carrier_kills={("K", 1_700_000_000, 1, "supply"): {kt}},
+        carrier_kills={("K", 1_700_000_000, "supply", 1): {kt}},
         carrier_returns={},  # no return → not a chain
         pushes={}, crossfires={}, spawn_timings={},
         victim_classes={}, combat_positions={},
@@ -127,8 +127,8 @@ def test_carrier_kill_with_quick_return_uses_chain_multiplier(svc):
     assert return_time - kt <= CARRIER_RETURN_WINDOW_MS  # sanity
     result = svc._score_kill(
         kill=_kill(kill_time=kt),
-        carrier_kills={("K", 1_700_000_000, 1, "supply"): {kt}},
-        carrier_returns={(1_700_000_000, 1, "supply"): [return_time]},
+        carrier_kills={("K", 1_700_000_000, "supply", 1): {kt}},
+        carrier_returns={(1_700_000_000, "supply", 1): [return_time]},
         pushes={}, crossfires={}, spawn_timings={},
         victim_classes={}, combat_positions={},
     )
@@ -142,8 +142,8 @@ def test_carrier_kill_with_late_return_does_not_chain(svc):
     return_time = kt + CARRIER_RETURN_WINDOW_MS + 1
     result = svc._score_kill(
         kill=_kill(kill_time=kt),
-        carrier_kills={("K", 1_700_000_000, 1, "supply"): {kt}},
-        carrier_returns={(1_700_000_000, 1, "supply"): [return_time]},
+        carrier_kills={("K", 1_700_000_000, "supply", 1): {kt}},
+        carrier_returns={(1_700_000_000, "supply", 1): [return_time]},
         pushes={}, crossfires={}, spawn_timings={},
         victim_classes={}, combat_positions={},
     )
@@ -160,7 +160,7 @@ def test_crossfire_within_3s_window_applies_multiplier(svc):
     result = svc._score_kill(
         kill=_kill(kill_time=kt),
         carrier_kills={}, carrier_returns={}, pushes={},
-        crossfires={(1_700_000_000, 1, "supply"): [kt + 1500]},  # 1.5s away → in window
+        crossfires={(1_700_000_000, "supply", 1): [kt + 1500]},  # 1.5s away → in window
         spawn_timings={}, victim_classes={}, combat_positions={},
     )
     assert result["crossfire_multiplier"] == CROSSFIRE_MULTIPLIER
@@ -172,7 +172,7 @@ def test_crossfire_outside_3s_window_skipped(svc):
     result = svc._score_kill(
         kill=_kill(kill_time=kt),
         carrier_kills={}, carrier_returns={}, pushes={},
-        crossfires={(1_700_000_000, 1, "supply"): [kt + 4000]},  # 4s away → outside
+        crossfires={(1_700_000_000, "supply", 1): [kt + 4000]},  # 4s away → outside
         spawn_timings={}, victim_classes={}, combat_positions={},
     )
     assert result["crossfire_multiplier"] == 1.0
@@ -190,7 +190,7 @@ def test_medic_kill_uses_class_weight():
         kill=_kill(),
         carrier_kills={}, carrier_returns={}, pushes={}, crossfires={},
         spawn_timings={},
-        victim_classes={("V", 1_700_000_000, 1, "supply"): "medic"},
+        victim_classes={("V", 1_700_000_000, "supply", 1): "medic"},
         combat_positions={},
     )
     assert result["class_multiplier"] == 1.5  # CLASS_WEIGHTS["MEDIC"]
@@ -201,7 +201,7 @@ def test_unknown_class_falls_back_to_1_0(svc):
         kill=_kill(),
         carrier_kills={}, carrier_returns={}, pushes={}, crossfires={},
         spawn_timings={},
-        victim_classes={("V", 1_700_000_000, 1, "supply"): "alien_class"},
+        victim_classes={("V", 1_700_000_000, "supply", 1): "alien_class"},
         combat_positions={},
     )
     assert result["class_multiplier"] == 1.0
@@ -227,7 +227,7 @@ def test_low_health_kill_applies_health_multiplier(svc):
         kill=_kill(kill_time=kt),
         carrier_kills={}, carrier_returns={}, pushes={}, crossfires={},
         spawn_timings={}, victim_classes={},
-        combat_positions={("K", 1_700_000_000, 1, kt, "supply"): _cp(killer_health=20)},
+        combat_positions={("K", 1_700_000_000, "supply", 1, kt): _cp(killer_health=20)},
     )
     assert result["health_multiplier"] == LOW_HEALTH_MULTIPLIER
 
@@ -238,7 +238,7 @@ def test_high_health_kill_no_health_multiplier(svc):
         kill=_kill(kill_time=kt),
         carrier_kills={}, carrier_returns={}, pushes={}, crossfires={},
         spawn_timings={}, victim_classes={},
-        combat_positions={("K", 1_700_000_000, 1, kt, "supply"): _cp(killer_health=80)},
+        combat_positions={("K", 1_700_000_000, "supply", 1, kt): _cp(killer_health=80)},
     )
     assert result["health_multiplier"] == 1.0
 
@@ -250,7 +250,7 @@ def test_solo_clutch_one_vs_three_uses_clutch_multiplier(svc):
         kill=_kill(kill_time=kt),
         carrier_kills={}, carrier_returns={}, pushes={}, crossfires={},
         spawn_timings={}, victim_classes={},
-        combat_positions={("K", 1_700_000_000, 1, kt, "supply"): cp},
+        combat_positions={("K", 1_700_000_000, "supply", 1, kt): cp},
     )
     assert result["alive_multiplier"] == SOLO_CLUTCH_MULTIPLIER
 
@@ -263,7 +263,7 @@ def test_outnumbered_kill_uses_outnumbered_multiplier(svc):
         kill=_kill(kill_time=kt),
         carrier_kills={}, carrier_returns={}, pushes={}, crossfires={},
         spawn_timings={}, victim_classes={},
-        combat_positions={("K", 1_700_000_000, 1, kt, "supply"): cp},
+        combat_positions={("K", 1_700_000_000, "supply", 1, kt): cp},
     )
     assert result["alive_multiplier"] == OUTNUMBERED_MULTIPLIER
 
@@ -275,7 +275,7 @@ def test_even_team_count_no_alive_multiplier(svc):
         kill=_kill(kill_time=kt),
         carrier_kills={}, carrier_returns={}, pushes={}, crossfires={},
         spawn_timings={}, victim_classes={},
-        combat_positions={("K", 1_700_000_000, 1, kt, "supply"): cp},
+        combat_positions={("K", 1_700_000_000, "supply", 1, kt): cp},
     )
     assert result["alive_multiplier"] == 1.0
 
@@ -292,7 +292,7 @@ def test_soft_cap_below_5_passes_raw(svc):
     # Easier: gibbed * carrier_kill = 1.3 * 3.0 = 3.9, well below 5.0 cap.
     result = svc._score_kill(
         kill=_kill(outcome="gibbed", kill_time=kt),
-        carrier_kills={("K", 1_700_000_000, 1, "supply"): {kt}},
+        carrier_kills={("K", 1_700_000_000, "supply", 1): {kt}},
         carrier_returns={},
         pushes={}, crossfires={}, spawn_timings={},
         victim_classes={}, combat_positions={},
@@ -314,10 +314,10 @@ def test_soft_cap_above_5_compresses_linearly(svc):
     return_time = kt + 5000  # within window → chain
     result = svc._score_kill(
         kill=_kill(outcome="gibbed", kill_time=kt),
-        carrier_kills={("K", 1_700_000_000, 1, "supply"): {kt}},
-        carrier_returns={(1_700_000_000, 1, "supply"): [return_time]},
+        carrier_kills={("K", 1_700_000_000, "supply", 1): {kt}},
+        carrier_returns={(1_700_000_000, "supply", 1): [return_time]},
         pushes={},
-        crossfires={(1_700_000_000, 1, "supply"): [kt + 100]},
+        crossfires={(1_700_000_000, "supply", 1): [kt + 100]},
         spawn_timings={}, victim_classes={}, combat_positions={},
     )
     raw = OUTCOME_GIBBED * CARRIER_CHAIN_MULTIPLIER * CROSSFIRE_MULTIPLIER
@@ -333,20 +333,20 @@ def test_soft_cap_preserves_ordering(svc):
     # Lower raw: outcome=gibbed * carrier_kill * crossfire = 1.3 * 3.0 * 1.5 = 5.85
     low = svc._score_kill(
         kill=_kill(outcome="gibbed", kill_time=kt),
-        carrier_kills={("K", 1_700_000_000, 1, "supply"): {kt}},
+        carrier_kills={("K", 1_700_000_000, "supply", 1): {kt}},
         carrier_returns={}, pushes={},
-        crossfires={(1_700_000_000, 1, "supply"): [kt + 100]},
+        crossfires={(1_700_000_000, "supply", 1): [kt + 100]},
         spawn_timings={}, victim_classes={}, combat_positions={},
     )
     # Higher raw: outcome=gibbed * carrier_chain * crossfire * medic class = 9.75 * 1.5 ≈ 14.625
     high = svc._score_kill(
         kill=_kill(outcome="gibbed", kill_time=kt),
-        carrier_kills={("K", 1_700_000_000, 1, "supply"): {kt}},
-        carrier_returns={(1_700_000_000, 1, "supply"): [kt + 5000]},
+        carrier_kills={("K", 1_700_000_000, "supply", 1): {kt}},
+        carrier_returns={(1_700_000_000, "supply", 1): [kt + 5000]},
         pushes={},
-        crossfires={(1_700_000_000, 1, "supply"): [kt + 100]},
+        crossfires={(1_700_000_000, "supply", 1): [kt + 100]},
         spawn_timings={},
-        victim_classes={("V", 1_700_000_000, 1, "supply"): "MEDIC"},
+        victim_classes={("V", 1_700_000_000, "supply", 1): "MEDIC"},
         combat_positions={},
     )
     assert high["total_impact"] > low["total_impact"]
@@ -364,7 +364,7 @@ def test_spawn_timing_5_tuple_uses_index_4_for_reinf(svc):
     result = svc._score_kill(
         kill=_kill(kill_time=kt),
         carrier_kills={}, carrier_returns={}, pushes={}, crossfires={},
-        spawn_timings={(1_700_000_000, 1, "supply"): [("K", kt, 0.0, "ignored", 25.0)]},
+        spawn_timings={(1_700_000_000, "supply", 1): [("K", kt, 0.0, "ignored", 25.0)]},
         victim_classes={}, combat_positions={},
     )
     assert result["reinf_multiplier"] == 1.30
@@ -376,7 +376,7 @@ def test_spawn_timing_4_tuple_uses_index_3_for_reinf(svc):
     result = svc._score_kill(
         kill=_kill(kill_time=kt),
         carrier_kills={}, carrier_returns={}, pushes={}, crossfires={},
-        spawn_timings={(1_700_000_000, 1, "supply"): [("K", kt, 0.0, 15.0)]},
+        spawn_timings={(1_700_000_000, "supply", 1): [("K", kt, 0.0, 15.0)]},
         victim_classes={}, combat_positions={},
     )
     assert result["reinf_multiplier"] == 1.10  # 15.0 → ≤15 tier
@@ -388,7 +388,7 @@ def test_spawn_timing_other_player_does_not_affect_score(svc):
     result = svc._score_kill(
         kill=_kill(killer_guid="K", kill_time=kt),
         carrier_kills={}, carrier_returns={}, pushes={}, crossfires={},
-        spawn_timings={(1_700_000_000, 1, "supply"): [("OTHER", kt, 0.0, 25.0)]},
+        spawn_timings={(1_700_000_000, "supply", 1): [("OTHER", kt, 0.0, 25.0)]},
         victim_classes={}, combat_positions={},
     )
     assert result["reinf_multiplier"] == 1.0  # default — no spawn_timing applied

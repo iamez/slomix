@@ -143,6 +143,21 @@ def _format_time_ms(ms: int) -> str:
     return f"{minutes}:{seconds:02d}"
 
 
+def round_ctx_key(round_start_unix, map_name, round_number) -> tuple:
+    """Canonical round-level key for KIS context lookups.
+
+    Ordering is (round_start_unix, map_name, round_number) — the SAME repo-wide
+    canonical round key ordering used by ois.py / ssr. round_start_unix is NOT
+    unique repo-wide (two rounds on different maps can share a start second
+    across sessions), so map_name is part of the key. Both the loaders that
+    BUILD context dicts and _score_kill that LOOKS THEM UP go through this one
+    helper so their key shapes can never drift apart (codex audit #10/#11,
+    Copilot PR #486 ordering review). Guid-prefixed / kill_time-suffixed keys
+    compose it as `(guid, *round_ctx_key(...))` / `(*..., kill_time)`.
+    """
+    return (round_start_unix, map_name, round_number)
+
+
 # Explicit export list so `from .base import *` is visible to ruff and mypy.
 __all__ = [
     # stdlib / third-party re-exports used by mixin method bodies
@@ -158,6 +173,7 @@ __all__ = [
     "_compute_locks",
     "_safe_short",
     "_to_date",
+    "round_ctx_key",
     "_to_date_str",
     "_format_time_ms",
     "logger",
