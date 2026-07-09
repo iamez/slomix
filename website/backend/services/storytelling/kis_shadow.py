@@ -118,10 +118,10 @@ def _build_shadow_kis_query() -> str:
     """
     return f"""
     WITH ck AS (
-        -- carrier kill keyed by (killer_guid, round_start_unix, round_number, map_name, kill_time).
-        -- map_name is part of the canonical round key (codex audit #10/#11):
-        -- round_start_unix is not unique repo-wide, so every join below also
-        -- matches ko.map_name — mirroring the Python loaders' dict keys.
+        -- carrier kill keyed by round + killer + kill_time. The canonical
+        -- round key is (round_start_unix, map_name, round_number) (codex audit
+        -- #10/#11): round_start_unix is not unique repo-wide, so every join
+        -- below also matches ko.map_name — mirroring the Python loaders' keys.
         SELECT killer_guid, round_start_unix, round_number, map_name, kill_time
         FROM proximity_carrier_kill
         WHERE session_date = $1
