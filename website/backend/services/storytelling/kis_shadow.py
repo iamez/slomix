@@ -118,26 +118,29 @@ def _build_shadow_kis_query() -> str:
     """
     return f"""
     WITH ck AS (
-        -- carrier kill keyed by (killer_guid, round_start_unix, round_number, kill_time)
-        SELECT killer_guid, round_start_unix, round_number, kill_time
+        -- carrier kill keyed by (killer_guid, round_start_unix, round_number, map_name, kill_time).
+        -- map_name is part of the canonical round key (codex audit #10/#11):
+        -- round_start_unix is not unique repo-wide, so every join below also
+        -- matches ko.map_name — mirroring the Python loaders' dict keys.
+        SELECT killer_guid, round_start_unix, round_number, map_name, kill_time
         FROM proximity_carrier_kill
         WHERE session_date = $1
     ),
     cr AS (
         -- carrier return events keyed by round
-        SELECT round_start_unix, round_number, return_time
+        SELECT round_start_unix, round_number, map_name, return_time
         FROM proximity_carrier_return
         WHERE session_date = $1
     ),
     pu AS (
-        SELECT round_start_unix, round_number, start_time, end_time,
+        SELECT round_start_unix, round_number, map_name, start_time, end_time,
                COALESCE(push_quality, 0)::numeric AS push_quality,
                COALESCE(toward_objective, '') AS toward_objective
         FROM proximity_team_push
         WHERE session_date = $1
     ),
     cf AS (
-        SELECT round_start_unix, round_number, event_time
+        SELECT round_start_unix, round_number, map_name, event_time
         FROM proximity_crossfire_opportunity
         WHERE was_executed = TRUE AND session_date = $1
     ),
@@ -147,35 +150,35 @@ def _build_shadow_kis_query() -> str:
         -- which coerces falsy zeros to the default; using plain COALESCE
         -- here would treat 0 as a real score and silently diverge from
         -- production for sessions containing zero-valued rows.
-        SELECT id, killer_guid, round_start_unix, round_number, kill_time,
+        SELECT id, killer_guid, round_start_unix, round_number, map_name, kill_time,
                COALESCE(NULLIF(spawn_timing_score, 0), 0.5)::numeric AS score,
                COALESCE(victim_reinf, 0)::numeric AS victim_reinf
         FROM proximity_spawn_timing
         WHERE session_date = $1
     ),
     vc AS (
-        -- victim class: keep first row per (target_guid, round_start_unix, round_number)
-        SELECT DISTINCT ON (target_guid, round_start_unix, round_number)
-               target_guid, round_start_unix, round_number,
+        -- victim class: keep first row per (target_guid, round_start_unix, round_number, map_name)
+        SELECT DISTINCT ON (target_guid, round_start_unix, round_number, map_name)
+               target_guid, round_start_unix, round_number, map_name,
                COALESCE(UPPER(target_class), '') AS target_class
         FROM proximity_reaction_metric
         WHERE session_date = $1
-        ORDER BY target_guid, round_start_unix, round_number, id
+        ORDER BY target_guid, round_start_unix, round_number, map_name, id
     ),
     cp AS (
         -- Dedup to one row per (attacker_guid, round_start_unix, round_number,
-        -- event_time) — the join key — so a kill outcome cannot fan out into
-        -- multiple shadow rows when the same attacker has duplicate position
-        -- entries at the same timestamp. Stable selection via row id.
-        SELECT DISTINCT ON (attacker_guid, round_start_unix, round_number, event_time)
-               attacker_guid, round_start_unix, round_number, event_time,
+        -- map_name, event_time) — the join key — so a kill outcome cannot fan
+        -- out into multiple shadow rows when the same attacker has duplicate
+        -- position entries at the same timestamp. Stable selection via row id.
+        SELECT DISTINCT ON (attacker_guid, round_start_unix, round_number, map_name, event_time)
+               attacker_guid, round_start_unix, round_number, map_name, event_time,
                COALESCE(killer_health, 0)::int AS killer_health,
                COALESCE(axis_alive, 0)::int AS axis_alive,
                COALESCE(allies_alive, 0)::int AS allies_alive,
                COALESCE(UPPER(attacker_team), '') AS attacker_team
         FROM proximity_combat_position
         WHERE session_date = $1 AND event_type = 'kill'
-        ORDER BY attacker_guid, round_start_unix, round_number, event_time, id
+        ORDER BY attacker_guid, round_start_unix, round_number, map_name, event_time, id
     )
     SELECT
         ko.id AS kill_outcome_id,
@@ -197,6 +200,7 @@ def _build_shadow_kis_query() -> str:
                 FROM pu
                 WHERE pu.round_start_unix = ko.round_start_unix
                   AND pu.round_number = ko.round_number
+                  AND pu.map_name = ko.map_name
                   AND ko.kill_time BETWEEN pu.start_time AND pu.end_time + {PUSH_BUFFER_MS}
                   AND pu.push_quality >= {PUSH_QUALITY_THRESHOLD}::numeric
                   AND pu.toward_objective NOT IN ('NO', 'N/A', '')
@@ -210,6 +214,7 @@ def _build_shadow_kis_query() -> str:
                 SELECT 1 FROM cf
                 WHERE cf.round_start_unix = ko.round_start_unix
                   AND cf.round_number = ko.round_number
+                  AND cf.map_name = ko.map_name
                   AND ABS(cf.event_time - ko.kill_time) <= {CROSSFIRE_TIMING_WINDOW_MS}
             ) THEN {CROSSFIRE_MULTIPLIER}::numeric
             ELSE 1.0::numeric
@@ -222,6 +227,7 @@ def _build_shadow_kis_query() -> str:
                 FROM st
                 WHERE st.round_start_unix = ko.round_start_unix
                   AND st.round_number = ko.round_number
+                  AND st.map_name = ko.map_name
                   AND st.killer_guid = ko.killer_guid
                   AND ABS(st.kill_time - ko.kill_time) <= {SPAWN_TIMING_WINDOW_MS}
             ),
@@ -244,6 +250,7 @@ def _build_shadow_kis_query() -> str:
                 FROM st
                 WHERE st.round_start_unix = ko.round_start_unix
                   AND st.round_number = ko.round_number
+                  AND st.map_name = ko.map_name
                   AND st.killer_guid = ko.killer_guid
                   AND ABS(st.kill_time - ko.kill_time) <= {SPAWN_TIMING_WINDOW_MS}
                 -- Deterministic match: closest spawn-timing by time delta,
@@ -331,6 +338,7 @@ def _build_shadow_kis_query() -> str:
         WHERE ck.killer_guid = ko.killer_guid
           AND ck.round_start_unix = ko.round_start_unix
           AND ck.round_number = ko.round_number
+          AND ck.map_name = ko.map_name
           AND ck.kill_time = ko.kill_time
         LIMIT 1
     ) ck_match ON TRUE
@@ -339,6 +347,7 @@ def _build_shadow_kis_query() -> str:
         FROM cr
         WHERE cr.round_start_unix = ko.round_start_unix
           AND cr.round_number = ko.round_number
+          AND cr.map_name = ko.map_name
           AND ck_match.kill_time IS NOT NULL
           AND (cr.return_time - ko.kill_time) > 0
           AND (cr.return_time - ko.kill_time) <= {CARRIER_RETURN_WINDOW_MS}
@@ -349,10 +358,12 @@ def _build_shadow_kis_query() -> str:
         ON vc.target_guid = ko.victim_guid
        AND vc.round_start_unix = ko.round_start_unix
        AND vc.round_number = ko.round_number
+       AND vc.map_name = ko.map_name
     LEFT JOIN cp
         ON cp.attacker_guid = ko.killer_guid
        AND cp.round_start_unix = ko.round_start_unix
        AND cp.round_number = ko.round_number
+       AND cp.map_name = ko.map_name
        AND cp.event_time = ko.kill_time
     WHERE ko.session_date = $1
     ORDER BY ko.round_start_unix, ko.kill_time

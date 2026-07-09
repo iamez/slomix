@@ -181,14 +181,17 @@ class _KisMixin:
         outcome = kill[9] or 'tapped_out'
         kill_time = kill[10] or 0
 
-        round_key = (round_start_unix, round_number)
+        # Canonical round key — map_name disambiguates rounds that share a
+        # start second across sessions (codex audit #10). Must match the key
+        # shape built in loaders.py exactly.
+        round_key = (round_start_unix, round_number, map_name)
 
         # Carrier kill check
         carrier_mult = 1.0
         is_carrier = False
-        ck_key = (killer_guid, round_start_unix, round_number)
+        ck_key = (killer_guid, round_start_unix, round_number, map_name)
         if ck_key in carrier_kills and kill_time in carrier_kills[ck_key]:
-            cr_key = (round_start_unix, round_number)
+            cr_key = (round_start_unix, round_number, map_name)
             if cr_key in carrier_returns:
                 chain = False
                 for ret in carrier_returns[cr_key]:
@@ -269,7 +272,7 @@ class _KisMixin:
             outcome_mult = OUTCOME_REVIVED
 
         # Target class multiplier (from reaction_metric)
-        victim_class = victim_classes.get((victim_guid, round_start_unix, round_number), '').upper()
+        victim_class = victim_classes.get((victim_guid, round_start_unix, round_number, map_name), '').upper()
         class_mult = CLASS_WEIGHTS.get(victim_class, 1.0)
 
         # TODO: Implement when per-kill distance data available
@@ -282,7 +285,7 @@ class _KisMixin:
         # reinf_mult is computed together with spawn_mult above
 
         cp = None
-        cp_key = (killer_guid, round_start_unix, round_number, kill_time)
+        cp_key = (killer_guid, round_start_unix, round_number, kill_time, map_name)
         if combat_positions:
             cp = combat_positions.get(cp_key)
             if cp:
