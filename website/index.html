@@ -1226,7 +1226,7 @@
     </style>
 
     <!-- Icons -->
-    <script src="https://unpkg.com/lucide@0.563.0/dist/umd/lucide.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.577.0/dist/umd/lucide.min.js"></script>
     <!-- Charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
@@ -2111,6 +2111,22 @@
                         </div>
                     </div>
                     <div id="proximity-scope-caption" class="text-xs text-slate-500 mt-3">All proximity data in current window.</div>
+                </div>
+
+                <div id="proximity-quality-panel" class="glass-panel p-4 rounded-xl mb-8 border border-white/10">
+                    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <i data-lucide="shield-check" class="w-4 h-4 text-brand-cyan"></i>
+                                <span class="text-sm font-bold text-slate-300">Data Trust</span>
+                                <span id="proximity-quality-status" class="text-[10px] font-bold px-2 py-0.5 rounded border border-slate-600/40 text-slate-400 bg-slate-800/40">checking</span>
+                            </div>
+                            <div id="proximity-quality-scope" class="text-[11px] text-slate-500 mt-1">Scope: Last 30d window</div>
+                        </div>
+                        <div id="proximity-quality-summary" class="text-xs text-slate-400 lg:text-right">Waiting for quality signal.</div>
+                    </div>
+                    <div id="proximity-quality-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mt-4"></div>
+                    <div id="proximity-quality-warnings" class="mt-3 text-[11px] text-slate-500"></div>
                 </div>
 
                 <!-- ===== ① HERO — Player Combat Map (map-first) ===== -->
@@ -4896,7 +4912,7 @@
     <script type="module" src="js/app.js?v=20260623-aimlock"></script>
     <script type="module" src="js/inline-actions.js?v=20260513-v142-cf-bust"></script>
     <script src="js/diagnostics.js?v=20260513-v142-cf-bust"></script>
-    <script src="js/lucide-init.js?v=20260513-v142-cf-bust"></script>
+    <script src="js/lucide-init.js?v=20260709-readme-icons"></script>
 
 </body>
 
