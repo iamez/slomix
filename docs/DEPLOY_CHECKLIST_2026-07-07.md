@@ -90,7 +90,7 @@ venv-web/bin/python scripts/backfill_s_effort_history.py --apply --i-have-a-back
 ## A4 — Verifikacija (read-only: recompute je bil forsiran že v A2c)
 ```
 curl -s "https://www.slomix.fyi/api/skill/leaderboard" | head -c 200   # brez OMNIBOT
-curl -s "https://www.slomix.fyi/api/skill/s-effort?session_date=<zadnja seja>"
+curl -s -H "X-Internal-Token: ${INTERNAL_API_SECRET:?set INTERNAL_API_SECRET}" "https://www.slomix.fyi/api/skill/s-effort?session_date=<zadnja seja>"
 curl -s "https://www.slomix.fyi/api/skill/adjusted-lifetime" | head -c 300
 sudo systemctl status slomix-web slomix-bot
 sudo journalctl -u slomix-web --since "-10 min" | grep -iE "error|greatshot recovery"

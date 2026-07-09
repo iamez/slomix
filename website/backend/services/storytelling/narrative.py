@@ -143,7 +143,12 @@ def _format_group_label(group_data: dict, fallback: str) -> str:
 class _NarrativeMixin:
     """Narrative methods for StorytellingService."""
 
-    async def generate_narrative(self, session_date: str | date) -> dict:
+    async def generate_narrative(
+        self,
+        session_date: str | date,
+        *,
+        ensure_kis: bool = True,
+    ) -> dict:
         """Generate a human-readable paragraph summarizing the session.
 
         Uses KIS, moments, synergy, archetypes, and PWC data. Output is
@@ -153,11 +158,13 @@ class _NarrativeMixin:
         sd = _to_date(session_date)
         sd_str = _to_date_str(sd)
 
-        # 1. Ensure KIS is computed, then fetch leaderboard + archetypes.
+        # 1. Ensure KIS is computed for internal callers, then fetch
+        # leaderboard + archetypes. Public routes must stay read-only.
         # Routes through kis_compute_with_shadow so KIS_SHADOW_MODE_ENABLED
         # sessions get an audit-row even when narrative generation is the
         # first thing that triggers a KIS compute.
-        await self.kis_compute_with_shadow(sd)
+        if ensure_kis:
+            await self.kis_compute_with_shadow(sd)
         kis_board = await self.get_kis_leaderboard(sd, limit=50)
         archetypes, stats = await self.classify_players(sd, kis_board)
 
@@ -328,7 +335,12 @@ class _NarrativeMixin:
             "narrative": narrative,
         }
 
-    async def generate_player_narratives(self, session_date: str | date) -> dict:
+    async def generate_player_narratives(
+        self,
+        session_date: str | date,
+        *,
+        ensure_kis: bool = True,
+    ) -> dict:
         """Generate per-player micro-narratives using gravity, space, enabler, lurker.
 
         Each player gets a 1-2 sentence story describing their invisible value,
@@ -344,9 +356,10 @@ class _NarrativeMixin:
             self.compute_lurker_profile(sd),
         )
 
-        # Also get KIS for archetype + kills context (shadow-aware — see
-        # generate_narrative for rationale).
-        await self.kis_compute_with_shadow(sd)
+        # Also get KIS for archetype + kills context. Only internal callers
+        # may trigger shadow-aware compute; public routes read existing cache.
+        if ensure_kis:
+            await self.kis_compute_with_shadow(sd)
         kis_board = await self.get_kis_leaderboard(sd, limit=50)
 
         # Index by guid_short
@@ -615,4 +628,3 @@ class _NarrativeMixin:
             "session_date": str(sd),
             "player_narratives": narratives,
         }
-

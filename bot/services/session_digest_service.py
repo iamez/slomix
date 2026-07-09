@@ -273,8 +273,9 @@ class SessionDigestService:
         url = f"{self.config.website_api_base}/storytelling/kill-impact"
         try:
             timeout = aiohttp.ClientTimeout(total=_HTTP_TIMEOUT_S)
+            headers = {"X-Internal-Token": getattr(self.config, "internal_api_secret", "")}
             async with aiohttp.ClientSession(timeout=timeout) as http, http.get(
-                url, params={"session_date": str(session_date), "limit": 3}
+                url, params={"session_date": str(session_date), "limit": 3}, headers=headers
             ) as resp:
                 if resp.status != 200:
                     logger.info("digest: kill-impact HTTP %s — skipping KIS block", resp.status)

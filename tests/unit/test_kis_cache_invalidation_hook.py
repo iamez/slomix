@@ -155,6 +155,7 @@ class _Sess:
         self._raise = raise_exc
         self.requested = None
         self.params = None
+        self.headers = None
 
     async def __aenter__(self):
         return self
@@ -162,9 +163,10 @@ class _Sess:
     async def __aexit__(self, *a):
         return False
 
-    def get(self, url, params=None):
+    def get(self, url, params=None, headers=None):
         self.requested = url
         self.params = params
+        self.headers = headers
         if self._raise:
             raise self._raise
         return _Resp(self._status)
@@ -175,6 +177,7 @@ def _warm_svc():
 
     class Cfg:
         website_api_base = "http://127.0.0.1:8000/api"
+        internal_api_secret = "test-internal-secret"  # noqa: S105 - test-only shared secret
 
     svc.config = Cfg()
     return svc
@@ -187,6 +190,7 @@ async def test_warm_hits_kill_impact_with_the_date():
         await _warm_svc()._warm_kis_cache("2026-07-07")  # noqa: SLF001
     assert sess.requested == "http://127.0.0.1:8000/api/storytelling/kill-impact"
     assert sess.params == {"session_date": "2026-07-07", "limit": 1}
+    assert sess.headers == {"X-Internal-Token": "test-internal-secret"}
 
 
 @pytest.mark.asyncio

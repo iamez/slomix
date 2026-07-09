@@ -555,10 +555,12 @@ class VoiceSessionService:
         try:
             import aiohttp
             url = f"{self.config.website_api_base}/storytelling/kill-impact"
+            headers = {"X-Internal-Token": getattr(self.config, "internal_api_secret", "")}
             timeout = aiohttp.ClientTimeout(total=15)
             async with aiohttp.ClientSession(timeout=timeout) as sess, \
                     sess.get(url, params={"session_date": str(session_date)[:10],
-                                           "limit": 1}) as resp:
+                                           "limit": 1},
+                             headers=headers) as resp:
                 if resp.status == 200:
                     logger.info("✅ KIS cache warmed for %s", session_date)
                 else:
@@ -616,9 +618,10 @@ class VoiceSessionService:
             import aiohttp
             url = (f"{self.config.website_api_base}/skill/s-effort"
                    f"?session_date={session_date}")
+            headers = {"X-Internal-Token": getattr(self.config, "internal_api_secret", "")}
             timeout = aiohttp.ClientTimeout(total=15)
             async with aiohttp.ClientSession(timeout=timeout) as sess, \
-                    sess.get(url) as resp:
+                    sess.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     logger.info("✅ s.effort persisted for %s", session_date)
                 else:
