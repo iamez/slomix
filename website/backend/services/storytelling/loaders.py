@@ -2,6 +2,15 @@
 
 Extracted from the monolithic storytelling_service.py in Sprint 6.
 Imports all module-level names (constants, helpers) from .base.
+
+Canonical-key contract (codex follow-up audit findings #10/#11): every
+context dict here is keyed by the round it belongs to, and `round_start_unix`
+alone is NOT unique repo-wide — two rounds on different maps can share a
+start second across sessions. So each key carries `map_name` alongside
+`round_number`, and `_score_kill` in kis.py MUST look these up with the
+IDENTICAL key shape (same field order). The per-day `WHERE session_date = $1`
+filter keeps today's collision window tiny, but the map_name in the key is
+what makes the match correct rather than merely usually-correct.
 """
 from __future__ import annotations
 
@@ -14,56 +23,56 @@ class _LoadersMixin:
     """Loaders methods for StorytellingService."""
 
     async def _load_carrier_kills(self, session_date):
-        """Load carrier kills indexed by (killer_guid, round_start_unix, round_number)."""
+        """Load carrier kills indexed by (killer_guid, round_start_unix, round_number, map_name)."""
         rows = await self.db.fetch_all(
-            "SELECT killer_guid, round_start_unix, round_number, kill_time "
+            "SELECT killer_guid, round_start_unix, round_number, kill_time, map_name "
             "FROM proximity_carrier_kill WHERE session_date = $1", (session_date,))
         result = {}
         for r in (rows or []):
-            result.setdefault((r[0], r[1], r[2]), []).append(r[3])
+            result.setdefault((r[0], r[1], r[2], r[4]), []).append(r[3])
         return result
 
     async def _load_carrier_returns(self, session_date):
-        """Load carrier returns indexed by (round_start_unix, round_number)."""
+        """Load carrier returns indexed by (round_start_unix, round_number, map_name)."""
         rows = await self.db.fetch_all(
-            "SELECT round_start_unix, round_number, return_time "
+            "SELECT round_start_unix, round_number, return_time, map_name "
             "FROM proximity_carrier_return WHERE session_date = $1", (session_date,))
         result = {}
         for r in (rows or []):
-            key = (r[0], r[1])
+            key = (r[0], r[1], r[3])
             result.setdefault(key, []).append(r[2])
         return result
 
     async def _load_pushes(self, session_date):
-        """Load push events indexed by (round_start_unix, round_number).
+        """Load push events indexed by (round_start_unix, round_number, map_name).
 
         Each entry is (start_time, end_time, push_quality, toward_objective).
         """
         rows = await self.db.fetch_all(
             "SELECT round_start_unix, round_number, start_time, end_time, "
-            "push_quality, toward_objective "
+            "push_quality, toward_objective, map_name "
             "FROM proximity_team_push WHERE session_date = $1", (session_date,))
         result = {}
         for r in (rows or []):
-            key = (r[0], r[1])
+            key = (r[0], r[1], r[6])
             result.setdefault(key, []).append(
                 (r[2], r[3], float(r[4] or 0), r[5] or ''))
         return result
 
     async def _load_crossfires(self, session_date):
-        """Load executed crossfire events indexed by (round_start_unix, round_number)."""
+        """Load executed crossfire events indexed by (round_start_unix, round_number, map_name)."""
         rows = await self.db.fetch_all(
-            "SELECT round_start_unix, round_number, event_time "
+            "SELECT round_start_unix, round_number, event_time, map_name "
             "FROM proximity_crossfire_opportunity WHERE was_executed = true AND session_date = $1",
             (session_date,))
         result = {}
         for r in (rows or []):
-            key = (r[0], r[1])
+            key = (r[0], r[1], r[3])
             result.setdefault(key, []).append(r[2])
         return result
 
     async def _load_spawn_timings(self, session_date):
-        """Load spawn timings indexed by (round_start_unix, round_number).
+        """Load spawn timings indexed by (round_start_unix, round_number, map_name).
 
         Each entry is a tuple of (guid, kill_time, score, victim_reinf).
         `enemy_spawn_interval` was stored at index 3 through KIS v2 where
@@ -73,38 +82,39 @@ class _LoadersMixin:
         """
         rows = await self.db.fetch_all(
             "SELECT killer_guid, kill_time, spawn_timing_score, round_start_unix, round_number, "
-            "victim_reinf "
+            "victim_reinf, map_name "
             "FROM proximity_spawn_timing WHERE session_date = $1", (session_date,))
         result = {}
         for r in (rows or []):
-            key = (r[3], r[4])
+            key = (r[3], r[4], r[6])
             result.setdefault(key, []).append(
                 (r[0], r[1], float(r[2] or 0.5), float(r[5] or 0)))
         return result
 
     async def _load_victim_classes(self, session_date):
-        """Load victim classes from reaction_metric, indexed by (target_guid, round_start_unix, round_number)."""
+        """Load victim classes from reaction_metric, indexed by (target_guid, round_start_unix, round_number, map_name)."""
         rows = await self.db.fetch_all(
-            "SELECT target_guid, round_start_unix, round_number, target_class "
+            "SELECT target_guid, round_start_unix, round_number, target_class, map_name "
             "FROM proximity_reaction_metric WHERE session_date = $1", (session_date,))
         result = {}
         for r in (rows or []):
-            key = (r[0], r[1], r[2])
+            key = (r[0], r[1], r[2], r[4])
             if key not in result:
                 result[key] = r[3] or ''
         return result
 
     async def _load_combat_positions(self, sd: date) -> dict:
-        """Load combat position data indexed by (killer_guid, round_start_unix, round_number, kill_time)."""
+        """Load combat position data indexed by (killer_guid, round_start_unix, round_number, kill_time, map_name)."""
         rows = await self.db.fetch_all(
             "SELECT attacker_guid, round_start_unix, round_number, event_time, "
-            "killer_health, axis_alive, allies_alive, attacker_team "
+            "killer_health, axis_alive, allies_alive, attacker_team, map_name "
             "FROM proximity_combat_position "
             "WHERE session_date = $1 AND event_type = 'kill'",
             (sd,))
         result = {}
         for r in (rows or []):
-            key = (r[0], r[1], r[2], r[3])  # (killer_guid, round_start_unix, round_number, event_time)
+            # (killer_guid, round_start_unix, round_number, event_time, map_name)
+            key = (r[0], r[1], r[2], r[3], r[8])
             result[key] = {
                 'killer_health': r[4] or 0,
                 'axis_alive': r[5] or 0,
@@ -112,4 +122,3 @@ class _LoadersMixin:
                 'attacker_team': r[7] or '',
             }
         return result
-

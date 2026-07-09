@@ -400,6 +400,23 @@ def test_shadow_query_includes_all_context_ctes():
         assert table in q, f"shadow query is missing {table}"
 
 
+def test_shadow_query_joins_every_context_on_map_name():
+    """Every context join must also match ko.map_name (codex #10/#11).
+
+    round_start_unix is not unique repo-wide, so the shadow SQL must
+    disambiguate rounds by map_name exactly like the fixed Python path —
+    otherwise the shadow audit compares two implementations that share the
+    SAME wrong identity and can never surface a canonical-key regression.
+    """
+    from website.backend.services.storytelling.kis_shadow import _build_shadow_kis_query
+    q = _build_shadow_kis_query()
+    # One "<alias>.map_name = ko.map_name" per joined context source.
+    for alias in ("pu", "cf", "st", "ck", "cr", "vc", "cp"):
+        assert f"{alias}.map_name = ko.map_name" in q, (
+            f"shadow join for {alias} is missing the map_name predicate"
+        )
+
+
 def test_shadow_query_uses_only_one_session_param():
     """Single $1 binding for session_date — the audit loop passes it once."""
     from website.backend.services.storytelling.kis_shadow import _build_shadow_kis_query

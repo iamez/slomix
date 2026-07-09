@@ -116,7 +116,7 @@ class TestScoreKillCarrier:
     def test_carrier_kill_no_return(self):
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
-        carrier_kills = {("A", 100, 1): [5000]}
+        carrier_kills = {("A", 100, 1, "goldrush"): [5000]}
         carrier_returns = {}  # no return
         _, pu, cf, st, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, carrier_kills, carrier_returns, pu, cf, st, vc, cp)
@@ -127,8 +127,8 @@ class TestScoreKillCarrier:
     def test_carrier_chain_with_return(self):
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
-        carrier_kills = {("A", 100, 1): [5000]}
-        carrier_returns = {(100, 1): [12000]}  # returned 7s after kill (within 10s)
+        carrier_kills = {("A", 100, 1, "goldrush"): [5000]}
+        carrier_returns = {(100, 1, "goldrush"): [12000]}  # returned 7s after kill (within 10s)
         _, pu, cf, st, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, carrier_kills, carrier_returns, pu, cf, st, vc, cp)
         assert result["carrier_multiplier"] == CARRIER_CHAIN_MULTIPLIER
@@ -138,8 +138,8 @@ class TestScoreKillCarrier:
         """Return after 10s should NOT trigger chain multiplier."""
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
-        carrier_kills = {("A", 100, 1): [5000]}
-        carrier_returns = {(100, 1): [16000]}  # 11s later — too late
+        carrier_kills = {("A", 100, 1, "goldrush"): [5000]}
+        carrier_returns = {(100, 1, "goldrush"): [16000]}  # 11s later — too late
         _, pu, cf, st, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, carrier_kills, carrier_returns, pu, cf, st, vc, cp)
         assert result["carrier_multiplier"] == CARRIER_KILL_MULTIPLIER  # falls back to basic
@@ -148,8 +148,8 @@ class TestScoreKillCarrier:
         """Return BEFORE kill should not chain."""
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
-        carrier_kills = {("A", 100, 1): [5000]}
-        carrier_returns = {(100, 1): [3000]}  # returned before kill
+        carrier_kills = {("A", 100, 1, "goldrush"): [5000]}
+        carrier_returns = {(100, 1, "goldrush"): [3000]}  # returned before kill
         _, pu, cf, st, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, carrier_kills, carrier_returns, pu, cf, st, vc, cp)
         assert result["carrier_multiplier"] == CARRIER_KILL_MULTIPLIER
@@ -161,7 +161,7 @@ class TestScoreKillPush:
     def test_push_quality_above_threshold(self):
         svc = _service()
         kill = _make_kill(round_start_unix=100, round_number=1, kill_time=5000)
-        pushes = {(100, 1): [(4000, 6000, 0.95, "objective")]}
+        pushes = {(100, 1, "goldrush"): [(4000, 6000, 0.95, "objective")]}
         ck, cr, cf, st, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pushes, cf, st, vc, cp)
         # push_mult = 1.0 + min(0.95 * 0.5, 1.0) = 1.0 + 0.475 = 1.475
@@ -172,7 +172,7 @@ class TestScoreKillPush:
         """Push quality below 0.9 should NOT trigger bonus."""
         svc = _service()
         kill = _make_kill(round_start_unix=100, round_number=1, kill_time=5000)
-        pushes = {(100, 1): [(4000, 6000, 0.80, "objective")]}
+        pushes = {(100, 1, "goldrush"): [(4000, 6000, 0.80, "objective")]}
         ck, cr, cf, st, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pushes, cf, st, vc, cp)
         assert result["push_multiplier"] == 1.0
@@ -182,7 +182,7 @@ class TestScoreKillPush:
         """Push toward 'NO' is excluded."""
         svc = _service()
         kill = _make_kill(round_start_unix=100, round_number=1, kill_time=5000)
-        pushes = {(100, 1): [(4000, 6000, 0.95, "NO")]}
+        pushes = {(100, 1, "goldrush"): [(4000, 6000, 0.95, "NO")]}
         ck, cr, cf, st, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pushes, cf, st, vc, cp)
         assert result["push_multiplier"] == 1.0
@@ -192,7 +192,7 @@ class TestScoreKillPush:
         """Kill slightly after push end (within 2s buffer) should still match."""
         svc = _service()
         kill = _make_kill(round_start_unix=100, round_number=1, kill_time=7500)
-        pushes = {(100, 1): [(4000, 6000, 0.95, "obj")]}  # push ends at 6000, +2000 buffer
+        pushes = {(100, 1, "goldrush"): [(4000, 6000, 0.95, "obj")]}  # push ends at 6000, +2000 buffer
         ck, cr, cf, st, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pushes, cf, st, vc, cp)
         assert result["push_multiplier"] > 1.0
@@ -201,7 +201,7 @@ class TestScoreKillPush:
         """Kill well after push+buffer should NOT match."""
         svc = _service()
         kill = _make_kill(round_start_unix=100, round_number=1, kill_time=10000)
-        pushes = {(100, 1): [(4000, 6000, 0.95, "obj")]}
+        pushes = {(100, 1, "goldrush"): [(4000, 6000, 0.95, "obj")]}
         ck, cr, cf, st, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pushes, cf, st, vc, cp)
         assert result["push_multiplier"] == 1.0
@@ -210,7 +210,7 @@ class TestScoreKillPush:
         """Push quality 1.0 => push_mult = 1.0 + min(1.0*0.5, 1.0) = 1.5."""
         svc = _service()
         kill = _make_kill(round_start_unix=100, round_number=1, kill_time=5000)
-        pushes = {(100, 1): [(4000, 6000, 1.0, "obj")]}
+        pushes = {(100, 1, "goldrush"): [(4000, 6000, 1.0, "obj")]}
         ck, cr, cf, st, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pushes, cf, st, vc, cp)
         assert result["push_multiplier"] == pytest.approx(1.5, abs=0.01)
@@ -222,7 +222,7 @@ class TestScoreKillCrossfire:
     def test_crossfire_within_3s(self):
         svc = _service()
         kill = _make_kill(round_start_unix=100, round_number=1, kill_time=5000)
-        crossfires = {(100, 1): [4000]}  # crossfire 1s before kill
+        crossfires = {(100, 1, "goldrush"): [4000]}  # crossfire 1s before kill
         ck, cr, pu, st, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pu, crossfires, st, vc, cp)
         assert result["crossfire_multiplier"] == CROSSFIRE_MULTIPLIER
@@ -231,7 +231,7 @@ class TestScoreKillCrossfire:
     def test_crossfire_outside_window(self):
         svc = _service()
         kill = _make_kill(round_start_unix=100, round_number=1, kill_time=5000)
-        crossfires = {(100, 1): [1000]}  # 4s gap — too far
+        crossfires = {(100, 1, "goldrush"): [1000]}  # 4s gap — too far
         ck, cr, pu, st, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pu, crossfires, st, vc, cp)
         assert result["crossfire_multiplier"] == 1.0
@@ -278,7 +278,7 @@ class TestScoreKillClassWeight:
     def test_medic_target(self):
         svc = _service()
         kill = _make_kill(victim_guid="VIC", round_start_unix=100, round_number=1)
-        victim_classes = {("VIC", 100, 1): "MEDIC"}
+        victim_classes = {("VIC", 100, 1, "goldrush"): "MEDIC"}
         ck, cr, pu, cf, st, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pu, cf, st, victim_classes, cp)
         assert result["class_multiplier"] == CLASS_WEIGHTS["MEDIC"]
@@ -287,7 +287,7 @@ class TestScoreKillClassWeight:
     def test_engineer_target(self):
         svc = _service()
         kill = _make_kill(victim_guid="VIC", round_start_unix=100, round_number=1)
-        victim_classes = {("VIC", 100, 1): "ENGINEER"}
+        victim_classes = {("VIC", 100, 1, "goldrush"): "ENGINEER"}
         ck, cr, pu, cf, st, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pu, cf, st, victim_classes, cp)
         assert result["class_multiplier"] == CLASS_WEIGHTS["ENGINEER"]
@@ -295,7 +295,7 @@ class TestScoreKillClassWeight:
     def test_unknown_class_defaults_to_1(self):
         svc = _service()
         kill = _make_kill(victim_guid="VIC", round_start_unix=100, round_number=1)
-        victim_classes = {("VIC", 100, 1): "UNKNOWN_CLASS"}
+        victim_classes = {("VIC", 100, 1, "goldrush"): "UNKNOWN_CLASS"}
         ck, cr, pu, cf, st, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pu, cf, st, victim_classes, cp)
         assert result["class_multiplier"] == 1.0
@@ -320,9 +320,9 @@ class TestScoreKillSoftCap:
             killer_guid="A", round_start_unix=100, round_number=1,
             kill_time=5000, outcome="gibbed",
         )
-        carrier_kills = {("A", 100, 1): [5000]}
-        carrier_returns = {(100, 1): [12000]}
-        crossfires = {(100, 1): [5000]}
+        carrier_kills = {("A", 100, 1, "goldrush"): [5000]}
+        carrier_returns = {(100, 1, "goldrush"): [12000]}
+        crossfires = {(100, 1, "goldrush"): [5000]}
         pu, st, vc, cp = {}, {}, {}, {}
         result = svc._score_kill(kill, carrier_kills, carrier_returns, pu, crossfires, st, vc, cp)
         # raw = 5.0 * 1.5 * 1.3 = 9.75
@@ -336,7 +336,7 @@ class TestScoreKillSoftCap:
             killer_guid="A", round_start_unix=100, round_number=1,
             kill_time=5000,
         )
-        carrier_kills = {("A", 100, 1): [5000]}
+        carrier_kills = {("A", 100, 1, "goldrush"): [5000]}
         carrier_returns = {}
         pu, cf, st, vc, cp = {}, {}, {}, {}, {}
         result = svc._score_kill(kill, carrier_kills, carrier_returns, pu, cf, st, vc, cp)
@@ -351,10 +351,10 @@ class TestScoreKillSoftCap:
             killer_guid="A", round_start_unix=100, round_number=1,
             kill_time=5000, outcome="gibbed", victim_guid="VIC",
         )
-        carrier_kills = {("A", 100, 1): [5000]}
-        carrier_returns = {(100, 1): [12000]}
-        crossfires = {(100, 1): [5000]}
-        victim_classes = {("VIC", 100, 1): "MEDIC"}
+        carrier_kills = {("A", 100, 1, "goldrush"): [5000]}
+        carrier_returns = {(100, 1, "goldrush"): [12000]}
+        crossfires = {(100, 1, "goldrush"): [5000]}
+        victim_classes = {("VIC", 100, 1, "goldrush"): "MEDIC"}
         pu, st, cp = {}, {}, {}
         result = svc._score_kill(kill, carrier_kills, carrier_returns, pu, crossfires, st, victim_classes, cp)
         raw = 5.0 * 1.5 * 1.5 * 1.3
@@ -369,7 +369,7 @@ class TestScoreKillHealth:
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
         combat_positions = {
-            ("A", 100, 1, 5000): {
+            ("A", 100, 1, 5000, "goldrush"): {
                 "killer_health": 20,
                 "axis_alive": 3,
                 "allies_alive": 3,
@@ -385,7 +385,7 @@ class TestScoreKillHealth:
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
         combat_positions = {
-            ("A", 100, 1, 5000): {
+            ("A", 100, 1, 5000, "goldrush"): {
                 "killer_health": 100,
                 "axis_alive": 3,
                 "allies_alive": 3,
@@ -401,7 +401,7 @@ class TestScoreKillHealth:
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
         combat_positions = {
-            ("A", 100, 1, 5000): {
+            ("A", 100, 1, 5000, "goldrush"): {
                 "killer_health": LOW_HEALTH_THRESHOLD,
                 "axis_alive": 3,
                 "allies_alive": 3,
@@ -420,7 +420,7 @@ class TestScoreKillAlive:
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
         combat_positions = {
-            ("A", 100, 1, 5000): {
+            ("A", 100, 1, 5000, "goldrush"): {
                 "killer_health": 80,
                 "axis_alive": 1,
                 "allies_alive": 3,
@@ -436,7 +436,7 @@ class TestScoreKillAlive:
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
         combat_positions = {
-            ("A", 100, 1, 5000): {
+            ("A", 100, 1, 5000, "goldrush"): {
                 "killer_health": 80,
                 "axis_alive": 1,
                 "allies_alive": 2,
@@ -453,7 +453,7 @@ class TestScoreKillAlive:
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
         combat_positions = {
-            ("A", 100, 1, 5000): {
+            ("A", 100, 1, 5000, "goldrush"): {
                 "killer_health": 80,
                 "axis_alive": 3,
                 "allies_alive": 3,
@@ -469,7 +469,7 @@ class TestScoreKillAlive:
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
         combat_positions = {
-            ("A", 100, 1, 5000): {
+            ("A", 100, 1, 5000, "goldrush"): {
                 "killer_health": 80,
                 "axis_alive": 4,
                 "allies_alive": 1,
@@ -488,7 +488,7 @@ class TestScoreKillSpawnTiming:
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
         spawn_timings = {
-            (100, 1): [("A", 5000, 0.8, 0, 0)]  # guid, kill_time, score, interval, reinf
+            (100, 1, "goldrush"): [("A", 5000, 0.8, 0, 0)]  # guid, kill_time, score, interval, reinf
         }
         ck, cr, pu, cf, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pu, cf, spawn_timings, vc, cp)
@@ -498,7 +498,7 @@ class TestScoreKillSpawnTiming:
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
         spawn_timings = {
-            (100, 1): [("OTHER", 5000, 0.8, 0, 0)]
+            (100, 1, "goldrush"): [("OTHER", 5000, 0.8, 0, 0)]
         }
         ck, cr, pu, cf, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pu, cf, spawn_timings, vc, cp)
@@ -515,7 +515,7 @@ class TestScoreKillCombined:
             killer_guid="A", round_start_unix=100, round_number=1,
             kill_time=5000, outcome="gibbed",
         )
-        carrier_kills = {("A", 100, 1): [5000]}
+        carrier_kills = {("A", 100, 1, "goldrush"): [5000]}
         cr, pu, cf, st, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, carrier_kills, cr, pu, cf, st, vc, cp)
         assert result["total_impact"] == pytest.approx(3.9, abs=0.01)
@@ -527,9 +527,9 @@ class TestScoreKillCombined:
             killer_guid="A", round_start_unix=100, round_number=1,
             kill_time=5000, victim_guid="VIC",
         )
-        carrier_kills = {("A", 100, 1): [5000]}
-        crossfires = {(100, 1): [5000]}
-        victim_classes = {("VIC", 100, 1): "MEDIC"}
+        carrier_kills = {("A", 100, 1, "goldrush"): [5000]}
+        crossfires = {(100, 1, "goldrush"): [5000]}
+        victim_classes = {("VIC", 100, 1, "goldrush"): "MEDIC"}
         cr, pu, st, cp = {}, {}, {}, {}
         result = svc._score_kill(kill, carrier_kills, cr, pu, crossfires, st, victim_classes, cp)
         raw = 3.0 * 1.5 * 1.5
@@ -571,7 +571,7 @@ class TestScoreKillReinfMultiplier:
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
         spawn_timings = {
-            (100, 1): [("A", 5000, 0.5, 30000, 10.0)]
+            (100, 1, "goldrush"): [("A", 5000, 0.5, 30000, 10.0)]
         }
         ck, cr, pu, cf, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pu, cf, spawn_timings, vc, cp)
@@ -582,7 +582,7 @@ class TestScoreKillReinfMultiplier:
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
         spawn_timings = {
-            (100, 1): [("A", 5000, 0.5, 30000, 25.0)]
+            (100, 1, "goldrush"): [("A", 5000, 0.5, 30000, 25.0)]
         }
         ck, cr, pu, cf, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pu, cf, spawn_timings, vc, cp)
@@ -593,7 +593,7 @@ class TestScoreKillReinfMultiplier:
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
         spawn_timings = {
-            (100, 1): [("A", 5000, 0.5, 30000, 2.0)]
+            (100, 1, "goldrush"): [("A", 5000, 0.5, 30000, 2.0)]
         }
         ck, cr, pu, cf, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pu, cf, spawn_timings, vc, cp)
@@ -604,7 +604,7 @@ class TestScoreKillReinfMultiplier:
         svc = _service()
         kill = _make_kill(killer_guid="A", round_start_unix=100, round_number=1, kill_time=5000)
         spawn_timings = {
-            (100, 1): [("A", 5000, 0.5, 30000, 30.0)]
+            (100, 1, "goldrush"): [("A", 5000, 0.5, 30000, 30.0)]
         }
         ck, cr, pu, cf, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pu, cf, spawn_timings, vc, cp)
