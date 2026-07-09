@@ -66,6 +66,28 @@ async def test_hook_hits_the_endpoint_with_the_date():
     assert sess.headers == {"X-Internal-Token": "test-internal-secret"}
 
 
+def _svc_no_secret():
+    svc = VoiceSessionService.__new__(VoiceSessionService)
+
+    class Cfg:
+        website_api_base = "http://127.0.0.1:8000/api"
+        internal_api_secret = ""  # not configured on this bot
+
+    svc.config = Cfg()
+    return svc
+
+
+@pytest.mark.asyncio
+async def test_persist_skipped_when_secret_unset():
+    """No INTERNAL_API_SECRET → skip the call entirely (it can only 401),
+    rather than firing a guaranteed-failing request every session end
+    (Copilot PR #487 review)."""
+    sess = _Sess(status=200)
+    with patch("aiohttp.ClientSession", return_value=sess):
+        await _svc_no_secret()._persist_s_effort("2026-07-07")  # noqa: SLF001
+    assert sess.requested is None  # no HTTP call made
+
+
 @pytest.mark.asyncio
 async def test_hook_never_raises_on_http_error_or_connect_failure():
     with patch("aiohttp.ClientSession", return_value=_Sess(status=404)):

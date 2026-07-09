@@ -209,3 +209,45 @@ async def test_fetch_kis_top_sends_internal_token(monkeypatch):
     assert sess.requested == "http://127.0.0.1:8000/api/storytelling/kill-impact"
     assert sess.params == {"session_date": "2026-06-11", "limit": 3}
     assert sess.headers == {"X-Internal-Token": "test-internal-secret"}
+
+
+@pytest.mark.asyncio
+async def test_fetch_kis_top_omits_token_when_secret_unset(monkeypatch):
+    """No secret configured → the digest still READS on the public path
+    (empty header), rather than sending an empty token that would 401 and
+    kill the KIS block (Copilot PR #487 review)."""
+    svc, _ = _service(_config(website_api_base="http://127.0.0.1:8000/api",
+                              internal_api_secret=""))
+
+    class _Resp:
+        status = 200
+
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def json(self):
+            return {"players": [{"guid": "ABC12345XYZ", "name": "vid", "total_kis": 12.3}]}
+
+    class _Sess:
+        def __init__(self):
+            self.requested = None
+            self.headers = None
+
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+
+        def get(self, url, params=None, headers=None):
+            self.requested = url
+            self.headers = headers
+            return _Resp()
+
+    sess = _Sess()
+    monkeypatch.setattr(
+        "bot.services.session_digest_service.aiohttp.ClientSession", lambda *a, **k: sess
+    )
+
+    line = await svc._fetch_kis_top("2026-06-11")
+
+    # still fetched (public read), and NO internal token header attached
+    assert "vid" in line
+    assert sess.requested == "http://127.0.0.1:8000/api/storytelling/kill-impact"
+    assert sess.headers == {}

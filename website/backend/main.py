@@ -100,7 +100,9 @@ WEBSITE_PORT = getenv_int("WEBSITE_PORT", 7000)
 # bind-all intentional; the service runs behind an nginx reverse proxy
 WEBSITE_HOST = os.getenv("WEBSITE_HOST", "0.0.0.0")  # nosec B104
 SESSION_SECRET = os.getenv("SESSION_SECRET")
-INTERNAL_API_SECRET = os.getenv("INTERNAL_API_SECRET")
+# Strip at load so a whitespace-only secret can't pass the non-empty
+# fail-fast below yet fail every runtime auth check (which uses .strip()).
+INTERNAL_API_SECRET = (os.getenv("INTERNAL_API_SECRET") or "").strip()
 # Secure-by-default (see auth.py): opt out only for local HTTP dev.
 SESSION_HTTPS_ONLY = os.getenv("SESSION_HTTPS_ONLY", "true").lower() == "true"
 CORS_ORIGINS = os.getenv(

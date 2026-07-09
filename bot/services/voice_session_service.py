@@ -551,11 +551,20 @@ class VoiceSessionService:
         (see _invalidate_kis_cache for why). Mirrors
         session_digest_service.py's _fetch_kis_top call pattern.
         Best-effort; must never raise."""
+        # Warming's whole job is to TRIGGER a compute, which now requires a
+        # valid internal token. Without a secret the call can only ever come
+        # back read-only (or 401), so skip it with one clear warning instead
+        # of logging a misleading "cache warmed" or a noisy 401 every time.
+        secret = (getattr(self.config, "internal_api_secret", "") or "").strip()
+        if not secret:
+            logger.warning("KIS cache warm skipped for %s: INTERNAL_API_SECRET "
+                           "not configured on the bot", session_date)
+            return
         url = "(unbuilt)"
         try:
             import aiohttp
             url = f"{self.config.website_api_base}/storytelling/kill-impact"
-            headers = {"X-Internal-Token": getattr(self.config, "internal_api_secret", "")}
+            headers = {"X-Internal-Token": secret}
             timeout = aiohttp.ClientTimeout(total=15)
             async with aiohttp.ClientSession(timeout=timeout) as sess, \
                     sess.get(url, params={"session_date": str(session_date)[:10],
@@ -613,12 +622,20 @@ class VoiceSessionService:
         """Best-effort GET to /skill/s-effort so the session's pool-adjusted
         ratings land in player_skill_history right at session end. Runs as a
         background task; must never raise."""
+        # s.effort persist is internal-only (it writes player_skill_history via
+        # the write-through GET). Without a secret it can only return 401, so
+        # skip with one clear warning rather than failing noisily each session.
+        secret = (getattr(self.config, "internal_api_secret", "") or "").strip()
+        if not secret:
+            logger.warning("s.effort persist skipped for %s: INTERNAL_API_SECRET "
+                           "not configured on the bot", session_date)
+            return
         url = "(unbuilt)"
         try:
             import aiohttp
             url = (f"{self.config.website_api_base}/skill/s-effort"
                    f"?session_date={session_date}")
-            headers = {"X-Internal-Token": getattr(self.config, "internal_api_secret", "")}
+            headers = {"X-Internal-Token": secret}
             timeout = aiohttp.ClientTimeout(total=15)
             async with aiohttp.ClientSession(timeout=timeout) as sess, \
                     sess.get(url, headers=headers) as resp:
