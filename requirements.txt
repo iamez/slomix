@@ -1,6 +1,11 @@
 # Runtime dependencies (pinned for reproducible builds)
 discord.py==2.6.4
 asyncpg==0.31.0
+# Sync driver used ONLY by standalone ops/backfill scripts in scripts/
+# (backfill_orphan_r2.py, backfill_rounds_is_valid.py, backtest_krogt_perlife.py, ...).
+# The bot and website both use asyncpg; without this pin those prod ops scripts
+# fail on a fresh venv and have to fall back to hand-written static SQL.
+psycopg2-binary==2.9.11
 aiosqlite==0.22.1
 python-dotenv==1.2.2
 pytz==2025.2
