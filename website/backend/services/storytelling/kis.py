@@ -32,6 +32,12 @@ from .base import (
     logger,
 )
 
+# Bump on any change to _score_kill's multipliers/logic so
+# _compute_session_kis_locked's cache-check stops serving stale rows
+# scored under the old formula (migration 060 adds the storage column;
+# codex, PR #478 follow-up audit finding #9).
+FORMULA_VERSION = "kis-v2"
+
 
 def _graduated_reinf_mult(victim_reinf_seconds: float) -> float:
     """Look up the graduated reinf multiplier for the given wait in seconds.
@@ -59,11 +65,15 @@ class _KisMixin:
 
     async def _compute_session_kis_locked(self, sd: date, force: bool) -> dict:
         """Inner compute logic — must be called while holding the session lock."""
-        # Check if already computed (unless force)
+        # Check if already computed under the CURRENT formula (unless
+        # force) — rows scored under an older formula_version don't count
+        # as cached, so a version bump naturally triggers a recompute
+        # instead of serving stale scores forever.
         if not force:
             existing = await self.db.fetch_one(
-                "SELECT COUNT(*) FROM storytelling_kill_impact WHERE session_date = $1",
-                (sd,)
+                "SELECT COUNT(*) FROM storytelling_kill_impact "
+                "WHERE session_date = $1 AND formula_version = $2",
+                (sd, FORMULA_VERSION)
             )
             if existing and existing[0] > 0:
                 return {"status": "cached", "kills_scored": existing[0]}
@@ -139,6 +149,7 @@ class _KisMixin:
                     s['total_impact'], s['is_carrier_kill'], s['is_during_push'], s['is_crossfire'],
                     s['is_objective_area'], s['kill_time_ms'],
                     s['killer_guid'][:8] if s['killer_guid'] else None,
+                    FORMULA_VERSION,
                 )
                 for s in scored
             ]
@@ -151,8 +162,8 @@ class _KisMixin:
                  health_multiplier, alive_multiplier, reinf_multiplier,
                  killer_health, axis_alive, allies_alive, victim_reinf,
                  total_impact, is_carrier_kill, is_during_push, is_crossfire, is_objective_area,
-                 kill_time_ms, killer_guid_canonical)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
+                 kill_time_ms, killer_guid_canonical, formula_version)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
             """, batch)
 
     def _score_kill(self, kill, carrier_kills, carrier_returns, pushes, crossfires,

@@ -45,11 +45,15 @@ def test_kis_scale_alignment():
 class FakeDB:
     def __init__(self):
         self.returns = [("AAAA1111", "engi", 1_000)]           # fast return
+        # (g8, name, event_type, round_start_unix, round_number, map_name,
+        # event_time) — canonical round key includes map_name/round_number
+        # (codex, PR #478 follow-up audit finding #4)
         self.events = [
-            ("BBBB2222", "defuser", "dynamite_defuse", 111, 50_000),
-            ("AAAA1111", "engi", "construction_complete", 111, 52_000),
+            ("BBBB2222", "defuser", "dynamite_defuse", 111, 1, "te_escape2", 50_000),
+            ("AAAA1111", "engi", "construction_complete", 111, 1, "te_escape2", 52_000),
         ]
-        self.kills = [(111, 55_000)]  # within 10s of the construction
+        # (round_start_unix, map_name, round_number, kill_time_ms)
+        self.kills = [(111, "te_escape2", 1, 55_000)]  # within 10s of the construction
 
     async def fetch_all(self, query, params=()):
         if "proximity_carrier_return" in query:
@@ -89,3 +93,28 @@ async def test_empty_session():
 
     rows = await OisService(EmptyDB()).compute_session_ois("2026-07-07")
     assert rows == []
+
+
+class CollidingRoundDB(FakeDB):
+    """Two DIFFERENT rounds sharing the same round_start_unix (collision) —
+    the canonical key (round_start_unix, map_name, round_number) must keep
+    them separate (codex, PR #478 follow-up audit finding #4)."""
+
+    def __init__(self):
+        super().__init__()
+        self.returns = []  # isolate the contested-construction signal
+        # construction on te_escape2/round_start_unix=111 — no kill nearby
+        # on THIS map/round; a kill exists at the SAME round_start_unix but
+        # a DIFFERENT map, which must NOT count as contested.
+        self.events = [
+            ("AAAA1111", "engi", "construction_complete", 111, 1, "te_escape2", 52_000),
+        ]
+        self.kills = [(111, "sw_goldrush_te", 1, 55_000)]  # different map!
+
+
+@pytest.mark.asyncio
+async def test_contested_does_not_cross_maps_on_shared_round_start_unix():
+    rows = await OisService(CollidingRoundDB()).compute_session_ois("2026-07-07")
+    engi = next(r for r in rows if r["player_guid"] == "AAAA1111")
+    # must score as UNCONTESTED — the kill on the other map must not match
+    assert engi["ois_total"] == pytest.approx(construction_score(contested=False))

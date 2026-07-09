@@ -97,7 +97,8 @@ class OisService:
         events = await self.db.fetch_all(
             "SELECT UPPER(LEFT(ce.player_guid, 8)) AS g8,"
             "       MAX(ce.player_name) AS name,"
-            "       ce.event_type, ce.round_start_unix, ce.event_time "
+            "       ce.event_type, ce.round_start_unix, ce.round_number,"
+            "       ce.map_name, ce.event_time "
             "FROM proximity_construction_event ce "
             "LEFT JOIN rounds r ON r.id = ce.round_id "
             "WHERE ce.session_date = ? AND (r.id IS NULL OR r.is_valid) "
@@ -105,28 +106,36 @@ class OisService:
             "  AND ce.player_guid IS NOT NULL "
             "  AND ce.player_guid NOT LIKE 'OMNIBOT%' "
             "GROUP BY UPPER(LEFT(ce.player_guid, 8)), ce.id, ce.event_type,"
-            "         ce.round_start_unix, ce.event_time",
+            "         ce.round_start_unix, ce.round_number, ce.map_name,"
+            "         ce.event_time",
             (sd,),
         )
 
-        # contested lookup: kill timestamps per round (one query, session-wide)
+        # contested lookup: kill timestamps per round (one query, session-wide).
+        # Canonical round key (round_start_unix, map_name, round_number) —
+        # round_start_unix alone is not guaranteed unique repo-wide, and both
+        # tables are queried WITHOUT session scoping baked into the key
+        # itself, so a collision within this single session_date would
+        # silently bucket kills from an unrelated round together (codex, PR
+        # #478 follow-up audit finding #4).
         kills = await self.db.fetch_all(
-            "SELECT round_start_unix, kill_time_ms "
+            "SELECT round_start_unix, map_name, round_number, kill_time_ms "
             "FROM storytelling_kill_impact WHERE session_date = ?",
             (sd,),
         )
-        kill_times: dict[int, list[int]] = {}
+        kill_times: dict[tuple, list[int]] = {}
         for k in kills or []:
             if k[0]:  # skip unknown-round kills (see _contested)
-                kill_times.setdefault(int(k[0]), []).append(int(k[1] or 0))
+                kill_times.setdefault((int(k[0]), k[1], int(k[2])), []).append(int(k[3] or 0))
 
-        def _contested(rsu, t) -> bool:
+        def _contested(rsu, map_name, round_number, t) -> bool:
             # unknown round identity (0/None) must never bucket cross-round
             # kills together — treat as not contested
             if not rsu:
                 return False
+            key = (int(rsu), map_name, int(round_number))
             return any(abs(kt - int(t or 0)) <= CONTESTED_WINDOW_MS
-                       for kt in kill_times.get(int(rsu), ()))
+                       for kt in kill_times.get(key, ()))
 
         players: dict[str, dict] = {}
 
@@ -148,7 +157,7 @@ class OisService:
                 _acc(e[0], e[1], "defuses", defuse_score())
             else:
                 _acc(e[0], e[1], "constructions",
-                     construction_score(_contested(e[3], e[4])))
+                     construction_score(_contested(e[3], e[5], e[4], e[6])))
 
         for p in players.values():
             p["ois_total"] = round(p["ois_total"], 3)
