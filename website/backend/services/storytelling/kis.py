@@ -66,18 +66,45 @@ class _KisMixin:
 
     async def _compute_session_kis_locked(self, sd: date, force: bool) -> dict:
         """Inner compute logic — must be called while holding the session lock."""
-        # Check if already computed under the CURRENT formula (unless
-        # force) — rows scored under an older formula_version don't count
-        # as cached, so a version bump naturally triggers a recompute
-        # instead of serving stale scores forever.
+        # Serve the cache only when it is BOTH current-formula AND fresh:
+        # - formula_version guards against serving scores from an older
+        #   formula after a version bump (#484).
+        # - freshness guards against the subtler staleness where proximity
+        #   context (kills, combat positions, spawn timing, ...) lands AFTER
+        #   the KIS cache was written — a late re-import. The formula_version
+        #   is unchanged there, so without a timestamp check the stale cache
+        #   would be served forever. If any KIS input's created_at is newer
+        #   than the newest cached row, fall through and recompute.
         if not force:
             existing = await self.db.fetch_one(
-                "SELECT COUNT(*) FROM storytelling_kill_impact "
+                "SELECT COUNT(*), MAX(created_at) FROM storytelling_kill_impact "
                 "WHERE session_date = $1 AND formula_version = $2",
                 (sd, FORMULA_VERSION)
             )
             if existing and existing[0] > 0:
-                return {"status": "cached", "kills_scored": existing[0]}
+                kis_ts = existing[1]
+                ctx = await self.db.fetch_one(
+                    "SELECT GREATEST("
+                    " (SELECT MAX(created_at) FROM proximity_kill_outcome          WHERE session_date=$1),"
+                    " (SELECT MAX(created_at) FROM proximity_combat_position       WHERE session_date=$1),"
+                    " (SELECT MAX(created_at) FROM proximity_spawn_timing          WHERE session_date=$1),"
+                    " (SELECT MAX(created_at) FROM proximity_team_push             WHERE session_date=$1),"
+                    " (SELECT MAX(created_at) FROM proximity_crossfire_opportunity WHERE session_date=$1),"
+                    " (SELECT MAX(created_at) FROM proximity_carrier_kill          WHERE session_date=$1),"
+                    " (SELECT MAX(created_at) FROM proximity_carrier_return        WHERE session_date=$1),"
+                    " (SELECT MAX(created_at) FROM proximity_reaction_metric       WHERE session_date=$1)"
+                    ")",
+                    (sd,)
+                )
+                ctx_ts = ctx[0] if ctx else None
+                # kis_ts should never be NULL when count>0, but guard anyway:
+                # a missing cache timestamp means we can't prove freshness, so
+                # recompute rather than risk serving stale scores.
+                if kis_ts is not None and (ctx_ts is None or ctx_ts <= kis_ts):
+                    return {"status": "cached", "kills_scored": existing[0]}
+                logger.info(
+                    "KIS cache stale for %s (context newer than cache) — recomputing", sd
+                )
 
         # 1. Get all kill outcomes for the session
         kills = await self.db.fetch_all("""
