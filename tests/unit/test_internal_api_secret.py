@@ -162,6 +162,25 @@ async def test_wrong_internal_token_rejects_before_db(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_whitespace_only_secret_never_authenticates(monkeypatch):
+    """A whitespace-only INTERNAL_API_SECRET must not authenticate any token.
+    main.py strips at load (so this can't pass the non-empty fail-fast) and
+    the dependency strips at request time — a request that even echoes the
+    raw whitespace secret as its token is still rejected (Copilot PR #487)."""
+    monkeypatch.setenv("INTERNAL_API_SECRET", "   ")
+    db_calls: list[str] = []
+    transport = httpx.ASGITransport(app=_story_app(db_calls))
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get(
+            "/api/storytelling/kill-impact?session_date=2026-07-07",
+            headers={"X-Internal-Token": "   "},
+        )
+
+    assert resp.status_code == 401
+    assert db_calls == []
+
+
+@pytest.mark.asyncio
 async def test_public_narrative_routes_do_not_ensure_kis(monkeypatch):
     monkeypatch.setenv("INTERNAL_API_SECRET", SECRET)
     calls: list[tuple] = []

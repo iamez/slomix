@@ -193,6 +193,28 @@ async def test_warm_hits_kill_impact_with_the_date():
     assert sess.headers == {"X-Internal-Token": "test-internal-secret"}
 
 
+def _warm_svc_no_secret():
+    svc = _svc()
+
+    class Cfg:
+        website_api_base = "http://127.0.0.1:8000/api"
+        internal_api_secret = ""  # not configured on this bot
+
+    svc.config = Cfg()
+    return svc
+
+
+@pytest.mark.asyncio
+async def test_warm_skipped_when_secret_unset():
+    """Warming only exists to TRIGGER a compute (internal-only). With no
+    secret the call can't compute, so skip it rather than logging a
+    misleading 'warmed' on a public read-only response (Copilot PR #487)."""
+    sess = _Sess(status=200)
+    with patch("aiohttp.ClientSession", return_value=sess):
+        await _warm_svc_no_secret()._warm_kis_cache("2026-07-07")  # noqa: SLF001
+    assert sess.requested is None  # no HTTP call made
+
+
 @pytest.mark.asyncio
 async def test_warm_never_raises_on_http_error_or_connect_failure():
     with patch("aiohttp.ClientSession", return_value=_Sess(status=404)):

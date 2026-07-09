@@ -273,7 +273,12 @@ class SessionDigestService:
         url = f"{self.config.website_api_base}/storytelling/kill-impact"
         try:
             timeout = aiohttp.ClientTimeout(total=_HTTP_TIMEOUT_S)
-            headers = {"X-Internal-Token": getattr(self.config, "internal_api_secret", "")}
+            # The digest only READS the KIS top for display, so it's fine on the
+            # public read-only path. Only attach the internal token when one is
+            # actually configured — sending an empty token would earn a 401 and
+            # kill the KIS block instead of falling back to the public cache read.
+            secret = (getattr(self.config, "internal_api_secret", "") or "").strip()
+            headers = {"X-Internal-Token": secret} if secret else {}
             async with aiohttp.ClientSession(timeout=timeout) as http, http.get(
                 url, params={"session_date": str(session_date), "limit": 3}, headers=headers
             ) as resp:
