@@ -144,7 +144,7 @@ sudo -u postgres psql -d etlegacy -f website/setup_readonly_user.sql
 # 2. Configure environment
 cp website/.env.example website/.env
 nano website/.env
-# Set: POSTGRES_PASSWORD, SESSION_SECRET, DISCORD_CLIENT_ID/SECRET
+# Set: POSTGRES_PASSWORD, SESSION_SECRET, INTERNAL_API_SECRET, DISCORD_CLIENT_ID/SECRET
 
 # 3. Install dependencies
 pip install -r website/requirements.txt

@@ -224,6 +224,7 @@ Generated passwords follow this format:
 | `POSTGRES_PASSWORD` | `.env` | Database authentication |
 | `DISCORD_BOT_TOKEN` | `.env` | Discord API authentication |
 | `SESSION_SECRET` | Website `.env` | Web session encryption |
+| `INTERNAL_API_SECRET` | Bot + Website `.env` | Internal bot-to-website write-through API authentication |
 | `DISCORD_CLIENT_ID` | Website `.env` | OAuth |
 | `DISCORD_CLIENT_SECRET` | Website `.env` | OAuth |
 | `SSH_KEY_PATH` | `.env` | VPS access |

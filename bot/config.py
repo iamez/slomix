@@ -212,6 +212,7 @@ class BotConfig:
         # Website API used for KIS MVP / PB enrichment (digest degrades
         # gracefully if unreachable). Prod runs the web on port 7000.
         self.website_api_base: str = self._get_config('WEBSITE_API_BASE', 'http://127.0.0.1:8000/api').rstrip('/')
+        self.internal_api_secret: str = self._get_config('INTERNAL_API_SECRET', '')
         # Public base for deep links in Discord embeds.
         self.website_public_base: str = self._get_config('WEBSITE_PUBLIC_BASE', 'https://www.slomix.fyi').rstrip('/')
         # Skip digest for stub sessions (false session-end trigger guard).

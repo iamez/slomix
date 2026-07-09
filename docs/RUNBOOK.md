@@ -17,6 +17,7 @@ cp website/.env.example website/.env
 
 Set at minimum in `.env`:
 - `SESSION_SECRET`
+- `INTERNAL_API_SECRET` (same value for bot and website)
 - `DATABASE_TYPE` (`sqlite` for local quick start, `postgresql` for prod-ish)
 - `DISCORD_BOT_TOKEN` (or use validate-only mode in local dev)
 
@@ -79,6 +80,8 @@ tail -f logs/web.log logs/bot.log logs/errors.log
 ## Common failures
 - `SESSION_SECRET environment variable must be set`:
   - Set `SESSION_SECRET` in `.env`.
+- `INTERNAL_API_SECRET environment variable must be set`:
+  - Set the same `INTERNAL_API_SECRET` in bot and website env files.
 - Web health check fails:
   - Inspect `logs/web.log` and `logs/errors.log`.
   - Verify DB settings (`DATABASE_TYPE`, PG vars, sqlite path).

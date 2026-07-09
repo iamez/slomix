@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from starlette.requests import Request
 
 from shared.guid_utils import short_guid
-from website.backend.dependencies import get_db
+from website.backend.dependencies import get_db, get_internal_request_mode
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 from website.backend.rate_limit import limiter
@@ -87,17 +87,24 @@ async def get_kill_impact_leaderboard(
     request: Request,
     session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
     limit: int = Query(default=20, le=100, ge=1),
+    internal_request: bool = Depends(get_internal_request_mode),
     db: DatabaseAdapter = Depends(get_db),
 ):
-    """KIS leaderboard for a session. Lazy-computes if not cached."""
+    """KIS leaderboard for a session.
+
+    Public calls are read-only. Internal bot calls with X-Internal-Token may
+    lazy-compute/write the KIS cache.
+    """
     sd = _parse_date(session_date)
     svc = StorytellingService(db)
-    # Routes through kis_compute_with_shadow so that, when
-    # KIS_SHADOW_MODE_ENABLED is set, the SQL shadow audit runs and
-    # populates storytelling_kis_shadow_audit. When the flag is off
-    # this is a thin pass-through to compute_session_kis (production
-    # path is always authoritative and writes are unchanged).
-    compute_result = await svc.kis_compute_with_shadow(sd)
+    compute_result = {"status": "read_only"}
+    if internal_request:
+        # Routes through kis_compute_with_shadow so that, when
+        # KIS_SHADOW_MODE_ENABLED is set, the SQL shadow audit runs and
+        # populates storytelling_kis_shadow_audit. When the flag is off
+        # this is a thin pass-through to compute_session_kis (production
+        # path is always authoritative and writes are unchanged).
+        compute_result = await svc.kis_compute_with_shadow(sd)
     leaderboard = await svc.get_kis_leaderboard(sd, limit=limit)
 
     return {
@@ -117,6 +124,7 @@ async def get_kill_impact_details(
     request: Request,
     session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
     player_guid: str = Query(..., description="Player GUID"),
+    internal_request: bool = Depends(get_internal_request_mode),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Per-kill KIS breakdown for a specific player in a session."""
@@ -126,8 +134,9 @@ async def get_kill_impact_details(
     # that into the 400 handled by _parse_date.
     sd = _parse_date(session_date)
     svc = StorytellingService(db)
-    # Same shadow-aware entrypoint as the leaderboard route (see above).
-    await svc.kis_compute_with_shadow(sd)
+    if internal_request:
+        # Same shadow-aware entrypoint as the leaderboard route (see above).
+        await svc.kis_compute_with_shadow(sd)
     rows = await db.fetch_all("""
         SELECT kill_outcome_id, round_number, round_start_unix, map_name,
                victim_guid, victim_name,
@@ -352,12 +361,13 @@ async def get_momentum_session(
 async def get_narrative(
     request: Request,
     session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    internal_request: bool = Depends(get_internal_request_mode),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Session narrative: human-readable summary paragraph."""
     sd = _parse_date(session_date)
     svc = StorytellingService(db)
-    return await svc.generate_narrative(sd)
+    return await svc.generate_narrative(sd, ensure_kis=internal_request)
 
 
 @router.get("/storytelling/gravity")
@@ -453,12 +463,13 @@ async def get_useless_defense_deaths(
 async def get_player_narratives(
     request: Request,
     session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    internal_request: bool = Depends(get_internal_request_mode),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Per-player micro-narratives: invisible value stories for each player."""
     sd = _parse_date(session_date)
     svc = StorytellingService(db)
-    return await svc.generate_player_narratives(sd)
+    return await svc.generate_player_narratives(sd, ensure_kis=internal_request)
 
 
 @router.get("/storytelling/box-score")

@@ -100,6 +100,7 @@ WEBSITE_PORT = getenv_int("WEBSITE_PORT", 7000)
 # bind-all intentional; the service runs behind an nginx reverse proxy
 WEBSITE_HOST = os.getenv("WEBSITE_HOST", "0.0.0.0")  # nosec B104
 SESSION_SECRET = os.getenv("SESSION_SECRET")
+INTERNAL_API_SECRET = os.getenv("INTERNAL_API_SECRET")
 # Secure-by-default (see auth.py): opt out only for local HTTP dev.
 SESSION_HTTPS_ONLY = os.getenv("SESSION_HTTPS_ONLY", "true").lower() == "true"
 CORS_ORIGINS = os.getenv(
@@ -186,6 +187,18 @@ CSRF_ALLOWED_ORIGINS = _csrf_allowed_origins()
 if not SESSION_SECRET or SESSION_SECRET == "super-secret-key-change-me":
     raise ValueError(
         "SESSION_SECRET environment variable must be set to a secure random value. "
+        "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+    )
+
+if (
+    not INTERNAL_API_SECRET
+    or INTERNAL_API_SECRET in {
+        "super-secret-key-change-me",
+        "change-this-to-a-secure-random-string-in-production",
+    }
+):
+    raise ValueError(
+        "INTERNAL_API_SECRET environment variable must be set to a secure random value. "
         "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
     )
 

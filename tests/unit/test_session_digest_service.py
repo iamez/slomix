@@ -19,6 +19,7 @@ def _config(**over):
     cfg.production_channel_id = 222
     cfg.website_api_base = "http://127.0.0.1:9"  # unreachable on purpose
     cfg.website_public_base = "https://www.slomix.fyi"
+    cfg.internal_api_secret = "test-internal-secret"  # noqa: S105 - test-only shared secret
     for k, v in over.items():
         setattr(cfg, k, v)
     return cfg
@@ -162,3 +163,49 @@ async def test_personal_bests_filters_bots_and_caps(monkeypatch):
     line = await svc._fetch_personal_bests("2026-06-11")
     assert "bot" not in line and "[BOT]" not in line
     assert line.count("\n") == 4  # 5 players max -> 4 newlines
+
+
+@pytest.mark.asyncio
+async def test_fetch_kis_top_sends_internal_token(monkeypatch):
+    svc, _ = _service(_config(website_api_base="http://127.0.0.1:8000/api"))
+
+    class _Resp:
+        status = 200
+
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def json(self):
+            return {
+                "players": [{
+                    "guid": "ABC12345XYZ",
+                    "name": "vid",
+                    "total_kis": 12.3,
+                }]
+            }
+
+    class _Sess:
+        def __init__(self):
+            self.requested = None
+            self.params = None
+            self.headers = None
+
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+
+        def get(self, url, params=None, headers=None):
+            self.requested = url
+            self.params = params
+            self.headers = headers
+            return _Resp()
+
+    sess = _Sess()
+    monkeypatch.setattr(
+        "bot.services.session_digest_service.aiohttp.ClientSession", lambda *a, **k: sess
+    )
+
+    line = await svc._fetch_kis_top("2026-06-11")
+
+    assert "vid" in line
+    assert sess.requested == "http://127.0.0.1:8000/api/storytelling/kill-impact"
+    assert sess.params == {"session_date": "2026-06-11", "limit": 3}
+    assert sess.headers == {"X-Internal-Token": "test-internal-secret"}
