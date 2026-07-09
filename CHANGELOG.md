@@ -6,6 +6,29 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.25.0](https://github.com/iamez/slomix/compare/v1.24.0...v1.25.0) (2026-07-09)
+
+
+### Features
+
+* **website:** internal API secret for bot→website write-through GETs ([d98b8a9](https://github.com/iamez/slomix/commit/d98b8a9e47a151dbee1cf179ecbc8cfff024df41))
+* **website:** internal API secret for bot→website write-through GETs ([8f5c53b](https://github.com/iamez/slomix/commit/8f5c53b5db38b45f1675b8665409015c3d4c27b5))
+
+
+### Bug Fixes
+
+* **bot:** address 3 codex review findings on KIS cache invalidation ([cd5efd4](https://github.com/iamez/slomix/commit/cd5efd4312f3da31dbbfdd1654b1596810896aa6))
+* **bot:** invalidate KIS cache at session end (Smart Stats/Story kill-count freeze) ([0daaf63](https://github.com/iamez/slomix/commit/0daaf63a9848d99d124aac3648c1b14e48cd4d02))
+* **bot:** invalidate KIS cache at session end so Story/Smart Stats never freeze mid-session ([83802b3](https://github.com/iamez/slomix/commit/83802b3de4853a76ddde32962f1c248b2957f0e8))
+* **bot:** revert delayed second KIS delete — it wiped fresh digest recomputes ([a6ce10b](https://github.com/iamez/slomix/commit/a6ce10b647393513d6b6615279d04a7603d6d3d8))
+* **bot:** warm KIS cache after invalidation + correct false self-healing claim ([5bdfca5](https://github.com/iamez/slomix/commit/5bdfca5a6d0ea88ee69f4f8e1c1a28d91675e6c8))
+* **proximity,bot:** canonical round-key bundle + KIS formula_version ([b2f0180](https://github.com/iamez/slomix/commit/b2f01803f758d34292fbdc97f430264ed7a4e78c))
+* **proximity,bot:** canonical round-key bundle + KIS formula_version + misc audit findings ([e19a651](https://github.com/iamez/slomix/commit/e19a651b6f7ab388e3d4fb5ab6855c0707e8636a))
+* **website:** canonical map_name in KIS context keys (audit [#10](https://github.com/iamez/slomix/issues/10)/[#11](https://github.com/iamez/slomix/issues/11)) ([59c2e99](https://github.com/iamez/slomix/commit/59c2e996c93c0a306c1078d23af4dc4540e1a8ec))
+* **website:** canonical map_name in KIS context keys (audit [#10](https://github.com/iamez/slomix/issues/10)/[#11](https://github.com/iamez/slomix/issues/11)) ([6be3314](https://github.com/iamez/slomix/commit/6be33140d2e49cbb8cad7b76a1786521fd1b6517))
+* **website:** freshness-aware KIS cache-check (staleness cannot recur) ([#489](https://github.com/iamez/slomix/issues/489)) ([3f754f3](https://github.com/iamez/slomix/commit/3f754f35413dd9f3cfb4f8095293a6ce3a9ba0ee))
+* **website:** harden internal-secret edge cases (Copilot PR [#487](https://github.com/iamez/slomix/issues/487) review) ([5b21607](https://github.com/iamez/slomix/commit/5b216075a8758d258021de97d96185aeb71c8d3a))
+
 ## [1.24.0](https://github.com/iamez/slomix/compare/v1.23.0...v1.24.0) (2026-07-08)
 
 
