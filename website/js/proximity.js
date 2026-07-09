@@ -38,6 +38,48 @@ const PLAYER_HEATMAP_MODES = {
     aim: { label: 'Aim', rgb: '167, 139, 250', hint: 'where they shoot from + which way they aim' },
 };
 
+const PROXIMITY_QUALITY_STATUS_META = {
+    ready: {
+        label: 'Ready',
+        summary: 'Core proximity signals are complete for this scope.',
+        badgeClass: 'bg-brand-emerald/10 border-brand-emerald/40 text-brand-emerald',
+    },
+    partial: {
+        label: 'Partial',
+        summary: 'Some proximity quality checks need attention for this scope.',
+        badgeClass: 'bg-brand-amber/10 border-brand-amber/40 text-brand-amber',
+    },
+    experimental: {
+        label: 'Experimental',
+        summary: 'Required signals are ready; optional experimental signals are still filling.',
+        badgeClass: 'bg-brand-purple/10 border-brand-purple/40 text-brand-purple',
+    },
+    insufficient: {
+        label: 'Insufficient',
+        summary: 'Core signal coverage is too low for a reliable proximity read.',
+        badgeClass: 'bg-brand-rose/10 border-brand-rose/40 text-brand-rose',
+    },
+    error: {
+        label: 'Error',
+        summary: 'Quality checks could not be completed.',
+        badgeClass: 'bg-brand-rose/10 border-brand-rose/40 text-brand-rose',
+    },
+    unknown: {
+        label: 'Checking',
+        summary: 'Waiting for quality signal.',
+        badgeClass: 'bg-slate-800/40 border-slate-600/40 text-slate-400',
+    },
+};
+
+const PROXIMITY_QUALITY_TONE_CLASSES = {
+    emerald: 'border-brand-emerald/30 bg-brand-emerald/5 text-brand-emerald',
+    amber: 'border-brand-amber/30 bg-brand-amber/5 text-brand-amber',
+    rose: 'border-brand-rose/30 bg-brand-rose/5 text-brand-rose',
+    purple: 'border-brand-purple/30 bg-brand-purple/5 text-brand-purple',
+    cyan: 'border-brand-cyan/30 bg-brand-cyan/5 text-brand-cyan',
+    slate: 'border-white/10 bg-slate-900/40 text-slate-300',
+};
+
 const proximityRenderCache = {
     heatmapPayload: null,
     eventPayload: null,
@@ -247,6 +289,7 @@ function updateScopeUIText() {
     setText('proximity-window-label', scope);
     setText('proximity-timeline-scope', `Scope: ${scope}`);
     setText('proximity-heatmap-scope', `Scope: ${scope}`);
+    setText('proximity-quality-scope', `Scope: ${scope}`);
 }
 
 function renderScopeSelectors() {
@@ -1395,6 +1438,217 @@ function renderSummary(data) {
     renderDuos(data.top_duos || []);
 }
 
+function getQualityStatusMeta(status) {
+    return PROXIMITY_QUALITY_STATUS_META[status] || PROXIMITY_QUALITY_STATUS_META.unknown;
+}
+
+function humanizeQualityValue(value) {
+    if (value == null || value === '') return '--';
+    return String(value)
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatQualityTimestamp(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function getQualityTone(status, ready = null) {
+    if (status === 'error') return 'rose';
+    if (status === 'insufficient') return 'rose';
+    if (status === 'warning') return 'amber';
+    if (status === 'partial') return 'amber';
+    if (status === 'missing') return 'amber';
+    if (status === 'stale') return 'amber';
+    if (status === 'low_count') return 'amber';
+    if (status === 'round_linkage_partial') return 'amber';
+    if (status === 'proximity_flags_incomplete') return 'amber';
+    if (status === 'experimental') return 'purple';
+    if (status === 'unknown') return 'slate';
+    if (ready === false) return 'amber';
+    if (status === 'ok' || status === 'ready' || ready === true) return 'emerald';
+    return 'slate';
+}
+
+function renderQualityStat(label, value, detail, tone = 'slate') {
+    const toneClass = PROXIMITY_QUALITY_TONE_CLASSES[tone] || PROXIMITY_QUALITY_TONE_CLASSES.slate;
+    return `
+        <div class="rounded-lg border ${toneClass} p-3">
+            <div class="text-[10px] uppercase tracking-wide text-slate-500 font-bold">${escapeHtml(label)}</div>
+            <div class="text-lg font-black mt-1">${escapeHtml(value)}</div>
+            <div class="text-[11px] text-slate-500 mt-1">${escapeHtml(detail || '--')}</div>
+        </div>
+    `;
+}
+
+function countQualitySignals(signals) {
+    const rows = signals && typeof signals === 'object' ? Object.values(signals) : [];
+    const total = rows.length;
+    const ready = rows.filter((row) => row?.ready === true).length;
+    const requiredRows = rows.filter((row) => row?.required === true);
+    const requiredReady = requiredRows.filter((row) => row?.ready === true).length;
+    return {
+        total,
+        ready,
+        required: requiredRows.length,
+        requiredReady,
+    };
+}
+
+function getWarningToneClass(warning) {
+    if (warning?.level === 'error') {
+        return 'bg-brand-rose/10 border-brand-rose/30 text-brand-rose';
+    }
+    if (warning?.level === 'info') {
+        return 'bg-brand-cyan/10 border-brand-cyan/30 text-brand-cyan';
+    }
+    return 'bg-brand-amber/10 border-brand-amber/30 text-brand-amber';
+}
+
+function renderQualityWarnings(warnings) {
+    const container = document.getElementById('proximity-quality-warnings');
+    if (!container) return;
+    const list = Array.isArray(warnings) ? warnings : [];
+    if (!list.length) {
+        container.innerHTML = '<span>No quality warnings for this scope.</span>';
+        return;
+    }
+    const visible = list.slice(0, 5);
+    const hiddenCount = list.length - visible.length;
+    container.innerHTML = `
+        <div class="space-y-1">
+            ${visible.map((warning) => `
+                <div class="flex flex-col sm:flex-row sm:items-center gap-1">
+                    <span class="inline-flex w-fit px-2 py-0.5 rounded border text-[10px] font-bold ${getWarningToneClass(warning)}">${escapeHtml(warning?.code || 'QUALITY_WARNING')}</span>
+                    <span class="text-slate-400">${escapeHtml(warning?.message || 'Quality warning.')}</span>
+                </div>
+            `).join('')}
+            ${hiddenCount > 0 ? `<div class="text-slate-500">+${formatNumber(hiddenCount)} more quality warnings.</div>` : ''}
+        </div>
+    `;
+}
+
+function renderQualityPanel(payload) {
+    const panel = document.getElementById('proximity-quality-panel');
+    if (!panel) return;
+    const status = payload?.overall_status || 'unknown';
+    const meta = getQualityStatusMeta(status);
+    const statusEl = document.getElementById('proximity-quality-status');
+    const summaryEl = document.getElementById('proximity-quality-summary');
+    const gridEl = document.getElementById('proximity-quality-grid');
+    const warnings = Array.isArray(payload?.warnings) ? payload.warnings : [];
+
+    if (statusEl) {
+        statusEl.className = `text-[10px] font-bold px-2 py-0.5 rounded border ${meta.badgeClass}`;
+        statusEl.textContent = meta.label;
+    }
+    setText('proximity-quality-scope', `Scope: ${getScopeDescription()}`);
+
+    if (summaryEl) {
+        const updatedAt = formatQualityTimestamp(payload?.generated_at);
+        const warningText = warnings.length ? ` ${warnings.length} warning${warnings.length === 1 ? '' : 's'}.` : '';
+        summaryEl.textContent = `${meta.summary}${warningText}${updatedAt ? ` Updated ${updatedAt}.` : ''}`;
+    }
+
+    const signalStats = countQualitySignals(payload?.signals);
+    const signalTone = signalStats.total === 0
+        ? 'slate'
+        : signalStats.requiredReady < signalStats.required
+            ? 'amber'
+            : signalStats.ready < signalStats.total
+                ? 'purple'
+                : 'emerald';
+    const signalValue = signalStats.total ? `${signalStats.ready}/${signalStats.total}` : '--';
+    const signalDetail = signalStats.total
+        ? `${signalStats.requiredReady}/${signalStats.required} required ready`
+        : 'No signal data returned';
+
+    const correlation = payload?.round_correlation || {};
+    const correlationStatus = correlation.status || 'unknown';
+    const correlationCount = correlation.correlation_count != null ? formatNumber(correlation.correlation_count) : '--';
+    const completeCount = correlation.complete_count != null ? formatNumber(correlation.complete_count) : '--';
+    const missingFlagsValue = Number(correlation.missing_proximity_flag_rows || 0);
+    const missingFlags = Number.isFinite(missingFlagsValue) ? missingFlagsValue : 0;
+    const avgCompletenessValue = Number(correlation.avg_completeness_pct);
+    const avgCompleteness = correlation.avg_completeness_pct != null
+        && Number.isFinite(avgCompletenessValue)
+        ? `${avgCompletenessValue.toFixed(1)}% avg completeness`
+        : 'Completeness unknown';
+    const correlationDetail = missingFlags > 0
+        ? `${formatNumber(missingFlags)} missing proximity flags`
+        : `${completeCount}/${correlationCount} complete - ${avgCompleteness}`;
+
+    const linkage = payload?.linkage || {};
+    const breachCountValue = Number(linkage.breach_count || 0);
+    const breachCount = Number.isFinite(breachCountValue) ? breachCountValue : 0;
+    const linkageStatus = linkage.status || 'unknown';
+    const linkageScopeLabel = linkage.scope === 'global' ? 'Global check' : 'Scoped check';
+    const linkageDetail = breachCount > 0
+        ? `${linkageScopeLabel} - ${formatNumber(breachCount)} anomaly threshold breach${breachCount === 1 ? '' : 'es'}`
+        : `${linkageScopeLabel} - no anomaly breaches reported`;
+
+    const cache = payload?.cache_freshness || {};
+    const cacheStatus = cache.status || 'unknown';
+    const cacheDetail = cacheStatus === 'ok'
+        ? 'Kill impact cache is current'
+        : cacheStatus === 'stale'
+            ? 'Kill impact cache is older than context'
+            : cacheStatus === 'missing'
+                ? 'Kill impact cache is missing'
+                : 'Freshness could not be determined';
+
+    if (gridEl) {
+        gridEl.innerHTML = [
+            renderQualityStat('Signals', signalValue, signalDetail, signalTone),
+            renderQualityStat('Round Correlation', humanizeQualityValue(correlationStatus), correlationDetail, getQualityTone(correlationStatus, correlation.ready)),
+            renderQualityStat('Linkage', humanizeQualityValue(linkageStatus), linkageDetail, getQualityTone(linkageStatus, breachCount === 0)),
+            renderQualityStat('KIS Cache', humanizeQualityValue(cacheStatus), cacheDetail, getQualityTone(cacheStatus)),
+        ].join('');
+    }
+
+    renderQualityWarnings(warnings);
+}
+
+function renderQualityLoading() {
+    const statusEl = document.getElementById('proximity-quality-status');
+    const summaryEl = document.getElementById('proximity-quality-summary');
+    const gridEl = document.getElementById('proximity-quality-grid');
+    if (statusEl) {
+        const meta = PROXIMITY_QUALITY_STATUS_META.unknown;
+        statusEl.className = `text-[10px] font-bold px-2 py-0.5 rounded border ${meta.badgeClass}`;
+        statusEl.textContent = meta.label;
+    }
+    setText('proximity-quality-scope', `Scope: ${getScopeDescription()}`);
+    if (summaryEl) summaryEl.textContent = 'Checking proximity readiness.';
+    if (gridEl) {
+        gridEl.innerHTML = [
+            renderQualityStat('Signals', '--', 'Checking tables', 'slate'),
+            renderQualityStat('Round Correlation', '--', 'Checking completeness flags', 'slate'),
+            renderQualityStat('Linkage', '--', 'Checking anomalies', 'slate'),
+            renderQualityStat('KIS Cache', '--', 'Checking freshness', 'slate'),
+        ].join('');
+    }
+    renderQualityWarnings([]);
+}
+
+function renderQualityFetchError() {
+    renderQualityPanel({
+        overall_status: 'error',
+        signals: {},
+        round_correlation: { status: 'error', ready: false },
+        linkage: { scope: 'global', status: 'unknown', breach_count: 0 },
+        cache_freshness: { status: 'unknown' },
+        warnings: [{
+            code: 'QUALITY_FETCH_FAILED',
+            level: 'warning',
+            message: 'Unable to load proximity quality checks.',
+        }],
+    });
+}
+
 function renderClassSummary(payload) {
     const container = document.getElementById('proximity-class-summary');
     if (!container) return;
@@ -1483,7 +1737,9 @@ function resetProximityValues() {
     setText('proximity-scope-caption', defaultScope);
     setText('proximity-timeline-scope', `Scope: ${defaultScope}`);
     setText('proximity-heatmap-scope', `Scope: ${defaultScope}`);
+    setText('proximity-quality-scope', `Scope: ${defaultScope}`);
     updateHeatIntensityLabel();
+    renderQualityLoading();
 
     renderTimeline([]);
     void renderHeatmap({ hotzones: [] }).catch(err => console.warn('Proximity fetch failed:', err));
@@ -1588,8 +1844,23 @@ async function loadScopedProximityData() {
     }
 
     try {
-        const data = await fetchJSON(scopedUrl('/proximity/summary'));
+        const [summaryRes, qualityRes] = await Promise.allSettled([
+            fetchJSON(scopedUrl('/proximity/summary')),
+            fetchJSON(scopedUrl('/proximity/quality')),
+        ]);
         if (loadId !== proximityScopedLoadId) return;
+
+        if (qualityRes.status === 'fulfilled') {
+            renderQualityPanel(qualityRes.value);
+        } else {
+            renderQualityFetchError();
+        }
+
+        if (summaryRes.status !== 'fulfilled') {
+            throw summaryRes.reason;
+        }
+
+        const data = summaryRes.value;
         renderSummary(data);
         const ready = data?.ready === true || data?.status === 'ok' || data?.status === 'ready';
         if (!ready) {
