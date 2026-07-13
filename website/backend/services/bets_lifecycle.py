@@ -4,8 +4,8 @@ Web-side background loop that manages the full parimutuel session-winner lifecyc
 so an admin no longer has to touch it by hand:
 - auto-OPENS a market when a live gaming session with two teams is detected (with a
   §6.4b closes_at cutoff = end of map 1, or a short fallback window before map 1 ends),
-- auto-TIGHTENS a fallback closes_at down to the real end-of-map-1 once map 1 finishes, and
-- auto-SETTLES a market once its session result is recorded.
+- auto-CLOSES betting (status='closed') once map 1 finishes, stamping the real cutoff, and
+- auto-SETTLES a market (open or closed) once its session result is recorded.
 No bot changes, no cron, and — deliberately — no writes on any read endpoint
 (get_current_market stays read-only); the work runs in this loop instead.
 
@@ -266,51 +266,56 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
         return None
 
 
-async def maybe_refresh_closes_at(db) -> int:
-    """Tighten an auto-opened market's closes_at to the real end-of-map-1 once map 1
-    finishes.
+async def maybe_close_after_map1(db) -> int:
+    """Close an auto-opened market for betting once its map 1 has finished (§6.4b).
 
-    When auto-open fires before map 1's R2 is done it uses a now + BETS_CLOSE_AFTER_MINUTES
-    fallback window. If map 1 then ends inside that window, place_bet would keep accepting
-    bets past the intended §6.4b cutoff. This pass recomputes closes_at from the finished
-    map 1 and only ever TIGHTENS it (never loosens). Scoped to auto-opened markets
-    (created_by_user_id IS NULL, and closes_at IS NOT NULL — only auto-open sets closes_at),
-    so admin markets are never touched. Best-effort — never raises out."""
+    Auto-open uses a future now + BETS_CLOSE_AFTER_MINUTES fallback window until map 1's
+    end is known. Once map 1 is over this flips the market to status='closed' and stamps
+    closes_at with the real end-of-map-1, so:
+      - the frontends (which show betting controls only while status=='open') stop
+        advertising an expired market as open, and
+      - place_bet (which rejects any non-'open' market) refuses further bets,
+    while auto-settle still resolves it (its scan includes 'closed').
+
+    Scoped to auto-opened markets (created_by_user_id IS NULL, and closes_at IS NOT NULL
+    — only auto-open sets closes_at), so admin markets are never touched. Idempotent (the
+    scan only sees status='open'). Best-effort — never raises out."""
     if db is None:
         return 0
     try:
         rows = await db.fetch_all(
-            "SELECT id, gaming_session_id, closes_at FROM parimutuel_markets "
+            "SELECT id, gaming_session_id FROM parimutuel_markets "
             "WHERE status = 'open' AND created_by_user_id IS NULL "
             "  AND gaming_session_id IS NOT NULL AND closes_at IS NOT NULL"
         )
     except asyncio.CancelledError:
         raise
     except Exception as exc:
-        logger.warning("bets closes_at refresh scan failed: %s", exc)
+        logger.warning("bets close-after-map1 scan failed: %s", exc)
         return 0
 
-    updated = 0
+    closed = 0
     for row in rows or []:
-        market_id, gsid, current = int(row[0]), int(row[1]), row[2]
+        market_id, gsid = int(row[0]), int(row[1])
         try:
-            real = await _map1_closes_at(db, gsid)
-            if real is None or current is None or real >= current:
-                continue  # map 1 not finished yet, or closes_at already tight enough
+            map1_end = await _map1_closes_at(db, gsid)
+            if map1_end is None:
+                continue  # map 1 not finished yet — leave the market open
             await db.execute(
-                "UPDATE parimutuel_markets SET closes_at = ? WHERE id = ? AND status = 'open'",
-                (real, market_id),
+                "UPDATE parimutuel_markets SET status = 'closed', closes_at = ? "
+                "WHERE id = ? AND status = 'open'",
+                (map1_end, market_id),
             )
-            updated += 1
+            closed += 1
             logger.info(
-                "bets closes_at refresh: market %s tightened %s -> %s (map 1 ended)",
-                market_id, current, real,
+                "bets close-after-map1: market %s closed (map 1 ended %s)",
+                market_id, map1_end,
             )
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # one bad market must not stop the rest
-            logger.warning("bets closes_at refresh failed for market %s: %s", market_id, exc)
-    return updated
+            logger.warning("bets close-after-map1 failed for market %s: %s", market_id, exc)
+    return closed
 
 
 async def maybe_settle_markets(db) -> int:
@@ -329,7 +334,7 @@ async def maybe_settle_markets(db) -> int:
             "   WHERE sr.gaming_session_id = m.gaming_session_id "
             "   ORDER BY sr.session_end DESC NULLS LAST LIMIT 1) AS winning_team "
             "FROM parimutuel_markets m "
-            "WHERE m.status = 'open' AND m.gaming_session_id IS NOT NULL"
+            "WHERE m.status IN ('open', 'closed') AND m.gaming_session_id IS NOT NULL"
         )
     except asyncio.CancelledError:
         raise
@@ -388,7 +393,7 @@ async def bets_lifecycle_loop(db_factory: Any, interval_seconds: int | None = No
             with contextlib.suppress(Exception):
                 await maybe_open_market(db, live_within)
             with contextlib.suppress(Exception):
-                await maybe_refresh_closes_at(db)
+                await maybe_close_after_map1(db)
             with contextlib.suppress(Exception):
                 await maybe_settle_markets(db)
             await asyncio.sleep(interval_seconds)
