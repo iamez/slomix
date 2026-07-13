@@ -5,7 +5,7 @@ Pure helpers plus FakeDB-driven coverage of maybe_open_market's decision logic
 """
 import time
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -23,7 +23,7 @@ class FakeDB:
 
     def __init__(self, *, latest_round=None, existing_market=None, teams_rows=None,
                  session_date_row=("2026-06-30",), roster_cols=2, insert_returns=(99,),
-                 finalized=False):
+                 finalized=False, map1_round=None):
         self.latest_round = latest_round        # (gsid, round_start_unix) | None
         self.existing_market = existing_market   # (id,) | None
         self.teams_rows = teams_rows or []       # list of (team_name, guids, names)
@@ -31,10 +31,13 @@ class FakeDB:
         self.roster_cols = roster_cols
         self.insert_returns = insert_returns
         self.finalized = finalized               # session_results row exists?
+        self.map1_round = map1_round             # (round_start_unix, duration_s) | None
         self.inserts: list[tuple] = []
 
     async def fetch_one(self, query, params=()):
         q = query.lower()
+        if "actual_duration_seconds" in q and "from rounds" in q:
+            return self.map1_round  # _map1_closes_at probe (None -> fallback window)
         if "from rounds" in q and "order by round_start_unix" in q:
             return self.latest_round
         if "from session_results" in q:
@@ -129,6 +132,32 @@ class TestMaybeOpenMarket:
         assert len(db.inserts) == 1
         sql, _params = db.inserts[0]
         assert "team_a_guids" not in sql
+        assert "closes_at" in sql  # cutoff set even on the legacy path
+
+    async def test_closes_at_fallback_when_map1_incomplete(self):
+        # No completed map-1 R2 yet -> closes_at is a short window from now (§6.4b).
+        db = FakeDB(latest_round=(132, int(time.time())), existing_market=None,
+                    teams_rows=_two_team_rows(), roster_cols=2, map1_round=None)
+        assert await maybe_open_market(db, 5400) == 99
+        sql, params = db.inserts[0]
+        assert "closes_at" in sql
+        closes_at = params[-2]  # ...team_b_guids, closes_at, gsid
+        assert isinstance(closes_at, datetime)
+        # fallback window is in the near future (default 20 min)
+        assert timedelta(minutes=1) < (closes_at - datetime.now()) < timedelta(minutes=60)  # noqa: DTZ005
+
+    async def test_closes_at_is_map1_end_when_complete(self):
+        # Map 1's R2 finished -> closes_at = its end (start_unix + duration), in the past
+        # relative to a live "now", so late joiners can't bet (Oracle integrity).
+        start_unix = int(time.time()) - 1800  # 30 min ago
+        duration = 300
+        db = FakeDB(latest_round=(132, int(time.time())), existing_market=None,
+                    teams_rows=_two_team_rows(), roster_cols=2,
+                    map1_round=(start_unix, duration))
+        assert await maybe_open_market(db, 5400) == 99
+        _sql, params = db.inserts[0]
+        closes_at = params[-2]
+        assert closes_at == datetime.fromtimestamp(start_unix + duration)  # noqa: DTZ006
 
 
 class TestLabelFromNames:

@@ -24,7 +24,7 @@ import asyncio
 import contextlib
 import json
 import time
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from website.backend.env_utils import getenv_int
@@ -50,6 +50,12 @@ _DEFAULT_LIVE_WITHIN = 90 * 60
 # Namespace for the per-session pg_advisory_xact_lock that serializes concurrent
 # auto-opens (int4). Arbitrary fixed constant.
 _BETS_LOCK_NS = 0x6265747
+
+# When a market auto-opens BEFORE the session's first map has finished, bets close
+# this many minutes after open (fallback). Once map 1 has completed, closes_at is the
+# real end-of-map-1 instead — bets only before/at the evening start (Oracle award
+# integrity, FULL_REVIEW §6.4 option b). Env-overridable via BETS_CLOSE_AFTER_MINUTES.
+_DEFAULT_CLOSE_AFTER_MIN = 20
 
 
 def _label_from_names(names: Any, fallback: str) -> str:
@@ -124,6 +130,28 @@ async def _session_date(db, gsid: int):
     return _coerce_date(row[0]) if row else None
 
 
+async def _map1_closes_at(db, gsid: int):
+    """Betting cutoff = end of the session's FIRST complete map (FULL_REVIEW §6.4
+    option b): once map 1 is over the evening is underway, so no more bets.
+
+    Returns a naive LOCAL datetime — parimutuel_markets.closes_at is a naive column and
+    bets_router compares it against datetime.now() (also naive local), so
+    datetime.fromtimestamp() (naive local, CET on the VM) is the matching convention.
+    Returns None when map 1's R2 isn't finished yet, so the caller falls back to
+    now + BETS_CLOSE_AFTER_MINUTES."""
+    row = await db.fetch_one(
+        "SELECT round_start_unix, actual_duration_seconds FROM rounds "
+        "WHERE gaming_session_id = ? AND round_number = 2 AND is_valid "
+        "  AND round_status = 'completed' AND round_start_unix IS NOT NULL "
+        "ORDER BY round_date, round_time LIMIT 1",
+        (gsid,),
+    )
+    if not row or row[0] is None:
+        return None
+    # naive local (CET) — matches the naive closes_at column + bets_router comparison
+    return datetime.fromtimestamp(int(row[0]) + int(row[1] or 0))  # noqa: DTZ006
+
+
 async def maybe_open_market(db, live_within_seconds: int) -> int | None:
     """Open a session-winner market for the current live session if one isn't open
     yet. Returns the new market id, or None when nothing was opened. Never raises."""
@@ -160,28 +188,35 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
             return None
         a_label, a_guids, b_label, b_guids = teams
         sess_date = await _session_date(db, gsid)
+        # Cutoff (FULL_REVIEW §6.4b): end of map 1 if it's already finished, else a
+        # short fallback window from now — so bets close near the evening's start.
+        closes_at = await _map1_closes_at(db, gsid)
+        if closes_at is None:
+            closes_at = datetime.now() + timedelta(  # noqa: DTZ005 - naive local matches column
+                minutes=getenv_int("BETS_CLOSE_AFTER_MINUTES", _DEFAULT_CLOSE_AFTER_MIN)
+            )
 
         if await _has_roster_cols(db):
             sql = (
                 "INSERT INTO parimutuel_markets "
                 "(gaming_session_id, session_date, team_a_label, team_b_label, "
-                " team_a_guids, team_b_guids, status) "
-                "SELECT ?, ?, ?, ?, ?, ?, 'open' "
+                " team_a_guids, team_b_guids, status, closes_at) "
+                "SELECT ?, ?, ?, ?, ?, ?, 'open', ? "
                 "WHERE NOT EXISTS (SELECT 1 FROM parimutuel_markets "
                 "  WHERE gaming_session_id = ?) "
                 "RETURNING id"
             )
-            params = (gsid, sess_date, a_label, b_label, a_guids, b_guids, gsid)
+            params = (gsid, sess_date, a_label, b_label, a_guids, b_guids, closes_at, gsid)
         else:
             sql = (
                 "INSERT INTO parimutuel_markets "
-                "(gaming_session_id, session_date, team_a_label, team_b_label, status) "
-                "SELECT ?, ?, ?, ?, 'open' "
+                "(gaming_session_id, session_date, team_a_label, team_b_label, status, closes_at) "
+                "SELECT ?, ?, ?, ?, 'open', ? "
                 "WHERE NOT EXISTS (SELECT 1 FROM parimutuel_markets "
                 "  WHERE gaming_session_id = ?) "
                 "RETURNING id"
             )
-            params = (gsid, sess_date, a_label, b_label, gsid)
+            params = (gsid, sess_date, a_label, b_label, closes_at, gsid)
 
         # There's no unique constraint on gaming_session_id, and INSERT ... WHERE
         # NOT EXISTS is NOT atomic across concurrent transactions (under READ
