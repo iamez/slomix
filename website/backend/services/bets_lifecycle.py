@@ -2,7 +2,9 @@
 
 Web-side background loop that manages the full parimutuel session-winner lifecycle
 so an admin no longer has to touch it by hand:
-- auto-OPENS a market when a live gaming session with two teams is detected, and
+- auto-OPENS a market when a live gaming session with two teams is detected (with a
+  §6.4b closes_at cutoff = end of map 1, or a short fallback window before map 1 ends),
+- auto-TIGHTENS a fallback closes_at down to the real end-of-map-1 once map 1 finishes, and
 - auto-SETTLES a market once its session result is recorded.
 No bot changes, no cron, and — deliberately — no writes on any read endpoint
 (get_current_market stays read-only); the work runs in this loop instead.
@@ -136,19 +138,26 @@ async def _map1_closes_at(db, gsid: int):
 
     Returns a naive LOCAL datetime — parimutuel_markets.closes_at is a naive column and
     bets_router compares it against datetime.now() (also naive local), so
-    datetime.fromtimestamp() (naive local, CET on the VM) is the matching convention.
+    datetime.fromtimestamp() (naive, server-local timezone) is the matching convention.
     Returns None when map 1's R2 isn't finished yet, so the caller falls back to
-    now + BETS_CLOSE_AFTER_MINUTES."""
+    now + BETS_CLOSE_AFTER_MINUTES.
+
+    'Completed' matches the repo-wide predicate (website_session_data_service): a real
+    'completed'/'substitution' round OR a legacy row with NULL round_status — otherwise
+    an already-finished older map 1 looks unfinished and the cutoff wrongly falls back.
+    Orders by round_start_unix (not round_date/round_time) so NULL-column ordering can't
+    differ across engines and it matches the unix-based cutoff math below."""
     row = await db.fetch_one(
         "SELECT round_start_unix, actual_duration_seconds FROM rounds "
         "WHERE gaming_session_id = ? AND round_number = 2 AND is_valid "
-        "  AND round_status = 'completed' AND round_start_unix IS NOT NULL "
-        "ORDER BY round_date, round_time LIMIT 1",
+        "  AND (round_status IN ('completed', 'substitution') OR round_status IS NULL) "
+        "  AND round_start_unix IS NOT NULL "
+        "ORDER BY round_start_unix LIMIT 1",
         (gsid,),
     )
     if not row or row[0] is None:
         return None
-    # naive local (CET) — matches the naive closes_at column + bets_router comparison
+    # naive, server-local — matches the naive closes_at column + bets_router comparison
     return datetime.fromtimestamp(int(row[0]) + int(row[1] or 0))  # noqa: DTZ006
 
 
@@ -195,6 +204,16 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
             closes_at = datetime.now() + timedelta(  # noqa: DTZ005 - naive local matches column
                 minutes=getenv_int("BETS_CLOSE_AFTER_MINUTES", _DEFAULT_CLOSE_AFTER_MIN)
             )
+        elif closes_at <= datetime.now():  # noqa: DTZ005 - naive local matches column
+            # Map 1 already ended (we only started seeing this live session mid-/post-map-2):
+            # the betting window has passed, so don't open a market that place_bet would
+            # immediately reject — the UIs gate on status=='open' and can't see closes_at,
+            # so an expired-but-open market only fails after a user submits a bet.
+            logger.debug(
+                "bets auto-open: gsid %s map-1 cutoff already passed (%s) — skipping",
+                gsid, closes_at,
+            )
+            return None
 
         if await _has_roster_cols(db):
             sql = (
@@ -245,6 +264,53 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
     except Exception as exc:  # best-effort — never break the loop
         logger.warning("bets auto-open failed: %s", exc)
         return None
+
+
+async def maybe_refresh_closes_at(db) -> int:
+    """Tighten an auto-opened market's closes_at to the real end-of-map-1 once map 1
+    finishes.
+
+    When auto-open fires before map 1's R2 is done it uses a now + BETS_CLOSE_AFTER_MINUTES
+    fallback window. If map 1 then ends inside that window, place_bet would keep accepting
+    bets past the intended §6.4b cutoff. This pass recomputes closes_at from the finished
+    map 1 and only ever TIGHTENS it (never loosens). Scoped to auto-opened markets
+    (created_by_user_id IS NULL, and closes_at IS NOT NULL — only auto-open sets closes_at),
+    so admin markets are never touched. Best-effort — never raises out."""
+    if db is None:
+        return 0
+    try:
+        rows = await db.fetch_all(
+            "SELECT id, gaming_session_id, closes_at FROM parimutuel_markets "
+            "WHERE status = 'open' AND created_by_user_id IS NULL "
+            "  AND gaming_session_id IS NOT NULL AND closes_at IS NOT NULL"
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.warning("bets closes_at refresh scan failed: %s", exc)
+        return 0
+
+    updated = 0
+    for row in rows or []:
+        market_id, gsid, current = int(row[0]), int(row[1]), row[2]
+        try:
+            real = await _map1_closes_at(db, gsid)
+            if real is None or current is None or real >= current:
+                continue  # map 1 not finished yet, or closes_at already tight enough
+            await db.execute(
+                "UPDATE parimutuel_markets SET closes_at = ? WHERE id = ? AND status = 'open'",
+                (real, market_id),
+            )
+            updated += 1
+            logger.info(
+                "bets closes_at refresh: market %s tightened %s -> %s (map 1 ended)",
+                market_id, current, real,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # one bad market must not stop the rest
+            logger.warning("bets closes_at refresh failed for market %s: %s", market_id, exc)
+    return updated
 
 
 async def maybe_settle_markets(db) -> int:
@@ -321,6 +387,8 @@ async def bets_lifecycle_loop(db_factory: Any, interval_seconds: int | None = No
             db = db_factory() if callable(db_factory) else db_factory
             with contextlib.suppress(Exception):
                 await maybe_open_market(db, live_within)
+            with contextlib.suppress(Exception):
+                await maybe_refresh_closes_at(db)
             with contextlib.suppress(Exception):
                 await maybe_settle_markets(db)
             await asyncio.sleep(interval_seconds)
