@@ -185,11 +185,13 @@ class _NarrativeMixin:
         maps_played = _format_maps_list(raw_maps)
         # Count maps *played* (matches), not distinct names: a map replayed in the
         # same session (e.g. te_escape2 x3) counts as 3, matching the box score's
-        # map_number grouping and the owner rule "each escape is its own map".
-        # DISTINCT round_id among R1 rounds == number of matches played.
+        # map_number grouping and the owner rule "each escape is its own map". Count
+        # from combat_engagement (the same source /proximity/scopes uses for the
+        # dropdown), keyed by (map_name, round_start_unix) among R1 rounds == matches
+        # — kill-outcome's round_id can be NULL when linkage is incomplete (codex/copilot).
         r1_row = await self.db.fetch_one(
-            "SELECT COUNT(DISTINCT round_id) FROM proximity_kill_outcome "
-            "WHERE session_date = $1 AND round_number = 1",
+            "SELECT COUNT(DISTINCT (map_name, round_start_unix)) FROM combat_engagement "
+            "WHERE session_date = $1 AND round_number = 1 AND round_start_unix > 0",
             (sd,))
         map_count = int(r1_row[0]) if r1_row and r1_row[0] else len(raw_maps)
 
