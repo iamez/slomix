@@ -7,16 +7,22 @@ compute_objective_pressure is exercised by the backtest against real data.
 """
 from __future__ import annotations
 
+import json
 import sys
 from collections import defaultdict
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from website.backend.services.objective_pressure_service import (
+    _CACHE,
     BUCKET_MS,
     _accumulate_round,
+    _load_zones,
     _zone_index,
+    compute_objective_pressure,
 )
 
 # One objective sphere at the origin, radius 500.
@@ -128,3 +134,55 @@ class TestAccumulateRound:
         ]
         _accumulate_round(rtracks, ZONES, pressure)
         assert round(pressure["a1"], 2) == 0.6
+
+
+class _FakeRow(dict):
+    """dict that also supports r["col"] access like an asyncpg Record."""
+
+
+class _FakeDB:
+    """Routes the two compute queries: player_track vs combat_position."""
+
+    def __init__(self, tracks, kills):
+        self._tracks = tracks
+        self._kills = kills
+
+    async def fetch_all(self, query, params=()):
+        return self._tracks if "FROM player_track" in query else self._kills
+
+
+def _track(guid, team, name, coord):
+    # Two samples 200ms apart at the objective coord so forward-gap credit applies.
+    x, y, z = coord
+    path = [{"time": 0, "x": x, "y": y, "z": z}, {"time": 200, "x": x, "y": y, "z": z}]
+    return _FakeRow(round_start_unix=1000, round_number=1, map_name="supply",
+                    player_guid=guid, player_name=name, team=team, path=json.dumps(path))
+
+
+class TestComputeReturnsShortGuids:
+    @pytest.mark.asyncio
+    async def test_profile_routable_short_guids(self):
+        # Two ALLIES (supported) + one AXIS (contesting) on a real 'supply'
+        # objective coord so the ALLIES pair earns pressure; verify the emitted
+        # GUIDs are the 8-char profile-routable form, not the 32-char one.
+        _CACHE.clear()
+        zones = _load_zones()["supply"]
+        coord = (zones[0][0], zones[0][1], zones[0][2])  # inside the first objective
+        g1 = "1C747DF1A037D2AFECCB6ED063DF44E7"
+        g2 = "AABBCCDD00112233445566778899AABB"
+        g_axis = "D8423F90112233445566778899AABBCC"
+        tracks = [
+            _track(g1, "ALLIES", "vid", coord),
+            _track(g2, "ALLIES", "olz", coord),
+            _track(g_axis, "AXIS", "kanii", coord),
+        ]
+        kills = [_FakeRow(guid=g1, kills=5), _FakeRow(guid=g_axis, kills=9)]
+        out = await compute_objective_pressure(_FakeDB(tracks, kills), "2099-01-01", limit=5)
+
+        assert out["players"], "expected the supported ALLIES pair to earn pressure"
+        for p in out["players"]:
+            assert len(p["guid"]) == 8  # short_guid, profile-routable
+        assert all(len(g) == 8 for g in out["top_fragger_guids"])
+        # the 32-char guid is shortened to its 8-char prefix
+        assert any(p["guid"] == "1C747DF1" for p in out["players"])
+        _CACHE.clear()

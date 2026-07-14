@@ -23,6 +23,7 @@ from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
 
+from shared.guid_utils import short_guid
 from website.backend.logging_config import get_app_logger
 from website.backend.utils.et_constants import strip_et_colors
 
@@ -193,15 +194,19 @@ async def compute_objective_pressure(db, session_date, limit: int = 10) -> dict:
     kills_by_guid = {r["guid"]: int(r["kills"]) for r in (kill_rows or [])}
     # The session's ACTUAL top fraggers (whole scoreboard, not just players who
     # earned pressure) so the UI's "invisible value" callout compares against the
-    # real frag leaders rather than a subset.
+    # real frag leaders rather than a subset. Emitted as short GUIDs to match the
+    # players list (see below), so the callout comparison stays consistent.
     top_fragger_guids = [
-        g for g, _ in sorted(kills_by_guid.items(), key=lambda kv: -kv[1])[:3]
+        short_guid(g) for g, _ in sorted(kills_by_guid.items(), key=lambda kv: -kv[1])[:3]
     ]
 
+    # player_track / combat_position GUIDs are the 32-char proximity form, but the
+    # #/profile route resolves against the 8-char player_comprehensive_stats GUID,
+    # so expose the short form the UI links to (short_guid no-ops on short ids).
     ranked = sorted(pressure.items(), key=lambda kv: -kv[1])
     all_players = [
         {
-            "guid": guid,
+            "guid": short_guid(guid),
             "name": guid_name.get(guid, guid[:8]),
             "pressure_seconds": round(secs, 1),
             "kills": kills_by_guid.get(guid, 0),
