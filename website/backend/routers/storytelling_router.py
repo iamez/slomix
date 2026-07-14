@@ -86,6 +86,27 @@ async def get_moments(
 _BEST_LIFE_MIN_KILLS = 3
 
 
+def _build_life_cards(rows) -> list:
+    """Turn best-life query rows into card dicts (colour-stripped name, rounded
+    life seconds, humanised narrative). Pure — unit-tested without a DB."""
+    lives = []
+    for r in (rows or []):
+        name = strip_et_colors(r["name"] or (r["guid"] or "")[:8])
+        life_s = round((r["life_ms"] or 0) / 1000)
+        kills = int(r["kills"])
+        lives.append({
+            "guid": r["guid"],
+            "name": name,
+            "kills": kills,
+            "life_seconds": life_s,
+            "map_name": r["map_name"],
+            "round_number": r["round_number"],
+            "narrative": f"{name} got {kills} kills in one life ({life_s}s) on "
+                         f"{(r['map_name'] or 'the map').replace('_', ' ')}",
+        })
+    return lives
+
+
 @router.get("/storytelling/best-lives")
 @limiter.limit("10/minute")
 async def get_best_lives(
@@ -130,22 +151,7 @@ async def get_best_lives(
         (sd, _BEST_LIFE_MIN_KILLS, limit),
     )
 
-    lives = []
-    for r in (rows or []):
-        name = strip_et_colors(r["name"] or (r["guid"] or "")[:8])
-        life_s = round((r["life_ms"] or 0) / 1000)
-        kills = int(r["kills"])
-        lives.append({
-            "guid": r["guid"],
-            "name": name,
-            "kills": kills,
-            "life_seconds": life_s,
-            "map_name": r["map_name"],
-            "round_number": r["round_number"],
-            "narrative": f"{name} got {kills} kills in one life ({life_s}s) on "
-                         f"{(r['map_name'] or 'the map').replace('_', ' ')}",
-        })
-
+    lives = _build_life_cards(rows)
     return {
         "status": "ok",
         "session_date": session_date,
