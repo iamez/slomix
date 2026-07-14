@@ -103,7 +103,9 @@ function renderSessionSelector() {
     }
     storyState.sessions.forEach(s => {
         const d = s.session_date;
-        const count = s.maps?.length || 0;
+        // maps_played counts replays separately (te_escape2 x3 = 3), matching the
+        // box score; fall back to distinct-map count for older payloads.
+        const count = s.maps_played ?? (s.maps?.length || 0);
         const opt = document.createElement('option');
         opt.value = d;
         opt.textContent = `${d} (${count} map${count !== 1 ? 's' : ''})`;
