@@ -140,7 +140,13 @@ async def get_best_lives(
         JOIN LATERAL (
             SELECT COUNT(*) AS kills FROM proximity_combat_position cp
             WHERE cp.session_date = pt.session_date
+              -- canonical round identity is (round_start_unix, map_name,
+              -- round_number); stale telemetry can share a round_start_unix
+              -- across two maps/rounds, and event_time is round-relative, so
+              -- joining on the unix alone pulls kills from the wrong life.
               AND cp.round_start_unix = pt.round_start_unix
+              AND cp.map_name = pt.map_name
+              AND cp.round_number = pt.round_number
               AND cp.event_type = 'kill'
               AND cp.attacker_guid = pt.player_guid
               AND cp.attacker_team != cp.victim_team
