@@ -192,7 +192,8 @@ class _NarrativeMixin:
         # rounds == matches played.
         r1_row = await self.db.fetch_one(
             "SELECT COUNT(*) FROM rounds "
-            "WHERE round_date = $1 AND round_number = 1 AND is_valid",
+            "WHERE round_date = $1 AND round_number = 1 "
+            "  AND is_valid AND round_status = 'completed'",
             (str(sd),))
         map_count = int(r1_row[0]) if r1_row and r1_row[0] else len(raw_maps)
 

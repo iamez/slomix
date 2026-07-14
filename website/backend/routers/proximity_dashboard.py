@@ -250,12 +250,15 @@ async def get_proximity_scopes(
         # Canonical maps-played per date, from the rounds table (one row per round,
         # always present) — NOT the per-engagement combat_engagement rows, which
         # would undercount a map whose R1 had no recorded engagement (codex/copilot).
+        # Same validity gate as the BOX scorer (is_valid + round_status='completed',
+        # box_scoring_service) so bot-test/filler/cancelled R1s aren't over-counted.
         # round_date is a 'YYYY-MM-DD' text column matching the session_date keys.
         rounds_by_date: dict[str, int] = {}
         try:
             r1_rows = await db.fetch_all(
                 "SELECT round_date, COUNT(*) FROM rounds "
-                "WHERE round_date >= $1 AND round_number = 1 AND is_valid "
+                "WHERE round_date >= $1 AND round_number = 1 "
+                "  AND is_valid AND round_status = 'completed' "
                 "GROUP BY round_date",
                 (since.isoformat(),),
             )
