@@ -48,6 +48,94 @@ def _moments_cache_ttl(sd: date) -> int:
     return _MOMENTS_TTL_TODAY if sd >= date.today() else _MOMENTS_TTL_HISTORICAL
 
 
+# Moment Director — cinematic priority per type, used ONLY as an equal-star
+# tie-break (stars stay the primary signal). A typical night saturates the
+# 5-star ceiling (many team wipes + multikills all at 5★), so `impact_stars`
+# alone can't tell a once-a-night ACE or carrier-chain game-winner from a
+# routine 3v3 wipe. Higher = more headline-worthy. Calibrated from pool
+# rarity (Phase-0 backtest over 12 sessions: team_wipe 251 / multikill 205
+# are the commonest, so they rank BELOW the rare, decisive plays) crossed
+# with intrinsic drama (objective-swinging + solo heroics headline).
+_TYPE_PRIORITY: dict[str, int] = {
+    "carrier_chain": 10,      # intercept the carrier AND a teammate returns it — game-swinging, rare (84)
+    "multi_revive": 9,        # rarest play in the pool (8) — a medic single-handedly resets a fight
+    "objective_secured": 9,   # literally wins the map
+    "objective_denied": 8,    # defuse / carrier-kill under fire — saves the map
+    "objective_run": 7,       # planted / built under fire
+    "multikill": 6,           # ACE lives here, but doubles/triples are common (205)
+    "focus_survival": 5,      # survived a 3v1+ — personal, uncommon (37)
+    "trade_chain": 5,         # avenged a teammate
+    "push_success": 4,        # team coordination, less personal (60)
+    "team_wipe": 4,           # great but the commonest 5★ (251) — shouldn't always headline
+    "kill_streak": 3,         # least cinematic; overlaps multikill
+}
+
+
+def _director_rank(m: dict) -> tuple:
+    """Sort key for the director's cut: stars first (primary signal, preserved),
+    then cinematic type priority (the equal-star tie-break), then chronological."""
+    return (-m.get("impact_stars", 0),
+            -_TYPE_PRIORITY.get(m.get("type", ""), 0),
+            m.get("time_ms", 0))
+
+
+def _select_director_cut(moments: list, limit: int) -> list:
+    """Pick the top `limit` moments as a star-tiered, diversity-aware greedy cut.
+
+    Stars are a HARD outer boundary: we consume moments one star tier at a time,
+    highest first, and only descend to a lower tier once the higher tier is
+    exhausted. So a 5★ moment can never lose its slot to a 4★ one, no matter how
+    the diversity constraints fall (Copilot + Codex, PR #499 — the earlier
+    single-pass version could fill from a fresh-player 4★ while repeat-player 5★
+    moments went unpicked).
+
+    WITHIN a tier we fill slots in relaxation passes so the reel spreads across
+    both TYPES and PLAYERS instead of showing five same-type moments from one
+    player. The type/player counters persist ACROSS tiers, so the spotlight
+    stays spread even when a lower tier is reached. Type priority (rarity /
+    cinematic weight) orders candidates inside each tier.
+    """
+    result: list = []
+    chosen: set = set()
+    type_count: dict[str, int] = {}
+    player_count: dict[str, int] = {}
+
+    def _fill(candidates: list, predicate) -> None:
+        for m in candidates:
+            if len(result) >= limit:
+                return
+            if id(m) in chosen or not predicate(m):
+                continue
+            result.append(m)
+            chosen.add(id(m))
+            type_count[m["type"]] = type_count.get(m["type"], 0) + 1
+            player_count[m.get("player", "")] = player_count.get(m.get("player", ""), 0) + 1
+
+    # Descend star tiers highest-first; a tier is fully consumed (its final
+    # "anything" pass takes everything left in it) before the next tier is
+    # touched, so stars stay the primary signal.
+    tiers = sorted({m.get("impact_stars", 0) for m in moments}, reverse=True)
+    for tier in tiers:
+        if len(result) >= limit:
+            break
+        # Order this tier's candidates by cinematic priority, then chronology.
+        cand = sorted(
+            (m for m in moments if m.get("impact_stars", 0) == tier),
+            key=lambda m: (-_TYPE_PRIORITY.get(m.get("type", ""), 0), m.get("time_ms", 0)))
+        # 1) fresh type AND fresh player — the ideal spread
+        _fill(cand, lambda m: type_count.get(m["type"], 0) == 0
+              and player_count.get(m.get("player", ""), 0) == 0)
+        # 2) fresh type (relax the player constraint) — preserves type diversity
+        _fill(cand, lambda m: type_count.get(m["type"], 0) == 0)
+        # 3) fresh player (relax the type constraint) — keep spreading the spotlight
+        _fill(cand, lambda m: player_count.get(m.get("player", ""), 0) == 0)
+        # 4) anything left in this tier, best-ranked first
+        _fill(cand, lambda m: True)
+
+    result.sort(key=_director_rank)
+    return result[:limit]
+
+
 def _moments_cache_evict_oldest_computed() -> None:
     """Evict the entry with the oldest computed-at timestamp when full.
 
@@ -93,9 +181,12 @@ class _MomentsMixin:
             _moments_cache_evict_oldest_computed()
             return result
 
-    async def _detect_moments_uncached(self, sd: date, limit: int) -> list:
-        """Run all 11 detectors, diversify by type, sort by stars, truncate."""
-        moments = []
+    async def _collect_moments(self, sd: date) -> list:
+        """Run all 11 detectors and return the raw, UNCUT union of moments for a
+        session (enriched with time_formatted). This is the full pool before any
+        director selection — the backtest measures it directly, and
+        _detect_moments_uncached feeds it into _select_director_cut."""
+        moments: list = []
 
         # Run all 11 detectors (5 original + 4 objective + 2 combat)
         detectors = [
@@ -129,30 +220,14 @@ class _MomentsMixin:
         for m in moments:
             if "time_formatted" not in m:
                 m["time_formatted"] = _format_time_ms(m.get("time_ms", 0))
+        return moments
 
-        # Ensure type diversity: reserve one slot per type, fill remainder by stars
-        by_type: dict[str, list] = {}
-        for m in moments:
-            by_type.setdefault(m["type"], []).append(m)
-        for bucket in by_type.values():
-            bucket.sort(key=lambda m: (-m["impact_stars"], m.get("time_ms", 0)))
-
-        # Pick the best moment from each type first
-        result = []
-        seen_ids = set()
-        for bucket in by_type.values():
-            if bucket:
-                best = bucket[0]
-                result.append(best)
-                seen_ids.add(id(best))
-
-        # Fill remaining slots from all moments by stars
-        remaining = [m for m in moments if id(m) not in seen_ids]
-        remaining.sort(key=lambda m: (-m["impact_stars"], m.get("time_ms", 0)))
-        result.extend(remaining[:max(0, limit - len(result))])
-
-        result.sort(key=lambda m: (-m["impact_stars"], m.get("time_ms", 0)))
-        return result[:limit]
+    async def _detect_moments_uncached(self, sd: date, limit: int) -> list:
+        """Collect all detector moments, then pick the director's cut (see
+        _select_director_cut): star tiers as a hard boundary, then a type-priority
+        + player-spread diversity pass within each tier."""
+        moments = await self._collect_moments(sd)
+        return _select_director_cut(moments, limit)
 
     async def _detect_kill_streaks(self, sd: date) -> list:
         """Detector A: Multi-kill streaks (3+ kills within 10s window).
