@@ -637,11 +637,11 @@ async function _loadObjectivePressure() {
     if (!players.length) return;
 
     const maxSec = Math.max(...players.map(p => num(p.pressure_seconds, 0)), 1);
-    // "Invisible value": a top-3 objective carrier who isn't a top-3 fragger —
-    // the work the scoreboard overlooks. Framed as recognition.
-    const byKills = [...players].sort((a, b) => num(b.kills, 0) - num(a.kills, 0));
-    const topFraggers = new Set(byKills.slice(0, 3).map(p => p.guid));
-    const quiet = players.slice(0, 3).find(p => !topFraggers.has(p.guid));
+    // "Invisible value": a top-3 objective carrier who isn't one of the session's
+    // actual top fraggers (computed server-side over the whole scoreboard, not
+    // just the pressure leaderboard) — the work the scoreboard overlooks.
+    const topFraggers = new Set(data.top_fragger_guids || []);
+    const quiet = players.slice(0, 3).find(p => p.guid && !topFraggers.has(p.guid));
 
     const rows = players.map((p, i) => {
         const secs = Math.round(num(p.pressure_seconds, 0));

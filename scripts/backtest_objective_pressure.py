@@ -30,6 +30,9 @@ from collections import defaultdict
 import asyncpg
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from website.backend.services.objective_pressure_service import (  # noqa: E402
+    _accumulate_round,  # canonical v0.2 accumulator — keep backtest and service in lockstep
+)
 from website.backend.utils.et_constants import strip_et_colors  # noqa: E402
 
 BUCKET_MS = 200          # time granularity for the contested cross-check
@@ -55,18 +58,9 @@ def _load_zones():
     return out
 
 
-def _zone_index(x, y, z, zones):
-    """Index of the first objective whose sphere contains (x,y,z), else -1.
-    v0.2 uses full 3D distance so a player on a different floor than the
-    objective (common in ET verticality) isn't credited as 'on' it."""
-    for i, (zx, zy, zz, r) in enumerate(zones):
-        if (x - zx) ** 2 + (y - zy) ** 2 + (z - zz) ** 2 <= r * r:
-            return i
-    return -1
-
-
 def _in_any_zone_2d(x, y, zones):
-    """v0 baseline: 2D-only, any objective (the pre-refinement definition)."""
+    """v0 baseline: 2D-only, any objective (the pre-refinement definition).
+    The shipped v0.2 uses the service's 3D per-zone accumulator instead."""
     return any((x - zx) ** 2 + (y - zy) ** 2 <= r * r for zx, zy, _zz, r in zones)
 
 
@@ -100,6 +94,7 @@ async def main():
                    team, path
             FROM player_track
             WHERE session_date = $1 AND path IS NOT NULL AND sample_count > 0
+              AND round_start_unix IS NOT NULL AND round_start_unix > 0
               AND player_guid NOT LIKE 'OMNIBOT%' AND player_name NOT LIKE '[BOT]%'""", sd)
 
         p_v0 = defaultdict(float)      # player -> v0 pressure seconds (2D, any-zone contested)
@@ -116,48 +111,38 @@ async def main():
                 continue
             maps_used.add(mapname)
 
-            # Pass 1: build presence.
-            #  v0  -> bucket -> set of teams in ANY zone (2D)
-            #  v0.2 -> bucket -> zone_idx -> {team: count} (3D)
+            # Parse once; keep the display name as the aggregation key for both.
             v0_teams: dict[int, set] = defaultdict(set)
-            v02_pres: dict[tuple, dict] = defaultdict(lambda: defaultdict(int))
-            parsed = []
+            parsed_v0 = []           # (name, samples, marks) for the v0 baseline
+            svc_rtracks = []         # (team, name, samples) for the canonical v0.2
             for t in rtracks:
                 path = t["path"] if isinstance(t["path"], list) else json.loads(t["path"])
-                samples = [(int(s["time"]), float(s["x"]), float(s["y"]), float(s.get("z", 0.0)))
-                           for s in path if "time" in s and "x" in s and "y" in s]
-                samples.sort()
-                marks = []  # (time, in_any_2d, zone_idx_3d)
-                for tm, x, y, z in samples:
-                    b = tm // BUCKET_MS
-                    a2 = _in_any_zone_2d(x, y, zones)
-                    zi = _zone_index(x, y, z, zones)
-                    marks.append((tm, a2, zi))
-                    if a2:
-                        v0_teams[b].add(t["team"])
-                    if zi >= 0:
-                        v02_pres[(b, zi)][t["team"]] += 1
-                parsed.append((t, samples, marks))
-
-            # Pass 2: credit both metrics.
-            for t, samples, marks in parsed:
+                samples = sorted(
+                    (int(s["time"]), float(s["x"]), float(s["y"]), float(s.get("z", 0.0)))
+                    for s in path if "time" in s and "x" in s and "y" in s)
+                if not samples:
+                    continue
                 name = strip_et_colors(t["player_name"] or t["player_guid"][:8])
-                my = t["team"]
-                for i, (tm, a2, zi) in enumerate(marks):
-                    b = tm // BUCKET_MS
-                    dt = (samples[i + 1][0] - tm) if i + 1 < len(samples) else BUCKET_MS
-                    dt = min(max(dt, 0), SAMPLE_CAP_MS) / 1000.0
-                    # v0: in any zone AND both teams somewhere in a zone this bucket
-                    if a2 and len(v0_teams.get(b, ())) >= 2:
-                        p_v0[name] += dt
-                    # v0.2: in a specific zone with an enemy contesting THAT zone (§F.1)
-                    # and teammate support in it (>=2 of my team => not empty pressure §F.2)
-                    if zi >= 0:
-                        counts = v02_pres[(b, zi)]
-                        enemy = any(c > 0 for tm2, c in counts.items() if tm2 != my)
-                        mates = counts.get(my, 0)
-                        if enemy and mates >= 2:
-                            p_v02[name] += dt
+                svc_rtracks.append((t["team"], name, samples))
+                marks = []  # (time, in_any_2d)
+                for tm, x, y, _z in samples:
+                    a2 = _in_any_zone_2d(x, y, zones)
+                    marks.append((tm, a2))
+                    if a2:
+                        v0_teams[tm // BUCKET_MS].add(t["team"])
+                parsed_v0.append((name, samples, marks))
+
+            # v0.2 = the SHIPPED service accumulator (distinct-player support,
+            # forward-gap credit, terminal sample = 0) — no divergence from prod.
+            _accumulate_round(svc_rtracks, zones, p_v02)
+
+            # v0 = the pre-refinement baseline (2D any-zone, count-based, old
+            # last-sample fallback) kept only for the A/B contrast.
+            for name, samples, marks in parsed_v0:
+                for i, (tm, a2) in enumerate(marks):
+                    if a2 and len(v0_teams.get(tm // BUCKET_MS, ())) >= 2:
+                        dt = (samples[i + 1][0] - tm) if i + 1 < len(samples) else BUCKET_MS
+                        p_v0[name] += min(max(dt, 0), SAMPLE_CAP_MS) / 1000.0
 
         if not p_v02 and not p_v0:
             print(f"{str(sd):<11}{len(maps_used):>5}{len(tracks):>7}  (no zoned maps)")

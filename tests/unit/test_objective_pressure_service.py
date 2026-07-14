@@ -49,27 +49,37 @@ def _samples(*times):
 
 class TestAccumulateRound:
     def test_contested_and_supported_credits(self):
-        # Two ALLIES + one AXIS all in the objective at t=0 -> the ALLIES pair is
-        # contested (enemy present) and supported (>=2 mates) -> both get credit.
+        # Two ALLIES + one AXIS all in the objective across t=0..200 -> the ALLIES
+        # pair is contested (enemy present) and supported (>=2 distinct mates) ->
+        # each gets the forward gap (200ms) credited once.
         pressure: dict = defaultdict(float)
         rtracks = [
-            ("ALLIES", "a1", _samples(0)),
-            ("ALLIES", "a2", _samples(0)),
-            ("AXIS", "x1", _samples(0)),
+            ("ALLIES", "a1", _samples(0, 200)),
+            ("ALLIES", "a2", _samples(0, 200)),
+            ("AXIS", "x1", _samples(0, 200)),
         ]
         _accumulate_round(rtracks, ZONES, pressure)
-        assert pressure["a1"] > 0
-        assert pressure["a2"] > 0
-        # last-sample credit defaults to one bucket (200ms)
         assert pressure["a1"] == BUCKET_MS / 1000.0
+        assert pressure["a2"] == BUCKET_MS / 1000.0
 
     def test_empty_pressure_no_teammate_support(self):
         # One ALLIES + one AXIS: contested but NOT supported (mates < 2) -> no
         # credit (empty pressure, §F.2).
         pressure: dict = defaultdict(float)
         rtracks = [
-            ("ALLIES", "a1", _samples(0)),
-            ("AXIS", "x1", _samples(0)),
+            ("ALLIES", "a1", _samples(0, 200)),
+            ("AXIS", "x1", _samples(0, 200)),
+        ]
+        _accumulate_round(rtracks, ZONES, pressure)
+        assert pressure["a1"] == 0
+
+    def test_duplicate_samples_do_not_fake_support(self):
+        # A single ALLIES player with TWO records in the same 200ms bucket must
+        # NOT satisfy the >=2 support rule (distinct players, not samples).
+        pressure: dict = defaultdict(float)
+        rtracks = [
+            ("ALLIES", "a1", _samples(0, 50, 200)),  # two records in bucket 0
+            ("AXIS", "x1", _samples(0, 200)),
         ]
         _accumulate_round(rtracks, ZONES, pressure)
         assert pressure["a1"] == 0
@@ -78,8 +88,8 @@ class TestAccumulateRound:
         # Two ALLIES in the objective, no enemy -> not contested -> no credit.
         pressure: dict = defaultdict(float)
         rtracks = [
-            ("ALLIES", "a1", _samples(0)),
-            ("ALLIES", "a2", _samples(0)),
+            ("ALLIES", "a1", _samples(0, 200)),
+            ("ALLIES", "a2", _samples(0, 200)),
         ]
         _accumulate_round(rtracks, ZONES, pressure)
         assert pressure["a1"] == 0
@@ -87,7 +97,19 @@ class TestAccumulateRound:
     def test_sample_outside_zone_ignored(self):
         pressure: dict = defaultdict(float)
         rtracks = [
-            ("ALLIES", "a1", [(0, 600.0, 0.0, 0.0)]),  # outside 2D
+            ("ALLIES", "a1", [(0, 600.0, 0.0, 0.0), (200, 600.0, 0.0, 0.0)]),  # outside 2D
+            ("ALLIES", "a2", _samples(0, 200)),
+            ("AXIS", "x1", _samples(0, 200)),
+        ]
+        _accumulate_round(rtracks, ZONES, pressure)
+        assert pressure["a1"] == 0
+
+    def test_terminal_sample_awards_no_forward_time(self):
+        # Single-sample track (a life that only ever registered one record on the
+        # point) has no forward duration -> zero credit, no phantom 200ms.
+        pressure: dict = defaultdict(float)
+        rtracks = [
+            ("ALLIES", "a1", _samples(0)),
             ("ALLIES", "a2", _samples(0)),
             ("AXIS", "x1", _samples(0)),
         ]
@@ -95,9 +117,9 @@ class TestAccumulateRound:
         assert pressure["a1"] == 0
 
     def test_duration_from_gaps_and_cap(self):
-        # a1 has samples at 0, 200, 1400 (a 1200ms gap). Credits:
-        #   i=0 -> gap 200ms, i=1 -> gap 1200ms capped to 400ms, i=2 -> last=200ms.
-        # = 0.2 + 0.4 + 0.2 = 0.8s. Support+contest present at every bucket.
+        # a1 has samples at 0, 200, 1400 (a 1200ms gap). Forward-gap credits:
+        #   i=0 -> 200ms, i=1 -> 1200ms capped to 400ms; the last sample (i=2)
+        #   awards nothing. = 0.2 + 0.4 = 0.6s. Support+contest at every bucket.
         pressure: dict = defaultdict(float)
         rtracks = [
             ("ALLIES", "a1", _samples(0, 200, 1400)),
@@ -105,4 +127,4 @@ class TestAccumulateRound:
             ("AXIS", "x1", _samples(0, 200, 1400)),
         ]
         _accumulate_round(rtracks, ZONES, pressure)
-        assert round(pressure["a1"], 2) == 0.8
+        assert round(pressure["a1"], 2) == 0.6
