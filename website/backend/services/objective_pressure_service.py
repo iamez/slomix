@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import time
 from collections import defaultdict
+from functools import lru_cache
 from pathlib import Path
 
 from website.backend.logging_config import get_app_logger
@@ -43,14 +44,10 @@ _CACHE: dict[str, tuple[dict, float]] = {}
 _CACHE_TTL = 300
 _CACHE_MAX = 32
 
-_zones_by_map: dict[str, list] | None = None
-
-
+@lru_cache(maxsize=1)
 def _load_zones() -> dict[str, list]:
-    """map_name (and aliases), lowercased -> list of (x, y, z, radius). Cached."""
-    global _zones_by_map
-    if _zones_by_map is not None:
-        return _zones_by_map
+    """map_name (and aliases), lowercased -> list of (x, y, z, radius). Cached
+    (the zones file is static); callers treat the result as read-only."""
     out: dict[str, list] = {}
     try:
         raw = json.loads(_ZONES_PATH.read_text(encoding="utf-8"))
@@ -64,7 +61,6 @@ def _load_zones() -> dict[str, list]:
                     out[key.lower()] = objs
     except (OSError, ValueError, KeyError):
         logger.exception("objective_pressure: failed to load objective zones")
-    _zones_by_map = out
     return out
 
 

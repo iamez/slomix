@@ -41,7 +41,8 @@ ZONES_PATH = os.path.join(
 
 def _load_zones():
     """map_name (and aliases), lowercased -> list of (x, y, z, radius)."""
-    raw = json.load(open(ZONES_PATH))
+    with open(ZONES_PATH) as f:
+        raw = json.load(f)
     out: dict[str, list] = {}
     for m in raw["maps"].values():
         objs = [(o["x"], o["y"], o.get("z", 0.0), o.get("radius", 500))
