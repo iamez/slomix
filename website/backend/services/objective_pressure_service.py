@@ -75,23 +75,24 @@ def _zone_index(x: float, y: float, z: float, zones: list) -> int:
 def _accumulate_round(rtracks: list, zones: list, pressure: dict) -> None:
     """Add each player's contested+supported objective seconds for one round.
 
-    rtracks: list of (team, name, samples) where samples is a sorted list of
-    (time_ms, x, y, z). Mutates `pressure` (name -> seconds).
+    rtracks: list of (team, key, samples) where key is the per-player aggregation
+    key (a player_guid in production) and samples is a sorted list of
+    (time_ms, x, y, z). Mutates `pressure` (key -> seconds).
     """
     # Pass 1: presence per (bucket, zone_idx) -> {team: count}.
     presence: dict[tuple, dict] = defaultdict(lambda: defaultdict(int))
     marked = []
-    for team, name, samples in rtracks:
+    for team, key, samples in rtracks:
         zis = []
         for tm, x, y, z in samples:
             zi = _zone_index(x, y, z, zones)
             zis.append(zi)
             if zi >= 0:
                 presence[(tm // BUCKET_MS, zi)][team] += 1
-        marked.append((team, name, samples, zis))
+        marked.append((team, key, samples, zis))
 
     # Pass 2: credit samples that are in a contested, supported objective.
-    for team, name, samples, zis in marked:
+    for team, key, samples, zis in marked:
         for i, zi in enumerate(zis):
             if zi < 0:
                 continue
@@ -102,7 +103,7 @@ def _accumulate_round(rtracks: list, zones: list, pressure: dict) -> None:
                 continue
             tm = samples[i][0]
             dt = (samples[i + 1][0] - tm) if i + 1 < len(samples) else BUCKET_MS
-            pressure[name] += min(max(dt, 0), SAMPLE_CAP_MS) / 1000.0
+            pressure[key] += min(max(dt, 0), SAMPLE_CAP_MS) / 1000.0
 
 
 def _evict_oldest() -> None:
@@ -136,8 +137,10 @@ async def compute_objective_pressure(db, session_date, limit: int = 10) -> dict:
         (session_date,),
     )
 
+    # Aggregate by player_guid (project rule — a visible name can be shared or
+    # changed mid-session; grouping by name would merge or mis-credit players).
     pressure: dict[str, float] = defaultdict(float)
-    name_guid: dict[str, str] = {}
+    guid_name: dict[str, str] = {}
     maps_counted: set = set()
     by_round: dict[tuple, list] = defaultdict(list)
 
@@ -152,11 +155,12 @@ async def compute_objective_pressure(db, session_date, limit: int = 10) -> dict:
         )
         if not samples:
             continue
-        name = strip_et_colors(t["player_name"] or t["player_guid"][:8])
-        name_guid.setdefault(name, t["player_guid"])
+        guid = t["player_guid"]
+        # last seen name wins (tracks come out in row order; good enough for a label)
+        guid_name[guid] = strip_et_colors(t["player_name"] or guid[:8])
         maps_counted.add(t["map_name"])
         by_round[(t["round_start_unix"], t["round_number"], t["map_name"])].append(
-            (t["team"], name, samples)
+            (t["team"], guid, samples)
         )
 
     for (_rsu, _rnum, mapname), rtracks in by_round.items():
@@ -164,28 +168,29 @@ async def compute_objective_pressure(db, session_date, limit: int = 10) -> dict:
 
     # Kills per player (same session, bots excluded) so the UI can contrast
     # objective pressure against the scoreboard — the "invisible value" framing.
+    # Grouped by attacker_guid so color-code variants of one name don't split.
     kill_rows = await db.fetch_all(
         """
-        SELECT attacker_name AS name, COUNT(*) AS kills
+        SELECT attacker_guid AS guid, COUNT(*) AS kills
         FROM proximity_combat_position
         WHERE session_date = $1 AND event_type = 'kill'
           AND attacker_team IS NOT NULL AND attacker_team != victim_team
           AND attacker_guid NOT LIKE 'OMNIBOT%' AND attacker_name NOT LIKE '[BOT]%'
-        GROUP BY attacker_name
+        GROUP BY attacker_guid
         """,
         (session_date,),
     )
-    kills_by_name = {strip_et_colors(r["name"]): int(r["kills"]) for r in (kill_rows or [])}
+    kills_by_guid = {r["guid"]: int(r["kills"]) for r in (kill_rows or [])}
 
     ranked = sorted(pressure.items(), key=lambda kv: -kv[1])
     players = [
         {
-            "guid": name_guid.get(name),
-            "name": name,
+            "guid": guid,
+            "name": guid_name.get(guid, guid[:8]),
             "pressure_seconds": round(secs, 1),
-            "kills": kills_by_name.get(name, 0),
+            "kills": kills_by_guid.get(guid, 0),
         }
-        for name, secs in ranked if secs > 0
+        for guid, secs in ranked if secs > 0
     ][: max(1, min(limit, 50))]
 
     result = {
