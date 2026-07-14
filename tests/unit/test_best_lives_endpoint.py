@@ -37,6 +37,12 @@ class TestBuildLifeCards:
         assert "8 kills in one life (59s)" in first["narrative"]
         assert "etl sp delivery" in first["narrative"]  # underscores humanised
 
+    def test_guid_shortened_for_profile_route(self):
+        # 32-char proximity GUID -> 8-char so the #/profile link resolves against
+        # the 8-char player_comprehensive_stats GUID.
+        card = _build_life_cards([_row(guid="1C747DF1A037D2AFECCB6ED063DF44E7")])[0]
+        assert card["guid"] == "1C747DF1"
+
     def test_empty(self):
         assert _build_life_cards([]) == []
         assert _build_life_cards(None) == []

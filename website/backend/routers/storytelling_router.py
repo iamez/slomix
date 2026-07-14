@@ -88,14 +88,20 @@ _BEST_LIFE_MIN_KILLS = 3
 
 def _build_life_cards(rows) -> list:
     """Turn best-life query rows into card dicts (colour-stripped name, rounded
-    life seconds, humanised narrative). Pure — unit-tested without a DB."""
+    life seconds, humanised narrative). Pure — unit-tested without a DB.
+
+    player_track.player_guid is the 32-char proximity GUID; the profile route
+    resolves against the 8-char player_comprehensive_stats GUID, so expose the
+    short form the UI can link to (short_guid is a no-op on already-short ids).
+    """
     lives = []
     for r in (rows or []):
-        name = strip_et_colors(r["name"] or (r["guid"] or "")[:8])
+        short = short_guid(r["guid"]) if r["guid"] else None
+        name = strip_et_colors(r["name"] or (short or "")[:8])
         life_s = round((r["life_ms"] or 0) / 1000)
         kills = int(r["kills"])
         lives.append({
-            "guid": r["guid"],
+            "guid": short,
             "name": name,
             "kills": kills,
             "life_seconds": life_s,
@@ -139,9 +145,15 @@ async def get_best_lives(
               AND cp.attacker_guid = pt.player_guid
               AND cp.attacker_team != cp.victim_team
               AND cp.event_time BETWEEN pt.spawn_time_ms AND pt.death_time_ms
+              -- don't let killing bots inflate a human's card (mixed rounds)
+              AND cp.victim_guid NOT LIKE 'OMNIBOT%' AND cp.victim_name NOT LIKE '[BOT]%'
         ) k ON TRUE
         WHERE pt.session_date = $1
           AND pt.spawn_time_ms IS NOT NULL AND pt.death_time_ms IS NOT NULL
+          -- round_start_unix 0/NULL is the legacy unlinked bucket; joining on it
+          -- would merge every such round (event_time is round-relative) and
+          -- mis-attribute kills across lives.
+          AND pt.round_start_unix IS NOT NULL AND pt.round_start_unix > 0
           AND pt.player_guid NOT LIKE 'OMNIBOT%' AND pt.player_name NOT LIKE '[BOT]%'
           AND k.kills >= $2
         ORDER BY k.kills DESC,
