@@ -81,6 +81,79 @@ async def get_moments(
     }
 
 
+# A life must land at least this many kills to be a "card" — below it there's no
+# story, just a normal life.
+_BEST_LIFE_MIN_KILLS = 3
+
+
+@router.get("/storytelling/best-lives")
+@limiter.limit("10/minute")
+async def get_best_lives(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    limit: int = Query(default=5, le=20, ge=1),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Life Cards — the standout single lives of a session (Good Night rank 9).
+
+    A "life" is one spawn->death span (a player_track row); a card celebrates the
+    rampage people remember ("X got 6 before going down"), which the session-total
+    scoreboard flattens. Kills are counted DURING the life window from
+    proximity_combat_position. Read-only. Ranked by kills, then by how explosive
+    the life was (kills per second). Bots excluded.
+    """
+    sd = _parse_date(session_date)
+    rows = await db.fetch_all(
+        """
+        SELECT pt.player_guid AS guid, pt.player_name AS name, pt.map_name,
+               pt.round_number,
+               GREATEST(pt.death_time_ms - pt.spawn_time_ms, 0) AS life_ms,
+               k.kills
+        FROM player_track pt
+        JOIN LATERAL (
+            SELECT COUNT(*) AS kills FROM proximity_combat_position cp
+            WHERE cp.session_date = pt.session_date
+              AND cp.round_start_unix = pt.round_start_unix
+              AND cp.event_type = 'kill'
+              AND cp.attacker_guid = pt.player_guid
+              AND cp.attacker_team != cp.victim_team
+              AND cp.event_time BETWEEN pt.spawn_time_ms AND pt.death_time_ms
+        ) k ON TRUE
+        WHERE pt.session_date = $1
+          AND pt.spawn_time_ms IS NOT NULL AND pt.death_time_ms IS NOT NULL
+          AND pt.player_guid NOT LIKE 'OMNIBOT%' AND pt.player_name NOT LIKE '[BOT]%'
+          AND k.kills >= $2
+        ORDER BY k.kills DESC,
+                 k.kills::float / GREATEST(pt.death_time_ms - pt.spawn_time_ms, 1000) DESC
+        LIMIT $3
+        """,
+        (sd, _BEST_LIFE_MIN_KILLS, limit),
+    )
+
+    lives = []
+    for r in (rows or []):
+        name = strip_et_colors(r["name"] or (r["guid"] or "")[:8])
+        life_s = round((r["life_ms"] or 0) / 1000)
+        kills = int(r["kills"])
+        lives.append({
+            "guid": r["guid"],
+            "name": name,
+            "kills": kills,
+            "life_seconds": life_s,
+            "map_name": r["map_name"],
+            "round_number": r["round_number"],
+            "narrative": f"{name} got {kills} kills in one life ({life_s}s) on "
+                         f"{(r['map_name'] or 'the map').replace('_', ' ')}",
+        })
+
+    return {
+        "status": "ok",
+        "session_date": session_date,
+        "lives": lives,
+        "total": len(lives),
+    }
+
+
 @router.get("/storytelling/kill-impact")
 @limiter.limit("10/minute")
 async def get_kill_impact_leaderboard(
