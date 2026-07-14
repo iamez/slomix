@@ -110,6 +110,24 @@ async def test_place_bet_rejects_when_result_known():
 
 
 @pytest.mark.asyncio
+async def test_place_bet_rejects_after_map1_despite_future_closes_at():
+    """§6.4b live cutoff: an auto-market (closes_at set) whose map 1 has already ended
+    takes no bets even if its stored fallback closes_at is still in the future — closing
+    the gap between map 1 ending and the lifecycle tick that flips the market closed."""
+    from datetime import datetime, timedelta
+    db = _db()
+    future = datetime.now() + timedelta(minutes=15)  # noqa: DTZ005 - naive col
+    db.fetch_one = AsyncMock(side_effect=[
+        _pb_market(closes_at=future, gsid=42),  # market lock (open, future fallback)
+        (1,),                                    # map-1 R2 completed probe
+    ])
+    with pytest.raises(HTTPException) as e:
+        await place_bet(_req(7), 1, {"choice": "team_a", "amount": 5}, {"id": 7}, db)
+    assert e.value.status_code == 400
+    assert "closed" in e.value.detail.lower()
+
+
+@pytest.mark.asyncio
 async def test_place_bet_requires_csrf():
     req = _req(7)
     req.headers = {}
