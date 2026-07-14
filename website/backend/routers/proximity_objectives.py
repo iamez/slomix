@@ -1,6 +1,6 @@
 """Proximity objective endpoints: carrier-events, carrier-kills, carrier-returns, vehicle-progress, escort-credits, construction-events, objective-runs, objective-focus."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -9,6 +9,9 @@ from website.backend.routers.proximity_helpers import (
     ProximityQueryBuilder,
     _parse_iso_date,
     _table_column_exists,
+)
+from website.backend.services.objective_pressure_service import (
+    compute_objective_pressure,
 )
 
 router = APIRouter()
@@ -660,3 +663,24 @@ async def get_proximity_objective_focus(
     objectives = [dict(r) for r in (obj_rows or [])]
 
     return {"status": "ok", "summary": summary, "players": players, "objectives": objectives}
+
+
+@router.get("/proximity/objective-pressure")
+@handle_router_errors("objective-pressure error")
+async def get_proximity_objective_pressure(
+    session_date: str,
+    limit: int = 10,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Objective Pressure — "real pressure seconds" per player for one session.
+
+    Rewards the ET objective work that raw K/D misses: contested, teammate-
+    supported time inside objective zones, computed from 200ms player_track
+    samples (see objective_pressure_service). Read-only, cached 5 min.
+    Returns each player's pressure_seconds alongside their session kills so the
+    UI can surface objective players the scoreboard overlooks.
+    """
+    parsed = _parse_iso_date(session_date)
+    if parsed is None:
+        raise HTTPException(status_code=400, detail="session_date must be YYYY-MM-DD")
+    return await compute_objective_pressure(db, parsed, limit=limit)

@@ -370,6 +370,7 @@ export async function loadSessionDetailView({ sessionId, sessionDate, tab } = {}
         _loadGoodNightCard().catch((e) => console.warn('good night card failed', e));
         _loadVerdictStrip().catch((e) => console.warn('verdict strip failed', e));
         _loadMomentsStrip().catch((e) => console.warn('moments strip failed', e));
+        _loadObjectivePressure().catch((e) => console.warn('objective pressure failed', e));
         _loadMvpPanel().catch((e) => console.warn('mvp panel failed', e));
     } catch (e) {
         console.error('Failed to load session detail:', e);
@@ -616,6 +617,70 @@ async function _loadMomentsStrip() {
 }
 
 // ============================================================
+// OBJECTIVE PRESSURE (Good Night rank 6) — who carried the objective
+// tonight: contested, teammate-supported seconds on the point. Rewards the
+// ET objective work raw K/D misses. Positive recognition, never a shame
+// board. Optional enrichment: any failure/empty leaves the page untouched.
+// ============================================================
+
+async function _loadObjectivePressure() {
+    const host = document.getElementById('sd-objective-pressure');
+    if (!host || !_sessionDate) return;
+    let data;
+    try {
+        data = await fetchJSON(
+            `${API_BASE}/proximity/objective-pressure?session_date=${encodeURIComponent(_sessionDate)}&limit=8`);
+    } catch (_) {
+        return; // optional enrichment — never block the page
+    }
+    const players = data?.players || [];
+    if (!players.length) return;
+
+    const maxSec = Math.max(...players.map(p => num(p.pressure_seconds, 0)), 1);
+    // "Invisible value": a top-3 objective carrier who isn't one of the session's
+    // actual top fraggers (computed server-side over the whole scoreboard, not
+    // just the pressure leaderboard) — the work the scoreboard overlooks.
+    const topFraggers = new Set(data.top_fragger_guids || []);
+    const quiet = players.slice(0, 3).find(p => p.guid && !topFraggers.has(p.guid));
+
+    const rows = players.map((p, i) => {
+        const secs = Math.round(num(p.pressure_seconds, 0));
+        const pct = Math.max(4, Math.round(num(p.pressure_seconds, 0) / maxSec * 100));
+        const isQuiet = quiet && p.guid === quiet.guid;
+        const nameCls = isQuiet ? 'text-emerald-300' : 'text-white';
+        return `
+            <a href="#/profile/${encodeURIComponent(p.guid || '')}"
+               class="flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-slate-800/40 transition">
+                <span class="text-[11px] text-slate-600 w-4 shrink-0">${i + 1}</span>
+                <span class="text-sm font-semibold ${nameCls} w-28 truncate shrink-0">${escapeHtml(p.name || '')}</span>
+                <span class="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <span class="block h-full rounded-full bg-gradient-to-r from-brand-cyan to-emerald-400" style="width:${pct}%"></span>
+                </span>
+                <span class="text-xs text-slate-300 w-10 text-right shrink-0 tabular-nums">${secs}s</span>
+                <span class="text-[10px] text-slate-500 w-14 text-right shrink-0 tabular-nums">${num(p.kills, 0)} kills</span>
+            </a>`;
+    }).join('');
+
+    const callout = quiet ? `
+        <div class="mt-2 text-[11px] text-emerald-300/90">
+            ${escapeHtml(quiet.name)} held the objective without topping the frags — the work the scoreboard misses.
+        </div>` : '';
+
+    host.innerHTML = `
+        <div class="glass-panel rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+                <div class="text-[11px] uppercase tracking-wider text-slate-500 font-bold"
+                     title="Contested, teammate-supported seconds spent on the objective — the ET objective work raw K/D misses. Rewards holding the point, never a shame board.">
+                    Objective carriers · who held the point
+                </div>
+                <span class="text-[10px] text-slate-500">${data.maps_counted || 0} maps</span>
+            </div>
+            <div class="flex flex-col gap-0.5">${rows}</div>
+            ${callout}
+        </div>`;
+}
+
+// ============================================================
 // SHELL
 // ============================================================
 
@@ -782,6 +847,9 @@ function _renderShell(container) {
 
         <!-- Moments strip: the evening's auto-detected highlights (proximity slice 1) -->
         <div id="sd-moments-strip" class="mb-6"></div>
+
+        <!-- Objective pressure: who carried the objective tonight (Good Night rank 6) -->
+        <div id="sd-objective-pressure" class="mb-6"></div>
 
         <!-- MVP vote: peer recognition for this session (S3) -->
         <div id="sd-mvp-panel" class="mb-6"></div>

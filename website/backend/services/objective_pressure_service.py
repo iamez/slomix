@@ -1,0 +1,222 @@
+"""Objective Pressure — "real pressure seconds" (Good Night plan rank 6, §F).
+
+Rewards the part of ET that raw K/D misses: time a player spends applying REAL,
+contested, coordinated objective pressure. Computed from the 200ms player_track
+samples against the objective zones in objective_zones.json.
+
+A track sample earns pressure time (v0.2 definition) only when ALL hold:
+  - the player is inside a specific objective's sphere (full 3D distance, so a
+    different floor doesn't count),
+  - an ENEMY is inside that same objective in the same ~200ms bucket (§F.1 —
+    the objective is actually contested), and
+  - at least one TEAMMATE is in it too (>=2 of the player's team => not "empty
+    pressure", §F.2 — lone loitering near an objective doesn't count).
+
+"Alive" is implicit: a track exists only between spawn and death. Bots are
+excluded. Proven with scripts/backtest_objective_pressure.py before shipping.
+"""
+from __future__ import annotations
+
+import json
+import time
+from collections import defaultdict
+from functools import lru_cache
+from pathlib import Path
+
+from website.backend.logging_config import get_app_logger
+from website.backend.utils.et_constants import strip_et_colors
+
+logger = get_app_logger("services.objective_pressure")
+
+# Time granularity for the contested/support cross-check, and the per-sample
+# credit cap so a gap in a track (e.g. a missed poll) can't inflate the total.
+BUCKET_MS = 200
+SAMPLE_CAP_MS = 400
+
+_ZONES_PATH = (
+    Path(__file__).resolve().parent.parent.parent
+    / "assets" / "maps" / "proximity" / "objective_zones.json"
+)
+
+# session_date -> (result, monotonic_ts). Pressure is a pure function of the
+# session's tracks; Session Detail can request it repeatedly, so memoize briefly.
+_CACHE: dict[str, tuple[dict, float]] = {}
+_CACHE_TTL = 300
+_CACHE_MAX = 32
+
+@lru_cache(maxsize=1)
+def _load_zones() -> dict[str, list]:
+    """map_name (and aliases), lowercased -> list of (x, y, z, radius). Cached
+    (the zones file is static); callers treat the result as read-only."""
+    out: dict[str, list] = {}
+    try:
+        raw = json.loads(_ZONES_PATH.read_text(encoding="utf-8"))
+        for m in raw.get("maps", {}).values():
+            objs = [(o["x"], o["y"], o.get("z", 0.0), o.get("radius", 500))
+                    for o in m.get("objectives", [])]
+            if not objs:
+                continue
+            for key in [m.get("map_name", ""), *m.get("aliases", [])]:
+                if key:
+                    out[key.lower()] = objs
+    except (OSError, ValueError, KeyError):
+        logger.exception("objective_pressure: failed to load objective zones")
+    return out
+
+
+def _zone_index(x: float, y: float, z: float, zones: list) -> int:
+    """Index of the first objective whose 3D sphere contains the point, else -1."""
+    for i, (zx, zy, zz, r) in enumerate(zones):
+        if (x - zx) ** 2 + (y - zy) ** 2 + (z - zz) ** 2 <= r * r:
+            return i
+    return -1
+
+
+def _accumulate_round(rtracks: list, zones: list, pressure: dict) -> None:
+    """Add each player's contested+supported objective seconds for one round.
+
+    rtracks: list of (team, key, samples) where key is the per-player aggregation
+    key (a player_guid in production) and samples is a sorted list of
+    (time_ms, x, y, z). Mutates `pressure` (key -> seconds).
+
+    Presence counts DISTINCT players (keys), so one player's two records in the
+    same 200ms bucket can't fake teammate support. Credit is the forward gap to
+    the NEXT sample only — the terminal sample (a life ends on a death /
+    round_end record) contributes no time after the player is gone.
+    """
+    # Pass 1: distinct player keys present per (bucket, zone_idx) per team.
+    presence: dict[tuple, dict] = defaultdict(lambda: defaultdict(set))
+    marked = []
+    for team, key, samples in rtracks:
+        zis = []
+        for tm, x, y, z in samples:
+            zi = _zone_index(x, y, z, zones)
+            zis.append(zi)
+            if zi >= 0:
+                presence[(tm // BUCKET_MS, zi)][team].add(key)
+        marked.append((team, key, samples, zis))
+
+    # Pass 2: credit the forward gap of each non-terminal in-zone sample that is
+    # in a contested (enemy present) and supported (>=2 distinct teammates) bucket.
+    for team, key, samples, zis in marked:
+        for i in range(len(samples) - 1):  # last sample has no forward duration
+            zi = zis[i]
+            if zi < 0:
+                continue
+            here = presence[(samples[i][0] // BUCKET_MS, zi)]
+            enemy = any(keys for tm2, keys in here.items() if tm2 != team and keys)
+            mates = len(here.get(team, ()))
+            if not enemy or mates < 2:
+                continue
+            dt = samples[i + 1][0] - samples[i][0]
+            pressure[key] += min(max(dt, 0), SAMPLE_CAP_MS) / 1000.0
+
+
+def _evict_oldest() -> None:
+    if len(_CACHE) <= _CACHE_MAX:
+        return
+    oldest = min(_CACHE, key=lambda k: _CACHE[k][1])
+    _CACHE.pop(oldest, None)
+
+
+async def compute_objective_pressure(db, session_date, limit: int = 10) -> dict:
+    """Objective-pressure leaderboard for one session. Read-only, cached 5 min.
+
+    session_date may be a datetime.date (from the router's _parse_iso_date) or a
+    'YYYY-MM-DD' string; it is passed straight to asyncpg for the DATE column.
+    """
+    n = max(1, min(limit, 50))
+    cache_key = str(session_date)
+    cached = _CACHE.get(cache_key)
+    if cached and (time.monotonic() - cached[1]) < _CACHE_TTL:
+        # Cache holds the FULL leaderboard; slice per request so a probe with a
+        # different limit can't poison later requests for the same session.
+        return {**cached[0], "players": cached[0]["players"][:n]}
+
+    zones_by_map = _load_zones()
+
+    tracks = await db.fetch_all(
+        """
+        SELECT round_start_unix, round_number, map_name, player_guid,
+               player_name, team, path
+        FROM player_track
+        WHERE session_date = $1 AND path IS NOT NULL AND sample_count > 0
+          AND round_start_unix IS NOT NULL AND round_start_unix > 0
+          AND player_guid NOT LIKE 'OMNIBOT%' AND player_name NOT LIKE '[BOT]%'
+        """,
+        (session_date,),
+    )
+
+    # Aggregate by player_guid (project rule — a visible name can be shared or
+    # changed mid-session; grouping by name would merge or mis-credit players).
+    pressure: dict[str, float] = defaultdict(float)
+    guid_name: dict[str, str] = {}
+    maps_counted: set = set()
+    by_round: dict[tuple, list] = defaultdict(list)
+
+    for t in (tracks or []):
+        zones = zones_by_map.get((t["map_name"] or "").lower())
+        if not zones:
+            continue
+        path = t["path"] if isinstance(t["path"], list) else json.loads(t["path"])
+        samples = sorted(
+            (int(s["time"]), float(s["x"]), float(s["y"]), float(s.get("z", 0.0)))
+            for s in path if "time" in s and "x" in s and "y" in s
+        )
+        if not samples:
+            continue
+        guid = t["player_guid"]
+        # last seen name wins (tracks come out in row order; good enough for a label)
+        guid_name[guid] = strip_et_colors(t["player_name"] or guid[:8])
+        maps_counted.add(t["map_name"])
+        by_round[(t["round_start_unix"], t["round_number"], t["map_name"])].append(
+            (t["team"], guid, samples)
+        )
+
+    for (_rsu, _rnum, mapname), rtracks in by_round.items():
+        _accumulate_round(rtracks, zones_by_map[(mapname or "").lower()], pressure)
+
+    # Kills per player (same session, bots excluded) so the UI can contrast
+    # objective pressure against the scoreboard — the "invisible value" framing.
+    # Grouped by attacker_guid so color-code variants of one name don't split.
+    kill_rows = await db.fetch_all(
+        """
+        SELECT attacker_guid AS guid, COUNT(*) AS kills
+        FROM proximity_combat_position
+        WHERE session_date = $1 AND event_type = 'kill'
+          AND attacker_team IS NOT NULL AND attacker_team != victim_team
+          AND attacker_guid NOT LIKE 'OMNIBOT%' AND attacker_name NOT LIKE '[BOT]%'
+        GROUP BY attacker_guid
+        """,
+        (session_date,),
+    )
+    kills_by_guid = {r["guid"]: int(r["kills"]) for r in (kill_rows or [])}
+    # The session's ACTUAL top fraggers (whole scoreboard, not just players who
+    # earned pressure) so the UI's "invisible value" callout compares against the
+    # real frag leaders rather than a subset.
+    top_fragger_guids = [
+        g for g, _ in sorted(kills_by_guid.items(), key=lambda kv: -kv[1])[:3]
+    ]
+
+    ranked = sorted(pressure.items(), key=lambda kv: -kv[1])
+    all_players = [
+        {
+            "guid": guid,
+            "name": guid_name.get(guid, guid[:8]),
+            "pressure_seconds": round(secs, 1),
+            "kills": kills_by_guid.get(guid, 0),
+        }
+        for guid, secs in ranked if secs > 0
+    ]
+
+    # Cache the FULL leaderboard (see the cache-hit slice above), return a slice.
+    full = {
+        "status": "ok",
+        "session_date": cache_key,
+        "maps_counted": len(maps_counted),
+        "top_fragger_guids": top_fragger_guids,
+        "players": all_players,
+    }
+    _CACHE[cache_key] = (full, time.monotonic())
+    _evict_oldest()
+    return {**full, "players": all_players[:n]}
