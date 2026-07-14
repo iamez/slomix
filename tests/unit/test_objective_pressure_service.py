@@ -141,7 +141,7 @@ class _FakeRow(dict):
 
 
 class _FakeDB:
-    """Routes the two compute queries: player_track vs combat_position."""
+    """Routes the two compute queries: player_track vs proximity_combat_position."""
 
     def __init__(self, tracks, kills):
         self._tracks = tracks
