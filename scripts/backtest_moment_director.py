@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 """Phase-0 backtest: Moment Director quality (READ-ONLY, Good Night plan B1).
 
-Runs the REAL StorytellingService.detect_moments() over recent sessions and
-characterizes the *current* top-5 "director's cut" so we can see, with a table,
-whether the selection is diverse before touching the ranking:
+Runs the REAL StorytellingService detectors over recent sessions and compares
+the pre-B1 star-then-time cut against the new star-tiered director cut, both
+picking a top-5 from the SAME uncut pool (svc._collect_moments), so we can see
+the effect with a table before/after touching the ranking:
 
-  - pool  : total moments detected (all 11 detectors, pre-truncation)
-  - types : distinct moment types in the full pool
-  - t5typ : distinct types among the shown top-5
-  - t5ply : distinct players among the shown top-5
-  - dom%  : share of the top-5 taken by its single most common type
-  - stars : star histogram of the top-5 (e.g. "5:3 4:2" = three 5-star, two 4-star)
-  - lead  : the top-5 as "type/player(stars)" so the human can eyeball tone
+  - pool : total moments detected (all 11 detectors, UNCUT — via _collect_moments)
+  - ply  : distinct players in the top-5, old -> new
+  - lead : the top-5 as "type/player(stars)" so the human can eyeball tone
 
-No writes: SET default_transaction_read_only = on, and detect_moments is pure-read.
+No writes: SET default_transaction_read_only = on, and the detectors are pure-read.
 """
 import asyncio
 import os
@@ -24,6 +21,7 @@ import asyncpg
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from website.backend.services.storytelling.moments import _select_director_cut  # noqa: E402
 from website.backend.services.storytelling_service import StorytellingService  # noqa: E402
 
 
@@ -100,28 +98,27 @@ async def main():
     print(f"{'date':<11}{'pool':>5} {'ply old->new':<13} lead old  ||  lead new")
     print("-" * 100)
 
-    for row in dates:
-        sd = row["session_date"]
-        full = await svc.detect_moments(sd, limit=100)    # full pool (unique moments)
-        if not full:
-            print(f"{str(sd):<11}{'0':>5}  (no moments)")
-            continue
-
-        new_cut = await svc.detect_moments(sd, limit=5)   # director's cut (new logic)
-        old_cut = _old_cut(full, limit=5)                 # pre-B1 selection, same pool
-
-        old_players = len({m.get("player", "?") for m in old_cut})
-        new_players = len({m.get("player", "?") for m in new_cut})
-
-        print(f"{str(sd):<11}{len(full):>5} {f'{old_players}->{new_players}':<13} "
-              f"{_fmt_cut(old_cut)}\n{'':<31}|| {_fmt_cut(new_cut)}")
-
-    # Aggregate the diversity signal across all sampled sessions.
-    print("\n=== pool type frequency (all sampled sessions) ===")
     agg: Counter = Counter()
     for row in dates:
-        pool_moments = await svc.detect_moments(row["session_date"], limit=100)
-        agg.update(m["type"] for m in pool_moments)
+        sd = row["session_date"]
+        moment_pool = await svc._collect_moments(sd)  # noqa: SLF001 - backtest harness reads the raw pool
+        if not moment_pool:
+            print(f"{str(sd):<11}{'0':>5}  (no moments)")
+            continue
+        agg.update(m["type"] for m in moment_pool)
+
+        # Both cuts pick their top-5 from the exact same uncut pool -> fair A/B.
+        old_c = _old_cut(moment_pool, limit=5)               # pre-B1 star-then-time
+        new_c = _select_director_cut(moment_pool, limit=5)   # new star-tiered director
+
+        old_players = len({m.get("player", "?") for m in old_c})
+        new_players = len({m.get("player", "?") for m in new_c})
+
+        print(f"{str(sd):<11}{len(moment_pool):>5} {f'{old_players}->{new_players}':<13} "
+              f"{_fmt_cut(old_c)}\n{'':<31}|| {_fmt_cut(new_c)}")
+
+    # Aggregate diversity signal across all sampled sessions (uncut pool).
+    print("\n=== pool type frequency (all sampled sessions, uncut) ===")
     for t, c in agg.most_common():
         print(f"  {t:<20}{c:>5}")
 

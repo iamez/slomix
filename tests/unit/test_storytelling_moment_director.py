@@ -106,6 +106,38 @@ class TestSelectDirectorCut:
         assert len(cut) == 3
         assert len({m["player"] for m in cut}) == 3
 
+    def test_star_tier_is_a_hard_boundary(self):
+        # Regression (Copilot + Codex, PR #499): three 5★ moments all from the
+        # same player AND type, plus 4★ moments from fresh players/types. The
+        # earlier single-pass fill would take fresh-player 4★ moments while the
+        # repeat-player 5★ ones went unpicked. Stars must win: with 3 slots to
+        # spare all three 5★ are chosen before any 4★.
+        moments = [
+            _m("team_wipe", 5, "A", t=1),
+            _m("team_wipe", 5, "A", t=2),
+            _m("team_wipe", 5, "A", t=3),
+            _m("multikill", 4, "B", t=4),
+            _m("carrier_chain", 4, "C", t=5),
+        ]
+        cut = _select_director_cut(moments, 4)
+        stars = [m["impact_stars"] for m in cut]
+        assert stars.count(5) == 3   # every 5★ included before descending
+        assert stars.count(4) == 1   # a 4★ only fills the one leftover slot
+        # and no lower-star moment ever precedes a higher-star one in the cut
+        assert stars == sorted(stars, reverse=True)
+
+    def test_descends_tier_only_when_higher_exhausted(self):
+        # Only two 5★ exist (same player) — after they're both taken the cut
+        # must descend to 4★ to fill the remaining slots.
+        moments = [
+            _m("team_wipe", 5, "A", t=1),
+            _m("multikill", 5, "A", t=2),
+            _m("carrier_chain", 4, "B", t=3),
+            _m("objective_run", 4, "C", t=4),
+        ]
+        cut = _select_director_cut(moments, 4)
+        assert [m["impact_stars"] for m in cut] == [5, 5, 4, 4]
+
     def test_missing_player_key_does_not_crash(self):
         moments = [
             {"type": "team_wipe", "impact_stars": 5, "time_ms": 1},
