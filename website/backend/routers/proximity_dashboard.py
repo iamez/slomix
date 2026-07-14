@@ -247,6 +247,22 @@ async def get_proximity_scopes(
                 if first is None or round_start_val < first:
                     map_entry["_first_round_start"] = round_start_val
 
+        # Canonical maps-played per date, from the rounds table (one row per round,
+        # always present) — NOT the per-engagement combat_engagement rows, which
+        # would undercount a map whose R1 had no recorded engagement (codex/copilot).
+        # round_date is a 'YYYY-MM-DD' text column matching the session_date keys.
+        rounds_by_date: dict[str, int] = {}
+        try:
+            r1_rows = await db.fetch_all(
+                "SELECT round_date, COUNT(*) FROM rounds "
+                "WHERE round_date >= $1 AND round_number = 1 AND is_valid "
+                "GROUP BY round_date",
+                (since.isoformat(),),
+            )
+            rounds_by_date = {str(r[0]): int(r[1]) for r in (r1_rows or [])}
+        except Exception:
+            logger.exception("Proximity scopes: canonical maps-played query failed")
+
         sessions: list[dict[str, Any]] = []
         for session in sorted(
             sessions_by_date.values(),
@@ -286,13 +302,9 @@ async def get_proximity_scopes(
             # (te_escape2 x3) is 3 maps, matching the box score's map_number
             # grouping + owner rule "each escape is its own map". map_count stays
             # the distinct-name count (used by the proximity nav hierarchy); the
-            # story dropdown label uses maps_played. R1 rounds == matches.
-            maps_played = sum(
-                1
-                for map_item in maps_sorted
-                for r in map_item["rounds"]
-                if r["round_number"] == 1
-            ) or len(maps_sorted)
+            # story dropdown label uses maps_played. Canonical from rounds (above),
+            # falling back to the distinct-map count if the date has no rounds row.
+            maps_played = rounds_by_date.get(session["session_date"], len(maps_sorted))
 
             sessions.append(
                 {
