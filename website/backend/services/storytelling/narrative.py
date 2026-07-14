@@ -183,7 +183,15 @@ class _NarrativeMixin:
             (sd,))
         raw_maps = [strip_et_colors(r[0]) for r in (map_rows or []) if r[0]]
         maps_played = _format_maps_list(raw_maps)
-        map_count = len(raw_maps)
+        # Count maps *played* (matches), not distinct names: a map replayed in the
+        # same session (e.g. te_escape2 x3) counts as 3, matching the box score's
+        # map_number grouping and the owner rule "each escape is its own map".
+        # DISTINCT round_id among R1 rounds == number of matches played.
+        r1_row = await self.db.fetch_one(
+            "SELECT COUNT(DISTINCT round_id) FROM proximity_kill_outcome "
+            "WHERE session_date = $1 AND round_number = 1",
+            (sd,))
+        map_count = int(r1_row[0]) if r1_row and r1_row[0] else len(raw_maps)
 
         # 3. MVP (top KIS player)
         mvp = kis_board[0]

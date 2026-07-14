@@ -282,11 +282,24 @@ async def get_proximity_scopes(
             for item in maps_sorted:
                 item.pop("_first_round_start", None)
 
+            # maps *played* (matches): a map replayed in the same session
+            # (te_escape2 x3) is 3 maps, matching the box score's map_number
+            # grouping + owner rule "each escape is its own map". map_count stays
+            # the distinct-name count (used by the proximity nav hierarchy); the
+            # story dropdown label uses maps_played. R1 rounds == matches.
+            maps_played = sum(
+                1
+                for map_item in maps_sorted
+                for r in map_item["rounds"]
+                if r["round_number"] == 1
+            ) or len(maps_sorted)
+
             sessions.append(
                 {
                     "session_date": session["session_date"],
                     "engagements": session["engagements"],
                     "map_count": len(maps_sorted),
+                    "maps_played": maps_played,
                     "round_count": sum(map_item["round_count"] for map_item in maps_sorted),
                     "maps": maps_sorted,
                 }
