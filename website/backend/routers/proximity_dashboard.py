@@ -250,21 +250,17 @@ async def get_proximity_scopes(
         # Canonical maps-played per date, from the rounds table (one row per round,
         # always present) — NOT the per-engagement combat_engagement rows, which
         # would undercount a map whose R1 had no recorded engagement (codex/copilot).
-        # Same validity gate as the BOX scorer (is_valid + round_status='completed')
-        # AND scoped to the SAME single gaming session BOX resolves for the date
-        # (the earliest gsid), so a multi-session calendar day isn't summed together.
-        # rounds_by_date is None only if the query itself failed (fall back per
-        # session); a date with zero valid completed R1s is correctly absent -> 0.
+        # Same validity gate as the BOX scorer (is_valid + round_status='completed'),
+        # scoped by round_date to match the date-keyed dropdown. rounds_by_date is
+        # None only if the query itself failed (fall back per session); a date with
+        # zero valid completed R1s is correctly absent -> 0.
         rounds_by_date: dict[str, int] | None = {}
         try:
             r1_rows = await db.fetch_all(
-                "SELECT r.round_date, COUNT(*) FROM rounds r "
-                "JOIN (SELECT round_date, MIN(gaming_session_id) AS gsid FROM rounds "
-                "      WHERE round_date >= $1 AND gaming_session_id IS NOT NULL "
-                "      GROUP BY round_date) f "
-                "  ON f.round_date = r.round_date AND f.gsid = r.gaming_session_id "
-                "WHERE r.round_number = 1 AND r.is_valid AND r.round_status = 'completed' "
-                "GROUP BY r.round_date",
+                "SELECT round_date, COUNT(*) FROM rounds "
+                "WHERE round_date >= $1 AND round_number = 1 "
+                "  AND is_valid AND round_status = 'completed' "
+                "GROUP BY round_date",
                 (since.isoformat(),),
             )
             rounds_by_date = {str(r[0]): int(r[1]) for r in (r1_rows or [])}

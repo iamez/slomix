@@ -178,20 +178,16 @@ class _NarrativeMixin:
         # time and "Adlernest, Brewdog, ..." the next — variant phrasing on
         # purpose, but map ordering shouldn't drift.
         # Read the played maps from the canonical rounds table — one row per round,
-        # always present — instead of proximity kill/engagement rows (which only
-        # exist when a kill/engagement was recorded and would drop a quiet map).
-        # Both the count AND the name list come from this single source so they can
-        # never disagree, using the SAME validity gate as BOX (is_valid +
-        # round_status='completed') and scoped to the SAME single gaming session BOX
-        # resolves for the date (deterministic ORDER BY gaming_session_id), so a
-        # multi-session calendar day isn't summed together (codex). R1 rounds ==
-        # maps played (replays counted).
+        # always present — instead of proximity kill/engagement rows (which only exist
+        # when a kill/engagement was recorded and would drop a quiet map). Both the
+        # count AND the name list come from this single source so they can never
+        # disagree, using the SAME validity gate as BOX (is_valid + completed). Scoped
+        # by session_date, matching the rest of this narrative (KIS/moments/synergy are
+        # all session_date-keyed). R1 rounds == maps played (replays counted).
         r1_rows = await self.db.fetch_all(
             "SELECT map_name FROM rounds "
-            "WHERE gaming_session_id = ("
-            "  SELECT gaming_session_id FROM rounds WHERE round_date = $1 "
-            "  AND gaming_session_id IS NOT NULL ORDER BY gaming_session_id LIMIT 1) "
-            "  AND round_number = 1 AND is_valid AND round_status = 'completed' "
+            "WHERE round_date = $1 AND round_number = 1 "
+            "  AND is_valid AND round_status = 'completed' "
             "ORDER BY round_start_unix",
             (str(sd),))
         r1_maps = [strip_et_colors(r[0]) for r in (r1_rows or []) if r[0]]
