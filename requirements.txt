@@ -18,7 +18,7 @@ aiofiles==25.1.0
 paramiko==4.0.0
 scp==0.15.0
 websockets==16.0
-Pillow==12.2.0
+Pillow==12.3.0
 matplotlib==3.10.8
 watchdog==6.0.0
 trueskill==0.4.5

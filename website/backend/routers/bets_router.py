@@ -247,6 +247,22 @@ async def place_bet(
         if closes_at is not None and datetime.now() >= closes_at:  # noqa: DTZ005 - naive column
             raise HTTPException(status_code=400, detail="Betting has closed for this market")
         m_gsid = market[3]
+        # Auto-lifecycle markets (closes_at set) enforce the §6.4b end-of-map-1 cutoff
+        # LIVE here, not only via the stored closes_at: auto-open uses a future fallback
+        # window until the lifecycle loop tightens/closes the market, so without this a
+        # bet placed between map 1 ending and the next tick would slip through on the
+        # still-future fallback. Scoped to closes_at-bearing markets so admin markets
+        # (closes_at NULL, no time cutoff) keep taking bets past map 1 if desired.
+        if closes_at is not None and m_gsid:
+            map1_done = await db.fetch_one(
+                "SELECT 1 FROM rounds WHERE gaming_session_id = ? AND round_number = 2 "
+                "  AND is_valid AND round_start_unix IS NOT NULL "
+                "  AND (round_status IN ('completed', 'substitution') OR round_status IS NULL) "
+                "LIMIT 1",
+                (int(m_gsid),),
+            )
+            if map1_done:
+                raise HTTPException(status_code=400, detail="Betting has closed for this market")
         if m_gsid:
             result_known = await db.fetch_one(
                 "SELECT 1 FROM session_results WHERE gaming_session_id = ? "

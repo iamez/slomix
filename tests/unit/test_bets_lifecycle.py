@@ -5,7 +5,7 @@ Pure helpers plus FakeDB-driven coverage of maybe_open_market's decision logic
 """
 import time
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -13,6 +13,7 @@ from website.backend.routers.bets_router import SettleSkip, _roster_cols_cache
 from website.backend.services.bets_lifecycle import (
     _coerce_date,
     _label_from_names,
+    maybe_close_after_map1,
     maybe_open_market,
     maybe_settle_markets,
 )
@@ -23,7 +24,7 @@ class FakeDB:
 
     def __init__(self, *, latest_round=None, existing_market=None, teams_rows=None,
                  session_date_row=("2026-06-30",), roster_cols=2, insert_returns=(99,),
-                 finalized=False):
+                 finalized=False, map1_round=None):
         self.latest_round = latest_round        # (gsid, round_start_unix) | None
         self.existing_market = existing_market   # (id,) | None
         self.teams_rows = teams_rows or []       # list of (team_name, guids, names)
@@ -31,10 +32,13 @@ class FakeDB:
         self.roster_cols = roster_cols
         self.insert_returns = insert_returns
         self.finalized = finalized               # session_results row exists?
+        self.map1_round = map1_round             # (round_start_unix, duration_s) | None
         self.inserts: list[tuple] = []
 
     async def fetch_one(self, query, params=()):
         q = query.lower()
+        if "actual_duration_seconds" in q and "from rounds" in q:
+            return self.map1_round  # _map1_closes_at probe (None -> fallback window)
         if "from rounds" in q and "order by round_start_unix" in q:
             return self.latest_round
         if "from session_results" in q:
@@ -129,6 +133,33 @@ class TestMaybeOpenMarket:
         assert len(db.inserts) == 1
         sql, _params = db.inserts[0]
         assert "team_a_guids" not in sql
+        assert "closes_at" in sql  # cutoff set even on the legacy path
+
+    async def test_closes_at_fallback_when_map1_incomplete(self, monkeypatch):
+        # No completed map-1 R2 yet -> closes_at is a short window from now (§6.4b).
+        # Clear the env override so the default (20 min) path is host-independent.
+        monkeypatch.delenv("BETS_CLOSE_AFTER_MINUTES", raising=False)
+        db = FakeDB(latest_round=(132, int(time.time())), existing_market=None,
+                    teams_rows=_two_team_rows(), roster_cols=2, map1_round=None)
+        assert await maybe_open_market(db, 5400) == 99
+        sql, params = db.inserts[0]
+        assert "closes_at" in sql
+        closes_at = params[-2]  # ...team_b_guids, closes_at, gsid
+        assert isinstance(closes_at, datetime)
+        # fallback window is in the near future (default 20 min)
+        assert timedelta(minutes=1) < (closes_at - datetime.now()) < timedelta(minutes=60)  # noqa: DTZ005
+
+    async def test_skips_when_map1_cutoff_already_passed(self):
+        # Map 1's R2 already finished when auto-open first sees the (still-live) session:
+        # the §6.4b window has passed, so no market is opened at all — opening one with a
+        # past closes_at would show as 'open' in the UIs but reject every bet (codex P2).
+        start_unix = int(time.time()) - 1800  # map 1 started 30 min ago
+        duration = 300                          # ...and ended 25 min ago -> cutoff passed
+        db = FakeDB(latest_round=(132, int(time.time())), existing_market=None,
+                    teams_rows=_two_team_rows(), roster_cols=2,
+                    map1_round=(start_unix, duration))
+        assert await maybe_open_market(db, 5400) is None
+        assert db.inserts == []
 
 
 class TestLabelFromNames:
@@ -182,7 +213,7 @@ class _SettleFakeDB:
 
     async def fetch_all(self, query, params=()):
         q = query.lower()
-        if "from parimutuel_markets m" in q and "status = 'open'" in q:
+        if "from parimutuel_markets m" in q and "status in ('open', 'closed')" in q:
             return [(mid, wt) for (mid, wt) in self.markets]
         return []
 
@@ -237,3 +268,61 @@ class TestMaybeSettleMarkets:
         )
         # SettleSkip is swallowed per-market -> 0 settled, no raise.
         assert await maybe_settle_markets(_SettleFakeDB([(10, 1)])) == 0
+
+
+class _CloseFakeDB:
+    """Stub for maybe_close_after_map1: the scan returns auto-opened open markets as
+    (id, gaming_session_id, closes_at); `map1_round` = (start_unix, duration) feeds
+    _map1_closes_at (None = map 1 not finished). Captures the close UPDATE as
+    (market_id, new_closes_at)."""
+
+    def __init__(self, markets, map1_round=None):
+        self.markets = markets
+        self.map1_round = map1_round
+        self.updates: list[tuple] = []
+
+    async def fetch_all(self, query, params=()):
+        q = query.lower()
+        if "from parimutuel_markets" in q and "created_by_user_id is null" in q:
+            return list(self.markets)
+        return []
+
+    async def fetch_one(self, query, params=()):
+        q = query.lower()
+        if "actual_duration_seconds" in q and "from rounds" in q:
+            return self.map1_round
+        return None
+
+    async def execute(self, query, params=()):
+        if "update parimutuel_markets set status = 'closed'" in query.lower():
+            self.updates.append((params[1], params[0]))  # (market_id, new_closes_at)
+
+
+class TestMaybeCloseAfterMap1:
+    async def test_closes_market_when_map1_ended(self):
+        # Fallback market still open; map 1 has since ended -> flip to closed and stamp
+        # closes_at with the real end-of-map-1 (so UIs/place_bet stop treating it open).
+        start_unix = int(time.time()) - 400
+        duration = 300  # map-1 end = 100s ago
+        future = datetime.now() + timedelta(minutes=10)  # noqa: DTZ005 - fallback still future
+        db = _CloseFakeDB([(55, 132, future)], map1_round=(start_unix, duration))
+        assert await maybe_close_after_map1(db) == 1
+        assert db.updates == [(55, datetime.fromtimestamp(start_unix + duration))]  # noqa: DTZ006
+
+    async def test_closes_market_when_fallback_window_elapsed(self):
+        # Map 1 still unfinished (map1_round=None) but the fallback closes_at is already
+        # in the past -> close so the UIs stop advertising an expired 'open' market.
+        past = datetime.now() - timedelta(minutes=1)  # noqa: DTZ005 - fallback elapsed
+        db = _CloseFakeDB([(55, 132, past)], map1_round=None)
+        assert await maybe_close_after_map1(db) == 1
+        assert db.updates == [(55, past)]  # keeps the (already-passed) fallback cutoff
+
+    async def test_noop_when_map1_unfinished_and_window_future(self):
+        # Map 1 unfinished and fallback still in the future -> leave the market open.
+        future = datetime.now() + timedelta(minutes=10)  # noqa: DTZ005
+        db = _CloseFakeDB([(55, 132, future)], map1_round=None)
+        assert await maybe_close_after_map1(db) == 0
+        assert db.updates == []
+
+    async def test_nothing_open(self):
+        assert await maybe_close_after_map1(_CloseFakeDB([])) == 0

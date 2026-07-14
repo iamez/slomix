@@ -2,8 +2,10 @@
 
 Web-side background loop that manages the full parimutuel session-winner lifecycle
 so an admin no longer has to touch it by hand:
-- auto-OPENS a market when a live gaming session with two teams is detected, and
-- auto-SETTLES a market once its session result is recorded.
+- auto-OPENS a market when a live gaming session with two teams is detected (with a
+  §6.4b closes_at cutoff = end of map 1, or a short fallback window before map 1 ends),
+- auto-CLOSES betting (status='closed') once map 1 finishes, stamping the real cutoff, and
+- auto-SETTLES a market (open or closed) once its session result is recorded.
 No bot changes, no cron, and — deliberately — no writes on any read endpoint
 (get_current_market stays read-only); the work runs in this loop instead.
 
@@ -24,7 +26,7 @@ import asyncio
 import contextlib
 import json
 import time
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from website.backend.env_utils import getenv_int
@@ -50,6 +52,12 @@ _DEFAULT_LIVE_WITHIN = 90 * 60
 # Namespace for the per-session pg_advisory_xact_lock that serializes concurrent
 # auto-opens (int4). Arbitrary fixed constant.
 _BETS_LOCK_NS = 0x6265747
+
+# When a market auto-opens BEFORE the session's first map has finished, bets close
+# this many minutes after open (fallback). Once map 1 has completed, closes_at is the
+# real end-of-map-1 instead — bets only before/at the evening start (Oracle award
+# integrity, FULL_REVIEW §6.4 option b). Env-overridable via BETS_CLOSE_AFTER_MINUTES.
+_DEFAULT_CLOSE_AFTER_MIN = 20
 
 
 def _label_from_names(names: Any, fallback: str) -> str:
@@ -124,6 +132,35 @@ async def _session_date(db, gsid: int):
     return _coerce_date(row[0]) if row else None
 
 
+async def _map1_closes_at(db, gsid: int):
+    """Betting cutoff = end of the session's FIRST complete map (FULL_REVIEW §6.4
+    option b): once map 1 is over the evening is underway, so no more bets.
+
+    Returns a naive LOCAL datetime — parimutuel_markets.closes_at is a naive column and
+    bets_router compares it against datetime.now() (also naive local), so
+    datetime.fromtimestamp() (naive, server-local timezone) is the matching convention.
+    Returns None when map 1's R2 isn't finished yet, so the caller falls back to
+    now + BETS_CLOSE_AFTER_MINUTES.
+
+    'Completed' matches the repo-wide predicate (website_session_data_service): a real
+    'completed'/'substitution' round OR a legacy row with NULL round_status — otherwise
+    an already-finished older map 1 looks unfinished and the cutoff wrongly falls back.
+    Orders by round_start_unix (not round_date/round_time) so NULL-column ordering can't
+    differ across engines and it matches the unix-based cutoff math below."""
+    row = await db.fetch_one(
+        "SELECT round_start_unix, actual_duration_seconds FROM rounds "
+        "WHERE gaming_session_id = ? AND round_number = 2 AND is_valid "
+        "  AND (round_status IN ('completed', 'substitution') OR round_status IS NULL) "
+        "  AND round_start_unix IS NOT NULL "
+        "ORDER BY round_start_unix LIMIT 1",
+        (gsid,),
+    )
+    if not row or row[0] is None:
+        return None
+    # naive, server-local — matches the naive closes_at column + bets_router comparison
+    return datetime.fromtimestamp(int(row[0]) + int(row[1] or 0))  # noqa: DTZ006
+
+
 async def maybe_open_market(db, live_within_seconds: int) -> int | None:
     """Open a session-winner market for the current live session if one isn't open
     yet. Returns the new market id, or None when nothing was opened. Never raises."""
@@ -160,28 +197,45 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
             return None
         a_label, a_guids, b_label, b_guids = teams
         sess_date = await _session_date(db, gsid)
+        # Cutoff (FULL_REVIEW §6.4b): end of map 1 if it's already finished, else a
+        # short fallback window from now — so bets close near the evening's start.
+        closes_at = await _map1_closes_at(db, gsid)
+        if closes_at is None:
+            closes_at = datetime.now() + timedelta(  # noqa: DTZ005 - naive local matches column
+                minutes=getenv_int("BETS_CLOSE_AFTER_MINUTES", _DEFAULT_CLOSE_AFTER_MIN)
+            )
+        elif closes_at <= datetime.now():  # noqa: DTZ005 - naive local matches column
+            # Map 1 already ended (we only started seeing this live session mid-/post-map-2):
+            # the betting window has passed, so don't open a market that place_bet would
+            # immediately reject — the UIs gate on status=='open' and can't see closes_at,
+            # so an expired-but-open market only fails after a user submits a bet.
+            logger.debug(
+                "bets auto-open: gsid %s map-1 cutoff already passed (%s) — skipping",
+                gsid, closes_at,
+            )
+            return None
 
         if await _has_roster_cols(db):
             sql = (
                 "INSERT INTO parimutuel_markets "
                 "(gaming_session_id, session_date, team_a_label, team_b_label, "
-                " team_a_guids, team_b_guids, status) "
-                "SELECT ?, ?, ?, ?, ?, ?, 'open' "
+                " team_a_guids, team_b_guids, status, closes_at) "
+                "SELECT ?, ?, ?, ?, ?, ?, 'open', ? "
                 "WHERE NOT EXISTS (SELECT 1 FROM parimutuel_markets "
                 "  WHERE gaming_session_id = ?) "
                 "RETURNING id"
             )
-            params = (gsid, sess_date, a_label, b_label, a_guids, b_guids, gsid)
+            params = (gsid, sess_date, a_label, b_label, a_guids, b_guids, closes_at, gsid)
         else:
             sql = (
                 "INSERT INTO parimutuel_markets "
-                "(gaming_session_id, session_date, team_a_label, team_b_label, status) "
-                "SELECT ?, ?, ?, ?, 'open' "
+                "(gaming_session_id, session_date, team_a_label, team_b_label, status, closes_at) "
+                "SELECT ?, ?, ?, ?, 'open', ? "
                 "WHERE NOT EXISTS (SELECT 1 FROM parimutuel_markets "
                 "  WHERE gaming_session_id = ?) "
                 "RETURNING id"
             )
-            params = (gsid, sess_date, a_label, b_label, gsid)
+            params = (gsid, sess_date, a_label, b_label, closes_at, gsid)
 
         # There's no unique constraint on gaming_session_id, and INSERT ... WHERE
         # NOT EXISTS is NOT atomic across concurrent transactions (under READ
@@ -212,6 +266,66 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
         return None
 
 
+async def maybe_close_after_map1(db) -> int:
+    """Close an auto-opened market for betting once its map 1 has finished — or once its
+    fallback window has elapsed with map 1 still unfinished (§6.4b).
+
+    Auto-open uses a future now + BETS_CLOSE_AFTER_MINUTES fallback window until map 1's
+    end is known. Once map 1 is over (or the fallback window passes without it finishing)
+    this flips the market to status='closed' and stamps closes_at with the cutoff, so:
+      - the frontends (which show betting controls only while status=='open') stop
+        advertising an expired market as open, and
+      - place_bet (which rejects any non-'open' market) refuses further bets,
+    while auto-settle still resolves it (its scan includes 'closed').
+
+    Scoped to auto-opened markets (created_by_user_id IS NULL, and closes_at IS NOT NULL
+    — only auto-open sets closes_at), so admin markets are never touched. Idempotent (the
+    scan only sees status='open'). Best-effort — never raises out."""
+    if db is None:
+        return 0
+    try:
+        rows = await db.fetch_all(
+            "SELECT id, gaming_session_id, closes_at FROM parimutuel_markets "
+            "WHERE status = 'open' AND created_by_user_id IS NULL "
+            "  AND gaming_session_id IS NOT NULL AND closes_at IS NOT NULL"
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.warning("bets close-after-map1 scan failed: %s", exc)
+        return 0
+
+    now = datetime.now()  # noqa: DTZ005 - naive local matches the naive closes_at column
+    closed = 0
+    for row in rows or []:
+        market_id, gsid, current_closes = int(row[0]), int(row[1]), row[2]
+        try:
+            map1_end = await _map1_closes_at(db, gsid)
+            if map1_end is not None:
+                # Map 1 finished — stamp the real cutoff and close.
+                new_closes, reason = map1_end, f"map 1 ended {map1_end}"
+            elif current_closes is not None and current_closes <= now:
+                # Map 1 still unfinished but the fallback window has already elapsed
+                # (a first map longer than BETS_CLOSE_AFTER_MINUTES): place_bet already
+                # rejects via closes_at, but the UIs only see status — so close it too
+                # instead of leaving an expired 'open' market advertised (codex P2).
+                new_closes, reason = current_closes, f"fallback window elapsed ({current_closes})"
+            else:
+                continue  # map 1 unfinished and the fallback window is still in the future
+            await db.execute(
+                "UPDATE parimutuel_markets SET status = 'closed', closes_at = ? "
+                "WHERE id = ? AND status = 'open'",
+                (new_closes, market_id),
+            )
+            closed += 1
+            logger.info("bets close-after-map1: market %s closed (%s)", market_id, reason)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # one bad market must not stop the rest
+            logger.warning("bets close-after-map1 failed for market %s: %s", market_id, exc)
+    return closed
+
+
 async def maybe_settle_markets(db) -> int:
     """Auto-settle every still-open market whose gaming session already has a
     recorded result. Uses the shared settle_market_locked (same payout math as the
@@ -228,7 +342,7 @@ async def maybe_settle_markets(db) -> int:
             "   WHERE sr.gaming_session_id = m.gaming_session_id "
             "   ORDER BY sr.session_end DESC NULLS LAST LIMIT 1) AS winning_team "
             "FROM parimutuel_markets m "
-            "WHERE m.status = 'open' AND m.gaming_session_id IS NOT NULL"
+            "WHERE m.status IN ('open', 'closed') AND m.gaming_session_id IS NOT NULL"
         )
     except asyncio.CancelledError:
         raise
@@ -286,6 +400,8 @@ async def bets_lifecycle_loop(db_factory: Any, interval_seconds: int | None = No
             db = db_factory() if callable(db_factory) else db_factory
             with contextlib.suppress(Exception):
                 await maybe_open_market(db, live_within)
+            with contextlib.suppress(Exception):
+                await maybe_close_after_map1(db)
             with contextlib.suppress(Exception):
                 await maybe_settle_markets(db)
             await asyncio.sleep(interval_seconds)
