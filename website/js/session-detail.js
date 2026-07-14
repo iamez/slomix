@@ -721,8 +721,8 @@ async function _loadLifeCards() {
         <div class="glass-panel rounded-xl p-4">
             <div class="flex items-center gap-3 mb-3">
                 <div class="text-[11px] uppercase tracking-wider text-slate-500 font-bold"
-                     title="The best single life of the night — the most kills a player landed between one spawn and death. The rampage the session total hides.">
-                    Lives of the night · one spawn, one death
+                     title="The best single life of the night — the most kills a player landed on one life (whether they died or lived to the round's end). The rampage the session total hides.">
+                    Lives of the night · the biggest single life
                 </div>
             </div>
             <div class="flex gap-2 overflow-x-auto pb-1">${cards}</div>
