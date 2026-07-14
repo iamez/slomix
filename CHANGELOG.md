@@ -6,6 +6,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.26.0](https://github.com/iamez/slomix/compare/v1.25.0...v1.26.0) (2026-07-14)
+
+
+### Features
+
+* **proximity:** data trust quality endpoint ([#494](https://github.com/iamez/slomix/issues/494)) ([b29977c](https://github.com/iamez/slomix/commit/b29977c0652f28aa16ca9a3a47005e4335ba2392))
+* **website:** betting cutoff — auto-open sets closes_at (§6.4b) ([#496](https://github.com/iamez/slomix/issues/496)) ([32c9802](https://github.com/iamez/slomix/commit/32c98028346c50fc0f6d1d67dbb6653e24489bd9))
+* **website:** Moment Director — rank the story cut past the 5★ ceiling ([#499](https://github.com/iamez/slomix/issues/499)) ([2044c11](https://github.com/iamez/slomix/commit/2044c1101f32f2f5768e133352c375e96f713978))
+
+
+### Bug Fixes
+
+* **website:** smart-stats map count = maps played, not distinct names ([#497](https://github.com/iamez/slomix/issues/497)) ([18a3f32](https://github.com/iamez/slomix/commit/18a3f32c11727b61dc205f9a0772ca04bbb38d42))
+
 ## [1.25.0](https://github.com/iamez/slomix/compare/v1.24.0...v1.25.0) (2026-07-09)
 
 
