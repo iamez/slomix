@@ -272,8 +272,9 @@ class TestMaybeSettleMarkets:
 
 class _CloseFakeDB:
     """Stub for maybe_close_after_map1: the scan returns auto-opened open markets as
-    (id, gaming_session_id); `map1_round` = (start_unix, duration) feeds _map1_closes_at
-    (None = map 1 not finished). Captures the close UPDATE as (market_id, new_closes_at)."""
+    (id, gaming_session_id, closes_at); `map1_round` = (start_unix, duration) feeds
+    _map1_closes_at (None = map 1 not finished). Captures the close UPDATE as
+    (market_id, new_closes_at)."""
 
     def __init__(self, markets, map1_round=None):
         self.markets = markets
@@ -303,12 +304,23 @@ class TestMaybeCloseAfterMap1:
         # closes_at with the real end-of-map-1 (so UIs/place_bet stop treating it open).
         start_unix = int(time.time()) - 400
         duration = 300  # map-1 end = 100s ago
-        db = _CloseFakeDB([(55, 132)], map1_round=(start_unix, duration))
+        future = datetime.now() + timedelta(minutes=10)  # noqa: DTZ005 - fallback still future
+        db = _CloseFakeDB([(55, 132, future)], map1_round=(start_unix, duration))
         assert await maybe_close_after_map1(db) == 1
         assert db.updates == [(55, datetime.fromtimestamp(start_unix + duration))]  # noqa: DTZ006
 
-    async def test_noop_when_map1_not_finished(self):
-        db = _CloseFakeDB([(55, 132)], map1_round=None)
+    async def test_closes_market_when_fallback_window_elapsed(self):
+        # Map 1 still unfinished (map1_round=None) but the fallback closes_at is already
+        # in the past -> close so the UIs stop advertising an expired 'open' market.
+        past = datetime.now() - timedelta(minutes=1)  # noqa: DTZ005 - fallback elapsed
+        db = _CloseFakeDB([(55, 132, past)], map1_round=None)
+        assert await maybe_close_after_map1(db) == 1
+        assert db.updates == [(55, past)]  # keeps the (already-passed) fallback cutoff
+
+    async def test_noop_when_map1_unfinished_and_window_future(self):
+        # Map 1 unfinished and fallback still in the future -> leave the market open.
+        future = datetime.now() + timedelta(minutes=10)  # noqa: DTZ005
+        db = _CloseFakeDB([(55, 132, future)], map1_round=None)
         assert await maybe_close_after_map1(db) == 0
         assert db.updates == []
 

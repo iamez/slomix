@@ -267,11 +267,12 @@ async def maybe_open_market(db, live_within_seconds: int) -> int | None:
 
 
 async def maybe_close_after_map1(db) -> int:
-    """Close an auto-opened market for betting once its map 1 has finished (§6.4b).
+    """Close an auto-opened market for betting once its map 1 has finished — or once its
+    fallback window has elapsed with map 1 still unfinished (§6.4b).
 
     Auto-open uses a future now + BETS_CLOSE_AFTER_MINUTES fallback window until map 1's
-    end is known. Once map 1 is over this flips the market to status='closed' and stamps
-    closes_at with the real end-of-map-1, so:
+    end is known. Once map 1 is over (or the fallback window passes without it finishing)
+    this flips the market to status='closed' and stamps closes_at with the cutoff, so:
       - the frontends (which show betting controls only while status=='open') stop
         advertising an expired market as open, and
       - place_bet (which rejects any non-'open' market) refuses further bets,
@@ -284,7 +285,7 @@ async def maybe_close_after_map1(db) -> int:
         return 0
     try:
         rows = await db.fetch_all(
-            "SELECT id, gaming_session_id FROM parimutuel_markets "
+            "SELECT id, gaming_session_id, closes_at FROM parimutuel_markets "
             "WHERE status = 'open' AND created_by_user_id IS NULL "
             "  AND gaming_session_id IS NOT NULL AND closes_at IS NOT NULL"
         )
@@ -294,23 +295,30 @@ async def maybe_close_after_map1(db) -> int:
         logger.warning("bets close-after-map1 scan failed: %s", exc)
         return 0
 
+    now = datetime.now()  # noqa: DTZ005 - naive local matches the naive closes_at column
     closed = 0
     for row in rows or []:
-        market_id, gsid = int(row[0]), int(row[1])
+        market_id, gsid, current_closes = int(row[0]), int(row[1]), row[2]
         try:
             map1_end = await _map1_closes_at(db, gsid)
-            if map1_end is None:
-                continue  # map 1 not finished yet — leave the market open
+            if map1_end is not None:
+                # Map 1 finished — stamp the real cutoff and close.
+                new_closes, reason = map1_end, f"map 1 ended {map1_end}"
+            elif current_closes is not None and current_closes <= now:
+                # Map 1 still unfinished but the fallback window has already elapsed
+                # (a first map longer than BETS_CLOSE_AFTER_MINUTES): place_bet already
+                # rejects via closes_at, but the UIs only see status — so close it too
+                # instead of leaving an expired 'open' market advertised (codex P2).
+                new_closes, reason = current_closes, f"fallback window elapsed ({current_closes})"
+            else:
+                continue  # map 1 unfinished and the fallback window is still in the future
             await db.execute(
                 "UPDATE parimutuel_markets SET status = 'closed', closes_at = ? "
                 "WHERE id = ? AND status = 'open'",
-                (map1_end, market_id),
+                (new_closes, market_id),
             )
             closed += 1
-            logger.info(
-                "bets close-after-map1: market %s closed (map 1 ended %s)",
-                market_id, map1_end,
-            )
+            logger.info("bets close-after-map1: market %s closed (%s)", market_id, reason)
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # one bad market must not stop the rest
