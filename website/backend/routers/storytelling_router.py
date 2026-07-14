@@ -481,8 +481,12 @@ async def get_box_score(
 ):
     """BOX Score: Oksii-style stopwatch match scoring."""
     sd = _parse_date(session_date)
+    # Deterministic resolution (earliest session of the day) so a multi-session
+    # calendar day always scores the SAME session — and matches the maps-played
+    # count the Story dropdown / narrative show (both scope to this same gsid).
     row = await db.fetch_one(
-        "SELECT gaming_session_id FROM rounds WHERE round_date = $1 LIMIT 1",
+        "SELECT gaming_session_id FROM rounds WHERE round_date = $1 "
+        "AND gaming_session_id IS NOT NULL ORDER BY gaming_session_id LIMIT 1",
         (str(sd),),
     )
     if not row:

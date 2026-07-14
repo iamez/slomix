@@ -250,21 +250,27 @@ async def get_proximity_scopes(
         # Canonical maps-played per date, from the rounds table (one row per round,
         # always present) — NOT the per-engagement combat_engagement rows, which
         # would undercount a map whose R1 had no recorded engagement (codex/copilot).
-        # Same validity gate as the BOX scorer (is_valid + round_status='completed',
-        # box_scoring_service) so bot-test/filler/cancelled R1s aren't over-counted.
-        # round_date is a 'YYYY-MM-DD' text column matching the session_date keys.
-        rounds_by_date: dict[str, int] = {}
+        # Same validity gate as the BOX scorer (is_valid + round_status='completed')
+        # AND scoped to the SAME single gaming session BOX resolves for the date
+        # (the earliest gsid), so a multi-session calendar day isn't summed together.
+        # rounds_by_date is None only if the query itself failed (fall back per
+        # session); a date with zero valid completed R1s is correctly absent -> 0.
+        rounds_by_date: dict[str, int] | None = {}
         try:
             r1_rows = await db.fetch_all(
-                "SELECT round_date, COUNT(*) FROM rounds "
-                "WHERE round_date >= $1 AND round_number = 1 "
-                "  AND is_valid AND round_status = 'completed' "
-                "GROUP BY round_date",
+                "SELECT r.round_date, COUNT(*) FROM rounds r "
+                "JOIN (SELECT round_date, MIN(gaming_session_id) AS gsid FROM rounds "
+                "      WHERE round_date >= $1 AND gaming_session_id IS NOT NULL "
+                "      GROUP BY round_date) f "
+                "  ON f.round_date = r.round_date AND f.gsid = r.gaming_session_id "
+                "WHERE r.round_number = 1 AND r.is_valid AND r.round_status = 'completed' "
+                "GROUP BY r.round_date",
                 (since.isoformat(),),
             )
             rounds_by_date = {str(r[0]): int(r[1]) for r in (r1_rows or [])}
         except Exception:
             logger.exception("Proximity scopes: canonical maps-played query failed")
+            rounds_by_date = None
 
         sessions: list[dict[str, Any]] = []
         for session in sorted(
@@ -305,9 +311,14 @@ async def get_proximity_scopes(
             # (te_escape2 x3) is 3 maps, matching the box score's map_number
             # grouping + owner rule "each escape is its own map". map_count stays
             # the distinct-name count (used by the proximity nav hierarchy); the
-            # story dropdown label uses maps_played. Canonical from rounds (above),
-            # falling back to the distinct-map count if the date has no rounds row.
-            maps_played = rounds_by_date.get(session["session_date"], len(maps_sorted))
+            # story dropdown label uses maps_played. Canonical from rounds (above):
+            # a date absent from rounds_by_date has zero valid completed R1s -> 0
+            # (BOX would show nothing). Only if the whole query failed (None) do we
+            # fall back to the distinct-map count.
+            if rounds_by_date is None:
+                maps_played = len(maps_sorted)
+            else:
+                maps_played = rounds_by_date.get(session["session_date"], 0)
 
             sessions.append(
                 {
