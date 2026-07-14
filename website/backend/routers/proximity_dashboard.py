@@ -247,6 +247,27 @@ async def get_proximity_scopes(
                 if first is None or round_start_val < first:
                     map_entry["_first_round_start"] = round_start_val
 
+        # Canonical maps-played per date, from the rounds table (one row per round,
+        # always present) — NOT the per-engagement combat_engagement rows, which
+        # would undercount a map whose R1 had no recorded engagement (codex/copilot).
+        # Same validity gate as the BOX scorer (is_valid + round_status='completed'),
+        # scoped by round_date to match the date-keyed dropdown. rounds_by_date is
+        # None only if the query itself failed (fall back per session); a date with
+        # zero valid completed R1s is correctly absent -> 0.
+        rounds_by_date: dict[str, int] | None = {}
+        try:
+            r1_rows = await db.fetch_all(
+                "SELECT round_date, COUNT(*) FROM rounds "
+                "WHERE round_date >= $1 AND round_number = 1 "
+                "  AND is_valid AND round_status = 'completed' "
+                "GROUP BY round_date",
+                (since.isoformat(),),
+            )
+            rounds_by_date = {str(r[0]): int(r[1]) for r in (r1_rows or [])}
+        except Exception:
+            logger.exception("Proximity scopes: canonical maps-played query failed")
+            rounds_by_date = None
+
         sessions: list[dict[str, Any]] = []
         for session in sorted(
             sessions_by_date.values(),
@@ -282,11 +303,25 @@ async def get_proximity_scopes(
             for item in maps_sorted:
                 item.pop("_first_round_start", None)
 
+            # maps *played* (matches): a map replayed in the same session
+            # (te_escape2 x3) is 3 maps, matching the box score's map_number
+            # grouping + owner rule "each escape is its own map". map_count stays
+            # the distinct-name count (used by the proximity nav hierarchy); the
+            # story dropdown label uses maps_played. Canonical from rounds (above):
+            # a date absent from rounds_by_date has zero valid completed R1s -> 0
+            # (BOX would show nothing). Only if the whole query failed (None) do we
+            # fall back to the distinct-map count.
+            if rounds_by_date is None:
+                maps_played = len(maps_sorted)
+            else:
+                maps_played = rounds_by_date.get(session["session_date"], 0)
+
             sessions.append(
                 {
                     "session_date": session["session_date"],
                     "engagements": session["engagements"],
                     "map_count": len(maps_sorted),
+                    "maps_played": maps_played,
                     "round_count": sum(map_item["round_count"] for map_item in maps_sorted),
                     "maps": maps_sorted,
                 }

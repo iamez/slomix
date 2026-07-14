@@ -177,13 +177,25 @@ class _NarrativeMixin:
         # and the same session would narrate "Brewdog, Adlernest, ..." one
         # time and "Adlernest, Brewdog, ..." the next — variant phrasing on
         # purpose, but map ordering shouldn't drift.
-        map_rows = await self.db.fetch_all(
-            "SELECT DISTINCT map_name FROM proximity_kill_outcome "
-            "WHERE session_date = $1 ORDER BY map_name",
-            (sd,))
-        raw_maps = [strip_et_colors(r[0]) for r in (map_rows or []) if r[0]]
+        # Read the played maps from the canonical rounds table — one row per round,
+        # always present — instead of proximity kill/engagement rows (which only exist
+        # when a kill/engagement was recorded and would drop a quiet map). Both the
+        # count AND the name list come from this single source so they can never
+        # disagree, using the SAME validity gate as BOX (is_valid + completed). Scoped
+        # by session_date, matching the rest of this narrative (KIS/moments/synergy are
+        # all session_date-keyed). R1 rounds == maps played (replays counted).
+        r1_rows = await self.db.fetch_all(
+            "SELECT map_name FROM rounds "
+            "WHERE round_date = $1 AND round_number = 1 "
+            "  AND is_valid AND round_status = 'completed' "
+            "ORDER BY round_start_unix",
+            (str(sd),))
+        r1_maps = [strip_et_colors(r[0]) for r in (r1_rows or []) if r[0]]
+        map_count = len(r1_maps)  # matches played, BOX-excluded rounds already gone
+        # distinct names for the sentence list (stable order); may be < map_count
+        # when a map was replayed — the sentence says the map count, lists the names.
+        raw_maps = sorted(set(r1_maps))
         maps_played = _format_maps_list(raw_maps)
-        map_count = len(raw_maps)
 
         # 3. MVP (top KIS player)
         mvp = kis_board[0]
