@@ -662,6 +662,41 @@ async function loadCareerHistory(root, guid) {
     }
 }
 
+// Slomix Museum memory card (Good Night plan rank 10) — a friendship-safe
+// keepsake of the player's whole history. Rank-vs-self only: "playing since",
+// nights, lifetime kills, personal-best round/spree, signature map. Lives in the
+// History tab next to the Career Timeline.
+async function loadMemoryCard(root, guid) {
+    if (!root || !guid) return;
+    let data;
+    try {
+        data = await fetchJSON(`${API_BASE}/players/${encodeURIComponent(guid)}/memory-card`);
+    } catch (_) {
+        return; // optional keepsake — never block the profile
+    }
+    const facts = (data && data.facts) || [];
+    if (!facts.length) return;
+
+    const cells = facts.map((f) => {
+        const isSig = f.key === 'signature_map';
+        const accent = isSig ? 'border-brand-amber/50' : 'border-white/5';
+        return `
+            <div class="bg-slate-800/40 rounded-lg p-3 border ${accent}">
+                <div class="text-[10px] uppercase tracking-wide text-slate-500">${escapeHtml(f.label)}</div>
+                <div class="text-lg font-bold ${isSig ? 'text-brand-amber' : 'text-white'}">${escapeHtml(String(f.value))}</div>
+                ${f.sub ? `<div class="text-[11px] text-slate-400 mt-0.5">${escapeHtml(String(f.sub))}</div>` : ''}
+            </div>`;
+    }).join('');
+
+    const html = _panel('Memory card', 'scroll-text', `
+        <p class="text-xs text-slate-500 mb-4">A keepsake of your Slomix history — measured against your own past, never a ladder.</p>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">${cells}</div>
+    `, 'history');
+    safeInsertHTML(root, 'beforeend', html);
+    _applyActivePfTab();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
 // Cached series so the sparkline can be (re)drawn when the History tab becomes
 // visible — a hidden canvas reports clientWidth 0, which would size it wrong.
 let _sparkValues = null;
@@ -758,6 +793,7 @@ export async function loadEnhancedProfileSections(playerIdentifier) {
 
     // History tab: rating sparkline + engraved season awards (S5-C, async).
     loadCareerHistory(root, data.guid).catch((e) => console.warn('career history failed', e));
+    loadMemoryCard(root, data.guid).catch((e) => console.warn('memory card failed', e));
     loadPlayerForm(root, data.guid).catch((e) => console.warn('player form failed', e));
 
     // Wire the aim map dropdown (rose) after the DOM exists. Pass the
