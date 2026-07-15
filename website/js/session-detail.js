@@ -371,6 +371,7 @@ export async function loadSessionDetailView({ sessionId, sessionDate, tab } = {}
         _loadVerdictStrip().catch((e) => console.warn('verdict strip failed', e));
         _loadMomentsStrip().catch((e) => console.warn('moments strip failed', e));
         _loadObjectivePressure().catch((e) => console.warn('objective pressure failed', e));
+        _loadLifeCards().catch((e) => console.warn('life cards failed', e));
         _loadMvpPanel().catch((e) => console.warn('mvp panel failed', e));
     } catch (e) {
         console.error('Failed to load session detail:', e);
@@ -681,6 +682,54 @@ async function _loadObjectivePressure() {
 }
 
 // ============================================================
+// LIFE CARDS (Good Night rank 9) — the standout single lives of the
+// night, the rampage people remember ("X got 8 before going down") that
+// the session total flattens. Optional enrichment: any failure/empty
+// leaves the page untouched.
+// ============================================================
+
+async function _loadLifeCards() {
+    const host = document.getElementById('sd-life-cards');
+    if (!host || !_sessionDate) return;
+    let data;
+    try {
+        data = await fetchJSON(
+            `${API_BASE}/storytelling/best-lives?session_date=${encodeURIComponent(_sessionDate)}&limit=5`);
+    } catch (_) {
+        return; // optional enrichment — never block the page
+    }
+    const lives = data?.lives || [];
+    if (!lives.length) return;
+
+    const cards = lives.map((l, i) => {
+        const meta = [mapLabel(l.map_name), l.round_number ? `R${l.round_number}` : '']
+            .filter(Boolean).join(' · ');
+        const lead = i === 0 ? 'ring-1 ring-amber-400/40' : 'border-slate-700/60';
+        return `
+            <a href="#/profile/${encodeURIComponent(l.guid || '')}"
+               class="flex flex-col gap-1 px-3 py-2 rounded-lg border ${lead} bg-slate-900/40 shrink-0 max-w-xs hover:bg-slate-800/40 transition">
+                <span class="flex items-baseline gap-2">
+                    <span class="text-2xl font-black text-amber-400 tabular-nums">${num(l.kills, 0)}</span>
+                    <span class="text-[10px] uppercase tracking-wide text-slate-500">kills · one life</span>
+                </span>
+                <span class="text-sm font-semibold text-white">${escapeHtml(l.name || '')}</span>
+                <span class="text-[10px] text-slate-500">${escapeHtml(meta)} · ${num(l.life_seconds, 0)}s alive</span>
+            </a>`;
+    }).join('');
+
+    host.innerHTML = `
+        <div class="glass-panel rounded-xl p-4">
+            <div class="flex items-center gap-3 mb-3">
+                <div class="text-[11px] uppercase tracking-wider text-slate-500 font-bold"
+                     title="The best single life of the night — the most kills a player landed on one life (whether they died or lived to the round's end). The rampage the session total hides.">
+                    Lives of the night · the biggest single life
+                </div>
+            </div>
+            <div class="flex gap-2 overflow-x-auto pb-1">${cards}</div>
+        </div>`;
+}
+
+// ============================================================
 // SHELL
 // ============================================================
 
@@ -850,6 +899,9 @@ function _renderShell(container) {
 
         <!-- Objective pressure: who carried the objective tonight (Good Night rank 6) -->
         <div id="sd-objective-pressure" class="mb-6"></div>
+
+        <!-- Life cards: the standout single lives of the night (Good Night rank 9) -->
+        <div id="sd-life-cards" class="mb-6"></div>
 
         <!-- MVP vote: peer recognition for this session (S3) -->
         <div id="sd-mvp-panel" class="mb-6"></div>

@@ -81,6 +81,103 @@ async def get_moments(
     }
 
 
+# A life must land at least this many kills to be a "card" — below it there's no
+# story, just a normal life.
+_BEST_LIFE_MIN_KILLS = 3
+
+
+def _build_life_cards(rows) -> list:
+    """Turn best-life query rows into card dicts (colour-stripped name, rounded
+    life seconds, humanised narrative). Pure — unit-tested without a DB.
+
+    player_track.player_guid is the 32-char proximity GUID; the profile route
+    resolves against the 8-char player_comprehensive_stats GUID, so expose the
+    short form the UI can link to (short_guid is a no-op on already-short ids).
+    """
+    lives = []
+    for r in (rows or []):
+        short = short_guid(r["guid"]) if r["guid"] else None
+        name = strip_et_colors(r["name"] or (short or "")[:8])
+        life_s = round((r["life_ms"] or 0) / 1000)
+        kills = int(r["kills"])
+        lives.append({
+            "guid": short,
+            "name": name,
+            "kills": kills,
+            "life_seconds": life_s,
+            "map_name": r["map_name"],
+            "round_number": r["round_number"],
+            "narrative": f"{name} got {kills} kills in one life ({life_s}s) on "
+                         f"{(r['map_name'] or 'the map').replace('_', ' ')}",
+        })
+    return lives
+
+
+@router.get("/storytelling/best-lives")
+@limiter.limit("10/minute")
+async def get_best_lives(
+    request: Request,
+    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    limit: int = Query(default=5, le=20, ge=1),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Life Cards — the standout single lives of a session (Good Night rank 9).
+
+    A "life" is one spawn->death span (a player_track row); a card celebrates the
+    rampage people remember ("X got 6 before going down"), which the session-total
+    scoreboard flattens. Kills are counted DURING the life window from
+    proximity_combat_position. Read-only. Ranked by kills, then by how explosive
+    the life was (kills per second). Bots excluded.
+    """
+    sd = _parse_date(session_date)
+    rows = await db.fetch_all(
+        """
+        SELECT pt.player_guid AS guid, pt.player_name AS name, pt.map_name,
+               pt.round_number,
+               GREATEST(pt.death_time_ms - pt.spawn_time_ms, 0) AS life_ms,
+               k.kills
+        FROM player_track pt
+        JOIN LATERAL (
+            SELECT COUNT(*) AS kills FROM proximity_combat_position cp
+            WHERE cp.session_date = pt.session_date
+              -- canonical round identity is (round_start_unix, map_name,
+              -- round_number); stale telemetry can share a round_start_unix
+              -- across two maps/rounds, and event_time is round-relative, so
+              -- joining on the unix alone pulls kills from the wrong life.
+              AND cp.round_start_unix = pt.round_start_unix
+              AND cp.map_name = pt.map_name
+              AND cp.round_number = pt.round_number
+              AND cp.event_type = 'kill'
+              AND cp.attacker_guid = pt.player_guid
+              AND cp.attacker_team != cp.victim_team
+              AND cp.event_time BETWEEN pt.spawn_time_ms AND pt.death_time_ms
+              -- don't let killing bots inflate a human's card (mixed rounds)
+              AND cp.victim_guid NOT LIKE 'OMNIBOT%' AND cp.victim_name NOT LIKE '[BOT]%'
+        ) k ON TRUE
+        WHERE pt.session_date = $1
+          AND pt.spawn_time_ms IS NOT NULL AND pt.death_time_ms IS NOT NULL
+          -- round_start_unix 0/NULL is the legacy unlinked bucket; joining on it
+          -- would merge every such round (event_time is round-relative) and
+          -- mis-attribute kills across lives.
+          AND pt.round_start_unix IS NOT NULL AND pt.round_start_unix > 0
+          AND pt.player_guid NOT LIKE 'OMNIBOT%' AND pt.player_name NOT LIKE '[BOT]%'
+          AND k.kills >= $2
+        ORDER BY k.kills DESC,
+                 k.kills::float / GREATEST(pt.death_time_ms - pt.spawn_time_ms, 1000) DESC
+        LIMIT $3
+        """,
+        (sd, _BEST_LIFE_MIN_KILLS, limit),
+    )
+
+    lives = _build_life_cards(rows)
+    return {
+        "status": "ok",
+        "session_date": session_date,
+        "lives": lives,
+        "total": len(lives),
+    }
+
+
 @router.get("/storytelling/kill-impact")
 @limiter.limit("10/minute")
 async def get_kill_impact_leaderboard(
