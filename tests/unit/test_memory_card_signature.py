@@ -45,6 +45,14 @@ class TestPickSignatureMap:
     def test_empty_rows_returns_none(self):
         assert _pick_signature_map([], career_avg=10.0) is None
 
+    def test_tie_break_is_deterministic_alphabetical(self):
+        # Two maps with identical lift -> alphabetically-first wins, regardless of
+        # GROUP BY row order (DB doesn't guarantee it).
+        a = [("supply", 30, 15.0), ("adlernest", 40, 15.0)]
+        b = [("adlernest", 40, 15.0), ("supply", 30, 15.0)]
+        assert _pick_signature_map(a, 10.0)["map_name"] == "adlernest"
+        assert _pick_signature_map(b, 10.0)["map_name"] == "adlernest"
+
     def test_handles_null_avg_kills(self):
         # A map row with a NULL avg (shouldn't happen post-filter, but be safe).
         assert _pick_signature_map([("supply", 8, None)], career_avg=10.0) is None

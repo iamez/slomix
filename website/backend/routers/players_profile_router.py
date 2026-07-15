@@ -1254,21 +1254,26 @@ def _pick_signature_map(map_rows, career_avg: float):
     {map_name, rounds, lift_pct} for the best qualifier, or None when no map
     clears _MEMORY_SIG_MIN_LIFT (or the player has no career average yet). Pure
     (no DB) so it can be unit-tested directly; mirrors the Phase-0 backtest.
+
+    On a lift tie the alphabetically-first map wins, so the result is
+    deterministic even though GROUP BY does not guarantee row order.
     """
     if career_avg <= 0:
         return None
-    best_lift = _MEMORY_SIG_MIN_LIFT
-    signature = None
+    best = None  # (lift, map_name, rounds)
     for name, rounds, avg_k in map_rows:
         lift = float(avg_k or 0.0) / career_avg
-        if lift >= best_lift:
-            best_lift = lift
-            signature = {
-                "map_name": name,
-                "rounds": int(rounds or 0),
-                "lift_pct": round((lift - 1.0) * 100),
-            }
-    return signature
+        if lift < _MEMORY_SIG_MIN_LIFT:
+            continue
+        if best is None or lift > best[0] or (lift == best[0] and name < best[1]):
+            best = (lift, name, int(rounds or 0))
+    if best is None:
+        return None
+    return {
+        "map_name": best[1],
+        "rounds": best[2],
+        "lift_pct": round((best[0] - 1.0) * 100),
+    }
 
 
 @router.get("/players/{identifier}/memory-card")
@@ -1297,7 +1302,7 @@ async def get_player_memory_card(identifier: str, db: DatabaseAdapter = Depends(
         f"COUNT(DISTINCT CAST(r.round_date AS DATE)) AS nights, "
         f"COUNT(*) AS rounds, COALESCE(SUM(pcs.kills), 0) AS career_kills, "
         f"MAX(pcs.killing_spree_best) AS best_spree, "
-        f"AVG(pcs.kills::float) AS avg_kills {base}",
+        f"AVG(CAST(pcs.kills AS FLOAT)) AS avg_kills {base}",
         (guid8,),
     )
     rounds = _i(spine[3]) if spine else 0
@@ -1320,7 +1325,7 @@ async def get_player_memory_card(identifier: str, db: DatabaseAdapter = Depends(
     # Signature map = highest avg-kills lift over the player's own career average
     # (computed in Python to mirror scripts/backtest_museum_memory_card.py exactly).
     map_rows = await db.fetch_all(
-        f"SELECT pcs.map_name, COUNT(*) AS n, AVG(pcs.kills::float) AS avg_k "  # noqa: S608 - base is literal
+        f"SELECT pcs.map_name, COUNT(*) AS n, AVG(CAST(pcs.kills AS FLOAT)) AS avg_k "  # noqa: S608 - base is literal
         f"{base} AND pcs.map_name IS NOT NULL "
         f"GROUP BY pcs.map_name HAVING COUNT(*) >= ?",
         (guid8, _MEMORY_MIN_ROUNDS_ON_MAP),
