@@ -35,31 +35,36 @@ async def main():
     await conn.execute("SET default_transaction_read_only = on")
 
     # Career spine: one row per player with the milestone facts.
+    # Same scope as the shipped endpoint: valid R1/R2 rounds only. Joining rounds
+    # and filtering round_number IN (1,2) excludes the round_number=0 R2 match
+    # summaries the importer writes (cumulative rows that would double-count).
     careers = await conn.fetch("""
-        SELECT player_guid,
-               MAX(clean_name) AS name,
-               MIN(round_date) AS first_seen,
-               MAX(round_date) AS last_seen,
-               COUNT(DISTINCT round_date) AS nights,
+        SELECT pcs.player_guid,
+               MAX(pcs.clean_name) AS name,
+               MIN(CAST(r.round_date AS DATE)) AS first_seen,
+               MAX(CAST(r.round_date AS DATE)) AS last_seen,
+               COUNT(DISTINCT CAST(r.round_date AS DATE)) AS nights,
                COUNT(*) AS rounds,
-               SUM(kills) AS career_kills,
-               MAX(kills) AS best_round_kills,
-               MAX(killing_spree_best) AS best_spree,
-               AVG(kills::float) AS avg_kills
-        FROM player_comprehensive_stats
-        WHERE player_guid IS NOT NULL AND player_name NOT LIKE '[BOT]%'
-        GROUP BY player_guid
+               SUM(pcs.kills) AS career_kills,
+               MAX(pcs.kills) AS best_round_kills,
+               MAX(pcs.killing_spree_best) AS best_spree,
+               AVG(pcs.kills::float) AS avg_kills
+        FROM player_comprehensive_stats pcs JOIN rounds r ON r.id = pcs.round_id
+        WHERE pcs.player_guid IS NOT NULL AND pcs.player_name NOT LIKE '[BOT]%'
+          AND r.round_number IN (1, 2) AND r.is_valid IS DISTINCT FROM FALSE
+        GROUP BY pcs.player_guid
         HAVING COUNT(*) >= $1
         ORDER BY nights DESC
     """, MIN_ROUNDS_CAREER)
 
     # Per-player, per-map averages so we can find the overperformance signature map.
     map_rows = await conn.fetch("""
-        SELECT player_guid, map_name, COUNT(*) AS n, AVG(kills::float) AS avg_k
-        FROM player_comprehensive_stats
-        WHERE player_guid IS NOT NULL AND map_name IS NOT NULL
-          AND player_name NOT LIKE '[BOT]%'
-        GROUP BY player_guid, map_name
+        SELECT pcs.player_guid, pcs.map_name, COUNT(*) AS n, AVG(pcs.kills::float) AS avg_k
+        FROM player_comprehensive_stats pcs JOIN rounds r ON r.id = pcs.round_id
+        WHERE pcs.player_guid IS NOT NULL AND pcs.map_name IS NOT NULL
+          AND pcs.player_name NOT LIKE '[BOT]%'
+          AND r.round_number IN (1, 2) AND r.is_valid IS DISTINCT FROM FALSE
+        GROUP BY pcs.player_guid, pcs.map_name
     """)
     by_player: dict[str, list] = {}
     for r in map_rows:
