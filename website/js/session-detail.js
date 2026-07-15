@@ -372,6 +372,7 @@ export async function loadSessionDetailView({ sessionId, sessionDate, tab } = {}
         _loadMomentsStrip().catch((e) => console.warn('moments strip failed', e));
         _loadObjectivePressure().catch((e) => console.warn('objective pressure failed', e));
         _loadLifeCards().catch((e) => console.warn('life cards failed', e));
+        _loadDataTrust().catch((e) => console.warn('data trust failed', e));
         _loadMvpPanel().catch((e) => console.warn('mvp panel failed', e));
     } catch (e) {
         console.error('Failed to load session detail:', e);
@@ -729,6 +730,66 @@ async function _loadLifeCards() {
         </div>`;
 }
 
+// Data trust (Good Night plan rank 12, §J) — a confidence badge that sits above
+// the stories so viewers can trust or discount the proximity-heavy claims. Pure
+// shaping from the SESSION-scoped fields of /proximity/quality; deliberately
+// ignores the endpoint's overall_status/linkage, which fold in GLOBAL anomaly
+// counts (same for every session) that would mislabel a well-tracked night.
+function _trustBadgeCopy(q) {
+    if (!q || typeof q !== 'object') return null;
+    const sig = q.signals || {};
+    // Core signals the stories lean on. If any is absent, this session predates
+    // proximity capture — show no badge and let the score/story stand (no
+    // "hallucination" claim, plan §J idea #3).
+    const core = ['combat_engagement', 'player_track', 'proximity_kill_outcome'];
+    if (core.some((k) => !sig[k] || sig[k].status === 'missing')) return null;
+
+    const rc = q.round_correlation || {};
+    const rounds = Number(rc.correlation_count || 0);
+    if (rounds <= 0) return null;
+    const coverage = Math.round(Number(rc.avg_completeness_pct || 0));
+    const gaps = Number(rc.missing_proximity_flag_rows || 0);
+
+    const solid = gaps === 0 && coverage >= 90;
+    const detailParts = [
+        `${rounds} round${rounds === 1 ? '' : 's'}`,
+        `proximity coverage ${coverage}%`,
+    ];
+    if (gaps > 0) detailParts.push(`${gaps} round${gaps === 1 ? '' : 's'} partial`);
+    return {
+        tone: solid ? 'solid' : 'partial',
+        label: solid ? 'Fully backed by tracked play' : 'Mostly backed by tracked play',
+        detail: detailParts.join(' · '),
+    };
+}
+
+async function _loadDataTrust() {
+    const host = document.getElementById('sd-data-trust');
+    if (!host || !_sessionDate) return;
+    let data;
+    try {
+        data = await fetchJSON(
+            `${API_BASE}/proximity/quality?session_date=${encodeURIComponent(_sessionDate)}`);
+    } catch (_) {
+        return; // optional confidence signal — never block the page
+    }
+    const badge = _trustBadgeCopy(data);
+    if (!badge) return;
+
+    const tone = badge.tone === 'solid'
+        ? { dot: 'bg-emerald-400', text: 'text-emerald-300', ring: 'border-emerald-500/30' }
+        : { dot: 'bg-amber-400', text: 'text-amber-300', ring: 'border-amber-500/30' };
+    host.innerHTML = `
+        <div class="glass-panel rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 border ${tone.ring}"
+             title="These insights are built from per-round proximity telemetry. This shows how much of tonight was actually tracked, so you can trust or discount the claims below.">
+            <span class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full ${tone.dot}"></span>
+                <span class="text-[11px] uppercase tracking-wider font-bold ${tone.text}">${escapeHtml(badge.label)}</span>
+            </span>
+            <span class="text-[11px] text-slate-400">${escapeHtml(badge.detail)}</span>
+        </div>`;
+}
+
 // ============================================================
 // SHELL
 // ============================================================
@@ -887,6 +948,9 @@ function _renderShell(container) {
                 </div>
             </div>
         </div>
+
+        <!-- Data trust: a confidence badge over the stories below (Good Night rank 12) -->
+        <div id="sd-data-trust" class="mb-4"></div>
 
         <!-- Good Night: one score for the EVENING itself (Good Night plan, Phase 1) -->
         <div id="sd-good-night" class="mb-6"></div>
