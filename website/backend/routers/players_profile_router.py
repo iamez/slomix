@@ -1238,3 +1238,128 @@ async def get_player_wrapped(identifier: str, season: str = "current",
                       "value": f"{_i(best_round[0])} DPM", "sub": f"{best_round[1]} · {best_round[2]}"})
     return {"status": "ok", "guid": guid8, "season_id": sid,
             "season_name": sm.get_season_name(sid), "player_name": name, "cards": cards}
+
+
+# Slomix Museum memory card (Good Night plan rank 10, §I). A signature map needs
+# enough rounds to mean something, and must beat the player's OWN career average
+# (raw most-played is te_escape2 for everyone here and so carries no signal).
+_MEMORY_MIN_ROUNDS_ON_MAP = 8
+_MEMORY_SIG_MIN_LIFT = 1.08
+
+
+def _pick_signature_map(map_rows, career_avg: float):
+    """The map with the highest avg-kills lift over a player's own career average.
+
+    map_rows: iterable of (map_name, rounds, avg_kills). Returns
+    {map_name, rounds, lift_pct} for the best qualifier, or None when no map
+    clears _MEMORY_SIG_MIN_LIFT (or the player has no career average yet). Pure
+    (no DB) so it can be unit-tested directly; mirrors the Phase-0 backtest.
+
+    On a lift tie the alphabetically-first map wins, so the result is
+    deterministic even though GROUP BY does not guarantee row order.
+    """
+    if career_avg <= 0:
+        return None
+    best = None  # (lift, map_name, rounds)
+    for name, rounds, avg_k in map_rows:
+        lift = float(avg_k or 0.0) / career_avg
+        if lift < _MEMORY_SIG_MIN_LIFT:
+            continue
+        if best is None or lift > best[0] or (lift == best[0] and name < best[1]):
+            best = (lift, name, int(rounds or 0))
+    if best is None:
+        return None
+    return {
+        "map_name": best[1],
+        "rounds": best[2],
+        "lift_pct": round((best[0] - 1.0) * 100),
+    }
+
+
+@router.get("/players/{identifier}/memory-card")
+async def get_player_memory_card(identifier: str, db: DatabaseAdapter = Depends(get_db)):
+    """Career 'memory card' — a friendship-safe keepsake of a player's whole
+    Slomix history (rank-vs-self, never a global ladder): playing since, nights
+    shown up, lifetime kills, personal-best round + spree, and the signature map
+    where they most overperform their own average. All facts come from
+    player_comprehensive_stats over valid R1/R2 rounds; no fabricated numbers.
+    """
+    guid8 = await resolve_player_guid(db, identifier)
+    if not guid8:
+        raise HTTPException(status_code=404, detail="Player not found")
+    name = await resolve_display_name(db, guid8, guid8[:8])
+
+    # Valid competitive rounds only (mirror /wrapped): exclude filler/invalid and
+    # R0 aggregates so a record is a real record.
+    base = (
+        "FROM player_comprehensive_stats pcs JOIN rounds r ON r.id = pcs.round_id "
+        "WHERE pcs.player_guid = ? AND r.round_number IN (1,2) "
+        "AND r.is_valid IS DISTINCT FROM FALSE"
+    )
+    spine = await db.fetch_one(
+        f"SELECT MIN(CAST(r.round_date AS DATE)) AS first_seen, "  # noqa: S608 - base is literal
+        f"MAX(CAST(r.round_date AS DATE)) AS last_seen, "
+        f"COUNT(DISTINCT CAST(r.round_date AS DATE)) AS nights, "
+        f"COUNT(*) AS rounds, COALESCE(SUM(pcs.kills), 0) AS career_kills, "
+        f"MAX(pcs.killing_spree_best) AS best_spree, "
+        f"AVG(CAST(pcs.kills AS FLOAT)) AS avg_kills {base}",
+        (guid8,),
+    )
+    rounds = _i(spine[3]) if spine else 0
+    if not rounds:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    first_seen, last_seen, nights = spine[0], spine[1], _i(spine[2])
+    career_kills = _i(spine[4])
+    best_spree = _i(spine[5])
+    career_avg = float(spine[6] or 0.0)
+
+    # The round the personal-best kills happened on (for the "on MAP, DATE" sub).
+    best_round = await db.fetch_one(
+        f"SELECT pcs.kills, pcs.map_name, CAST(r.round_date AS DATE) AS d "  # noqa: S608 - base is literal
+        f"{base} AND pcs.kills IS NOT NULL "
+        f"ORDER BY pcs.kills DESC, r.round_date ASC LIMIT 1",
+        (guid8,),
+    )
+
+    # Signature map = highest avg-kills lift over the player's own career average
+    # (computed in Python to mirror scripts/backtest_museum_memory_card.py exactly).
+    map_rows = await db.fetch_all(
+        f"SELECT pcs.map_name, COUNT(*) AS n, AVG(CAST(pcs.kills AS FLOAT)) AS avg_k "  # noqa: S608 - base is literal
+        f"{base} AND pcs.map_name IS NOT NULL "
+        f"GROUP BY pcs.map_name HAVING COUNT(*) >= ?",
+        (guid8, _MEMORY_MIN_ROUNDS_ON_MAP),
+    )
+    signature = _pick_signature_map(
+        [(mr[0], mr[1], mr[2]) for mr in (map_rows or [])], career_avg,
+    )
+
+    facts = [
+        {"key": "playing_since", "label": "Playing since",
+         "value": str(first_seen), "sub": f"{nights} night{'s' if nights != 1 else ''} · last seen {last_seen}"},
+        {"key": "career_kills", "label": "Career kills",
+         "value": f"{career_kills:,}", "sub": f"over {rounds:,} rounds"},
+    ]
+    if best_round and best_round[0] is not None:
+        facts.append({"key": "best_round", "label": "Best round ever",
+                      "value": f"{_i(best_round[0])} kills",
+                      "sub": f"{best_round[1]} · {best_round[2]}"})
+    if best_spree:
+        facts.append({"key": "best_spree", "label": "Longest killing spree",
+                      "value": f"{best_spree} kills", "sub": "without dying"})
+    if signature:
+        facts.append({"key": "signature_map", "label": "Signature map",
+                      "value": signature["map_name"],
+                      "sub": f"+{signature['lift_pct']}% vs your average · {signature['rounds']} rounds"})
+
+    return {
+        "status": "ok",
+        "guid": guid8,
+        "player_name": name,
+        "playing_since": str(first_seen),
+        "last_seen": str(last_seen),
+        "nights": nights,
+        "rounds": rounds,
+        "signature_map": signature,
+        "facts": facts,
+    }
