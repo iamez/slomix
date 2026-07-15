@@ -59,14 +59,22 @@ async def main():
             JOIN LATERAL (
                 SELECT COUNT(*) AS kills FROM proximity_combat_position cp
                 WHERE cp.session_date = pt.session_date
+                  -- canonical round identity (matches the shipped endpoint):
+                  -- a bare round_start_unix can be shared across two maps/rounds
+                  -- and event_time is round-relative, so scope to the full key.
                   AND cp.round_start_unix = pt.round_start_unix
+                  AND cp.map_name = pt.map_name
+                  AND cp.round_number = pt.round_number
                   AND cp.event_type = 'kill'
                   AND cp.attacker_guid = pt.player_guid
                   AND cp.attacker_team != cp.victim_team
                   AND cp.event_time BETWEEN pt.spawn_time_ms AND pt.death_time_ms
+                  -- bots excluded on the victim side too (attacker side is filtered below)
+                  AND cp.victim_guid NOT LIKE 'OMNIBOT%' AND cp.victim_name NOT LIKE '[BOT]%'
             ) k ON TRUE
             WHERE pt.session_date = $1
               AND pt.spawn_time_ms IS NOT NULL AND pt.death_time_ms IS NOT NULL
+              AND pt.round_start_unix IS NOT NULL AND pt.round_start_unix > 0
               AND pt.player_guid NOT LIKE 'OMNIBOT%' AND pt.player_name NOT LIKE '[BOT]%'
               AND k.kills >= $2
         """, sd, MIN_KILLS)
