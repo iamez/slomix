@@ -742,7 +742,13 @@ function _trustBadgeCopy(q) {
     // proximity capture — show no badge and let the score/story stand (no
     // "hallucination" claim, plan §J idea #3).
     const core = ['combat_engagement', 'player_track', 'proximity_kill_outcome'];
-    if (core.some((k) => !sig[k] || sig[k].status === 'missing')) return null;
+    const coreSignals = core.map((k) => sig[k]);
+    // No badge when a core signal is absent (session predates proximity) or its
+    // query errored — we can't make a trustworthy claim either way (§J idea #3).
+    if (coreSignals.some((s) => !s || s.status === 'missing' || s.status === 'error')) return null;
+    // A core signal that is present but not `ready` (low_count / partial round
+    // linkage) means thin telemetry — never let the badge read "fully backed".
+    const coreReady = coreSignals.every((s) => s.ready !== false);
 
     const rc = q.round_correlation || {};
     const rounds = Number(rc.correlation_count || 0);
@@ -750,7 +756,7 @@ function _trustBadgeCopy(q) {
     const coverage = Math.round(Number(rc.avg_completeness_pct || 0));
     const gaps = Number(rc.missing_proximity_flag_rows || 0);
 
-    const solid = gaps === 0 && coverage >= 90;
+    const solid = coreReady && gaps === 0 && coverage >= 90;
     const detailParts = [
         `${rounds} round${rounds === 1 ? '' : 's'}`,
         `proximity coverage ${coverage}%`,
