@@ -7,9 +7,16 @@ any pending .sql files from the migrations/ directory.
 
 Usage:
     python scripts/apply_migrations.py                       # Apply pending migrations
-    python scripts/apply_migrations.py --status              # Show migration status
+    python scripts/apply_migrations.py --only FILE [FILE..]  # Apply only the named pending files
+    python scripts/apply_migrations.py --status [--json]     # Show migration status
+    python scripts/apply_migrations.py --validate [--json]   # Exit non-zero on pending/failed/checksum drift
     python scripts/apply_migrations.py --baseline            # Mark all as pre-applied
     python scripts/apply_migrations.py --mark FILE [FILE..]  # Record specific files as applied without running them
+
+Exit codes:
+    0  success / nothing to do / validation clean
+    1  migration failure, checksum drift, validation drift, or refused operation
+    2  bad CLI arguments
 
 Environment variables (or .env file):
     POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DATABASE,
@@ -20,8 +27,10 @@ Environment variables (or .env file):
     DB_* names. POSTGRES_* takes precedence when both are present.
 """
 
+import argparse
 import asyncio
 import hashlib
+import json
 import os
 import re
 import sys
@@ -42,6 +51,10 @@ except ImportError:
     pass  # python-dotenv is optional
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
+
+# Session-level advisory lock key so two runners (or a runner racing a deploy)
+# can never interleave migration writes. Value is the ASCII of 'SLOMIX_M'.
+ADVISORY_LOCK_KEY = 0x534C4F4D49585F4D
 
 # ── Ordering ──────────────────────────────────────────────────────────
 
@@ -64,6 +77,155 @@ def _version_from_filename(filename: str) -> str:
 def _file_checksum(path: Path) -> str:
     """SHA-256 hex digest of a file's contents."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+# ── SQL transaction-control analysis ──────────────────────────────────
+
+class MigrationRejected(Exception):
+    """The migration file contains transaction control the runner cannot wrap."""
+
+
+def _mask_sql_noise(sql: str) -> str:
+    """Return a same-length copy with comments and string literals blanked.
+
+    Same-length masking keeps every offset identical to the original, so a
+    token span found in the masked text can be sliced out of the original.
+    Handles: `--` line comments, nested `/* */` block comments, single-quoted
+    strings ('' escape), and dollar-quoted strings ($tag$ ... $tag$ — where
+    PL/pgSQL bodies with their own BEGIN/END live).
+    """
+    out = list(sql)
+    i, n = 0, len(sql)
+    while i < n:
+        ch = sql[i]
+        nxt = sql[i + 1] if i + 1 < n else ""
+        if ch == "-" and nxt == "-":
+            j = sql.find("\n", i)
+            j = n if j == -1 else j
+            for k in range(i, j):
+                out[k] = " "
+            i = j
+        elif ch == "/" and nxt == "*":
+            depth, j = 1, i + 2
+            while j < n and depth:
+                if sql[j] == "/" and j + 1 < n and sql[j + 1] == "*":
+                    depth += 1
+                    j += 2
+                elif sql[j] == "*" and j + 1 < n and sql[j + 1] == "/":
+                    depth -= 1
+                    j += 2
+                else:
+                    j += 1
+            for k in range(i, min(j, n)):
+                out[k] = " "
+            i = j
+        elif ch == "'":
+            j = i + 1
+            while j < n:
+                if sql[j] == "'":
+                    if j + 1 < n and sql[j + 1] == "'":  # escaped ''
+                        j += 2
+                        continue
+                    j += 1
+                    break
+                j += 1
+            for k in range(i, min(j, n)):
+                out[k] = " "
+            i = j
+        elif ch == "$":
+            m = re.match(r"\$([A-Za-z_][A-Za-z0-9_]*)?\$", sql[i:])
+            if m:
+                tag = m.group(0)
+                j = sql.find(tag, i + len(tag))
+                j = n if j == -1 else j + len(tag)
+                for k in range(i, min(j, n)):
+                    out[k] = " "
+                i = j
+            else:
+                i += 1
+        else:
+            i += 1
+    return "".join(out)
+
+
+_TXN_TOKEN = re.compile(
+    r"\b(?:BEGIN|COMMIT|ROLLBACK|SAVEPOINT|START\s+TRANSACTION|END\s+TRANSACTION)\b",
+    re.IGNORECASE,
+)
+_OPEN_TOKEN = re.compile(r"^(?:BEGIN|START\s+TRANSACTION)$", re.IGNORECASE)
+
+
+def unwrap_outer_transaction(sql: str) -> str:
+    """Strip a single outer BEGIN;…COMMIT; wrapper; reject other txn control.
+
+    Most migrations in this repo wrap themselves in BEGIN;/COMMIT;. The runner
+    supplies its own transaction (so the ledger write is atomic with the
+    migration), which means the file's wrapper must be removed — an inner
+    COMMIT would silently end the runner's transaction and break atomicity.
+    Any transaction control that is NOT exactly one leading BEGIN plus one
+    trailing COMMIT (comments/strings excluded via masking) raises
+    MigrationRejected: such a file needs restructuring, not guessing.
+    """
+    masked = _mask_sql_noise(sql)
+    tokens = list(_TXN_TOKEN.finditer(masked))
+    if not tokens:
+        return sql
+
+    first, last = tokens[0], tokens[-1]
+    body_before = masked[:first.start()].strip()
+
+    # Exactly one leading BEGIN and one COMMIT. Content is allowed AFTER the
+    # COMMIT (e.g. 014 runs a post-commit DO block); it simply joins the
+    # runner's transaction, which is safe for the DDL/DO patterns used here.
+    ok_wrapper = (
+        len(tokens) == 2
+        and _OPEN_TOKEN.match(first.group(0))
+        and last.group(0).upper() == "COMMIT"
+        and body_before == ""
+    )
+    if not ok_wrapper:
+        found = ", ".join(t.group(0).upper() for t in tokens)
+        raise MigrationRejected(
+            f"unsupported transaction control ({found}); only a single outer "
+            "BEGIN;…COMMIT; wrapper is allowed — the runner manages the transaction"
+        )
+
+    # Slice the wrapper (and its trailing semicolons) out of the original.
+    open_end = first.end()
+    if open_end < len(sql) and sql[open_end:].lstrip().startswith(";"):
+        open_end = sql.index(";", open_end) + 1
+    close_start, close_end = last.start(), last.end()
+    tail = sql[close_end:]
+    stripped_tail = tail.lstrip()
+    if stripped_tail.startswith(";"):
+        close_end += len(tail) - len(stripped_tail) + 1
+    return sql[:first.start()] + sql[open_end:close_start] + sql[close_end:]
+
+
+def requires_non_transactional(sql: str) -> bool:
+    """True for statements PostgreSQL refuses inside a transaction block."""
+    return re.search(r"\bCONCURRENTLY\b", _mask_sql_noise(sql)) is not None
+
+
+def split_statements(sql: str) -> list[str]:
+    """Split SQL on top-level semicolons (comments/strings masked out).
+
+    Used only for the non-transactional (CONCURRENTLY) path: a multi-statement
+    string sent as one simple query runs in an implicit transaction, which
+    PostgreSQL rejects for CONCURRENTLY — each statement must go separately.
+    """
+    masked = _mask_sql_noise(sql)
+    statements, start = [], 0
+    for i, ch in enumerate(masked):
+        if ch == ";":
+            stmt = sql[start:i].strip()
+            if stmt:
+                statements.append(stmt)
+            start = i + 1
+    tail = sql[start:].strip()
+    if tail:
+        statements.append(tail)
+    return statements
 
 
 # ── Database helpers ──────────────────────────────────────────────────
@@ -93,6 +255,18 @@ async def get_connection() -> asyncpg.Connection:
         user=_env("POSTGRES_USER", "DB_USER", default="etlegacy_user"),
         password=_env("POSTGRES_PASSWORD", "DB_PASSWORD", default=""),
     )
+
+
+async def acquire_runner_lock(conn: asyncpg.Connection):
+    """Take the session advisory lock or refuse to run.
+
+    pg_try_advisory_lock (not the blocking variant): a second runner should
+    fail fast with a clear message, not hang behind an unknown peer.
+    """
+    got = await conn.fetchval("SELECT pg_try_advisory_lock($1)", ADVISORY_LOCK_KEY)
+    if not got:
+        print("ERROR: another migration runner holds the advisory lock; aborting.")
+        sys.exit(1)
 
 
 async def ensure_tracking_table(conn: asyncpg.Connection):
@@ -131,6 +305,26 @@ async def get_failed(conn: asyncpg.Connection) -> set[str]:
     return {r["filename"] for r in rows}
 
 
+async def get_checksum_mismatches(conn: asyncpg.Connection) -> list[str]:
+    """Applied files whose on-disk content no longer matches the ledger.
+
+    A recorded checksum of NULL (pre-checksum rows) is treated as unknown and
+    skipped — only a positive mismatch is drift.
+    """
+    recorded = {
+        r["filename"]: r["checksum"]
+        for r in await conn.fetch(
+            "SELECT filename, checksum FROM schema_migrations WHERE success = TRUE"
+        )
+    }
+    mismatches = []
+    for filename, path in discover_migrations():
+        rec = recorded.get(filename)
+        if rec and rec != _file_checksum(path):
+            mismatches.append(filename)
+    return mismatches
+
+
 def discover_migrations() -> list[tuple[str, Path]]:
     """Return sorted list of (filename, path) for all .sql migration files."""
     files = sorted(
@@ -140,38 +334,91 @@ def discover_migrations() -> list[tuple[str, Path]]:
     return [(f, MIGRATIONS_DIR / f) for f in files]
 
 
+async def collect_state(conn: asyncpg.Connection) -> dict:
+    """Shared status snapshot for --status/--validate."""
+    applied = await get_applied(conn)
+    failed = await get_failed(conn)
+    migrations = discover_migrations()
+    pending = [f for f, _ in migrations if f not in applied]
+    mismatches = await get_checksum_mismatches(conn)
+    return {
+        "total_files": len(migrations),
+        "applied": sorted(applied),
+        "failed": sorted(failed),
+        "pending": pending,
+        "checksum_mismatches": mismatches,
+    }
+
+
 # ── Commands ──────────────────────────────────────────────────────────
 
-async def cmd_status():
+async def cmd_status(json_out: bool = False):
     """Show which migrations are applied vs pending."""
     conn = await get_connection()
     try:
         await ensure_tracking_table(conn)
-        applied = await get_applied(conn)
-        failed = await get_failed(conn)
-        migrations = discover_migrations()
+        state = await collect_state(conn)
+        if json_out:
+            print(json.dumps(state, indent=2))
+            return
 
+        applied = set(state["applied"])
+        failed = set(state["failed"])
         print(f"\nMigrations directory: {MIGRATIONS_DIR}")
-        print(f"Total files: {len(migrations)}\n")
+        print(f"Total files: {state['total_files']}\n")
 
-        pending = 0
-        for filename, path in migrations:
+        for filename, _path in discover_migrations():
             if filename in applied:
                 status, marker = "APPLIED", "  "
             elif filename in failed:
                 status, marker = "FAILED", "!!"
             else:
                 status, marker = "PENDING", ">>"
-                pending += 1
-            print(f"  {marker} [{status:7s}] {filename}")
+            drift = "  (CHECKSUM MISMATCH)" if filename in state["checksum_mismatches"] else ""
+            print(f"  {marker} [{status:7s}] {filename}{drift}")
 
-        print(f"\n  Applied: {len(applied)}, Failed: {len(failed)}, Pending: {pending}")
+        print(f"\n  Applied: {len(applied)}, Failed: {len(failed)}, "
+              f"Pending: {len(state['pending'])}, "
+              f"Checksum mismatches: {len(state['checksum_mismatches'])}")
         if failed:
             print("  FAILED migrations retry on next apply; if they were fixed "
                   "manually via psql, reconcile with --mark.")
         print()
     finally:
         await conn.close()
+
+
+async def cmd_validate(json_out: bool = False):
+    """Exit non-zero when the ledger and the migrations directory disagree.
+
+    Deploy integration point: deploy_release.sh runs this after applying a
+    release's migrations and aborts the deploy on any drift (pending, failed,
+    or checksum mismatch).
+    """
+    conn = await get_connection()
+    try:
+        await ensure_tracking_table(conn)
+        state = await collect_state(conn)
+    finally:
+        await conn.close()
+
+    clean = not state["pending"] and not state["failed"] and not state["checksum_mismatches"]
+    state["clean"] = clean
+    if json_out:
+        print(json.dumps(state, indent=2))
+    else:
+        print(f"  Applied: {len(state['applied'])}, Failed: {len(state['failed'])}, "
+              f"Pending: {len(state['pending'])}, "
+              f"Checksum mismatches: {len(state['checksum_mismatches'])}")
+        for f in state["pending"]:
+            print(f"    >> PENDING  {f}")
+        for f in state["failed"]:
+            print(f"    !! FAILED   {f}")
+        for f in state["checksum_mismatches"]:
+            print(f"    ~~ CHECKSUM {f}")
+        print(f"  Validation: {'CLEAN' if clean else 'DRIFT DETECTED'}")
+    if not clean:
+        sys.exit(1)
 
 
 async def cmd_baseline():
@@ -211,11 +458,46 @@ async def cmd_baseline():
         await conn.close()
 
 
-async def cmd_apply():
-    """Apply pending migrations in order."""
+async def _record_failure(conn, version, filename, checksum, elapsed_ms):
+    """Write the failure row in its own (new) transaction.
+
+    Called after the migration transaction rolled back, so the connection is
+    out of aborted-transaction state and this insert can succeed.
+    """
+    await conn.execute(
+        """INSERT INTO schema_migrations
+           (version, filename, checksum, applied_by, execution_ms, success)
+           VALUES ($1, $2, $3, 'cli', $4, FALSE)
+           ON CONFLICT (filename) DO UPDATE
+           SET success = FALSE, checksum = EXCLUDED.checksum,
+               applied_by = 'cli', execution_ms = EXCLUDED.execution_ms,
+               applied_at = NOW()""",
+        version, filename, checksum, elapsed_ms,
+    )
+
+
+_SUCCESS_UPSERT = """INSERT INTO schema_migrations
+   (version, filename, checksum, applied_by, execution_ms, success)
+   VALUES ($1, $2, $3, 'cli', $4, TRUE)
+   ON CONFLICT (filename) DO UPDATE
+   SET success = TRUE, checksum = EXCLUDED.checksum,
+       applied_by = 'cli', execution_ms = EXCLUDED.execution_ms,
+       applied_at = NOW()"""
+
+
+async def cmd_apply(only: list[str] | None = None):
+    """Apply pending migrations in order.
+
+    Each migration's SQL and its ledger success row commit in the SAME
+    transaction; on error the transaction rolls back, the failure row is
+    recorded in a new transaction, and the process exits non-zero (the old
+    behavior returned normally, so deploy scripts saw exit 0 on failure —
+    Codex audit AUD-002).
+    """
     conn = await get_connection()
     try:
         await ensure_tracking_table(conn)
+        await acquire_runner_lock(conn)
         applied = await get_applied(conn)
         failed = await get_failed(conn)
         migrations = discover_migrations()
@@ -236,12 +518,38 @@ async def cmd_apply():
                 print("  Verify the schema, then run:  apply_migrations.py --baseline\n")
                 sys.exit(1)
 
+        mismatches = await get_checksum_mismatches(conn)
+        if mismatches:
+            print("  ERROR: applied migration file(s) changed on disk since they")
+            print("  were recorded (checksum mismatch). Refusing to apply anything")
+            print("  until the drift is resolved:")
+            for f in mismatches:
+                print(f"    ~~ {f}")
+            sys.exit(1)
+
         pending = [(f, p) for f, p in migrations if f not in applied]
+
+        if only:
+            known = {f for f, _ in migrations}
+            unknown = [f for f in only if f not in known]
+            if unknown:
+                print(f"  ERROR: --only file(s) not found under {MIGRATIONS_DIR}:")
+                for f in unknown:
+                    print(f"    {f}")
+                sys.exit(1)
+            already = [f for f in only if f in applied]
+            for f in already:
+                print(f"  [SKIP] {f} (already applied)")
+            wanted = set(only)
+            pending = [(f, p) for f, p in pending if f in wanted]
+
         if failed:
-            print(f"  NOTE: {len(failed)} previously FAILED migration(s) will be retried:")
-            for f in sorted(failed):
-                print(f"    !! {f}")
-            print()
+            retrying = [f for f, _ in pending if f in failed]
+            if retrying:
+                print(f"  NOTE: {len(retrying)} previously FAILED migration(s) will be retried:")
+                for f in sorted(retrying):
+                    print(f"    !! {f}")
+                print()
 
         if not pending:
             print("  No pending migrations.\n")
@@ -257,38 +565,37 @@ async def cmd_apply():
             print(f"  Applying: {filename} ... ", end="", flush=True)
             start = time.monotonic()
             try:
-                await conn.execute(sql)
-                elapsed_ms = int((time.monotonic() - start) * 1000)
-                # DO UPDATE, not DO NOTHING: a retried migration conflicts with
-                # its own earlier success=FALSE row, and the outcome must
-                # overwrite it or the retry's success is never recorded.
-                await conn.execute(
-                    """INSERT INTO schema_migrations
-                       (version, filename, checksum, applied_by, execution_ms, success)
-                       VALUES ($1, $2, $3, 'cli', $4, TRUE)
-                       ON CONFLICT (filename) DO UPDATE
-                       SET success = TRUE, checksum = EXCLUDED.checksum,
-                           applied_by = 'cli', execution_ms = EXCLUDED.execution_ms,
-                           applied_at = NOW()""",
-                    version, filename, checksum, elapsed_ms,
-                )
+                body = unwrap_outer_transaction(sql)
+            except MigrationRejected as e:
+                print("REJECTED")
+                print(f"    Error: {e}")
+                sys.exit(1)
+
+            try:
+                if requires_non_transactional(body):
+                    # CREATE INDEX CONCURRENTLY etc. refuse to run inside a
+                    # transaction block; apply statement-by-statement (each
+                    # autocommits) and record success separately. Not atomic —
+                    # a mid-file failure leaves earlier statements applied,
+                    # which the failure row + non-zero exit make visible.
+                    print("(non-transactional: CONCURRENTLY) ... ", end="", flush=True)
+                    for stmt in split_statements(body):
+                        await conn.execute(stmt)
+                    elapsed_ms = int((time.monotonic() - start) * 1000)
+                    await conn.execute(_SUCCESS_UPSERT, version, filename, checksum, elapsed_ms)
+                else:
+                    async with conn.transaction():
+                        await conn.execute(body)
+                        elapsed_ms = int((time.monotonic() - start) * 1000)
+                        await conn.execute(_SUCCESS_UPSERT, version, filename, checksum, elapsed_ms)
                 print(f"OK ({elapsed_ms}ms)")
             except Exception as e:
                 elapsed_ms = int((time.monotonic() - start) * 1000)
-                await conn.execute(
-                    """INSERT INTO schema_migrations
-                       (version, filename, checksum, applied_by, execution_ms, success)
-                       VALUES ($1, $2, $3, 'cli', $4, FALSE)
-                       ON CONFLICT (filename) DO UPDATE
-                       SET success = FALSE, checksum = EXCLUDED.checksum,
-                           applied_by = 'cli', execution_ms = EXCLUDED.execution_ms,
-                           applied_at = NOW()""",
-                    version, filename, checksum, elapsed_ms,
-                )
+                await _record_failure(conn, version, filename, checksum, elapsed_ms)
                 print(f"FAILED ({elapsed_ms}ms)")
                 print(f"    Error: {e}")
                 print("  Stopping at first failure.\n")
-                return
+                sys.exit(1)
 
         print(f"\n  All {len(pending)} migration(s) applied successfully.\n")
     finally:
@@ -392,32 +699,41 @@ async def cmd_mark(filenames: list[str]):
         await conn.close()
 
 
-async def cmd_baseline_inner(conn: asyncpg.Connection, migrations: list):
-    """Baseline helper (uses existing connection)."""
-    for filename, path in migrations:
-        version = _version_from_filename(filename)
-        checksum = _file_checksum(path)
-        await conn.execute(
-            """INSERT INTO schema_migrations (version, filename, checksum, applied_by)
-               VALUES ($1, $2, $3, 'baseline')
-               ON CONFLICT (filename) DO NOTHING""",
-            version, filename, checksum,
-        )
-        print(f"    [BASELINE] {filename}")
-
-
 # ── Main ──────────────────────────────────────────────────────────────
 
 def main():
-    if "--status" in sys.argv:
-        asyncio.run(cmd_status())
-    elif "--baseline" in sys.argv:
+    parser = argparse.ArgumentParser(
+        description="Slomix migration runner (see module docstring)",
+    )
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--status", action="store_true",
+                       help="show applied/failed/pending state")
+    group.add_argument("--validate", action="store_true",
+                       help="exit 1 on pending/failed/checksum drift")
+    group.add_argument("--baseline", action="store_true",
+                       help="mark all migrations as pre-applied")
+    group.add_argument("--mark", nargs="+", metavar="FILE",
+                       help="record files as applied without running them")
+    group.add_argument("--only", nargs="+", metavar="FILE",
+                       help="apply only the named pending files")
+    parser.add_argument("--json", action="store_true",
+                        help="JSON output (with --status/--validate)")
+    args = parser.parse_args()
+
+    if args.json and not (args.status or args.validate):
+        parser.error("--json requires --status or --validate")
+
+    if args.status:
+        asyncio.run(cmd_status(json_out=args.json))
+    elif args.validate:
+        asyncio.run(cmd_validate(json_out=args.json))
+    elif args.baseline:
         asyncio.run(cmd_baseline())
-    elif "--mark" in sys.argv:
-        idx = sys.argv.index("--mark")
-        # Everything after --mark, stripped of leading paths if user pasted them
-        filenames = [Path(a).name for a in sys.argv[idx + 1:] if not a.startswith("-")]
-        asyncio.run(cmd_mark(filenames))
+    elif args.mark:
+        # Strip leading paths if the user pasted them.
+        asyncio.run(cmd_mark([Path(a).name for a in args.mark]))
+    elif args.only:
+        asyncio.run(cmd_apply(only=[Path(a).name for a in args.only]))
     else:
         asyncio.run(cmd_apply())
 

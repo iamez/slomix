@@ -57,7 +57,7 @@ for arg in "$@"; do
     --dry-run)         DRY_RUN=true ;;
     --skip-migrations) SKIP_MIGRATIONS=true ;;
     --skip-flags)      SKIP_FLAGS=true ;;
-    *)                 echo "WARN: unknown flag $arg (ignored)" >&2 ;;
+    *)                 echo "ERROR: unknown flag $arg" >&2; exit 1 ;;
   esac
 done
 
@@ -317,26 +317,29 @@ run_remote "cd $VM_PATH && \
 # set modern-route-host.js's BUILD_VERSION const to $SHA so the modern entry gets
 # the same cache-buster the legacy assets got in 3b (the 3b `?v=` sed can't match
 # its `?v=${BUILD_VERSION}` template). Non-fatal: a build failure logs and keeps
-# the previous build — legacy routes deploy regardless.
+# the previous build. A failed or missing build is FATAL (audit remediation
+# plan U1): four live routes depend on it, and this step runs BEFORE services
+# stop, so aborting here causes no downtime.
 log "3c/8 Build modern (React) frontend + atomic verify + SHA cache-bust"
 run_remote "cd $VM_PATH && \
   SHA=\$(git rev-parse --short HEAD) && \
-  if command -v npm >/dev/null 2>&1; then \
-    echo '  building website/frontend (vite) → static/modern.new' && \
-    ( cd website/frontend && npm ci --no-audit --no-fund && npm run build -- --outDir ../static/modern.new --emptyOutDir ) || echo '  WARN: modern build failed (non-fatal)'; \
-    if [ -s website/static/modern.new/route-host.js ]; then \
-      echo '  build OK — atomic swap into static/modern' && \
-      rm -rf website/static/modern.prev && \
-      { [ -d website/static/modern ] && mv website/static/modern website/static/modern.prev || true; } && \
-      mv website/static/modern.new website/static/modern && \
-      sed -i \"s|const BUILD_VERSION = '[^']*'|const BUILD_VERSION = '\$SHA'|\" website/js/modern-route-host.js && \
-      echo \"  modern BUILD_VERSION set to \$SHA\"; \
-    else \
-      echo '  keeping previous static/modern (no fresh build)' >&2 && \
-      rm -rf website/static/modern.new || true; \
-    fi; \
+  if ! command -v npm >/dev/null 2>&1; then \
+    echo 'ERROR: npm not found on VM — cannot build the 4 live React routes' >&2; \
+    exit 1; \
+  fi && \
+  echo '  building website/frontend (vite) → static/modern.new' && \
+  ( cd website/frontend && npm ci --no-audit --no-fund && npm run build -- --outDir ../static/modern.new --emptyOutDir ) && \
+  if [ -s website/static/modern.new/route-host.js ]; then \
+    echo '  build OK — atomic swap into static/modern' && \
+    rm -rf website/static/modern.prev && \
+    { [ -d website/static/modern ] && mv website/static/modern website/static/modern.prev || true; } && \
+    mv website/static/modern.new website/static/modern && \
+    sed -i \"s|const BUILD_VERSION = '[^']*'|const BUILD_VERSION = '\$SHA'|\" website/js/modern-route-host.js && \
+    echo \"  modern BUILD_VERSION set to \$SHA\"; \
   else \
-    echo '  WARN: npm not found on VM — skipping modern build (React routes keep previous build)' >&2; \
+    echo 'ERROR: build produced no route-host.js — keeping previous static/modern and aborting' >&2 && \
+    rm -rf website/static/modern.new; \
+    exit 1; \
   fi"
 
 # ─── 4. Stop services (clean restart) ─────────────────────────────────────────
@@ -346,28 +349,25 @@ sudo_run "systemctl stop slomix-web slomix-bot"
 # step 7 will trigger an auto-restart of both services.
 SERVICES_STOPPED=true
 
-# ─── 5. Apply migrations ──────────────────────────────────────────────────────
+# ─── 5. Apply migrations via the runner ───────────────────────────────────────
+# The runner (scripts/apply_migrations.py) applies each migration and its
+# schema_migrations ledger row in the SAME transaction and exits non-zero on
+# any failure. The previous raw `psql -f` + best-effort `--mark` path silently
+# skipped ledger recording when its interpreter was missing — that is exactly
+# how production drifted for migrations 052-060 (audit AUD-002). The
+# interpreter is pinned to the production web venv; a missing interpreter,
+# an apply failure, or post-apply ledger drift each abort the deploy.
+VM_PY="venv-web/bin/python"
 if ! $SKIP_MIGRATIONS && [ ${#MIGRATIONS[@]} -gt 0 ]; then
-  log "5/8  Apply ${#MIGRATIONS[@]} migration(s) (each must be idempotent / IF NOT EXISTS)"
-  for MIG in "${MIGRATIONS[@]}"; do
-    log "  -> $MIG"
-    run_remote "cd $VM_PATH && \
-      PGPASSWORD=\$(grep -E '^(DB|POSTGRES)_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '\"') \
-      psql -h localhost -U etlegacy_user -d etlegacy -v ON_ERROR_STOP=1 -f migrations/$MIG"
-  done
-  # After successful psql applies, record the rows in schema_migrations so
-  # the migration runner doesn't treat them as pending next time. Uses the
-  # `--mark` mode (added in PR #257) which inserts without re-running SQL.
-  # Falls back to a warning if apply_migrations.py is missing or errors —
-  # we don't want a tracking-table glitch to fail the whole deploy.
-  log "  Recording migrations in schema_migrations via apply_migrations.py --mark"
+  log "5/8  Apply ${#MIGRATIONS[@]} migration(s) via apply_migrations.py (transactional + ledger)"
   run_remote "cd $VM_PATH && \
-    if [ -f scripts/apply_migrations.py ] && [ -x venv/bin/python ]; then \
-      venv/bin/python scripts/apply_migrations.py --mark ${MIGRATIONS[*]} \
-        || echo 'WARN: --mark failed; reconcile manually after deploy'; \
-    else \
-      echo 'WARN: apply_migrations.py or venv/bin/python missing; skipping --mark'; \
+    if [ ! -x $VM_PY ]; then \
+      echo \"ERROR: $VM_PY missing on VM — refusing to run migrations without the ledger runner\" >&2; \
+      exit 1; \
     fi"
+  run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --only ${MIGRATIONS[*]}"
+  log "  Validating migration ledger (pending/failed/checksum drift aborts deploy)"
+  run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --validate"
 else
   log "5/8  Skipping migrations (--skip-migrations or empty MIGRATIONS=)"
 fi
