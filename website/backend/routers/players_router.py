@@ -265,7 +265,8 @@ def _lua_guid_list(val) -> list[str]:
 
 
 def _fmt_mmss(seconds) -> str:
-    """Whole-second duration as m:ss (e.g. 252 -> '4:12'). '' for None/negative."""
+    """Whole-second duration as m:ss (e.g. 252 -> '4:12'). '' for None, negative,
+    or non-numeric input."""
     try:
         s = int(seconds)
     except (TypeError, ValueError):
@@ -366,7 +367,8 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
     rows = rows or []
     if not rows:
         return {"status": "ok", "active": False, "teams": {}, "maps": [],
-                "momentum": [], "score": {}, "current": None, "hold_probability": None}
+                "momentum": [], "score": {}, "current": None, "director": None,
+                "hold_probability": None}
 
     # --- Resolve logical teams with the stopwatch side-alternation model that
     #     the rest of the site uses (see BOXScoringService): on odd maps Team A
