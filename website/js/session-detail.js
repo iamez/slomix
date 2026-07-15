@@ -751,17 +751,22 @@ function _trustBadgeCopy(q) {
     const coreReady = coreSignals.every((s) => s.ready !== false);
 
     const rc = q.round_correlation || {};
-    const rounds = Number(rc.correlation_count || 0);
-    if (rounds <= 0) return null;
-    const coverage = Math.round(Number(rc.avg_completeness_pct || 0));
+    // correlation_count = COUNT(*) FROM round_correlations, i.e. one row per R1/R2
+    // match (a map), NOT per individual round. avg_completeness_pct is the overall
+    // correlation completeness across stats/lua/gametime/endstats/proximity, not a
+    // proximity-only figure. missing_proximity_flag_rows IS proximity-specific
+    // (matches missing an R1/R2 proximity flag). Label each honestly.
+    const maps = Number(rc.correlation_count || 0);
+    if (maps <= 0) return null;
+    const completeness = Math.round(Number(rc.avg_completeness_pct || 0));
     const gaps = Number(rc.missing_proximity_flag_rows || 0);
 
-    const solid = coreReady && gaps === 0 && coverage >= 90;
+    const solid = coreReady && gaps === 0 && completeness >= 90;
     const detailParts = [
-        `${rounds} round${rounds === 1 ? '' : 's'}`,
-        `proximity coverage ${coverage}%`,
+        `${maps} map${maps === 1 ? '' : 's'}`,
+        `${completeness}% telemetry complete`,
     ];
-    if (gaps > 0) detailParts.push(`${gaps} round${gaps === 1 ? '' : 's'} partial`);
+    if (gaps > 0) detailParts.push(`${gaps} with partial proximity`);
     return {
         tone: solid ? 'solid' : 'partial',
         label: solid ? 'Fully backed by tracked play' : 'Mostly backed by tracked play',
@@ -787,7 +792,7 @@ async function _loadDataTrust() {
         : { dot: 'bg-amber-400', text: 'text-amber-300', ring: 'border-amber-500/30' };
     host.innerHTML = `
         <div class="glass-panel rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 border ${tone.ring}"
-             title="These insights are built from per-round proximity telemetry. This shows how much of tonight was actually tracked, so you can trust or discount the claims below.">
+             title="These insights are built from per-match proximity telemetry. This shows how much of tonight was actually tracked, so you can trust or discount the claims below.">
             <span class="flex items-center gap-2">
                 <span class="w-2 h-2 rounded-full ${tone.dot}"></span>
                 <span class="text-[11px] uppercase tracking-wider font-bold ${tone.text}">${escapeHtml(badge.label)}</span>
