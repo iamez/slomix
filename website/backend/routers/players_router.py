@@ -264,6 +264,84 @@ def _lua_guid_list(val) -> list[str]:
     return [g for g in (val or []) if isinstance(g, str)]
 
 
+def _fmt_mmss(seconds) -> str:
+    """Whole-second duration as m:ss (e.g. 252 -> '4:12'). '' for None, negative,
+    or non-numeric input."""
+    try:
+        s = int(seconds)
+    except (TypeError, ValueError):
+        return ""
+    if s < 0:
+        return ""
+    return f"{s // 60}:{s % 60:02d}"
+
+
+def _tonight_director_line(score: dict, momentum: list, current: dict,
+                           name_a: str, name_b: str) -> str | None:
+    """One live 'director' sentence for the Tonight hub (Good Night plan rank 8,
+    §A idea 1). A pure read of the already-computed tonight payload — never a new
+    metric, just a plain-language summary of the night so far plus the live chase.
+
+    Returns None before there is anything to say (no completed map and no round
+    decided yet), so the caller can simply omit the line.
+    """
+    a_maps, b_maps = int(score.get("a_maps", 0)), int(score.get("b_maps", 0))
+    a_rounds, b_rounds = int(score.get("a_rounds", 0)), int(score.get("b_rounds", 0))
+    maps_completed = int(score.get("maps_completed", 0))
+    if maps_completed == 0 and a_rounds == 0 and b_rounds == 0:
+        return None
+
+    # Momentum: last swing value (100 = Team A dominating, 0 = Team B).
+    last_m = float(momentum[-1].get("a", 50.0)) if momentum else 50.0
+    mom_a = last_m >= 55.0
+    mom_b = last_m <= 45.0
+
+    # Lead clause — maps first (the night is scored in maps), rounds as the
+    # tiebreaker when maps are level.
+    if a_maps > b_maps:
+        leader, hi, lo, leader_is_a = name_a, a_maps, b_maps, True
+        lead = f"{leader} lead the night {hi}–{lo} on maps"
+    elif b_maps > a_maps:
+        leader, hi, lo, leader_is_a = name_b, b_maps, a_maps, False
+        lead = f"{leader} lead the night {hi}–{lo} on maps"
+    elif maps_completed > 0:
+        leader, leader_is_a = None, None
+        lead = f"All square at {a_maps}–{b_maps} on maps"
+    else:
+        # First map still on the clock — lean on the round tally.
+        leader, leader_is_a = None, None
+        if a_rounds != b_rounds:
+            rl, rh, rlo = (name_a, a_rounds, b_rounds) if a_rounds > b_rounds else (name_b, b_rounds, a_rounds)
+            lead = f"Opening map on the clock — {rl} up {rh}–{rlo} on rounds"
+        else:
+            lead = f"Opening map on the clock — even {a_rounds}–{b_rounds} on rounds"
+
+    # Momentum clause — only when it adds something.
+    tail = ""
+    if leader is not None:
+        if (leader_is_a and mom_a) or (not leader_is_a and mom_b):
+            tail = ", and they hold the momentum"
+        elif (leader_is_a and mom_b) or (not leader_is_a and mom_a):
+            other = name_b if leader_is_a else name_a
+            tail = f", but {other} have swung the last few rounds"
+    elif maps_completed > 0 and (mom_a or mom_b):
+        # Level on maps — momentum names who's pushing now.
+        pusher = name_a if mom_a else name_b
+        tail = f", but {pusher} are pushing"
+
+    # Live chase clause — an R1 just landed and R2 is on the clock.
+    chase = ""
+    if current and current.get("r2_pending"):
+        beat = _fmt_mmss(current.get("beat_seconds"))
+        cmap = (current.get("map") or "").replace("_", " ")
+        if beat and cmap:
+            chase = f" · {cmap}: R2 chasing {beat}"
+        elif cmap:
+            chase = f" · {cmap}: R2 to play"
+
+    return f"{lead}{tail}{chase}."
+
+
 @router.get("/stats/tonight")
 async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
     """Consolidated live payload for the Tonight hub. Reads the real-time
@@ -289,7 +367,8 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
     rows = rows or []
     if not rows:
         return {"status": "ok", "active": False, "teams": {}, "maps": [],
-                "momentum": [], "score": {}, "current": None, "hold_probability": None}
+                "momentum": [], "score": {}, "current": None, "director": None,
+                "hold_probability": None}
 
     # --- Resolve logical teams with the stopwatch side-alternation model that
     #     the rest of the site uses (see BOXScoringService): on odd maps Team A
@@ -443,6 +522,11 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
     def _roster(d):
         return sorted(d.values(), key=str.lower)
 
+    score = {
+        "a_maps": a_maps, "b_maps": b_maps,
+        "a_rounds": a_rounds, "b_rounds": b_rounds,
+        "maps_completed": maps_completed,
+    }
     return {
         "status": "ok",
         "active": age <= _TONIGHT_ACTIVE_SECONDS,
@@ -453,14 +537,11 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
             "a": {"name": name_a, "roster": _roster(roster_a)},
             "b": {"name": name_b, "roster": _roster(roster_b)},
         },
-        "score": {
-            "a_maps": a_maps, "b_maps": b_maps,
-            "a_rounds": a_rounds, "b_rounds": b_rounds,
-            "maps_completed": maps_completed,
-        },
+        "score": score,
         "maps": map_list,
         "momentum": momentum,
         "current": current,
+        "director": _tonight_director_line(score, momentum, current, name_a, name_b),
         "hold_probability": {"map": current_map, "curve": hold} if hold else None,
     }
 
