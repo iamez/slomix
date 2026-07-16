@@ -3364,6 +3364,14 @@ function renderProxScores(data, formula) {
     const players = data?.players ?? [];
     const listEl = document.getElementById('prox-scores-list');
     if (!listEl) return;
+    // AUD-008 quality contract: a degraded response means one or more source
+    // queries failed — show an explicit unavailable state, never a stale or
+    // all-neutral ranking presented as real.
+    if (data?.status === 'degraded' || data?.quality?.ranking_available === false) {
+        const failed = (data?.quality?.failed_sources ?? []).length;
+        listEl.innerHTML = `<div class="text-[11px] text-amber-400/80">Proximity scores are temporarily unavailable (${failed} data source${failed === 1 ? '' : 's'} failed). Ranking withheld to avoid showing incomplete results.</div>`;
+        return;
+    }
     if (players.length === 0) {
         listEl.innerHTML = '<div class="text-[11px] text-slate-500">No proximity score data yet.</div>';
         return;

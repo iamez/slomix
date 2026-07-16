@@ -181,9 +181,10 @@ async def get_proximity_player_radar(
         teamplay = None
         if total_eng >= 10:
             from website.backend.services.prox_scoring import compute_prox_scores
-            prox_scores = await compute_prox_scores(db, range_days=range_days, player_guid=guid)
-            if prox_scores and prox_scores[0].get("prox_team") is not None:
-                teamplay = prox_scores[0]["prox_team"]
+            prox_result = await compute_prox_scores(db, range_days=range_days, player_guid=guid)
+            prox_players = prox_result.get("players", []) if isinstance(prox_result, dict) else []
+            if prox_players and prox_players[0].get("prox_team") is not None:
+                teamplay = prox_players[0]["prox_team"]
 
         if teamplay is None:
             # Fallback: lightweight CF+TR queries with raised thresholds

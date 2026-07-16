@@ -694,18 +694,27 @@ async def get_prox_scores(
     previously a selected date/map made prox_overall *look* scoped while showing
     the 30-day global score. round_start_unix disambiguates a repeated map/round.
     """
-    from website.backend.services.prox_scoring import compute_prox_scores
+    from website.backend.services.prox_scoring import (
+        FORMULA_VERSION_QUALITY,
+        compute_prox_scores,
+    )
     parsed_date = _parse_iso_date(session_date) if isinstance(session_date, str) else session_date
     try:
-        results = await compute_prox_scores(
+        result = await compute_prox_scores(
             db, range_days, player_guid,
             session_date=parsed_date, map_name=map_name, round_number=round_number,
             round_start_unix=round_start_unix,
         )
+        players = result.get("players", [])
+        quality = result.get("quality", {})
         scoped = bool(parsed_date or map_name or round_number is not None or round_start_unix is not None)
         return {
-            "status": "ok",
-            "version": "1.0",
+            # AUD-008: propagate degraded status + quality metadata so callers
+            # never mistake a data failure for a real (all-neutral) ranking.
+            "status": result.get("status", "ok"),
+            "version": "1.0",  # legacy field kept for back-compat
+            "formula_version": result.get("formula_version", FORMULA_VERSION_QUALITY),
+            "quality": quality,
             "range_days": range_days,
             "scope": {
                 "scoped": scoped,
@@ -714,8 +723,8 @@ async def get_prox_scores(
                 "round_number": round_number,
                 "round_start_unix": round_start_unix,
             },
-            "player_count": len(results),
-            "players": results[:limit],
+            "player_count": len(players),
+            "players": players[:limit],
         }
     except Exception:
         logger.exception("prox-scores failed")

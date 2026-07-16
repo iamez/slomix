@@ -21,9 +21,18 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════════
 
 FORMULA_VERSION = "1.0"
+# Quality-contract semantics (audit AUD-008): a failed source withholds the
+# ranking instead of silently substituting neutral 0.5; ties use midrank; a
+# player is scored only above MIN_METRIC_WEIGHT_COVERAGE of real (non-missing)
+# metric weight. Different semantics ⇒ a distinct, additive version string.
+FORMULA_VERSION_QUALITY = "prox-web-v2.0"
 
 # Minimum engagements/tracks to be scored (prevents noisy data)
 MIN_ENGAGEMENTS = 10
+
+# Minimum fraction of total metric weight a player must have REAL data for
+# (not neutral-filled) before we publish a composite score for them.
+MIN_METRIC_WEIGHT_COVERAGE = 0.80
 
 # Category weights for prox_overall
 CATEGORY_WEIGHTS = {
@@ -104,6 +113,33 @@ def _percentile_rank(values: list[float]) -> list[float]:
     return result
 
 
+def _percentile_rank_midrank(values: list[float]) -> list[float]:
+    """Midrank percentile (0.0-1.0) — the quality-contract semantics.
+
+    Unlike `_percentile_rank` (bisect_right upper-edge), tied values share
+    the AVERAGE of their rank span, so an all-equal cohort scores 0.5 rather
+    than 1.0 (no false "everyone is a co-leader" signal — audit AUD-008).
+
+    Fractional midrank over [0, 1]: percentile = (n_less + (n_equal-1)/2)/(n-1).
+      - unique top value  → (n-1)/(n-1) = 1.0
+      - unique bottom     → 0/(n-1) = 0.0
+      - all equal         → ((n-1)/2)/(n-1) = 0.5
+    A lone value has no cohort to rank against → neutral 0.5.
+    """
+    if not values:
+        return []
+    n = len(values)
+    if n == 1:
+        return [0.5]
+    sorted_vals = sorted(values)
+    result = []
+    for v in values:
+        n_less = bisect.bisect_left(sorted_vals, v)
+        n_equal = bisect.bisect_right(sorted_vals, v) - n_less
+        result.append((n_less + (n_equal - 1) / 2) / (n - 1))
+    return result
+
+
 def _compute_category_score(
     player_raw: dict[str, float],
     category_key: str,
@@ -138,6 +174,35 @@ def _compute_category_score(
     return round(score, 2), breakdown
 
 
+def _total_metric_weight() -> float:
+    """Sum of every metric's within-category weight across all categories."""
+    return sum(
+        m["weight"]
+        for cat in METRICS.values()
+        for m in cat["metrics"].values()
+    )
+
+
+_TOTAL_METRIC_WEIGHT = _total_metric_weight()
+
+
+def _degraded(sources: list[dict]) -> dict:
+    """Quality-contract degraded response: NO ranking, NO neutral fill."""
+    failed = [s["source"] for s in sources if not s["success"]]
+    return {
+        "status": "degraded",
+        "formula_version": FORMULA_VERSION_QUALITY,
+        "quality": {
+            "ranking_available": False,
+            "successful_sources": sum(1 for s in sources if s["success"]),
+            "total_sources": len(sources),
+            "failed_sources": failed,
+            "metric_weight_coverage": 0.0,
+        },
+        "players": [],
+    }
+
+
 async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None = None,
                               *, session_date=None, map_name: str | None = None,
                               round_number: int | None = None, round_start_unix: int | None = None):
@@ -147,26 +212,52 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
     map_name/round_number/round_start_unix are supplied, scoped to exactly that
     selection (round_start_unix disambiguates a map/round played more than once).
 
-    Returns list of player score dicts.
+    Returns a quality-contract dict (audit AUD-008):
+        {
+          "status": "ok" | "degraded",
+          "formula_version": "prox-web-v2.0",
+          "quality": {ranking_available, successful_sources, total_sources,
+                      failed_sources, metric_weight_coverage},
+          "players": [ ... ]   # each carries metric_weight_coverage + missing_metrics
+        }
+    On ANY source-query failure the ranking is withheld (status=degraded,
+    players=[]) rather than substituting neutral 0.5 percentiles.
     """
     range_days = max(1, min(int(range_days), 365))
-    raw_data = await _fetch_raw_metrics(
+    raw_data, sources = await _fetch_raw_metrics(
         db, range_days, session_date=session_date,
         map_name=map_name, round_number=round_number, round_start_unix=round_start_unix,
     )
 
-    if not raw_data:
-        return []
+    # AUD-008: a failed source poisons the whole percentile pool — withhold.
+    if any(not s["success"] for s in sources):
+        return _degraded(sources)
 
-    # Filter to single player if requested (but keep all for percentile context)
+    def _ok(players, coverage=1.0):
+        return {
+            "status": "ok",
+            "formula_version": FORMULA_VERSION_QUALITY,
+            "quality": {
+                "ranking_available": bool(players),
+                "successful_sources": len(sources),
+                "total_sources": len(sources),
+                "failed_sources": [],
+                "metric_weight_coverage": round(coverage, 3),
+            },
+            "players": players,
+        }
+
+    if not raw_data:
+        return _ok([])
+
     all_guids = list(raw_data.keys())
 
     # Filter out players with too few engagements
     qualified_guids = [g for g in all_guids if raw_data[g].get("engagements", 0) >= MIN_ENGAGEMENTS]
     if not qualified_guids:
-        return []
+        return _ok([])
 
-    # Compute percentile maps for each metric
+    # Compute percentile maps for each metric (midrank ties — AUD-008)
     all_metric_keys = set()
     for cat in METRICS.values():
         all_metric_keys.update(cat["metrics"].keys())
@@ -177,15 +268,24 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
         with_data = [(g, raw_data[g][mkey]) for g in qualified_guids if raw_data[g].get(mkey) is not None]
         if with_data:
             vals_only = [v for _, v in with_data]
-            pctls = _percentile_rank(vals_only)
+            pctls = _percentile_rank_midrank(vals_only)
             pctl_map = {g: p for (g, _), p in zip(with_data, pctls)}
         else:
             pctl_map = {}
-        # Players without data for this metric get neutral 0.5
+        # Neutral 0.5 only fills the score arithmetic below; it never counts
+        # toward coverage (a genuinely missing metric is tracked separately).
         percentile_maps[mkey] = {g: pctl_map.get(g, 0.5) for g in qualified_guids}
+
+    # Per-metric weight (for coverage) — a metric's share of the total weight.
+    metric_weight = {
+        mk: mc["weight"]
+        for cat in METRICS.values()
+        for mk, mc in cat["metrics"].items()
+    }
 
     # Compute scores per player
     results = []
+    below_coverage = 0
     target_guids = [player_guid] if player_guid and player_guid in raw_data else qualified_guids
 
     for guid in target_guids:
@@ -194,6 +294,20 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
 
         pdata = raw_data[guid]
         pdata["__guid__"] = guid
+
+        # Coverage = fraction of total metric weight this player has REAL data
+        # for. Missing metrics (neutral-filled) don't count.
+        missing = [mk for mk in metric_weight if pdata.get(mk) is None]
+        real_weight = sum(w for mk, w in metric_weight.items() if pdata.get(mk) is not None)
+        coverage = real_weight / _TOTAL_METRIC_WEIGHT if _TOTAL_METRIC_WEIGHT else 0.0
+
+        # AUD-008: don't publish a composite built mostly from neutral fill.
+        # A single-player request still returns the player (with the coverage
+        # flag) so the profile page can decide; leaderboard rows are dropped.
+        if coverage < MIN_METRIC_WEIGHT_COVERAGE and guid != player_guid:
+            below_coverage += 1
+            continue
+
         category_scores = {}
         category_breakdowns = {}
 
@@ -228,6 +342,8 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
             "prox_overall": round(overall, 2),
             "prox_radar": radar,
             "breakdown": category_breakdowns,
+            "metric_weight_coverage": round(coverage, 3),
+            "missing_metrics": missing,
         })
 
     # Sort by overall descending
@@ -237,7 +353,9 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
     for i, r in enumerate(results):
         r["rank"] = i + 1
 
-    return results
+    out = _ok(results)
+    out["quality"]["below_coverage_dropped"] = below_coverage
+    return out
 
 
 def _sub_score(breakdowns: dict, cat_key: str, metric_keys: list[str]) -> float:
@@ -414,10 +532,29 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
         """),
     ]
 
+    import time as _time
+    _t0 = _time.monotonic()
     results = await asyncio.gather(
         *(db.fetch_all(q.format(scope=scope_sql), scope_params) for _, q in queries),
         return_exceptions=True,
     )
+    _elapsed_ms = int((_time.monotonic() - _t0) * 1000)
+
+    # Per-source status (audit AUD-008): the caller uses this to withhold the
+    # ranking on ANY failure instead of silently substituting neutral scores.
+    sources: list[dict] = []
+    for idx, (label, _q) in enumerate(queries):
+        r = results[idx]
+        if isinstance(r, Exception):
+            sources.append({
+                "source": label, "success": False, "row_count": 0,
+                "error_code": type(r).__name__,
+            })
+        else:
+            sources.append({
+                "source": label, "success": True, "row_count": len(r),
+                "error_code": None,
+            })
 
     def _rows(idx: int) -> list | None:
         r = results[idx]
@@ -539,7 +676,26 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
                 "focus_survival": float(r[3] or 0),
             })
 
-    return players
+    for s in sources:
+        s["duration_ms"] = _elapsed_ms  # gather() is concurrent → shared wall time
+
+    # Low-cardinality Prometheus signals (AUD-008): {source, outcome} + batch
+    # duration. Import lazily so the service has no hard prometheus dependency.
+    try:
+        from website.backend.metrics import (
+            PROX_SOURCE_QUERIES,
+            PROX_SOURCE_QUERY_DURATION,
+        )
+        for s in sources:
+            PROX_SOURCE_QUERIES.labels(
+                source=s["source"],
+                outcome="success" if s["success"] else "error",
+            ).inc()
+        PROX_SOURCE_QUERY_DURATION.observe(_elapsed_ms / 1000.0)
+    except Exception:  # pragma: no cover - metrics must never break scoring
+        logger.debug("prox_scoring: metrics emit skipped", exc_info=True)
+
+    return players, sources
 
 
 def get_formula_config() -> dict:
