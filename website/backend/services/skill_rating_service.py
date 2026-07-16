@@ -248,12 +248,19 @@ def calculate_et_rating(player_stats: dict, percentiles: dict,
     return round(rating, 4), components
 
 
-async def compute_all_ratings(db) -> list[dict]:
+async def compute_all_ratings(db, *, epoch_start: str | None = None,
+                              min_rounds: int = MIN_ROUNDS) -> list[dict]:
     """
     Compute ET_Rating for all players with enough rounds (v2.0).
     Returns sorted list of player rating dicts.
     Single query: PCS aggregates + proximity LEFT JOINs, percentiles + ratings
     computed from the same result set.
+
+    epoch_start: when set (YYYY-MM-DD), only rounds on/after that date feed the
+    aggregates — the ET Performance v3 shadow path passes a common telemetry
+    epoch so PCS and proximity counters share one observation window (audit
+    AUD-007). Default None preserves the live all-time v2 behaviour exactly.
+    min_rounds: HAVING threshold (v3 shadow lowers it and gates eligibility itself).
 
     Proximity metrics:
       - kill_quality: Kill Quality Index (gib-weighted outcome avg, simplified KIS)
@@ -330,6 +337,7 @@ async def compute_all_ratings(db) -> list[dict]:
                 / NULLIF(COUNT(*), 0) as gib_rate
             FROM proximity_kill_outcome
             WHERE killer_guid_canonical IS NOT NULL
+              AND ($2::text IS NULL OR session_date::text >= $2)
             GROUP BY killer_guid_canonical
         ) prox_outcome ON prox_outcome.guid_c = pcs.player_guid
 
@@ -337,6 +345,7 @@ async def compute_all_ratings(db) -> list[dict]:
             SELECT trader_guid_canonical as guid_c, COUNT(*) as trade_count
             FROM proximity_lua_trade_kill
             WHERE trader_guid_canonical IS NOT NULL
+              AND ($2::text IS NULL OR session_date::text >= $2)
             GROUP BY trader_guid_canonical
         ) prox_trades ON prox_trades.guid_c = pcs.player_guid
 
@@ -350,6 +359,7 @@ async def compute_all_ratings(db) -> list[dict]:
                 )::REAL / NULLIF(COUNT(*), 0) as clutch_rate
             FROM proximity_combat_position
             WHERE event_type = 'kill' AND attacker_guid_canonical IS NOT NULL
+              AND ($2::text IS NULL OR session_date::text >= $2)
             GROUP BY attacker_guid_canonical
         ) prox_clutch ON prox_clutch.guid_c = pcs.player_guid
 
@@ -357,6 +367,7 @@ async def compute_all_ratings(db) -> list[dict]:
             SELECT killer_guid_canonical as guid_c, AVG(spawn_timing_score) as avg_timing_score
             FROM proximity_spawn_timing
             WHERE killer_guid_canonical IS NOT NULL
+              AND ($2::text IS NULL OR session_date::text >= $2)
             GROUP BY killer_guid_canonical
         ) prox_spawn ON prox_spawn.guid_c = pcs.player_guid
 
@@ -366,13 +377,14 @@ async def compute_all_ratings(db) -> list[dict]:
           AND pcs.round_id IN (SELECT id FROM rounds WHERE is_valid)
           AND pcs.player_guid NOT LIKE 'OMNIBOT%'
           AND pcs.player_name NOT LIKE '[BOT]%'
+          AND ($2::text IS NULL OR pcs.round_date::text >= $2)
         GROUP BY pcs.player_guid, prox_outcome.kill_quality,
                  pts.crossfire_kills, prox_trades.trade_count,
                  prox_outcome.gib_rate, prox_clutch.clutch_rate,
                  prox_spawn.avg_timing_score
         HAVING COUNT(*) >= $1
         ORDER BY pcs.player_guid
-    """, (MIN_ROUNDS,))
+    """, (min_rounds, epoch_start))
 
     if not rows:
         logger.warning("No player data for rating computation")

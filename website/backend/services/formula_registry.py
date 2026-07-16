@@ -8,6 +8,8 @@ version reviewed with the formula itself.
 
 Statuses:
   live      — computed in production paths and user-visible
+  shadow    — computed and stored/exposed for owner review, NOT user-visible;
+              awaiting calibration/promotion gates
   research  — backtest scripts only; tables reviewed by the owner, no surface
   proposed  — designed/named but not implemented yet
 """
@@ -54,7 +56,20 @@ def get_registry() -> list[dict]:
             "module": "website/backend/services/skill_rating_service.py",
             "surface": "/api/skill/leaderboard, /api/skill/player/*, SkillRating page",
             "summary": "15 percentile-normalized metrics (9 PCS + 6 proximity), "
-                       "constant 0.15; population is bot-free and is_valid-gated.",
+                       "constant 0.15; population is bot-free and is_valid-gated. "
+                       "Known bias: mixes telemetry epochs and median ≈0.57 (not "
+                       "0.50) — corrected in the et_performance_v3 shadow.",
+        },
+        {
+            "name": "et_performance_v3",
+            "version": "et-perf-v3.0-shadow",
+            "status": "shadow",
+            "module": "website/backend/services/skill_rating_v3.py",
+            "surface": "/api/skill/v3-shadow (owner review only)",
+            "summary": "AUD-007 fix: same absolute weights, no constant, "
+                       "directed midrank percentiles over a common 2026-03-24+ "
+                       "telemetry epoch → median exactly 0.50. Shadow until "
+                       "promotion gates pass (remediation plan §6).",
         },
         {
             "name": "s_effort",

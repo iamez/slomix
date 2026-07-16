@@ -17,7 +17,7 @@ def test_names_unique_and_statuses_valid():
     reg = get_registry()
     names = [e["name"] for e in reg]
     assert len(names) == len(set(names))
-    assert {e["status"] for e in reg} <= {"live", "research", "proposed"}
+    assert {e["status"] for e in reg} <= {"live", "shadow", "research", "proposed"}
     for e in reg:
         for key in ("name", "version", "status", "module", "surface", "summary"):
             assert e.get(key), f"{e.get('name')} missing {key}"
