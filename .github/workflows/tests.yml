@@ -56,6 +56,11 @@ jobs:
       - name: Lint Python
         run: ruff check bot/ website/backend/
 
+      - name: Dependency consistency (pip check)
+        # Catches incompatible transitive pins (e.g. a fastapi/starlette bump
+        # that leaves an unsatisfiable requirement) before they reach a deploy.
+        run: pip check
+
       - name: Run tests
         env:
           POSTGRES_TEST_HOST: localhost
@@ -111,6 +116,20 @@ jobs:
       - name: Unit tests (vitest)
         run: npm test
 
+  shellcheck:
+    name: ShellCheck (deploy + ops scripts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: ShellCheck scripts/*.sh
+        # Gate the deploy/ops shell scripts at error severity (AUD-012). These
+        # run against production; a quoting/`cd` slip is a real hazard. Style
+        # warnings (SC2006 etc.) are not gated yet — ratchet to -S warning
+        # once the existing style debt is cleared.
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          shellcheck -S error scripts/*.sh
+
   security:
     name: Security (pip-audit + bandit)
     runs-on: ubuntu-latest
@@ -127,12 +146,13 @@ jobs:
           pip install pip-audit==2.10.0 bandit==1.9.4
 
       - name: Dependency audit (pip-audit)
-        # The ignored advisories either have no fix compatible with the pinned
-        # FastAPI stack — every starlette fix is a 1.x MAJOR; a FastAPI/starlette
-        # major bump needs its own compat pass (tracked) — or no fix exists at all
-        # (paramiko CVE-2026-44405). Every OTHER package is gated, so a newly
-        # disclosed CVE in any dependency fails this job. Re-evaluate when the
-        # starlette 1.x migration lands and drop the matching ignores.
+        # TIME-BOXED IGNORES (audit AUD-009) — owner: iamez. Re-evaluate by
+        # 2026-10-01. The starlette-stack entries drop when the FastAPI/starlette
+        # 1.x migration lands (every fix is a 1.x MAJOR needing a compat pass);
+        # the request-routing advisory in that stack is separately mitigated at
+        # runtime. The paramiko entry drops when an upstream fix ships (none yet).
+        # Every OTHER package is gated, so a newly disclosed CVE elsewhere fails
+        # this job. Advisory IDs live only in the --ignore-vuln flags below.
         run: |
           pip-audit -r requirements.txt --progress-spinner=off \
             --ignore-vuln CVE-2026-44405 \

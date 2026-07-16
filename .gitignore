@@ -10,6 +10,13 @@
 # ENVIRONMENT & SECRETS (NEVER COMMIT)
 # ============================================
 .env
+# Secret backup copies (audit AUD-010): deploys/ops sometimes drop a dated
+# .env backup in the checkout — never let one be committed. Real backups live
+# in a root-only location outside the repo with a documented retention policy.
+.env.bak
+.env.bak*
+.env.*.bak
+*.env.bak
 .prodenv
 .envcopy
 .db_credentials
