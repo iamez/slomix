@@ -118,7 +118,14 @@ For migrations 052–060, compare actual production objects (`pg_get_indexdef`, 
 
 ### OPS-LUA — Forward Lua deploy (owner)
 
-Copy the exact release artifact `proximity/lua/proximity_tracker.lua` (repo SHA-256 `68cd46b4…`) to the game server's luascripts directory, verify the hash on the server, and perform a **full map load** (never `lua_restart`). The next real round must carry the new hash and produce zero `duration_ms > samples*400+400` violations.
+Copy the release artifact `proximity/lua/proximity_tracker.lua` (repo SHA-256 `68cd46b4…`) to the game server's luascripts directory, then perform a **full map load** (never `lua_restart`).
+
+**Two known intentional live-vs-repo differences — never blind-copy:**
+
+1. The repo ships `shot_fired = false` (default-off, protected by a guard test); the live server intentionally runs `true` — it is the aim-telemetry data source. After copying, flip `shot_fired = true` on the server and compute the verification hash over **that adjusted artifact** (or use a diff gate that whitelists exactly this line).
+2. `c0rnp0rn8.lua` on the live server is AHEAD of the repo (live-only fixes); it is not part of this deploy and must not be overwritten.
+
+The next real round must carry the expected hash and produce zero `duration_ms > samples*400+400` violations.
 
 ### OPS-DATA — Historical cleanup (owner)
 
