@@ -54,10 +54,11 @@ async def test_resolves_with_orientation_flip_and_draws():
     ])
     n = await PredictionEngine(db).auto_resolve_predictions("2026-07-07")
     assert n == 1
-    (actual, a_score, b_score, correct, _acc, pred_id) = db.updates[0]
+    (actual, a_score, b_score, correct, _acc, brier, pred_id) = db.updates[0]
     assert pred_id == 7
     assert (actual, a_score, b_score) == (0, 1, 1)
     assert correct is False  # engine leaned A, session was a tie
+    assert brier is None  # draws are excluded from binary calibration
 
 
 @pytest.mark.asyncio
@@ -65,8 +66,9 @@ async def test_clear_winner_marks_correct():
     db = FakeDB([_row(A, B, 1), _row(B, A, 2)])  # A wins both orientations
     n = await PredictionEngine(db).auto_resolve_predictions("2026-07-07")
     assert n == 1
-    (actual, a_score, b_score, correct, _acc, _id) = db.updates[0]
+    (actual, a_score, b_score, correct, _acc, brier, _id) = db.updates[0]
     assert (actual, a_score, b_score, correct) == (1, 2, 0, True)
+    assert brier == pytest.approx((1.0 - 0.62) ** 2)
 
 
 @pytest.mark.asyncio

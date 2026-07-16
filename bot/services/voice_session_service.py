@@ -1069,44 +1069,55 @@ class VoiceSessionService:
                             )
                             logger.info(f"💡 Insight: {prediction['key_insight']}")
 
-                            # Phase 4: Store prediction in database and post to Discord
+                            # Phase 4 / shadow program (AUD-006): storing and
+                            # publishing are now independent. Predictions are
+                            # STORED whenever shadow collection is on (default),
+                            # but POSTED to Discord only behind
+                            # PREDICTION_PUBLISH_ENABLED — which stays off until
+                            # the calibration promotion gates pass.
                             if self.prediction_embed_builder:
                                 try:
-                                    # Get player names for better display
-                                    player_names = await self._get_player_names(
-                                        split_data['team_a_guids'] + split_data['team_b_guids']
-                                    )
+                                    discord_message_id = None
+                                    discord_channel_id = None
 
-                                    # Build prediction embed
-                                    embed = self.prediction_embed_builder.build_prediction_embed(
-                                        prediction,
-                                        split_data,
-                                        player_names
-                                    )
+                                    if self.config.prediction_publish_enabled:
+                                        # Get player names for better display
+                                        player_names = await self._get_player_names(
+                                            split_data['team_a_guids'] + split_data['team_b_guids']
+                                        )
 
-                                    # Post to Discord (production channel)
-                                    channel = self.bot.get_channel(self.config.production_channel_id)
-                                    if channel:
-                                        message = await channel.send(embed=embed)
-                                        discord_message_id = message.id
-                                        discord_channel_id = channel.id
-                                        logger.info(f"📤 Prediction posted to Discord (msg_id={discord_message_id})")
+                                        # Build prediction embed
+                                        embed = self.prediction_embed_builder.build_prediction_embed(
+                                            prediction,
+                                            split_data,
+                                            player_names
+                                        )
+
+                                        # Post to Discord (production channel)
+                                        channel = self.bot.get_channel(self.config.production_channel_id)
+                                        if channel:
+                                            message = await channel.send(embed=embed)
+                                            discord_message_id = message.id
+                                            discord_channel_id = channel.id
+                                            logger.info(f"📤 Prediction posted to Discord (msg_id={discord_message_id})")
+                                        else:
+                                            logger.warning("⚠️ Production channel not found, prediction not posted")
                                     else:
-                                        discord_message_id = None
-                                        discord_channel_id = None
-                                        logger.warning("⚠️ Production channel not found, prediction not posted")
+                                        logger.info("🕶️ Shadow mode: prediction NOT posted (PREDICTION_PUBLISH_ENABLED=false)")
 
-                                    # Store prediction in database
-                                    session_date = datetime.now().strftime('%Y-%m-%d')  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
-                                    prediction_id = await self.prediction_engine.store_prediction(
-                                        prediction,
-                                        split_data,
-                                        session_date,
-                                        discord_channel_id,
-                                        discord_message_id
-                                    )
-
-                                    logger.info(f"✅ Prediction workflow complete (id={prediction_id})")
+                                    # Store prediction in database (shadow collection)
+                                    if self.config.prediction_shadow_enabled or discord_message_id:
+                                        session_date = datetime.now().strftime('%Y-%m-%d')  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
+                                        publish_state = "published" if discord_message_id else "shadow"
+                                        prediction_id = await self.prediction_engine.store_prediction(
+                                            prediction,
+                                            split_data,
+                                            session_date,
+                                            discord_channel_id,
+                                            discord_message_id,
+                                            publish_state=publish_state,
+                                        )
+                                        logger.info(f"✅ Prediction workflow complete (id={prediction_id}, {publish_state})")
 
                                 except Exception as e:
                                     logger.error(f"❌ Failed to post/store prediction: {e}", exc_info=True)

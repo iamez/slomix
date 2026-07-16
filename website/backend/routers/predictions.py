@@ -15,6 +15,8 @@ async def get_recent_predictions(limit: int = 5, db: DatabaseAdapter = Depends(g
     Get recent match predictions.
     """
     try:
+        # Shadow program (AUD-006): only rows explicitly published are
+        # public. Shadow rows exist purely for calibration evidence.
         query = """
             SELECT
                 id,
@@ -30,6 +32,7 @@ async def get_recent_predictions(limit: int = 5, db: DatabaseAdapter = Depends(g
                 team_a_guids,
                 team_b_guids
             FROM match_predictions
+            WHERE publish_state = 'published'
             ORDER BY prediction_time DESC
             LIMIT $1
         """

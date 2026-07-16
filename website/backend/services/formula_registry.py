@@ -139,13 +139,17 @@ def get_registry() -> list[dict]:
         },
         {
             "name": "prediction_engine",
-            "version": "v1-heuristic",
-            "status": "live",
+            "version": "heuristic-v1.1",
+            "status": "shadow",
             "module": "bot/services/prediction_engine.py",
-            "surface": "Discord predictions",
-            "summary": "H2H 45% + form 30% + map 25%, mapped to 30-70% band. "
-                       "NOT calibrated — calibration rework is planned "
-                       "(owner answer B4, 2026-07-07).",
+            "surface": "shadow only — stored for calibration, not published "
+                       "(PREDICTION_PUBLISH_ENABLED=false)",
+            "summary": "Experimental heuristic estimate: H2H 45% + form 30% + "
+                       "map 25%, mapped to 30-70% band, valid/human rounds "
+                       "before prediction time only. NOT a calibrated "
+                       "probability — publishes only after >=100 resolved "
+                       "shadow predictions pass Brier/reliability gates "
+                       "(remediation plan §5).",
         },
         {
             "name": "clutch_value",

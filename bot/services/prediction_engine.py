@@ -10,12 +10,53 @@ Predicts match outcomes based on:
 Phase 3: Competitive Analytics
 """
 
+import hashlib
 import json
 import logging
 import os
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+# Bumped whenever the formula or its data gates change — calibration reports
+# must never mix versions. v1.1: valid/human round gates + as-of cutoff +
+# factor availability metadata (shadow program, audit AUD-006).
+MODEL_VERSION = "heuristic-v1.1"
+
+
+def compute_event_key(
+    session_date: str,
+    match_format: str,
+    team_a_guids: list[str],
+    team_b_guids: list[str],
+    map_name: str | None = None,
+) -> str:
+    """Deterministic dedup key for one prediction event.
+
+    Order-invariant in two ways: guids are sorted within each team, and the
+    two teams are sorted against each other — so a repeated voice split (or
+    A/B channels swapping) maps to the same key and cannot create a
+    duplicate row (unique index idx_predictions_event_key).
+    """
+    team_1 = ",".join(sorted(str(g).upper() for g in team_a_guids))
+    team_2 = ",".join(sorted(str(g).upper() for g in team_b_guids))
+    rosters = "|".join(sorted([team_1, team_2]))
+    raw = f"{session_date}|{match_format}|{map_name or ''}|{rosters}"
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+# Shared factor-query gates (audit AUD-006): only valid, human rounds that
+# COMPLETED before the prediction moment may influence a factor. round_date
+# is date-only, so the intra-evening cutoff uses the rounds unix timestamps;
+# rows without either timestamp fall back to strictly-earlier calendar days.
+_VALID_HUMAN_GATE = "r.is_valid = TRUE AND COALESCE(r.is_bot_round, FALSE) = FALSE"
+
+
+def _completed_before(unix_ph: str, date_ph: str) -> str:
+    ts = "COALESCE(NULLIF(r.round_end_unix, 0), NULLIF(r.round_start_unix, 0))"
+    return (
+        f"({ts} < {unix_ph} OR ({ts} IS NULL AND pcs.round_date < {date_ph}))"
+    )
 
 
 class PredictionEngine:
@@ -54,7 +95,8 @@ class PredictionEngine:
         self,
         team_a_guids: list[str],
         team_b_guids: list[str],
-        map_name: str | None = None
+        map_name: str | None = None,
+        as_of: datetime | None = None,
     ) -> dict:
         """
         Generate match prediction with confidence scoring.
@@ -81,10 +123,15 @@ class PredictionEngine:
         """
         logger.info(f"🔮 Generating prediction: {len(team_a_guids)}v{len(team_b_guids)}")
 
+        # Temporal cutoff: every factor query sees only rounds completed
+        # BEFORE this moment, so a later result can never leak into the
+        # snapshot (shadow-program requirement).
+        as_of = as_of or datetime.now()  # noqa: DTZ005 naive datetime intentional — project convention
+
         # Analyze each factor
-        h2h = await self._analyze_head_to_head(team_a_guids, team_b_guids)
-        form = await self._analyze_recent_form(team_a_guids, team_b_guids)
-        map_perf = await self._analyze_map_performance(team_a_guids, team_b_guids, map_name)
+        h2h = await self._analyze_head_to_head(team_a_guids, team_b_guids, as_of)
+        form = await self._analyze_recent_form(team_a_guids, team_b_guids, as_of)
+        map_perf = await self._analyze_map_performance(team_a_guids, team_b_guids, map_name, as_of)
         subs = await self._analyze_substitution_impact(team_a_guids, team_b_guids)
 
         # Calculate weighted score
@@ -113,17 +160,35 @@ class PredictionEngine:
             f"(Confidence: {confidence})"
         )
 
+        factors = {'h2h': h2h, 'form': form, 'map': map_perf, 'subs': subs}
+
+        # Per-factor coverage: a factor that had no data is recorded as
+        # unavailable (its neutral 0.5 is a placeholder, not evidence) so the
+        # calibration report can slice eligible vs non-eligible predictions.
+        coverage = {
+            name: {
+                'available': bool(f.get('available', False)),
+                'sample_size': int(f.get('sample_size', 0)),
+                'window_start': f.get('window_start'),
+                'window_end': f.get('window_end'),
+            }
+            for name, f in factors.items()
+        }
+        eligibility_reasons = [
+            f"{name}_unavailable" for name, f in factors.items()
+            if not f.get('available', False)
+        ]
+
         return {
             'team_a_win_probability': round(team_a_prob, 2),
             'team_b_win_probability': round(team_b_prob, 2),
             'confidence': confidence,
             'confidence_score': round(confidence_score, 2),
-            'factors': {
-                'h2h': h2h,
-                'form': form,
-                'map': map_perf,
-                'subs': subs
-            },
+            'factors': factors,
+            'coverage': coverage,
+            'eligibility_reasons': eligibility_reasons,
+            'model_version': MODEL_VERSION,
+            'as_of': as_of.isoformat(),
             'key_insight': key_insight,
             'weighted_score': round(weighted_score, 3)
         }
@@ -134,7 +199,8 @@ class PredictionEngine:
         split_data: dict,
         session_date: str,
         discord_channel_id: int | None = None,
-        discord_message_id: int | None = None
+        discord_message_id: int | None = None,
+        publish_state: str = "shadow",
     ) -> int:
         """
         Store prediction in database for accuracy tracking.
@@ -145,9 +211,13 @@ class PredictionEngine:
             session_date: Date of gaming session (YYYY-MM-DD)
             discord_channel_id: Optional Discord channel where prediction was posted
             discord_message_id: Optional Discord message ID for editing
+            publish_state: 'shadow' (stored for calibration only, default) or
+                'published' (was actually shown to users)
 
         Returns:
-            prediction_id: Database ID of stored prediction
+            prediction_id: Database ID of stored prediction. Idempotent: a
+            repeated voice split with the same rosters hits the same
+            prediction_event_key and returns the existing row's id.
         """
         try:
             # Extract factor details
@@ -186,6 +256,17 @@ class PredictionEngine:
                 'details': subs.get('details', '')
             })
 
+            event_key = compute_event_key(
+                session_date,
+                split_data['format'],
+                split_data['team_a_guids'],
+                split_data['team_b_guids'],
+                split_data.get('map_name'),
+            )
+            feature_snapshot_json = json.dumps(prediction.get('factors', {}), default=str)
+            feature_coverage_json = json.dumps(prediction.get('coverage', {}), default=str)
+            eligibility_reasons = ",".join(prediction.get('eligibility_reasons', [])) or None
+
             query = """
                 INSERT INTO match_predictions (
                     session_date,
@@ -213,12 +294,21 @@ class PredictionEngine:
                     subs_details,
                     discord_channel_id,
                     discord_message_id,
-                    guid_coverage
+                    guid_coverage,
+                    model_version,
+                    publish_state,
+                    prediction_event_key,
+                    feature_snapshot,
+                    feature_coverage,
+                    eligibility_reasons
                 ) VALUES (
                     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                     $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                    $21, $22, $23, $24, $25, $26
+                    $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
+                    $31, $32
                 )
+                ON CONFLICT (prediction_event_key) WHERE prediction_event_key IS NOT NULL
+                DO NOTHING
                 RETURNING id
             """
 
@@ -248,13 +338,29 @@ class PredictionEngine:
                 subs_details_json,
                 discord_channel_id,
                 discord_message_id,
-                split_data['guid_coverage']
+                split_data['guid_coverage'],
+                prediction.get('model_version', MODEL_VERSION),
+                publish_state,
+                event_key,
+                feature_snapshot_json,
+                feature_coverage_json,
+                eligibility_reasons,
             )
 
             result = await self.db.fetch_one(query, params)
-            prediction_id = result[0]
+            if result is None:
+                # Dedup hit: the same event was already stored (repeated voice
+                # split). Return the existing id instead of inserting a twin.
+                existing = await self.db.fetch_one(
+                    "SELECT id FROM match_predictions WHERE prediction_event_key = $1",
+                    (event_key,),
+                )
+                prediction_id = existing[0]
+                logger.info(f"💾 Prediction dedup: event already stored (ID={prediction_id})")
+                return prediction_id
 
-            logger.info(f"💾 Prediction stored: ID={prediction_id}")
+            prediction_id = result[0]
+            logger.info(f"💾 Prediction stored: ID={prediction_id} ({publish_state})")
             return prediction_id
 
         except Exception as e:
@@ -299,17 +405,18 @@ class PredictionEngine:
 
             prediction_correct = (predicted_winner == actual_winner)
 
-            # Calculate accuracy (Brier score: lower is better, 0 = perfect)
-            # For binary outcomes, Brier score = (p - actual)^2
+            # Raw Brier score = (p - outcome)^2, lower is better. Draws are
+            # excluded from binary calibration: brier_score stays NULL and
+            # only the legacy accuracy field gets the 0.5 placeholder.
             if actual_winner == 1:
                 brier_score = (1.0 - team_a_prob) ** 2
             elif actual_winner == 2:
                 brier_score = (1.0 - team_b_prob) ** 2
             else:
-                brier_score = 0.5  # Draw case
+                brier_score = None  # Draw/cancelled
 
-            # Convert to accuracy (higher is better, 1 = perfect)
-            prediction_accuracy = 1.0 - brier_score
+            # Legacy display metric (higher is better, 1 = perfect)
+            prediction_accuracy = 1.0 - (brier_score if brier_score is not None else 0.5)
 
             # Update database
             query_update = """
@@ -319,8 +426,9 @@ class PredictionEngine:
                     team_b_actual_score = $3,
                     prediction_correct = $4,
                     prediction_accuracy = $5,
+                    brier_score = $6,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = $6
+                WHERE id = $7
             """
 
             await self.db.execute(query_update, (
@@ -329,6 +437,7 @@ class PredictionEngine:
                 team_b_score,
                 prediction_correct,
                 prediction_accuracy,
+                brier_score,
                 prediction_id
             ))
 
@@ -411,6 +520,26 @@ class PredictionEngine:
                 resolved += 1
 
             if resolved:
+                # Record which gaming session actually resolved these
+                # predictions — but only when the date maps to exactly one
+                # session (ambiguity stays NULL rather than guessing).
+                try:
+                    sids = await self.db.fetch_all(
+                        "SELECT DISTINCT gaming_session_id FROM rounds "
+                        "WHERE round_date = $1 AND gaming_session_id IS NOT NULL",
+                        (session_date,),
+                    )
+                    if len(sids) == 1:
+                        await self.db.execute(
+                            "UPDATE match_predictions SET gaming_session_id = $1 "
+                            "WHERE session_date = $2 AND actual_winner IS NOT NULL "
+                            "AND gaming_session_id IS NULL",
+                            (sids[0][0], session_date),
+                        )
+                except Exception as e:
+                    logger.debug("gaming_session_id backlink skipped: %s", e)
+
+            if resolved:
                 logger.info("✅ auto-resolved %d prediction(s) for %s",
                             resolved, session_date)
             return resolved
@@ -421,25 +550,31 @@ class PredictionEngine:
     async def _analyze_head_to_head(
         self,
         team_a_guids: list[str],
-        team_b_guids: list[str]
+        team_b_guids: list[str],
+        as_of: datetime,
     ) -> dict:
         """
         Analyze historical head-to-head matchups between these lineups.
 
-        Returns score: >0.5 = Team A favored, <0.5 = Team B favored
+        Returns score: >0.5 = Team A favored, <0.5 = Team B favored.
+        Only valid, human rounds completed before `as_of` are visible
+        (rounds.is_valid + bot gate + temporal cutoff — audit AUD-006).
         """
         # Find sessions where these teams (or similar) played each other
         # Use overlap percentage to find matches
 
-        query = """
+        query = f"""
             WITH team_sessions AS (
                 SELECT DISTINCT
-                    DATE(round_date) as session_date,
-                    player_guid,
-                    team
-                FROM player_comprehensive_stats
-                WHERE round_number IN (1, 2)
-                  AND round_date > $1
+                    DATE(pcs.round_date) as session_date,
+                    pcs.player_guid,
+                    pcs.team
+                FROM player_comprehensive_stats pcs
+                JOIN rounds r ON r.id = pcs.round_id
+                WHERE pcs.round_number IN (1, 2)
+                  AND pcs.round_date > $1
+                  AND {_VALID_HUMAN_GATE}
+                  AND {_completed_before('$2', '$3')}
             )
             SELECT session_date, team, array_agg(DISTINCT player_guid) as guids
             FROM team_sessions
@@ -447,11 +582,14 @@ class PredictionEngine:
             ORDER BY session_date DESC
         """
 
-        # Look back 90 days
-        cutoff = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
+        # Look back 90 days before the prediction moment
+        cutoff = (as_of - timedelta(days=90)).strftime('%Y-%m-%d')
+        as_of_unix = int(as_of.timestamp())
+        as_of_date = as_of.strftime('%Y-%m-%d')
+        window = {'window_start': cutoff, 'window_end': as_of.isoformat()}
 
         try:
-            rows = await self.db.fetch_all(query, (cutoff,))
+            rows = await self.db.fetch_all(query, (cutoff, as_of_unix, as_of_date))
 
             use_results_lookup = os.getenv(
                 "ENABLE_H2H_RESULTS_LOOKUP", "false"
@@ -518,15 +656,21 @@ class PredictionEngine:
                     'matches': total_matches,
                     'team_a_wins': 0,
                     'team_b_wins': 0,
-                    'confidence': 'low'
+                    'confidence': 'low',
+                    'available': False,
+                    'sample_size': total_matches,
+                    **window,
                 }
 
             # Calculate score
-            # If results lookup is disabled or unavailable, remain neutral
+            # If results lookup is disabled or unavailable, remain neutral —
+            # and a neutral placeholder is NOT evidence, so available=False.
             if not use_results_lookup or (team_a_wins + team_b_wins) == 0:
                 score = 0.5
+                has_evidence = False
             else:
                 score = team_a_wins / max(team_a_wins + team_b_wins, 1)
+                has_evidence = True
 
             return {
                 'score': score,
@@ -534,7 +678,10 @@ class PredictionEngine:
                 'matches': total_matches,
                 'team_a_wins': team_a_wins,
                 'team_b_wins': team_b_wins,
-                'confidence': 'medium' if total_matches >= 5 else 'low'
+                'confidence': 'medium' if total_matches >= 5 else 'low',
+                'available': has_evidence,
+                'sample_size': total_matches,
+                **window,
             }
 
         except Exception as e:
@@ -543,7 +690,9 @@ class PredictionEngine:
                 'score': 0.5,
                 'details': 'H2H analysis unavailable',
                 'matches': 0,
-                'confidence': 'low'
+                'confidence': 'low',
+                'available': False,
+                'sample_size': 0,
             }
 
     async def _get_session_winner_from_results(
@@ -614,36 +763,51 @@ class PredictionEngine:
     async def _analyze_recent_form(
         self,
         team_a_guids: list[str],
-        team_b_guids: list[str]
+        team_b_guids: list[str],
+        as_of: datetime,
     ) -> dict:
         """
-        Analyze recent form using average DPM over last 30 days.
+        Analyze recent form using average DPM over the 30 days before `as_of`.
 
-        Returns score: >0.5 = Team A has better recent form
+        Returns score: >0.5 = Team A has better recent form.
+        Only valid, human rounds completed before `as_of` count.
         """
+        window_start = (as_of - timedelta(days=30)).strftime('%Y-%m-%d')
+        window = {'window_start': window_start, 'window_end': as_of.isoformat()}
+        as_of_unix = int(as_of.timestamp())
+        as_of_date = as_of.strftime('%Y-%m-%d')
+
         try:
-            async def _team_avg_dpm(guids: list[str]) -> float:
+            async def _team_avg_dpm(guids: list[str]) -> tuple[float, int]:
                 if not guids:
-                    return 0.0
+                    return 0.0, 0
                 placeholders = ','.join([f'${i+1}' for i in range(len(guids))])
                 n = len(guids)
                 query = f"""
-                    SELECT AVG(dpm) FROM (
-                        SELECT player_guid, AVG(dpm) as dpm
-                        FROM player_comprehensive_stats
-                        WHERE player_guid IN ({placeholders})
-                          AND round_date >= (CURRENT_DATE - ${n+1} * INTERVAL '1 day')::text
-                          AND round_number IN (1, 2)
-                          AND time_played_seconds > 60
-                        GROUP BY player_guid
+                    SELECT AVG(dpm), COALESCE(SUM(rounds_n), 0) FROM (
+                        SELECT pcs.player_guid, AVG(pcs.dpm) as dpm, COUNT(*) as rounds_n
+                        FROM player_comprehensive_stats pcs
+                        JOIN rounds r ON r.id = pcs.round_id
+                        WHERE pcs.player_guid IN ({placeholders})
+                          AND pcs.round_date >= ${n+1}
+                          AND pcs.round_number IN (1, 2)
+                          AND pcs.time_played_seconds > 60
+                          AND {_VALID_HUMAN_GATE}
+                          AND {_completed_before(f'${n+2}', f'${n+3}')}
+                        GROUP BY pcs.player_guid
                     ) sub
                 """
-                result = await self.db.fetch_one(query, tuple(guids) + (30,))
-                return float(result[0] or 0) if result and result[0] else 0.0
+                result = await self.db.fetch_one(
+                    query, tuple(guids) + (window_start, as_of_unix, as_of_date)
+                )
+                if not result or result[0] is None:
+                    return 0.0, 0
+                return float(result[0]), int(result[1] or 0)
 
-            team_a_dpm = await _team_avg_dpm(team_a_guids)
-            team_b_dpm = await _team_avg_dpm(team_b_guids)
+            team_a_dpm, a_rounds = await _team_avg_dpm(team_a_guids)
+            team_b_dpm, b_rounds = await _team_avg_dpm(team_b_guids)
             total = team_a_dpm + team_b_dpm
+            sample_size = a_rounds + b_rounds
 
             if total < 1:
                 return {
@@ -651,7 +815,10 @@ class PredictionEngine:
                     'details': 'Insufficient recent data for form analysis',
                     'team_a_form': f'{team_a_dpm:.0f}',
                     'team_b_form': f'{team_b_dpm:.0f}',
-                    'confidence': 'low'
+                    'confidence': 'low',
+                    'available': False,
+                    'sample_size': sample_size,
+                    **window,
                 }
 
             score = team_a_dpm / total
@@ -663,7 +830,10 @@ class PredictionEngine:
                 'details': f'Team A avg DPM: {team_a_dpm:.0f}, Team B: {team_b_dpm:.0f} (30d)',
                 'team_a_form': f'{team_a_dpm:.0f}',
                 'team_b_form': f'{team_b_dpm:.0f}',
-                'confidence': confidence
+                'confidence': confidence,
+                'available': True,
+                'sample_size': sample_size,
+                **window,
             }
         except Exception as e:
             logger.error(f"Form analysis failed: {e}", exc_info=True)
@@ -672,17 +842,20 @@ class PredictionEngine:
                 'details': f'Form analysis error: {e}',
                 'team_a_form': '?',
                 'team_b_form': '?',
-                'confidence': 'low'
+                'confidence': 'low',
+                'available': False,
+                'sample_size': 0,
             }
 
     async def _analyze_map_performance(
         self,
         team_a_guids: list[str],
         team_b_guids: list[str],
-        map_name: str | None
+        map_name: str | None,
+        as_of: datetime,
     ) -> dict:
         """
-        Analyze map-specific DPM performance.
+        Analyze map-specific DPM performance (valid human rounds before `as_of`).
 
         Returns score: >0.5 = Team A better on this map
         """
@@ -690,38 +863,55 @@ class PredictionEngine:
             return {
                 'score': 0.5,
                 'details': 'Map not specified',
-                'confidence': 'low'
+                'confidence': 'low',
+                'available': False,
+                'sample_size': 0,
             }
 
+        as_of_unix = int(as_of.timestamp())
+        as_of_date = as_of.strftime('%Y-%m-%d')
+        window = {'window_start': None, 'window_end': as_of.isoformat()}
+
         try:
-            async def _team_map_dpm(guids: list[str]) -> float:
+            async def _team_map_dpm(guids: list[str]) -> tuple[float, int]:
                 if not guids:
-                    return 0.0
+                    return 0.0, 0
                 placeholders = ','.join([f'${i+1}' for i in range(len(guids))])
                 n = len(guids)
                 query = f"""
-                    SELECT AVG(dpm) FROM (
-                        SELECT player_guid, AVG(dpm) as dpm
-                        FROM player_comprehensive_stats
-                        WHERE player_guid IN ({placeholders})
-                          AND map_name = ${n+1}
-                          AND round_number IN (1, 2)
-                          AND time_played_seconds > 60
-                        GROUP BY player_guid
+                    SELECT AVG(dpm), COALESCE(SUM(rounds_n), 0) FROM (
+                        SELECT pcs.player_guid, AVG(pcs.dpm) as dpm, COUNT(*) as rounds_n
+                        FROM player_comprehensive_stats pcs
+                        JOIN rounds r ON r.id = pcs.round_id
+                        WHERE pcs.player_guid IN ({placeholders})
+                          AND pcs.map_name = ${n+1}
+                          AND pcs.round_number IN (1, 2)
+                          AND pcs.time_played_seconds > 60
+                          AND {_VALID_HUMAN_GATE}
+                          AND {_completed_before(f'${n+2}', f'${n+3}')}
+                        GROUP BY pcs.player_guid
                     ) sub
                 """
-                result = await self.db.fetch_one(query, tuple(guids) + (map_name,))
-                return float(result[0] or 0) if result and result[0] else 0.0
+                result = await self.db.fetch_one(
+                    query, tuple(guids) + (map_name, as_of_unix, as_of_date)
+                )
+                if not result or result[0] is None:
+                    return 0.0, 0
+                return float(result[0]), int(result[1] or 0)
 
-            team_a_dpm = await _team_map_dpm(team_a_guids)
-            team_b_dpm = await _team_map_dpm(team_b_guids)
+            team_a_dpm, a_rounds = await _team_map_dpm(team_a_guids)
+            team_b_dpm, b_rounds = await _team_map_dpm(team_b_guids)
             total = team_a_dpm + team_b_dpm
+            sample_size = a_rounds + b_rounds
 
             if total < 1:
                 return {
                     'score': 0.5,
                     'details': f'No data for {map_name}',
-                    'confidence': 'low'
+                    'confidence': 'low',
+                    'available': False,
+                    'sample_size': sample_size,
+                    **window,
                 }
 
             score = team_a_dpm / total
@@ -731,14 +921,19 @@ class PredictionEngine:
             return {
                 'score': score,
                 'details': f'{map_name}: Team A {team_a_dpm:.0f} DPM vs Team B {team_b_dpm:.0f} DPM',
-                'confidence': confidence
+                'confidence': confidence,
+                'available': True,
+                'sample_size': sample_size,
+                **window,
             }
         except Exception as e:
             logger.error(f"Map analysis failed: {e}", exc_info=True)
             return {
                 'score': 0.5,
                 'details': f'Map analysis error: {e}',
-                'confidence': 'low'
+                'confidence': 'low',
+                'available': False,
+                'sample_size': 0,
             }
 
     async def _analyze_substitution_impact(
@@ -758,7 +953,9 @@ class PredictionEngine:
             'details': 'Substitution analysis not yet implemented',
             'team_a_subs': 0,
             'team_b_subs': 0,
-            'confidence': 'low'
+            'confidence': 'low',
+            'available': False,
+            'sample_size': 0,
         }
 
     def _calculate_confidence(
