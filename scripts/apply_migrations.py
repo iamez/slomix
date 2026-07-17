@@ -556,6 +556,20 @@ async def cmd_apply(only: list[str] | None = None):
                 print(f"    ~~ {f}")
             sys.exit(1)
 
+        # Refuse if any ledger row (applied OR failed) references a file that is
+        # gone from the checkout — a full `apply` must not proceed past a
+        # deleted/renamed migration whose version is already in the DB, just like
+        # the --only preflight already refuses it (Codex review on #509).
+        discovered_names = {f for f, _ in migrations}
+        missing_files = sorted((applied | failed) - discovered_names)
+        if missing_files:
+            print("  ERROR: ledger row(s) reference migration file(s) missing from")
+            print(f"  {MIGRATIONS_DIR} (deleted/renamed). Refusing to apply until the")
+            print("  drift is reconciled:")
+            for f in missing_files:
+                print(f"    ?? {f}")
+            sys.exit(1)
+
         pending = [(f, p) for f, p in migrations if f not in applied]
 
         if only:

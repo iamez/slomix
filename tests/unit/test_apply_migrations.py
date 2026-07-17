@@ -294,6 +294,7 @@ async def test_apply_records_success_inside_migration_transaction(monkeypatch, t
     mig_dir = tmp_path / "migrations"
     mig_dir.mkdir()
     (mig_dir / "001_atomic.sql").write_text("BEGIN;\nSELECT 1;\nCOMMIT;")
+    (mig_dir / "000_seed.sql").write_text("SELECT 1;")  # applied seed needs a file
 
     conn = FakeConn(rows=[{"filename": "000_seed.sql", "success": True}])
     monkeypatch.setattr("scripts.apply_migrations.MIGRATIONS_DIR", mig_dir)
@@ -315,6 +316,7 @@ async def test_apply_failure_rolls_back_and_exits_nonzero(monkeypatch, tmp_path,
     mig_dir = tmp_path / "migrations"
     mig_dir.mkdir()
     (mig_dir / "001_boom.sql").write_text("SELECT kaboom;")
+    (mig_dir / "000_seed.sql").write_text("SELECT 1;")  # applied seed needs a file
 
     conn = FakeConn(rows=[{"filename": "000_seed.sql", "success": True}],
                     fail_on_sql="kaboom")
@@ -376,13 +378,36 @@ async def test_apply_only_filters_and_validates_names(monkeypatch, tmp_path, cap
     assert any("SELECT 2" in q for q in applied_sql)
     assert not any("SELECT 1;" in q for q in applied_sql)
 
-    # Unknown --only name → exit 1 before touching anything.
-    conn2 = FakeConn(rows=[{"filename": "000_seed.sql", "success": True}])
+    # Unknown --only name → exit 1 before touching anything. (Applied row 001_a
+    # has an on-disk file so the missing-file guard doesn't trip first.)
+    conn2 = FakeConn(rows=[{"filename": "001_a.sql", "success": True}])
     monkeypatch.setattr("scripts.apply_migrations.get_connection",
                         _returning(conn2))
     with pytest.raises(SystemExit) as exc:
         await cmd_apply(only=["999_nope.sql"])
     assert exc.value.code == 1
+
+
+@pytest.mark.asyncio
+async def test_full_apply_refuses_missing_ledger_file(monkeypatch, tmp_path, capsys):
+    """A full (non---only) apply refuses when a ledger row references a file that
+    is gone from the checkout, matching the --only preflight (Codex #509)."""
+    mig_dir = tmp_path / "migrations"
+    mig_dir.mkdir()
+    (mig_dir / "001_a.sql").write_text("SELECT 1;")
+    conn = FakeConn(rows=[
+        {"filename": "001_a.sql", "success": True},
+        {"filename": "099_deleted.sql", "success": True},  # applied, file gone
+    ])
+    monkeypatch.setattr("scripts.apply_migrations.MIGRATIONS_DIR", mig_dir)
+    monkeypatch.setattr("scripts.apply_migrations.get_connection",
+                        _returning(conn))
+    with pytest.raises(SystemExit) as exc:
+        await cmd_apply()
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "missing from" in out and "099_deleted.sql" in out
+    assert not any("INSERT INTO schema_migrations" in q for q, _ in conn.executed)
 
 
 @pytest.mark.asyncio
@@ -394,6 +419,7 @@ async def test_apply_only_refuses_unrelated_pending_drift(monkeypatch, tmp_path,
     mig_dir.mkdir()
     (mig_dir / "001_a.sql").write_text("SELECT 1;")   # left pending (unrelated)
     (mig_dir / "002_b.sql").write_text("SELECT 2;")
+    (mig_dir / "000_seed.sql").write_text("SELECT 1;")  # applied seed needs a file
 
     conn = FakeConn(rows=[{"filename": "000_seed.sql", "success": True}])
     monkeypatch.setattr("scripts.apply_migrations.MIGRATIONS_DIR", mig_dir)

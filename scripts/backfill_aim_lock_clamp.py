@@ -195,6 +195,13 @@ def main() -> int:
         conn.close()
         return 0
 
+    # Lock out concurrent writers for the rest of the transaction so no new
+    # violating row can be committed between the residual check and our commit
+    # (Codex #509). SHARE mode blocks INSERT/UPDATE from OTHER transactions (they
+    # need ROW EXCLUSIVE) but not our own statements; the game is paused for this
+    # one-off owner backfill, so the brief importer stall is harmless.
+    cur.execute("LOCK TABLE proximity_aim_lock IN SHARE MODE")
+
     cur.execute(
         "UPDATE proximity_aim_lock "
         "SET duration_ms = GREATEST(samples,1)*%s + %s, "

@@ -71,7 +71,14 @@ async def pg(runner_env):
 
 
 async def _seed_ledger(conn, ns):
-    """Non-empty ledger bypasses the populated-DB auto-baseline guard."""
+    """Non-empty ledger bypasses the populated-DB auto-baseline guard.
+
+    The seed row must correspond to a real file under MIGRATIONS_DIR, or the
+    runner's missing-file drift check refuses to apply (it treats a ledger row
+    with no on-disk file as drift).
+    """
+    import scripts.apply_migrations as _apply
+    (_apply.MIGRATIONS_DIR / f"000_{ns}_seed.sql").write_text("SELECT 1;")
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS schema_migrations (
             id SERIAL PRIMARY KEY, version TEXT NOT NULL UNIQUE,

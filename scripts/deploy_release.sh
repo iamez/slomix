@@ -161,6 +161,7 @@ sudo_run() {
 # restore the previous checkout so the still-running services match their
 # assets again.
 CHECKOUT_CHANGED=false
+MODERN_SWAPPED=false
 SERVICES_STOPPED=false
 SERVICES_RESTARTED=false
 
@@ -185,13 +186,20 @@ recover_on_failure() {
     warn "modern bundle so the still-running services match their assets."
     warn "═════════════════════════════════════════════════════════════"
     local restore_rc=0
+    # Only restore modern.prev if THIS deploy actually swapped it in (step 3c);
+    # otherwise modern.prev is a stale copy from a prior deploy and restoring it
+    # would replace the current-correct bundle (Codex #509).
+    local modern_restore=""
+    if $MODERN_SWAPPED; then
+      modern_restore="rm -rf website/static/modern.new; \
+        if [ -d website/static/modern.prev ]; then \
+          rm -rf website/static/modern && \
+          mv website/static/modern.prev website/static/modern && \
+          echo '  restored previous modern bundle from static/modern.prev'; \
+        fi;"
+    fi
     $SSH "cd $VM_PATH && git checkout -f $CURRENT_COMMIT && \
-      rm -rf website/static/modern.new; \
-      if [ -d website/static/modern.prev ]; then \
-        rm -rf website/static/modern && \
-        mv website/static/modern.prev website/static/modern && \
-        echo '  restored previous modern bundle from static/modern.prev'; \
-      fi; \
+      $modern_restore \
       git log --oneline -1" || restore_rc=$?
     if [ "$restore_rc" -eq 0 ]; then
       warn "Checkout restored. The old services were never stopped, so no"
@@ -394,6 +402,11 @@ run_remote "cd $VM_PATH && \
     rm -rf website/static/modern.new; \
     exit 1; \
   fi"
+# The atomic swap succeeded → static/modern.prev now holds THIS deploy's old
+# bundle. Only then may a rollback restore it (Codex #509): a failure during
+# npm ci / the Vite build leaves modern.prev as a STALE copy from the previous
+# deploy, which must NOT be restored over the current-and-correct bundle.
+$DRY_RUN || MODERN_SWAPPED=true
 
 # ─── 4. Stop services (clean restart) ─────────────────────────────────────────
 log "4/8  Stop services before migration"
