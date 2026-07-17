@@ -62,9 +62,15 @@ _VALID_HUMAN_GATE = "r.is_valid = TRUE AND COALESCE(r.is_bot_round, FALSE) = FAL
 
 
 def _completed_before(unix_ph: str, date_ph: str) -> str:
-    ts = "COALESCE(NULLIF(r.round_end_unix, 0), NULLIF(r.round_start_unix, 0))"
+    # Only a real ROUND-END timestamp proves a round finished before the
+    # prediction moment. The old fallback to round_start_unix let a round that
+    # had merely STARTED before `as_of` (but finished after) leak into the
+    # factor snapshot, contaminating historical calibration (Codex #511). A row
+    # with no trustworthy end uses a strictly-earlier calendar day instead —
+    # conservatively excluding same-day rounds of uncertain completion.
+    end = "NULLIF(r.round_end_unix, 0)"
     return (
-        f"({ts} < {unix_ph} OR ({ts} IS NULL AND pcs.round_date < {date_ph}))"
+        f"({end} < {unix_ph} OR ({end} IS NULL AND pcs.round_date < {date_ph}))"
     )
 
 

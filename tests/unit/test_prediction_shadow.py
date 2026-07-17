@@ -17,6 +17,7 @@ import pytest
 from bot.services.prediction_engine import (
     MODEL_VERSION,
     PredictionEngine,
+    _completed_before,
     compute_event_key,
 )
 
@@ -85,6 +86,16 @@ def test_event_key_occurrence_separates_rematches():
     assert k1 != base and k2 != base and k1 != k2  # different windows → new rows
     # Same window repeated → same key → deduped.
     assert compute_event_key("2026-07-14", "3v3", A, B, "supply", "100") == k1
+
+
+def test_completed_before_uses_round_end_not_start():
+    """The as-of gate must key on round_end (a started-but-unfinished round
+    must not leak into a snapshot); a missing end falls back to a strictly
+    earlier calendar day, never round_start (Codex #511)."""
+    gate = _completed_before("$3", "$4")
+    assert "round_end_unix" in gate
+    assert "round_start_unix" not in gate
+    assert "round_date <" in gate
 
 
 # ── factor query gates ───────────────────────────────────────────────
