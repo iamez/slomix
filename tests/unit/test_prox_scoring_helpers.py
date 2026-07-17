@@ -49,9 +49,10 @@ def test_min_engagements_constant_pinned():
 
 
 def test_formula_version_pinned():
-    """FORMULA_VERSION="1.0" — pin so any formula change is a deliberate
-    bump. Frontend may cache scores keyed on this version."""
-    assert FORMULA_VERSION == "1.0"
+    """FORMULA_VERSION="2.0" — pin so any formula change is a deliberate bump.
+    Bumped 1.0→2.0 with the quality-contract rework (midrank + coverage gating),
+    so the canonical version matches the prox-web-v2.0 score responses."""
+    assert FORMULA_VERSION == "2.0"
 
 
 def test_category_weights_sum_to_one():

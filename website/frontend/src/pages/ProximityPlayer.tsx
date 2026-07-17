@@ -372,10 +372,32 @@ const SCORE_COLORS: Record<string, string> = {
   prox_combat: '#ef4444', prox_team: '#60a5fa', prox_gamesense: '#f59e0b', prox_overall: '#22c55e',
 };
 
+// Matches MIN_METRIC_WEIGHT_COVERAGE in the backend prox_scoring service.
+const MIN_PROX_COVERAGE = 0.8;
+
 function PlayerProxScoreSection({ guid }: { guid: string }) {
   const { data } = useProxScores(30, guid, 1);
   const player = data?.players[0];
   if (!player) return null;
+
+  // Quality contract (AUD-008): a single-player request returns a player even
+  // below the coverage threshold (flagged), and a degraded response withholds
+  // ranking — do NOT render a mostly-neutral-filled score as a real rating.
+  const coverage = player.metric_weight_coverage ?? 1;
+  if (data?.status === 'degraded' || coverage < MIN_PROX_COVERAGE) {
+    return (
+      <GlassPanel className="mt-6">
+        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">
+          Proximity Score
+        </h3>
+        <div className="text-[11px] text-slate-500">
+          {data?.status === 'degraded'
+            ? 'Proximity scores are temporarily unavailable (a data source failed).'
+            : 'Not enough proximity telemetry to rate this player yet.'}
+        </div>
+      </GlassPanel>
+    );
+  }
 
   return (
     <GlassPanel className="mt-6">

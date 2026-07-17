@@ -326,7 +326,10 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
         # AUD-008: don't publish a composite built mostly from neutral fill.
         # A single-player request still returns the player (with the coverage
         # flag) so the profile page can decide; leaderboard rows are dropped.
-        if coverage < MIN_METRIC_WEIGHT_COVERAGE and guid != player_guid:
+        # Tolerance: a player mathematically AT the 0.80 boundary can accumulate
+        # to 0.7999999999999999 in float, so compare with a small epsilon rather
+        # than dropping an exactly-covered player (Codex #512).
+        if coverage < MIN_METRIC_WEIGHT_COVERAGE - 1e-9 and guid != player_guid:
             below_coverage += 1
             continue
 
