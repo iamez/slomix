@@ -4,12 +4,19 @@
 **Vir:** 20-dnevni pregled (`slomix-review-20dni`) → nadaljevanje v gradnjo.
 **Legenda napredka:** ✅ done · 🔜 v teku · ⏳ owner-gated · ☐ todo
 
+> **Status update (ob mergu, naknadno):** ta dokument je posnetek stanja z dne
+> 2026-07-13. Merge-status vrstic spodaj je bil zamrznjen na tisti dan; od
+> takrat so PR-ji **#494, #496 in #499 (ter Good Night ranki #503/#505/#506/#507)
+> mergani**. Kjer besedilo pravi »čaka owner merge-OK«, beri kot »takrat še
+> nemergano — od tedaj MERGANO«. Ta banner je edini avtoritativni merge-status;
+> posamezne vrstice ohranjajo izvorni zapis zaradi zgodovinskega konteksta.
+
 ---
 
 ## Kontekst
 
 20-dnevni pregled je **zaključen** — vse najdbe popravljene, prod zdrav na **1.25.0**
-+ Data Trust endpoint (#494) + bot crash-loop fix. Preverjeno da nič ni pozabljeno:
+z Data Trust endpointom (#494) + bot crash-loop fix. Preverjeno da nič ni pozabljeno:
 FULL_REVIEW §6 vseh 10 postavk obravnavanih, §8 sprint vse 4 done. Ostaneta samo **2
 owner-gated review postavki** + **Good Night Engine vizija** (največji odprt projekt;
 Phase 0+1 + Story layer že shipani).
@@ -34,7 +41,7 @@ na Session Detail, player `archetypes.py` + story kartice. Plan cilja **dejanske
   `round_start_unix + actual_duration_seconds`); fallback = `now + BETS_CLOSE_AFTER_MINUTES`
   (default 20) če 1. mapa še ni gotova. `bets_router.py` cutoff že uveljavlja.
 - **Testi:** 3 novi unit testi (`test_bets_lifecycle.py`), 25 passed.
-- **Stanje:** veja `feat/betting-closes-at-cutoff`, **PR #496 (CLEAN, zelen)** — čaka owner merge-OK.
+- **Stanje:** veja `feat/betting-closes-at-cutoff`, **PR #496 (CLEAN, zelen)** — čaka owner merge-OK. **[od tedaj MERGANO]**
   (Pillow 12.2.0→12.3.0 bump v istem PR-ju = pip-audit CVE fix, ne moja koda.)
 
 ### A2. Dual-frontend reachability analiza (§6.8, "najprej analiza") — ✅ DONE
@@ -58,7 +65,7 @@ na Session Detail, player `archetypes.py` + story kartice. Plan cilja **dejanske
 **Vzorec za VSAKO rezino:** `Phase-0 read-only backtest (dokaži s tabelo) → API endpoint →
 friendship-safe UI`. Public surface = "nad svojo formo" ton, ne globalne lestvice.
 
-### B1. Story layer — poglobi (rank 1) — ✅ shipan v PR #499 (čaka merge-OK + tone review)
+### B1. Story layer — poglobi (rank 1) — ✅ shipan v PR #499 (čaka merge-OK + tone review) **[od tedaj MERGANO]**
 - **Stanje:** Good Night verdict card + 5-moment strip ŽE na Session Detail. `moments.py`
   ima 11 detektorjev + type-diversity selekcijo (one-per-type, potem po zvezdah).
 - **Prvotna ocena (2026-07-13):** "že dobro zgrajen". **Popravek po Phase-0 backtestu
@@ -119,7 +126,7 @@ Zaporedje statusa:
 ## Stanje = ZAKLJUČENO (razen owner odločitev)
 
 Ves konkreten kod/analiza-rez tega plana je opravljen. Preostane le **owner-gated**:
-merge PR #496 (A1), morebiten tone-review mikro-polish, in Track A3 housekeeping (bump #495,
+merge PR #496 (A1) **[od tedaj MERGANO]**, morebiten tone-review mikro-polish, in Track A3 housekeeping (bump #495,
 stashi, drop bak_kis, sudo rotacija). **Nič za avtonomno graditi** — nadaljnja gradnja bi bila
 duplikat že shipanih funkcij ali potrebuje owner usmeritev.
 
