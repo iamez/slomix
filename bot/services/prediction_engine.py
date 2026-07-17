@@ -30,6 +30,7 @@ def compute_event_key(
     team_a_guids: list[str],
     team_b_guids: list[str],
     map_name: str | None = None,
+    occurrence: str | None = None,
 ) -> str:
     """Deterministic dedup key for one prediction event.
 
@@ -37,11 +38,19 @@ def compute_event_key(
     two teams are sorted against each other — so a repeated voice split (or
     A/B channels swapping) maps to the same key and cannot create a
     duplicate row (unique index idx_predictions_event_key).
+
+    `occurrence` separates legitimate same-evening REMATCHES of the same
+    roster/map/format from true repeated detections of one event (Codex review
+    on #511). The caller passes an episode-window token (the split time bucketed
+    to the prediction cooldown): predictions can only fire once per cooldown
+    window per split, so two rematches the cooldown allowed land in different
+    windows (distinct keys, both stored), while a re-detection inside the same
+    window keeps the same key (deduped). Omitting it preserves the old key.
     """
     team_1 = ",".join(sorted(str(g).upper() for g in team_a_guids))
     team_2 = ",".join(sorted(str(g).upper() for g in team_b_guids))
     rosters = "|".join(sorted([team_1, team_2]))
-    raw = f"{session_date}|{match_format}|{map_name or ''}|{rosters}"
+    raw = f"{session_date}|{match_format}|{map_name or ''}|{rosters}|{occurrence or ''}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
@@ -201,6 +210,7 @@ class PredictionEngine:
         discord_channel_id: int | None = None,
         discord_message_id: int | None = None,
         publish_state: str = "shadow",
+        occurrence: str | None = None,
     ) -> int:
         """
         Store prediction in database for accuracy tracking.
@@ -262,6 +272,7 @@ class PredictionEngine:
                 split_data['team_a_guids'],
                 split_data['team_b_guids'],
                 split_data.get('map_name'),
+                occurrence,
             )
             feature_snapshot_json = json.dumps(prediction.get('factors', {}), default=str)
             feature_coverage_json = json.dumps(prediction.get('coverage', {}), default=str)
@@ -304,11 +315,20 @@ class PredictionEngine:
                 ) VALUES (
                     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                     $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                    $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-                    $31, $32
+                    $21, $22, $23, $24, $25, $26, $27, $28, $29, $30::jsonb,
+                    $31::jsonb, $32
                 )
                 ON CONFLICT (prediction_event_key) WHERE prediction_event_key IS NOT NULL
-                DO NOTHING
+                DO UPDATE SET
+                    -- Promote an existing shadow row to published when this
+                    -- write publishes it, but never downgrade a published row
+                    -- back to shadow (Codex review on #511).
+                    publish_state = CASE
+                        WHEN EXCLUDED.publish_state = 'published' THEN 'published'
+                        ELSE match_predictions.publish_state
+                    END,
+                    discord_channel_id = COALESCE(EXCLUDED.discord_channel_id, match_predictions.discord_channel_id),
+                    discord_message_id = COALESCE(EXCLUDED.discord_message_id, match_predictions.discord_message_id)
                 RETURNING id
             """
 
@@ -349,12 +369,21 @@ class PredictionEngine:
 
             result = await self.db.fetch_one(query, params)
             if result is None:
-                # Dedup hit: the same event was already stored (repeated voice
-                # split). Return the existing id instead of inserting a twin.
+                # With ON CONFLICT DO UPDATE the row is always returned, so this
+                # is only reachable if the write had no event_key (event_key
+                # NULL → the partial unique index doesn't apply → plain insert,
+                # which still RETURNs) or an adapter quirk. Fall back to a
+                # lookup, but guard against a missing row instead of crashing on
+                # existing[0] (Copilot review on #511).
                 existing = await self.db.fetch_one(
                     "SELECT id FROM match_predictions WHERE prediction_event_key = $1",
                     (event_key,),
                 )
+                if not existing:
+                    raise RuntimeError(
+                        "store_prediction: INSERT returned no row and no row "
+                        f"matched event_key={event_key!r} — prediction not stored"
+                    )
                 prediction_id = existing[0]
                 logger.info(f"💾 Prediction dedup: event already stored (ID={prediction_id})")
                 return prediction_id
@@ -809,10 +838,14 @@ class PredictionEngine:
             total = team_a_dpm + team_b_dpm
             sample_size = a_rounds + b_rounds
 
-            if total < 1:
+            # A one-sided comparison (only one team has prior rounds) yields an
+            # extreme score (e.g. 1.0) that is NOT evidence — mark it
+            # unavailable so calibration coverage never counts a half-missing
+            # factor as eligible (Codex review on #511).
+            if total < 1 or a_rounds == 0 or b_rounds == 0:
                 return {
                     'score': 0.5,
-                    'details': 'Insufficient recent data for form analysis',
+                    'details': 'Insufficient two-sided recent data for form analysis',
                     'team_a_form': f'{team_a_dpm:.0f}',
                     'team_b_form': f'{team_b_dpm:.0f}',
                     'confidence': 'low',
@@ -904,10 +937,12 @@ class PredictionEngine:
             total = team_a_dpm + team_b_dpm
             sample_size = a_rounds + b_rounds
 
-            if total < 1:
+            # One-sided map data is not evidence (see form analysis) — require
+            # both teams to have rounds on this map (Codex review on #511).
+            if total < 1 or a_rounds == 0 or b_rounds == 0:
                 return {
                     'score': 0.5,
-                    'details': f'No data for {map_name}',
+                    'details': f'Insufficient two-sided data for {map_name}',
                     'confidence': 'low',
                     'available': False,
                     'sample_size': sample_size,

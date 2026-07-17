@@ -34,7 +34,7 @@ async def get_recent_predictions(limit: int = 5, db: DatabaseAdapter = Depends(g
             FROM match_predictions
             WHERE publish_state = 'published'
             ORDER BY prediction_time DESC
-            LIMIT $1
+            LIMIT ?
         """
 
         # Note: fetch_all arguments might need to be a tuple depending on the adapter implementation

@@ -77,6 +77,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                     prediction_correct,
                     prediction_accuracy
                 FROM match_predictions
+                WHERE publish_state = 'published'
                 ORDER BY prediction_time DESC
                 LIMIT $1
             """
@@ -176,6 +177,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                     COUNT(CASE WHEN confidence = 'low' AND prediction_correct = true THEN 1 END) as low_correct
                 FROM match_predictions
                 WHERE prediction_time >= $1
+                  AND publish_state = 'published'
             """
 
             row = await self.db.fetch_one(query, (cutoff_date,))
@@ -248,6 +250,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                 FROM match_predictions
                 WHERE prediction_time >= $1
                   AND actual_winner IS NOT NULL
+                  AND publish_state = 'published'
                 ORDER BY prediction_time DESC
                 LIMIT 10
             """
@@ -333,8 +336,9 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                     actual_winner,
                     prediction_correct
                 FROM match_predictions
-                WHERE team_a_guids LIKE $1
-                   OR team_b_guids LIKE $1
+                WHERE publish_state = 'published'
+                  AND (team_a_guids LIKE $1
+                       OR team_b_guids LIKE $1)
                 ORDER BY prediction_time DESC
                 LIMIT 10
             """
@@ -477,6 +481,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                     AVG(CASE WHEN actual_winner IS NOT NULL THEN prediction_accuracy END) as avg_accuracy
                 FROM match_predictions
                 WHERE prediction_time >= $1
+                  AND publish_state = 'published'
                 GROUP BY DATE(prediction_time)
                 ORDER BY pred_date DESC
                 LIMIT 30
@@ -626,6 +631,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                     FROM match_predictions mp
                     CROSS JOIN player_links pl
                     WHERE mp.prediction_time >= $1
+                      AND mp.publish_state = 'published'
                 ) subq
                 WHERE player_guid IS NOT NULL
                 GROUP BY player_guid
@@ -740,6 +746,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                         AVG(team_a_win_probability) as avg_team_a_prob
                     FROM match_predictions
                     WHERE LOWER(map_name) LIKE LOWER($1)
+                      AND publish_state = 'published'
                     GROUP BY map_name
                 """
                 rows = await self.db.fetch_all(query, (f"%{map_name}%",))
@@ -754,6 +761,7 @@ class PredictionsCog(commands.Cog, name="Predictions"):
                         AVG(CASE WHEN actual_winner IS NOT NULL THEN prediction_accuracy END) as avg_accuracy,
                         AVG(team_a_win_probability) as avg_team_a_prob
                     FROM match_predictions
+                    WHERE publish_state = 'published'
                     GROUP BY map_name
                     ORDER BY COUNT(*) DESC
                     LIMIT 10

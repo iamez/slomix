@@ -1105,10 +1105,27 @@ class VoiceSessionService:
                                     else:
                                         logger.info("🕶️ Shadow mode: prediction NOT posted (PREDICTION_PUBLISH_ENABLED=false)")
 
-                                    # Store prediction in database (shadow collection)
-                                    if self.config.prediction_shadow_enabled or discord_message_id:
+                                    # Store prediction in database. Store whenever
+                                    # EITHER shadow collection OR publishing is on:
+                                    # if publishing was enabled but the channel was
+                                    # missing (discord_message_id is None), the
+                                    # prediction must still be stored as 'shadow'
+                                    # rather than silently dropped (Copilot #511).
+                                    if self.config.prediction_shadow_enabled or self.config.prediction_publish_enabled:
                                         session_date = datetime.now().strftime('%Y-%m-%d')  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
                                         publish_state = "published" if discord_message_id else "shadow"
+                                        # Occurrence window: the split time bucketed
+                                        # to the prediction cooldown. Predictions
+                                        # fire at most once per cooldown window per
+                                        # split, so this separates same-evening
+                                        # rematches (new window → new row) from true
+                                        # re-detections (same window → dedup). See
+                                        # compute_event_key (Codex #511).
+                                        occurrence = None
+                                        if self.last_split_time:
+                                            bucket_min = max(1, self.prediction_cooldown_minutes)
+                                            epoch_min = int(self.last_split_time.timestamp()) // 60
+                                            occurrence = str(epoch_min // bucket_min)
                                         prediction_id = await self.prediction_engine.store_prediction(
                                             prediction,
                                             split_data,
@@ -1116,6 +1133,7 @@ class VoiceSessionService:
                                             discord_channel_id,
                                             discord_message_id,
                                             publish_state=publish_state,
+                                            occurrence=occurrence,
                                         )
                                         logger.info(f"✅ Prediction workflow complete (id={prediction_id}, {publish_state})")
 

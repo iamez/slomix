@@ -1293,7 +1293,15 @@ CREATE TABLE public.match_predictions (
     discord_channel_id bigint,
     guid_coverage real NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    model_version text DEFAULT 'heuristic-v1'::text NOT NULL,
+    publish_state text DEFAULT 'shadow'::text NOT NULL,
+    prediction_event_key text,
+    feature_snapshot jsonb,
+    feature_coverage jsonb,
+    eligibility_reasons text,
+    gaming_session_id integer,
+    brier_score real
 );
 
 
@@ -7184,6 +7192,20 @@ CREATE INDEX idx_predictions_confidence ON public.match_predictions USING btree 
 --
 
 CREATE INDEX idx_predictions_discord_msg ON public.match_predictions USING btree (discord_message_id);
+
+
+--
+-- Name: idx_predictions_event_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_predictions_event_key ON public.match_predictions USING btree (prediction_event_key) WHERE (prediction_event_key IS NOT NULL);
+
+
+--
+-- Name: idx_predictions_publish_state; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_predictions_publish_state ON public.match_predictions USING btree (publish_state);
 
 
 --

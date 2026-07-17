@@ -73,6 +73,20 @@ def test_event_key_changes_with_roster_date_format_map():
     assert compute_event_key("2026-07-14", "3v3", A, B, "radar") != base
 
 
+def test_event_key_occurrence_separates_rematches():
+    """Same-evening rematches (same roster/map/format) get distinct keys via
+    the occurrence window, but a repeated detection in the SAME window dedups
+    (Codex review on #511)."""
+    base = compute_event_key("2026-07-14", "3v3", A, B, "supply")
+    # Omitting occurrence keeps the legacy key.
+    assert compute_event_key("2026-07-14", "3v3", A, B, "supply", None) == base
+    k1 = compute_event_key("2026-07-14", "3v3", A, B, "supply", "100")
+    k2 = compute_event_key("2026-07-14", "3v3", A, B, "supply", "101")
+    assert k1 != base and k2 != base and k1 != k2  # different windows → new rows
+    # Same window repeated → same key → deduped.
+    assert compute_event_key("2026-07-14", "3v3", A, B, "supply", "100") == k1
+
+
 # ── factor query gates ───────────────────────────────────────────────
 
 
@@ -100,6 +114,36 @@ async def test_factor_queries_gate_on_valid_human_rounds_and_as_of():
     factor_params = [p for q, p in db.queries
                      if "player_comprehensive_stats" in q]
     assert all(as_of_unix in p for p in factor_params)
+
+
+@pytest.mark.asyncio
+async def test_one_sided_form_is_unavailable():
+    """Only team A has recent rounds → the extreme 1.0 score is not evidence;
+    the factor must report available=False (Codex review on #511)."""
+    db = QueryCapturingDB(fetch_one_results=[(120.0, 8), (None, 0)])
+    engine = PredictionEngine(db)
+    form = await engine._analyze_recent_form(A, B, AS_OF)  # noqa: SLF001
+    assert form["available"] is False
+    assert form["score"] == 0.5
+    assert form["sample_size"] == 8
+
+
+@pytest.mark.asyncio
+async def test_two_sided_form_is_available():
+    db = QueryCapturingDB(fetch_one_results=[(120.0, 8), (80.0, 6)])
+    engine = PredictionEngine(db)
+    form = await engine._analyze_recent_form(A, B, AS_OF)  # noqa: SLF001
+    assert form["available"] is True
+    assert form["sample_size"] == 14
+
+
+@pytest.mark.asyncio
+async def test_one_sided_map_is_unavailable():
+    db = QueryCapturingDB(fetch_one_results=[(100.0, 4), (None, 0)])
+    engine = PredictionEngine(db)
+    m = await engine._analyze_map_performance(A, B, "supply", AS_OF)  # noqa: SLF001
+    assert m["available"] is False
+    assert m["score"] == 0.5
 
 
 @pytest.mark.asyncio
@@ -167,10 +211,24 @@ async def test_store_prediction_records_shadow_state_and_event_key():
         (q, p) for q, p in db.queries if "INSERT INTO match_predictions" in q
     )
     assert "ON CONFLICT (prediction_event_key)" in insert_q
+    # DO UPDATE (not DO NOTHING) so a later publish promotes a shadow row,
+    # and JSONB params are cast so asyncpg accepts them (Codex/Copilot #511).
+    assert "DO UPDATE" in insert_q and "publish_state = CASE" in insert_q
+    assert "$30::jsonb" in insert_q and "$31::jsonb" in insert_q
     assert "publish_state" in insert_q and "feature_snapshot" in insert_q
     assert "shadow" in insert_p
     expected_key = compute_event_key("2026-07-14", "3v3", A, B)
     assert expected_key in insert_p
+
+
+@pytest.mark.asyncio
+async def test_store_prediction_raises_when_no_row_found():
+    """If the INSERT returns no row AND no row matches the event key, raise a
+    clear error instead of crashing on existing[0] (Copilot review on #511)."""
+    db = QueryCapturingDB(fetch_one_results=[None, None])
+    engine = PredictionEngine(db)
+    with pytest.raises(RuntimeError, match="not stored"):
+        await engine.store_prediction(_prediction(), _split_data(), "2026-07-14")
 
 
 @pytest.mark.asyncio
