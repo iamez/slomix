@@ -149,6 +149,33 @@ async def test_two_sided_form_is_available():
 
 
 @pytest.mark.asyncio
+async def test_form_below_min_matches_is_unavailable():
+    """Both teams have data but total rounds < MIN_FORM_MATCHES → not evidence
+    (Codex #511)."""
+    db = QueryCapturingDB(fetch_one_results=[(120.0, 2), (80.0, 2)])
+    engine = PredictionEngine(db)
+    form = await engine._analyze_recent_form(A, B, AS_OF)  # noqa: SLF001
+    assert form["available"] is False
+    assert form["sample_size"] == 4  # 2 + 2, below MIN_FORM_MATCHES (5)
+
+
+@pytest.mark.asyncio
+async def test_eligibility_excludes_structural_factors():
+    """eligibility_reasons must list only genuine data gaps: the zero-weight
+    subs factor and the N/A map factor (no map_name) are excluded, so a
+    calibration report can count eligible rows meaningfully (Codex #511)."""
+    db = QueryCapturingDB()
+    engine = PredictionEngine(db)
+    pred = await engine.predict_match(A, B, map_name=None, as_of=AS_OF)
+    reasons = pred["eligibility_reasons"]
+    assert "subs_unavailable" not in reasons  # weight 0, unimplemented
+    assert "map_unavailable" not in reasons    # N/A: no map_name supplied
+    # h2h and form ARE weighted and data-driven → genuine gaps still reported.
+    assert "h2h_unavailable" in reasons
+    assert "form_unavailable" in reasons
+
+
+@pytest.mark.asyncio
 async def test_one_sided_map_is_unavailable():
     db = QueryCapturingDB(fetch_one_results=[(100.0, 4), (None, 0)])
     engine = PredictionEngine(db)

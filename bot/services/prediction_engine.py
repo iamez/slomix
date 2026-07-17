@@ -189,10 +189,23 @@ class PredictionEngine:
             }
             for name, f in factors.items()
         }
-        eligibility_reasons = [
-            f"{name}_unavailable" for name, f in factors.items()
-            if not f.get('available', False)
-        ]
+        # Eligibility reasons must reflect GENUINE data gaps, not structural
+        # ones (Codex P1 #511): a zero-weight factor (subs — unimplemented, so
+        # ALWAYS unavailable) and a factor that is not applicable to this
+        # prediction (map when no map_name was supplied) would otherwise land in
+        # every row, making a "resolved eligible" count meaningless.
+        factor_weights = {
+            'h2h': self.H2H_WEIGHT, 'form': self.FORM_WEIGHT,
+            'map': self.MAP_WEIGHT, 'subs': self.SUB_WEIGHT,
+        }
+        eligibility_reasons = []
+        for name, f in factors.items():
+            if factor_weights.get(name, 0) <= 0:
+                continue  # unweighted/unimplemented — not an eligibility signal
+            if name == 'map' and not map_name:
+                continue  # map factor is N/A when no map was specified
+            if not f.get('available', False):
+                eligibility_reasons.append(f"{name}_unavailable")
 
         return {
             'team_a_win_probability': round(team_a_prob, 2),
@@ -508,6 +521,26 @@ class PredictionEngine:
             if not pending:
                 return 0
 
+            # Per-session correctness (Codex #511): this resolver aggregates every
+            # roster-matching result across the WHOLE date. When the same rosters
+            # play multiple gaming sessions that day (a rematch → multiple
+            # prediction rows via the episode occurrence key), the combined tally
+            # would be assigned to EACH prediction, corrupting calibration. Only
+            # auto-resolve dates that map to exactly one gaming session; defer the
+            # rest to manual resolution rather than record a wrong outcome.
+            session_ids = await self.db.fetch_all(
+                "SELECT DISTINCT gaming_session_id FROM rounds "
+                "WHERE round_date = $1 AND gaming_session_id IS NOT NULL",
+                (session_date,),
+            )
+            if len(session_ids) > 1:
+                logger.warning(
+                    "auto_resolve: %s spans %d gaming sessions — deferring to manual "
+                    "resolution (whole-date aggregation would mis-resolve rematches)",
+                    session_date, len(session_ids),
+                )
+                return 0
+
             results = await self.db.fetch_all(
                 """SELECT team_1_guids, team_2_guids, winning_team
                    FROM session_results
@@ -554,23 +587,17 @@ class PredictionEngine:
                 )
                 resolved += 1
 
-            if resolved:
-                # Record which gaming session actually resolved these
-                # predictions — but only when the date maps to exactly one
-                # session (ambiguity stays NULL rather than guessing).
+            if resolved and len(session_ids) == 1:
+                # Record which gaming session resolved these predictions. Safe:
+                # we only get here when the date maps to exactly one session
+                # (the >1 case returned early above).
                 try:
-                    sids = await self.db.fetch_all(
-                        "SELECT DISTINCT gaming_session_id FROM rounds "
-                        "WHERE round_date = $1 AND gaming_session_id IS NOT NULL",
-                        (session_date,),
+                    await self.db.execute(
+                        "UPDATE match_predictions SET gaming_session_id = $1 "
+                        "WHERE session_date = $2 AND actual_winner IS NOT NULL "
+                        "AND gaming_session_id IS NULL",
+                        (session_ids[0][0], session_date),
                     )
-                    if len(sids) == 1:
-                        await self.db.execute(
-                            "UPDATE match_predictions SET gaming_session_id = $1 "
-                            "WHERE session_date = $2 AND actual_winner IS NOT NULL "
-                            "AND gaming_session_id IS NULL",
-                            (sids[0][0], session_date),
-                        )
                 except Exception as e:
                     logger.debug("gaming_session_id backlink skipped: %s", e)
 
@@ -665,7 +692,7 @@ class PredictionEngine:
                     total_matches += 1
                     if use_results_lookup:
                         winner = await self._get_session_winner_from_results(
-                            session_date, team_a_set, team_b_set, results_cache
+                            session_date, team_a_set, team_b_set, results_cache, as_of
                         )
                         if winner == "A":
                             team_a_wins += 1
@@ -676,7 +703,7 @@ class PredictionEngine:
                     total_matches += 1
                     if use_results_lookup:
                         winner = await self._get_session_winner_from_results(
-                            session_date, team_b_set, team_a_set, results_cache
+                            session_date, team_b_set, team_a_set, results_cache, as_of
                         )
                         if winner == "A":
                             team_b_wins += 1
@@ -736,12 +763,18 @@ class PredictionEngine:
         team_a_set: set,
         team_b_set: set,
         cache: dict[str, str | None],
+        as_of: datetime,
     ) -> str | None:
         """
         Resolve winner for a session_date using session_results (if available).
 
         Returns:
             "A" if Team A won, "B" if Team B won, None if tie/unknown.
+
+        Only results finalized on/before `as_of` are visible: without this
+        cutoff a same-day session whose result was written AFTER the prediction
+        moment would leak future information into the replayed H2H factor
+        (Codex #511). Rows without an `updated_at` are treated as pre-existing.
         """
         if session_date in cache:
             return cache[session_date]
@@ -753,10 +786,11 @@ class PredictionEngine:
                 FROM session_results
                 WHERE session_date LIKE $1
                   AND map_name = 'ALL'
+                  AND (updated_at IS NULL OR updated_at <= $2)
                 ORDER BY updated_at DESC NULLS LAST
                 LIMIT 1
                 """,
-                (f"{session_date}%",),
+                (f"{session_date}%", as_of),
             )
         except Exception as e:
             logger.debug(f"Session results lookup failed for {session_date}: {e}")
@@ -847,11 +881,15 @@ class PredictionEngine:
             # A one-sided comparison (only one team has prior rounds) yields an
             # extreme score (e.g. 1.0) that is NOT evidence — mark it
             # unavailable so calibration coverage never counts a half-missing
-            # factor as eligible (Codex review on #511).
-            if total < 1 or a_rounds == 0 or b_rounds == 0:
+            # factor as eligible (Codex review on #511). Also enforce the
+            # documented MIN_FORM_MATCHES threshold: a couple of rounds is below
+            # the model's own minimum and must not be counted as evidence.
+            if (total < 1 or a_rounds == 0 or b_rounds == 0
+                    or sample_size < self.MIN_FORM_MATCHES):
                 return {
                     'score': 0.5,
-                    'details': 'Insufficient two-sided recent data for form analysis',
+                    'details': f'Insufficient two-sided recent data '
+                               f'(< {self.MIN_FORM_MATCHES} matches) for form analysis',
                     'team_a_form': f'{team_a_dpm:.0f}',
                     'team_b_form': f'{team_b_dpm:.0f}',
                     'confidence': 'low',
