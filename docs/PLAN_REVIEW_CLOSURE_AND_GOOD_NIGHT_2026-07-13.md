@@ -35,7 +35,7 @@ na Session Detail, player `archetypes.py` + story kartice. Plan cilja **dejanske
 
 ## Track A — Review closure (hitro, ~2 mala PR-ja)
 
-### A1. Betting `closes_at` cutoff = po 1. mapi (§6.4, opcija b) — ✅ KODA DONE, ⏳ merge
+### A1. Betting `closes_at` cutoff = po 1. mapi (§6.4, opcija b) — ✅ KODA DONE **[PR #496 od tedaj MERGAN]**
 - **Datoteka:** `website/backend/services/bets_lifecycle.py::maybe_open_market`.
   Auto-open zdaj izračuna `closes_at` = konec 1. mape (prva dokončana R2 po gaming seji,
   `round_start_unix + actual_duration_seconds`); fallback = `now + BETS_CLOSE_AFTER_MINUTES`
