@@ -108,8 +108,10 @@ async def test_multi_session_resolves_per_gaming_session():
         async def fetch_all(self, query, params=()):
             if "FROM match_predictions" in query:
                 return [
-                    (1, json.dumps(A), json.dumps(B), _Ts(1000)),   # in session 101
-                    (2, json.dumps(A), json.dumps(B), _Ts(5000)),   # in session 102
+                    (1, json.dumps(A), json.dumps(B), _Ts(1000)),   # inside session 101
+                    # BETWEEN sessions → must match the FOLLOWING session (102),
+                    # not the nearest-by-distance previous one (Codex #511).
+                    (2, json.dumps(A), json.dumps(B), _Ts(2000)),
                 ]
             if "FROM rounds" in query:
                 return [(101, 900, 1100), (102, 4900, 5100)]  # two session windows

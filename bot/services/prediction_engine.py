@@ -553,9 +553,14 @@ class PredictionEngine:
                 return {str(g)[:8].upper() for g in vals if g}
 
             def _match_gsid(pred_time) -> int | None:
-                """The gaming session whose time window best fits a prediction
-                made at pred_time (predictions are made at/just before a session
-                start): a window that contains it, else the nearest by start."""
+                """The gaming session a prediction made at pred_time belongs to.
+
+                A prediction is made at/just BEFORE its match starts, so: a window
+                that contains pred_time, else the FOLLOWING session (earliest start
+                at/after pred_time) — NOT the nearest by absolute distance, which
+                could pick the previous session for a between-sessions prediction
+                (Codex #511). Fallback to the last session before it only if none
+                follows (e.g. a straggler after the final session)."""
                 if pred_time is None or not windows:
                     return None
                 ts = pred_time.timestamp() if hasattr(pred_time, "timestamp") else None
@@ -564,8 +569,10 @@ class PredictionEngine:
                 for gsid, lo, hi in ((w[0], w[1], w[2]) for w in windows):
                     if lo is not None and hi is not None and lo <= ts <= hi:
                         return gsid
-                # No containing window → nearest session by |start - pred_time|.
-                return min(windows, key=lambda w: abs((w[1] or 0) - ts))[0]
+                following = [w for w in windows if w[1] is not None and w[1] >= ts]
+                if following:
+                    return min(following, key=lambda w: w[1])[0]
+                return max(windows, key=lambda w: w[1] or 0)[0]
 
             resolved = 0
             for pred in pending:
