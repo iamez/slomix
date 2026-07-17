@@ -180,10 +180,24 @@ async def get_proximity_player_radar(
         # total_eng is already computed above (line 169) from combat_engagement.
         teamplay = None
         if total_eng >= 10:
-            from website.backend.services.prox_scoring import compute_prox_scores
-            prox_scores = await compute_prox_scores(db, range_days=range_days, player_guid=guid)
-            if prox_scores and prox_scores[0].get("prox_team") is not None:
-                teamplay = prox_scores[0]["prox_team"]
+            from website.backend.services.prox_scoring import (
+                MIN_METRIC_WEIGHT_COVERAGE,
+                compute_prox_scores,
+            )
+            prox_result = await compute_prox_scores(db, range_days=range_days, player_guid=guid)
+            prox_players = prox_result.get("players", []) if isinstance(prox_result, dict) else []
+            # Honor the quality contract: a single-player request still RETURNS a
+            # below-coverage player (flagged), so only reuse its prox_team when it
+            # actually meets the coverage threshold — otherwise fall through to the
+            # CF/TR fallback rather than surfacing a neutral-filled score (Codex P1
+            # #512).
+            if (
+                prox_result.get("status") != "degraded"
+                and prox_players
+                and prox_players[0].get("prox_team") is not None
+                and prox_players[0].get("metric_weight_coverage", 0.0) >= MIN_METRIC_WEIGHT_COVERAGE
+            ):
+                teamplay = prox_players[0]["prox_team"]
 
         if teamplay is None:
             # Fallback: lightweight CF+TR queries with raised thresholds

@@ -20,10 +20,23 @@ logger = logging.getLogger(__name__)
 # FORMULA CONFIG — edit this to tweak scoring
 # ═══════════════════════════════════════════════════════════════════════════
 
-FORMULA_VERSION = "1.0"
+# Canonical version bumped 1.0 → 2.0: this commit changes the actual scores
+# (midrank normalization + coverage gating), so get_formula_config(), the
+# formula registry, and the UI subtitle must not keep advertising v1.0 while
+# responses carry prox-web-v2.0 (Codex review on #512).
+FORMULA_VERSION = "2.0"
+# Quality-contract semantics (audit AUD-008): a failed source withholds the
+# ranking instead of silently substituting neutral 0.5; ties use midrank; a
+# player is scored only above MIN_METRIC_WEIGHT_COVERAGE of real (non-missing)
+# metric weight. The detailed variant string carried in score responses.
+FORMULA_VERSION_QUALITY = "prox-web-v2.0"
 
 # Minimum engagements/tracks to be scored (prevents noisy data)
 MIN_ENGAGEMENTS = 10
+
+# Minimum fraction of total metric weight a player must have REAL data for
+# (not neutral-filled) before we publish a composite score for them.
+MIN_METRIC_WEIGHT_COVERAGE = 0.80
 
 # Category weights for prox_overall
 CATEGORY_WEIGHTS = {
@@ -104,6 +117,33 @@ def _percentile_rank(values: list[float]) -> list[float]:
     return result
 
 
+def _percentile_rank_midrank(values: list[float]) -> list[float]:
+    """Midrank percentile (0.0-1.0) — the quality-contract semantics.
+
+    Unlike `_percentile_rank` (bisect_right upper-edge), tied values share
+    the AVERAGE of their rank span, so an all-equal cohort scores 0.5 rather
+    than 1.0 (no false "everyone is a co-leader" signal — audit AUD-008).
+
+    Fractional midrank over [0, 1]: percentile = (n_less + (n_equal-1)/2)/(n-1).
+      - unique top value  → (n-1)/(n-1) = 1.0
+      - unique bottom     → 0/(n-1) = 0.0
+      - all equal         → ((n-1)/2)/(n-1) = 0.5
+    A lone value has no cohort to rank against → neutral 0.5.
+    """
+    if not values:
+        return []
+    n = len(values)
+    if n == 1:
+        return [0.5]
+    sorted_vals = sorted(values)
+    result = []
+    for v in values:
+        n_less = bisect.bisect_left(sorted_vals, v)
+        n_equal = bisect.bisect_right(sorted_vals, v) - n_less
+        result.append((n_less + (n_equal - 1) / 2) / (n - 1))
+    return result
+
+
 def _compute_category_score(
     player_raw: dict[str, float],
     category_key: str,
@@ -138,6 +178,46 @@ def _compute_category_score(
     return round(score, 2), breakdown
 
 
+def _metric_effective_weights() -> dict[str, float]:
+    """Each metric's share of the OVERALL composite.
+
+    prox_overall weights CATEGORIES (Combat 0.40 / Team 0.35 / Game Sense 0.25),
+    so a metric's real contribution is CATEGORY_WEIGHTS[cat] × its share within
+    its category. Coverage MUST use these — summing raw within-category weights
+    (as before) treated every category as ~1/3, so a player missing only a
+    lightly-weighted category was dropped far more aggressively than the score
+    formula implies (Copilot/Codex review on #512). Sums to Σ CATEGORY_WEIGHTS.
+    """
+    eff: dict[str, float] = {}
+    for cat_key, cat in METRICS.items():
+        cat_total = sum(m["weight"] for m in cat["metrics"].values()) or 1.0
+        cw = CATEGORY_WEIGHTS.get(cat_key, 0.0)
+        for mk, mc in cat["metrics"].items():
+            eff[mk] = cw * mc["weight"] / cat_total
+    return eff
+
+
+_METRIC_EFFECTIVE_WEIGHT = _metric_effective_weights()
+_TOTAL_EFFECTIVE_WEIGHT = sum(_METRIC_EFFECTIVE_WEIGHT.values())
+
+
+def _degraded(sources: list[dict]) -> dict:
+    """Quality-contract degraded response: NO ranking, NO neutral fill."""
+    failed = [s["source"] for s in sources if not s["success"]]
+    return {
+        "status": "degraded",
+        "formula_version": FORMULA_VERSION_QUALITY,
+        "quality": {
+            "ranking_available": False,
+            "successful_sources": sum(1 for s in sources if s["success"]),
+            "total_sources": len(sources),
+            "failed_sources": failed,
+            "metric_weight_coverage": 0.0,
+        },
+        "players": [],
+    }
+
+
 async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None = None,
                               *, session_date=None, map_name: str | None = None,
                               round_number: int | None = None, round_start_unix: int | None = None):
@@ -147,53 +227,117 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
     map_name/round_number/round_start_unix are supplied, scoped to exactly that
     selection (round_start_unix disambiguates a map/round played more than once).
 
-    Returns list of player score dicts.
+    Returns a quality-contract dict (audit AUD-008):
+        {
+          "status": "ok" | "degraded",
+          "formula_version": "prox-web-v2.0",
+          "quality": {ranking_available, successful_sources, total_sources,
+                      failed_sources, metric_weight_coverage},
+          "players": [ ... ]   # each carries metric_weight_coverage + missing_metrics
+        }
+    On ANY source-query failure the ranking is withheld (status=degraded,
+    players=[]) rather than substituting neutral 0.5 percentiles.
     """
     range_days = max(1, min(int(range_days), 365))
-    raw_data = await _fetch_raw_metrics(
+    raw_data, sources = await _fetch_raw_metrics(
         db, range_days, session_date=session_date,
         map_name=map_name, round_number=round_number, round_start_unix=round_start_unix,
     )
 
-    if not raw_data:
-        return []
+    # AUD-008: a failed source poisons the whole percentile pool — withhold.
+    if any(not s["success"] for s in sources):
+        return _degraded(sources)
 
-    # Filter to single player if requested (but keep all for percentile context)
+    def _ok(players, coverage=None, dropped=0):
+        # Response-level coverage reflects the ACTUAL returned players (min of
+        # their per-player coverage), not a hard-coded 1.0 that misrepresented
+        # the quality metadata (Copilot review on #512). Empty → 0.0.
+        if coverage is None:
+            coverage = min(
+                (p["metric_weight_coverage"] for p in players), default=0.0
+            )
+        return {
+            "status": "ok",
+            "formula_version": FORMULA_VERSION_QUALITY,
+            "quality": {
+                "ranking_available": bool(players),
+                "successful_sources": len(sources),
+                "total_sources": len(sources),
+                "failed_sources": [],
+                "metric_weight_coverage": round(coverage, 3),
+                # Always present so the quality-contract shape doesn't depend on
+                # the dataset (empty/healthy responses carried it only after the
+                # scoring loop before) — Codex review on #512.
+                "below_coverage_dropped": dropped,
+            },
+            "players": players,
+        }
+
+    if not raw_data:
+        return _ok([])
+
     all_guids = list(raw_data.keys())
 
     # Filter out players with too few engagements
     qualified_guids = [g for g in all_guids if raw_data[g].get("engagements", 0) >= MIN_ENGAGEMENTS]
     if not qualified_guids:
-        return []
+        return _ok([])
 
-    # Compute percentile maps for each metric
+    # Coverage per player = fraction of the composite's EFFECTIVE metric weight
+    # backed by REAL data (missing/neutral-filled metrics don't count), weighted
+    # the way prox_overall combines categories.
+    def _coverage(pd: dict) -> float:
+        real = sum(w for mk, w in _METRIC_EFFECTIVE_WEIGHT.items() if pd.get(mk) is not None)
+        return real / _TOTAL_EFFECTIVE_WEIGHT if _TOTAL_EFFECTIVE_WEIGHT else 0.0
+
+    coverage_by_guid = {g: _coverage(raw_data[g]) for g in qualified_guids}
+
+    # The COHORT that shapes percentiles is engagement-qualified AND at/above the
+    # coverage threshold: a below-coverage (mostly neutral-filled) player must
+    # NOT drag the percentile columns everyone else is ranked against (Codex P1
+    # #512). Epsilon tolerates a player mathematically AT 0.80 (float 0.79999…).
+    cohort_guids = [
+        g for g in qualified_guids
+        if coverage_by_guid[g] >= MIN_METRIC_WEIGHT_COVERAGE - 1e-9
+    ]
+    below_coverage = len(qualified_guids) - len(cohort_guids)
+
+    # Compute percentile maps for each metric over the COHORT only (midrank ties).
     all_metric_keys = set()
     for cat in METRICS.values():
         all_metric_keys.update(cat["metrics"].keys())
 
     percentile_maps: dict[str, dict[str, float]] = {}
     for mkey in all_metric_keys:
-        # Only include players who have actual data for this metric
-        with_data = [(g, raw_data[g][mkey]) for g in qualified_guids if raw_data[g].get(mkey) is not None]
+        with_data = [(g, raw_data[g][mkey]) for g in cohort_guids if raw_data[g].get(mkey) is not None]
         if with_data:
             vals_only = [v for _, v in with_data]
-            pctls = _percentile_rank(vals_only)
+            pctls = _percentile_rank_midrank(vals_only)
             pctl_map = {g: p for (g, _), p in zip(with_data, pctls)}
         else:
             pctl_map = {}
-        # Players without data for this metric get neutral 0.5
-        percentile_maps[mkey] = {g: pctl_map.get(g, 0.5) for g in qualified_guids}
+        # Neutral 0.5 fills the score arithmetic for a cohort member missing this
+        # metric; a below-coverage single-player request (not in the cohort) also
+        # scores against these cohort percentiles, defaulting to 0.5 where it has
+        # no cohort rank (it is returned flagged and hidden by the UI).
+        percentile_maps[mkey] = {g: pctl_map.get(g, 0.5) for g in cohort_guids}
 
-    # Compute scores per player
+    # Score set: the covered cohort for a leaderboard, or exactly the requested
+    # player (which may itself be below coverage — returned flagged).
     results = []
-    target_guids = [player_guid] if player_guid and player_guid in raw_data else qualified_guids
+    if player_guid and player_guid in raw_data:
+        target_guids = [player_guid]
+    else:
+        target_guids = cohort_guids
 
     for guid in target_guids:
-        if guid not in qualified_guids and guid != player_guid:
-            continue
-
         pdata = raw_data[guid]
         pdata["__guid__"] = guid
+        missing = [mk for mk in _METRIC_EFFECTIVE_WEIGHT if pdata.get(mk) is None]
+        coverage = coverage_by_guid.get(guid)
+        if coverage is None:
+            coverage = _coverage(pdata)
+
         category_scores = {}
         category_breakdowns = {}
 
@@ -228,6 +372,8 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
             "prox_overall": round(overall, 2),
             "prox_radar": radar,
             "breakdown": category_breakdowns,
+            "metric_weight_coverage": round(coverage, 3),
+            "missing_metrics": missing,
         })
 
     # Sort by overall descending
@@ -237,7 +383,7 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
     for i, r in enumerate(results):
         r["rank"] = i + 1
 
-    return results
+    return _ok(results, dropped=below_coverage)
 
 
 def _sub_score(breakdowns: dict, cat_key: str, metric_keys: list[str]) -> float:
@@ -254,10 +400,18 @@ def _sub_score(breakdowns: dict, cat_key: str, metric_keys: list[str]) -> float:
 async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
                              map_name: str | None = None,
                              round_number: int | None = None,
-                             round_start_unix: int | None = None) -> dict[str, dict]:
+                             round_start_unix: int | None = None,
+                             ) -> tuple[dict[str, dict], list[dict]]:
     """
     Fetch raw per-player metric values from all source tables.
-    Returns {guid: {metric_key: value, ...}} merged dict.
+
+    Returns a ``(players, sources)`` tuple:
+      - ``players``: ``{guid: {metric_key: value, ...}}`` merged dict. A metric
+        the source returned as NULL is OMITTED (kept as missing), never merged
+        as a coalesced 0, so coverage counts only real data.
+      - ``sources``: per-source ``{source, success, row_count, error_code,
+        duration_ms}`` status the caller uses to withhold the ranking on any
+        query failure (AUD-008).
 
     All 10 source queries are independent — run them concurrently via
     `asyncio.gather(..., return_exceptions=True)` so one slow table
@@ -414,10 +568,29 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
         """),
     ]
 
+    import time as _time
+    _t0 = _time.monotonic()
     results = await asyncio.gather(
         *(db.fetch_all(q.format(scope=scope_sql), scope_params) for _, q in queries),
         return_exceptions=True,
     )
+    _elapsed_ms = int((_time.monotonic() - _t0) * 1000)
+
+    # Per-source status (audit AUD-008): the caller uses this to withhold the
+    # ranking on ANY failure instead of silently substituting neutral scores.
+    sources: list[dict] = []
+    for idx, (label, _q) in enumerate(queries):
+        r = results[idx]
+        if isinstance(r, Exception):
+            sources.append({
+                "source": label, "success": False, "row_count": 0,
+                "error_code": type(r).__name__,
+            })
+        else:
+            sources.append({
+                "source": label, "success": True, "row_count": len(r),
+                "error_code": None,
+            })
 
     def _rows(idx: int) -> list | None:
         r = results[idx]
@@ -447,8 +620,10 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
     if (rows := _rows(2)) is not None:
         for r in rows:
             _merge(r[0], r[1], {
-                "spawn_score": float(r[2] or 0),
-                "timed_kills": float(r[3] or 0),
+                # AVG can be NULL when no scored kills exist — preserve None so
+                # coverage doesn't count a coalesced 0 as real data (Codex #512).
+                "spawn_score": float(r[2]) if r[2] is not None else None,
+                "timed_kills": float(r[3] or 0),  # COUNT(*): always real for a row
             })
 
     # 4. Movement: speed, sprint, distance, stance, post_spawn
@@ -470,11 +645,14 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
 
             _merge(r[0], r[1], {
                 "tracks": tracks,
-                "peak_speed": float(r[4] or 0),
-                "sprint_discipline": float(r[5] or 0),
-                "distance_per_life": float(r[6] or 0),
-                "post_spawn_rush": float(r[7] or 0),
-                "stance_variety": stance_variety,
+                "peak_speed": float(r[4] or 0),  # query filters peak_speed IS NOT NULL
+                # AVG aggregates can be NULL (no movement rows for the metric) —
+                # preserve None so a coalesced 0 isn't counted toward metric
+                # coverage (Codex review on #512).
+                "sprint_discipline": float(r[5]) if r[5] is not None else None,
+                "distance_per_life": float(r[6]) if r[6] is not None else None,
+                "post_spawn_rush": float(r[7]) if r[7] is not None else None,
+                "stance_variety": stance_variety if total_stance > 0 else None,
             })
 
     # 5. Kill outcomes: KPR (as killer)
@@ -485,7 +663,9 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
             kpr = gibs / max(gibs + rev, 1)
             _merge(r[0], r[1], {
                 "kpr": kpr,
-                "denied_time": float(r[5] or 0),
+                # AVG effective_denied_ms is NULL when no denial telemetry —
+                # preserve None rather than a coalesced 0 (Codex review on #512).
+                "denied_time": float(r[5]) if r[5] is not None else None,
             })
 
     # 6. Kill outcomes: revive rate (as victim)
@@ -539,7 +719,26 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
                 "focus_survival": float(r[3] or 0),
             })
 
-    return players
+    for s in sources:
+        s["duration_ms"] = _elapsed_ms  # gather() is concurrent → shared wall time
+
+    # Low-cardinality Prometheus signals (AUD-008): {source, outcome} + batch
+    # duration. Import lazily so the service has no hard prometheus dependency.
+    try:
+        from website.backend.metrics import (
+            PROX_SOURCE_QUERIES,
+            PROX_SOURCE_QUERY_DURATION,
+        )
+        for s in sources:
+            PROX_SOURCE_QUERIES.labels(
+                source=s["source"],
+                outcome="success" if s["success"] else "error",
+            ).inc()
+        PROX_SOURCE_QUERY_DURATION.observe(_elapsed_ms / 1000.0)
+    except Exception:  # pragma: no cover - metrics must never break scoring
+        logger.debug("prox_scoring: metrics emit skipped", exc_info=True)
+
+    return players, sources
 
 
 def get_formula_config() -> dict:
