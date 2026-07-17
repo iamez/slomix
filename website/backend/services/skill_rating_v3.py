@@ -237,7 +237,11 @@ async def compute_et_performance_v3(db) -> dict:
         "unrated_reasons": unrated,
         "mean_rating": round(mean_rating, 4) if mean_rating is not None else None,
         "median_rating": round(median, 4) if median is not None else None,
-        "coverage": round(_population_coverage(scored), 3),
+        # Coverage from eligible_pop, NOT scored: score_population() keeps only
+        # the 3-decimal display raw, but coverage must use the unrounded
+        # raw_stats (a trade_rate of 0.0004 rounds to 0.000 == neutral and would
+        # be miscounted as uncovered) (Codex #513).
+        "coverage": round(_population_coverage(eligible_pop), 3),
         "coverage_note": (
             "Coarse proxy: shares of players with any off-neutral epoch-scoped "
             "proximity value. It cannot yet distinguish an observed zero from "
