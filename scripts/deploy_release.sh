@@ -203,11 +203,16 @@ recover_on_failure() {
     # services were actually serving). Re-bump any committed ?v= query to the
     # restored commit's SHA so the served assets carry a deterministic buster
     # again (Codex #509); bare (never-busted) imports stay as committed.
-    $SSH "cd $VM_PATH && git checkout -f $CURRENT_COMMIT && \
-      RSHA=\$(git rev-parse --short HEAD) && \
+    # `git checkout -f` must stay FATAL (its failure means the rollback itself
+    # failed), so wrap ONLY the non-critical re-bump in a group with its own
+    # `|| true` — a trailing `|| true` on the whole chain would swallow a
+    # checkout failure and let the following `git log` report success (Codex #509).
+    $SSH "cd $VM_PATH && git checkout -f $CURRENT_COMMIT && { \
+      RSHA=\$(git rev-parse --short HEAD); \
       sed -i \"s|?v=[A-Za-z0-9._-]\\+|?v=\$RSHA|g\" website/index.html website/js/*.js 2>/dev/null || true; \
       $modern_restore \
-      git log --oneline -1" || restore_rc=$?
+      git log --oneline -1; \
+    }" || restore_rc=$?
     if [ "$restore_rc" -eq 0 ]; then
       warn "Checkout restored. The old services were never stopped, so no"
       warn "restart is needed. Investigate the failure (rc=$rc) before re-deploying."
