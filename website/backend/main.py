@@ -10,7 +10,6 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 try:
     from prometheus_fastapi_instrumentator import Instrumentator
@@ -47,6 +46,7 @@ from website.backend.middleware import (
 )
 from website.backend.security_utils import (
     CSRFMiddleware,
+    StrictTrustedHostMiddleware,
     csrf_allowed_origins,
     resolve_trusted_hosts,
     routed_path,
@@ -257,12 +257,11 @@ async def add_security_headers(request, call_next):
     return response
 
 
-# Trusted-host gate — registered LAST (after the @app.middleware decorators
-# above, which each wrap the stack) so it is the OUTERMOST middleware
-# (AUD-005): an unexpected or malformed Host header gets a 400 before any
-# other middleware (headers, cache, CSRF, session, logging) can observe the
-# request.
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=TRUSTED_HOSTS)
+# NOTE: the trusted-host gate is registered at the very end of this module
+# (after Prometheus instrumentation) so it stays the OUTERMOST middleware —
+# see the StrictTrustedHostMiddleware registration below the instrumentator
+# block. Registering it here would leave the instrumentator's middleware
+# outside it, reading a Host-distorted request.url first (Codex review #510).
 
 # Include Routers
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
@@ -289,6 +288,15 @@ app.include_router(replay_router.router, prefix="/api", tags=["Replay"])
 if PROMETHEUS_ENABLED and Instrumentator is not None:
     instrumentator = Instrumentator(excluded_handlers=["/metrics"])
     instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+
+# Trusted-host gate — added DEAD LAST so it is the OUTERMOST middleware even
+# after Prometheus instrumentation wraps the app above (AUD-005): a malformed
+# or untrusted Host header gets a 400 before ANY other middleware — including
+# the instrumentator's, which constructs a Request and can read a
+# Host-distorted request.url — observes the request. StrictTrustedHostMiddleware
+# also rejects colon-embedded path payloads that Starlette's split(':')[0]
+# TrustedHostMiddleware would let through (Codex review on #510).
+app.add_middleware(StrictTrustedHostMiddleware, allowed_hosts=TRUSTED_HOSTS)
 
 
 @app.get("/greatshot", include_in_schema=False)

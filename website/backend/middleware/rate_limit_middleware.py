@@ -18,6 +18,7 @@ from starlette.responses import Response
 
 from website.backend.env_utils import getenv_int
 from website.backend.metrics import API_RATE_LIMIT_REJECTIONS
+from website.backend.security_utils import routed_path
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -47,7 +48,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._requests: dict[str, deque[float]] = {}
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        if not self.enabled or not self._should_limit(request.url.path):
+        # routed_path() reads the raw ASGI scope path — NOT request.url.path,
+        # which Starlette rebuilds from the client-controlled Host header and a
+        # malformed Host can distort (Codex review on #510). Bucketing/limiting
+        # decisions must use the un-distortable path.
+        path = routed_path(request)
+        if not self.enabled or not self._should_limit(path):
             return await call_next(request)
 
         now = time.time()
@@ -56,7 +62,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             self._next_cleanup_at = now + self.cleanup_interval_seconds
 
         client_ip = self._get_client_ip(request)
-        path = request.url.path
         if path.startswith(self.proximity_prefixes):
             bucket = "proximity"
         elif path.startswith(self.heavy_prefixes):
@@ -93,7 +98,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             retry_after = max(1, int(timeline[0] + self.window_seconds - now))
             API_RATE_LIMIT_REJECTIONS.inc()
             logger.warning("Rate limit exceeded: client=%s bucket=%s limit=%d path=%s",
-                           client_ip, bucket, limit, request.url.path)
+                           client_ip, bucket, limit, path)
             return JSONResponse(
                 status_code=429,
                 content={

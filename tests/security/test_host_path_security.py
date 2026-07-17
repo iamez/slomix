@@ -3,10 +3,13 @@
 The pinned Starlette line has a published advisory where a malformed Host
 header distorts `request.url`-derived values. The mitigation is two-layered:
 
-1. TrustedHostMiddleware is the OUTERMOST middleware → unexpected/malformed
-   Host gets 400 before anything else observes the request;
-2. security decisions (CSRF prefix matching, sensitive-file blocking) read
-   `request.scope["path"]` via `routed_path()`, which Host cannot influence.
+1. StrictTrustedHostMiddleware is the OUTERMOST middleware → unexpected,
+   malformed, or colon-embedded-path Host values get 400 before anything else
+   observes the request (Starlette's own split(':')[0] gate would let a
+   `trusted:443/../admin` value through — Codex P1 review on #510);
+2. security decisions (CSRF prefix matching, sensitive-file blocking, rate-
+   limit bucketing, cache keys) read `request.scope["path"]` via
+   `routed_path()`, which the Host header cannot influence.
 
 These tests build a minimal app from the same building blocks main.py wires
 (security_utils is import-light by design), so they run without booting the
@@ -19,12 +22,13 @@ import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from website.backend.security_utils import (  # noqa: E402
     CSRFMiddleware,
+    StrictTrustedHostMiddleware,
+    host_is_allowed,
     resolve_trusted_hosts,
     routed_path,
 )
@@ -54,10 +58,10 @@ def _build_app() -> FastAPI:
         return {"ok": True}
 
     # Same add_middleware order as main.py: CSRF, then session, then the
-    # trusted-host gate LAST so it ends up outermost.
+    # strict trusted-host gate LAST so it ends up outermost.
     app.add_middleware(CSRFMiddleware, enabled=True, allowed_origins={"https://www.slomix.fyi"})
     app.add_middleware(SessionMiddleware, secret_key="test-secret")
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=TRUSTED)
+    app.add_middleware(StrictTrustedHostMiddleware, allowed_hosts=TRUSTED)
     return app
 
 
@@ -76,11 +80,17 @@ def client():
     "www.slomix.fyi?x=1",
     "www.slomix.fyi#frag",
     "www.slomix.fyi evil.example",
+    # The colon-embedded path payload Starlette's split(':')[0] gate let through
+    # (Codex P1 review on #510): host part is trusted, but the value carries a
+    # path that would distort request.url.path downstream.
+    "www.slomix.fyi:443/../admin",
+    "www.slomix.fyi:80@evil.example",
+    "www.slomix.fyi:443:443",
 ])
 def test_malformed_or_unknown_host_gets_400(client, bad_host):
     resp = client.get("/api/echo-path", headers={"host": bad_host})
     assert resp.status_code == 400, (
-        f"host {bad_host!r} must be rejected by the outermost TrustedHostMiddleware"
+        f"host {bad_host!r} must be rejected by the outermost StrictTrustedHostMiddleware"
     )
 
 
@@ -98,10 +108,36 @@ def test_host_with_port_passes():
 
 def test_trusted_host_runs_before_csrf(client):
     """Middleware order: a bad Host on a CSRF-protected mutation must yield
-    400 (TrustedHost, outermost), never 403 (CSRF, inner)."""
+    400 (host gate, outermost), never 403 (CSRF, inner)."""
     client.get("/login")
     resp = client.post("/api/mutate", headers={"host": "evil.example"})
     assert resp.status_code == 400
+
+
+# ── host_is_allowed unit matrix (the strict parser) ──────────────────
+
+
+@pytest.mark.parametrize("host,expected", [
+    ("www.slomix.fyi", True),
+    ("www.slomix.fyi:443", True),          # port is fine
+    ("WWW.SLOMIX.FYI", True),              # case-insensitive
+    ("evil.example", False),
+    ("www.slomix.fyi:443/../admin", False),  # the P1 bypass
+    ("www.slomix.fyi:80@evil.example", False),
+    ("www.slomix.fyi ", True),             # surrounding whitespace tolerated
+    ("", False),                           # missing Host
+    ("has space.fyi", False),
+])
+def test_host_is_allowed_matrix(host, expected):
+    assert host_is_allowed(host, TRUSTED) is expected
+
+
+def test_host_is_allowed_wildcard_and_star():
+    assert host_is_allowed("a.slomix.fyi", ["*.slomix.fyi"]) is True
+    assert host_is_allowed("a.b.slomix.fyi", ["*.slomix.fyi"]) is True
+    assert host_is_allowed("slomix.fyi", ["*.slomix.fyi"]) is False  # bare domain not covered
+    assert host_is_allowed("anything.at.all", ["*"]) is True
+    assert host_is_allowed("literally/anything", ["*"]) is True  # wildcard short-circuits
 
 
 # ── routed_path ──────────────────────────────────────────────────────

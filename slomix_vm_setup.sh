@@ -878,6 +878,11 @@ WEBSITE_RELOAD=false
 
 # ---- Session & Security ----
 SESSION_SECRET=${SESSION_SECRET}
+# Production posture: secure session cookies (HTTPS). Set false for local HTTP.
+SESSION_HTTPS_ONLY=true
+# REQUIRED while SESSION_HTTPS_ONLY=true — outermost Host allow-list (AUD-005).
+# The app refuses to start without it, so it must be generated here.
+TRUSTED_HOSTS=${DOMAIN_NAME},www.${DOMAIN_NAME},localhost,127.0.0.1
 
 # ---- CORS ----
 CORS_ORIGINS=http://localhost:${WEBSITE_PORT},http://127.0.0.1:${WEBSITE_PORT},https://${DOMAIN_NAME}
