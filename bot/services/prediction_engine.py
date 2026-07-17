@@ -545,8 +545,15 @@ class PredictionEngine:
                 logger.debug("auto_resolve: no session_results yet for %s", session_date)
                 return 0
 
-            multi_session = len({w[0] for w in windows}) > 1
-            results_tagged = any(r[3] is not None for r in results)
+            # Derive multi-session mode from the TAGGED RESULTS, not the rounds
+            # windows: if a session's rounds lack round_start_unix the windows
+            # query drops that session, which could leave multi_session False and
+            # push every prediction onto the combined date-wide fallback → wrong
+            # winners (Codex P1 #511). The results' distinct gaming_session_id is
+            # authoritative for whether the date holds >1 session.
+            result_gsids = {r[3] for r in results if r[3] is not None}
+            results_tagged = bool(result_gsids)
+            multi_session = len(result_gsids) > 1
 
             def g8set(raw) -> set:
                 vals = json.loads(raw) if isinstance(raw, str) else (raw or [])
