@@ -18,7 +18,6 @@ from website.backend.services.skill_rating_service import WEIGHTS
 from website.backend.services.skill_rating_v3 import (
     _ABS_WEIGHT_SUM,
     _PENALTY_METRICS,
-    _PROXIMITY_NEUTRAL,
     UNSCOPED_METRICS,
     directed_midrank_percentiles,
     score_population,
@@ -101,23 +100,38 @@ def test_crossfire_is_neutralized_for_all_players():
         assert p["components"]["crossfire_rate"]["directed_percentile"] == pytest.approx(0.5)
 
 
-def test_missing_proximity_neutral_excluded_from_ranking():
-    """Players whose proximity metric sits on its neutral default are treated as
-    missing (given 0.5), not ranked as real telemetry (Codex)."""
-    # Two players with REAL kill_quality, one sitting exactly on the 1.0 neutral.
+def test_observed_zero_proximity_ranks_at_bottom_not_neutral():
+    """A genuinely-zero scoped proximity value must rank at the bottom (0.0), NOT
+    be inflated to a neutral 0.5 — v3 no longer guesses missing-vs-zero, which
+    would inflate real zeros (Codex #513). Missing/observed can't be split until
+    migration 062 capability data exists."""
     base = {m: {"raw": 1.0} for m in WEIGHTS}
-    real_hi = {"player_guid": "HI", "display_name": "HI", "rounds": 25,
-               "components": {**base, "kill_quality": {"raw": 1.8}}}
-    real_lo = {"player_guid": "LO", "display_name": "LO", "rounds": 25,
-               "components": {**base, "kill_quality": {"raw": 1.2}}}
-    neutral = {"player_guid": "NE", "display_name": "NE", "rounds": 25,
-               "components": {**base, "kill_quality": {"raw": _PROXIMITY_NEUTRAL["kill_quality"]}}}
-    scored = {p["player_guid"]: p for p in score_population([real_hi, real_lo, neutral])}
-    # The neutral player is not ranked → neutral 0.5; the two real players rank
-    # against EACH OTHER only (0.0 and 1.0), not against the neutral placeholder.
-    assert scored["NE"]["components"]["kill_quality"]["directed_percentile"] == pytest.approx(0.5)
-    assert scored["HI"]["components"]["kill_quality"]["directed_percentile"] == pytest.approx(1.0)
-    assert scored["LO"]["components"]["kill_quality"]["directed_percentile"] == pytest.approx(0.0)
+    hi = {"player_guid": "HI", "display_name": "HI", "rounds": 25,
+          "components": {**base, "trade_rate": {"raw": 0.9}}}
+    mid = {"player_guid": "MID", "display_name": "MID", "rounds": 25,
+           "components": {**base, "trade_rate": {"raw": 0.4}}}
+    zero = {"player_guid": "ZERO", "display_name": "ZERO", "rounds": 25,
+            "components": {**base, "trade_rate": {"raw": 0.0}}}
+    scored = {p["player_guid"]: p for p in score_population([hi, mid, zero])}
+    assert scored["ZERO"]["components"]["trade_rate"]["directed_percentile"] == pytest.approx(0.0)
+    assert scored["HI"]["components"]["trade_rate"]["directed_percentile"] == pytest.approx(1.0)
+
+
+def test_score_population_uses_unrounded_raw_stats():
+    """Ranking must use raw_stats (unrounded), not the 3-decimal display value
+    in components["raw"], so near-equal players don't collapse into ties
+    (Codex #513)."""
+    def _p(guid, dpm_unrounded):
+        return {
+            "player_guid": guid, "display_name": guid, "rounds": 25,
+            # display raw rounds both to 0.5 (a tie if used for ranking)…
+            "components": {m: {"raw": 0.5} for m in WEIGHTS},
+            # …but raw_stats carries the true, distinct values.
+            "raw_stats": {**dict.fromkeys(WEIGHTS, 0.5), "dpm": dpm_unrounded},
+        }
+    scored = {p["player_guid"]: p for p in score_population([_p("A", 0.50004), _p("B", 0.49996)])}
+    assert scored["A"]["components"]["dpm"]["directed_percentile"] == pytest.approx(1.0)
+    assert scored["B"]["components"]["dpm"]["directed_percentile"] == pytest.approx(0.0)
 
 
 def test_penalty_metric_direction_is_flipped():

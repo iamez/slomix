@@ -25,6 +25,7 @@ Format-agnostic: metrics work in 3v3 (medic/engi/covy) and 6v6 (full roster).
 import bisect
 import json
 import logging
+from datetime import date
 
 logger = logging.getLogger(__name__)
 
@@ -248,7 +249,7 @@ def calculate_et_rating(player_stats: dict, percentiles: dict,
     return round(rating, 4), components
 
 
-async def compute_all_ratings(db, *, epoch_start: str | None = None,
+async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
                               min_rounds: int = MIN_ROUNDS) -> list[dict]:
     """
     Compute ET_Rating for all players with enough rounds (v2.0).
@@ -270,6 +271,11 @@ async def compute_all_ratings(db, *, epoch_start: str | None = None,
       - clutch_factor: low HP (<30) or outnumbered kills / total kills
       - spawn_timing_eff: avg spawn_timing_score (from proximity_spawn_timing)
     """
+    # Bind the epoch cutoff as a real date: the SQL casts $2 to ::date, and
+    # asyncpg (via the adapter, which preserves params) rejects a str for a DATE
+    # parameter — a string EPOCH_START would send every v3 call to the handler's
+    # exception path (Codex P1 #513). None (v2 all-time) stays None.
+    epoch_param = date.fromisoformat(epoch_start) if isinstance(epoch_start, str) else epoch_start
     logger.info("Querying player aggregates with proximity data (v2 single pass)...")
     rows = await db.fetch_all("""
         SELECT
@@ -386,14 +392,14 @@ async def compute_all_ratings(db, *, epoch_start: str | None = None,
           AND pcs.round_id IN (SELECT id FROM rounds WHERE is_valid)
           AND pcs.player_guid NOT LIKE 'OMNIBOT%'
           AND pcs.player_name NOT LIKE '[BOT]%'
-          AND ($2::text IS NULL OR pcs.round_date::text >= $2)
+          AND ($2::date IS NULL OR pcs.round_date >= $2::text)
         GROUP BY pcs.player_guid, prox_outcome.kill_quality,
                  pts.crossfire_kills, prox_trades.trade_count,
                  prox_outcome.gib_rate, prox_clutch.clutch_rate,
                  prox_spawn.avg_timing_score
         HAVING COUNT(*) >= $1
         ORDER BY pcs.player_guid
-    """, (min_rounds, epoch_start))
+    """, (min_rounds, epoch_param))
 
     if not rows:
         logger.warning("No player data for rating computation")
@@ -416,6 +422,10 @@ async def compute_all_ratings(db, *, epoch_start: str | None = None,
             "rounds": int(r[2]),
             "et_rating": rating,
             "components": components,
+            # Unrounded metric values: components["raw"] is rounded to 3 decimals
+            # for display, which the v3 re-ranker must NOT use (rounding creates
+            # artificial ties / collapses small rates to neutral — Codex #513).
+            "raw_stats": stats,
         })
 
     results.sort(key=lambda x: x["et_rating"], reverse=True)

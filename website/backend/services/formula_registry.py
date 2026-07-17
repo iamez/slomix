@@ -68,7 +68,8 @@ def get_registry() -> list[dict]:
             "surface": "/api/skill/v3-shadow (owner review only)",
             "summary": "AUD-007 fix: same absolute weights, no constant, "
                        "directed midrank percentiles over a common 2026-03-24+ "
-                       "telemetry epoch → median exactly 0.50. Shadow until "
+                       "telemetry epoch → population MEAN exactly 0.50 (median is "
+                       "empirical, near but not forced to 0.50). Shadow until "
                        "promotion gates pass (remediation plan §6).",
         },
         {

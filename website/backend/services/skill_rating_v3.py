@@ -93,21 +93,41 @@ def directed_midrank_percentiles(values: list[float]) -> list[float]:
     return out
 
 
+def _metric_raw(player: dict, metric: str) -> float:
+    """Unrounded raw value for a metric, falling back to the display-rounded
+    component when raw_stats is absent (Codex #513: never re-rank on the
+    3-decimal display value)."""
+    rs = player.get("raw_stats")
+    if rs is not None and metric in rs:
+        return float(rs[metric] or 0.0)
+    return float(player["components"].get(metric, {}).get("raw") or 0.0)
+
+
 def score_population(players: list[dict]) -> list[dict]:
     """Re-score a v2 population with the v3 directed-midrank formula.
 
-    `players` is the output of compute_all_ratings(): each has
-    `components[metric]["raw"]`. Percentiles are recomputed here across the
-    supplied cohort (the cohort IS the population). Each metric column has mean
-    exactly 0.5 and the absolute weights sum to 1.0, so the composite MEAN is
-    exactly 0.50 (the AUD-007 centering the v2 constant only claimed). The
-    median lands near 0.50 but is not forced there — it is reported empirically.
+    `players` is the output of compute_all_ratings(). Percentiles are recomputed
+    here across the supplied cohort (the cohort IS the population). Each metric
+    column has mean exactly 0.5 and the absolute weights sum to 1.0, so the
+    composite MEAN is exactly 0.50 (the AUD-007 centering the v2 constant only
+    claimed). The median lands near 0.50 but is not forced there — it is
+    reported empirically.
 
-    Missing telemetry is handled honestly: a proximity metric sitting on its
-    neutral default is excluded from that metric's percentile column and given
-    the neutral 0.5 directed percentile, and the epoch-unscoped metrics
-    (crossfire) are neutralized for everyone (Codex #513). Because the excluded
-    players still receive 0.5, the column mean stays 0.5 and the centering holds.
+    Two deliberate handlings (Codex #513):
+      - **Epoch-unscoped metrics** (crossfire) are numerically unreliable in the
+        epoch path (all-time numerator / epoch denominator can exceed 1), so
+        every player gets the neutral 0.5 for them — the weight stays in the sum
+        (mean stays centred) but the garbage rate never affects ranking.
+      - **Missing vs observed-zero proximity telemetry cannot be distinguished
+        yet.** compute_all_ratings COALESCEs absent telemetry to a neutral
+        default, but a player who genuinely earned zero (0 trades, 0 clutch)
+        also reports that value. A precise split needs migration 062's
+        capability manifest, which nothing reads yet. So v3 does NOT guess: it
+        ranks every observed value (a real zero ranks at the bottom, as it
+        should) and reports coverage separately for owner review. This is a
+        headline reason v3 stays shadow-only.
+    Raw values are read UNROUNDED (raw_stats), not from the 3-decimal display
+    `components["raw"]`, to avoid artificial ties.
     """
     if not players:
         return []
@@ -116,30 +136,10 @@ def score_population(players: list[dict]) -> list[dict]:
 
     directed: dict[str, list[float]] = {}
     for m in metrics:
-        raws = [p["components"].get(m, {}).get("raw") for p in players]
-
         if m in UNSCOPED_METRICS:
-            # Unreliable in the epoch path → uniform neutral (no ranking effect).
             directed[m] = [0.5] * len(players)
             continue
-
-        if m in PROXIMITY_METRICS:
-            neutral = _PROXIMITY_NEUTRAL[m]
-            # Only players with REAL telemetry (raw present and off its neutral)
-            # rank against each other; the rest get the neutral 0.5.
-            real_idx = [
-                i for i, v in enumerate(raws)
-                if v is not None and float(v) != neutral
-            ]
-            real_vals = [float(raws[i]) for i in real_idx]
-            real_pctls = directed_midrank_percentiles(real_vals)
-            pctls = [0.5] * len(players)
-            for j, i in enumerate(real_idx):
-                pctls[i] = real_pctls[j]
-        else:
-            # PCS metrics are always observed.
-            pctls = directed_midrank_percentiles([float(v or 0.0) for v in raws])
-
+        pctls = directed_midrank_percentiles([_metric_raw(p, m) for p in players])
         if m in _PENALTY_METRICS:
             pctls = [1.0 - p for p in pctls]
         directed[m] = pctls
@@ -181,17 +181,18 @@ def _population_coverage(players: list[dict]) -> float:
     """
     if not players:
         return 0.0
+    # Only EPOCH-SCOPED proximity metrics can indicate epoch telemetry. crossfire
+    # is unscoped/neutralized, so an old all-time crossfire rate must NOT mark a
+    # player covered (Codex #513). A metric counts as telemetry when its raw is
+    # off its own neutral default (kill_quality neutral is 1.0, the rest 0.0 —
+    # not a blanket (0.0, 1.0), Copilot #513). This is a coarse proxy pending the
+    # migration-062 capability manifest.
+    scoped_prox = [m for m in PROXIMITY_METRICS if m not in UNSCOPED_METRICS]
     covered = 0
     for p in players:
-        comps = p["components"]
-        # A metric counts as real telemetry when its raw is present and OFF its
-        # own neutral default. The previous `not in (0.0, 1.0)` test wrongly
-        # treated a legitimate crossfire/trade rate of exactly 1.0 as "no
-        # telemetry" — only kill_quality is neutral at 1.0 (Copilot #513).
         has_prox = any(
-            (raw := comps.get(m, {}).get("raw")) is not None
-            and float(raw) != _PROXIMITY_NEUTRAL[m]
-            for m in PROXIMITY_METRICS
+            _metric_raw(p, m) != _PROXIMITY_NEUTRAL[m]
+            for m in scoped_prox
         )
         if has_prox:
             covered += 1
@@ -237,6 +238,12 @@ async def compute_et_performance_v3(db) -> dict:
         "mean_rating": round(mean_rating, 4) if mean_rating is not None else None,
         "median_rating": round(median, 4) if median is not None else None,
         "coverage": round(_population_coverage(scored), 3),
+        "coverage_note": (
+            "Coarse proxy: shares of players with any off-neutral epoch-scoped "
+            "proximity value. It cannot yet distinguish an observed zero from "
+            "absent telemetry — that needs the migration-062 capability manifest "
+            "(not read yet). One reason v3 stays shadow-only."
+        ),
         "unscoped_metrics": sorted(UNSCOPED_METRICS),
         "abs_weight_sum": round(_ABS_WEIGHT_SUM, 4),
         "players": scored,
