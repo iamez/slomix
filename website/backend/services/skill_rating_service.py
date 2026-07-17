@@ -25,6 +25,7 @@ Format-agnostic: metrics work in 3v3 (medic/engi/covy) and 6v6 (full roster).
 import bisect
 import json
 import logging
+from datetime import date
 
 logger = logging.getLogger(__name__)
 
@@ -248,12 +249,19 @@ def calculate_et_rating(player_stats: dict, percentiles: dict,
     return round(rating, 4), components
 
 
-async def compute_all_ratings(db) -> list[dict]:
+async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
+                              min_rounds: int = MIN_ROUNDS) -> list[dict]:
     """
     Compute ET_Rating for all players with enough rounds (v2.0).
     Returns sorted list of player rating dicts.
     Single query: PCS aggregates + proximity LEFT JOINs, percentiles + ratings
     computed from the same result set.
+
+    epoch_start: when set (YYYY-MM-DD), only rounds on/after that date feed the
+    aggregates — the ET Performance v3 shadow path passes a common telemetry
+    epoch so PCS and proximity counters share one observation window (audit
+    AUD-007). Default None preserves the live all-time v2 behaviour exactly.
+    min_rounds: HAVING threshold (v3 shadow lowers it and gates eligibility itself).
 
     Proximity metrics:
       - kill_quality: Kill Quality Index (gib-weighted outcome avg, simplified KIS)
@@ -263,6 +271,11 @@ async def compute_all_ratings(db) -> list[dict]:
       - clutch_factor: low HP (<30) or outnumbered kills / total kills
       - spawn_timing_eff: avg spawn_timing_score (from proximity_spawn_timing)
     """
+    # Bind the epoch cutoff as a real date: the SQL casts $2 to ::date, and
+    # asyncpg (via the adapter, which preserves params) rejects a str for a DATE
+    # parameter — a string EPOCH_START would send every v3 call to the handler's
+    # exception path (Codex P1 #513). None (v2 all-time) stays None.
+    epoch_param = date.fromisoformat(epoch_start) if isinstance(epoch_start, str) else epoch_start
     logger.info("Querying player aggregates with proximity data (v2 single pass)...")
     rows = await db.fetch_all("""
         SELECT
@@ -330,6 +343,13 @@ async def compute_all_ratings(db) -> list[dict]:
                 / NULLIF(COUNT(*), 0) as gib_rate
             FROM proximity_kill_outcome
             WHERE killer_guid_canonical IS NOT NULL
+              -- Compare session_date as DATE (param cast, column left bare) so the
+              -- (session_date, guid) composite index stays usable (Copilot #513).
+              AND ($2::date IS NULL OR session_date >= $2::date)
+              -- Epoch path only (v2 all-time behavior unchanged): gate proximity
+              -- telemetry on valid rounds, matching the PCS gate, so filler/replay
+              -- rounds can't feed v3 metrics the PCS denominator excludes (Codex #513).
+              AND ($2::date IS NULL OR round_id IN (SELECT id FROM rounds WHERE is_valid))
             GROUP BY killer_guid_canonical
         ) prox_outcome ON prox_outcome.guid_c = pcs.player_guid
 
@@ -337,6 +357,8 @@ async def compute_all_ratings(db) -> list[dict]:
             SELECT trader_guid_canonical as guid_c, COUNT(*) as trade_count
             FROM proximity_lua_trade_kill
             WHERE trader_guid_canonical IS NOT NULL
+              AND ($2::date IS NULL OR session_date >= $2::date)
+              AND ($2::date IS NULL OR round_id IN (SELECT id FROM rounds WHERE is_valid))
             GROUP BY trader_guid_canonical
         ) prox_trades ON prox_trades.guid_c = pcs.player_guid
 
@@ -350,6 +372,8 @@ async def compute_all_ratings(db) -> list[dict]:
                 )::REAL / NULLIF(COUNT(*), 0) as clutch_rate
             FROM proximity_combat_position
             WHERE event_type = 'kill' AND attacker_guid_canonical IS NOT NULL
+              AND ($2::date IS NULL OR session_date >= $2::date)
+              AND ($2::date IS NULL OR round_id IN (SELECT id FROM rounds WHERE is_valid))
             GROUP BY attacker_guid_canonical
         ) prox_clutch ON prox_clutch.guid_c = pcs.player_guid
 
@@ -357,6 +381,8 @@ async def compute_all_ratings(db) -> list[dict]:
             SELECT killer_guid_canonical as guid_c, AVG(spawn_timing_score) as avg_timing_score
             FROM proximity_spawn_timing
             WHERE killer_guid_canonical IS NOT NULL
+              AND ($2::date IS NULL OR session_date >= $2::date)
+              AND ($2::date IS NULL OR round_id IN (SELECT id FROM rounds WHERE is_valid))
             GROUP BY killer_guid_canonical
         ) prox_spawn ON prox_spawn.guid_c = pcs.player_guid
 
@@ -366,13 +392,14 @@ async def compute_all_ratings(db) -> list[dict]:
           AND pcs.round_id IN (SELECT id FROM rounds WHERE is_valid)
           AND pcs.player_guid NOT LIKE 'OMNIBOT%'
           AND pcs.player_name NOT LIKE '[BOT]%'
+          AND ($2::date IS NULL OR pcs.round_date >= $2::text)
         GROUP BY pcs.player_guid, prox_outcome.kill_quality,
                  pts.crossfire_kills, prox_trades.trade_count,
                  prox_outcome.gib_rate, prox_clutch.clutch_rate,
                  prox_spawn.avg_timing_score
         HAVING COUNT(*) >= $1
         ORDER BY pcs.player_guid
-    """, (MIN_ROUNDS,))
+    """, (min_rounds, epoch_param))
 
     if not rows:
         logger.warning("No player data for rating computation")
@@ -395,6 +422,10 @@ async def compute_all_ratings(db) -> list[dict]:
             "rounds": int(r[2]),
             "et_rating": rating,
             "components": components,
+            # Unrounded metric values: components["raw"] is rounded to 3 decimals
+            # for display, which the v3 re-ranker must NOT use (rounding creates
+            # artificial ties / collapses small rates to neutral — Codex #513).
+            "raw_stats": stats,
         })
 
     results.sort(key=lambda x: x["et_rating"], reverse=True)
