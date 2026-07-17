@@ -281,6 +281,12 @@ class BotConfig:
         # Phase 3: Match predictions
         self.enable_match_predictions: bool = self._get_config('ENABLE_MATCH_PREDICTIONS', 'false').lower() == 'true'
 
+        # Shadow program (audit AUD-006): predictions are stored for
+        # calibration by default, but NOT posted to Discord until the
+        # promotion gates pass (>=100 resolved, Brier < 0.25, ...).
+        self.prediction_shadow_enabled: bool = self._get_config('PREDICTION_SHADOW_ENABLED', 'true').lower() == 'true'
+        self.prediction_publish_enabled: bool = self._get_config('PREDICTION_PUBLISH_ENABLED', 'false').lower() == 'true'
+
         # Optional: H2H results lookup from session_results (kept OFF by default until validated)
         self.enable_h2h_results_lookup: bool = self._get_config('ENABLE_H2H_RESULTS_LOOKUP', 'false').lower() == 'true'
 

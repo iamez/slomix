@@ -24,9 +24,11 @@ class FakeDB:
 
     async def fetch_all(self, query, params=()):
         if "FROM match_predictions" in query:
-            return [(7, json.dumps(A), json.dumps(B))]
+            # (id, team_a_guids, team_b_guids, prediction_time)
+            return [(7, json.dumps(A), json.dumps(B), None)]
         if "FROM session_results" in query:
             return self.results
+        # rounds gaming-session windows query → single/untagged path
         return []
 
     async def fetch_one(self, query, params=()):
@@ -39,8 +41,9 @@ class FakeDB:
             self.updates.append(params)
 
 
-def _row(t1, t2, winner):
-    return (json.dumps(t1), json.dumps(t2), winner)
+def _row(t1, t2, winner, gsid=None):
+    # (team_1_guids, team_2_guids, winning_team, gaming_session_id)
+    return (json.dumps(t1), json.dumps(t2), winner, gsid)
 
 
 @pytest.mark.asyncio
@@ -54,10 +57,11 @@ async def test_resolves_with_orientation_flip_and_draws():
     ])
     n = await PredictionEngine(db).auto_resolve_predictions("2026-07-07")
     assert n == 1
-    (actual, a_score, b_score, correct, _acc, pred_id) = db.updates[0]
+    (actual, a_score, b_score, correct, _acc, brier, pred_id) = db.updates[0]
     assert pred_id == 7
     assert (actual, a_score, b_score) == (0, 1, 1)
     assert correct is False  # engine leaned A, session was a tie
+    assert brier is None  # draws are excluded from binary calibration
 
 
 @pytest.mark.asyncio
@@ -65,8 +69,9 @@ async def test_clear_winner_marks_correct():
     db = FakeDB([_row(A, B, 1), _row(B, A, 2)])  # A wins both orientations
     n = await PredictionEngine(db).auto_resolve_predictions("2026-07-07")
     assert n == 1
-    (actual, a_score, b_score, correct, _acc, _id) = db.updates[0]
+    (actual, a_score, b_score, correct, _acc, brier, _id) = db.updates[0]
     assert (actual, a_score, b_score, correct) == (1, 2, 0, True)
+    assert brier == pytest.approx((1.0 - 0.62) ** 2)
 
 
 @pytest.mark.asyncio
@@ -82,3 +87,53 @@ async def test_coincidental_overlap_does_not_resolve():
 async def test_no_results_yet_is_a_noop():
     db = FakeDB([])
     assert await PredictionEngine(db).auto_resolve_predictions("2026-07-07") == 0
+
+
+class _Ts:
+    """Minimal prediction_time stand-in with .timestamp() (tz-safe for tests)."""
+    def __init__(self, ts: float):
+        self._ts = ts
+    def timestamp(self) -> float:
+        return self._ts
+
+
+@pytest.mark.asyncio
+async def test_multi_session_resolves_per_gaming_session():
+    """Two gaming sessions on one date → each prediction resolves against ITS
+    session's tagged results, not the whole-date aggregate (Codex P1 #511)."""
+    class MultiDB:
+        def __init__(self):
+            self.updates = []
+
+        async def fetch_all(self, query, params=()):
+            if "FROM match_predictions" in query:
+                return [
+                    (1, json.dumps(A), json.dumps(B), _Ts(1000)),   # inside session 101
+                    # BETWEEN sessions → must match the FOLLOWING session (102),
+                    # not the nearest-by-distance previous one (Codex #511).
+                    (2, json.dumps(A), json.dumps(B), _Ts(2000)),
+                ]
+            if "FROM rounds" in query:
+                return [(101, 900, 1100), (102, 4900, 5100)]  # two session windows
+            if "FROM session_results" in query:
+                return [
+                    (json.dumps(A), json.dumps(B), 1, 101),  # session 101: A wins
+                    (json.dumps(A), json.dumps(B), 2, 102),  # session 102: B wins
+                ]
+            return []
+
+        async def fetch_one(self, query, params=()):
+            if "team_a_win_probability" in query:
+                return (0.6, 0.4)
+            return None
+
+        async def execute(self, query, params=()):
+            if "UPDATE match_predictions" in query and "actual_winner" in query:
+                self.updates.append(params)
+
+    db = MultiDB()
+    n = await PredictionEngine(db).auto_resolve_predictions("2026-07-07")
+    assert n == 2
+    actual_by_id = {p[-1]: p[0] for p in db.updates}
+    assert actual_by_id[1] == 1  # session 101 → Team A won
+    assert actual_by_id[2] == 2  # session 102 → Team B won (NOT the aggregate)

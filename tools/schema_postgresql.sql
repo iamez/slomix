@@ -1293,7 +1293,15 @@ CREATE TABLE public.match_predictions (
     discord_channel_id bigint,
     guid_coverage real NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    model_version text DEFAULT 'heuristic-v1'::text NOT NULL,
+    publish_state text DEFAULT 'shadow'::text NOT NULL,
+    prediction_event_key text,
+    feature_snapshot jsonb,
+    feature_coverage jsonb,
+    eligibility_reasons text,
+    gaming_session_id integer,
+    brier_score real
 );
 
 
@@ -3733,7 +3741,8 @@ CREATE TABLE public.rounds (
     time_to_beat_seconds integer,
     next_timelimit_minutes integer,
     map_play_seq integer,
-    round_canonical_id character varying(64)
+    round_canonical_id character varying(64),
+    is_valid boolean DEFAULT true NOT NULL
 );
 
 
@@ -7187,6 +7196,20 @@ CREATE INDEX idx_predictions_discord_msg ON public.match_predictions USING btree
 
 
 --
+-- Name: idx_predictions_event_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_predictions_event_key ON public.match_predictions USING btree (prediction_event_key) WHERE (prediction_event_key IS NOT NULL);
+
+
+--
+-- Name: idx_predictions_publish_state; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_predictions_publish_state ON public.match_predictions USING btree (publish_state);
+
+
+--
 -- Name: idx_predictions_format; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7618,6 +7641,13 @@ CREATE INDEX idx_rounds_gaming_session ON public.rounds USING btree (gaming_sess
 --
 
 CREATE INDEX idx_rounds_is_bot_round ON public.rounds USING btree (is_bot_round);
+
+
+--
+-- Name: idx_rounds_is_valid_false; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_rounds_is_valid_false ON public.rounds USING btree (id) WHERE (is_valid = false);
 
 
 --

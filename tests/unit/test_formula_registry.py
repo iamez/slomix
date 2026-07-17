@@ -45,3 +45,14 @@ def test_live_versions_track_source_constants():
 
 def test_lookup_miss_returns_none():
     assert get_formula("no-such-formula") is None
+
+
+def test_prediction_status_follows_publish_flag(monkeypatch):
+    """The prediction_engine registry entry reports live/shadow from the actual
+    PREDICTION_PUBLISH_ENABLED flag, not a hard-coded 'shadow' (Codex #511)."""
+    monkeypatch.setenv("PREDICTION_PUBLISH_ENABLED", "false")
+    assert get_formula("prediction_engine")["status"] == "shadow"
+    monkeypatch.setenv("PREDICTION_PUBLISH_ENABLED", "true")
+    entry = get_formula("prediction_engine")
+    assert entry["status"] == "live"
+    assert "published" in entry["surface"].lower()
