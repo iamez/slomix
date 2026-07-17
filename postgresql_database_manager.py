@@ -406,6 +406,11 @@ class PostgreSQLDatabaseManager:
                     round_stopwatch_state VARCHAR(16),
                     score_confidence VARCHAR(32),
                     time_to_beat_seconds INTEGER,
+                    -- is_valid (migration 057): "counts for stats" flag. Bootstrapped
+                    -- DBs omitted it, so every query using `AND r.is_valid` (ratings,
+                    -- proximity, prediction factors) failed on a fresh install and
+                    -- silently returned neutral/unavailable data (Codex P1 #511).
+                    is_valid BOOLEAN NOT NULL DEFAULT TRUE,
                     UNIQUE(match_id, round_number)
                 )
             ''')
@@ -417,6 +422,14 @@ class PostgreSQLDatabaseManager:
             # EXISTS is a no-op on a freshly-created table.
             await conn.execute('''
                 ALTER TABLE rounds ADD COLUMN IF NOT EXISTS round_canonical_id VARCHAR(64)
+            ''')
+            # Same guard for is_valid (migration 057) on a pre-existing rounds table.
+            await conn.execute('''
+                ALTER TABLE rounds ADD COLUMN IF NOT EXISTS is_valid BOOLEAN NOT NULL DEFAULT TRUE
+            ''')
+            await conn.execute('''
+                CREATE INDEX IF NOT EXISTS idx_rounds_is_valid_false
+                ON rounds (id) WHERE is_valid = FALSE
             ''')
             # Partial UNIQUE index on round_canonical_id (matches schema_postgresql.sql
             # uniq_rounds_canonical_id) — required for the INSERT ... ON CONFLICT
@@ -739,7 +752,18 @@ class PostgreSQLDatabaseManager:
                     discord_channel_id BIGINT,
                     guid_coverage REAL NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    -- Prediction shadow program v2 (migration 061): keep the
+                    -- inline bootstrap DDL in step with schema_postgresql.sql
+                    -- (test_inline_ddl_matches_canonical_schema drift guard).
+                    model_version TEXT NOT NULL DEFAULT 'heuristic-v1',
+                    publish_state TEXT NOT NULL DEFAULT 'shadow',
+                    prediction_event_key TEXT,
+                    feature_snapshot JSONB,
+                    feature_coverage JSONB,
+                    eligibility_reasons TEXT,
+                    gaming_session_id INTEGER,
+                    brier_score REAL
                 )
             ''')
 
@@ -978,6 +1002,9 @@ class PostgreSQLDatabaseManager:
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_predictions_confidence ON match_predictions(confidence)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_predictions_discord_msg ON match_predictions(discord_message_id)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_predictions_outcome ON match_predictions(actual_winner) WHERE actual_winner IS NOT NULL')
+            # Prediction shadow v2 (migration 061): dedup + publish-state indexes.
+            await conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_predictions_event_key ON match_predictions(prediction_event_key) WHERE prediction_event_key IS NOT NULL')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_predictions_publish_state ON match_predictions(publish_state)')
 
             # Session results indexes
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_session_results_date ON session_results(session_date DESC)')

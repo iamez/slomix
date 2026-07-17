@@ -79,6 +79,10 @@ class VoiceSessionService:
         self.team_a_guids: list[str] = []
         self.team_b_guids: list[str] = []
         self.last_split_time: datetime | None = None
+        # Stable identifier for the CURRENT split episode (set once when a split
+        # is first detected, cleared when it ends). Used as the prediction
+        # occurrence so dedup ties to the match episode, not wall-clock time.
+        self.current_split_episode: str | None = None
         self.prediction_cooldown_minutes: int = config.prediction_cooldown_minutes
 
         # Prediction Engine (Phase 3: Competitive Analytics)
@@ -1037,6 +1041,19 @@ class VoiceSessionService:
                 self.team_b_guids = split_data['team_b_guids']
                 self.last_split_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
+                # A NEW split opens a NEW episode: mint a fresh episode id so its
+                # prediction dedups within the episode but a genuine rematch (a
+                # later new split) gets its own row (Codex #511).
+                # KNOWN LIMITATION (accepted for the shadow program): a bot
+                # restart mid-split loses this in-memory id, so the same match
+                # re-detected post-restart mints a new id and can add one extra
+                # calibration row. It does NOT corrupt data (the dedup unique
+                # index still blocks exact duplicates within a process), and a
+                # rare extra shadow row is acceptable noise vs. persisting split
+                # state across restarts. Owner calibration review can dedup.
+                if is_new_split:
+                    self.current_split_episode = self.last_split_time.strftime('%Y%m%dT%H%M%S')  # noqa: DTZ007
+
                 # Log event
                 if is_new_split:
                     logger.info(
@@ -1069,21 +1086,29 @@ class VoiceSessionService:
                             )
                             logger.info(f"💡 Insight: {prediction['key_insight']}")
 
-                            # Phase 4: Store prediction in database and post to Discord
-                            if self.prediction_embed_builder:
-                                try:
+                            # Phase 4 / shadow program (AUD-006): storing and
+                            # publishing are now independent. Predictions are
+                            # STORED whenever shadow collection is on (default),
+                            # but POSTED to Discord only behind
+                            # PREDICTION_PUBLISH_ENABLED — which stays off until
+                            # the calibration promotion gates pass.
+                            # Storage must NOT depend on the (separately optional)
+                            # embed builder: shadow calibration collection needs
+                            # only the engine, so a degraded env with no
+                            # PredictionEmbedBuilder must still store rows. Only
+                            # PUBLISHING needs the embed builder (Codex #511).
+                            try:
+                                discord_message_id = None
+                                discord_channel_id = None
+
+                                if self.config.prediction_publish_enabled and self.prediction_embed_builder:
                                     # Get player names for better display
                                     player_names = await self._get_player_names(
                                         split_data['team_a_guids'] + split_data['team_b_guids']
                                     )
-
-                                    # Build prediction embed
                                     embed = self.prediction_embed_builder.build_prediction_embed(
-                                        prediction,
-                                        split_data,
-                                        player_names
+                                        prediction, split_data, player_names
                                     )
-
                                     # Post to Discord (production channel)
                                     channel = self.bot.get_channel(self.config.production_channel_id)
                                     if channel:
@@ -1092,24 +1117,38 @@ class VoiceSessionService:
                                         discord_channel_id = channel.id
                                         logger.info(f"📤 Prediction posted to Discord (msg_id={discord_message_id})")
                                     else:
-                                        discord_message_id = None
-                                        discord_channel_id = None
                                         logger.warning("⚠️ Production channel not found, prediction not posted")
+                                elif self.config.prediction_publish_enabled:
+                                    logger.warning("⚠️ Publishing enabled but PredictionEmbedBuilder unavailable — storing as shadow only")
+                                else:
+                                    logger.info("🕶️ Shadow mode: prediction NOT posted (PREDICTION_PUBLISH_ENABLED=false)")
 
-                                    # Store prediction in database
+                                # Store whenever shadow collection OR publishing is
+                                # enabled (a publish whose channel/embed was missing
+                                # still stores as 'shadow' rather than dropping it).
+                                if self.config.prediction_shadow_enabled or self.config.prediction_publish_enabled:
                                     session_date = datetime.now().strftime('%Y-%m-%d')  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
+                                    publish_state = "published" if discord_message_id else "shadow"
+                                    # Occurrence = the split EPISODE identifier (set
+                                    # once when the split is first detected), not a
+                                    # wall-clock bucket: this ties dedup to the actual
+                                    # match episode, so a re-prediction of the same
+                                    # episode dedups while a genuine rematch (a new
+                                    # episode) gets its own row — no boundary/collision
+                                    # artefacts (Codex #511). See compute_event_key.
                                     prediction_id = await self.prediction_engine.store_prediction(
                                         prediction,
                                         split_data,
                                         session_date,
                                         discord_channel_id,
-                                        discord_message_id
+                                        discord_message_id,
+                                        publish_state=publish_state,
+                                        occurrence=self.current_split_episode,
                                     )
+                                    logger.info(f"✅ Prediction workflow complete (id={prediction_id}, {publish_state})")
 
-                                    logger.info(f"✅ Prediction workflow complete (id={prediction_id})")
-
-                                except Exception as e:
-                                    logger.error(f"❌ Failed to post/store prediction: {e}", exc_info=True)
+                            except Exception as e:
+                                logger.error(f"❌ Failed to post/store prediction: {e}", exc_info=True)
 
                             if self.config.enable_prediction_logging:
                                 logger.debug(f"📊 Full prediction: {prediction}")
@@ -1130,6 +1169,9 @@ class VoiceSessionService:
                     self.team_b_channel_id = None
                     self.team_a_guids = []
                     self.team_b_guids = []
+                    # End the episode: the next split (e.g. a rematch) mints a
+                    # fresh episode id and therefore its own prediction row.
+                    self.current_split_episode = None
 
         except Exception as e:
             logger.error(f"❌ Error checking team split: {e}", exc_info=True)
