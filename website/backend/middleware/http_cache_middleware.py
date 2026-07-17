@@ -17,6 +17,7 @@ from starlette.responses import Response
 
 from website.backend.env_utils import getenv_int
 from website.backend.metrics import API_CACHE_HITS, API_CACHE_INVALIDATIONS, API_CACHE_MISSES
+from website.backend.security_utils import routed_path
 from website.backend.services.http_cache_backend import CacheBackend
 
 
@@ -60,7 +61,11 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
         )
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        path = request.url.path
+        # Use the raw ASGI scope path, never request.url.path (Starlette rebuilds
+        # request.url from the Host header, which a malformed Host can distort —
+        # Codex review on #510). Cache gating and write-invalidation matching are
+        # security-relevant, so they must key off the un-distortable path.
+        path = routed_path(request)
 
         if not path.startswith("/api/"):
             return await call_next(request)
@@ -326,6 +331,9 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
     def _build_cache_key(request: Request) -> str:
         query_items = sorted(request.query_params.multi_items())
         query = urlencode(query_items, doseq=True)
+        # scope path (not request.url.path) so a Host-distorted URL can't forge
+        # or collide cache keys (Codex review on #510).
+        path = routed_path(request)
         if query:
-            return f"{request.url.path}?{query}"
-        return request.url.path
+            return f"{path}?{query}"
+        return path

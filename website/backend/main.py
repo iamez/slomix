@@ -2,14 +2,12 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -45,6 +43,13 @@ from website.backend.middleware import (
     HTTPCacheMiddleware,
     RateLimitMiddleware,
     RequestLoggingMiddleware,
+)
+from website.backend.security_utils import (
+    CSRFMiddleware,
+    StrictTrustedHostMiddleware,
+    csrf_allowed_origins,
+    resolve_trusted_hosts,
+    routed_path,
 )
 
 # Configure logging from environment
@@ -113,77 +118,13 @@ PROMETHEUS_ENABLED = os.getenv("PROMETHEUS_ENABLED", "true").lower() == "true"
 cache_backend = create_cache_backend_from_env()
 
 
-def _normalize_origin(origin: str | None) -> str | None:
-    if not origin:
-        return None
-    parsed = urlsplit(origin.strip())
-    if not parsed.scheme or not parsed.netloc:
-        return None
-    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
-
-
-def _parse_origin_list(raw_value: str) -> list[str]:
-    return [value.strip() for value in raw_value.split(",") if value.strip()]
-
-
-def _csrf_allowed_origins() -> set[str]:
-    configured = _parse_origin_list(os.getenv("CSRF_ALLOWED_ORIGINS", ""))
-    if not configured:
-        configured = [*CORS_ORIGINS]
-        frontend_origin = os.getenv("FRONTEND_ORIGIN")
-        public_origin = os.getenv("PUBLIC_FRONTEND_ORIGIN")
-        if frontend_origin:
-            configured.append(frontend_origin)
-        if public_origin:
-            configured.append(public_origin)
-    return {
-        normalized
-        for normalized in (_normalize_origin(origin) for origin in configured)
-        if normalized
-    }
-
-
-class CSRFMiddleware(BaseHTTPMiddleware):
-    """Origin-check guard for session-authenticated mutating requests."""
-
-    _MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-
-    def __init__(
-        self,
-        app,
-        *,
-        enabled: bool,
-        allowed_origins: set[str],
-    ):
-        super().__init__(app)
-        self.enabled = enabled
-        self.allowed_origins = allowed_origins
-
-    async def dispatch(self, request: Request, call_next):
-        if not self.enabled or request.method.upper() not in self._MUTATING_METHODS:
-            return await call_next(request)
-        if not (request.url.path.startswith("/api/") or request.url.path.startswith("/auth/")):
-            return await call_next(request)
-        if not request.session.get("user"):
-            return await call_next(request)
-
-        allowed_origins = self.allowed_origins
-        if not allowed_origins:
-            inferred_origin = _normalize_origin(str(request.base_url))
-            if inferred_origin:
-                allowed_origins = {inferred_origin}
-
-        request_origin = _normalize_origin(request.headers.get("origin"))
-        if not request_origin:
-            request_origin = _normalize_origin(request.headers.get("referer"))
-        if request_origin and request_origin in allowed_origins:
-            return await call_next(request)
-
-        return JSONResponse(status_code=403, content={"detail": "CSRF origin check failed"})
-
-
 CSRF_ORIGIN_CHECK_ENABLED = os.getenv("CSRF_ORIGIN_CHECK_ENABLED", "true").lower() == "true"
-CSRF_ALLOWED_ORIGINS = _csrf_allowed_origins()
+CSRF_ALLOWED_ORIGINS = csrf_allowed_origins(CORS_ORIGINS)
+
+# Host allow-list for the outermost TrustedHostMiddleware (AUD-005). Raises at
+# startup when the production posture (SESSION_HTTPS_ONLY=true) runs without
+# an explicit TRUSTED_HOSTS list.
+TRUSTED_HOSTS = resolve_trusted_hosts(https_only=SESSION_HTTPS_ONLY)
 
 # Validate SESSION_SECRET is properly configured
 if not SESSION_SECRET or SESSION_SECRET == "super-secret-key-change-me":
@@ -254,7 +195,7 @@ app.add_middleware(HTTPCacheMiddleware, cache_backend=cache_backend)
 # Request Logging Middleware (added after session so it can access session data)
 app.add_middleware(RequestLoggingMiddleware)
 
-# GZip compression — added last so it wraps all other middleware (outermost layer)
+# GZip compression — wraps the middleware below it
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # File extensions that get Cache-Control headers
@@ -283,7 +224,7 @@ _BLOCKED_PREFIXES = (".env", "backend/", "frontend/src/", "__pycache__/")
 @app.middleware("http")
 async def block_sensitive_files(request, call_next):
     """Prevent static file serving from exposing sensitive files."""
-    path = request.url.path.lstrip("/")
+    path = routed_path(request).lstrip("/")
     if path in _BLOCKED_PATHS or any(path.startswith(p) for p in _BLOCKED_PREFIXES):
         return JSONResponse(status_code=404, content={"detail": "Not Found"})
     return await call_next(request)
@@ -292,7 +233,7 @@ async def block_sensitive_files(request, call_next):
 @app.middleware("http")
 async def add_static_cache_headers(request, call_next):
     response = await call_next(request)
-    path = request.url.path
+    path = routed_path(request)
     if path in _ENTRYPOINT_NO_CACHE_PATHS:
         response.headers["Cache-Control"] = "no-cache"
     elif path.startswith("/static/modern/chunks/"):
@@ -314,6 +255,13 @@ async def add_security_headers(request, call_next):
     if os.getenv("ENABLE_HSTS", "false").lower() == "true":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
+
+
+# NOTE: the trusted-host gate is registered at the very end of this module
+# (after Prometheus instrumentation) so it stays the OUTERMOST middleware —
+# see the StrictTrustedHostMiddleware registration below the instrumentator
+# block. Registering it here would leave the instrumentator's middleware
+# outside it, reading a Host-distorted request.url first (Codex review #510).
 
 # Include Routers
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
@@ -340,6 +288,15 @@ app.include_router(replay_router.router, prefix="/api", tags=["Replay"])
 if PROMETHEUS_ENABLED and Instrumentator is not None:
     instrumentator = Instrumentator(excluded_handlers=["/metrics"])
     instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+
+# Trusted-host gate — added DEAD LAST so it is the OUTERMOST middleware even
+# after Prometheus instrumentation wraps the app above (AUD-005): a malformed
+# or untrusted Host header gets a 400 before ANY other middleware — including
+# the instrumentator's, which constructs a Request and can read a
+# Host-distorted request.url — observes the request. StrictTrustedHostMiddleware
+# also rejects colon-embedded path payloads that Starlette's split(':')[0]
+# TrustedHostMiddleware would let through (Codex review on #510).
+app.add_middleware(StrictTrustedHostMiddleware, allowed_hosts=TRUSTED_HOSTS)
 
 
 @app.get("/greatshot", include_in_schema=False)
