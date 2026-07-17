@@ -3364,10 +3364,11 @@ function renderProxScores(data, formula) {
     const players = data?.players ?? [];
     const listEl = document.getElementById('prox-scores-list');
     if (!listEl) return;
-    // AUD-008 quality contract: a degraded response means one or more source
-    // queries failed — show an explicit unavailable state, never a stale or
-    // all-neutral ranking presented as real.
-    if (data?.status === 'degraded' || data?.quality?.ranking_available === false) {
+    // AUD-008 quality contract: gate the "unavailable" state on status ===
+    // 'degraded' ONLY. quality.ranking_available is also false for a healthy
+    // empty result (no qualifying players / new install), so keying off it made
+    // an empty scope look like a data-source outage (Copilot/Codex review #512).
+    if (data?.status === 'degraded') {
         const failed = (data?.quality?.failed_sources ?? []).length;
         listEl.innerHTML = `<div class="text-[11px] text-amber-400/80">Proximity scores are temporarily unavailable (${failed} data source${failed === 1 ? '' : 's'} failed). Ranking withheld to avoid showing incomplete results.</div>`;
         return;

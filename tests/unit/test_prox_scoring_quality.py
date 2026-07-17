@@ -164,6 +164,56 @@ async def test_low_coverage_player_dropped_from_leaderboard(monkeypatch):
     assert result["quality"]["below_coverage_dropped"] == 1
 
 
+def test_metric_effective_weights_match_category_weighting():
+    """Coverage weights must equal CATEGORY_WEIGHTS x within-category share and
+    sum to the CATEGORY_WEIGHTS total, not treat each category as ~1/3 (#512)."""
+    eff = prox_scoring._metric_effective_weights()  # noqa: SLF001
+    assert sum(eff.values()) == pytest.approx(sum(prox_scoring.CATEGORY_WEIGHTS.values()))
+    # escape_rate: Combat(0.40) x (0.20 / combat_total 1.0) = 0.08
+    assert eff["escape_rate"] == pytest.approx(0.08)
+    # stance_variety: Game Sense(0.25) x (0.15 / 1.0) = 0.0375
+    assert eff["stance_variety"] == pytest.approx(0.0375)
+
+
+@pytest.mark.asyncio
+async def test_response_coverage_is_min_of_returned_players(monkeypatch):
+    async def fake_fetch(db, range_days, **kwargs):
+        full = {**_full_metric_row("GUID_FULL", "Full"),
+                "name": "Full", "engagements": 40, "tracks": 10}
+        partial = {**_full_metric_row("GUID_PART", "Part"),
+                   "name": "Part", "engagements": 40, "tracks": 10}
+        del partial["stance_variety"]  # drop one light metric → coverage ~0.96
+        sources = [{"source": s, "success": True, "row_count": 2,
+                    "error_code": None, "duration_ms": 5} for s in SOURCE_LABELS]
+        return {"GUID_FULL": full, "GUID_PART": partial}, sources
+
+    monkeypatch.setattr(prox_scoring, "_fetch_raw_metrics", fake_fetch)
+    result = await compute_prox_scores(object())
+    assert len(result["players"]) == 2  # both above the 0.80 gate
+    cov = result["quality"]["metric_weight_coverage"]
+    assert cov < 1.0, "response coverage must reflect the least-covered player"
+    assert cov == pytest.approx(min(p["metric_weight_coverage"] for p in result["players"]))
+
+
+@pytest.mark.asyncio
+async def test_none_valued_metric_counts_as_missing(monkeypatch):
+    """A preserved NULL aggregate (None, not coalesced 0) must count as missing
+    coverage, not real data (Codex #512)."""
+    async def fake_fetch(db, range_days, **kwargs):
+        row = {**_full_metric_row("GUID_X", "X"),
+               "name": "X", "engagements": 40, "tracks": 10}
+        row["denied_time"] = None  # NULL aggregate now preserved as None
+        sources = [{"source": s, "success": True, "row_count": 1,
+                    "error_code": None, "duration_ms": 5} for s in SOURCE_LABELS]
+        return {"GUID_X": row}, sources
+
+    monkeypatch.setattr(prox_scoring, "_fetch_raw_metrics", fake_fetch)
+    result = await compute_prox_scores(object(), player_guid="GUID_X")
+    p = result["players"][0]
+    assert "denied_time" in p["missing_metrics"]
+    assert p["metric_weight_coverage"] < 1.0
+
+
 @pytest.mark.asyncio
 async def test_single_player_request_returns_low_coverage_player(monkeypatch):
     async def fake_fetch(db, range_days, **kwargs):
