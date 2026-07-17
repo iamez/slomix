@@ -322,13 +322,18 @@ async def get_skill_formula():
 
 
 @router.get("/skill/v3-shadow")
-async def get_et_performance_v3_shadow(db: DatabaseAdapter = Depends(get_db)):
+async def get_et_performance_v3_shadow(
+    db: DatabaseAdapter = Depends(get_db),
+    _internal: None = Depends(require_internal_secret),
+):
     """ET Performance v3 SHADOW rating (audit AUD-007).
 
-    Not the public rating — this is the corrected formula (directed midrank +
-    absolute weights, no constant, median 0.50) over a common telemetry epoch,
-    exposed for owner review before any promotion. v2 remains canonical at
-    /skill/leaderboard.
+    Owner-review only — gated behind require_internal_secret like the other
+    non-public skill endpoints (Copilot/Codex P1 #513): it is not user-visible
+    and triggers an expensive full recomputation. This is the corrected formula
+    (directed midrank + absolute weights, no constant, mean 0.50) over a common
+    telemetry epoch, exposed for review before any promotion. v2 remains
+    canonical at /skill/leaderboard.
     """
     from website.backend.services.skill_rating_v3 import compute_et_performance_v3
     try:

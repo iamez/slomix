@@ -337,7 +337,13 @@ async def compute_all_ratings(db, *, epoch_start: str | None = None,
                 / NULLIF(COUNT(*), 0) as gib_rate
             FROM proximity_kill_outcome
             WHERE killer_guid_canonical IS NOT NULL
-              AND ($2::text IS NULL OR session_date::text >= $2)
+              -- Compare session_date as DATE (param cast, column left bare) so the
+              -- (session_date, guid) composite index stays usable (Copilot #513).
+              AND ($2::date IS NULL OR session_date >= $2::date)
+              -- Epoch path only (v2 all-time behavior unchanged): gate proximity
+              -- telemetry on valid rounds, matching the PCS gate, so filler/replay
+              -- rounds can't feed v3 metrics the PCS denominator excludes (Codex #513).
+              AND ($2::date IS NULL OR round_id IN (SELECT id FROM rounds WHERE is_valid))
             GROUP BY killer_guid_canonical
         ) prox_outcome ON prox_outcome.guid_c = pcs.player_guid
 
@@ -345,7 +351,8 @@ async def compute_all_ratings(db, *, epoch_start: str | None = None,
             SELECT trader_guid_canonical as guid_c, COUNT(*) as trade_count
             FROM proximity_lua_trade_kill
             WHERE trader_guid_canonical IS NOT NULL
-              AND ($2::text IS NULL OR session_date::text >= $2)
+              AND ($2::date IS NULL OR session_date >= $2::date)
+              AND ($2::date IS NULL OR round_id IN (SELECT id FROM rounds WHERE is_valid))
             GROUP BY trader_guid_canonical
         ) prox_trades ON prox_trades.guid_c = pcs.player_guid
 
@@ -359,7 +366,8 @@ async def compute_all_ratings(db, *, epoch_start: str | None = None,
                 )::REAL / NULLIF(COUNT(*), 0) as clutch_rate
             FROM proximity_combat_position
             WHERE event_type = 'kill' AND attacker_guid_canonical IS NOT NULL
-              AND ($2::text IS NULL OR session_date::text >= $2)
+              AND ($2::date IS NULL OR session_date >= $2::date)
+              AND ($2::date IS NULL OR round_id IN (SELECT id FROM rounds WHERE is_valid))
             GROUP BY attacker_guid_canonical
         ) prox_clutch ON prox_clutch.guid_c = pcs.player_guid
 
@@ -367,7 +375,8 @@ async def compute_all_ratings(db, *, epoch_start: str | None = None,
             SELECT killer_guid_canonical as guid_c, AVG(spawn_timing_score) as avg_timing_score
             FROM proximity_spawn_timing
             WHERE killer_guid_canonical IS NOT NULL
-              AND ($2::text IS NULL OR session_date::text >= $2)
+              AND ($2::date IS NULL OR session_date >= $2::date)
+              AND ($2::date IS NULL OR round_id IN (SELECT id FROM rounds WHERE is_valid))
             GROUP BY killer_guid_canonical
         ) prox_spawn ON prox_spawn.guid_c = pcs.player_guid
 

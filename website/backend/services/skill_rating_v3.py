@@ -12,9 +12,11 @@ v3 fixes both WITHOUT retuning weights (isolate the correction):
     counters (via compute_all_ratings(epoch_start=...));
   - directed midrank percentiles + absolute weights, no constant:
         score = Σ |w_i| · directed_midrank_percentile_i
-    where directed flips "lower/penalty is better" metrics. Because the
-    absolute v2 weights already sum to 1.0, the population median is
-    mathematically 0.50 — provable, not asserted.
+    where directed flips "lower/penalty is better" metrics. Each metric column
+    has mean exactly 0.5 and the absolute v2 weights sum to 1.0, so the
+    population MEAN is mathematically 0.50 — provable, not asserted. (The v2
+    bug was that its constant only *claimed* to centre the average; the MEDIAN
+    is reported empirically and lands near, but is not forced to, 0.50.)
 
 Status: SHADOW. Computed and exposed under an explicit v3 endpoint for
 review; v2 stays the public rating. Promotion gates (≥20 eligible players,
@@ -27,6 +29,7 @@ from __future__ import annotations
 
 import bisect
 import logging
+import statistics
 
 from website.backend.services.skill_rating_service import (
     PROXIMITY_METRICS,
@@ -47,9 +50,20 @@ EPOCH_START = "2026-03-24"
 MIN_ROUNDS_V3 = 20
 
 # crossfire_rate is sourced from player_teamplay_stats, which has no
-# session_date column, so it alone cannot be epoch-scoped in the shared query.
-# It is flagged rather than silently mixed.
+# session_date column. In the epoch path its all-time numerator is divided by
+# an epoch-scoped kill denominator, which produces distorted (even >1) rates
+# (Codex #513). Rather than mix epochs, v3 gives EVERY player the neutral
+# directed percentile (0.5) for these metrics: the weight stays in the sum (so
+# the composite mean stays centered) but the unreliable signal never affects
+# ranking. They are flagged epoch_scoped=False in the component breakdown.
 UNSCOPED_METRICS = frozenset({"crossfire_rate"})
+
+# Neutral raw value each proximity metric collapses to when there is NO
+# telemetry: compute_all_ratings COALESCEs kill_quality to 1.0 and every other
+# proximity rate to 0.0. A raw sitting exactly on its neutral is treated as
+# "missing" (not observed) so absent telemetry can't shape the percentile
+# columns (Codex #513); this is the pre-capabilities-backfill proxy.
+_PROXIMITY_NEUTRAL = {m: (1.0 if m == "kill_quality" else 0.0) for m in PROXIMITY_METRICS}
 
 # Metrics where a higher raw value is WORSE. v2 encodes dpr as a negative
 # weight; v3 makes the direction explicit and takes |weight|.
@@ -84,22 +98,48 @@ def score_population(players: list[dict]) -> list[dict]:
 
     `players` is the output of compute_all_ratings(): each has
     `components[metric]["raw"]`. Percentiles are recomputed here across the
-    supplied cohort (the cohort IS the population), so median = 0.50 holds by
-    construction.
+    supplied cohort (the cohort IS the population). Each metric column has mean
+    exactly 0.5 and the absolute weights sum to 1.0, so the composite MEAN is
+    exactly 0.50 (the AUD-007 centering the v2 constant only claimed). The
+    median lands near 0.50 but is not forced there — it is reported empirically.
+
+    Missing telemetry is handled honestly: a proximity metric sitting on its
+    neutral default is excluded from that metric's percentile column and given
+    the neutral 0.5 directed percentile, and the epoch-unscoped metrics
+    (crossfire) are neutralized for everyone (Codex #513). Because the excluded
+    players still receive 0.5, the column mean stays 0.5 and the centering holds.
     """
     if not players:
         return []
 
     metrics = list(WEIGHTS.keys())
-    # Column of raw values per metric across the cohort.
-    raw_cols: dict[str, list[float]] = {}
-    for m in metrics:
-        raw_cols[m] = [float(p["components"].get(m, {}).get("raw") or 0.0) for p in players]
 
-    # Midrank percentile per metric, then flip penalty/"lower is better".
     directed: dict[str, list[float]] = {}
     for m in metrics:
-        pctls = directed_midrank_percentiles(raw_cols[m])
+        raws = [p["components"].get(m, {}).get("raw") for p in players]
+
+        if m in UNSCOPED_METRICS:
+            # Unreliable in the epoch path → uniform neutral (no ranking effect).
+            directed[m] = [0.5] * len(players)
+            continue
+
+        if m in PROXIMITY_METRICS:
+            neutral = _PROXIMITY_NEUTRAL[m]
+            # Only players with REAL telemetry (raw present and off its neutral)
+            # rank against each other; the rest get the neutral 0.5.
+            real_idx = [
+                i for i, v in enumerate(raws)
+                if v is not None and float(v) != neutral
+            ]
+            real_vals = [float(raws[i]) for i in real_idx]
+            real_pctls = directed_midrank_percentiles(real_vals)
+            pctls = [0.5] * len(players)
+            for j, i in enumerate(real_idx):
+                pctls[i] = real_pctls[j]
+        else:
+            # PCS metrics are always observed.
+            pctls = directed_midrank_percentiles([float(v or 0.0) for v in raws])
+
         if m in _PENALTY_METRICS:
             pctls = [1.0 - p for p in pctls]
         directed[m] = pctls
@@ -144,8 +184,13 @@ def _population_coverage(players: list[dict]) -> float:
     covered = 0
     for p in players:
         comps = p["components"]
+        # A metric counts as real telemetry when its raw is present and OFF its
+        # own neutral default. The previous `not in (0.0, 1.0)` test wrongly
+        # treated a legitimate crossfire/trade rate of exactly 1.0 as "no
+        # telemetry" — only kill_quality is neutral at 1.0 (Copilot #513).
         has_prox = any(
-            (comps.get(m, {}).get("raw") or 0.0) not in (0.0, 1.0)
+            (raw := comps.get(m, {}).get("raw")) is not None
+            and float(raw) != _PROXIMITY_NEUTRAL[m]
             for m in PROXIMITY_METRICS
         )
         if has_prox:
@@ -158,33 +203,41 @@ async def compute_et_performance_v3(db) -> dict:
 
     Returns:
         {
-          "formula_version", "epoch_start", "observation_end",
-          "eligible_count", "unrated_reasons",
-          "median_rating", "coverage", "unscoped_metrics",
+          "formula_version", "epoch_start", "min_rounds",
+          "eligible_count", "scored_count", "unrated_reasons",
+          "mean_rating", "median_rating", "coverage", "unscoped_metrics",
           "players": [ ... ]   # eligible players, ranked
         }
     """
     population = await compute_all_ratings(db, epoch_start=EPOCH_START, min_rounds=1)
-    scored = score_population(population)
 
-    eligible = [p for p in scored if p["rounds"] >= MIN_ROUNDS_V3]
+    # Score ONLY the eligible cohort: players below MIN_ROUNDS_V3 must not shape
+    # the percentile columns of the players we publish (Codex #513). Below-
+    # threshold players are counted separately.
+    eligible_pop = [p for p in population if p["rounds"] >= MIN_ROUNDS_V3]
+    scored = score_population(eligible_pop)
     unrated = {
-        "below_min_rounds": sum(1 for p in scored if p["rounds"] < MIN_ROUNDS_V3),
+        "below_min_rounds": len(population) - len(eligible_pop),
     }
 
     ratings = sorted(p["et_performance_v3"] for p in scored)
-    median = ratings[len(ratings) // 2] if ratings else None
+    # Mean is the mathematically-centered statistic (0.50 by construction);
+    # median is reported empirically, computed correctly for even cohorts
+    # (average of the two middle values, not the upper-middle — Codex/Copilot).
+    mean_rating = sum(ratings) / len(ratings) if ratings else None
+    median = statistics.median(ratings) if ratings else None
 
     return {
         "formula_version": FORMULA_VERSION,
         "epoch_start": EPOCH_START,
         "min_rounds": MIN_ROUNDS_V3,
-        "eligible_count": len(eligible),
+        "eligible_count": len(scored),
         "scored_count": len(scored),
         "unrated_reasons": unrated,
+        "mean_rating": round(mean_rating, 4) if mean_rating is not None else None,
         "median_rating": round(median, 4) if median is not None else None,
         "coverage": round(_population_coverage(scored), 3),
         "unscoped_metrics": sorted(UNSCOPED_METRICS),
         "abs_weight_sum": round(_ABS_WEIGHT_SUM, 4),
-        "players": eligible,
+        "players": scored,
     }
