@@ -129,7 +129,9 @@ The next real round must carry the expected hash and produce zero `duration_ms >
 
 ### OPS-DATA — Historical cleanup (owner)
 
-After OPS-LUA: DB backup + candidate snapshot, run the guarded backfill `--apply`, prove 0 violations / unchanged row count / empty re-dry-run. The next two real rounds must stay clean.
+**Precondition (ordering hazard):** the production baseline (`b29977c`) still ships the OLD, UNGUARDED `scripts/backfill_aim_lock_clamp.py`, which accepts `--apply` with no count/date/fingerprint preconditions and updates *every* row matching the predicate. Because REL-1 (which deploys PR-1/#509 with the guarded version) runs *after* this step, **do not run the production copy.** First stage the guarded PR-1 script — either land #509 before this step, or copy the guarded script onto the VM and verify its `--expect-count`/`--expect-fingerprint` flags exist — then run that. Otherwise the "guarded backfill" instruction below silently executes the unguarded predicate-wide update.
+
+After the guarded script is in place: DB backup + candidate snapshot, run the guarded backfill `--apply` (with the dry-run's exact `--expect-*` values), prove 0 violations / unchanged row count / empty re-dry-run. The next two real rounds must stay clean.
 
 ### REL-1 — Application deploy (owner)
 
@@ -161,9 +163,9 @@ References: scikit-learn probability calibration guide; Google production-ML mon
 ### ET Performance v3 (shadow)
 
 - Common telemetry epoch **2026-03-24+**; canonical `round_id`, `rounds.is_valid`, human gates for **all** PCS and proximity counters; identical denominator window for crossfire/trade/clutch rates (no more all-time counts divided by short-window denominators).
-- `proximity_processed_files` gains `tracker_version`, `round_key`, `capabilities JSONB` so the formula can distinguish a true 0 from telemetry that was never captured.
+- `proximity_processed_files` gains `tracker_version`, `round_key`, `capabilities JSONB`. **The columns alone are not sufficient:** the current tracker emits only the coarse `# PROXIMITY_TRACKER_V6` header (stored as integer version 6), and an optional section (e.g. AIM_LOCK) is written only when it has rows — so an *enabled* feature with zero events is byte-identical to a *disabled* one. Distinguishing a true 0 from "never captured" therefore requires the Lua tracker to emit an explicit per-feature capability manifest AND the parser to persist it into `capabilities`. Until that lands, the v3 scorer must NOT infer coverage from a value equalling its neutral default (it would misclassify observed zeros) — this is why v3 currently ranks all observed values and stays shadow-only.
 - Formula fix isolated from tuning: keep absolute v2 weights, remove the incorrect centering constant, invert "lower is better" metrics first:
-  `score = Σ abs(weight) * directed_midrank_percentile`, where `directed = percentile if weight > 0 else 1 - percentile`. Absolute weights sum to 1, so the median profile is mathematically 0.50.
+  `score = Σ abs(weight) * directed_midrank_percentile`, where `directed = percentile if weight > 0 else 1 - percentile`. Each metric column has mean 0.5 and the absolute weights sum to 1, so the population **mean** is mathematically 0.50 (this is the AUD-007 centering the v2 constant only claimed). The **median** is empirical — near, but not forced to, 0.50 — because a weighted sum of midrank columns is not median-preserving for mixed rankings.
 - Eligibility: ≥20 valid rounds and ≥80 % telemetry-round coverage. API returns `formula_version`, `observation_start/end`, coverage, `eligible`, `unrated_reasons`, per-metric sample size.
 - v2 stays public; v3 runs shadow for ≥30 days and ≥8 session dates.
 - **Promotion gate:** ≥20 eligible players, split-half Spearman ≥ 0.70, `abs(corr(score, coverage)) ≤ 0.15`, leave-one-family-out median rank shift ≤ 3. Every shift of more than five places between v2 and v3 gets a documented explanation (data window, missingness, or formula effect). Owner reviews top/bottom and role/class slices before v3 is user-visible.
@@ -262,7 +264,7 @@ et_performance_v3 += abs(weight) * directed
 
 ## 12. Definition of Done
 
-- Production runs a release-identical Lua tracker and produces no impossible aim-lock events.
+- Production runs the **approved release Lua tracker** — identical to the repo artifact except the single intentional `shot_fired = true` line (§OPS-LUA), verified by a hash over that adjusted artifact or a diff gate that whitelists exactly that line — and produces no impossible aim-lock events. (Byte-identity to the repo is deliberately NOT the criterion: the repo ships `shot_fired = false`.)
 - The migration ledger is complete, checksum-validated, and can no longer be skipped by a deploy.
 - Malformed host inputs never reach application routing; the upstream advisory is absent from the canonical environments (or explicitly mitigated + time-boxed).
 - #496/#497 and the Good Night wave are deployed and confirmed against known production cases (session 134 = 8 maps; betting closes after map one).

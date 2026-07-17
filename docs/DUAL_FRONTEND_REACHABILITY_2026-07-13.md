@@ -48,8 +48,10 @@ le zmožnost renderiranja — dejansko dosegljive so le MODERN route iz registry
 | `Availability.tsx` | availability | legacy | ne |
 | `Admin.tsx` | admin | legacy | ne |
 
-("Zbildan chunk" = obstaja committan v `website/static/modern/chunks/` iz preteklega builda;
-ker viewId ni MODERN, se nikoli ne mounta = mrtev build output, ne mrtva koda.)
+("Zbildan chunk" = **generiran ob deployu** v `website/static/modern/chunks/`, NE committan —
+`.gitignore` izključuje `website/static/modern/`, `scripts/deploy_release.sh` (korak 3c) pa
+direktorij zgradi in atomično zamenja ob vsakem deployu. Ker viewId ni MODERN, se ta lazy chunk
+nikoli ne mounta = mrtev build **artefakt**, ne mrtva koda.)
 
 ## Priporočilo
 
@@ -58,7 +60,13 @@ ker viewId ni MODERN, se nikoli ne mounta = mrtev build output, ne mrtva koda.)
 - **Maintenance opomba:** ker `route-host.tsx` lazy-importa vseh 25, mora modern build
   prevesti tudi teh 21 → morajo ostati **TS-valid / build-clean**, sicer prihodnji poln React
   cutover pade. To je edina cena hranjenja.
-- **Kozmetika (opcijsko, nizka prio):** committani mrtvi chunki (Home/Records/… ki niso MODERN)
-  se lahko ob naslednjem čistem buildu pomečejo; brez funkcijskega vpliva.
-- **Za promocijo strani v LIVE React:** flipni njen `mode` v `route-registry.js` na `MODERN`
-  (enovrstična sprememba) + poskrbi da chunk je zbildan. To je celoten "cutover" korak na stran.
+- **Kozmetika (opcijsko, nizka prio):** neaktivni chunki (Home/Records/… ki niso MODERN) so
+  zgolj deploy-generiran build output, ne committani — čist Vite build jih tako ali tako regenerira
+  vse (lazy-importi). **NE briši ročno `website/static/modern/`** na živem: 4 žive modern route
+  (proximity-player/replay/teams, skill-rating) strežejo iz tega direktorija in bi šle offline.
+- **Za promocijo strani v LIVE React:** flipni njen `mode` v `route-registry.js` na `MODERN` +
+  poskrbi da chunk je zbildan. **Opozorilo za aliasirane route:** Records in Hall of Fame se v
+  `route-registry.js` razrešita na `viewId: 'record-book'`, medtem ko `route-host.tsx` izpostavlja
+  ključa `records` in `hall-of-fame` — flip aliasovega `mode` je zaobiden (`parseHash` vrne
+  `record-book`), flip same `record-book` definicije pa poskuša mountati neobstoječo modern route.
+  Ti dve strani zato rabita **spremembo route-key mappinga**, ne le enovrstičnega mode flipa.
