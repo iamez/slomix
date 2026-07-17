@@ -20,11 +20,15 @@ logger = logging.getLogger(__name__)
 # FORMULA CONFIG — edit this to tweak scoring
 # ═══════════════════════════════════════════════════════════════════════════
 
-FORMULA_VERSION = "1.0"
+# Canonical version bumped 1.0 → 2.0: this commit changes the actual scores
+# (midrank normalization + coverage gating), so get_formula_config(), the
+# formula registry, and the UI subtitle must not keep advertising v1.0 while
+# responses carry prox-web-v2.0 (Codex review on #512).
+FORMULA_VERSION = "2.0"
 # Quality-contract semantics (audit AUD-008): a failed source withholds the
 # ranking instead of silently substituting neutral 0.5; ties use midrank; a
 # player is scored only above MIN_METRIC_WEIGHT_COVERAGE of real (non-missing)
-# metric weight. Different semantics ⇒ a distinct, additive version string.
+# metric weight. The detailed variant string carried in score responses.
 FORMULA_VERSION_QUALITY = "prox-web-v2.0"
 
 # Minimum engagements/tracks to be scored (prevents noisy data)
@@ -174,18 +178,6 @@ def _compute_category_score(
     return round(score, 2), breakdown
 
 
-def _total_metric_weight() -> float:
-    """Sum of every metric's within-category weight across all categories."""
-    return sum(
-        m["weight"]
-        for cat in METRICS.values()
-        for m in cat["metrics"].values()
-    )
-
-
-_TOTAL_METRIC_WEIGHT = _total_metric_weight()
-
-
 def _metric_effective_weights() -> dict[str, float]:
     """Each metric's share of the OVERALL composite.
 
@@ -256,7 +248,7 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
     if any(not s["success"] for s in sources):
         return _degraded(sources)
 
-    def _ok(players, coverage=None):
+    def _ok(players, coverage=None, dropped=0):
         # Response-level coverage reflects the ACTUAL returned players (min of
         # their per-player coverage), not a hard-coded 1.0 that misrepresented
         # the quality metadata (Copilot review on #512). Empty → 0.0.
@@ -273,6 +265,10 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
                 "total_sources": len(sources),
                 "failed_sources": [],
                 "metric_weight_coverage": round(coverage, 3),
+                # Always present so the quality-contract shape doesn't depend on
+                # the dataset (empty/healthy responses carried it only after the
+                # scoring loop before) — Codex review on #512.
+                "below_coverage_dropped": dropped,
             },
             "players": players,
         }
@@ -379,9 +375,7 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
     for i, r in enumerate(results):
         r["rank"] = i + 1
 
-    out = _ok(results)
-    out["quality"]["below_coverage_dropped"] = below_coverage
-    return out
+    return _ok(results, dropped=below_coverage)
 
 
 def _sub_score(breakdowns: dict, cat_key: str, metric_keys: list[str]) -> float:

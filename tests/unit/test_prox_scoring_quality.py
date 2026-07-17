@@ -110,6 +110,12 @@ async def test_any_source_failure_returns_degraded(monkeypatch):
     assert result["players"] == []
 
 
+def test_canonical_formula_version_is_v2():
+    """The canonical FORMULA_VERSION was bumped to 2.0 so it no longer advertises
+    v1.0 while responses carry prox-web-v2.0 (Codex #512)."""
+    assert prox_scoring.FORMULA_VERSION == "2.0"
+
+
 @pytest.mark.asyncio
 async def test_healthy_sources_but_no_data_is_ok_empty():
     result = await compute_prox_scores(FakeDB(players={}))
@@ -117,6 +123,9 @@ async def test_healthy_sources_but_no_data_is_ok_empty():
     assert result["quality"]["ranking_available"] is False  # no players
     assert result["players"] == []
     assert result["quality"]["failed_sources"] == []
+    # Quality shape is dataset-independent: below_coverage_dropped is always
+    # present, even on an empty healthy response (Codex #512).
+    assert result["quality"]["below_coverage_dropped"] == 0
 
 
 @pytest.mark.asyncio

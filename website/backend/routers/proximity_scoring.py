@@ -695,6 +695,7 @@ async def get_prox_scores(
     the 30-day global score. round_start_unix disambiguates a repeated map/round.
     """
     from website.backend.services.prox_scoring import (
+        FORMULA_VERSION,
         FORMULA_VERSION_QUALITY,
         compute_prox_scores,
     )
@@ -706,13 +707,23 @@ async def get_prox_scores(
             round_start_unix=round_start_unix,
         )
         players = result.get("players", [])
-        quality = result.get("quality", {})
+        quality = dict(result.get("quality", {}))
+        limited = players[:limit]
+        # Recompute the response-level coverage/availability over the RETURNED
+        # slice, not the full result: otherwise a low-coverage player omitted by
+        # the limit still drags the reported coverage down, and limit=0 would
+        # report ranking_available=true with an empty ranking (Codex #512).
+        if result.get("status") != "degraded":
+            quality["ranking_available"] = bool(limited)
+            quality["metric_weight_coverage"] = round(
+                min((p.get("metric_weight_coverage", 0.0) for p in limited), default=0.0), 3
+            )
         scoped = bool(parsed_date or map_name or round_number is not None or round_start_unix is not None)
         return {
             # AUD-008: propagate degraded status + quality metadata so callers
             # never mistake a data failure for a real (all-neutral) ranking.
             "status": result.get("status", "ok"),
-            "version": "1.0",  # legacy field kept for back-compat
+            "version": FORMULA_VERSION,  # canonical formula version (now 2.0)
             "formula_version": result.get("formula_version", FORMULA_VERSION_QUALITY),
             "quality": quality,
             "range_days": range_days,
@@ -724,7 +735,7 @@ async def get_prox_scores(
                 "round_start_unix": round_start_unix,
             },
             "player_count": len(players),
-            "players": players[:limit],
+            "players": limited,
         }
     except Exception:
         logger.exception("prox-scores failed")
