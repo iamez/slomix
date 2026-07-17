@@ -62,8 +62,13 @@ DRY-RUN; run `db_backup.sh` first, then `--apply`.
 ```
 python -m scripts.backfill_orphan_r2            # dry-run (≈48 R2 rounds today, match_id-paired)
 python -m scripts.backfill_orphan_r2 --apply    # marks round_status='orphan_r2' + is_valid=FALSE
-python -m scripts.backfill_aim_lock_clamp       # dry-run (≈56 rows, ~726k phantom ms today)
-python -m scripts.backfill_aim_lock_clamp --apply
+python -m scripts.backfill_aim_lock_clamp       # dry-run — prints count/phantom-ms/latest-date/fingerprint/db
+# --apply is now GUARDED: copy the EXACT --expect-* values the dry-run prints
+# (a changed candidate set or wrong target DB aborts before writing). e.g.:
+python -m scripts.backfill_aim_lock_clamp --apply \
+    --expect-count 56 --expect-phantom-ms 726050 \
+    --expect-latest-date 2026-06-11 --expect-fingerprint <sha256-from-dry-run> \
+    --expect-db <host:port/dbname-from-dry-run>
 ```
 
 ## After go-live

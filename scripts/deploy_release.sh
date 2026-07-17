@@ -57,7 +57,7 @@ for arg in "$@"; do
     --dry-run)         DRY_RUN=true ;;
     --skip-migrations) SKIP_MIGRATIONS=true ;;
     --skip-flags)      SKIP_FLAGS=true ;;
-    *)                 echo "WARN: unknown flag $arg (ignored)" >&2 ;;
+    *)                 echo "ERROR: unknown flag $arg" >&2; exit 1 ;;
   esac
 done
 
@@ -151,12 +151,81 @@ sudo_run() {
 #     `systemctl start` is idempotent so retrying both services is safe.
 #   - Trap function inlines the SSH+sudo call instead of using `sudo_run`,
 #     because `sudo_run` calls `fail` on error which would re-enter the trap.
+#
+# Second recovery window (Codex review on #509): steps 3/3b/3c check out the
+# new tag and rewrite the on-disk frontend (cache-buster + React build) while
+# the OLD services are still running (they don't stop until step 4). If the
+# React build (3c) or any command in that window fails, the old backend would
+# keep serving newly-rewritten frontend assets — a mixed old-backend/new-
+# frontend state. So when we fail AFTER the checkout but BEFORE services stop,
+# restore the previous checkout so the still-running services match their
+# assets again.
+CHECKOUT_CHANGED=false
+MODERN_SWAPPED=false
 SERVICES_STOPPED=false
 SERVICES_RESTARTED=false
 
-recover_services_on_failure() {
+recover_on_failure() {
   local rc=$?
-  if $DRY_RUN || [ "$rc" -eq 0 ] || ! $SERVICES_STOPPED || $SERVICES_RESTARTED; then
+  if $DRY_RUN || [ "$rc" -eq 0 ]; then
+    exit "$rc"
+  fi
+
+  # Window 1: failed after checkout/cache-bust/build but before services were
+  # stopped. Roll the VM checkout back to the pre-deploy commit so the running
+  # old backend and the on-disk frontend come from the same commit again. Also
+  # restore the gitignored modern bundle: `git checkout -f` does NOT touch
+  # website/static/modern (it's ignored), but step 3c swapped the new build in
+  # and kept the old one as static/modern.prev — move it back so the still-old
+  # services don't serve the new modern bundle (Codex #509).
+  if $CHECKOUT_CHANGED && ! $SERVICES_STOPPED; then
+    echo "" >&2
+    warn "═════════════════════════════════════════════════════════════"
+    warn "Deploy aborted (rc=$rc) after checkout but before services"
+    warn "stopped. Restoring VM checkout to $CURRENT_COMMIT + previous"
+    warn "modern bundle so the still-running services match their assets."
+    warn "═════════════════════════════════════════════════════════════"
+    local restore_rc=0
+    # Only restore modern.prev if THIS deploy actually swapped it in (step 3c);
+    # otherwise modern.prev is a stale copy from a prior deploy and restoring it
+    # would replace the current-correct bundle (Codex #509).
+    local modern_restore=""
+    if $MODERN_SWAPPED; then
+      modern_restore="rm -rf website/static/modern.new; \
+        if [ -d website/static/modern.prev ]; then \
+          rm -rf website/static/modern && \
+          mv website/static/modern.prev website/static/modern && \
+          echo '  restored previous modern bundle from static/modern.prev'; \
+        fi;"
+    fi
+    # `git checkout -f` restores the COMMITTED legacy files, discarding the
+    # ?v=<sha> cache-busters step 3b had applied on disk (the ones the old
+    # services were actually serving). Re-bump any committed ?v= query to the
+    # restored commit's SHA so the served assets carry a deterministic buster
+    # again (Codex #509); bare (never-busted) imports stay as committed.
+    # `git checkout -f` must stay FATAL (its failure means the rollback itself
+    # failed), so wrap ONLY the non-critical re-bump in a group with its own
+    # `|| true` — a trailing `|| true` on the whole chain would swallow a
+    # checkout failure and let the following `git log` report success (Codex #509).
+    $SSH "cd $VM_PATH && git checkout -f $CURRENT_COMMIT && { \
+      RSHA=\$(git rev-parse --short HEAD); \
+      sed -i \"s|?v=[A-Za-z0-9._-]\\+|?v=\$RSHA|g\" website/index.html website/js/*.js 2>/dev/null || true; \
+      $modern_restore \
+      git log --oneline -1; \
+    }" || restore_rc=$?
+    if [ "$restore_rc" -eq 0 ]; then
+      warn "Checkout restored. The old services were never stopped, so no"
+      warn "restart is needed. Investigate the failure (rc=$rc) before re-deploying."
+    else
+      warn "Checkout restore FAILED (rc=$restore_rc). Manual intervention:"
+      warn "  ssh -i $VM_KEY $VM_USER@$VM_HOST 'cd $VM_PATH && git checkout -f $CURRENT_COMMIT'"
+    fi
+    exit "$rc"
+  fi
+
+  # Window 2: failed after services were stopped, before they were confirmed
+  # restarted — auto-restart both on whatever code is currently checked out.
+  if ! $SERVICES_STOPPED || $SERVICES_RESTARTED; then
     exit "$rc"
   fi
   echo "" >&2
@@ -183,7 +252,7 @@ recover_services_on_failure() {
   fi
   exit "$rc"
 }
-trap recover_services_on_failure EXIT
+trap recover_on_failure EXIT
 
 # ─── Header ───────────────────────────────────────────────────────────────────
 MIG_DESC="SKIP"
@@ -263,6 +332,10 @@ run_remote "cd $VM_PATH && \
 # refuse with "Your local changes would be overwritten by checkout".
 # Safe because the allow-list guard above already proved nothing else is dirty.
 run_remote "cd $VM_PATH && git fetch origin --tags && git checkout -f $TAG && git log --oneline -1"
+# Arm the checkout-rollback recovery window: from here until services stop
+# (step 4), a failure restores $CURRENT_COMMIT so old services don't serve
+# newly-rewritten frontend assets (Codex review on #509).
+$DRY_RUN || CHECKOUT_CHANGED=true
 
 # ─── 3b. Auto-bump JS cache-buster to current git SHA (CF edge cache purge) ───
 # Why: every <script src="..."> in index.html and every `from './foo.js'`
@@ -317,27 +390,35 @@ run_remote "cd $VM_PATH && \
 # set modern-route-host.js's BUILD_VERSION const to $SHA so the modern entry gets
 # the same cache-buster the legacy assets got in 3b (the 3b `?v=` sed can't match
 # its `?v=${BUILD_VERSION}` template). Non-fatal: a build failure logs and keeps
-# the previous build — legacy routes deploy regardless.
+# the previous build. A failed or missing build is FATAL (audit remediation
+# plan U1): four live routes depend on it, and this step runs BEFORE services
+# stop, so aborting here causes no downtime.
 log "3c/8 Build modern (React) frontend + atomic verify + SHA cache-bust"
 run_remote "cd $VM_PATH && \
   SHA=\$(git rev-parse --short HEAD) && \
-  if command -v npm >/dev/null 2>&1; then \
-    echo '  building website/frontend (vite) → static/modern.new' && \
-    ( cd website/frontend && npm ci --no-audit --no-fund && npm run build -- --outDir ../static/modern.new --emptyOutDir ) || echo '  WARN: modern build failed (non-fatal)'; \
-    if [ -s website/static/modern.new/route-host.js ]; then \
-      echo '  build OK — atomic swap into static/modern' && \
-      rm -rf website/static/modern.prev && \
-      { [ -d website/static/modern ] && mv website/static/modern website/static/modern.prev || true; } && \
-      mv website/static/modern.new website/static/modern && \
-      sed -i \"s|const BUILD_VERSION = '[^']*'|const BUILD_VERSION = '\$SHA'|\" website/js/modern-route-host.js && \
-      echo \"  modern BUILD_VERSION set to \$SHA\"; \
-    else \
-      echo '  keeping previous static/modern (no fresh build)' >&2 && \
-      rm -rf website/static/modern.new || true; \
-    fi; \
+  if ! command -v npm >/dev/null 2>&1; then \
+    echo 'ERROR: npm not found on VM — cannot build the 4 live React routes' >&2; \
+    exit 1; \
+  fi && \
+  echo '  building website/frontend (vite) → static/modern.new' && \
+  ( cd website/frontend && npm ci --no-audit --no-fund && npm run build -- --outDir ../static/modern.new --emptyOutDir ) && \
+  if [ -s website/static/modern.new/route-host.js ]; then \
+    echo '  build OK — set BUILD_VERSION, then atomic swap LAST' && \
+    sed -i \"s|const BUILD_VERSION = '[^']*'|const BUILD_VERSION = '\$SHA'|\" website/js/modern-route-host.js && \
+    rm -rf website/static/modern.prev && \
+    { [ -d website/static/modern ] && mv website/static/modern website/static/modern.prev || true; } && \
+    mv website/static/modern.new website/static/modern && \
+    echo \"  modern BUILD_VERSION set to \$SHA + bundle swapped\"; \
   else \
-    echo '  WARN: npm not found on VM — skipping modern build (React routes keep previous build)' >&2; \
+    echo 'ERROR: build produced no route-host.js — keeping previous static/modern and aborting' >&2 && \
+    rm -rf website/static/modern.new; \
+    exit 1; \
   fi"
+# The atomic swap succeeded → static/modern.prev now holds THIS deploy's old
+# bundle. Only then may a rollback restore it (Codex #509): a failure during
+# npm ci / the Vite build leaves modern.prev as a STALE copy from the previous
+# deploy, which must NOT be restored over the current-and-correct bundle.
+$DRY_RUN || MODERN_SWAPPED=true
 
 # ─── 4. Stop services (clean restart) ─────────────────────────────────────────
 log "4/8  Stop services before migration"
@@ -346,30 +427,35 @@ sudo_run "systemctl stop slomix-web slomix-bot"
 # step 7 will trigger an auto-restart of both services.
 SERVICES_STOPPED=true
 
-# ─── 5. Apply migrations ──────────────────────────────────────────────────────
-if ! $SKIP_MIGRATIONS && [ ${#MIGRATIONS[@]} -gt 0 ]; then
-  log "5/8  Apply ${#MIGRATIONS[@]} migration(s) (each must be idempotent / IF NOT EXISTS)"
-  for MIG in "${MIGRATIONS[@]}"; do
-    log "  -> $MIG"
-    run_remote "cd $VM_PATH && \
-      PGPASSWORD=\$(grep -E '^(DB|POSTGRES)_PASSWORD=' .env | head -1 | cut -d= -f2- | tr -d '\"') \
-      psql -h localhost -U etlegacy_user -d etlegacy -v ON_ERROR_STOP=1 -f migrations/$MIG"
-  done
-  # After successful psql applies, record the rows in schema_migrations so
-  # the migration runner doesn't treat them as pending next time. Uses the
-  # `--mark` mode (added in PR #257) which inserts without re-running SQL.
-  # Falls back to a warning if apply_migrations.py is missing or errors —
-  # we don't want a tracking-table glitch to fail the whole deploy.
-  log "  Recording migrations in schema_migrations via apply_migrations.py --mark"
-  run_remote "cd $VM_PATH && \
-    if [ -f scripts/apply_migrations.py ] && [ -x venv/bin/python ]; then \
-      venv/bin/python scripts/apply_migrations.py --mark ${MIGRATIONS[*]} \
-        || echo 'WARN: --mark failed; reconcile manually after deploy'; \
-    else \
-      echo 'WARN: apply_migrations.py or venv/bin/python missing; skipping --mark'; \
-    fi"
+# ─── 5. Apply migrations via the runner ───────────────────────────────────────
+# The runner (scripts/apply_migrations.py) applies each migration and its
+# schema_migrations ledger row in the SAME transaction and exits non-zero on
+# any failure. The previous raw `psql -f` + best-effort `--mark` path silently
+# skipped ledger recording when its interpreter was missing — that is exactly
+# how production drifted for migrations 052-060 (audit AUD-002). The
+# interpreter is pinned to the production web venv; a missing interpreter,
+# an apply failure, or post-apply ledger drift each abort the deploy.
+VM_PY="venv-web/bin/python"
+if $SKIP_MIGRATIONS; then
+  log "5/8  Skipping migrations (--skip-migrations)"
 else
-  log "5/8  Skipping migrations (--skip-migrations or empty MIGRATIONS=)"
+  run_remote "cd $VM_PATH && \
+    if [ ! -x $VM_PY ]; then \
+      echo \"ERROR: $VM_PY missing on VM — refusing to run migrations without the ledger runner\" >&2; \
+      exit 1; \
+    fi"
+  if [ ${#MIGRATIONS[@]} -gt 0 ]; then
+    log "5/8  Apply ${#MIGRATIONS[@]} migration(s) via apply_migrations.py (transactional + ledger)"
+    run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --only ${MIGRATIONS[*]}"
+  else
+    log "5/8  No migrations queued — validating ledger only"
+  fi
+  # Validate ALWAYS (even with an empty MIGRATIONS list): a release config that
+  # forgot to list a migration the tag actually adds would otherwise start the
+  # new code against the old schema with no error. --validate catches the
+  # omitted pending migration (and any drift) and aborts the deploy (Codex #509).
+  log "  Validating migration ledger (pending/failed/missing/checksum drift aborts deploy)"
+  run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --validate"
 fi
 
 # ─── 6. Update .env flags (idempotent, sudo'd) ────────────────────────────────
