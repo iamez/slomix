@@ -1419,11 +1419,25 @@ export interface ProxScorePlayer {
   prox_overall: number;
   prox_radar: ProxRadarAxis[];
   breakdown: Record<string, ProxCategoryBreakdown>;
+  // Quality contract (AUD-008): fraction of composite weight backed by REAL
+  // data. A single-player request returns a below-threshold player flagged
+  // here; consumers must not present a mostly-neutral-filled score as real.
+  metric_weight_coverage?: number;
+  missing_metrics?: string[];
+}
+
+export interface ProxScoreQuality {
+  ranking_available: boolean;
+  metric_weight_coverage: number;
+  failed_sources: string[];
+  below_coverage_dropped?: number;
 }
 
 export interface ProxScoresResponse {
   status: string;
   version: string;
+  formula_version?: string;
+  quality?: ProxScoreQuality;
   range_days: number;
   player_count: number;
   players: ProxScorePlayer[];
