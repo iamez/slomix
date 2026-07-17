@@ -17,6 +17,11 @@
 .env.bak*
 .env.*.bak
 *.env.bak
+# The documented rotation naming is .env.backup.YYYYMMDD_HHMMSS (see
+# docs/SECRETS_MANAGEMENT.md); the generic *.backup rule below does NOT catch
+# the timestamp suffix, so ignore .env.backup* explicitly (Codex review #514).
+.env.backup
+.env.backup*
 .prodenv
 .envcopy
 .db_credentials

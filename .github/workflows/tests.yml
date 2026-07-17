@@ -121,14 +121,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - name: ShellCheck scripts/*.sh
-        # Gate the deploy/ops shell scripts at error severity (AUD-012). These
-        # run against production; a quoting/`cd` slip is a real hazard. Style
-        # warnings (SC2006 etc.) are not gated yet — ratchet to -S warning
-        # once the existing style debt is cleared.
+      - name: ShellCheck all tracked shell scripts
+        # Gate EVERY tracked shell script at error severity (AUD-012), not just
+        # scripts/*.sh: install.sh, slomix_vm_setup.sh, website/start_website.sh,
+        # tools/*.sh and the sourced scripts/release_configs/*.sh are all part of
+        # the production bootstrap/release surface, so a quoting/`cd` slip there
+        # is just as real a hazard (Copilot/Codex review on #514). Enumerating via
+        # `git ls-files '*.sh'` means new scripts are covered automatically and
+        # the list can't drift. Style warnings (SC2006 etc.) are not gated yet —
+        # ratchet to -S warning once the existing style debt is cleared.
         run: |
           sudo apt-get update && sudo apt-get install -y shellcheck
-          shellcheck -S error scripts/*.sh
+          mapfile -t sh_files < <(git ls-files '*.sh')
+          printf 'ShellCheck: %d tracked shell script(s)\n' "${#sh_files[@]}"
+          shellcheck -S error "${sh_files[@]}"
 
   security:
     name: Security (pip-audit + bandit)
@@ -165,6 +171,19 @@ jobs:
           # slomix_vm_setup.sh) — audit it too so the web app can't lag on a
           # vulnerable pin. It lists no starlette/paramiko, so no ignores needed.
           pip-audit -r website/requirements.txt --progress-spinner=off
+
+      - name: Website dependency consistency (isolated pip check)
+        # The web service deploys from website/requirements.txt into its OWN venv
+        # (rsync_deploy_vm.sh / slomix_vm_setup.sh), so an incompatible pin there
+        # slips past the root `pip check` in the python job, which resolves the
+        # dev/root manifests. Install the web manifest into a throwaway venv and
+        # check it in isolation so the deployed web venv can't be left broken
+        # (Codex review on #514).
+        run: |
+          python -m venv /tmp/webvenv
+          /tmp/webvenv/bin/pip install --upgrade pip
+          /tmp/webvenv/bin/pip install -r website/requirements.txt
+          /tmp/webvenv/bin/pip check
 
       - name: Static security scan (bandit)
         # Config in pyproject.toml [tool.bandit]: -ll = medium+ severity. B608 is a
