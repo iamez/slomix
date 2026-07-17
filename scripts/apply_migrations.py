@@ -148,11 +148,20 @@ def _mask_sql_noise(sql: str) -> str:
     return "".join(out)
 
 
+# ABORT (= ROLLBACK) and END WORK/TRANSACTION (= COMMIT) are transaction-control
+# ALIASES the scanner must also catch (Codex #509). Bare `END;` (a COMMIT alias)
+# is deliberately NOT matched: it is indistinguishable from a `CASE … END` close
+# without statement parsing, and 5 repo migrations use CASE — our migrations end
+# transactions with an explicit COMMIT, not bare END.
 _TXN_TOKEN = re.compile(
-    r"\b(?:BEGIN|COMMIT|ROLLBACK|SAVEPOINT|START\s+TRANSACTION|END\s+TRANSACTION)\b",
+    r"\b(?:BEGIN|COMMIT|ROLLBACK|ABORT|SAVEPOINT"
+    r"|START\s+TRANSACTION|END\s+(?:TRANSACTION|WORK))\b",
     re.IGNORECASE,
 )
 _OPEN_TOKEN = re.compile(r"^(?:BEGIN|START\s+TRANSACTION)$", re.IGNORECASE)
+# `COMMIT/ROLLBACK AND CHAIN` immediately opens a NEW transaction, which would
+# silently break the runner's atomic SQL+ledger commit — reject outright.
+_CHAIN_TOKEN = re.compile(r"\bAND\s+CHAIN\b", re.IGNORECASE)
 
 
 def unwrap_outer_transaction(sql: str) -> str:
@@ -167,6 +176,11 @@ def unwrap_outer_transaction(sql: str) -> str:
     MigrationRejected: such a file needs restructuring, not guessing.
     """
     masked = _mask_sql_noise(sql)
+    if _CHAIN_TOKEN.search(masked):
+        raise MigrationRejected(
+            "COMMIT/ROLLBACK AND CHAIN opens a new transaction — restructure the "
+            "migration so the runner owns the single transaction"
+        )
     tokens = list(_TXN_TOKEN.finditer(masked))
     if not tokens:
         return sql

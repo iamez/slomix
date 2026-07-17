@@ -135,6 +135,29 @@ def test_unwrap_rejects_rollback():
         unwrap_outer_transaction(sql)
 
 
+def test_unwrap_rejects_transaction_aliases():
+    """ABORT (=ROLLBACK) and END WORK (=COMMIT) are transaction-control aliases
+    that must be rejected too (Codex #509)."""
+    for sql in ("BEGIN;\nSELECT 1;\nABORT;\n", "BEGIN;\nSELECT 1;\nEND WORK;\n"):
+        with pytest.raises(MigrationRejected):
+            unwrap_outer_transaction(sql)
+
+
+def test_unwrap_rejects_and_chain():
+    """COMMIT/ROLLBACK AND CHAIN opens a new transaction → reject (Codex #509)."""
+    with pytest.raises(MigrationRejected):
+        unwrap_outer_transaction("BEGIN;\nSELECT 1;\nCOMMIT AND CHAIN;\n")
+
+
+def test_unwrap_allows_case_end():
+    """A bare END closing a CASE expression must NOT be mistaken for a
+    transaction-ending alias (5 repo migrations use CASE)."""
+    sql = "BEGIN;\nSELECT CASE WHEN x > 0 THEN 1 ELSE 0 END FROM t;\nCOMMIT;\n"
+    body = unwrap_outer_transaction(sql)
+    assert "CASE WHEN" in body
+    assert "BEGIN" not in body and "COMMIT" not in body
+
+
 def test_unwrap_ignores_tokens_in_comments_and_strings():
     sql = (
         "-- BEGIN; not a wrapper\n"

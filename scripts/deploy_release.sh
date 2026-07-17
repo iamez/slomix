@@ -198,7 +198,14 @@ recover_on_failure() {
           echo '  restored previous modern bundle from static/modern.prev'; \
         fi;"
     fi
+    # `git checkout -f` restores the COMMITTED legacy files, discarding the
+    # ?v=<sha> cache-busters step 3b had applied on disk (the ones the old
+    # services were actually serving). Re-bump any committed ?v= query to the
+    # restored commit's SHA so the served assets carry a deterministic buster
+    # again (Codex #509); bare (never-busted) imports stay as committed.
     $SSH "cd $VM_PATH && git checkout -f $CURRENT_COMMIT && \
+      RSHA=\$(git rev-parse --short HEAD) && \
+      sed -i \"s|?v=[A-Za-z0-9._-]\\+|?v=\$RSHA|g\" website/index.html website/js/*.js 2>/dev/null || true; \
       $modern_restore \
       git log --oneline -1" || restore_rc=$?
     if [ "$restore_rc" -eq 0 ]; then
@@ -391,12 +398,12 @@ run_remote "cd $VM_PATH && \
   echo '  building website/frontend (vite) → static/modern.new' && \
   ( cd website/frontend && npm ci --no-audit --no-fund && npm run build -- --outDir ../static/modern.new --emptyOutDir ) && \
   if [ -s website/static/modern.new/route-host.js ]; then \
-    echo '  build OK — atomic swap into static/modern' && \
+    echo '  build OK — set BUILD_VERSION, then atomic swap LAST' && \
+    sed -i \"s|const BUILD_VERSION = '[^']*'|const BUILD_VERSION = '\$SHA'|\" website/js/modern-route-host.js && \
     rm -rf website/static/modern.prev && \
     { [ -d website/static/modern ] && mv website/static/modern website/static/modern.prev || true; } && \
     mv website/static/modern.new website/static/modern && \
-    sed -i \"s|const BUILD_VERSION = '[^']*'|const BUILD_VERSION = '\$SHA'|\" website/js/modern-route-host.js && \
-    echo \"  modern BUILD_VERSION set to \$SHA\"; \
+    echo \"  modern BUILD_VERSION set to \$SHA + bundle swapped\"; \
   else \
     echo 'ERROR: build produced no route-host.js — keeping previous static/modern and aborting' >&2 && \
     rm -rf website/static/modern.new; \
@@ -424,18 +431,26 @@ SERVICES_STOPPED=true
 # interpreter is pinned to the production web venv; a missing interpreter,
 # an apply failure, or post-apply ledger drift each abort the deploy.
 VM_PY="venv-web/bin/python"
-if ! $SKIP_MIGRATIONS && [ ${#MIGRATIONS[@]} -gt 0 ]; then
-  log "5/8  Apply ${#MIGRATIONS[@]} migration(s) via apply_migrations.py (transactional + ledger)"
+if $SKIP_MIGRATIONS; then
+  log "5/8  Skipping migrations (--skip-migrations)"
+else
   run_remote "cd $VM_PATH && \
     if [ ! -x $VM_PY ]; then \
       echo \"ERROR: $VM_PY missing on VM — refusing to run migrations without the ledger runner\" >&2; \
       exit 1; \
     fi"
-  run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --only ${MIGRATIONS[*]}"
-  log "  Validating migration ledger (pending/failed/checksum drift aborts deploy)"
+  if [ ${#MIGRATIONS[@]} -gt 0 ]; then
+    log "5/8  Apply ${#MIGRATIONS[@]} migration(s) via apply_migrations.py (transactional + ledger)"
+    run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --only ${MIGRATIONS[*]}"
+  else
+    log "5/8  No migrations queued — validating ledger only"
+  fi
+  # Validate ALWAYS (even with an empty MIGRATIONS list): a release config that
+  # forgot to list a migration the tag actually adds would otherwise start the
+  # new code against the old schema with no error. --validate catches the
+  # omitted pending migration (and any drift) and aborts the deploy (Codex #509).
+  log "  Validating migration ledger (pending/failed/missing/checksum drift aborts deploy)"
   run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --validate"
-else
-  log "5/8  Skipping migrations (--skip-migrations or empty MIGRATIONS=)"
 fi
 
 # ─── 6. Update .env flags (idempotent, sudo'd) ────────────────────────────────
