@@ -56,6 +56,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-etlegacy_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
+      # This compose serves plain HTTP on localhost, so opt out of secure-only
+      # session cookies by default; the outermost host gate still requires an
+      # explicit TRUSTED_HOSTS or the app aborts at import (AUD-005). Both are
+      # overridable from .env. Compose does NOT auto-inject .env vars that aren't
+      # referenced here, so TRUSTED_HOSTS must be listed (Codex P1 #510).
+      SESSION_HTTPS_ONLY: ${SESSION_HTTPS_ONLY:-false}
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS:-localhost,127.0.0.1}
       WEBSITE_HOST: 0.0.0.0
       WEBSITE_PORT: 8000
       CORS_ORIGINS: http://localhost:7000,http://127.0.0.1:7000

@@ -878,6 +878,11 @@ WEBSITE_RELOAD=false
 
 # ---- Session & Security ----
 SESSION_SECRET=${SESSION_SECRET}
+# Production posture: secure session cookies (HTTPS). Set false for local HTTP.
+SESSION_HTTPS_ONLY=true
+# REQUIRED while SESSION_HTTPS_ONLY=true — outermost Host allow-list (AUD-005).
+# The app refuses to start without it, so it must be generated here.
+TRUSTED_HOSTS=${DOMAIN_NAME},www.${DOMAIN_NAME},localhost,127.0.0.1
 
 # ---- CORS ----
 CORS_ORIGINS=http://localhost:${WEBSITE_PORT},http://127.0.0.1:${WEBSITE_PORT},https://${DOMAIN_NAME}
@@ -900,6 +905,21 @@ LOG_LEVEL=INFO
 EOF
   chmod 640 "$WEBSITE_ENV"
   chown "$WEB_USER:$SLX_GROUP" "$WEBSITE_ENV"
+fi
+
+# Backfill required keys into an EXISTING website .env on upgrade (the heredoc
+# above only runs for a brand-new file). An existing prod env has the now-
+# default SESSION_HTTPS_ONLY=true posture but predates TRUSTED_HOSTS, so the
+# updated backend would abort at import without it (AUD-005; Codex P1 #510).
+if [[ -f "$WEBSITE_ENV" ]]; then
+  if ! grep -q '^TRUSTED_HOSTS=' "$WEBSITE_ENV"; then
+    info "Backfilling TRUSTED_HOSTS into existing $WEBSITE_ENV"
+    printf 'TRUSTED_HOSTS=%s,www.%s,localhost,127.0.0.1\n' "$DOMAIN_NAME" "$DOMAIN_NAME" >> "$WEBSITE_ENV"
+  fi
+  if ! grep -q '^SESSION_HTTPS_ONLY=' "$WEBSITE_ENV"; then
+    info "Backfilling SESSION_HTTPS_ONLY into existing $WEBSITE_ENV"
+    printf 'SESSION_HTTPS_ONLY=true\n' >> "$WEBSITE_ENV"
+  fi
 fi
 
 success ".env files created"
