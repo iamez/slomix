@@ -3741,7 +3741,8 @@ CREATE TABLE public.rounds (
     time_to_beat_seconds integer,
     next_timelimit_minutes integer,
     map_play_seq integer,
-    round_canonical_id character varying(64)
+    round_canonical_id character varying(64),
+    is_valid boolean DEFAULT true NOT NULL
 );
 
 
@@ -7640,6 +7641,13 @@ CREATE INDEX idx_rounds_gaming_session ON public.rounds USING btree (gaming_sess
 --
 
 CREATE INDEX idx_rounds_is_bot_round ON public.rounds USING btree (is_bot_round);
+
+
+--
+-- Name: idx_rounds_is_valid_false; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_rounds_is_valid_false ON public.rounds USING btree (id) WHERE (is_valid = false);
 
 
 --

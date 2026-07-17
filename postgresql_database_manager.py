@@ -406,6 +406,11 @@ class PostgreSQLDatabaseManager:
                     round_stopwatch_state VARCHAR(16),
                     score_confidence VARCHAR(32),
                     time_to_beat_seconds INTEGER,
+                    -- is_valid (migration 057): "counts for stats" flag. Bootstrapped
+                    -- DBs omitted it, so every query using `AND r.is_valid` (ratings,
+                    -- proximity, prediction factors) failed on a fresh install and
+                    -- silently returned neutral/unavailable data (Codex P1 #511).
+                    is_valid BOOLEAN NOT NULL DEFAULT TRUE,
                     UNIQUE(match_id, round_number)
                 )
             ''')
@@ -417,6 +422,14 @@ class PostgreSQLDatabaseManager:
             # EXISTS is a no-op on a freshly-created table.
             await conn.execute('''
                 ALTER TABLE rounds ADD COLUMN IF NOT EXISTS round_canonical_id VARCHAR(64)
+            ''')
+            # Same guard for is_valid (migration 057) on a pre-existing rounds table.
+            await conn.execute('''
+                ALTER TABLE rounds ADD COLUMN IF NOT EXISTS is_valid BOOLEAN NOT NULL DEFAULT TRUE
+            ''')
+            await conn.execute('''
+                CREATE INDEX IF NOT EXISTS idx_rounds_is_valid_false
+                ON rounds (id) WHERE is_valid = FALSE
             ''')
             # Partial UNIQUE index on round_canonical_id (matches schema_postgresql.sql
             # uniq_rounds_canonical_id) — required for the INSERT ... ON CONFLICT
