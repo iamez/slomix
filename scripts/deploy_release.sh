@@ -172,16 +172,27 @@ recover_on_failure() {
 
   # Window 1: failed after checkout/cache-bust/build but before services were
   # stopped. Roll the VM checkout back to the pre-deploy commit so the running
-  # old backend and the on-disk frontend come from the same commit again.
+  # old backend and the on-disk frontend come from the same commit again. Also
+  # restore the gitignored modern bundle: `git checkout -f` does NOT touch
+  # website/static/modern (it's ignored), but step 3c swapped the new build in
+  # and kept the old one as static/modern.prev — move it back so the still-old
+  # services don't serve the new modern bundle (Codex #509).
   if $CHECKOUT_CHANGED && ! $SERVICES_STOPPED; then
     echo "" >&2
     warn "═════════════════════════════════════════════════════════════"
     warn "Deploy aborted (rc=$rc) after checkout but before services"
-    warn "stopped. Restoring VM checkout to $CURRENT_COMMIT so the still-"
-    warn "running services match their on-disk frontend assets."
+    warn "stopped. Restoring VM checkout to $CURRENT_COMMIT + previous"
+    warn "modern bundle so the still-running services match their assets."
     warn "═════════════════════════════════════════════════════════════"
     local restore_rc=0
-    $SSH "cd $VM_PATH && git checkout -f $CURRENT_COMMIT && git log --oneline -1" || restore_rc=$?
+    $SSH "cd $VM_PATH && git checkout -f $CURRENT_COMMIT && \
+      rm -rf website/static/modern.new; \
+      if [ -d website/static/modern.prev ]; then \
+        rm -rf website/static/modern && \
+        mv website/static/modern.prev website/static/modern && \
+        echo '  restored previous modern bundle from static/modern.prev'; \
+      fi; \
+      git log --oneline -1" || restore_rc=$?
     if [ "$restore_rc" -eq 0 ]; then
       warn "Checkout restored. The old services were never stopped, so no"
       warn "restart is needed. Investigate the failure (rc=$rc) before re-deploying."

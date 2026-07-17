@@ -21,7 +21,12 @@ Usage:
     python -m scripts.backfill_aim_lock_clamp                 # dry-run
     python -m scripts.backfill_aim_lock_clamp --apply \\
         --expect-count 56 --expect-phantom-ms 726050 \\
-        --expect-latest-date 2026-06-11 --expect-fingerprint <sha256>
+        --expect-latest-date 2026-06-11 --expect-fingerprint <sha256> \\
+        --expect-db <host:port/dbname>
+
+--expect-db binds the apply to the intended database (host:port/dbname printed
+by the dry-run): a clone/snapshot of production commonly has IDENTICAL candidate
+rows and fingerprint, so without it the guard could mutate the wrong DB.
 
 Run scripts/db_backup.sh first.
 """
@@ -75,6 +80,7 @@ def check_expectations(stats: dict, args) -> list[str]:
         ("phantom-ms", stats["phantom_ms"], args.expect_phantom_ms),
         ("latest-date", str(stats["latest_date"]), args.expect_latest_date),
         ("fingerprint", stats["fingerprint"], args.expect_fingerprint),
+        ("db", stats.get("db_identity"), args.expect_db),
     ]
     for name, measured, expected in checks:
         if expected is None:
@@ -118,6 +124,10 @@ def main() -> int:
                     help="required with --apply: newest violation date (YYYY-MM-DD)")
     ap.add_argument("--expect-fingerprint", default=None,
                     help="required with --apply: candidate-id SHA-256 from dry-run")
+    ap.add_argument("--expect-db", default=None,
+                    help="required with --apply: target DB identity host:port/dbname "
+                         "from dry-run — binds the guard to the intended database so a "
+                         "clone/snapshot with identical candidate rows can't be mutated")
     args = ap.parse_args()
     iv = max(1, args.interval_ms)
 
@@ -125,11 +135,24 @@ def main() -> int:
     conn.autocommit = False
     cur = conn.cursor()
 
+    # Target DB identity: candidate count/fingerprint alone are commonly IDENTICAL
+    # on a restored clone of production, so bind the guard to WHICH database this
+    # is (Codex #509). host:port come from the connection env; current_database()
+    # is authoritative for the name.
+    cur.execute("SELECT current_database()")
+    db_identity = "{}:{}/{}".format(
+        os.getenv("POSTGRES_HOST", "localhost"),
+        os.getenv("POSTGRES_PORT", "5432"),
+        cur.fetchone()[0],
+    )
+
     stats = measure(cur, iv)
+    stats["db_identity"] = db_identity
 
     print("=" * 60)
     print("aim-lock duration CLAMP BACKFILL — " + ("APPLY" if args.apply else "DRY-RUN"))
     print("=" * 60)
+    print(f"target database: {db_identity}")
     print(f"interval={iv}ms  clamp = samples*{iv} + {iv}")
     print(f"  rows above clamp: {stats['count']}")
     if stats["count"]:
@@ -145,7 +168,8 @@ def main() -> int:
             print(f"  --apply --expect-count {stats['count']} "
                   f"--expect-phantom-ms {stats['phantom_ms']} "
                   f"--expect-latest-date {stats['latest_date']} "
-                  f"--expect-fingerprint {stats['fingerprint']}")
+                  f"--expect-fingerprint {stats['fingerprint']} "
+                  f"--expect-db {stats['db_identity']}")
         cur.close()
         conn.close()
         return 0
@@ -185,17 +209,24 @@ def main() -> int:
         cur.close()
         conn.close()
         return 1
-    conn.commit()
-    print(f"\n✅ Committed. {cur.rowcount} aim-lock rows clamped.")
 
-    # Post-apply proof: a second measurement must be empty.
+    # Verify residual BEFORE committing: measure() runs inside the still-open
+    # transaction, so it sees our scoped UPDATE plus any row a concurrent session
+    # committed since the initial measurement. If a NEW violating row appeared,
+    # roll back rather than commit a partial correction — honoring the guard's
+    # promise that a changed candidate set aborts before writing (Codex #509).
     residual = measure(cur, iv)
     if residual["count"]:
-        print(f"WARNING: {residual['count']} rows still above the clamp after apply — investigate.")
+        conn.rollback()
+        print(f"\nABORTED — {residual['count']} row(s) above the clamp after the scoped "
+              "UPDATE (candidate set changed concurrently); rolled back, nothing written.")
         cur.close()
         conn.close()
         return 1
-    print("Post-apply re-check: 0 rows above the clamp. ✅")
+
+    conn.commit()
+    print(f"\n✅ Committed. {stats['count']} aim-lock rows clamped. "
+          "Pre-commit re-check: 0 rows above the clamp. ✅")
     cur.close()
     conn.close()
     return 0

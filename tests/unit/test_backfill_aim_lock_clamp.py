@@ -20,6 +20,7 @@ def _args(**overrides):
         "expect_phantom_ms": 726050,
         "expect_latest_date": "2026-06-11",
         "expect_fingerprint": fingerprint_ids([1, 2, 3]),
+        "expect_db": "prod-host:5432/etlegacy",
     }
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
@@ -32,6 +33,7 @@ def _stats(**overrides):
         "phantom_ms": 726050,
         "latest_date": "2026-06-11",
         "fingerprint": fingerprint_ids([1, 2, 3]),
+        "db_identity": "prod-host:5432/etlegacy",
     }
     stats.update(overrides)
     return stats
@@ -76,6 +78,22 @@ def test_new_rows_since_dry_run_change_fingerprint():
                    fingerprint=fingerprint_ids([1, 2, 3, 4]))
     problems = check_expectations(stats, _args())
     assert problems, "guard must trip when the candidate set changed"
+
+
+def test_wrong_target_db_trips_guard():
+    """A clone/snapshot with identical candidate rows but a DIFFERENT database
+    identity must fail the guard, binding the apply to the intended DB
+    (Codex #509)."""
+    problems = check_expectations(
+        _stats(db_identity="clone-host:5432/etlegacy"), _args(),
+    )
+    assert problems
+    assert any("db" in p for p in problems)
+
+
+def test_missing_expect_db_is_refused():
+    problems = check_expectations(_stats(), _args(expect_db=None))
+    assert any("--expect-db is required" in p for p in problems)
 
 
 def test_zero_rows_with_apply_trips_guard():

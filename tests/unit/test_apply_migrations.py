@@ -204,9 +204,12 @@ async def test_collect_state_flags_missing_applied_file(monkeypatch, tmp_path):
     conn = FakeConn(rows=[
         {"filename": "001_a.sql", "success": True},
         {"filename": "099_deleted.sql", "success": True},
+        # A FAILED row whose file was also deleted must ALSO count as missing
+        # (orphaned failed drift — Codex review on #509).
+        {"filename": "098_failed_gone.sql", "success": False},
     ])
     state = await collect_state(conn)
-    assert state["missing"] == ["099_deleted.sql"]
+    assert state["missing"] == ["098_failed_gone.sql", "099_deleted.sql"]
     assert "099_deleted.sql" not in state["pending"]
 
 

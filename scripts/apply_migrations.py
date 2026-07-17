@@ -343,10 +343,12 @@ async def collect_state(conn: asyncpg.Connection) -> dict:
     # A FAILED file is not also PENDING — counting it in both let Pending+Failed
     # exceed total_files and listed the same file twice (Copilot review on #509).
     pending = [f for f, _ in migrations if f not in applied and f not in failed]
-    # Rows recorded as applied whose SQL file is gone from the checkout (deleted
-    # or renamed): fresh installs and drift audits would silently diverge because
-    # the version lives in prod but not in the repo (Copilot/Codex review on #509).
-    missing = sorted(applied - discovered)
+    # Rows recorded in the ledger (applied OR failed) whose SQL file is gone from
+    # the checkout (deleted or renamed): fresh installs and drift audits would
+    # silently diverge because the version lives in the DB but not in the repo.
+    # Include FAILED rows too — an orphaned failed row is drift the targeted-apply
+    # preflight must also catch (Copilot/Codex review on #509).
+    missing = sorted((applied | failed) - discovered)
     mismatches = await get_checksum_mismatches(conn)
     return {
         "total_files": len(migrations),
@@ -576,7 +578,10 @@ async def cmd_apply(only: list[str] | None = None):
             unrelated = sorted(
                 f for f, _ in migrations if f not in applied and f not in wanted
             )
-            missing = sorted(applied - known)
+            # Include FAILED rows whose file is gone: an orphaned failed-and-
+            # deleted migration is drift the preflight must catch too, not just
+            # applied-and-deleted rows (Codex review on #509).
+            missing = sorted((applied | failed) - known)
             if unrelated or missing:
                 print("  ERROR: --only refuses to run while unrelated ledger drift exists.")
                 print("  Reconcile these before deploying the targeted set:")
