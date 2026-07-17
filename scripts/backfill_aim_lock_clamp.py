@@ -131,26 +131,30 @@ def main() -> int:
     print("aim-lock duration CLAMP BACKFILL — " + ("APPLY" if args.apply else "DRY-RUN"))
     print("=" * 60)
     print(f"interval={iv}ms  clamp = samples*{iv} + {iv}")
-    if not stats["count"]:
-        print("No rows above the clamp — already consistent. ✅")
-        cur.close()
-        conn.close()
-        return 0
     print(f"  rows above clamp: {stats['count']}")
-    print(f"  phantom ms to remove (sum of overage): {stats['phantom_ms']}")
-    print(f"  newest violation session_date: {stats['latest_date']}")
-    print(f"  candidate fingerprint: {stats['fingerprint']}")
+    if stats["count"]:
+        print(f"  phantom ms to remove (sum of overage): {stats['phantom_ms']}")
+        print(f"  newest violation session_date: {stats['latest_date']}")
+        print(f"  candidate fingerprint: {stats['fingerprint']}")
 
     if not args.apply:
-        print("\nDRY-RUN — no changes written. Run scripts/db_backup.sh, then re-run with:")
-        print(f"  --apply --expect-count {stats['count']} "
-              f"--expect-phantom-ms {stats['phantom_ms']} "
-              f"--expect-latest-date {stats['latest_date']} "
-              f"--expect-fingerprint {stats['fingerprint']}")
+        if not stats["count"]:
+            print("\nNo rows above the clamp — already consistent. ✅")
+        else:
+            print("\nDRY-RUN — no changes written. Run scripts/db_backup.sh, then re-run with:")
+            print(f"  --apply --expect-count {stats['count']} "
+                  f"--expect-phantom-ms {stats['phantom_ms']} "
+                  f"--expect-latest-date {stats['latest_date']} "
+                  f"--expect-fingerprint {stats['fingerprint']}")
         cur.close()
         conn.close()
         return 0
 
+    # --apply: verify the measured candidate set matches the dry-run's --expect-*
+    # values BEFORE any success return — even for a zero-row measurement. Pointing
+    # --apply at the wrong DB, or one already mutated since the dry-run, otherwise
+    # no-ops to 0 rows and exits 0 without ever checking --expect-count 56 / the
+    # fingerprint, masking a failed correction (Codex review on #509).
     problems = check_expectations(stats, args)
     if problems:
         print("\nABORTED — preconditions not met, nothing written:")
@@ -160,6 +164,12 @@ def main() -> int:
         cur.close()
         conn.close()
         return 1
+
+    if not stats["count"]:
+        print("\nExpectations matched but no rows are above the clamp — nothing to write. ✅")
+        cur.close()
+        conn.close()
+        return 0
 
     cur.execute(
         "UPDATE proximity_aim_lock "

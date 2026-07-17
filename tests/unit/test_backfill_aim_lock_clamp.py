@@ -76,3 +76,15 @@ def test_new_rows_since_dry_run_change_fingerprint():
                    fingerprint=fingerprint_ids([1, 2, 3, 4]))
     problems = check_expectations(stats, _args())
     assert problems, "guard must trip when the candidate set changed"
+
+
+def test_zero_rows_with_apply_trips_guard():
+    """A DB with no candidate rows (wrong target / already mutated) must fail
+    the guard against a nonzero --expect-count, not silently no-op to success.
+    main() now runs check_expectations even on a zero-row --apply measurement
+    (Codex review on #509)."""
+    stats = _stats(ids=[], count=0, phantom_ms=0, latest_date=None,
+                   fingerprint=fingerprint_ids([]))
+    problems = check_expectations(stats, _args())
+    assert problems, "zero-row measurement must not satisfy --expect-count 56"
+    assert any("count" in p for p in problems)

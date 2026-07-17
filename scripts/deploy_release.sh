@@ -151,12 +151,50 @@ sudo_run() {
 #     `systemctl start` is idempotent so retrying both services is safe.
 #   - Trap function inlines the SSH+sudo call instead of using `sudo_run`,
 #     because `sudo_run` calls `fail` on error which would re-enter the trap.
+#
+# Second recovery window (Codex review on #509): steps 3/3b/3c check out the
+# new tag and rewrite the on-disk frontend (cache-buster + React build) while
+# the OLD services are still running (they don't stop until step 4). If the
+# React build (3c) or any command in that window fails, the old backend would
+# keep serving newly-rewritten frontend assets — a mixed old-backend/new-
+# frontend state. So when we fail AFTER the checkout but BEFORE services stop,
+# restore the previous checkout so the still-running services match their
+# assets again.
+CHECKOUT_CHANGED=false
 SERVICES_STOPPED=false
 SERVICES_RESTARTED=false
 
-recover_services_on_failure() {
+recover_on_failure() {
   local rc=$?
-  if $DRY_RUN || [ "$rc" -eq 0 ] || ! $SERVICES_STOPPED || $SERVICES_RESTARTED; then
+  if $DRY_RUN || [ "$rc" -eq 0 ]; then
+    exit "$rc"
+  fi
+
+  # Window 1: failed after checkout/cache-bust/build but before services were
+  # stopped. Roll the VM checkout back to the pre-deploy commit so the running
+  # old backend and the on-disk frontend come from the same commit again.
+  if $CHECKOUT_CHANGED && ! $SERVICES_STOPPED; then
+    echo "" >&2
+    warn "═════════════════════════════════════════════════════════════"
+    warn "Deploy aborted (rc=$rc) after checkout but before services"
+    warn "stopped. Restoring VM checkout to $CURRENT_COMMIT so the still-"
+    warn "running services match their on-disk frontend assets."
+    warn "═════════════════════════════════════════════════════════════"
+    local restore_rc=0
+    $SSH "cd $VM_PATH && git checkout -f $CURRENT_COMMIT && git log --oneline -1" || restore_rc=$?
+    if [ "$restore_rc" -eq 0 ]; then
+      warn "Checkout restored. The old services were never stopped, so no"
+      warn "restart is needed. Investigate the failure (rc=$rc) before re-deploying."
+    else
+      warn "Checkout restore FAILED (rc=$restore_rc). Manual intervention:"
+      warn "  ssh -i $VM_KEY $VM_USER@$VM_HOST 'cd $VM_PATH && git checkout -f $CURRENT_COMMIT'"
+    fi
+    exit "$rc"
+  fi
+
+  # Window 2: failed after services were stopped, before they were confirmed
+  # restarted — auto-restart both on whatever code is currently checked out.
+  if ! $SERVICES_STOPPED || $SERVICES_RESTARTED; then
     exit "$rc"
   fi
   echo "" >&2
@@ -183,7 +221,7 @@ recover_services_on_failure() {
   fi
   exit "$rc"
 }
-trap recover_services_on_failure EXIT
+trap recover_on_failure EXIT
 
 # ─── Header ───────────────────────────────────────────────────────────────────
 MIG_DESC="SKIP"
@@ -263,6 +301,10 @@ run_remote "cd $VM_PATH && \
 # refuse with "Your local changes would be overwritten by checkout".
 # Safe because the allow-list guard above already proved nothing else is dirty.
 run_remote "cd $VM_PATH && git fetch origin --tags && git checkout -f $TAG && git log --oneline -1"
+# Arm the checkout-rollback recovery window: from here until services stop
+# (step 4), a failure restores $CURRENT_COMMIT so old services don't serve
+# newly-rewritten frontend assets (Codex review on #509).
+$DRY_RUN || CHECKOUT_CHANGED=true
 
 # ─── 3b. Auto-bump JS cache-buster to current git SHA (CF edge cache purge) ───
 # Why: every <script src="..."> in index.html and every `from './foo.js'`

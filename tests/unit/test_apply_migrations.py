@@ -19,6 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from scripts.apply_migrations import (  # noqa: E402
     MigrationRejected,
     cmd_apply,
+    cmd_validate,
+    collect_state,
     get_applied,
     get_failed,
     requires_non_transactional,
@@ -53,6 +55,7 @@ class FakeConn:
         self.executed: list[tuple[str, tuple]] = []
         self.txn_depth = 0
         self.rolled_back = 0
+        self.advisory_lock_calls = 0
         # (query substring, txn_depth at execution) — to assert the ledger
         # success write happened inside the migration's transaction.
         self.execution_depths: list[tuple[str, int]] = []
@@ -69,6 +72,7 @@ class FakeConn:
 
     async def fetchval(self, query, *args):
         if "pg_try_advisory_lock" in query:
+            self.advisory_lock_calls += 1
             return True
         if "information_schema.tables" in query:
             return self.has_pcs_table
@@ -169,6 +173,75 @@ async def test_get_applied_excludes_failed_rows():
     applied = await get_applied(conn)
     assert applied == {"001_ok.sql"}
     assert await get_failed(conn) == {"002_broken.sql"}
+
+
+@pytest.mark.asyncio
+async def test_collect_state_excludes_failed_from_pending(monkeypatch, tmp_path):
+    """A FAILED file appears only under `failed`, never double-counted in
+    `pending` (Copilot review on #509)."""
+    mig_dir = tmp_path / "migrations"
+    mig_dir.mkdir()
+    (mig_dir / "001_a.sql").write_text("SELECT 1;")
+    (mig_dir / "002_b.sql").write_text("SELECT 2;")
+    monkeypatch.setattr("scripts.apply_migrations.MIGRATIONS_DIR", mig_dir)
+
+    conn = FakeConn(rows=[{"filename": "001_a.sql", "success": False}])
+    state = await collect_state(conn)
+    assert state["failed"] == ["001_a.sql"]
+    assert state["pending"] == ["002_b.sql"]  # 001_a not double-listed
+    assert state["missing"] == []
+
+
+@pytest.mark.asyncio
+async def test_collect_state_flags_missing_applied_file(monkeypatch, tmp_path):
+    """A row recorded applied whose SQL file is gone shows up as `missing`
+    (deleted/renamed migration — Copilot/Codex review on #509)."""
+    mig_dir = tmp_path / "migrations"
+    mig_dir.mkdir()
+    (mig_dir / "001_a.sql").write_text("SELECT 1;")
+    monkeypatch.setattr("scripts.apply_migrations.MIGRATIONS_DIR", mig_dir)
+
+    conn = FakeConn(rows=[
+        {"filename": "001_a.sql", "success": True},
+        {"filename": "099_deleted.sql", "success": True},
+    ])
+    state = await collect_state(conn)
+    assert state["missing"] == ["099_deleted.sql"]
+    assert "099_deleted.sql" not in state["pending"]
+
+
+@pytest.mark.asyncio
+async def test_validate_clean_takes_lock_and_exits_zero(monkeypatch, tmp_path):
+    """A fully-applied ledger validates clean AND takes the runner advisory
+    lock so it can't read a half-written ledger mid-apply (Copilot #509)."""
+    mig_dir = tmp_path / "migrations"
+    mig_dir.mkdir()
+    (mig_dir / "001_a.sql").write_text("SELECT 1;")
+    monkeypatch.setattr("scripts.apply_migrations.MIGRATIONS_DIR", mig_dir)
+
+    conn = FakeConn(rows=[{"filename": "001_a.sql", "success": True}])
+    monkeypatch.setattr("scripts.apply_migrations.get_connection",
+                        _returning(conn))
+    await cmd_validate()  # no SystemExit → clean
+    assert conn.advisory_lock_calls == 1, "validate must acquire the runner lock"
+
+
+@pytest.mark.asyncio
+async def test_validate_pending_exits_nonzero(monkeypatch, tmp_path, capsys):
+    """A pending file (drift) makes --validate exit 1 for deploy gating."""
+    mig_dir = tmp_path / "migrations"
+    mig_dir.mkdir()
+    (mig_dir / "001_a.sql").write_text("SELECT 1;")
+    (mig_dir / "002_b.sql").write_text("SELECT 2;")  # pending
+    monkeypatch.setattr("scripts.apply_migrations.MIGRATIONS_DIR", mig_dir)
+
+    conn = FakeConn(rows=[{"filename": "001_a.sql", "success": True}])
+    monkeypatch.setattr("scripts.apply_migrations.get_connection",
+                        _returning(conn))
+    with pytest.raises(SystemExit) as exc:
+        await cmd_validate()
+    assert exc.value.code == 1
+    assert "DRIFT DETECTED" in capsys.readouterr().out
 
 
 @pytest.mark.asyncio
@@ -286,7 +359,12 @@ async def test_apply_only_filters_and_validates_names(monkeypatch, tmp_path, cap
     (mig_dir / "001_a.sql").write_text("SELECT 1;")
     (mig_dir / "002_b.sql").write_text("SELECT 2;")
 
-    conn = FakeConn(rows=[{"filename": "000_seed.sql", "success": True}])
+    # 001_a already applied → 002_b is the only pending file, so a targeted
+    # --only apply has no unrelated drift to refuse. (Both applied rows must
+    # correspond to on-disk files, or the new missing-file guard trips.)
+    conn = FakeConn(rows=[
+        {"filename": "001_a.sql", "success": True},
+    ])
     monkeypatch.setattr("scripts.apply_migrations.MIGRATIONS_DIR", mig_dir)
     monkeypatch.setattr("scripts.apply_migrations.get_connection",
                         _returning(conn))
@@ -302,3 +380,27 @@ async def test_apply_only_filters_and_validates_names(monkeypatch, tmp_path, cap
     with pytest.raises(SystemExit) as exc:
         await cmd_apply(only=["999_nope.sql"])
     assert exc.value.code == 1
+
+
+@pytest.mark.asyncio
+async def test_apply_only_refuses_unrelated_pending_drift(monkeypatch, tmp_path, capsys):
+    """--only must abort when a migration OUTSIDE the requested set is still
+    pending/failed — the deploy-time guard against advancing the DB for a
+    release's new files while (e.g.) 052-060 stay unreconciled (Codex #509)."""
+    mig_dir = tmp_path / "migrations"
+    mig_dir.mkdir()
+    (mig_dir / "001_a.sql").write_text("SELECT 1;")   # left pending (unrelated)
+    (mig_dir / "002_b.sql").write_text("SELECT 2;")
+
+    conn = FakeConn(rows=[{"filename": "000_seed.sql", "success": True}])
+    monkeypatch.setattr("scripts.apply_migrations.MIGRATIONS_DIR", mig_dir)
+    monkeypatch.setattr("scripts.apply_migrations.get_connection",
+                        _returning(conn))
+    with pytest.raises(SystemExit) as exc:
+        await cmd_apply(only=["002_b.sql"])
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "unrelated ledger drift" in out
+    assert "001_a.sql" in out
+    # Nothing was applied — no ledger write happened.
+    assert not any("INSERT INTO schema_migrations" in q for q, _ in conn.executed)

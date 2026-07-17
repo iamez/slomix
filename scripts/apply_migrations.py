@@ -339,13 +339,21 @@ async def collect_state(conn: asyncpg.Connection) -> dict:
     applied = await get_applied(conn)
     failed = await get_failed(conn)
     migrations = discover_migrations()
-    pending = [f for f, _ in migrations if f not in applied]
+    discovered = {f for f, _ in migrations}
+    # A FAILED file is not also PENDING — counting it in both let Pending+Failed
+    # exceed total_files and listed the same file twice (Copilot review on #509).
+    pending = [f for f, _ in migrations if f not in applied and f not in failed]
+    # Rows recorded as applied whose SQL file is gone from the checkout (deleted
+    # or renamed): fresh installs and drift audits would silently diverge because
+    # the version lives in prod but not in the repo (Copilot/Codex review on #509).
+    missing = sorted(applied - discovered)
     mismatches = await get_checksum_mismatches(conn)
     return {
         "total_files": len(migrations),
         "applied": sorted(applied),
         "failed": sorted(failed),
         "pending": pending,
+        "missing": missing,
         "checksum_mismatches": mismatches,
     }
 
@@ -377,9 +385,16 @@ async def cmd_status(json_out: bool = False):
             drift = "  (CHECKSUM MISMATCH)" if filename in state["checksum_mismatches"] else ""
             print(f"  {marker} [{status:7s}] {filename}{drift}")
 
+        for filename in state["missing"]:
+            print(f"  ?? [MISSING] {filename}  (recorded applied, no file on disk)")
+
         print(f"\n  Applied: {len(applied)}, Failed: {len(failed)}, "
               f"Pending: {len(state['pending'])}, "
+              f"Missing: {len(state['missing'])}, "
               f"Checksum mismatches: {len(state['checksum_mismatches'])}")
+        if state["missing"]:
+            print("  MISSING migrations are recorded in the ledger but absent from "
+                  "migrations/ — restore the file or reconcile the ledger.")
         if failed:
             print("  FAILED migrations retry on next apply; if they were fixed "
                   "manually via psql, reconcile with --mark.")
@@ -398,22 +413,34 @@ async def cmd_validate(json_out: bool = False):
     conn = await get_connection()
     try:
         await ensure_tracking_table(conn)
+        # Take the runner lock so validation can't observe a half-written ledger
+        # while another session is mid-apply (uncommitted rows / transient drift).
+        # Fail-fast keeps deploy gating deterministic (Copilot review on #509).
+        await acquire_runner_lock(conn)
         state = await collect_state(conn)
     finally:
         await conn.close()
 
-    clean = not state["pending"] and not state["failed"] and not state["checksum_mismatches"]
+    clean = (
+        not state["pending"]
+        and not state["failed"]
+        and not state["missing"]
+        and not state["checksum_mismatches"]
+    )
     state["clean"] = clean
     if json_out:
         print(json.dumps(state, indent=2))
     else:
         print(f"  Applied: {len(state['applied'])}, Failed: {len(state['failed'])}, "
               f"Pending: {len(state['pending'])}, "
+              f"Missing: {len(state['missing'])}, "
               f"Checksum mismatches: {len(state['checksum_mismatches'])}")
         for f in state["pending"]:
             print(f"    >> PENDING  {f}")
         for f in state["failed"]:
             print(f"    !! FAILED   {f}")
+        for f in state["missing"]:
+            print(f"    ?? MISSING  {f}")
         for f in state["checksum_mismatches"]:
             print(f"    ~~ CHECKSUM {f}")
         print(f"  Validation: {'CLEAN' if clean else 'DRIFT DETECTED'}")
@@ -537,10 +564,30 @@ async def cmd_apply(only: list[str] | None = None):
                 for f in unknown:
                     print(f"    {f}")
                 sys.exit(1)
+            wanted = set(only)
+            # Refuse a targeted apply while UNRELATED ledger drift exists: any
+            # migration outside `only` that is un-applied (pending or previously
+            # failed) or recorded-applied-but-missing from disk. Otherwise a
+            # release deploy advances the DB for its new files and records their
+            # success even though reconciliation (e.g. 052-060) is still
+            # outstanding — the deploy's own post-apply --validate runs too late
+            # to prevent that write (Codex review on #509). Checksum mismatches
+            # are already refused globally above.
+            unrelated = sorted(
+                f for f, _ in migrations if f not in applied and f not in wanted
+            )
+            missing = sorted(applied - known)
+            if unrelated or missing:
+                print("  ERROR: --only refuses to run while unrelated ledger drift exists.")
+                print("  Reconcile these before deploying the targeted set:")
+                for f in unrelated:
+                    print(f"    {'FAILED ' if f in failed else 'PENDING'}: {f}")
+                for f in missing:
+                    print(f"    MISSING: {f}")
+                sys.exit(1)
             already = [f for f in only if f in applied]
             for f in already:
                 print(f"  [SKIP] {f} (already applied)")
-            wanted = set(only)
             pending = [(f, p) for f, p in pending if f in wanted]
 
         if failed:
