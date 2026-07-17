@@ -283,55 +283,60 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
     if not qualified_guids:
         return _ok([])
 
-    # Compute percentile maps for each metric (midrank ties — AUD-008)
+    # Coverage per player = fraction of the composite's EFFECTIVE metric weight
+    # backed by REAL data (missing/neutral-filled metrics don't count), weighted
+    # the way prox_overall combines categories.
+    def _coverage(pd: dict) -> float:
+        real = sum(w for mk, w in _METRIC_EFFECTIVE_WEIGHT.items() if pd.get(mk) is not None)
+        return real / _TOTAL_EFFECTIVE_WEIGHT if _TOTAL_EFFECTIVE_WEIGHT else 0.0
+
+    coverage_by_guid = {g: _coverage(raw_data[g]) for g in qualified_guids}
+
+    # The COHORT that shapes percentiles is engagement-qualified AND at/above the
+    # coverage threshold: a below-coverage (mostly neutral-filled) player must
+    # NOT drag the percentile columns everyone else is ranked against (Codex P1
+    # #512). Epsilon tolerates a player mathematically AT 0.80 (float 0.79999…).
+    cohort_guids = [
+        g for g in qualified_guids
+        if coverage_by_guid[g] >= MIN_METRIC_WEIGHT_COVERAGE - 1e-9
+    ]
+    below_coverage = len(qualified_guids) - len(cohort_guids)
+
+    # Compute percentile maps for each metric over the COHORT only (midrank ties).
     all_metric_keys = set()
     for cat in METRICS.values():
         all_metric_keys.update(cat["metrics"].keys())
 
     percentile_maps: dict[str, dict[str, float]] = {}
     for mkey in all_metric_keys:
-        # Only include players who have actual data for this metric
-        with_data = [(g, raw_data[g][mkey]) for g in qualified_guids if raw_data[g].get(mkey) is not None]
+        with_data = [(g, raw_data[g][mkey]) for g in cohort_guids if raw_data[g].get(mkey) is not None]
         if with_data:
             vals_only = [v for _, v in with_data]
             pctls = _percentile_rank_midrank(vals_only)
             pctl_map = {g: p for (g, _), p in zip(with_data, pctls)}
         else:
             pctl_map = {}
-        # Neutral 0.5 only fills the score arithmetic below; it never counts
-        # toward coverage (a genuinely missing metric is tracked separately).
-        percentile_maps[mkey] = {g: pctl_map.get(g, 0.5) for g in qualified_guids}
+        # Neutral 0.5 fills the score arithmetic for a cohort member missing this
+        # metric; a below-coverage single-player request (not in the cohort) also
+        # scores against these cohort percentiles, defaulting to 0.5 where it has
+        # no cohort rank (it is returned flagged and hidden by the UI).
+        percentile_maps[mkey] = {g: pctl_map.get(g, 0.5) for g in cohort_guids}
 
-    # Compute scores per player
+    # Score set: the covered cohort for a leaderboard, or exactly the requested
+    # player (which may itself be below coverage — returned flagged).
     results = []
-    below_coverage = 0
-    target_guids = [player_guid] if player_guid and player_guid in raw_data else qualified_guids
+    if player_guid and player_guid in raw_data:
+        target_guids = [player_guid]
+    else:
+        target_guids = cohort_guids
 
     for guid in target_guids:
-        if guid not in qualified_guids and guid != player_guid:
-            continue
-
         pdata = raw_data[guid]
         pdata["__guid__"] = guid
-
-        # Coverage = fraction of the composite's EFFECTIVE metric weight this
-        # player has REAL data for. Missing metrics (neutral-filled) don't count,
-        # and the weighting matches how prox_overall combines categories.
         missing = [mk for mk in _METRIC_EFFECTIVE_WEIGHT if pdata.get(mk) is None]
-        real_weight = sum(
-            w for mk, w in _METRIC_EFFECTIVE_WEIGHT.items() if pdata.get(mk) is not None
-        )
-        coverage = real_weight / _TOTAL_EFFECTIVE_WEIGHT if _TOTAL_EFFECTIVE_WEIGHT else 0.0
-
-        # AUD-008: don't publish a composite built mostly from neutral fill.
-        # A single-player request still returns the player (with the coverage
-        # flag) so the profile page can decide; leaderboard rows are dropped.
-        # Tolerance: a player mathematically AT the 0.80 boundary can accumulate
-        # to 0.7999999999999999 in float, so compare with a small epsilon rather
-        # than dropping an exactly-covered player (Codex #512).
-        if coverage < MIN_METRIC_WEIGHT_COVERAGE - 1e-9 and guid != player_guid:
-            below_coverage += 1
-            continue
+        coverage = coverage_by_guid.get(guid)
+        if coverage is None:
+            coverage = _coverage(pdata)
 
         category_scores = {}
         category_breakdowns = {}

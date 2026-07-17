@@ -375,28 +375,36 @@ const SCORE_COLORS: Record<string, string> = {
 // Matches MIN_METRIC_WEIGHT_COVERAGE in the backend prox_scoring service.
 const MIN_PROX_COVERAGE = 0.8;
 
+function ProxScoreUnavailable({ message }: { message: string }) {
+  return (
+    <GlassPanel className="mt-6">
+      <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">
+        Proximity Score
+      </h3>
+      <div className="text-[11px] text-slate-500">{message}</div>
+    </GlassPanel>
+  );
+}
+
 function PlayerProxScoreSection({ guid }: { guid: string }) {
   const { data } = useProxScores(30, guid, 1);
+
+  // Quality contract (AUD-008): a degraded response deliberately returns
+  // players: [], so check it BEFORE the absent-player guard below — otherwise
+  // `!player` would silently return null instead of the unavailable state
+  // (Codex #512). `data` may be undefined while loading, so `?.` is required.
+  if (data?.status === 'degraded') {
+    return <ProxScoreUnavailable message="Proximity scores are temporarily unavailable (a data source failed)." />;
+  }
+
   const player = data?.players[0];
   if (!player) return null;
 
-  // Quality contract (AUD-008): a single-player request returns a player even
-  // below the coverage threshold (flagged), and a degraded response withholds
-  // ranking — do NOT render a mostly-neutral-filled score as a real rating.
+  // A single-player request returns a player even below the coverage threshold
+  // (flagged) — do NOT render a mostly-neutral-filled score as a real rating.
   const coverage = player.metric_weight_coverage ?? 1;
-  if (data?.status === 'degraded' || coverage < MIN_PROX_COVERAGE) {
-    return (
-      <GlassPanel className="mt-6">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">
-          Proximity Score
-        </h3>
-        <div className="text-[11px] text-slate-500">
-          {data?.status === 'degraded'
-            ? 'Proximity scores are temporarily unavailable (a data source failed).'
-            : 'Not enough proximity telemetry to rate this player yet.'}
-        </div>
-      </GlassPanel>
-    );
+  if (coverage < MIN_PROX_COVERAGE) {
+    return <ProxScoreUnavailable message="Not enough proximity telemetry to rate this player yet." />;
   }
 
   return (
