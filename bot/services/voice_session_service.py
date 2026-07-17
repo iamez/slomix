@@ -1044,6 +1044,13 @@ class VoiceSessionService:
                 # A NEW split opens a NEW episode: mint a fresh episode id so its
                 # prediction dedups within the episode but a genuine rematch (a
                 # later new split) gets its own row (Codex #511).
+                # KNOWN LIMITATION (accepted for the shadow program): a bot
+                # restart mid-split loses this in-memory id, so the same match
+                # re-detected post-restart mints a new id and can add one extra
+                # calibration row. It does NOT corrupt data (the dedup unique
+                # index still blocks exact duplicates within a process), and a
+                # rare extra shadow row is acceptable noise vs. persisting split
+                # state across restarts. Owner calibration review can dedup.
                 if is_new_split:
                     self.current_split_episode = self.last_split_time.strftime('%Y%m%dT%H%M%S')  # noqa: DTZ007
 

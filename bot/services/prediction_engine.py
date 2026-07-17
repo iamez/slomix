@@ -513,7 +513,7 @@ class PredictionEngine:
         """
         try:
             pending = await self.db.fetch_all(
-                """SELECT id, team_a_guids, team_b_guids
+                """SELECT id, team_a_guids, team_b_guids, prediction_time
                    FROM match_predictions
                    WHERE session_date = $1 AND actual_winner IS NULL""",
                 (session_date,),
@@ -521,28 +521,22 @@ class PredictionEngine:
             if not pending:
                 return 0
 
-            # Per-session correctness (Codex #511): this resolver aggregates every
-            # roster-matching result across the WHOLE date. When the same rosters
-            # play multiple gaming sessions that day (a rematch → multiple
-            # prediction rows via the episode occurrence key), the combined tally
-            # would be assigned to EACH prediction, corrupting calibration. Only
-            # auto-resolve dates that map to exactly one gaming session; defer the
-            # rest to manual resolution rather than record a wrong outcome.
-            session_ids = await self.db.fetch_all(
-                "SELECT DISTINCT gaming_session_id FROM rounds "
-                "WHERE round_date = $1 AND gaming_session_id IS NOT NULL",
+            # Per-session correctness (Codex #511): a date can hold MORE THAN ONE
+            # gaming session (a rematch → multiple prediction rows via the episode
+            # occurrence key). Resolving against the whole date's aggregated
+            # results would assign the combined tally to EACH prediction. Instead,
+            # match each prediction to its gaming session by prediction_time and
+            # resolve against ONLY that session's results — so rematches resolve
+            # correctly rather than being deferred forever.
+            windows = await self.db.fetch_all(
+                "SELECT gaming_session_id, MIN(round_start_unix) AS lo, "
+                "MAX(COALESCE(NULLIF(round_end_unix, 0), round_start_unix)) AS hi "
+                "FROM rounds WHERE round_date = $1 AND gaming_session_id IS NOT NULL "
+                "AND round_start_unix IS NOT NULL GROUP BY gaming_session_id",
                 (session_date,),
             )
-            if len(session_ids) > 1:
-                logger.warning(
-                    "auto_resolve: %s spans %d gaming sessions — deferring to manual "
-                    "resolution (whole-date aggregation would mis-resolve rematches)",
-                    session_date, len(session_ids),
-                )
-                return 0
-
             results = await self.db.fetch_all(
-                """SELECT team_1_guids, team_2_guids, winning_team
+                """SELECT team_1_guids, team_2_guids, winning_team, gaming_session_id
                    FROM session_results
                    WHERE session_date = $1 AND winning_team IS NOT NULL""",
                 (session_date,),
@@ -551,17 +545,53 @@ class PredictionEngine:
                 logger.debug("auto_resolve: no session_results yet for %s", session_date)
                 return 0
 
+            multi_session = len({w[0] for w in windows}) > 1
+            results_tagged = any(r[3] is not None for r in results)
+
             def g8set(raw) -> set:
                 vals = json.loads(raw) if isinstance(raw, str) else (raw or [])
                 return {str(g)[:8].upper() for g in vals if g}
 
+            def _match_gsid(pred_time) -> int | None:
+                """The gaming session whose time window best fits a prediction
+                made at pred_time (predictions are made at/just before a session
+                start): a window that contains it, else the nearest by start."""
+                if pred_time is None or not windows:
+                    return None
+                ts = pred_time.timestamp() if hasattr(pred_time, "timestamp") else None
+                if ts is None:
+                    return None
+                for gsid, lo, hi in ((w[0], w[1], w[2]) for w in windows):
+                    if lo is not None and hi is not None and lo <= ts <= hi:
+                        return gsid
+                # No containing window → nearest session by |start - pred_time|.
+                return min(windows, key=lambda w: abs((w[1] or 0) - ts))[0]
+
             resolved = 0
             for pred in pending:
                 pred_id, a_set, b_set = pred[0], g8set(pred[1]), g8set(pred[2])
+                pred_time = pred[3]
                 if not a_set or not b_set:
                     continue
+
+                # Pick the results subset for THIS prediction's gaming session.
+                target_gsid = None
+                if multi_session and results_tagged:
+                    target_gsid = _match_gsid(pred_time)
+                    if target_gsid is None:
+                        # Can't place this prediction in a session → leave it
+                        # pending (a later pass may match) rather than mis-resolve.
+                        logger.debug("auto_resolve: prediction %s unmatched to a "
+                                     "gaming session — left pending", pred_id)
+                        continue
+                    subset = [r for r in results if r[3] == target_gsid]
+                else:
+                    # Single session (or untagged results): the whole date is one
+                    # match set — the original, safe behavior.
+                    subset = results
+
                 a_wins = b_wins = matched = 0
-                for row in results:
+                for row in subset:
                     t1, t2, winner = g8set(row[0]), g8set(row[1]), int(row[2])
                     straight = len(a_set & t1) + len(b_set & t2)
                     flipped = len(a_set & t2) + len(b_set & t1)
@@ -585,21 +615,20 @@ class PredictionEngine:
                 await self.update_prediction_outcome(
                     pred_id, actual, a_wins, b_wins
                 )
+                # Record the gaming session that resolved this prediction.
+                gsid = target_gsid
+                if gsid is None and not multi_session and windows:
+                    gsid = windows[0][0]  # unambiguous single session
+                if gsid is not None:
+                    try:
+                        await self.db.execute(
+                            "UPDATE match_predictions SET gaming_session_id = $1 "
+                            "WHERE id = $2 AND gaming_session_id IS NULL",
+                            (gsid, pred_id),
+                        )
+                    except Exception as e:
+                        logger.debug("gaming_session_id backlink skipped: %s", e)
                 resolved += 1
-
-            if resolved and len(session_ids) == 1:
-                # Record which gaming session resolved these predictions. Safe:
-                # we only get here when the date maps to exactly one session
-                # (the >1 case returned early above).
-                try:
-                    await self.db.execute(
-                        "UPDATE match_predictions SET gaming_session_id = $1 "
-                        "WHERE session_date = $2 AND actual_winner IS NOT NULL "
-                        "AND gaming_session_id IS NULL",
-                        (session_ids[0][0], session_date),
-                    )
-                except Exception as e:
-                    logger.debug("gaming_session_id backlink skipped: %s", e)
 
             if resolved:
                 logger.info("✅ auto-resolved %d prediction(s) for %s",
@@ -724,25 +753,29 @@ class PredictionEngine:
                     **window,
                 }
 
-            # Calculate score
-            # If results lookup is disabled or unavailable, remain neutral —
-            # and a neutral placeholder is NOT evidence, so available=False.
-            if not use_results_lookup or (team_a_wins + team_b_wins) == 0:
+            # Calculate score. Availability requires enough RESOLVED (decisive)
+            # outcomes, not just roster-overlap dates: with results lookup on but
+            # only one date carrying a non-draw result, team_a_wins+team_b_wins
+            # could be 1, yielding an extreme 0.0/1.0 score marked as evidence
+            # (Codex #511). Require >= MIN_H2H_MATCHES decided outcomes.
+            resolved_outcomes = team_a_wins + team_b_wins
+            if not use_results_lookup or resolved_outcomes < self.MIN_H2H_MATCHES:
                 score = 0.5
                 has_evidence = False
             else:
-                score = team_a_wins / max(team_a_wins + team_b_wins, 1)
+                score = team_a_wins / resolved_outcomes
                 has_evidence = True
 
             return {
                 'score': score,
-                'details': f'Found {total_matches} H2H matches',
+                'details': f'Found {total_matches} H2H matches '
+                           f'({resolved_outcomes} decided)',
                 'matches': total_matches,
                 'team_a_wins': team_a_wins,
                 'team_b_wins': team_b_wins,
-                'confidence': 'medium' if total_matches >= 5 else 'low',
+                'confidence': 'medium' if resolved_outcomes >= 5 else 'low',
                 'available': has_evidence,
-                'sample_size': total_matches,
+                'sample_size': resolved_outcomes if has_evidence else total_matches,
                 **window,
             }
 
@@ -852,9 +885,12 @@ class PredictionEngine:
                     return 0.0, 0
                 placeholders = ','.join([f'${i+1}' for i in range(len(guids))])
                 n = len(guids)
+                # `matches` counts DISTINCT rounds, not player-stat rows: a single
+                # 3v3 round is one match but three PCS rows, so SUM(row counts)
+                # would clear MIN_FORM_MATCHES after one game (Codex #511).
                 query = f"""
-                    SELECT AVG(dpm), COALESCE(SUM(rounds_n), 0) FROM (
-                        SELECT pcs.player_guid, AVG(pcs.dpm) as dpm, COUNT(*) as rounds_n
+                    WITH team_rows AS (
+                        SELECT pcs.player_guid, pcs.dpm, pcs.round_id
                         FROM player_comprehensive_stats pcs
                         JOIN rounds r ON r.id = pcs.round_id
                         WHERE pcs.player_guid IN ({placeholders})
@@ -863,8 +899,12 @@ class PredictionEngine:
                           AND pcs.time_played_seconds > 60
                           AND {_VALID_HUMAN_GATE}
                           AND {_completed_before(f'${n+2}', f'${n+3}')}
-                        GROUP BY pcs.player_guid
-                    ) sub
+                    )
+                    SELECT
+                        (SELECT AVG(dpm) FROM (
+                            SELECT AVG(dpm) AS dpm FROM team_rows GROUP BY player_guid
+                        ) pp) AS team_dpm,
+                        (SELECT COUNT(DISTINCT round_id) FROM team_rows) AS matches
                 """
                 result = await self.db.fetch_one(
                     query, tuple(guids) + (window_start, as_of_unix, as_of_date)
@@ -955,9 +995,10 @@ class PredictionEngine:
                     return 0.0, 0
                 placeholders = ','.join([f'${i+1}' for i in range(len(guids))])
                 n = len(guids)
+                # `matches` = DISTINCT rounds, not player-stat rows (Codex #511).
                 query = f"""
-                    SELECT AVG(dpm), COALESCE(SUM(rounds_n), 0) FROM (
-                        SELECT pcs.player_guid, AVG(pcs.dpm) as dpm, COUNT(*) as rounds_n
+                    WITH team_rows AS (
+                        SELECT pcs.player_guid, pcs.dpm, pcs.round_id
                         FROM player_comprehensive_stats pcs
                         JOIN rounds r ON r.id = pcs.round_id
                         WHERE pcs.player_guid IN ({placeholders})
@@ -966,8 +1007,12 @@ class PredictionEngine:
                           AND pcs.time_played_seconds > 60
                           AND {_VALID_HUMAN_GATE}
                           AND {_completed_before(f'${n+2}', f'${n+3}')}
-                        GROUP BY pcs.player_guid
-                    ) sub
+                    )
+                    SELECT
+                        (SELECT AVG(dpm) FROM (
+                            SELECT AVG(dpm) AS dpm FROM team_rows GROUP BY player_guid
+                        ) pp) AS team_dpm,
+                        (SELECT COUNT(DISTINCT round_id) FROM team_rows) AS matches
                 """
                 result = await self.db.fetch_one(
                     query, tuple(guids) + (map_name, as_of_unix, as_of_date)
