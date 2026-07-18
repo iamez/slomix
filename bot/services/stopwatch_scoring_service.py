@@ -18,6 +18,8 @@ import json
 import logging
 from typing import Any
 
+from shared.round_details import ROUND_DETAILS_VERSION
+
 logger = logging.getLogger(__name__)
 
 
@@ -70,6 +72,7 @@ class StopwatchScoringService:
             entry = maps_dict.setdefault(key, {
                 'map_name': map_name,
                 'gaming_session_id': gaming_session_id,
+                'match_id': match_id,
                 'round1': None,
                 'round2': None,
             })
@@ -85,6 +88,7 @@ class StopwatchScoringService:
             maps_dict[map_key] = {
                 'map_name': map_name,
                 'gaming_session_id': gaming_session_id,
+                'match_id': match_id,  # None on the legacy (pre-pairer) path
                 'round1': round_data,
                 'round2': None,
             }
@@ -238,7 +242,8 @@ class StopwatchScoringService:
                 rounds_query = f"""
                     SELECT map_name, gaming_session_id, round_number,
                            defender_team, winner_team, time_limit, actual_time,
-                           round_date, round_time, match_id
+                           round_date, round_time, match_id,
+                           round_start_unix, map_play_seq
                     FROM rounds
                     WHERE id IN ({placeholders})
                     AND round_status = 'completed'
@@ -254,7 +259,8 @@ class StopwatchScoringService:
                 rounds_query = """
                     SELECT map_name, gaming_session_id, round_number,
                            defender_team, winner_team, time_limit, actual_time,
-                           round_date, round_time, match_id
+                           round_date, round_time, match_id,
+                           round_start_unix, map_play_seq
                     FROM rounds
                     WHERE SUBSTRING(round_date, 1, 10) = $1
                     AND round_status = 'completed'
@@ -278,7 +284,8 @@ class StopwatchScoringService:
 
             for row in rows:
                 (map_name, gaming_session_id, round_num, defender, winner,
-                 time_limit, actual_time, round_date, round_time, match_id) = row
+                 time_limit, actual_time, round_date, round_time, match_id,
+                 round_start_unix, map_play_seq) = row
 
                 round_data = {
                     'defender': defender,
@@ -286,7 +293,9 @@ class StopwatchScoringService:
                     'time_limit': time_limit,
                     'actual_time': actual_time,
                     'round_date': round_date,
-                    'round_time': round_time
+                    'round_time': round_time,
+                    'round_start_unix': round_start_unix,
+                    'map_play_seq': map_play_seq
                 }
                 self._pair_round(
                     maps_dict, pending_r1, map_play_count,
@@ -430,7 +439,13 @@ class StopwatchScoringService:
                     'map': map_data['map_name'],
                     'team1_points': team1_pts,
                     'team2_points': team2_pts,
-                    'description': desc
+                    'description': desc,
+                    # IMP-002: durable per-map identity so later readers (the
+                    # prediction resolver) can place each map in time without
+                    # fragile alignment against the rounds table.
+                    'match_id': map_data.get('match_id'),
+                    'map_play_seq': r1.get('map_play_seq'),
+                    'round_start_unix': r1.get('round_start_unix'),
                 })
 
             # Build result object
@@ -500,9 +515,14 @@ class StopwatchScoringService:
             else:
                 winning_team = 0
 
-            # Format for storage
+            # Format for storage. round_details v2 (IMP-002): a versioned dict
+            # wrapper — every reader goes through shared.round_details.
+            # parse_round_details, which also accepts the legacy bare list.
             format_str = f"{len(team_1_guids)}v{len(team_2_guids)}"
-            round_details = json.dumps(map_results)
+            round_details = json.dumps({
+                'round_details_version': ROUND_DETAILS_VERSION,
+                'maps': map_results,
+            })
             # Each map has 2 rounds
             round_numbers = json.dumps([1, 2] * len(map_results))
 
@@ -707,7 +727,8 @@ class StopwatchScoringService:
             rounds_query = f"""
                 SELECT r.id, r.map_name, r.gaming_session_id, r.round_number,
                        r.defender_team, r.winner_team, r.time_limit, r.actual_time,
-                       r.round_date, r.round_time, r.match_id
+                       r.round_date, r.round_time, r.match_id,
+                       r.round_start_unix, r.map_play_seq
                 FROM rounds r
                 WHERE r.id IN ({placeholders})
                 AND r.round_status = 'completed'
@@ -732,7 +753,8 @@ class StopwatchScoringService:
             for row in rows:
                 (round_id, map_name, gaming_session_id, round_num,
                  defender_team, winner_team, time_limit, actual_time,
-                 round_date, round_time, match_id) = row
+                 round_date, round_time, match_id,
+                 round_start_unix, map_play_seq) = row
 
                 round_data = {
                     'round_id': round_id,
@@ -741,7 +763,9 @@ class StopwatchScoringService:
                     'time_limit': time_limit,
                     'actual_time': actual_time,
                     'round_date': round_date,
-                    'round_time': round_time
+                    'round_time': round_time,
+                    'round_start_unix': round_start_unix,
+                    'map_play_seq': map_play_seq
                 }
                 self._pair_round(
                     maps_dict, pending_r1, map_play_count,
@@ -1000,7 +1024,11 @@ class StopwatchScoringService:
                     'team_a_r2_side': 2 if team_a_r1_side == 1 else 1,
                     'r1_defender_side': r1_defender_side,
                     'scoring_source': scoring_source,
-                    'counted': True
+                    'counted': True,
+                    # IMP-002: durable per-map identity (see path-1 comment).
+                    'match_id': map_data.get('match_id'),
+                    'map_play_seq': r1.get('map_play_seq'),
+                    'round_start_unix': r1.get('round_start_unix'),
                 })
 
                 logger.debug(
@@ -1035,7 +1063,10 @@ class StopwatchScoringService:
                     'r1_defender_side': r1.get('defender_team'),
                     'scoring_source': 'incomplete',
                     'counted': False,
-                    'note': 'R1 only (not counted)'
+                    'note': 'R1 only (not counted)',
+                    'match_id': map_data.get('match_id'),
+                    'map_play_seq': r1.get('map_play_seq'),
+                    'round_start_unix': r1.get('round_start_unix'),
                 })
 
             # Build result
