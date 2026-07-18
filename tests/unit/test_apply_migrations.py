@@ -179,6 +179,30 @@ def test_concurrently_detection_ignores_comments():
     assert not requires_non_transactional("-- REFRESH ... CONCURRENTLY\nSELECT 1;")
 
 
+@pytest.mark.asyncio
+async def test_concurrently_migration_is_rejected(monkeypatch, tmp_path, capsys):
+    """IMP-008: the statement-by-statement CONCURRENTLY path is non-atomic and
+    is disabled — such a migration is REJECTED (exit 1) with the manual-psql +
+    --mark instruction, never applied piecemeal."""
+    mig_dir = tmp_path / "migrations"
+    mig_dir.mkdir()
+    (mig_dir / "001_conc.sql").write_text(
+        "CREATE INDEX CONCURRENTLY idx_x ON t(x);"
+    )
+    conn = FakeConn(rows=[])
+    monkeypatch.setattr("scripts.apply_migrations.MIGRATIONS_DIR", mig_dir)
+    monkeypatch.setattr("scripts.apply_migrations.get_connection",
+                        _returning(conn))
+    with pytest.raises(SystemExit) as exc:
+        await cmd_apply()
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "REJECTED" in out and "--mark" in out
+    # Nothing was executed or recorded for the rejected migration.
+    assert not any("CREATE INDEX" in q for q, _ in conn.executed)
+    assert not any("INSERT INTO schema_migrations" in q for q, _ in conn.executed)
+
+
 def test_split_statements_respects_strings():
     stmts = split_statements("SELECT 'a;b'; SELECT 2;")
     assert stmts == ["SELECT 'a;b'", "SELECT 2"]

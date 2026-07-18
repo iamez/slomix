@@ -3015,7 +3015,10 @@ CREATE TABLE public.proximity_processed_files (
     filename text NOT NULL,
     file_hash text,
     aggregates_applied boolean DEFAULT false,
-    imported_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    imported_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    tracker_version text,
+    round_key text,
+    capabilities jsonb
 );
 
 
@@ -7361,6 +7364,13 @@ CREATE INDEX idx_proximity_lua_trade_kill_round_lookup_unlinked ON public.proxim
 --
 
 CREATE INDEX idx_proximity_objective_focus_round_id ON public.proximity_objective_focus USING btree (round_id) WHERE (round_id IS NOT NULL);
+
+
+--
+-- Name: idx_proximity_processed_round_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_proximity_processed_round_key ON public.proximity_processed_files USING btree (round_key) WHERE (round_key IS NOT NULL);
 
 
 --

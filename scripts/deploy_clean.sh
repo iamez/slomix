@@ -188,6 +188,33 @@ if [ "$AUTO_YES" = false ]; then
   fi
 fi
 
+# ─── Step 3.5: FRESH-DB GATE (IMP-001) — before ANY mutation ─────────────────
+# This script is the FRESH-BOOTSTRAP workflow ONLY. Its later steps apply the
+# canonical schema dump and then `--baseline` the migration ledger — which
+# records every migration as applied WITHOUT comparing the actual schema
+# (apply_migrations.py cmd_baseline). That is only sound on a provably EMPTY
+# database. The gate therefore runs BEFORE stopping services, uploading, or
+# extracting anything: an existing deployment must use deploy_release.sh.
+# Proof of emptiness = ZERO relations in the public schema (not just a couple
+# of sentinel tables).
+echo ""
+echo "[3.5] Fresh-database gate (bootstrap-only guard)..."
+DB_PASS_GATE=$($SSH "grep -E '^POSTGRES_PASSWORD=' $VM_PATH/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\"'" || true)
+if [ -z "$DB_PASS_GATE" ]; then
+  echo "  [ABORT] Cannot read POSTGRES_PASSWORD from $VM_PATH/.env — unable to"
+  echo "          prove the database is empty. Provision .env first (slomix_vm_setup.sh)."
+  exit 1
+fi
+PUBLIC_TABLES=$($SSH "PGPASSWORD='$DB_PASS_GATE' psql -h localhost -U etlegacy_user -d etlegacy -tAc \
+  \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'\"" || echo "ERR")
+if [ "$PUBLIC_TABLES" != "0" ]; then
+  echo "  [ABORT] public schema is not empty (tables=$PUBLIC_TABLES) or unreachable."
+  echo "          This workflow is for FRESH installs only. For an existing"
+  echo "          deployment use: SUDO_PASS=<pass> ./scripts/deploy_release.sh <tag>"
+  exit 1
+fi
+echo "  public schema empty — fresh bootstrap confirmed."
+
 # ─── Step 4: Stop services ───────────────────────────────────────────────────
 echo ""
 echo "[ 4 ] Stopping services..."
@@ -279,27 +306,42 @@ if [ "$UPDATE_DEPS" = true ]; then
   echo "  Bot packages updated."
 
   echo "  Web venv..."
-  $SSH "$VM_PATH/venv-web/bin/pip install --quiet -r $VM_PATH/requirements.txt 2>&1" | tail -5
+  # The web service runs from ITS OWN manifest — installing the root
+  # requirements here left the web venv without its web-only pins (IMP-001).
+  $SSH "$VM_PATH/venv-web/bin/pip install --quiet -r $VM_PATH/website/requirements.txt 2>&1" | tail -5
   echo "  Web packages updated."
 else
   echo "[ 7 ] Skipping dep update (use --update-deps to reinstall)"
 fi
 
-# ─── Step 8: Apply DB schema ─────────────────────────────────────────────────
+# ─── Step 8: Apply DB schema + baseline the migration ledger ─────────────────
+# Fresh-bootstrap contract (IMP-001): the step-3.5 gate proved the public
+# schema empty, so the canonical dump is applied with ON_ERROR_STOP=1 — on an
+# empty database every error is REAL and must abort (the old =0 tolerated
+# errors because it ran against populated DBs, which this workflow now
+# refuses). Afterwards the migration ledger is baselined (the dump already
+# CONTAINS every migration's effect) and validated clean, so the very first
+# deploy_release.sh run starts from a sound ledger.
 echo ""
-echo "[ 8 ] Applying DB schema (IF NOT EXISTS — idempotent)..."
+echo "[ 8 ] Applying DB schema (fresh bootstrap, ON_ERROR_STOP=1)..."
 
 DB_PASS=$($SSH "grep -E '^POSTGRES_PASSWORD=' $VM_PATH/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\"'" || true)
 
 if [ -z "$DB_PASS" ]; then
-  echo "  [WARN] Could not read DB password — skipping schema step."
-else
-  SCHEMA_OUT=$($SSH "PGPASSWORD='$DB_PASS' psql -h localhost -U etlegacy_user -d etlegacy \
-    -f $VM_PATH/tools/schema_postgresql.sql \
-    -v ON_ERROR_STOP=0 2>&1 \
-    | grep -cE 'CREATE TABLE|CREATE INDEX'" 2>/dev/null || echo "0")
-  echo "  Schema applied ($SCHEMA_OUT new objects created)."
+  echo "  [ABORT] Could not read DB password — cannot bootstrap the schema."
+  exit 1
 fi
+$SSH "PGPASSWORD='$DB_PASS' psql -h localhost -U etlegacy_user -d etlegacy \
+  -f $VM_PATH/tools/schema_postgresql.sql \
+  -v ON_ERROR_STOP=1 -q" || { echo "  [ABORT] schema apply failed."; exit 1; }
+echo "  Schema applied."
+
+echo "  Baselining migration ledger (dump ⊇ migrations — CI parity test proves it)..."
+$SSH "cd $VM_PATH && venv-web/bin/python scripts/apply_migrations.py --baseline" \
+  || { echo "  [ABORT] ledger baseline failed."; exit 1; }
+$SSH "cd $VM_PATH && venv-web/bin/python scripts/apply_migrations.py --validate" \
+  || { echo "  [ABORT] ledger validation failed after baseline."; exit 1; }
+echo "  Ledger baselined + validated clean."
 
 # ─── Step 9: Fix ownership and permissions ────────────────────────────────────
 echo ""

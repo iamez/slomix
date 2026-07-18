@@ -646,28 +646,31 @@ async def cmd_apply(only: list[str] | None = None):
             start = time.monotonic()
             try:
                 body = unwrap_outer_transaction(sql)
+                # IMP-008: the statement-by-statement CONCURRENTLY path is NOT
+                # atomic (a mid-file failure leaves earlier statements applied),
+                # which silently violates the same-transaction SQL+ledger
+                # contract every other path guarantees. No committed migration
+                # uses it (test_every_repo_migration_is_accepted), so refuse the
+                # latent escape hatch until a dedicated non-transactional
+                # contract is agreed. Operator path for a genuine CONCURRENTLY
+                # migration today: apply manually via psql, then `--mark`.
+                if requires_non_transactional(body):
+                    raise MigrationRejected(
+                        "contains CONCURRENTLY, which cannot run inside the "
+                        "runner's transaction; the non-atomic fallback is "
+                        "disabled (IMP-008). Apply manually via psql, then "
+                        "record it with --mark."
+                    )
             except MigrationRejected as e:
                 print("REJECTED")
                 print(f"    Error: {e}")
                 sys.exit(1)
 
             try:
-                if requires_non_transactional(body):
-                    # CREATE INDEX CONCURRENTLY etc. refuse to run inside a
-                    # transaction block; apply statement-by-statement (each
-                    # autocommits) and record success separately. Not atomic —
-                    # a mid-file failure leaves earlier statements applied,
-                    # which the failure row + non-zero exit make visible.
-                    print("(non-transactional: CONCURRENTLY) ... ", end="", flush=True)
-                    for stmt in split_statements(body):
-                        await conn.execute(stmt)
+                async with conn.transaction():
+                    await conn.execute(body)
                     elapsed_ms = int((time.monotonic() - start) * 1000)
                     await conn.execute(_SUCCESS_UPSERT, version, filename, checksum, elapsed_ms)
-                else:
-                    async with conn.transaction():
-                        await conn.execute(body)
-                        elapsed_ms = int((time.monotonic() - start) * 1000)
-                        await conn.execute(_SUCCESS_UPSERT, version, filename, checksum, elapsed_ms)
                 print(f"OK ({elapsed_ms}ms)")
             except Exception as e:
                 elapsed_ms = int((time.monotonic() - start) * 1000)

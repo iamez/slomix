@@ -164,6 +164,8 @@ CHECKOUT_CHANGED=false
 MODERN_SWAPPED=false
 SERVICES_STOPPED=false
 SERVICES_RESTARTED=false
+ENV_SNAPSHOT=""
+ENV_SNAPSHOT_TAKEN=false
 
 recover_on_failure() {
   local rc=$?
@@ -224,16 +226,56 @@ recover_on_failure() {
   fi
 
   # Window 2: failed after services were stopped, before they were confirmed
-  # restarted — auto-restart both on whatever code is currently checked out.
+  # restarted. Before restarting, roll the code BACK to $CURRENT_COMMIT (plus
+  # the modern bundle and .env snapshot when applicable): the dangerous
+  # direction is NEW code starting against a database that did not receive its
+  # migrations. (Migrations that DID succeed before the failure stay applied —
+  # they are additive by policy, and the old code tolerates an additive schema.)
   if ! $SERVICES_STOPPED || $SERVICES_RESTARTED; then
     exit "$rc"
   fi
   echo "" >&2
   warn "═════════════════════════════════════════════════════════════"
   warn "Deploy aborted (rc=$rc) after services were stopped, before"
-  warn "they were confirmed restarted. Auto-recovery: starting both"
-  warn "services on whatever code is currently checked out on the VM."
+  warn "they were confirmed restarted. Auto-recovery: restoring the"
+  warn "pre-deploy code ($CURRENT_COMMIT) and starting both services."
   warn "═════════════════════════════════════════════════════════════"
+  local rollback_rc=0
+  local modern_restore=""
+  if $MODERN_SWAPPED; then
+    modern_restore="rm -rf website/static/modern.new; \
+      if [ -d website/static/modern.prev ]; then \
+        rm -rf website/static/modern && \
+        mv website/static/modern.prev website/static/modern && \
+        echo '  restored previous modern bundle'; \
+      fi;"
+  fi
+  $SSH "cd $VM_PATH && git checkout -f $CURRENT_COMMIT && { \
+    RSHA=\$(git rev-parse --short HEAD); \
+    sed -i \"s|?v=[A-Za-z0-9._-]\\+|?v=\$RSHA|g\" website/index.html website/js/*.js 2>/dev/null || true; \
+    $modern_restore \
+    true; \
+  }" || rollback_rc=$?
+  if [ "$rollback_rc" -ne 0 ]; then
+    warn "Code rollback to $CURRENT_COMMIT FAILED (rc=$rollback_rc) — services"
+    warn "will start on the CURRENT checkout. Verify schema/code compatibility!"
+  fi
+  # Restore the pre-deploy .env from the root-only snapshot (a failure after
+  # the flag write must not leave half-applied flags). install(1) preserves
+  # content; ownership/mode are restored to the canonical slomix_bot:slomix 640.
+  if $ENV_SNAPSHOT_TAKEN && [ -n "$ENV_SNAPSHOT" ]; then
+    local envrestore_rc=0
+    if [ -n "${SUDO_PASS:-}" ]; then
+      printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -- bash -c 'install -o slomix_bot -g slomix -m 640 $ENV_SNAPSHOT $VM_PATH/.env'" || envrestore_rc=$?
+    else
+      $SSH "sudo -n -- bash -c 'install -o slomix_bot -g slomix -m 640 $ENV_SNAPSHOT $VM_PATH/.env'" || envrestore_rc=$?
+    fi
+    if [ "$envrestore_rc" -eq 0 ]; then
+      warn ".env restored from snapshot $ENV_SNAPSHOT"
+    else
+      warn ".env snapshot restore FAILED (rc=$envrestore_rc): sudo install -o slomix_bot -g slomix -m 640 $ENV_SNAPSHOT $VM_PATH/.env"
+    fi
+  fi
   local recover_rc=0
   if [ -n "${SUDO_PASS:-}" ]; then
     printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -- systemctl start slomix-web slomix-bot" || recover_rc=$?
@@ -420,6 +462,19 @@ run_remote "cd $VM_PATH && \
 # deploy, which must NOT be restored over the current-and-correct bundle.
 $DRY_RUN || MODERN_SWAPPED=true
 
+# ─── 3d. Install Python dependencies into both venvs ─────────────────────────
+# Each venv installs from ITS OWN manifest: the web service runs from
+# website/requirements.txt, the bot from the root requirements.txt (IMP-005:
+# without this step, new pins — e.g. prometheus-client for the web venv — never
+# reached production at all). Runs BEFORE services stop, so a resolver/network
+# failure aborts with zero downtime and the window-1 rollback restores the
+# checkout. pip is idempotent: unchanged manifests are a fast no-op.
+log "3d/8 Install Python deps (venv-bot ← requirements.txt, venv-web ← website/requirements.txt)"
+run_remote "cd $VM_PATH && \
+  venv-bot/bin/pip install -q -r requirements.txt && \
+  venv-web/bin/pip install -q -r website/requirements.txt && \
+  echo '  dependencies OK'"
+
 # ─── 4. Stop services (clean restart) ─────────────────────────────────────────
 log "4/8  Stop services before migration"
 sudo_run "systemctl stop slomix-web slomix-bot"
@@ -436,34 +491,41 @@ SERVICES_STOPPED=true
 # interpreter is pinned to the production web venv; a missing interpreter,
 # an apply failure, or post-apply ledger drift each abort the deploy.
 VM_PY="venv-web/bin/python"
+run_remote "cd $VM_PATH && \
+  if [ ! -x $VM_PY ]; then \
+    echo \"ERROR: $VM_PY missing on VM — refusing to deploy without the ledger runner\" >&2; \
+    exit 1; \
+  fi"
 if $SKIP_MIGRATIONS; then
-  log "5/8  Skipping migrations (--skip-migrations)"
+  log "5/8  Skipping migration APPLY (--skip-migrations) — ledger validation still runs"
+elif [ ${#MIGRATIONS[@]} -gt 0 ]; then
+  log "5/8  Apply ${#MIGRATIONS[@]} migration(s) via apply_migrations.py (transactional + ledger)"
+  run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --only ${MIGRATIONS[*]}"
 else
-  run_remote "cd $VM_PATH && \
-    if [ ! -x $VM_PY ]; then \
-      echo \"ERROR: $VM_PY missing on VM — refusing to run migrations without the ledger runner\" >&2; \
-      exit 1; \
-    fi"
-  if [ ${#MIGRATIONS[@]} -gt 0 ]; then
-    log "5/8  Apply ${#MIGRATIONS[@]} migration(s) via apply_migrations.py (transactional + ledger)"
-    run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --only ${MIGRATIONS[*]}"
-  else
-    log "5/8  No migrations queued — validating ledger only"
-  fi
-  # Validate ALWAYS (even with an empty MIGRATIONS list): a release config that
-  # forgot to list a migration the tag actually adds would otherwise start the
-  # new code against the old schema with no error. --validate catches the
-  # omitted pending migration (and any drift) and aborts the deploy (Codex #509).
-  log "  Validating migration ledger (pending/failed/missing/checksum drift aborts deploy)"
-  run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --validate"
+  log "5/8  No migrations queued — validating ledger only"
 fi
+# Validate ALWAYS — including with --skip-migrations (IMP-001 / DoD: "the
+# ledger can no longer be skipped by a deploy"). --skip-migrations only skips
+# the APPLY; a code-only deploy still refuses to proceed over ledger drift
+# (pending/failed/missing/checksum), so no deploy path bypasses the ledger.
+log "  Validating migration ledger (pending/failed/missing/checksum drift aborts deploy)"
+run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --validate"
 
 # ─── 6. Update .env flags (idempotent, sudo'd) ────────────────────────────────
 # /opt/slomix/.env is owned by slomix_bot:slomix mode 640. The deploy user
 # (slomix) has read but not write — every write must go through sudo.
 # We learned this the hard way on 2026-05-13 (PermissionError mid-deploy).
 if ! $SKIP_FLAGS && [ ${#FLAGS[@]} -gt 0 ]; then
-  log "6/8  Add ${#FLAGS[@]} feature flag(s) to /opt/slomix/.env (via sudo)"
+  # Snapshot .env into a ROOT-ONLY location OUTSIDE the checkout before any
+  # flag write, so a failure between the flag write and service restart can
+  # restore the exact pre-deploy env. Deliberately NOT in /opt/slomix (a
+  # secret backup inside the checkout is exactly what audit AUD-010 bans).
+  # Retention: the last 10 snapshots are kept (pruned below on success).
+  ENV_SNAPSHOT="/var/backups/slomix/env/${TAG}-$(date +%Y%m%d-%H%M%S).env"
+  log "6/8  Snapshot .env → $ENV_SNAPSHOT (root-only, mode 600)"
+  sudo_run "bash -c 'mkdir -p /var/backups/slomix/env && chmod 700 /var/backups/slomix /var/backups/slomix/env && install -o root -g root -m 600 $VM_PATH/.env $ENV_SNAPSHOT'"
+  $DRY_RUN || ENV_SNAPSHOT_TAKEN=true
+  log "     Add ${#FLAGS[@]} feature flag(s) to /opt/slomix/.env (via sudo)"
   for KV in "${FLAGS[@]}"; do
     KEY="${KV%%=*}"
     VAL="${KV#*=}"
@@ -541,5 +603,12 @@ if [ ${#FLAGS[@]} -gt 0 ]; then
     KEY="${KV%%=*}"
     echo "    ssh -i $VM_KEY $VM_USER@$VM_HOST \"sudo sed -i 's/^${KEY}=.*/${KEY}=false/' $VM_PATH/.env && sudo systemctl restart slomix-web slomix-bot\""
   done
+fi
+# Retention: keep only the newest 10 .env snapshots (root-only dir). Runs only
+# after a fully successful deploy — a failed deploy keeps every snapshot for
+# forensics. ls -t sorts newest-first; tail -n +11 selects the 11th onward.
+if $ENV_SNAPSHOT_TAKEN; then
+  log "Pruning .env snapshots (keep newest 10) in /var/backups/slomix/env"
+  sudo_run "bash -c 'cd /var/backups/slomix/env && ls -t | tail -n +11 | xargs -r rm --'" || warn "snapshot prune failed (non-fatal)"
 fi
 echo

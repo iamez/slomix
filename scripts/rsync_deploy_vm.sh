@@ -19,6 +19,21 @@
 
 set -euo pipefail
 
+# ═══════════════════════════════════════════════════════════════════════════
+# RETIRED (IMP-001, audit AUD-002): this script bypasses the migration ledger
+# (it only COUNTS migration files, never applies or validates them) and has
+# additional known hazards (.audit-venv / React-build). Every production
+# deploy MUST go through scripts/deploy_release.sh, which applies migrations
+# through the transactional runner and validates the ledger on every run.
+# There is deliberately NO override flag — any override recreates the ledger
+# bypass this retirement exists to close. The body below is kept for
+# reference only and is unreachable.
+echo "ERROR: rsync_deploy_vm.sh is RETIRED and must not be used for deploys." >&2
+echo "       Use: SUDO_PASS=<pass> ./scripts/deploy_release.sh <tag>" >&2
+echo "       (fresh installs: scripts/deploy_clean.sh)" >&2
+exit 1
+# ═══════════════════════════════════════════════════════════════════════════
+
 # ─── Config ──────────────────────────────────────────────────────────────────
 VM_HOST="192.168.64.159"
 VM_USER="slomix"
