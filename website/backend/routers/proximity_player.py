@@ -179,8 +179,12 @@ async def get_proximity_player_radar(
         # otherwise the player gets neutral 0.5 percentiles → meaningless 50.0 score.
         # total_eng is already computed above (line 169) from combat_engagement.
         teamplay = None
+        teamplay_source = None
+        teamplay_meta: dict = {}
+        fallback_reason = "below_min_engagements" if total_eng < 10 else None
         if total_eng >= 10:
             from website.backend.services.prox_scoring import (
+                FORMULA_VERSION_QUALITY,
                 MIN_METRIC_WEIGHT_COVERAGE,
                 compute_prox_scores,
             )
@@ -198,9 +202,23 @@ async def get_proximity_player_radar(
                 and prox_players[0].get("metric_weight_coverage", 0.0) >= MIN_METRIC_WEIGHT_COVERAGE
             ):
                 teamplay = prox_players[0]["prox_team"]
+                teamplay_source = "prox_team"
+                teamplay_meta = {
+                    "teamplay_formula_version": FORMULA_VERSION_QUALITY,
+                    "teamplay_degraded": False,
+                }
+            elif prox_result.get("status") == "degraded":
+                fallback_reason = "prox_degraded"
+            elif not prox_players:
+                fallback_reason = "prox_unavailable"
+            else:
+                fallback_reason = "below_coverage"
 
         if teamplay is None:
-            # Fallback: lightweight CF+TR queries with raised thresholds
+            # Fallback: a DIFFERENT, simpler formula (CF+TR per played session).
+            # IMP-003 contract: it must never masquerade as the prox_team score —
+            # the response carries its own formula version, window, sample count,
+            # the reason the primary score was unavailable, and a degraded flag.
             cf_row = await db.fetch_one(
                 """
                 SELECT COUNT(*), COUNT(DISTINCT session_date)
@@ -222,6 +240,13 @@ async def get_proximity_player_radar(
             cf_per_session = cf_total / cf_sessions
             trade_per_session = trade_total / trade_sessions
             teamplay = min(100, (min(cf_per_session / 20, 1) * 50) + (min(trade_per_session / 10, 1) * 50))
+            teamplay_source = "cf_tr_fallback"
+            teamplay_meta = {
+                "teamplay_formula_version": "cf-tr-v1",
+                "teamplay_sample_count": cf_total + trade_total,
+                "teamplay_fallback_reason": fallback_reason or "prox_unavailable",
+                "teamplay_degraded": True,
+            }
 
         # Timing + Mechanical rows already fetched in the gather() above.
         avg_timing = float(timing_row[0] or 0) if timing_row else 0
@@ -241,6 +266,13 @@ async def get_proximity_player_radar(
                 {"label": "Mechanical", "value": round(mechanical, 1)},
             ],
             "composite": round((aggression + awareness + teamplay + timing + mechanical) / 5, 1),
+            # IMP-003 teamplay formula contract: which formula produced the
+            # Teamplay axis, its version/window, and — for the CF/TR fallback —
+            # sample count, the reason the prox score was unavailable, and a
+            # degraded flag so the UI can label the axis as an estimate.
+            "teamplay_source": teamplay_source,
+            "teamplay_observation_window_days": range_days,
+            **teamplay_meta,
         }
     except Exception:
         logger.exception("Proximity endpoint error")

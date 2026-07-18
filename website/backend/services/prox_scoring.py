@@ -20,16 +20,40 @@ logger = logging.getLogger(__name__)
 # FORMULA CONFIG — edit this to tweak scoring
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Canonical version bumped 1.0 → 2.0: this commit changes the actual scores
-# (midrank normalization + coverage gating), so get_formula_config(), the
-# formula registry, and the UI subtitle must not keep advertising v1.0 while
-# responses carry prox-web-v2.0 (Codex review on #512).
-FORMULA_VERSION = "2.0"
+# Canonical version history: 1.0 → 2.0 (midrank normalization + coverage
+# gating, #512) → 2.1 (IMP-003: trades_per_session denominator = sessions
+# PLAYED, exact-round true-zero fill, single-player MIN_ENGAGEMENTS). Any
+# change to what the numbers MEAN bumps this — the registry and UI import it.
+FORMULA_VERSION = "2.1"
 # Quality-contract semantics (audit AUD-008): a failed source withholds the
 # ranking instead of silently substituting neutral 0.5; ties use midrank; a
 # player is scored only above MIN_METRIC_WEIGHT_COVERAGE of real (non-missing)
 # metric weight. The detailed variant string carried in score responses.
-FORMULA_VERSION_QUALITY = "prox-web-v2.0"
+FORMULA_VERSION_QUALITY = "prox-web-v2.1"
+
+# ── METRIC SEMANTICS (IMP-003) — the 0-vs-NULL contract per metric ──────────
+# metric                numerator / denominator            0 when …            NULL when …
+# escape_rate           escapes / engagements              engaged, 0 escapes  no engagements (unqualified anyway)
+# return_fire_ms        AVG reaction                       —                   no reaction samples (avg has no 0)
+# dodge_ms              AVG reaction                       —                   no reaction samples
+# support_reaction_ms   AVG reaction                       —                   no reaction samples
+# kpr                   gibs / (gibs+revived)              0 gibs, >0 outcomes no kill outcomes
+# peak_speed            MAX speed                          —                   no movement tracks
+# headshot_pct          head hits / hits                   hits, 0 head        no hit rows
+# spawn_score           AVG timing score                   —                   no timed kills (avg)
+# timed_kills           COUNT spawn-timed kills            EXACT-ROUND scope + source captured (see below)
+# crossfire_rate        executed / opportunities           opportunities>0, 0 executed   NO opportunities (ratio undefined — NEVER zero-filled)
+# trades_per_session    trades / sessions PLAYED           EXACT-ROUND scope + source captured; else NULL without trade rows
+# revive_rate_as_victim revived / times killed             killed, 0 revived   never killed
+# focus_survival        AVG focus score                    —                   <3 focus events (avg)
+# sprint/distance/…     AVG movement                       —                   NULL aggregates preserved
+# stance_variety        entropy of stance mix              —                   no stance time
+#
+# "source captured" proof today = the source query succeeded AND returned ≥1
+# row in the SAME exact round (someone's event exists in the shared tracker
+# artifact). Broad range_days windows mix pre/post-feature periods, so their
+# missing values stay NULL until a per-round capability manifest or
+# owner-verified per-source coverage epochs exist.
 
 # Minimum engagements/tracks to be scored (prevents noisy data)
 MIN_ENGAGEMENTS = 10
@@ -278,9 +302,14 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
 
     all_guids = list(raw_data.keys())
 
-    # Filter out players with too few engagements
+    # Filter out players with too few engagements. MIN_ENGAGEMENTS applies to
+    # the SINGLE-PLAYER path too (IMP-003): a sub-threshold player must not
+    # receive a mostly-neutral score just because other qualified players exist
+    # — the caller (profile radar) falls back to its labeled CF/TR estimate.
     qualified_guids = [g for g in all_guids if raw_data[g].get("engagements", 0) >= MIN_ENGAGEMENTS]
     if not qualified_guids:
+        return _ok([])
+    if player_guid and raw_data.get(player_guid, {}).get("engagements", 0) < MIN_ENGAGEMENTS:
         return _ok([])
 
     # Coverage per player = fraction of the composite's EFFECTIVE metric weight
@@ -465,7 +494,8 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
             SELECT target_guid, MAX(target_name) as name,
                    COUNT(*) as engagements,
                    SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END)::REAL
-                     / NULLIF(COUNT(*), 0) as escape_rate
+                     / NULLIF(COUNT(*), 0) as escape_rate,
+                   COUNT(DISTINCT session_date) as sessions_played
             FROM combat_engagement
             {scope}
             GROUP BY target_guid
@@ -551,8 +581,7 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
         """),
         ("proximity_lua_trade_kill", """
             SELECT trader_guid, MAX(trader_name),
-                   COUNT(*) as trades,
-                   COUNT(DISTINCT session_date) as sessions
+                   COUNT(*) as trades
             FROM proximity_lua_trade_kill
             {scope}
             GROUP BY trader_guid
@@ -599,12 +628,16 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
             return None
         return r
 
-    # 1. Engagements: escape_rate, engagement count
+    # 1. Engagements: escape_rate, engagement count, sessions PLAYED. The
+    # dunder key is internal (not a metric): it is the participation
+    # denominator for trades_per_session (IMP-003 — "trades / sessions with a
+    # trade" overstated everyone with sparse trades).
     if (rows := _rows(0)) is not None:
         for r in rows:
             _merge(r[0], r[1], {
                 "engagements": int(r[2] or 0),
                 "escape_rate": float(r[3] or 0),
+                "__sessions_played__": int(r[4] or 0),
             })
 
     # 2. Reactions: return_fire_ms, dodge_ms, support_reaction_ms
@@ -703,13 +736,14 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
                 "crossfire_rate": executed / max(total, 1),
             })
 
-    # 9. Trade kills per session
+    # 9. Trade kills — RAW count here; the rate is derived below against the
+    # participation denominator (sessions PLAYED from combat_engagement), not
+    # sessions-with-a-trade (IMP-003: COUNT(DISTINCT session_date) over trade
+    # rows made one trade in one of three played sessions look like 1.0/session).
     if (rows := _rows(8)) is not None:
         for r in rows:
-            trades = int(r[2] or 0)
-            sessions = max(int(r[3] or 1), 1)
             _merge(r[0], r[1], {
-                "trades_per_session": trades / sessions,
+                "__trades_raw__": int(r[2] or 0),
             })
 
     # 10. Focus fire score
@@ -718,6 +752,50 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
             _merge(r[0], r[1], {
                 "focus_survival": float(r[3] or 0),
             })
+
+    # Derive trades_per_session against the PARTICIPATION denominator: trades
+    # divided by sessions the player actually PLAYED (combat_engagement), never
+    # sessions-with-a-trade (IMP-003). Players with trade rows but no
+    # engagement rows in scope have no sound denominator → metric stays missing.
+    for pdata in players.values():
+        raw_trades = pdata.pop("__trades_raw__", None)
+        sessions_played = pdata.get("__sessions_played__") or 0
+        if raw_trades is not None and sessions_played > 0:
+            pdata["trades_per_session"] = raw_trades / sessions_played
+
+    # TRUE-ZERO fill (IMP-003) — EXACT-ROUND scope only. In a single-round
+    # scope, another player's event in the SAME round proves the shared
+    # tracker artifact captured that signal, so an engagement-qualified player
+    # absent from the source genuinely recorded ZERO. Broad windows
+    # (range_days) mix periods before/after a tracker feature existed, so a
+    # missing value there stays MISSING until a per-round capability manifest
+    # or owner-verified per-source coverage epochs exist (documented follow-up).
+    # crossfire_rate is NEVER zero-filled: with zero opportunities the ratio is
+    # undefined, and a real 0 (opportunities > 0, executed = 0) already comes
+    # back from the query itself. Averages likewise stay missing (no signal ≠ 0).
+    exact_round_scope = (
+        session_date is not None
+        and map_name is not None
+        and round_number is not None
+        and round_start_unix is not None
+    )
+    if exact_round_scope:
+        _by_label = {s["source"]: s for s in sources}
+        _zero_rules = (
+            ("proximity_lua_trade_kill", "trades_per_session"),
+            ("proximity_spawn_timing", "timed_kills"),
+        )
+        for src_label, metric in _zero_rules:
+            src = _by_label.get(src_label)
+            # Capture proof: the source query succeeded AND returned at least
+            # one row in THIS round (someone's event exists in the artifact).
+            if not src or not src["success"] or src["row_count"] < 1:
+                continue
+            for pdata in players.values():
+                if pdata.get("engagements", 0) < MIN_ENGAGEMENTS:
+                    continue
+                if pdata.get(metric) is None:
+                    pdata[metric] = 0.0
 
     for s in sources:
         s["duration_ms"] = _elapsed_ms  # gather() is concurrent → shared wall time
