@@ -19,7 +19,7 @@ v3 fixes both WITHOUT retuning weights (isolate the correction):
     is reported empirically and lands near, but is not forced to, 0.50.)
 
 Status: SHADOW. Computed and exposed under an explicit v3 endpoint for
-review; v2 stays the public rating. Promotion gates (≥20 eligible players,
+review; v2 stays the public rating. Promotion gates (≥20 round-qualified players,
 split-half Spearman ≥ 0.70, |corr(score, coverage)| ≤ 0.15, leave-one-family
 -out median rank shift ≤ 3) are owner-reviewed over ≥30 days / 8 sessions
 before v3 becomes user-visible (remediation plan §6).
@@ -165,28 +165,34 @@ def score_population(players: list[dict]) -> list[dict]:
             "display_name": p["display_name"],
             "rounds": p["rounds"],
             "et_performance_v3": round(score, 4),
+            # Honest null (IMP-004): per-player telemetry coverage cannot be
+            # computed until proximity_processed_files.capabilities (migration
+            # 062) is backfilled. null = "unknown", never a claimed fraction.
+            "telemetry_coverage": None,
             "components": components,
         })
     scored.sort(key=lambda x: x["et_performance_v3"], reverse=True)
     return scored
 
 
-def _population_coverage(players: list[dict]) -> float:
-    """Fraction of players that have any real proximity signal (telemetry).
+def _population_coverage_proxy(players: list[dict]) -> float:
+    """DIAGNOSTIC-ONLY proxy: fraction of players with any off-neutral scoped
+    proximity value.
 
-    A player whose every proximity metric sits at its neutral default has no
-    telemetry coverage. This is the population-level proxy until
-    proximity_processed_files.capabilities (migration 062) is backfilled to
-    give a precise per-round coverage.
+    This is NOT telemetry coverage and must never gate eligibility (IMP-004):
+    a player whose every proximity metric sits at its neutral default might
+    have zero telemetry — or might genuinely have earned those zeros. The two
+    are indistinguishable until proximity_processed_files.capabilities
+    (migration 062) is backfilled. Until then this number only signals "how
+    many players show any proximity signal at all" for owner review.
     """
     if not players:
         return 0.0
     # Only EPOCH-SCOPED proximity metrics can indicate epoch telemetry. crossfire
     # is unscoped/neutralized, so an old all-time crossfire rate must NOT mark a
-    # player covered (Codex #513). A metric counts as telemetry when its raw is
+    # player covered (Codex #513). A metric counts as a signal when its raw is
     # off its own neutral default (kill_quality neutral is 1.0, the rest 0.0 —
-    # not a blanket (0.0, 1.0), Copilot #513). This is a coarse proxy pending the
-    # migration-062 capability manifest.
+    # not a blanket (0.0, 1.0), Copilot #513).
     scoped_prox = [m for m in PROXIMITY_METRICS if m not in UNSCOPED_METRICS]
     covered = 0
     for p in players:
@@ -199,15 +205,62 @@ def _population_coverage(players: list[dict]) -> float:
     return covered / len(players)
 
 
+def _observed_players(players: list[dict]) -> dict[str, int | None]:
+    """Per-metric count of players whose value was OBSERVED (diagnostic).
+
+    PCS metrics come from player_comprehensive_stats, which every rated round
+    writes — observed for the whole cohort. Scoped proximity metrics use the
+    off-neutral proxy (an observed zero is indistinguishable from missing
+    telemetry pre-062, so these are LOWER BOUNDS). Unscoped metrics are
+    neutralized and never observed → None.
+    """
+    counts: dict[str, int | None] = {}
+    for m in WEIGHTS:
+        if m in UNSCOPED_METRICS:
+            counts[m] = None
+        elif m in PROXIMITY_METRICS:
+            counts[m] = sum(
+                1 for p in players if _metric_raw(p, m) != _PROXIMITY_NEUTRAL[m]
+            )
+        else:
+            counts[m] = len(players)
+    return counts
+
+
+async def _observation_end(db) -> str | None:
+    """MAX(round_date) over the rounds the v3 epoch aggregation actually
+    includes (same gates: valid, non-bot, human player rows, epoch cutoff).
+
+    The observation window must end at the last INCLUDED round, not "today" —
+    a stale pipeline would otherwise silently stretch the claimed window
+    (IMP-004). round_date is ISO text, so MAX() is chronological.
+    """
+    row = await db.fetch_one("""
+        SELECT MAX(pcs.round_date)
+        FROM player_comprehensive_stats pcs
+        WHERE pcs.round_number > 0
+          AND pcs.round_id IN (
+              SELECT id FROM rounds
+              WHERE is_valid AND NOT COALESCE(is_bot_round, FALSE)
+          )
+          AND pcs.player_guid NOT LIKE 'OMNIBOT%'
+          AND pcs.player_name NOT LIKE '[BOT]%'
+          AND pcs.round_date >= $1
+    """, (EPOCH_START,))
+    return row[0] if row and row[0] else None
+
+
 async def compute_et_performance_v3(db) -> dict:
     """Compute the ET Performance v3 shadow rating with metadata.
 
     Returns:
         {
           "formula_version", "epoch_start", "min_rounds",
-          "eligible_count", "scored_count", "unrated_reasons",
-          "mean_rating", "median_rating", "coverage", "unscoped_metrics",
-          "players": [ ... ]   # eligible players, ranked
+          "round_qualified_count", "eligible_count" (null), "eligibility_status",
+          "scored_count", "unrated_reasons", "observation_start",
+          "observation_end", "mean_rating", "median_rating", "coverage_proxy",
+          "observed_players", "unscoped_metrics",
+          "players": [ ... ]   # round-qualified players, ranked
         }
     """
     population = await compute_all_ratings(db, epoch_start=EPOCH_START, min_rounds=1)
@@ -232,22 +285,33 @@ async def compute_et_performance_v3(db) -> dict:
         "formula_version": FORMULA_VERSION,
         "epoch_start": EPOCH_START,
         "min_rounds": MIN_ROUNDS_V3,
-        "eligible_count": len(scored),
+        # Honest eligibility (IMP-004): passing the round threshold does NOT
+        # make a player "eligible" — true eligibility additionally requires
+        # per-round telemetry coverage, which needs the migration-062
+        # capability backfill. Until then eligible_count is null (unknown),
+        # never the round-qualified count dressed up as eligibility.
+        "round_qualified_count": len(scored),
+        "eligible_count": None,
+        "eligibility_status": "pending_capabilities",
         "scored_count": len(scored),
         "unrated_reasons": unrated,
+        # The claimed window ends at the last INCLUDED valid round, not "now".
+        "observation_start": EPOCH_START,
+        "observation_end": await _observation_end(db),
         "mean_rating": round(mean_rating, 4) if mean_rating is not None else None,
         "median_rating": round(median, 4) if median is not None else None,
-        # Coverage from eligible_pop, NOT scored: score_population() keeps only
-        # the 3-decimal display raw, but coverage must use the unrounded
+        # Proxy from eligible_pop, NOT scored: score_population() keeps only
+        # the 3-decimal display raw, but the proxy must use the unrounded
         # raw_stats (a trade_rate of 0.0004 rounds to 0.000 == neutral and would
         # be miscounted as uncovered) (Codex #513).
-        "coverage": round(_population_coverage(eligible_pop), 3),
-        "coverage_note": (
-            "Coarse proxy: shares of players with any off-neutral epoch-scoped "
-            "proximity value. It cannot yet distinguish an observed zero from "
-            "absent telemetry — that needs the migration-062 capability manifest "
-            "(not read yet). One reason v3 stays shadow-only."
+        "coverage_proxy": round(_population_coverage_proxy(eligible_pop), 3),
+        "coverage_proxy_note": (
+            "DIAGNOSTIC ONLY — share of players with any off-neutral "
+            "epoch-scoped proximity value. It cannot distinguish an observed "
+            "zero from absent telemetry (needs the migration-062 capability "
+            "manifest) and gates nothing. One reason v3 stays shadow-only."
         ),
+        "observed_players": _observed_players(eligible_pop),
         "unscoped_metrics": sorted(UNSCOPED_METRICS),
         "abs_weight_sum": round(_ABS_WEIGHT_SUM, 4),
         "players": scored,
