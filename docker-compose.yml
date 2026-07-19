@@ -62,7 +62,11 @@ services:
       # overridable from .env. Compose does NOT auto-inject .env vars that aren't
       # referenced here, so TRUSTED_HOSTS must be listed (Codex P1 #510).
       SESSION_HTTPS_ONLY: ${SESSION_HTTPS_ONLY:-false}
-      TRUSTED_HOSTS: ${TRUSTED_HOSTS:-localhost,127.0.0.1}
+      # `api` must be on the allow-list: the observability-profile Prometheus
+      # scrapes the service as api:8000, and the outermost host gate compares
+      # hostnames — without it every /metrics scrape 400s and the alert rules
+      # never receive samples (Codex on #521).
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS:-localhost,127.0.0.1,api}
       WEBSITE_HOST: 0.0.0.0
       WEBSITE_PORT: 8000
       CORS_ORIGINS: http://localhost:7000,http://127.0.0.1:7000

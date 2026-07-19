@@ -333,3 +333,13 @@ async def test_degraded_gauge_scope_labels(degraded_gauge):
         FakeDB(fail_source="combat_engagement"), session_date="2026-07-18"
     )
     assert degraded_gauge.set_calls == [("round", 1.0)]
+
+
+@pytest.mark.asyncio
+async def test_source_labels_constant_matches_query_catalog():
+    """PROX_SOURCE_LABELS pre-initializes the Prometheus counter children so
+    increase() can see a source's FIRST failure (Codex on #521) — it must
+    never drift from the actual query catalog."""
+    _, sources = await prox_scoring._fetch_raw_metrics(FakeDB(players={}), 30)  # noqa: SLF001
+    assert tuple(s["source"] for s in sources) == prox_scoring.PROX_SOURCE_LABELS
+    assert tuple(SOURCE_LABELS) == prox_scoring.PROX_SOURCE_LABELS

@@ -198,6 +198,27 @@ def _metric_effective_weights() -> dict[str, float]:
 
 
 _METRIC_EFFECTIVE_WEIGHT = _metric_effective_weights()
+
+# The 10 source labels _fetch_raw_metrics queries, in query-catalog order.
+# Kept as a module constant so the Prometheus counter children can be
+# PRE-INITIALIZED below: increase()/rate() cannot see the first increment of
+# a counter series that did not exist before it — a one-off first failure of
+# a source would never fire ProxSourceError (Codex on #521). A guard test
+# pins this list against the actual query catalog.
+PROX_SOURCE_LABELS = (
+    "combat_engagement", "proximity_reaction_metric", "proximity_spawn_timing",
+    "player_track", "proximity_kill_outcome_killer", "proximity_kill_outcome_victim",
+    "proximity_hit_region", "proximity_crossfire_opportunity",
+    "proximity_lua_trade_kill", "proximity_focus_fire",
+)
+
+try:  # touching .labels() creates the child series at 0
+    from website.backend.metrics import PROX_SOURCE_QUERIES as _PSQ
+    for _lbl in PROX_SOURCE_LABELS:
+        _PSQ.labels(source=_lbl, outcome="success")
+        _PSQ.labels(source=_lbl, outcome="error")
+except Exception:  # pragma: no cover - metrics must never break scoring
+    logger.debug("prox_scoring: counter pre-init skipped", exc_info=True)
 _TOTAL_EFFECTIVE_WEIGHT = sum(_METRIC_EFFECTIVE_WEIGHT.values())
 
 
