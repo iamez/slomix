@@ -8789,3 +8789,79 @@ CREATE TABLE IF NOT EXISTS parimutuel_bets (
     UNIQUE (market_id, user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_parimutuel_bets_market ON parimutuel_bets (market_id, choice);
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Drift closure (IMP-001, caught by tests/integration/test_fresh_bootstrap_parity.py):
+-- objects that migrations 030/051/053/054/056/059/060 create but earlier
+-- regenerations of this dump missed. A fresh bootstrap `--baseline`s the
+-- ledger against THIS file, so every migration effect must exist here.
+-- All statements are idempotent (IF NOT EXISTS) — safe on populated DBs.
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- 054: server-side KIS shadow audit
+CREATE TABLE IF NOT EXISTS storytelling_kis_shadow_audit (
+    id              SERIAL PRIMARY KEY,
+    session_date    DATE NOT NULL,
+    kill_outcome_id INTEGER NOT NULL,
+    python_impact   REAL NOT NULL,
+    sql_impact      REAL NOT NULL,
+    delta           REAL NOT NULL,
+    captured_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_kis_shadow_audit_session_date
+    ON storytelling_kis_shadow_audit(session_date);
+CREATE INDEX IF NOT EXISTS idx_kis_shadow_audit_session_delta
+    ON storytelling_kis_shadow_audit(session_date, ABS(delta) DESC);
+
+-- 056: player_links locale + twitch
+ALTER TABLE player_links
+    ADD COLUMN IF NOT EXISTS discord_locale character varying(16);
+ALTER TABLE player_links
+    ADD COLUMN IF NOT EXISTS twitch_login   character varying(64);
+
+-- 060: KIS formula version cache column
+ALTER TABLE storytelling_kill_impact
+    ADD COLUMN IF NOT EXISTS formula_version VARCHAR(20) NOT NULL DEFAULT 'kis-v2';
+CREATE INDEX IF NOT EXISTS idx_kis_session_formula_version
+    ON storytelling_kill_impact (session_date, formula_version);
+
+-- 059: rounds start-unix ordering index
+CREATE INDEX IF NOT EXISTS idx_rounds_start_unix
+    ON rounds (round_start_unix DESC)
+    WHERE round_start_unix IS NOT NULL AND gaming_session_id IS NOT NULL;
+
+-- 051: audit-surfaced hot-path indexes
+CREATE INDEX IF NOT EXISTS idx_round_correlations_r1_round_id
+    ON round_correlations (r1_round_id)
+    WHERE r1_round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_round_correlations_r2_round_id
+    ON round_correlations (r2_round_id)
+    WHERE r2_round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_pcs_player_guid_round_number
+    ON player_comprehensive_stats (player_guid, round_number)
+    WHERE round_number > 0;
+
+-- 030: objective-run round linkage index
+CREATE INDEX IF NOT EXISTS idx_prox_obj_run_round_id
+    ON proximity_objective_run(round_id) WHERE round_id IS NOT NULL;
+
+-- 053: weapon leaderboard matview (the whole matview was missing from the
+-- dump — invisible to the column snapshot, betrayed by its indexes)
+CREATE MATERIALIZED VIEW IF NOT EXISTS weapon_stats_mv AS
+SELECT
+    weapon_name,
+    round_date,
+    SUM(kills)::bigint        AS total_kills,
+    SUM(deaths)::bigint       AS total_deaths,
+    SUM(headshots)::bigint    AS total_headshots,
+    SUM(shots)::bigint        AS total_shots,
+    SUM(hits)::bigint         AS total_hits,
+    COUNT(*)::bigint          AS sample_rows,
+    MAX(created_at)           AS last_seen_at
+FROM weapon_comprehensive_stats
+WHERE weapon_name IS NOT NULL
+GROUP BY weapon_name, round_date;
+CREATE UNIQUE INDEX IF NOT EXISTS weapon_stats_mv_pk
+    ON weapon_stats_mv (weapon_name, round_date);
+CREATE INDEX IF NOT EXISTS weapon_stats_mv_round_date_substr
+    ON weapon_stats_mv (SUBSTR(CAST(round_date AS TEXT), 1, 10));
