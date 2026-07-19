@@ -40,6 +40,18 @@ import base64
 import json
 import os
 
+# Neutralize python-dotenv BEFORE anything imports the app: main.py (and any
+# transitively imported module) would otherwise merge a developer/CI
+# checkout's .env into this minimal environment via load_dotenv's
+# add-if-absent, and ANY import-time int()/path parse anywhere in the import
+# graph (greatshot.config, diagnostics_router, ...) could crash the
+# subprocess before the ordering probes run. Stubbing the loader makes the
+# explicit env passed by the test the ONLY configuration source — no more
+# per-variable pin whack-a-mole (Codex on #520).
+import dotenv
+
+dotenv.load_dotenv = lambda *args, **kwargs: False
+
 import httpx
 import itsdangerous
 
