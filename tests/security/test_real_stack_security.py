@@ -29,6 +29,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -42,7 +43,22 @@ import os
 import httpx
 import itsdangerous
 
-from website.backend.main import app
+try:
+    import prometheus_fastapi_instrumentator  # noqa: F401
+    HAS_PROMETHEUS = True
+except ImportError:  # minimal local env — CI installs the root pins
+    HAS_PROMETHEUS = False
+
+from website.backend.main import PROMETHEUS_ENABLED, app
+
+# The ordering guarantee this test exists for must cover the Prometheus
+# instrumentator when available (Codex on #520): its middleware constructs a
+# Request and reads request.url, so it is exactly the kind of inner layer the
+# outermost host gate protects. With the dependency present (CI), the app MUST
+# have been built with it enabled — otherwise the bad-Host probes would pass
+# while a gate-outside-Prometheus regression slipped by.
+if HAS_PROMETHEUS:
+    assert PROMETHEUS_ENABLED, "subprocess env must keep PROMETHEUS_ENABLED=true"
 
 GOOD_HOST = "www.slomix.fyi"
 BAD_HOSTS = [
@@ -79,6 +95,16 @@ async def main() -> None:
         for bad in BAD_HOSTS:
             r = await client.get("/health", headers={"host": bad})
             assert r.status_code == 400, f"Host {bad!r} must 400, got {r.status_code}"
+
+        # 2b) With Prometheus available, prove the instrumentator is REALLY in
+        # the stack (a live /metrics endpoint) and that a bad Host still dies
+        # at the gate BEFORE reaching it — the instrumentator middleware reads
+        # request.url, so it must sit inside the host gate (Codex on #520).
+        if HAS_PROMETHEUS:
+            r = await client.get("/metrics", headers={"host": GOOD_HOST})
+            assert r.status_code == 200, f"/metrics must serve with Prometheus on, got {r.status_code}"
+            r = await client.get("/metrics", headers={"host": "www.slomix.fyi:443/../admin"})
+            assert r.status_code == 400, f"bad Host must 400 before the instrumentator, got {r.status_code}"
 
         # 3) Host gate runs BEFORE CSRF — proven with a real signed session.
         cookie = build_session_cookie()
@@ -130,15 +156,21 @@ def test_real_app_host_gate_and_csrf_order():
         "CSRF_ALLOWED_ORIGINS": "https://www.slomix.fyi",
         # main.py calls load_dotenv() at import, and dotenv ADDS any key that
         # is absent from this env — so a developer/CI checkout's .env could
-        # still leak config the probes touch (Codex on #520: e.g.
-        # CACHE_BACKEND=redis + a broad CACHE_INVALIDATE_ON_WRITE_PREFIXES
-        # would make the POST probe hit an unstarted cache backend, since this
-        # test intentionally skips the lifespan). Pin everything the probed
-        # request paths can reach; explicit values always win over dotenv.
+        # still leak config that import or the probes touch (Codex on #520:
+        # e.g. CACHE_BACKEND=redis + broad invalidation prefixes would make
+        # the POST probe hit an unstarted cache backend, and an exotic
+        # WEB_LOG_DIR would crash setup_logging's mkdir before any probe).
+        # Pin everything import-time config and the probed request paths can
+        # reach; explicit values always win over dotenv's add-if-absent.
         "CACHE_BACKEND": "memory",
         "CACHE_INVALIDATE_ON_WRITE_PREFIXES": "",
         "RATE_LIMIT_ENABLED": "false",
-        "PROMETHEUS_ENABLED": "false",
+        # Prometheus stays at its production DEFAULT (enabled): the
+        # instrumentator middleware reads request.url, so the ordering proof
+        # must include it inside the host gate — the subprocess asserts it is
+        # really wired and probes /metrics with a bad Host (Codex on #520).
+        "PROMETHEUS_ENABLED": "true",
+        "WEB_LOG_DIR": tempfile.mkdtemp(prefix="slomix-real-stack-logs-"),
         "LOG_LEVEL": "WARNING",
     }
     result = subprocess.run(  # noqa: S603
