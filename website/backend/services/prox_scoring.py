@@ -201,6 +201,18 @@ _METRIC_EFFECTIVE_WEIGHT = _metric_effective_weights()
 _TOTAL_EFFECTIVE_WEIGHT = sum(_METRIC_EFFECTIVE_WEIGHT.values())
 
 
+def _emit_degraded_gauge(scope: str, degraded: bool) -> None:
+    """Set the per-scope degraded gauge (IMP-005). Per-scope labels mean a
+    degraded one-off round request can't overwrite (or fake) leaderboard
+    health — the last-request-wins race the unlabeled design had. Lazy import
+    + broad except: metrics must never break scoring."""
+    try:
+        from website.backend.metrics import PROX_DEGRADED
+        PROX_DEGRADED.labels(scope=scope).set(1.0 if degraded else 0.0)
+    except Exception:  # pragma: no cover - metrics must never break scoring
+        logger.debug("prox_scoring: degraded gauge emit skipped", exc_info=True)
+
+
 def _degraded(sources: list[dict]) -> dict:
     """Quality-contract degraded response: NO ranking, NO neutral fill."""
     failed = [s["source"] for s in sources if not s["success"]]
@@ -239,6 +251,15 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
     players=[]) rather than substituting neutral 0.5 percentiles.
     """
     range_days = max(1, min(int(range_days), 365))
+    # Gauge scope (low-cardinality): a round/session-scoped request is "round",
+    # a single-player request "player", the default cohort "leaderboard".
+    if session_date is not None or map_name or round_number is not None or round_start_unix is not None:
+        metric_scope = "round"
+    elif player_guid:
+        metric_scope = "player"
+    else:
+        metric_scope = "leaderboard"
+
     raw_data, sources = await _fetch_raw_metrics(
         db, range_days, session_date=session_date,
         map_name=map_name, round_number=round_number, round_start_unix=round_start_unix,
@@ -246,7 +267,9 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
 
     # AUD-008: a failed source poisons the whole percentile pool — withhold.
     if any(not s["success"] for s in sources):
+        _emit_degraded_gauge(metric_scope, True)
         return _degraded(sources)
+    _emit_degraded_gauge(metric_scope, False)
 
     def _ok(players, coverage=None, dropped=0):
         # Response-level coverage reflects the ACTUAL returned players (min of
@@ -569,12 +592,23 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
     ]
 
     import time as _time
-    _t0 = _time.monotonic()
-    results = await asyncio.gather(
-        *(db.fetch_all(q.format(scope=scope_sql), scope_params) for _, q in queries),
-        return_exceptions=True,
-    )
-    _elapsed_ms = int((_time.monotonic() - _t0) * 1000)
+
+    async def _timed_fetch(sql: str) -> tuple[list | Exception, int]:
+        """One source query with its OWN wall-clock duration. The previous
+        batch-level timing stamped every source with the shared gather() time,
+        so a single slow table was invisible in the per-source status and the
+        duration histogram (IMP-005). Exceptions are returned, not raised —
+        the caller records them per-source and withholds the ranking."""
+        t0 = _time.monotonic()
+        try:
+            rows = await db.fetch_all(sql.format(scope=scope_sql), scope_params)
+        except Exception as exc:  # noqa: BLE001 — recorded per-source (AUD-008)
+            return exc, int((_time.monotonic() - t0) * 1000)
+        return rows, int((_time.monotonic() - t0) * 1000)
+
+    timed = await asyncio.gather(*(_timed_fetch(q) for _, q in queries))
+    results = [r for r, _ in timed]
+    durations_ms = [d for _, d in timed]
 
     # Per-source status (audit AUD-008): the caller uses this to withhold the
     # ranking on ANY failure instead of silently substituting neutral scores.
@@ -719,11 +753,12 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
                 "focus_survival": float(r[3] or 0),
             })
 
-    for s in sources:
-        s["duration_ms"] = _elapsed_ms  # gather() is concurrent → shared wall time
+    for idx, s in enumerate(sources):
+        s["duration_ms"] = durations_ms[idx]  # per-source, not shared batch time
 
-    # Low-cardinality Prometheus signals (AUD-008): {source, outcome} + batch
-    # duration. Import lazily so the service has no hard prometheus dependency.
+    # Low-cardinality Prometheus signals (AUD-008/IMP-005): {source, outcome}
+    # counts + a per-source duration histogram. Import lazily so the service
+    # has no hard prometheus dependency.
     try:
         from website.backend.metrics import (
             PROX_SOURCE_QUERIES,
@@ -734,7 +769,9 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
                 source=s["source"],
                 outcome="success" if s["success"] else "error",
             ).inc()
-        PROX_SOURCE_QUERY_DURATION.observe(_elapsed_ms / 1000.0)
+            PROX_SOURCE_QUERY_DURATION.labels(source=s["source"]).observe(
+                s["duration_ms"] / 1000.0
+            )
     except Exception:  # pragma: no cover - metrics must never break scoring
         logger.debug("prox_scoring: metrics emit skipped", exc_info=True)
 

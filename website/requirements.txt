@@ -7,3 +7,9 @@ python-multipart==0.0.31
 httpx==0.28.1
 itsdangerous==2.2.0
 slowapi==0.1.9
+# Observability (IMP-005): prod runs the web service from venv-web built off
+# THIS file — without these pins the /metrics endpoint and the Redis cache
+# backend silently degrade to no-ops. Versions match the root requirements.txt.
+prometheus-client==0.24.1
+prometheus-fastapi-instrumentator==7.1.0
+redis==7.2.1

@@ -1,0 +1,28 @@
+# Prometheus alert rules for the Slomix web backend (IMP-005).
+# Mounted into the prometheus container by docker-compose.monitoring.yml and
+# referenced from prometheus.yml `rule_files`. Validated in CI with promtool.
+groups:
+  - name: slomix-prox-scoring
+    rules:
+      - alert: ProxSourceError
+        expr: increase(slomix_prox_source_queries_total{outcome="error"}[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Proximity scoring source query failing"
+          description: >-
+            Source {{ $labels.source }} returned at least one error in the
+            last 5 minutes. Any failed source withholds the prox ranking
+            (quality contract AUD-008), so this is user-visible.
+
+      - alert: ProxLeaderboardDegraded15m
+        expr: slomix_prox_scoring_degraded{scope="leaderboard"} == 1
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prox leaderboard degraded for 15 minutes"
+          description: >-
+            The proximity leaderboard has been serving the degraded
+            (ranking-withheld) response for 15 minutes — a source table or
+            the database is persistently failing.

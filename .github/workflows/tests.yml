@@ -209,3 +209,11 @@ jobs:
           echo "INTERNAL_API_SECRET=ci_placeholder" >> .env
           echo "DISCORD_BOT_TOKEN=ci_placeholder" >> .env
           docker compose build api website
+      - name: Validate Prometheus config + alert rules (promtool)
+        # Same image tag docker-compose runs in production, so "promtool
+        # accepts it" here means "prometheus will load it" there (IMP-005).
+        run: |
+          docker run --rm -v "$PWD/monitoring":/m:ro --entrypoint /bin/promtool \
+            prom/prometheus:v2.54.1 check rules /m/alerts.yml
+          docker run --rm -v "$PWD/monitoring":/m:ro --entrypoint /bin/promtool \
+            prom/prometheus:v2.54.1 check config /m/prometheus.yml
