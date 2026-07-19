@@ -40,7 +40,7 @@ def _parser_with_columns(db, present_columns):
 @pytest.mark.asyncio
 async def test_mark_file_processed_writes_round_key_when_supported():
     db = _FakeDB()
-    parser = _parser_with_columns(db, {"filename", "round_key"})
+    parser = _parser_with_columns(db, {"filename", "round_key", "tracker_version"})
 
     await parser._mark_file_processed("proximity_x.txt", "2026-07-18")  # noqa: SLF001
 
@@ -73,6 +73,21 @@ async def test_mark_file_processed_without_session_date_uses_legacy_insert():
     parser = _parser_with_columns(db, {"filename", "round_key"})
 
     await parser._mark_file_processed("proximity_x.txt")  # noqa: SLF001
+
+    assert len(db.calls) == 1
+    query, params = db.calls[0]
+    assert "round_key" not in query
+    assert params == ("proximity_x.txt",)
+
+
+@pytest.mark.asyncio
+async def test_mark_file_processed_falls_back_when_tracker_version_missing():
+    """A partially-migrated schema (round_key present, tracker_version absent)
+    must use the legacy insert, not raise mid-upsert (Copilot on #519)."""
+    db = _FakeDB()
+    parser = _parser_with_columns(db, {"filename", "round_key"})
+
+    await parser._mark_file_processed("proximity_x.txt", "2026-07-18")  # noqa: SLF001
 
     assert len(db.calls) == 1
     query, params = db.calls[0]

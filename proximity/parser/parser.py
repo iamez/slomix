@@ -1612,7 +1612,15 @@ class ProximityParserV4:
         if not await self._table_has_column('proximity_processed_files', 'filename'):
             return
         try:
-            if session_date and await self._table_has_column('proximity_processed_files', 'round_key'):
+            # BOTH 062 columns must exist — a partially-migrated/diverged
+            # schema with round_key but not tracker_version would make the
+            # upsert raise and the file would never be marked processed
+            # (Copilot on #519).
+            if (
+                session_date
+                and await self._table_has_column('proximity_processed_files', 'round_key')
+                and await self._table_has_column('proximity_processed_files', 'tracker_version')
+            ):
                 tracker_version = str(self.metadata.get('tracker_version') or '')
                 round_key = "|".join((
                     str(session_date),
