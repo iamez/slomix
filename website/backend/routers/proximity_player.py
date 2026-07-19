@@ -255,16 +255,27 @@ async def get_proximity_player_radar(
             if sessions_played > 0:
                 cf_per_session = cf_total / sessions_played
                 trade_per_session = trade_total / sessions_played
+                teamplay = min(100, (min(cf_per_session / 20, 1) * 50) + (min(trade_per_session / 10, 1) * 50))
+                teamplay_source = "cf_tr_fallback"
+                teamplay_meta = {
+                    "teamplay_formula_version": "cf-tr-v1",
+                    "teamplay_sample_count": cf_total + trade_total,
+                    "teamplay_fallback_reason": fallback_reason or "prox_unavailable",
+                    "teamplay_degraded": True,
+                }
             else:
-                cf_per_session = trade_per_session = 0.0
-            teamplay = min(100, (min(cf_per_session / 20, 1) * 50) + (min(trade_per_session / 10, 1) * 50))
-            teamplay_source = "cf_tr_fallback"
-            teamplay_meta = {
-                "teamplay_formula_version": "cf-tr-v1",
-                "teamplay_sample_count": cf_total + trade_total,
-                "teamplay_fallback_reason": fallback_reason or "prox_unavailable",
-                "teamplay_degraded": True,
-            }
+                # No sound participation denominator (events without any
+                # combat_engagement/player_track rows in the window): the
+                # same contract as scoring — never convert an unknown into a
+                # real 0 rate; the axis is UNAVAILABLE, not zero (Codex #518).
+                teamplay = 0.0
+                teamplay_source = "unavailable"
+                teamplay_meta = {
+                    "teamplay_formula_version": None,
+                    "teamplay_sample_count": cf_total + trade_total,
+                    "teamplay_fallback_reason": "no_participation_data",
+                    "teamplay_degraded": True,
+                }
 
         # Timing + Mechanical rows already fetched in the gather() above.
         avg_timing = float(timing_row[0] or 0) if timing_row else 0

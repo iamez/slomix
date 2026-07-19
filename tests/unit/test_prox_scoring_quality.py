@@ -387,3 +387,26 @@ async def test_trades_denominator_covers_untargeted_sessions():
     )
     players, _ = await prox_scoring._fetch_raw_metrics(db, 30)  # noqa: SLF001
     assert players["GUID_Q"]["trades_per_session"] == pytest.approx(1 / 3)
+
+
+@pytest.mark.asyncio
+async def test_incomplete_track_rows_still_count_participation():
+    """Legacy/partial player_track rows (peak_speed NULL) are excluded from
+    the movement METRICS but still prove the player PLAYED those sessions —
+    the SQL keeps the participation count unfiltered, so a row can arrive
+    with zero complete tracks, NULL aggregates, and a real session count
+    (Codex on #518). The merge must use that count for the denominator and
+    must NOT turn the missing peak_speed into a real 0."""
+    db = FakeDB(
+        players={"GUID_Q": {"name": "Q", "engagements": 40, "sessions_played": 1}},
+        source_rows={
+            # (guid, name, tracks, avg_speed, peak_speed, sprint, distance,
+            #  post_spawn, standing, crouching, prone, sessions_tracked)
+            "player_track": [("GUID_Q", "Q", 0, None, None, None,
+                              None, None, None, None, None, 3)],
+            "proximity_lua_trade_kill": [("GUID_Q", "Q", 1)],
+        },
+    )
+    players, _ = await prox_scoring._fetch_raw_metrics(db, 30)  # noqa: SLF001
+    assert players["GUID_Q"]["trades_per_session"] == pytest.approx(1 / 3)
+    assert "peak_speed" not in players["GUID_Q"], "NULL peak must stay missing"

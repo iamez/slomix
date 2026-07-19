@@ -519,19 +519,23 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
         """),
         ("player_track", """
             SELECT player_guid, MAX(player_name),
-                   COUNT(*) as tracks,
-                   AVG(avg_speed) as avg_speed,
+                   COUNT(*) FILTER (WHERE peak_speed IS NOT NULL) as tracks,
+                   AVG(avg_speed) FILTER (WHERE peak_speed IS NOT NULL) as avg_speed,
                    MAX(peak_speed) as peak_speed,
-                   AVG(sprint_percentage) as sprint_pct,
-                   AVG(total_distance) as avg_distance,
-                   AVG(post_spawn_distance) as avg_post_spawn,
-                   AVG(stance_standing_sec) as avg_standing,
-                   AVG(stance_crouching_sec) as avg_crouching,
-                   AVG(stance_prone_sec) as avg_prone,
+                   AVG(sprint_percentage) FILTER (WHERE peak_speed IS NOT NULL) as sprint_pct,
+                   AVG(total_distance) FILTER (WHERE peak_speed IS NOT NULL) as avg_distance,
+                   AVG(post_spawn_distance) FILTER (WHERE peak_speed IS NOT NULL) as avg_post_spawn,
+                   AVG(stance_standing_sec) FILTER (WHERE peak_speed IS NOT NULL) as avg_standing,
+                   AVG(stance_crouching_sec) FILTER (WHERE peak_speed IS NOT NULL) as avg_crouching,
+                   AVG(stance_prone_sec) FILTER (WHERE peak_speed IS NOT NULL) as avg_prone,
+                   -- Participation count deliberately UNFILTERED (Codex on
+                   -- #518): the movement metrics only trust complete rows
+                   -- (peak_speed present), but a legacy/partial track row
+                   -- still proves the player PLAYED that session — filtering
+                   -- it out would shrink the trades denominator again.
                    COUNT(DISTINCT session_date) as sessions_tracked
             FROM player_track
             {scope}
-              AND peak_speed IS NOT NULL
             GROUP BY player_guid
         """),
         ("proximity_kill_outcome_killer", """
@@ -679,7 +683,10 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
 
             _merge(r[0], r[1], {
                 "tracks": tracks,
-                "peak_speed": float(r[4] or 0),  # query filters peak_speed IS NOT NULL
+                # A row can now exist with ONLY incomplete tracks (the
+                # participation count is unfiltered) — preserve None so a
+                # missing peak_speed isn't turned into a fake real 0.
+                "peak_speed": float(r[4]) if r[4] is not None else None,
                 # AVG aggregates can be NULL (no movement rows for the metric) —
                 # preserve None so a coalesced 0 isn't counted toward metric
                 # coverage (Codex review on #512).
