@@ -79,7 +79,7 @@ def test_no_host_derived_paths_in_source():
     client-controlled Host header, so a crafted Host could otherwise move a
     request into a QUIET path, out of a SECURITY path, or past the
     suspicious-pattern classifier."""
-    src = Path(logging_middleware.__file__).read_text()
+    src = Path(logging_middleware.__file__).read_text(encoding="utf-8")
     assert "request.url.path" not in src, "logging must not read Host-derived request.url.path"
     assert "routed_path" in src
 
