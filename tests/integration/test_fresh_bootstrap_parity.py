@@ -31,6 +31,7 @@ follow-up in the remediation plan.
 from __future__ import annotations
 
 import os
+import re
 import sys
 import uuid
 from pathlib import Path
@@ -69,6 +70,21 @@ _ALREADY_EXISTS = {
     "42710",  # duplicate_object (constraints, triggers, …)
     "42723",  # duplicate_function
 }
+
+_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+
+
+def _has_executable_sql(stmt: str) -> bool:
+    """False for comment-only fragments. split_statements() can yield a chunk
+    that is ONLY trailing comments (e.g. add_round_status.sql's status legend
+    after the final ';'); asyncpg's execute() crashes with an AttributeError
+    on such empty queries instead of a PostgresError, so they must be skipped
+    — there is nothing to prove parity against anyway."""
+    without_blocks = _BLOCK_COMMENT_RE.sub("", stmt)
+    return any(
+        line.split("--", 1)[0].strip()
+        for line in without_blocks.splitlines()
+    )
 
 
 async def _admin_conn():
@@ -117,6 +133,8 @@ async def test_dump_contains_every_migration(monkeypatch):
             for filename, path in discover_migrations():
                 body = unwrap_outer_transaction(path.read_text(encoding="utf-8"))
                 for stmt in split_statements(body):
+                    if not _has_executable_sql(stmt):
+                        continue
                     try:
                         await conn.execute(stmt)
                     except asyncpg.PostgresError as e:
