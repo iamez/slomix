@@ -12,9 +12,10 @@ Computed on read — no schema. Copy is neutral English (owner decision).
 """
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
+
+from shared.round_details import entry_points, parse_round_details
 
 logger = logging.getLogger(__name__)
 
@@ -86,22 +87,25 @@ class GoodNightService:
             (gaming_session_id,),
         )
         wins_a = wins_b = draws = 0
-        has_details = bool(sr and sr[0])
+        # round_details is versioned (v1 bare list / v2 dict wrapper, IMP-002)
+        # — always go through the shared parser so a shape change can't break
+        # this reader silently.
+        _, detail_maps = parse_round_details(sr[0] if sr else None)
+        has_details = bool(detail_maps)
         if has_details:
-            try:
-                for m in json.loads(sr[0]) if isinstance(sr[0], str) else sr[0]:
-                    if m.get("counted") is False:
-                        continue
-                    pa = int(m.get("team_a_points", m.get("team1_points", 0)) or 0)
-                    pb = int(m.get("team_b_points", m.get("team2_points", 0)) or 0)
-                    if pa > pb:
-                        wins_a += 1
-                    elif pb > pa:
-                        wins_b += 1
-                    else:
-                        draws += 1
-            except (TypeError, ValueError):
-                has_details = False
+            for m in detail_maps:
+                if m.get("counted") is False:
+                    continue
+                pts = entry_points(m)
+                if pts is None:
+                    continue
+                pa, pb = pts
+                if pa > pb:
+                    wins_a += 1
+                elif pb > pa:
+                    wins_b += 1
+                else:
+                    draws += 1
             # all maps uncounted (e.g. roster-ambiguous night) carries no
             # win/loss signal — treat like missing details (codex round 4)
             if wins_a + wins_b + draws == 0:

@@ -22,10 +22,15 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import os
+import sys
+from pathlib import Path
 
 import asyncpg
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from shared.round_details import parse_round_details  # noqa: E402
 
 
 def _transform(map_results: list[dict]) -> tuple[int, int, bool]:
@@ -82,10 +87,9 @@ async def main() -> int:
     changes = []
     skipped_no_details = 0
     for rid, sdate, t1, t2, details in rows:
-        try:
-            maps = json.loads(details) if isinstance(details, str) else (details or [])
-        except (TypeError, ValueError):
-            maps = []
+        # Versioned shape (v1 bare list / v2 dict wrapper, IMP-002) — the
+        # shared parser normalizes both to a maps list.
+        _, maps = parse_round_details(details)
         if not maps:
             skipped_no_details += 1
             continue

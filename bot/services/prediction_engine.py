@@ -16,6 +16,8 @@ import logging
 import os
 from datetime import datetime, timedelta
 
+from shared.round_details import entry_map_name, entry_points, parse_round_details
+
 logger = logging.getLogger(__name__)
 
 # Bumped whenever the formula or its data gates change — calibration reports
@@ -536,7 +538,8 @@ class PredictionEngine:
                 (session_date,),
             )
             results = await self.db.fetch_all(
-                """SELECT team_1_guids, team_2_guids, winning_team, gaming_session_id
+                """SELECT team_1_guids, team_2_guids, winning_team, gaming_session_id,
+                          map_name, round_details
                    FROM session_results
                    WHERE session_date = $1 AND winning_team IS NOT NULL""",
                 (session_date,),
@@ -581,14 +584,17 @@ class PredictionEngine:
                     return min(following, key=lambda w: w[1])[0]
                 return max(windows, key=lambda w: w[1] or 0)[0]
 
-            resolved = 0
+            # Collect per-prediction info, then GROUP by orientation-independent
+            # roster pair + gaming session (IMP-002): a gaming session holds
+            # MULTIPLE matches, so two rematch predictions of the same rosters
+            # inside ONE session must be split per-match via round_details —
+            # never resolved against the session's aggregate tally.
+            pred_infos = []
             for pred in pending:
                 pred_id, a_set, b_set = pred[0], g8set(pred[1]), g8set(pred[2])
                 pred_time = pred[3]
                 if not a_set or not b_set:
                     continue
-
-                # Pick the results subset for THIS prediction's gaming session.
                 target_gsid = None
                 if multi_session and results_tagged:
                     target_gsid = _match_gsid(pred_time)
@@ -598,12 +604,30 @@ class PredictionEngine:
                         logger.debug("auto_resolve: prediction %s unmatched to a "
                                      "gaming session — left pending", pred_id)
                         continue
+                pred_infos.append((pred_id, a_set, b_set, pred_time, target_gsid))
+
+            groups: dict[tuple, list] = {}
+            for info in pred_infos:
+                _, a_set, b_set, _, target_gsid = info
+                key = (frozenset({frozenset(a_set), frozenset(b_set)}), target_gsid)
+                groups.setdefault(key, []).append(info)
+
+            resolved = 0
+            for (_, target_gsid), infos in groups.items():
+                if target_gsid is not None:
                     subset = [r for r in results if r[3] == target_gsid]
                 else:
                     # Single session (or untagged results): the whole date is one
                     # match set — the original, safe behavior.
                     subset = results
 
+                if len(infos) > 1:
+                    resolved += await self._resolve_rematch_group(
+                        infos, subset, target_gsid, g8set
+                    )
+                    continue
+
+                pred_id, a_set, b_set, _pred_time, _ = infos[0]
                 a_wins = b_wins = matched = 0
                 for row in subset:
                     t1, t2, winner = g8set(row[0]), g8set(row[1]), int(row[2])
@@ -651,6 +675,213 @@ class PredictionEngine:
         except Exception as e:
             logger.error(f"❌ auto_resolve_predictions failed: {e}", exc_info=True)
             return 0
+
+    async def _resolve_rematch_group(
+        self, infos: list, subset: list, target_gsid, g8set
+    ) -> int:
+        """Resolve >1 same-roster predictions inside ONE gaming session (IMP-002).
+
+        The session stores a single 'ALL' summary row whose per-map results
+        live in round_details JSON. Best-effort per Codex's recipe with STRICT
+        defer: parse round_details, place every counted map in time (v2
+        entries carry round_start_unix; v1 falls back to an exact-order
+        alignment against the session's complete round pairs), re-orient
+        per-map points to the prediction's A/B, partition maps by
+        prediction_time windows, and resolve each prediction over ITS
+        partition only. ANY ambiguity — orientation, missing points/names,
+        missing times, alignment mismatch, a map before the first prediction,
+        or an empty partition — defers the WHOLE group to manual resolution
+        (no wrong calibration data, ever).
+        """
+        def _defer(reason: str) -> int:
+            logger.warning(
+                "auto_resolve: rematch group (%d predictions, gsid=%s) deferred "
+                "to manual resolution: %s",
+                len(infos), target_gsid, reason,
+            )
+            return 0
+
+        _, a_set, b_set, _, _ = infos[0]
+
+        # 1) Exactly one roster-matching 'ALL' summary row for this session.
+        candidates = []
+        for row in subset:
+            if (row[4] or "") != "ALL":
+                continue
+            t1, t2 = g8set(row[0]), g8set(row[1])
+            s_ok = (len(a_set & t1) * 2 > len(a_set)
+                    and len(b_set & t2) * 2 > len(b_set))
+            f_ok = (len(a_set & t2) * 2 > len(a_set)
+                    and len(b_set & t1) * 2 > len(b_set))
+            if s_ok and f_ok:
+                return _defer("roster orientation ambiguous (both fit)")
+            if s_ok or f_ok:
+                candidates.append((row, s_ok))
+        if len(candidates) != 1:
+            return _defer(f"expected exactly 1 matching ALL row, found {len(candidates)}")
+        row, straight = candidates[0]
+        # Single-session dates never set target_gsid (multi_session is False),
+        # but the matched ALL row carries the unambiguous gaming_session_id —
+        # adopt it so the v1 alignment path and the backlink work for the
+        # common one-session rematch too (Codex on #517).
+        if target_gsid is None:
+            target_gsid = row[3]
+
+        # 2) Parse per-map details; counted entries need name + points.
+        _version, detail_maps = parse_round_details(row[5])
+        counted = [m for m in detail_maps if m.get("counted", True)]
+        if not counted:
+            return _defer("round_details has no counted per-map entries")
+        maps: list[tuple[str, int, int, int]] = []  # (name, start, pa, pb)
+        for m in counted:
+            name = entry_map_name(m)
+            pts = entry_points(m)
+            if name is None or pts is None:
+                return _defer("counted entry missing map name or points")
+            t1p, t2p = pts
+            pa, pb = (t1p, t2p) if straight else (t2p, t1p)
+            # Normalize the per-map time: this codebase uses 0 as a missing-
+            # timestamp sentinel, and JSON round-trips can widen types — a
+            # non-positive or unparseable start must fall through to the
+            # alignment path (or defer), never be compared against real
+            # prediction timestamps (Copilot on #517).
+            raw_start = m.get("round_start_unix")
+            try:
+                start = int(raw_start) if raw_start is not None else None
+            except (TypeError, ValueError):
+                start = None
+            if start is not None and start <= 0:
+                start = None
+            maps.append((name, start, pa, pb))
+
+        # 3) Per-map times: v2 entries carry round_start_unix; otherwise align
+        # exactly (count+names+order) against the session's complete pairs.
+        if any(start is None for _, start, _, _ in maps):
+            if target_gsid is None:
+                return _defer("no per-map times and no gaming_session_id to align against")
+            starts = await self._session_match_starts(target_gsid)
+            if starts is None:
+                return _defer("rounds alignment unavailable (missing round_start_unix)")
+            if len(starts) != len(maps) or any(
+                sn != mn for (sn, _), (mn, _, _, _) in zip(starts, maps)
+            ):
+                return _defer(
+                    "round_details ↔ rounds mismatch "
+                    f"(details={[(m[0]) for m in maps]}, rounds={[s[0] for s in starts]})"
+                )
+            maps = [(mn, s_start, pa, pb)
+                    for (_, s_start), (mn, _, pa, pb) in zip(starts, maps)]
+
+        maps.sort(key=lambda m: m[1])
+
+        # 4) Partition maps into prediction windows [pred_i, pred_{i+1}).
+        if any(i[3] is None or not hasattr(i[3], "timestamp") for i in infos):
+            return _defer("a prediction has no usable prediction_time")
+        ordered = sorted(infos, key=lambda i: i[3].timestamp())
+        pred_ts = [i[3].timestamp() for i in ordered]
+        partitions: list[list[tuple[str, int, int, int]]] = [[] for _ in ordered]
+        for entry in maps:
+            _, start, _, _ = entry
+            if start < pred_ts[0]:
+                return _defer(f"map started before the first prediction ({entry[0]})")
+            idx = 0
+            for j, ts in enumerate(pred_ts):
+                if start >= ts:
+                    idx = j
+            partitions[idx].append(entry)
+        if any(not part for part in partitions):
+            return _defer("a prediction window contains no maps")
+
+        # 5) Resolve each prediction over its own partition (BOX map-win tally).
+        # The tally above is oriented to infos[0]'s A/B — but the group key is
+        # orientation-INDEPENDENT, so a later prediction row may have stored
+        # the same rosters with A/B swapped (voice-channel ordering). Each
+        # row's outcome must be re-oriented to ITS OWN A/B, or a swapped row
+        # records the opponent's result under its own ID (Codex on #517).
+        # Orientation is validated for EVERY row BEFORE any outcome is
+        # written, so a defer can never leave the group half-resolved.
+        base_a, base_b = frozenset(a_set), frozenset(b_set)
+        if base_a == base_b:
+            return _defer("prediction rosters identical on both sides")
+        flips: list[bool] = []
+        for _, a_i, b_i, _, _ in ordered:
+            if frozenset(a_i) == base_a and frozenset(b_i) == base_b:
+                flips.append(False)
+            elif frozenset(a_i) == base_b and frozenset(b_i) == base_a:
+                flips.append(True)
+            else:
+                # Unreachable given the exact-frozenset group key — but never guess.
+                return _defer("prediction orientation does not match the group rosters")
+
+        resolved = 0
+        for (pred_id, *_rest), part, flip in zip(ordered, partitions, flips):
+            a_wins = sum(1 for _, _, pa, pb in part if pa > pb)
+            b_wins = sum(1 for _, _, pa, pb in part if pb > pa)
+            if flip:
+                a_wins, b_wins = b_wins, a_wins
+            actual = 1 if a_wins > b_wins else 2 if b_wins > a_wins else 0
+            await self.update_prediction_outcome(pred_id, actual, a_wins, b_wins)
+            if target_gsid is not None:
+                try:
+                    await self.db.execute(
+                        "UPDATE match_predictions SET gaming_session_id = $1 "
+                        "WHERE id = $2 AND gaming_session_id IS NULL",
+                        (target_gsid, pred_id),
+                    )
+                except Exception as e:
+                    logger.debug("gaming_session_id backlink skipped: %s", e)
+            resolved += 1
+        logger.info(
+            "✅ rematch group split: %d prediction(s) resolved per-match (gsid=%s)",
+            resolved, target_gsid,
+        )
+        return resolved
+
+    async def _session_match_starts(self, gsid) -> list[tuple[str, int]] | None:
+        """Ordered (map_name, start_unix) of the session's COMPLETE matches.
+
+        Pairs R1/R2 by match_id (canonical since the PR #370 pairer; legacy
+        rows fall back to sequential same-map pairing). Returns None when any
+        used round lacks round_start_unix — the caller must defer rather than
+        guess (IMP-002).
+        """
+        rows = await self.db.fetch_all(
+            """SELECT map_name, round_number, round_start_unix, match_id
+               FROM rounds
+               WHERE gaming_session_id = $1 AND is_valid
+                 AND round_status = 'completed' AND round_number IN (1, 2)
+               ORDER BY id""",
+            (gsid,),
+        )
+        pairs: dict[str, dict] = {}
+        seq: dict[str, int] = {}
+        for map_name, rnum, start, match_id in rows:
+            if match_id:
+                key = f"m:{match_id}"
+            elif rnum == 1:
+                seq[map_name] = seq.get(map_name, 0) + 1
+                key = f"s:{map_name}:{seq[map_name]}"
+            else:
+                key = f"s:{map_name}:{seq.get(map_name, 0)}"
+            entry = pairs.setdefault(key, {"map": map_name, "r1": None, "r2": None})
+            slot = "r1" if rnum == 1 else "r2"
+            if entry[slot] is None:
+                entry[slot] = start
+        complete = [p for p in pairs.values()
+                    if p["r1"] is not None and p["r2"] is not None]
+        out = []
+        for p in complete:
+            r1, r2 = p["r1"], p["r2"]
+            # BOTH rounds must carry a real start (0 is this codebase's
+            # missing-timestamp sentinel). Accepting a pair with only one
+            # usable start could place the map into the wrong prediction
+            # window when a rematch begins between R1 and R2 — the caller
+            # must defer instead (Codex/Copilot on #517).
+            if not r1 or not r2 or r1 <= 0 or r2 <= 0:
+                return None
+            out.append((p["map"], min(r1, r2)))
+        out.sort(key=lambda x: x[1])
+        return out
 
     async def _analyze_head_to_head(
         self,
