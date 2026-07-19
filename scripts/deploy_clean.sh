@@ -105,6 +105,20 @@ build_file_list() {
   echo "requirements.txt"
   echo "postgresql_database_manager.py"
 
+  # Web venv manifest — step 7 installs from it ON THE VM, and step 8's
+  # runner executes from venv-web; without shipping it, a fresh VM has no
+  # website/requirements.txt at all and a re-deploy installs stale pins
+  # (Codex on #516).
+  echo "website/requirements.txt"
+
+  # Migration runner + every migration file — step 8 baselines the ledger on
+  # the VM, so these must come from THIS deploy's archive: a --clean run
+  # deletes $VM_PATH/scripts first, and without shipping migrations/ the
+  # baseline would record whatever stale files were left on the VM instead of
+  # the set matching the dump just uploaded (Codex on #516).
+  echo "scripts/apply_migrations.py"
+  find migrations/ -name '*.sql' 2>/dev/null
+
   # Greatshot package (website hard dependency)
   find greatshot/ -name '*.py' -not -path '*__pycache__*' -not -path '*tests/*' 2>/dev/null
 
@@ -188,6 +202,75 @@ if [ "$AUTO_YES" = false ]; then
   fi
 fi
 
+# ─── Step 3.5: FRESH-DB GATE (IMP-001) — before ANY mutation ─────────────────
+# This script is the FRESH-BOOTSTRAP workflow ONLY. Its later steps apply the
+# canonical schema dump and then `--baseline` the migration ledger — which
+# records every migration as applied WITHOUT comparing the actual schema
+# (apply_migrations.py cmd_baseline). That is only sound against the canonical
+# dump, so the gate runs BEFORE stopping services, uploading, or extracting
+# anything. Two acceptable states (Codex on #516):
+#   1. EMPTY public schema (zero relations of ANY kind) → normal bootstrap;
+#   2. schema PRELOADED by the documented fresh-install path
+#      (slomix_vm_setup.sh phase 1), with ZERO ledger ROWS and ZERO data
+#      rows → the preload is WIPED (DROP OWNED BY the app user) and this
+#      script re-applies the dump itself, atomically. Two Codex findings on
+#      #516 forced this design: the dump itself CREATES an empty
+#      schema_migrations table (so table-existence means nothing — only
+#      recorded ROWS indicate a managed DB), and a historical setup preload
+#      was not atomic (a partial schema could pass any dump-checksum proof).
+#      Wipe-and-reapply makes the bootstrapped schema provably THIS dump
+#      regardless of how the preload went. Any recorded ledger row or any
+#      data row → managed database → deploy_release.sh.
+# The password never leaves the VM (Copilot on #516): the grep feeds
+# PGPASSWORD inside the remote shell — no local interpolation, so shell
+# metacharacters in the password can't break quoting here.
+echo ""
+echo "[3.5] Fresh-database gate (bootstrap-only guard)..."
+if ! $SSH "grep -qE '^POSTGRES_PASSWORD=.' $VM_PATH/.env 2>/dev/null"; then
+  echo "  [ABORT] Cannot read POSTGRES_PASSWORD from $VM_PATH/.env — unable to"
+  echo "          prove the database is empty. Provision .env first (slomix_vm_setup.sh)."
+  exit 1
+fi
+REMOTE_PSQL="PGPASSWORD=\$(grep -E '^POSTGRES_PASSWORD=' $VM_PATH/.env | head -1 | cut -d= -f2-) psql -h localhost -U etlegacy_user -d etlegacy -tAc"
+PUBLIC_RELATIONS=$($SSH "$REMOTE_PSQL \"SELECT COUNT(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public'\"" || echo "ERR")
+# Ledger ROWS, not table existence — the dump creates the (empty) table.
+LEDGER_ROWS=$($SSH "$REMOTE_PSQL \"SELECT CASE WHEN to_regclass('public.schema_migrations') IS NULL THEN 0 ELSE (SELECT COUNT(*) FROM schema_migrations) END\"" || echo "ERR")
+# Data proof: sentinel tables must be EMPTY (exact check) and the planner
+# stats must estimate zero live tuples overall (belt). Either signal of data
+# means this is NOT a fresh install and must never be wiped.
+DATA_SIGNAL=$($SSH "$REMOTE_PSQL \"SELECT (COALESCE((SELECT SUM(n_live_tup) FROM pg_stat_user_tables), 0) > 0) OR (to_regclass('public.rounds') IS NOT NULL AND EXISTS (SELECT 1 FROM rounds)) OR (to_regclass('public.player_comprehensive_stats') IS NOT NULL AND EXISTS (SELECT 1 FROM player_comprehensive_stats)) OR (to_regclass('public.lua_round_teams') IS NOT NULL AND EXISTS (SELECT 1 FROM lua_round_teams)) OR (to_regclass('public.website_users') IS NOT NULL AND EXISTS (SELECT 1 FROM website_users))\"" || echo "ERR")
+if [ "$PUBLIC_RELATIONS" = "ERR" ] || [ "$LEDGER_ROWS" = "ERR" ] || [ "$DATA_SIGNAL" = "ERR" ]; then
+  echo "  [ABORT] database unreachable — cannot prove the fresh-install state."
+  exit 1
+fi
+if [ "$LEDGER_ROWS" != "0" ]; then
+  echo "  [ABORT] schema_migrations has $LEDGER_ROWS recorded row(s) — this is a"
+  echo "          MANAGED database. Use: SUDO_PASS=<pass> ./scripts/deploy_release.sh <tag>"
+  exit 1
+fi
+if [ "$PUBLIC_RELATIONS" = "0" ]; then
+  echo "  public schema empty — fresh bootstrap confirmed (dump will be applied)."
+else
+  if [ "$DATA_SIGNAL" != "f" ]; then
+    echo "  [ABORT] schema is preloaded AND contains data rows (signal=$DATA_SIGNAL)"
+    echo "          — refusing to touch it. For an existing deployment use:"
+    echo "          SUDO_PASS=<pass> ./scripts/deploy_release.sh <tag>"
+    exit 1
+  fi
+  echo "  schema preloaded (relations=$PUBLIC_RELATIONS), zero ledger rows, zero"
+  echo "  data — wiping the preload (DROP OWNED BY app user) so step 8 can apply"
+  echo "  THIS checkout's dump atomically instead of trusting the preload."
+  $SSH "$REMOTE_PSQL \"DROP OWNED BY CURRENT_USER CASCADE\"" \
+    || { echo "  [ABORT] preload wipe failed."; exit 1; }
+  POST_WIPE=$($SSH "$REMOTE_PSQL \"SELECT COUNT(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public'\"" || echo "ERR")
+  if [ "$POST_WIPE" != "0" ]; then
+    echo "  [ABORT] $POST_WIPE relation(s) survived the wipe (foreign ownership?)"
+    echo "          — resolve manually before bootstrapping."
+    exit 1
+  fi
+  echo "  preload wiped — proceeding as a clean bootstrap."
+fi
+
 # ─── Step 4: Stop services ───────────────────────────────────────────────────
 echo ""
 echo "[ 4 ] Stopping services..."
@@ -256,11 +339,22 @@ echo "$FILE_LIST" | tar czf "$TARBALL" -T -
 TARBALL_SIZE=$(du -h "$TARBALL" | cut -f1)
 echo "  Archive: $TARBALL_SIZE"
 
-# Ensure base dirs exist and are writable
+# Ensure base dirs exist and are writable — including scripts/ (the runner
+# ships in the archive, and a setup-cloned checkout leaves it group-read-only,
+# so tar could not overwrite apply_migrations.py — Codex on #516).
 sudo_run chmod -R g+w "$VM_PATH/bot/" 2>/dev/null || true
 sudo_run chmod -R g+w "$VM_PATH/website/" 2>/dev/null || true
 sudo_run chmod -R g+w "$VM_PATH/tools/" 2>/dev/null || true
+sudo_run chmod -R g+w "$VM_PATH/scripts/" 2>/dev/null || true
 sudo_run chmod g+w "$VM_PATH/" 2>/dev/null || true
+
+# Prune the VM's migrations/ ENTIRELY before extracting (Codex on #516):
+# tar does not delete files absent from the archive, and step 8 baselines
+# whatever discover_migrations() finds on the VM — a stale .sql left by a
+# setup clone or an older deploy would be ledgered as applied even though
+# the dump just bootstrapped doesn't contain its effect. Removing the dir
+# (not only under --clean) guarantees the baseline set == this archive.
+sudo_run rm -rf "$VM_PATH/migrations" 2>/dev/null || true
 
 # Upload and extract
 VM_TARBALL="/tmp/slomix_deploy_$(date +%s).tar.gz"
@@ -279,27 +373,45 @@ if [ "$UPDATE_DEPS" = true ]; then
   echo "  Bot packages updated."
 
   echo "  Web venv..."
-  $SSH "$VM_PATH/venv-web/bin/pip install --quiet -r $VM_PATH/requirements.txt 2>&1" | tail -5
+  # The web service runs from ITS OWN manifest — installing the root
+  # requirements here left the web venv without its web-only pins (IMP-001).
+  $SSH "$VM_PATH/venv-web/bin/pip install --quiet -r $VM_PATH/website/requirements.txt 2>&1" | tail -5
   echo "  Web packages updated."
 else
   echo "[ 7 ] Skipping dep update (use --update-deps to reinstall)"
 fi
 
-# ─── Step 8: Apply DB schema ─────────────────────────────────────────────────
+# ─── Step 8: Apply DB schema + baseline the migration ledger ─────────────────
+# Fresh-bootstrap contract (IMP-001): the step-3.5 gate proved the public
+# schema empty, so the canonical dump is applied with ON_ERROR_STOP=1 — on an
+# empty database every error is REAL and must abort (the old =0 tolerated
+# errors because it ran against populated DBs, which this workflow now
+# refuses). Afterwards the migration ledger is baselined (the dump already
+# CONTAINS every migration's effect) and validated clean, so the very first
+# deploy_release.sh run starts from a sound ledger.
 echo ""
-echo "[ 8 ] Applying DB schema (IF NOT EXISTS — idempotent)..."
+# The gate guarantees an EMPTY schema at this point (a clean preload was
+# wiped there), so the dump is ALWAYS applied here — the bootstrapped schema
+# is provably this checkout's dump (Codex on #516).
+echo "[ 8 ] Applying DB schema (fresh bootstrap, single transaction, ON_ERROR_STOP=1)..."
+# Same remote-side password pattern as the gate (Copilot on #516): the
+# secret is resolved inside the VM shell, never interpolated locally.
+# --single-transaction + ON_ERROR_STOP (Codex on #516): without it a
+# mid-dump failure leaves earlier DDL committed, which a later run's gate
+# could misjudge. All-or-nothing means a failed apply leaves the database
+# empty and the retry takes the normal bootstrap path.
+$SSH "PGPASSWORD=\$(grep -E '^POSTGRES_PASSWORD=' $VM_PATH/.env | head -1 | cut -d= -f2-) \
+  psql -h localhost -U etlegacy_user -d etlegacy \
+  -f $VM_PATH/tools/schema_postgresql.sql \
+  --single-transaction -v ON_ERROR_STOP=1 -q" || { echo "  [ABORT] schema apply failed (no partial state — single transaction)."; exit 1; }
+echo "  Schema applied."
 
-DB_PASS=$($SSH "grep -E '^POSTGRES_PASSWORD=' $VM_PATH/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\"'" || true)
-
-if [ -z "$DB_PASS" ]; then
-  echo "  [WARN] Could not read DB password — skipping schema step."
-else
-  SCHEMA_OUT=$($SSH "PGPASSWORD='$DB_PASS' psql -h localhost -U etlegacy_user -d etlegacy \
-    -f $VM_PATH/tools/schema_postgresql.sql \
-    -v ON_ERROR_STOP=0 2>&1 \
-    | grep -cE 'CREATE TABLE|CREATE INDEX'" 2>/dev/null || echo "0")
-  echo "  Schema applied ($SCHEMA_OUT new objects created)."
-fi
+echo "  Baselining migration ledger (dump ⊇ migrations — CI parity test proves it)..."
+$SSH "cd $VM_PATH && venv-web/bin/python scripts/apply_migrations.py --baseline" \
+  || { echo "  [ABORT] ledger baseline failed."; exit 1; }
+$SSH "cd $VM_PATH && venv-web/bin/python scripts/apply_migrations.py --validate" \
+  || { echo "  [ABORT] ledger validation failed after baseline."; exit 1; }
+echo "  Ledger baselined + validated clean."
 
 # ─── Step 9: Fix ownership and permissions ────────────────────────────────────
 echo ""

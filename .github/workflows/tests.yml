@@ -39,6 +39,30 @@ jobs:
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          # Full history: the whitespace gate below diffs against the PR base /
+          # pre-push SHA, which a shallow checkout does not contain (IMP-009).
+          fetch-depth: 0
+
+      - name: Whitespace hygiene (git diff --check)
+        # IMP-009: reject trailing whitespace / stray CR introduced by this
+        # change set (pre-existing issues on untouched lines don't fail —
+        # diff --check only inspects added lines). Base SHA differs by event:
+        # PR → the PR base; push → the pre-push SHA (guarded: a forced push or
+        # branch creation can yield an unknown/zero SHA → skip with a note).
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
+            echo "No usable base SHA ('$BASE') — skipping whitespace gate."
+            exit 0
+          fi
+          # Markdown is excluded: a trailing double-space is VALID Markdown
+          # (hard line break), so gating .md would forbid legitimate syntax.
+          git diff --check "$BASE"...HEAD -- . ':(exclude)*.md'
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
