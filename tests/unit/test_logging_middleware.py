@@ -120,3 +120,26 @@ async def test_security_classification_uses_routed_path(monkeypatch):
     paths = [extra.get("path") for _, extra in sec.records if "path" in extra]
     assert "/auth/me" in paths, "security event must record the routed path"
 
+
+
+@pytest.mark.asyncio
+async def test_control_characters_in_path_cannot_forge_log_lines(monkeypatch):
+    """ASGI decodes %0A/%0D into scope['path'] — logged copies must escape
+    control characters so a request can't inject fake log entries; the raw
+    path still drives classification (Codex on #520)."""
+    logger = StubAccessLogger()
+    monkeypatch.setattr(logging_middleware, "access_logger", logger)
+
+    app = FastAPI()
+    app.add_middleware(logging_middleware.RequestLoggingMiddleware)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        await client.get("/api/a%0Ainjected%0D")
+
+    assert logger.calls, "request must be logged"
+    for _, message in logger.calls:
+        assert "\n" not in message and "\r" not in message, (
+            f"log message contains raw control chars: {message!r}"
+        )
+    assert any("\\n" in m for _, m in logger.calls), "newline must be escaped, not dropped"

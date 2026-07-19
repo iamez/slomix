@@ -12,6 +12,7 @@ Logs all HTTP requests/responses with:
 import ipaddress
 import logging
 import os
+import re
 import time
 import uuid
 from typing import Callable
@@ -62,6 +63,19 @@ SUSPICIOUS_PATTERNS = [
     "%00",           # Null byte injection
 ]
 
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _log_safe(value: str) -> str:
+    """Escape control characters for LOG OUTPUT only.
+
+    ASGI decodes percent-encoded bytes into scope["path"], so a request for
+    /api/a%0Ab arrives with a literal newline — written raw, it would let a
+    good-Host client forge multiline access/security log entries (Codex on
+    #520). Decisions keep the raw routed path; only the logged copies are
+    escaped (\\n, \\r, \\x00…)."""
+    return _CONTROL_CHARS_RE.sub(lambda m: repr(m.group())[1:-1], value)
+
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Middleware for comprehensive request/response logging."""
@@ -100,16 +114,20 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         # Determine if this is a quiet path
         is_quiet = any(path.startswith(p) for p in QUIET_PATHS)
 
+        # Every LOGGED copy of the path goes through _log_safe (decisions
+        # above/below keep the raw value).
+        safe_path = _log_safe(path)
+
         # Log request (unless quiet)
         if not is_quiet:
             access_logger.info(
-                f"→ {request.method} {path}",
+                f"→ {request.method} {safe_path}",
                 extra={
                     "request_id": request_id,
                     "client_ip": client_ip,
                     "method": request.method,
-                    "path": path,
-                    "user_agent": request.headers.get("user-agent", "unknown")[:100],
+                    "path": safe_path,
+                    "user_agent": _log_safe(request.headers.get("user-agent", "unknown")[:100]),
                 }
             )
 
@@ -142,12 +160,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 log_func = access_logger.info if status_code < 400 or expected_auth_failure else access_logger.warning
 
                 log_func(
-                    f"← {request.method} {path} → {status_code} ({duration_ms:.1f}ms)",
+                    f"← {request.method} {safe_path} → {status_code} ({duration_ms:.1f}ms)",
                     extra={
                         "request_id": request_id,
                         "client_ip": client_ip,
                         "method": request.method,
-                        "path": path,
+                        "path": safe_path,
                         "status_code": status_code,
                         "duration_ms": round(duration_ms, 2),
                     }
@@ -260,8 +278,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                         "request_id": request_id,
                         "client_ip": client_ip,
                         "method": request.method,
-                        "path": path,
-                        "query": query[:200],  # Limit logged query length
+                        "path": _log_safe(path),
+                        "query": _log_safe(query[:200]),  # Limit logged query length
                         "event_type": "suspicious_request",
                         "pattern": pattern,
                     }
@@ -271,7 +289,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         # Check for auth abuse (many failed attempts would be tracked separately)
         if path.startswith("/auth/"):
             security_logger.info(
-                f"🔐 Auth request: {request.method} {path}",
+                f"🔐 Auth request: {request.method} {_log_safe(path)}",
                 extra={
                     "request_id": request_id,
                     "client_ip": client_ip,
@@ -305,12 +323,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         security_logger.log(
             log_level,
-            f"{'✅' if status_code < 400 else '❌'} Security event: {event_type} on {path}",
+            f"{'✅' if status_code < 400 else '❌'} Security event: {event_type} on {_log_safe(path)}",
             extra={
                 "request_id": request_id,
                 "client_ip": client_ip,
                 "status_code": status_code,
                 "event_type": event_type,
-                "path": path,
+                "path": _log_safe(path),
             }
         )
