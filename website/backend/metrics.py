@@ -1,7 +1,7 @@
 """Prometheus metric helpers for middleware instrumentation."""
 
 try:
-    from prometheus_client import Counter, Histogram
+    from prometheus_client import Counter, Gauge, Histogram
 except ImportError:  # pragma: no cover - optional dependency fallback
     class _NoopMetric:
         def __init__(self, *args, **kwargs):
@@ -13,10 +13,14 @@ except ImportError:  # pragma: no cover - optional dependency fallback
         def observe(self, amount: float) -> None:
             return None
 
+        def set(self, value: float) -> None:
+            return None
+
         def labels(self, *args, **kwargs):
             return self
 
     Counter = _NoopMetric
+    Gauge = _NoopMetric
     Histogram = _NoopMetric
 
 
@@ -51,5 +55,17 @@ PROX_SOURCE_QUERIES = Counter(
 
 PROX_SOURCE_QUERY_DURATION = Histogram(
     "slomix_prox_source_query_duration_seconds",
-    "Wall-clock duration of the concurrent proximity source-query batch",
+    "Per-source wall-clock duration of each proximity scoring query",
+    ["source"],
+)
+
+# 1 while the LAST prox-scores compute for that scope was degraded (any source
+# failed → ranking withheld), 0 once it recovers. `scope` is low-cardinality:
+# leaderboard | player | round. Per-scope so a degraded one-off round request
+# can't mask (or fake) leaderboard health — alerting keys on
+# scope="leaderboard" (IMP-005).
+PROX_DEGRADED = Gauge(
+    "slomix_prox_scoring_degraded",
+    "Whether the last proximity scoring compute for this scope was degraded",
+    ["scope"],
 )

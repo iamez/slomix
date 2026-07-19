@@ -155,11 +155,13 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
 
         # Bypass cache when the body carries a proximity stub error — those
         # endpoints return HTTP 200 with `{"status": "error", "message":
-        # "Proximity query failed"}` on query failure (audit finding P10).
-        # Without this bypass, a transient DB blip gets cached for the full
-        # 300s leaderboard TTL and monitoring can't see the underlying
+        # "Proximity query failed"}` on query failure (audit finding P10) —
+        # or a quality-contract degraded response (`"status": "degraded"`,
+        # AUD-008/IMP-005): caching a degraded prox-scores payload would keep
+        # serving "ranking withheld" for the full 300s TTL after the source
+        # recovers, and monitoring would see a healthy cache instead of the
         # failure. Byte-substring match avoids a JSON parse per response.
-        if self._is_proximity_error_body(response_body):
+        if self._is_uncacheable_status_body(response_body):
             response.headers["Cache-Control"] = "no-store"
             response.headers["X-Cache"] = "BYPASS-ERROR"
             return Response(
@@ -304,16 +306,22 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
         return f"public, max-age={ttl}, stale-while-revalidate={stale}"
 
     @staticmethod
-    def _is_proximity_error_body(body: bytes) -> bool:
-        """Detect proximity/prototype error payloads that must bypass cache.
+    def _is_uncacheable_status_body(body: bytes) -> bool:
+        """Detect error/degraded payloads that must bypass the cache.
 
-        Matches `{"status":"error"}` with and without a space after the
-        colon so it works regardless of whether FastAPI emits compact or
-        pretty JSON. False positives would require an unrelated field
-        whose value literally starts with `"error"` — acceptable tradeoff
-        for avoiding a JSON parse on every cached response.
+        Matches `{"status":"error"}` and `{"status":"degraded"}` with and
+        without a space after the colon so it works regardless of whether
+        FastAPI emits compact or pretty JSON. False positives would require
+        an unrelated field whose value literally starts with `"error"` /
+        `"degraded"` — acceptable tradeoff for avoiding a JSON parse on
+        every cached response.
         """
-        return b'"status":"error"' in body or b'"status": "error"' in body
+        return (
+            b'"status":"error"' in body
+            or b'"status": "error"' in body
+            or b'"status":"degraded"' in body
+            or b'"status": "degraded"' in body
+        )
 
     @staticmethod
     def _compute_etag(payload: bytes) -> str:

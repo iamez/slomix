@@ -90,6 +90,40 @@ async def test_http_cache_bypasses_proximity_error_bodies():
 
 
 @pytest.mark.asyncio
+async def test_http_cache_bypasses_degraded_quality_bodies():
+    """IMP-005: prox-scores returns HTTP 200 with `{"status": "degraded", ...}`
+    (ranking withheld) when any source query fails. Caching that payload would
+    keep serving "degraded" for the full TTL after the source recovers — and
+    hide the failure window from monitoring. Same bypass as error bodies."""
+    app = FastAPI()
+    cache_backend = MemoryCacheBackend()
+
+    state = {"value": 0}
+
+    @app.get("/api/proximity/prox-scores")
+    async def prox_scores():
+        state["value"] += 1
+        return {
+            "status": "degraded",
+            "quality": {"ranking_available": False},
+            "players": [],
+            "value": state["value"],
+        }
+
+    app.add_middleware(HTTPCacheMiddleware, cache_backend=cache_backend)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        first = await client.get("/api/proximity/prox-scores")
+        assert first.status_code == 200
+        assert first.headers.get("X-Cache") == "BYPASS-ERROR"
+        assert first.headers.get("Cache-Control") == "no-store"
+
+        second = await client.get("/api/proximity/prox-scores")
+        assert second.json()["value"] == 2, "degraded body must never be served from cache"
+
+
+@pytest.mark.asyncio
 async def test_rate_limit_middleware_rejects_when_limit_exceeded(monkeypatch):
     monkeypatch.setenv("RATE_LIMIT_ENABLED", "true")
     monkeypatch.setenv("RATE_LIMIT_WINDOW_SECONDS", "60")

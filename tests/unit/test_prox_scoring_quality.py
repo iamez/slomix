@@ -251,6 +251,108 @@ async def test_single_player_request_returns_low_coverage_player(monkeypatch):
     assert len(p["missing_metrics"]) > 0
 
 
+# ── observability (IMP-005) ──────────────────────────────────────────
+
+
+class SlowSourceDB(FakeDB):
+    """FakeDB variant where one chosen source sleeps, so per-source durations
+    are distinguishable from the shared gather() wall time."""
+
+    def __init__(self, slow_source: str, delay_s: float = 0.06, **kwargs):
+        super().__init__(**kwargs)
+        self.slow_source = slow_source
+        self.delay_s = delay_s
+
+    async def fetch_all(self, query, params=()):
+        idx = self._call
+        label = SOURCE_LABELS[idx] if idx < len(SOURCE_LABELS) else "?"
+        if label == self.slow_source:
+            import asyncio
+            await asyncio.sleep(self.delay_s)
+        return await super().fetch_all(query, params)
+
+
+@pytest.mark.asyncio
+async def test_sources_carry_per_source_durations():
+    """Every source status must carry its OWN duration — the old batch-level
+    timing stamped all 10 sources with the shared gather() wall time, hiding
+    which table was slow (IMP-005)."""
+    result_players, sources = await prox_scoring._fetch_raw_metrics(  # noqa: SLF001
+        SlowSourceDB("proximity_hit_region", delay_s=0.06), 30
+    )
+    by_source = {s["source"]: s for s in sources}
+    assert all(isinstance(s["duration_ms"], int) for s in sources)
+    slow = by_source["proximity_hit_region"]["duration_ms"]
+    fast = by_source["combat_engagement"]["duration_ms"]
+    assert slow >= 40, f"slow source must show its own latency, got {slow}ms"
+    assert fast < slow, "a fast source must not inherit the slow source's time"
+
+
+@pytest.mark.asyncio
+async def test_failed_source_still_reports_duration():
+    _, sources = await prox_scoring._fetch_raw_metrics(  # noqa: SLF001
+        FakeDB(fail_source="proximity_focus_fire"), 30
+    )
+    failed = next(s for s in sources if s["source"] == "proximity_focus_fire")
+    assert failed["success"] is False
+    assert isinstance(failed["duration_ms"], int)
+
+
+class StubGauge:
+    def __init__(self):
+        self.set_calls: list[tuple[str, float]] = []
+
+    def labels(self, scope):
+        outer = self
+
+        class _Labeled:
+            def set(self, value):
+                outer.set_calls.append((scope, value))
+
+        return _Labeled()
+
+
+@pytest.fixture
+def degraded_gauge(monkeypatch):
+    from website.backend import metrics
+    stub = StubGauge()
+    monkeypatch.setattr(metrics, "PROX_DEGRADED", stub)
+    return stub
+
+
+@pytest.mark.asyncio
+async def test_degraded_gauge_scope_labels(degraded_gauge):
+    """The degraded gauge is per-scope (leaderboard|player|round) so a degraded
+    one-off round request can't overwrite leaderboard health and vice versa —
+    the unlabeled design was last-request-wins across scopes (IMP-005)."""
+    # Leaderboard compute fails → scope=leaderboard set to 1.
+    await compute_prox_scores(FakeDB(fail_source="player_track"))
+    assert ("leaderboard", 1.0) in degraded_gauge.set_calls
+
+    # Healthy leaderboard compute → back to 0.
+    await compute_prox_scores(FakeDB(players={}))
+    assert ("leaderboard", 0.0) in degraded_gauge.set_calls
+
+    # Single-player and round-scoped requests touch THEIR scope only.
+    degraded_gauge.set_calls.clear()
+    await compute_prox_scores(FakeDB(players={}), player_guid="GUID_X")
+    assert degraded_gauge.set_calls == [("player", 0.0)]
+
+    degraded_gauge.set_calls.clear()
+    await compute_prox_scores(
+        FakeDB(fail_source="combat_engagement"), session_date="2026-07-18"
+    )
+    assert degraded_gauge.set_calls == [("round", 1.0)]
+
+
+@pytest.mark.asyncio
+async def test_source_labels_constant_matches_query_catalog():
+    """PROX_SOURCE_LABELS pre-initializes the Prometheus counter children so
+    increase() can see a source's FIRST failure (Codex on #521) — it must
+    never drift from the actual query catalog."""
+    _, sources = await prox_scoring._fetch_raw_metrics(FakeDB(players={}), 30)  # noqa: SLF001
+    assert tuple(s["source"] for s in sources) == prox_scoring.PROX_SOURCE_LABELS
+    assert tuple(SOURCE_LABELS) == prox_scoring.PROX_SOURCE_LABELS
 # ── SQL-merge level contracts (IMP-003) — real _fetch_raw_metrics rows ───────
 
 

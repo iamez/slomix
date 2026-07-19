@@ -285,6 +285,16 @@ app.include_router(storytelling_router.router, prefix="/api", tags=["Storytellin
 app.include_router(rivalries_router.router, prefix="/api", tags=["Rivalries"])
 app.include_router(replay_router.router, prefix="/api", tags=["Replay"])
 
+# Pre-initialize the prox-scoring Prometheus counter children at APP import,
+# not on the first /prox-scores request (Codex on #521): the router imports
+# the service lazily, so without this the pre-init could run in the very
+# request that records a source's first error — Prometheus would then never
+# scrape the zero-valued child and increase() would miss that first failure.
+try:
+    from website.backend.services import prox_scoring as _prox_scoring_preinit  # noqa: F401
+except Exception:  # pragma: no cover - metrics must never block startup
+    logger.debug("prox_scoring pre-init import skipped", exc_info=True)
+
 if PROMETHEUS_ENABLED and Instrumentator is not None:
     instrumentator = Instrumentator(excluded_handlers=["/metrics"])
     instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
