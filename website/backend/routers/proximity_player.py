@@ -286,6 +286,13 @@ async def get_proximity_player_radar(
         rf_score = max(0, 100 - (rf_ms / 30))
         mechanical = min(100, rf_score)
 
+        # The composite averages only REAL axis scores: an 'unavailable'
+        # Teamplay is a placeholder 0 by contract, and averaging it in would
+        # depress the composite by a value explicitly declared not-a-score
+        # (Codex on #518).
+        composite_axes = [aggression, awareness, timing, mechanical]
+        if teamplay_source != "unavailable":
+            composite_axes.append(teamplay)
         return {
             "axes": [
                 {"label": "Aggression", "value": round(aggression, 1)},
@@ -294,7 +301,7 @@ async def get_proximity_player_radar(
                 {"label": "Timing", "value": round(timing, 1)},
                 {"label": "Mechanical", "value": round(mechanical, 1)},
             ],
-            "composite": round((aggression + awareness + teamplay + timing + mechanical) / 5, 1),
+            "composite": round(sum(composite_axes) / len(composite_axes), 1),
             # IMP-003 teamplay formula contract: which formula produced the
             # Teamplay axis, its version/window, and — for the CF/TR fallback —
             # sample count, the reason the prox score was unavailable, and a
