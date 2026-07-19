@@ -132,6 +132,23 @@ sudo_run() {
   fi
 }
 
+# Like sudo_run, but executes as a specific (service) user — needed where the
+# target files are owned by slomix_bot/slomix_web rather than root or $VM_USER
+# (e.g. the venvs, which slomix_vm_setup.sh chowns without group write).
+sudo_run_as() {
+  local as_user=$1
+  shift
+  if $DRY_RUN; then
+    log "[dry-run] would sudo -u $as_user: $*"
+    return
+  fi
+  if [ -n "${SUDO_PASS:-}" ]; then
+    printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -u $as_user -- $*"
+  else
+    $SSH "sudo -n -u $as_user -- $*" || fail "sudo -u $as_user failed — re-run with SUDO_PASS=<pass>"
+  fi
+}
+
 # ─── Mid-deploy recovery trap ─────────────────────────────────────────────────
 # If anything fails *after* services are stopped (step 4) but *before* they're
 # confirmed restarted (end of step 7), the EXIT trap auto-restarts both
@@ -148,7 +165,9 @@ sudo_run() {
 #   - Success path → SERVICES_RESTARTED=true at end of step 7, trap no-ops.
 #   - Dry-run → trap no-ops (no real state change happened).
 #   - Failure mid-step-7 (e.g. slomix-bot fails is-active) → trap fires.
-#     `systemctl start` is idempotent so retrying both services is safe.
+#     `systemctl restart` handles both a stopped unit (plain start) and an
+#     already-active one (re-exec on the rolled-back code) — see the
+#     recovery body.
 #   - Trap function inlines the SSH+sudo call instead of using `sudo_run`,
 #     because `sudo_run` calls `fail` on error which would re-enter the trap.
 #
@@ -276,11 +295,17 @@ recover_on_failure() {
       warn ".env snapshot restore FAILED (rc=$envrestore_rc): sudo install -o slomix_bot -g slomix -m 640 $ENV_SNAPSHOT $VM_PATH/.env"
     fi
   fi
+  # `restart`, not `start` (Codex on #516): a window-2 failure can land after
+  # step 7 already STARTED slomix-web on the new tag. The checkout was just
+  # rolled back above, but `systemctl start` is a no-op on an active unit, so
+  # the web process would keep running the failed tag's code. `restart`
+  # re-execs an active unit and plain-starts a stopped one — correct in both
+  # states.
   local recover_rc=0
   if [ -n "${SUDO_PASS:-}" ]; then
-    printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -- systemctl start slomix-web slomix-bot" || recover_rc=$?
+    printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -- systemctl restart slomix-web slomix-bot" || recover_rc=$?
   else
-    $SSH "sudo -n -- systemctl start slomix-web slomix-bot" || recover_rc=$?
+    $SSH "sudo -n -- systemctl restart slomix-web slomix-bot" || recover_rc=$?
   fi
   if [ "$recover_rc" -eq 0 ]; then
     warn "Recovery succeeded. Verify state with:"
@@ -289,7 +314,7 @@ recover_on_failure() {
   else
     warn "Recovery FAILED (rc=$recover_rc). Manual intervention required:"
     warn "  ssh -i $VM_KEY $VM_USER@$VM_HOST"
-    warn "  sudo systemctl start slomix-web slomix-bot"
+    warn "  sudo systemctl restart slomix-web slomix-bot"
     warn "  sudo journalctl -u slomix-web -u slomix-bot --since '5 minutes ago' --no-pager"
   fi
   exit "$rc"
@@ -462,25 +487,30 @@ run_remote "cd $VM_PATH && \
 # deploy, which must NOT be restored over the current-and-correct bundle.
 $DRY_RUN || MODERN_SWAPPED=true
 
-# ─── 3d. Install Python dependencies into both venvs ─────────────────────────
-# Each venv installs from ITS OWN manifest: the web service runs from
-# website/requirements.txt, the bot from the root requirements.txt (IMP-005:
-# without this step, new pins — e.g. prometheus-client for the web venv — never
-# reached production at all). Runs BEFORE services stop, so a resolver/network
-# failure aborts with zero downtime and the window-1 rollback restores the
-# checkout. pip is idempotent: unchanged manifests are a fast no-op.
-log "3d/8 Install Python deps (venv-bot ← requirements.txt, venv-web ← website/requirements.txt)"
-run_remote "cd $VM_PATH && \
-  venv-bot/bin/pip install -q -r requirements.txt && \
-  venv-web/bin/pip install -q -r website/requirements.txt && \
-  echo '  dependencies OK'"
-
 # ─── 4. Stop services (clean restart) ─────────────────────────────────────────
 log "4/8  Stop services before migration"
 sudo_run "systemctl stop slomix-web slomix-bot"
 # Arm the recovery trap. Any non-zero exit from here until the end of
 # step 7 will trigger an auto-restart of both services.
 SERVICES_STOPPED=true
+
+# ─── 4b. Install Python dependencies into both venvs ──────────────────────────
+# Each venv installs from ITS OWN manifest: the web service runs from
+# website/requirements.txt, the bot from the root requirements.txt (IMP-005:
+# without this step, new pins — e.g. prometheus-client for the web venv — never
+# reached production at all). Runs AFTER services stop (Copilot on #516):
+# mutating site-packages under a live process risks inconsistent imports if it
+# loads modules mid-install. Runs AS the venv owners (Codex on #516):
+# slomix_vm_setup.sh chowns venv-bot/venv-web to slomix_bot/slomix_web with no
+# group write, so a plain $VM_USER pip fails the moment a pin actually changes.
+# pip is idempotent: unchanged manifests are a fast no-op. A failure here lands
+# in window 2: recovery restores the old checkout and restarts — pinned deps
+# are additive/backward-compatible, so old code on a partially-updated venv
+# still boots (and the next deploy re-runs the install).
+log "4b/8 Install Python deps (venv-bot ← requirements.txt, venv-web ← website/requirements.txt)"
+sudo_run_as slomix_bot "$VM_PATH/venv-bot/bin/pip install -q -r $VM_PATH/requirements.txt"
+sudo_run_as slomix_web "$VM_PATH/venv-web/bin/pip install -q -r $VM_PATH/website/requirements.txt"
+log "  dependencies OK"
 
 # ─── 5. Apply migrations via the runner ───────────────────────────────────────
 # The runner (scripts/apply_migrations.py) applies each migration and its

@@ -168,10 +168,20 @@ def test_unwrap_ignores_tokens_in_comments_and_strings():
 
 
 def test_every_repo_migration_is_accepted():
-    """No committed migration may be rejected by the wrapper analysis."""
+    """No committed migration may be rejected by the runner's analysis —
+    neither the wrapper unwrap nor the IMP-008 CONCURRENTLY rejection (053's
+    CONCURRENTLY mention lives inside masked dollar-quoted/comment context).
+    This is the guard the apply-loop comment cites: a migration that trips
+    requires_non_transactional() must go through the manual psql + --mark
+    path, and adding one to the repo should fail HERE first."""
     mig_dir = Path(__file__).resolve().parents[2] / "migrations"
+    assert sorted(mig_dir.glob("*.sql")), "no migrations found — wrong path?"
     for path in sorted(mig_dir.glob("*.sql")):
-        unwrap_outer_transaction(path.read_text(encoding="utf-8"))
+        body = unwrap_outer_transaction(path.read_text(encoding="utf-8"))
+        assert not requires_non_transactional(body), (
+            f"{path.name} contains live CONCURRENTLY — the runner would "
+            "REJECT it (IMP-008); apply manually via psql + --mark instead"
+        )
 
 
 def test_concurrently_detection_ignores_comments():

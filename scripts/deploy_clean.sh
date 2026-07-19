@@ -105,6 +105,20 @@ build_file_list() {
   echo "requirements.txt"
   echo "postgresql_database_manager.py"
 
+  # Web venv manifest — step 7 installs from it ON THE VM, and step 8's
+  # runner executes from venv-web; without shipping it, a fresh VM has no
+  # website/requirements.txt at all and a re-deploy installs stale pins
+  # (Codex on #516).
+  echo "website/requirements.txt"
+
+  # Migration runner + every migration file — step 8 baselines the ledger on
+  # the VM, so these must come from THIS deploy's archive: a --clean run
+  # deletes $VM_PATH/scripts first, and without shipping migrations/ the
+  # baseline would record whatever stale files were left on the VM instead of
+  # the set matching the dump just uploaded (Codex on #516).
+  echo "scripts/apply_migrations.py"
+  find migrations/ -name '*.sql' 2>/dev/null
+
   # Greatshot package (website hard dependency)
   find greatshot/ -name '*.py' -not -path '*__pycache__*' -not -path '*tests/*' 2>/dev/null
 
@@ -192,28 +206,47 @@ fi
 # This script is the FRESH-BOOTSTRAP workflow ONLY. Its later steps apply the
 # canonical schema dump and then `--baseline` the migration ledger — which
 # records every migration as applied WITHOUT comparing the actual schema
-# (apply_migrations.py cmd_baseline). That is only sound on a provably EMPTY
-# database. The gate therefore runs BEFORE stopping services, uploading, or
-# extracting anything: an existing deployment must use deploy_release.sh.
-# Proof of emptiness = ZERO relations in the public schema (not just a couple
-# of sentinel tables).
+# (apply_migrations.py cmd_baseline). That is only sound against the canonical
+# dump, so the gate runs BEFORE stopping services, uploading, or extracting
+# anything. Two acceptable states (Codex on #516):
+#   1. EMPTY public schema (zero relations of ANY kind — tables, views,
+#      sequences, matviews; not just a couple of sentinel tables)
+#      → this script applies the dump itself;
+#   2. schema PRELOADED by the documented fresh-install path
+#      (slomix_vm_setup.sh phase 1 applies tools/schema_postgresql.sql before
+#      writing .env) and NEVER ledgered (no schema_migrations table)
+#      → skip the dump apply, still baseline. Sound because setup + this
+#        deploy run back-to-back from the same checkout; a preloaded schema
+#        WITH a ledger means a managed database → deploy_release.sh.
+# The password never leaves the VM (Copilot on #516): the grep feeds
+# PGPASSWORD inside the remote shell — no local interpolation, so shell
+# metacharacters in the password can't break quoting here.
 echo ""
 echo "[3.5] Fresh-database gate (bootstrap-only guard)..."
-DB_PASS_GATE=$($SSH "grep -E '^POSTGRES_PASSWORD=' $VM_PATH/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\"'" || true)
-if [ -z "$DB_PASS_GATE" ]; then
+if ! $SSH "grep -qE '^POSTGRES_PASSWORD=.' $VM_PATH/.env 2>/dev/null"; then
   echo "  [ABORT] Cannot read POSTGRES_PASSWORD from $VM_PATH/.env — unable to"
   echo "          prove the database is empty. Provision .env first (slomix_vm_setup.sh)."
   exit 1
 fi
-PUBLIC_TABLES=$($SSH "PGPASSWORD='$DB_PASS_GATE' psql -h localhost -U etlegacy_user -d etlegacy -tAc \
-  \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'\"" || echo "ERR")
-if [ "$PUBLIC_TABLES" != "0" ]; then
-  echo "  [ABORT] public schema is not empty (tables=$PUBLIC_TABLES) or unreachable."
-  echo "          This workflow is for FRESH installs only. For an existing"
-  echo "          deployment use: SUDO_PASS=<pass> ./scripts/deploy_release.sh <tag>"
+REMOTE_PSQL="PGPASSWORD=\$(grep -E '^POSTGRES_PASSWORD=' $VM_PATH/.env | head -1 | cut -d= -f2-) psql -h localhost -U etlegacy_user -d etlegacy -tAc"
+PUBLIC_RELATIONS=$($SSH "$REMOTE_PSQL \"SELECT COUNT(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public'\"" || echo "ERR")
+LEDGER_TABLES=$($SSH "$REMOTE_PSQL \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'schema_migrations'\"" || echo "ERR")
+if [ "$PUBLIC_RELATIONS" = "0" ] && [ "$LEDGER_TABLES" = "0" ]; then
+  APPLY_DUMP=true
+  echo "  public schema empty — fresh bootstrap confirmed (dump will be applied)."
+elif [ "$PUBLIC_RELATIONS" != "ERR" ] && [ "$LEDGER_TABLES" = "0" ]; then
+  APPLY_DUMP=false
+  echo "  schema preloaded (relations=$PUBLIC_RELATIONS) with NO migration ledger —"
+  echo "  accepting the slomix_vm_setup.sh fresh-install state. The dump apply is"
+  echo "  skipped; the ledger will be baselined. NOTE: this is only sound when"
+  echo "  setup and this deploy ran from the SAME checkout."
+else
+  echo "  [ABORT] database is managed or unreachable (relations=$PUBLIC_RELATIONS,"
+  echo "          schema_migrations=$LEDGER_TABLES). This workflow is for FRESH"
+  echo "          installs only. For an existing deployment use:"
+  echo "          SUDO_PASS=<pass> ./scripts/deploy_release.sh <tag>"
   exit 1
 fi
-echo "  public schema empty — fresh bootstrap confirmed."
 
 # ─── Step 4: Stop services ───────────────────────────────────────────────────
 echo ""
@@ -323,18 +356,18 @@ fi
 # CONTAINS every migration's effect) and validated clean, so the very first
 # deploy_release.sh run starts from a sound ledger.
 echo ""
-echo "[ 8 ] Applying DB schema (fresh bootstrap, ON_ERROR_STOP=1)..."
-
-DB_PASS=$($SSH "grep -E '^POSTGRES_PASSWORD=' $VM_PATH/.env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\"'" || true)
-
-if [ -z "$DB_PASS" ]; then
-  echo "  [ABORT] Could not read DB password — cannot bootstrap the schema."
-  exit 1
+if [ "$APPLY_DUMP" = true ]; then
+  echo "[ 8 ] Applying DB schema (fresh bootstrap, ON_ERROR_STOP=1)..."
+  # Same remote-side password pattern as the gate (Copilot on #516): the
+  # secret is resolved inside the VM shell, never interpolated locally.
+  $SSH "PGPASSWORD=\$(grep -E '^POSTGRES_PASSWORD=' $VM_PATH/.env | head -1 | cut -d= -f2-) \
+    psql -h localhost -U etlegacy_user -d etlegacy \
+    -f $VM_PATH/tools/schema_postgresql.sql \
+    -v ON_ERROR_STOP=1 -q" || { echo "  [ABORT] schema apply failed."; exit 1; }
+  echo "  Schema applied."
+else
+  echo "[ 8 ] Schema already preloaded by slomix_vm_setup.sh — skipping dump apply."
 fi
-$SSH "PGPASSWORD='$DB_PASS' psql -h localhost -U etlegacy_user -d etlegacy \
-  -f $VM_PATH/tools/schema_postgresql.sql \
-  -v ON_ERROR_STOP=1 -q" || { echo "  [ABORT] schema apply failed."; exit 1; }
-echo "  Schema applied."
 
 echo "  Baselining migration ledger (dump ⊇ migrations — CI parity test proves it)..."
 $SSH "cd $VM_PATH && venv-web/bin/python scripts/apply_migrations.py --baseline" \

@@ -16,7 +16,17 @@ This test proves it on the CI PostgreSQL:
    something the dump lacked would show up here);
 6. `--baseline` + `--validate` must then report a clean ledger.
 
-Skips when the CI PostgreSQL service is unavailable (local dev).
+Skips when the CI PostgreSQL service is unavailable (local dev) or the test
+user cannot CREATE DATABASE.
+
+Known limitation (Codex on #516): this proves PRESENCE parity, not
+DEFINITION parity. An idempotent migration (`ADD COLUMN IF NOT EXISTS`,
+`CREATE INDEX IF NOT EXISTS`) no-ops when the dump carries an object of the
+same NAME but a different type/default/predicate, and the before/after
+snapshot stays equal. Definition-level comparison needs a second
+migrations-only schema build, which the migration set can't produce on its
+own (migrations assume the pre-migration base schema) — tracked as an owner
+follow-up in the remediation plan.
 """
 from __future__ import annotations
 
@@ -86,7 +96,14 @@ async def _snapshot(conn) -> frozenset:
 async def test_dump_contains_every_migration(monkeypatch):
     admin = await _admin_conn()
     parity_db = f"parity_{uuid.uuid4().hex[:8]}"
-    await admin.execute(f'CREATE DATABASE "{parity_db}"')
+    try:
+        await admin.execute(f'CREATE DATABASE "{parity_db}"')
+    except asyncpg.InsufficientPrivilegeError as e:
+        # Local dev users typically lack CREATEDB; only the CI service user is
+        # guaranteed to have it. Skip (like the connection check) instead of
+        # hard-failing the suite outside CI (Copilot on #516).
+        await admin.close()
+        pytest.skip(f"test user cannot CREATE DATABASE: {e}")
     try:
         conn = await asyncpg.connect(**{**TEST_DB, "database": parity_db})
         try:

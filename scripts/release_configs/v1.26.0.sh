@@ -3,6 +3,11 @@
 # shellcheck disable=SC2034
 #
 # Migrations shipped by this release:
+#   060 — KIS formula_version cache column (was left out of every committed
+#         release config; the runner's --only preflight refuses to run while
+#         an unrelated migration is pending, so omitting it would abort the
+#         deploy after services stopped on any ledger that hasn't had 060
+#         applied/marked yet — Codex on #516. Already-applied ledgers skip it.)
 #   061 — prediction shadow program v2 columns (match_predictions)
 #   062 — proximity_processed_files capability columns (tracker_version,
 #         round_key, capabilities JSONB)
@@ -13,6 +18,7 @@
 #   HOSTNAME-ONLY entries (no scheme, no port) — the gate parses the Host
 #   header as hostname[:port] and compares hostnames.
 MIGRATIONS=(
+  "060_add_kis_formula_version.sql"
   "061_prediction_shadow_v2.sql"
   "062_proximity_processed_files_capabilities.sql"
 )
