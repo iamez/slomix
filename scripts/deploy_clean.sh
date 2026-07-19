@@ -241,7 +241,9 @@ elif [ "$PUBLIC_RELATIONS" != "ERR" ] && [ "$LEDGER_TABLES" = "0" ]; then
   # branch would baseline newer migration files over an older schema —
   # exactly the unsound ledger IMP-001 forbids (Codex on #516). PROOF =
   # byte-identical dump: compare the VM's setup-cloned copy against ours.
-  LOCAL_DUMP_SHA=$(sha256sum tools/schema_postgresql.sql | cut -d' ' -f1)
+  # Absolute path (Codex on #516): the gate runs before step 6's cd, so a
+  # relative path would break when the script is invoked from scripts/.
+  LOCAL_DUMP_SHA=$(sha256sum "$LOCAL_ROOT/tools/schema_postgresql.sql" | cut -d' ' -f1)
   VM_DUMP_SHA=$($SSH "sha256sum $VM_PATH/tools/schema_postgresql.sql 2>/dev/null | cut -d' ' -f1" || true)
   if [ -z "$VM_DUMP_SHA" ] || [ "$LOCAL_DUMP_SHA" != "$VM_DUMP_SHA" ]; then
     echo "  [ABORT] schema is preloaded but the VM's dump does NOT match this"
@@ -385,13 +387,18 @@ fi
 # deploy_release.sh run starts from a sound ledger.
 echo ""
 if [ "$APPLY_DUMP" = true ]; then
-  echo "[ 8 ] Applying DB schema (fresh bootstrap, ON_ERROR_STOP=1)..."
+  echo "[ 8 ] Applying DB schema (fresh bootstrap, single transaction, ON_ERROR_STOP=1)..."
   # Same remote-side password pattern as the gate (Copilot on #516): the
   # secret is resolved inside the VM shell, never interpolated locally.
+  # --single-transaction + ON_ERROR_STOP (Codex on #516): without it a
+  # mid-dump failure leaves earlier DDL committed, and the NEXT run's gate
+  # would see relations>0 / no ledger / matching dump checksum and baseline
+  # an INCOMPLETE schema. All-or-nothing means a failed apply leaves the
+  # database empty and the retry takes the normal bootstrap path.
   $SSH "PGPASSWORD=\$(grep -E '^POSTGRES_PASSWORD=' $VM_PATH/.env | head -1 | cut -d= -f2-) \
     psql -h localhost -U etlegacy_user -d etlegacy \
     -f $VM_PATH/tools/schema_postgresql.sql \
-    -v ON_ERROR_STOP=1 -q" || { echo "  [ABORT] schema apply failed."; exit 1; }
+    --single-transaction -v ON_ERROR_STOP=1 -q" || { echo "  [ABORT] schema apply failed (no partial state — single transaction)."; exit 1; }
   echo "  Schema applied."
 else
   echo "[ 8 ] Schema already preloaded by slomix_vm_setup.sh — skipping dump apply."

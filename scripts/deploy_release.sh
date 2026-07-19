@@ -184,6 +184,7 @@ MODERN_SWAPPED=false
 SERVICES_STOPPED=false
 SERVICES_RESTARTED=false
 ENV_SNAPSHOT=""
+ENV_SNAPSHOT_WEB=""
 ENV_SNAPSHOT_TAKEN=false
 
 recover_on_failure() {
@@ -231,6 +232,8 @@ recover_on_failure() {
     $SSH "cd $VM_PATH && git checkout -f $CURRENT_COMMIT && { \
       RSHA=\$(git rev-parse --short HEAD); \
       sed -i \"s|?v=[A-Za-z0-9._-]\\+|?v=\$RSHA|g\" website/index.html website/js/*.js 2>/dev/null || true; \
+      sed -i -E \"s|(from '\\./[^'?]+\\.js)'|\\1?v=\$RSHA'|g; s|(from \\\"\\./[^\\\"?]+\\.js)\\\"|\\1?v=\$RSHA\\\"|g; s|(import '\\./[^'?]+\\.js)'|\\1?v=\$RSHA'|g; s|(import \\\"\\./[^\\\"?]+\\.js)\\\"|\\1?v=\$RSHA\\\"|g\" website/js/*.js website/index.html 2>/dev/null || true; \
+      sed -i -E \"s|(src=\\\"js/[^\\\"?]+\\.js)\\\"|\\1?v=\$RSHA\\\"|g; s|(src='js/[^'?]+\\.js)'|\\1?v=\$RSHA'|g\" website/index.html 2>/dev/null || true; \
       $modern_restore \
       git log --oneline -1; \
     }" || restore_rc=$?
@@ -272,6 +275,8 @@ recover_on_failure() {
   $SSH "cd $VM_PATH && git checkout -f $CURRENT_COMMIT && { \
     RSHA=\$(git rev-parse --short HEAD); \
     sed -i \"s|?v=[A-Za-z0-9._-]\\+|?v=\$RSHA|g\" website/index.html website/js/*.js 2>/dev/null || true; \
+    sed -i -E \"s|(from '\\./[^'?]+\\.js)'|\\1?v=\$RSHA'|g; s|(from \\\"\\./[^\\\"?]+\\.js)\\\"|\\1?v=\$RSHA\\\"|g; s|(import '\\./[^'?]+\\.js)'|\\1?v=\$RSHA'|g; s|(import \\\"\\./[^\\\"?]+\\.js)\\\"|\\1?v=\$RSHA\\\"|g\" website/js/*.js website/index.html 2>/dev/null || true; \
+    sed -i -E \"s|(src=\\\"js/[^\\\"?]+\\.js)\\\"|\\1?v=\$RSHA\\\"|g; s|(src='js/[^'?]+\\.js)'|\\1?v=\$RSHA'|g\" website/index.html 2>/dev/null || true; \
     $modern_restore \
     true; \
   }" || rollback_rc=$?
@@ -284,13 +289,17 @@ recover_on_failure() {
   # content; ownership/mode are restored to the canonical slomix_bot:slomix 640.
   if $ENV_SNAPSHOT_TAKEN && [ -n "$ENV_SNAPSHOT" ]; then
     local envrestore_rc=0
+    # website/.env (when it was snapshotted) is restored alongside the root
+    # file — the flag loop writes both, so a partial-write failure must roll
+    # BOTH back (Codex on #516).
+    local restore_cmd="install -o slomix_bot -g slomix -m 640 $ENV_SNAPSHOT $VM_PATH/.env; if [ -f $ENV_SNAPSHOT_WEB ]; then install -o slomix_web -g slomix -m 640 $ENV_SNAPSHOT_WEB $VM_PATH/website/.env; fi"
     if [ -n "${SUDO_PASS:-}" ]; then
-      printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -- bash -c 'install -o slomix_bot -g slomix -m 640 $ENV_SNAPSHOT $VM_PATH/.env'" || envrestore_rc=$?
+      printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -- bash -c '$restore_cmd'" || envrestore_rc=$?
     else
-      $SSH "sudo -n -- bash -c 'install -o slomix_bot -g slomix -m 640 $ENV_SNAPSHOT $VM_PATH/.env'" || envrestore_rc=$?
+      $SSH "sudo -n -- bash -c '$restore_cmd'" || envrestore_rc=$?
     fi
     if [ "$envrestore_rc" -eq 0 ]; then
-      warn ".env restored from snapshot $ENV_SNAPSHOT"
+      warn ".env (and website/.env when present) restored from snapshot $ENV_SNAPSHOT"
     else
       warn ".env snapshot restore FAILED (rc=$envrestore_rc): sudo install -o slomix_bot -g slomix -m 640 $ENV_SNAPSHOT $VM_PATH/.env"
     fi
@@ -562,8 +571,18 @@ fi
 # already recorded, and aborting after services stopped would strand the bad
 # release running. Pending/failed/checksum drift aborts on every path.
 if $SKIP_MIGRATIONS; then
-  log "  Validating migration ledger (tolerating MISSING — rollback checkout may lack newer files)"
-  run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --validate --tolerate-missing"
+  # The checked-out (possibly OLDER) tag's runner may predate the
+  # --tolerate-missing flag — argparse would then fail after services
+  # stopped, stranding the rollback (Codex on #516). Stage THIS deploy's
+  # runner at the same directory depth (so its migrations/.env discovery
+  # via __file__ still resolves to $VM_PATH) and validate with it; the
+  # staged copy is removed either way.
+  STAGED_RUNNER="scripts/.apply_migrations.deploy.py"
+  if ! $DRY_RUN; then
+    scp -i "$VM_KEY" "$SCRIPT_DIR/apply_migrations.py" "$VM_USER@$VM_HOST:$VM_PATH/$STAGED_RUNNER"
+  fi
+  log "  Validating migration ledger (staged current runner; tolerating MISSING — rollback checkout may lack newer files)"
+  run_remote "cd $VM_PATH && $VM_PY $STAGED_RUNNER --validate --tolerate-missing; rc=\$?; rm -f $STAGED_RUNNER; exit \$rc"
 else
   log "  Validating migration ledger (pending/failed/missing/checksum drift aborts deploy)"
   run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --validate"
@@ -580,8 +599,9 @@ if ! $SKIP_FLAGS && [ ${#FLAGS[@]} -gt 0 ]; then
   # secret backup inside the checkout is exactly what audit AUD-010 bans).
   # Retention: the last 10 snapshots are kept (pruned below on success).
   ENV_SNAPSHOT="/var/backups/slomix/env/${TAG}-$(date +%Y%m%d-%H%M%S).env"
+  ENV_SNAPSHOT_WEB="${ENV_SNAPSHOT%.env}-web.env"
   log "6/8  Snapshot .env → $ENV_SNAPSHOT (root-only, mode 600)"
-  sudo_run "bash -c 'mkdir -p /var/backups/slomix/env && chmod 700 /var/backups/slomix /var/backups/slomix/env && install -o root -g root -m 600 $VM_PATH/.env $ENV_SNAPSHOT'"
+  sudo_run "bash -c 'mkdir -p /var/backups/slomix/env && chmod 700 /var/backups/slomix /var/backups/slomix/env && install -o root -g root -m 600 $VM_PATH/.env $ENV_SNAPSHOT && { [ -f $VM_PATH/website/.env ] && install -o root -g root -m 600 $VM_PATH/website/.env $ENV_SNAPSHOT_WEB || true; }'"
   $DRY_RUN || ENV_SNAPSHOT_TAKEN=true
   log "     Add ${#FLAGS[@]} feature flag(s) to /opt/slomix/.env (via sudo)"
   for KV in "${FLAGS[@]}"; do
@@ -612,10 +632,24 @@ if ! $SKIP_FLAGS && [ ${#FLAGS[@]} -gt 0 ]; then
       else \
         echo \"${KEY}=${VAL}\" >> .env; \
       fi'"
+    # ALSO upsert into website/.env when it exists (Codex on #516): VMs
+    # provisioned by slomix_vm_setup.sh run the web service with
+    # EnvironmentFile=website/.env, and main.py prefers website/.env over
+    # the root file — a flag written only to /opt/slomix/.env (e.g. the
+    # required TRUSTED_HOSTS) would never reach the web process there.
+    sudo_run "bash -c 'cd $VM_PATH && \
+      if [ -f website/.env ]; then \
+        if grep -qE \"^${KEY}=\" website/.env; then \
+          sed -i \"s|^${KEY}=.*|${KEY}=${VAL_ESC}|\" website/.env; \
+        else \
+          echo \"${KEY}=${VAL}\" >> website/.env; \
+        fi; \
+      fi'"
   done
   log "Final flag state on VM (this release only):"
   ALL_KEYS="$(printf '%s\n' "${FLAGS[@]}" | cut -d= -f1 | paste -sd '|')"
-  run_remote "grep -E '^(${ALL_KEYS})=' $VM_PATH/.env || true"
+  run_remote "grep -E '^(${ALL_KEYS})=' $VM_PATH/.env || true; \
+    if [ -f $VM_PATH/website/.env ]; then echo '  (website/.env:)'; grep -E '^(${ALL_KEYS})=' $VM_PATH/website/.env || true; fi"
 else
   log "6/8  Skipping .env edit (--skip-flags or empty FLAGS=)"
 fi
@@ -654,12 +688,18 @@ log "Deploy complete. To rollback to pre-deploy commit ($CURRENT_COMMIT):"
 # Include `-i $VM_KEY` so the printed commands match the script's own SSH
 # connection params — without it, the rollback fails for anyone who doesn't
 # have $VM_KEY as their default identity for $VM_HOST. (Copilot review on #259.)
-echo "  ssh -i $VM_KEY $VM_USER@$VM_HOST 'cd $VM_PATH && git checkout -f $CURRENT_COMMIT && sudo systemctl restart slomix-web slomix-bot'"
+# The pip installs are part of the documented rollback (Codex on #516):
+# step 4b already synced both venvs to THIS release's pins, so old code
+# must get its own manifests back before restarting.
+echo "  ssh -i $VM_KEY $VM_USER@$VM_HOST 'cd $VM_PATH && git checkout -f $CURRENT_COMMIT \\"
+echo "    && sudo -u slomix_bot venv-bot/bin/pip install -q -r requirements.txt \\"
+echo "    && sudo -u slomix_web venv-web/bin/pip install -q -r website/requirements.txt \\"
+echo "    && sudo systemctl restart slomix-web slomix-bot'"
 if [ ${#FLAGS[@]} -gt 0 ]; then
   echo "  To disable one of this release's flags (cheaper rollback — keeps code):"
   for KV in "${FLAGS[@]}"; do
     KEY="${KV%%=*}"
-    echo "    ssh -i $VM_KEY $VM_USER@$VM_HOST \"sudo sed -i 's/^${KEY}=.*/${KEY}=false/' $VM_PATH/.env && sudo systemctl restart slomix-web slomix-bot\""
+    echo "    ssh -i $VM_KEY $VM_USER@$VM_HOST \"sudo sed -i 's/^${KEY}=.*/${KEY}=false/' $VM_PATH/.env && { [ -f $VM_PATH/website/.env ] && sudo sed -i 's/^${KEY}=.*/${KEY}=false/' $VM_PATH/website/.env || true; } && sudo systemctl restart slomix-web slomix-bot\""
   done
 fi
 # Retention: keep only the newest 10 .env snapshots (root-only dir). Runs only
