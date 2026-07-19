@@ -97,14 +97,39 @@ async def main() -> None:
             assert r.status_code == 400, f"Host {bad!r} must 400, got {r.status_code}"
 
         # 2b) With Prometheus available, prove the instrumentator is REALLY in
-        # the stack (a live /metrics endpoint) and that a bad Host still dies
-        # at the gate BEFORE reaching it — the instrumentator middleware reads
-        # request.url, so it must sit inside the host gate (Codex on #520).
+        # the stack (a live /metrics endpoint) and — via an ordering SIDE
+        # EFFECT — that a bad Host never reaches it: a 400 status alone can't
+        # distinguish gate-first from instrumentator-first, because the inner
+        # gate would still 400 after Prometheus observed the request (Codex on
+        # #520). So: count the /health samples Prometheus has recorded, fire
+        # bad-Host /health probes, and require the count to be UNCHANGED — the
+        # vulnerable ordering would have counted them.
         if HAS_PROMETHEUS:
+            def health_samples(metrics_text: str) -> float:
+                total = 0.0
+                for line in metrics_text.splitlines():
+                    if line.startswith("#") or 'handler="/health"' not in line:
+                        continue
+                    if line.split("{", 1)[0].endswith("_count") or line.split("{", 1)[0].endswith("_total"):
+                        total += float(line.rsplit(" ", 1)[1])
+                return total
+
             r = await client.get("/metrics", headers={"host": GOOD_HOST})
             assert r.status_code == 200, f"/metrics must serve with Prometheus on, got {r.status_code}"
-            r = await client.get("/metrics", headers={"host": "www.slomix.fyi:443/../admin"})
-            assert r.status_code == 400, f"bad Host must 400 before the instrumentator, got {r.status_code}"
+            before = health_samples(r.text)
+            assert before > 0, "good-Host /health probes must already be counted"
+
+            for _ in range(3):
+                r = await client.get("/health", headers={"host": "www.slomix.fyi:443/../admin"})
+                assert r.status_code == 400, f"bad Host must 400, got {r.status_code}"
+
+            r = await client.get("/metrics", headers={"host": GOOD_HOST})
+            assert r.status_code == 200
+            after = health_samples(r.text)
+            assert after == before, (
+                f"bad-Host requests were OBSERVED by the instrumentator "
+                f"({before} -> {after}) — the host gate is no longer outermost"
+            )
 
         # 3) Host gate runs BEFORE CSRF — proven with a real signed session.
         cookie = build_session_cookie()
@@ -172,6 +197,15 @@ def test_real_app_host_gate_and_csrf_order():
         "PROMETHEUS_ENABLED": "true",
         "WEB_LOG_DIR": tempfile.mkdtemp(prefix="slomix-real-stack-logs-"),
         "LOG_LEVEL": "WARNING",
+        # Import-time int()/float() parses in routers (auth OAuth knobs,
+        # availability throttle, greatshot timeout): an unparseable value from
+        # a checkout .env would crash the import before any probe (Codex on
+        # #520) — pin them all to their documented defaults.
+        "DISCORD_OAUTH_STATE_TTL_SECONDS": "600",
+        "DISCORD_OAUTH_RATE_LIMIT_WINDOW_SECONDS": "60",
+        "DISCORD_OAUTH_RATE_LIMIT_MAX_REQUESTS": "40",
+        "AVAILABILITY_LINK_TOKEN_MIN_INTERVAL_SECONDS": "30",
+        "GREATSHOT_STARTUP_TIMEOUT_SECONDS": "20",
     }
     result = subprocess.run(  # noqa: S603
         [sys.executable, "-c", _SUBPROCESS_SCRIPT],
