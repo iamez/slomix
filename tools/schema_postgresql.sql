@@ -27,7 +27,15 @@ SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
-SELECT pg_catalog.set_config('search_path', '', false);
+-- pg_dump emits search_path='' here, but this file also carries hand-appended
+-- sections (parimutuel_*, availability_*, …) whose statements are NOT
+-- schema-qualified — with an empty search_path they fail on a fresh database
+-- ("no schema has been selected to create in"), which broke the
+-- deploy_clean.sh bootstrap this dump exists for (IMP-001; caught by
+-- tests/integration/test_fresh_bootstrap_parity.py). 'public' is safe for the
+-- pg_dump body too: every generated statement is public-qualified. If you
+-- regenerate this dump, KEEP this override.
+SELECT pg_catalog.set_config('search_path', 'public', false);
 SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
