@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import httpx
 import pytest
 from fastapi import FastAPI
@@ -68,4 +70,53 @@ async def test_other_401_still_logs_warning(monkeypatch):
         level == "warning" and "← GET /api/private/resource → 401" in message
         for level, message in logger.calls
     )
+
+
+def test_no_host_derived_paths_in_source():
+    """Guard (IMP-006): every path classification and every logged path value
+    must come from routed_path() (the raw ASGI scope path), never from
+    request.url.path — Starlette reconstructs request.url with the
+    client-controlled Host header, so a crafted Host could otherwise move a
+    request into a QUIET path, out of a SECURITY path, or past the
+    suspicious-pattern classifier."""
+    src = Path(logging_middleware.__file__).read_text()
+    assert "request.url.path" not in src, "logging must not read Host-derived request.url.path"
+    assert "routed_path" in src
+
+
+class StubSecurityLogger:
+    def __init__(self) -> None:
+        self.records: list[tuple[str, dict]] = []
+
+    def info(self, message: str, extra=None) -> None:  # noqa: ANN001
+        self.records.append((message, extra or {}))
+
+    def warning(self, message: str, extra=None) -> None:  # noqa: ANN001
+        self.records.append((message, extra or {}))
+
+    def log(self, level, message: str, extra=None) -> None:  # noqa: ANN001
+        self.records.append((message, extra or {}))
+
+
+@pytest.mark.asyncio
+async def test_security_classification_uses_routed_path(monkeypatch):
+    """Auth-path security events must carry the routed ASGI path."""
+    sec = StubSecurityLogger()
+    monkeypatch.setattr(logging_middleware, "security_logger", sec)
+
+    app = FastAPI()
+
+    @app.get("/auth/me")
+    async def auth_me():
+        return JSONResponse({"detail": "Authentication required"}, status_code=401)
+
+    app.add_middleware(logging_middleware.RequestLoggingMiddleware)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.get("/auth/me")
+
+    assert response.status_code == 401
+    paths = [extra.get("path") for _, extra in sec.records if "path" in extra]
+    assert "/auth/me" in paths, "security event must record the routed path"
 
