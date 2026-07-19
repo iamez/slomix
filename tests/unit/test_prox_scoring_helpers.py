@@ -49,10 +49,11 @@ def test_min_engagements_constant_pinned():
 
 
 def test_formula_version_pinned():
-    """FORMULA_VERSION="2.0" — pin so any formula change is a deliberate bump.
-    Bumped 1.0→2.0 with the quality-contract rework (midrank + coverage gating),
-    so the canonical version matches the prox-web-v2.0 score responses."""
-    assert FORMULA_VERSION == "2.0"
+    """FORMULA_VERSION="2.1" — pin so any formula change is a deliberate bump.
+    2.0 = quality-contract rework (midrank + coverage gating); 2.1 = IMP-003
+    (trades denominator = sessions PLAYED, exact-round true-zero fill,
+    single-player MIN_ENGAGEMENTS)."""
+    assert FORMULA_VERSION == "2.1"
 
 
 def test_category_weights_sum_to_one():

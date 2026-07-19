@@ -75,11 +75,19 @@ def _full_metric_row(guid, name):
 
 
 class FakeDB:
-    """Serves canned per-source rows, or raises for a chosen failing source."""
+    """Serves canned per-source rows, or raises for a chosen failing source.
 
-    def __init__(self, fail_source: str | None = None, players=None):
+    `source_rows` (label → list of row tuples matching THAT source's real
+    SELECT column order) exercises the actual SQL-merge logic — IMP-003's
+    review point that injecting pre-merged dicts proves nothing about the
+    merge itself.
+    """
+
+    def __init__(self, fail_source: str | None = None, players=None,
+                 source_rows: dict | None = None):
         self.fail_source = fail_source
         self.players = players or {}
+        self.source_rows = source_rows or {}
         self._call = 0
 
     async def fetch_all(self, query, params=()):
@@ -88,13 +96,14 @@ class FakeDB:
         label = SOURCE_LABELS[idx] if idx < len(SOURCE_LABELS) else "?"
         if label == self.fail_source:
             raise RuntimeError(f"{label} boom")
-        # Only the first source (combat_engagement) sets engagements; feed it
-        # so players qualify. Other sources contribute their metrics via a
-        # simplified single-column contract is not possible here, so we return
-        # empty for them and rely on the injected `players` for coverage tests.
+        if label in self.source_rows:
+            return self.source_rows[label]
+        # combat_engagement row: (guid, name, engagements, escape_rate,
+        # sessions_played) — mirrors the production SELECT.
         if label == "combat_engagement":
             return [
-                (g, p["name"], p["engagements"], p.get("escape_rate", 0.5))
+                (g, p["name"], p["engagements"], p.get("escape_rate", 0.5),
+                 p.get("sessions_played", 1))
                 for g, p in self.players.items()
             ]
         return []
@@ -110,10 +119,11 @@ async def test_any_source_failure_returns_degraded(monkeypatch):
     assert result["players"] == []
 
 
-def test_canonical_formula_version_is_v2():
-    """The canonical FORMULA_VERSION was bumped to 2.0 so it no longer advertises
-    v1.0 while responses carry prox-web-v2.0 (Codex #512)."""
-    assert prox_scoring.FORMULA_VERSION == "2.0"
+def test_canonical_formula_version_is_v2_1():
+    """2.1 = IMP-003 semantics (trades denominator = sessions PLAYED,
+    exact-round true-zero fill, single-player MIN_ENGAGEMENTS)."""
+    assert prox_scoring.FORMULA_VERSION == "2.1"
+    assert prox_scoring.FORMULA_VERSION_QUALITY == "prox-web-v2.1"
 
 
 @pytest.mark.asyncio
@@ -239,3 +249,164 @@ async def test_single_player_request_returns_low_coverage_player(monkeypatch):
     assert p["guid"] == "GUID_SPARSE"
     assert p["metric_weight_coverage"] < prox_scoring.MIN_METRIC_WEIGHT_COVERAGE
     assert len(p["missing_metrics"]) > 0
+
+
+# ── SQL-merge level contracts (IMP-003) — real _fetch_raw_metrics rows ───────
+
+
+QUAL = {"GUID_Q": {"name": "Q", "engagements": 40, "sessions_played": 3}}
+
+EXACT_SCOPE = {"session_date": "2026-07-18", "map_name": "supply",
+               "round_number": 1, "round_start_unix": 1721300000}
+
+
+@pytest.mark.asyncio
+async def test_trades_denominator_is_sessions_played():
+    """1 trade across 3 PLAYED sessions = 1/3, not 1.0 (the old
+    sessions-with-a-trade denominator) — IMP-003."""
+    db = FakeDB(players=QUAL, source_rows={
+        "proximity_lua_trade_kill": [("GUID_Q", "Q", 1)],
+    })
+    players, sources = await prox_scoring._fetch_raw_metrics(db, 30)  # noqa: SLF001
+    assert all(s["success"] for s in sources)
+    assert players["GUID_Q"]["trades_per_session"] == pytest.approx(1 / 3)
+
+
+@pytest.mark.asyncio
+async def test_trades_without_participation_denominator_stay_missing():
+    """Trade rows for a player with NO engagement rows in scope have no sound
+    sessions-played denominator → the metric stays missing, never guessed."""
+    db = FakeDB(players=QUAL, source_rows={
+        "proximity_lua_trade_kill": [("GUID_GHOST", "Ghost", 5)],
+    })
+    players, _ = await prox_scoring._fetch_raw_metrics(db, 30)  # noqa: SLF001
+    assert "trades_per_session" not in players["GUID_GHOST"]
+
+
+@pytest.mark.asyncio
+async def test_exact_round_scope_zero_fills_count_metrics():
+    """Exact-round scope + ANOTHER player's event in the same round (shared
+    tracker artifact captured the signal) → a qualified player absent from the
+    source genuinely recorded ZERO trades / timed kills."""
+    db = FakeDB(players=QUAL, source_rows={
+        "proximity_lua_trade_kill": [("GUID_OTHER", "Other", 2)],
+        "proximity_spawn_timing": [("GUID_OTHER", "Other", 0.5, 3)],
+    })
+    players, _ = await prox_scoring._fetch_raw_metrics(db, 30, **EXACT_SCOPE)  # noqa: SLF001
+    assert players["GUID_Q"]["trades_per_session"] == 0.0
+    assert players["GUID_Q"]["timed_kills"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_broad_window_never_zero_fills():
+    """A range_days window mixes pre/post-feature periods → missing stays
+    MISSING (no presumed zero) until a capability manifest exists."""
+    db = FakeDB(players=QUAL, source_rows={
+        "proximity_lua_trade_kill": [("GUID_OTHER", "Other", 2)],
+        "proximity_spawn_timing": [("GUID_OTHER", "Other", 0.5, 3)],
+    })
+    players, _ = await prox_scoring._fetch_raw_metrics(db, 30)  # broad scope  # noqa: SLF001
+    assert "trades_per_session" not in players["GUID_Q"]
+    assert "timed_kills" not in players["GUID_Q"]
+
+
+@pytest.mark.asyncio
+async def test_exact_round_no_fill_without_capture_proof():
+    """Exact-round scope but the source returned ZERO rows — capture is not
+    proven, so nothing is zero-filled."""
+    db = FakeDB(players=QUAL)  # trade + spawn sources return []
+    players, _ = await prox_scoring._fetch_raw_metrics(db, 30, **EXACT_SCOPE)  # noqa: SLF001
+    assert "trades_per_session" not in players["GUID_Q"]
+    assert "timed_kills" not in players["GUID_Q"]
+
+
+@pytest.mark.asyncio
+async def test_crossfire_is_never_zero_filled():
+    """Without crossfire OPPORTUNITIES the ratio is mathematically undefined —
+    absent stays missing even in exact-round scope; a true 0 (opportunities>0,
+    executed=0) already comes back from the query itself."""
+    db = FakeDB(players=QUAL, source_rows={
+        "proximity_crossfire_opportunity": [("GUID_OTHER", 4, 0)],
+        "proximity_lua_trade_kill": [("GUID_OTHER", "Other", 1)],
+    })
+    players, _ = await prox_scoring._fetch_raw_metrics(db, 30, **EXACT_SCOPE)  # noqa: SLF001
+    assert "crossfire_rate" not in players["GUID_Q"]
+    # …while the other player's real 0/4 IS a true zero from the query:
+    assert players["GUID_OTHER"]["crossfire_rate"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_single_player_below_min_engagements_returns_empty():
+    """A sub-MIN_ENGAGEMENTS single-player request returns NO player (the
+    profile falls back to its labeled CF/TR estimate) — IMP-003."""
+    players = {
+        "GUID_Q": {"name": "Q", "engagements": 40, "sessions_played": 3},
+        "GUID_LOW": {"name": "Low", "engagements": 3, "sessions_played": 1},
+    }
+    result = await compute_prox_scores(FakeDB(players=players),
+                                       player_guid="GUID_LOW")
+    assert result["status"] == "ok"
+    assert result["players"] == []
+
+
+@pytest.mark.asyncio
+async def test_sentinel_or_empty_scope_params_never_zero_fill():
+    """round_start_unix=0 (schema default for unlinked rows) and an empty
+    map_name do NOT disambiguate a single round — such a scope must not
+    enable the true-zero fill (Codex/Copilot on #518)."""
+    rows = {
+        "proximity_lua_trade_kill": [("GUID_OTHER", "Other", 2)],
+        "proximity_spawn_timing": [("GUID_OTHER", "Other", 0.5, 3)],
+    }
+    for bad_scope in (
+        {**EXACT_SCOPE, "round_start_unix": 0},
+        {**EXACT_SCOPE, "map_name": ""},
+    ):
+        db = FakeDB(players=QUAL, source_rows=rows)
+        players, _ = await prox_scoring._fetch_raw_metrics(db, 30, **bad_scope)  # noqa: SLF001
+        assert "trades_per_session" not in players["GUID_Q"], bad_scope
+        assert "timed_kills" not in players["GUID_Q"], bad_scope
+
+
+@pytest.mark.asyncio
+async def test_trades_denominator_covers_untargeted_sessions():
+    """combat_engagement is target-only: a session where the player was never
+    attacked would undercount participation and re-inflate the rate. The
+    denominator is the MAX of engagement-sessions and track-sessions (both
+    lower bounds) — Codex repro on #518: 1 trade, tracked in 3 sessions but
+    targeted in only 1 → 1/3, not 1/1."""
+    # player_track row: (guid, name, tracks, avg_speed, peak_speed, sprint,
+    # distance, post_spawn, standing, crouching, prone, sessions_tracked)
+    db = FakeDB(
+        players={"GUID_Q": {"name": "Q", "engagements": 40, "sessions_played": 1}},
+        source_rows={
+            "player_track": [("GUID_Q", "Q", 12, 200.0, 350.0, 40.0,
+                              900.0, 300.0, 10.0, 5.0, 1.0, 3)],
+            "proximity_lua_trade_kill": [("GUID_Q", "Q", 1)],
+        },
+    )
+    players, _ = await prox_scoring._fetch_raw_metrics(db, 30)  # noqa: SLF001
+    assert players["GUID_Q"]["trades_per_session"] == pytest.approx(1 / 3)
+
+
+@pytest.mark.asyncio
+async def test_incomplete_track_rows_still_count_participation():
+    """Legacy/partial player_track rows (peak_speed NULL) are excluded from
+    the movement METRICS but still prove the player PLAYED those sessions —
+    the SQL keeps the participation count unfiltered, so a row can arrive
+    with zero complete tracks, NULL aggregates, and a real session count
+    (Codex on #518). The merge must use that count for the denominator and
+    must NOT turn the missing peak_speed into a real 0."""
+    db = FakeDB(
+        players={"GUID_Q": {"name": "Q", "engagements": 40, "sessions_played": 1}},
+        source_rows={
+            # (guid, name, tracks, avg_speed, peak_speed, sprint, distance,
+            #  post_spawn, standing, crouching, prone, sessions_tracked)
+            "player_track": [("GUID_Q", "Q", 0, None, None, None,
+                              None, None, None, None, None, 3)],
+            "proximity_lua_trade_kill": [("GUID_Q", "Q", 1)],
+        },
+    )
+    players, _ = await prox_scoring._fetch_raw_metrics(db, 30)  # noqa: SLF001
+    assert players["GUID_Q"]["trades_per_session"] == pytest.approx(1 / 3)
+    assert "peak_speed" not in players["GUID_Q"], "NULL peak must stay missing"
