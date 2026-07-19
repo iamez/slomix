@@ -16,13 +16,22 @@ groups:
             (quality contract AUD-008), so this is user-visible.
 
       - alert: ProxLeaderboardDegraded15m
-        expr: slomix_prox_scoring_degraded{scope="leaderboard"} == 1
+        # The gauge LATCHES the last compute's state: in sparse traffic a
+        # single transient failure would otherwise keep the alert armed until
+        # the next healthy leaderboard request resets it. Requiring recent
+        # source errors alongside the latched gauge means the alert fires
+        # only while failures are actually ongoing (Codex on #521).
+        expr: >-
+          slomix_prox_scoring_degraded{scope="leaderboard"} == 1
+          and on()
+          sum(increase(slomix_prox_source_queries_total{outcome="error"}[15m])) > 0
         for: 15m
         labels:
           severity: critical
         annotations:
-          summary: "Prox leaderboard degraded for 15 minutes"
+          summary: "Prox leaderboard degraded with ongoing source errors"
           description: >-
-            The proximity leaderboard has been serving the degraded
-            (ranking-withheld) response for 15 minutes — a source table or
-            the database is persistently failing.
+            The proximity leaderboard's last compute was degraded
+            (ranking withheld) AND source queries kept failing over the
+            last 15 minutes — a source table or the database is
+            persistently failing.
