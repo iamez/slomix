@@ -13,3 +13,10 @@ slowapi==0.1.9
 prometheus-client==0.24.1
 prometheus-fastapi-instrumentator==7.1.0
 redis==7.2.1
+# Explicit starlette pin (matches the root manifest and both prod venvs):
+# the instrumentator constrains starlette<1.0, so without a pin the resolver
+# floats inside the 0.x line and CI audits a nondeterministic version. The
+# 0.x advisories are the same time-boxed, owner-accepted debt as in the root
+# requirements (see the pip-audit ignores in .github/workflows/tests.yml;
+# they drop with the FastAPI/starlette 1.x migration).
+starlette==0.52.1
