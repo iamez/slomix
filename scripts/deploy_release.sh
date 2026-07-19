@@ -696,10 +696,24 @@ echo "    && sudo -u slomix_bot venv-bot/bin/pip install -q -r requirements.txt 
 echo "    && sudo -u slomix_web venv-web/bin/pip install -q -r website/requirements.txt \\"
 echo "    && sudo systemctl restart slomix-web slomix-bot'"
 if [ ${#FLAGS[@]} -gt 0 ]; then
-  echo "  To disable one of this release's flags (cheaper rollback — keeps code):"
+  echo "  Per-flag rollback (cheaper than a code rollback):"
   for KV in "${FLAGS[@]}"; do
     KEY="${KV%%=*}"
-    echo "    ssh -i $VM_KEY $VM_USER@$VM_HOST \"sudo sed -i 's/^${KEY}=.*/${KEY}=false/' $VM_PATH/.env && { [ -f $VM_PATH/website/.env ] && sudo sed -i 's/^${KEY}=.*/${KEY}=false/' $VM_PATH/website/.env || true; } && sudo systemctl restart slomix-web slomix-bot\""
+    VAL="${KV#*=}"
+    case "$VAL" in
+      true|false)
+        # Boolean flags can simply be flipped off.
+        echo "    ssh -i $VM_KEY $VM_USER@$VM_HOST \"sudo sed -i 's/^${KEY}=.*/${KEY}=false/' $VM_PATH/.env && { [ -f $VM_PATH/website/.env ] && sudo sed -i 's/^${KEY}=.*/${KEY}=false/' $VM_PATH/website/.env || true; } && sudo systemctl restart slomix-web slomix-bot\""
+        ;;
+      *)
+        # NON-boolean flags (e.g. TRUSTED_HOSTS hostname list) must NEVER be
+        # set to 'false' — resolve_trusted_hosts() would treat that as the
+        # only allowed hostname and lock real traffic out (Codex on #516).
+        # The safe rollback is the pre-deploy snapshot restore.
+        echo "    # ${KEY} is not boolean — restore the pre-deploy env snapshot instead:"
+        echo "    ssh -i $VM_KEY $VM_USER@$VM_HOST \"sudo install -o slomix_bot -g slomix -m 640 $ENV_SNAPSHOT $VM_PATH/.env && { [ -f $ENV_SNAPSHOT_WEB ] && sudo install -o slomix_web -g slomix -m 640 $ENV_SNAPSHOT_WEB $VM_PATH/website/.env || true; } && sudo systemctl restart slomix-web slomix-bot\""
+        ;;
+    esac
   done
 fi
 # Retention: keep only the newest 10 .env snapshots (root-only dir). Runs only
