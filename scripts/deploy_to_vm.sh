@@ -146,6 +146,7 @@ detect_files() {
     # If it passed all excludes, check it's a deployable file type/path
     case "$filepath" in
       bot/*.py|bot/**/*.py)           echo "$filepath" ;;
+      shared/*.py)                    echo "$filepath" ;;
       analytics/*.py)                 echo "$filepath" ;;
       proximity/parser/*.py)          echo "$filepath" ;;
       proximity/*.json)               echo "$filepath" ;;
