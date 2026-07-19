@@ -739,9 +739,15 @@ sudo -u postgres psql -c "GRANT CONNECT ON DATABASE ${DB_NAME} TO ${WEB_DB_USER}
 # ---------- Apply schema ----------
 SCHEMA_FILE="$APP_DIR/tools/schema_postgresql.sql"
 if [[ -f "$SCHEMA_FILE" ]]; then
-  info "Applying database schema from tools/schema_postgresql.sql"
-  PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME" -f "$SCHEMA_FILE" >/dev/null 2>&1 || \
-    info "Schema may already exist (non‑fatal)"
+  info "Applying database schema from tools/schema_postgresql.sql (single transaction)"
+  # ALL-OR-NOTHING (Codex on #516): --single-transaction + ON_ERROR_STOP means
+  # a mid-dump error rolls the whole preload back, so this phase can never
+  # leave a PARTIAL schema for deploy_clean.sh's fresh-bootstrap gate to
+  # misjudge. Still non-fatal: an empty schema is fine — deploy_clean.sh
+  # bootstraps it atomically itself.
+  PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME" \
+    --single-transaction -v ON_ERROR_STOP=1 -f "$SCHEMA_FILE" >/dev/null 2>&1 || \
+    info "Schema preload failed or already exists (non‑fatal — deploy_clean.sh bootstraps a fresh DB)"
 fi
 
 # Grant read‑only for website user on all existing tables

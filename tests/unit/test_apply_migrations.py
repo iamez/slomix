@@ -168,15 +168,49 @@ def test_unwrap_ignores_tokens_in_comments_and_strings():
 
 
 def test_every_repo_migration_is_accepted():
-    """No committed migration may be rejected by the wrapper analysis."""
+    """No committed migration may be rejected by the runner's analysis —
+    neither the wrapper unwrap nor the IMP-008 CONCURRENTLY rejection (053's
+    CONCURRENTLY mention lives inside masked dollar-quoted/comment context).
+    This is the guard the apply-loop comment cites: a migration that trips
+    requires_non_transactional() must go through the manual psql + --mark
+    path, and adding one to the repo should fail HERE first."""
     mig_dir = Path(__file__).resolve().parents[2] / "migrations"
+    assert sorted(mig_dir.glob("*.sql")), "no migrations found — wrong path?"
     for path in sorted(mig_dir.glob("*.sql")):
-        unwrap_outer_transaction(path.read_text(encoding="utf-8"))
+        body = unwrap_outer_transaction(path.read_text(encoding="utf-8"))
+        assert not requires_non_transactional(body), (
+            f"{path.name} contains live CONCURRENTLY — the runner would "
+            "REJECT it (IMP-008); apply manually via psql + --mark instead"
+        )
 
 
 def test_concurrently_detection_ignores_comments():
     assert requires_non_transactional("CREATE INDEX CONCURRENTLY idx ON t(x);")
     assert not requires_non_transactional("-- REFRESH ... CONCURRENTLY\nSELECT 1;")
+
+
+@pytest.mark.asyncio
+async def test_concurrently_migration_is_rejected(monkeypatch, tmp_path, capsys):
+    """IMP-008: the statement-by-statement CONCURRENTLY path is non-atomic and
+    is disabled — such a migration is REJECTED (exit 1) with the manual-psql +
+    --mark instruction, never applied piecemeal."""
+    mig_dir = tmp_path / "migrations"
+    mig_dir.mkdir()
+    (mig_dir / "001_conc.sql").write_text(
+        "CREATE INDEX CONCURRENTLY idx_x ON t(x);"
+    )
+    conn = FakeConn(rows=[])
+    monkeypatch.setattr("scripts.apply_migrations.MIGRATIONS_DIR", mig_dir)
+    monkeypatch.setattr("scripts.apply_migrations.get_connection",
+                        _returning(conn))
+    with pytest.raises(SystemExit) as exc:
+        await cmd_apply()
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "REJECTED" in out and "--mark" in out
+    # Nothing was executed or recorded for the rejected migration.
+    assert not any("CREATE INDEX" in q for q, _ in conn.executed)
+    assert not any("INSERT INTO schema_migrations" in q for q, _ in conn.executed)
 
 
 def test_split_statements_respects_strings():
@@ -268,6 +302,35 @@ async def test_validate_pending_exits_nonzero(monkeypatch, tmp_path, capsys):
         await cmd_validate()
     assert exc.value.code == 1
     assert "DRIFT DETECTED" in capsys.readouterr().out
+
+
+@pytest.mark.asyncio
+async def test_validate_tolerate_missing_only_forgives_missing(monkeypatch, tmp_path):
+    """--tolerate-missing exists for the older-tag ROLLBACK path (#516): a
+    ledger row whose file is absent from the checkout passes, but pending
+    drift still fails even with the flag."""
+    mig_dir = tmp_path / "migrations"
+    mig_dir.mkdir()
+    (mig_dir / "001_a.sql").write_text("SELECT 1;")
+    monkeypatch.setattr("scripts.apply_migrations.MIGRATIONS_DIR", mig_dir)
+
+    # 002 recorded applied but not on disk (rollback checkout) → tolerated.
+    conn = FakeConn(rows=[{"filename": "001_a.sql", "success": True},
+                          {"filename": "002_newer.sql", "success": True}])
+    monkeypatch.setattr("scripts.apply_migrations.get_connection",
+                        _returning(conn))
+    await cmd_validate(tolerate_missing=True)  # no SystemExit
+    with pytest.raises(SystemExit):
+        await cmd_validate()  # without the flag it is still drift
+
+    # Pending drift is NEVER tolerated, flag or not.
+    (mig_dir / "003_pending.sql").write_text("SELECT 3;")
+    conn2 = FakeConn(rows=[{"filename": "001_a.sql", "success": True},
+                           {"filename": "002_newer.sql", "success": True}])
+    monkeypatch.setattr("scripts.apply_migrations.get_connection",
+                        _returning(conn2))
+    with pytest.raises(SystemExit):
+        await cmd_validate(tolerate_missing=True)
 
 
 @pytest.mark.asyncio

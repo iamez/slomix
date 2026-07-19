@@ -12,15 +12,18 @@ Logs all HTTP requests/responses with:
 import ipaddress
 import logging
 import os
+import re
 import time
 import uuid
 from typing import Callable
+from urllib.parse import unquote_plus
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
 from website.backend.logging_config import get_access_logger, get_security_logger
+from website.backend.security_utils import routed_path
 
 access_logger = get_access_logger()
 security_logger = get_security_logger()
@@ -61,6 +64,19 @@ SUSPICIOUS_PATTERNS = [
     "%00",           # Null byte injection
 ]
 
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _log_safe(value: str) -> str:
+    """Escape control characters for LOG OUTPUT only.
+
+    ASGI decodes percent-encoded bytes into scope["path"], so a request for
+    /api/a%0Ab arrives with a literal newline — written raw, it would let a
+    good-Host client forge multiline access/security log entries (Codex on
+    #520). Decisions keep the raw routed path; only the logged copies are
+    escaped (\\n, \\r, \\x00…)."""
+    return _CONTROL_CHARS_RE.sub(lambda m: repr(m.group())[1:-1], value)
+
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Middleware for comprehensive request/response logging."""
@@ -83,25 +99,36 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         # Get client IP (proxy-aware)
         client_ip = self._get_client_ip(request)
 
+        # Path classifications and logged values read the raw ASGI routed
+        # path — never the path off request.url, which Starlette reconstructs
+        # with the client-controlled Host header (AUD-005/IMP-006): a crafted
+        # Host must not be able to move a request into a QUIET path, out of a
+        # SECURITY path, or dodge the suspicious-pattern classifier.
+        path = routed_path(request)
+
         # Start timing
         start_time = time.perf_counter()
 
         # Check for suspicious activity
-        await self._check_security(request, client_ip, request_id)
+        await self._check_security(request, path, client_ip, request_id)
 
         # Determine if this is a quiet path
-        is_quiet = any(request.url.path.startswith(p) for p in QUIET_PATHS)
+        is_quiet = any(path.startswith(p) for p in QUIET_PATHS)
+
+        # Every LOGGED copy of the path goes through _log_safe (decisions
+        # above/below keep the raw value).
+        safe_path = _log_safe(path)
 
         # Log request (unless quiet)
         if not is_quiet:
             access_logger.info(
-                f"→ {request.method} {request.url.path}",
+                f"→ {request.method} {safe_path}",
                 extra={
                     "request_id": request_id,
                     "client_ip": client_ip,
                     "method": request.method,
-                    "path": request.url.path,
-                    "user_agent": request.headers.get("user-agent", "unknown")[:100],
+                    "path": safe_path,
+                    "user_agent": _log_safe(request.headers.get("user-agent", "unknown")[:100]),
                 }
             )
 
@@ -129,17 +156,17 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 expected_auth_failure = (
                     request.method == "GET"
                     and status_code in {401, 403}
-                    and request.url.path in INFO_AUTH_FAILURE_PATHS
+                    and path in INFO_AUTH_FAILURE_PATHS
                 )
                 log_func = access_logger.info if status_code < 400 or expected_auth_failure else access_logger.warning
 
                 log_func(
-                    f"← {request.method} {request.url.path} → {status_code} ({duration_ms:.1f}ms)",
+                    f"← {request.method} {safe_path} → {status_code} ({duration_ms:.1f}ms)",
                     extra={
                         "request_id": request_id,
                         "client_ip": client_ip,
                         "method": request.method,
-                        "path": request.url.path,
+                        "path": safe_path,
                         "status_code": status_code,
                         "duration_ms": round(duration_ms, 2),
                     }
@@ -154,8 +181,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 )
 
             # Security logging for auth paths
-            if any(request.url.path.startswith(p) for p in SECURITY_PATHS):
-                self._log_security_event(request, status_code, client_ip, request_id)
+            if any(path.startswith(p) for p in SECURITY_PATHS):
+                self._log_security_event(request, path, status_code, client_ip, request_id)
 
         return response
 
@@ -231,25 +258,36 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def _check_security(
         self,
         request: Request,
+        path: str,
         client_ip: str,
         request_id: str
     ) -> None:
-        """Check for suspicious request patterns and log security events."""
+        """Check for suspicious request patterns and log security events.
 
-        # Check URL path for suspicious patterns
-        path = request.url.path.lower()
-        query = str(request.url.query).lower() if request.url.query else ""
+        Both `path` and the query come from the raw ASGI scope — request.url
+        is reconstructed with the client-controlled Host header, and a
+        crafted Host (e.g. one carrying a '#fragment') can make
+        request.url.query come back EMPTY, letting a suspicious query dodge
+        this scan entirely in postures without the strict host gate
+        (Codex on #520).
+        """
+        lowered_path = path.lower()
+        query = request.scope.get("query_string", b"").decode("latin-1", "replace").lower()
+        # Scan BOTH forms: the raw query catches literal patterns (%00), the
+        # unquoted one catches percent-encoded evasion (DROP%20TABLE).
+        query_decoded = unquote_plus(query)
 
         for pattern in SUSPICIOUS_PATTERNS:
-            if pattern.lower() in path or pattern.lower() in query:
+            lowered = pattern.lower()
+            if lowered in lowered_path or lowered in query or lowered in query_decoded:
                 security_logger.warning(
                     f"🚨 SUSPICIOUS REQUEST DETECTED: pattern='{pattern}'",
                     extra={
                         "request_id": request_id,
                         "client_ip": client_ip,
                         "method": request.method,
-                        "path": request.url.path,
-                        "query": query[:200],  # Limit logged query length
+                        "path": _log_safe(path),
+                        "query": _log_safe(query[:200]),  # Limit logged query length
                         "event_type": "suspicious_request",
                         "pattern": pattern,
                     }
@@ -257,9 +295,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 break
 
         # Check for auth abuse (many failed attempts would be tracked separately)
-        if request.url.path.startswith("/auth/"):
+        if path.startswith("/auth/"):
             security_logger.info(
-                f"🔐 Auth request: {request.method} {request.url.path}",
+                f"🔐 Auth request: {request.method} {_log_safe(path)}",
                 extra={
                     "request_id": request_id,
                     "client_ip": client_ip,
@@ -270,11 +308,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     def _log_security_event(
         self,
         request: Request,
+        path: str,
         status_code: int,
         client_ip: str,
         request_id: str
     ) -> None:
-        """Log security-relevant events."""
+        """Log security-relevant events. `path` is the routed ASGI path."""
 
         event_type = "auth_success" if status_code < 400 else "auth_failure"
         # Downgrade benign auth probes (e.g. /auth/me 401 on every page
@@ -286,18 +325,18 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         is_expected_probe = (
             request.method == "GET"
             and status_code in {401, 403}
-            and request.url.path in INFO_AUTH_FAILURE_PATHS
+            and path in INFO_AUTH_FAILURE_PATHS
         )
         log_level = logging.INFO if status_code < 400 or is_expected_probe else logging.WARNING
 
         security_logger.log(
             log_level,
-            f"{'✅' if status_code < 400 else '❌'} Security event: {event_type} on {request.url.path}",
+            f"{'✅' if status_code < 400 else '❌'} Security event: {event_type} on {_log_safe(path)}",
             extra={
                 "request_id": request_id,
                 "client_ip": client_ip,
                 "status_code": status_code,
                 "event_type": event_type,
-                "path": request.url.path,
+                "path": _log_safe(path),
             }
         )
