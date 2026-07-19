@@ -773,11 +773,17 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
     # crossfire_rate is NEVER zero-filled: with zero opportunities the ratio is
     # undefined, and a real 0 (opportunities > 0, executed = 0) already comes
     # back from the query itself. Averages likewise stay missing (no signal ≠ 0).
+    # Tightened predicate (Codex/Copilot on #518): map_name must be NON-EMPTY
+    # (the scope builder only adds the map filter for truthy values, so ""
+    # would zero-fill a whole-session bucket) and round_start_unix must be
+    # POSITIVE (0 is the schema default/sentinel for unlinked proximity rows —
+    # a (date, map, round, 0) bucket does not disambiguate a single round).
     exact_round_scope = (
         session_date is not None
-        and map_name is not None
+        and bool(map_name)
         and round_number is not None
         and round_start_unix is not None
+        and round_start_unix > 0
     )
     if exact_round_scope:
         _by_label = {s["source"]: s for s in sources}

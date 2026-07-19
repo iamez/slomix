@@ -221,7 +221,7 @@ async def get_proximity_player_radar(
             # the reason the primary score was unavailable, and a degraded flag.
             cf_row = await db.fetch_one(
                 """
-                SELECT COUNT(*), COUNT(DISTINCT session_date)
+                SELECT COUNT(*)
                 FROM proximity_crossfire_opportunity
                 WHERE (teammate1_guid = $1 OR teammate2_guid = $1) AND was_executed = true
                 AND session_date >= $2
@@ -229,16 +229,28 @@ async def get_proximity_player_radar(
             )
             trade_row = await db.fetch_one(
                 """
-                SELECT COUNT(*), COUNT(DISTINCT session_date)
+                SELECT COUNT(*)
                 FROM proximity_lua_trade_kill WHERE trader_guid = $1 AND session_date >= $2
                 """, (guid, since),
             )
+            # Participation denominator (Copilot on #518, same defect as
+            # IMP-003's trades_per_session): sessions the player PLAYED, from
+            # combat_engagement — counting only sessions-with-an-event made a
+            # single lucky session look like a per-session norm.
+            played_row = await db.fetch_one(
+                """
+                SELECT COUNT(DISTINCT session_date)
+                FROM combat_engagement WHERE target_guid = $1 AND session_date >= $2
+                """, (guid, since),
+            )
             cf_total = int(cf_row[0] or 0) if cf_row else 0
-            cf_sessions = max(1, int(cf_row[1] or 1) if cf_row else 1)
             trade_total = int(trade_row[0] or 0) if trade_row else 0
-            trade_sessions = max(1, int(trade_row[1] or 1) if trade_row else 1)
-            cf_per_session = cf_total / cf_sessions
-            trade_per_session = trade_total / trade_sessions
+            sessions_played = int(played_row[0] or 0) if played_row else 0
+            if sessions_played > 0:
+                cf_per_session = cf_total / sessions_played
+                trade_per_session = trade_total / sessions_played
+            else:
+                cf_per_session = trade_per_session = 0.0
             teamplay = min(100, (min(cf_per_session / 20, 1) * 50) + (min(trade_per_session / 10, 1) * 50))
             teamplay_source = "cf_tr_fallback"
             teamplay_meta = {

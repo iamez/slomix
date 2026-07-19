@@ -347,3 +347,22 @@ async def test_single_player_below_min_engagements_returns_empty():
                                        player_guid="GUID_LOW")
     assert result["status"] == "ok"
     assert result["players"] == []
+
+
+@pytest.mark.asyncio
+async def test_sentinel_or_empty_scope_params_never_zero_fill():
+    """round_start_unix=0 (schema default for unlinked rows) and an empty
+    map_name do NOT disambiguate a single round — such a scope must not
+    enable the true-zero fill (Codex/Copilot on #518)."""
+    rows = {
+        "proximity_lua_trade_kill": [("GUID_OTHER", "Other", 2)],
+        "proximity_spawn_timing": [("GUID_OTHER", "Other", 0.5, 3)],
+    }
+    for bad_scope in (
+        {**EXACT_SCOPE, "round_start_unix": 0},
+        {**EXACT_SCOPE, "map_name": ""},
+    ):
+        db = FakeDB(players=QUAL, source_rows=rows)
+        players, _ = await prox_scoring._fetch_raw_metrics(db, 30, **bad_scope)  # noqa: SLF001
+        assert "trades_per_session" not in players["GUID_Q"], bad_scope
+        assert "timed_kills" not in players["GUID_Q"], bad_scope
