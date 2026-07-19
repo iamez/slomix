@@ -16,6 +16,7 @@ import re
 import time
 import uuid
 from typing import Callable
+from urllib.parse import unquote_plus
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -263,15 +264,22 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     ) -> None:
         """Check for suspicious request patterns and log security events.
 
-        `path` is the routed ASGI path (Host-independent) — the raw query
-        string still comes from the URL, which is fine: the query is
-        attacker-controlled by definition and only ever pattern-scanned.
+        Both `path` and the query come from the raw ASGI scope — request.url
+        is reconstructed with the client-controlled Host header, and a
+        crafted Host (e.g. one carrying a '#fragment') can make
+        request.url.query come back EMPTY, letting a suspicious query dodge
+        this scan entirely in postures without the strict host gate
+        (Codex on #520).
         """
         lowered_path = path.lower()
-        query = str(request.url.query).lower() if request.url.query else ""
+        query = request.scope.get("query_string", b"").decode("latin-1", "replace").lower()
+        # Scan BOTH forms: the raw query catches literal patterns (%00), the
+        # unquoted one catches percent-encoded evasion (DROP%20TABLE).
+        query_decoded = unquote_plus(query)
 
         for pattern in SUSPICIOUS_PATTERNS:
-            if pattern.lower() in lowered_path or pattern.lower() in query:
+            lowered = pattern.lower()
+            if lowered in lowered_path or lowered in query or lowered in query_decoded:
                 security_logger.warning(
                     f"🚨 SUSPICIOUS REQUEST DETECTED: pattern='{pattern}'",
                     extra={

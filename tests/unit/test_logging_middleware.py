@@ -143,3 +143,31 @@ async def test_control_characters_in_path_cannot_forge_log_lines(monkeypatch):
             f"log message contains raw control chars: {message!r}"
         )
     assert any("\\n" in m for _, m in logger.calls), "newline must be escaped, not dropped"
+
+
+@pytest.mark.asyncio
+async def test_suspicious_query_scan_reads_asgi_scope(monkeypatch):
+    """The suspicious-pattern scan must read scope['query_string'], not the
+    Host-reconstructed request.url (a crafted Host can blank url.query and
+    dodge the scan — Codex on #520)."""
+    sec = StubSecurityLogger()
+    monkeypatch.setattr(logging_middleware, "security_logger", sec)
+
+    app = FastAPI()
+
+    @app.get("/api/test")
+    async def api_test():
+        return JSONResponse({"ok": True})
+
+    app.add_middleware(logging_middleware.RequestLoggingMiddleware)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        # Distorting Host: without the scope-based read, url.query turns
+        # empty and the DROP TABLE pattern would go unscanned.
+        await client.get("/api/test?x=DROP%20TABLE",
+                         headers={"host": "testserver#frag"})
+
+    assert any(
+        extra.get("event_type") == "suspicious_request" for _, extra in sec.records
+    ), "suspicious query must be detected from the raw ASGI query_string"
