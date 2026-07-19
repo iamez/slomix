@@ -720,6 +720,12 @@ class PredictionEngine:
         if len(candidates) != 1:
             return _defer(f"expected exactly 1 matching ALL row, found {len(candidates)}")
         row, straight = candidates[0]
+        # Single-session dates never set target_gsid (multi_session is False),
+        # but the matched ALL row carries the unambiguous gaming_session_id —
+        # adopt it so the v1 alignment path and the backlink work for the
+        # common one-session rematch too (Codex on #517).
+        if target_gsid is None:
+            target_gsid = row[3]
 
         # 2) Parse per-map details; counted entries need name + points.
         _version, detail_maps = parse_round_details(row[5])
@@ -734,7 +740,19 @@ class PredictionEngine:
                 return _defer("counted entry missing map name or points")
             t1p, t2p = pts
             pa, pb = (t1p, t2p) if straight else (t2p, t1p)
-            maps.append((name, m.get("round_start_unix"), pa, pb))
+            # Normalize the per-map time: this codebase uses 0 as a missing-
+            # timestamp sentinel, and JSON round-trips can widen types — a
+            # non-positive or unparseable start must fall through to the
+            # alignment path (or defer), never be compared against real
+            # prediction timestamps (Copilot on #517).
+            raw_start = m.get("round_start_unix")
+            try:
+                start = int(raw_start) if raw_start is not None else None
+            except (TypeError, ValueError):
+                start = None
+            if start is not None and start <= 0:
+                start = None
+            maps.append((name, start, pa, pb))
 
         # 3) Per-map times: v2 entries carry round_start_unix; otherwise align
         # exactly (count+names+order) against the session's complete pairs.
@@ -775,10 +793,32 @@ class PredictionEngine:
             return _defer("a prediction window contains no maps")
 
         # 5) Resolve each prediction over its own partition (BOX map-win tally).
+        # The tally above is oriented to infos[0]'s A/B — but the group key is
+        # orientation-INDEPENDENT, so a later prediction row may have stored
+        # the same rosters with A/B swapped (voice-channel ordering). Each
+        # row's outcome must be re-oriented to ITS OWN A/B, or a swapped row
+        # records the opponent's result under its own ID (Codex on #517).
+        # Orientation is validated for EVERY row BEFORE any outcome is
+        # written, so a defer can never leave the group half-resolved.
+        base_a, base_b = frozenset(a_set), frozenset(b_set)
+        if base_a == base_b:
+            return _defer("prediction rosters identical on both sides")
+        flips: list[bool] = []
+        for _, a_i, b_i, _, _ in ordered:
+            if frozenset(a_i) == base_a and frozenset(b_i) == base_b:
+                flips.append(False)
+            elif frozenset(a_i) == base_b and frozenset(b_i) == base_a:
+                flips.append(True)
+            else:
+                # Unreachable given the exact-frozenset group key — but never guess.
+                return _defer("prediction orientation does not match the group rosters")
+
         resolved = 0
-        for (pred_id, *_rest), part in zip(ordered, partitions):
+        for (pred_id, *_rest), part, flip in zip(ordered, partitions, flips):
             a_wins = sum(1 for _, _, pa, pb in part if pa > pb)
             b_wins = sum(1 for _, _, pa, pb in part if pb > pa)
+            if flip:
+                a_wins, b_wins = b_wins, a_wins
             actual = 1 if a_wins > b_wins else 2 if b_wins > a_wins else 0
             await self.update_prediction_outcome(pred_id, actual, a_wins, b_wins)
             if target_gsid is not None:
@@ -831,10 +871,15 @@ class PredictionEngine:
                     if p["r1"] is not None and p["r2"] is not None]
         out = []
         for p in complete:
-            starts = [s for s in (p["r1"], p["r2"]) if s]
-            if not starts:
-                return None  # a complete pair with no usable start → defer
-            out.append((p["map"], min(starts)))
+            r1, r2 = p["r1"], p["r2"]
+            # BOTH rounds must carry a real start (0 is this codebase's
+            # missing-timestamp sentinel). Accepting a pair with only one
+            # usable start could place the map into the wrong prediction
+            # window when a rematch begins between R1 and R2 — the caller
+            # must defer instead (Codex/Copilot on #517).
+            if not r1 or not r2 or r1 <= 0 or r2 <= 0:
+                return None
+            out.append((p["map"], min(r1, r2)))
         out.sort(key=lambda x: x[1])
         return out
 
