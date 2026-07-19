@@ -277,7 +277,7 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
     # exception path (Codex P1 #513). None (v2 all-time) stays None.
     epoch_param = date.fromisoformat(epoch_start) if isinstance(epoch_start, str) else epoch_start
     logger.info("Querying player aggregates with proximity data (v2 single pass)...")
-    rows = await db.fetch_all("""
+    query = """
         SELECT
             pcs.player_guid,
             MAX(pcs.player_name) as display_name,
@@ -349,7 +349,7 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
               -- Epoch path only (v2 all-time behavior unchanged): gate proximity
               -- telemetry on valid rounds, matching the PCS gate, so filler/replay
               -- rounds can't feed v3 metrics the PCS denominator excludes (Codex #513).
-              AND ($2::date IS NULL OR round_id IN (SELECT id FROM rounds WHERE is_valid))
+              AND ($2::date IS NULL OR round_id IN (SELECT id FROM rounds WHERE is_valid/*V3_BOT_GATE*/))
             GROUP BY killer_guid_canonical
         ) prox_outcome ON prox_outcome.guid_c = pcs.player_guid
 
@@ -358,7 +358,7 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
             FROM proximity_lua_trade_kill
             WHERE trader_guid_canonical IS NOT NULL
               AND ($2::date IS NULL OR session_date >= $2::date)
-              AND ($2::date IS NULL OR round_id IN (SELECT id FROM rounds WHERE is_valid))
+              AND ($2::date IS NULL OR round_id IN (SELECT id FROM rounds WHERE is_valid/*V3_BOT_GATE*/))
             GROUP BY trader_guid_canonical
         ) prox_trades ON prox_trades.guid_c = pcs.player_guid
 
@@ -373,7 +373,7 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
             FROM proximity_combat_position
             WHERE event_type = 'kill' AND attacker_guid_canonical IS NOT NULL
               AND ($2::date IS NULL OR session_date >= $2::date)
-              AND ($2::date IS NULL OR round_id IN (SELECT id FROM rounds WHERE is_valid))
+              AND ($2::date IS NULL OR round_id IN (SELECT id FROM rounds WHERE is_valid/*V3_BOT_GATE*/))
             GROUP BY attacker_guid_canonical
         ) prox_clutch ON prox_clutch.guid_c = pcs.player_guid
 
@@ -382,14 +382,14 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
             FROM proximity_spawn_timing
             WHERE killer_guid_canonical IS NOT NULL
               AND ($2::date IS NULL OR session_date >= $2::date)
-              AND ($2::date IS NULL OR round_id IN (SELECT id FROM rounds WHERE is_valid))
+              AND ($2::date IS NULL OR round_id IN (SELECT id FROM rounds WHERE is_valid/*V3_BOT_GATE*/))
             GROUP BY killer_guid_canonical
         ) prox_spawn ON prox_spawn.guid_c = pcs.player_guid
 
         WHERE pcs.round_number > 0
           -- is_valid + bot gate (Codex audit finding 12): 822 bot rows and 16
           -- invalid-round rows were feeding lifetime ratings and percentiles
-          AND pcs.round_id IN (SELECT id FROM rounds WHERE is_valid)
+          AND pcs.round_id IN (SELECT id FROM rounds WHERE is_valid/*V3_BOT_GATE*/)
           AND pcs.player_guid NOT LIKE 'OMNIBOT%'
           AND pcs.player_name NOT LIKE '[BOT]%'
           AND ($2::date IS NULL OR pcs.round_date >= $2::text)
@@ -399,7 +399,17 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
                  prox_spawn.avg_timing_score
         HAVING COUNT(*) >= $1
         ORDER BY pcs.player_guid
-    """, (min_rounds, epoch_param))
+    """
+    # is_bot_round gate ONLY in the v3 epoch path (IMP-004): bot-vs-bot rounds
+    # carry `is_bot_round = TRUE` and must not feed the v3 shadow percentiles.
+    # The live v2 all-time query (epoch_start=None) stays byte-identical — a v2
+    # population change needs a pre/post rank diff + owner sign-off first, so
+    # the marker is replaced with the gate ONLY when an epoch is requested.
+    query = query.replace(
+        "/*V3_BOT_GATE*/",
+        " AND NOT COALESCE(is_bot_round, FALSE)" if epoch_param is not None else "",
+    )
+    rows = await db.fetch_all(query, (min_rounds, epoch_param))
 
     if not rows:
         logger.warning("No player data for rating computation")

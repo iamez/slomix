@@ -1567,7 +1567,7 @@ class ProximityParserV4:
                 await self._import_objective_runs(session_date)
 
             # Mark file as processed
-            await self._mark_file_processed(os.path.basename(filepath))
+            await self._mark_file_processed(os.path.basename(filepath), session_date)
 
         try:
             tx_context = getattr(self.db_adapter, "transaction", None)
@@ -1599,11 +1599,46 @@ class ProximityParserV4:
             self.logger.debug(f"_check_processed_file query failed for {filename}: {e}")
             return False
 
-    async def _mark_file_processed(self, filename: str) -> None:
-        """Record that this file was imported with aggregates applied."""
+    async def _mark_file_processed(self, filename: str, session_date: str | None = None) -> None:
+        """Record that this file was imported with aggregates applied.
+
+        When migration 062 columns exist, also record the tracker version and
+        the canonical round key (session_date|map|round|start_unix) so the ET
+        Performance v3 rating can join files to rounds and reason about which
+        telemetry signals were even capturable (audit AUD-007). `capabilities`
+        stays NULL until the Lua capability manifest lands (owner-gated) —
+        NULL means "unknown", never a claimed zero.
+        """
         if not await self._table_has_column('proximity_processed_files', 'filename'):
             return
         try:
+            # BOTH 062 columns must exist — a partially-migrated/diverged
+            # schema with round_key but not tracker_version would make the
+            # upsert raise and the file would never be marked processed
+            # (Copilot on #519).
+            if (
+                session_date
+                and await self._table_has_column('proximity_processed_files', 'round_key')
+                and await self._table_has_column('proximity_processed_files', 'tracker_version')
+            ):
+                tracker_version = str(self.metadata.get('tracker_version') or '')
+                round_key = "|".join((
+                    str(session_date),
+                    str(self.metadata.get('map_name') or ''),
+                    str(int(self.metadata.get('round_num') or 0)),
+                    str(int(self.metadata.get('round_start_unix') or 0)),
+                ))
+                await self.db_adapter.execute(
+                    """INSERT INTO proximity_processed_files
+                           (filename, aggregates_applied, tracker_version, round_key)
+                       VALUES ($1, TRUE, $2, $3)
+                       ON CONFLICT (filename) DO UPDATE
+                           SET aggregates_applied = TRUE,
+                               tracker_version = EXCLUDED.tracker_version,
+                               round_key = EXCLUDED.round_key""",
+                    (filename, tracker_version, round_key),
+                )
+                return
             await self.db_adapter.execute(
                 """INSERT INTO proximity_processed_files (filename, aggregates_applied)
                    VALUES ($1, TRUE)
