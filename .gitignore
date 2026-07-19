@@ -325,7 +325,12 @@ WEBSITE_STAT_BUGS_FOUND.md
 /bin/
 /opusreview/
 /deployed_lua/
-/monitoring/
+# monitoring/ holds runtime data, but the Prometheus config + alert rules are
+# infrastructure-as-code (IMP-005): docker-compose mounts them, so an
+# untracked copy meant prod alerting could silently drift from the repo.
+/monitoring/*
+!/monitoring/prometheus.yml
+!/monitoring/alerts.yml
 
 # ============================================
 # KEEP ESSENTIAL ROOT SCRIPTS

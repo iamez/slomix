@@ -21,3 +21,10 @@ exclude_paths:
   - "tests/**"
   # Documentation and non-code assets
   - "docs/**"
+  # Dependency advisories for the web manifest are enforced by the CI
+  # pip-audit step (tests.yml security job) with TIME-BOXED, owner-accepted
+  # ignores for the starlette 0.x line (drops with the 1.x migration).
+  # Codacy's trivy pass has no per-advisory ignore mechanism, so it would
+  # permanently re-report that same accepted debt on every PR touching the
+  # file. The root requirements.txt stays Codacy-covered.
+  - "website/requirements.txt"

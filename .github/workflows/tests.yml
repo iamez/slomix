@@ -193,8 +193,17 @@ jobs:
             --ignore-vuln CVE-2026-48817
           # The website venv is built from its own manifest (rsync_deploy_vm.sh,
           # slomix_vm_setup.sh) — audit it too so the web app can't lag on a
-          # vulnerable pin. It lists no starlette/paramiko, so no ignores needed.
-          pip-audit -r website/requirements.txt --progress-spinner=off
+          # vulnerable pin. Since the observability pins (IMP-005), the
+          # instrumentator constrains starlette<1.0, so the same time-boxed
+          # starlette-stack ignores as the root audit apply here (no paramiko
+          # in this manifest). PYSEC-2026-2280/2281 alias the two CVE ignores
+          # above under their PYSEC ids.
+          pip-audit -r website/requirements.txt --progress-spinner=off \
+            --ignore-vuln PYSEC-2026-161 \
+            --ignore-vuln PYSEC-2026-249 \
+            --ignore-vuln PYSEC-2026-248 \
+            --ignore-vuln PYSEC-2026-2280 \
+            --ignore-vuln PYSEC-2026-2281
 
       - name: Website dependency consistency (isolated pip check)
         # The web service deploys from website/requirements.txt into its OWN venv
@@ -233,3 +242,11 @@ jobs:
           echo "INTERNAL_API_SECRET=ci_placeholder" >> .env
           echo "DISCORD_BOT_TOKEN=ci_placeholder" >> .env
           docker compose build api website
+      - name: Validate Prometheus config + alert rules (promtool)
+        # Same image tag docker-compose runs in production, so "promtool
+        # accepts it" here means "prometheus will load it" there (IMP-005).
+        run: |
+          docker run --rm -v "$PWD/monitoring":/m:ro --entrypoint /bin/promtool \
+            prom/prometheus:v2.54.1 check rules /m/alerts.yml
+          docker run --rm -v "$PWD/monitoring":/m:ro --entrypoint /bin/promtool \
+            prom/prometheus:v2.54.1 check config /m/prometheus.yml
