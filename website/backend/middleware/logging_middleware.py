@@ -21,6 +21,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from website.backend.logging_config import get_access_logger, get_security_logger
+from website.backend.security_utils import routed_path
 
 access_logger = get_access_logger()
 security_logger = get_security_logger()
@@ -83,24 +84,31 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         # Get client IP (proxy-aware)
         client_ip = self._get_client_ip(request)
 
+        # Path classifications and logged values read the raw ASGI routed
+        # path — never the path off request.url, which Starlette reconstructs
+        # with the client-controlled Host header (AUD-005/IMP-006): a crafted
+        # Host must not be able to move a request into a QUIET path, out of a
+        # SECURITY path, or dodge the suspicious-pattern classifier.
+        path = routed_path(request)
+
         # Start timing
         start_time = time.perf_counter()
 
         # Check for suspicious activity
-        await self._check_security(request, client_ip, request_id)
+        await self._check_security(request, path, client_ip, request_id)
 
         # Determine if this is a quiet path
-        is_quiet = any(request.url.path.startswith(p) for p in QUIET_PATHS)
+        is_quiet = any(path.startswith(p) for p in QUIET_PATHS)
 
         # Log request (unless quiet)
         if not is_quiet:
             access_logger.info(
-                f"→ {request.method} {request.url.path}",
+                f"→ {request.method} {path}",
                 extra={
                     "request_id": request_id,
                     "client_ip": client_ip,
                     "method": request.method,
-                    "path": request.url.path,
+                    "path": path,
                     "user_agent": request.headers.get("user-agent", "unknown")[:100],
                 }
             )
@@ -129,17 +137,17 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 expected_auth_failure = (
                     request.method == "GET"
                     and status_code in {401, 403}
-                    and request.url.path in INFO_AUTH_FAILURE_PATHS
+                    and path in INFO_AUTH_FAILURE_PATHS
                 )
                 log_func = access_logger.info if status_code < 400 or expected_auth_failure else access_logger.warning
 
                 log_func(
-                    f"← {request.method} {request.url.path} → {status_code} ({duration_ms:.1f}ms)",
+                    f"← {request.method} {path} → {status_code} ({duration_ms:.1f}ms)",
                     extra={
                         "request_id": request_id,
                         "client_ip": client_ip,
                         "method": request.method,
-                        "path": request.url.path,
+                        "path": path,
                         "status_code": status_code,
                         "duration_ms": round(duration_ms, 2),
                     }
@@ -154,8 +162,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 )
 
             # Security logging for auth paths
-            if any(request.url.path.startswith(p) for p in SECURITY_PATHS):
-                self._log_security_event(request, status_code, client_ip, request_id)
+            if any(path.startswith(p) for p in SECURITY_PATHS):
+                self._log_security_event(request, path, status_code, client_ip, request_id)
 
         return response
 
@@ -231,24 +239,28 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def _check_security(
         self,
         request: Request,
+        path: str,
         client_ip: str,
         request_id: str
     ) -> None:
-        """Check for suspicious request patterns and log security events."""
+        """Check for suspicious request patterns and log security events.
 
-        # Check URL path for suspicious patterns
-        path = request.url.path.lower()
+        `path` is the routed ASGI path (Host-independent) — the raw query
+        string still comes from the URL, which is fine: the query is
+        attacker-controlled by definition and only ever pattern-scanned.
+        """
+        lowered_path = path.lower()
         query = str(request.url.query).lower() if request.url.query else ""
 
         for pattern in SUSPICIOUS_PATTERNS:
-            if pattern.lower() in path or pattern.lower() in query:
+            if pattern.lower() in lowered_path or pattern.lower() in query:
                 security_logger.warning(
                     f"🚨 SUSPICIOUS REQUEST DETECTED: pattern='{pattern}'",
                     extra={
                         "request_id": request_id,
                         "client_ip": client_ip,
                         "method": request.method,
-                        "path": request.url.path,
+                        "path": path,
                         "query": query[:200],  # Limit logged query length
                         "event_type": "suspicious_request",
                         "pattern": pattern,
@@ -257,9 +269,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 break
 
         # Check for auth abuse (many failed attempts would be tracked separately)
-        if request.url.path.startswith("/auth/"):
+        if path.startswith("/auth/"):
             security_logger.info(
-                f"🔐 Auth request: {request.method} {request.url.path}",
+                f"🔐 Auth request: {request.method} {path}",
                 extra={
                     "request_id": request_id,
                     "client_ip": client_ip,
@@ -270,11 +282,12 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     def _log_security_event(
         self,
         request: Request,
+        path: str,
         status_code: int,
         client_ip: str,
         request_id: str
     ) -> None:
-        """Log security-relevant events."""
+        """Log security-relevant events. `path` is the routed ASGI path."""
 
         event_type = "auth_success" if status_code < 400 else "auth_failure"
         # Downgrade benign auth probes (e.g. /auth/me 401 on every page
@@ -286,18 +299,18 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         is_expected_probe = (
             request.method == "GET"
             and status_code in {401, 403}
-            and request.url.path in INFO_AUTH_FAILURE_PATHS
+            and path in INFO_AUTH_FAILURE_PATHS
         )
         log_level = logging.INFO if status_code < 400 or is_expected_probe else logging.WARNING
 
         security_logger.log(
             log_level,
-            f"{'✅' if status_code < 400 else '❌'} Security event: {event_type} on {request.url.path}",
+            f"{'✅' if status_code < 400 else '❌'} Security event: {event_type} on {path}",
             extra={
                 "request_id": request_id,
                 "client_ip": client_ip,
                 "status_code": status_code,
                 "event_type": event_type,
-                "path": request.url.path,
+                "path": path,
             }
         )
