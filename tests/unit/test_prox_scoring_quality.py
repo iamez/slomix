@@ -366,3 +366,24 @@ async def test_sentinel_or_empty_scope_params_never_zero_fill():
         players, _ = await prox_scoring._fetch_raw_metrics(db, 30, **bad_scope)  # noqa: SLF001
         assert "trades_per_session" not in players["GUID_Q"], bad_scope
         assert "timed_kills" not in players["GUID_Q"], bad_scope
+
+
+@pytest.mark.asyncio
+async def test_trades_denominator_covers_untargeted_sessions():
+    """combat_engagement is target-only: a session where the player was never
+    attacked would undercount participation and re-inflate the rate. The
+    denominator is the MAX of engagement-sessions and track-sessions (both
+    lower bounds) — Codex repro on #518: 1 trade, tracked in 3 sessions but
+    targeted in only 1 → 1/3, not 1/1."""
+    # player_track row: (guid, name, tracks, avg_speed, peak_speed, sprint,
+    # distance, post_spawn, standing, crouching, prone, sessions_tracked)
+    db = FakeDB(
+        players={"GUID_Q": {"name": "Q", "engagements": 40, "sessions_played": 1}},
+        source_rows={
+            "player_track": [("GUID_Q", "Q", 12, 200.0, 350.0, 40.0,
+                              900.0, 300.0, 10.0, 5.0, 1.0, 3)],
+            "proximity_lua_trade_kill": [("GUID_Q", "Q", 1)],
+        },
+    )
+    players, _ = await prox_scoring._fetch_raw_metrics(db, 30)  # noqa: SLF001
+    assert players["GUID_Q"]["trades_per_session"] == pytest.approx(1 / 3)

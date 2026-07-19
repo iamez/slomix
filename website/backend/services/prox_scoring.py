@@ -527,7 +527,8 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
                    AVG(post_spawn_distance) as avg_post_spawn,
                    AVG(stance_standing_sec) as avg_standing,
                    AVG(stance_crouching_sec) as avg_crouching,
-                   AVG(stance_prone_sec) as avg_prone
+                   AVG(stance_prone_sec) as avg_prone,
+                   COUNT(DISTINCT session_date) as sessions_tracked
             FROM player_track
             {scope}
               AND peak_speed IS NOT NULL
@@ -686,6 +687,7 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
                 "distance_per_life": float(r[6]) if r[6] is not None else None,
                 "post_spawn_rush": float(r[7]) if r[7] is not None else None,
                 "stance_variety": stance_variety if total_stance > 0 else None,
+                "__sessions_tracked__": int(r[11] or 0),
             })
 
     # 5. Kill outcomes: KPR (as killer)
@@ -754,12 +756,19 @@ async def _fetch_raw_metrics(db, range_days: int, *, session_date=None,
             })
 
     # Derive trades_per_session against the PARTICIPATION denominator: trades
-    # divided by sessions the player actually PLAYED (combat_engagement), never
-    # sessions-with-a-trade (IMP-003). Players with trade rows but no
-    # engagement rows in scope have no sound denominator → metric stays missing.
+    # divided by sessions the player actually PLAYED, never sessions-with-a-
+    # trade (IMP-003). Participation = the MAX of two lower bounds: sessions
+    # with combat_engagement rows (target-only — a session where the player
+    # was never attacked would be missed, Codex on #518) and sessions with
+    # player_track rows (movement — present whenever the player was in the
+    # round). Players with trade rows but neither participation signal in
+    # scope have no sound denominator → metric stays missing.
     for pdata in players.values():
         raw_trades = pdata.pop("__trades_raw__", None)
-        sessions_played = pdata.get("__sessions_played__") or 0
+        sessions_played = max(
+            pdata.get("__sessions_played__") or 0,
+            pdata.pop("__sessions_tracked__", 0) or 0,
+        )
         if raw_trades is not None and sessions_played > 0:
             pdata["trades_per_session"] = raw_trades / sessions_played
 

@@ -233,14 +233,20 @@ async def get_proximity_player_radar(
                 FROM proximity_lua_trade_kill WHERE trader_guid = $1 AND session_date >= $2
                 """, (guid, since),
             )
-            # Participation denominator (Copilot on #518, same defect as
-            # IMP-003's trades_per_session): sessions the player PLAYED, from
-            # combat_engagement — counting only sessions-with-an-event made a
-            # single lucky session look like a per-session norm.
+            # Participation denominator (Copilot/Codex on #518, same defect as
+            # IMP-003's trades_per_session): sessions the player PLAYED, not
+            # sessions-with-an-event. GREATEST of two lower bounds, because
+            # combat_engagement is target-only (a session where the player was
+            # never attacked would be missed) and player_track covers any
+            # session the player moved in.
             played_row = await db.fetch_one(
                 """
-                SELECT COUNT(DISTINCT session_date)
-                FROM combat_engagement WHERE target_guid = $1 AND session_date >= $2
+                SELECT GREATEST(
+                    (SELECT COUNT(DISTINCT session_date) FROM combat_engagement
+                     WHERE target_guid = $1 AND session_date >= $2),
+                    (SELECT COUNT(DISTINCT session_date) FROM player_track
+                     WHERE player_guid = $1 AND session_date >= $2)
+                )
                 """, (guid, since),
             )
             cf_total = int(cf_row[0] or 0) if cf_row else 0
