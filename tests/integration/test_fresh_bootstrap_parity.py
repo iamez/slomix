@@ -149,12 +149,20 @@ async def test_dump_contains_every_migration(monkeypatch):
                 + "\n".join(problems)
             )
 
-            # 3) schema unchanged ⇒ dump ⊇ migrations.
+            # 3) schema IDENTICAL in BOTH directions ⇒ dump ≡ migrations.
+            # `after - before` catches objects a migration adds that the dump
+            # lacks; `before - after` catches objects a migration REMOVES that
+            # the dump still creates (e.g. 045's dropped monitoring tables) —
+            # deploy_clean.sh baselines immediately after the dump, so either
+            # direction means the fresh ledger lies about the schema (Codex
+            # on #516).
             after = await _snapshot(conn)
             added = sorted(after - before)
-            assert not added, (
-                "migrations ADDED objects the dump lacks (dump drift):\n"
-                + "\n".join(map(str, added[:40]))
+            removed = sorted(before - after)
+            assert not added and not removed, (
+                "dump ≠ migrations:\n"
+                + "".join(f"  MIGRATION-ONLY (dump lacks): {a}\n" for a in added[:25])
+                + "".join(f"  DUMP-ONLY (migration removes): {r}\n" for r in removed[:25])
             )
         finally:
             await conn.close()

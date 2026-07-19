@@ -305,6 +305,35 @@ async def test_validate_pending_exits_nonzero(monkeypatch, tmp_path, capsys):
 
 
 @pytest.mark.asyncio
+async def test_validate_tolerate_missing_only_forgives_missing(monkeypatch, tmp_path):
+    """--tolerate-missing exists for the older-tag ROLLBACK path (#516): a
+    ledger row whose file is absent from the checkout passes, but pending
+    drift still fails even with the flag."""
+    mig_dir = tmp_path / "migrations"
+    mig_dir.mkdir()
+    (mig_dir / "001_a.sql").write_text("SELECT 1;")
+    monkeypatch.setattr("scripts.apply_migrations.MIGRATIONS_DIR", mig_dir)
+
+    # 002 recorded applied but not on disk (rollback checkout) → tolerated.
+    conn = FakeConn(rows=[{"filename": "001_a.sql", "success": True},
+                          {"filename": "002_newer.sql", "success": True}])
+    monkeypatch.setattr("scripts.apply_migrations.get_connection",
+                        _returning(conn))
+    await cmd_validate(tolerate_missing=True)  # no SystemExit
+    with pytest.raises(SystemExit):
+        await cmd_validate()  # without the flag it is still drift
+
+    # Pending drift is NEVER tolerated, flag or not.
+    (mig_dir / "003_pending.sql").write_text("SELECT 3;")
+    conn2 = FakeConn(rows=[{"filename": "001_a.sql", "success": True},
+                           {"filename": "002_newer.sql", "success": True}])
+    monkeypatch.setattr("scripts.apply_migrations.get_connection",
+                        _returning(conn2))
+    with pytest.raises(SystemExit):
+        await cmd_validate(tolerate_missing=True)
+
+
+@pytest.mark.asyncio
 async def test_apply_refuses_auto_baseline_on_populated_db(monkeypatch, capsys):
     """Empty tracking + populated DB → exit 1 with --baseline instructions,
     never a silent baseline of every migration file."""

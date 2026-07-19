@@ -235,11 +235,28 @@ if [ "$PUBLIC_RELATIONS" = "0" ] && [ "$LEDGER_TABLES" = "0" ]; then
   APPLY_DUMP=true
   echo "  public schema empty — fresh bootstrap confirmed (dump will be applied)."
 elif [ "$PUBLIC_RELATIONS" != "ERR" ] && [ "$LEDGER_TABLES" = "0" ]; then
+  # The preloaded state is only sound when the schema the VM already applied
+  # IS this deploy's dump: slomix_vm_setup.sh clones its own checkout
+  # (REPO_BRANCH), so a setup from main followed by a deploy from a newer
+  # branch would baseline newer migration files over an older schema —
+  # exactly the unsound ledger IMP-001 forbids (Codex on #516). PROOF =
+  # byte-identical dump: compare the VM's setup-cloned copy against ours.
+  LOCAL_DUMP_SHA=$(sha256sum tools/schema_postgresql.sql | cut -d' ' -f1)
+  VM_DUMP_SHA=$($SSH "sha256sum $VM_PATH/tools/schema_postgresql.sql 2>/dev/null | cut -d' ' -f1" || true)
+  if [ -z "$VM_DUMP_SHA" ] || [ "$LOCAL_DUMP_SHA" != "$VM_DUMP_SHA" ]; then
+    echo "  [ABORT] schema is preloaded but the VM's dump does NOT match this"
+    echo "          checkout's (local=$LOCAL_DUMP_SHA"
+    echo "          vm=${VM_DUMP_SHA:-unreadable}) — baselining would record"
+    echo "          this checkout's migrations over a different schema."
+    echo "          Either re-run slomix_vm_setup.sh from THIS checkout, or"
+    echo "          drop/recreate the empty database and re-run this deploy."
+    exit 1
+  fi
   APPLY_DUMP=false
-  echo "  schema preloaded (relations=$PUBLIC_RELATIONS) with NO migration ledger —"
-  echo "  accepting the slomix_vm_setup.sh fresh-install state. The dump apply is"
-  echo "  skipped; the ledger will be baselined. NOTE: this is only sound when"
-  echo "  setup and this deploy ran from the SAME checkout."
+  echo "  schema preloaded (relations=$PUBLIC_RELATIONS) with NO migration ledger"
+  echo "  and a BYTE-IDENTICAL dump — accepting the slomix_vm_setup.sh"
+  echo "  fresh-install state. The dump apply is skipped; the ledger will be"
+  echo "  baselined against this same dump."
 else
   echo "  [ABORT] database is managed or unreachable (relations=$PUBLIC_RELATIONS,"
   echo "          schema_migrations=$LEDGER_TABLES). This workflow is for FRESH"
@@ -316,11 +333,22 @@ echo "$FILE_LIST" | tar czf "$TARBALL" -T -
 TARBALL_SIZE=$(du -h "$TARBALL" | cut -f1)
 echo "  Archive: $TARBALL_SIZE"
 
-# Ensure base dirs exist and are writable
+# Ensure base dirs exist and are writable — including scripts/ (the runner
+# ships in the archive, and a setup-cloned checkout leaves it group-read-only,
+# so tar could not overwrite apply_migrations.py — Codex on #516).
 sudo_run chmod -R g+w "$VM_PATH/bot/" 2>/dev/null || true
 sudo_run chmod -R g+w "$VM_PATH/website/" 2>/dev/null || true
 sudo_run chmod -R g+w "$VM_PATH/tools/" 2>/dev/null || true
+sudo_run chmod -R g+w "$VM_PATH/scripts/" 2>/dev/null || true
 sudo_run chmod g+w "$VM_PATH/" 2>/dev/null || true
+
+# Prune the VM's migrations/ ENTIRELY before extracting (Codex on #516):
+# tar does not delete files absent from the archive, and step 8 baselines
+# whatever discover_migrations() finds on the VM — a stale .sql left by a
+# setup clone or an older deploy would be ledgered as applied even though
+# the dump just bootstrapped doesn't contain its effect. Removing the dir
+# (not only under --clean) guarantees the baseline set == this archive.
+sudo_run rm -rf "$VM_PATH/migrations" 2>/dev/null || true
 
 # Upload and extract
 VM_TARBALL="/tmp/slomix_deploy_$(date +%s).tar.gz"

@@ -295,6 +295,26 @@ recover_on_failure() {
       warn ".env snapshot restore FAILED (rc=$envrestore_rc): sudo install -o slomix_bot -g slomix -m 640 $ENV_SNAPSHOT $VM_PATH/.env"
     fi
   fi
+  # Re-install the RESTORED commit's dependency manifests before restarting
+  # (Codex on #516): step 4b may have already updated the venvs to the failed
+  # release's pins, and rolled-back code running against a changed venv is an
+  # untested combination. Best-effort — pip is idempotent, and a failure here
+  # must not block the restart (a partially-newer venv usually still boots
+  # old code; the warning tells the operator to verify).
+  local pipfix_rc=0
+  if [ -n "${SUDO_PASS:-}" ]; then
+    printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -u slomix_bot -- $VM_PATH/venv-bot/bin/pip install -q -r $VM_PATH/requirements.txt" || pipfix_rc=$?
+    printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -u slomix_web -- $VM_PATH/venv-web/bin/pip install -q -r $VM_PATH/website/requirements.txt" || pipfix_rc=$?
+  else
+    $SSH "sudo -n -u slomix_bot -- $VM_PATH/venv-bot/bin/pip install -q -r $VM_PATH/requirements.txt" || pipfix_rc=$?
+    $SSH "sudo -n -u slomix_web -- $VM_PATH/venv-web/bin/pip install -q -r $VM_PATH/website/requirements.txt" || pipfix_rc=$?
+  fi
+  if [ "$pipfix_rc" -eq 0 ]; then
+    warn "venv pins re-synced to the restored checkout's manifests"
+  else
+    warn "venv re-sync FAILED (rc=$pipfix_rc) — services restart on possibly-"
+    warn "newer pins; verify with: $VM_PATH/venv-bot/bin/pip check"
+  fi
   # `restart`, not `start` (Codex on #516): a window-2 failure can land after
   # step 7 already STARTED slomix-web on the new tag. The checkout was just
   # rolled back above, but `systemctl start` is a no-op on an active unit, so
@@ -536,10 +556,18 @@ else
 fi
 # Validate ALWAYS — including with --skip-migrations (IMP-001 / DoD: "the
 # ledger can no longer be skipped by a deploy"). --skip-migrations only skips
-# the APPLY; a code-only deploy still refuses to proceed over ledger drift
-# (pending/failed/missing/checksum), so no deploy path bypasses the ledger.
-log "  Validating migration ledger (pending/failed/missing/checksum drift aborts deploy)"
-run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --validate"
+# the APPLY; a code-only deploy still refuses to proceed over ledger drift.
+# The skip path tolerates MISSING rows only (Codex on #516): an older-tag
+# ROLLBACK checkout legitimately lacks migration files the production ledger
+# already recorded, and aborting after services stopped would strand the bad
+# release running. Pending/failed/checksum drift aborts on every path.
+if $SKIP_MIGRATIONS; then
+  log "  Validating migration ledger (tolerating MISSING — rollback checkout may lack newer files)"
+  run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --validate --tolerate-missing"
+else
+  log "  Validating migration ledger (pending/failed/missing/checksum drift aborts deploy)"
+  run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --validate"
+fi
 
 # ─── 6. Update .env flags (idempotent, sudo'd) ────────────────────────────────
 # /opt/slomix/.env is owned by slomix_bot:slomix mode 640. The deploy user

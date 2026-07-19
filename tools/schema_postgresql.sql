@@ -8865,3 +8865,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS weapon_stats_mv_pk
     ON weapon_stats_mv (weapon_name, round_date);
 CREATE INDEX IF NOT EXISTS weapon_stats_mv_round_date_substr
     ON weapon_stats_mv (SUBSTR(CAST(round_date AS TEXT), 1, 10));
+
+-- 045: orphan monitoring tables were DROPPED in production, but the pg_dump
+-- body above still creates them (dump predates the migration — Codex on
+-- #516). Re-applying the same drops here makes this file's NET effect match
+-- the migrated schema; CASCADE also removes the dependent
+-- current_voice_status view, exactly as 045 did. A future regeneration from
+-- the live DB will not contain these objects at all — then delete this block.
+DROP TABLE IF EXISTS voice_members CASCADE;
+DROP TABLE IF EXISTS server_status_history_backup_20260207 CASCADE;
