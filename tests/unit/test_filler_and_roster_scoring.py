@@ -55,10 +55,11 @@ class _FakeDB:
 
 def _rounds_one_map():
     # (id, map_name, gaming_session_id, round_number, defender_team,
-    #  winner_team, time_limit, actual_time, round_date, round_time, match_id)
+    #  winner_team, time_limit, actual_time, round_date, round_time, match_id,
+    #  round_start_unix, map_play_seq)
     return [
-        (1, "etl_adlernest", 99, 1, 2, 1, "0", "10:00", "2026-06-08", "230738", "m-adler-1"),
-        (2, "etl_adlernest", 99, 2, 1, 2, "0", "1:54", "2026-06-08", "231011", "m-adler-1"),
+        (1, "etl_adlernest", 99, 1, 2, 1, "0", "10:00", "2026-06-08", "230738", "m-adler-1", 1749416858, 1),
+        (2, "etl_adlernest", 99, 2, 1, 2, "0", "1:54", "2026-06-08", "231011", "m-adler-1", 1749417011, 1),
     ]
 
 
