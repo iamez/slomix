@@ -128,6 +128,18 @@ def test_real_app_host_gate_and_csrf_order():
         "TRUSTED_HOSTS": "www.slomix.fyi,slomix.fyi,localhost,127.0.0.1",
         "CSRF_ORIGIN_CHECK_ENABLED": "true",
         "CSRF_ALLOWED_ORIGINS": "https://www.slomix.fyi",
+        # main.py calls load_dotenv() at import, and dotenv ADDS any key that
+        # is absent from this env — so a developer/CI checkout's .env could
+        # still leak config the probes touch (Codex on #520: e.g.
+        # CACHE_BACKEND=redis + a broad CACHE_INVALIDATE_ON_WRITE_PREFIXES
+        # would make the POST probe hit an unstarted cache backend, since this
+        # test intentionally skips the lifespan). Pin everything the probed
+        # request paths can reach; explicit values always win over dotenv.
+        "CACHE_BACKEND": "memory",
+        "CACHE_INVALIDATE_ON_WRITE_PREFIXES": "",
+        "RATE_LIMIT_ENABLED": "false",
+        "PROMETHEUS_ENABLED": "false",
+        "LOG_LEVEL": "WARNING",
     }
     result = subprocess.run(  # noqa: S603
         [sys.executable, "-c", _SUBPROCESS_SCRIPT],
