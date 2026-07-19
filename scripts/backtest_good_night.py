@@ -5,10 +5,15 @@ good_night = .25*balance + .20*tension + .15*attendance + .15*story_density
            + .10*flow + .10*variety + .05*participation
 """
 import asyncio
-import json
 import os
+import sys
+from pathlib import Path
 
 import asyncpg
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from shared.round_details import parse_round_details  # noqa: E402
 
 
 def clamp(v, lo=0.0, hi=100.0):
@@ -53,9 +58,13 @@ async def main():
             "SELECT team_1_score, team_2_score, round_details FROM session_results "
             "WHERE gaming_session_id=$1 ORDER BY id DESC LIMIT 1", gsid)
         wins_a = wins_b = draws = 0
-        has_details = bool(sr and sr["round_details"])
+        # Shared parser handles both the legacy v1 list and the v2
+        # {"round_details_version": 2, "maps": [...]} wrapper — iterating the
+        # raw json.loads() of a v2 row would walk dict KEYS and crash.
+        _version, detail_maps = parse_round_details(sr["round_details"] if sr else None)
+        has_details = bool(detail_maps)
         if has_details:
-            for m in json.loads(sr["round_details"]):
+            for m in detail_maps:
                 if m.get("counted") is False:
                     continue
                 pa = int(m.get("team_a_points", m.get("team1_points", 0)) or 0)
