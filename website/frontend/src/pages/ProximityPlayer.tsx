@@ -35,6 +35,13 @@ interface ProfileData {
 interface RadarData {
   axes: { label: string; value: number }[];
   composite: number;
+  // IMP-003 teamplay formula contract: the Teamplay axis may come from a
+  // DIFFERENT (simpler) fallback formula — the UI must label it, never
+  // present it as the prox_team score.
+  teamplay_source?: 'prox_team' | 'cf_tr_fallback' | 'unavailable' | null;
+  teamplay_formula_version?: string;
+  teamplay_fallback_reason?: string;
+  teamplay_degraded?: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -261,7 +268,28 @@ export default function ProximityPlayer({ params }: { params?: Record<string, st
             Player Radar
           </h3>
           {radar?.axes?.length === 5 ? (
-            <RadarChart axes={radar.axes} composite={radar.composite} />
+            <>
+              <RadarChart
+                axes={radar.teamplay_source === 'cf_tr_fallback' || radar.teamplay_source === 'unavailable'
+                  ? radar.axes.map((a) =>
+                      a.label === 'Teamplay' ? { ...a, label: 'Teamplay*' } : a)
+                  : radar.axes}
+                composite={radar.composite}
+              />
+              {radar.teamplay_source === 'cf_tr_fallback' && (
+                <div className="text-[10px] text-amber-400/70 mt-2 self-start">
+                  * Teamplay is an estimate ({radar.teamplay_formula_version ?? 'cf-tr-v1'})
+                  — full proximity score unavailable
+                  {radar.teamplay_fallback_reason ? ` (${radar.teamplay_fallback_reason})` : ''}.
+                </div>
+              )}
+              {radar.teamplay_source === 'unavailable' && (
+                <div className="text-[10px] text-amber-400/70 mt-2 self-start">
+                  * Teamplay unavailable — no participation data in this window
+                  (the 0 is a placeholder, not a score).
+                </div>
+              )}
+            </>
           ) : (
             <div className="text-sm text-slate-500 py-8">Radar data not available</div>
           )}
