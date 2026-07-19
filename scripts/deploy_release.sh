@@ -132,6 +132,23 @@ sudo_run() {
   fi
 }
 
+# Like sudo_run, but executes as a specific (service) user — needed where the
+# target files are owned by slomix_bot/slomix_web rather than root or $VM_USER
+# (e.g. the venvs, which slomix_vm_setup.sh chowns without group write).
+sudo_run_as() {
+  local as_user=$1
+  shift
+  if $DRY_RUN; then
+    log "[dry-run] would sudo -u $as_user: $*"
+    return
+  fi
+  if [ -n "${SUDO_PASS:-}" ]; then
+    printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -u $as_user -- $*"
+  else
+    $SSH "sudo -n -u $as_user -- $*" || fail "sudo -u $as_user failed — re-run with SUDO_PASS=<pass>"
+  fi
+}
+
 # ─── Mid-deploy recovery trap ─────────────────────────────────────────────────
 # If anything fails *after* services are stopped (step 4) but *before* they're
 # confirmed restarted (end of step 7), the EXIT trap auto-restarts both
@@ -148,7 +165,9 @@ sudo_run() {
 #   - Success path → SERVICES_RESTARTED=true at end of step 7, trap no-ops.
 #   - Dry-run → trap no-ops (no real state change happened).
 #   - Failure mid-step-7 (e.g. slomix-bot fails is-active) → trap fires.
-#     `systemctl start` is idempotent so retrying both services is safe.
+#     `systemctl restart` handles both a stopped unit (plain start) and an
+#     already-active one (re-exec on the rolled-back code) — see the
+#     recovery body.
 #   - Trap function inlines the SSH+sudo call instead of using `sudo_run`,
 #     because `sudo_run` calls `fail` on error which would re-enter the trap.
 #
@@ -164,6 +183,9 @@ CHECKOUT_CHANGED=false
 MODERN_SWAPPED=false
 SERVICES_STOPPED=false
 SERVICES_RESTARTED=false
+ENV_SNAPSHOT=""
+ENV_SNAPSHOT_WEB=""
+ENV_SNAPSHOT_TAKEN=false
 
 recover_on_failure() {
   local rc=$?
@@ -210,6 +232,8 @@ recover_on_failure() {
     $SSH "cd $VM_PATH && git checkout -f $CURRENT_COMMIT && { \
       RSHA=\$(git rev-parse --short HEAD); \
       sed -i \"s|?v=[A-Za-z0-9._-]\\+|?v=\$RSHA|g\" website/index.html website/js/*.js 2>/dev/null || true; \
+      sed -i -E \"s|(from '\\./[^'?]+\\.js)'|\\1?v=\$RSHA'|g; s|(from \\\"\\./[^\\\"?]+\\.js)\\\"|\\1?v=\$RSHA\\\"|g; s|(import '\\./[^'?]+\\.js)'|\\1?v=\$RSHA'|g; s|(import \\\"\\./[^\\\"?]+\\.js)\\\"|\\1?v=\$RSHA\\\"|g\" website/js/*.js website/index.html 2>/dev/null || true; \
+      sed -i -E \"s|(src=\\\"js/[^\\\"?]+\\.js)\\\"|\\1?v=\$RSHA\\\"|g; s|(src='js/[^'?]+\\.js)'|\\1?v=\$RSHA'|g\" website/index.html 2>/dev/null || true; \
       $modern_restore \
       git log --oneline -1; \
     }" || restore_rc=$?
@@ -224,21 +248,93 @@ recover_on_failure() {
   fi
 
   # Window 2: failed after services were stopped, before they were confirmed
-  # restarted — auto-restart both on whatever code is currently checked out.
+  # restarted. Before restarting, roll the code BACK to $CURRENT_COMMIT (plus
+  # the modern bundle and .env snapshot when applicable): the dangerous
+  # direction is NEW code starting against a database that did not receive its
+  # migrations. (Migrations that DID succeed before the failure stay applied —
+  # they are additive by policy, and the old code tolerates an additive schema.)
   if ! $SERVICES_STOPPED || $SERVICES_RESTARTED; then
     exit "$rc"
   fi
   echo "" >&2
   warn "═════════════════════════════════════════════════════════════"
   warn "Deploy aborted (rc=$rc) after services were stopped, before"
-  warn "they were confirmed restarted. Auto-recovery: starting both"
-  warn "services on whatever code is currently checked out on the VM."
+  warn "they were confirmed restarted. Auto-recovery: restoring the"
+  warn "pre-deploy code ($CURRENT_COMMIT) and starting both services."
   warn "═════════════════════════════════════════════════════════════"
+  local rollback_rc=0
+  local modern_restore=""
+  if $MODERN_SWAPPED; then
+    modern_restore="rm -rf website/static/modern.new; \
+      if [ -d website/static/modern.prev ]; then \
+        rm -rf website/static/modern && \
+        mv website/static/modern.prev website/static/modern && \
+        echo '  restored previous modern bundle'; \
+      fi;"
+  fi
+  $SSH "cd $VM_PATH && git checkout -f $CURRENT_COMMIT && { \
+    RSHA=\$(git rev-parse --short HEAD); \
+    sed -i \"s|?v=[A-Za-z0-9._-]\\+|?v=\$RSHA|g\" website/index.html website/js/*.js 2>/dev/null || true; \
+    sed -i -E \"s|(from '\\./[^'?]+\\.js)'|\\1?v=\$RSHA'|g; s|(from \\\"\\./[^\\\"?]+\\.js)\\\"|\\1?v=\$RSHA\\\"|g; s|(import '\\./[^'?]+\\.js)'|\\1?v=\$RSHA'|g; s|(import \\\"\\./[^\\\"?]+\\.js)\\\"|\\1?v=\$RSHA\\\"|g\" website/js/*.js website/index.html 2>/dev/null || true; \
+    sed -i -E \"s|(src=\\\"js/[^\\\"?]+\\.js)\\\"|\\1?v=\$RSHA\\\"|g; s|(src='js/[^'?]+\\.js)'|\\1?v=\$RSHA'|g\" website/index.html 2>/dev/null || true; \
+    $modern_restore \
+    true; \
+  }" || rollback_rc=$?
+  if [ "$rollback_rc" -ne 0 ]; then
+    warn "Code rollback to $CURRENT_COMMIT FAILED (rc=$rollback_rc) — services"
+    warn "will start on the CURRENT checkout. Verify schema/code compatibility!"
+  fi
+  # Restore the pre-deploy .env from the root-only snapshot (a failure after
+  # the flag write must not leave half-applied flags). install(1) preserves
+  # content; ownership/mode are restored to the canonical slomix_bot:slomix 640.
+  if $ENV_SNAPSHOT_TAKEN && [ -n "$ENV_SNAPSHOT" ]; then
+    local envrestore_rc=0
+    # website/.env (when it was snapshotted) is restored alongside the root
+    # file — the flag loop writes both, so a partial-write failure must roll
+    # BOTH back (Codex on #516).
+    local restore_cmd="install -o slomix_bot -g slomix -m 640 $ENV_SNAPSHOT $VM_PATH/.env; if [ -f $ENV_SNAPSHOT_WEB ]; then install -o slomix_web -g slomix -m 640 $ENV_SNAPSHOT_WEB $VM_PATH/website/.env; fi"
+    if [ -n "${SUDO_PASS:-}" ]; then
+      printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -- bash -c '$restore_cmd'" || envrestore_rc=$?
+    else
+      $SSH "sudo -n -- bash -c '$restore_cmd'" || envrestore_rc=$?
+    fi
+    if [ "$envrestore_rc" -eq 0 ]; then
+      warn ".env (and website/.env when present) restored from snapshot $ENV_SNAPSHOT"
+    else
+      warn ".env snapshot restore FAILED (rc=$envrestore_rc): sudo install -o slomix_bot -g slomix -m 640 $ENV_SNAPSHOT $VM_PATH/.env"
+    fi
+  fi
+  # Re-install the RESTORED commit's dependency manifests before restarting
+  # (Codex on #516): step 4b may have already updated the venvs to the failed
+  # release's pins, and rolled-back code running against a changed venv is an
+  # untested combination. Best-effort — pip is idempotent, and a failure here
+  # must not block the restart (a partially-newer venv usually still boots
+  # old code; the warning tells the operator to verify).
+  local pipfix_rc=0
+  if [ -n "${SUDO_PASS:-}" ]; then
+    printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -u slomix_bot -- $VM_PATH/venv-bot/bin/pip install -q -r $VM_PATH/requirements.txt" || pipfix_rc=$?
+    printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -u slomix_web -- $VM_PATH/venv-web/bin/pip install -q -r $VM_PATH/website/requirements.txt" || pipfix_rc=$?
+  else
+    $SSH "sudo -n -u slomix_bot -- $VM_PATH/venv-bot/bin/pip install -q -r $VM_PATH/requirements.txt" || pipfix_rc=$?
+    $SSH "sudo -n -u slomix_web -- $VM_PATH/venv-web/bin/pip install -q -r $VM_PATH/website/requirements.txt" || pipfix_rc=$?
+  fi
+  if [ "$pipfix_rc" -eq 0 ]; then
+    warn "venv pins re-synced to the restored checkout's manifests"
+  else
+    warn "venv re-sync FAILED (rc=$pipfix_rc) — services restart on possibly-"
+    warn "newer pins; verify with: $VM_PATH/venv-bot/bin/pip check"
+  fi
+  # `restart`, not `start` (Codex on #516): a window-2 failure can land after
+  # step 7 already STARTED slomix-web on the new tag. The checkout was just
+  # rolled back above, but `systemctl start` is a no-op on an active unit, so
+  # the web process would keep running the failed tag's code. `restart`
+  # re-execs an active unit and plain-starts a stopped one — correct in both
+  # states.
   local recover_rc=0
   if [ -n "${SUDO_PASS:-}" ]; then
-    printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -- systemctl start slomix-web slomix-bot" || recover_rc=$?
+    printf '%s\n' "$SUDO_PASS" | $SSH "sudo -S -- systemctl restart slomix-web slomix-bot" || recover_rc=$?
   else
-    $SSH "sudo -n -- systemctl start slomix-web slomix-bot" || recover_rc=$?
+    $SSH "sudo -n -- systemctl restart slomix-web slomix-bot" || recover_rc=$?
   fi
   if [ "$recover_rc" -eq 0 ]; then
     warn "Recovery succeeded. Verify state with:"
@@ -247,7 +343,7 @@ recover_on_failure() {
   else
     warn "Recovery FAILED (rc=$recover_rc). Manual intervention required:"
     warn "  ssh -i $VM_KEY $VM_USER@$VM_HOST"
-    warn "  sudo systemctl start slomix-web slomix-bot"
+    warn "  sudo systemctl restart slomix-web slomix-bot"
     warn "  sudo journalctl -u slomix-web -u slomix-bot --since '5 minutes ago' --no-pager"
   fi
   exit "$rc"
@@ -427,6 +523,24 @@ sudo_run "systemctl stop slomix-web slomix-bot"
 # step 7 will trigger an auto-restart of both services.
 SERVICES_STOPPED=true
 
+# ─── 4b. Install Python dependencies into both venvs ──────────────────────────
+# Each venv installs from ITS OWN manifest: the web service runs from
+# website/requirements.txt, the bot from the root requirements.txt (IMP-005:
+# without this step, new pins — e.g. prometheus-client for the web venv — never
+# reached production at all). Runs AFTER services stop (Copilot on #516):
+# mutating site-packages under a live process risks inconsistent imports if it
+# loads modules mid-install. Runs AS the venv owners (Codex on #516):
+# slomix_vm_setup.sh chowns venv-bot/venv-web to slomix_bot/slomix_web with no
+# group write, so a plain $VM_USER pip fails the moment a pin actually changes.
+# pip is idempotent: unchanged manifests are a fast no-op. A failure here lands
+# in window 2: recovery restores the old checkout and restarts — pinned deps
+# are additive/backward-compatible, so old code on a partially-updated venv
+# still boots (and the next deploy re-runs the install).
+log "4b/8 Install Python deps (venv-bot ← requirements.txt, venv-web ← website/requirements.txt)"
+sudo_run_as slomix_bot "$VM_PATH/venv-bot/bin/pip install -q -r $VM_PATH/requirements.txt"
+sudo_run_as slomix_web "$VM_PATH/venv-web/bin/pip install -q -r $VM_PATH/website/requirements.txt"
+log "  dependencies OK"
+
 # ─── 5. Apply migrations via the runner ───────────────────────────────────────
 # The runner (scripts/apply_migrations.py) applies each migration and its
 # schema_migrations ledger row in the SAME transaction and exits non-zero on
@@ -436,24 +550,40 @@ SERVICES_STOPPED=true
 # interpreter is pinned to the production web venv; a missing interpreter,
 # an apply failure, or post-apply ledger drift each abort the deploy.
 VM_PY="venv-web/bin/python"
+run_remote "cd $VM_PATH && \
+  if [ ! -x $VM_PY ]; then \
+    echo \"ERROR: $VM_PY missing on VM — refusing to deploy without the ledger runner\" >&2; \
+    exit 1; \
+  fi"
 if $SKIP_MIGRATIONS; then
-  log "5/8  Skipping migrations (--skip-migrations)"
+  log "5/8  Skipping migration APPLY (--skip-migrations) — ledger validation still runs"
+elif [ ${#MIGRATIONS[@]} -gt 0 ]; then
+  log "5/8  Apply ${#MIGRATIONS[@]} migration(s) via apply_migrations.py (transactional + ledger)"
+  run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --only ${MIGRATIONS[*]}"
 else
-  run_remote "cd $VM_PATH && \
-    if [ ! -x $VM_PY ]; then \
-      echo \"ERROR: $VM_PY missing on VM — refusing to run migrations without the ledger runner\" >&2; \
-      exit 1; \
-    fi"
-  if [ ${#MIGRATIONS[@]} -gt 0 ]; then
-    log "5/8  Apply ${#MIGRATIONS[@]} migration(s) via apply_migrations.py (transactional + ledger)"
-    run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --only ${MIGRATIONS[*]}"
-  else
-    log "5/8  No migrations queued — validating ledger only"
+  log "5/8  No migrations queued — validating ledger only"
+fi
+# Validate ALWAYS — including with --skip-migrations (IMP-001 / DoD: "the
+# ledger can no longer be skipped by a deploy"). --skip-migrations only skips
+# the APPLY; a code-only deploy still refuses to proceed over ledger drift.
+# The skip path tolerates MISSING rows only (Codex on #516): an older-tag
+# ROLLBACK checkout legitimately lacks migration files the production ledger
+# already recorded, and aborting after services stopped would strand the bad
+# release running. Pending/failed/checksum drift aborts on every path.
+if $SKIP_MIGRATIONS; then
+  # The checked-out (possibly OLDER) tag's runner may predate the
+  # --tolerate-missing flag — argparse would then fail after services
+  # stopped, stranding the rollback (Codex on #516). Stage THIS deploy's
+  # runner at the same directory depth (so its migrations/.env discovery
+  # via __file__ still resolves to $VM_PATH) and validate with it; the
+  # staged copy is removed either way.
+  STAGED_RUNNER="scripts/.apply_migrations.deploy.py"
+  if ! $DRY_RUN; then
+    scp -i "$VM_KEY" "$SCRIPT_DIR/apply_migrations.py" "$VM_USER@$VM_HOST:$VM_PATH/$STAGED_RUNNER"
   fi
-  # Validate ALWAYS (even with an empty MIGRATIONS list): a release config that
-  # forgot to list a migration the tag actually adds would otherwise start the
-  # new code against the old schema with no error. --validate catches the
-  # omitted pending migration (and any drift) and aborts the deploy (Codex #509).
+  log "  Validating migration ledger (staged current runner; tolerating MISSING — rollback checkout may lack newer files)"
+  run_remote "cd $VM_PATH && $VM_PY $STAGED_RUNNER --validate --tolerate-missing; rc=\$?; rm -f $STAGED_RUNNER; exit \$rc"
+else
   log "  Validating migration ledger (pending/failed/missing/checksum drift aborts deploy)"
   run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --validate"
 fi
@@ -463,7 +593,17 @@ fi
 # (slomix) has read but not write — every write must go through sudo.
 # We learned this the hard way on 2026-05-13 (PermissionError mid-deploy).
 if ! $SKIP_FLAGS && [ ${#FLAGS[@]} -gt 0 ]; then
-  log "6/8  Add ${#FLAGS[@]} feature flag(s) to /opt/slomix/.env (via sudo)"
+  # Snapshot .env into a ROOT-ONLY location OUTSIDE the checkout before any
+  # flag write, so a failure between the flag write and service restart can
+  # restore the exact pre-deploy env. Deliberately NOT in /opt/slomix (a
+  # secret backup inside the checkout is exactly what audit AUD-010 bans).
+  # Retention: the last 10 snapshots are kept (pruned below on success).
+  ENV_SNAPSHOT="/var/backups/slomix/env/${TAG}-$(date +%Y%m%d-%H%M%S).env"
+  ENV_SNAPSHOT_WEB="${ENV_SNAPSHOT%.env}-web.env"
+  log "6/8  Snapshot .env → $ENV_SNAPSHOT (root-only, mode 600)"
+  sudo_run "bash -c 'mkdir -p /var/backups/slomix/env && chmod 700 /var/backups/slomix /var/backups/slomix/env && install -o root -g root -m 600 $VM_PATH/.env $ENV_SNAPSHOT && { [ -f $VM_PATH/website/.env ] && install -o root -g root -m 600 $VM_PATH/website/.env $ENV_SNAPSHOT_WEB || true; }'"
+  $DRY_RUN || ENV_SNAPSHOT_TAKEN=true
+  log "     Add ${#FLAGS[@]} feature flag(s) to /opt/slomix/.env (via sudo)"
   for KV in "${FLAGS[@]}"; do
     KEY="${KV%%=*}"
     VAL="${KV#*=}"
@@ -492,10 +632,24 @@ if ! $SKIP_FLAGS && [ ${#FLAGS[@]} -gt 0 ]; then
       else \
         echo \"${KEY}=${VAL}\" >> .env; \
       fi'"
+    # ALSO upsert into website/.env when it exists (Codex on #516): VMs
+    # provisioned by slomix_vm_setup.sh run the web service with
+    # EnvironmentFile=website/.env, and main.py prefers website/.env over
+    # the root file — a flag written only to /opt/slomix/.env (e.g. the
+    # required TRUSTED_HOSTS) would never reach the web process there.
+    sudo_run "bash -c 'cd $VM_PATH && \
+      if [ -f website/.env ]; then \
+        if grep -qE \"^${KEY}=\" website/.env; then \
+          sed -i \"s|^${KEY}=.*|${KEY}=${VAL_ESC}|\" website/.env; \
+        else \
+          echo \"${KEY}=${VAL}\" >> website/.env; \
+        fi; \
+      fi'"
   done
   log "Final flag state on VM (this release only):"
   ALL_KEYS="$(printf '%s\n' "${FLAGS[@]}" | cut -d= -f1 | paste -sd '|')"
-  run_remote "grep -E '^(${ALL_KEYS})=' $VM_PATH/.env || true"
+  run_remote "grep -E '^(${ALL_KEYS})=' $VM_PATH/.env || true; \
+    if [ -f $VM_PATH/website/.env ]; then echo '  (website/.env:)'; grep -E '^(${ALL_KEYS})=' $VM_PATH/website/.env || true; fi"
 else
   log "6/8  Skipping .env edit (--skip-flags or empty FLAGS=)"
 fi
@@ -534,12 +688,39 @@ log "Deploy complete. To rollback to pre-deploy commit ($CURRENT_COMMIT):"
 # Include `-i $VM_KEY` so the printed commands match the script's own SSH
 # connection params — without it, the rollback fails for anyone who doesn't
 # have $VM_KEY as their default identity for $VM_HOST. (Copilot review on #259.)
-echo "  ssh -i $VM_KEY $VM_USER@$VM_HOST 'cd $VM_PATH && git checkout -f $CURRENT_COMMIT && sudo systemctl restart slomix-web slomix-bot'"
+# The pip installs are part of the documented rollback (Codex on #516):
+# step 4b already synced both venvs to THIS release's pins, so old code
+# must get its own manifests back before restarting.
+echo "  ssh -i $VM_KEY $VM_USER@$VM_HOST 'cd $VM_PATH && git checkout -f $CURRENT_COMMIT \\"
+echo "    && sudo -u slomix_bot venv-bot/bin/pip install -q -r requirements.txt \\"
+echo "    && sudo -u slomix_web venv-web/bin/pip install -q -r website/requirements.txt \\"
+echo "    && sudo systemctl restart slomix-web slomix-bot'"
 if [ ${#FLAGS[@]} -gt 0 ]; then
-  echo "  To disable one of this release's flags (cheaper rollback — keeps code):"
+  echo "  Per-flag rollback (cheaper than a code rollback):"
   for KV in "${FLAGS[@]}"; do
     KEY="${KV%%=*}"
-    echo "    ssh -i $VM_KEY $VM_USER@$VM_HOST \"sudo sed -i 's/^${KEY}=.*/${KEY}=false/' $VM_PATH/.env && sudo systemctl restart slomix-web slomix-bot\""
+    VAL="${KV#*=}"
+    case "$VAL" in
+      true|false)
+        # Boolean flags can simply be flipped off.
+        echo "    ssh -i $VM_KEY $VM_USER@$VM_HOST \"sudo sed -i 's/^${KEY}=.*/${KEY}=false/' $VM_PATH/.env && { [ -f $VM_PATH/website/.env ] && sudo sed -i 's/^${KEY}=.*/${KEY}=false/' $VM_PATH/website/.env || true; } && sudo systemctl restart slomix-web slomix-bot\""
+        ;;
+      *)
+        # NON-boolean flags (e.g. TRUSTED_HOSTS hostname list) must NEVER be
+        # set to 'false' — resolve_trusted_hosts() would treat that as the
+        # only allowed hostname and lock real traffic out (Codex on #516).
+        # The safe rollback is the pre-deploy snapshot restore.
+        echo "    # ${KEY} is not boolean — restore the pre-deploy env snapshot instead:"
+        echo "    ssh -i $VM_KEY $VM_USER@$VM_HOST \"sudo install -o slomix_bot -g slomix -m 640 $ENV_SNAPSHOT $VM_PATH/.env && { [ -f $ENV_SNAPSHOT_WEB ] && sudo install -o slomix_web -g slomix -m 640 $ENV_SNAPSHOT_WEB $VM_PATH/website/.env || true; } && sudo systemctl restart slomix-web slomix-bot\""
+        ;;
+    esac
   done
+fi
+# Retention: keep only the newest 10 .env snapshots (root-only dir). Runs only
+# after a fully successful deploy — a failed deploy keeps every snapshot for
+# forensics. ls -t sorts newest-first; tail -n +11 selects the 11th onward.
+if $ENV_SNAPSHOT_TAKEN; then
+  log "Pruning .env snapshots (keep newest 10) in /var/backups/slomix/env"
+  sudo_run "bash -c 'cd /var/backups/slomix/env && ls -t | tail -n +11 | xargs -r rm --'" || warn "snapshot prune failed (non-fatal)"
 fi
 echo

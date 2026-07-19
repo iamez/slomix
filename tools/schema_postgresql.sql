@@ -27,7 +27,15 @@ SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
-SELECT pg_catalog.set_config('search_path', '', false);
+-- pg_dump emits search_path='' here, but this file also carries hand-appended
+-- sections (parimutuel_*, availability_*, …) whose statements are NOT
+-- schema-qualified — with an empty search_path they fail on a fresh database
+-- ("no schema has been selected to create in"), which broke the
+-- deploy_clean.sh bootstrap this dump exists for (IMP-001; caught by
+-- tests/integration/test_fresh_bootstrap_parity.py). 'public' is safe for the
+-- pg_dump body too: every generated statement is public-qualified. If you
+-- regenerate this dump, KEEP this override.
+SELECT pg_catalog.set_config('search_path', 'public', false);
 SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
@@ -3015,7 +3023,10 @@ CREATE TABLE public.proximity_processed_files (
     filename text NOT NULL,
     file_hash text,
     aggregates_applied boolean DEFAULT false,
-    imported_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    imported_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    tracker_version text,
+    round_key text,
+    capabilities jsonb
 );
 
 
@@ -7364,6 +7375,13 @@ CREATE INDEX idx_proximity_objective_focus_round_id ON public.proximity_objectiv
 
 
 --
+-- Name: idx_proximity_processed_round_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_proximity_processed_round_key ON public.proximity_processed_files USING btree (round_key) WHERE (round_key IS NOT NULL);
+
+
+--
 -- Name: idx_proximity_objective_focus_round_lookup_unlinked; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8771,3 +8789,88 @@ CREATE TABLE IF NOT EXISTS parimutuel_bets (
     UNIQUE (market_id, user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_parimutuel_bets_market ON parimutuel_bets (market_id, choice);
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Drift closure (IMP-001, caught by tests/integration/test_fresh_bootstrap_parity.py):
+-- objects that migrations 030/051/053/054/056/059/060 create but earlier
+-- regenerations of this dump missed. A fresh bootstrap `--baseline`s the
+-- ledger against THIS file, so every migration effect must exist here.
+-- All statements are idempotent (IF NOT EXISTS) — safe on populated DBs.
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- 054: server-side KIS shadow audit
+CREATE TABLE IF NOT EXISTS storytelling_kis_shadow_audit (
+    id              SERIAL PRIMARY KEY,
+    session_date    DATE NOT NULL,
+    kill_outcome_id INTEGER NOT NULL,
+    python_impact   REAL NOT NULL,
+    sql_impact      REAL NOT NULL,
+    delta           REAL NOT NULL,
+    captured_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_kis_shadow_audit_session_date
+    ON storytelling_kis_shadow_audit(session_date);
+CREATE INDEX IF NOT EXISTS idx_kis_shadow_audit_session_delta
+    ON storytelling_kis_shadow_audit(session_date, ABS(delta) DESC);
+
+-- 056: player_links locale + twitch
+ALTER TABLE player_links
+    ADD COLUMN IF NOT EXISTS discord_locale character varying(16);
+ALTER TABLE player_links
+    ADD COLUMN IF NOT EXISTS twitch_login   character varying(64);
+
+-- 060: KIS formula version cache column
+ALTER TABLE storytelling_kill_impact
+    ADD COLUMN IF NOT EXISTS formula_version VARCHAR(20) NOT NULL DEFAULT 'kis-v2';
+CREATE INDEX IF NOT EXISTS idx_kis_session_formula_version
+    ON storytelling_kill_impact (session_date, formula_version);
+
+-- 059: rounds start-unix ordering index
+CREATE INDEX IF NOT EXISTS idx_rounds_start_unix
+    ON rounds (round_start_unix DESC)
+    WHERE round_start_unix IS NOT NULL AND gaming_session_id IS NOT NULL;
+
+-- 051: audit-surfaced hot-path indexes
+CREATE INDEX IF NOT EXISTS idx_round_correlations_r1_round_id
+    ON round_correlations (r1_round_id)
+    WHERE r1_round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_round_correlations_r2_round_id
+    ON round_correlations (r2_round_id)
+    WHERE r2_round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_pcs_player_guid_round_number
+    ON player_comprehensive_stats (player_guid, round_number)
+    WHERE round_number > 0;
+
+-- 030: objective-run round linkage index
+CREATE INDEX IF NOT EXISTS idx_prox_obj_run_round_id
+    ON proximity_objective_run(round_id) WHERE round_id IS NOT NULL;
+
+-- 053: weapon leaderboard matview (the whole matview was missing from the
+-- dump — invisible to the column snapshot, betrayed by its indexes)
+CREATE MATERIALIZED VIEW IF NOT EXISTS weapon_stats_mv AS
+SELECT
+    weapon_name,
+    round_date,
+    SUM(kills)::bigint        AS total_kills,
+    SUM(deaths)::bigint       AS total_deaths,
+    SUM(headshots)::bigint    AS total_headshots,
+    SUM(shots)::bigint        AS total_shots,
+    SUM(hits)::bigint         AS total_hits,
+    COUNT(*)::bigint          AS sample_rows,
+    MAX(created_at)           AS last_seen_at
+FROM weapon_comprehensive_stats
+WHERE weapon_name IS NOT NULL
+GROUP BY weapon_name, round_date;
+CREATE UNIQUE INDEX IF NOT EXISTS weapon_stats_mv_pk
+    ON weapon_stats_mv (weapon_name, round_date);
+CREATE INDEX IF NOT EXISTS weapon_stats_mv_round_date_substr
+    ON weapon_stats_mv (SUBSTR(CAST(round_date AS TEXT), 1, 10));
+
+-- 045: orphan monitoring tables were DROPPED in production, but the pg_dump
+-- body above still creates them (dump predates the migration — Codex on
+-- #516). Re-applying the same drops here makes this file's NET effect match
+-- the migrated schema; CASCADE also removes the dependent
+-- current_voice_status view, exactly as 045 did. A future regeneration from
+-- the live DB will not contain these objects at all — then delete this block.
+DROP TABLE IF EXISTS voice_members CASCADE;
+DROP TABLE IF EXISTS server_status_history_backup_20260207 CASCADE;

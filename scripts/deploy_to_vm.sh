@@ -24,6 +24,20 @@
 
 set -euo pipefail
 
+# ═══════════════════════════════════════════════════════════════════════════
+# RETIRED (IMP-001, audit AUD-002): this script excludes migrations/ from the
+# copy and applies the schema dump with raw psql — the database can mutate
+# BEFORE any ledger validation could run, which is exactly the bypass the
+# migration-ledger contract forbids. Every production deploy MUST go through
+# scripts/deploy_release.sh (transactional runner + ledger validation on
+# every run). There is deliberately NO override flag — any override recreates
+# the bypass. The body below is kept for reference only and is unreachable.
+echo "ERROR: deploy_to_vm.sh is RETIRED and must not be used for deploys." >&2
+echo "       Use: SUDO_PASS=<pass> ./scripts/deploy_release.sh <tag>" >&2
+echo "       (fresh installs: scripts/deploy_clean.sh)" >&2
+exit 1
+# ═══════════════════════════════════════════════════════════════════════════
+
 # ─── Config ───────────────────────────────────────────────────────────────────
 VM_HOST="192.168.64.159"
 VM_USER="slomix"

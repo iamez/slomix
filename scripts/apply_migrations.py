@@ -419,12 +419,19 @@ async def cmd_status(json_out: bool = False):
         await conn.close()
 
 
-async def cmd_validate(json_out: bool = False):
+async def cmd_validate(json_out: bool = False, tolerate_missing: bool = False):
     """Exit non-zero when the ledger and the migrations directory disagree.
 
     Deploy integration point: deploy_release.sh runs this after applying a
     release's migrations and aborts the deploy on any drift (pending, failed,
     or checksum mismatch).
+
+    tolerate_missing: MISSING rows (recorded applied, no file on disk) do not
+    fail validation. This exists for ONE caller: a `--skip-migrations` ROLLBACK
+    deploy checks out an older tag whose migrations/ directory legitimately
+    lacks files the production ledger already recorded — aborting there would
+    strand the BAD release running (Codex on #516). Pending/failed/checksum
+    drift still fails; forward deploys never pass this flag.
     """
     conn = await get_connection()
     try:
@@ -440,10 +447,11 @@ async def cmd_validate(json_out: bool = False):
     clean = (
         not state["pending"]
         and not state["failed"]
-        and not state["missing"]
+        and (tolerate_missing or not state["missing"])
         and not state["checksum_mismatches"]
     )
     state["clean"] = clean
+    state["tolerate_missing"] = tolerate_missing
     if json_out:
         print(json.dumps(state, indent=2))
     else:
@@ -646,28 +654,31 @@ async def cmd_apply(only: list[str] | None = None):
             start = time.monotonic()
             try:
                 body = unwrap_outer_transaction(sql)
+                # IMP-008: the statement-by-statement CONCURRENTLY path is NOT
+                # atomic (a mid-file failure leaves earlier statements applied),
+                # which silently violates the same-transaction SQL+ledger
+                # contract every other path guarantees. No committed migration
+                # uses it (test_every_repo_migration_is_accepted), so refuse the
+                # latent escape hatch until a dedicated non-transactional
+                # contract is agreed. Operator path for a genuine CONCURRENTLY
+                # migration today: apply manually via psql, then `--mark`.
+                if requires_non_transactional(body):
+                    raise MigrationRejected(
+                        "contains CONCURRENTLY, which cannot run inside the "
+                        "runner's transaction; the non-atomic fallback is "
+                        "disabled (IMP-008). Apply manually via psql, then "
+                        "record it with --mark."
+                    )
             except MigrationRejected as e:
                 print("REJECTED")
                 print(f"    Error: {e}")
                 sys.exit(1)
 
             try:
-                if requires_non_transactional(body):
-                    # CREATE INDEX CONCURRENTLY etc. refuse to run inside a
-                    # transaction block; apply statement-by-statement (each
-                    # autocommits) and record success separately. Not atomic —
-                    # a mid-file failure leaves earlier statements applied,
-                    # which the failure row + non-zero exit make visible.
-                    print("(non-transactional: CONCURRENTLY) ... ", end="", flush=True)
-                    for stmt in split_statements(body):
-                        await conn.execute(stmt)
+                async with conn.transaction():
+                    await conn.execute(body)
                     elapsed_ms = int((time.monotonic() - start) * 1000)
                     await conn.execute(_SUCCESS_UPSERT, version, filename, checksum, elapsed_ms)
-                else:
-                    async with conn.transaction():
-                        await conn.execute(body)
-                        elapsed_ms = int((time.monotonic() - start) * 1000)
-                        await conn.execute(_SUCCESS_UPSERT, version, filename, checksum, elapsed_ms)
                 print(f"OK ({elapsed_ms}ms)")
             except Exception as e:
                 elapsed_ms = int((time.monotonic() - start) * 1000)
@@ -790,6 +801,9 @@ def main():
                        help="show applied/failed/pending state")
     group.add_argument("--validate", action="store_true",
                        help="exit 1 on pending/failed/checksum drift")
+    parser.add_argument("--tolerate-missing", action="store_true",
+                        help="with --validate: MISSING ledger rows (older-tag "
+                             "rollback checkout) do not fail validation")
     group.add_argument("--baseline", action="store_true",
                        help="mark all migrations as pre-applied")
     group.add_argument("--mark", nargs="+", metavar="FILE",
@@ -802,11 +816,14 @@ def main():
 
     if args.json and not (args.status or args.validate):
         parser.error("--json requires --status or --validate")
+    if args.tolerate_missing and not args.validate:
+        parser.error("--tolerate-missing requires --validate")
 
     if args.status:
         asyncio.run(cmd_status(json_out=args.json))
     elif args.validate:
-        asyncio.run(cmd_validate(json_out=args.json))
+        asyncio.run(cmd_validate(json_out=args.json,
+                                 tolerate_missing=args.tolerate_missing))
     elif args.baseline:
         asyncio.run(cmd_baseline())
     elif args.mark:
