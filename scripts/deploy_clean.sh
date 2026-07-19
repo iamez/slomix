@@ -114,6 +114,11 @@ build_file_list() {
     [ -f "$f" ] && echo "$f"
   done
 
+  # Shared bot+website modules (e.g. shared.round_details — imported by both
+  # the stopwatch scorer and the website Good Night service; a deploy without
+  # this package restarts into ModuleNotFoundError — Codex on #517)
+  find shared/ -name '*.py' -not -path '*__pycache__*' 2>/dev/null
+
   # Tools (unified CLI + schema)
   for f in tools/__init__.py tools/slomix_backfill.py tools/slomix_audit.py \
            tools/slomix_rcon.py tools/slomix_proximity.py tools/slomix_retro.py \
