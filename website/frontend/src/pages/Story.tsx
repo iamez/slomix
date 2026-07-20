@@ -123,7 +123,7 @@ export default function Story({ params }: { params?: Record<string, string> }) {
     const resolved = kis?.scope;
     if (resolved?.gaming_session_id != null && resolved.gaming_session_id !== gamingSessionId) {
       setGamingSessionId(resolved.gaming_session_id);
-      setSessionDate(resolved.dates?.[0] ?? null);
+      setSessionDate(resolved.dates.length > 0 ? resolved.dates[0] : null);
     }
   }, [kis, gamingSessionId]);
 
