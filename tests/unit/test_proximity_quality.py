@@ -166,6 +166,7 @@ async def test_proximity_quality_wrong_start_rows_flags_wrong_round_linkage():
     assert signal["ready"] is False
     assert payload["overall_status"] == "partial"
     assert payload["selected_scope_status"] == "partial"
+    assert "SIGNAL_WRONG_ROUND_LINKAGE" in {w["code"] for w in payload["warnings"]}
 
 
 @pytest.mark.asyncio
@@ -184,6 +185,7 @@ async def test_proximity_quality_low_exact_ratio_without_wrong_start_is_partial(
     assert signal["wrong_start_rows"] == 0
     assert signal["exact_link_ratio"] == pytest.approx(0.5)
     assert signal["status"] == "round_linkage_partial"
+    assert "SIGNAL_ROUND_LINKAGE_PARTIAL" in {w["code"] for w in payload["warnings"]}
 
 
 @pytest.mark.asyncio

@@ -626,11 +626,21 @@ def _build_warnings(
                     f"{key} has fewer rows than the minimum expected for the selected scope.",
                 )
             )
+        elif status == "wrong_round_linkage":
+            warnings.append(
+                _warning(
+                    "SIGNAL_WRONG_ROUND_LINKAGE",
+                    f"{key} has rows linked to the WRONG round (round_start_unix "
+                    "mismatch) in the selected scope, not just missing linkage.",
+                )
+            )
         elif status == "round_linkage_partial":
             warnings.append(
                 _warning(
                     "SIGNAL_ROUND_LINKAGE_PARTIAL",
-                    f"{key} has rows without round_id linkage in the selected scope.",
+                    f"{key} has fewer than {int(_EXACT_LINK_RATIO_THRESHOLD * 100)}% of rows "
+                    "with a confirmed exact-round link (unlinked or unverifiable "
+                    "round_id) in the selected scope.",
                 )
             )
 
