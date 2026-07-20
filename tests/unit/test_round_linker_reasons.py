@@ -117,15 +117,13 @@ async def test_resolve_round_id_exact_unix_match_beats_closest():
 
 
 @pytest.mark.asyncio
-async def test_resolve_round_id_tied_candidates_currently_picks_first_arbitrarily():
-    """L2 lock-in of the CURRENT gap (Codex L3 target, not desired
-    behaviour): when two candidates are EQUALLY close to target_dt — a tie,
-    neither an exact round_start_unix match — the nearest-neighbour loop's
-    strict `<` comparison means the FIRST-iterated candidate silently wins.
-    No ambiguity is signalled anywhere in `diag`. This is the same class of
-    "guessing" the exact-unix-match short-circuit above was built to avoid
-    for the exact-match case; a genuine tie in the fuzzy fallback has no
-    equivalent protection yet."""
+async def test_resolve_round_id_tied_candidates_defers_instead_of_guessing():
+    """Codex §18/L3: when two candidates are EQUALLY close to target_dt — a
+    tie, neither an exact round_start_unix match — the matcher must defer
+    (return None) rather than silently pick whichever row happened to be
+    iterated first. Same "never guess" principle the exact-unix-match
+    short-circuit above already applies to the unambiguous case, now
+    extended to genuine ties in the fuzzy fallback."""
     target_unix = 1776802310
     target_dt = datetime.fromtimestamp(target_unix)
     before_unix = target_unix - 100
@@ -143,9 +141,57 @@ async def test_resolve_round_id_tied_candidates_currently_picks_first_arbitraril
         target_dt=target_dt, round_date="2026-04-21", window_minutes=45,
     )
 
-    assert round_id == 111, "first-iterated candidate silently wins the tie today"
-    assert diag["reason_code"] == "resolved"
+    assert round_id is None, "a genuine tie must defer, never guess"
+    assert diag["reason_code"] == "ambiguous_tie"
     assert diag["best_diff_seconds"] == 100
+
+
+@pytest.mark.asyncio
+async def test_resolve_round_id_three_way_tie_defers_too():
+    """Tie-detection must generalize beyond exactly two candidates."""
+    target_unix = 1776802310
+    target_dt = datetime.fromtimestamp(target_unix)
+    offsets = [-100, 100, -100]  # two candidates share the SAME diff as row 0
+    rows = []
+    for i, off in enumerate(offsets):
+        u = target_unix + off
+        dt = datetime.fromtimestamp(u)
+        rows.append((100 + i, "2026-04-21", dt.strftime("%H%M%S"), None, u))
+    db = _FakeDB(rows_with_date=rows, rows_without_date=rows)
+
+    round_id, diag = await resolve_round_id_with_reason(
+        db, "te_escape2", 1,
+        target_dt=target_dt, round_date="2026-04-21", window_minutes=45,
+    )
+
+    assert round_id is None
+    assert diag["reason_code"] == "ambiguous_tie"
+
+
+@pytest.mark.asyncio
+async def test_resolve_round_id_near_tie_not_exactly_equal_still_resolves():
+    """Only an EXACT diff tie defers — two candidates merely close together
+    (different diffs) must still resolve to the genuinely closer one."""
+    target_unix = 1776802310
+    target_dt = datetime.fromtimestamp(target_unix)
+    closer_unix = target_unix - 50
+    farther_unix = target_unix - 60
+    closer_dt = datetime.fromtimestamp(closer_unix)
+    farther_dt = datetime.fromtimestamp(farther_unix)
+    rows = [
+        (111, "2026-04-21", farther_dt.strftime("%H%M%S"), None, farther_unix),
+        (222, "2026-04-21", closer_dt.strftime("%H%M%S"), None, closer_unix),
+    ]
+    db = _FakeDB(rows_with_date=rows, rows_without_date=rows)
+
+    round_id, diag = await resolve_round_id_with_reason(
+        db, "te_escape2", 1,
+        target_dt=target_dt, round_date="2026-04-21", window_minutes=45,
+    )
+
+    assert round_id == 222
+    assert diag["reason_code"] == "resolved"
+    assert diag["best_diff_seconds"] == 50
 
 
 @pytest.mark.asyncio

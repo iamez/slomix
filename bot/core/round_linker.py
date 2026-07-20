@@ -347,10 +347,16 @@ async def resolve_round_id_with_reason(
                         )
                         return round_id, diag
 
-    best_id = None
-    best_diff = timedelta(days=1)
     max_diff = timedelta(minutes=window_minutes)
     parsed_diffs_seconds = []
+    # In-window candidates as (round_id, diff) — collected in full rather
+    # than tracked as a running best, so a TIE (two candidates equally
+    # close, neither an exact round_start_unix match — that case already
+    # short-circuited above) can be detected after the loop instead of
+    # silently keeping whichever row happened to be iterated first (Codex
+    # §18/L3 — the same "never guess" principle the exact-match
+    # short-circuit above already applies to the unambiguous case).
+    in_window: list[tuple[int, timedelta]] = []
     diag["candidate_count"] = len(rows)
 
     for row in rows:
@@ -410,13 +416,25 @@ async def resolve_round_id_with_reason(
         diag["parsed_candidate_count"] += 1
         diff = abs(candidate_dt - target_dt)
         parsed_diffs_seconds.append(diff.total_seconds())
-        if diff <= max_diff and diff < best_diff:
-            best_diff = diff
-            best_id = round_id
+        if diff <= max_diff:
+            in_window.append((round_id, diff))
 
-    if best_id is not None:
+    if in_window:
+        min_diff = min(diff for _, diff in in_window)
+        tied = [rid for rid, diff in in_window if diff == min_diff]
+        if len(tied) > 1:
+            diag["reason_code"] = "ambiguous_tie"
+            diag["best_diff_seconds"] = int(min_diff.total_seconds())
+            warn(
+                "round_linker: reason=ambiguous_tie map=%s rn=%d date=%s "
+                "(%d candidates tied at %ds — deferring rather than guessing)",
+                map_name, round_number, round_date, len(tied), diag["best_diff_seconds"],
+            )
+            return None, diag
+
+        best_id = tied[0]
         diag["reason_code"] = "resolved"
-        diag["best_diff_seconds"] = int(best_diff.total_seconds())
+        diag["best_diff_seconds"] = int(min_diff.total_seconds())
         logger.debug(
             "round_linker: reason=resolved map=%s rn=%d round_id=%d diff=%ds candidates=%d",
             map_name, round_number, best_id, diag["best_diff_seconds"], diag["candidate_count"],
