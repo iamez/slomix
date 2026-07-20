@@ -9,6 +9,8 @@ and that params/placeholders follow the bot's `?` convention.
 """
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from bot.services.linkage_inventory_service import (
@@ -145,6 +147,24 @@ async def test_per_table_query_failure_does_not_kill_whole_report():
 
 
 @pytest.mark.asyncio
+async def test_unknown_table_rejected_before_query():
+    """`table` is f-string interpolated into raw SQL — a caller (not just
+    the CLI script) passing an unknown table must be rejected BEFORE any
+    query runs, not merely filtered by the script layer (Copilot PR #532
+    finding: SQL-injection risk if build_linkage_inventory() itself trusts
+    the caller)."""
+    db = _FakeDB()
+    report = await build_linkage_inventory(
+        db, tables=("combat_engagement", "players; DROP TABLE rounds --"))
+
+    assert report["tables"]["combat_engagement"]["status"] == "ok"
+    bad_entry = report["tables"]["players; DROP TABLE rounds --"]
+    assert bad_entry == {"status": "error", "error": "unknown_table"}
+    # no query was ever issued for the rejected table
+    assert all("DROP" not in q.upper() for q, _ in db.calls)
+
+
+@pytest.mark.asyncio
 async def test_tables_arg_restricts_scope():
     db = _FakeDB()
     report = await build_linkage_inventory(db, tables=("proximity_shot_fired",))
@@ -186,15 +206,19 @@ async def test_no_date_range_omits_date_params():
 @pytest.mark.asyncio
 async def test_queries_are_select_only_no_writes():
     """This module is read-only inventory prep — pin that no query contains
-    a mutating keyword, so a future edit can't sneak a write in here."""
+    a mutating keyword, so a future edit can't sneak a write in here.
+
+    Tokenizes on any non-word boundary (not just spaces) so a trailing
+    newline/tab after the keyword — or a CREATE — can't slip past the
+    guard (Copilot PR #532 finding)."""
     db = _FakeDB()
     await build_linkage_inventory(db, tables=("combat_engagement",))
 
+    forbidden_tokens = {"INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "TRUNCATE", "CREATE"}
     for q, _ in db.calls:
-        upper = q.upper()
-        assert "SELECT" in upper
-        for forbidden in ("INSERT ", "UPDATE ", "DELETE ", "DROP ", "ALTER ", "TRUNCATE "):
-            assert forbidden not in upper
+        tokens = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", q.upper()))
+        assert "SELECT" in tokens
+        assert not (tokens & forbidden_tokens)
 
 
 @pytest.mark.asyncio

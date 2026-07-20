@@ -196,6 +196,13 @@ async def build_linkage_inventory(
     }
 
     for table in tables:
+        if table not in LINKAGE_INVENTORY_TABLES:
+            # `table` is f-string interpolated into raw SQL below — an
+            # allowlist check here (not just at the CLI layer) is the only
+            # thing standing between a future caller passing untrusted
+            # input and SQL injection (Copilot PR #532 finding).
+            report["tables"][table] = {"status": "error", "error": "unknown_table"}
+            continue
         try:
             by_date = await _counts_by_date(db, table, since_date, until_date)
             samples = await _sample_rows(db, table, since_date, until_date, sample_limit)
