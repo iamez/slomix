@@ -760,27 +760,35 @@ async def get_proximity_weapon_accuracy(
     """Weapon accuracy leaderboard or per-player breakdown."""
     safe_limit = max(1, min(limit, 50))
     try:
-        clauses = ["shots_fired >= 10"]
-        params: list = []
-
-        if player_guid:
-            params.append(player_guid.strip())
-            clauses.append(f"player_guid = ${len(params)}")
+        # Shared scope (map_name + range_days) — both the leaderboard AND
+        # the per-weapon breakdown below must respect it. Before this fix
+        # the breakdown query only filtered on player_guid, so a
+        # map_name/range_days-scoped request showed an ALL-TIME/ALL-MAP
+        # per-weapon breakdown next to a correctly-scoped leaderboard in
+        # the SAME response (Codex §17 PX-2).
+        scope_clauses: list[str] = []
+        scope_params: list = []
         if map_name:
-            params.append(map_name.strip())
-            clauses.append(f"map_name = ${len(params)}")
-
+            scope_params.append(map_name.strip())
+            scope_clauses.append(f"map_name = ${len(scope_params)}")
         # Audit P8 + migration 043: previously `range_days` was accepted
         # but never applied to the query — the endpoint returned all-time
         # rows. Filter on `session_date` (play time) with created_at
         # fallback for rows whose re-linker hasn't populated round_id yet.
-        params.append(range_days)
-        clauses.append(
-            "(session_date >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day' "
-            "OR (session_date IS NULL AND created_at >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day'))"
+        scope_params.append(range_days)
+        scope_clauses.append(
+            "(session_date >= CURRENT_DATE - $" + str(len(scope_params)) + " * INTERVAL '1 day' "
+            "OR (session_date IS NULL AND created_at >= CURRENT_DATE - $" + str(len(scope_params)) + " * INTERVAL '1 day'))"
         )
 
-        where = "WHERE " + " AND ".join(clauses)
+        leader_clauses = list(scope_clauses)
+        leader_params = list(scope_params)
+        if player_guid:
+            leader_params.append(player_guid.strip())
+            leader_clauses.append(f"player_guid = ${len(leader_params)}")
+        leader_clauses.append("shots_fired >= 10")
+
+        where = "WHERE " + " AND ".join(leader_clauses)
 
         rows = await db.fetch_all(
             f"""
@@ -793,23 +801,33 @@ async def get_proximity_weapon_accuracy(
             FROM proximity_weapon_accuracy {where}
             GROUP BY player_guid
             ORDER BY accuracy DESC
-            LIMIT ${len(params) + 1}
+            LIMIT ${len(leader_params) + 1}
             """,
-            tuple(params) + (safe_limit,),
+            tuple(leader_params) + (safe_limit,),
         )
 
-        # Per-weapon breakdown (if player_guid specified)
+        # Per-weapon breakdown (if player_guid specified) — same map_name/
+        # range_days scope as the leaderboard above, just without the
+        # shots_fired >= 10 sample-size floor (a lightly-used weapon for an
+        # already-selected player is still worth showing).
         weapon_breakdown = []
         if player_guid:
+            breakdown_params = list(scope_params)
+            breakdown_params.append(player_guid.strip())
+            breakdown_clauses = [
+                *scope_clauses,
+                f"player_guid = ${len(breakdown_params)}",
+                "shots_fired > 0",
+            ]
             wrows = await db.fetch_all(
-                """
+                f"""
                 SELECT weapon_id, SUM(shots_fired), SUM(hits), SUM(kills), SUM(headshots),
                        ROUND((SUM(hits)::numeric / NULLIF(SUM(shots_fired), 0)) * 100, 1)
                 FROM proximity_weapon_accuracy
-                WHERE player_guid = $1 AND shots_fired > 0
+                WHERE {" AND ".join(breakdown_clauses)}
                 GROUP BY weapon_id ORDER BY SUM(kills) DESC
                 """,
-                (player_guid.strip(),),
+                tuple(breakdown_params),
             )
             weapon_breakdown = [
                 {

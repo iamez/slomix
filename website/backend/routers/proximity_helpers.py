@@ -81,6 +81,32 @@ class ProximityQueryBuilder:
             self.where_parts.append(f"{column} = ${len(self.params)}")  # nosec B608
         return self
 
+    def with_round(
+        self, round_number: int | None, round_start_unix: int | None
+    ) -> "ProximityQueryBuilder":
+        """Add exact round_number / round_start_unix filters when provided.
+
+        Same semantics as _build_proximity_where_clause's round scoping
+        (round_number/round_start_unix < 0 rejected; round_start_unix=0
+        treated as "not provided") so an endpoint's exact-round param
+        behaves identically regardless of which of the two builders it
+        happens to use (Codex §16/§17 PX-2 — several endpoints using THIS
+        builder had no round_number/round_start_unix params at all, so a
+        caller's exact-round request was silently ignored).
+        """
+        if round_number is not None:
+            if round_number < 0:
+                raise HTTPException(status_code=400, detail="round_number must be >= 0")
+            self.params.append(int(round_number))
+            self.where_parts.append(f"round_number = ${len(self.params)}")
+        if round_start_unix is not None:
+            if round_start_unix < 0:
+                raise HTTPException(status_code=400, detail="round_start_unix must be >= 0")
+            if int(round_start_unix) > 0:
+                self.params.append(int(round_start_unix))
+                self.where_parts.append(f"round_start_unix = ${len(self.params)}")
+        return self
+
     def with_raw(self, clause: str, *values: Any) -> "ProximityQueryBuilder":
         """Append a raw WHERE clause whose ``$1,$2,...`` placeholders are
         renumbered to continue from the builder's current param count.
