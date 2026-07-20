@@ -38,11 +38,25 @@ def _parse_args():
         default=0.20,
         help="Threshold for unlinked lua_round_teams ratio (0.0-1.0).",
     )
-    parser.add_argument("--max-match-id-mismatch", type=int, default=0)
+    parser.add_argument(
+        "--max-wrong-start-lua",
+        type=int,
+        default=0,
+        help="Threshold for lua_round_teams rows linked to the WRONG round "
+             "(round_start_unix disagrees with the linked round's own "
+             "round_start_unix — the real mislink signal, Codex §18.5).",
+    )
     parser.add_argument("--max-map-mismatch", type=int, default=0)
     parser.add_argument("--max-round-number-mismatch", type=int, default=0)
     parser.add_argument("--max-duplicate-links", type=int, default=0)
-    parser.add_argument("--max-correlation-mismatch", type=int, default=0)
+    parser.add_argument(
+        "--max-correlation-mismatch",
+        type=int,
+        default=0,
+        help="Threshold for round_correlations rows whose map_name disagrees "
+             "with the linked round's map_name (match_id-equality dropped, "
+             "Codex §18.4 — it compared two independently-generated IDs).",
+    )
     parser.add_argument("--max-complete-missing-core", type=int, default=0)
     parser.add_argument(
         "--fail-on-breach",
@@ -63,11 +77,11 @@ async def _run() -> int:
             sample_limit=args.sample_limit,
             thresholds={
                 "max_unlinked_lua_ratio": args.max_unlinked_lua_ratio,
-                "max_match_id_mismatch_rows": args.max_match_id_mismatch,
+                "max_wrong_start_lua_rows": args.max_wrong_start_lua,
                 "max_map_name_mismatch_rows": args.max_map_mismatch,
                 "max_round_number_mismatch_rows": args.max_round_number_mismatch,
                 "max_duplicate_lua_round_links": args.max_duplicate_links,
-                "max_correlation_round_mismatch_rows": args.max_correlation_mismatch,
+                "max_correlation_map_mismatch_rows": args.max_correlation_mismatch,
                 "max_complete_missing_core_rows": args.max_complete_missing_core,
             },
         )
