@@ -90,8 +90,14 @@ class _LoadersMixin:
         result = {}
         for r in (rows or []):
             key = round_ctx_key(r[3], r[6], r[4])
+            # score=0 is a legitimate "no spawn-timing bonus" value, not a
+            # missing one — `r[2] or 0.5` silently promoted it to the 0.5
+            # neutral-default score, inflating spawn_mult for kills that
+            # should get none at all (Codex SS-E). Only a genuine NULL
+            # (unlinked round, missing row) falls back to 0.5.
+            score = 0.5 if r[2] is None else float(r[2])
             result.setdefault(key, []).append(
-                (r[0], r[1], float(r[2] or 0.5), float(r[5] or 0)))
+                (r[0], r[1], score, float(r[5] or 0)))
         return result
 
     async def _load_victim_classes(self, session_date):

@@ -15,6 +15,7 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
+from website.backend.routers.storytelling_router import get_kis_formula
 from website.backend.services.storytelling.kis import FORMULA_VERSION
 from website.backend.services.storytelling.service import StorytellingService
 
@@ -112,3 +113,15 @@ async def test_missing_cache_timestamp_forces_recompute():
     result = await StorytellingService(db=db).compute_session_kis(SD)
 
     assert result["status"] != "cached"
+
+
+@pytest.mark.asyncio
+async def test_public_formula_endpoint_reports_same_version_used_for_cache():
+    """`/storytelling/formula` (transparency endpoint) must report the SAME
+    `version` string as `FORMULA_VERSION` — the identifier actually stored
+    in `storytelling_kill_impact.formula_version` and compared for cache
+    invalidation. Before Codex SS-E this was a disconnected hardcoded
+    "1.0" that could drift from what was actually computed."""
+    result = await get_kis_formula()
+
+    assert result["version"] == FORMULA_VERSION

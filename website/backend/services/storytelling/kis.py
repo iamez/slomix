@@ -39,7 +39,16 @@ from .base import (
 # _compute_session_kis_locked's cache-check stops serving stale rows
 # scored under the old formula (migration 060 adds the storage column;
 # codex, PR #478 follow-up audit finding #9).
-FORMULA_VERSION = "kis-v2"
+#
+# v2 -> v3 (Codex SS-E): the graduated REINF_MULT_TIERS reinf-multiplier
+# (loaders.py's docstring already called this "KIS v3" — the code just
+# never bumped the version string when it shipped) plus the spawn=0
+# scoring fix (_load_spawn_timings previously treated a legitimate 0
+# spawn_timing_score as missing data via `r[2] or 0.5`, inflating
+# spawn_mult for kills that should get no bonus at all). Both are real
+# scoring changes that were silently served from stale pre-fix cache
+# rows forever — this string never having moved off "kis-v2" IS that bug.
+FORMULA_VERSION = "kis-v3"
 
 
 def _scope_row_filter(

@@ -250,6 +250,20 @@ async def test_load_spawn_timings_score_null_defaults_to_half(host, db):
 
 
 @pytest.mark.asyncio
+async def test_load_spawn_timings_score_zero_preserved_not_promoted_to_half(host, db):
+    """spawn_timing_score=0 is a legitimate 'no bonus' value — it must stay
+    0, NOT be promoted to the 0.5 neutral default (Codex SS-E: `r[2] or 0.5`
+    treated falsy-zero as missing, inflating spawn_mult for kills that
+    should get none at all). Only a genuine NULL falls back to 0.5."""
+    db.fetch_all = AsyncMock(return_value=[
+        ("k", 5.0, 0, 1700000000, 1, 30.0, MAP),
+    ])
+    out = await host._load_spawn_timings("d")
+    entry = out[(1700000000, MAP, 1)][0]
+    assert entry[2] == 0.0
+
+
+@pytest.mark.asyncio
 async def test_load_spawn_timings_victim_reinf_null_defaults_to_zero(host, db):
     """victim_reinf=NULL → 0.0 (no spawn-tier bonus when unknown)."""
     db.fetch_all = AsyncMock(return_value=[
