@@ -22,10 +22,16 @@ class _ComplianceFakeDb:
     """Scripted DB. Captures all queries to assert no compute path runs."""
 
     def __init__(self, *, kills_total=100, kis_rows=100, rounds_total=10,
-                 rounds_correlated=10, kills_with_round=100, distinct_rounds=10):
+                 rounds_correlated=10, kills_with_round=100, distinct_rounds=10,
+                 comparable_link_rows=None, exact_link_rows=None):
         self.kills_row = (kills_total, kills_with_round, distinct_rounds, 5)
         self.kis_row = (kis_rows, 5, 1234.56)
         self.rounds_row = (rounds_total, rounds_correlated)
+        # Default: every comparable row is an exact link (healthy) unless a
+        # test overrides it to exercise the wrong-round-linkage path.
+        comparable = kills_with_round if comparable_link_rows is None else comparable_link_rows
+        exact = comparable if exact_link_rows is None else exact_link_rows
+        self.wrong_link_row = (comparable, exact)
         self.queries: list[str] = []
 
     async def fetch_one(self, query, params=None):
@@ -37,6 +43,8 @@ class _ComplianceFakeDb:
             return self.kis_row
         if "FROM proximity_kill_outcome pko" in q and "rounds_correlated" in q:
             return self.rounds_row
+        if "comparable_rows" in q and "exact_rows" in q:
+            return self.wrong_link_row
         return None
 
     async def fetch_all(self, query, params=None):
@@ -104,6 +112,62 @@ async def test_endpoint_rejects_invalid_session_date():
     with pytest.raises(HTTPException) as exc:
         await get_storytelling_completeness("not-a-date", db)
     assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_endpoint_flags_wrong_round_linkage_distinct_from_missing_link():
+    """Codex §18 / L1 methodology: a non-NULL round_id only proves a kill
+    points at SOME round, not the CORRECT one. 100/100 kills have a
+    round_id (linkage_ratio healthy), but 5 of those point at the WRONG
+    round (round_start_unix mismatch) — must surface as its own warning
+    and degrade status, not be hidden by a healthy linkage_ratio."""
+    db = _ComplianceFakeDb(
+        kills_total=100, kis_rows=100, kills_with_round=100,
+        comparable_link_rows=100, exact_link_rows=95,
+    )
+    result = await get_storytelling_completeness("2026-04-21", db)
+
+    assert result["wrong_round_kills"] == 5
+    assert result["status"] == "degraded"
+    wrong_link_warnings = [
+        w for w in result["warnings"] if "NAPAČNO rundo" in w["message"]
+    ]
+    assert len(wrong_link_warnings) == 1
+
+
+@pytest.mark.asyncio
+async def test_endpoint_wrong_link_query_excludes_zero_round_start_unix():
+    """Both proximity_kill_outcome.round_start_unix and rounds.round_start_unix
+    default to 0 (not NULL) for legacy/unset rows — an IS NOT NULL-only check
+    would count a 0-vs-0 pair as a "comparable, exact" match, when neither
+    side ever recorded a real timestamp. The query must require > 0 on both
+    sides (Copilot review on #525)."""
+    db = _ComplianceFakeDb()
+    await get_storytelling_completeness("2026-04-21", db)
+
+    wrong_link_queries = [q for q in db.queries if "comparable_rows" in q and "exact_rows" in q]
+    assert len(wrong_link_queries) == 1
+    q = wrong_link_queries[0]
+    assert "pko.round_start_unix > 0" in q
+    assert "r.round_start_unix > 0" in q
+
+
+@pytest.mark.asyncio
+async def test_endpoint_status_ok_when_fully_healthy():
+    db = _ComplianceFakeDb(kills_total=100, kis_rows=100, kills_with_round=100)
+    result = await get_storytelling_completeness("2026-04-21", db)
+
+    assert result["status"] == "ok"
+    assert result["wrong_round_kills"] == 0
+    assert result["unlinked_kills"] == 0
+
+
+@pytest.mark.asyncio
+async def test_endpoint_status_no_data_when_no_kills():
+    db = _ComplianceFakeDb(kills_total=0, kis_rows=0, kills_with_round=0)
+    result = await get_storytelling_completeness("2026-04-21", db)
+
+    assert result["status"] == "no_data"
 
 
 @pytest.mark.asyncio

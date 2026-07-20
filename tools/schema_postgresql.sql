@@ -8792,11 +8792,18 @@ CREATE INDEX IF NOT EXISTS idx_parimutuel_bets_market ON parimutuel_bets (market
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- Drift closure (IMP-001, caught by tests/integration/test_fresh_bootstrap_parity.py):
--- objects that migrations 030/051/053/054/056/059/060 create but earlier
--- regenerations of this dump missed. A fresh bootstrap `--baseline`s the
--- ledger against THIS file, so every migration effect must exist here.
+-- objects that migrations 030/051/053/054/056/059/060/063 create but
+-- earlier regenerations of this dump missed. A fresh bootstrap `--baseline`s
+-- the ledger against THIS file, so every migration effect must exist here.
 -- All statements are idempotent (IF NOT EXISTS) — safe on populated DBs.
 -- ════════════════════════════════════════════════════════════════════════════
+
+-- 063: KIS gaming_session_id column (Codex SS-B)
+ALTER TABLE storytelling_kill_impact
+    ADD COLUMN IF NOT EXISTS gaming_session_id BIGINT NULL;
+CREATE INDEX IF NOT EXISTS idx_kis_gaming_session_id
+    ON storytelling_kill_impact (gaming_session_id)
+    WHERE gaming_session_id IS NOT NULL;
 
 -- 054: server-side KIS shadow audit
 CREATE TABLE IF NOT EXISTS storytelling_kis_shadow_audit (
