@@ -95,6 +95,16 @@ async def resolve_story_scope(
     real, safe, immediately useful — without claiming the deeper
     multi-date correctness fix that hasn't been done here.
     """
+    # Validate "exactly one of" BEFORE parsing session_date: a malformed
+    # date supplied alongside gaming_session_id must still be the 422 the
+    # resolver would raise (both provided), not a 400 from date-parsing
+    # running first and hiding the real contract violation — same ordering
+    # bug Copilot caught on BOX score (#524), now here too.
+    if (session_date is None) == (gaming_session_id is None):
+        raise HTTPException(
+            status_code=422,
+            detail="Exactly one of gaming_session_id or session_date is required.",
+        )
     if session_date is not None:
         session_date = str(_parse_date(session_date))
     return await resolve_gaming_session_scope(

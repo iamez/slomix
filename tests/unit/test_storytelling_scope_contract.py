@@ -11,7 +11,7 @@ this whole program exists to close.
 
 Deliberately NOT covered here: the underlying per-panel SQL still queries
 a SINGLE representative date (scope.dates[0]), not the full multi-date
-scope compute_session_kis_for_gsid (SS-B) uses — seeresolve_story_scope's
+scope compute_session_kis_for_gsid (SS-B) uses — see resolve_story_scope's
 docstring. This test only proves the ROUTE CONTRACT (gsid-addressable,
 ambiguous-date-safe, scope metadata present), not per-panel multi-date
 data completeness.
@@ -174,6 +174,21 @@ async def test_panel_both_params_is_422():
         resp = await client.get(
             "/api/storytelling/momentum",
             params={"session_date": "2026-07-18", "gaming_session_id": 137},
+        )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_panel_both_params_with_malformed_date_is_422_not_400():
+    """The 'exactly one of' check must run BEFORE date parsing, so a
+    malformed date alongside gaming_session_id still surfaces as the real
+    contract violation (422), not a 400 that masks it (Copilot review)."""
+    db = _ContractFakeDB()
+    transport = httpx.ASGITransport(app=_build_app(db))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        resp = await client.get(
+            "/api/storytelling/momentum",
+            params={"session_date": "not-a-date", "gaming_session_id": 137},
         )
     assert resp.status_code == 422
 
