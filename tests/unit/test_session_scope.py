@@ -12,6 +12,8 @@ from fastapi import HTTPException
 
 from website.backend.services.session_scope import (
     AmbiguousSessionDateError,
+    ScopeBackendUnsupportedError,
+    list_recent_scopes,
     resolve_gaming_session_scope,
 )
 
@@ -177,6 +179,22 @@ async def test_neither_param_supplied_is_422():
         await resolve_gaming_session_scope(db)
 
     assert exc_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_list_recent_scopes_raises_503_on_sqlite_backend():
+    """STRING_AGG is PostgreSQL-only — SQLite (local dev fallback, per
+    CLAUDE.md) must fail loudly, never silently return an empty/wrong
+    session list (D4: degraded, never a silent fallback)."""
+    db = FakeScopeDB()
+    db.db_path = "/tmp/local-dev.sqlite3"  # duck-typed SQLite marker
+
+    with pytest.raises(ScopeBackendUnsupportedError) as exc_info:
+        await list_recent_scopes(db)
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail["code"] == "SCOPE_BACKEND_UNSUPPORTED"
+    assert db.calls == []  # never even attempted the STRING_AGG query
 
 
 def test_scope_to_metadata_shape():

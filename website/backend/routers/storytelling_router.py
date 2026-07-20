@@ -615,6 +615,16 @@ async def get_box_score(
     calendar date. An ambiguous date now returns 409 with the candidate
     sessions instead of a wrong/incomplete score.
     """
+    # Validate "exactly one of" BEFORE parsing session_date: a malformed date
+    # supplied alongside gaming_session_id must still be the 422 the resolver
+    # would raise (both provided), not a 400 from date-parsing running first
+    # and hiding the real contract violation (Copilot review on #524).
+    if (session_date is None) == (gaming_session_id is None):
+        raise HTTPException(
+            status_code=422,
+            detail="Exactly one of gaming_session_id or session_date is required.",
+        )
+
     if session_date is not None:
         session_date = str(_parse_date(session_date))
 

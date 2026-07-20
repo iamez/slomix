@@ -33,8 +33,12 @@ class FakeBoxDB:
         # gsid -> list of (id, map_name, round_number, winner_team, defender_team,
         #                   round_outcome, actual_duration_seconds, time_to_beat_seconds)
         self.box_rounds_by_gsid: dict[int, list[tuple]] = {}
-        # gsid -> list of team_name
-        self.team_names_by_gsid: dict[int, list[str]] = {}
+        # gsid -> list of (team_name,) rows — BOXScoringService._get_team_names
+        # does `r[0] for r in rows`, matching the real adapter's row shape
+        # (a bare list[str] here would silently index into each STRING
+        # instead, e.g. "Alpha"[0] == "A" — a stub/adapter divergence
+        # Copilot review flagged on #524).
+        self.team_names_by_gsid: dict[int, list[tuple[str]]] = {}
         # rows for list_recent_scopes
         self.recent_scope_rows: list[tuple] = []
 
@@ -90,7 +94,7 @@ async def test_box_score_by_gaming_session_id_embeds_scope_metadata():
         (1, "supply", 1, 1, 2, "Fullhold", 300, 0),
         (2, "supply", 2, 2, 1, None, 250, 300),
     )
-    db.team_names_by_gsid[137] = ["Alpha", "Beta"]
+    db.team_names_by_gsid[137] = [("Alpha",), ("Beta",)]
 
     transport = httpx.ASGITransport(app=_build_app(db))
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
@@ -99,6 +103,11 @@ async def test_box_score_by_gaming_session_id_embeds_scope_metadata():
     assert resp.status_code == 200
     body = resp.json()
     assert body["gaming_session_id"] == 137
+    # Guards against the FakeBoxDB row-shape regression Copilot flagged: a
+    # plain list[str] here would make _get_team_names' `r[0] for r in rows`
+    # index into each STRING instead ("Alpha"[0] == "A").
+    assert body["alpha_team"] == "Alpha"
+    assert body["beta_team"] == "Beta"
     assert body["scope"] == {
         "kind": "gaming_session",
         "version": "gaming-session-v1",
@@ -121,7 +130,7 @@ async def test_box_score_by_unambiguous_session_date_matches_gsid_result():
         (1, "supply", 1, 1, 2, "Fullhold", 300, 0),
         (2, "supply", 2, 2, 1, None, 250, 300),
     )
-    db.team_names_by_gsid[137] = ["Alpha", "Beta"]
+    db.team_names_by_gsid[137] = [("Alpha",), ("Beta",)]
 
     transport = httpx.ASGITransport(app=_build_app(db))
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
@@ -193,6 +202,24 @@ async def test_box_score_neither_param_supplied_is_422():
 
 
 @pytest.mark.asyncio
+async def test_box_score_both_params_with_malformed_date_is_422_not_400():
+    """Copilot review on #524: the 'exactly one of' check must run BEFORE
+    date parsing, so a malformed date alongside gaming_session_id still
+    surfaces as the real contract violation (422 - both provided), instead
+    of a 400 from date-parsing that masks it."""
+    db = FakeBoxDB()
+
+    transport = httpx.ASGITransport(app=_build_app(db))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        resp = await client.get(
+            "/api/storytelling/box-score",
+            params={"gaming_session_id": 137, "session_date": "not-a-date"},
+        )
+
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_box_score_invalid_date_format_is_400_before_scope_resolution():
     db = FakeBoxDB()
 
@@ -248,3 +275,19 @@ async def test_storytelling_scopes_rejects_out_of_range_limit():
         resp = await client.get("/api/storytelling/scopes", params={"limit": 500})
 
     assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_storytelling_scopes_returns_503_on_sqlite_backend():
+    """Copilot review on #524: STRING_AGG is PostgreSQL-only. SQLite (the
+    local dev fallback) must fail loudly with 503, never silently return an
+    empty/wrong session list (D4 — degraded, never a silent fallback)."""
+    db = FakeBoxDB()
+    db.db_path = "/tmp/local-dev.sqlite3"  # duck-typed SQLite marker
+
+    transport = httpx.ASGITransport(app=_build_app(db))
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        resp = await client.get("/api/storytelling/scopes")
+
+    assert resp.status_code == 503
+    assert resp.json()["detail"]["code"] == "SCOPE_BACKEND_UNSUPPORTED"

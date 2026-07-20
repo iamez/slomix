@@ -66,6 +66,33 @@ class GamingSessionScope:
         }
 
 
+def _is_sqlite_adapter(db: DatabaseAdapter) -> bool:
+    """Duck-type check matching proximity_quality.py's existing convention —
+    the SQLite dev-fallback adapter class name starts with 'sqlite' and/or
+    carries a db_path attribute the PostgreSQL adapter never has."""
+    adapter_name = db.__class__.__name__.lower()
+    return adapter_name.startswith("sqlite") or hasattr(db, "db_path")
+
+
+class ScopeBackendUnsupportedError(HTTPException):
+    """Raised instead of letting a PostgreSQL-only query (STRING_AGG) hit
+    SQLite and crash with a raw 'no such function' error. Local SQLite mode
+    is a dev/tooling fallback (CLAUDE.md), not a production target — this
+    is an explicit, honest 503, not a silent empty-list fallback (D4)."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=503,
+            detail={
+                "code": "SCOPE_BACKEND_UNSUPPORTED",
+                "message": (
+                    "Gaming session scope listing requires PostgreSQL "
+                    "(STRING_AGG) and is unavailable in local SQLite mode."
+                ),
+            },
+        )
+
+
 class AmbiguousSessionDateError(HTTPException):
     """A date resolved to MORE THAN ONE gaming session — the caller must
     disambiguate (409), never get a silent `LIMIT 1` guess (§12: explicit
@@ -159,7 +186,12 @@ async def list_recent_scopes(db: DatabaseAdapter, *, limit: int = 30) -> list[di
     player_count/win-loss — a selector dropdown doesn't need them); reuses
     the identical round-validity gate so a session that appears in the
     selector is guaranteed resolvable by `resolve_gaming_session_scope`.
+
+    Raises ScopeBackendUnsupportedError(503) on SQLite — the STRING_AGG
+    aggregate below is PostgreSQL-only.
     """
+    if _is_sqlite_adapter(db):
+        raise ScopeBackendUnsupportedError()
     limit = max(1, min(int(limit), 200))
     rows = await db.fetch_all(
         f"""
