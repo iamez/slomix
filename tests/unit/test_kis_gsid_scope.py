@@ -47,6 +47,7 @@ class _GsidKisFakeDB:
     def __init__(self):
         self.executed_deletes: list[tuple] = []
         self.inserted_batches: list[tuple] = []
+        self.kills_query_text: str | None = None
         self.tx_entered = 0
 
     @asynccontextmanager
@@ -63,6 +64,7 @@ class _GsidKisFakeDB:
         if "FROM rounds" in q and "round_start_unix, map_name, round_number" in q:
             return SCOPE_ROUNDS
         if "FROM proximity_kill_outcome" in q:
+            self.kills_query_text = q
             return [KILL_A, KILL_B]
         if "FROM proximity_carrier_kill" in q:
             d = params[0]
@@ -98,6 +100,72 @@ async def test_compute_session_kis_for_gsid_merges_context_across_date_fragments
     assert by_killer["K2"][10] == pytest.approx(CARRIER_KILL_MULTIPLIER)
 
 
+class _SharedDateFakeDB:
+    """Two DIFFERENT gaming sessions (137 and 999) both play on DATE1 —
+    proximity_kill_outcome has no gaming_session_id column, only
+    session_date/round_start_unix/map_name/round_number, so a bare
+    session_date filter cannot tell the two sessions' kills apart."""
+
+    def __init__(self):
+        self.executed_deletes: list[tuple] = []
+        self.inserted_batches: list[tuple] = []
+        self.tx_entered = 0
+        # gsid 137 owns round_start_unix=1000 (supply); a DIFFERENT session
+        # (999, never resolved here) owns round_start_unix=5000 (goldrush)
+        # on the SAME calendar date.
+        self.scope_rounds = [(1000, "supply", 1, "2026-07-18")]
+        self.kill_mine = (1, DATE1, 1, 1000, "supply", "K1", "killer1", "V1", "victim1", "tapped_out", 5000)
+        self.kill_other_session = (
+            2, DATE1, 1, 5000, "goldrush", "K9", "killer9", "V9", "victim9", "tapped_out", 3000,
+        )
+
+    @asynccontextmanager
+    async def transaction(self):
+        self.tx_entered += 1
+        yield self
+
+    async def fetch_one(self, query, params=None):
+        return None
+
+    async def fetch_all(self, query, params=None):
+        q = " ".join(query.split())
+        if "FROM rounds" in q and "round_start_unix, map_name, round_number" in q:
+            return self.scope_rounds
+        if "FROM proximity_kill_outcome" in q:
+            # A REGRESSION back to `session_date = ANY(...)` would make this
+            # branch return BOTH kills (both share DATE1); a precise
+            # round-key filter must exclude the other session's kill.
+            if "session_date = any" in q.lower():
+                return [self.kill_mine, self.kill_other_session]
+            return [self.kill_mine]  # round-key filter correctly excludes kill_other_session
+        return []
+
+    async def execute(self, query, params=None):
+        q = " ".join(query.split())
+        if "DELETE FROM storytelling_kill_impact" in q:
+            self.executed_deletes.append(params)
+
+    async def executemany(self, query, params_list):
+        self.inserted_batches = list(params_list)
+
+
+@pytest.mark.asyncio
+async def test_compute_session_kis_for_gsid_excludes_other_session_sharing_same_date():
+    """The exact bug Copilot flagged on #525: two gaming sessions on the
+    same calendar date must not have their kills mixed by a gsid-scoped
+    compute for one of them."""
+    db = _SharedDateFakeDB()
+    svc = StorytellingService(db=db)
+
+    result = await svc.compute_session_kis_for_gsid(137, force=True)
+
+    assert result["kills_scored"] == 1
+    assert len(db.inserted_batches) == 1
+    assert db.inserted_batches[0][5] == "K1"  # killer_guid — only OUR session's kill
+    # The other session's kill (K9, round_start_unix=5000) must never appear.
+    assert all(row[5] != "K9" for row in db.inserted_batches)
+
+
 @pytest.mark.asyncio
 async def test_compute_session_kis_for_gsid_stamps_gaming_session_id_on_every_row():
     db = _GsidKisFakeDB()
@@ -111,15 +179,39 @@ async def test_compute_session_kis_for_gsid_stamps_gaming_session_id_on_every_ro
 
 
 @pytest.mark.asyncio
-async def test_compute_session_kis_for_gsid_deletes_across_every_date_fragment():
+async def test_compute_session_kis_for_gsid_deletes_by_precise_round_keys():
+    """The delete (and the kills fetch feeding it) must scope by the exact
+    round_start_unix/map_name/round_number triples this gsid's scope
+    contains — NOT by session_date, which another, unrelated gaming session
+    could share (Copilot review on #525: a bare date filter would wipe out
+    that other session's KIS rows too)."""
     db = _GsidKisFakeDB()
     svc = StorytellingService(db=db)
 
     await svc.compute_session_kis_for_gsid(137, force=True)
 
     assert len(db.executed_deletes) == 1
-    (dates_param,) = db.executed_deletes[0]
-    assert set(dates_param) == {DATE1, DATE2}
+    starts, maps, nums = db.executed_deletes[0]
+    assert set(starts) == {1000, 90000}
+    assert set(maps) == {"supply", "goldrush"}
+    assert set(nums) == {1}
+
+
+@pytest.mark.asyncio
+async def test_compute_session_kis_for_gsid_kills_query_filters_by_round_key_not_date():
+    """Locks in the actual SQL shape: the gsid-native path must filter kills
+    by the (round_start_unix, map_name, round_number) triple, never by a
+    bare `session_date = ANY(...)` — a regression back to date-only
+    filtering would silently reintroduce the cross-session mixing bug."""
+    db = _GsidKisFakeDB()
+    svc = StorytellingService(db=db)
+
+    await svc.compute_session_kis_for_gsid(137, force=True)
+
+    assert db.kills_query_text is not None
+    assert "round_start_unix, ko.map_name, ko.round_number) in" in db.kills_query_text.lower()
+    assert "unnest(" in db.kills_query_text.lower()
+    assert "session_date = any" not in db.kills_query_text.lower()
 
 
 @pytest.mark.asyncio

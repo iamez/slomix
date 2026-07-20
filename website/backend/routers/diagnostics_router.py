@@ -715,14 +715,20 @@ async def get_storytelling_completeness(
         # never re-linked) so comparing it against the linked round's own
         # round_start_unix catches the ~9% wrong-round-linkage class L1 found
         # that a bare "round_id IS NOT NULL" check misses entirely.
+        # Both columns default to 0 for legacy/unset rows (not NULL) — an
+        # IS NOT NULL check alone would count a 0-vs-0 pair as a "comparable,
+        # exact" match, when it actually means neither side ever recorded a
+        # real timestamp. Require > 0 on both sides (Copilot review on #525).
         wrong_link_row = await db.fetch_one(
             """
             SELECT
                 COUNT(*) FILTER (
-                    WHERE pko.round_id IS NOT NULL AND r.round_start_unix IS NOT NULL
+                    WHERE pko.round_id IS NOT NULL
+                        AND pko.round_start_unix > 0 AND r.round_start_unix > 0
                 ) AS comparable_rows,
                 COUNT(*) FILTER (
-                    WHERE pko.round_id IS NOT NULL AND r.round_start_unix IS NOT NULL
+                    WHERE pko.round_id IS NOT NULL
+                        AND pko.round_start_unix > 0 AND r.round_start_unix > 0
                         AND r.round_start_unix = pko.round_start_unix
                 ) AS exact_rows
             FROM proximity_kill_outcome pko

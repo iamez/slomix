@@ -136,6 +136,23 @@ async def test_endpoint_flags_wrong_round_linkage_distinct_from_missing_link():
 
 
 @pytest.mark.asyncio
+async def test_endpoint_wrong_link_query_excludes_zero_round_start_unix():
+    """Both proximity_kill_outcome.round_start_unix and rounds.round_start_unix
+    default to 0 (not NULL) for legacy/unset rows — an IS NOT NULL-only check
+    would count a 0-vs-0 pair as a "comparable, exact" match, when neither
+    side ever recorded a real timestamp. The query must require > 0 on both
+    sides (Copilot review on #525)."""
+    db = _ComplianceFakeDb()
+    await get_storytelling_completeness("2026-04-21", db)
+
+    wrong_link_queries = [q for q in db.queries if "comparable_rows" in q and "exact_rows" in q]
+    assert len(wrong_link_queries) == 1
+    q = wrong_link_queries[0]
+    assert "pko.round_start_unix > 0" in q
+    assert "r.round_start_unix > 0" in q
+
+
+@pytest.mark.asyncio
 async def test_endpoint_status_ok_when_fully_healthy():
     db = _ComplianceFakeDb(kills_total=100, kis_rows=100, kills_with_round=100)
     result = await get_storytelling_completeness("2026-04-21", db)

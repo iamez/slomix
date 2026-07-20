@@ -42,6 +42,40 @@ from .base import (
 FORMULA_VERSION = "kis-v2"
 
 
+def _scope_row_filter(
+    round_keys: tuple[tuple[int, str, int], ...] | None,
+    dates: tuple[date, ...],
+    prefix: str = "",
+) -> tuple[str, tuple]:
+    """SQL WHERE fragment + params scoping a query to this KIS compute.
+
+    With round_keys (gsid-native path): filters by the EXACT
+    (round_start_unix, map_name, round_number) triples the resolved
+    GamingSessionScope contains — precise even when another, unrelated
+    gaming session shares a calendar date with this one. A bare
+    session_date filter here would silently pull that OTHER session's
+    kills into this compute and stamp them with the wrong
+    gaming_session_id (Copilot review on #525).
+
+    Without round_keys (legacy session_date path): unchanged
+    `session_date = ANY($1)` — the pre-existing, still-imprecise-on-a-
+    shared-date behaviour of the two still-unconverted kill-impact
+    endpoints, deliberately left untouched by this PR (see
+    compute_session_kis's docstring).
+    """
+    col = f"{prefix}." if prefix else ""
+    if round_keys:
+        starts = [rk[0] for rk in round_keys]
+        maps = [rk[1] for rk in round_keys]
+        nums = [rk[2] for rk in round_keys]
+        clause = (
+            f"({col}round_start_unix, {col}map_name, {col}round_number) IN "
+            "(SELECT * FROM unnest($1::bigint[], $2::varchar[], $3::int[]))"
+        )
+        return clause, (starts, maps, nums)
+    return f"{col}session_date = ANY($1)", (list(dates),)
+
+
 def _graduated_reinf_mult(victim_reinf_seconds: float) -> float:
     """Look up the graduated reinf multiplier for the given wait in seconds.
 
@@ -93,20 +127,31 @@ class _KisMixin:
         dates = tuple(_to_date(d) for d in scope.dates)
         lock_key = f"gsid:{gaming_session_id}"
         async with _compute_locks.get(lock_key):
-            return await self._compute_kis_for_dates_locked(dates, gaming_session_id, force)
+            return await self._compute_kis_for_dates_locked(
+                dates, gaming_session_id, force, round_keys=scope.round_keys
+            )
 
     async def _compute_kis_for_dates_locked(
-        self, dates: tuple[date, ...], gaming_session_id: int | None, force: bool
+        self,
+        dates: tuple[date, ...],
+        gaming_session_id: int | None,
+        force: bool,
+        round_keys: tuple[tuple[int, str, int], ...] | None = None,
     ) -> dict:
         """Inner compute logic — must be called while holding the session lock.
 
         `dates` may be a single-element tuple (legacy session_date path,
-        gaming_session_id=None) or the full multi-date scope of a gaming
-        session (gsid-native path). `session_date = ANY($1)` with a
-        one-element array is equivalent to `session_date = $1` for the
-        legacy caller — no behaviour change for existing single-date use.
+        gaming_session_id=None, round_keys=None — filtering stays exactly
+        `session_date = ANY($1)`, unchanged) or the full multi-date scope of
+        a gaming session (gsid-native path, round_keys from the resolved
+        GamingSessionScope — filtering switches to the precise round-key
+        triple match _scope_row_filter builds, immune to another session
+        sharing a calendar date with this one).
         """
         date_list = list(dates)
+        row_filter, scope_params = _scope_row_filter(round_keys, dates)
+        ko_row_filter, _ = _scope_row_filter(round_keys, dates, prefix="ko")
+        fv_placeholder = f"${len(scope_params) + 1}"
         # Serve the cache only when it is BOTH current-formula AND fresh:
         # - formula_version guards against serving scores from an older
         #   formula after a version bump (#484).
@@ -119,23 +164,23 @@ class _KisMixin:
         if not force:
             existing = await self.db.fetch_one(
                 "SELECT COUNT(*), MAX(created_at) FROM storytelling_kill_impact "
-                "WHERE session_date = ANY($1) AND formula_version = $2",
-                (date_list, FORMULA_VERSION)
+                f"WHERE {row_filter} AND formula_version = {fv_placeholder}",  # nosec B608 - row_filter from _scope_row_filter, all values $N-bound
+                (*scope_params, FORMULA_VERSION)
             )
             if existing and existing[0] > 0:
                 kis_ts = existing[1]
                 ctx = await self.db.fetch_one(
                     "SELECT GREATEST("
-                    " (SELECT MAX(created_at) FROM proximity_kill_outcome          WHERE session_date=ANY($1)),"
-                    " (SELECT MAX(created_at) FROM proximity_combat_position       WHERE session_date=ANY($1)),"
-                    " (SELECT MAX(created_at) FROM proximity_spawn_timing          WHERE session_date=ANY($1)),"
-                    " (SELECT MAX(created_at) FROM proximity_team_push             WHERE session_date=ANY($1)),"
-                    " (SELECT MAX(created_at) FROM proximity_crossfire_opportunity WHERE session_date=ANY($1)),"
-                    " (SELECT MAX(created_at) FROM proximity_carrier_kill          WHERE session_date=ANY($1)),"
-                    " (SELECT MAX(created_at) FROM proximity_carrier_return        WHERE session_date=ANY($1)),"
-                    " (SELECT MAX(created_at) FROM proximity_reaction_metric       WHERE session_date=ANY($1))"
-                    ")",
-                    (date_list,)
+                    f" (SELECT MAX(created_at) FROM proximity_kill_outcome          WHERE {row_filter}),"
+                    f" (SELECT MAX(created_at) FROM proximity_combat_position       WHERE {row_filter}),"
+                    f" (SELECT MAX(created_at) FROM proximity_spawn_timing          WHERE {row_filter}),"
+                    f" (SELECT MAX(created_at) FROM proximity_team_push             WHERE {row_filter}),"
+                    f" (SELECT MAX(created_at) FROM proximity_crossfire_opportunity WHERE {row_filter}),"
+                    f" (SELECT MAX(created_at) FROM proximity_carrier_kill          WHERE {row_filter}),"
+                    f" (SELECT MAX(created_at) FROM proximity_carrier_return        WHERE {row_filter}),"
+                    f" (SELECT MAX(created_at) FROM proximity_reaction_metric       WHERE {row_filter})"
+                    ")",  # nosec B608 - row_filter from _scope_row_filter, all values $N-bound
+                    scope_params
                 )
                 ctx_ts = ctx[0] if ctx else None
                 # kis_ts should never be NULL when count>0, but guard anyway:
@@ -148,15 +193,15 @@ class _KisMixin:
                 )
 
         # 1. Get all kill outcomes for the session
-        kills = await self.db.fetch_all("""
+        kills = await self.db.fetch_all(f"""
             SELECT ko.id, ko.session_date, ko.round_number, ko.round_start_unix,
                    ko.map_name, ko.killer_guid, ko.killer_name,
                    ko.victim_guid, ko.victim_name,
                    ko.outcome, ko.kill_time
             FROM proximity_kill_outcome ko
-            WHERE ko.session_date = ANY($1)
+            WHERE {ko_row_filter}
             ORDER BY ko.round_start_unix, ko.kill_time
-        """, (date_list,))
+        """, scope_params)  # nosec B608 - ko_row_filter from _scope_row_filter, all values $N-bound
 
         if not kills:
             return {"status": "no_data", "kills_scored": 0}
@@ -187,9 +232,9 @@ class _KisMixin:
         tx = getattr(self.db, "transaction", None)
         if callable(tx):
             async with tx():
-                await self._store_scored_kills(date_list, gaming_session_id, scored)
+                await self._store_scored_kills(row_filter, scope_params, gaming_session_id, scored)
         else:  # SQLite dev adapter has no transaction context
-            await self._store_scored_kills(date_list, gaming_session_id, scored)
+            await self._store_scored_kills(row_filter, scope_params, gaming_session_id, scored)
 
         logger.info("KIS computed for dates=%s: %d kills scored", date_list, len(scored))
         return {"status": "computed", "kills_scored": len(scored)}
@@ -235,10 +280,18 @@ class _KisMixin:
         )
 
     async def _store_scored_kills(
-        self, dates: list[date], gaming_session_id: int | None, scored: list
+        self,
+        row_filter: str,
+        scope_params: tuple,
+        gaming_session_id: int | None,
+        scored: list,
     ) -> None:
+        # Same precise round-key filter as the fetch above (or the unchanged
+        # date filter on the legacy path) — a broader delete here would wipe
+        # out an unrelated session's rows sharing this session's date
+        # (Copilot review on #525).
         await self.db.execute(
-            "DELETE FROM storytelling_kill_impact WHERE session_date = ANY($1)", (dates,)
+            f"DELETE FROM storytelling_kill_impact WHERE {row_filter}", scope_params  # nosec B608 - row_filter built by _scope_row_filter from internal constants, all values $N-bound
         )
 
         if scored:
