@@ -1505,11 +1505,25 @@ export interface KillImpactEntry {
   archetype?: string;
 }
 
+// Codex SS-D: embedded on every gsid-aware storytelling response
+// (GamingSessionScope.to_metadata() server-side) — used client-side to
+// resolve/confirm the canonical gaming_session_id from a legacy
+// session_date lookup.
+export interface StorySessionScopeMeta {
+  kind: string;
+  version: string;
+  gaming_session_id: number;
+  dates: string[];
+  accepted_round_count: number;
+  distinct_map_names: string[];
+}
+
 export interface KillImpactResponse {
   status: string;
   session_date: string;
   entries: KillImpactEntry[];
   total_kills: number;
+  scope?: StorySessionScopeMeta;
 }
 
 // ── Match Moments ──

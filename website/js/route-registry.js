@@ -319,14 +319,28 @@ const ROUTE_DEFINITIONS = Object.freeze({
         mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'C',
-        buildHash: ({ date } = {}) => (
-            date ? `#/story/date/${encodeURIComponent(date)}` : '#/story'
-        ),
-        parseHash: (hash) => {
-            const m = hash.match(/^#\/story\/date\/([^/]+)$/);
-            return m ? { date: safeDecode(m[1]) } : null;
+        // gsid (Codex SS-D) is the PREFERRED, unambiguous link shape —
+        // #/story/session/<gaming_session_id>. The legacy #/story/date/<date>
+        // form still works (story.js resolves it, silently upgrading the URL
+        // to the gsid form once resolved, or showing a picker on a date that
+        // spans more than one gaming session).
+        buildHash: ({ gsid, date } = {}) => {
+            if (gsid != null) return `#/story/session/${encodeURIComponent(gsid)}`;
+            return date ? `#/story/date/${encodeURIComponent(date)}` : '#/story';
         },
-        load: ({ legacy, params }) => legacy.loadStoryView({ date: params && params.date }),
+        parseHash: (hash) => {
+            const sessionMatch = hash.match(/^#\/story\/session\/([^/]+)$/);
+            if (sessionMatch) {
+                const gsid = parseInt(safeDecode(sessionMatch[1]), 10);
+                return Number.isFinite(gsid) ? { gsid } : null;
+            }
+            const dateMatch = hash.match(/^#\/story\/date\/([^/]+)$/);
+            return dateMatch ? { date: safeDecode(dateMatch[1]) } : null;
+        },
+        load: ({ legacy, params }) => legacy.loadStoryView({
+            date: params && params.date,
+            gsid: params && params.gsid,
+        }),
     },
     replay: {
         viewId: 'replay',

@@ -23,7 +23,7 @@ import { loadFormView } from './form.js';
 import { loadRecordsView } from './records.js';
 import { loadAwardsView } from './awards.js';
 import { loadProximityView } from './proximity.js?v=20260623-aimlock';
-import { loadStoryView } from './story.js?v=20260623-aimlock';
+import { loadStoryView } from './story.js?v=20260720-ssd-gsid';
 import { loadReplayView } from './replay.js';
 import { loadRivalriesView } from './rivalries.js';
 import { loadSmartStatsDiagView } from './smart-stats-diag.js?v=20260607-aim';
@@ -42,7 +42,7 @@ import {
     getActiveNavKeys,
     parseHashRoute,
     loadRoute,
-} from './route-registry.js?v=20260513-v142-cf-bust';
+} from './route-registry.js?v=20260720-ssd-gsid';
 import { mountModernRoute, resetModernRouteHost } from './modern-route-host.js?v=20260513-v142-cf-bust';
 import './compare.js'; // Self-registers to window
 import { getBadgesForPlayer, renderBadges, renderBadge } from './badges.js';
@@ -53,7 +53,7 @@ import { openWrapped } from './wrapped.js';
 import { loadTonightView } from './tonight.js';
 import { loadRetroVizView } from './retro-viz.js?v=20260513-v142-cf-bust';
 import { loadSessions2View } from './sessions2.js?v=20260513-v142-cf-bust';
-import { loadSessionDetailView } from './session-detail.js?v=20260513-v142-cf-bust';
+import { loadSessionDetailView } from './session-detail.js?v=20260720-ssd-gsid';
 import { initMobileNav } from './mobile-nav.js';
 
 // ============================================================================

@@ -120,6 +120,18 @@ function buildScopedQuery(params?: ProximityScope, extra?: Record<string, string
   return q.toString();
 }
 
+// Codex SS-D: every storytelling panel below accepts EITHER a
+// gaming_session_id (preferred, unambiguous) or a legacy session_date.
+// sessionDate stays a plain string (never gaming_session_id AND
+// session_date at once — the backend 422s on both/neither).
+export type StoryScope = { gamingSessionId: number } | { sessionDate: string };
+
+function storyScopeParams(scope: StoryScope): URLSearchParams {
+  return 'gamingSessionId' in scope
+    ? new URLSearchParams({ gaming_session_id: String(scope.gamingSessionId) })
+    : new URLSearchParams({ session_date: scope.sessionDate });
+}
+
 export const api = {
   // Home / Overview
   getOverview: () => get<OverviewStats>('/stats/overview', { cache: 'no-store' }),
@@ -492,44 +504,51 @@ export const api = {
     );
   },
 
-  // Storytelling / Smart Stats
-  getStoryKillImpact: (sessionDate: string, limit = 20) => {
-    const params = new URLSearchParams({ session_date: sessionDate, limit: String(limit) });
+  // Storytelling / Smart Stats (Codex SS-D — all gsid/session_date-scoped
+  // via StoryScope, EXCEPT getCompositeStats: /skill/composite is a
+  // different router, outside this program's scope-resolver conversion,
+  // and still only accepts a single session_date).
+  getStoryKillImpact: (scope: StoryScope, limit = 20) => {
+    const params = storyScopeParams(scope);
+    params.set('limit', String(limit));
     return get<import('./types').KillImpactResponse>(`/storytelling/kill-impact?${params.toString()}`);
   },
 
-  getStoryMoments: (sessionDate: string, limit = 10) =>
-    get<import('./types').MomentsResponse>(`/storytelling/moments?session_date=${sessionDate}&limit=${limit}`),
+  getStoryMoments: (scope: StoryScope, limit = 10) => {
+    const params = storyScopeParams(scope);
+    params.set('limit', String(limit));
+    return get<import('./types').MomentsResponse>(`/storytelling/moments?${params.toString()}`);
+  },
 
-  getStoryMomentum: (sessionDate: string) =>
-    get<MomentumResponse>(`/storytelling/momentum?session_date=${sessionDate}`),
+  getStoryMomentum: (scope: StoryScope) =>
+    get<MomentumResponse>(`/storytelling/momentum?${storyScopeParams(scope).toString()}`),
 
-  getStoryNarrative: (sessionDate: string) =>
-    get<NarrativeResponse>(`/storytelling/narrative?session_date=${sessionDate}`),
+  getStoryNarrative: (scope: StoryScope) =>
+    get<NarrativeResponse>(`/storytelling/narrative?${storyScopeParams(scope).toString()}`),
 
-  getPlayerNarratives: (sessionDate: string) =>
-    get<PlayerNarrativesResponse>(`/storytelling/player-narratives?session_date=${sessionDate}`),
+  getPlayerNarratives: (scope: StoryScope) =>
+    get<PlayerNarrativesResponse>(`/storytelling/player-narratives?${storyScopeParams(scope).toString()}`),
 
-  getStoryGravity: (sessionDate: string) =>
-    get<GravityResponse>(`/storytelling/gravity?session_date=${sessionDate}`),
+  getStoryGravity: (scope: StoryScope) =>
+    get<GravityResponse>(`/storytelling/gravity?${storyScopeParams(scope).toString()}`),
 
-  getStorySpaceCreated: (sessionDate: string) =>
-    get<SpaceCreatedResponse>(`/storytelling/space-created?session_date=${sessionDate}`),
+  getStorySpaceCreated: (scope: StoryScope) =>
+    get<SpaceCreatedResponse>(`/storytelling/space-created?${storyScopeParams(scope).toString()}`),
 
-  getStoryEnabler: (sessionDate: string) =>
-    get<EnablerResponse>(`/storytelling/enabler?session_date=${sessionDate}`),
+  getStoryEnabler: (scope: StoryScope) =>
+    get<EnablerResponse>(`/storytelling/enabler?${storyScopeParams(scope).toString()}`),
 
-  getStoryLurkerProfile: (sessionDate: string) =>
-    get<LurkerResponse>(`/storytelling/lurker-profile?session_date=${sessionDate}`),
+  getStoryLurkerProfile: (scope: StoryScope) =>
+    get<LurkerResponse>(`/storytelling/lurker-profile?${storyScopeParams(scope).toString()}`),
 
-  getStorySynergy: (sessionDate: string) =>
-    get<SynergyResponse>(`/storytelling/synergy?session_date=${sessionDate}`),
+  getStorySynergy: (scope: StoryScope) =>
+    get<SynergyResponse>(`/storytelling/synergy?${storyScopeParams(scope).toString()}`),
 
-  getStoryWinContribution: (sessionDate: string) =>
-    get<WinContributionResponse>(`/storytelling/win-contribution?session_date=${sessionDate}`),
+  getStoryWinContribution: (scope: StoryScope) =>
+    get<WinContributionResponse>(`/storytelling/win-contribution?${storyScopeParams(scope).toString()}`),
 
-  getStoryBoxScore: (sessionDate: string) =>
-    get<BoxScoreResponse>(`/storytelling/box-score?session_date=${sessionDate}`),
+  getStoryBoxScore: (scope: StoryScope) =>
+    get<BoxScoreResponse>(`/storytelling/box-score?${storyScopeParams(scope).toString()}`),
 
   getCompositeStats: (sessionDate: string) =>
     get<CompositeStatsResponse>(`/skill/composite?session_date=${sessionDate}`),

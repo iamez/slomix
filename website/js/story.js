@@ -5,6 +5,7 @@
  */
 
 import { API_BASE, fetchJSON, formatNumber } from './utils.js';
+import { getRouteHash } from './route-registry.js?v=20260720-ssd-gsid';
 
 function stripEtColors(text) {
     if (!text) return '';
@@ -24,14 +25,47 @@ function _el(tag, className, ...children) {
 
 let storyLoadId = 0;
 
-const DEFAULT_SCOPE_RANGE_DAYS = 365;
+const DEFAULT_SCOPE_LIMIT = 100;
 
 const storyState = {
     sessions: [],
+    // gamingSessionId is the PRIMARY identity (Codex SS-D) — unambiguous by
+    // construction, unlike sessionDate which can span >1 gaming session.
+    gamingSessionId: null,
+    // Single ISO date (scope.dates[0]) — required by the few panels that
+    // haven't been converted to accept gaming_session_id yet (e.g.
+    // /skill/composite, outside this program's scope). NOT for display —
+    // a midnight-crossing session's real range lives in sessionDateLabel.
     sessionDate: null,
+    // Human-readable "2026-07-18" or "2026-07-18 → 2026-07-19" for the hero
+    // heading / selector.
+    sessionDateLabel: null,
     players: [],
     loading: false,
 };
+
+/** Build the `gaming_session_id=X` or legacy `session_date=X` query fragment
+ * for the currently-loaded session. Prefers gsid once resolved. */
+function _storyScopeQuery() {
+    if (storyState.gamingSessionId != null) {
+        return `gaming_session_id=${encodeURIComponent(storyState.gamingSessionId)}`;
+    }
+    return `session_date=${encodeURIComponent(storyState.sessionDate)}`;
+}
+
+/** Sync the URL hash to the resolved gsid without pushing a history entry
+ * or re-firing hashchange (mirrors session-detail.js's tab-sync pattern). */
+function _syncStoryHash() {
+    if (storyState.gamingSessionId == null) return;
+    try {
+        const hash = getRouteHash('story', { gsid: storyState.gamingSessionId });
+        if (hash && hash !== window.location.hash) {
+            window.history.replaceState(null, '', hash);
+        }
+    } catch {
+        // Non-fatal: URL sync is a nicety, not required for the page to work.
+    }
+}
 
 const ARCHETYPES = {
     pressure_engine:      { icon: '\u{1F525}', label: 'Pressure Engine',      color: 'rose' },
@@ -74,16 +108,35 @@ function getKISTier(kis) {
 
 async function loadStoryScopes() {
     try {
-        const data = await fetchJSON(`${API_BASE}/proximity/scopes?range_days=${DEFAULT_SCOPE_RANGE_DAYS}`);
+        // /api/storytelling/scopes (Codex SS-D) — gsid-native, midnight-safe
+        // selector source. Deliberately NOT /proximity/scopes, which groups
+        // by calendar session_date only and has no gaming_session_id at all —
+        // the root cause of the Story page's original date-only selector.
+        const data = await fetchJSON(`${API_BASE}/storytelling/scopes?limit=${DEFAULT_SCOPE_LIMIT}`);
         storyState.sessions = Array.isArray(data?.sessions) ? data.sessions : [];
-        if (!storyState.sessionDate && storyState.sessions.length > 0) {
-            storyState.sessionDate = storyState.sessions[0].session_date;
+        if (storyState.gamingSessionId == null && !storyState.sessionDate && storyState.sessions.length > 0) {
+            storyState.gamingSessionId = storyState.sessions[0].gaming_session_id;
         }
     } catch {
         storyState.sessions = [];
-        storyState.sessionDate = null;
     }
     renderSessionSelector();
+}
+
+/** "2026-07-18" for a single-date session, "2026-07-18 → 2026-07-19" for one
+ * that crosses midnight. Accepts either a /storytelling/scopes listing entry
+ * ({start_date, end_date}) or a resolved GamingSessionScope.to_metadata()
+ * block ({dates: [...]}) — the two shapes this module sees scope info in. */
+function _sessionDateLabel(scope) {
+    if (!scope) return '';
+    if (Array.isArray(scope.dates)) {
+        const first = scope.dates[0];
+        const last = scope.dates[scope.dates.length - 1];
+        return first === last ? first : `${first} → ${last}`;
+    }
+    return scope.start_date === scope.end_date
+        ? scope.start_date
+        : `${scope.start_date} → ${scope.end_date}`;
 }
 
 function renderSessionSelector() {
@@ -91,36 +144,96 @@ function renderSessionSelector() {
     if (!select) return;
 
     select.textContent = '';
-    // A deep-linked date can fall outside the scopes window — keep the
+    // A deep-linked session can fall outside the scopes window — keep the
     // selector honest by showing it as an explicit option.
-    if (storyState.sessionDate
-        && !storyState.sessions.some(s => s.session_date === storyState.sessionDate)) {
+    if (storyState.gamingSessionId != null
+        && !storyState.sessions.some(s => s.gaming_session_id === storyState.gamingSessionId)) {
         const opt = document.createElement('option');
-        opt.value = storyState.sessionDate;
-        opt.textContent = storyState.sessionDate;
+        opt.value = String(storyState.gamingSessionId);
+        opt.textContent = storyState.sessionDateLabel
+            ? storyState.sessionDateLabel
+            : `Session ${storyState.gamingSessionId}`;
         opt.selected = true;
         select.appendChild(opt);
     }
     storyState.sessions.forEach(s => {
-        const d = s.session_date;
-        // maps_played counts replays separately (te_escape2 x3 = 3), matching the
-        // box score; fall back to distinct-map count for older payloads.
-        const count = s.maps_played ?? (s.maps?.length || 0);
+        const gsid = s.gaming_session_id;
+        const count = s.accepted_round_count ?? 0;
         const opt = document.createElement('option');
-        opt.value = d;
-        opt.textContent = `${d} (${count} map${count !== 1 ? 's' : ''})`;
-        if (d === storyState.sessionDate) opt.selected = true;
+        opt.value = String(gsid);
+        opt.textContent = `${_sessionDateLabel(s)} (${count} round${count !== 1 ? 's' : ''})`;
+        if (gsid === storyState.gamingSessionId) opt.selected = true;
         select.appendChild(opt);
     });
 
     select.onchange = () => {
-        storyState.sessionDate = select.value;
+        storyState.gamingSessionId = parseInt(select.value, 10);
+        // Both re-derived from the next response's resolved scope.
+        storyState.sessionDate = null;
+        storyState.sessionDateLabel = null;
         loadStoryData();
     };
 }
 
+/** Raw fetch (not fetchJSON) for the ONE resolving call each page load
+ * makes — needs the response body even on a 409, to extract ambiguous-date
+ * candidates; fetchJSON discards the body and just throws `HTTP 409`.
+ * Every OTHER call in this module goes through fetchJSON once the gsid is
+ * known (never ambiguous by then — see loadStoryData). */
+async function _fetchWithAmbiguityDetection(url) {
+    const res = await fetch(url);
+    let body = null;
+    try { body = await res.json(); } catch { /* non-JSON error body, ignore */ }
+    if (res.status === 409 && body?.detail?.code === 'AMBIGUOUS_SESSION_DATE') {
+        return { ambiguous: true, candidates: body.detail.candidates || [] };
+    }
+    if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+    }
+    return { ambiguous: false, data: body };
+}
+
+/** A legacy #/story/date/<date> deep link hit a date shared by >1 gaming
+ * session — let the user pick instead of guessing (Codex SS-D, same
+ * "never guess" principle the backend resolver enforces server-side). */
+function renderAmbiguousSessionPicker(candidates) {
+    const title = document.getElementById('story-title');
+    const subtitle = document.getElementById('story-subtitle');
+    const statsRow = document.getElementById('story-stats-row');
+    if (title) title.textContent = 'Multiple sessions on this date';
+    if (subtitle) subtitle.textContent = 'This date has more than one gaming session — choose which one you meant:';
+    if (statsRow) statsRow.textContent = '';
+
+    const players = document.getElementById('story-players');
+    if (players) {
+        players.textContent = '';
+        const wrap = _el('div', 'col-span-full flex flex-col items-center gap-3 py-12');
+        wrap.appendChild(_el('div', 'text-slate-600 text-4xl mb-1', '\u{1F553}'));
+        (candidates || []).forEach(c => {
+            const range = c.end_date && c.end_date !== c.start_date ? `${c.start_date} → ${c.end_date}` : c.start_date;
+            const btn = _el('button',
+                'px-4 py-2 rounded-lg border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] text-sm text-white transition',
+                `${range} — ${c.round_count ?? '?'} rounds (session ${c.gaming_session_id})`);
+            btn.type = 'button';
+            btn.addEventListener('click', () => {
+                storyState.gamingSessionId = c.gaming_session_id;
+                storyState.sessionDate = null;
+                storyState.sessionDateLabel = null;
+                _syncStoryHash();
+                loadStoryData();
+            });
+            wrap.appendChild(btn);
+        });
+        players.appendChild(wrap);
+    }
+    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution', 'story-box-score', 'story-invisible-value']) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '';
+    }
+}
+
 async function loadStoryData() {
-    if (!storyState.sessionDate) {
+    if (storyState.gamingSessionId == null && !storyState.sessionDate) {
         renderEmpty('No sessions available');
         return;
     }
@@ -130,10 +243,31 @@ async function loadStoryData() {
     renderLoading();
 
     try {
-        const data = await fetchJSON(
-            `${API_BASE}/storytelling/kill-impact?session_date=${encodeURIComponent(storyState.sessionDate)}&limit=50`
+        const resolved = await _fetchWithAmbiguityDetection(
+            `${API_BASE}/storytelling/kill-impact?${_storyScopeQuery()}&limit=50`
         );
         if (loadId !== storyLoadId) return;
+
+        if (resolved.ambiguous) {
+            renderAmbiguousSessionPicker(resolved.candidates);
+            return;
+        }
+
+        const data = resolved.data;
+        // Resolve/confirm the canonical gsid from the response's scope
+        // block. A legacy session_date only reaches here once unambiguous
+        // (a shared date already branched into the picker above), so this
+        // is always the ONE session the user meant — sync state + URL to
+        // the gsid form so every fetch below (and the address bar) use the
+        // canonical identity from here on.
+        const scope = data?.scope;
+        if (scope?.gaming_session_id != null) {
+            storyState.gamingSessionId = scope.gaming_session_id;
+            storyState.sessionDate = (scope.dates && scope.dates[0]) || storyState.sessionDate;
+            storyState.sessionDateLabel = _sessionDateLabel(scope) || storyState.sessionDateLabel;
+            _syncStoryHash();
+        }
+
         storyState.players = Array.isArray(data?.players) ? data.players : [];
 
         if (storyState.players.length === 0) {
@@ -141,45 +275,44 @@ async function loadStoryData() {
             return;
         }
 
-        renderStoryHero(storyState.sessionDate, storyState.players);
+        renderStoryHero(storyState.sessionDateLabel || storyState.sessionDate, storyState.players);
         renderPlayerCards(storyState.players);
         renderKISBreakdown(storyState.players);
 
+        // gsid-native query for every panel already converted (SS-C). A few
+        // panels (skill/composite) haven't been converted and still need a
+        // single session_date — see the dedicated `dateQ` fragment below.
+        const q = _storyScopeQuery();
+        const dateQ = `session_date=${encodeURIComponent(storyState.sessionDate)}`;
+
         // Fetch narrative, momentum, moments, synergy, win-contribution in parallel (non-blocking)
-        fetchJSON(
-            `${API_BASE}/storytelling/narrative?session_date=${encodeURIComponent(storyState.sessionDate)}`
-        ).then(narData => {
+        fetchJSON(`${API_BASE}/storytelling/narrative?${q}`).then(narData => {
             if (loadId === storyLoadId) renderNarrative(narData);
         }).catch(() => renderNarrative(null));
 
-        fetchJSON(
-            `${API_BASE}/storytelling/momentum?session_date=${encodeURIComponent(storyState.sessionDate)}`
-        ).then(momtData => {
+        fetchJSON(`${API_BASE}/storytelling/momentum?${q}`).then(momtData => {
             if (loadId === storyLoadId) renderMomentum(momtData);
         }).catch(() => renderMomentum(null));
 
-        fetchJSON(
-            `${API_BASE}/storytelling/moments?session_date=${encodeURIComponent(storyState.sessionDate)}&limit=10`
-        ).then(momData => {
+        fetchJSON(`${API_BASE}/storytelling/moments?${q}&limit=10`).then(momData => {
             if (loadId === storyLoadId) renderMoments(momData);
         }).catch(() => renderMoments(null));
 
-        fetchJSON(
-            `${API_BASE}/storytelling/synergy?session_date=${encodeURIComponent(storyState.sessionDate)}`
-        ).then(synData => {
+        fetchJSON(`${API_BASE}/storytelling/synergy?${q}`).then(synData => {
             if (loadId === storyLoadId) renderTeamSynergy(synData);
         }).catch(() => renderTeamSynergy(null));
 
-        fetchJSON(
-            `${API_BASE}/storytelling/win-contribution?session_date=${encodeURIComponent(storyState.sessionDate)}`
-        ).then(pwcData => {
+        fetchJSON(`${API_BASE}/storytelling/win-contribution?${q}`).then(pwcData => {
             if (loadId === storyLoadId) renderWinContribution(pwcData);
         }).catch(() => renderWinContribution(null));
 
         // Advanced metrics + Comp Skill board render into the SAME container,
         // sequentially (renderAdvancedMetrics clears it) — so fetch together.
+        // /skill/composite is outside this program's scope-resolver
+        // conversion (a different router) and still only accepts a single
+        // session_date.
         Promise.allSettled([
-            fetchJSON(`${API_BASE}/skill/composite?session_date=${encodeURIComponent(storyState.sessionDate)}`),
+            fetchJSON(`${API_BASE}/skill/composite?${dateQ}`),
             fetchJSON(`${API_BASE}/skill/ssr`),
         ]).then(([comp, ssr]) => {
             if (loadId !== storyLoadId) return;
@@ -188,18 +321,17 @@ async function loadStoryData() {
         });
 
         // Box Score
-        const enc = encodeURIComponent(storyState.sessionDate);
-        fetchJSON(`${API_BASE}/storytelling/box-score?session_date=${enc}`)
+        fetchJSON(`${API_BASE}/storytelling/box-score?${q}`)
             .then(d => { if (loadId === storyLoadId) renderBoxScore(d); })
             .catch(() => renderBoxScore(null));
 
         // Invisible Value — 5 parallel fetches
         Promise.allSettled([
-            fetchJSON(`${API_BASE}/storytelling/gravity?session_date=${enc}`),
-            fetchJSON(`${API_BASE}/storytelling/space-created?session_date=${enc}`),
-            fetchJSON(`${API_BASE}/storytelling/enabler?session_date=${enc}`),
-            fetchJSON(`${API_BASE}/storytelling/lurker-profile?session_date=${enc}`),
-            fetchJSON(`${API_BASE}/storytelling/useless-defense-deaths?session_date=${enc}`),
+            fetchJSON(`${API_BASE}/storytelling/gravity?${q}`),
+            fetchJSON(`${API_BASE}/storytelling/space-created?${q}`),
+            fetchJSON(`${API_BASE}/storytelling/enabler?${q}`),
+            fetchJSON(`${API_BASE}/storytelling/lurker-profile?${q}`),
+            fetchJSON(`${API_BASE}/storytelling/useless-defense-deaths?${q}`),
         ]).then(([g, s, e, l, d]) => {
             if (loadId !== storyLoadId) return;
             renderInvisibleValue(
@@ -385,7 +517,7 @@ function _createMomentumChart(canvas, round, idx) {
 
 // Session-wide (team) momentum view state
 let _momentumMode = 'round'; // 'round' | 'session'
-const _momentumSessionCache = new Map(); // sessionDate -> payload
+const _momentumSessionCache = new Map(); // gaming_session_id -> payload
 let _momentumLastData = null;
 
 const TEAM_A_COLOR = 'rgba(245, 158, 11, 0.9)';  // amber
@@ -490,24 +622,24 @@ function _createSessionMomentumChart(canvas, sess) {
 }
 
 async function _renderSessionMomentum(container) {
-    const sessionDate = storyState.sessionDate;
+    const gsid = storyState.gamingSessionId;
     const wrapper = container.querySelector('.momentum-chart-wrapper');
-    if (!wrapper || !sessionDate) return;
+    if (!wrapper || gsid == null) return;
     wrapper.textContent = '';
     wrapper.style.height = '240px';
     wrapper.innerHTML = '<div class="text-[11px] text-slate-500 p-3">Loading session momentum…</div>';
 
-    let sess = _momentumSessionCache.get(sessionDate);
+    let sess = _momentumSessionCache.get(gsid);
     if (!sess) {
         try {
-            sess = await fetchJSON(`${API_BASE}/storytelling/momentum-session?session_date=${encodeURIComponent(sessionDate)}`);
-            _momentumSessionCache.set(sessionDate, sess);
+            sess = await fetchJSON(`${API_BASE}/storytelling/momentum-session?gaming_session_id=${gsid}`);
+            _momentumSessionCache.set(gsid, sess);
         } catch (err) {
             wrapper.innerHTML = '<div class="text-[11px] text-slate-500 p-3">Failed to load session momentum</div>';
             return;
         }
     }
-    if (sessionDate !== storyState.sessionDate || _momentumMode !== 'session') return; // stale
+    if (gsid !== storyState.gamingSessionId || _momentumMode !== 'session') return; // stale
     if (sess.status !== 'ok' || !(sess.points || []).length) {
         wrapper.textContent = '';
         wrapper.appendChild(_el('div', 'text-[11px] text-slate-500 p-3',
@@ -1681,16 +1813,15 @@ async function openKisDetailsModal(playerGuid, playerName) {
 
     document.body.appendChild(overlay);
 
-    const sessionDate = storyState.sessionDate;
-    if (!sessionDate) {
+    if (storyState.gamingSessionId == null && !storyState.sessionDate) {
         body.textContent = '';
-        body.appendChild(_el('div', 'text-rose-300 text-sm', 'session_date ni izbran.'));
+        body.appendChild(_el('div', 'text-rose-300 text-sm', 'Seja ni izbrana.'));
         return;
     }
 
     let data;
     try {
-        const url = `${API_BASE}/storytelling/kill-impact/details?session_date=${encodeURIComponent(sessionDate)}&player_guid=${encodeURIComponent(playerGuid)}`;
+        const url = `${API_BASE}/storytelling/kill-impact/details?${_storyScopeQuery()}&player_guid=${encodeURIComponent(playerGuid)}`;
         data = await fetchJSON(url);
     } catch (err) {
         body.textContent = '';
@@ -1744,11 +1875,20 @@ async function openKisDetailsModal(playerGuid, playerName) {
     });
 }
 
-export async function loadStoryView({ date } = {}) {
-    // Deep-link support (#/story/date/YYYY-MM-DD) — e.g. Session Detail's
-    // "Full story" link. loadStoryScopes only defaults sessionDate when unset,
-    // so a requested date survives the scopes load.
-    if (date) storyState.sessionDate = date;
+export async function loadStoryView({ date, gsid } = {}) {
+    // Deep-link support: #/story/session/<gaming_session_id> (Codex SS-D,
+    // preferred — unambiguous by construction) or the legacy
+    // #/story/date/YYYY-MM-DD (e.g. Session Detail's "Full story" link when
+    // it doesn't have a gsid handy — resolved, and the URL silently
+    // upgraded to the gsid form, inside loadStoryData; a date spanning >1
+    // session shows the picker instead of guessing).
+    // loadStoryScopes only defaults gamingSessionId when BOTH are unset, so
+    // a requested gsid/date survives the scopes load.
+    if (gsid != null) {
+        storyState.gamingSessionId = gsid;
+    } else if (date) {
+        storyState.sessionDate = date;
+    }
     await loadStoryScopes();
     await loadStoryData();
 }
