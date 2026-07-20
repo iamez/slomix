@@ -65,6 +65,7 @@ setup_logging(
 logger = get_app_logger(__name__)
 
 from greatshot.config import CONFIG as GREATSHOT_CONFIG
+from website.backend import build_info
 from website.backend.dependencies import close_db_pool, get_db_pool, init_db_pool
 from website.backend.routers import (
     auth,
@@ -246,6 +247,18 @@ async def add_static_cache_headers(request, call_next):
 
 
 @app.middleware("http")
+async def add_build_header(request, call_next):
+    """Stamp every response with X-Slomix-Build so a stale process is
+    visible from a single response header, not just the dedicated
+    /api/build probe (Codex PX-DEV-002). Registered here (BEFORE the
+    trusted-host gate below) so the strict host check stays the outermost
+    middleware — see the ordering note a few lines down."""
+    response = await call_next(request)
+    response.headers["X-Slomix-Build"] = build_info.build_header_value()
+    return response
+
+
+@app.middleware("http")
 async def add_security_headers(request, call_next):
     response = await call_next(request)
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
@@ -329,6 +342,18 @@ async def share_redirect(upload_id: str):
     if not _re.match(r'^[a-zA-Z0-9_-]+$', upload_id):
         raise HTTPException(status_code=400, detail="Invalid upload ID")
     return RedirectResponse(url=f"/#/uploads/{upload_id}", status_code=302)
+
+
+@app.get("/api/build", include_in_schema=False)
+async def get_build() -> dict:
+    """Build/revision handshake (Codex PX-DEV-002).
+
+    Answers "what code is THIS process actually running right now" without
+    touching the database — the fix for the mixed-revision failure mode
+    (old Python handlers + StaticFiles serving a newer frontend from the
+    same mutable checkout). See website/backend/build_info.py.
+    """
+    return build_info.get_build_info(app)
 
 
 @app.get("/health", include_in_schema=False)

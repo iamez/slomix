@@ -36,6 +36,7 @@ import re
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 try:
     import asyncpg
@@ -43,10 +44,25 @@ except ImportError:
     print("ERROR: asyncpg not installed. Run: pip install asyncpg")
     sys.exit(1)
 
-# Load .env if python-dotenv is available
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def resolve_env_file(repo_root: Path) -> Path:
+    """Which .env file this runner should load — MUST match the running web
+    service's own resolution (website/backend/main.py:33-37: website/.env
+    if it exists, else the root .env) or a migration can validate against a
+    different database than the one the service actually uses (Codex
+    PX-DB-001). This script previously loaded ONLY the root .env
+    unconditionally, silently diverging from main.py whenever website/.env
+    existed with different POSTGRES_* values."""
+    website_env = repo_root / "website" / ".env"
+    return website_env if website_env.exists() else repo_root / ".env"
+
+
+# Load .env if python-dotenv is available.
 try:
     from dotenv import load_dotenv
-    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+    load_dotenv(resolve_env_file(_REPO_ROOT))
 except ImportError:
     pass  # python-dotenv is optional
 
@@ -261,14 +277,59 @@ def _env(*names: str, default: str = "") -> str:
     return default
 
 
+def get_target_dsn_parts() -> dict[str, str]:
+    """The resolved (non-secret) connection target this runner will use.
+
+    Split out from get_connection() so the fingerprint can be computed and
+    printed even when the connection itself later fails (a mismatch is most
+    useful to see BEFORE debugging a connection error, not after).
+    """
+    return {
+        "host": _env("POSTGRES_HOST", "DB_HOST", default="localhost"),
+        "port": _env("POSTGRES_PORT", "DB_PORT", default="5432"),
+        "database": _env("POSTGRES_DATABASE", "DB_NAME", default="etlegacy"),
+        "user": _env("POSTGRES_USER", "DB_USER", default="etlegacy_user"),
+    }
+
+
 async def get_connection() -> asyncpg.Connection:
+    target = get_target_dsn_parts()
     return await asyncpg.connect(
-        host=_env("POSTGRES_HOST", "DB_HOST", default="localhost"),
-        port=int(_env("POSTGRES_PORT", "DB_PORT", default="5432")),
-        database=_env("POSTGRES_DATABASE", "DB_NAME", default="etlegacy"),
-        user=_env("POSTGRES_USER", "DB_USER", default="etlegacy_user"),
+        host=target["host"],
+        port=int(target["port"]),
+        database=target["database"],
+        user=target["user"],
         password=_env("POSTGRES_PASSWORD", "DB_PASSWORD", default=""),
     )
+
+
+async def get_db_fingerprint(conn: asyncpg.Connection) -> dict[str, Any]:
+    """Non-secret identity of the database this runner is ACTUALLY talking
+    to (PX-DB-001, Codex): environment/database/role/host/ledger — printed
+    before every --validate/--status so a runner pointed at the wrong
+    database (e.g. website/.env vs root .env divergence) is visible in the
+    same output as the drift it reports, not just discoverable by manually
+    cross-checking two .env files. Never includes a password.
+    """
+    target = get_target_dsn_parts()
+    row = await conn.fetchrow(
+        "SELECT current_database() AS db, current_user AS role, "
+        "inet_server_addr()::text AS server_addr, inet_server_port() AS server_port"
+    )
+    applied = await get_applied(conn)
+    ledger_max = max(applied, key=_sort_key) if applied else None
+    return {
+        # SLOMIX_ENV lets a deploy pin an explicit label (e.g. "prod",
+        # "staging"); falls back to the resolved host so a fingerprint is
+        # never blank.
+        "environment": os.getenv("SLOMIX_ENV") or target["host"],
+        "database_name": row["db"] if row else target["database"],
+        "database_role": row["role"] if row else target["user"],
+        "host_fingerprint": f"{target['host']}:{target['port']}",
+        "server_addr": row["server_addr"] if row else None,
+        "server_port": row["server_port"] if row else None,
+        "ledger_max": ledger_max,
+    }
 
 
 async def acquire_runner_lock(conn: asyncpg.Connection):
@@ -382,13 +443,20 @@ async def cmd_status(json_out: bool = False):
     try:
         await ensure_tracking_table(conn)
         state = await collect_state(conn)
+        state["db_fingerprint"] = await get_db_fingerprint(conn)
         if json_out:
             print(json.dumps(state, indent=2))
             return
 
         applied = set(state["applied"])
         failed = set(state["failed"])
-        print(f"\nMigrations directory: {MIGRATIONS_DIR}")
+        fp = state["db_fingerprint"]
+        print(
+            f"\nTarget: {fp['database_name']}@{fp['host_fingerprint']} "
+            f"(role={fp['database_role']}, env={fp['environment']}, "
+            f"ledger_max={fp['ledger_max']})"
+        )
+        print(f"Migrations directory: {MIGRATIONS_DIR}")
         print(f"Total files: {state['total_files']}\n")
 
         for filename, _path in discover_migrations():
@@ -441,6 +509,7 @@ async def cmd_validate(json_out: bool = False, tolerate_missing: bool = False):
         # Fail-fast keeps deploy gating deterministic (Copilot review on #509).
         await acquire_runner_lock(conn)
         state = await collect_state(conn)
+        state["db_fingerprint"] = await get_db_fingerprint(conn)
     finally:
         await conn.close()
 
@@ -455,6 +524,12 @@ async def cmd_validate(json_out: bool = False, tolerate_missing: bool = False):
     if json_out:
         print(json.dumps(state, indent=2))
     else:
+        fp = state["db_fingerprint"]
+        print(
+            f"  Target: {fp['database_name']}@{fp['host_fingerprint']} "
+            f"(role={fp['database_role']}, env={fp['environment']}, "
+            f"ledger_max={fp['ledger_max']})"
+        )
         print(f"  Applied: {len(state['applied'])}, Failed: {len(state['failed'])}, "
               f"Pending: {len(state['pending'])}, "
               f"Missing: {len(state['missing'])}, "
