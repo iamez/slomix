@@ -5,6 +5,7 @@ import {
   useStoryGravity, useStorySpaceCreated, useStoryEnabler, useStoryLurkerProfile,
   useStorySynergy, useStoryWinContribution, useStoryBoxScore, useStoryComposite,
 } from '../api/hooks';
+import type { StoryScope } from '../api/client';
 import type { KillImpactEntry } from '../api/types';
 import { Skeleton } from '../components/Skeleton';
 import { StoryHero } from '../components/story/StoryHero';
@@ -22,15 +23,26 @@ import type { PlayerArchetype } from '../components/story/ArchetypeBadge';
 
 const API = '/api';
 
-/* ── Scopes (reuse proximity scopes endpoint) ── */
+/* ── Scopes (Codex SS-D: gsid-native /storytelling/scopes, NOT
+ * /proximity/scopes — the latter groups by calendar session_date only and
+ * has no gaming_session_id at all, the root cause of the page's original
+ * date-only selector) ── */
 
 interface ScopeSession {
-  session_date: string;
-  maps?: Array<{ map_name: string }>;
+  gaming_session_id: number;
+  start_date: string;
+  end_date: string;
+  accepted_round_count: number;
+  distinct_map_names: string[];
 }
 interface ScopeData {
+  scope_version: string;
   sessions: ScopeSession[];
-  scope?: { session_date: string };
+}
+
+function sessionDateLabel(s: { start_date: string; end_date: string } | undefined): string {
+  if (!s) return '';
+  return s.start_date === s.end_date ? s.start_date : `${s.start_date} → ${s.end_date}`;
 }
 
 /* ── Archetype from server response ── */
@@ -61,40 +73,76 @@ const STORY_STYLES = `
 
 /* ── Main Page ── */
 
-export default function Story() {
-  const [sessionDate, setSessionDate] = useState<string | null>(null);
+export default function Story({ params }: { params?: Record<string, string> }) {
+  // Deep-link support (Codex SS-D): #/story/session/<gsid> (preferred,
+  // unambiguous) or the legacy #/story/date/<date>. Parsed once on mount —
+  // params don't change without a full remount of this lazy-loaded page.
+  const initialGsid = useMemo(() => {
+    const raw = params?.gsid;
+    if (!raw) return null;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? n : null;
+  }, [params]);
+
+  const [gamingSessionId, setGamingSessionId] = useState<number | null>(initialGsid);
+  // Single ISO date — used both as the legacy resolution input (when no
+  // gsid is known yet) and as the one param useStoryComposite still needs
+  // (/skill/composite is a different router, outside this program's
+  // gsid conversion).
+  const [sessionDate, setSessionDate] = useState<string | null>(
+    initialGsid == null ? (params?.date ?? null) : null,
+  );
 
   // Fetch available sessions
   const { data: scopes, isLoading: scopesLoading } = useQuery<ScopeData>({
-    queryKey: ['proximity-scopes'],
-    queryFn: () => fetch(`${API}/proximity/scopes?range_days=365`).then((r) => r.json()),
+    queryKey: ['storytelling-scopes'],
+    queryFn: () => fetch(`${API}/storytelling/scopes?limit=100`).then((r) => r.json()),
     staleTime: 60_000,
   });
 
-  // Auto-select first session
+  // Auto-select the newest session when nothing was requested via deep link.
   useEffect(() => {
-    if (!sessionDate && scopes?.sessions.length) {
-      setSessionDate(scopes.scope?.session_date ?? scopes.sessions[0].session_date);
+    if (gamingSessionId == null && !sessionDate && scopes?.sessions.length) {
+      setGamingSessionId(scopes.sessions[0].gaming_session_id);
     }
-  }, [scopes, sessionDate]);
+  }, [scopes, gamingSessionId, sessionDate]);
 
-  // KIS data
-  const { data: kis, isLoading: kisLoading } = useStoryKillImpact(sessionDate);
+  const scope: StoryScope | null = useMemo(() => {
+    if (gamingSessionId != null) return { gamingSessionId };
+    if (sessionDate) return { sessionDate };
+    return null;
+  }, [gamingSessionId, sessionDate]);
+
+  // KIS data — the primary/resolving fetch. Its response `scope` block
+  // confirms the canonical gsid once resolved from a legacy session_date,
+  // so every OTHER hook below (once gamingSessionId updates) targets the
+  // same session precisely.
+  const { data: kis, isLoading: kisLoading, isError: kisError } = useStoryKillImpact(scope);
+
+  useEffect(() => {
+    const resolved = kis?.scope;
+    if (resolved?.gaming_session_id != null && resolved.gaming_session_id !== gamingSessionId) {
+      setGamingSessionId(resolved.gaming_session_id);
+      setSessionDate(resolved.dates?.[0] ?? null);
+    }
+  }, [kis, gamingSessionId]);
+
   // Moments data
-  const { data: momentsData, isLoading: momentsLoading } = useStoryMoments(sessionDate);
+  const { data: momentsData, isLoading: momentsLoading } = useStoryMoments(scope);
   // Momentum + Narrative (fetched in parallel with KIS/moments)
-  const { data: momentumData, isLoading: momentumLoading } = useStoryMomentum(sessionDate);
-  const { data: narrativeData, isLoading: narrativeLoading } = useStoryNarrative(sessionDate);
-  const { data: playerNarData, isLoading: playerNarLoading } = usePlayerNarratives(sessionDate);
+  const { data: momentumData, isLoading: momentumLoading } = useStoryMomentum(scope);
+  const { data: narrativeData, isLoading: narrativeLoading } = useStoryNarrative(scope);
+  const { data: playerNarData, isLoading: playerNarLoading } = usePlayerNarratives(scope);
 
   // New story panels
-  const { data: gravityData, isLoading: gravityLoading } = useStoryGravity(sessionDate);
-  const { data: spaceData, isLoading: spaceLoading } = useStorySpaceCreated(sessionDate);
-  const { data: enablerData, isLoading: enablerLoading } = useStoryEnabler(sessionDate);
-  const { data: lurkerData, isLoading: lurkerLoading } = useStoryLurkerProfile(sessionDate);
-  const { data: synergyData, isLoading: synergyLoading } = useStorySynergy(sessionDate);
-  const { data: pwcData, isLoading: pwcLoading } = useStoryWinContribution(sessionDate);
-  const { data: boxData, isLoading: boxLoading } = useStoryBoxScore(sessionDate);
+  const { data: gravityData, isLoading: gravityLoading } = useStoryGravity(scope);
+  const { data: spaceData, isLoading: spaceLoading } = useStorySpaceCreated(scope);
+  const { data: enablerData, isLoading: enablerLoading } = useStoryEnabler(scope);
+  const { data: lurkerData, isLoading: lurkerLoading } = useStoryLurkerProfile(scope);
+  const { data: synergyData, isLoading: synergyLoading } = useStorySynergy(scope);
+  const { data: pwcData, isLoading: pwcLoading } = useStoryWinContribution(scope);
+  const { data: boxData, isLoading: boxLoading } = useStoryBoxScore(scope);
+  // /skill/composite isn't gsid-aware — needs the resolved single date.
   const { data: compositeData } = useStoryComposite(sessionDate);
 
   const entries = useMemo(() => kis?.entries ?? [], [kis]);
@@ -104,9 +152,18 @@ export default function Story() {
   const narrative = narrativeData?.narrative ?? '';
   const playerNarratives = useMemo(() => playerNarData?.player_narratives ?? [], [playerNarData]);
 
-  // Current session metadata
-  const currentSession = scopes?.sessions.find((s) => s.session_date === sessionDate);
-  const mapNames = currentSession?.maps?.map((m) => m.map_name) ?? [];
+  // Current session metadata (selector display + hero)
+  const currentSession = scopes?.sessions.find((s) => s.gaming_session_id === gamingSessionId);
+  const heroLabel = sessionDateLabel(currentSession) || sessionDate || '';
+  const mapNames = currentSession?.distinct_map_names ?? [];
+
+  // A legacy date deep-link that spans >1 gaming session 409s here. The
+  // dropdown below always lists unambiguous individual sessions, so
+  // pointing the user at it is a real fix, not a dead end — a full
+  // candidate picker (matching story.js's) would need a body-preserving
+  // fetch path get<T> doesn't have; tracked as a smaller follow-up rather
+  // than blocking this conversion.
+  const showAmbiguousNotice = kisError && gamingSessionId == null && !!sessionDate;
 
   return (
     <>
@@ -114,9 +171,9 @@ export default function Story() {
 
       <div className="space-y-6">
         {/* Hero header */}
-        {sessionDate && !kisLoading ? (
+        {gamingSessionId != null && !kisLoading ? (
           <StoryHero
-            sessionDate={sessionDate}
+            sessionDate={heroLabel}
             mapNames={mapNames}
             playerCount={entries.length}
             totalKills={totalKills}
@@ -130,18 +187,28 @@ export default function Story() {
           </div>
         ) : null}
 
+        {showAmbiguousNotice && (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+            This date has more than one gaming session — pick the one you meant from the dropdown below.
+          </div>
+        )}
+
         {/* Session selector */}
         <div className="flex items-center gap-3">
           <label className="text-xs text-slate-500 uppercase tracking-wider font-bold">Session</label>
           <select
-            value={sessionDate ?? ''}
-            onChange={(e) => { setSessionDate(e.target.value || null); }}
+            value={gamingSessionId ?? ''}
+            onChange={(e) => {
+              const next = e.target.value ? parseInt(e.target.value, 10) : null;
+              setGamingSessionId(next);
+              setSessionDate(null);
+            }}
             className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white backdrop-blur-sm focus:border-cyan-400/50 focus:outline-none"
           >
             {scopesLoading && <option value="">Loading...</option>}
             {scopes?.sessions.map((s) => (
-              <option key={s.session_date} value={s.session_date}>
-                {s.session_date} — {s.maps?.length ?? 0} map{(s.maps?.length ?? 0) !== 1 ? 's' : ''}
+              <option key={s.gaming_session_id} value={s.gaming_session_id}>
+                {sessionDateLabel(s)} — {s.accepted_round_count} round{s.accepted_round_count !== 1 ? 's' : ''}
               </option>
             ))}
           </select>

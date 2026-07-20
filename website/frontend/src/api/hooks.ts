@@ -1,6 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
-import { api } from './client';
+import { api, type StoryScope } from './client';
 import type { ProximityScope, PlayerHeatmapMode } from './types';
+
+// Codex SS-D: query-key identity for a StoryScope — the gsid when known
+// (preferred, stable across a session's date fragments), else the legacy
+// session_date. 'gaming-session-v1' tags the key shape so a future scope
+// contract change can't collide with stale cached entries under the old
+// (bare session_date) key shape.
+function storyQueryKeyPart(scope: StoryScope | null): string | number | null {
+  if (!scope) return null;
+  return 'gamingSessionId' in scope ? scope.gamingSessionId : scope.sessionDate;
+}
 
 // Home / Overview
 export const useOverview = () =>
@@ -585,145 +595,146 @@ export const useMovementStats = (rangeDays = 30, playerGuid?: string) =>
     staleTime: 60_000,
   });
 
-// Storytelling / Smart Stats
-export function useStoryKillImpact(sessionDate: string | null) {
+// Storytelling / Smart Stats (Codex SS-D — scope: StoryScope | null, gsid
+// preferred over the legacy session_date; see storyQueryKeyPart above)
+export function useStoryKillImpact(scope: StoryScope | null) {
   return useQuery({
-    queryKey: ['story-kill-impact', sessionDate],
+    queryKey: ['story-kill-impact', storyQueryKeyPart(scope), 'gaming-session-v1'],
     queryFn: () => {
-      if (!sessionDate) throw new Error('sessionDate required');
-      return api.getStoryKillImpact(sessionDate);
+      if (!scope) throw new Error('scope required');
+      return api.getStoryKillImpact(scope);
     },
-    enabled: !!sessionDate,
+    enabled: !!scope,
   });
 }
 
-export function useStoryMoments(sessionDate: string | null) {
+export function useStoryMoments(scope: StoryScope | null) {
   return useQuery({
-    queryKey: ['story-moments', sessionDate],
+    queryKey: ['story-moments', storyQueryKeyPart(scope), 'gaming-session-v1'],
     queryFn: () => {
-      if (!sessionDate) throw new Error('sessionDate required');
-      return api.getStoryMoments(sessionDate);
+      if (!scope) throw new Error('scope required');
+      return api.getStoryMoments(scope);
     },
-    enabled: !!sessionDate,
+    enabled: !!scope,
   });
 }
 
-export function useStoryMomentum(sessionDate: string | null) {
+export function useStoryMomentum(scope: StoryScope | null) {
   return useQuery({
-    queryKey: ['story-momentum', sessionDate],
+    queryKey: ['story-momentum', storyQueryKeyPart(scope), 'gaming-session-v1'],
     queryFn: () => {
-      if (!sessionDate) throw new Error('sessionDate required');
-      return api.getStoryMomentum(sessionDate);
+      if (!scope) throw new Error('scope required');
+      return api.getStoryMomentum(scope);
     },
-    enabled: !!sessionDate,
+    enabled: !!scope,
     staleTime: 60_000,
   });
 }
 
-export function useStoryNarrative(sessionDate: string | null) {
+export function useStoryNarrative(scope: StoryScope | null) {
   return useQuery({
-    queryKey: ['story-narrative', sessionDate],
+    queryKey: ['story-narrative', storyQueryKeyPart(scope), 'gaming-session-v1'],
     queryFn: () => {
-      if (!sessionDate) throw new Error('sessionDate required');
-      return api.getStoryNarrative(sessionDate);
+      if (!scope) throw new Error('scope required');
+      return api.getStoryNarrative(scope);
     },
-    enabled: !!sessionDate,
+    enabled: !!scope,
     staleTime: 60_000,
   });
 }
 
-export function usePlayerNarratives(sessionDate: string | null) {
+export function usePlayerNarratives(scope: StoryScope | null) {
   return useQuery({
-    queryKey: ['player-narratives', sessionDate],
+    queryKey: ['player-narratives', storyQueryKeyPart(scope), 'gaming-session-v1'],
     queryFn: () => {
-      if (!sessionDate) throw new Error('sessionDate required');
-      return api.getPlayerNarratives(sessionDate);
+      if (!scope) throw new Error('scope required');
+      return api.getPlayerNarratives(scope);
     },
-    enabled: !!sessionDate,
+    enabled: !!scope,
     staleTime: 60_000,
   });
 }
 
-export function useStoryGravity(sessionDate: string | null) {
+export function useStoryGravity(scope: StoryScope | null) {
   return useQuery({
-    queryKey: ['story-gravity', sessionDate],
+    queryKey: ['story-gravity', storyQueryKeyPart(scope), 'gaming-session-v1'],
     queryFn: () => {
-      if (!sessionDate) throw new Error('sessionDate required');
-      return api.getStoryGravity(sessionDate);
+      if (!scope) throw new Error('scope required');
+      return api.getStoryGravity(scope);
     },
-    enabled: !!sessionDate,
+    enabled: !!scope,
     staleTime: 60_000,
   });
 }
 
-export function useStorySpaceCreated(sessionDate: string | null) {
+export function useStorySpaceCreated(scope: StoryScope | null) {
   return useQuery({
-    queryKey: ['story-space-created', sessionDate],
+    queryKey: ['story-space-created', storyQueryKeyPart(scope), 'gaming-session-v1'],
     queryFn: () => {
-      if (!sessionDate) throw new Error('sessionDate required');
-      return api.getStorySpaceCreated(sessionDate);
+      if (!scope) throw new Error('scope required');
+      return api.getStorySpaceCreated(scope);
     },
-    enabled: !!sessionDate,
+    enabled: !!scope,
     staleTime: 60_000,
   });
 }
 
-export function useStoryEnabler(sessionDate: string | null) {
+export function useStoryEnabler(scope: StoryScope | null) {
   return useQuery({
-    queryKey: ['story-enabler', sessionDate],
+    queryKey: ['story-enabler', storyQueryKeyPart(scope), 'gaming-session-v1'],
     queryFn: () => {
-      if (!sessionDate) throw new Error('sessionDate required');
-      return api.getStoryEnabler(sessionDate);
+      if (!scope) throw new Error('scope required');
+      return api.getStoryEnabler(scope);
     },
-    enabled: !!sessionDate,
+    enabled: !!scope,
     staleTime: 60_000,
   });
 }
 
-export function useStoryLurkerProfile(sessionDate: string | null) {
+export function useStoryLurkerProfile(scope: StoryScope | null) {
   return useQuery({
-    queryKey: ['story-lurker', sessionDate],
+    queryKey: ['story-lurker', storyQueryKeyPart(scope), 'gaming-session-v1'],
     queryFn: () => {
-      if (!sessionDate) throw new Error('sessionDate required');
-      return api.getStoryLurkerProfile(sessionDate);
+      if (!scope) throw new Error('scope required');
+      return api.getStoryLurkerProfile(scope);
     },
-    enabled: !!sessionDate,
+    enabled: !!scope,
     staleTime: 60_000,
   });
 }
 
-export function useStorySynergy(sessionDate: string | null) {
+export function useStorySynergy(scope: StoryScope | null) {
   return useQuery({
-    queryKey: ['story-synergy', sessionDate],
+    queryKey: ['story-synergy', storyQueryKeyPart(scope), 'gaming-session-v1'],
     queryFn: () => {
-      if (!sessionDate) throw new Error('sessionDate required');
-      return api.getStorySynergy(sessionDate);
+      if (!scope) throw new Error('scope required');
+      return api.getStorySynergy(scope);
     },
-    enabled: !!sessionDate,
+    enabled: !!scope,
     staleTime: 60_000,
   });
 }
 
-export function useStoryWinContribution(sessionDate: string | null) {
+export function useStoryWinContribution(scope: StoryScope | null) {
   return useQuery({
-    queryKey: ['story-win-contribution', sessionDate],
+    queryKey: ['story-win-contribution', storyQueryKeyPart(scope), 'gaming-session-v1'],
     queryFn: () => {
-      if (!sessionDate) throw new Error('sessionDate required');
-      return api.getStoryWinContribution(sessionDate);
+      if (!scope) throw new Error('scope required');
+      return api.getStoryWinContribution(scope);
     },
-    enabled: !!sessionDate,
+    enabled: !!scope,
     staleTime: 60_000,
   });
 }
 
-export function useStoryBoxScore(sessionDate: string | null) {
+export function useStoryBoxScore(scope: StoryScope | null) {
   return useQuery({
-    queryKey: ['story-box-score', sessionDate],
+    queryKey: ['story-box-score', storyQueryKeyPart(scope), 'gaming-session-v1'],
     queryFn: () => {
-      if (!sessionDate) throw new Error('sessionDate required');
-      return api.getStoryBoxScore(sessionDate);
+      if (!scope) throw new Error('scope required');
+      return api.getStoryBoxScore(scope);
     },
-    enabled: !!sessionDate,
+    enabled: !!scope,
     staleTime: 60_000,
   });
 }
