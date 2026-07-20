@@ -12,6 +12,11 @@ from website.backend.dependencies import get_db, get_internal_request_mode
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 from website.backend.rate_limit import limiter
+from website.backend.services.session_scope import (
+    SCOPE_VERSION,
+    list_recent_scopes,
+    resolve_gaming_session_scope,
+)
 from website.backend.services.storytelling_service import (
     CARRIER_CHAIN_MULTIPLIER,
     CARRIER_KILL_MULTIPLIER,
@@ -59,6 +64,23 @@ def _parse_date(val: str) -> date:
             detail=f"session_date out of range (must be {_MIN_SESSION_DATE.isoformat()} to {today.isoformat()}).",
         )
     return parsed
+
+
+@router.get("/storytelling/scopes")
+async def get_storytelling_scopes(
+    limit: int = Query(30, ge=1, le=200),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Canonical gaming-session scopes for the Smart Stats selector (§7.1).
+
+    Deliberately separate from GET /proximity/scopes (which groups by
+    calendar session_date only and has no gaming_session_id at all — the
+    root cause the Story frontend's date-only selector inherited). Every
+    entry here is directly resolvable by /storytelling/* endpoints via
+    gaming_session_id.
+    """
+    scopes = await list_recent_scopes(db, limit=limit)
+    return {"scope_version": SCOPE_VERSION, "sessions": scopes}
 
 
 @router.get("/storytelling/moments")
@@ -573,20 +595,47 @@ async def get_player_narratives(
 @limiter.limit("10/minute")
 async def get_box_score(
     request: Request,
-    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    session_date: str | None = Query(
+        None,
+        description="Session date (YYYY-MM-DD) — legacy lookup; a date "
+        "spanning more than one gaming session returns 409 with candidates. "
+        "Prefer gaming_session_id.",
+    ),
+    gaming_session_id: int | None = Query(
+        None, description="Canonical gaming session id (preferred over session_date)."
+    ),
     db: DatabaseAdapter = Depends(get_db),
 ):
-    """BOX Score: Oksii-style stopwatch match scoring."""
-    sd = _parse_date(session_date)
-    row = await db.fetch_one(
-        "SELECT gaming_session_id FROM rounds WHERE round_date = $1 LIMIT 1",
-        (str(sd),),
+    """BOX Score: Oksii-style stopwatch match scoring.
+
+    Codex §5/§8 PR-A: resolves the caller's session_date/gaming_session_id
+    through the shared GamingSessionScope resolver instead of the old
+    `SELECT gaming_session_id FROM rounds WHERE round_date = $1 LIMIT 1` —
+    that silently picked ONE of possibly several gaming sessions on the same
+    calendar date. An ambiguous date now returns 409 with the candidate
+    sessions instead of a wrong/incomplete score.
+    """
+    # Validate "exactly one of" BEFORE parsing session_date: a malformed date
+    # supplied alongside gaming_session_id must still be the 422 the resolver
+    # would raise (both provided), not a 400 from date-parsing running first
+    # and hiding the real contract violation (Copilot review on #524).
+    if (session_date is None) == (gaming_session_id is None):
+        raise HTTPException(
+            status_code=422,
+            detail="Exactly one of gaming_session_id or session_date is required.",
+        )
+
+    if session_date is not None:
+        session_date = str(_parse_date(session_date))
+
+    scope = await resolve_gaming_session_scope(
+        db, gaming_session_id=gaming_session_id, session_date=session_date
     )
-    if not row:
-        return {"status": "ok", "maps": [], "maps_completed": 0}
 
     from website.backend.services.box_scoring_service import BOXScoringService
 
     svc = BOXScoringService(db)
-    score = await svc.calculate_session_score(row[0])
-    return svc.to_api_response(score)
+    score = await svc.calculate_session_score(scope.gaming_session_id)
+    response = svc.to_api_response(score)
+    response["scope"] = scope.to_metadata()
+    return response
