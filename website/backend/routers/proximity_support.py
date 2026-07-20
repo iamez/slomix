@@ -19,6 +19,8 @@ async def get_proximity_support_summary(
     range_days: int = 30,
     session_date: str | None = None,
     map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Support summary — medic support uptime per round."""
@@ -29,6 +31,7 @@ async def get_proximity_support_summary(
         ProximityQueryBuilder()
         .with_session_scope(session_date, range_days)
         .with_map_name(map_name)
+        .with_round(round_number, round_start_unix)
         .build()
     )
 
@@ -91,6 +94,8 @@ async def get_proximity_movement_stats(
     session_date: str | None = None,
     map_name: str | None = None,
     player_guid: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -100,10 +105,17 @@ async def get_proximity_movement_stats(
         .with_session_scope(session_date, range_days)
         .with_map_name(map_name)
         .with_player_guid("player_guid", player_guid)
+        .with_round(round_number, round_start_unix)
         .build()
     )
     safe_limit = max(1, min(limit, 50))
-    scope = {"session_date": session_date, "map_name": map_name, "player_guid": player_guid}
+    scope = {
+        "session_date": session_date,
+        "map_name": map_name,
+        "player_guid": player_guid,
+        "round_number": round_number,
+        "round_start_unix": round_start_unix,
+    }
 
     rows = await db.fetch_all(
             f"""
