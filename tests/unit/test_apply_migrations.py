@@ -571,7 +571,7 @@ async def test_get_db_fingerprint_never_includes_a_password():
     fp = await get_db_fingerprint(conn)
     assert "password" not in fp
     serialized = json.dumps(fp)
-    assert "PASSWORD" not in serialized.upper() or "database_role" in fp  # sanity: no raw secret leaks
+    assert "PASSWORD" not in serialized.upper()
     assert fp["database_name"] == "etlegacy_test"
     assert fp["database_role"] == "etlegacy_user"
     assert fp["ledger_max"] == "001_a.sql"

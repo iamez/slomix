@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-import subprocess
+import subprocess  # nosec B404 - used only by _read_git_revision() below with a fixed argv, no shell, no user input
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -54,7 +54,7 @@ def _read_git_revision() -> tuple[str | None, str | None]:
     git absent) must not crash the app over a diagnostics field.
     """
     try:
-        out = subprocess.run(  # noqa: S603 - fixed argv, no shell, no user input
+        out = subprocess.run(  # noqa: S603 # nosec B603 - fixed argv, no shell, no user input
             ["/usr/bin/env", "git", "rev-parse", "HEAD"],
             cwd=str(PROJECT_ROOT),
             capture_output=True,

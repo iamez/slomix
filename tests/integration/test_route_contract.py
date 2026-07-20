@@ -91,6 +91,20 @@ _FE_PATH_RE = re.compile(
     r"(?:scopedUrl\(['\"]|\$\{API(?:_BASE)?\})(/[a-zA-Z0-9/_-]+)"
 )
 
+# Matches a hardcoded `/api/...` literal wherever it appears — covers call
+# sites that skip the API_BASE constant entirely, e.g. auth.js's
+# `fetch('/api/availability/link-token', ...)` and diagnostics.js's endpoint
+# table (`{ endpoint: '/api/stats/overview', ... }`, later interpolated as
+# `${getApiBase()}${test.endpoint}` — a variable name _FE_PATH_RE doesn't
+# recognize, but the literal itself already carries the real `/api/...`
+# path, so no prefix needs reattaching here). The lookbehind requires an
+# opening quote/backtick or a template interpolation's closing `}`
+# immediately before `/api/` — i.e. this must be the START of an actual
+# string literal, not prose. Without it, doc-comments that merely MENTION a
+# path (admin-panel.js: "Future: pull from a /api/version endpoint") would
+# be scanned as real fetch targets and fail the test on a comment, not code.
+_FE_LITERAL_API_RE = re.compile(r"(?<=['\"`}])/api/[a-zA-Z0-9/_-]+")
+
 
 # website/js/community.js is dead code: no other JS module imports it and
 # it is not <script>-tagged anywhere in website/index.html, so its
@@ -111,6 +125,10 @@ def _extract_frontend_api_paths() -> set[str]:
             path = match.group(1).rstrip("/")
             if path:
                 paths.add(_API_BASE_PREFIX + path)
+        for match in _FE_LITERAL_API_RE.finditer(text):
+            path = match.group(0).rstrip("/")
+            if path:
+                paths.add(path)
     return paths
 
 
