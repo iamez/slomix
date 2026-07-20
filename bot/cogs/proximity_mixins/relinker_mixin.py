@@ -46,6 +46,18 @@ _RELINK_FALLBACK_TEMPLATE = (
     "WHERE map_name = $2 AND round_start_unix = $3 "
     "  AND (round_id IS NULL OR round_id != $1)"
 )
+# lua_round_teams has no session_date column (unlike every other table in
+# the fanout), so it can't use _RELINK_PRIMARY_TEMPLATE as-is. This uses
+# round_number + round_start_unix instead — still more precise than the
+# generic fallback template below, which only has map_name + round_start_unix
+# to work with (Codex §18/L3: lua_round_teams was excluded from the fanout
+# entirely before this; it's one of the tables with the worst wrong-link
+# rates precisely because a bad link here was never even retried).
+_RELINK_LUA_TEAMS_TEMPLATE = (
+    "UPDATE lua_round_teams SET round_id = $1 "
+    "WHERE map_name = $2 AND round_number = $3 AND round_start_unix = $4 "
+    "  AND (round_id IS NULL OR round_id != $1)"
+)
 _relink_primary_cache: dict[str, str] = {}
 _relink_fallback_cache: dict[str, str] = {}
 
@@ -79,6 +91,11 @@ class _ProximityRelinkerMixin:
             # stats arrived later creating the correct round but proximity stayed
             # linked to the wrong one. Without re-linking these, KIS / momentum /
             # BOX score for the mis-routed round are silently corrupted.
+            # combat_engagement/player_track added (Codex §18/L3 — both have
+            # a session_date column, so they fit the generic leg shape below
+            # exactly). lua_round_teams is handled SEPARATELY: it has no
+            # session_date column at all, so it needs its own leg pair that
+            # synthesizes one from round_start_unix for the UNION.
             tables_with_round_number = [
                 "proximity_reaction_metric", "proximity_spawn_timing",
                 "proximity_team_cohesion", "proximity_kill_outcome",
@@ -90,6 +107,7 @@ class _ProximityRelinkerMixin:
                 "proximity_objective_focus", "proximity_objective_run",
                 "proximity_support_summary", "proximity_team_push",
                 "proximity_trade_event", "proximity_vehicle_progress",
+                "combat_engagement", "player_track",
             ]
             null_legs = " UNION ".join(
                 f"SELECT map_name, round_number, round_start_unix, session_date "
@@ -104,6 +122,25 @@ class _ProximityRelinkerMixin:
                 f"  AND pko.round_start_unix != r.round_start_unix"
                 for t in tables_with_round_number
             )
+            # lua_round_teams: no session_date column — synthesize one from
+            # round_start_unix so this leg's column shape matches the UNION.
+            lua_teams_null_leg = (
+                "SELECT map_name, round_number, round_start_unix, "
+                "CASE WHEN round_start_unix IS NOT NULL "
+                "THEN TO_TIMESTAMP(round_start_unix)::date ELSE NULL END AS session_date "
+                "FROM lua_round_teams WHERE round_id IS NULL"
+            )
+            lua_teams_mismatch_leg = (
+                "SELECT pko.map_name, pko.round_number, pko.round_start_unix, "
+                "CASE WHEN pko.round_start_unix IS NOT NULL "
+                "THEN TO_TIMESTAMP(pko.round_start_unix)::date ELSE NULL END AS session_date "
+                "FROM lua_round_teams pko JOIN rounds r ON r.id = pko.round_id "
+                "WHERE pko.round_start_unix IS NOT NULL "
+                "  AND r.round_start_unix IS NOT NULL "
+                "  AND pko.round_start_unix != r.round_start_unix"
+            )
+            null_legs = f"{null_legs} UNION {lua_teams_null_leg}"
+            mismatch_legs = f"{mismatch_legs} UNION {lua_teams_mismatch_leg}"
             unlinked = await db.fetch_all(
                 f"SELECT DISTINCT map_name, round_number, round_start_unix, session_date "
                 f"FROM ({null_legs} UNION {mismatch_legs}) sub "
@@ -182,10 +219,20 @@ class _ProximityRelinkerMixin:
                 ) -> None:
                     async with sem:
                         try:
-                            await db.execute(
-                                _relink_sql(table),
-                                (rid, mn, rn, sd, rsu),
-                            )
+                            if table == "lua_round_teams":
+                                # No session_date column on this table — use
+                                # the dedicated template (map+round_number+
+                                # round_start_unix) instead of the generic
+                                # primary one.
+                                await db.execute(
+                                    _RELINK_LUA_TEAMS_TEMPLATE,
+                                    (rid, mn, rn, rsu),
+                                )
+                            else:
+                                await db.execute(
+                                    _relink_sql(table),
+                                    (rid, mn, rn, sd, rsu),
+                                )
                         except Exception as e:
                             logger.warning("Re-linker: %s primary update failed: %s", table, e)
                             try:

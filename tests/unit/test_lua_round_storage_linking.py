@@ -83,13 +83,11 @@ async def test_link_lua_round_teams_picks_closest_of_multiple_null_candidates():
 
 
 @pytest.mark.asyncio
-async def test_link_lua_round_teams_tied_candidates_currently_picks_first_arbitrarily():
-    """L2 lock-in of the CURRENT gap (not desired behaviour): two candidates
-    equally close to target_unix — neither an exact match to anything
-    round_linker-side — silently resolves to whichever row the DB happened
-    to return first. No ambiguity is signalled. This is the exact class of
-    "guessing" a future exact-match-priority / tie-defer fix (L3) should
-    close for this independent matcher, mirroring round_linker.py's fix."""
+async def test_link_lua_round_teams_tied_candidates_defers_instead_of_guessing():
+    """Codex §18/L3: two candidates equally close to target_unix — neither
+    an exact match — must defer (no update), never silently pick whichever
+    row the DB happened to return first. Mirrors round_linker.py's
+    tie-defer fix for this independent matcher."""
     target_unix = 1_776_800_000
     adapter = _FakeAdapter(null_candidates=[
         (10, target_unix - 100, None),  # tied: 100s away
@@ -101,9 +99,7 @@ async def test_link_lua_round_teams_tied_candidates_currently_picks_first_arbitr
         "map_name": "supply", "round_number": 1, "round_end_unix": target_unix,
     })
 
-    assert len(adapter.updates) == 1
-    _, params = adapter.updates[0]
-    assert params == (42, 10)  # first-iterated row silently wins the tie
+    assert adapter.updates == [], "a genuine tie must defer, never guess"
 
 
 @pytest.mark.asyncio
