@@ -5,6 +5,8 @@ Imports all module-level names (constants, helpers) from .base.
 """
 from __future__ import annotations
 
+from website.backend.services.session_scope import resolve_gaming_session_scope
+
 from .base import (
     CARRIER_CHAIN_MULTIPLIER,
     CARRIER_KILL_MULTIPLIER,
@@ -58,14 +60,53 @@ class _KisMixin:
     """Kis methods for StorytellingService."""
 
     async def compute_session_kis(self, session_date: str | date, force: bool = False) -> dict:
-        """Compute KIS for all kills in a session. Returns summary stats."""
+        """Compute KIS for all kills in a session. Returns summary stats.
+
+        Legacy single-date entrypoint — unchanged behaviour, kept for the
+        existing session_date-scoped callers (storytelling_router.py's
+        kill-impact endpoints). For a gsid-known caller, prefer
+        compute_session_kis_for_gsid() below: it resolves the FULL gaming
+        session scope (every date fragment a midnight-crossing session
+        touches), not just the one date given here.
+        """
         sd = _to_date(session_date)
         lock_key = str(sd)
         async with _compute_locks.get(lock_key):
-            return await self._compute_session_kis_locked(sd, force)
+            return await self._compute_kis_for_dates_locked((sd,), None, force)
 
-    async def _compute_session_kis_locked(self, sd: date, force: bool) -> dict:
-        """Inner compute logic — must be called while holding the session lock."""
+    async def compute_session_kis_for_gsid(
+        self, gaming_session_id: int, force: bool = False
+    ) -> dict:
+        """Gsid-native entrypoint (Codex §5/§8 SS-B).
+
+        Resolves the caller's gaming_session_id through the shared
+        GamingSessionScope resolver (session_scope.py) instead of a single
+        session_date, so a session that crosses midnight gets ALL of its
+        date fragments covered by one fetch/store/lock instead of only
+        whichever date the caller happened to ask about (the same class of
+        bug BOX score's PR-A fixed for scores; this is the same fix for
+        kill-impact). Every row this path writes is stamped with
+        gaming_session_id (migration 063) so a scope-wide lookup no longer
+        needs to enumerate dates by hand.
+        """
+        scope = await resolve_gaming_session_scope(self.db, gaming_session_id=gaming_session_id)
+        dates = tuple(_to_date(d) for d in scope.dates)
+        lock_key = f"gsid:{gaming_session_id}"
+        async with _compute_locks.get(lock_key):
+            return await self._compute_kis_for_dates_locked(dates, gaming_session_id, force)
+
+    async def _compute_kis_for_dates_locked(
+        self, dates: tuple[date, ...], gaming_session_id: int | None, force: bool
+    ) -> dict:
+        """Inner compute logic — must be called while holding the session lock.
+
+        `dates` may be a single-element tuple (legacy session_date path,
+        gaming_session_id=None) or the full multi-date scope of a gaming
+        session (gsid-native path). `session_date = ANY($1)` with a
+        one-element array is equivalent to `session_date = $1` for the
+        legacy caller — no behaviour change for existing single-date use.
+        """
+        date_list = list(dates)
         # Serve the cache only when it is BOTH current-formula AND fresh:
         # - formula_version guards against serving scores from an older
         #   formula after a version bump (#484).
@@ -78,23 +119,23 @@ class _KisMixin:
         if not force:
             existing = await self.db.fetch_one(
                 "SELECT COUNT(*), MAX(created_at) FROM storytelling_kill_impact "
-                "WHERE session_date = $1 AND formula_version = $2",
-                (sd, FORMULA_VERSION)
+                "WHERE session_date = ANY($1) AND formula_version = $2",
+                (date_list, FORMULA_VERSION)
             )
             if existing and existing[0] > 0:
                 kis_ts = existing[1]
                 ctx = await self.db.fetch_one(
                     "SELECT GREATEST("
-                    " (SELECT MAX(created_at) FROM proximity_kill_outcome          WHERE session_date=$1),"
-                    " (SELECT MAX(created_at) FROM proximity_combat_position       WHERE session_date=$1),"
-                    " (SELECT MAX(created_at) FROM proximity_spawn_timing          WHERE session_date=$1),"
-                    " (SELECT MAX(created_at) FROM proximity_team_push             WHERE session_date=$1),"
-                    " (SELECT MAX(created_at) FROM proximity_crossfire_opportunity WHERE session_date=$1),"
-                    " (SELECT MAX(created_at) FROM proximity_carrier_kill          WHERE session_date=$1),"
-                    " (SELECT MAX(created_at) FROM proximity_carrier_return        WHERE session_date=$1),"
-                    " (SELECT MAX(created_at) FROM proximity_reaction_metric       WHERE session_date=$1)"
+                    " (SELECT MAX(created_at) FROM proximity_kill_outcome          WHERE session_date=ANY($1)),"
+                    " (SELECT MAX(created_at) FROM proximity_combat_position       WHERE session_date=ANY($1)),"
+                    " (SELECT MAX(created_at) FROM proximity_spawn_timing          WHERE session_date=ANY($1)),"
+                    " (SELECT MAX(created_at) FROM proximity_team_push             WHERE session_date=ANY($1)),"
+                    " (SELECT MAX(created_at) FROM proximity_crossfire_opportunity WHERE session_date=ANY($1)),"
+                    " (SELECT MAX(created_at) FROM proximity_carrier_kill          WHERE session_date=ANY($1)),"
+                    " (SELECT MAX(created_at) FROM proximity_carrier_return        WHERE session_date=ANY($1)),"
+                    " (SELECT MAX(created_at) FROM proximity_reaction_metric       WHERE session_date=ANY($1))"
                     ")",
-                    (sd,)
+                    (date_list,)
                 )
                 ctx_ts = ctx[0] if ctx else None
                 # kis_ts should never be NULL when count>0, but guard anyway:
@@ -103,7 +144,7 @@ class _KisMixin:
                 if kis_ts is not None and (ctx_ts is None or ctx_ts <= kis_ts):
                     return {"status": "cached", "kills_scored": existing[0]}
                 logger.info(
-                    "KIS cache stale for %s (context newer than cache) — recomputing", sd
+                    "KIS cache stale for dates=%s (context newer than cache) — recomputing", date_list
                 )
 
         # 1. Get all kill outcomes for the session
@@ -113,14 +154,15 @@ class _KisMixin:
                    ko.victim_guid, ko.victim_name,
                    ko.outcome, ko.kill_time
             FROM proximity_kill_outcome ko
-            WHERE ko.session_date = $1
+            WHERE ko.session_date = ANY($1)
             ORDER BY ko.round_start_unix, ko.kill_time
-        """, (sd,))
+        """, (date_list,))
 
         if not kills:
             return {"status": "no_data", "kills_scored": 0}
 
-        # 2. Pre-load context data for the session (parallel — independent queries)
+        # 2. Pre-load context data for the session (parallel per date,
+        # merged across date fragments — see _load_context_for_dates).
         (
             carrier_kills,
             carrier_returns,
@@ -129,15 +171,7 @@ class _KisMixin:
             spawn_timings,
             victim_classes,
             combat_positions,
-        ) = await asyncio.gather(
-            self._load_carrier_kills(sd),
-            self._load_carrier_returns(sd),
-            self._load_pushes(sd),
-            self._load_crossfires(sd),
-            self._load_spawn_timings(sd),
-            self._load_victim_classes(sd),
-            self._load_combat_positions(sd),
-        )
+        ) = await self._load_context_for_dates(dates)
 
         # 3. Score each kill
         scored = []
@@ -153,16 +187,58 @@ class _KisMixin:
         tx = getattr(self.db, "transaction", None)
         if callable(tx):
             async with tx():
-                await self._store_scored_kills(sd, scored)
+                await self._store_scored_kills(date_list, gaming_session_id, scored)
         else:  # SQLite dev adapter has no transaction context
-            await self._store_scored_kills(sd, scored)
+            await self._store_scored_kills(date_list, gaming_session_id, scored)
 
-        logger.info("KIS computed for %s: %d kills scored", sd, len(scored))
+        logger.info("KIS computed for dates=%s: %d kills scored", date_list, len(scored))
         return {"status": "computed", "kills_scored": len(scored)}
 
-    async def _store_scored_kills(self, sd: date, scored: list) -> None:
+    async def _load_context_for_dates(self, dates: tuple[date, ...]) -> tuple[dict, ...]:
+        """Run the 7 KIS context loaders once per date fragment and merge.
+
+        Safe to merge with plain dict.update(): every loader is keyed by
+        round_ctx_key (round_start_unix, map_name, round_number) —
+        round_start_unix is a unique Unix timestamp, so keys from different
+        date fragments of the SAME gaming session can never collide.
+        Without this, a midnight-crossing session's second-date kills would
+        score with NO carrier/push/crossfire/spawn/class/position context —
+        a silent wrong-score bug, not a crash (Codex §5/§8 SS-B).
+        """
+        carrier_kills: dict = {}
+        carrier_returns: dict = {}
+        pushes: dict = {}
+        crossfires: dict = {}
+        spawn_timings: dict = {}
+        victim_classes: dict = {}
+        combat_positions: dict = {}
+        for d in dates:
+            (ck, cr, pu, cf, st, vc, cp) = await asyncio.gather(
+                self._load_carrier_kills(d),
+                self._load_carrier_returns(d),
+                self._load_pushes(d),
+                self._load_crossfires(d),
+                self._load_spawn_timings(d),
+                self._load_victim_classes(d),
+                self._load_combat_positions(d),
+            )
+            carrier_kills.update(ck)
+            carrier_returns.update(cr)
+            pushes.update(pu)
+            crossfires.update(cf)
+            spawn_timings.update(st)
+            victim_classes.update(vc)
+            combat_positions.update(cp)
+        return (
+            carrier_kills, carrier_returns, pushes, crossfires,
+            spawn_timings, victim_classes, combat_positions,
+        )
+
+    async def _store_scored_kills(
+        self, dates: list[date], gaming_session_id: int | None, scored: list
+    ) -> None:
         await self.db.execute(
-            "DELETE FROM storytelling_kill_impact WHERE session_date = $1", (sd,)
+            "DELETE FROM storytelling_kill_impact WHERE session_date = ANY($1)", (dates,)
         )
 
         if scored:
@@ -178,6 +254,7 @@ class _KisMixin:
                     s['is_objective_area'], s['kill_time_ms'],
                     s['killer_guid'][:8] if s['killer_guid'] else None,
                     FORMULA_VERSION,
+                    gaming_session_id,
                 )
                 for s in scored
             ]
@@ -190,8 +267,8 @@ class _KisMixin:
                  health_multiplier, alive_multiplier, reinf_multiplier,
                  killer_health, axis_alive, allies_alive, victim_reinf,
                  total_impact, is_carrier_kill, is_during_push, is_crossfire, is_objective_area,
-                 kill_time_ms, killer_guid_canonical, formula_version)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
+                 kill_time_ms, killer_guid_canonical, formula_version, gaming_session_id)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
             """, batch)
 
     def _score_kill(self, kill, carrier_kills, carrier_returns, pushes, crossfires,

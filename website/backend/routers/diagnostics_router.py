@@ -709,6 +709,28 @@ async def get_storytelling_completeness(
             """,
             (sd,),
         )
+        # Exact-link check (Codex §18 / L1 methodology): a non-NULL round_id
+        # only proves a kill points at SOME round, never the CORRECT one —
+        # pko.round_start_unix is written directly by the parser (trustworthy,
+        # never re-linked) so comparing it against the linked round's own
+        # round_start_unix catches the ~9% wrong-round-linkage class L1 found
+        # that a bare "round_id IS NOT NULL" check misses entirely.
+        wrong_link_row = await db.fetch_one(
+            """
+            SELECT
+                COUNT(*) FILTER (
+                    WHERE pko.round_id IS NOT NULL AND r.round_start_unix IS NOT NULL
+                ) AS comparable_rows,
+                COUNT(*) FILTER (
+                    WHERE pko.round_id IS NOT NULL AND r.round_start_unix IS NOT NULL
+                        AND r.round_start_unix = pko.round_start_unix
+                ) AS exact_rows
+            FROM proximity_kill_outcome pko
+            LEFT JOIN rounds r ON r.id = pko.round_id
+            WHERE pko.session_date = $1
+            """,
+            (sd,),
+        )
     except Exception as e:
         logger.error("Database error in storytelling-completeness: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred.")
@@ -719,12 +741,24 @@ async def get_storytelling_completeness(
     kis_rows = int(kis_row[0] or 0) if kis_row else 0
     rounds_total = int(rounds_row[0] or 0) if rounds_row else 0
     rounds_correlated = int(rounds_row[1] or 0) if rounds_row else 0
+    comparable_link_rows = int(wrong_link_row[0] or 0) if wrong_link_row else 0
+    exact_link_rows = int(wrong_link_row[1] or 0) if wrong_link_row else 0
+    wrong_round_kills = max(0, comparable_link_rows - exact_link_rows)
+    unlinked_kills = max(0, kills_total - kills_with_round)
 
     completeness_ratio = (kis_rows / kills_total) if kills_total > 0 else 0.0
     linkage_ratio = (kills_with_round / kills_total) if kills_total > 0 else 0.0
     correlation_ratio = (rounds_correlated / rounds_total) if rounds_total > 0 else 0.0
 
     kis_computed = kis_rows > 0
+
+    # D4 (degraded, never a silent fallback): a single status field a caller
+    # can branch on without re-deriving the ratio thresholds below itself.
+    status = "ok"
+    if kills_total == 0:
+        status = "no_data"
+    elif not kis_computed or completeness_ratio < 0.95 or linkage_ratio < 0.99 or wrong_round_kills > 0:
+        status = "degraded"
 
     warnings = []
     if kills_total == 0:
@@ -750,8 +784,16 @@ async def get_storytelling_completeness(
             warnings.append({
                 "level": "warning",
                 "message": (
-                    f"{kills_total - kills_with_round} kills brez round_id linka — "
+                    f"{unlinked_kills} kills brez round_id linka — "
                     "round_linker še ni resolviral vseh."
+                ),
+            })
+        if wrong_round_kills > 0:
+            warnings.append({
+                "level": "warning",
+                "message": (
+                    f"{wrong_round_kills} kills ima round_id, ki kaže na NAPAČNO rundo "
+                    "(round_start_unix se ne ujema) — ne samo manjkajoč link."
                 ),
             })
         if rounds_total > 0 and correlation_ratio < 0.90:
@@ -787,8 +829,11 @@ async def get_storytelling_completeness(
 
     return {
         "session_date": session_date,
+        "status": status,
         "kills_total": kills_total,
         "kills_with_round": kills_with_round,
+        "unlinked_kills": unlinked_kills,
+        "wrong_round_kills": wrong_round_kills,
         "distinct_rounds_in_kills": distinct_rounds,
         "kis_rows": kis_rows,
         "kis_computed": kis_computed,
