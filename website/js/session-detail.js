@@ -754,12 +754,13 @@ function _trustBadgeCopy(q) {
     // correlation_count = COUNT(*) FROM round_correlations, i.e. one row per R1/R2
     // match (a map), NOT per individual round. avg_completeness_pct is the overall
     // correlation completeness across stats/lua/gametime/endstats/proximity, not a
-    // proximity-only figure. missing_proximity_flag_rows IS proximity-specific
-    // (matches missing an R1/R2 proximity flag). Label each honestly.
+    // proximity-only figure. missing_existing_round_sides IS proximity-specific
+    // (an EXISTING R1/R2 round whose proximity flag is false — a genuinely
+    // partial match with no R2 round at all no longer counts here; Codex §18.3).
     const maps = Number(rc.correlation_count || 0);
     if (maps <= 0) return null;
     const completeness = Math.round(Number(rc.avg_completeness_pct || 0));
-    const gaps = Number(rc.missing_proximity_flag_rows || 0);
+    const gaps = Number(rc.missing_existing_round_sides || 0);
 
     const solid = coreReady && gaps === 0 && completeness >= 90;
     const detailParts = [

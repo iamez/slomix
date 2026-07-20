@@ -184,6 +184,8 @@ def _is_sqlite_adapter(db: DatabaseAdapter) -> bool:
 def _sqlite_unsupported_payload(scope: dict[str, Any]) -> dict[str, Any]:
     return {
         "overall_status": "error",
+        "selected_scope_status": "error",
+        "global_maintenance_status": "unknown",
         "scope": scope,
         "signals": {},
         "round_correlation": {
@@ -210,6 +212,9 @@ def _sqlite_unsupported_payload(scope: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+_EXACT_LINK_RATIO_THRESHOLD = 0.90
+
+
 async def _collect_signal(
     db: DatabaseAdapter,
     source: dict[str, Any],
@@ -220,40 +225,63 @@ async def _collect_signal(
     round_number: int | None,
     round_start_unix: int | None,
 ) -> dict[str, Any]:
-    where_sql, params, _scope = _build_proximity_where_clause(
-        range_days,
-        session_date,
-        map_name,
-        round_number,
-        round_start_unix,
-    )
     key = source["key"]
     table = source["table"]
     has_round_id = bool(source.get("has_round_id"))
-    if has_round_id:
-        linkage_columns = """
-            COUNT(*) FILTER (WHERE round_id IS NOT NULL) AS linked_rows,
-            COUNT(DISTINCT round_id) FILTER (WHERE round_id IS NOT NULL) AS linked_round_count,
-        """
-    else:
-        linkage_columns = """
-            NULL::integer AS linked_rows,
-            NULL::integer AS linked_round_count,
-        """
 
-    try:
-        row = await db.fetch_one(
-            f"""
+    if has_round_id:
+        # Aliased + LEFT JOIN rounds so "linked" can be checked against the
+        # ONE thing a foreign key can't lie about without the join: whether
+        # the linked round's own round_start_unix agrees with the source
+        # row's round_start_unix. A non-NULL round_id proves a row points at
+        # *some* round — never that it points at the CORRECT one (Codex
+        # §18.6: back-to-back replays of the same map get nearest-neighbour
+        # linked to the wrong instance while round_id stays non-NULL).
+        where_sql, params, _scope = _build_proximity_where_clause(
+            range_days, session_date, map_name, round_number, round_start_unix,
+            alias="src",
+        )
+        query = f"""
             /* proximity_quality_signal:{key} */
             SELECT
                 COUNT(*) AS row_count,
-                {linkage_columns}
+                COUNT(*) FILTER (WHERE src.round_id IS NOT NULL) AS linked_rows,
+                COUNT(DISTINCT src.round_id) FILTER (WHERE src.round_id IS NOT NULL) AS linked_round_count,
+                COUNT(*) FILTER (
+                    WHERE src.round_id IS NOT NULL
+                      AND src.round_start_unix IS NOT NULL
+                      AND r.round_start_unix IS NOT NULL
+                ) AS comparable_start_rows,
+                COUNT(*) FILTER (
+                    WHERE src.round_id IS NOT NULL
+                      AND src.round_start_unix IS NOT NULL
+                      AND r.round_start_unix IS NOT NULL
+                      AND src.round_start_unix = r.round_start_unix
+                ) AS exact_start_rows,
+                MAX(src.created_at) AS latest_created_at
+            FROM {table} src
+            LEFT JOIN rounds r ON src.round_id = r.id
+            {where_sql}
+        """  # nosec B608 - table/key are hardcoded constants in _SIGNAL_SOURCES.
+    else:
+        where_sql, params, _scope = _build_proximity_where_clause(
+            range_days, session_date, map_name, round_number, round_start_unix,
+        )
+        query = f"""
+            /* proximity_quality_signal:{key} */
+            SELECT
+                COUNT(*) AS row_count,
+                NULL::integer AS linked_rows,
+                NULL::integer AS linked_round_count,
+                NULL::integer AS comparable_start_rows,
+                NULL::integer AS exact_start_rows,
                 MAX(created_at) AS latest_created_at
             FROM {table}
             {where_sql}
-            """,  # nosec B608 - table/key are hardcoded constants in _SIGNAL_SOURCES.
-            tuple(params),
-        )
+        """  # nosec B608 - table/key are hardcoded constants in _SIGNAL_SOURCES.
+
+    try:
+        row = await db.fetch_one(query, tuple(params))
     except Exception as exc:
         logger.warning("proximity quality signal query failed for %s: %s", key, exc)
         return {
@@ -261,7 +289,10 @@ async def _collect_signal(
             "row_count": 0,
             "linked_rows": None,
             "linked_round_count": None,
-            "linked_ratio": None,
+            "comparable_start_rows": None,
+            "exact_start_rows": None,
+            "wrong_start_rows": None,
+            "exact_link_ratio": None,
             "latest_created_at": None,
             "ready": False,
             "status": "error",
@@ -279,12 +310,30 @@ async def _collect_signal(
     linked_round_count = (
         _safe_int(linked_round_count_raw) if linked_round_count_raw is not None else None
     )
-    latest_created_at = _row_get(row, 3, "latest_created_at")
+    comparable_start_rows_raw = _row_get(row, 3, "comparable_start_rows")
+    comparable_start_rows = (
+        _safe_int(comparable_start_rows_raw) if comparable_start_rows_raw is not None else None
+    )
+    exact_start_rows_raw = _row_get(row, 4, "exact_start_rows")
+    exact_start_rows = (
+        _safe_int(exact_start_rows_raw) if exact_start_rows_raw is not None else None
+    )
+    latest_created_at = _row_get(row, 5, "latest_created_at")
     min_rows = max(1, _safe_int(source.get("min_rows", 1)))
     required = bool(source.get("required"))
-    linked_ratio = (
-        round(float(linked_rows) / float(row_count), 6)
-        if has_round_id and linked_rows is not None and row_count > 0
+
+    wrong_start_rows = (
+        comparable_start_rows - exact_start_rows
+        if comparable_start_rows is not None and exact_start_rows is not None
+        else None
+    )
+    # exact_link_ratio is denominated over ALL rows (not just comparable
+    # ones): a row with no comparable start is honestly NOT proven correct,
+    # so it must count against the ratio the same way a wrong-start row does
+    # (Codex §18.6 — the old linked_ratio counted it as healthy).
+    exact_link_ratio = (
+        round(float(exact_start_rows) / float(row_count), 6)
+        if has_round_id and exact_start_rows is not None and row_count > 0
         else None
     )
 
@@ -296,7 +345,10 @@ async def _collect_signal(
     elif row_count < min_rows:
         status = "low_count"
         ready = not required
-    elif linked_ratio is not None and linked_ratio < 0.90:
+    elif wrong_start_rows is not None and wrong_start_rows > 0:
+        status = "wrong_round_linkage"
+        ready = not required
+    elif exact_link_ratio is not None and exact_link_ratio < _EXACT_LINK_RATIO_THRESHOLD:
         status = "round_linkage_partial"
         ready = not required
 
@@ -305,7 +357,10 @@ async def _collect_signal(
         "row_count": row_count,
         "linked_rows": linked_rows,
         "linked_round_count": linked_round_count,
-        "linked_ratio": linked_ratio,
+        "comparable_start_rows": comparable_start_rows,
+        "exact_start_rows": exact_start_rows,
+        "wrong_start_rows": wrong_start_rows,
+        "exact_link_ratio": exact_link_ratio,
         "latest_created_at": _isoformat(latest_created_at),
         "ready": ready,
         "status": status,
@@ -417,12 +472,14 @@ async def _collect_round_correlation(
             SELECT
                 COUNT(*) AS correlation_count,
                 COUNT(*) FILTER (WHERE rc.status = 'complete') AS complete_count,
-                COUNT(*) FILTER (WHERE COALESCE(rc.has_r1_proximity, FALSE)) AS r1_proximity_count,
-                COUNT(*) FILTER (WHERE COALESCE(rc.has_r2_proximity, FALSE)) AS r2_proximity_count,
+                COUNT(*) FILTER (WHERE rc.r1_round_id IS NOT NULL) AS r1_expected_sides,
                 COUNT(*) FILTER (
-                    WHERE NOT COALESCE(rc.has_r1_proximity, FALSE)
-                       OR NOT COALESCE(rc.has_r2_proximity, FALSE)
-                ) AS missing_proximity_flag_rows,
+                    WHERE rc.r1_round_id IS NOT NULL AND COALESCE(rc.has_r1_proximity, FALSE)
+                ) AS r1_proximity_present,
+                COUNT(*) FILTER (WHERE rc.r2_round_id IS NOT NULL) AS r2_expected_sides,
+                COUNT(*) FILTER (
+                    WHERE rc.r2_round_id IS NOT NULL AND COALESCE(rc.has_r2_proximity, FALSE)
+                ) AS r2_proximity_present,
                 COALESCE(ROUND(AVG(COALESCE(rc.completeness_pct, 0))::numeric, 2), 0) AS avg_completeness_pct,
                 MAX(rc.created_at) AS latest_created_at
             FROM round_correlations rc
@@ -439,9 +496,10 @@ async def _collect_round_correlation(
             "ready": False,
             "correlation_count": 0,
             "complete_count": 0,
-            "r1_proximity_count": 0,
-            "r2_proximity_count": 0,
-            "missing_proximity_flag_rows": 0,
+            "expected_round_sides": 0,
+            "present_proximity_sides": 0,
+            "missing_existing_round_sides": 0,
+            "unpaired_round_sides": 0,
             "avg_completeness_pct": 0.0,
             "latest_created_at": None,
             "error": "query_failed",
@@ -449,13 +507,28 @@ async def _collect_round_correlation(
 
     correlation_count = _safe_int(_row_get(row, 0, "correlation_count"))
     complete_count = _safe_int(_row_get(row, 1, "complete_count"))
-    missing_proximity_flag_rows = _safe_int(_row_get(row, 4, "missing_proximity_flag_rows"))
+    r1_expected_sides = _safe_int(_row_get(row, 2, "r1_expected_sides"))
+    r1_proximity_present = _safe_int(_row_get(row, 3, "r1_proximity_present"))
+    r2_expected_sides = _safe_int(_row_get(row, 4, "r2_expected_sides"))
+    r2_proximity_present = _safe_int(_row_get(row, 5, "r2_proximity_present"))
+
+    # §18.3 fix: a side that has NO round (r1_round_id/r2_round_id IS NULL —
+    # e.g. a genuinely partial R1-only match with no R2 to attach Proximity
+    # to) must NEVER be counted as missing telemetry. Only an EXISTING round
+    # side that lacks its proximity flag is a real completeness gap.
+    expected_round_sides = r1_expected_sides + r2_expected_sides
+    present_proximity_sides = r1_proximity_present + r2_proximity_present
+    missing_existing_round_sides = expected_round_sides - present_proximity_sides
+    # Informational only (not a telemetry failure): sides where the round
+    # itself was never paired (correlation_count*2 total possible sides).
+    unpaired_round_sides = (correlation_count * 2) - expected_round_sides
+
     status = "ok"
     ready = True
     if correlation_count <= 0:
         status = "missing"
         ready = False
-    elif missing_proximity_flag_rows > 0:
+    elif missing_existing_round_sides > 0:
         status = "proximity_flags_incomplete"
         ready = False
 
@@ -464,11 +537,12 @@ async def _collect_round_correlation(
         "ready": ready,
         "correlation_count": correlation_count,
         "complete_count": complete_count,
-        "r1_proximity_count": _safe_int(_row_get(row, 2, "r1_proximity_count")),
-        "r2_proximity_count": _safe_int(_row_get(row, 3, "r2_proximity_count")),
-        "missing_proximity_flag_rows": missing_proximity_flag_rows,
-        "avg_completeness_pct": _safe_float(_row_get(row, 5, "avg_completeness_pct")),
-        "latest_created_at": _isoformat(_row_get(row, 6, "latest_created_at")),
+        "expected_round_sides": expected_round_sides,
+        "present_proximity_sides": present_proximity_sides,
+        "missing_existing_round_sides": missing_existing_round_sides,
+        "unpaired_round_sides": unpaired_round_sides,
+        "avg_completeness_pct": _safe_float(_row_get(row, 6, "avg_completeness_pct")),
+        "latest_created_at": _isoformat(_row_get(row, 7, "latest_created_at")),
     }
 
 
@@ -552,11 +626,21 @@ def _build_warnings(
                     f"{key} has fewer rows than the minimum expected for the selected scope.",
                 )
             )
+        elif status == "wrong_round_linkage":
+            warnings.append(
+                _warning(
+                    "SIGNAL_WRONG_ROUND_LINKAGE",
+                    f"{key} has rows linked to the WRONG round (round_start_unix "
+                    "mismatch) in the selected scope, not just missing linkage.",
+                )
+            )
         elif status == "round_linkage_partial":
             warnings.append(
                 _warning(
                     "SIGNAL_ROUND_LINKAGE_PARTIAL",
-                    f"{key} has rows without round_id linkage in the selected scope.",
+                    f"{key} has fewer than {int(_EXACT_LINK_RATIO_THRESHOLD * 100)}% of rows "
+                    "with a confirmed exact-round link (unlinked or unverifiable "
+                    "round_id) in the selected scope.",
                 )
             )
 
@@ -621,16 +705,22 @@ def _build_warnings(
     return warnings
 
 
-def _overall_status(
+def _selected_scope_status(
     signals: dict[str, dict[str, Any]],
     round_correlation: dict[str, Any],
-    linkage: dict[str, Any],
     cache_freshness: dict[str, Any],
 ) -> str:
+    """Quality of the data for the SCOPE the caller actually selected —
+    signals + round correlation + cache freshness. Deliberately excludes
+    `linkage`, which `_sanitize_linkage` always scopes globally: a caller
+    looking at one date must not see "partial" caused entirely by unrelated
+    historical linkage debt elsewhere in the database (Codex §18.7 — the
+    response must separate selected-scope health from global maintenance
+    debt, which previously appeared "beneath the selected date" but was
+    conflated into one status)."""
     if (
         any(signal.get("status") == "error" for signal in signals.values())
         or round_correlation.get("status") == "error"
-        or linkage.get("status") == "error"
     ):
         return "error"
 
@@ -649,7 +739,6 @@ def _overall_status(
     if (
         partial_signal
         or not round_correlation.get("ready", False)
-        or linkage.get("breach_count", 0) > 0
         or cache_freshness.get("status") in {"missing", "stale"}
     ):
         return "partial"
@@ -661,6 +750,35 @@ def _overall_status(
         return "experimental"
 
     return "ready"
+
+
+def _global_maintenance_status(linkage: dict[str, Any]) -> str:
+    """Health of the GLOBAL, all-history round-linkage anomaly checks — never
+    scoped to the caller's selected date/round (Codex §18.7)."""
+    if linkage.get("status") == "error":
+        return "error"
+    if linkage.get("breach_count", 0) > 0:
+        return "warning"
+    return "ok"
+
+
+def _overall_status(
+    signals: dict[str, dict[str, Any]],
+    round_correlation: dict[str, Any],
+    linkage: dict[str, Any],
+    cache_freshness: dict[str, Any],
+) -> str:
+    """Backward-compatible combined status (existing consumers read this
+    field). New callers should prefer `selected_scope_status` +
+    `global_maintenance_status`, which this is derived from."""
+    selected = _selected_scope_status(signals, round_correlation, cache_freshness)
+    if selected == "error" or linkage.get("status") == "error":
+        return "error"
+    if selected == "insufficient":
+        return "insufficient"
+    if selected == "partial" or linkage.get("breach_count", 0) > 0:
+        return "partial"
+    return selected
 
 
 @router.get("/proximity/quality")
@@ -707,6 +825,12 @@ async def get_proximity_quality(
         overall_status = _overall_status(signals, round_correlation, linkage, cache_freshness)
         return {
             "overall_status": overall_status,
+            # Codex §18.7: separate scopes so a caller looking at one date
+            # doesn't read "partial" caused entirely by unrelated global
+            # linkage debt (and vice versa — global debt must not hide
+            # behind a healthy-looking selected scope).
+            "selected_scope_status": _selected_scope_status(signals, round_correlation, cache_freshness),
+            "global_maintenance_status": _global_maintenance_status(linkage),
             "scope": scope,
             "signals": signals,
             "round_correlation": round_correlation,
@@ -719,6 +843,8 @@ async def get_proximity_quality(
         logger.error("proximity quality endpoint failed: %s", exc, exc_info=True)
         return {
             "overall_status": "error",
+            "selected_scope_status": "error",
+            "global_maintenance_status": "unknown",
             "scope": scope,
             "signals": {},
             "round_correlation": {"status": "error", "ready": False},
