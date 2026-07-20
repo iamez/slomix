@@ -127,6 +127,20 @@ async def test_movement_stats_round_scope_reaches_sql():
 
 
 @pytest.mark.asyncio
+async def test_movement_stats_scope_normalizes_zero_round_start_unix_to_none():
+    """round_start_unix=0 applies no SQL filter (with_round() treats it as
+    "not provided") — the echoed scope must say None, not 0, or it claims
+    a round-scoped response the executed SQL isn't (Copilot review on #529)."""
+    from website.backend.routers.proximity_support import get_proximity_movement_stats
+
+    db = _CapturingDB()
+    result = await get_proximity_movement_stats(round_start_unix=0, db=db)
+    query, _ = db.fetch_all_calls[0]
+    assert "round_start_unix" not in query
+    assert result["scope"]["round_start_unix"] is None
+
+
+@pytest.mark.asyncio
 async def test_kill_outcomes_player_stats_round_scope_reaches_sql():
     from website.backend.routers.proximity_dashboard import (
         get_proximity_kill_outcomes_player_stats,

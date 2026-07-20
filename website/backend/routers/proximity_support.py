@@ -114,7 +114,11 @@ async def get_proximity_movement_stats(
         "map_name": map_name,
         "player_guid": player_guid,
         "round_number": round_number,
-        "round_start_unix": round_start_unix,
+        # Normalize like _build_proximity_where_clause's own scope dict and
+        # with_round() itself: round_start_unix<=0 means "no filter was
+        # actually applied" — echoing the raw 0 here would claim a
+        # round-scoped response that the executed SQL isn't (Copilot review).
+        "round_start_unix": round_start_unix if round_start_unix and round_start_unix > 0 else None,
     }
 
     rows = await db.fetch_all(
