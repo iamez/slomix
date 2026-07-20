@@ -148,6 +148,15 @@ class ProximityCog(
         "proximity_trade_event",
         "proximity_vehicle_progress",
         # proximity_weapon_accuracy excluded: no round_number/round_start_unix/session_date columns
+        # Codex §18/L3: these three had among the WORST wrong-round-linkage
+        # rates, precisely because they were missing from this fanout — a
+        # bad/NULL round_id here was never even retried by the 5-minute
+        # relinker. lua_round_teams has round_number+round_start_unix but no
+        # session_date column — relinker_mixin.py's _link_table special-cases
+        # it onto a dedicated SQL template rather than the generic primary one.
+        "combat_engagement",
+        "player_track",
+        "lua_round_teams",
     })
 
 

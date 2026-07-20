@@ -86,9 +86,14 @@ class _LuaRoundStorageMixin:
             if not rows:
                 return
 
-            # Pick the closest candidate to avoid linking multiple rows
-            best_id = None
-            best_diff = None
+            # Pick the closest candidate to avoid linking multiple rows.
+            # Collected in full (not tracked as a running best) so a TIE —
+            # two candidates equally close to target_unix — can be detected
+            # and deferred instead of silently keeping whichever row the DB
+            # happened to return first (Codex §18/L3: this matcher is
+            # independent of bot.core.round_linker, which got the same
+            # never-guess-on-a-tie treatment).
+            candidates: list[tuple[int, int]] = []
             for row in rows:
                 lua_id, round_end_unix, round_start_unix = row
                 diffs = []
@@ -98,20 +103,28 @@ class _LuaRoundStorageMixin:
                     diffs.append(abs(int(round_start_unix) - target_unix))
                 if not diffs:
                     continue
-                diff = min(diffs)
-                if best_diff is None or diff < best_diff:
-                    best_diff = diff
-                    best_id = lua_id
+                candidates.append((lua_id, min(diffs)))
 
-            if best_id is not None:
-                await self.db_adapter.execute(
-                    "UPDATE lua_round_teams SET round_id = ? WHERE id = ?",
-                    (round_id, best_id),
-                )
-                logger.debug(
-                    "Lua round link (NULL pass): lua_id=%s → round_id=%s (diff=%ss)",
-                    best_id, round_id, best_diff,
-                )
+            if candidates:
+                best_diff = min(diff for _, diff in candidates)
+                tied = [lid for lid, diff in candidates if diff == best_diff]
+                if len(tied) > 1:
+                    logger.info(
+                        "Lua round link (NULL pass) ambiguous tie: map=%s rn=%s "
+                        "round_id=%s — %d candidates tied at %ss, deferring "
+                        "rather than guessing",
+                        map_name, round_number, round_id, len(tied), best_diff,
+                    )
+                else:
+                    best_id = tied[0]
+                    await self.db_adapter.execute(
+                        "UPDATE lua_round_teams SET round_id = ? WHERE id = ?",
+                        (round_id, best_id),
+                    )
+                    logger.debug(
+                        "Lua round link (NULL pass): lua_id=%s → round_id=%s (diff=%ss)",
+                        best_id, round_id, best_diff,
+                    )
 
             # --- Second pass: fix stale linkages ---
             # When the same map is played multiple times in a session, the initial
