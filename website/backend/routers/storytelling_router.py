@@ -14,6 +14,7 @@ from website.backend.logging_config import get_app_logger
 from website.backend.rate_limit import limiter
 from website.backend.services.session_scope import (
     SCOPE_VERSION,
+    GamingSessionScope,
     list_recent_scopes,
     resolve_gaming_session_scope,
 )
@@ -66,6 +67,51 @@ def _parse_date(val: str) -> date:
     return parsed
 
 
+async def resolve_story_scope(
+    session_date: str | None = Query(
+        None,
+        description="Session date (YYYY-MM-DD) — legacy lookup; a date "
+        "spanning more than one gaming session returns 409 with candidates. "
+        "Prefer gaming_session_id.",
+    ),
+    gaming_session_id: int | None = Query(
+        None, description="Canonical gaming session id (preferred over session_date)."
+    ),
+    db: DatabaseAdapter = Depends(get_db),
+) -> GamingSessionScope:
+    """Shared scope resolver for the storytelling panels (Codex §5/§8 SS-C).
+
+    Every panel below accepts EITHER session_date OR gaming_session_id
+    through this one dependency instead of repeating the query params —
+    the same resolver BOX score (SS-A) uses, so an ambiguous date 409s
+    with candidates instead of silently picking one gaming session.
+
+    Panels still compute against a SINGLE representative date
+    (scope.dates[0] — the earliest date fragment) rather than the full
+    multi-date scope compute_session_kis_for_gsid (SS-B) uses: a genuine
+    per-panel multi-date data fix is a larger, file-by-file undertaking
+    tracked separately. This pass gives every panel gsid-addressability,
+    409-on-ambiguity, and a `scope` metadata block in its response —
+    real, safe, immediately useful — without claiming the deeper
+    multi-date correctness fix that hasn't been done here.
+    """
+    # Validate "exactly one of" BEFORE parsing session_date: a malformed
+    # date supplied alongside gaming_session_id must still be the 422 the
+    # resolver would raise (both provided), not a 400 from date-parsing
+    # running first and hiding the real contract violation — same ordering
+    # bug Copilot caught on BOX score (#524), now here too.
+    if (session_date is None) == (gaming_session_id is None):
+        raise HTTPException(
+            status_code=422,
+            detail="Exactly one of gaming_session_id or session_date is required.",
+        )
+    if session_date is not None:
+        session_date = str(_parse_date(session_date))
+    return await resolve_gaming_session_scope(
+        db, gaming_session_id=gaming_session_id, session_date=session_date
+    )
+
+
 @router.get("/storytelling/scopes")
 async def get_storytelling_scopes(
     limit: int = Query(30, ge=1, le=200),
@@ -87,17 +133,18 @@ async def get_storytelling_scopes(
 @limiter.limit("10/minute")
 async def get_moments(
     request: Request,
-    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    scope: GamingSessionScope = Depends(resolve_story_scope),
     limit: int = Query(default=10, le=50, ge=1),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Match Moments — highlight reel of a session."""
-    sd = _parse_date(session_date)
+    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
     moments = await svc.detect_moments(sd, limit=limit)
     return {
         "status": "ok",
-        "session_date": session_date,
+        "session_date": scope.dates[0],
+        "scope": scope.to_metadata(),
         "moments": moments,
         "total": len(moments),
     }
@@ -139,7 +186,7 @@ def _build_life_cards(rows) -> list:
 @limiter.limit("10/minute")
 async def get_best_lives(
     request: Request,
-    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    scope: GamingSessionScope = Depends(resolve_story_scope),
     limit: int = Query(default=5, le=20, ge=1),
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -151,7 +198,7 @@ async def get_best_lives(
     proximity_combat_position. Read-only. Ranked by kills, then by how explosive
     the life was (kills per second). Bots excluded.
     """
-    sd = _parse_date(session_date)
+    sd = date.fromisoformat(scope.dates[0])
     rows = await db.fetch_all(
         """
         SELECT pt.player_guid AS guid, pt.player_name AS name, pt.map_name,
@@ -194,7 +241,8 @@ async def get_best_lives(
     lives = _build_life_cards(rows)
     return {
         "status": "ok",
-        "session_date": session_date,
+        "session_date": scope.dates[0],
+        "scope": scope.to_metadata(),
         "lives": lives,
         "total": len(lives),
     }
@@ -204,17 +252,27 @@ async def get_best_lives(
 @limiter.limit("10/minute")
 async def get_kill_impact_leaderboard(
     request: Request,
-    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
-    limit: int = Query(default=20, le=100, ge=1),
+    # internal_request MUST resolve before scope: get_internal_request_mode
+    # raises 401 on a bad token, and must do so BEFORE resolve_story_scope
+    # touches the database (Codex SS-C — FastAPI resolves Depends() in
+    # parameter order; test_wrong_internal_token_rejects_before_db pins this).
     internal_request: bool = Depends(get_internal_request_mode),
+    scope: GamingSessionScope = Depends(resolve_story_scope),
+    limit: int = Query(default=20, le=100, ge=1),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """KIS leaderboard for a session.
 
     Public calls are read-only. Internal bot calls with X-Internal-Token may
     lazy-compute/write the KIS cache.
+
+    The compute call itself stays on the legacy single-date
+    compute_session_kis path (via kis_compute_with_shadow) — SS-B's
+    gsid-native compute_session_kis_for_gsid is intentionally not wired in
+    here yet (see that PR's notes); this endpoint gains gsid-addressability
+    and scope metadata, not the deeper multi-date KIS fix.
     """
-    sd = _parse_date(session_date)
+    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
     compute_result = {"status": "read_only"}
     if internal_request:
@@ -228,7 +286,8 @@ async def get_kill_impact_leaderboard(
 
     return {
         "status": "ok",
-        "session_date": session_date,
+        "session_date": scope.dates[0],
+        "scope": scope.to_metadata(),
         "compute": compute_result,
         "players": leaderboard,
         "entries": leaderboard,
@@ -241,17 +300,15 @@ async def get_kill_impact_leaderboard(
 @limiter.limit("10/minute")
 async def get_kill_impact_details(
     request: Request,
-    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
-    player_guid: str = Query(..., description="Player GUID"),
+    # See get_kill_impact_leaderboard above: internal_request must resolve
+    # (and 401 on a bad token) before scope touches the database.
     internal_request: bool = Depends(get_internal_request_mode),
+    scope: GamingSessionScope = Depends(resolve_story_scope),
+    player_guid: str = Query(..., description="Player GUID"),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Per-kill KIS breakdown for a specific player in a session."""
-    # Validate the date first — previously compute_session_kis() received
-    # the raw query string, so `session_date=foo` surfaced as an internal
-    # 500 via the ValueError raised from _to_date. Parsing up front turns
-    # that into the 400 handled by _parse_date.
-    sd = _parse_date(session_date)
+    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
     if internal_request:
         # Same shadow-aware entrypoint as the leaderboard route (see above).
@@ -318,7 +375,8 @@ async def get_kill_impact_details(
 
     return {
         "status": "ok",
-        "session_date": session_date,
+        "session_date": scope.dates[0],
+        "scope": scope.to_metadata(),
         "player_guid": player_guid,
         "player_name": player_name,
         "summary": {
@@ -426,126 +484,143 @@ async def get_kis_formula():
 @limiter.limit("10/minute")
 async def get_team_synergy(
     request: Request,
-    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    scope: GamingSessionScope = Depends(resolve_story_scope),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Team Synergy Score: 5-axis coordination metrics per faction."""
-    sd = _parse_date(session_date)
+    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    return await svc.compute_team_synergy(sd)
+    result = await svc.compute_team_synergy(sd)
+    result["scope"] = scope.to_metadata()
+    return result
 
 
 @router.get("/storytelling/win-contribution")
 @limiter.limit("10/minute")
 async def get_win_contribution(
     request: Request,
-    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    scope: GamingSessionScope = Depends(resolve_story_scope),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Player Win Contribution (PWC): per-round contribution + Win Impact Score."""
-    _parse_date(session_date)  # validate
     svc = StorytellingService(db)
-    result = await svc.compute_win_contribution(session_date)
-    return {"status": "ok", **result}
+    result = await svc.compute_win_contribution(scope.dates[0])
+    return {"status": "ok", **result, "scope": scope.to_metadata()}
 
 
 @router.get("/storytelling/momentum")
 @limiter.limit("10/minute")
 async def get_momentum(
     request: Request,
-    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    scope: GamingSessionScope = Depends(resolve_story_scope),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Momentum chart: per-round team momentum in 30-second windows."""
-    sd = _parse_date(session_date)
+    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    return await svc.compute_momentum(sd)
+    result = await svc.compute_momentum(sd)
+    result["scope"] = scope.to_metadata()
+    return result
 
 
 @router.get("/storytelling/momentum-session")
 @limiter.limit("10/minute")
 async def get_momentum_session(
     request: Request,
-    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    scope: GamingSessionScope = Depends(resolve_story_scope),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Whole-session momentum by logical team (stopwatch roster tracking)."""
-    sd = _parse_date(session_date)
+    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    return await svc.compute_momentum_session(sd)
+    result = await svc.compute_momentum_session(sd)
+    result["scope"] = scope.to_metadata()
+    return result
 
 
 @router.get("/storytelling/narrative")
 @limiter.limit("10/minute")
 async def get_narrative(
     request: Request,
-    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    # See get_kill_impact_leaderboard above: internal_request must resolve
+    # (and 401 on a bad token) before scope touches the database.
     internal_request: bool = Depends(get_internal_request_mode),
+    scope: GamingSessionScope = Depends(resolve_story_scope),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Session narrative: human-readable summary paragraph."""
-    sd = _parse_date(session_date)
+    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    return await svc.generate_narrative(sd, ensure_kis=internal_request)
+    result = await svc.generate_narrative(sd, ensure_kis=internal_request)
+    result["scope"] = scope.to_metadata()
+    return result
 
 
 @router.get("/storytelling/gravity")
 @limiter.limit("10/minute")
 async def get_gravity(
     request: Request,
-    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    scope: GamingSessionScope = Depends(resolve_story_scope),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Gravity Score: enemy attention attracted per minute alive."""
-    sd = _parse_date(session_date)
+    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    return await svc.compute_gravity(sd)
+    result = await svc.compute_gravity(sd)
+    result["scope"] = scope.to_metadata()
+    return result
 
 
 @router.get("/storytelling/space-created")
 @limiter.limit("10/minute")
 async def get_space_created(
     request: Request,
-    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    scope: GamingSessionScope = Depends(resolve_story_scope),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Space Created: productive deaths where teammates capitalized."""
-    sd = _parse_date(session_date)
+    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    return await svc.compute_space_created(sd)
+    result = await svc.compute_space_created(sd)
+    result["scope"] = scope.to_metadata()
+    return result
 
 
 @router.get("/storytelling/enabler")
 @limiter.limit("10/minute")
 async def get_enabler(
     request: Request,
-    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    scope: GamingSessionScope = Depends(resolve_story_scope),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Enabler Score: teammate kills enabled by your presence/action."""
-    sd = _parse_date(session_date)
+    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    return await svc.compute_enabler(sd)
+    result = await svc.compute_enabler(sd)
+    result["scope"] = scope.to_metadata()
+    return result
 
 
 @router.get("/storytelling/lurker-profile")
 @limiter.limit("5/minute")
 async def get_lurker_profile(
     request: Request,
-    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    scope: GamingSessionScope = Depends(resolve_story_scope),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Lurker Profile: solo time and team separation analysis."""
-    sd = _parse_date(session_date)
+    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    return await svc.compute_lurker_profile(sd)
+    result = await svc.compute_lurker_profile(sd)
+    result["scope"] = scope.to_metadata()
+    return result
 
 
 @router.get("/storytelling/useless-defense-deaths")
 @limiter.limit("10/minute")
 async def get_useless_defense_deaths(
     request: Request,
-    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    scope: GamingSessionScope = Depends(resolve_story_scope),
     min_killer_health: int = Query(
         default=80, ge=1, le=200,
         description=(
@@ -568,27 +643,33 @@ async def get_useless_defense_deaths(
     favors stable players (high sample size) over single-incident outliers.
     Rate (useless / total) is included in the response for downstream sorting.
     """
-    sd = _parse_date(session_date)
+    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    return await svc.compute_useless_defense_deaths(
+    result = await svc.compute_useless_defense_deaths(
         sd,
         min_killer_health=min_killer_health,
         min_reinf_seconds=min_reinf_seconds,
     )
+    result["scope"] = scope.to_metadata()
+    return result
 
 
 @router.get("/storytelling/player-narratives")
 @limiter.limit("5/minute")
 async def get_player_narratives(
     request: Request,
-    session_date: str = Query(..., description="Session date (YYYY-MM-DD)"),
+    # See get_kill_impact_leaderboard above: internal_request must resolve
+    # (and 401 on a bad token) before scope touches the database.
     internal_request: bool = Depends(get_internal_request_mode),
+    scope: GamingSessionScope = Depends(resolve_story_scope),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Per-player micro-narratives: invisible value stories for each player."""
-    sd = _parse_date(session_date)
+    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    return await svc.generate_player_narratives(sd, ensure_kis=internal_request)
+    result = await svc.generate_player_narratives(sd, ensure_kis=internal_request)
+    result["scope"] = scope.to_metadata()
+    return result
 
 
 @router.get("/storytelling/box-score")

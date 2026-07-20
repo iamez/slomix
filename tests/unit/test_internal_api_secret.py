@@ -74,12 +74,38 @@ async def test_s_effort_accepts_valid_internal_header(monkeypatch):
     assert [c[0] for c in calls] == ["init", "compute", "persist"]
 
 
+class _StoryScopeFakeDB:
+    """Every storytelling endpoint now resolves its session_date through
+    resolve_story_scope (Codex SS-C), which — unlike the old endpoints,
+    which only format/range-validated the date string — needs real DB
+    support to detect an ambiguous date. Resolves any requested date to
+    exactly one unambiguous gaming session, echoing that SAME date back
+    from _fetch_scope_rounds so existing call assertions (which check the
+    exact date string passed to the mocked service methods) keep working
+    unchanged."""
+
+    def __init__(self):
+        self._requested_date: str | None = None
+
+    async def fetch_all(self, query, params=None):
+        q = " ".join(str(query).split())
+        if "MIN(SUBSTR(CAST(round_date AS TEXT), 1, 10)) AS start_date" in q:
+            self._requested_date = params[0]
+            return [(1, params[0], params[0], 1)]
+        if "round_start_unix, map_name, round_number" in q:
+            return [(1_700_000_000, "supply", 1, self._requested_date)]
+        return []
+
+    async def fetch_one(self, query, params=None):
+        return None
+
+
 def _story_app(db_calls: list[str]):
     app = FastAPI()
 
     async def _db_override():
         db_calls.append("db")
-        return object()
+        return _StoryScopeFakeDB()
 
     app.dependency_overrides[get_db] = _db_override
     app.include_router(storytelling_router.router, prefix="/api")
