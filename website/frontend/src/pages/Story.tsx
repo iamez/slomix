@@ -96,7 +96,16 @@ export default function Story({ params }: { params?: Record<string, string> }) {
   // Fetch available sessions
   const { data: scopes, isLoading: scopesLoading } = useQuery<ScopeData>({
     queryKey: ['storytelling-scopes'],
-    queryFn: () => fetch(`${API}/storytelling/scopes?limit=100`).then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch(`${API}/storytelling/scopes?limit=100`);
+      if (!res.ok) {
+        // 503 (SQLite dev mode — session_scope.py's ScopeBackendUnsupportedError)
+        // or a transient 500 both have an error-shaped body, not ScopeData —
+        // parsing it as one would silently corrupt `sessions` (Copilot review).
+        throw new Error(`storytelling/scopes ${res.status}`);
+      }
+      return res.json() as Promise<ScopeData>;
+    },
     staleTime: 60_000,
   });
 
@@ -157,13 +166,15 @@ export default function Story({ params }: { params?: Record<string, string> }) {
   const heroLabel = sessionDateLabel(currentSession) || sessionDate || '';
   const mapNames = currentSession?.distinct_map_names ?? [];
 
-  // A legacy date deep-link that spans >1 gaming session 409s here. The
-  // dropdown below always lists unambiguous individual sessions, so
-  // pointing the user at it is a real fix, not a dead end — a full
-  // candidate picker (matching story.js's) would need a body-preserving
-  // fetch path get<T> doesn't have; tracked as a smaller follow-up rather
-  // than blocking this conversion.
-  const showAmbiguousNotice = kisError && gamingSessionId == null && !!sessionDate;
+  // A legacy date deep-link can fail to resolve for more than one reason —
+  // most commonly the date spans >1 gaming session (409), but also a
+  // genuinely unknown date (404) or a transient backend error (5xx). get<T>
+  // discards the response body on error, so this can't distinguish which
+  // one happened (a body-preserving fetch path would let it, matching
+  // story.js's dedicated candidate picker — tracked as a smaller follow-up
+  // rather than blocking this conversion); the message below is worded to
+  // stay true regardless of the actual cause (Copilot review).
+  const showDateResolutionNotice = kisError && gamingSessionId == null && !!sessionDate;
 
   return (
     <>
@@ -187,9 +198,9 @@ export default function Story({ params }: { params?: Record<string, string> }) {
           </div>
         ) : null}
 
-        {showAmbiguousNotice && (
+        {showDateResolutionNotice && (
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
-            This date has more than one gaming session — pick the one you meant from the dropdown below.
+            Couldn't load Smart Stats for that date — pick a session from the dropdown below.
           </div>
         )}
 
