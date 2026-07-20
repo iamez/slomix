@@ -16,11 +16,25 @@ logger = logging.getLogger('bot.services.round_linkage_anomaly')
 
 DEFAULT_THRESHOLDS = {
     "max_unlinked_lua_ratio": 0.20,
-    "max_match_id_mismatch_rows": 0,
+    # max_match_id_mismatch_rows REMOVED (Codex §18.4): rounds.match_id is
+    # derived from the stats filename/stopwatch pairing while
+    # lua_round_teams.match_id is derived from round_end_unix (documented
+    # divergence in bot/services/timing_comparison_service.py:15-18) — raw
+    # equality between the two is not a valid health invariant and was
+    # producing hundreds of false-positive breaches. Replaced by
+    # max_wrong_start_lua_rows, which compares the one field both sides
+    # agree must match: round_start_unix.
+    "max_wrong_start_lua_rows": 0,
     "max_map_name_mismatch_rows": 0,
     "max_round_number_mismatch_rows": 0,
     "max_duplicate_lua_round_links": 0,
-    "max_correlation_round_mismatch_rows": 0,
+    # max_correlation_round_mismatch_rows REMOVED for the same reason as
+    # match_id above (it OR'd in a match_id comparison). round_correlations
+    # has no round_start_unix of its own (r1_round_id/r2_round_id are plain
+    # FKs, not a denormalized copy like lua_round_teams carries) — the only
+    # remaining independently-comparable field is map_name. Replaced by
+    # max_correlation_map_mismatch_rows.
+    "max_correlation_map_mismatch_rows": 0,
     "max_complete_missing_core_rows": 0,
 }
 
@@ -56,11 +70,11 @@ def _normalize_thresholds(thresholds: dict[str, Any] | None) -> dict[str, Any]:
 
     merged["max_unlinked_lua_ratio"] = float(merged["max_unlinked_lua_ratio"] or 0.0)
     for key in (
-        "max_match_id_mismatch_rows",
+        "max_wrong_start_lua_rows",
         "max_map_name_mismatch_rows",
         "max_round_number_mismatch_rows",
         "max_duplicate_lua_round_links",
-        "max_correlation_round_mismatch_rows",
+        "max_correlation_map_mismatch_rows",
         "max_complete_missing_core_rows",
     ):
         merged[key] = max(0, _safe_int(merged[key]))
@@ -123,13 +137,22 @@ async def assess_round_linkage_anomalies(
     except Exception as e:
         payload["errors"].append(f"lua_totals_query_failed:{type(e).__name__}:{e}")
 
-    # 2) Mismatch counts between lua_round_teams and rounds for linked rows.
+    # 2) Real mismatch counts between lua_round_teams and its LINKED round.
+    # wrong_start_lua_rows is the severe metric (Codex §18.5): both sides
+    # carry round_start_unix and a linked row whose start disagrees with its
+    # target round genuinely points at the WRONG round (the classic
+    # back-to-back-replay nearest-neighbor mislink). map_name/round_number
+    # comparisons stay — those ARE directly comparable, unlike match_id.
     try:
         row = await db.fetch_one(
             """
             SELECT
-                SUM(CASE WHEN COALESCE(l.match_id, '') <> COALESCE(r.match_id, '') THEN 1 ELSE 0 END)
-                    AS match_id_mismatch_rows,
+                SUM(
+                    CASE WHEN l.round_start_unix IS NOT NULL
+                              AND r.round_start_unix IS NOT NULL
+                              AND l.round_start_unix <> r.round_start_unix
+                         THEN 1 ELSE 0 END
+                ) AS wrong_start_lua_rows,
                 SUM(CASE WHEN LOWER(COALESCE(l.map_name, '')) <> LOWER(COALESCE(r.map_name, '')) THEN 1 ELSE 0 END)
                     AS map_name_mismatch_rows,
                 SUM(CASE WHEN COALESCE(l.round_number, -1) <> COALESCE(r.round_number, -1) THEN 1 ELSE 0 END)
@@ -140,7 +163,7 @@ async def assess_round_linkage_anomalies(
         )
         payload["metrics"].update(
             {
-                "match_id_mismatch_rows": _safe_int(_row_get(row, 0, "match_id_mismatch_rows")),
+                "wrong_start_lua_rows": _safe_int(_row_get(row, 0, "wrong_start_lua_rows")),
                 "map_name_mismatch_rows": _safe_int(_row_get(row, 1, "map_name_mismatch_rows")),
                 "round_number_mismatch_rows": _safe_int(_row_get(row, 2, "round_number_mismatch_rows")),
             }
@@ -168,7 +191,10 @@ async def assess_round_linkage_anomalies(
     except Exception as e:
         payload["errors"].append(f"duplicate_lua_links_query_failed:{type(e).__name__}:{e}")
 
-    # 4) round_correlations linkage sanity.
+    # 4) round_correlations linkage sanity. match_id dropped from both arms
+    # (Codex §18.4 — same invalid-equality reasoning as query #2); map_name
+    # is the only independently-comparable field a correlation carries
+    # outside its r1/r2 FKs.
     try:
         row = await db.fetch_one(
             """
@@ -177,24 +203,18 @@ async def assess_round_linkage_anomalies(
                     CASE
                         WHEN c.r1_round_id IS NOT NULL
                              AND r1.id IS NOT NULL
-                             AND (
-                                 COALESCE(r1.match_id, '') <> COALESCE(c.match_id, '')
-                                 OR LOWER(COALESCE(r1.map_name, '')) <> LOWER(COALESCE(c.map_name, ''))
-                             )
+                             AND LOWER(COALESCE(r1.map_name, '')) <> LOWER(COALESCE(c.map_name, ''))
                         THEN 1 ELSE 0
                     END
-                ) AS r1_mismatch_rows,
+                ) AS r1_map_mismatch_rows,
                 SUM(
                     CASE
                         WHEN c.r2_round_id IS NOT NULL
                              AND r2.id IS NOT NULL
-                             AND (
-                                 COALESCE(r2.match_id, '') <> COALESCE(c.match_id, '')
-                                 OR LOWER(COALESCE(r2.map_name, '')) <> LOWER(COALESCE(c.map_name, ''))
-                             )
+                             AND LOWER(COALESCE(r2.map_name, '')) <> LOWER(COALESCE(c.map_name, ''))
                         THEN 1 ELSE 0
                     END
-                ) AS r2_mismatch_rows,
+                ) AS r2_map_mismatch_rows,
                 SUM(
                     CASE
                         WHEN c.status = 'complete' AND (c.r1_round_id IS NULL OR c.r2_round_id IS NULL)
@@ -206,30 +226,31 @@ async def assess_round_linkage_anomalies(
             LEFT JOIN rounds r2 ON c.r2_round_id = r2.id
             """
         )
-        r1_mismatch_rows = _safe_int(_row_get(row, 0, "r1_mismatch_rows"))
-        r2_mismatch_rows = _safe_int(_row_get(row, 1, "r2_mismatch_rows"))
+        r1_map_mismatch_rows = _safe_int(_row_get(row, 0, "r1_map_mismatch_rows"))
+        r2_map_mismatch_rows = _safe_int(_row_get(row, 1, "r2_map_mismatch_rows"))
         complete_missing_core_rows = _safe_int(_row_get(row, 2, "complete_missing_core_rows"))
-        correlation_round_mismatch_rows = r1_mismatch_rows + r2_mismatch_rows
+        correlation_map_mismatch_rows = r1_map_mismatch_rows + r2_map_mismatch_rows
         payload["metrics"].update(
             {
-                "r1_correlation_mismatch_rows": r1_mismatch_rows,
-                "r2_correlation_mismatch_rows": r2_mismatch_rows,
-                "correlation_round_mismatch_rows": correlation_round_mismatch_rows,
+                "r1_correlation_map_mismatch_rows": r1_map_mismatch_rows,
+                "r2_correlation_map_mismatch_rows": r2_map_mismatch_rows,
+                "correlation_map_mismatch_rows": correlation_map_mismatch_rows,
                 "complete_missing_core_rows": complete_missing_core_rows,
             }
         )
     except Exception as e:
         payload["errors"].append(f"correlation_mismatch_query_failed:{type(e).__name__}:{e}")
 
-    # 5) Samples: lua linked rows with mismatch.
+    # 5) Samples: lua linked rows with a REAL mismatch (wrong start, map, or
+    # round number — match_id dropped, see query #2).
     try:
         rows = await db.fetch_all(
             f"""
             SELECT
                 l.id AS lua_row_id,
                 l.round_id,
-                l.match_id AS lua_match_id,
-                r.match_id AS round_match_id,
+                l.round_start_unix AS lua_round_start_unix,
+                r.round_start_unix AS round_round_start_unix,
                 l.map_name AS lua_map_name,
                 r.map_name AS round_map_name,
                 l.round_number AS lua_round_number,
@@ -237,7 +258,8 @@ async def assess_round_linkage_anomalies(
             FROM lua_round_teams l
             JOIN rounds r ON l.round_id = r.id
             WHERE
-                COALESCE(l.match_id, '') <> COALESCE(r.match_id, '')
+                (l.round_start_unix IS NOT NULL AND r.round_start_unix IS NOT NULL
+                 AND l.round_start_unix <> r.round_start_unix)
                 OR LOWER(COALESCE(l.map_name, '')) <> LOWER(COALESCE(r.map_name, ''))
                 OR COALESCE(l.round_number, -1) <> COALESCE(r.round_number, -1)
             ORDER BY l.id DESC
@@ -249,8 +271,8 @@ async def assess_round_linkage_anomalies(
                 {
                     "lua_row_id": _safe_int(_row_get(row, 0, "lua_row_id")),
                     "round_id": _safe_int(_row_get(row, 1, "round_id")),
-                    "lua_match_id": _row_get(row, 2, "lua_match_id"),
-                    "round_match_id": _row_get(row, 3, "round_match_id"),
+                    "lua_round_start_unix": _row_get(row, 2, "lua_round_start_unix"),
+                    "round_round_start_unix": _row_get(row, 3, "round_round_start_unix"),
                     "lua_map_name": _row_get(row, 4, "lua_map_name"),
                     "round_map_name": _row_get(row, 5, "round_map_name"),
                     "lua_round_number": _safe_int(_row_get(row, 6, "lua_round_number")),
@@ -260,7 +282,8 @@ async def assess_round_linkage_anomalies(
     except Exception as e:
         payload["errors"].append(f"lua_mismatch_samples_query_failed:{type(e).__name__}:{e}")
 
-    # 6) Samples: correlation rows with mismatch.
+    # 6) Samples: correlation rows with a REAL mismatch (map name only —
+    # match_id dropped, see query #4).
     try:
         rows = await db.fetch_all(
             f"""
@@ -270,8 +293,6 @@ async def assess_round_linkage_anomalies(
                 c.map_name,
                 c.r1_round_id,
                 c.r2_round_id,
-                r1.match_id AS r1_round_match_id,
-                r2.match_id AS r2_round_match_id,
                 r1.map_name AS r1_round_map_name,
                 r2.map_name AS r2_round_map_name,
                 c.status
@@ -279,15 +300,11 @@ async def assess_round_linkage_anomalies(
             LEFT JOIN rounds r1 ON c.r1_round_id = r1.id
             LEFT JOIN rounds r2 ON c.r2_round_id = r2.id
             WHERE
-                (c.r1_round_id IS NOT NULL AND r1.id IS NOT NULL AND (
-                    COALESCE(r1.match_id, '') <> COALESCE(c.match_id, '')
-                    OR LOWER(COALESCE(r1.map_name, '')) <> LOWER(COALESCE(c.map_name, ''))
-                ))
+                (c.r1_round_id IS NOT NULL AND r1.id IS NOT NULL
+                 AND LOWER(COALESCE(r1.map_name, '')) <> LOWER(COALESCE(c.map_name, '')))
                 OR
-                (c.r2_round_id IS NOT NULL AND r2.id IS NOT NULL AND (
-                    COALESCE(r2.match_id, '') <> COALESCE(c.match_id, '')
-                    OR LOWER(COALESCE(r2.map_name, '')) <> LOWER(COALESCE(c.map_name, ''))
-                ))
+                (c.r2_round_id IS NOT NULL AND r2.id IS NOT NULL
+                 AND LOWER(COALESCE(r2.map_name, '')) <> LOWER(COALESCE(c.map_name, '')))
                 OR
                 (c.status = 'complete' AND (c.r1_round_id IS NULL OR c.r2_round_id IS NULL))
             ORDER BY c.created_at DESC
@@ -302,11 +319,9 @@ async def assess_round_linkage_anomalies(
                     "map_name": _row_get(row, 2, "map_name"),
                     "r1_round_id": _row_get(row, 3, "r1_round_id"),
                     "r2_round_id": _row_get(row, 4, "r2_round_id"),
-                    "r1_round_match_id": _row_get(row, 5, "r1_round_match_id"),
-                    "r2_round_match_id": _row_get(row, 6, "r2_round_match_id"),
-                    "r1_round_map_name": _row_get(row, 7, "r1_round_map_name"),
-                    "r2_round_map_name": _row_get(row, 8, "r2_round_map_name"),
-                    "status": _row_get(row, 9, "status"),
+                    "r1_round_map_name": _row_get(row, 5, "r1_round_map_name"),
+                    "r2_round_map_name": _row_get(row, 6, "r2_round_map_name"),
+                    "status": _row_get(row, 7, "status"),
                 }
             )
     except Exception as e:
@@ -322,11 +337,11 @@ async def assess_round_linkage_anomalies(
         )
 
     for metric, threshold_key in (
-        ("match_id_mismatch_rows", "max_match_id_mismatch_rows"),
+        ("wrong_start_lua_rows", "max_wrong_start_lua_rows"),
         ("map_name_mismatch_rows", "max_map_name_mismatch_rows"),
         ("round_number_mismatch_rows", "max_round_number_mismatch_rows"),
         ("duplicate_lua_round_links", "max_duplicate_lua_round_links"),
-        ("correlation_round_mismatch_rows", "max_correlation_round_mismatch_rows"),
+        ("correlation_map_mismatch_rows", "max_correlation_map_mismatch_rows"),
         ("complete_missing_core_rows", "max_complete_missing_core_rows"),
     ):
         value = _safe_int(metrics.get(metric, 0))

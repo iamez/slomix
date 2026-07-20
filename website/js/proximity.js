@@ -1570,7 +1570,10 @@ function renderQualityPanel(payload) {
     const correlationStatus = correlation.status || 'unknown';
     const correlationCount = correlation.correlation_count != null ? formatNumber(correlation.correlation_count) : '--';
     const completeCount = correlation.complete_count != null ? formatNumber(correlation.complete_count) : '--';
-    const missingFlagsValue = Number(correlation.missing_proximity_flag_rows || 0);
+    // missing_existing_round_sides: an EXISTING R1/R2 round whose proximity
+    // flag is false — a partial match with no R2 round at all no longer
+    // counts here (Codex §18.3 false-positive fix).
+    const missingFlagsValue = Number(correlation.missing_existing_round_sides || 0);
     const missingFlags = Number.isFinite(missingFlagsValue) ? missingFlagsValue : 0;
     const avgCompletenessValue = Number(correlation.avg_completeness_pct);
     const avgCompleteness = correlation.avg_completeness_pct != null

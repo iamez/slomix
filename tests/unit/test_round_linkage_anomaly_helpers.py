@@ -117,11 +117,11 @@ def test_normalize_thresholds_returns_defaults_when_empty():
 def test_normalize_thresholds_merges_overrides():
     """User-supplied overrides replace defaults; unknown keys ignored."""
     out = _normalize_thresholds({
-        "max_match_id_mismatch_rows": 5,
+        "max_wrong_start_lua_rows": 5,
         "max_unlinked_lua_ratio": 0.5,
         "alien_field_should_be_ignored": 999,
     })
-    assert out["max_match_id_mismatch_rows"] == 5
+    assert out["max_wrong_start_lua_rows"] == 5
     assert out["max_unlinked_lua_ratio"] == 0.5
     assert "alien_field_should_be_ignored" not in out
 
@@ -130,30 +130,30 @@ def test_normalize_thresholds_skips_none_values():
     """None override → keep default. This protects against partial
     config payloads that don't want to override every key."""
     out = _normalize_thresholds({
-        "max_match_id_mismatch_rows": None,
+        "max_wrong_start_lua_rows": None,
         "max_unlinked_lua_ratio": None,
     })
-    assert out["max_match_id_mismatch_rows"] == DEFAULT_THRESHOLDS["max_match_id_mismatch_rows"]
+    assert out["max_wrong_start_lua_rows"] == DEFAULT_THRESHOLDS["max_wrong_start_lua_rows"]
     assert out["max_unlinked_lua_ratio"] == DEFAULT_THRESHOLDS["max_unlinked_lua_ratio"]
 
 
 def test_normalize_thresholds_clamps_negative_int_thresholds_to_zero():
     """A negative threshold makes no sense (count of bad rows can't be
     negative). Defensive: clamp to 0."""
-    out = _normalize_thresholds({"max_match_id_mismatch_rows": -5})
-    assert out["max_match_id_mismatch_rows"] == 0
+    out = _normalize_thresholds({"max_wrong_start_lua_rows": -5})
+    assert out["max_wrong_start_lua_rows"] == 0
 
 
 def test_normalize_thresholds_coerces_string_int_thresholds():
     """env-var or YAML config may supply strings."""
-    out = _normalize_thresholds({"max_match_id_mismatch_rows": "10"})
-    assert out["max_match_id_mismatch_rows"] == 10
+    out = _normalize_thresholds({"max_wrong_start_lua_rows": "10"})
+    assert out["max_wrong_start_lua_rows"] == 10
 
 
 def test_normalize_thresholds_coerces_garbage_int_to_zero():
     """Bad string → safe_int returns 0 → clamped to 0."""
-    out = _normalize_thresholds({"max_match_id_mismatch_rows": "garbage"})
-    assert out["max_match_id_mismatch_rows"] == 0
+    out = _normalize_thresholds({"max_wrong_start_lua_rows": "garbage"})
+    assert out["max_wrong_start_lua_rows"] == 0
 
 
 def test_normalize_thresholds_returns_float_for_ratio():
@@ -185,11 +185,11 @@ def test_normalize_thresholds_default_keys_match_breach_sites():
     a new metric requires updating both this list AND DEFAULT_THRESHOLDS."""
     expected = {
         "max_unlinked_lua_ratio",
-        "max_match_id_mismatch_rows",
+        "max_wrong_start_lua_rows",
         "max_map_name_mismatch_rows",
         "max_round_number_mismatch_rows",
         "max_duplicate_lua_round_links",
-        "max_correlation_round_mismatch_rows",
+        "max_correlation_map_mismatch_rows",
         "max_complete_missing_core_rows",
     }
     assert set(DEFAULT_THRESHOLDS.keys()) == expected
@@ -201,9 +201,9 @@ def test_normalize_thresholds_default_keys_match_breach_sites():
 
 
 def test_build_breach_returns_canonical_shape():
-    out = _build_breach("max_match_id_mismatch_rows", 5, 0)
+    out = _build_breach("max_wrong_start_lua_rows", 5, 0)
     assert out == {
-        "metric": "max_match_id_mismatch_rows",
+        "metric": "max_wrong_start_lua_rows",
         "value": 5,
         "threshold": 0,
     }

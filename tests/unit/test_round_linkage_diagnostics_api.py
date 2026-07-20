@@ -10,11 +10,11 @@ class _FakeDB:
         q = " ".join(str(query).split()).lower()
         if "total_lua_rows" in q and "unlinked_lua_rows" in q:
             return (10, 0)
-        if "match_id_mismatch_rows" in q and "map_name_mismatch_rows" in q:
+        if "wrong_start_lua_rows" in q and "map_name_mismatch_rows" in q:
             return (0, 0, 0)
         if "duplicate_lua_round_links" in q:
             return (0,)
-        if "r1_mismatch_rows" in q and "complete_missing_core_rows" in q:
+        if "r1_map_mismatch_rows" in q and "complete_missing_core_rows" in q:
             return (0, 0, 0)
         return None
 
