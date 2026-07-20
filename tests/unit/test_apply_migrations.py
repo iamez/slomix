@@ -9,6 +9,7 @@ AUD-002 additions: migration + ledger success commit in one transaction, a
 failure rolls back and exits non-zero, checksum drift refuses to apply, and
 file-level BEGIN/COMMIT wrappers are unwrapped (anything else is rejected).
 """
+import json
 import sys
 from pathlib import Path
 
@@ -19,11 +20,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from scripts.apply_migrations import (  # noqa: E402
     MigrationRejected,
     cmd_apply,
+    cmd_status,
     cmd_validate,
     collect_state,
     get_applied,
+    get_db_fingerprint,
     get_failed,
     requires_non_transactional,
+    resolve_env_file,
     split_statements,
     unwrap_outer_transaction,
 )
@@ -76,6 +80,16 @@ class FakeConn:
             return True
         if "information_schema.tables" in query:
             return self.has_pcs_table
+        return None
+
+    async def fetchrow(self, query, *args):
+        if "current_database()" in query:
+            return {
+                "db": "etlegacy_test",
+                "role": "etlegacy_user",
+                "server_addr": "127.0.0.1",
+                "server_port": 5432,
+            }
         return None
 
     async def execute(self, query, *args):
@@ -519,3 +533,86 @@ async def test_apply_only_refuses_unrelated_pending_drift(monkeypatch, tmp_path,
     assert "001_a.sql" in out
     # Nothing was applied — no ledger write happened.
     assert not any("INSERT INTO schema_migrations" in q for q, _ in conn.executed)
+
+
+# ── PX-DB-001: env-file precedence must match main.py, DB fingerprint ──
+
+
+def test_resolve_env_file_prefers_website_env_when_present(tmp_path):
+    """Must mirror website/backend/main.py:33-37 EXACTLY: website/.env wins
+    when it exists — a migration validated against the root .env while the
+    service actually runs on website/.env's database is the PX-DB-001 bug."""
+    website_dir = tmp_path / "website"
+    website_dir.mkdir()
+    website_env = website_dir / ".env"
+    website_env.write_text("POSTGRES_DATABASE=website_db\n")
+    (tmp_path / ".env").write_text("POSTGRES_DATABASE=root_db\n")
+
+    assert resolve_env_file(tmp_path) == website_env
+
+
+def test_resolve_env_file_falls_back_to_root_env_when_website_env_absent(tmp_path):
+    (tmp_path / ".env").write_text("POSTGRES_DATABASE=root_db\n")
+
+    assert resolve_env_file(tmp_path) == tmp_path / ".env"
+
+
+def test_resolve_env_file_falls_back_when_website_dir_missing_entirely(tmp_path):
+    """No website/ directory at all (e.g. a minimal checkout) must not
+    raise — falls back to the (possibly nonexistent) root .env path."""
+    assert resolve_env_file(tmp_path) == tmp_path / ".env"
+
+
+@pytest.mark.asyncio
+async def test_get_db_fingerprint_never_includes_a_password():
+    """The fingerprint is printed in --status/--validate output (logs,
+    CI, deploy output) — it must be safe to paste anywhere."""
+    conn = FakeConn(rows=[{"filename": "001_a.sql", "success": True}])
+    fp = await get_db_fingerprint(conn)
+    assert "password" not in fp
+    serialized = json.dumps(fp)
+    assert "PASSWORD" not in serialized.upper()
+    assert fp["database_name"] == "etlegacy_test"
+    assert fp["database_role"] == "etlegacy_user"
+    assert fp["ledger_max"] == "001_a.sql"
+
+
+@pytest.mark.asyncio
+async def test_get_db_fingerprint_ledger_max_none_when_nothing_applied():
+    conn = FakeConn(rows=[])
+    fp = await get_db_fingerprint(conn)
+    assert fp["ledger_max"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_db_fingerprint_uses_slomix_env_label_when_set(monkeypatch):
+    monkeypatch.setenv("SLOMIX_ENV", "prod")
+    conn = FakeConn(rows=[])
+    fp = await get_db_fingerprint(conn)
+    assert fp["environment"] == "prod"
+    monkeypatch.delenv("SLOMIX_ENV", raising=False)
+
+
+@pytest.mark.asyncio
+async def test_cmd_status_json_includes_db_fingerprint(monkeypatch, capsys):
+    """Deploy/CI tooling that parses --status --json must be able to read
+    the fingerprint alongside the ledger state in ONE call — no separate
+    round-trip needed to cross-check which database was validated."""
+    conn = FakeConn(rows=[{"filename": "001_a.sql", "success": True}])
+    monkeypatch.setattr("scripts.apply_migrations.get_connection", _returning(conn))
+    await cmd_status(json_out=True)
+    out = json.loads(capsys.readouterr().out)
+    assert "db_fingerprint" in out
+    assert out["db_fingerprint"]["database_name"] == "etlegacy_test"
+
+
+@pytest.mark.asyncio
+async def test_cmd_validate_json_includes_db_fingerprint(monkeypatch, capsys):
+    conn = FakeConn(rows=[{"filename": "001_a.sql", "success": True}])
+    monkeypatch.setattr("scripts.apply_migrations.MIGRATIONS_DIR", Path("/nonexistent-empty-dir"))
+    monkeypatch.setattr("scripts.apply_migrations.discover_migrations", lambda: [])
+    monkeypatch.setattr("scripts.apply_migrations.get_connection", _returning(conn))
+    with pytest.raises(SystemExit):
+        await cmd_validate(json_out=True)
+    out = json.loads(capsys.readouterr().out)
+    assert out["db_fingerprint"]["database_name"] == "etlegacy_test"
