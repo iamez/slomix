@@ -4,7 +4,7 @@
  * @module session-detail
  */
 import { API_BASE, fetchJSON, escapeHtml, escapeJsString } from './utils.js';
-import { getRouteHash, SESSION_DETAIL_TABS } from './route-registry.js?v=20260513-v142-cf-bust';
+import { getRouteHash, SESSION_DETAIL_TABS } from './route-registry.js?v=20260720-ssd-gsid';
 import {
     renderMatchSummary,
     renderCombatRadar,
@@ -612,7 +612,7 @@ async function _loadMomentsStrip() {
                      title="Auto-detected highlights of the evening, straight from the round telemetry.">
                     Moments of the night
                 </div>
-                <a href="#/story/date/${encodeURIComponent(_sessionDate)}" class="text-[11px] text-brand-blue hover:underline">Full story →</a>
+                <a href="${escapeHtml(getRouteHash('story', _sessionId != null ? { gsid: _sessionId } : { date: _sessionDate }))}" class="text-[11px] text-brand-blue hover:underline">Full story →</a>
             </div>
             <div class="flex gap-2 overflow-x-auto pb-1">${cards}</div>
         </div>`;
