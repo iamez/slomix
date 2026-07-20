@@ -117,6 +117,38 @@ async def test_resolve_round_id_exact_unix_match_beats_closest():
 
 
 @pytest.mark.asyncio
+async def test_resolve_round_id_tied_candidates_currently_picks_first_arbitrarily():
+    """L2 lock-in of the CURRENT gap (Codex L3 target, not desired
+    behaviour): when two candidates are EQUALLY close to target_dt — a tie,
+    neither an exact round_start_unix match — the nearest-neighbour loop's
+    strict `<` comparison means the FIRST-iterated candidate silently wins.
+    No ambiguity is signalled anywhere in `diag`. This is the same class of
+    "guessing" the exact-unix-match short-circuit above was built to avoid
+    for the exact-match case; a genuine tie in the fuzzy fallback has no
+    equivalent protection yet."""
+    target_unix = 1776802310
+    target_dt = datetime.fromtimestamp(target_unix)
+    before_unix = target_unix - 100
+    after_unix = target_unix + 100
+    before_dt = datetime.fromtimestamp(before_unix)
+    after_dt = datetime.fromtimestamp(after_unix)
+    rows = [
+        (111, "2026-04-21", before_dt.strftime("%H%M%S"), None, before_unix),
+        (222, "2026-04-21", after_dt.strftime("%H%M%S"), None, after_unix),
+    ]
+    db = _FakeDB(rows_with_date=rows, rows_without_date=rows)
+
+    round_id, diag = await resolve_round_id_with_reason(
+        db, "te_escape2", 1,
+        target_dt=target_dt, round_date="2026-04-21", window_minutes=45,
+    )
+
+    assert round_id == 111, "first-iterated candidate silently wins the tie today"
+    assert diag["reason_code"] == "resolved"
+    assert diag["best_diff_seconds"] == 100
+
+
+@pytest.mark.asyncio
 async def test_resolve_round_id_with_reason_outside_window():
     db = _FakeDB(
         rows_with_date=[(9818, "2026-02-11", "230000", None)],
