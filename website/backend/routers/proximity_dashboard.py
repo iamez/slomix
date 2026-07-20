@@ -635,12 +635,14 @@ async def get_proximity_kill_outcomes_player_stats(
     session_date: str | None = None,
     map_name: str | None = None,
     player_guid: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Per-player kill outcome stats — Kill Permanence Rate (KPR) and revive rates."""
     where_sql, params, scope = _build_proximity_where_clause(
-        range_days, session_date, map_name, None, None,
+        range_days, session_date, map_name, round_number, round_start_unix,
     )
     query_params = tuple(params)
     safe_limit = max(1, min(limit, 50))

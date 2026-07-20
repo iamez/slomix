@@ -354,13 +354,15 @@ async def get_proximity_hit_regions_by_weapon(
     player_guid: str = "",
     session_date: str | None = None,
     map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Per-weapon hit region breakdown for a specific player."""
     if not player_guid or not player_guid.strip():
         return {"status": "error", "detail": "player_guid is required"}
     where_sql, params, scope = _build_proximity_where_clause(
-        range_days, session_date, map_name, None, None,
+        range_days, session_date, map_name, round_number, round_start_unix,
         player_guid=player_guid, player_guid_columns=["attacker_guid"],
     )
     query_params = tuple(params)
@@ -408,12 +410,14 @@ async def get_proximity_hit_regions_headshot_rates(
     range_days: int = 30,
     session_date: str | None = None,
     map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Headshot percentage leaderboard — minimum 50 hits required."""
     where_sql, params, scope = _build_proximity_where_clause(
-        range_days, session_date, map_name, None, None,
+        range_days, session_date, map_name, round_number, round_start_unix,
     )
     query_params = tuple(params)
     safe_limit = max(1, min(limit, 50))
@@ -930,6 +934,8 @@ async def get_proximity_combat_positions_kill_lines(
     weapon_id: int | None = None,
     attacker_guid: str | None = None,
     session_date: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     limit: int = 100,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -938,7 +944,7 @@ async def get_proximity_combat_positions_kill_lines(
         raise HTTPException(status_code=400, detail="map_name is required")
 
     where_sql, params, scope = _build_proximity_where_clause(
-        range_days, session_date, map_name, None, None,
+        range_days, session_date, map_name, round_number, round_start_unix,
     )
     query_params_list = list(params)
 
@@ -988,6 +994,8 @@ async def get_proximity_combat_positions_danger_zones(
     map_name: str | None = None,
     victim_class: str | None = None,
     session_date: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Danger zones — grid-binned death positions ranked by death count with class breakdown."""
@@ -995,7 +1003,7 @@ async def get_proximity_combat_positions_danger_zones(
         raise HTTPException(status_code=400, detail="map_name is required")
 
     where_sql, params, scope = _build_proximity_where_clause(
-        range_days, session_date, map_name, None, None,
+        range_days, session_date, map_name, round_number, round_start_unix,
     )
     query_params_list = list(params)
 
@@ -1065,6 +1073,8 @@ async def get_proximity_combat_position_stats(
     range_days: int = 30,
     session_date: str | None = None,
     map_name: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Combat position aggregate stats — kill distances, class matchups."""
@@ -1075,6 +1085,7 @@ async def get_proximity_combat_position_stats(
         ProximityQueryBuilder()
         .with_session_scope(session_date, range_days)
         .with_map_name(map_name)
+        .with_round(round_number, round_start_unix)
         .build()
     )
 
