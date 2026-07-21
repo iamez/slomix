@@ -40,14 +40,16 @@ from .base import (
 # scored under the old formula (migration 060 adds the storage column;
 # codex, PR #478 follow-up audit finding #9).
 #
-# v2 -> v3 (Codex SS-E): the graduated REINF_MULT_TIERS reinf-multiplier
-# (loaders.py's docstring already called this "KIS v3" — the code just
-# never bumped the version string when it shipped) plus the spawn=0
-# scoring fix (_load_spawn_timings previously treated a legitimate 0
-# spawn_timing_score as missing data via `r[2] or 0.5`, inflating
-# spawn_mult for kills that should get no bonus at all). Both are real
-# scoring changes that were silently served from stale pre-fix cache
-# rows forever — this string never having moved off "kis-v2" IS that bug.
+# v2 -> v3 (Codex SS-E): the spawn=0 scoring fix in _load_spawn_timings
+# (a stored spawn_timing_score of 0 — the Lua interval<=0 sentinel — is
+# now kept instead of being promoted to 0.5 by `r[2] or 0.5`; see the
+# loader comment). That is a real change to _score_kill's spawn_mult, so
+# the version bumps to invalidate any pre-fix cache rows. In practice the
+# current cache reinf_multiplier values already match REINF_MULT_TIERS
+# (loaders.py's docstring calls that "KIS v3"), and every historical
+# score-0 row is orphaned (matches no kill) — so a recompute reproduces
+# every currently-displayed kill identically; the bump is a correctness/
+# consistency guard, not a data-changing event on today's sessions.
 FORMULA_VERSION = "kis-v3"
 
 

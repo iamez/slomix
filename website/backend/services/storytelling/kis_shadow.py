@@ -145,13 +145,20 @@ def _build_shadow_kis_query() -> str:
         WHERE was_executed = TRUE AND session_date = $1
     ),
     st AS (
-        -- NULLIF(...) drops to NULL so the outer COALESCE applies the
-        -- 0.5 fallback. Mirrors the Python loader's `float(r[2] or 0.5)`
-        -- which coerces falsy zeros to the default; using plain COALESCE
-        -- here would treat 0 as a real score and silently diverge from
-        -- production for sessions containing zero-valued rows.
+        -- Plain COALESCE(..., 0.5): a stored 0 is kept as a real score;
+        -- only a genuine NULL (no row) falls back to 0.5. Mirrors the
+        -- Python loader's `0.5 if r[2] is None else float(r[2])` (Codex
+        -- SS-E). NOTE: the earlier form here used NULLIF to drop a 0 to
+        -- NULL so the outer COALESCE promoted it to 0.5, deliberately
+        -- mirroring the OLD loader's `float(r[2] or 0.5)`. Both paths
+        -- changed together in SS-E so this shadow keeps mirroring the
+        -- authoritative Python path exactly (all historical 0s are the
+        -- Lua `interval <= 0` sentinel from 2026-03-17..19, orphaned rows
+        -- matching no kill — so this changes the audit for 0 real kills,
+        -- but keeps the two paths from silently diverging on any future
+        -- zero-valued row).
         SELECT id, killer_guid, round_start_unix, round_number, map_name, kill_time,
-               COALESCE(NULLIF(spawn_timing_score, 0), 0.5)::numeric AS score,
+               COALESCE(spawn_timing_score, 0.5)::numeric AS score,
                COALESCE(victim_reinf, 0)::numeric AS victim_reinf
         FROM proximity_spawn_timing
         WHERE session_date = $1
