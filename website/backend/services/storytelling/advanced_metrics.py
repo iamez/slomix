@@ -616,9 +616,10 @@ class _AdvancedMetricsMixin:
 
         This relies on the storytelling_kill_impact pre-compute (which carries
         ``victim_reinf`` and ``killer_health``); the caller is expected to have
-        triggered ``compute_session_kis(sd)`` already if it wants fresh KIS
-        coverage. We do NOT trigger it here — keeps this metric independent of
-        the KIS code path.
+        triggered ``compute_session_kis_for_gsid(scope.gaming_session_id)``
+        (the gsid-native KIS entrypoint this metric now scopes by) already if
+        it wants fresh KIS coverage. We do NOT trigger it here — keeps this
+        metric independent of the KIS code path.
         """
         sd_str = scope.dates[0]
 
