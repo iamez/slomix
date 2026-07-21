@@ -199,9 +199,14 @@ async def get_best_lives(
     proximity_combat_position. Read-only. Ranked by kills, then by how explosive
     the life was (kills per second). Bots excluded.
     """
-    sd = date.fromisoformat(scope.dates[0])
+    # Full gaming-session scope (deep SS-C): player_track carries no
+    # gaming_session_id, so filter the outer pt rows by session dates + the
+    # canonical round key. The LATERAL cp subquery is already correlated to
+    # pt's exact round, so it needs no separate scope filter.
+    pt_dates = [date.fromisoformat(d) for d in scope.dates]
+    pt_starts, pt_maps, pt_rnums = scope.round_key_arrays()
     rows = await db.fetch_all(
-        """
+        f"""
         SELECT pt.player_guid AS guid, pt.player_name AS name, pt.map_name,
                pt.round_number,
                GREATEST(pt.death_time_ms - pt.spawn_time_ms, 0) AS life_ms,
@@ -224,7 +229,8 @@ async def get_best_lives(
               -- don't let killing bots inflate a human's card (mixed rounds)
               AND cp.victim_guid NOT LIKE 'OMNIBOT%' AND cp.victim_name NOT LIKE '[BOT]%'
         ) k ON TRUE
-        WHERE pt.session_date = $1
+        WHERE pt.session_date = ANY($1)
+          AND {scope.round_key_filter_sql(4, alias="pt")}
           AND pt.spawn_time_ms IS NOT NULL AND pt.death_time_ms IS NOT NULL
           -- round_start_unix 0/NULL is the legacy unlinked bucket; joining on it
           -- would merge every such round (event_time is round-relative) and
@@ -236,7 +242,7 @@ async def get_best_lives(
                  k.kills::float / GREATEST(pt.death_time_ms - pt.spawn_time_ms, 1000) DESC
         LIMIT $3
         """,
-        (sd, _BEST_LIFE_MIN_KILLS, limit),
+        (pt_dates, _BEST_LIFE_MIN_KILLS, limit, pt_starts, pt_maps, pt_rnums),
     )
 
     lives = _build_life_cards(rows)
@@ -648,10 +654,9 @@ async def get_useless_defense_deaths(
     favors stable players (high sample size) over single-incident outliers.
     Rate (useless / total) is included in the response for downstream sorting.
     """
-    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
     result = await svc.compute_useless_defense_deaths(
-        sd,
+        scope,
         min_killer_health=min_killer_health,
         min_reinf_seconds=min_reinf_seconds,
     )

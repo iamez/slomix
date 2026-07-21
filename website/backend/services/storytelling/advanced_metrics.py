@@ -9,6 +9,7 @@ import asyncio
 import json as _json
 import math
 from collections import defaultdict
+from typing import TYPE_CHECKING
 
 from .base import (
     DEATH_TRADE_WINDOW_MS,
@@ -19,6 +20,9 @@ from .base import (
     date,
     strip_et_colors,
 )
+
+if TYPE_CHECKING:
+    from website.backend.services.session_scope import GamingSessionScope
 
 # Lurker-profile tuning (module constants so the sync worker + the async wrapper
 # agree on them).
@@ -588,7 +592,7 @@ class _AdvancedMetricsMixin:
 
     async def compute_useless_defense_deaths(
         self,
-        session_date: str | date,
+        scope: GamingSessionScope,
         min_killer_health: int = 80,
         min_reinf_seconds: int = 25,
     ) -> dict:
@@ -612,28 +616,27 @@ class _AdvancedMetricsMixin:
 
         This relies on the storytelling_kill_impact pre-compute (which carries
         ``victim_reinf`` and ``killer_health``); the caller is expected to have
-        triggered ``compute_session_kis(sd)`` already if it wants fresh KIS
-        coverage. We do NOT trigger it here — keeps this metric independent of
-        the KIS code path.
+        triggered ``compute_session_kis_for_gsid(scope.gaming_session_id)``
+        (the gsid-native KIS entrypoint this metric now scopes by) already if
+        it wants fresh KIS coverage. We do NOT trigger it here — keeps this
+        metric independent of the KIS code path.
         """
-        sd = _to_date(session_date)
+        sd_str = scope.dates[0]
 
         rows = await self.db.fetch_all(
             """
             WITH defender_pcs AS (
-                -- rounds.round_date is TEXT in this schema, storytelling
-                -- session_date is DATE — cast on the rounds side so the
-                -- downstream JOIN uses native date comparison.
-                -- round_start_unix joins us back to a specific round so
-                -- two sessions on the same calendar date with the same
-                -- map+R1 don't collide (the previous (date,map,round_num)
-                -- key was non-unique under that scenario).
+                -- Scoped by gaming_session_id (deep SS-C): PCS.round_id ->
+                -- rounds is reliable, so the joined round's gsid is the
+                -- precise, multi-date-safe session filter. round_start_unix
+                -- still joins us back to a specific round so two sessions on
+                -- the same calendar date with the same map+R1 don't collide.
                 SELECT pcs.round_id, pcs.player_guid, pcs.team, r.defender_team,
                        r.round_date::date AS round_date_d,
                        r.map_name, r.round_number, r.round_start_unix
                 FROM player_comprehensive_stats pcs
                 JOIN rounds r ON r.id = pcs.round_id
-                WHERE r.round_date::date = $1
+                WHERE r.gaming_session_id = $1
                   AND r.defender_team IN (1, 2)
                   AND pcs.team = r.defender_team
             ),
@@ -641,7 +644,8 @@ class _AdvancedMetricsMixin:
                 -- GROUP BY victim_guid only; MAX(victim_name) avoids
                 -- splitting the same player into multiple rows when
                 -- their displayed name changes mid-session (color codes,
-                -- clan tag swaps).
+                -- clan tag swaps). storytelling_kill_impact carries gsid
+                -- (SS-B migration 063), so scope by it too.
                 SELECT ski.victim_guid,
                        MAX(ski.victim_name) AS victim_name,
                        COUNT(*) FILTER (
@@ -656,7 +660,7 @@ class _AdvancedMetricsMixin:
                  -- PCS stores 8-char short_guid; storytelling_kill_impact
                  -- stores the full 32-char Lua GUID. Match on prefix.
                  AND dp.player_guid = LEFT(ski.victim_guid, 8)
-                WHERE ski.session_date = $1
+                WHERE ski.gaming_session_id = $1
                 GROUP BY ski.victim_guid
             )
             SELECT victim_guid, victim_name, useless_deaths, total_def_deaths
@@ -668,7 +672,7 @@ class _AdvancedMetricsMixin:
             -- sample. Previously this used ASC and inverted the intent.
             ORDER BY useless_deaths DESC, total_def_deaths DESC
             """,
-            (sd, min_reinf_seconds, min_killer_health),
+            (scope.gaming_session_id, min_reinf_seconds, min_killer_health),
         )
 
         players = []
@@ -688,7 +692,7 @@ class _AdvancedMetricsMixin:
 
         return {
             "status": "ok",
-            "session_date": str(sd),
+            "session_date": sd_str,
             "metric": "useless_defense_deaths",
             "description": (
                 "Defenders who died with their next spawn far away "
