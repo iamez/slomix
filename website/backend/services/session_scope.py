@@ -65,6 +65,56 @@ class GamingSessionScope:
             "distinct_map_names": list(self.distinct_map_names),
         }
 
+    # ── Per-panel multi-date query filters (deep SS-C) ────────────────
+    #
+    # The storytelling panels historically scoped by a SINGLE session_date
+    # (scope.dates[0]). A gaming session that crosses midnight spans two
+    # calendar dates, so those panels showed only one fragment. These
+    # helpers let each panel restrict to EXACTLY this session's rounds:
+    #
+    #  - Tables that carry `gaming_session_id` (storytelling_kill_impact)
+    #    or JOIN `rounds` (PCS via round_id, reliable per plan D1): filter
+    #    on `gaming_session_id = $n` directly — nothing here needed.
+    #  - Raw proximity tables (no gsid column): filter on the canonical
+    #    round key `(round_start_unix, map_name, round_number)` via
+    #    `round_key_filter_sql` + `round_key_arrays`. This is precise even
+    #    when two gaming sessions share a calendar date (6 such sessions
+    #    exist in prod) — a `session_date = ANY(dates)` prefilter alone
+    #    would wrongly pull the other session's rounds.
+
+    def round_key_arrays(self) -> tuple[list[int], list[str], list[int]]:
+        """The scope's round_keys unzipped into three parallel arrays
+        (round_start_unix[], map_name[], round_number[]) to bind to the
+        `unnest(...)` in `round_key_filter_sql`. Append them to the query
+        params in exactly this order at the matching positional indices."""
+        starts: list[int] = []
+        maps: list[str] = []
+        rnums: list[int] = []
+        for rsu, mn, rn in self.round_keys:
+            starts.append(int(rsu))
+            maps.append(str(mn))
+            rnums.append(int(rn))
+        return starts, maps, rnums
+
+    def round_key_filter_sql(self, first_param: int, alias: str = "") -> str:
+        """A SQL boolean fragment (AND it into a WHERE) that keeps only
+        rows whose (round_start_unix, map_name, round_number) is one of
+        this scope's round_keys, via three arrays bound at $first_param,
+        $first_param+1, $first_param+2 — pair with `round_key_arrays()`
+        appended to the params in that order.
+
+        `alias` qualifies the row columns (e.g. "st" -> st.round_start_unix)
+        for queries that alias the proximity table; empty for an unaliased
+        table.
+        """
+        prefix = f"{alias}." if alias else ""
+        a, b, c = first_param, first_param + 1, first_param + 2
+        return (
+            f"EXISTS (SELECT 1 FROM unnest(${a}::bigint[], ${b}::text[], ${c}::int[]) "
+            f"AS _rk(rsu, mn, rn) WHERE _rk.rsu = {prefix}round_start_unix "
+            f"AND _rk.mn = {prefix}map_name AND _rk.rn = {prefix}round_number)"
+        )
+
 
 def _is_sqlite_adapter(db: DatabaseAdapter) -> bool:
     """Duck-type check matching proximity_quality.py's existing convention —

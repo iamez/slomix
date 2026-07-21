@@ -216,3 +216,64 @@ def test_scope_to_metadata_shape():
         "accepted_round_count": 23,
         "distinct_map_names": ["supply", "radar"],
     }
+
+
+# ── Per-panel multi-date query filters (deep SS-C) ────────────────────
+
+
+def _scope_with_keys(round_keys):
+    from website.backend.services.session_scope import GamingSessionScope
+    return GamingSessionScope(
+        gaming_session_id=137,
+        dates=("2026-07-18", "2026-07-19"),
+        round_keys=tuple(round_keys),
+        accepted_round_count=len(round_keys),
+        distinct_map_names=("supply",),
+    )
+
+
+def test_round_key_arrays_unzips_in_order():
+    """The three parallel arrays must line up index-for-index with the
+    scope's round_keys (unnest binds them positionally)."""
+    scope = _scope_with_keys([(1000, "supply", 1), (1600, "radar", 2)])
+    starts, maps, rnums = scope.round_key_arrays()
+    assert starts == [1000, 1600]
+    assert maps == ["supply", "radar"]
+    assert rnums == [1, 2]
+
+
+def test_round_key_arrays_coerces_types():
+    """round_start_unix/round_number coerced to int, map_name to str, so a
+    stray Decimal/str from the resolver can't break asyncpg array binding."""
+    scope = _scope_with_keys([("1000", "supply", "1")])
+    starts, maps, rnums = scope.round_key_arrays()
+    assert starts == [1000] and rnums == [1]
+    assert maps == ["supply"]
+
+
+def test_round_key_filter_sql_binds_three_consecutive_params():
+    """Fragment must reference exactly $n,$n+1,$n+2 with the array casts,
+    so callers append round_key_arrays() at those positions."""
+    scope = _scope_with_keys([(1000, "supply", 1)])
+    sql = scope.round_key_filter_sql(5)
+    assert "$5::bigint[]" in sql
+    assert "$6::text[]" in sql
+    assert "$7::int[]" in sql
+    assert "round_start_unix" in sql and "map_name" in sql and "round_number" in sql
+
+
+def test_round_key_filter_sql_alias_qualifies_columns():
+    """With an alias, the row columns must be prefixed (st.round_start_unix)
+    so a joined/aliased proximity table filters on the right relation."""
+    scope = _scope_with_keys([(1000, "supply", 1)])
+    sql = scope.round_key_filter_sql(1, alias="st")
+    assert "st.round_start_unix" in sql
+    assert "st.map_name" in sql
+    assert "st.round_number" in sql
+
+
+def test_round_key_filter_sql_no_alias_leaves_columns_bare():
+    scope = _scope_with_keys([(1000, "supply", 1)])
+    sql = scope.round_key_filter_sql(1)
+    assert " round_start_unix" in sql
+    assert "." not in sql.split("_rk")[1].split("WHERE")[1]  # no alias prefix on row cols
