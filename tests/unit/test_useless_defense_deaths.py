@@ -14,7 +14,16 @@ import pytest
 # Ensure project root is on sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from website.backend.services.session_scope import GamingSessionScope
 from website.backend.services.storytelling_service import StorytellingService
+
+_SCOPE = GamingSessionScope(
+    gaming_session_id=77,
+    dates=("2026-05-05",),
+    round_keys=((1000, "supply", 1),),
+    accepted_round_count=1,
+    distinct_map_names=("supply",),
+)
 
 
 def _make_service(rows: list[tuple]):
@@ -26,7 +35,7 @@ def _make_service(rows: list[tuple]):
 @pytest.mark.asyncio
 async def test_returns_empty_players_when_no_rows():
     svc = _make_service(rows=[])
-    result = await svc.compute_useless_defense_deaths("2026-05-05")
+    result = await svc.compute_useless_defense_deaths(_SCOPE)
 
     assert result["status"] == "ok"
     assert result["session_date"] == "2026-05-05"
@@ -46,7 +55,7 @@ async def test_per_player_shape_and_rate_rounding():
         ("D8423F90F045D9D3E2C0550811C5A899", "^pvid", 4, 84),
     ]
     svc = _make_service(rows=rows)
-    result = await svc.compute_useless_defense_deaths("2026-05-05")
+    result = await svc.compute_useless_defense_deaths(_SCOPE)
 
     assert len(result["players"]) == 2
     p = result["players"][0]
@@ -68,7 +77,7 @@ async def test_zero_total_yields_zero_rate_no_divzero():
     # the Python layer must not crash on (0,0) just in case.
     rows = [("AAAAAAAA00000000000000000000AAAA", "edge", 0, 0)]
     svc = _make_service(rows=rows)
-    result = await svc.compute_useless_defense_deaths("2026-05-05")
+    result = await svc.compute_useless_defense_deaths(_SCOPE)
     assert result["players"][0]["rate"] == 0.0
 
 
@@ -76,7 +85,7 @@ async def test_zero_total_yields_zero_rate_no_divzero():
 async def test_custom_thresholds_propagate_to_response():
     svc = _make_service(rows=[])
     result = await svc.compute_useless_defense_deaths(
-        "2026-05-05", min_killer_health=100, min_reinf_seconds=20
+        _SCOPE, min_killer_health=100, min_reinf_seconds=20
     )
     assert result["thresholds"] == {
         "min_reinf_seconds": 20,
@@ -89,11 +98,12 @@ async def test_thresholds_are_passed_to_sql_params():
     """Verify the thresholds reach fetch_all as $2/$3 params, in order."""
     svc = _make_service(rows=[])
     await svc.compute_useless_defense_deaths(
-        "2026-05-05", min_killer_health=120, min_reinf_seconds=30
+        _SCOPE, min_killer_health=120, min_reinf_seconds=30
     )
     # fetch_all called once with (sql, (date, min_reinf_seconds, min_killer_health))
     args, kwargs = svc.db.fetch_all.call_args
     sql, params = args
-    # Params order: ($1=session_date, $2=min_reinf_seconds, $3=min_killer_health)
+    # Params order: ($1=gaming_session_id, $2=min_reinf_seconds, $3=min_killer_health)
+    assert params[0] == 77
     assert params[1] == 30
     assert params[2] == 120
