@@ -70,9 +70,10 @@ class _MomentumMixin:
         # 2. Build team map from PCS
         rtm = await self._build_round_team_map(scope)
 
-        # Fallback: majority-vote per GUID
+        # Fallback: majority-vote per GUID (coarse last resort — the map is
+        # now keyed by the canonical round key, so unpack all four fields).
         guid_teams: dict[str, list[str]] = {}
-        for (g, _rn), faction in rtm.items():
+        for (g, _rsu, _map, _rn), faction in rtm.items():
             guid_teams.setdefault(g, []).append(faction)
         guid_majority: dict[str, str] = {}
         for g, teams in guid_teams.items():
@@ -89,16 +90,20 @@ class _MomentumMixin:
             all_guids.add(k[5])
         short_to_long = {g[:8]: g for g in all_guids}
 
-        def _get_team(guid: str, rn: int) -> str | None:
-            """Resolve team for a GUID in a round. Try PCS 8-char lookup, then majority."""
-            t = rtm.get((guid[:8], rn)) or rtm.get((guid, rn))
+        def _get_team(guid: str, rsu: int, map_name: str, rn: int) -> str | None:
+            """Resolve team for a GUID in a specific round via the canonical
+            round key (round_start_unix, map_name, round_number) — round_number
+            alone collides across maps in a gaming session. Falls back to a
+            per-guid majority vote when the exact round row is missing."""
+            short = guid[:8]
+            t = rtm.get((short, rsu, map_name, rn)) or rtm.get((guid, rsu, map_name, rn))
             if t:
                 return t
-            long = short_to_long.get(guid[:8], guid)
-            t = rtm.get((long[:8], rn))
+            long = short_to_long.get(short, guid)
+            t = rtm.get((long[:8], rsu, map_name, rn))
             if t:
                 return t
-            return guid_majority.get(guid[:8]) or guid_majority.get(guid)
+            return guid_majority.get(short) or guid_majority.get(guid)
 
         # 3. Get objective events: carrier pickups/secured
         carrier_events = await self.db.fetch_all(f"""
@@ -125,7 +130,7 @@ class _MomentumMixin:
                 rounds_data[key] = {"map_name": map_name, "kills": [], "objectives": []}
             kill_time_ms = k[3] or 0
             killer_guid = k[4]
-            killer_team = _get_team(killer_guid, rn)
+            killer_team = _get_team(killer_guid, start_unix, map_name, rn)
             if killer_team is None:
                 continue
             rounds_data[key]["kills"].append({

@@ -110,22 +110,31 @@ class _SynergyMixin:
         return response
 
     async def _build_round_team_map(self, scope: GamingSessionScope) -> dict:
-        """Build (player_guid, round_number) -> faction mapping from PCS.
+        """Build (player_guid, round_start_unix, map_name, round_number) ->
+        faction mapping from PCS.
 
         Scoped by gaming_session_id (deep SS-C): PCS.round_id -> rounds is
         reliable (plan D1), so the joined round's gsid captures the whole
         session across a midnight boundary without pulling another session
         that shares a calendar date.
+
+        Keyed by the CANONICAL round key, not just round_number: round_number
+        is only 1/2 (unique within a match, not a session), so a multi-map
+        gaming session would otherwise collapse every map's R1 into one entry
+        (last-write-wins) and mis-assign factions — a player is AXIS on map1-R1
+        but ALLIES on map2-R1. Matches the round_key_filter_sql semantics the
+        momentum queries use (Copilot PR #537).
         """
         rows = await self.db.fetch_all(
-            "SELECT pcs.player_guid, pcs.round_number, pcs.team "
+            "SELECT pcs.player_guid, r.round_start_unix, r.map_name, "
+            "pcs.round_number, pcs.team "
             "FROM player_comprehensive_stats pcs "
             "JOIN rounds r ON r.id = pcs.round_id "
             "WHERE r.gaming_session_id = $1 AND pcs.team IN (1, 2)",
             (scope.gaming_session_id,))
         result = {}
         for r in (rows or []):
-            result[(r[0], r[1])] = 'AXIS' if r[2] == 1 else 'ALLIES'
+            result[(r[0], r[1], r[2], r[3])] = 'AXIS' if r[4] == 1 else 'ALLIES'
         return result
 
     async def _build_player_groups(self, sd: date) -> dict | None:

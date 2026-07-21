@@ -120,3 +120,23 @@ async def test_partial_groups_yield_no_team_data():
 
     assert res["status"] == "no_team_data"
     assert res["reason"] == "no_r1_data"
+
+
+@pytest.mark.asyncio
+async def test_build_round_team_map_keys_by_canonical_round_no_map_collision():
+    """round_number is only 1/2 (unique per match, not per session), so a
+    multi-map gaming session where the SAME player is AXIS on map1-R1 and
+    ALLIES on map2-R1 must keep BOTH entries — keying by (guid, round_number)
+    alone would collapse them (last-write-wins) and mis-assign the faction
+    (Copilot PR #537). Key must be the canonical (guid, rsu, map, rn)."""
+    svc = StorytellingService(AsyncMock())
+    # (player_guid, round_start_unix, map_name, round_number, team)
+    svc.db.fetch_all = AsyncMock(return_value=[
+        (A1[:8], 1000, "supply", 1, 1),    # map1 R1: AXIS
+        (A1[:8], 5000, "goldrush", 1, 2),  # map2 R1: ALLIES (same round_number!)
+    ])
+    rtm = await svc._build_round_team_map(_SCOPE)
+
+    assert rtm[(A1[:8], 1000, "supply", 1)] == "AXIS"
+    assert rtm[(A1[:8], 5000, "goldrush", 1)] == "ALLIES"
+    assert len(rtm) == 2  # no collision
