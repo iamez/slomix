@@ -275,5 +275,13 @@ def test_round_key_filter_sql_alias_qualifies_columns():
 def test_round_key_filter_sql_no_alias_leaves_columns_bare():
     scope = _scope_with_keys([(1000, "supply", 1)])
     sql = scope.round_key_filter_sql(1)
-    assert " round_start_unix" in sql
-    assert "." not in sql.split("_rk")[1].split("WHERE")[1]  # no alias prefix on row cols
+    # The three row columns must be compared BARE (no table-alias prefix),
+    # even though the unnest helper column `_rk.*` is always prefixed.
+    assert "= round_start_unix" in sql
+    assert "= map_name" in sql
+    assert "= round_number" in sql
+    # ...and no dot-qualified form of the row columns leaked in (which is
+    # exactly what alias mode would produce, e.g. `= st.round_start_unix`).
+    assert ".round_start_unix" not in sql
+    assert ".map_name" not in sql
+    assert ".round_number" not in sql
