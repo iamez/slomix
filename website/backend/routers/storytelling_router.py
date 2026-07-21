@@ -18,6 +18,7 @@ from website.backend.services.session_scope import (
     list_recent_scopes,
     resolve_gaming_session_scope,
 )
+from website.backend.services.storytelling.kis import FORMULA_VERSION
 from website.backend.services.storytelling_service import (
     CARRIER_CHAIN_MULTIPLIER,
     CARRIER_KILL_MULTIPLIER,
@@ -396,7 +397,11 @@ async def get_kis_formula():
     """Return KIS multiplier definitions (transparency endpoint)."""
     return {
         "status": "ok",
-        "version": "1.0",
+        # Codex SS-E: was a disconnected hardcoded "1.0", unrelated to the
+        # kis-vN identifier actually stored/compared for cache invalidation
+        # (kis.py's FORMULA_VERSION) — now reports the SAME string so this
+        # transparency endpoint can't silently drift from what's computed.
+        "version": FORMULA_VERSION,
         "name": "Kill Impact Score (KIS)",
         "description": "Contextual kill impact scoring for competitive ET:Legacy. "
                        "Each kill starts at 1.0 base and is multiplied by context factors.",

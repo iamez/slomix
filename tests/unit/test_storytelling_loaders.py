@@ -250,6 +250,23 @@ async def test_load_spawn_timings_score_null_defaults_to_half(host, db):
 
 
 @pytest.mark.asyncio
+async def test_load_spawn_timings_score_zero_preserved_not_promoted_to_half(host, db):
+    """A stored spawn_timing_score of 0 (the Lua interval<=0 sentinel) must
+    stay 0, NOT be promoted to the 0.5 neutral default (Codex SS-E: the old
+    `r[2] or 0.5` promoted it, giving an unknown-timing kill a 1.5x spawn
+    bonus while an identical no-spawn-row kill got 1.0x). Kept at 0, an
+    unknown-timing kill scores the same 1.0x as a no-data kill. Only a
+    genuine NULL falls back to 0.5. kis_shadow.py's `st` CTE mirrors this
+    exact rule (COALESCE(spawn_timing_score, 0.5), no NULLIF)."""
+    db.fetch_all = AsyncMock(return_value=[
+        ("k", 5.0, 0, 1700000000, 1, 30.0, MAP),
+    ])
+    out = await host._load_spawn_timings("d")
+    entry = out[(1700000000, MAP, 1)][0]
+    assert entry[2] == 0.0
+
+
+@pytest.mark.asyncio
 async def test_load_spawn_timings_victim_reinf_null_defaults_to_zero(host, db):
     """victim_reinf=NULL → 0.0 (no spawn-tier bonus when unknown)."""
     db.fetch_all = AsyncMock(return_value=[
