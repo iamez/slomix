@@ -33,6 +33,7 @@ from website.backend.services.storytelling.kis_shadow import (
     SHADOW_AUDIT_DELTA_FLOOR,
     SHADOW_AUDIT_TOP_N,
     _apply_soft_cap_and_round,
+    _build_shadow_kis_query,
     _shadow_mode_enabled,
 )
 from website.backend.services.storytelling.service import StorytellingService
@@ -82,6 +83,26 @@ def test_apply_soft_cap_preserves_ordering():
     b = _apply_soft_cap_and_round(8.0)
     c = _apply_soft_cap_and_round(20.0)
     assert a < b < c
+
+
+# ---------------------------------------------------------------------------
+# Shadow ↔ Python spawn-score parity (Codex SS-E)
+# ---------------------------------------------------------------------------
+
+
+def test_shadow_spawn_score_mirrors_python_no_nullif():
+    """The shadow's `st` CTE must coerce spawn_timing_score with a plain
+    COALESCE(..., 0.5), NOT NULLIF(spawn_timing_score, 0) — mirroring the
+    Python loader's `0.5 if r[2] is None else float(r[2])`.
+
+    Before SS-E both paths used the falsy-zero form (`r[2] or 0.5` /
+    NULLIF→0.5), promoting a stored 0 to 0.5. SS-E changed the Python
+    loader to keep a real 0; if the shadow kept NULLIF it would silently
+    diverge from the authoritative path on every zero-valued spawn row.
+    Pin the shadow so the two can never drift apart again."""
+    query = " ".join(_build_shadow_kis_query().split()).upper()
+    assert "COALESCE(SPAWN_TIMING_SCORE, 0.5)" in query
+    assert "NULLIF(SPAWN_TIMING_SCORE" not in query
 
 
 # ---------------------------------------------------------------------------

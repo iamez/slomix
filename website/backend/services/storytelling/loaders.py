@@ -90,8 +90,22 @@ class _LoadersMixin:
         result = {}
         for r in (rows or []):
             key = round_ctx_key(r[3], r[6], r[4])
+            # A stored spawn_timing_score of 0 is the Lua `interval <= 0`
+            # sentinel (spawn interval undetermined → score 0,0). The old
+            # `float(r[2] or 0.5)` promoted every such 0 to the 0.5
+            # neutral default, so a kill with an unknown-interval spawn row
+            # got a 1.5x spawn bonus while an identical kill with NO spawn
+            # row got 1.0x — inconsistent. Now 0 is kept, so unknown-timing
+            # kills score the same 1.0x as no-data kills; only a genuine
+            # NULL (which the table never stores today — all 0s are real
+            # sentinels) would fall back to 0.5 (Codex SS-E). NB: every
+            # historical 0 is an orphaned 2026-03-17..19 row matching no
+            # kill_outcome, so this changes 0 currently-displayed kills;
+            # it fixes the semantics for any future unknown-interval data.
+            # kis_shadow.py's `st` CTE mirrors this exact rule.
+            score = 0.5 if r[2] is None else float(r[2])
             result.setdefault(key, []).append(
-                (r[0], r[1], float(r[2] or 0.5), float(r[5] or 0)))
+                (r[0], r[1], score, float(r[5] or 0)))
         return result
 
     async def _load_victim_classes(self, session_date):
