@@ -5,28 +5,35 @@ Imports all module-level names (constants, helpers) from .base.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from .base import (
-    _to_date,
     date,
 )
+
+if TYPE_CHECKING:
+    from website.backend.services.session_scope import GamingSessionScope
 
 
 class _MomentumMixin:
     """Momentum methods for StorytellingService."""
 
-    async def compute_momentum(self, session_date: str | date) -> dict:
+    async def compute_momentum(self, scope: GamingSessionScope) -> dict:
         """Compute per-round team momentum in 30-second windows.
 
         Momentum decays each window (×0.85) and gains from kills and objectives.
         Returns dual-line data (AXIS vs ALLIES) normalized to 0-100 per round.
+
+        Scoped by the full gaming session (deep SS-C): a midnight-crossing
+        session charts momentum for ALL its rounds, not just one date.
         """
-        sd = _to_date(session_date)
-        internal = await self._momentum_rounds(sd)
+        internal = await self._momentum_rounds(scope)
+        sd_str = scope.dates[0]
         if internal is None:
-            return {"status": "no_data", "session_date": str(sd), "rounds": []}
+            return {"status": "no_data", "session_date": sd_str, "rounds": []}
         return {
             "status": "ok",
-            "session_date": str(sd),
+            "session_date": sd_str,
             "rounds": [
                 {
                     "round_number": r["round_number"],
@@ -37,23 +44,31 @@ class _MomentumMixin:
             ],
         }
 
-    async def _momentum_rounds(self, sd: date) -> list[dict] | None:
-        """Per-round momentum series, with round_start_unix kept for stitching."""
+    async def _momentum_rounds(self, scope: GamingSessionScope) -> list[dict] | None:
+        """Per-round momentum series, with round_start_unix kept for stitching.
+
+        Proximity tables (kill_outcome, carrier_event, construction_event)
+        carry no gaming_session_id, so they filter by session dates + the
+        canonical round key (deep SS-C). Shared with compute_momentum and
+        compute_momentum_session.
+        """
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
 
         # 1. Get all kills with team info
-        kills = await self.db.fetch_all("""
+        kills = await self.db.fetch_all(f"""
             SELECT ko.round_number, ko.round_start_unix, ko.map_name,
                    ko.kill_time, ko.killer_guid, ko.victim_guid
             FROM proximity_kill_outcome ko
-            WHERE ko.session_date = $1
+            WHERE ko.session_date = ANY($1) AND {scope.round_key_filter_sql(2, alias="ko")}
             ORDER BY ko.round_start_unix, ko.kill_time
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
 
         if not kills:
             return None
 
         # 2. Build team map from PCS
-        rtm = await self._build_round_team_map(sd)
+        rtm = await self._build_round_team_map(scope)
 
         # Fallback: majority-vote per GUID
         guid_teams: dict[str, list[str]] = {}
@@ -86,20 +101,20 @@ class _MomentumMixin:
             return guid_majority.get(guid[:8]) or guid_majority.get(guid)
 
         # 3. Get objective events: carrier pickups/secured
-        carrier_events = await self.db.fetch_all("""
+        carrier_events = await self.db.fetch_all(f"""
             SELECT round_number, round_start_unix, map_name,
                    carrier_team, pickup_time, outcome
             FROM proximity_carrier_event
-            WHERE session_date = $1
-        """, (sd,))
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
+        """, (dates, starts, maps, rnums))
 
         # Construction events
-        construction_events = await self.db.fetch_all("""
+        construction_events = await self.db.fetch_all(f"""
             SELECT round_number, round_start_unix, map_name,
                    player_team, event_time, event_type
             FROM proximity_construction_event
-            WHERE session_date = $1
-        """, (sd,))
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
+        """, (dates, starts, maps, rnums))
 
         # 4. Group kills by round
         rounds_data: dict[tuple[int, int], dict] = {}  # (rn, start_unix) -> {map, kills, objs}
@@ -233,7 +248,7 @@ class _MomentumMixin:
 
         return result_rounds
 
-    async def compute_momentum_session(self, session_date: str | date) -> dict:
+    async def compute_momentum_session(self, scope: GamingSessionScope) -> dict:
         """Whole-session momentum by LOGICAL team (stopwatch-aware).
 
         Faction lines are meaningless across a session — rosters swap sides
@@ -242,9 +257,17 @@ class _MomentumMixin:
         + per-round guid-overlap voting), then stitched onto one cumulative
         timeline (sum of round durations, not wall clock — map breaks would
         stretch the chart).
+
+        Deep SS-C transitional: `_momentum_rounds` is now full-gaming-session
+        scoped (multi-date), but the player-group mapping (`_build_player_groups`
+        / `_team_labels`) still keys off the representative first date until
+        the shared `_build_player_groups` cluster converts (next batch). For a
+        midnight-crossing session the after-midnight rounds therefore surface
+        as `unmapped_rounds` rather than mislabeled — honest, and finalized
+        when the cluster lands.
         """
-        sd = _to_date(session_date)
-        internal = await self._momentum_rounds(sd)
+        sd = date.fromisoformat(scope.dates[0])
+        internal = await self._momentum_rounds(scope)
         if internal is None:
             return {"status": "no_data", "session_date": str(sd), "points": []}
 

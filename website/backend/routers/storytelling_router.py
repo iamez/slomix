@@ -526,9 +526,8 @@ async def get_momentum(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Momentum chart: per-round team momentum in 30-second windows."""
-    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    result = await svc.compute_momentum(sd)
+    result = await svc.compute_momentum(scope)
     result["scope"] = scope.to_metadata()
     return result
 
@@ -541,9 +540,8 @@ async def get_momentum_session(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Whole-session momentum by logical team (stopwatch roster tracking)."""
-    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    result = await svc.compute_momentum_session(sd)
+    result = await svc.compute_momentum_session(scope)
     result["scope"] = scope.to_metadata()
     return result
 

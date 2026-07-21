@@ -6,6 +6,7 @@ Imports all module-level names (constants, helpers) from .base.
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
 from .base import (
     COHESION_MAX_DISPERSION,
@@ -15,6 +16,9 @@ from .base import (
     date,
     logger,
 )
+
+if TYPE_CHECKING:
+    from website.backend.services.session_scope import GamingSessionScope
 
 
 class _SynergyMixin:
@@ -105,13 +109,20 @@ class _SynergyMixin:
         }
         return response
 
-    async def _build_round_team_map(self, sd: date) -> dict:
-        """Build (player_guid, round_number) -> faction mapping from PCS."""
+    async def _build_round_team_map(self, scope: GamingSessionScope) -> dict:
+        """Build (player_guid, round_number) -> faction mapping from PCS.
+
+        Scoped by gaming_session_id (deep SS-C): PCS.round_id -> rounds is
+        reliable (plan D1), so the joined round's gsid captures the whole
+        session across a midnight boundary without pulling another session
+        that shares a calendar date.
+        """
         rows = await self.db.fetch_all(
-            "SELECT player_guid, round_number, team "
-            "FROM player_comprehensive_stats "
-            "WHERE round_date = $1 AND team IN (1, 2)",
-            (_to_date_str(sd),))
+            "SELECT pcs.player_guid, pcs.round_number, pcs.team "
+            "FROM player_comprehensive_stats pcs "
+            "JOIN rounds r ON r.id = pcs.round_id "
+            "WHERE r.gaming_session_id = $1 AND pcs.team IN (1, 2)",
+            (scope.gaming_session_id,))
         result = {}
         for r in (rows or []):
             result[(r[0], r[1])] = 'AXIS' if r[2] == 1 else 'ALLIES'

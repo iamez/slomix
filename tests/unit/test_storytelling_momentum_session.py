@@ -9,10 +9,19 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from website.backend.services.session_scope import GamingSessionScope
 from website.backend.services.storytelling.service import StorytellingService
 
 A1, A2 = "AAAA1111" + "0" * 24, "AAAA2222" + "0" * 24
 B1, B2 = "BBBB1111" + "0" * 24, "BBBB2222" + "0" * 24
+
+_SCOPE = GamingSessionScope(
+    gaming_session_id=55,
+    dates=("2026-06-09",),
+    round_keys=((1000, "supply", 1), (2000, "supply", 2)),
+    accepted_round_count=2,
+    distinct_map_names=("supply",),
+)
 
 
 def _service_with(internal_rounds, groups, label_rows):
@@ -56,7 +65,7 @@ async def test_session_stitch_keeps_logical_team_across_swap():
         _round(2, 2000, "supply", [{"t_ms": 0, "axis": 20.0, "allies": 80.0}]),
     ]
     svc = _service_with(rounds, GROUPS, LABEL_ROWS)
-    res = await svc.compute_momentum_session("2026-06-09")
+    res = await svc.compute_momentum_session(_SCOPE)
 
     assert res["status"] == "ok"
     assert [p["team_a"] for p in res["points"]] == [80.0, 80.0]
@@ -71,7 +80,7 @@ async def test_boundaries_and_cumulative_timeline():
         _round(2, 2000, "supply", [{"t_ms": 0, "axis": 50, "allies": 50}]),
     ]
     svc = _service_with(rounds, GROUPS, LABEL_ROWS)
-    res = await svc.compute_momentum_session("2026-06-09")
+    res = await svc.compute_momentum_session(_SCOPE)
 
     # R1 duration = last t_ms + window (30s) = 60s; R2 starts at 60_000.
     assert [b["x_ms"] for b in res["round_boundaries"]] == [0, 60_000]
@@ -86,7 +95,7 @@ async def test_unmapped_round_skipped_and_reported():
         _round(1, 9999, "orphan_map", [{"t_ms": 0, "axis": 50, "allies": 50}]),
     ]
     svc = _service_with(rounds, GROUPS, LABEL_ROWS)
-    res = await svc.compute_momentum_session("2026-06-09")
+    res = await svc.compute_momentum_session(_SCOPE)
 
     assert res["meta"]["rounds"] == 1
     assert res["meta"]["unmapped_rounds"] == 1
@@ -96,7 +105,7 @@ async def test_unmapped_round_skipped_and_reported():
 async def test_team_labels_top_two_killers():
     rounds = [_round(1, 1000, "supply", [{"t_ms": 0, "axis": 50, "allies": 50}])]
     svc = _service_with(rounds, GROUPS, LABEL_ROWS)
-    res = await svc.compute_momentum_session("2026-06-09")
+    res = await svc.compute_momentum_session(_SCOPE)
 
     assert res["teams"]["team_a"]["label"] == "olz & wise"
     assert res["teams"]["team_b"]["label"] == "SuperBoyy & vid"
@@ -107,7 +116,7 @@ async def test_team_labels_top_two_killers():
 async def test_partial_groups_yield_no_team_data():
     rounds = [_round(1, 1000, "supply", [{"t_ms": 0, "axis": 50, "allies": 50}])]
     svc = _service_with(rounds, {"_status": "partial_data", "_reason": "no_r1_data"}, [])
-    res = await svc.compute_momentum_session("2026-06-09")
+    res = await svc.compute_momentum_session(_SCOPE)
 
     assert res["status"] == "no_team_data"
     assert res["reason"] == "no_r1_data"
