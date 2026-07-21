@@ -6,6 +6,7 @@ Imports all module-level names (constants, helpers) from .base.
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
 from .base import (
     CARRIER_RETURN_WINDOW_MS,
@@ -17,7 +18,6 @@ from .base import (
     _compute_locks,
     _format_time_ms,
     _safe_short,
-    _to_date,
     asyncio,
     date,
     logger,
@@ -26,19 +26,23 @@ from .base import (
     weapon_name,
 )
 
+if TYPE_CHECKING:
+    from website.backend.services.session_scope import GamingSessionScope
+
 # Module-level cache for `detect_moments` results. The 11 detectors fire
 # 11 parallel DB queries + objective-event loader on every request; story
 # page typically triggers both `/moments` (limit=N from user) and
 # `/narrative` (internal call with limit=1) on the same session, so
 # without caching we recompute identically twice.
 #
-# Keyed by (session_date, limit) — moments are a pure function of the
-# data in the DB for that date, and the limit determines type-diversity
-# truncation so we cache per-limit to preserve exact behavior.
+# Keyed by (gaming_session_id, limit) — moments are a pure function of the
+# data in the DB for that gaming session (deep SS-C: a midnight-crossing
+# session is one gsid, not two dates), and the limit determines
+# type-diversity truncation so we cache per-limit to preserve exact behavior.
 #
 # Timestamp column uses `time.monotonic()` — wall-clock jumps (NTP, DST,
 # manual adjustment) would otherwise corrupt TTL math.
-_MOMENTS_CACHE: dict[tuple[date, int], tuple[list, float]] = {}
+_MOMENTS_CACHE: dict[tuple[int, int], tuple[list, float]] = {}
 _MOMENTS_CACHE_MAX = 32  # 16 sessions × 2 typical limits
 _MOMENTS_TTL_TODAY = 300    # 5 min — new rounds may still arrive
 _MOMENTS_TTL_HISTORICAL = 3600  # 1 h — stable, bounded for retro-corrections
@@ -153,35 +157,38 @@ def _moments_cache_evict_oldest_computed() -> None:
 class _MomentsMixin:
     """Moments methods for StorytellingService."""
 
-    async def detect_moments(self, session_date: str | date, limit: int = 10) -> list:
+    async def detect_moments(self, scope: GamingSessionScope, limit: int = 10) -> list:
         """Detect highlight-reel moments for a session across 11 detectors.
 
-        Results are memoized at module level per (session_date, limit) —
+        Results are memoized at module level per (gaming_session_id, limit) —
         TTL 5 min for today, 1 h for historical. First caller computes,
-        subsequent callers hit the cache.
+        subsequent callers hit the cache. Scoped by the full gaming session
+        (deep SS-C): a midnight-crossing session detects moments across ALL
+        its rounds, not just one date's fragment.
         """
-        sd = _to_date(session_date)
         now = time.monotonic()
-        ttl = _moments_cache_ttl(sd)
-        key = (sd, limit)
+        # TTL "recency" keys off the session's LATEST date — a session that
+        # ran past midnight is still "today" the morning after.
+        ttl = _moments_cache_ttl(date.fromisoformat(scope.dates[-1]))
+        key = (scope.gaming_session_id, limit)
         cached = _MOMENTS_CACHE.get(key)
         if cached and (now - cached[1]) < ttl:
             return cached[0]
 
         # Double-check under lock to prevent concurrent recompute when
         # several coroutines all miss the cache before any of them writes.
-        lock = _compute_locks.get(f"moments:{sd}:{limit}")
+        lock = _compute_locks.get(f"moments:{scope.gaming_session_id}:{limit}")
         async with lock:
             cached = _MOMENTS_CACHE.get(key)
             if cached and (time.monotonic() - cached[1]) < ttl:
                 return cached[0]
 
-            result = await self._detect_moments_uncached(sd, limit)
+            result = await self._detect_moments_uncached(scope, limit)
             _MOMENTS_CACHE[key] = (result, time.monotonic())
             _moments_cache_evict_oldest_computed()
             return result
 
-    async def _collect_moments(self, sd: date) -> list:
+    async def _collect_moments(self, scope: GamingSessionScope) -> list:
         """Run all 11 detectors and return the raw, UNCUT union of moments for a
         session (enriched with time_formatted). This is the full pool before any
         director selection — the backtest measures it directly, and
@@ -204,7 +211,7 @@ class _MomentsMixin:
         ]
         # Run all detectors in parallel — each hits DB independently (-1.5s per session)
         results = await asyncio.gather(
-            *(detector(sd) for detector in detectors),
+            *(detector(scope) for detector in detectors),
             return_exceptions=True,
         )
         for detector, result in zip(detectors, results, strict=True):
@@ -222,17 +229,19 @@ class _MomentsMixin:
                 m["time_formatted"] = _format_time_ms(m.get("time_ms", 0))
         return moments
 
-    async def _detect_moments_uncached(self, sd: date, limit: int) -> list:
+    async def _detect_moments_uncached(self, scope: GamingSessionScope, limit: int) -> list:
         """Collect all detector moments, then pick the director's cut (see
         _select_director_cut): star tiers as a hard boundary, then a type-priority
         + player-spread diversity pass within each tier."""
-        moments = await self._collect_moments(sd)
+        moments = await self._collect_moments(scope)
         return _select_director_cut(moments, limit)
 
-    async def _detect_kill_streaks(self, sd: date) -> list:
+    async def _detect_kill_streaks(self, scope: GamingSessionScope) -> list:
         """Detector A: Multi-kill streaks (3+ kills within 10s window).
         Enhanced with objective proximity bonus: +1★ if streak overlaps with
         carrier event, objective run, or team push in the same round."""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
         # RANGE BETWEEN N PRECEDING cannot accept query params in PostgreSQL,
         # so we interpolate the trusted module constant directly.
         rows = await self.db.fetch_all(f"""
@@ -245,17 +254,17 @@ class _MomentsMixin:
                            RANGE BETWEEN {KILL_STREAK_WINDOW_MS} PRECEDING AND CURRENT ROW
                        ) AS streak
                 FROM proximity_kill_outcome
-                WHERE session_date = $1
+                WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
             )
             SELECT killer_guid, killer_name, kill_time, round_number, map_name,
                    round_start_unix, streak
             FROM windowed
             WHERE streak >= 3
             ORDER BY streak DESC, kill_time
-        """, (sd,))  # nosec B608 - trusted module constant, not user input
+        """, (dates, starts, maps, rnums))  # nosec B608 - trusted module constant, not user input
 
         # Pre-load objective event times for proximity bonus
-        obj_times = await self._load_objective_event_times(sd)
+        obj_times = await self._load_objective_event_times(scope)
 
         # Group by (killer_guid, round_start_unix) and take best streak per player per round
         seen = {}
@@ -306,40 +315,47 @@ class _MomentsMixin:
             })
         return moments
 
-    async def _load_objective_event_times(self, sd: date) -> dict:
+    async def _load_objective_event_times(self, scope: GamingSessionScope) -> dict:
         """Load all objective event timestamps indexed by (round_start_unix, round_number).
         Combines carrier events, objective runs, and construction events."""
         result: dict[tuple, list[int]] = {}
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
 
         # Carrier pickups/drops/secures
         rows = await self.db.fetch_all(
-            "SELECT round_start_unix, round_number, pickup_time FROM proximity_carrier_event "
-            "WHERE session_date = $1", (sd,))
+            f"SELECT round_start_unix, round_number, pickup_time FROM proximity_carrier_event "
+            f"WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}",
+            (dates, starts, maps, rnums))
         for r in (rows or []):
             if r[2] and r[2] > 0:
                 result.setdefault((r[0], r[1]), []).append(r[2])
 
         # Objective runs (plants, constructions, defuses)
         rows = await self.db.fetch_all(
-            "SELECT round_start_unix, round_number, action_time FROM proximity_objective_run "
-            "WHERE session_date = $1", (sd,))
+            f"SELECT round_start_unix, round_number, action_time FROM proximity_objective_run "
+            f"WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}",
+            (dates, starts, maps, rnums))
         for r in (rows or []):
             if r[2] and r[2] > 0:
                 result.setdefault((r[0], r[1]), []).append(r[2])
 
         # Construction events
         rows = await self.db.fetch_all(
-            "SELECT round_start_unix, round_number, event_time FROM proximity_construction_event "
-            "WHERE session_date = $1", (sd,))
+            f"SELECT round_start_unix, round_number, event_time FROM proximity_construction_event "
+            f"WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}",
+            (dates, starts, maps, rnums))
         for r in (rows or []):
             if r[2] and r[2] > 0:
                 result.setdefault((r[0], r[1]), []).append(r[2])
 
         return result
 
-    async def _detect_carrier_chains(self, sd: date) -> list:
+    async def _detect_carrier_chains(self, scope: GamingSessionScope) -> list:
         """Detector B: Carrier kill → teammate returns within 10s."""
-        rows = await self.db.fetch_all("""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
+        rows = await self.db.fetch_all(f"""
             SELECT ck.killer_guid, ck.killer_name, ck.kill_time,
                    cr.returner_guid, cr.returner_name, cr.return_time,
                    ck.round_number, ck.map_name
@@ -348,10 +364,11 @@ class _MomentsMixin:
                 ON cr.session_date = ck.session_date
                 AND cr.round_number = ck.round_number
                 AND cr.round_start_unix = ck.round_start_unix
-            WHERE ck.session_date = $1
+            WHERE ck.session_date = ANY($1)
+                AND {scope.round_key_filter_sql(3, alias="ck")}
                 AND (cr.return_time - ck.kill_time) BETWEEN 0 AND $2
             ORDER BY ck.kill_time
-        """, (sd, CARRIER_RETURN_WINDOW_MS))
+        """, (dates, CARRIER_RETURN_WINDOW_MS, starts, maps, rnums))
 
         moments = []
         for r in (rows or []):
@@ -373,7 +390,7 @@ class _MomentsMixin:
             })
         return moments
 
-    async def _detect_focus_survivals(self, sd: date) -> list:
+    async def _detect_focus_survivals(self, scope: GamingSessionScope) -> list:
         """Detector C: Survived 3v1+ focus fire.
 
         Joins `combat_engagement` to recover `end_time_ms` — without it
@@ -387,7 +404,9 @@ class _MomentsMixin:
         counters when rounds start from 1 again). LEFT JOIN keeps rows
         whose engagement never landed — `time_ms` then stays 0.
         """
-        rows = await self.db.fetch_all("""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
+        rows = await self.db.fetch_all(f"""
             SELECT ff.target_guid, ff.target_name, ff.attacker_count, ff.focus_score,
                    ff.round_number, ff.map_name, ff.engagement_id,
                    ce.end_time_ms
@@ -398,11 +417,13 @@ class _MomentsMixin:
                   AND ce.round_start_unix = ff.round_start_unix
                   AND ce.engagement_id = ff.engagement_id
                   AND ce.map_name = ff.map_name
-            WHERE ff.session_date = $1 AND ff.attacker_count >= 3
+            WHERE ff.session_date = ANY($1)
+                AND {scope.round_key_filter_sql(2, alias="ff")}
+                AND ff.attacker_count >= 3
                 AND ff.focus_score >= 0.5
             ORDER BY ff.focus_score DESC
             LIMIT 10
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
 
         moments = []
         for r in (rows or []):
@@ -425,7 +446,7 @@ class _MomentsMixin:
             })
         return moments
 
-    async def _detect_push_successes(self, sd: date) -> list:
+    async def _detect_push_successes(self, scope: GamingSessionScope) -> list:
         """Detector D: High-quality team pushes (3+ participants, high push_quality).
 
         Excludes the first 5s of every round so spawn-rush flows — players
@@ -439,18 +460,20 @@ class _MomentsMixin:
         passing through (only 'NO' was rejected), surfacing direction-less
         pushes as "Team X pushed objective".
         """
-        rows = await self.db.fetch_all("""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
+        rows = await self.db.fetch_all(f"""
             SELECT team, participant_count, push_quality, alignment_score,
                    toward_objective, round_number, map_name, start_time
             FROM proximity_team_push
-            WHERE session_date = $1
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
                 AND participant_count >= 3
                 AND push_quality >= 0.7
                 AND toward_objective NOT IN ('NO', 'N/A')
                 AND start_time >= 5000
             ORDER BY push_quality DESC
             LIMIT 5
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
 
         moments = []
         for r in (rows or []):
@@ -478,17 +501,19 @@ class _MomentsMixin:
             })
         return moments
 
-    async def _detect_trade_chains(self, sd: date) -> list:
+    async def _detect_trade_chains(self, scope: GamingSessionScope) -> list:
         """Detector E: Trade kills (A kills B, C avenges A within delta_ms)."""
-        rows = await self.db.fetch_all("""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
+        rows = await self.db.fetch_all(f"""
             SELECT trader_guid, trader_name, original_victim_guid, original_victim_name,
                    original_killer_guid, original_killer_name, delta_ms,
                    round_number, map_name, traded_kill_time
             FROM proximity_lua_trade_kill
-            WHERE session_date = $1 AND delta_ms <= $2
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(3)} AND delta_ms <= $2
             ORDER BY delta_ms ASC
             LIMIT 10
-        """, (sd, TRADE_KILL_DELTA_MS))
+        """, (dates, TRADE_KILL_DELTA_MS, starts, maps, rnums))
 
         moments = []
         for r in (rows or []):
@@ -512,17 +537,19 @@ class _MomentsMixin:
             })
         return moments
 
-    async def _detect_objective_secured(self, sd: date) -> list:
+    async def _detect_objective_secured(self, scope: GamingSessionScope) -> list:
         """Detector F: Carrier picks up objective and successfully secures it,
         OR carrier kill → return chain (enhanced carrier_chain with pickup context)."""
-        rows = await self.db.fetch_all("""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
+        rows = await self.db.fetch_all(f"""
             SELECT carrier_guid, carrier_name, pickup_time, drop_time,
                    duration_ms, outcome, carry_distance, map_name,
                    round_number, efficiency
             FROM proximity_carrier_event
-            WHERE session_date = $1 AND outcome = 'secured'
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)} AND outcome = 'secured'
             ORDER BY pickup_time
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
 
         moments = []
         for r in (rows or []):
@@ -548,20 +575,22 @@ class _MomentsMixin:
             })
         return moments
 
-    async def _detect_objective_run_moments(self, sd: date) -> list:
+    async def _detect_objective_run_moments(self, scope: GamingSessionScope) -> list:
         """Detector G: Engineer completes objective action under fire (enemies_nearby >= 2)
         or any successful dynamite plant / construction in contested area."""
-        rows = await self.db.fetch_all("""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
+        rows = await self.db.fetch_all(f"""
             SELECT engineer_guid, engineer_name, action_type, track_name,
                    enemies_nearby, nearby_teammates, map_name, round_number,
                    action_time, approach_distance, self_kills, team_kills
             FROM proximity_objective_run
-            WHERE session_date = $1
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
                 AND action_type IN ('dynamite_plant', 'construction_complete', 'objective_destroyed')
                 AND enemies_nearby >= 2
             ORDER BY enemies_nearby DESC, action_time
             LIMIT 10
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
 
         moments = []
         for r in (rows or []):
@@ -604,22 +633,25 @@ class _MomentsMixin:
             })
         return moments
 
-    async def _detect_objective_denied(self, sd: date) -> list:
+    async def _detect_objective_denied(self, scope: GamingSessionScope) -> list:
         """Detector H: Player kills carrier before extraction, or defuses dynamite,
         or kills engineer during construction."""
         moments = []
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
 
         # H1: Carrier killed before extraction (outcome = 'killed')
-        carrier_rows = await self.db.fetch_all("""
+        carrier_rows = await self.db.fetch_all(f"""
             SELECT ce.carrier_guid, ce.carrier_name, ce.killer_guid, ce.killer_name,
                    ce.carry_distance, ce.duration_ms, ce.map_name, ce.round_number,
                    ce.pickup_time
             FROM proximity_carrier_event ce
-            WHERE ce.session_date = $1 AND ce.outcome = 'killed'
+            WHERE ce.session_date = ANY($1) AND {scope.round_key_filter_sql(2, alias="ce")}
+                AND ce.outcome = 'killed'
                 AND ce.killer_guid IS NOT NULL AND ce.killer_guid != ''
             ORDER BY ce.carry_distance DESC
             LIMIT 10
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
 
         for r in (carrier_rows or []):
             carrier_name = strip_et_colors(r[1] or _safe_short(r[0]))
@@ -644,14 +676,15 @@ class _MomentsMixin:
             })
 
         # H2: Dynamite defused (enemy planted, defender defused)
-        defuse_rows = await self.db.fetch_all("""
+        defuse_rows = await self.db.fetch_all(f"""
             SELECT engineer_guid, engineer_name, track_name, map_name,
                    round_number, action_time, enemies_nearby
             FROM proximity_objective_run
-            WHERE session_date = $1 AND action_type = 'dynamite_defuse'
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
+                AND action_type = 'dynamite_defuse'
             ORDER BY action_time
             LIMIT 10
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
 
         for r in (defuse_rows or []):
             name = strip_et_colors(r[1] or _safe_short(r[0]))
@@ -675,10 +708,12 @@ class _MomentsMixin:
 
         return moments
 
-    async def _detect_multi_revive(self, sd: date) -> list:
+    async def _detect_multi_revive(self, scope: GamingSessionScope) -> list:
         """Detector I: Medic revives 3+ teammates within a 15s window.
         Inspired by Overwatch's mass-rez moments — in high-TTK games like ET,
         rapid revives swing fights dramatically."""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
         # RANGE BETWEEN N PRECEDING cannot accept query params in PostgreSQL,
         # so we interpolate the trusted module constant directly.
         rows = await self.db.fetch_all(f"""
@@ -691,7 +726,7 @@ class _MomentsMixin:
                            RANGE BETWEEN {OBJECTIVE_EVENT_WINDOW_MS} PRECEDING AND CURRENT ROW
                        ) AS revive_burst
                 FROM proximity_kill_outcome
-                WHERE session_date = $1
+                WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
                     AND outcome = 'revived'
                     AND reviver_guid IS NOT NULL
                     AND reviver_guid != ''
@@ -701,7 +736,7 @@ class _MomentsMixin:
             FROM revives
             WHERE revive_burst >= 3
             ORDER BY revive_burst DESC, outcome_time
-        """, (sd,))  # nosec B608 - trusted module constant, not user input
+        """, (dates, starts, maps, rnums))  # nosec B608 - trusted module constant, not user input
 
         # Group by (reviver_guid, round_start_unix) and take best burst per medic per round
         seen = {}
@@ -738,36 +773,38 @@ class _MomentsMixin:
             })
         return moments
 
-    async def _detect_team_wipes(self, sd: date) -> list:
+    async def _detect_team_wipes(self, scope: GamingSessionScope) -> list:
         """Detector J: Team Wipe — all enemies killed within a 15s window.
         In competitive 3v3 ET, wiping all 3 enemies is the highest impact play.
         Uses combat_position for team info + kill_outcome for kill details."""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
 
         # Get all kills with team info for this session
-        rows = await self.db.fetch_all("""
+        rows = await self.db.fetch_all(f"""
             SELECT cp.event_time, cp.attacker_guid, cp.attacker_name, cp.attacker_team,
                    cp.victim_guid, cp.victim_name, cp.victim_team,
                    cp.means_of_death, cp.round_number, cp.map_name, cp.round_start_unix
             FROM proximity_combat_position cp
-            WHERE cp.session_date = $1
+            WHERE cp.session_date = ANY($1) AND {scope.round_key_filter_sql(2, alias="cp")}
                 AND cp.event_type = 'kill'
                 AND cp.attacker_team IS NOT NULL
                 AND cp.victim_team IS NOT NULL
                 AND cp.attacker_team != cp.victim_team
             ORDER BY cp.round_start_unix, cp.event_time
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
 
         if not rows:
             return []
 
         # Get team sizes per round
-        team_sizes = await self.db.fetch_all("""
+        team_sizes = await self.db.fetch_all(f"""
             SELECT round_start_unix, round_number, attacker_team,
                    COUNT(DISTINCT attacker_guid) as team_size
             FROM proximity_combat_position
-            WHERE session_date = $1 AND event_type = 'kill'
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)} AND event_type = 'kill'
             GROUP BY round_start_unix, round_number, attacker_team
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
 
         ts_map: dict[tuple, dict[str, int]] = {}
         for r in (team_sizes or []):
@@ -891,7 +928,7 @@ class _MomentsMixin:
 
         return unique_moments
 
-    async def _detect_multikills(self, sd: date) -> list:
+    async def _detect_multikills(self, scope: GamingSessionScope) -> list:
         """Detector K: Personal Multikill — a single player kills 2+ enemies
         in rapid succession (tighter window than kill_streak).
         - Double kill: 2 kills in 5s → 2★
@@ -899,33 +936,35 @@ class _MomentsMixin:
         - Quad kill: 4 kills in 8s → 4★
         - Ace (all enemies): 5★
         Uses combat_position for weapon/team context."""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
 
         # Get all kills with full context
-        rows = await self.db.fetch_all("""
+        rows = await self.db.fetch_all(f"""
             SELECT cp.event_time, cp.attacker_guid, cp.attacker_name, cp.attacker_team,
                    cp.victim_guid, cp.victim_name, cp.victim_team,
                    cp.means_of_death, cp.round_number, cp.map_name, cp.round_start_unix
             FROM proximity_combat_position cp
-            WHERE cp.session_date = $1
+            WHERE cp.session_date = ANY($1) AND {scope.round_key_filter_sql(2, alias="cp")}
                 AND cp.event_type = 'kill'
                 AND cp.attacker_team IS NOT NULL
                 AND cp.victim_team IS NOT NULL
                 AND cp.attacker_team != cp.victim_team
             ORDER BY cp.attacker_guid, cp.round_start_unix, cp.event_time
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
 
         if not rows:
             return []
 
         # Get team sizes for ace detection
-        team_sizes = await self.db.fetch_all("""
+        team_sizes = await self.db.fetch_all(f"""
             SELECT round_start_unix, round_number, victim_team,
                    COUNT(DISTINCT victim_guid) as team_size
             FROM proximity_combat_position
-            WHERE session_date = $1 AND event_type = 'kill'
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)} AND event_type = 'kill'
                 AND attacker_team != victim_team
             GROUP BY round_start_unix, round_number, victim_team
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
         ts_map: dict[tuple, dict[str, int]] = {}
         for r in (team_sizes or []):
             ts_map.setdefault((r[0], r[1]), {})[r[2]] = int(r[3])
@@ -948,7 +987,7 @@ class _MomentsMixin:
             })
 
         # Load objective event times for proximity check
-        obj_times = await self._load_objective_event_times(sd)
+        obj_times = await self._load_objective_event_times(scope)
 
         moments = []
         for pkey, kills in by_player_round.items():

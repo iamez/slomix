@@ -139,9 +139,8 @@ async def get_moments(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Match Moments — highlight reel of a session."""
-    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    moments = await svc.detect_moments(sd, limit=limit)
+    moments = await svc.detect_moments(scope, limit=limit)
     return {
         "status": "ok",
         "session_date": scope.dates[0],
@@ -560,9 +559,8 @@ async def get_narrative(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Session narrative: human-readable summary paragraph."""
-    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    result = await svc.generate_narrative(sd, ensure_kis=internal_request)
+    result = await svc.generate_narrative(scope, ensure_kis=internal_request)
     result["scope"] = scope.to_metadata()
     return result
 

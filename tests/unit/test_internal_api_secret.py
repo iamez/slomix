@@ -215,8 +215,11 @@ async def test_public_narrative_routes_do_not_ensure_kis(monkeypatch):
         def __init__(self, db):
             calls.append(("init", db))
 
-        async def generate_narrative(self, sd, *, ensure_kis=True):
-            calls.append(("narrative", str(sd), ensure_kis))
+        async def generate_narrative(self, scope, *, ensure_kis=True):
+            # generate_narrative now takes a GamingSessionScope (deep SS-C);
+            # record its representative date so the assertion still pins the
+            # resolved session, and ensure_kis (the real point of this test).
+            calls.append(("narrative", scope.dates[0], ensure_kis))
             return {"status": "ok", "narrative": "cached story"}
 
         async def generate_player_narratives(self, sd, *, ensure_kis=True):

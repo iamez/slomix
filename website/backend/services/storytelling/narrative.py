@@ -13,6 +13,7 @@ session_id hash so back-to-back sessions don't read identically.
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from .base import (
     _to_date,
@@ -21,6 +22,9 @@ from .base import (
     date,
     strip_et_colors,
 )
+
+if TYPE_CHECKING:
+    from website.backend.services.session_scope import GamingSessionScope
 
 # ---------------------------------------------------------------------------
 # Map name humanization
@@ -145,7 +149,7 @@ class _NarrativeMixin:
 
     async def generate_narrative(
         self,
-        session_date: str | date,
+        scope: GamingSessionScope,
         *,
         ensure_kis: bool = True,
     ) -> dict:
@@ -154,9 +158,16 @@ class _NarrativeMixin:
         Uses KIS, moments, synergy, archetypes, and PWC data. Output is
         designed to read like a sports recap, not a stats dump — see
         the module docstring for the wordalisation rationale.
+
+        Deep SS-C transitional: the moment pick (`detect_moments`) is now
+        full-gaming-session scoped (multi-date), while the KIS/synergy/maps
+        sub-queries still key off the representative first date (`sd`) until
+        their own batches land. For a midnight-crossing session the headline
+        moment therefore already considers ALL rounds; the rest follows in
+        later batches.
         """
-        sd = _to_date(session_date)
-        sd_str = _to_date_str(sd)
+        sd = date.fromisoformat(scope.dates[0])
+        sd_str = scope.dates[0]
 
         # 1. Ensure KIS is computed for internal callers, then fetch
         # leaderboard + archetypes. Public routes must stay read-only.
@@ -217,7 +228,7 @@ class _NarrativeMixin:
                 medic_name = strip_et_colors(entry["name"]) if entry else guid[:8]
 
         # 5. Top moment — include map+round context, drop raw quality%
-        moments = await self.detect_moments(sd, limit=1)
+        moments = await self.detect_moments(scope, limit=1)
         top_moment_when = ""
         top_moment_what = ""
         if moments:
