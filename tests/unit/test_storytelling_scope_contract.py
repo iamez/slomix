@@ -75,11 +75,11 @@ class _FakeStorytellingService:
     async def compute_win_contribution(self, scope):
         return {"session_date": scope.dates[0], "mvp": None, "players": []}
 
-    async def compute_momentum(self, sd):
-        return {"status": "ok", "session_date": str(sd), "rounds": []}
+    async def compute_momentum(self, scope):
+        return {"status": "ok", "session_date": scope.dates[0], "rounds": []}
 
-    async def compute_momentum_session(self, sd):
-        return {"status": "ok", "session_date": str(sd), "points": []}
+    async def compute_momentum_session(self, scope):
+        return {"status": "ok", "session_date": scope.dates[0], "points": []}
 
     async def generate_narrative(self, scope, *, ensure_kis=True):
         # Router passes a GamingSessionScope (deep SS-C batch 3).
