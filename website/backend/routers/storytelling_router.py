@@ -509,7 +509,7 @@ async def get_win_contribution(
 ):
     """Player Win Contribution (PWC): per-round contribution + Win Impact Score."""
     svc = StorytellingService(db)
-    result = await svc.compute_win_contribution(scope.dates[0])
+    result = await svc.compute_win_contribution(scope)
     return {"status": "ok", **result, "scope": scope.to_metadata()}
 
 

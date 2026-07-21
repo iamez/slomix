@@ -11,7 +11,16 @@ from __future__ import annotations
 
 import pytest
 
+from website.backend.services.session_scope import GamingSessionScope
 from website.backend.services.storytelling_service import StorytellingService
+
+_SCOPE = GamingSessionScope(
+    gaming_session_id=42,
+    dates=("2026-07-08",),
+    round_keys=((500, "te_escape2", 1), (500, "te_escape2", 2)),
+    accepted_round_count=2,
+    distinct_map_names=("te_escape2",),
+)
 
 
 class _FakeDB:
@@ -45,7 +54,7 @@ class _FakeDB:
 
 @pytest.mark.asyncio
 async def test_crossfire_does_not_bleed_across_rounds_sharing_start_unix():
-    result = await StorytellingService(_FakeDB()).compute_win_contribution("2026-07-08")
+    result = await StorytellingService(_FakeDB()).compute_win_contribution(_SCOPE)
     player = next(p for p in result["players"] if p["guid"] == "AAAA1111")
 
     # round 1 (round_number=1): solo team, crossfire_share = 2/2 = 1.0,

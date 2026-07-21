@@ -5,30 +5,46 @@ Imports all module-level names (constants, helpers) from .base.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from .base import (
-    _to_date,
-    _to_date_str,
     date,
     strip_et_colors,
 )
+
+if TYPE_CHECKING:
+    from website.backend.services.session_scope import GamingSessionScope
 
 
 class _WinContributionMixin:
     """Win Contribution methods for StorytellingService."""
 
-    async def compute_win_contribution(self, session_date: str | date) -> dict:
+    async def compute_win_contribution(self, scope: GamingSessionScope) -> dict:
         """Compute Player Win Contribution v2 for every player in a session.
 
         v2 adds proximity-derived components: crossfire share, trade share,
         clutch share (28% combined weight, inspired by HLTV 2.1 / FACEIT RWS).
 
-        Returns dict with 'mvp', 'players' list (sorted by total_pwc desc),
-        and 'session_date'.
-        """
-        sd_str = _to_date_str(session_date)
-        sd_date = _to_date(session_date)
+        Scoped by the full gaming session (deep SS-C): the PCS/rounds and
+        storytelling_kill_impact queries filter on gaming_session_id (both
+        carry it reliably); the raw proximity tables (no gsid column) filter
+        on the canonical round key so a midnight-crossing session sees ALL
+        its rounds, and a date shared with another session never bleeds in.
 
-        # 1. Fetch per-player per-round stats from PCS joined with rounds
+        Returns dict with 'mvp', 'players' list (sorted by total_pwc desc),
+        and 'session_date' (the representative first date, for display).
+        """
+        sd_str = scope.dates[0]
+        gsid = scope.gaming_session_id
+        # session_date is a DATE column — bind date objects, not strings,
+        # for `= ANY($1)` (asyncpg needs datetime.date for a date[] array).
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
+
+        # 1. Fetch per-player per-round stats from PCS joined with rounds.
+        # PCS.round_id -> rounds.id is reliable (written by stats import),
+        # so gaming_session_id on the joined round is the precise session
+        # filter (plan D1) — multi-date safe without a date filter.
         rows = await self.db.fetch_all("""
             SELECT pcs.player_guid, pcs.player_name, pcs.round_number,
                    r.map_name, pcs.team, r.winner_team,
@@ -47,52 +63,57 @@ class _WinContributionMixin:
                    r.round_start_unix
             FROM player_comprehensive_stats pcs
             JOIN rounds r ON r.id = pcs.round_id
-            WHERE pcs.round_date = $1
+            WHERE r.gaming_session_id = $1
               AND pcs.round_number IN (1, 2)
               AND r.round_number IN (1, 2)
               AND r.is_valid
               AND pcs.time_played_seconds > 0
             ORDER BY r.id, pcs.player_guid
-        """, (sd_str,))
+        """, (gsid,))
 
         # 1b. Fetch proximity data for proximity PWC components. Keys
         # include round_number (not just round_start_unix, which is not
         # guaranteed unique repo-wide) so add-ons can't blend into the
         # wrong round of this session — codex, PR #478 follow-up audit
         # finding #12.
-        # Crossfire kills per player per round (via guid_canonical)
+        # Crossfire kills per player per round — storytelling_kill_impact
+        # carries gaming_session_id (SS-B migration 063), so filter by it.
         xf_rows = await self.db.fetch_all("""
             SELECT killer_guid_canonical, round_start_unix, round_number, COUNT(*) as xf_kills
             FROM storytelling_kill_impact
-            WHERE session_date = $1 AND is_crossfire = true AND killer_guid_canonical IS NOT NULL
+            WHERE gaming_session_id = $1 AND is_crossfire = true AND killer_guid_canonical IS NOT NULL
             GROUP BY killer_guid_canonical, round_start_unix, round_number
-        """, (sd_date,))
+        """, (gsid,))
         xf_map: dict[tuple[str, int, int], int] = {
             (r[0], int(r[1]), int(r[2])): int(r[3]) for r in xf_rows
         }
 
-        # Trade kills per player per round (via guid_canonical)
-        tr_rows = await self.db.fetch_all("""
+        # Trade kills per player per round — proximity_lua_trade_kill has no
+        # gsid column, so scope by session dates + canonical round keys.
+        tr_rows = await self.db.fetch_all(f"""
             SELECT trader_guid_canonical, round_start_unix, round_number, COUNT(*) as tr_kills
             FROM proximity_lua_trade_kill
-            WHERE session_date = $1 AND trader_guid_canonical IS NOT NULL
+            WHERE session_date = ANY($1) AND trader_guid_canonical IS NOT NULL
+              AND {scope.round_key_filter_sql(2)}
             GROUP BY trader_guid_canonical, round_start_unix, round_number
-        """, (sd_date,))
+        """, (dates, starts, maps, rnums))
         tr_map: dict[tuple[str, int, int], int] = {
             (r[0], int(r[1]), int(r[2])): int(r[3]) for r in tr_rows
         }
 
-        # Clutch kills per player per round (via guid_canonical)
-        cl_rows = await self.db.fetch_all("""
+        # Clutch kills per player per round — proximity_combat_position, same
+        # (session dates + canonical round keys).
+        cl_rows = await self.db.fetch_all(f"""
             SELECT attacker_guid_canonical, round_start_unix, round_number, COUNT(*) as cl_kills
             FROM proximity_combat_position
-            WHERE session_date = $1 AND event_type = 'kill'
+            WHERE session_date = ANY($1) AND event_type = 'kill'
               AND attacker_guid_canonical IS NOT NULL
               AND ((killer_health > 0 AND killer_health < 30)
                    OR (attacker_team = 'AXIS' AND axis_alive < allies_alive)
                    OR (attacker_team = 'ALLIES' AND allies_alive < axis_alive))
+              AND {scope.round_key_filter_sql(2)}
             GROUP BY attacker_guid_canonical, round_start_unix, round_number
-        """, (sd_date,))
+        """, (dates, starts, maps, rnums))
         cl_map: dict[tuple[str, int, int], int] = {
             (r[0], int(r[1]), int(r[2])): int(r[3]) for r in cl_rows
         }
