@@ -57,7 +57,10 @@ class _FakeStorytellingService:
     def __init__(self, db):
         self.db = db
 
-    async def detect_moments(self, sd, limit=10):
+    async def detect_moments(self, scope, limit=10):
+        # Router now passes a GamingSessionScope (deep SS-C batch 3), not a
+        # date. Not a TypeError either way (one positional arg), but name it
+        # accurately so the fake documents the real contract.
         return []
 
     async def kis_compute_with_shadow(self, sd):
@@ -69,8 +72,8 @@ class _FakeStorytellingService:
     async def compute_team_synergy(self, sd):
         return {"status": "ok", "session_date": str(sd)}
 
-    async def compute_win_contribution(self, session_date):
-        return {"session_date": str(session_date), "mvp": None, "players": []}
+    async def compute_win_contribution(self, scope):
+        return {"session_date": scope.dates[0], "mvp": None, "players": []}
 
     async def compute_momentum(self, sd):
         return {"status": "ok", "session_date": str(sd), "rounds": []}
@@ -78,8 +81,9 @@ class _FakeStorytellingService:
     async def compute_momentum_session(self, sd):
         return {"status": "ok", "session_date": str(sd), "points": []}
 
-    async def generate_narrative(self, sd, *, ensure_kis=True):
-        return {"status": "ok", "session_date": str(sd), "narrative": "story"}
+    async def generate_narrative(self, scope, *, ensure_kis=True):
+        # Router passes a GamingSessionScope (deep SS-C batch 3).
+        return {"status": "ok", "session_date": scope.dates[0], "narrative": "story"}
 
     async def compute_gravity(self, sd):
         return {"status": "ok", "session_date": str(sd), "players": []}
@@ -93,8 +97,8 @@ class _FakeStorytellingService:
     async def compute_lurker_profile(self, sd):
         return {"status": "ok", "session_date": str(sd), "players": []}
 
-    async def compute_useless_defense_deaths(self, sd, *, min_killer_health=80, min_reinf_seconds=25):
-        return {"status": "ok", "session_date": str(sd), "players": []}
+    async def compute_useless_defense_deaths(self, scope, *, min_killer_health=80, min_reinf_seconds=25):
+        return {"status": "ok", "session_date": scope.dates[0], "players": []}
 
     async def generate_player_narratives(self, sd, *, ensure_kis=True):
         return {"status": "ok", "session_date": str(sd), "player_narratives": []}
