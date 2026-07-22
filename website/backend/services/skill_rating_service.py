@@ -63,7 +63,11 @@ CONSTANT = 0.15  # Baseline so ratings center ~0.50 for average player
 # playtime than a full enemy team kept dead your whole alive time, so every
 # denied_playtime aggregation caps the per-round value at
 # DENIED_PLAYTIME_CAP_MULT × time_played_seconds before summing.
-# NOTE: the SQL below hardcodes the 6 — keep this constant in sync with it.
+# The SQL below hardcodes the 6 (the queries are plain asyncpg strings with
+# $N params + .replace() for the epoch clause, not f-strings — interpolating
+# into them is error-prone). Instead of relying on manual sync, the guard
+# test `test_every_denied_sum_caps_with_the_constant_multiplier` ties the SQL
+# to THIS constant: change one without the other and CI fails.
 DENIED_PLAYTIME_CAP_MULT = 6
 
 # Metrics sourced from proximity tables (need LEFT JOINs)

@@ -262,9 +262,26 @@ class TestDeniedPlaytimeCap:
         uncapped = re.findall(r"SUM\(\s*(?:pcs\.)?denied_playtime\s*\)", src)
         assert uncapped == [], f"un-capped denied_playtime SUM(s) found: {uncapped}"
 
-    def test_every_denied_sum_uses_least_cap(self):
+    def test_every_denied_sum_caps_with_the_constant_multiplier(self):
+        """Whitespace-tolerant + ties the SQL to DENIED_PLAYTIME_CAP_MULT, so
+        the constant is load-bearing: if SQL and constant ever diverge (someone
+        tunes one without the other), this fails. Tolerant of formatting so it
+        enforces 'SQL uses the constant's value', not an exact string (Copilot
+        PR #538)."""
+        import re
+
+        from website.backend.services.skill_rating_service import (
+            DENIED_PLAYTIME_CAP_MULT as MULT,
+        )
         src = self._source()
-        capped = src.count("SUM(LEAST(denied_playtime, 6 * time_played_seconds))")
-        capped += src.count("SUM(LEAST(pcs.denied_playtime, 6 * pcs.time_played_seconds))")
+        # LEAST( <alias.>denied_playtime , <MULT> * <alias.>time_played_seconds )
+        pat = re.compile(
+            r"LEAST\(\s*(pcs\.)?denied_playtime\s*,\s*"
+            + str(MULT)
+            + r"\s*\*\s*(pcs\.)?time_played_seconds\s*\)"
+        )
         # 5 scopes: global percentiles, global ratings, session, map, movers.
-        assert capped == 5, f"expected 5 capped denied aggregations, found {capped}"
+        assert len(pat.findall(src)) == 5, (
+            f"expected 5 denied caps using multiplier {MULT}, "
+            f"found {len(pat.findall(src))}"
+        )
