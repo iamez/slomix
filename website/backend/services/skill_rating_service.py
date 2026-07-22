@@ -55,6 +55,17 @@ WEIGHTS = {
 }
 CONSTANT = 0.15  # Baseline so ratings center ~0.50 for average player
 
+# denied_playtime is a RAW game stat (topshots[16]: seconds of enemy respawn
+# time your kills caused). A small fraction of rows (~3%) carry physically
+# implausible values — up to 18880s over a 600s round — which dominate the
+# population percentile and make the metric look wrong (superboyy 2026-07-22:
+# "denied time je pravilno? bronze 17% vid 71%"). You cannot deny more enemy
+# playtime than a full enemy team kept dead your whole alive time, so every
+# denied_playtime aggregation caps the per-round value at
+# DENIED_PLAYTIME_CAP_MULT × time_played_seconds before summing.
+# NOTE: the SQL below hardcodes the 6 — keep this constant in sync with it.
+DENIED_PLAYTIME_CAP_MULT = 6
+
 # Metrics sourced from proximity tables (need LEFT JOINs)
 PROXIMITY_METRICS = frozenset({
     "kill_quality", "crossfire_rate", "trade_rate",
@@ -167,7 +178,7 @@ async def compute_population_percentiles(db) -> dict:
             SUM(most_useful_kills)::REAL / NULLIF(SUM(kills), 0), 0
         ) as useful_kill_rate,
         COALESCE(
-            SUM(denied_playtime)::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
+            SUM(LEAST(denied_playtime, 6 * time_played_seconds))::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
         ) as denied_playtime_pm,
         COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
         FROM player_comprehensive_stats
@@ -303,7 +314,7 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
                 SUM(pcs.most_useful_kills)::REAL / NULLIF(SUM(pcs.kills), 0), 0
             ) as useful_kill_rate,
             COALESCE(
-                SUM(pcs.denied_playtime)::REAL / NULLIF(SUM(pcs.time_played_seconds) / 60.0, 0), 0
+                SUM(LEAST(pcs.denied_playtime, 6 * pcs.time_played_seconds))::REAL / NULLIF(SUM(pcs.time_played_seconds) / 60.0, 0), 0
             ) as denied_playtime_pm,
             COALESCE(AVG(pcs.accuracy) FILTER (WHERE pcs.accuracy IS NOT NULL AND pcs.accuracy > 0), 0) as avg_accuracy,
             -- Proximity metrics (6) ────────────────────────────────
@@ -530,7 +541,7 @@ async def compute_session_ratings(db, player_guid: str, session_date: str,
             SUM(most_useful_kills)::REAL / NULLIF(SUM(kills), 0), 0
         ) as useful_kill_rate,
         COALESCE(
-            SUM(denied_playtime)::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
+            SUM(LEAST(denied_playtime, 6 * time_played_seconds))::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
         ) as denied_playtime_pm,
         COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
         FROM player_comprehensive_stats
@@ -598,7 +609,7 @@ async def compute_session_map_ratings(db, player_guid: str, session_date: str,
             SUM(most_useful_kills)::REAL / NULLIF(SUM(kills), 0), 0
         ) as useful_kill_rate,
         COALESCE(
-            SUM(denied_playtime)::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
+            SUM(LEAST(denied_playtime, 6 * time_played_seconds))::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
         ) as denied_playtime_pm,
         COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
         FROM player_comprehensive_stats
@@ -693,7 +704,7 @@ async def get_player_session_history(db, player_guid: str,
                 SUM(most_useful_kills)::REAL / NULLIF(SUM(kills), 0), 0
             ) as useful_kill_rate,
             COALESCE(
-                SUM(denied_playtime)::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
+                SUM(LEAST(denied_playtime, 6 * time_played_seconds))::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
             ) as denied_playtime_pm,
             COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
             FROM player_comprehensive_stats
