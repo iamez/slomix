@@ -229,3 +229,42 @@ class TestRowToStats:
         stats = _row_to_stats(row, offset=0, has_proximity=False)
         assert stats["dpm"] == 50.0
         assert stats["accuracy"] == 0.25
+
+
+# ===========================================================================
+# denied_playtime outlier cap (superboyy 2026-07-22 "denied time correct?")
+# ===========================================================================
+
+class TestDeniedPlaytimeCap:
+    """Every denied_playtime aggregation must cap the per-round value at
+    DENIED_PLAYTIME_CAP_MULT × time_played_seconds before summing, so a few
+    physically-implausible rows (up to 18880s over a 600s round) can't
+    dominate the population percentile. Guards all 5 SQL scopes at once —
+    a future edit dropping the LEAST() in any one of them fails here."""
+
+    def _source(self) -> str:
+        import inspect
+
+        from website.backend.services import skill_rating_service
+        return inspect.getsource(skill_rating_service)
+
+    def test_constant_present(self):
+        from website.backend.services.skill_rating_service import (
+            DENIED_PLAYTIME_CAP_MULT,
+        )
+        assert DENIED_PLAYTIME_CAP_MULT == 6
+
+    def test_no_uncapped_denied_sum_remains(self):
+        import re
+
+        src = self._source()
+        # Any `SUM(<alias.>denied_playtime)` NOT wrapped in LEAST(...) is a leak.
+        uncapped = re.findall(r"SUM\(\s*(?:pcs\.)?denied_playtime\s*\)", src)
+        assert uncapped == [], f"un-capped denied_playtime SUM(s) found: {uncapped}"
+
+    def test_every_denied_sum_uses_least_cap(self):
+        src = self._source()
+        capped = src.count("SUM(LEAST(denied_playtime, 6 * time_played_seconds))")
+        capped += src.count("SUM(LEAST(pcs.denied_playtime, 6 * pcs.time_played_seconds))")
+        # 5 scopes: global percentiles, global ratings, session, map, movers.
+        assert capped == 5, f"expected 5 capped denied aggregations, found {capped}"
