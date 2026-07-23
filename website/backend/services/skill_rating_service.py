@@ -40,9 +40,8 @@ WEIGHTS = {
     "revive_rate": 0.07,          # Revives per round (medic = default class in 3v3)
     "survival_rate": 0.07,        # % of round time alive
     "useful_kill_rate": 0.06,     # Useful kills / total kills
-    # ── PCS Objective & Timing (10%) ──────────────────────────────
+    # ── PCS Objective (6%) ────────────────────────────────────────
     "objective_rate": 0.06,       # Objectives per round
-    "denied_playtime_pm": 0.04,   # Denied enemy playtime per minute
     # ── Proximity: Team Contribution (22%) ────────────────────────
     "kill_quality": 0.10,         # Kill Quality Index (simplified KIS proxy)
     "crossfire_rate": 0.06,       # Crossfire kills / total kills
@@ -50,15 +49,22 @@ WEIGHTS = {
     # ── Proximity: Clutch & Permanence (10%) ──────────────────────
     "kill_permanence": 0.05,      # Gib rate (permanent kills / total kills)
     "clutch_factor": 0.05,        # Low HP + outnumbered kills / total kills
-    # ── Proximity: Spawn Timing (4%) ─────────────────────────────
+    # ── Proximity: Timing & Denial (8%) ──────────────────────────
     "spawn_timing_eff": 0.04,     # Avg spawn timing score (0-1)
+    "denied_playtime_pm": 0.04,   # Denied enemy playtime/min — proximity_kill_outcome
+                                  # (effective_denied_ms; tapped_out uses delta_ms to
+                                  # avoid the +wave double-count, RCA 2026-07-23)
 }
 CONSTANT = 0.15  # Baseline so ratings center ~0.50 for average player
 
 # Metrics sourced from proximity tables (need LEFT JOINs)
+# denied_playtime_pm moved here (was PCS topshots[16]) — now proximity_kill_outcome
+# (round-relative gameTime, revive-aware). RCA 2026-07-23: superior to the buggy
+# server-uptime topshots[16] source. Excluded in pcs_only session scope like the rest.
 PROXIMITY_METRICS = frozenset({
     "kill_quality", "crossfire_rate", "trade_rate",
     "kill_permanence", "clutch_factor", "spawn_timing_eff",
+    "denied_playtime_pm",
 })
 
 # Metrics sourced from PCS only
@@ -68,15 +74,16 @@ PCS_METRICS = frozenset(WEIGHTS.keys()) - PROXIMITY_METRICS
 # CRITICAL: this MUST match the SELECT column order, not WEIGHTS dict order!
 _GLOBAL_SQL_COLUMNS = [
     "dpm", "kpr", "dpr", "revive_rate", "objective_rate",
-    "survival_rate", "useful_kill_rate", "denied_playtime_pm", "accuracy",
-    "kill_quality", "crossfire_rate", "trade_rate",
+    "survival_rate", "useful_kill_rate", "accuracy",
+    # proximity block — denied_playtime_pm leads it (now proximity-sourced)
+    "denied_playtime_pm", "kill_quality", "crossfire_rate", "trade_rate",
     "kill_permanence", "clutch_factor", "spawn_timing_eff",
 ]
 
-# Column order for PCS-only queries (session/map scope)
+# Column order for PCS-only queries (session/map scope) — no denied (proximity now)
 _PCS_SQL_COLUMNS = [
     "dpm", "kpr", "dpr", "revive_rate", "objective_rate",
-    "survival_rate", "useful_kill_rate", "denied_playtime_pm", "accuracy",
+    "survival_rate", "useful_kill_rate", "accuracy",
 ]
 
 # Minimum rounds to be rated (global). Per-session has no minimum.
@@ -115,11 +122,12 @@ def _row_to_stats(r, offset: int = 0, *, has_proximity: bool = True) -> dict:
         "objective_rate": float(r[offset + 4]),
         "survival_rate": float(r[offset + 5]),
         "useful_kill_rate": float(r[offset + 6]),
-        "denied_playtime_pm": float(r[offset + 7]),
-        "accuracy": float(r[offset + 8]),
+        "accuracy": float(r[offset + 7]),
     }
     if has_proximity:
+        # proximity block: denied_playtime_pm leads (now proximity-sourced)
         stats.update({
+            "denied_playtime_pm": float(r[offset + 8]),
             "kill_quality": float(r[offset + 9]),
             "crossfire_rate": float(r[offset + 10]),
             "trade_rate": float(r[offset + 11]),
@@ -128,8 +136,10 @@ def _row_to_stats(r, offset: int = 0, *, has_proximity: bool = True) -> dict:
             "spawn_timing_eff": float(r[offset + 14]),
         })
     else:
-        # No proximity data available — use neutral defaults
+        # No proximity data available — use neutral defaults (all skipped in
+        # pcs_only ratings anyway; denied joined this bucket on 2026-07-23)
         stats.update({
+            "denied_playtime_pm": 0.0,
             "kill_quality": 1.0,
             "crossfire_rate": 0.0,
             "trade_rate": 0.0,
@@ -166,9 +176,6 @@ async def compute_population_percentiles(db) -> dict:
         COALESCE(
             SUM(most_useful_kills)::REAL / NULLIF(SUM(kills), 0), 0
         ) as useful_kill_rate,
-        COALESCE(
-            SUM(denied_playtime)::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
-        ) as denied_playtime_pm,
         COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
         FROM player_comprehensive_stats
         WHERE round_number > 0
@@ -219,8 +226,9 @@ def calculate_et_rating(player_stats: dict, percentiles: dict,
     rating = CONSTANT
 
     pcs_weight_sum = sum(abs(w) for m, w in WEIGHTS.items() if m in PCS_METRICS)
-    # Scale factor: if only PCS metrics contribute, scale up so they fill the full range
-    # pcs_weight_sum ≈ 0.64, total_weight_sum = 1.00, so scale ≈ 1.5625
+    # Scale factor: if only PCS metrics contribute, scale up so they fill the full range.
+    # denied_playtime_pm moved to proximity on 2026-07-23, so pcs_weight_sum ≈ 0.60
+    # (was 0.64), total_weight_sum = 1.00, so scale ≈ 1.667.
     scale = 1.0 / pcs_weight_sum if pcs_only else 1.0
 
     for metric, weight in WEIGHTS.items():
@@ -264,6 +272,9 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
     min_rounds: HAVING threshold (v3 shadow lowers it and gates eligibility itself).
 
     Proximity metrics:
+      - denied_playtime_pm: enemy playtime denied/min (from proximity_kill_outcome;
+        tapped_out→delta_ms, else effective_denied_ms — RCA 2026-07-23, replaces
+        the buggy PCS topshots[16] server-uptime source)
       - kill_quality: Kill Quality Index (gib-weighted outcome avg, simplified KIS)
       - crossfire_rate: crossfire kills / total kills (from player_teamplay_stats)
       - trade_rate: trade kills / total kills (from proximity_lua_trade_kill)
@@ -302,11 +313,23 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
             COALESCE(
                 SUM(pcs.most_useful_kills)::REAL / NULLIF(SUM(pcs.kills), 0), 0
             ) as useful_kill_rate,
-            COALESCE(
-                SUM(pcs.denied_playtime)::REAL / NULLIF(SUM(pcs.time_played_seconds) / 60.0, 0), 0
-            ) as denied_playtime_pm,
             COALESCE(AVG(pcs.accuracy) FILTER (WHERE pcs.accuracy IS NOT NULL AND pcs.accuracy > 0), 0) as avg_accuracy,
-            -- Proximity metrics (6) ────────────────────────────────
+            -- Proximity metrics (7) ────────────────────────────────
+            -- denied leads the proximity block (RCA 2026-07-23): enemy playtime
+            -- denied per minute, now from proximity_kill_outcome (round-relative
+            -- gameTime, revive-aware) instead of the buggy PCS topshots[16].
+            -- Denominator = minutes played in proximity-COVERED rounds only, NOT
+            -- all-time minutes: dividing a proximity-era numerator by an all-time
+            -- denominator dilutes veterans who played heavily pre-tracking (olz
+            -- 3.0 vs true 10.6/min). Players with zero proximity coverage → 0/0
+            -- → 0 (same no-coverage treatment as the other proximity metrics).
+            COALESCE(
+                prox_outcome.denied_seconds::REAL
+                / NULLIF(SUM(pcs.time_played_seconds) FILTER (
+                    WHERE pcs.round_id IN (
+                        SELECT round_id FROM proximity_kill_outcome
+                        WHERE round_id IS NOT NULL
+                    )) / 60.0, 0), 0) as denied_playtime_pm,
             COALESCE(prox_outcome.kill_quality, 1.0) as kill_quality,
             COALESCE(
                 pts.crossfire_kills::REAL / NULLIF(SUM(pcs.kills), 0), 0
@@ -329,9 +352,14 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
         ) pts ON pts.guid_c = pcs.player_guid
 
         LEFT JOIN (
-            -- One scan of proximity_kill_outcome for both proximity metrics:
-            --   kill_quality = gib-weighted outcome average (simplified KIS)
-            --   gib_rate     = gibbed / total (kill permanence)
+            -- One scan of proximity_kill_outcome for three proximity metrics:
+            --   kill_quality   = gib-weighted outcome average (simplified KIS)
+            --   gib_rate       = gibbed / total (kill permanence)
+            --   denied_seconds = enemy playtime denied (RCA 2026-07-23). For
+            --     tapped_out use delta_ms (outcome finalizes AT respawn, so delta
+            --     already spans the full denial); effective_denied_ms for the rest
+            --     (gibbed finalizes at gib, needs its +wave remainder). This sidesteps
+            --     the tapped_out +wave double-count (2.4% of rows) with no Lua change.
             SELECT killer_guid_canonical as guid_c,
                 AVG(CASE outcome
                     WHEN 'gibbed' THEN 1.3
@@ -340,7 +368,9 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
                     ELSE 1.0
                 END) as kill_quality,
                 COUNT(*) FILTER (WHERE outcome = 'gibbed')::REAL
-                / NULLIF(COUNT(*), 0) as gib_rate
+                / NULLIF(COUNT(*), 0) as gib_rate,
+                SUM(CASE WHEN outcome = 'tapped_out' THEN delta_ms
+                         ELSE effective_denied_ms END)::REAL / 1000.0 as denied_seconds
             FROM proximity_kill_outcome
             WHERE killer_guid_canonical IS NOT NULL
               -- Compare session_date as DATE (param cast, column left bare) so the
@@ -394,6 +424,7 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
           AND pcs.player_name NOT LIKE '[BOT]%'
           AND ($2::date IS NULL OR pcs.round_date >= $2::text)
         GROUP BY pcs.player_guid, prox_outcome.kill_quality,
+                 prox_outcome.denied_seconds,
                  pts.crossfire_kills, prox_trades.trade_count,
                  prox_outcome.gib_rate, prox_clutch.clutch_rate,
                  prox_spawn.avg_timing_score
@@ -416,7 +447,8 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
         return []
 
     # Build percentile lookup using explicit column mapping (NOT WEIGHTS dict order)
-    # Columns: 0=guid, 1=name, 2=rounds, 3..11=PCS metrics, 12..17=proximity metrics
+    # Columns: 0=guid, 1=name, 2=rounds, then _GLOBAL_SQL_COLUMNS in order —
+    # 3..10 = 8 PCS metrics, 11..17 = 7 proximity metrics (denied_playtime_pm leads)
     percentiles = {
         col_name: sorted([float(r[i + 3]) for r in rows])
         for i, col_name in enumerate(_GLOBAL_SQL_COLUMNS)
@@ -529,9 +561,6 @@ async def compute_session_ratings(db, player_guid: str, session_date: str,
         COALESCE(
             SUM(most_useful_kills)::REAL / NULLIF(SUM(kills), 0), 0
         ) as useful_kill_rate,
-        COALESCE(
-            SUM(denied_playtime)::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
-        ) as denied_playtime_pm,
         COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
         FROM player_comprehensive_stats
         WHERE player_guid = $1 AND round_number > 0
@@ -597,9 +626,6 @@ async def compute_session_map_ratings(db, player_guid: str, session_date: str,
         COALESCE(
             SUM(most_useful_kills)::REAL / NULLIF(SUM(kills), 0), 0
         ) as useful_kill_rate,
-        COALESCE(
-            SUM(denied_playtime)::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
-        ) as denied_playtime_pm,
         COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
         FROM player_comprehensive_stats
         WHERE player_guid = $1 AND round_number > 0
@@ -692,9 +718,6 @@ async def get_player_session_history(db, player_guid: str,
             COALESCE(
                 SUM(most_useful_kills)::REAL / NULLIF(SUM(kills), 0), 0
             ) as useful_kill_rate,
-            COALESCE(
-                SUM(denied_playtime)::REAL / NULLIF(SUM(time_played_seconds) / 60.0, 0), 0
-            ) as denied_playtime_pm,
             COALESCE(AVG(accuracy) FILTER (WHERE accuracy IS NOT NULL AND accuracy > 0), 0) as avg_accuracy
             FROM player_comprehensive_stats
             WHERE player_guid = $1 AND round_number > 0
