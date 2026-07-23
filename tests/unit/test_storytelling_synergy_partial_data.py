@@ -79,3 +79,22 @@ async def test_synergy_no_data_when_no_rows():
 
     assert result["status"] == "no_data"
     assert result["groups"] == {}
+
+
+@pytest.mark.asyncio
+async def test_build_player_groups_gates_on_round_keys_not_bare_gsid():
+    """The group-anchoring PCS query MUST filter by the scope's ACCEPTED
+    round keys, not bare gaming_session_id — otherwise an is_valid=false /
+    non-completed round the scope resolver excluded could seed `first_rsu`
+    and mis-attribute the accepted rounds to the wrong logical team, while
+    the proximity axes use scope.round_keys (Codex/Copilot PR #539)."""
+    db = AsyncMock()
+    db.fetch_all.return_value = []
+
+    svc = StorytellingService(db)
+    await svc._build_player_groups_uncached(_SCOPE)  # noqa: SLF001
+
+    sql = db.fetch_all.await_args.args[0]
+    # Restricted to the canonical round key (unnest EXISTS), NOT `gsid = $1`.
+    assert "unnest(" in sql and "round_start_unix" in sql
+    assert "gaming_session_id" not in sql

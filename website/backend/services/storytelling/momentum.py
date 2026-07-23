@@ -335,19 +335,22 @@ class _MomentumMixin:
     async def _team_labels(self, scope: GamingSessionScope, groups: dict) -> dict[str, str]:
         """Name each logical team after its two highest-kill players.
 
-        Scoped by gaming_session_id (deep SS-C): PCS via round_id -> rounds is
-        reliable, so both date fragments of a midnight-crossing session count.
+        Gated on the scope's accepted round keys (deep SS-C): the same round
+        set the group map + momentum series use, so kills from is_valid=false /
+        non-completed rounds don't skew the naming (consistency with
+        _build_player_groups, Codex PR #539).
         """
+        starts, maps, rnums = scope.round_key_arrays()
         rows = await self.db.fetch_all(
-            """
+            f"""
             SELECT pcs.player_guid, MAX(pcs.player_name), SUM(pcs.kills) AS kills
             FROM player_comprehensive_stats pcs
             JOIN rounds r ON r.id = pcs.round_id
-            WHERE r.gaming_session_id = $1
+            WHERE {scope.round_key_filter_sql(1, alias='r')}
             GROUP BY pcs.player_guid
             ORDER BY kills DESC NULLS LAST
             """,
-            (scope.gaming_session_id,),
+            (starts, maps, rnums),
         )
         guid_to_group = groups.get("guid_to_group", {})
         top: dict[str, list[str]] = {"group_a": [], "group_b": []}

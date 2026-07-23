@@ -192,24 +192,31 @@ class _SynergyMixin:
         For each round_start_unix we determine which faction corresponds to
         which group via player-overlap voting.
 
-        Scoped by gaming_session_id (deep SS-C): PCS.round_id -> rounds is
-        reliable (plan D1), so the joined round's gsid captures ALL of a
-        midnight-crossing session's rounds. round_map keys on round_start_unix,
-        which is unique per round WITHIN a session (unlike round_number), so no
-        cross-map collision.
+        Scoped by the scope's ACCEPTED round keys (deep SS-C), NOT bare
+        gaming_session_id: filtering only by gsid would pull rounds the scope
+        resolver deliberately excluded (is_valid=false / non-completed), and an
+        excluded R1 with the lowest rsu could become `first_rsu` and seed the
+        group_a/group_b anchor — while every proximity axis is filtered to
+        `scope.round_keys`, mis-attributing the accepted rounds to the wrong
+        logical team (Codex/Copilot PR #539). Restricting to the canonical
+        round key uses the SAME round set the axes do, and inherently drops
+        NULL/0 round_start_unix rows (they can't match a key), so `min()` below
+        never sees a NULL. round_map keys on round_start_unix, unique per round
+        within a session (unlike round_number) → no cross-map collision.
 
         Returns dict with group_a_players, group_b_players (sorted name lists),
         round_map (round_start_unix, faction) -> group key, and
         guid_to_group mapping, or None if no data.
         """
+        starts, maps, rnums = scope.round_key_arrays()
         rows = await self.db.fetch_all(
-            "SELECT pcs.player_guid, pcs.player_name, pcs.round_number, "
-            "pcs.team, r.round_start_unix "
-            "FROM player_comprehensive_stats pcs "
-            "JOIN rounds r ON r.id = pcs.round_id "
-            "WHERE r.gaming_session_id = $1 AND pcs.round_number IN (1, 2) "
-            "AND pcs.team IN (1, 2)",
-            (scope.gaming_session_id,))
+            f"SELECT pcs.player_guid, pcs.player_name, pcs.round_number, "
+            f"pcs.team, r.round_start_unix "
+            f"FROM player_comprehensive_stats pcs "
+            f"JOIN rounds r ON r.id = pcs.round_id "
+            f"WHERE {scope.round_key_filter_sql(1, alias='r')} "
+            f"AND pcs.round_number IN (1, 2) AND pcs.team IN (1, 2)",
+            (starts, maps, rnums))
 
         if not rows:
             return None
@@ -340,11 +347,17 @@ class _SynergyMixin:
             f"WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)} "
             f"GROUP BY original_victim_guid", (dates, starts, maps, rnums))
 
+        # Deaths denominator MUST use the same accepted-round set as the trade
+        # numerator above — gate on scope.round_keys, not bare gsid (which would
+        # count deaths from is_valid=false / non-completed rounds the proximity
+        # axis excludes, understating the trade %). Same fix as
+        # _build_player_groups (Codex PR #539).
         deaths_rows = await self.db.fetch_all(
-            "SELECT pcs.player_guid, SUM(pcs.deaths) FROM player_comprehensive_stats pcs "
-            "JOIN rounds r ON r.id = pcs.round_id "
-            "WHERE r.gaming_session_id = $1 AND pcs.round_number IN (1, 2) AND pcs.team IN (1, 2) "
-            "GROUP BY pcs.player_guid", (scope.gaming_session_id,))
+            f"SELECT pcs.player_guid, SUM(pcs.deaths) FROM player_comprehensive_stats pcs "
+            f"JOIN rounds r ON r.id = pcs.round_id "
+            f"WHERE {scope.round_key_filter_sql(1, alias='r')} "
+            f"AND pcs.round_number IN (1, 2) AND pcs.team IN (1, 2) "
+            f"GROUP BY pcs.player_guid", (starts, maps, rnums))
 
         tt: dict[str, int] = {'group_a': 0, 'group_b': 0}
         for r in (trades or []):
@@ -431,11 +444,16 @@ class _SynergyMixin:
             f"AND outcome = 'revived' "
             f"GROUP BY victim_guid", (dates, starts, maps, rnums))
 
+        # Deaths denominator gated on the accepted round keys (same as the
+        # revive numerator) — not bare gsid — so invalid/non-completed rounds
+        # don't inflate the denominator and understate the medic %
+        # (Codex PR #539).
         deaths_rows = await self.db.fetch_all(
-            "SELECT pcs.player_guid, SUM(pcs.deaths) FROM player_comprehensive_stats pcs "
-            "JOIN rounds r ON r.id = pcs.round_id "
-            "WHERE r.gaming_session_id = $1 AND pcs.round_number IN (1, 2) AND pcs.team IN (1, 2) "
-            "GROUP BY pcs.player_guid", (scope.gaming_session_id,))
+            f"SELECT pcs.player_guid, SUM(pcs.deaths) FROM player_comprehensive_stats pcs "
+            f"JOIN rounds r ON r.id = pcs.round_id "
+            f"WHERE {scope.round_key_filter_sql(1, alias='r')} "
+            f"AND pcs.round_number IN (1, 2) AND pcs.team IN (1, 2) "
+            f"GROUP BY pcs.player_guid", (starts, maps, rnums))
 
         tr: dict[str, int] = {'group_a': 0, 'group_b': 0}
         for r in (revives or []):
