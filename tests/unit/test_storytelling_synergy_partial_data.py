@@ -20,7 +20,16 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from website.backend.services.session_scope import GamingSessionScope
 from website.backend.services.storytelling.service import StorytellingService
+
+_SCOPE = GamingSessionScope(
+    gaming_session_id=88,
+    dates=("2026-04-21",),
+    round_keys=((1_700_000_000, "supply", 1),),
+    accepted_round_count=1,
+    distinct_map_names=("supply",),
+)
 
 
 @pytest.mark.asyncio
@@ -33,7 +42,7 @@ async def test_synergy_returns_partial_data_when_r1_missing():
     ]
 
     svc = StorytellingService(db)
-    result = await svc.compute_team_synergy(date(2026, 4, 21))
+    result = await svc.compute_team_synergy(_SCOPE)
 
     assert result["status"] == "partial_data"
     assert result["reason"] == "no_r1_data"
@@ -52,7 +61,7 @@ async def test_build_player_groups_returns_groups_on_r1_present():
     ]
 
     svc = StorytellingService(db)
-    groups = await svc._build_player_groups(date(2026, 4, 21))
+    groups = await svc._build_player_groups(_SCOPE)
 
     assert groups is not None
     assert "_status" not in groups  # partial_data sentinel absent
@@ -66,7 +75,7 @@ async def test_synergy_no_data_when_no_rows():
     db.fetch_all.return_value = []
 
     svc = StorytellingService(db)
-    result = await svc.compute_team_synergy(date(2026, 4, 21))
+    result = await svc.compute_team_synergy(_SCOPE)
 
     assert result["status"] == "no_data"
     assert result["groups"] == {}

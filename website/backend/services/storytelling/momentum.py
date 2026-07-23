@@ -263,30 +263,28 @@ class _MomentumMixin:
         timeline (sum of round durations, not wall clock — map breaks would
         stretch the chart).
 
-        Deep SS-C transitional: `_momentum_rounds` is now full-gaming-session
-        scoped (multi-date), but the player-group mapping (`_build_player_groups`
-        / `_team_labels`) still keys off the representative first date until
-        the shared `_build_player_groups` cluster converts (next batch). For a
-        midnight-crossing session the after-midnight rounds therefore surface
-        as `unmapped_rounds` rather than mislabeled — honest, and finalized
-        when the cluster lands.
+        Deep SS-C: fully gaming-session scoped — `_momentum_rounds`,
+        `_build_player_groups` and `_team_labels` all cover ALL of a
+        midnight-crossing session's rounds now (the batch-4 transitional
+        single-date player-group mapping, which surfaced after-midnight rounds
+        as `unmapped_rounds`, is resolved by the batch-5 cluster conversion).
         """
-        sd = date.fromisoformat(scope.dates[0])
+        sd_str = scope.dates[0]
         internal = await self._momentum_rounds(scope)
         if internal is None:
-            return {"status": "no_data", "session_date": str(sd), "points": []}
+            return {"status": "no_data", "session_date": sd_str, "points": []}
 
-        groups = await self._build_player_groups(sd)
+        groups = await self._build_player_groups(scope)
         if not groups or groups.get("_status") == "partial_data":
             return {
                 "status": "no_team_data",
-                "session_date": str(sd),
+                "session_date": sd_str,
                 "reason": (groups or {}).get("_reason", "no_pcs_rows"),
                 "points": [],
             }
 
         round_map = groups["round_map"]
-        labels = await self._team_labels(sd, groups)
+        labels = await self._team_labels(scope, groups)
 
         WINDOW_MS = 30_000
         points: list[dict] = []
@@ -320,7 +318,7 @@ class _MomentumMixin:
 
         return {
             "status": "ok",
-            "session_date": str(sd),
+            "session_date": sd_str,
             "teams": {
                 "team_a": {"label": labels["team_a"], "players": groups["group_a_players"]},
                 "team_b": {"label": labels["team_b"], "players": groups["group_b_players"]},
@@ -334,17 +332,22 @@ class _MomentumMixin:
             },
         }
 
-    async def _team_labels(self, sd: date, groups: dict) -> dict[str, str]:
-        """Name each logical team after its two highest-kill players."""
+    async def _team_labels(self, scope: GamingSessionScope, groups: dict) -> dict[str, str]:
+        """Name each logical team after its two highest-kill players.
+
+        Scoped by gaming_session_id (deep SS-C): PCS via round_id -> rounds is
+        reliable, so both date fragments of a midnight-crossing session count.
+        """
         rows = await self.db.fetch_all(
             """
             SELECT pcs.player_guid, MAX(pcs.player_name), SUM(pcs.kills) AS kills
             FROM player_comprehensive_stats pcs
-            WHERE pcs.round_date = $1
+            JOIN rounds r ON r.id = pcs.round_id
+            WHERE r.gaming_session_id = $1
             GROUP BY pcs.player_guid
             ORDER BY kills DESC NULLS LAST
             """,
-            (str(sd),),
+            (scope.gaming_session_id,),
         )
         guid_to_group = groups.get("guid_to_group", {})
         top: dict[str, list[str]] = {"group_a": [], "group_b": []}

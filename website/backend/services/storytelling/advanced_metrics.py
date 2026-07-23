@@ -139,7 +139,7 @@ def _compute_lurker_solo(track_rows: list) -> tuple[dict, dict]:
 class _AdvancedMetricsMixin:
     """Advanced Metrics methods for StorytellingService."""
 
-    async def _fallback_canonical_names(self, sd: date) -> dict[str, str]:
+    async def _fallback_canonical_names(self, scope: GamingSessionScope) -> dict[str, str]:
         """Names keyed by 8-char canonical guid, sourced from combat_engagement.
 
         ``compute_space_created``/``compute_enabler`` resolve names from
@@ -149,20 +149,25 @@ class _AdvancedMetricsMixin:
         ``compute_gravity`` so names resolve regardless of KIS state.
 
         Covers both sides of an engagement: a player who only ever appears as
-        a killer (never engaged as a target) still resolves.
+        a killer (never engaged as a target) still resolves. Scoped by the full
+        gaming session (deep SS-C): combat_engagement has no gsid column, so
+        filter by session dates + canonical round key (both UNION halves).
         """
-        rows = await self.db.fetch_all("""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
+        rows = await self.db.fetch_all(f"""
             SELECT LEFT(target_guid, 8) AS g8, MAX(target_name) AS nm
             FROM combat_engagement
-            WHERE session_date = $1 AND target_guid IS NOT NULL
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
+              AND target_guid IS NOT NULL
             GROUP BY LEFT(target_guid, 8)
             UNION ALL
             SELECT LEFT(killer_guid, 8) AS g8, MAX(killer_name) AS nm
             FROM combat_engagement
-            WHERE session_date = $1
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
               AND killer_guid IS NOT NULL AND killer_name IS NOT NULL
             GROUP BY LEFT(killer_guid, 8)
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
         names: dict[str, str] = {}
         for r in (rows or []):
             if r[0] and r[0] not in names:
@@ -232,38 +237,44 @@ class _AdvancedMetricsMixin:
             "players": players,
         }
 
-    async def compute_space_created(self, session_date: str | date) -> dict:
+    async def compute_space_created(self, scope: GamingSessionScope) -> dict:
         """Compute Space Created: what happens after your death?
 
         Productive death = teammate gets a kill within 10s after you die.
         Formula: productive_deaths / total_deaths
+
+        Scoped by the full gaming session (deep SS-C): proximity_kill_outcome
+        filters by session dates + canonical round key; storytelling_kill_impact
+        (carries gsid) by gaming_session_id.
         """
-        sd = _to_date(session_date)
+        sd_str = scope.dates[0]
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
         WINDOW_MS = DEATH_TRADE_WINDOW_MS
 
         # All kills grouped by round for temporal analysis.
         # round_start_unix > 0 filter: orphaned rows with NULL/0 rsu would
         # collapse into bucket 0 and mix unrelated kills into the same
         # temporal window, producing spurious teammate-trade matches.
-        kill_rows = await self.db.fetch_all("""
+        kill_rows = await self.db.fetch_all(f"""
             SELECT victim_guid, killer_guid, kill_time, round_number, round_start_unix
             FROM proximity_kill_outcome
-            WHERE session_date = $1
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
               AND outcome IN ('gibbed', 'tapped_out')
               AND round_start_unix IS NOT NULL
               AND round_start_unix > 0
             ORDER BY round_start_unix, kill_time
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
 
         if not kill_rows:
-            return {"status": "ok", "session_date": str(sd), "players": []}
+            return {"status": "ok", "session_date": sd_str, "players": []}
 
         # Build team mapping from storytelling_kill_impact (has guid_canonical)
         team_rows = await self.db.fetch_all("""
             SELECT DISTINCT killer_guid, killer_guid_canonical
             FROM storytelling_kill_impact
-            WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
-        """, (sd,))
+            WHERE gaming_session_id = $1 AND killer_guid_canonical IS NOT NULL
+        """, (scope.gaming_session_id,))
         guid_to_short = {r[0]: r[1] for r in (team_rows or [])}
 
         # Group kills by (round_start_unix) for same-round temporal queries
@@ -277,7 +288,7 @@ class _AdvancedMetricsMixin:
             })
 
         # Build player groups to know who is teammate
-        groups = await self._build_player_groups(sd)
+        groups = await self._build_player_groups(scope)
         g2g = groups["guid_to_group"] if groups else {}
 
         # For each death: check if teammates got kills in next 10s
@@ -316,10 +327,10 @@ class _AdvancedMetricsMixin:
         name_rows = await self.db.fetch_all("""
             SELECT killer_guid_canonical, MAX(killer_name)
             FROM storytelling_kill_impact
-            WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
+            WHERE gaming_session_id = $1 AND killer_guid_canonical IS NOT NULL
             GROUP BY killer_guid_canonical
-        """, (sd,))
-        name_map = await self._fallback_canonical_names(sd)
+        """, (scope.gaming_session_id,))
+        name_map = await self._fallback_canonical_names(scope)
         name_map.update({r[0]: strip_et_colors(r[1] or r[0]) for r in (name_rows or [])})
 
         players = []
@@ -339,51 +350,57 @@ class _AdvancedMetricsMixin:
 
         return {
             "status": "ok",
-            "session_date": str(sd),
+            "session_date": sd_str,
             "metric": "space_created",
             "description": "Fraction of deaths where teammates capitalized within 10s. Higher = more productive deaths.",
             "window_ms": WINDOW_MS,
             "players": players,
         }
 
-    async def compute_enabler(self, session_date: str | date) -> dict:
+    async def compute_enabler(self, scope: GamingSessionScope) -> dict:
         """Compute Enabler Score: teammate kills near your engagements.
 
         For each player's engagements, count teammate kills within ±5s
         and ≤500 game units. Includes crossfire assists and trade assists.
+
+        Scoped by the full gaming session (deep SS-C): combat_engagement +
+        proximity_lua_trade_kill by session dates + canonical round key;
+        storytelling_kill_impact by gaming_session_id.
         """
-        sd = _to_date(session_date)
+        sd_str = scope.dates[0]
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
         TIME_WINDOW_MS = TRADE_KILL_DELTA_MS
         DISTANCE_THRESHOLD = 500
 
         # round_start_unix > 0 filter: orphaned rows with NULL/0 rsu would
         # collapse into bucket 0 and mix unrelated rounds' temporal windows
         # (same pattern as compute_space_created fix in PR #210).
-        eng_rows = await self.db.fetch_all("""
+        eng_rows = await self.db.fetch_all(f"""
             SELECT target_guid, killer_guid, end_x, end_y, end_time_ms,
                    round_start_unix, num_attackers
             FROM combat_engagement
-            WHERE session_date = $1
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
               AND outcome = 'killed'
               AND end_x IS NOT NULL AND end_y IS NOT NULL
               AND round_start_unix IS NOT NULL
               AND round_start_unix > 0
             ORDER BY round_start_unix, end_time_ms
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
 
         if not eng_rows:
-            return {"status": "ok", "session_date": str(sd), "players": []}
+            return {"status": "ok", "session_date": sd_str, "players": []}
 
         # Build team mapping
-        groups = await self._build_player_groups(sd)
+        groups = await self._build_player_groups(scope)
         g2g = groups["guid_to_group"] if groups else {}
 
         # guid_canonical lookup
         team_rows = await self.db.fetch_all("""
             SELECT DISTINCT killer_guid, killer_guid_canonical
             FROM storytelling_kill_impact
-            WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
-        """, (sd,))
+            WHERE gaming_session_id = $1 AND killer_guid_canonical IS NOT NULL
+        """, (scope.gaming_session_id,))
         g2short = {r[0]: r[1] for r in (team_rows or [])}
 
         import math
@@ -442,19 +459,20 @@ class _AdvancedMetricsMixin:
         xf_rows = await self.db.fetch_all("""
             SELECT killer_guid_canonical, COUNT(*)
             FROM storytelling_kill_impact
-            WHERE session_date = $1 AND is_crossfire = true AND killer_guid_canonical IS NOT NULL
+            WHERE gaming_session_id = $1 AND is_crossfire = true AND killer_guid_canonical IS NOT NULL
             GROUP BY killer_guid_canonical
-        """, (sd,))
+        """, (scope.gaming_session_id,))
         for r in (xf_rows or []):
             if r[0] in player_stats:
                 player_stats[r[0]]["crossfire_assists"] = int(r[1] or 0)
 
-        tr_rows = await self.db.fetch_all("""
+        tr_rows = await self.db.fetch_all(f"""
             SELECT trader_guid_canonical, COUNT(*)
             FROM proximity_lua_trade_kill
-            WHERE session_date = $1 AND trader_guid_canonical IS NOT NULL
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
+              AND trader_guid_canonical IS NOT NULL
             GROUP BY trader_guid_canonical
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
         for r in (tr_rows or []):
             if r[0] in player_stats:
                 player_stats[r[0]]["trade_assists"] = int(r[1] or 0)
@@ -464,18 +482,20 @@ class _AdvancedMetricsMixin:
         name_rows = await self.db.fetch_all("""
             SELECT killer_guid_canonical, MAX(killer_name)
             FROM storytelling_kill_impact
-            WHERE session_date = $1 AND killer_guid_canonical IS NOT NULL
+            WHERE gaming_session_id = $1 AND killer_guid_canonical IS NOT NULL
             GROUP BY killer_guid_canonical
-        """, (sd,))
-        name_map = await self._fallback_canonical_names(sd)
+        """, (scope.gaming_session_id,))
+        name_map = await self._fallback_canonical_names(scope)
         name_map.update({r[0]: strip_et_colors(r[1] or r[0]) for r in (name_rows or [])})
 
         # Alive time for normalization
-        alive_rows = await self.db.fetch_all("""
+        alive_rows = await self.db.fetch_all(f"""
             SELECT player_guid, SUM(GREATEST(duration_ms, 1)) AS alive_ms
-            FROM player_track WHERE session_date = $1 AND duration_ms > 0
+            FROM player_track
+            WHERE session_date = ANY($1) AND duration_ms > 0
+              AND {scope.round_key_filter_sql(2)}
             GROUP BY player_guid
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
         alive_map = {r[0][:8]: int(r[1] or 1) for r in (alive_rows or [])}
 
         players = []
@@ -507,7 +527,7 @@ class _AdvancedMetricsMixin:
 
         return {
             "status": "ok",
-            "session_date": str(sd),
+            "session_date": sd_str,
             "metric": "enabler",
             "description": "Teammate kills enabled per minute alive (nearby kills ±5s ≤500u + crossfire + trades).",
             "time_window_ms": TIME_WINDOW_MS,
