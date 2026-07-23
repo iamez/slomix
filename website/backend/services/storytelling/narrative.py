@@ -158,12 +158,11 @@ class _NarrativeMixin:
         designed to read like a sports recap, not a stats dump — see
         the module docstring for the wordalisation rationale.
 
-        Deep SS-C transitional: the moment pick (`detect_moments`) is now
-        full-gaming-session scoped (multi-date), while the KIS/synergy/maps
-        sub-queries still key off the representative first date (`sd`) until
-        their own batches land. For a midnight-crossing session the headline
-        moment therefore already considers ALL rounds; the rest follows in
-        later batches.
+        Deep SS-C (batch 6): the moment pick (`detect_moments`), team synergy
+        and the maps-played count are all full-gaming-session scoped now, so a
+        midnight-crossing session's narrative covers ALL its rounds. The KIS
+        leaderboard / archetype sub-calls still key off the representative first
+        date (`sd`) — that's the KIS layer (SS-B), not a storytelling panel.
         """
         sd = date.fromisoformat(scope.dates[0])
         sd_str = scope.dates[0]
@@ -191,15 +190,16 @@ class _NarrativeMixin:
         # always present — instead of proximity kill/engagement rows (which only exist
         # when a kill/engagement was recorded and would drop a quiet map). Both the
         # count AND the name list come from this single source so they can never
-        # disagree, using the SAME validity gate as BOX (is_valid + completed). Scoped
-        # by session_date, matching the rest of this narrative (KIS/moments/synergy are
-        # all session_date-keyed). R1 rounds == maps played (replays counted).
+        # disagree, using the SAME validity gate as BOX (is_valid + completed).
+        # Scoped by gaming_session_id (deep SS-C) so a midnight-crossing session
+        # counts ALL its maps, not just the first date's. R1 rounds == maps
+        # played (replays counted).
         r1_rows = await self.db.fetch_all(
             "SELECT map_name FROM rounds "
-            "WHERE round_date = $1 AND round_number = 1 "
+            "WHERE gaming_session_id = $1 AND round_number = 1 "
             "  AND is_valid AND round_status = 'completed' "
             "ORDER BY round_start_unix",
-            (str(sd),))
+            (scope.gaming_session_id,))
         r1_maps = [strip_et_colors(r[0]) for r in (r1_rows or []) if r[0]]
         map_count = len(r1_maps)  # matches played, BOX-excluded rounds already gone
         # distinct names for the sentence list (stable order); may be < map_count
@@ -370,20 +370,20 @@ class _NarrativeMixin:
         Each player gets a 1-2 sentence story describing their invisible value,
         not just their K/D.
 
-        Deep SS-C transitional (batch 5): space_created + enabler are now full
-        gaming-session scoped; gravity + lurker still key off the representative
-        first date (`sd`) until batch 6 converts them. For a midnight-crossing
-        session the space/enabler stories already cover ALL rounds; the rest
-        follows next batch.
+        Deep SS-C (batch 6): all four proximity metrics (gravity, space,
+        enabler, lurker) are now full gaming-session scoped, so a
+        midnight-crossing session's stories cover ALL its rounds. The KIS
+        sub-calls below still key off the representative first date (`sd`) —
+        that's the KIS/archetype layer (SS-B), not a storytelling panel.
         """
         sd = date.fromisoformat(scope.dates[0])
 
         # Compute all metrics in parallel
         gravity, space, enabler, lurker = await asyncio.gather(
-            self.compute_gravity(sd),
+            self.compute_gravity(scope),
             self.compute_space_created(scope),
             self.compute_enabler(scope),
-            self.compute_lurker_profile(sd),
+            self.compute_lurker_profile(scope),
         )
 
         # Also get KIS for archetype + kills context. Only internal callers
