@@ -85,8 +85,8 @@ class _FakeStorytellingService:
         # Router passes a GamingSessionScope (deep SS-C batch 3).
         return {"status": "ok", "session_date": scope.dates[0], "narrative": "story"}
 
-    async def compute_gravity(self, sd):
-        return {"status": "ok", "session_date": str(sd), "players": []}
+    async def compute_gravity(self, scope):
+        return {"status": "ok", "session_date": scope.dates[0], "players": []}
 
     async def compute_space_created(self, scope):
         return {"status": "ok", "session_date": scope.dates[0], "players": []}
@@ -94,8 +94,8 @@ class _FakeStorytellingService:
     async def compute_enabler(self, scope):
         return {"status": "ok", "session_date": scope.dates[0], "players": []}
 
-    async def compute_lurker_profile(self, sd):
-        return {"status": "ok", "session_date": str(sd), "players": []}
+    async def compute_lurker_profile(self, scope):
+        return {"status": "ok", "session_date": scope.dates[0], "players": []}
 
     async def compute_useless_defense_deaths(self, scope, *, min_killer_health=80, min_reinf_seconds=25):
         return {"status": "ok", "session_date": scope.dates[0], "players": []}

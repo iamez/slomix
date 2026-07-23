@@ -16,7 +16,6 @@ from .base import (
     LURKER_MIN_DURATION_MS,
     TRADE_KILL_DELTA_MS,
     _compute_locks,
-    _to_date,
     date,
     strip_et_colors,
 )
@@ -174,35 +173,42 @@ class _AdvancedMetricsMixin:
                 names[r[0]] = strip_et_colors(r[1] or r[0])
         return names
 
-    async def compute_gravity(self, session_date: str | date) -> dict:
+    async def compute_gravity(self, scope: GamingSessionScope) -> dict:
         """Compute Gravity Score: how much enemy attention each player attracts.
 
         Higher gravity = more enemies focused on you = more space for teammates.
         Formula: total_attention_ms / alive_time_ms (normalized per minute alive).
-        """
-        sd = _to_date(session_date)
 
-        rows = await self.db.fetch_all("""
+        Scoped by the full gaming session (deep SS-C): combat_engagement and
+        player_track carry no gaming_session_id, so filter by session dates +
+        the canonical round key.
+        """
+        sd_str = scope.dates[0]
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
+
+        rows = await self.db.fetch_all(f"""
             SELECT target_guid, MAX(target_name) AS name,
                    COUNT(*) AS engagements,
                    AVG(num_attackers) AS avg_attackers,
                    SUM(num_attackers * duration_ms) AS total_attention_ms,
                    SUM(duration_ms) AS total_engaged_ms
             FROM combat_engagement
-            WHERE session_date = $1
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
             GROUP BY target_guid
             HAVING COUNT(*) >= 5
             ORDER BY SUM(num_attackers * duration_ms) DESC
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
 
-        alive_rows = await self.db.fetch_all("""
+        alive_rows = await self.db.fetch_all(f"""
             SELECT player_guid,
                    SUM(GREATEST(duration_ms, 1)) AS total_alive_ms,
                    COUNT(*) AS tracks
             FROM player_track
-            WHERE session_date = $1 AND duration_ms > 0
+            WHERE session_date = ANY($1) AND duration_ms > 0
+              AND {scope.round_key_filter_sql(2)}
             GROUP BY player_guid
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
         alive_map = {r[0]: int(r[1] or 1) for r in (alive_rows or [])}
 
         players = []
@@ -231,7 +237,7 @@ class _AdvancedMetricsMixin:
 
         return {
             "status": "ok",
-            "session_date": str(sd),
+            "session_date": sd_str,
             "metric": "gravity",
             "description": "Enemy attention attracted per minute alive. Higher = more space created for teammates.",
             "players": players,
@@ -535,41 +541,47 @@ class _AdvancedMetricsMixin:
             "players": players,
         }
 
-    async def compute_lurker_profile(self, session_date: str | date) -> dict:
+    async def compute_lurker_profile(self, scope: GamingSessionScope) -> dict:
         """Compute Lurker Profile: solo time away from teammates.
 
         Uses player_track.path (200ms samples, spawn-to-death) to calculate
         how much time each player spends away from teammates.
         Downsampled to 1s intervals for performance (~20k points vs 100k).
+
+        Scoped by the full gaming session (deep SS-C): player_track has no
+        gaming_session_id, so filter by session dates + canonical round key.
         """
-        sd = _to_date(session_date)
+        sd_str = scope.dates[0]
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
         SOLO_RADIUS = _LURKER_SOLO_RADIUS
         DOWNSAMPLE_MS = _LURKER_DOWNSAMPLE_MS
 
         # round_start_unix > 0 filter: orphaned rows with NULL/0 rsu would
         # collapse into bucket 0 and mix unrelated rounds' tracks together
         # (same pattern as compute_space_created fix in PR #210).
-        track_rows = await self.db.fetch_all("""
+        track_rows = await self.db.fetch_all(f"""
             SELECT player_guid, player_name, team, round_start_unix,
                    spawn_time_ms, death_time_ms, duration_ms, path
             FROM player_track
-            WHERE session_date = $1
+            WHERE session_date = ANY($1)
               AND duration_ms > $2
               AND path IS NOT NULL
               AND round_start_unix IS NOT NULL
               AND round_start_unix > 0
+              AND {scope.round_key_filter_sql(3)}
             ORDER BY round_start_unix, player_guid
-        """, (sd, LURKER_MIN_DURATION_MS))
+        """, (dates, LURKER_MIN_DURATION_MS, starts, maps, rnums))
 
         if not track_rows:
-            return {"status": "ok", "session_date": str(sd), "players": []}
+            return {"status": "ok", "session_date": sd_str, "players": []}
 
         # The solo-time math is a heavy pure-Python triple loop. Offload it to a
         # worker thread so it can't block the event loop (~13s freeze), and hold
         # a per-session lock so concurrent cold requests don't thrash the CPU.
         # Names are resolved inside the worker from player_track.player_name,
         # keyed by the same 8-char prefix as player_stats (no separate query).
-        async with _compute_locks.get(f"lurker:{sd}"):
+        async with _compute_locks.get(f"lurker:{scope.gaming_session_id}"):
             player_stats, name_by_guid = await asyncio.to_thread(
                 _compute_lurker_solo, track_rows,
             )
@@ -597,7 +609,7 @@ class _AdvancedMetricsMixin:
         tracks_used = sum(s["tracks"] for s in player_stats.values())
         return {
             "status": "ok",
-            "session_date": str(sd),
+            "session_date": sd_str,
             "metric": "lurker_profile",
             "description": f"Percentage of alive time spent >={SOLO_RADIUS}u from nearest teammate.",
             "solo_radius": SOLO_RADIUS,

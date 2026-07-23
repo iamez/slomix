@@ -79,7 +79,7 @@ async def test_compute_lurker_profile_filters_null_round_start() -> None:
     svc = StorytellingService(db=AsyncMock())
     svc.db.fetch_all = AsyncMock(return_value=[])
 
-    await svc.compute_lurker_profile("2026-05-01")
+    await svc.compute_lurker_profile(_SCOPE)
 
     assert any(_has_filter(q) for q in _captured_queries(svc)), (
         "compute_lurker_profile must filter NULL/0 round_start_unix "
