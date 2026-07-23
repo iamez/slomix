@@ -22,7 +22,16 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from website.backend.services.session_scope import GamingSessionScope
 from website.backend.services.storytelling_service import StorytellingService
+
+_SCOPE = GamingSessionScope(
+    gaming_session_id=99,
+    dates=("2026-05-01",),
+    round_keys=((1781000000, "supply", 1),),
+    accepted_round_count=1,
+    distinct_map_names=("supply",),
+)
 
 
 def _captured_queries(svc: StorytellingService) -> list[str]:
@@ -45,7 +54,7 @@ async def test_compute_space_created_filters_null_round_start() -> None:
     # short-circuits after the SQL is captured.
     svc.db.fetch_all = AsyncMock(return_value=[])
 
-    await svc.compute_space_created("2026-05-01")
+    await svc.compute_space_created(_SCOPE)
 
     assert any(_has_filter(q) for q in _captured_queries(svc)), (
         "compute_space_created must filter NULL/0 round_start_unix "
@@ -58,7 +67,7 @@ async def test_compute_enabler_filters_null_round_start() -> None:
     svc = StorytellingService(db=AsyncMock())
     svc.db.fetch_all = AsyncMock(return_value=[])
 
-    await svc.compute_enabler("2026-05-01")
+    await svc.compute_enabler(_SCOPE)
 
     assert any(_has_filter(q) for q in _captured_queries(svc)), (
         "compute_enabler must filter NULL/0 round_start_unix (see PR #228)"

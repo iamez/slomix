@@ -69,8 +69,8 @@ class _FakeStorytellingService:
     async def get_kis_leaderboard(self, sd, limit=20):
         return []
 
-    async def compute_team_synergy(self, sd):
-        return {"status": "ok", "session_date": str(sd)}
+    async def compute_team_synergy(self, scope):
+        return {"status": "ok", "session_date": scope.dates[0]}
 
     async def compute_win_contribution(self, scope):
         return {"session_date": scope.dates[0], "mvp": None, "players": []}
@@ -88,11 +88,11 @@ class _FakeStorytellingService:
     async def compute_gravity(self, sd):
         return {"status": "ok", "session_date": str(sd), "players": []}
 
-    async def compute_space_created(self, sd):
-        return {"status": "ok", "session_date": str(sd), "players": []}
+    async def compute_space_created(self, scope):
+        return {"status": "ok", "session_date": scope.dates[0], "players": []}
 
-    async def compute_enabler(self, sd):
-        return {"status": "ok", "session_date": str(sd), "players": []}
+    async def compute_enabler(self, scope):
+        return {"status": "ok", "session_date": scope.dates[0], "players": []}
 
     async def compute_lurker_profile(self, sd):
         return {"status": "ok", "session_date": str(sd), "players": []}

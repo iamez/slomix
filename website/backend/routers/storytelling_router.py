@@ -498,9 +498,8 @@ async def get_team_synergy(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Team Synergy Score: 5-axis coordination metrics per faction."""
-    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    result = await svc.compute_team_synergy(sd)
+    result = await svc.compute_team_synergy(scope)
     result["scope"] = scope.to_metadata()
     return result
 
@@ -586,9 +585,8 @@ async def get_space_created(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Space Created: productive deaths where teammates capitalized."""
-    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    result = await svc.compute_space_created(sd)
+    result = await svc.compute_space_created(scope)
     result["scope"] = scope.to_metadata()
     return result
 
@@ -601,9 +599,8 @@ async def get_enabler(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Enabler Score: teammate kills enabled by your presence/action."""
-    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    result = await svc.compute_enabler(sd)
+    result = await svc.compute_enabler(scope)
     result["scope"] = scope.to_metadata()
     return result
 
@@ -671,9 +668,8 @@ async def get_player_narratives(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Per-player micro-narratives: invisible value stories for each player."""
-    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    result = await svc.generate_player_narratives(sd, ensure_kis=internal_request)
+    result = await svc.generate_player_narratives(scope, ensure_kis=internal_request)
     result["scope"] = scope.to_metadata()
     return result
 

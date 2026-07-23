@@ -23,17 +23,25 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from website.backend.services.session_scope import GamingSessionScope
 from website.backend.services.storytelling_service import StorytellingService
 
 GUID32 = "EDBB5DA97C9F52151865C5F223F9B951"
 KILLER32 = "FDA127DF5246F28D7355490F749DD894"
 SD = date(2026, 5, 1)
+SCOPE = GamingSessionScope(
+    gaming_session_id=99,
+    dates=("2026-05-01",),
+    round_keys=((1781000000, "supply", 1),),
+    accepted_round_count=1,
+    distinct_map_names=("supply",),
+)
 
 
 def _svc_with_groups() -> StorytellingService:
     """Service with a pre-seeded player-groups cache (skips the PCS query)."""
     svc = StorytellingService(db=AsyncMock())
-    svc._groups_cache[SD] = {  # noqa: SLF001 — seed the memo, skip the PCS query
+    svc._groups_cache[SCOPE.gaming_session_id] = {  # noqa: SLF001 — seed the memo (gsid key), skip the PCS query
         "guid_to_group": {GUID32[:8]: "A", KILLER32[:8]: "B"},
     }
     return svc
@@ -47,7 +55,7 @@ async def test_fallback_canonical_names_strips_colors_and_skips_null() -> None:
         (None, "ghost"),
     ])
 
-    names = await svc._fallback_canonical_names(SD)  # noqa: SLF001 — unit under test
+    names = await svc._fallback_canonical_names(SCOPE)  # noqa: SLF001 — unit under test
 
     assert names == {GUID32[:8]: "SuperBoyy"}
 
@@ -63,7 +71,7 @@ async def test_space_created_resolves_names_without_kis_rows() -> None:
         [(GUID32[:8], "^6S^2uper^6B^2oyy")],  # combat_engagement fallback
     ])
 
-    result = await svc.compute_space_created(SD)
+    result = await svc.compute_space_created(SCOPE)
 
     by_guid = {p["guid_short"]: p["name"] for p in result["players"]}
     assert by_guid[GUID32[:8]] == "SuperBoyy", (
@@ -86,7 +94,7 @@ async def test_enabler_resolves_names_without_kis_rows() -> None:
         [(KILLER32, 60000)],  # player_track alive time
     ])
 
-    result = await svc.compute_enabler(SD)
+    result = await svc.compute_enabler(SCOPE)
 
     by_guid = {p["guid_short"]: p["name"] for p in result["players"]}
     assert by_guid[KILLER32[:8]] == "wiseBoy", (
@@ -106,7 +114,7 @@ async def test_kis_names_win_over_fallback() -> None:
         [(GUID32[:8], "^6Fallback-Name")],           # fallback also present
     ])
 
-    result = await svc.compute_space_created(SD)
+    result = await svc.compute_space_created(SCOPE)
 
     by_guid = {p["guid_short"]: p["name"] for p in result["players"]}
     assert by_guid[GUID32[:8]] == "KIS-Name"

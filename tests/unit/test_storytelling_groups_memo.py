@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from datetime import date
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -20,7 +19,19 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from website.backend.services.session_scope import GamingSessionScope
 from website.backend.services.storytelling.service import StorytellingService
+
+
+def _scope(gsid: int) -> GamingSessionScope:
+    # Memo now keys on gaming_session_id (deep SS-C batch 5), not session_date.
+    return GamingSessionScope(
+        gaming_session_id=gsid,
+        dates=("2026-04-21",),
+        round_keys=((1_700_000_000, "supply", 1),),
+        accepted_round_count=1,
+        distinct_map_names=("supply",),
+    )
 
 
 def _service_with_stub_db():
@@ -41,25 +52,25 @@ def _fixture_rows():
 @pytest.mark.asyncio
 async def test_memo_hits_db_once_across_repeated_calls():
     svc, db = _service_with_stub_db()
-    sd = date(2026, 4, 21)
+    scope = _scope(1)
 
-    a = await svc._build_player_groups(sd)
-    b = await svc._build_player_groups(sd)
-    c = await svc._build_player_groups(sd)
+    a = await svc._build_player_groups(scope)
+    b = await svc._build_player_groups(scope)
+    c = await svc._build_player_groups(scope)
 
     assert a is b is c  # identity match — cached object returned
     assert db.fetch_all.await_count == 1
 
 
 @pytest.mark.asyncio
-async def test_memo_separates_by_session_date():
+async def test_memo_separates_by_gsid():
     svc, db = _service_with_stub_db()
-    sd1 = date(2026, 4, 20)
-    sd2 = date(2026, 4, 21)
+    scope1 = _scope(20)
+    scope2 = _scope(21)
 
-    await svc._build_player_groups(sd1)
-    await svc._build_player_groups(sd2)
-    await svc._build_player_groups(sd1)  # sd1 cached, no new DB call
+    await svc._build_player_groups(scope1)
+    await svc._build_player_groups(scope2)
+    await svc._build_player_groups(scope1)  # gsid 20 cached, no new DB call
 
     assert db.fetch_all.await_count == 2
 
@@ -70,10 +81,10 @@ async def test_uncached_helper_still_reachable():
     cache (e.g. diagnostics). Calling it directly still works and is
     what the memo wraps."""
     svc, db = _service_with_stub_db()
-    sd = date(2026, 4, 21)
+    scope = _scope(1)
 
-    first = await svc._build_player_groups_uncached(sd)
-    second = await svc._build_player_groups_uncached(sd)
+    first = await svc._build_player_groups_uncached(scope)
+    second = await svc._build_player_groups_uncached(scope)
 
     # Not memoized — two separate DB calls.
     assert db.fetch_all.await_count == 2
@@ -109,11 +120,11 @@ async def test_memo_is_concurrent_safe():
     db.fetch_all.side_effect = slow_fetch
 
     svc = StorytellingService(db)
-    sd = date(2026, 4, 21)
+    scope = _scope(1)
 
     # 8 concurrent callers — representative of the Story page fan-out
     # (gravity + space-created + enabler + player-narratives + …).
-    results = await asyncio.gather(*(svc._build_player_groups(sd) for _ in range(8)))
+    results = await asyncio.gather(*(svc._build_player_groups(scope) for _ in range(8)))
 
     assert db.fetch_all.await_count == 1
     # All coroutines see the same memoized object.
