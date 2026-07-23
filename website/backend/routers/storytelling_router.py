@@ -570,9 +570,8 @@ async def get_gravity(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Gravity Score: enemy attention attracted per minute alive."""
-    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    result = await svc.compute_gravity(sd)
+    result = await svc.compute_gravity(scope)
     result["scope"] = scope.to_metadata()
     return result
 
@@ -613,9 +612,8 @@ async def get_lurker_profile(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Lurker Profile: solo time and team separation analysis."""
-    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
-    result = await svc.compute_lurker_profile(sd)
+    result = await svc.compute_lurker_profile(scope)
     result["scope"] = scope.to_metadata()
     return result
 

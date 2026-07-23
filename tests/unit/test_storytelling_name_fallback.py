@@ -132,7 +132,7 @@ async def test_lurker_profile_reports_coverage() -> None:
         (KILLER32, "^3w^7ise^3B^7oy", "AXIS", 1781000000, 0, 5000, 5000, "{corrupt"),
     ])
 
-    result = await svc.compute_lurker_profile(SD)
+    result = await svc.compute_lurker_profile(SCOPE)
 
     assert result["coverage"] == {
         "tracks_fetched": 3,
