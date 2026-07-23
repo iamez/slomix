@@ -369,8 +369,18 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
                 END) as kill_quality,
                 COUNT(*) FILTER (WHERE outcome = 'gibbed')::REAL
                 / NULLIF(COUNT(*), 0) as gib_rate,
+                -- denied numerator gated to the SAME valid (+bot on epoch) round
+                -- set as the PCS minutes it's divided by (Codex P2 #541): the
+                -- subquery's is_valid predicate short-circuits on the v2 all-time
+                -- path (epoch NULL), so without this FILTER invalid/filler-round
+                -- denied time would inflate the metric with no matching playtime.
+                -- Rows with a NULL round_id also drop out here — consistent with
+                -- the covered-round denominator, which excludes them too.
                 SUM(CASE WHEN outcome = 'tapped_out' THEN delta_ms
-                         ELSE effective_denied_ms END)::REAL / 1000.0 as denied_seconds
+                         ELSE effective_denied_ms END)
+                    FILTER (WHERE round_id IN (
+                        SELECT id FROM rounds WHERE is_valid/*V3_BOT_GATE*/
+                    ))::REAL / 1000.0 as denied_seconds
             FROM proximity_kill_outcome
             WHERE killer_guid_canonical IS NOT NULL
               -- Compare session_date as DATE (param cast, column left bare) so the
