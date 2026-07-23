@@ -11,8 +11,6 @@ from typing import TYPE_CHECKING
 from .base import (
     COHESION_MAX_DISPERSION,
     SYNERGY_WEIGHTS,
-    _to_date,
-    _to_date_str,
     date,
     logger,
 )
@@ -24,19 +22,22 @@ if TYPE_CHECKING:
 class _SynergyMixin:
     """Synergy methods for StorytellingService."""
 
-    async def compute_team_synergy(self, session_date: str | date) -> dict:
+    async def compute_team_synergy(self, scope: GamingSessionScope) -> dict:
         """Compute Team Synergy Score (5 axes) per stable player group.
 
         In stopwatch mode teams swap sides between R1/R2, so aggregating
         by faction (AXIS/ALLIES) mixes two different player compositions.
         Instead, we identify the two stable player groups and aggregate
         synergy per group.
-        """
-        sd = _to_date(session_date)
 
-        groups = await self._build_player_groups(sd)
+        Scoped by the full gaming session (deep SS-C): a midnight-crossing
+        session's groups + all 5 synergy axes cover ALL its rounds.
+        """
+        sd_str = scope.dates[0]
+
+        groups = await self._build_player_groups(scope)
         if not groups:
-            return {"status": "no_data", "session_date": str(sd), "groups": {}}
+            return {"status": "no_data", "session_date": sd_str, "groups": {}}
 
         # Audit F9: partial_data signal from _build_player_groups_uncached
         # when PCS rows exist but R1 data is missing. Propagate to the
@@ -46,7 +47,7 @@ class _SynergyMixin:
             return {
                 "status": "partial_data",
                 "reason": groups.get('_reason', 'unknown'),
-                "session_date": str(sd),
+                "session_date": sd_str,
                 "groups": {},
             }
 
@@ -59,11 +60,11 @@ class _SynergyMixin:
         # endpoint. Measured locally: ~250 ms → ~60 ms on a typical
         # session with full proximity data.
         crossfire, trade, cohesion, push, medic = await asyncio.gather(
-            self._synergy_crossfire(sd, rmap),
-            self._synergy_trade(sd, g2g),
-            self._synergy_cohesion(sd, rmap),
-            self._synergy_push(sd, rmap),
-            self._synergy_medic(sd, g2g),
+            self._synergy_crossfire(scope, rmap),
+            self._synergy_trade(scope, g2g),
+            self._synergy_cohesion(scope, rmap),
+            self._synergy_push(scope, rmap),
+            self._synergy_medic(scope, g2g),
         )
 
         result_groups = {}
@@ -89,7 +90,7 @@ class _SynergyMixin:
             }
 
         logger.info("Synergy computed for %s: A=%.1f (%s), B=%.1f (%s)",
-                     sd,
+                     sd_str,
                      result_groups.get('group_a', {}).get('composite', 0),
                      ', '.join(groups['group_a_players'][:3]),
                      result_groups.get('group_b', {}).get('composite', 0),
@@ -102,7 +103,7 @@ class _SynergyMixin:
         defaulted = int(groups.get('defaulted_players_count', 0) or 0)
         response = {
             "status": "ok" if defaulted == 0 else "ok_with_defaults",
-            "session_date": str(sd),
+            "session_date": sd_str,
             "groups": result_groups,
             "weights": SYNERGY_WEIGHTS,
             "defaulted_players_count": defaulted,
@@ -137,7 +138,7 @@ class _SynergyMixin:
             result[(r[0], r[1], r[2], r[3])] = 'AXIS' if r[4] == 1 else 'ALLIES'
         return result
 
-    async def _build_player_groups(self, sd: date) -> dict | None:
+    async def _build_player_groups(self, scope: GamingSessionScope) -> dict | None:
         """Memoized wrapper: see `_build_player_groups_uncached` for logic.
 
         Story page fans out to gravity/space-created/enabler/narratives
@@ -145,40 +146,45 @@ class _SynergyMixin:
         Caching on the request-scoped service instance collapses 3-4
         identical PCS JOIN rounds scans into one per request.
 
-        A per-date asyncio.Lock around the cache-miss branch prevents
+        Cache/lock keyed by gaming_session_id (deep SS-C): a midnight-crossing
+        session is one gsid, so the fan-out shares one groups compute across
+        both date fragments (was per-date, which split it).
+
+        A per-gsid asyncio.Lock around the cache-miss branch prevents
         the concurrent fan-out from all missing together and running
         `_build_player_groups_uncached` N times. Pattern:
 
             - Fast path: cache hit → return immediately (no lock).
-            - Slow path: acquire the per-date lock; first waiter runs
+            - Slow path: acquire the per-gsid lock; first waiter runs
               the uncached query and writes the cache; every other
               waiter wakes up into the fast path.
         """
+        gsid = scope.gaming_session_id
         cache = getattr(self, "_groups_cache", None)
         if cache is None:
             # Defensive: any subclass that skips the __init__ cache
             # allocation still gets the old behaviour (no memo).
-            return await self._build_player_groups_uncached(sd)
-        if sd in cache:
-            return cache[sd]
+            return await self._build_player_groups_uncached(scope)
+        if gsid in cache:
+            return cache[gsid]
 
         locks = getattr(self, "_groups_locks", None)
         if locks is None:
-            value = await self._build_player_groups_uncached(sd)
-            cache[sd] = value
+            value = await self._build_player_groups_uncached(scope)
+            cache[gsid] = value
             return value
 
-        lock = locks.setdefault(sd, asyncio.Lock())
+        lock = locks.setdefault(gsid, asyncio.Lock())
         async with lock:
             # Double-check after acquiring — first waiter may have
             # already populated the cache while we queued for the lock.
-            if sd in cache:
-                return cache[sd]
-            value = await self._build_player_groups_uncached(sd)
-            cache[sd] = value
+            if gsid in cache:
+                return cache[gsid]
+            value = await self._build_player_groups_uncached(scope)
+            cache[gsid] = value
             return value
 
-    async def _build_player_groups_uncached(self, sd: date) -> dict | None:
+    async def _build_player_groups_uncached(self, scope: GamingSessionScope) -> dict | None:
         """Identify stable player groups across stopwatch rounds.
 
         In stopwatch, teams swap sides between R1/R2.  Group A is defined
@@ -186,18 +192,31 @@ class _SynergyMixin:
         For each round_start_unix we determine which faction corresponds to
         which group via player-overlap voting.
 
+        Scoped by the scope's ACCEPTED round keys (deep SS-C), NOT bare
+        gaming_session_id: filtering only by gsid would pull rounds the scope
+        resolver deliberately excluded (is_valid=false / non-completed), and an
+        excluded R1 with the lowest rsu could become `first_rsu` and seed the
+        group_a/group_b anchor — while every proximity axis is filtered to
+        `scope.round_keys`, mis-attributing the accepted rounds to the wrong
+        logical team (Codex/Copilot PR #539). Restricting to the canonical
+        round key uses the SAME round set the axes do, and inherently drops
+        NULL/0 round_start_unix rows (they can't match a key), so `min()` below
+        never sees a NULL. round_map keys on round_start_unix, unique per round
+        within a session (unlike round_number) → no cross-map collision.
+
         Returns dict with group_a_players, group_b_players (sorted name lists),
         round_map (round_start_unix, faction) -> group key, and
         guid_to_group mapping, or None if no data.
         """
+        starts, maps, rnums = scope.round_key_arrays()
         rows = await self.db.fetch_all(
-            "SELECT pcs.player_guid, pcs.player_name, pcs.round_number, "
-            "pcs.team, r.round_start_unix "
-            "FROM player_comprehensive_stats pcs "
-            "JOIN rounds r ON r.id = pcs.round_id "
-            "WHERE pcs.round_date = $1 AND pcs.round_number IN (1, 2) "
-            "AND pcs.team IN (1, 2)",
-            (_to_date_str(sd),))
+            f"SELECT pcs.player_guid, pcs.player_name, pcs.round_number, "
+            f"pcs.team, r.round_start_unix "
+            f"FROM player_comprehensive_stats pcs "
+            f"JOIN rounds r ON r.id = pcs.round_id "
+            f"WHERE {scope.round_key_filter_sql(1, alias='r')} "
+            f"AND pcs.round_number IN (1, 2) AND pcs.team IN (1, 2)",
+            (starts, maps, rnums))
 
         if not rows:
             return None
@@ -211,8 +230,8 @@ class _SynergyMixin:
             # "Insufficient data" badge instead of silently rendering
             # a degenerate single-group layout.
             logger.warning(
-                "synergy: session %s has rows but no R1 — partial_data",
-                sd,
+                "synergy: gsid %s has rows but no R1 — partial_data",
+                scope.gaming_session_id,
             )
             return {
                 "_status": "partial_data",
@@ -291,16 +310,18 @@ class _SynergyMixin:
             'defaulted_players_count': len(defaulted_player_guids),
         }
 
-    async def _synergy_crossfire(self, sd: date, round_map: dict) -> dict:
+    async def _synergy_crossfire(self, scope: GamingSessionScope, round_map: dict) -> dict:
         """Crossfire execution rate per player group (0-100)."""
-        rows = await self.db.fetch_all("""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
+        rows = await self.db.fetch_all(f"""
             SELECT round_start_unix, target_team,
                    COUNT(*) as total,
                    COUNT(*) FILTER (WHERE was_executed) as executed
             FROM proximity_crossfire_opportunity
-            WHERE session_date = $1
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
             GROUP BY round_start_unix, target_team
-        """, (sd,))
+        """, (dates, starts, maps, rnums))
         totals: dict[str, int] = {'group_a': 0, 'group_b': 0}
         executed: dict[str, int] = {'group_a': 0, 'group_b': 0}
         for r in (rows or []):
@@ -316,17 +337,27 @@ class _SynergyMixin:
         return {g: min(100, executed[g] / max(totals[g], 1) * 100)
                 for g in ('group_a', 'group_b')}
 
-    async def _synergy_trade(self, sd: date, guid_to_group: dict) -> dict:
+    async def _synergy_trade(self, scope: GamingSessionScope, guid_to_group: dict) -> dict:
         """Trade coverage per player group: % of team deaths avenged (0-100)."""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
         trades = await self.db.fetch_all(
-            "SELECT original_victim_guid, COUNT(*) "
-            "FROM proximity_lua_trade_kill WHERE session_date = $1 "
-            "GROUP BY original_victim_guid", (sd,))
+            f"SELECT original_victim_guid, COUNT(*) "
+            f"FROM proximity_lua_trade_kill "
+            f"WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)} "
+            f"GROUP BY original_victim_guid", (dates, starts, maps, rnums))
 
+        # Deaths denominator MUST use the same accepted-round set as the trade
+        # numerator above — gate on scope.round_keys, not bare gsid (which would
+        # count deaths from is_valid=false / non-completed rounds the proximity
+        # axis excludes, understating the trade %). Same fix as
+        # _build_player_groups (Codex PR #539).
         deaths_rows = await self.db.fetch_all(
-            "SELECT player_guid, SUM(deaths) FROM player_comprehensive_stats "
-            "WHERE round_date = $1 AND round_number IN (1, 2) AND team IN (1, 2) "
-            "GROUP BY player_guid", (_to_date_str(sd),))
+            f"SELECT pcs.player_guid, SUM(pcs.deaths) FROM player_comprehensive_stats pcs "
+            f"JOIN rounds r ON r.id = pcs.round_id "
+            f"WHERE {scope.round_key_filter_sql(1, alias='r')} "
+            f"AND pcs.round_number IN (1, 2) AND pcs.team IN (1, 2) "
+            f"GROUP BY pcs.player_guid", (starts, maps, rnums))
 
         tt: dict[str, int] = {'group_a': 0, 'group_b': 0}
         for r in (trades or []):
@@ -345,11 +376,15 @@ class _SynergyMixin:
         return {g: min(100, tt[g] / max(td[g], 1) * 100)
                 for g in ('group_a', 'group_b')}
 
-    async def _synergy_cohesion(self, sd: date, round_map: dict) -> dict:
+    async def _synergy_cohesion(self, scope: GamingSessionScope, round_map: dict) -> dict:
         """Team cohesion per player group: inverted average dispersion (0-100)."""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
         rows = await self.db.fetch_all(
-            "SELECT round_start_unix, team, dispersion "
-            "FROM proximity_team_cohesion WHERE session_date = $1", (sd,))
+            f"SELECT round_start_unix, team, dispersion "
+            f"FROM proximity_team_cohesion "
+            f"WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}",
+            (dates, starts, maps, rnums))
         group_dispersions: dict[str, list[float]] = {'group_a': [], 'group_b': []}
         for r in (rows or []):
             rsu, faction = r[0], r[1]
@@ -368,11 +403,15 @@ class _SynergyMixin:
                 result[g] = 0
         return result
 
-    async def _synergy_push(self, sd: date, round_map: dict) -> dict:
+    async def _synergy_push(self, scope: GamingSessionScope, round_map: dict) -> dict:
         """Push quality per player group: quality + participation bonus (0-100)."""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
         rows = await self.db.fetch_all(
-            "SELECT round_start_unix, team, push_quality, participant_count "
-            "FROM proximity_team_push WHERE session_date = $1", (sd,))
+            f"SELECT round_start_unix, team, push_quality, participant_count "
+            f"FROM proximity_team_push "
+            f"WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}",
+            (dates, starts, maps, rnums))
         gq: dict[str, list[float]] = {'group_a': [], 'group_b': []}
         gp: dict[str, list[float]] = {'group_a': [], 'group_b': []}
         for r in (rows or []):
@@ -394,18 +433,27 @@ class _SynergyMixin:
                 result[g] = 0
         return result
 
-    async def _synergy_medic(self, sd: date, guid_to_group: dict) -> dict:
+    async def _synergy_medic(self, scope: GamingSessionScope, guid_to_group: dict) -> dict:
         """Medic bond per player group: revive rate scaled to 0-100."""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
         revives = await self.db.fetch_all(
-            "SELECT victim_guid, COUNT(*) "
-            "FROM proximity_kill_outcome "
-            "WHERE session_date = $1 AND outcome = 'revived' "
-            "GROUP BY victim_guid", (sd,))
+            f"SELECT victim_guid, COUNT(*) "
+            f"FROM proximity_kill_outcome "
+            f"WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)} "
+            f"AND outcome = 'revived' "
+            f"GROUP BY victim_guid", (dates, starts, maps, rnums))
 
+        # Deaths denominator gated on the accepted round keys (same as the
+        # revive numerator) — not bare gsid — so invalid/non-completed rounds
+        # don't inflate the denominator and understate the medic %
+        # (Codex PR #539).
         deaths_rows = await self.db.fetch_all(
-            "SELECT player_guid, SUM(deaths) FROM player_comprehensive_stats "
-            "WHERE round_date = $1 AND round_number IN (1, 2) AND team IN (1, 2) "
-            "GROUP BY player_guid", (_to_date_str(sd),))
+            f"SELECT pcs.player_guid, SUM(pcs.deaths) FROM player_comprehensive_stats pcs "
+            f"JOIN rounds r ON r.id = pcs.round_id "
+            f"WHERE {scope.round_key_filter_sql(1, alias='r')} "
+            f"AND pcs.round_number IN (1, 2) AND pcs.team IN (1, 2) "
+            f"GROUP BY pcs.player_guid", (starts, maps, rnums))
 
         tr: dict[str, int] = {'group_a': 0, 'group_b': 0}
         for r in (revives or []):

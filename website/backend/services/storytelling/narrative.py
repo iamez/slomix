@@ -16,7 +16,6 @@ import re
 from typing import TYPE_CHECKING
 
 from .base import (
-    _to_date,
     _to_date_str,
     asyncio,
     date,
@@ -263,8 +262,10 @@ class _NarrativeMixin:
             else:
                 top_moment_what = raw
 
-        # 6. Team synergy — humanize labels, drop raw axis number
-        synergy = await self.compute_team_synergy(sd)
+        # 6. Team synergy — humanize labels, drop raw axis number.
+        # Full gaming-session scoped (deep SS-C batch 5): synergy now covers
+        # ALL of a midnight-crossing session's rounds (was single-date sd).
+        synergy = await self.compute_team_synergy(scope)
         winner_label = ""
         loser_label = ""
         win_score = 0
@@ -360,7 +361,7 @@ class _NarrativeMixin:
 
     async def generate_player_narratives(
         self,
-        session_date: str | date,
+        scope: GamingSessionScope,
         *,
         ensure_kis: bool = True,
     ) -> dict:
@@ -368,14 +369,20 @@ class _NarrativeMixin:
 
         Each player gets a 1-2 sentence story describing their invisible value,
         not just their K/D.
+
+        Deep SS-C transitional (batch 5): space_created + enabler are now full
+        gaming-session scoped; gravity + lurker still key off the representative
+        first date (`sd`) until batch 6 converts them. For a midnight-crossing
+        session the space/enabler stories already cover ALL rounds; the rest
+        follows next batch.
         """
-        sd = _to_date(session_date)
+        sd = date.fromisoformat(scope.dates[0])
 
         # Compute all metrics in parallel
         gravity, space, enabler, lurker = await asyncio.gather(
             self.compute_gravity(sd),
-            self.compute_space_created(sd),
-            self.compute_enabler(sd),
+            self.compute_space_created(scope),
+            self.compute_enabler(scope),
             self.compute_lurker_profile(sd),
         )
 

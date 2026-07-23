@@ -222,8 +222,9 @@ async def test_public_narrative_routes_do_not_ensure_kis(monkeypatch):
             calls.append(("narrative", scope.dates[0], ensure_kis))
             return {"status": "ok", "narrative": "cached story"}
 
-        async def generate_player_narratives(self, sd, *, ensure_kis=True):
-            calls.append(("player_narratives", str(sd), ensure_kis))
+        async def generate_player_narratives(self, scope, *, ensure_kis=True):
+            # Router now passes a GamingSessionScope (deep SS-C batch 5).
+            calls.append(("player_narratives", scope.dates[0], ensure_kis))
             return {"status": "ok", "player_narratives": []}
 
     monkeypatch.setattr(storytelling_router, "StorytellingService", _FakeStorytellingService)
