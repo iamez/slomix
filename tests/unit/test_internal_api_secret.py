@@ -121,12 +121,14 @@ async def test_public_kill_impact_is_read_only(monkeypatch):
         def __init__(self, db):
             calls.append(("init", db))
 
-        async def kis_compute_with_shadow(self, sd):
-            calls.append(("compute", str(sd)))
+        async def compute_session_kis_for_gsid(self, gaming_session_id):
+            # Endpoint now uses the gsid-native compute (deep SS-C: KIS spans
+            # every date of a midnight-crossing session, not just the first).
+            calls.append(("compute", gaming_session_id))
             return {"status": "computed"}
 
-        async def get_kis_leaderboard(self, sd, limit=20):
-            calls.append(("leaderboard", str(sd), limit))
+        async def get_kis_leaderboard(self, scope, limit=20):
+            calls.append(("leaderboard", scope.dates[0], limit))
             return [{"guid": "ABC12345", "name": "vid", "kills": 2, "total_kis": 4.5}]
 
     monkeypatch.setattr(storytelling_router, "StorytellingService", _FakeStorytellingService)
@@ -150,12 +152,14 @@ async def test_internal_kill_impact_runs_compute(monkeypatch):
         def __init__(self, db):
             calls.append(("init", db))
 
-        async def kis_compute_with_shadow(self, sd):
-            calls.append(("compute", str(sd)))
+        async def compute_session_kis_for_gsid(self, gaming_session_id):
+            # Endpoint now uses the gsid-native compute (deep SS-C: KIS spans
+            # every date of a midnight-crossing session, not just the first).
+            calls.append(("compute", gaming_session_id))
             return {"status": "computed"}
 
-        async def get_kis_leaderboard(self, sd, limit=20):
-            calls.append(("leaderboard", str(sd), limit))
+        async def get_kis_leaderboard(self, scope, limit=20):
+            calls.append(("leaderboard", scope.dates[0], limit))
             return [{"guid": "ABC12345", "name": "vid", "kills": 2, "total_kis": 4.5}]
 
     monkeypatch.setattr(storytelling_router, "StorytellingService", _FakeStorytellingService)

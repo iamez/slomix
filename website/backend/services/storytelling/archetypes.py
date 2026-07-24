@@ -5,22 +5,35 @@ Imports all module-level names (constants, helpers) from .base.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from .base import (
     _safe_short,
-    _to_date,
-    _to_date_str,
     date,
     strip_et_colors,
 )
+
+if TYPE_CHECKING:
+    from website.backend.services.session_scope import GamingSessionScope
 
 
 class _ArchetypesMixin:
     """Archetypes methods for StorytellingService."""
 
-    async def get_kis_leaderboard(self, session_date: str | date, limit: int = 20) -> list:
-        """Get KIS leaderboard for a session, including server-side archetype."""
-        sd = _to_date(session_date)
-        rows = await self.db.fetch_all("""
+    async def get_kis_leaderboard(self, scope: GamingSessionScope, limit: int = 20) -> list:
+        """Get KIS leaderboard for a gaming session, including server-side archetype.
+
+        Deep SS-C: scoped by the FULL gaming session (all date fragments a
+        midnight-crossing session touches), not just the first date. A bare
+        `session_date = dates[0]` here dropped every after-midnight kill from
+        the leaderboard (the two kill-impact endpoints were the last panels
+        left on the single-date path). storytelling_kill_impact has the
+        canonical round-key columns, so filter by session dates + round key —
+        immune to another session sharing a calendar date.
+        """
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
+        rows = await self.db.fetch_all(f"""
             SELECT killer_guid, MAX(killer_name) as name,
                    ROUND(SUM(total_impact)::numeric, 1) as total_kis,
                    COUNT(*) as kills,
@@ -33,11 +46,11 @@ class _ArchetypesMixin:
                    SUM(CASE WHEN COALESCE(alive_multiplier, 1) > 1 AND COALESCE(alive_multiplier, 1) < 2 THEN 1 ELSE 0 END) as outnumbered_kills,
                    SUM(CASE WHEN COALESCE(reinf_multiplier, 1) > 1 THEN 1 ELSE 0 END) as spawn_denial_kills
             FROM storytelling_kill_impact
-            WHERE session_date = $1
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
             GROUP BY killer_guid
             ORDER BY SUM(total_impact) DESC
-            LIMIT $2
-        """, (sd, limit))
+            LIMIT $5
+        """, (dates, starts, maps, rnums, limit))
 
         kis_entries = [
             {
@@ -55,7 +68,7 @@ class _ArchetypesMixin:
 
         # Enrich with server-side archetypes and PCS metrics
         if kis_entries:
-            archetypes, player_stats = await self.classify_players(sd, kis_entries)
+            archetypes, player_stats = await self.classify_players(scope, kis_entries)
             for entry in kis_entries:
                 entry["archetype"] = archetypes.get(entry["guid"], "frontline_warrior")
                 ps = player_stats.get(entry["guid"], {})
@@ -67,15 +80,24 @@ class _ArchetypesMixin:
         return kis_entries
 
     async def classify_players(
-        self, session_date: date, kis_entries: list[dict]
+        self, scope: GamingSessionScope, kis_entries: list[dict]
     ) -> tuple[dict[str, str], dict[str, dict]]:
         """Classify each player's archetype using all available data.
+
+        Deep SS-C: scoped by the full gaming session. PCS metrics gate on
+        gaming_session_id (JOIN rounds); proximity enrichment (trades, kill
+        distance) filters by session dates + canonical round key. A bare
+        single-date scope dropped every after-midnight round from a
+        midnight-crossing session's archetype stats.
 
         Returns (archetypes: {guid: archetype_string}, stats_by_guid: {guid: stats_dict}).
         """
         guids = [e["guid"] for e in kis_entries]
         if not guids:
             return {}, {}
+        gsid = scope.gaming_session_id
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
 
         # Build a stats dict per player starting from KIS data
         stats_by_guid: dict[str, dict] = {}
@@ -114,10 +136,10 @@ class _ArchetypesMixin:
                    SUM(denied_playtime) as denied_time,
                    SUM(time_dead_minutes) as time_dead
             FROM player_comprehensive_stats
-            WHERE round_date = $1
+            WHERE round_id IN (SELECT id FROM rounds WHERE gaming_session_id = $1 AND is_valid)
               AND round_number > 0
             GROUP BY player_guid
-        """, (_to_date_str(session_date),))
+        """, (gsid,))
         # Build short→long GUID lookup (PCS uses 8-char, proximity uses 32-char)
         short_to_long = {g[:8]: g for g in stats_by_guid}
 
@@ -146,19 +168,19 @@ class _ArchetypesMixin:
                 s["time_dead_pct"] = time_dead / max(time_played, 0.1)
 
         # 2. Trade kills from proximity_lua_trade_kill
-        trade_rows = await self.db.fetch_all("""
+        trade_rows = await self.db.fetch_all(f"""
             SELECT trader_guid, COUNT(*) as trades
             FROM proximity_lua_trade_kill
-            WHERE session_date = $1
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
             GROUP BY trader_guid
-        """, (session_date,))
+        """, (dates, starts, maps, rnums))
         for r in (trade_rows or []):
             guid = r[0]
             if guid in stats_by_guid:
                 stats_by_guid[guid]["trade_kills"] = int(r[1] or 0)
 
         # 3. Average kill distance from proximity_combat_position
-        dist_rows = await self.db.fetch_all("""
+        dist_rows = await self.db.fetch_all(f"""
             SELECT attacker_guid,
                    AVG(SQRT(
                        POWER(attacker_x - victim_x, 2) +
@@ -166,9 +188,9 @@ class _ArchetypesMixin:
                        POWER(attacker_z - victim_z, 2)
                    )) as avg_dist
             FROM proximity_combat_position
-            WHERE session_date = $1
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
             GROUP BY attacker_guid
-        """, (session_date,))
+        """, (dates, starts, maps, rnums))
         for r in (dist_rows or []):
             guid = r[0]
             if guid in stats_by_guid:
