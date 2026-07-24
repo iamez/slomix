@@ -65,6 +65,7 @@ setup_logging(
 logger = get_app_logger(__name__)
 
 from greatshot.config import CONFIG as GREATSHOT_CONFIG
+from shared.migration_status import warn_if_pending_migrations
 from website.backend import build_info
 from website.backend.dependencies import close_db_pool, get_db_pool, init_db_pool
 from website.backend.routers import (
@@ -386,6 +387,10 @@ app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
 async def startup_event():
     logger.info("🚀 Slomix Website Backend Starting...")
     await init_db_pool()  # Initialize shared DB pool once
+    # Migration-drift guard (schema_migration_drift 2026-07-24): warn loudly if
+    # any migration is unapplied — a git-checkout deploy applies none, and the
+    # gap otherwise only surfaces as an UndefinedColumn 500 at request time.
+    await warn_if_pending_migrations(get_db_pool(), logger, "web")
     await cache_backend.connect()
     # A8 audit: optional background refresh of weapon_stats_mv. Enabled when
     # WEAPON_STATS_MV_REFRESH_SECONDS > 0. Scheduled BEFORE the Greatshot
