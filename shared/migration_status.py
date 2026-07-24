@@ -60,7 +60,7 @@ def _file_checksum(path: Path) -> str:
 
 
 async def get_migration_drift(db) -> dict:
-    """Return {'discovered': int, 'pending': [...], 'checksum_mismatch': [...]}.
+    """Return {'discovered', 'pending', 'checksum_mismatch', 'missing_file'}.
 
     `db` is any adapter exposing async ``fetch_all(query, params)``.
     - pending: discovered files not recorded ``success = TRUE`` (a ``success =
@@ -68,17 +68,24 @@ async def get_migration_drift(db) -> dict:
     - checksum_mismatch: applied files whose on-disk SHA-256 differs from the
       recorded checksum (a migration edited after being applied). NULL recorded
       checksums are skipped (unknown), matching apply_migrations.
+    - missing_file: filenames recorded applied but absent from disk (deleted /
+      renamed / partially-packaged checkout — apply_migrations flags this too,
+      Codex #545).
     """
     paths = _discover_paths()
-    result: dict = {"discovered": len(paths), "pending": [], "checksum_mismatch": []}
-    if not paths:
-        return result
-    names = sorted(paths, key=_sort_key)
+    result: dict = {
+        "discovered": len(paths),
+        "pending": [],
+        "checksum_mismatch": [],
+        "missing_file": [],
+    }
     rows = await db.fetch_all(
         "SELECT filename, checksum FROM schema_migrations WHERE success = TRUE", ()
     )
     applied = {r[0]: r[1] for r in (rows or [])}
-    for name in names:
+    if not paths:
+        return result
+    for name in sorted(paths, key=_sort_key):
         if name not in applied:
             result["pending"].append(name)
             continue
@@ -92,6 +99,10 @@ async def get_migration_drift(db) -> dict:
                 # checksum compare for this one (non-fatal; a genuinely missing
                 # file is already covered by discovery). CodeQL empty-except.
                 continue
+    # applied ledger rows whose .sql is gone from the checkout
+    result["missing_file"] = sorted(
+        (f for f in applied if f not in paths), key=_sort_key
+    )
     return result
 
 
@@ -131,7 +142,8 @@ async def warn_if_pending_migrations(db, logger: logging.Logger, component: str)
 
     pending = drift["pending"]
     mismatch = drift["checksum_mismatch"]
-    if pending or mismatch:
+    missing = drift["missing_file"]
+    if pending or mismatch or missing:
         logger.error(
             "⚠️ DB MIGRATION DRIFT [%s] — run `python scripts/apply_migrations.py "
             "--validate`: %d pending%s%s%s. Drift causes UndefinedColumn 500s at "
@@ -139,8 +151,8 @@ async def warn_if_pending_migrations(db, logger: logging.Logger, component: str)
             component,
             len(pending),
             f" ({', '.join(pending)})" if pending else "",
-            f"; {len(mismatch)} checksum-mismatch" if mismatch else "",
-            f" ({', '.join(mismatch)})" if mismatch else "",
+            f"; {len(mismatch)} checksum-mismatch ({', '.join(mismatch)})" if mismatch else "",
+            f"; {len(missing)} missing-file ({', '.join(missing)})" if missing else "",
         )
     else:
         logger.info("✅ DB migrations up to date [%s]", component)

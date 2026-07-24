@@ -80,6 +80,20 @@ async def test_checksum_mismatch_surfaced(caplog):
 
 
 @pytest.mark.asyncio
+async def test_missing_ledger_file_surfaced(caplog):
+    """A ledger row (applied) whose .sql is gone from disk is flagged, not
+    silently reported clean (Codex #545)."""
+    recorded = dict.fromkeys(_names(), "ok")
+    recorded["999_ghost_migration.sql"] = "ok"  # applied but not on disk
+    drift = await get_migration_drift(_fake_db(recorded))
+    assert drift["pending"] == []
+    assert drift["missing_file"] == ["999_ghost_migration.sql"]
+    with caplog.at_level(logging.ERROR):
+        await warn_if_pending_migrations(_fake_db(recorded), logging.getLogger("t"), "web")
+    assert any("missing-file" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
 async def test_empty_discovery_warns_not_clean(caplog, monkeypatch):
     """No discoverable migration files (e.g. Docker strips *.sql) must warn,
     NOT read as 'up to date' (Codex #545)."""
