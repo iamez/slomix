@@ -6,6 +6,53 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.26.0](https://github.com/iamez/slomix/compare/v1.25.0...v1.26.0) (2026-07-24)
+
+
+### Features
+
+* **bot:** prediction shadow program v2 — silent calibration collection ([#511](https://github.com/iamez/slomix/issues/511)) ([3952ffe](https://github.com/iamez/slomix/commit/3952ffe25593d85b588557a64882ab46233174fc))
+* **proximity:** data trust quality endpoint ([#494](https://github.com/iamez/slomix/issues/494)) ([b29977c](https://github.com/iamez/slomix/commit/b29977c0652f28aa16ca9a3a47005e4335ba2392))
+* **website,ci:** build/revision handshake + FE route contract test + DB fingerprint (PX-1, Codex §16-17) ([#523](https://github.com/iamez/slomix/issues/523)) ([de3c1e7](https://github.com/iamez/slomix/commit/de3c1e784e61bdaa03081f94eed948f8d628c251))
+* **website:** betting cutoff — auto-open sets closes_at (§6.4b) ([#496](https://github.com/iamez/slomix/issues/496)) ([32c9802](https://github.com/iamez/slomix/commit/32c98028346c50fc0f6d1d67dbb6653e24489bd9))
+* **website:** convert Smart Stats frontend (legacy + React) to gsid (SS-D) ([#530](https://github.com/iamez/slomix/issues/530)) ([d69a61c](https://github.com/iamez/slomix/commit/d69a61c73fd6a2bfdbba08eadd27972f0aa35f77))
+* **website:** Data Trust badge on Session Detail (Good Night rank 12) ([#506](https://github.com/iamez/slomix/issues/506)) ([66f1c2a](https://github.com/iamez/slomix/commit/66f1c2a0e0f196052b1df55c2a4202ea13b3e9c1))
+* **website:** ET Performance v3 shadow — median-0.50 rating over a common epoch ([#513](https://github.com/iamez/slomix/issues/513)) ([e11fa33](https://github.com/iamez/slomix/commit/e11fa33e1bc4e3d0a45f954a7a8da88c67cf5f91))
+* **website:** ET-Rating denied source → proximity_kill_outcome (RCA-verified, supersedes [#538](https://github.com/iamez/slomix/issues/538)) ([#541](https://github.com/iamez/slomix/issues/541)) ([f2ae70e](https://github.com/iamez/slomix/commit/f2ae70eedc8642bbf181981cd492e00b2aaf1f3a))
+* **website:** GamingSessionScope resolver + BOX score gsid support (SS-A) ([#524](https://github.com/iamez/slomix/issues/524)) ([326122b](https://github.com/iamez/slomix/commit/326122b891dd7162d14f812efb7aff5eb5958d38))
+* **website:** gsid-addressable scope contract for 15 storytelling panels (SS-C route layer) ([#528](https://github.com/iamez/slomix/issues/528)) ([c2a91eb](https://github.com/iamez/slomix/commit/c2a91eb21e21d4a27d46964070d14ce1a25e1b19))
+* **website:** implement is_objective_area in KIS — kills at the objective score higher (KIS v4) ([#542](https://github.com/iamez/slomix/issues/542)) ([7c1df5e](https://github.com/iamez/slomix/commit/7c1df5e1aaf39cfa3fcb8c60ccd37c9cb5a7e1d2))
+* **website:** KIS gaming-session-scoped compute path + wrong-link diagnostics (SS-B) ([#525](https://github.com/iamez/slomix/issues/525)) ([795e4f2](https://github.com/iamez/slomix/commit/795e4f2b223d6ba3e56a10e96d0a3e079a02b0fd))
+* **website:** Life Cards — the best single life of the night ([#503](https://github.com/iamez/slomix/issues/503)) ([1215e06](https://github.com/iamez/slomix/commit/1215e064f0b55ca837d756a8d29542ccac591fa9))
+* **website:** Live Director sentence on the Tonight hub (Good Night rank 8) ([#507](https://github.com/iamez/slomix/issues/507)) ([7666f7b](https://github.com/iamez/slomix/commit/7666f7bc2ee56136436f844b5fd5729dc6e5a52d))
+* **website:** Moment Director — rank the story cut past the 5★ ceiling ([#499](https://github.com/iamez/slomix/issues/499)) ([2044c11](https://github.com/iamez/slomix/commit/2044c1101f32f2f5768e133352c375e96f713978))
+* **website:** multi-date scope filter helper + win-contribution deep SS-C (batch 1/N) ([#533](https://github.com/iamez/slomix/issues/533)) ([4d0312d](https://github.com/iamez/slomix/commit/4d0312dfed15df6bb5d790fd34253dcf5e86271b))
+* **website:** multi-date scope for gravity + lurker + narrative finalization (deep SS-C batch 6, FINAL) ([#540](https://github.com/iamez/slomix/issues/540)) ([f793864](https://github.com/iamez/slomix/commit/f79386479b82168052fff9cb05c251991714a5b2))
+* **website:** multi-date scope for Match Moments (11 detectors) — deep SS-C batch 3 ([#536](https://github.com/iamez/slomix/issues/536)) ([2a46e8e](https://github.com/iamez/slomix/commit/2a46e8e52c920bf8f372175d7b1c9e254ee4b3be))
+* **website:** multi-date scope for Momentum chart — deep SS-C batch 4 ([#537](https://github.com/iamez/slomix/issues/537)) ([5f40c14](https://github.com/iamez/slomix/commit/5f40c14163d8c18801a0d815a9322922677e2565))
+* **website:** multi-date scope for the _build_player_groups cluster (deep SS-C batch 5) ([#539](https://github.com/iamez/slomix/issues/539)) ([041d487](https://github.com/iamez/slomix/commit/041d487cbf35c59eaba34241e9ababc299b53128))
+* **website:** multi-date scope for useless-defense-deaths + best-lives (deep SS-C batch 2) ([#535](https://github.com/iamez/slomix/issues/535)) ([e4e222c](https://github.com/iamez/slomix/commit/e4e222cf08e6cbf255272d125adbb840153ac4a2))
+* **website:** Objective Pressure — reward the objective work K/D misses ([#501](https://github.com/iamez/slomix/issues/501)) ([44f7135](https://github.com/iamez/slomix/commit/44f7135fe1b5fddea184ad9c00e8ec8c7fac64f0))
+* **website:** read-only wrong-round-linkage inventory script (L4) ([#532](https://github.com/iamez/slomix/issues/532)) ([1f2dba4](https://github.com/iamez/slomix/commit/1f2dba471e6ec5ce24cb284a8ba3457acb30aa03))
+* **website:** Slomix Museum memory card — a rank-vs-self career keepsake ([#505](https://github.com/iamez/slomix/issues/505)) ([76b3da1](https://github.com/iamez/slomix/commit/76b3da1004627412065477c7f82b22e86c24f8b0))
+
+
+### Bug Fixes
+
+* **bot:** split intra-session rematch predictions per match via round_details (IMP-002) ([#517](https://github.com/iamez/slomix/issues/517)) ([5493b12](https://github.com/iamez/slomix/commit/5493b127e71c35f6d00d9ce96c15cb612c1e08f3))
+* **bot:** tie-defer on ambiguous round matches, extend relinker fanout (L3) ([#527](https://github.com/iamez/slomix/issues/527)) ([1cff1da](https://github.com/iamez/slomix/commit/1cff1daccd1b6d05f42a246e5c065a96ed6c6a28))
+* **db:** close deploy-path ledger bypasses + fresh-bootstrap contract (IMP-001/008/009) ([#516](https://github.com/iamez/slomix/issues/516)) ([a65a1e1](https://github.com/iamez/slomix/commit/a65a1e1fafb663d9e7899322428590137f58540a))
+* **db:** transactional migration runner, deploy ledger enforcement, guarded aim-lock backfill ([#509](https://github.com/iamez/slomix/issues/509)) ([639432b](https://github.com/iamez/slomix/commit/639432be8559d07e5871f2dd14cbe09464b79816))
+* **proximity:** linkage diagnostics stop conflating linked with linked-correctly (L1, Codex §18) ([#522](https://github.com/iamez/slomix/issues/522)) ([892c73d](https://github.com/iamez/slomix/commit/892c73dd4f010b6aefafe311fb93c5588e47fe70))
+* **proximity:** true-zero contract, trades denominator, labeled profile fallback (IMP-003) ([#518](https://github.com/iamez/slomix/issues/518)) ([503cddf](https://github.com/iamez/slomix/commit/503cddf4420c532305f6948133fb6343782809e3))
+* **website:** ET v3 honest eligibility + epoch-only bot gate + parser round_key (IMP-004) ([#519](https://github.com/iamez/slomix/issues/519)) ([a801607](https://github.com/iamez/slomix/commit/a80160784ec13ce5582962fd47fd357ffe88a48a))
+* **website:** objective-pressure returns profile-routable short GUIDs ([#504](https://github.com/iamez/slomix/issues/504)) ([bb4a4e7](https://github.com/iamez/slomix/commit/bb4a4e78cbf3fcb5274ea79f11e6b988caaff50b))
+* **website:** prox observability — per-source durations, scoped degraded gauge, tracked alerting (IMP-005) ([#521](https://github.com/iamez/slomix/issues/521)) ([a9761d8](https://github.com/iamez/slomix/commit/a9761d8676c35d331514a7b9af6cbc79a7eefa1a))
+* **website:** proximity score v2 quality contract — no silent neutral fill ([#512](https://github.com/iamez/slomix/issues/512)) ([df1c909](https://github.com/iamez/slomix/commit/df1c909ee6591a53103f94adbc988a2bd62effb4))
+* **website:** real-stack security order test + routed-path logging (IMP-006) ([#520](https://github.com/iamez/slomix/issues/520)) ([7ccf184](https://github.com/iamez/slomix/commit/7ccf18498956027d6714d9631287c600000516f3))
+* **website:** smart-stats map count = maps played, not distinct names ([#497](https://github.com/iamez/slomix/issues/497)) ([18a3f32](https://github.com/iamez/slomix/commit/18a3f32c11727b61dc205f9a0772ca04bbb38d42))
+* **website:** wire exact-round scoping into 8 proximity endpoints, unify weapon-accuracy scope (PX-2) ([#529](https://github.com/iamez/slomix/issues/529)) ([874562b](https://github.com/iamez/slomix/commit/874562b172bef35f9bdf1e1b8aa6bbd12ee8f334))
+
 ## [1.25.0](https://github.com/iamez/slomix/compare/v1.24.0...v1.25.0) (2026-07-09)
 
 
