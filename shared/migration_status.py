@@ -88,7 +88,10 @@ async def get_migration_drift(db) -> dict:
                 if _file_checksum(paths[name]) != stored:
                     result["checksum_mismatch"].append(name)
             except OSError:
-                pass
+                # Unreadable migration file → can't hash it, so skip the
+                # checksum compare for this one (non-fatal; a genuinely missing
+                # file is already covered by discovery). CodeQL empty-except.
+                continue
     return result
 
 
