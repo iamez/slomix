@@ -44,17 +44,22 @@ def _discover() -> list[str]:
 
 
 async def get_pending_migrations(db) -> list[str]:
-    """Migration files present on disk but not recorded as applied/failed.
+    """Migration files present on disk but not recorded as SUCCESSFULLY applied.
 
-    `db` is any adapter exposing async ``fetch_all(query, params)``. Failed rows
-    are excluded (they are a distinct, surfaced problem, not silent drift).
+    `db` is any adapter exposing async ``fetch_all(query, params)``. Only
+    ``success = TRUE`` rows count as applied — a migration whose last attempt
+    was ``success = FALSE`` (failed) must still be surfaced as drift, not hidden
+    behind a "up to date" report (Codex #545). This matches
+    scripts/apply_migrations.py, which never treats a failed row as applied.
     """
     files = _discover()
     if not files:
         return []
-    rows = await db.fetch_all("SELECT filename FROM schema_migrations", ())
-    seen = {r[0] for r in (rows or [])}
-    return [f for f in files if f not in seen]
+    rows = await db.fetch_all(
+        "SELECT filename FROM schema_migrations WHERE success = TRUE", ()
+    )
+    applied = {r[0] for r in (rows or [])}
+    return [f for f in files if f not in applied]
 
 
 async def warn_if_pending_migrations(db, logger: logging.Logger, component: str) -> list[str]:

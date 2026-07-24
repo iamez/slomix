@@ -509,6 +509,12 @@ class UltimateETLegacyBot(
             logger.error(f"❌ Failed to connect database adapter: {e}")
             raise
 
+        # Migration-drift guard (schema_migration_drift 2026-07-24): run BEFORE
+        # schema validation (Codex #545) — a pending migration is often exactly
+        # what makes validate_database_schema() fail, so warning here surfaces
+        # the root cause (which migration to apply) before the bot exits.
+        await warn_if_pending_migrations(self.db_adapter, logger, "bot")
+
         # ✅ CRITICAL: Validate schema FIRST
         await self.validate_database_schema()
 
@@ -1986,11 +1992,6 @@ class UltimateETLegacyBot(
         logger.info(f"🔧 Cogs Loaded: {len(self.cogs)}")
         logger.info(f"🌐 Servers: {len(self.guilds)}")
         logger.info("=" * 80)
-
-        # Migration-drift guard (schema_migration_drift 2026-07-24): warn loudly
-        # if any migration is unapplied — a git-checkout deploy applies none, so
-        # drift otherwise only surfaces as an UndefinedColumn 500 at request time.
-        await warn_if_pending_migrations(self.db_adapter, logger, "bot")
 
         # Validate webhook security
         try:

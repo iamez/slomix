@@ -45,6 +45,21 @@ async def test_no_pending_when_all_recorded():
 
 
 @pytest.mark.asyncio
+async def test_only_successful_rows_count_as_applied():
+    """A failed migration (success=FALSE) must be surfaced as pending, not
+    hidden behind an 'up to date' report (Codex #545). The applied query must
+    filter on success = TRUE so failed rows never fall into the applied set."""
+    files = _discover()
+    db = _fake_db(files)  # the query WHERE success=TRUE returns only applied rows
+    await get_pending_migrations(db)
+    sql = db.fetch_all.call_args.args[0]
+    assert "success = TRUE" in sql
+    # A file recorded ONLY as failed (i.e. absent from the success set) is pending.
+    failed_only = _fake_db(files[:-1])  # last file not in the success set
+    assert files[-1] in await get_pending_migrations(failed_only)
+
+
+@pytest.mark.asyncio
 async def test_warn_logs_error_and_returns_pending(caplog):
     files = _discover()
     db = _fake_db(files[:-1])
