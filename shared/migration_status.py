@@ -63,7 +63,15 @@ async def warn_if_pending_migrations(db, logger: logging.Logger, component: str)
     try:
         pending = await get_pending_migrations(db)
     except Exception as exc:  # noqa: BLE001 - a guard must never break startup
-        logger.debug("migration-status check skipped (%s): %s", component, exc)
+        # WARNING, not DEBUG (Copilot #545): if the guard itself can't run
+        # (missing schema_migrations, permissions, DB not connected) it must
+        # NOT fail silently — a silent guard defeats the whole point of
+        # surfacing drift. Still non-fatal: startup continues.
+        logger.warning(
+            "⚠️ migration-drift check could NOT run [%s]: %s — schema drift "
+            "would go unnoticed; verify `python scripts/apply_migrations.py --status`.",
+            component, exc,
+        )
         return []
     if pending:
         logger.error(

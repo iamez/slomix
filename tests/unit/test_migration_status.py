@@ -55,9 +55,12 @@ async def test_warn_logs_error_and_returns_pending(caplog):
 
 
 @pytest.mark.asyncio
-async def test_guard_never_raises_on_db_failure():
-    """A missing schema_migrations table (fresh DB) must not block startup."""
+async def test_guard_never_raises_on_db_failure(caplog):
+    """A missing schema_migrations table (fresh DB) must not block startup, and
+    the guard must NOT fail silently — it warns that it could not run (Copilot #545)."""
     db = AsyncMock()
     db.fetch_all = AsyncMock(side_effect=RuntimeError("relation does not exist"))
-    # Must not raise, and returns empty (non-fatal).
-    assert await warn_if_pending_migrations(db, logging.getLogger("t"), "bot") == []
+    with caplog.at_level(logging.WARNING):
+        result = await warn_if_pending_migrations(db, logging.getLogger("t"), "bot")
+    assert result == []  # non-fatal
+    assert any("could NOT run" in r.message for r in caplog.records)
