@@ -13,7 +13,11 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from website.backend.services.skill_rating_service import (
+    _GLOBAL_SQL_COLUMNS,
+    _PCS_SQL_COLUMNS,
     CONSTANT,
+    PCS_METRICS,
+    PROXIMITY_METRICS,
     WEIGHTS,
     _percentile,
     _row_to_stats,
@@ -208,11 +212,15 @@ class TestCalculateEtRating:
 # ===========================================================================
 
 class TestRowToStats:
-    """Extract 9 metrics from a DB row at a given offset."""
+    """Extract PCS metrics from a DB row at a given offset (pcs_only = 8 columns).
+
+    denied_playtime_pm moved to the proximity block on 2026-07-23, so a
+    has_proximity=False row carries 8 PCS values (denied → neutral 0.0).
+    """
 
     def test_basic_extraction(self):
         row = (0.0, 0.0, 0.0,  # padding
-               50.0, 3.0, 2.0, 5.0, 1.0, 0.8, 0.4, 10.0, 0.25)
+               50.0, 3.0, 2.0, 5.0, 1.0, 0.8, 0.4, 0.25)
         stats = _row_to_stats(row, offset=3, has_proximity=False)
         assert stats["dpm"] == 50.0
         assert stats["kpr"] == 3.0
@@ -221,11 +229,52 @@ class TestRowToStats:
         assert stats["objective_rate"] == 1.0
         assert stats["survival_rate"] == 0.8
         assert stats["useful_kill_rate"] == 0.4
-        assert stats["denied_playtime_pm"] == 10.0
         assert stats["accuracy"] == 0.25
+        # denied is proximity-sourced now → neutral default in pcs_only rows
+        assert stats["denied_playtime_pm"] == 0.0
 
     def test_zero_offset(self):
-        row = (50.0, 3.0, 2.0, 5.0, 1.0, 0.8, 0.4, 10.0, 0.25)
+        row = (50.0, 3.0, 2.0, 5.0, 1.0, 0.8, 0.4, 0.25)
         stats = _row_to_stats(row, offset=0, has_proximity=False)
         assert stats["dpm"] == 50.0
         assert stats["accuracy"] == 0.25
+
+
+# ===========================================================================
+# denied_playtime_pm source switch (RCA 2026-07-23): PCS topshots[16] →
+# proximity_kill_outcome. denied is now a proximity metric.
+# ===========================================================================
+
+class TestDeniedSourceContract:
+    """Guards for the denied → proximity_kill_outcome switch."""
+
+    def test_denied_is_proximity_metric(self):
+        assert "denied_playtime_pm" in PROXIMITY_METRICS
+        assert "denied_playtime_pm" not in PCS_METRICS
+
+    def test_column_layout(self):
+        # 8 PCS + 7 proximity = 15 global columns; denied leads the proximity block
+        assert len(_GLOBAL_SQL_COLUMNS) == 15
+        assert len(_PCS_SQL_COLUMNS) == 8
+        assert "denied_playtime_pm" not in _PCS_SQL_COLUMNS
+        assert _GLOBAL_SQL_COLUMNS[8] == "denied_playtime_pm"
+        # global column order must match _row_to_stats offsets
+        assert _GLOBAL_SQL_COLUMNS[7] == "accuracy"  # last PCS column
+
+    def test_row_to_stats_denied_at_proximity_offset(self):
+        # has_proximity=True: denied read from the proximity block (offset+8)
+        row = tuple(range(15))  # values 0..14 at offsets 0..14
+        stats = _row_to_stats(row, offset=0, has_proximity=True)
+        assert stats["accuracy"] == 7.0          # last PCS
+        assert stats["denied_playtime_pm"] == 8.0  # first proximity
+        assert stats["kill_quality"] == 9.0
+
+    def test_denied_skipped_in_pcs_only_rating(self):
+        # A session-scope (pcs_only) rating must not consult denied (no proximity
+        # data there); it is reported as proximity_data_unavailable, weight preserved.
+        stats = dict.fromkeys(WEIGHTS, 0.5)
+        percentiles = {m: sorted([0.0, 0.5, 1.0]) for m in WEIGHTS}
+        _, components = calculate_et_rating(stats, percentiles, pcs_only=True)
+        assert components["denied_playtime_pm"]["note"] == "proximity_data_unavailable"
+        assert components["denied_playtime_pm"]["contribution"] == 0
+        assert components["denied_playtime_pm"]["weight"] == WEIGHTS["denied_playtime_pm"]
