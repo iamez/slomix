@@ -13,66 +13,97 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from shared import migration_status  # noqa: E402
 from shared.migration_status import (  # noqa: E402
-    _discover,
+    _discover_paths,
+    get_migration_drift,
     get_pending_migrations,
     warn_if_pending_migrations,
 )
 
 
-def _fake_db(recorded_filenames):
-    """A db whose fetch_all returns (filename,) rows for the given names."""
+def _fake_db(recorded):
+    """A db whose fetch_all returns (filename, checksum) rows.
+
+    `recorded` is either a list of filenames (checksum None) or a dict
+    {filename: checksum}. The query selects only success=TRUE rows, so the
+    caller supplies the successfully-applied set.
+    """
+    if isinstance(recorded, dict):
+        rows = [(f, c) for f, c in recorded.items()]
+    else:
+        rows = [(f, None) for f in recorded]
     db = AsyncMock()
-    db.fetch_all = AsyncMock(return_value=[(f,) for f in recorded_filenames])
+    db.fetch_all = AsyncMock(return_value=rows)
     return db
+
+
+def _names():
+    return sorted(_discover_paths())
 
 
 @pytest.mark.asyncio
 async def test_pending_is_disk_minus_recorded():
-    """A discovered file not recorded (applied or failed) is pending."""
-    files = _discover()
-    assert files, "expected migrations/*.sql to be discoverable"
-    missing = files[-1]
-    db = _fake_db(files[:-1])  # everything recorded except the last
-    pending = await get_pending_migrations(db)
-    assert pending == [missing]
+    names = _names()
+    assert names, "expected migrations/*.sql to be discoverable"
+    db = _fake_db(names[:-1])  # everything applied except the last
+    assert await get_pending_migrations(db) == [names[-1]]
 
 
 @pytest.mark.asyncio
 async def test_no_pending_when_all_recorded():
-    db = _fake_db(_discover())
-    assert await get_pending_migrations(db) == []
+    assert await get_pending_migrations(_fake_db(_names())) == []
 
 
 @pytest.mark.asyncio
 async def test_only_successful_rows_count_as_applied():
-    """A failed migration (success=FALSE) must be surfaced as pending, not
-    hidden behind an 'up to date' report (Codex #545). The applied query must
-    filter on success = TRUE so failed rows never fall into the applied set."""
-    files = _discover()
-    db = _fake_db(files)  # the query WHERE success=TRUE returns only applied rows
+    """Failed rows (success=FALSE) must not count as applied (Codex #545):
+    the query filters on success = TRUE, so a failed-only file stays pending."""
+    db = _fake_db(_names())
     await get_pending_migrations(db)
-    sql = db.fetch_all.call_args.args[0]
-    assert "success = TRUE" in sql
-    # A file recorded ONLY as failed (i.e. absent from the success set) is pending.
-    failed_only = _fake_db(files[:-1])  # last file not in the success set
-    assert files[-1] in await get_pending_migrations(failed_only)
+    assert "success = TRUE" in db.fetch_all.call_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_checksum_mismatch_surfaced(caplog):
+    """An applied migration whose file was edited (stored checksum != on-disk)
+    is flagged, not silently reported clean (Codex #545)."""
+    names = _names()
+    recorded = dict.fromkeys(names, "applied-ok")
+    recorded[names[0]] = "0" * 64  # wrong stored checksum → mismatch on disk
+    drift = await get_migration_drift(_fake_db(recorded))
+    assert drift["pending"] == []
+    assert names[0] in drift["checksum_mismatch"]
+    with caplog.at_level(logging.ERROR):
+        await warn_if_pending_migrations(_fake_db(recorded), logging.getLogger("t"), "web")
+    assert any("checksum-mismatch" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_empty_discovery_warns_not_clean(caplog, monkeypatch):
+    """No discoverable migration files (e.g. Docker strips *.sql) must warn,
+    NOT read as 'up to date' (Codex #545)."""
+    monkeypatch.setattr(migration_status, "_discover_paths", lambda: {})
+    with caplog.at_level(logging.WARNING):
+        result = await warn_if_pending_migrations(_fake_db([]), logging.getLogger("t"), "web")
+    assert result == []
+    assert any("no migration files discoverable" in r.message for r in caplog.records)
 
 
 @pytest.mark.asyncio
 async def test_warn_logs_error_and_returns_pending(caplog):
-    files = _discover()
-    db = _fake_db(files[:-1])
+    names = _names()
+    db = _fake_db(names[:-1])
     with caplog.at_level(logging.ERROR):
         pending = await warn_if_pending_migrations(db, logging.getLogger("t"), "web")
-    assert pending == [files[-1]]
-    assert any("PENDING DB MIGRATION" in r.message for r in caplog.records)
+    assert pending == [names[-1]]
+    assert any("MIGRATION DRIFT" in r.message for r in caplog.records)
 
 
 @pytest.mark.asyncio
 async def test_guard_never_raises_on_db_failure(caplog):
     """A missing schema_migrations table (fresh DB) must not block startup, and
-    the guard must NOT fail silently — it warns that it could not run (Copilot #545)."""
+    the guard must NOT fail silently — it warns that it could not run (#545)."""
     db = AsyncMock()
     db.fetch_all = AsyncMock(side_effect=RuntimeError("relation does not exist"))
     with caplog.at_level(logging.WARNING):
