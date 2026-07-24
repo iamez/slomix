@@ -158,13 +158,12 @@ class _NarrativeMixin:
         designed to read like a sports recap, not a stats dump — see
         the module docstring for the wordalisation rationale.
 
-        Deep SS-C (batch 6): the moment pick (`detect_moments`), team synergy
-        and the maps-played count are all full-gaming-session scoped now, so a
-        midnight-crossing session's narrative covers ALL its rounds. The KIS
-        leaderboard / archetype sub-calls still key off the representative first
-        date (`sd`) — that's the KIS layer (SS-B), not a storytelling panel.
+        Deep SS-C: the moment pick (`detect_moments`), team synergy, the
+        maps-played count AND the KIS leaderboard / archetype sub-calls are all
+        full-gaming-session scoped now (the kill-impact panels were the last
+        holdouts), so a midnight-crossing session's narrative covers ALL its
+        rounds.
         """
-        sd = date.fromisoformat(scope.dates[0])
         sd_str = scope.dates[0]
 
         # 1. Ensure KIS is computed for internal callers, then fetch
@@ -173,9 +172,9 @@ class _NarrativeMixin:
         # sessions get an audit-row even when narrative generation is the
         # first thing that triggers a KIS compute.
         if ensure_kis:
-            await self.kis_compute_with_shadow(sd)
-        kis_board = await self.get_kis_leaderboard(sd, limit=50)
-        archetypes, stats = await self.classify_players(sd, kis_board)
+            await self.compute_session_kis_for_gsid(scope.gaming_session_id)
+        kis_board = await self.get_kis_leaderboard(scope, limit=50)
+        archetypes, stats = await self.classify_players(scope, kis_board)
 
         if not kis_board:
             return {"status": "no_data", "narrative": ""}
@@ -389,8 +388,8 @@ class _NarrativeMixin:
         # Also get KIS for archetype + kills context. Only internal callers
         # may trigger shadow-aware compute; public routes read existing cache.
         if ensure_kis:
-            await self.kis_compute_with_shadow(sd)
-        kis_board = await self.get_kis_leaderboard(sd, limit=50)
+            await self.compute_session_kis_for_gsid(scope.gaming_session_id)
+        kis_board = await self.get_kis_leaderboard(scope, limit=50)
 
         # Index by guid_short
         g_map = {p["guid_short"]: p for p in gravity.get("players", [])}
