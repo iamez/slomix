@@ -41,6 +41,7 @@ from bot.services.voice_session_service import VoiceSessionService
 from bot.services.webhook_handler_mixin import _WebhookHandlerMixin
 from bot.services.webhook_metadata_mixin import _WebhookMetadataMixin
 from bot.services.webhook_round_metadata_service import WebhookRoundMetadataService
+from shared.migration_status import warn_if_pending_migrations
 
 # WebSocket client for push-based file notifications (optional)
 try:
@@ -507,6 +508,12 @@ class UltimateETLegacyBot(
         except Exception as e:
             logger.error(f"❌ Failed to connect database adapter: {e}")
             raise
+
+        # Migration-drift guard (schema_migration_drift 2026-07-24): run BEFORE
+        # schema validation (Codex #545) — a pending migration is often exactly
+        # what makes validate_database_schema() fail, so warning here surfaces
+        # the root cause (which migration to apply) before the bot exits.
+        await warn_if_pending_migrations(self.db_adapter, logger, "bot")
 
         # ✅ CRITICAL: Validate schema FIRST
         await self.validate_database_schema()
