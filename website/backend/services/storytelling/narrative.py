@@ -168,12 +168,13 @@ class _NarrativeMixin:
 
         # 1. Ensure KIS is computed for internal callers, then fetch
         # leaderboard + archetypes. Public routes must stay read-only.
-        # Routes through kis_compute_with_shadow so KIS_SHADOW_MODE_ENABLED
-        # sessions get an audit-row even when narrative generation is the
-        # first thing that triggers a KIS compute.
+        # gsid-native compute covers every date of a midnight-crossing session
+        # (deep SS-C — the kill-impact panels were the last single-date holdouts).
         if ensure_kis:
             await self.compute_session_kis_for_gsid(scope.gaming_session_id)
         kis_board = await self.get_kis_leaderboard(scope, limit=50)
+        # get_kis_leaderboard enriches entries with the archetype subset; this
+        # call returns the FULL stats_by_guid tuple the narrative needs below.
         archetypes, stats = await self.classify_players(scope, kis_board)
 
         if not kis_board:
@@ -386,7 +387,7 @@ class _NarrativeMixin:
         )
 
         # Also get KIS for archetype + kills context. Only internal callers
-        # may trigger shadow-aware compute; public routes read existing cache.
+        # may trigger the gsid-native compute; public routes read existing cache.
         if ensure_kis:
             await self.compute_session_kis_for_gsid(scope.gaming_session_id)
         kis_board = await self.get_kis_leaderboard(scope, limit=50)
