@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Slomix - ET:Legacy Discord Bot
 
-**Version**: 1.25.0 <!-- x-release-please-version --> | **Language**: Python 3.11+ | **Discord.py**: 2.6.4 (pinned)
+**Version**: 1.26.0 <!-- x-release-please-version --> | **Language**: Python 3.11+ | **Discord.py**: 2.6.4 (pinned)
 **Database**: PostgreSQL 17 (production) / 14 (dev) | **Status**: Production-Ready
 
 ---
@@ -250,7 +250,7 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 
 ---
 
-## System Status (Version 1.25.0) <!-- x-release-please-version -->
+## System Status (Version 1.26.0) <!-- x-release-please-version -->
 
 - Parser: 100% functional, R2 differential validated, Oksii fields backward-compatible
 - Database: PostgreSQL (101 tables), no corruption
@@ -263,4 +263,4 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 
 ---
 
-**Version**: 1.25.0 <!-- x-release-please-version --> | **Last Updated**: 2026-05-13 | **Schema Version**: 2.2
+**Version**: 1.26.0 <!-- x-release-please-version --> | **Last Updated**: 2026-05-13 | **Schema Version**: 2.2
