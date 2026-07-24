@@ -6,6 +6,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.27.0](https://github.com/iamez/slomix/compare/v1.26.0...v1.27.0) (2026-07-24)
+
+
+### Features
+
+* **bot,website:** startup migration-drift guard (prevents silent schema drift) ([#545](https://github.com/iamez/slomix/issues/545)) ([f52ccd4](https://github.com/iamez/slomix/commit/f52ccd4fee798038ea1beabc43ee30a83afc13c4))
+
+
+### Bug Fixes
+
+* **website:** KIS leaderboard + archetypes span the full gaming session (deep SS-C completion) ([#543](https://github.com/iamez/slomix/issues/543)) ([fabe767](https://github.com/iamez/slomix/commit/fabe76749f5e08c6742b28beb9fcfc10e3e8dcb3))
+
 ## [1.26.0](https://github.com/iamez/slomix/compare/v1.25.0...v1.26.0) (2026-07-24)
 
 
