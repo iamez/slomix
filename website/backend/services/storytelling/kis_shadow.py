@@ -27,8 +27,15 @@ Which multipliers move to SQL (full re-implementation in this module):
 - soft cap                   (linear 25% compression above 5.0)
 
 Which multipliers stay Python-only / Python-joined:
-- None. Every multiplier is reproduced in SQL. The shadow path is a
-  full re-implementation. If a divergence shows up it is either:
+- objective_multiplier (KIS v4, 2026-07-23) — the Python path multiplies by
+  OBJECTIVE_AREA_MULTIPLIER when the victim died inside an objective sphere
+  (objective_zones.json, app-side 3D distance). Replicating the per-map
+  objective coordinates + 3D containment in SQL is deferred, so until then the
+  shadow path does NOT apply it. This is a KNOWN, expected divergence on
+  is_objective_area kills; Phase 2 cutover must add the SQL equivalent before
+  it can replace the Python path. (The shadow is off by default — audit only.)
+- Otherwise every multiplier is reproduced in SQL. A remaining divergence is
+  either:
     (a) rounding (banker's vs half-away-from-zero), or
     (b) a contract drift in the Python code that the SQL didn't follow.
   Both surface as a row in `storytelling_kis_shadow_audit`.
