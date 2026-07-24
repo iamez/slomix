@@ -272,23 +272,19 @@ async def get_kill_impact_leaderboard(
     Public calls are read-only. Internal bot calls with X-Internal-Token may
     lazy-compute/write the KIS cache.
 
-    The compute call itself stays on the legacy single-date
-    compute_session_kis path (via kis_compute_with_shadow) — SS-B's
-    gsid-native compute_session_kis_for_gsid is intentionally not wired in
-    here yet (see that PR's notes); this endpoint gains gsid-addressability
-    and scope metadata, not the deeper multi-date KIS fix.
+    Multi-date (deep SS-C completion): both the compute and the leaderboard
+    now span the FULL gaming session via compute_session_kis_for_gsid /
+    get_kis_leaderboard(scope). A midnight-crossing session used to show only
+    the first date's KIS (this endpoint was the last panel left single-date).
     """
-    sd = date.fromisoformat(scope.dates[0])
     svc = StorytellingService(db)
     compute_result = {"status": "read_only"}
     if internal_request:
-        # Routes through kis_compute_with_shadow so that, when
-        # KIS_SHADOW_MODE_ENABLED is set, the SQL shadow audit runs and
-        # populates storytelling_kis_shadow_audit. When the flag is off
-        # this is a thin pass-through to compute_session_kis (production
-        # path is always authoritative and writes are unchanged).
-        compute_result = await svc.kis_compute_with_shadow(sd)
-    leaderboard = await svc.get_kis_leaderboard(sd, limit=limit)
+        # gsid-native compute covers every date fragment of the session.
+        # (KIS_SHADOW_MODE audit is not wired to the gsid path yet; it stays
+        # off by default and is being superseded by the Phase-2 cutover.)
+        compute_result = await svc.compute_session_kis_for_gsid(scope.gaming_session_id)
+    leaderboard = await svc.get_kis_leaderboard(scope, limit=limit)
 
     return {
         "status": "ok",
@@ -313,13 +309,15 @@ async def get_kill_impact_details(
     player_guid: str = Query(..., description="Player GUID"),
     db: DatabaseAdapter = Depends(get_db),
 ):
-    """Per-kill KIS breakdown for a specific player in a session."""
-    sd = date.fromisoformat(scope.dates[0])
+    """Per-kill KIS breakdown for a specific player in a session (full gaming
+    session — every date fragment, deep SS-C)."""
     svc = StorytellingService(db)
     if internal_request:
-        # Same shadow-aware entrypoint as the leaderboard route (see above).
-        await svc.kis_compute_with_shadow(sd)
-    rows = await db.fetch_all("""
+        # gsid-native compute (see the leaderboard route) — covers all dates.
+        await svc.compute_session_kis_for_gsid(scope.gaming_session_id)
+    dates = [date.fromisoformat(d) for d in scope.dates]
+    starts, maps, rnums = scope.round_key_arrays()
+    rows = await db.fetch_all(f"""
         SELECT kill_outcome_id, round_number, round_start_unix, map_name,
                victim_guid, victim_name,
                base_impact, carrier_multiplier, push_multiplier, crossfire_multiplier,
@@ -330,9 +328,10 @@ async def get_kill_impact_details(
                COALESCE(reinf_multiplier, 1.0), COALESCE(killer_health, 0),
                COALESCE(axis_alive, 0), COALESCE(allies_alive, 0)
         FROM storytelling_kill_impact
-        WHERE session_date = $1 AND killer_guid = $2
+        WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
+          AND killer_guid = $5
         ORDER BY total_impact DESC
-    """, (sd, player_guid))
+    """, (dates, starts, maps, rnums, player_guid))
 
     kills = [
         {
@@ -374,8 +373,9 @@ async def get_kill_impact_details(
     player_name = ""
     if kills:
         name_row = await db.fetch_one(
-            "SELECT MAX(killer_name) FROM storytelling_kill_impact WHERE session_date = $1 AND killer_guid = $2",
-            (sd, player_guid)
+            f"SELECT MAX(killer_name) FROM storytelling_kill_impact "
+            f"WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)} AND killer_guid = $5",
+            (dates, starts, maps, rnums, player_guid)
         )
         player_name = strip_et_colors((name_row[0] if name_row else "") or short_guid(player_guid))
 
