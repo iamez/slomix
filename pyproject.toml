@@ -1,6 +1,6 @@
 [project]
 name = "etlegacy-stats-bot"
-version = "1.26.0"  # x-release-please-version
+version = "1.26.1"  # x-release-please-version
 description = "ET:Legacy Discord Stats Bot - Production-grade gaming analytics"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
