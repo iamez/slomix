@@ -20,11 +20,13 @@ from website.backend.services.storytelling_service import (
     CROSSFIRE_MULTIPLIER,
     LOW_HEALTH_MULTIPLIER,
     LOW_HEALTH_THRESHOLD,
+    OBJECTIVE_AREA_MULTIPLIER,
     OUTCOME_GIBBED,
     OUTCOME_REVIVED,
     OUTNUMBERED_MULTIPLIER,
     SOLO_CLUTCH_MULTIPLIER,
     StorytellingService,
+    round_ctx_key,
 )
 
 # ---------------------------------------------------------------------------
@@ -728,3 +730,53 @@ class TestClassifyArchetype:
         stats = {"pcs_kills": 5, "deaths": 5}
         result = StorytellingService._classify_archetype(stats)
         assert isinstance(result, str)
+
+
+# ===========================================================================
+# Test class: is_objective_area (KIS v4, 2026-07-23)
+# ===========================================================================
+
+class TestScoreKillObjectiveArea:
+    """A kill whose victim died inside an objective sphere earns the
+    OBJECTIVE_AREA_MULTIPLIER and sets is_objective_area=True (was a
+    hardcoded-False TODO before KIS v4)."""
+
+    def _cp_for(self, kill, vx, vy, vz):
+        """combat_positions dict keyed the way _score_kill looks it up
+        (killer_guid, *round_ctx_key(unix, map, round), kill_time)."""
+        key = (kill[5], *round_ctx_key(kill[3], kill[4], kill[2]), kill[10])
+        return {key: {
+            "killer_health": 100,   # no low-health bonus
+            "axis_alive": 3, "allies_alive": 3,  # even 3v3 → no alive bonus
+            "attacker_team": "axis",
+            "victim_x": vx, "victim_y": vy, "victim_z": vz,
+        }}
+
+    def test_kill_at_objective_sets_flag_and_multiplier(self):
+        # adlernest "Allied CP" objective is at (-412, -2064, 128), radius 500.
+        svc = _service()
+        kill = _make_kill(map_name="adlernest")
+        ck, cr, pu, cf, st, vc, _ = _empty_context()
+        cp = self._cp_for(kill, -412, -2064, 128)
+        result = svc._score_kill(kill, ck, cr, pu, cf, st, vc, cp)
+        assert result["is_objective_area"] is True
+        # every other multiplier is 1.0 here → total is exactly the obj mult
+        assert result["total_impact"] == pytest.approx(OBJECTIVE_AREA_MULTIPLIER, abs=0.01)
+
+    def test_kill_away_from_objective_no_flag(self):
+        svc = _service()
+        kill = _make_kill(map_name="adlernest")
+        ck, cr, pu, cf, st, vc, _ = _empty_context()
+        cp = self._cp_for(kill, 99999, 99999, 128)  # far from any objective
+        result = svc._score_kill(kill, ck, cr, pu, cf, st, vc, cp)
+        assert result["is_objective_area"] is False
+        assert result["total_impact"] == pytest.approx(1.0, abs=0.01)
+
+    def test_missing_victim_coords_no_flag(self):
+        # NULL coords (older/partial rows) must not fire or crash.
+        svc = _service()
+        kill = _make_kill(map_name="adlernest")
+        ck, cr, pu, cf, st, vc, _ = _empty_context()
+        cp = self._cp_for(kill, None, None, None)
+        result = svc._score_kill(kill, ck, cr, pu, cf, st, vc, cp)
+        assert result["is_objective_area"] is False

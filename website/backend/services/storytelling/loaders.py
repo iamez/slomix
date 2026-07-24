@@ -124,7 +124,8 @@ class _LoadersMixin:
         """Combat positions indexed by (killer_guid, round_start_unix, map_name, round_number, kill_time)."""
         rows = await self.db.fetch_all(
             "SELECT attacker_guid, round_start_unix, round_number, event_time, "
-            "killer_health, axis_alive, allies_alive, attacker_team, map_name "
+            "killer_health, axis_alive, allies_alive, attacker_team, map_name, "
+            "victim_x, victim_y, victim_z "
             "FROM proximity_combat_position "
             "WHERE session_date = $1 AND event_type = 'kill'",
             (sd,))
@@ -137,5 +138,9 @@ class _LoadersMixin:
                 'axis_alive': r[5] or 0,
                 'allies_alive': r[6] or 0,
                 'attacker_team': r[7] or '',
+                # victim death position (for is_objective_area, KIS v4)
+                'victim_x': r[9],
+                'victim_y': r[10],
+                'victim_z': r[11],
             }
         return result

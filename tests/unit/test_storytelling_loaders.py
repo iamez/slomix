@@ -342,7 +342,7 @@ async def test_load_combat_positions_dict_shape(host, db):
     allies_alive, attacker_team. Pin schema for KIS v2 health/alive
     multipliers."""
     db.fetch_all = AsyncMock(return_value=[
-        ("k1", 1700000000, 1, 12.5, 80, 4, 6, "axis", MAP),
+        ("k1", 1700000000, 1, 12.5, 80, 4, 6, "axis", MAP, 100, 200, 30),
     ])
     out = await host._load_combat_positions(date(2026, 5, 7))
     entry = out[("k1", 1700000000, MAP, 1, 12.5)]
@@ -351,6 +351,9 @@ async def test_load_combat_positions_dict_shape(host, db):
         "axis_alive": 4,
         "allies_alive": 6,
         "attacker_team": "axis",
+        "victim_x": 100,
+        "victim_y": 200,
+        "victim_z": 30,
     }
 
 
@@ -359,8 +362,8 @@ async def test_load_combat_positions_keys_include_event_time(host, db):
     """Key includes event_time (as the suffix) — distinguishes multiple
     kills by the same player in the same round."""
     db.fetch_all = AsyncMock(return_value=[
-        ("k1", 1700000000, 1, 5.0, 90, 5, 6, "axis", MAP),
-        ("k1", 1700000000, 1, 12.0, 75, 4, 6, "axis", MAP),
+        ("k1", 1700000000, 1, 5.0, 90, 5, 6, "axis", MAP, 0, 0, 0),
+        ("k1", 1700000000, 1, 12.0, 75, 4, 6, "axis", MAP, 0, 0, 0),
     ])
     out = await host._load_combat_positions(date(2026, 5, 7))
     assert ("k1", 1700000000, MAP, 1, 5.0) in out
@@ -374,7 +377,7 @@ async def test_load_combat_positions_null_health_defaults_zero(host, db):
     """NULL killer_health → 0. Pin defensive default for KIS health
     multiplier (0% health = max bonus)."""
     db.fetch_all = AsyncMock(return_value=[
-        ("k1", 1700000000, 1, 5.0, None, None, None, None, MAP),
+        ("k1", 1700000000, 1, 5.0, None, None, None, None, MAP, None, None, None),
     ])
     out = await host._load_combat_positions(date(2026, 5, 7))
     entry = out[("k1", 1700000000, MAP, 1, 5.0)]
@@ -382,6 +385,8 @@ async def test_load_combat_positions_null_health_defaults_zero(host, db):
     assert entry["axis_alive"] == 0
     assert entry["allies_alive"] == 0
     assert entry["attacker_team"] == ''
+    # NULL victim coords pass through as None (is_objective_area skips them)
+    assert entry["victim_x"] is None
 
 
 @pytest.mark.asyncio
@@ -390,8 +395,8 @@ async def test_load_combat_positions_last_event_wins_on_duplicate_key(host, db):
     defend against), last write wins. Pin observed dict-assignment
     semantics."""
     db.fetch_all = AsyncMock(return_value=[
-        ("k1", 1700000000, 1, 5.0, 100, 6, 6, "axis", MAP),
-        ("k1", 1700000000, 1, 5.0, 50, 3, 3, "allies", MAP),
+        ("k1", 1700000000, 1, 5.0, 100, 6, 6, "axis", MAP, 0, 0, 0),
+        ("k1", 1700000000, 1, 5.0, 50, 3, 3, "allies", MAP, 0, 0, 0),
     ])
     out = await host._load_combat_positions(date(2026, 5, 7))
     entry = out[("k1", 1700000000, MAP, 1, 5.0)]
@@ -404,8 +409,8 @@ async def test_load_combat_positions_separates_maps_on_same_second(host, db):
     """Same (guid, unix, round, event_time) but DIFFERENT map → separate
     keys (codex #10 collision guard)."""
     db.fetch_all = AsyncMock(return_value=[
-        ("k1", 1700000000, 1, 5.0, 100, 6, 6, "axis", MAP),
-        ("k1", 1700000000, 1, 5.0, 40, 2, 5, "allies", MAP2),
+        ("k1", 1700000000, 1, 5.0, 100, 6, 6, "axis", MAP, 0, 0, 0),
+        ("k1", 1700000000, 1, 5.0, 40, 2, 5, "allies", MAP2, 0, 0, 0),
     ])
     out = await host._load_combat_positions(date(2026, 5, 7))
     assert out[("k1", 1700000000, MAP, 1, 5.0)]["killer_health"] == 100

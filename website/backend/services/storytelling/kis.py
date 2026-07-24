@@ -5,6 +5,12 @@ Imports all module-level names (constants, helpers) from .base.
 """
 from __future__ import annotations
 
+from website.backend.services.objective_pressure_service import (
+    _load_zones as _load_objective_zones,
+)
+from website.backend.services.objective_pressure_service import (
+    _zone_index as _objective_zone_index,
+)
 from website.backend.services.session_scope import resolve_gaming_session_scope
 
 from .base import (
@@ -17,6 +23,7 @@ from .base import (
     DISTANCE_NORMAL,
     LOW_HEALTH_MULTIPLIER,
     LOW_HEALTH_THRESHOLD,
+    OBJECTIVE_AREA_MULTIPLIER,
     OUTCOME_GIBBED,
     OUTCOME_REVIVED,
     OUTNUMBERED_MULTIPLIER,
@@ -50,7 +57,11 @@ from .base import (
 # score-0 row is orphaned (matches no kill) — so a recompute reproduces
 # every currently-displayed kill identically; the bump is a correctness/
 # consistency guard, not a data-changing event on today's sessions.
-FORMULA_VERSION = "kis-v3"
+# v3 -> v4 (2026-07-23): is_objective_area implemented (was a hardcoded-False
+# TODO). A kill whose victim died inside an objective sphere now earns
+# OBJECTIVE_AREA_MULTIPLIER — a real change to total_impact for obj-area kills,
+# so the version bumps to invalidate pre-fix cache rows.
+FORMULA_VERSION = "kis-v4"
 
 
 def _scope_row_filter(
@@ -453,6 +464,13 @@ class _KisMixin:
         alive_mult = 1.0
         # reinf_mult is computed together with spawn_mult above
 
+        # Objective-area multiplier (KIS v4): victim died inside an objective
+        # sphere (objective_zones.json, full 3D — a different floor doesn't
+        # count). A kill at the contested/defended point matters more than a
+        # neutral-ground frag. Replaces the old hardcoded-False is_objective_area.
+        obj_mult = 1.0
+        is_objective_area = False
+
         cp = None
         cp_key = (killer_guid, *round_key, kill_time)
         if combat_positions:
@@ -479,10 +497,19 @@ class _KisMixin:
                 elif my_alive > 0 and (enemy_alive - my_alive) >= outnumbered_threshold:
                     alive_mult = OUTNUMBERED_MULTIPLIER
 
+                # Objective-area check — victim position vs the map's objective
+                # spheres. Coordinates may be absent on older/partial rows.
+                vx, vy, vz = cp.get('victim_x'), cp.get('victim_y'), cp.get('victim_z')
+                if vx is not None and vy is not None:
+                    zones = _load_objective_zones().get((map_name or '').lower())
+                    if zones and _objective_zone_index(vx, vy, vz or 0, zones) >= 0:
+                        obj_mult = OBJECTIVE_AREA_MULTIPLIER
+                        is_objective_area = True
+
         # Total impact = product of all multipliers
         raw = (1.0 * carrier_mult * push_mult * cf_mult
                * spawn_mult * outcome_mult * class_mult * dist_mult
-               * health_mult * alive_mult * reinf_mult)
+               * health_mult * alive_mult * reinf_mult * obj_mult)
         # Soft cap: linear compression above 5.0 (25% above threshold)
         # Preserves ordering while preventing outlier dominance
         total = raw if raw <= 5.0 else 5.0 + (raw - 5.0) * 0.25
@@ -516,7 +543,7 @@ class _KisMixin:
             'is_carrier_kill': is_carrier,
             'is_during_push': is_push,
             'is_crossfire': is_cf,
-            'is_objective_area': False,  # TODO: Implement when per-kill distance data available
+            'is_objective_area': is_objective_area,  # KIS v4: victim died in an objective sphere
             'kill_time_ms': kill_time,
         }
 

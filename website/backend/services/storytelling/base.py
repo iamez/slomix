@@ -72,6 +72,11 @@ LOW_HEALTH_MULTIPLIER = 1.3         # Kill with <30 HP = clutch
 SOLO_CLUTCH_THRESHOLD = 3           # Enemies alive for solo clutch
 SOLO_CLUTCH_MULTIPLIER = 2.0        # 1v3+ kill
 OUTNUMBERED_MULTIPLIER = 1.5        # Kill while outnumbered
+# Objective-area kill (2026-07-23): the victim died inside an objective sphere
+# (objective_zones.json, full 3D). A kill at the contested/defended point is
+# worth more than a neutral-ground frag — sits above OUTCOME_GIBBED (1.3),
+# below OUTNUMBERED (1.5); carrier/push already price the strongest obj moments.
+OBJECTIVE_AREA_MULTIPLIER = 1.4
 # Graduated reinforcement multiplier tiers (UTRO-inspired, 2026-04-20).
 # Each tier is (max_reinf_seconds_inclusive, multiplier): a wait whose
 # value is <= that tier's max wins it. The last tier uses infinity, so
@@ -197,6 +202,7 @@ __all__ = [
     "SOLO_CLUTCH_THRESHOLD",
     "SOLO_CLUTCH_MULTIPLIER",
     "OUTNUMBERED_MULTIPLIER",
+    "OBJECTIVE_AREA_MULTIPLIER",
     "REINF_MULT_TIERS",
     "SYNERGY_WEIGHTS",
     "COHESION_MAX_DISPERSION",
