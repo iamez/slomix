@@ -41,6 +41,7 @@ from bot.services.voice_session_service import VoiceSessionService
 from bot.services.webhook_handler_mixin import _WebhookHandlerMixin
 from bot.services.webhook_metadata_mixin import _WebhookMetadataMixin
 from bot.services.webhook_round_metadata_service import WebhookRoundMetadataService
+from shared.migration_status import warn_if_pending_migrations
 
 # WebSocket client for push-based file notifications (optional)
 try:
@@ -1985,6 +1986,11 @@ class UltimateETLegacyBot(
         logger.info(f"🔧 Cogs Loaded: {len(self.cogs)}")
         logger.info(f"🌐 Servers: {len(self.guilds)}")
         logger.info("=" * 80)
+
+        # Migration-drift guard (schema_migration_drift 2026-07-24): warn loudly
+        # if any migration is unapplied — a git-checkout deploy applies none, so
+        # drift otherwise only surfaces as an UndefinedColumn 500 at request time.
+        await warn_if_pending_migrations(self.db_adapter, logger, "bot")
 
         # Validate webhook security
         try:
