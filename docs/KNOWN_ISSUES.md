@@ -21,7 +21,7 @@ identity + dedup + tz-aware linking (#549).
 | **KIS `distance_multiplier` stub** | Low | Hardcoded `DISTANCE_NORMAL` (kis.py TODO) but stored/returned as a real per-kill field. Needs per-kill distance data. |
 | **`website/migrations/` has no ledger** | Low | The #545 drift guard cannot cover it (documented in that PR). |
 | **`storytelling/loaders.py` per-date only** | Low | Safe today only because `_load_context_for_dates` merges per-date; any future direct caller inherits the midnight bug. |
-| **Formula registry gaps** | Low | PWC/WIS/WAA now registered (this PR); still missing: archetypes, moments, synergy, momentum, gravity/space/enabler/lurker, objective_pressure, session_matrix, rivalries, season_awards. 15/20 versions are hand-typed with no verifying test. |
+| **Formula registry gaps** | Low | `pwc` now registered (this PR) — its derived WIS/WAA/waa_bayes are described inside that entry rather than as separate formulas, since they are not independently versioned. Still missing entirely: archetypes, moments, synergy, momentum, gravity/space/enabler/lurker, objective_pressure, session_matrix, rivalries, season_awards. 15/20 versions are hand-typed with no verifying test. |
 
 ---
 
