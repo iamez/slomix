@@ -492,7 +492,7 @@ async def get_kis_formula():
             "compression": 0.25,
             "description": "Above 5.0: total = 5.0 + (raw - 5.0) × 0.25. Max ~8.5",
         },
-        "formula": "total_impact = soft_cap(base × carrier × crossfire × spawn × outcome × class × distance × health × alive × reinf)",
+        "formula": "total_impact = soft_cap(base × carrier × crossfire × spawn × outcome × class × distance × health × alive × reinf × objective_area)",
     }
 
 

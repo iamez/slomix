@@ -27,6 +27,12 @@ from __future__ import annotations
 
 import datetime as _dt
 
+# KIS_FORMULA_VERSION pins every storytelling_kill_impact read to the CURRENT
+# KIS generation (see _kis_shares). Imported live so a KIS bump can never
+# silently leave these aggregates reading a mixture of formulas.
+from website.backend.services.storytelling.kis import (
+    FORMULA_VERSION as KIS_FORMULA_VERSION,
+)
 from website.backend.utils.et_constants import strip_et_colors
 
 FORMULA_VERSION = "ssr-v0.2"  # v0.2: +opening_net, +trade_discipline (owner-
@@ -91,10 +97,17 @@ class SsrService:
             "           WHERE is_carrier_kill OR is_during_push"
             "              OR is_crossfire OR is_objective_area) AS situ "
             "FROM storytelling_kill_impact "
-            "WHERE killer_guid NOT LIKE ? AND killer_name NOT LIKE ? "
+            # formula_version pin (2026-07-25): without it this SUM mixes
+            # formula generations. It matters twice over — is_during_push
+            # scored a multiplier up to kis-v4 and scores nothing from v5,
+            # and is_objective_area is structurally FALSE on every pre-v4
+            # row — so an unpinned aggregate would rank players partly by
+            # which formula happened to score their sessions.
+            "WHERE formula_version = ? "
+            "  AND killer_guid NOT LIKE ? AND killer_name NOT LIKE ? "
             "GROUP BY UPPER(LEFT(killer_guid, 8)) "
             "HAVING SUM(total_impact) > 0",
-            _BOTS,
+            (KIS_FORMULA_VERSION, *_BOTS),
         )
         return {r[0]: float(r[2] or 0) / float(r[1]) for r in (rows or [])}
 
@@ -115,6 +128,7 @@ class SsrService:
             "         UPPER(LEFT(ki.killer_guid, 8)) AS g8,"
             "         ki.total_impact AS kis "
             "  FROM storytelling_kill_impact ki "
+            # same formula_version pin as _kis_shares
             "  JOIN proximity_combat_position cp "
             "    ON cp.round_start_unix = ki.round_start_unix "
             "   AND cp.session_date = ki.session_date "
@@ -123,13 +137,13 @@ class SsrService:
             "   AND UPPER(LEFT(cp.attacker_guid, 8)) = UPPER(LEFT(ki.killer_guid, 8)) "
             "   AND UPPER(LEFT(cp.victim_guid, 8)) = UPPER(LEFT(ki.victim_guid, 8)) "
             "   AND ABS(cp.event_time - ki.kill_time_ms) <= 300 "
-            "  WHERE ki.session_date >= ?::date "
+            "  WHERE ki.formula_version = ? AND ki.session_date >= ?::date "
             "    AND ((cp.attacker_team = 'AXIS' AND cp.axis_alive = 1)"
             "      OR (cp.attacker_team = 'ALLIES' AND cp.allies_alive = 1)) "
             "    AND ki.killer_guid NOT LIKE ? AND ki.killer_name NOT LIKE ? "
             "  ORDER BY ki.id, ABS(cp.event_time - ki.kill_time_ms)"
             ") solo GROUP BY g8",
-            (_dt.date.fromisoformat(ALIVE_CONTEXT_SINCE), *_BOTS),
+            (KIS_FORMULA_VERSION, _dt.date.fromisoformat(ALIVE_CONTEXT_SINCE), *_BOTS),
         )
         return {r[0]: float(r[1] or 0) for r in (rows or [])}
 
@@ -228,12 +242,13 @@ class SsrService:
             "         UPPER(LEFT(ki.killer_guid, 8)) AS killer,"
             "         UPPER(LEFT(ki.victim_guid, 8)) AS victim "
             "  FROM storytelling_kill_impact ki "
+            # same formula_version pin as _kis_shares
             "  JOIN rounds r ON r.round_start_unix = ki.round_start_unix "
             "               AND r.round_number = ki.round_number "
             "               AND r.map_name = ki.map_name "
             "               AND r.is_valid "
             "               AND NOT COALESCE(r.is_bot_round, FALSE) "
-            "  WHERE ki.round_start_unix > 0 "
+            "  WHERE ki.formula_version = ? AND ki.round_start_unix > 0 "
             "    AND ki.killer_guid NOT LIKE ? AND ki.victim_guid NOT LIKE ? "
             "    AND ki.killer_name NOT LIKE ? "
             "    AND COALESCE(ki.victim_name, '') NOT LIKE ? "
@@ -242,7 +257,7 @@ class SsrService:
             "WHERE (round_start_unix, map_name, round_number, kill_time_ms) IN ("
             "    SELECT round_start_unix, map_name, round_number, MIN(kill_time_ms) "
             "    FROM k GROUP BY round_start_unix, map_name, round_number)",
-            (_BOTS[0], _BOTS[0], _BOTS[1], _BOTS[1]),
+            (KIS_FORMULA_VERSION, _BOTS[0], _BOTS[0], _BOTS[1], _BOTS[1]),
         )
         presence_rows = await self.db.fetch_all(
             "SELECT UPPER(LEFT(p.player_guid, 8)) AS g8, COUNT(*) "

@@ -112,7 +112,8 @@ def get_registry() -> list[dict]:
             "surface": "/api/storytelling/*, Smart Stats, Story, momentum",
             "summary": "Kill Impact Score: base x 10 context multipliers "
                        "(carrier/crossfire/spawn/outcome/class/distance/"
-                       "health/alive/reinf), soft cap 5.0. The PUSH multiplier "
+                       "health/alive/reinf/objective_area), soft cap 5.0. "
+                       "The PUSH multiplier "
                        "was retired in v5 (2026-07-25): push kills matched the "
                        "~50% round-winner baseline (50.9% vs 50.8%) while the "
                        "gating metric ran inverse to kill activity; "

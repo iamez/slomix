@@ -878,10 +878,15 @@ function renderKISBreakdown(players) {
     const top = players.slice(0, 12);
     const maxKIS = Math.max(...top.map(p => p.total_kis), 1);
 
+    // 'Push' left this waterfall in kis-v5 (2026-07-25): the push multiplier
+    // was retired after measuring at the round-winner baseline, so push kills
+    // no longer carry any KIS of their own. Drawing an amber Push slice — and
+    // subtracting it from Base — would attribute score that the backend never
+    // awarded. Push involvement is still shown as a plain count in the stat
+    // row below; it is context, not contribution.
     const SEGMENTS = [
         { key: 'base',        label: 'Base',         color: 'bg-slate-500' },
         { key: 'carrier',     label: 'Carrier',      color: 'bg-rose-500' },
-        { key: 'push',        label: 'Push',         color: 'bg-amber-500' },
         { key: 'crossfire',   label: 'Crossfire',    color: 'bg-cyan-500' },
         { key: 'clutch',      label: 'Clutch',       color: 'bg-purple-500' },
         { key: 'spawn',       label: 'Spawn Denial', color: 'bg-emerald-500' },
@@ -901,7 +906,6 @@ function renderKISBreakdown(players) {
     // Bars
     top.forEach(p => {
         const carrierK = p.carrier_kills || 0;
-        const pushK = p.push_kills || 0;
         const crossfireK = p.crossfire_kills || 0;
         const clutchK = p.clutch_kills || 0;
         const spawnK = p.spawn_denial_kills || 0;
@@ -911,7 +915,7 @@ function renderKISBreakdown(players) {
         const totalKIS = p.total_kis ?? 0;
         const k = Math.max(p.kills, 1);
         const rawSeg = (count) => totalKIS * (count / k);
-        const rawSum = rawSeg(carrierK) + rawSeg(pushK) + rawSeg(crossfireK) + rawSeg(clutchK) + rawSeg(spawnK) + rawSeg(outnumberedK);
+        const rawSum = rawSeg(carrierK) + rawSeg(crossfireK) + rawSeg(clutchK) + rawSeg(spawnK) + rawSeg(outnumberedK);
         const scale = rawSum > totalKIS ? totalKIS / rawSum : 1;
         const segKIS = (count) => rawSeg(count) * scale;
         const baseKIS = Math.max(0, totalKIS - rawSum * scale);
@@ -931,11 +935,10 @@ function renderKISBreakdown(players) {
         const addSeg = (cls, val) => { const s = _el('div', `${cls} h-full`); s.style.width = `${pct(val)}%`; barTrack.appendChild(s); };
         addSeg(`${SEGMENTS[0].color}/60`, baseKIS);
         addSeg(`${SEGMENTS[1].color}/80`, segKIS(carrierK));
-        addSeg(`${SEGMENTS[2].color}/80`, segKIS(pushK));
-        addSeg(`${SEGMENTS[3].color}/80`, segKIS(crossfireK));
-        addSeg(`${SEGMENTS[4].color}/80`, segKIS(clutchK));
-        addSeg(`${SEGMENTS[5].color}/80`, segKIS(spawnK));
-        addSeg(`${SEGMENTS[6].color}/80`, segKIS(outnumberedK));
+        addSeg(`${SEGMENTS[2].color}/80`, segKIS(crossfireK));
+        addSeg(`${SEGMENTS[3].color}/80`, segKIS(clutchK));
+        addSeg(`${SEGMENTS[4].color}/80`, segKIS(spawnK));
+        addSeg(`${SEGMENTS[5].color}/80`, segKIS(outnumberedK));
         barRow.appendChild(barTrack);
 
         barRow.appendChild(_el('div', 'w-12 text-xs text-slate-400 text-right font-mono', (p.total_kis ?? 0).toFixed(1)));
