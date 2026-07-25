@@ -76,15 +76,17 @@ nearby_teammates=0, run_type=contested_solo, self_kills=0, team_kills=0
 Kontekstna polja (`enemies_nearby`, `nearby_teammates`, `run_type`, `escort_guids`) **so** pravi gradniki ocene odločitve. Toda dve stvari, ki sta se pokazali šele ob ownerjevem ugovoru (2026-07-25) in ju je treba povedati naravnost:
 
 **(a) To NI "inženirska" tabela, ki bi jo bilo treba le posplošiti — je tabela, ki pokriva napačno manjšino.**
-`proximity_objective_run` pozna samo štiri akcije, vse inženirske: `dynamite_plant` (1.058), `objective_destroyed` (656), `construction_complete` (643), `dynamite_defuse` (152). Nošenje dokumentov/zastave je v ločeni tabeli `proximity_carrier_event`, kjer so nosilci **69,4 % MEDIC**, 18,6 % ENGINEER, 9,6 % COVERTOPS. In ravno ta tabela nima nobenega konteksta:
+`proximity_objective_run` pozna samo štiri akcije, vse inženirske: `dynamite_plant` (1.058), `objective_destroyed` (656), `construction_complete` (643), `dynamite_defuse` (152) — skupaj **2.509**. Nošenje dokumentov/zastave je v ločeni tabeli `proximity_carrier_event` z **2.079** zapisi.
 
-| Polje | objective_run (inženir) | carrier_event (69 % medici) |
+**Pošten razrez (popravek po reviewu):** 69,4 % je delež *nosilcev*, NE delež vsega objective dela — prvotna formulacija je to zamešala. Od vseh 4.588 objective dogodkov je **45,3 % nošenja** in **28,2 % jih opravijo medici**; inženirji z akcijami + nošenjem opravijo večino. Sklep se s tem ne spremeni, le zaostri se pravilno: **kar 45 % objective dela — nošenje, ki ga v 69 % opravljajo medici — nima niti enega konteksta odločitve.**
+
+| Polje | objective_run (2.509, inženir) | carrier_event (2.079, 69 % medici) |
 |---|---|---|
 | `enemies_nearby` / `nearby_teammates` | ✅ | ❌ |
 | `run_type`, `escort_guids` | ✅ | ❌ |
 | geometrija (distance/beeline/efficiency) | ✅ | ✅ — **samo to** |
 
-Bogat kontekst torej pokriva manjšinski del objective dela. Prva naloga ni "posplošiti z inženirja", ampak **carrier_event izenačiti z objective_run**.
+Bogat kontekst torej pokriva 55 % objective dogodkov, 45 % (nošenje) pa nima ničesar. Prva naloga ni "posplošiti z inženirja", ampak **carrier_event izenačiti z objective_run**.
 
 **(b) `path_efficiency` ni ocena odločitve — je merilo ravnosti in kaže v napačno smer.** Formula je `beeline / dejanska_pot` (Lua vrstica 2862). Izmerjeno na naši bazi:
 
@@ -143,10 +145,16 @@ Za vsak 200 ms vzorec izračunamo (offline, ob importu):
 - razdalja do najbližjega objectiva in ali se mu **približuje ali oddaljuje**;
 - št. soigralcev/sovražnikov v radiju (že imamo pozicije vseh);
 - ali je sam (`isolation`) — ownerjeva lurk os;
-- ali je v znanem chokepointu (izpeljemo iz movement heatmap gostote);
-- **izpostavljenost v tistem trenutku** — ali je bil v vidnem polju/dosegu znanih pozicij nasprotnikov, in kako smrtonosna je bila ta celica po zgodovinskem kill heatmapu.
+- ali je v ozkem grlu — ⚠️ **NE zgolj iz gostote gibanja**: spawn sobe, staging prostori in odprti objectivi so med najgostejšimi mesti na mapi, pa niso ozka grla. Ozko grlo mora zahtevati oboje: visoko gostoto prehodov **in** visoko smrtnost na prehod (kill heatmap / gostota poti), sicer bi metrika kaznovala normalno pot iz spawna;
+- **izpostavljenost v tistem trenutku** — koliko nevarnosti je pot vsebovala glede na dejanske pozicije nasprotnikov in zgodovinsko smrtnost te celice.
 
 **Zadnja postavka je odgovor na `path_efficiency`.** Namesto *"kako ravno je šel"* merimo *"koliko nevarnosti je pot vsebovala glede na to, kje so bili takrat nasprotniki"*. Ista pot je lahko odlična ali samomorilska, odvisno od trenutka — ravnost tega ne ve, izpostavljenost pa. Daljša pot skozi varno območje se tako pravilno oceni bolje od kratke skozi ogenj.
+
+**Tri omejitve, ki jih je izpostavil review in brez katerih je izpostavljenost prav tako neveljavna:**
+
+1. **Ni "vidnega polja".** Zvezne smeri pogleda nimamo (§V1), zato izpostavljenosti NE smemo definirati kot "bil je v vidnem polju nasprotnika". Uporabna definicija je brez orientacije: razdalja, prekinjenost pogleda po geometriji mape in zgodovinska smrtnost celice.
+2. **Sodi po informaciji, ki jo je igralec IMEL.** Nasprotnik za zidom, ki ga nihče ni videl in ga ni izdal noben signal (strel, zvok, ubit soigralec, spawn wave), ne sme šteti kot "nevarnost, ki bi se ji moral izogniti" — sicer kaznujemo za vsevednost, ki je igralec ni imel. Nevarnost mora izhajati iz **znanih** nasprotnikov: tistih, ki so bili v tem oknu videni, so streljali, ali so bili implicirani po wave-timingu.
+3. **Nevarnostna podlaga ne sme vsebovati ocenjevane runde.** Če smrtnost celice računamo iz zgodovine, ki vključuje prav to rundo, se izid pricurlja v lastno oceno (data leakage): igralec, ki tam umre, poveča nevarnost celice in je zato retroaktivno kaznovan zaradi lastne smrti. Podlaga mora biti **leave-one-round-out**.
 
 Rezultat: iz "kje je" dobimo **"v kakšni situaciji je"**.
 
@@ -156,10 +164,14 @@ Za vsak **dogodek** (kill, smrt, plant, revive, push) primerjamo kontekst tik pr
 
 | Odločitev | Dobra, če… | Slaba, če… |
 |-----------|-----------|-----------|
-| Push naprej | ekipa sledi (cohesion pade < X), pridobiš prostor/objective | greš sam, umreš, ekipa izgubi prostor (že merimo kot useless-defense) |
-| Zadrževanje / lurk | ustvariš priložnost soigralcem (enabler/gravity) | pasivnost brez učinka |
+| Push naprej | ekipa sledi in **fronta se premakne proti objectivu** (glej opombo o prostoru) | greš sam, umreš, fronta se pomakne nazaj |
+| Zadrževanje / lurk | soigralec v tem oknu dejansko izkoristi priložnost (kill/objective napredek, ki ga je omogočila tvoja prisotnost) — **NE** zgolj visok `gravity` | pasivnost brez učinka |
 | Sacrifice | umreš, a ekipa v naslednjih N sekundah napreduje **in je napredek povezan s tvojo smrtjo** (glej spodaj) | umreš brez posledice |
 | Objective run | pot se je izogibala takratni nevarnosti, prihod pri zdravju, timing usklajen z ekipo | šel skozi znano nevarno cono brez podpore in kritja |
+
+**Opomba o "prostoru" (review):** izgubljenega prostora NE moremo vzeti iz `useless-defense` — ta meri smrt branilca z oddaljenim spawnom, ne premika fronte. Prostor je treba izpeljati posebej, npr. kot premik **težišča stika** (mediana pozicij spopadov obeh ekip) med oknom pred pushem in po njem. Brez te izpeljave je vrstica "ekipa izgubi prostor" neizmerljiva.
+
+**Opomba o lurk (review):** `gravity` ne sme biti dokaz koristnega lurkanja — meri predvsem volumen spopadov in smrti (r=0,897 oz. 0,724, §2a). Igralec z veliko spopadi bi bil samodejno označen za koristnega. Dokaz mora biti **izkoriščena priložnost pri soigralcu**, ne pozornost sama.
 
 Ownerjev "sacrifice, ki nastavi priložnost" postane **merljiv** — a ne naivno.
 
@@ -193,7 +205,8 @@ Dokler ta odločitev ne pade, DQL-3 ostaja **odložen**. DQL-1 od njega ni odvis
 
 **DQL-2 pa je delno odvisen (popravljeno po reviewu):** ocene, ki vsebujejo pojem *"koristnega prostora"* ali *"pravega objectiva"*, na mapah s sekvenčnimi/opcijskimi/vzporednimi cilji brez faze niso zanesljive — push proti drugemu objectivu, ko je aktiven prvi, izgleda enako kot pravi push. Zato se DQL-2 uvede v dveh korakih:
 
-- **Faza A (brez DQL-3):** ocene, ki so fazno nevtralne — trade responsiveness, izolacija/lurk, sacrifice s kavzalnimi dokazi, objective-run kvaliteta (ta ima svoj kontekst že v zapisu).
+- **Faza A (brez DQL-3):** ocene, ki so fazno nevtralne — trade responsiveness, izolacija/lurk, sacrifice s kavzalnimi dokazi.
+  ⚠️ **Objective-run kvaliteta NE spada v fazo A** (popravek po reviewu): tabela beleži izključno uspele akcije (`approach_killed` = 0, `denied` = 0, §V3c), zato bi vsaka "kvaliteta" primerjala uspehe z uspehi. Dokler zajem ne beleži tudi prekinjenih poskusov, ta ocena ni izvedljiva — ne v fazi A ne v fazi B.
 - **Faza B (po DQL-3):** ocene, ki potrebujejo *"kateri cilj je zdaj pomemben"* — vrednost pridobljenega prostora, kvaliteta pusha, obrambne odločitve.
 
 ---
@@ -204,7 +217,7 @@ Dokler ta odločitev ne pade, DQL-3 ostaja **odložen**. DQL-1 od njega ni odvis
 |------|-------|-----------|-------|
 | **0** | **Popraviti dva živa scoring defekta** (§2a): KIS push multiplier na obrnjeni metriki, prox_score awareness/mechanical osi | ne gre za nov feature — trenutno aktivno kvarita rezultate | S–M |
 | **1** | `et_brewdog` (+ manjkajoče) v `objective_zones.json` | 45 rund trenutno šteje kot "brez objectiva" — čista izguba točnih podatkov, majhen napor | S |
-| **1b** | **`carrier_event` izenačiti z `objective_run`** (enemies_nearby, nearby_teammates, run_type) | 69 % objective dela opravijo medici in zanje nimamo konteksta; `path_samples` že obstaja na vseh 2.079 vrsticah | M |
+| **1b** | **`carrier_event` izenačiti z `objective_run`** (enemies_nearby, nearby_teammates, run_type) | 45 % objective dogodkov je nošenja (69 % od tega medici) in zanje nimamo nobenega konteksta; `path_samples` že obstaja na vseh 2.079 vrsticah | M |
 | **2** | DQL-1 kontekst giba (izolacija, približevanje objectivu, lokalna premoč) | temelj za vse ostalo; vhodi že obstajajo | M |
 | **3** | Razširi `OBJECTIVE_RUNS` logiko na vse igralce (ne samo inženirje) | dokazano deluje, samo posplošitev | M |
 | **4** | DQL-2 ocena odločitev + "sacrifice score" | ownerjeva osrednja želja; hrani LURK/OBJECTIVE osi Passporta | L |
