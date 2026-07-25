@@ -117,7 +117,13 @@ def get_registry() -> list[dict]:
             "surface": "/api/storytelling/win-contribution, Smart Stats MVP",
             "summary": "Player Win Contribution: 8 weighted shares (kills .22, "
                        "objectives .20, revives .12, crossfire .10, trade .10, "
-                       "damage .10, survival .08, clutch .08). Derived: WIS "
+                       "damage .10, survival .08, clutch .08). CONDITIONAL: in a "
+                       "round where every player has zero objectives, the .20 "
+                       "objective weight is dropped and redistributed (kills "
+                       "+.06, damage +.03, revives +.03, crossfire +.03, trade "
+                       "+.03, survival +.02; clutch unchanged) — common on "
+                       "fullhold/short rounds, so the fixed weights above are "
+                       "not what those rounds actually use. Derived: WIS "
                        "(win-loss delta x harmonic confidence), WAA, and "
                        "Bayesian-shrunk waa_bayes (prior C=2) for MVP. "
                        "Session-ephemeral — no persistence.",

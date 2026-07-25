@@ -6,15 +6,18 @@
 
 Open follow-ups from the full data-correctness audit (deep report is local:
 `docs/AUDIT_DATA_CORRECTNESS_2026-07-25.md`, gitignored by convention).
-Fixed in the same program: KIS gsid backfill (#546), KIS v4 full recompute
-(#547), proximity serving-layer sweep (#548), revive/weapon-accuracy
-identity + dedup + tz-aware linking (#549).
+
+Addressed by sibling PRs of the same program, **each still open at the time
+of writing** — anything below that references their migrations or behaviour
+only applies once that PR is merged: KIS gsid backfill + migration 064
+(#546), KIS v4 full recompute (#547), proximity serving-layer sweep (#548),
+revive/weapon-accuracy identity + dedup + migration 065 (#549).
 
 | Issue | Severity | Notes |
 |------|----------|-------|
-| **Deployment drift (prod + puran)** | High | Prod VM runs v1.25.0 (`b29977c0`) — everything #495+ is not live. Puran runs a hand-edited `proximity_tracker.lua` based on #378 (flags flipped by hand, no #403 duration clamp) and webhook v1.7.0 (missing the #343 detect_pause Lua 5.4 crash fix). Owner-gated: prod needs migrations 061+063 (+064/065) BEFORE the code deploy. `shot_fired=true` on puran is INTENTIONAL — never blind-copy the repo file. |
+| **Deployment drift (prod + puran)** | High | Prod VM runs v1.25.0 (`b29977c0`) — everything #495+ is not live. Puran runs a hand-edited `proximity_tracker.lua` based on #378 (flags flipped by hand, no #403 duration clamp) and webhook v1.7.0 (missing the #343 detect_pause Lua 5.4 crash fix). **Deploy prerequisites (owner-gated), in order:** (1) migrations `061` + `063`, which exist in this tree today; (2) migration `064` — ships with PR #546, NOT in this tree; (3) migration `065` — ships with PR #549, NOT in this tree. Steps 2–3 are only performable once those PRs are merged; deploying code from a tree containing them without their migrations breaks the KIS gsid path. `shot_fired=true` on puran is INTENTIONAL — never blind-copy the repo file. |
 | **KIS v2 residue** | Medium | 1,812 `kis-v2` rows remain after the #547 full recompute: 88 from gsid 127 (scope resolver rejects it — no accepted rounds) + 1,724 identity-orphans whose round keys match no gsid-stamped round. Unattributable by design; revisit only if a session-level attribution source appears. |
-| **Proximity NULL-round_id orphans** | Medium | Rows imported before migration 065 with a NULL `round_id` carry no round identity (revive/weapon-accuracy) or only a date (other tables) and cannot be relinked or deduped against linked siblings — e.g. one etl_adlernest R2 (gsid 138) has its weapon-accuracy only in identity-less form. Serving keeps them (dropping would shrink long-standing totals). |
+| **Proximity NULL-round_id orphans** | Medium | (Applies once PR #549 lands.) Rows imported before migration 065 with a NULL `round_id` carry no round identity (revive/weapon-accuracy) or only a date (other tables) and cannot be relinked or deduped against linked siblings — e.g. one etl_adlernest R2 (gsid 138) has its weapon-accuracy only in identity-less form. Serving keeps them (dropping would shrink long-standing totals). |
 | **Proximity is date-scoped, not gsid** (S7) | Medium | The /proximity/ routers still scope by `session_date`; a midnight-crossing session shows only its pre-midnight rounds when a date is selected (gsid 138: 2 rounds / 88 kills invisible). Storytelling already migrated (GamingSessionScope); proximity needs the same treatment. |
 | **`/skill/composite` + React `client.ts` single-date** | Medium | Last SS-D holdouts; `/skill/composite` also lacks `is_valid` and bot filters entirely. |
 | **skill_router SDS denied source** | Low | Still reads PCS `denied_playtime` (capped) — PR #541's own noted follow-up. |
