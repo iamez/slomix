@@ -13,6 +13,7 @@ from website.backend.rate_limit import limiter
 from website.backend.routers.proximity_helpers import (
     _load_scoped_guid_name_map,
     _parse_iso_date,
+    _round_quality_gate_sql,
     logger,
 )
 
@@ -51,7 +52,15 @@ async def get_proximity_session_scores(
         # asyncpg needs date object, not string
         sd = datetime.strptime(session_date, "%Y-%m-%d").date() if isinstance(session_date, str) else session_date  # noqa: DTZ007 date-only parsing, no time component used
         results = await svc.compute_session_scores(sd)
-        return {"status": "ok", "session_date": session_date, "players": results}
+        return {
+            "status": "ok", "session_date": session_date, "players": results,
+            # Honest-scope metadata (audit 2026-07-25 S2): the page sends
+            # map_name/round filters that this session-wide composite does
+            # not support — declare what was actually applied instead of
+            # letting FastAPI drop them silently.
+            "scope_applied": {"session_date": str(session_date)},
+            "scope_note": "session-wide composite; map/round filters are not applied",
+        }
     except Exception:
         logger.exception("session-scores failed")
         raise HTTPException(status_code=500, detail="session-scores computation failed")
@@ -81,9 +90,18 @@ async def get_proximity_leaderboards(
 
     # Build scope filter helper for leaderboard queries
     def _lb_scope(table_alias: str = "", has_round_number: bool = False):
-        """Build WHERE clause fragments and params for leaderboard scope."""
+        """Build WHERE clause fragments and params for leaderboard scope.
+
+        A selected session_date filters with `=` (audit 2026-07-25 S3 — the
+        old `>=` showed the chosen session PLUS every session after it);
+        `>=` remains only for the rolling range_days window. Exact-round
+        disambiguation accepts round_start_unix so a map replayed twice in
+        one night stays separable, and every query carries the shared
+        bot/validity round gate (S6).
+        """
         prefix = f"{table_alias}." if table_alias else ""
-        clauses = [f"{prefix}session_date >= ${1}"]
+        op = "=" if parsed_date else ">="
+        clauses = [f"{prefix}session_date {op} $1"]
         params = [since]
         idx = 2
         if map_name:
@@ -94,6 +112,11 @@ async def get_proximity_leaderboards(
             clauses.append(f"{prefix}round_number = ${idx}")
             params.append(round_number)
             idx += 1
+        if has_round_number and round_start_unix is not None and int(round_start_unix) > 0:
+            clauses.append(f"{prefix}round_start_unix = ${idx}")
+            params.append(int(round_start_unix))
+            idx += 1
+        clauses.append(_round_quality_gate_sql(prefix))
         return " AND ".join(clauses), tuple(params), idx
 
     try:
@@ -107,7 +130,7 @@ async def get_proximity_leaderboards(
                        COUNT(*) AS total,
                        SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes
                 FROM combat_engagement
-                WHERE {scope_where}
+                WHERE killer_guid IS DISTINCT FROM target_guid AND {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 5
                 ORDER BY COUNT(*) DESC
@@ -153,8 +176,8 @@ async def get_proximity_leaderboards(
             )
             dodge_map: dict[str, int] = {}
             for r in (dodge_rows or []):
-                if r[0] in guid_set:
-                    dodge_map[r[0]] = int(r[1] or 5000)
+                if r[0] in guid_set and r[1] is not None:
+                    dodge_map[r[0]] = int(r[1])
 
             # 4. Crossfire participation (teamplay axis)
             cf_rows = await db.fetch_all(
@@ -223,8 +246,8 @@ async def get_proximity_leaderboards(
             )
             rf_map: dict[str, int] = {}
             for r in (rf_rows or []):
-                if r[0] in guid_set:
-                    rf_map[r[0]] = int(r[1] or 3000)
+                if r[0] in guid_set and r[1] is not None:
+                    rf_map[r[0]] = int(r[1])
 
             # 8. Kill permanence (teamplay axis) — fraction of kills that stay dead
             perm_rows = await db.fetch_all(
@@ -256,16 +279,23 @@ async def get_proximity_leaderboards(
             )
             support_map: dict[str, float] = {}
             for r in (support_rows or []):
-                if r[0] in guid_set:
-                    support_map[r[0]] = float(r[1] or 3000)
+                if r[0] in guid_set and r[1] is not None:
+                    support_map[r[0]] = float(r[1])
 
             # ── Teamplay: 5-metric percentile normalization ──
-            # Collect raw values across all qualified players
+            # Pools contain only players with REAL data for the metric
+            # (audit 2026-07-25 S5): a fabricated constant (dodge 5000ms,
+            # support 3000ms) used to compete inside the percentile pool
+            # and distort every other player's rank. Count metrics keep 0
+            # — zero crossfires/trades is genuine data, not absence.
+            # Players missing from a pool score the explicit 0.5 neutral
+            # in the composition below and are listed in axes_defaulted.
             tp_cf = {g: float(cf_map.get(g, 0)) for g in eng_map}
             tp_tr = {g: float(trade_map.get(g, 0)) for g in eng_map}
-            tp_st = {g: timing_map.get(g, (0.0, 0))[0] for g in eng_map}
-            tp_pm = {g: perm_map.get(g, 0.0) for g in eng_map}
-            tp_sp = {g: support_map.get(g, 3000.0) for g in eng_map}
+            tp_st = {g: timing_map[g][0] for g in eng_map
+                     if timing_map.get(g, (0.0, 0))[1] > 0}
+            tp_pm = {g: perm_map[g] for g in eng_map if g in perm_map}
+            tp_sp = {g: support_map[g] for g in eng_map if g in support_map}
 
             # Percentile ranks (empty dict if < 3 players)
             pct_cf = _percentile_rank_map(tp_cf)
@@ -277,14 +307,31 @@ async def get_proximity_leaderboards(
             pct_sp = {g: 1.0 - p for g, p in pct_sp_raw.items()}
             use_pct = bool(pct_cf)
 
+            # Neutral fallback for the two non-percentile axes: the pool
+            # MEDIAN of players with real data — not an arbitrary constant
+            # that silently scores no-data players as slow (S5).
+            def _median(vals: list[float], fallback: float) -> float:
+                if not vals:
+                    return fallback
+                s = sorted(vals)
+                m = len(s) // 2
+                return s[m] if len(s) % 2 else (s[m - 1] + s[m]) / 2
+
+            dodge_neutral = _median([float(v) for v in dodge_map.values()], 5000.0)
+            rf_neutral = _median([float(v) for v in rf_map.values()], 3000.0)
+
             # Compute composite scores
             results = []
             for g, info in eng_map.items():
+                defaulted: list[str] = []
                 sp, spd = move_map.get(g, (0.0, 0.0))
                 aggression = min(100, sp * 0.6 + min(spd / 300, 1) * 100 * 0.4)
 
                 esc_rate = info["escapes"] / max(info["total"], 1) * 100
-                d_ms = dodge_map.get(g, 5000)
+                d_ms = dodge_map.get(g)
+                if d_ms is None:
+                    d_ms = dodge_neutral
+                    defaulted.append("awareness.dodge")
                 awareness = min(100, esc_rate * 0.5 + max(0, 100 - d_ms / 50) * 0.5)
 
                 # Teamplay: percentile-weighted across 5 ET-specific dimensions
@@ -307,8 +354,17 @@ async def get_proximity_leaderboards(
                 avg_tm, tm_cnt = timing_map.get(g, (0.0, 0))
                 timing = min(100, avg_tm * 100 * min(tm_cnt / 5, 1))
 
-                rf_ms = rf_map.get(g, 3000)
+                rf_ms = rf_map.get(g)
+                if rf_ms is None:
+                    rf_ms = rf_neutral
+                    defaulted.append("mechanical.return_fire")
                 mechanical = min(100, max(0, 100 - rf_ms / 30))
+
+                for pool, label in ((tp_st, "teamplay.spawn_timing"),
+                                    (tp_pm, "teamplay.permanence"),
+                                    (tp_sp, "teamplay.support")):
+                    if use_pct and g not in pool:
+                        defaulted.append(label)
 
                 composite = round((aggression + awareness + teamplay + timing + mechanical) / 5, 1)
                 results.append({
@@ -318,6 +374,7 @@ async def get_proximity_leaderboards(
                         "teamplay": round(teamplay, 1), "timing": round(timing, 1),
                         "mechanical": round(mechanical, 1),
                     },
+                    "axes_defaulted": defaulted,
                 })
 
             results.sort(key=lambda x: x["value"], reverse=True)
@@ -364,16 +421,20 @@ async def get_proximity_leaderboards(
             )
             rows = await db.fetch_all(
                 f"""
-                SELECT guid, SUM(cnt) AS total, ROUND(AVG(avg_angle)::numeric, 1) AS avg_angle
+                SELECT guid, SUM(cnt) AS total,
+                       -- Weighted by event count (audit 2026-07-25 S4): a
+                       -- player appearing on both teammate sides used to get
+                       -- an UNWEIGHTED average of the two per-side means.
+                       ROUND((SUM(sum_angle) / NULLIF(SUM(cnt), 0))::numeric, 1) AS avg_angle
                 FROM (
                     SELECT c.teammate1_guid AS guid,
-                           COUNT(*) AS cnt, AVG(c.angular_separation) AS avg_angle
+                           COUNT(*) AS cnt, SUM(c.angular_separation) AS sum_angle
                     FROM proximity_crossfire_opportunity c
                     WHERE c.was_executed = true AND {scope_where}
                     GROUP BY c.teammate1_guid
                     UNION ALL
                     SELECT c.teammate2_guid AS guid,
-                           COUNT(*) AS cnt, AVG(c.angular_separation) AS avg_angle
+                           COUNT(*) AS cnt, SUM(c.angular_separation) AS sum_angle
                     FROM proximity_crossfire_opportunity c
                     WHERE c.was_executed = true AND {scope_where}
                     GROUP BY c.teammate2_guid
@@ -463,7 +524,9 @@ async def get_proximity_leaderboards(
                        COUNT(*) AS total_engagements,
                        ROUND(AVG(duration_ms)::numeric, 0) AS avg_duration
                 FROM combat_engagement
-                WHERE {scope_where}
+                -- self-rows (world/self-kill artifacts, ~12% of the table)
+                -- are not real engagements and deflated every rate (S14)
+                WHERE killer_guid IS DISTINCT FROM target_guid AND {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 5
                 ORDER BY escape_pct DESC
@@ -752,6 +815,9 @@ async def get_prox_scores_formula():
 @router.get("/proximity/weapon-accuracy")
 async def get_proximity_weapon_accuracy(
     range_days: int = 30,
+    session_date: str | None = None,
+    round_number: int | None = None,
+    round_start_unix: int | None = None,
     player_guid: str | None = None,
     map_name: str | None = None,
     limit: int = 20,
@@ -760,26 +826,53 @@ async def get_proximity_weapon_accuracy(
     """Weapon accuracy leaderboard or per-player breakdown."""
     safe_limit = max(1, min(limit, 50))
     try:
-        # Shared scope (map_name + range_days) — both the leaderboard AND
-        # the per-weapon breakdown below must respect it. Before this fix
-        # the breakdown query only filtered on player_guid, so a
-        # map_name/range_days-scoped request showed an ALL-TIME/ALL-MAP
-        # per-weapon breakdown next to a correctly-scoped leaderboard in
-        # the SAME response (Codex §17 PX-2).
+        # Shared scope — both the leaderboard AND the per-weapon breakdown
+        # below must respect it. Before this fix the breakdown query only
+        # filtered on player_guid, so a map_name/range_days-scoped request
+        # showed an ALL-TIME/ALL-MAP per-weapon breakdown next to a
+        # correctly-scoped leaderboard in the SAME response (Codex §17 PX-2).
+        #
+        # Audit 2026-07-25 S2: the /proximity/ page always sends
+        # session_date/round_number/round_start_unix, and FastAPI silently
+        # dropped them here — the panel showed a rolling 30-day window
+        # while the page header claimed "Session X / Round Y". The table
+        # has no round columns, so exact-round scope resolves through
+        # round_id -> rounds.
         scope_clauses: list[str] = []
         scope_params: list = []
         if map_name:
             scope_params.append(map_name.strip())
             scope_clauses.append(f"map_name = ${len(scope_params)}")
-        # Audit P8 + migration 043: previously `range_days` was accepted
-        # but never applied to the query — the endpoint returned all-time
-        # rows. Filter on `session_date` (play time) with created_at
-        # fallback for rows whose re-linker hasn't populated round_id yet.
-        scope_params.append(range_days)
-        scope_clauses.append(
-            "(session_date >= CURRENT_DATE - $" + str(len(scope_params)) + " * INTERVAL '1 day' "
-            "OR (session_date IS NULL AND created_at >= CURRENT_DATE - $" + str(len(scope_params)) + " * INTERVAL '1 day'))"
-        )
+        parsed_sd = _parse_iso_date(session_date)
+        if parsed_sd is not None:
+            scope_params.append(parsed_sd)
+            scope_clauses.append(f"session_date = ${len(scope_params)}")
+        else:
+            # Audit P8 + migration 043: previously `range_days` was accepted
+            # but never applied to the query — the endpoint returned all-time
+            # rows. Filter on `session_date` (play time) with created_at
+            # fallback for rows whose re-linker hasn't populated round_id yet.
+            scope_params.append(range_days)
+            scope_clauses.append(
+                "(session_date >= CURRENT_DATE - $" + str(len(scope_params)) + " * INTERVAL '1 day' "
+                "OR (session_date IS NULL AND created_at >= CURRENT_DATE - $" + str(len(scope_params)) + " * INTERVAL '1 day'))"
+            )
+        if round_number is not None and round_number < 0:
+            raise HTTPException(status_code=400, detail="round_number must be >= 0")
+        if round_start_unix is not None and round_start_unix < 0:
+            raise HTTPException(status_code=400, detail="round_start_unix must be >= 0")
+        round_sub: list[str] = []
+        if round_number is not None:
+            scope_params.append(int(round_number))
+            round_sub.append(f"r.round_number = ${len(scope_params)}")
+        if round_start_unix is not None and int(round_start_unix) > 0:
+            scope_params.append(int(round_start_unix))
+            round_sub.append(f"r.round_start_unix = ${len(scope_params)}")
+        if round_sub:
+            scope_clauses.append(
+                "round_id IN (SELECT r.id FROM rounds r WHERE " + " AND ".join(round_sub) + ")"
+            )
+        scope_clauses.append(_round_quality_gate_sql(""))
 
         leader_clauses = list(scope_clauses)
         leader_params = list(scope_params)

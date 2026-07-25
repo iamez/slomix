@@ -170,17 +170,25 @@ async def get_proximity_aim_lock(
     track targets, plus how tight (avg_err_deg, lower = better) and at what
     range (avg_dist). Closes the loop between shot data and real targets.
     """
+    # player filter on `guid` (the LOCKER) only — the old OR across
+    # ["guid","target_guid"] combined with GROUP BY guid meant filtering
+    # the panel to player X returned rows keyed by the players who locked
+    # onto X, not X (audit 2026-07-25 S12).
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
-        player_guid=player_guid, player_guid_columns=["guid", "target_guid"],
+        player_guid=player_guid, player_guid_columns=["guid"],
     )
     query_params = tuple(params)
     leaders = await db.fetch_all(
         f"""
         SELECT guid, MAX(player_name) AS name,
                COUNT(*) AS locks,
-               ROUND(AVG(duration_ms)::numeric, 0) AS avg_lock_ms,
-               SUM(duration_ms) AS total_lock_ms,
+               -- LEAST() clamps to the physical maximum (samples x 400ms
+               -- interval + 400): 56 historical rows were written before
+               -- the Lua last_seen/duration clamp and inflated total_lock
+               -- rankings by up to 36x (audit 2026-07-25 S12).
+               ROUND(AVG(LEAST(duration_ms, samples * 400 + 400))::numeric, 0) AS avg_lock_ms,
+               SUM(LEAST(duration_ms, samples * 400 + 400)) AS total_lock_ms,
                ROUND(AVG(avg_err_deg)::numeric, 2) AS avg_err_deg,
                ROUND(AVG(avg_dist)::numeric, 0) AS avg_dist,
                COUNT(DISTINCT target_guid) AS targets
@@ -243,13 +251,23 @@ async def get_proximity_cohesion(
         """,
         query_params,
     )
-    # Sampled timeline (limit to avoid huge payloads)
+    # Sampled timeline. Two fixes vs the old `ORDER BY sample_time LIMIT
+    # 2000` (audit 2026-07-25 S13): sample_time is ms-since-ROUND-start, so
+    # at session scope every round was superimposed on one axis and the
+    # LIMIT kept only the opening minutes of the mixed pile. Rounds are now
+    # laid out sequentially on an absolute axis (round_start_unix anchors
+    # each round), and the payload cap downsamples EVENLY across the whole
+    # scope instead of truncating at the earliest 2000 samples.
     timeline = await db.fetch_all(
         f"""
-        SELECT sample_time, team, dispersion
-        FROM proximity_team_cohesion {where_sql}
-        ORDER BY sample_time
-        LIMIT 2000
+        SELECT sample_time, team, dispersion, round_start_unix FROM (
+            SELECT sample_time, team, dispersion, round_start_unix,
+                   ROW_NUMBER() OVER (ORDER BY round_start_unix, sample_time) AS rn,
+                   COUNT(*) OVER () AS total
+            FROM proximity_team_cohesion {where_sql}
+        ) t
+        WHERE (t.rn - 1) % GREATEST(1, CEIL(t.total / 2000.0)::int) = 0
+        ORDER BY round_start_unix, sample_time
         """,
         query_params,
     )
@@ -280,7 +298,13 @@ async def get_proximity_cohesion(
             for r in (team_summary or [])
         ],
         "timeline": [
-            {"time": int(r[0] or 0), "team": r[1], "dispersion": float(r[2] or 0)}
+            # Absolute ms axis (round anchor + in-round offset) — the
+            # canvas normalizes to min/max, so single-round scopes render
+            # exactly as before while multi-round scopes become sequential
+            # instead of superimposed.
+            {"time": int(r[3] or 0) * 1000 + int(r[0] or 0),
+             "team": r[1], "dispersion": float(r[2] or 0),
+             "round_start_unix": int(r[3] or 0)}
             for r in (timeline or [])
         ],
         "buddy_pairs": [

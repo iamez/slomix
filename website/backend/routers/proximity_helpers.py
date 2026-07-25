@@ -107,6 +107,14 @@ class ProximityQueryBuilder:
                 self.where_parts.append(f"round_start_unix = ${len(self.params)}")
         return self
 
+    def with_round_quality_gate(self, alias: str = "") -> "ProximityQueryBuilder":
+        """Exclude bot-round / rejected-round rows (see _round_quality_gate_sql).
+
+        Only valid for tables that carry a round_id column."""
+        prefix = f"{alias}." if alias else ""
+        self.where_parts.append(_round_quality_gate_sql(prefix))
+        return self
+
     def with_raw(self, clause: str, *values: Any) -> "ProximityQueryBuilder":
         """Append a raw WHERE clause whose ``$1,$2,...`` placeholders are
         renumbered to continue from the builder's current param count.
@@ -159,6 +167,28 @@ def _parse_iso_date(value: str | None) -> Any | None:
         )
 
 
+def _round_quality_gate_sql(prefix: str) -> str:
+    """Exclude rows from bot rounds and rejected rounds (audit 2026-07-25 S6).
+
+    Every proximity KPI, leaderboard and heatmap previously mixed bot-test
+    rounds and invalid rounds into the same aggregates the rest of the
+    platform (ET Rating v3, SSR, season awards) explicitly gates out.
+    Rows whose round_id is NULL (unlinked orphans, ~7% on some tables) are
+    KEPT — they cannot be attributed either way, and dropping them would
+    silently shrink long-standing totals; the orphan problem is tracked
+    separately (round-linkage workstream).
+
+    Owner decision (2026-07-25): hard gate everywhere, no include_bots flag.
+    """
+    return (
+        f"({prefix}round_id IS NULL OR EXISTS ("
+        "SELECT 1 FROM rounds rq "
+        f"WHERE rq.id = {prefix}round_id "
+        "AND rq.is_bot_round IS DISTINCT FROM TRUE "
+        "AND rq.is_valid IS DISTINCT FROM FALSE))"
+    )
+
+
 def _build_proximity_where_clause(
     range_days: int,
     session_date: str | None,
@@ -168,6 +198,7 @@ def _build_proximity_where_clause(
     alias: str | None = None,
     player_guid: str | None = None,
     player_guid_columns: list[str] | None = None,
+    round_quality_gate: bool = True,
 ) -> tuple[str, list[Any], dict[str, Any]]:
     prefix = f"{alias}." if alias else ""
     params: list[Any] = []
@@ -215,6 +246,13 @@ def _build_proximity_where_clause(
         else:
             # Default: target_guid (engagement tables)
             clauses.append(f"{prefix}target_guid = ${pidx}")
+
+    if round_quality_gate:
+        # No params — pure EXISTS subquery against rounds. Callers querying
+        # tables WITHOUT a round_id column (map_kill_heatmap,
+        # map_movement_heatmap, proximity_hit_region_summary) must pass
+        # round_quality_gate=False.
+        clauses.append(_round_quality_gate_sql(prefix))
 
     scope = {
         "session_date": parsed_session_date.isoformat() if parsed_session_date else None,

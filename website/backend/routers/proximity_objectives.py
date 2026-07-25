@@ -32,6 +32,7 @@ async def get_proximity_carrier_events(
     qb = (
         ProximityQueryBuilder()
         .with_session_scope(session_date, range_days)
+        .with_round_quality_gate()
         .with_map_name(map_name)
     )
     if round_number is not None:
@@ -154,6 +155,7 @@ async def get_proximity_carrier_kills(
     qb = (
         ProximityQueryBuilder()
         .with_session_scope(session_date, range_days)
+        .with_round_quality_gate()
         .with_map_name(map_name)
     )
     if round_number is not None:
@@ -683,4 +685,11 @@ async def get_proximity_objective_pressure(
     parsed = _parse_iso_date(session_date)
     if parsed is None:
         raise HTTPException(status_code=400, detail="session_date must be YYYY-MM-DD")
-    return await compute_objective_pressure(db, parsed, limit=limit)
+    payload = await compute_objective_pressure(db, parsed, limit=limit)
+    if isinstance(payload, dict):
+        # Honest-scope metadata (audit 2026-07-25 S2): the page also sends
+        # map/round filters this session-wide metric does not support.
+        payload.setdefault("scope_applied", {"session_date": str(parsed)})
+        payload.setdefault("scope_note",
+                           "session-wide metric; map/round filters are not applied")
+    return payload

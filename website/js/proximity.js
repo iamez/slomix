@@ -2311,10 +2311,13 @@ function renderInvisibleValue(payload, sessionDate) {
     if (statusEl) {
         statusEl.textContent = `Session ${formatDateLabel(sessionDate)} — session-wide metrics; map/round selection does not narrow these.`;
     }
-    // gravity_score is attention-ms per minute alive (max 60000) — display as
-    // % of alive time under enemy attention (E2E verification finding F3).
+    // gravity_score is ATTACKER-WEIGHTED attention-ms per minute alive
+    // (SUM(num_attackers x duration) / minutes) — it is NOT a percentage:
+    // a player focused by 3 enemies at once can exceed 60000/min, so the
+    // old "/600 → %" render could show >100% (audit 2026-07-25 S11).
+    // Display as seconds of enemy attention drawn per minute alive.
     renderLeaderList('proximity-invisible-gravity', (payload.gravity?.players || []).slice(0, 8),
-        (row) => `${((Number(row.gravity_score) || 0) / 600).toFixed(1)}% attention`,
+        (row) => `${((Number(row.gravity_score) || 0) / 1000).toFixed(1)}s/min enemy attention`,
         'No engagement data yet');
     renderLeaderList('proximity-invisible-space', (payload.space?.players || []).slice(0, 8),
         (row) => `${Math.round((Number(row.space_score) || 0) * 100)}% productive (${row.productive_deaths ?? 0}/${row.total_deaths ?? 0})`,
