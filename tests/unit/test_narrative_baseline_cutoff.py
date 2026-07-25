@@ -55,6 +55,12 @@ def _scope(gsid: int, dates: tuple[str, ...] = ("2026-03-25",)) -> GamingSession
 
 @pytest.fixture
 def captured_cutoffs(monkeypatch):
+    """Record the cutoff handed to trailing_averages.
+
+    The metric computations are stubbed to yield ONE player, because with
+    an empty fake DB `all_guids` is empty and trailing_averages is never
+    called at all — which would make every cutoff assertion vacuously true.
+    """
     seen: list[int | None] = []
 
     async def _spy(db, guid, *, before_session_id=None, n=10):
@@ -62,6 +68,19 @@ def captured_cutoffs(monkeypatch):
         return {}
 
     monkeypatch.setattr(baseline_mod, "trailing_averages", _spy)
+
+    one_player = {"players": [{
+        "guid_short": "AAAA1111", "name": "alpha",
+        "gravity_score": 1.0, "space_score": 1.0,
+        "enabler_score": 1.0, "solo_pct": 1.0,
+    }]}
+
+    async def _metric(self, scope):
+        return dict(one_player)
+
+    for meth in ("compute_gravity", "compute_space_created",
+                 "compute_enabler", "compute_lurker_profile"):
+        monkeypatch.setattr(StorytellingService, meth, _metric, raising=True)
     return seen
 
 
@@ -73,6 +92,8 @@ async def test_cutoff_is_the_narrated_session(captured_cutoffs, gsid):
     await StorytellingService(db=db).generate_player_narratives(
         _scope(gsid), ensure_kis=False,
     )
+    # non-vacuous: the stubbed metrics guarantee at least one player
+    assert captured_cutoffs, "trailing_averages was never called"
     assert all(c == gsid for c in captured_cutoffs), captured_cutoffs
 
 

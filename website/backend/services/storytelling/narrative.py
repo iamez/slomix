@@ -448,6 +448,16 @@ class _NarrativeMixin:
         # later one also threw away the earlier one's contribution to the
         # baseline — and the caller's resolved scope was sitting right here
         # unused (Codex DATA-01).
+        #
+        # ASSUMPTION, inherited rather than introduced: trailing_averages
+        # treats this as a TEMPORAL bound (gaming_session_id <
+        # before_session_id), so it relies on ids increasing with time.
+        # That holds for every session in the current database — 0
+        # violations when comparing each session's MIN round_date against
+        # the previous id's — but could break for sessions backfilled out
+        # of chronological order. Making the bound genuinely temporal means
+        # changing trailing_averages to filter on dates, which affects
+        # every caller and is out of scope for this fix.
         before_gsid = scope.gaming_session_id
         baseline_results = await asyncio.gather(
             *(trailing_averages(self.db, g[:8], before_session_id=before_gsid)
