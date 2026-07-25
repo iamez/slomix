@@ -66,12 +66,14 @@ UTRO lestvica (`?metric=utro&size=6`, 177 igralcev) vrne na 1. mestu igralca z *
 
 Vsaka os je 0–100, izračunana kot **evidence-weighted percentil znotraj našega bazena**, ne absolutna vrednost.
 
+⚠️ **Predpogoj, ki je pomembnejši od uteži:** sistematski test proximity metrik (`PROXIMITY_VISION_AUDIT_2026-07.md` §2a) je pokazal, da je od devetih preverjenih **nesporno zdrava ena** (`spawn_timing_score`); štiri kažejo v obratno smer od zatrjevane, dve nimata signala, dve sta zamešani z volumnom. Passport ne sme brati nobene metrike, ki ni prestala tega testa — sicer bi večdimenzionalni profil zgolj lepše zapakiral iste napake. Vsaka os spodaj mora pred uporabo prestati isti test: **ali korelira s tem, kar trdi, in ali loči skupine.**
+
 | Os | Kaj meri | Viri, ki jih ŽE imamo |
 |----|----------|----------------------|
 | **FRAG** | Čista ubojna moč in kvaliteta ubojev | KIS (kontekstualni impact), K/D, accuracy, headshot % |
 | **TEAMPLAY** | Koliko igra z ekipo | crossfire participacija, trade responsiveness, revives, PWC crossfire+trade share, cohesion (koliko časa blizu ekipe) |
 | **OBJECTIVE** | Delo za zmago, ki ga K/D spregleda | objective pressure sekunde, carrier events/returns, construction, KIS `is_objective_area` delež, useless-defense (negativno) — ⚠️ **rabi kurirane cone**, glej §4.1a |
-| **LURK / SPACE** | Ownerjeva os: samostojno ustvarjanje prostora in priložnosti | lurker `solo_pct`, space_created (produktivne smrti), enabler (asisti), gravity (koliko pozornosti nase potegne) |
+| **LURK / SPACE** | Ownerjeva os: samostojno ustvarjanje prostora in priložnosti | lurker `solo_pct`, space_created (produktivne smrti), enabler (asisti) — ⚠️ **`gravity` NE v surovi obliki**: korelira 0,897 s številom spopadov in 0,724 s smrtmi, torej meri večinoma volumen bojev in umiranje, ne odvrnjene pozornosti (glej revizijo metrik v PROXIMITY_VISION_AUDIT §2a) |
 | **CLUTCH** | Vrednost pod pritiskom | solo-clutch KIS multiplierji, low-HP kills, outnumbered situacije, best-lives |
 
 Igralec ni "78" — igralec je npr. **FRAG 61 · TEAMPLAY 84 · OBJECTIVE 72 · LURK 91 · CLUTCH 55**, kar se prevede v čitljivo značko: *"Lurker/Enabler"*. Ownerjev lastni opis (*"lurker/teamplayer, ki nastavlja priložnosti s sacrificem"*) mora iz teh številk pasti ven sam od sebe — to je sprejemni test.
