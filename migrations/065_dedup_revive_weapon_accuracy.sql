@@ -13,6 +13,20 @@
 -- round_id cannot serve as the identity — round_start_unix, which comes from
 -- the file itself, can).
 --
+-- KNOWN LIMITATION (Codex #549, accepted and measured after backfill):
+-- a historically WRONG round_id participates in identity, because the
+-- backfill can only copy identity from whatever round the row was linked
+-- to. Two rows describing the SAME physical event therefore survive if a
+-- re-import linked them to different rounds. This is strictly better than
+-- the pre-migration state — where neither row had any identity at all and
+-- nothing could be deduped — but it means dedup is not total until the
+-- round-relink workstream corrects the underlying links. Measure the
+-- residue after any relink run:
+--   SELECT COUNT(*) FROM (
+--     SELECT map_name, medic_guid, revived_guid, revive_time
+--     FROM proximity_revive WHERE round_start_unix IS NOT NULL
+--     GROUP BY 1,2,3,4 HAVING COUNT(DISTINCT round_start_unix) > 1) d;
+--
 -- IDEMPOTENT: ADD COLUMN IF NOT EXISTS, backfill only NULL rows, dedup
 -- deletes nothing on a clean table, CREATE UNIQUE INDEX IF NOT EXISTS.
 -- (Partial unique indexes keep legacy NULL-identity orphans out of the
