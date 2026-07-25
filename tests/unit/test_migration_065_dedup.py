@@ -125,6 +125,29 @@ def test_parser_conflict_target_matches_the_unique_index(table, conflict_cols):
         f"{table}: parser conflict target does not match the index ({target})"
 
 
+def test_orphan_dedup_also_compares_round_number():
+    """A row can lack a start timestamp yet carry a valid round number, so
+    two rows from DIFFERENT rounds must not collapse into one."""
+    sql = _sql()
+    assert sql.count("keep.round_number IS NOT DISTINCT FROM") == 4
+
+
+def test_parser_refreshes_the_link_on_identity_conflict():
+    """A file replayed after its correct `rounds` row finally exists carries
+    a freshly resolved round_id. DO NOTHING discarded it and left the row
+    stale or unlinked forever — the exact condition the relinker exists to
+    fix. Only the LINK is refreshed; measurement columns are untouched."""
+    parser = Path("proximity/parser/parser.py").read_text(encoding="utf-8")
+    joined = re.sub(r'"\s*\n\s*"', "", parser)
+    for table in ("proximity_revive", "proximity_weapon_accuracy"):
+        assert f"DO UPDATE SET round_id = COALESCE(EXCLUDED.round_id, {table}.round_id)" in joined
+        assert f"WHERE {table}.round_id IS DISTINCT FROM EXCLUDED.round_id" in joined
+    assert "EXCLUDED.round_id IS NOT NULL" in joined
+    # measurements must NOT be in any DO UPDATE SET clause
+    for col in ("shots_fired", "hits", "revive_x", "distance_to_enemy"):
+        assert f"DO UPDATE SET {col}" not in joined
+
+
 def test_parser_only_names_a_conflict_target_when_identity_is_complete():
     """With a missing round number or start time the row has no identity, so
     the parser must fall back to the bare DO NOTHING rather than naming an

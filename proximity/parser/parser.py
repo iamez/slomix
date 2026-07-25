@@ -3455,10 +3455,22 @@ class ProximityParserV4:
                 columns += ["session_date", "round_number", "round_start_unix"]
                 values += [session_date, self.metadata.get('round_num'), rsu_val]
                 if rsu_val is not None and self.metadata.get('round_num') is not None:
+                    # DO UPDATE, not DO NOTHING, for the LINK fields only.
+                    # A file replayed after its correct `rounds` row finally
+                    # exists carries a freshly resolved round_id; DO NOTHING
+                    # threw that away and left the row stale or unlinked
+                    # forever, which is exactly what the relinker exists to
+                    # avoid. Measurement columns are deliberately NOT
+                    # refreshed — the identity key already fixes the event,
+                    # so a differing value would mean a re-parse we should
+                    # not silently prefer.
                     conflict = (
                         "ON CONFLICT (round_start_unix, round_number, map_name, medic_guid, "
                         "revived_guid, revive_time) "
-                        "WHERE round_start_unix IS NOT NULL AND round_number IS NOT NULL DO NOTHING"
+                        "WHERE round_start_unix IS NOT NULL AND round_number IS NOT NULL "
+                        "DO UPDATE SET round_id = COALESCE(EXCLUDED.round_id, proximity_revive.round_id) "
+                        "WHERE proximity_revive.round_id IS DISTINCT FROM EXCLUDED.round_id "
+                        "  AND EXCLUDED.round_id IS NOT NULL"
                     )
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""
@@ -3493,9 +3505,13 @@ class ProximityParserV4:
                 columns += ["session_date", "round_number", "round_start_unix"]
                 values += [session_date, self.metadata.get('round_num'), rsu_val]
                 if rsu_val is not None and self.metadata.get('round_num') is not None:
+                    # Link-only refresh — see the revive insert above.
                     conflict = (
                         "ON CONFLICT (round_start_unix, round_number, map_name, player_guid, weapon_id) "
-                        "WHERE round_start_unix IS NOT NULL AND round_number IS NOT NULL DO NOTHING"
+                        "WHERE round_start_unix IS NOT NULL AND round_number IS NOT NULL "
+                        "DO UPDATE SET round_id = COALESCE(EXCLUDED.round_id, proximity_weapon_accuracy.round_id) "
+                        "WHERE proximity_weapon_accuracy.round_id IS DISTINCT FROM EXCLUDED.round_id "
+                        "  AND EXCLUDED.round_id IS NOT NULL"
                     )
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""

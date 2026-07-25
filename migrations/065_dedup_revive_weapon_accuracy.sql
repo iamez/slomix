@@ -90,6 +90,10 @@ DELETE FROM proximity_revive pr
 USING proximity_revive keep
 WHERE pr.id > keep.id
   AND pr.round_start_unix IS NULL AND keep.round_start_unix IS NULL
+  -- round_number too: a row can lack a start timestamp yet carry a valid
+  -- round number, and two rows from DIFFERENT rounds would otherwise be
+  -- collapsed into one.
+  AND keep.round_number IS NOT DISTINCT FROM pr.round_number
   AND keep.map_name = pr.map_name
   AND keep.medic_guid = pr.medic_guid
   AND keep.revived_guid = pr.revived_guid
@@ -122,6 +126,7 @@ DELETE FROM proximity_weapon_accuracy pw
 USING proximity_weapon_accuracy keep
 WHERE pw.id > keep.id
   AND pw.round_start_unix IS NULL AND keep.round_start_unix IS NULL
+  AND keep.round_number IS NOT DISTINCT FROM pw.round_number
   AND keep.map_name = pw.map_name
   AND keep.player_guid = pw.player_guid
   AND keep.weapon_id = pw.weapon_id
