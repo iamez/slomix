@@ -105,7 +105,7 @@ def get_registry() -> list[dict]:
             "status": "live",
             "module": "website/backend/services/storytelling/kis.py",
             "surface": "/api/storytelling/*, Smart Stats, Story, momentum",
-            "summary": "Kill Impact Score: base x 12 context multipliers "
+            "summary": "Kill Impact Score: base x 11 context multipliers "
                        "(carrier/push/crossfire/spawn/outcome/class/distance/"
                        "health/alive/reinf/objective_area), soft cap 5.0.",
         },

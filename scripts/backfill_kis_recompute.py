@@ -30,6 +30,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import asyncpg  # noqa: E402
+from fastapi import HTTPException  # noqa: E402
 
 from website.backend.services.storytelling.kis import FORMULA_VERSION  # noqa: E402
 from website.backend.services.storytelling.service import StorytellingService  # noqa: E402
@@ -138,13 +139,24 @@ async def main() -> int:
                     done += 1
                     print(f"  gsid {gsid}: {scored} kills scored")
                 else:
-                    # compute_session_kis_for_gsid deletes-then-inserts inside
-                    # one transaction; a 0-kill result means the scope had no
-                    # source rows — the transaction still committed an empty
-                    # replace, which the pre-flight above should have made
-                    # impossible. Report loudly either way.
+                    # A 0-kill result ("no_data") returns BEFORE the
+                    # delete/insert step, so existing rows for the scope are
+                    # left untouched at their old version — report so the
+                    # summary shows the session was not migrated.
                     skipped += 1
                     print(f"  gsid {gsid}: SKIP/EMPTY ({result})")
+            except HTTPException as e:
+                # session_scope's resolver 404s a gaming_session_id with no
+                # accepted rounds (all invalid/cancelled). That is the
+                # resolver working as designed — such sessions shouldn't be
+                # scored — not a recompute failure, so it must not flip the
+                # exit code (dev: gsid 127). Anything but 404 is still real.
+                if e.status_code == 404:
+                    skipped += 1
+                    print(f"  gsid {gsid}: SKIP (scope resolver: {e.detail})")
+                else:
+                    failed += 1
+                    print(f"  gsid {gsid}: FAILED — HTTP {e.status_code}: {e.detail}")
             except Exception as e:  # noqa: BLE001 - per-session isolation, summary below
                 failed += 1
                 print(f"  gsid {gsid}: FAILED — {e}")
