@@ -264,8 +264,13 @@ async def _collect_signal(
             {where_sql}
         """  # nosec B608 - table/key are hardcoded constants in _SIGNAL_SOURCES.
     else:
+        # No round_id column on this source (storytelling_kill_impact) —
+        # the shared bot/validity gate joins through round_id, so it must be
+        # disabled here or Postgres rejects the whole signal query and every
+        # quality request degrades to `error` (review on #548).
         where_sql, params, _scope = _build_proximity_where_clause(
             range_days, session_date, map_name, round_number, round_start_unix,
+            round_quality_gate=False,
         )
         query = f"""
             /* proximity_quality_signal:{key} */

@@ -138,8 +138,11 @@ async def get_proximity_dashboard(
             range_days=range_days, session_date=parsed_date, map_name=map_name, db=db),
         "revives": lambda: get_proximity_revives(
             range_days=range_days, session_date=parsed_date, map_name=map_name, db=db),
-        "weapon_accuracy": lambda: get_proximity_weapon_accuracy(
-            range_days=range_days, map_name=map_name, db=db),
+        # Forwards the full scope now that the endpoint accepts it (review
+        # on #548): otherwise this section alone kept returning a rolling
+        # multi-session window inside a composite response the caller
+        # scoped to one session/round.
+        "weapon_accuracy": lambda: get_proximity_weapon_accuracy(**full, db=db),
         "prox_scores": lambda: get_prox_scores(request=request, range_days=range_days, db=db),
         "prox_formula": get_prox_scores_formula,
     }

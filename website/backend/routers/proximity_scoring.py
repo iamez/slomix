@@ -825,6 +825,14 @@ async def get_proximity_weapon_accuracy(
 ):
     """Weapon accuracy leaderboard or per-player breakdown."""
     safe_limit = max(1, min(limit, 50))
+    # Input validation BEFORE the try: the broad `except Exception` below
+    # would otherwise convert these client errors into a 500 plus a noisy
+    # error log (review on #548).
+    parsed_sd = _parse_iso_date(session_date)
+    if round_number is not None and round_number < 0:
+        raise HTTPException(status_code=400, detail="round_number must be >= 0")
+    if round_start_unix is not None and round_start_unix < 0:
+        raise HTTPException(status_code=400, detail="round_start_unix must be >= 0")
     try:
         # Shared scope — both the leaderboard AND the per-weapon breakdown
         # below must respect it. Before this fix the breakdown query only
@@ -843,7 +851,6 @@ async def get_proximity_weapon_accuracy(
         if map_name:
             scope_params.append(map_name.strip())
             scope_clauses.append(f"map_name = ${len(scope_params)}")
-        parsed_sd = _parse_iso_date(session_date)
         if parsed_sd is not None:
             scope_params.append(parsed_sd)
             scope_clauses.append(f"session_date = ${len(scope_params)}")
@@ -857,10 +864,6 @@ async def get_proximity_weapon_accuracy(
                 "(session_date >= CURRENT_DATE - $" + str(len(scope_params)) + " * INTERVAL '1 day' "
                 "OR (session_date IS NULL AND created_at >= CURRENT_DATE - $" + str(len(scope_params)) + " * INTERVAL '1 day'))"
             )
-        if round_number is not None and round_number < 0:
-            raise HTTPException(status_code=400, detail="round_number must be >= 0")
-        if round_start_unix is not None and round_start_unix < 0:
-            raise HTTPException(status_code=400, detail="round_start_unix must be >= 0")
         round_sub: list[str] = []
         if round_number is not None:
             scope_params.append(int(round_number))

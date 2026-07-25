@@ -205,3 +205,94 @@ async def test_weapon_accuracy_without_date_keeps_range_window():
     resp = await _get(db, "/api/proximity/weapon-accuracy", {"range_days": 30})
     assert resp.status_code == 200
     assert "CURRENT_DATE" in db.queries[0][0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad", [
+    {"session_date": "not-a-date"},
+    {"round_number": -1},
+    {"round_start_unix": -5},
+])
+async def test_weapon_accuracy_invalid_scope_is_400_not_500(bad):
+    """Validation runs BEFORE the broad `except Exception`, which would
+    otherwise turn a client input error into a 500 + error log (review
+    on #548)."""
+    db = _CaptureDB()
+    resp = await _get(db, "/api/proximity/weapon-accuracy", bad)
+    assert resp.status_code == 400, resp.text[:200]
+
+
+# ---------------------------------------------------------------------------
+# Round-quality gate must be OFF for tables without a round_id column
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_quality_signal_without_round_id_omits_the_gate():
+    """storytelling_kill_impact has no round_id column, so the shared gate
+    (which joins through it) must be omitted for that source — otherwise
+    Postgres rejects the signal query and EVERY /proximity/quality request
+    degrades to `error` (review on #548, P1).
+
+    Verified by running the real signal collector against a capturing DB
+    and inspecting the SQL it emits, not by reading the source."""
+    from website.backend.routers import proximity_quality
+
+    sources = {s["key"]: s for s in proximity_quality._SIGNAL_SOURCES}  # noqa: SLF001
+    no_round_id = sources["storytelling_kill_impact"]
+    with_round_id = sources["proximity_kill_outcome"]
+    assert no_round_id["has_round_id"] is False
+    assert with_round_id["has_round_id"] is True
+
+    for source, gate_expected in ((no_round_id, False), (with_round_id, True)):
+        db = _CaptureDB()
+        await proximity_quality._collect_signal(  # noqa: SLF001
+            db, source, range_days=30, session_date="2026-07-18",
+            map_name=None, round_number=None, round_start_unix=None,
+        )
+        sql = db.joined()
+        assert sql, f"{source['key']} issued no query"
+        assert (GATE_FRAGMENT in sql) is gate_expected, (
+            f"{source['key']}: gate present={GATE_FRAGMENT in sql}, "
+            f"expected={gate_expected}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# S13 — cohesion timeline: keep both teams, concatenate rounds
+# ---------------------------------------------------------------------------
+
+def test_cohesion_timeline_concatenates_rounds_without_wallclock_gaps():
+    """Rounds hours apart must render back-to-back: anchoring on epoch time
+    let the real downtime eat the canvas width (review on #548)."""
+    from website.backend.routers.proximity_teamplay import (
+        _ROUND_GAP_MS,
+        _concatenated_timeline,
+    )
+
+    # (sample_time, team, dispersion, round_start_unix) — two rounds 3h apart
+    rows = [
+        (0, "AXIS", 100.0, 1_000_000), (0, "ALLIES", 110.0, 1_000_000),
+        (60_000, "AXIS", 120.0, 1_000_000), (60_000, "ALLIES", 130.0, 1_000_000),
+        (0, "AXIS", 140.0, 1_010_800), (0, "ALLIES", 150.0, 1_010_800),
+        (30_000, "AXIS", 160.0, 1_010_800), (30_000, "ALLIES", 170.0, 1_010_800),
+    ]
+    out = _concatenated_timeline(rows)
+
+    assert len(out) == 8
+    # both teams survive
+    assert {p["team"] for p in out} == {"AXIS", "ALLIES"}
+    # first round starts at 0, second begins right after it (+ the gap),
+    # NOT 3 hours later
+    assert out[0]["time"] == 0
+    second_round = [p for p in out if p["round_start_unix"] == 1_010_800]
+    assert min(p["time"] for p in second_round) == 60_000 + _ROUND_GAP_MS
+    # total width is play time + one gap, not wall-clock span
+    assert max(p["time"] for p in out) == 60_000 + _ROUND_GAP_MS + 30_000
+    # in-round offset preserved for annotation
+    assert second_round[0]["round_time"] == 0
+
+
+def test_cohesion_timeline_empty_is_safe():
+    from website.backend.routers.proximity_teamplay import _concatenated_timeline
+    assert _concatenated_timeline([]) == []
+    assert _concatenated_timeline(None) == []
