@@ -33,14 +33,22 @@ def _svc():
 
 
 class _FakeAdapter:
-    def __init__(self, raise_exc=None):
+    def __init__(self, raise_exc=None, gsid_rows=None):
         self._raise = raise_exc
+        self._gsid_rows = gsid_rows if gsid_rows is not None else []
         self.calls = []
+        self.fetches = []
 
     async def execute(self, query, params=()):
         self.calls.append((query, params))
         if self._raise:
             raise self._raise
+
+    async def fetch_all(self, query, params=()):
+        self.fetches.append((query, params))
+        if self._raise:
+            raise self._raise
+        return self._gsid_rows
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +71,53 @@ async def test_delete_deletes_by_session_date_as_a_date_object():
     # bare string here is the exact bug class PR #455 hit on
     # player_skill_history (codex, s_effort_service.py precedent).
     assert params == (dt.date(2026, 7, 7),)
+
+
+@pytest.mark.asyncio
+async def test_delete_with_round_ids_scopes_to_this_sessions_gsids():
+    """A bare `session_date = ?` delete wiped EVERY gaming session sharing
+    that calendar date (multi-gsid dates exist — 2026-03-25 held four),
+    including a neighbour session's correctly-computed rows that nothing
+    would recompute. With round_ids the delete must target this session's
+    gaming_session_id(s), plus only the date's unattributable NULL-gsid
+    leftovers — never the neighbour's stamped rows."""
+    svc = _svc()
+    adapter = _FakeAdapter(gsid_rows=[(137,)])
+    svc.db_adapter = adapter
+
+    await svc._delete_kis_rows("2026-07-18", round_ids=[9001, 9002])  # noqa: SLF001
+
+    # gsid resolution went through rounds by id
+    assert len(adapter.fetches) == 1
+    fq, fp = adapter.fetches[0]
+    assert "FROM rounds" in fq and "WHERE id IN" in fq
+    assert fp == (9001, 9002)
+
+    assert len(adapter.calls) == 1
+    query, params = adapter.calls[0]
+    assert "DELETE FROM storytelling_kill_impact" in query
+    assert "gaming_session_id IN" in query
+    # NULL-gsid leftovers on the date go too — but ONLY the NULL ones
+    assert "gaming_session_id IS NULL" in query
+    assert params == (137, dt.date(2026, 7, 18))
+
+
+@pytest.mark.asyncio
+async def test_delete_falls_back_to_date_wide_when_gsids_unresolvable():
+    """No resolvable gaming_session_id (legacy rounds, resolution failure)
+    must degrade to the previous date-wide behaviour, not skip deletion —
+    a stale mid-session snapshot is worse than an over-wide delete."""
+    svc = _svc()
+    adapter = _FakeAdapter(gsid_rows=[])
+    svc.db_adapter = adapter
+
+    await svc._delete_kis_rows("2026-07-18", round_ids=[9001])  # noqa: SLF001
+
+    assert len(adapter.calls) == 1
+    query, params = adapter.calls[0]
+    assert "WHERE session_date = ?" in query
+    assert "gaming_session_id IN" not in query
+    assert params == (dt.date(2026, 7, 18),)
 
 
 @pytest.mark.asyncio

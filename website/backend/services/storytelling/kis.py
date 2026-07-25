@@ -254,9 +254,15 @@ class _KisMixin:
         tx = getattr(self.db, "transaction", None)
         if callable(tx):
             async with tx():
-                await self._store_scored_kills(row_filter, scope_params, gaming_session_id, scored)
+                await self._store_scored_kills(
+                    row_filter, scope_params, gaming_session_id, scored,
+                    dates=dates, round_keys=round_keys,
+                )
         else:  # SQLite dev adapter has no transaction context
-            await self._store_scored_kills(row_filter, scope_params, gaming_session_id, scored)
+            await self._store_scored_kills(
+                row_filter, scope_params, gaming_session_id, scored,
+                dates=dates, round_keys=round_keys,
+            )
 
         logger.info("KIS computed for dates=%s: %d kills scored", date_list, len(scored))
         return {"status": "computed", "kills_scored": len(scored)}
@@ -307,6 +313,8 @@ class _KisMixin:
         scope_params: tuple,
         gaming_session_id: int | None,
         scored: list,
+        dates: tuple[date, ...] = (),
+        round_keys: tuple[tuple[int, str, int], ...] | None = None,
     ) -> None:
         # Same precise round-key filter as the fetch above (or the unchanged
         # date filter on the legacy path) — a broader delete here would wipe
@@ -345,6 +353,40 @@ class _KisMixin:
                  kill_time_ms, killer_guid_canonical, formula_version, gaming_session_id)
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
             """, batch)
+
+        if gaming_session_id is None:
+            # Legacy session_date path: rows above were inserted with a NULL
+            # gaming_session_id, which every gsid-filtered reader
+            # (useless-defense, PWC crossfire, enabler — #533/#535/#539)
+            # treats as "not part of any gaming session". Stamp them from
+            # rounds via the canonical round key, exactly like migration 064
+            # backfilled the historical rows — otherwise each legacy
+            # recompute would silently recreate the NULL-gsid regression.
+            # Keys mapping to more than one distinct gsid are skipped (a
+            # wrong stamp is worse than NULL); orphan keys stay NULL.
+            stamp_filter, stamp_params = _scope_row_filter(round_keys, dates, prefix="k")
+            await self.db.execute(
+                f"""
+                UPDATE storytelling_kill_impact k
+                SET gaming_session_id = r.gsid
+                FROM (
+                    SELECT round_start_unix, map_name, round_number,
+                           MIN(gaming_session_id) AS gsid
+                    FROM rounds
+                    WHERE gaming_session_id IS NOT NULL
+                      AND round_start_unix IS NOT NULL
+                      AND round_start_unix > 0
+                    GROUP BY round_start_unix, map_name, round_number
+                    HAVING COUNT(DISTINCT gaming_session_id) = 1
+                ) r
+                WHERE k.gaming_session_id IS NULL
+                  AND {stamp_filter}
+                  AND k.round_start_unix = r.round_start_unix
+                  AND k.map_name = r.map_name
+                  AND k.round_number = r.round_number
+                """,  # nosec B608 - stamp_filter built by _scope_row_filter from internal constants, all values $N-bound
+                stamp_params,
+            )
 
     def _score_kill(self, kill, carrier_kills, carrier_returns, pushes, crossfires,
                     spawn_timings, victim_classes, combat_positions=None):

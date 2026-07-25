@@ -423,7 +423,7 @@ class VoiceSessionService:
             session_dates = await self._session_dates_touched(session_ids)
             for sd in (session_dates or [start_date or str(latest_date)]):
                 asyncio.create_task(
-                    self._invalidate_kis_cache(sd),
+                    self._invalidate_kis_cache(sd, round_ids=session_ids),
                     name="kis-cache-invalidate",
                 )
 
@@ -502,7 +502,7 @@ class VoiceSessionService:
             logger.warning("session dates-touched lookup failed", exc_info=True)
             return []
 
-    async def _invalidate_kis_cache(self, session_date: str) -> None:
+    async def _invalidate_kis_cache(self, session_date: str, round_ids=None) -> None:
         """Delete stale storytelling_kill_impact rows for session_date, then
         proactively warm the cache with a fresh compute.
 
@@ -547,7 +547,7 @@ class VoiceSessionService:
         bot-only change should not race with that (codex, "Serialize KIS
         invalidation with in-flight computes"). Best-effort; must never
         raise."""
-        await self._delete_kis_rows(session_date)
+        await self._delete_kis_rows(session_date, round_ids=round_ids)
         await self._warm_kis_cache(session_date)
 
     async def _warm_kis_cache(self, session_date: str) -> None:
@@ -583,13 +583,41 @@ class VoiceSessionService:
             logger.warning("KIS cache warm failed for %s (url=%s): %s",
                             session_date, url, e)
 
-    async def _delete_kis_rows(self, session_date: str) -> None:
+    async def _delete_kis_rows(self, session_date: str, round_ids=None) -> None:
+        """Delete THIS session's cached KIS rows for session_date.
+
+        A bare `WHERE session_date = ?` wiped every gaming session sharing
+        that calendar date (multi-gsid dates exist: 2026-03-25 held four),
+        including a neighbour session's correctly-computed rows that nothing
+        would recompute until someone happened to view it. With round_ids
+        (rounds.id values, as passed by the finalization caller) the delete
+        is scoped to this session's gaming_session_id(s) plus the date's
+        unattributable NULL-gsid leftovers; without them it falls back to
+        the old date-wide behaviour."""
         try:
             sd = datetime.fromisoformat(str(session_date)[:10]).date()
-            await self.db_adapter.execute(
-                "DELETE FROM storytelling_kill_impact WHERE session_date = ?",
-                (sd,),
-            )
+            gsids: list[int] = []
+            if round_ids:
+                placeholders = ",".join("?" * len(round_ids))
+                rows = await self.db_adapter.fetch_all(
+                    f"SELECT DISTINCT gaming_session_id FROM rounds "
+                    f"WHERE id IN ({placeholders}) AND gaming_session_id IS NOT NULL",  # noqa: S608 - placeholders only, values bound
+                    tuple(round_ids),
+                )
+                gsids = [int(r[0]) for r in (rows or []) if r and r[0] is not None]
+            if gsids:
+                gsid_ph = ",".join("?" * len(gsids))
+                await self.db_adapter.execute(
+                    f"DELETE FROM storytelling_kill_impact "
+                    f"WHERE gaming_session_id IN ({gsid_ph}) "
+                    f"OR (session_date = ? AND gaming_session_id IS NULL)",  # noqa: S608 - placeholders only, values bound
+                    (*gsids, sd),
+                )
+            else:
+                await self.db_adapter.execute(
+                    "DELETE FROM storytelling_kill_impact WHERE session_date = ?",
+                    (sd,),
+                )
             logger.info("✅ KIS cache invalidated for %s (recomputes on next read)", session_date)
         except Exception as e:
             logger.warning("KIS cache invalidation failed for %s: %s", session_date, e)
