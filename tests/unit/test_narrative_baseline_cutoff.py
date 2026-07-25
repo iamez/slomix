@@ -110,10 +110,39 @@ async def test_cutoff_is_not_re_derived_from_the_date(captured_cutoffs):
     ), "baseline cutoff still re-derived from the calendar date"
 
 
-def test_baseline_helper_keeps_an_exclusive_session_bound():
-    """`before_session_id` is the contract the cutoff feeds; if it changed
-    meaning, the cutoff would be silently wrong."""
-    import inspect
+@pytest.mark.asyncio
+async def test_baseline_bound_is_strictly_exclusive_and_bound_as_a_value():
+    """The cutoff only works if the bound EXCLUDES the narrated session.
+    Asserting the parameter name would still pass if the SQL flipped to
+    `<=`, dropped the predicate, or stopped binding the value — so this
+    inspects the emitted SQL and its parameters instead."""
+    captured: dict = {}
 
-    params = inspect.signature(baseline_mod.trailing_averages).parameters
-    assert "before_session_id" in params
+    class _SpyDB:
+        async def fetch_all(self, query, params=None):
+            captured["sql"] = " ".join(str(query).split())
+            captured["params"] = tuple(params or ())
+            return []
+
+    await baseline_mod.trailing_averages(_SpyDB(), "AAAA1111", before_session_id=137)
+
+    sql = captured["sql"]
+    assert "r.gaming_session_id <" in sql, sql
+    assert "r.gaming_session_id <=" not in sql, "bound must EXCLUDE the session"
+    assert 137 in captured["params"], captured["params"]
+
+
+@pytest.mark.asyncio
+async def test_no_bound_means_no_predicate():
+    """Without a cutoff the helper must not invent one — an accidental
+    always-true or always-false predicate would silently empty or widen
+    every baseline."""
+    captured: dict = {}
+
+    class _SpyDB:
+        async def fetch_all(self, query, params=None):
+            captured["sql"] = " ".join(str(query).split())
+            return []
+
+    await baseline_mod.trailing_averages(_SpyDB(), "AAAA1111")
+    assert "gaming_session_id <" not in captured["sql"]
