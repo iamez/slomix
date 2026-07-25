@@ -34,7 +34,9 @@ class FakeDB:
                     ("BBBB2222", "bravo", MIN_SESSIONS),
                     ("CCCC3333", "^1char^7lie", MIN_SESSIONS + 1),
                     ("DDDD4444", "rookie", MIN_SESSIONS - 1)]
-        if "is_carrier_kill OR is_during_push" in query:
+        # Matches the situational filter WITHOUT is_during_push: the push
+        # signal left the filter in kis-v5 (see ssr_service._kis_shares).
+        if "is_carrier_kill" in query and "is_objective_area" in query:
             return [("AAAA1111", 100.0, 50.0),   # share 0.5
                     ("BBBB2222", 100.0, 20.0),   # share 0.2
                     ("DDDD4444", 100.0, 90.0)]   # below gate -> ignored
@@ -67,7 +69,9 @@ class FakeDB:
 @pytest.mark.asyncio
 async def test_compute_aggregates_group_relative():
     res = await SsrService(FakeDB()).compute()
-    assert res["formula_version"] == "ssr-v0.2"
+    # v0.3: situational_share dropped is_during_push with the kis-v5
+    # retirement — a component change, so the version had to move with it.
+    assert res["formula_version"] == "ssr-v0.3"
     by = {p["player_guid"]: p for p in res["players"]}
 
     assert "DDDD4444" not in by, "below min-session gate must not be rated"

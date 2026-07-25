@@ -158,16 +158,31 @@ class TestScoreKillCarrier:
 
 
 class TestScoreKillPush:
-    """Push context multiplier with quality gating."""
+    """Push context is DESCRIPTIVE since kis-v5 — flagged, never scored.
 
-    def test_push_quality_above_threshold(self):
+    The multiplier was retired on 2026-07-25 after measuring that kills
+    during a push match the round-winner baseline (50.9% vs 50.8%) while
+    push_quality ran inverse to kill activity. The detection window and
+    gates are unchanged; only the score contribution is gone.
+    """
+
+    def test_push_is_flagged_but_never_multiplies(self):
         svc = _service()
         kill = _make_kill(round_start_unix=100, round_number=1, kill_time=5000)
         pushes = {(100, "goldrush", 1): [(4000, 6000, 0.95, "objective")]}
         ck, cr, cf, st, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pushes, cf, st, vc, cp)
-        # push_mult = 1.0 + min(0.95 * 0.5, 1.0) = 1.0 + 0.475 = 1.475
-        assert result["push_multiplier"] == pytest.approx(1.475, abs=0.01)
+        assert result["push_multiplier"] == 1.0
+        assert result["is_during_push"] is True
+
+    def test_push_perfect_quality_still_does_not_multiply(self):
+        """Even a maximal-quality push adds nothing to the score now."""
+        svc = _service()
+        kill = _make_kill(round_start_unix=100, round_number=1, kill_time=5000)
+        pushes = {(100, "goldrush", 1): [(4000, 6000, 2.0, "objective")]}
+        ck, cr, cf, st, vc, cp = {}, {}, {}, {}, {}, {}
+        result = svc._score_kill(kill, ck, cr, pushes, cf, st, vc, cp)
+        assert result["push_multiplier"] == 1.0
         assert result["is_during_push"] is True
 
     def test_push_quality_below_threshold(self):
@@ -191,13 +206,15 @@ class TestScoreKillPush:
         assert result["is_during_push"] is False
 
     def test_push_kill_within_buffer(self):
-        """Kill slightly after push end (within 2s buffer) should still match."""
+        """Kill slightly after push end (within 2s buffer) still counts as
+        being DURING the push — the window is unchanged by v5."""
         svc = _service()
         kill = _make_kill(round_start_unix=100, round_number=1, kill_time=7500)
         pushes = {(100, "goldrush", 1): [(4000, 6000, 0.95, "obj")]}  # push ends at 6000, +2000 buffer
         ck, cr, cf, st, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pushes, cf, st, vc, cp)
-        assert result["push_multiplier"] > 1.0
+        assert result["is_during_push"] is True
+        assert result["push_multiplier"] == 1.0
 
     def test_push_kill_outside_window(self):
         """Kill well after push+buffer should NOT match."""
@@ -208,14 +225,16 @@ class TestScoreKillPush:
         result = svc._score_kill(kill, ck, cr, pushes, cf, st, vc, cp)
         assert result["push_multiplier"] == 1.0
 
-    def test_push_perfect_quality(self):
-        """Push quality 1.0 => push_mult = 1.0 + min(1.0*0.5, 1.0) = 1.5."""
+    def test_push_quality_no_longer_scales_the_multiplier(self):
+        """Superseded by kis-v5: quality 1.0 used to give 1.5x. The whole
+        point of the retirement is that push_quality carried no signal, so
+        no quality value may move the score."""
         svc = _service()
         kill = _make_kill(round_start_unix=100, round_number=1, kill_time=5000)
         pushes = {(100, "goldrush", 1): [(4000, 6000, 1.0, "obj")]}
         ck, cr, cf, st, vc, cp = {}, {}, {}, {}, {}, {}
         result = svc._score_kill(kill, ck, cr, pushes, cf, st, vc, cp)
-        assert result["push_multiplier"] == pytest.approx(1.5, abs=0.01)
+        assert result["push_multiplier"] == 1.0
 
 
 class TestScoreKillCrossfire:
