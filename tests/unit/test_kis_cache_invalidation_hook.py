@@ -93,15 +93,23 @@ async def test_delete_with_round_ids_scopes_to_this_sessions_gsids():
     assert len(adapter.calls) == 1
     query, params = adapter.calls[0]
     assert "DELETE FROM storytelling_kill_impact" in query
-    assert "gaming_session_id IN" in query
-    # NULL-gsid leftovers on the date go too — but ONLY the NULL ones
-    assert "gaming_session_id IS NULL" in query
+    assert "k.gaming_session_id IN" in query
+    # NULL-gsid rows are removed ONLY when their round key belongs to this
+    # session. Deleting every NULL row on the date destroyed a neighbour's
+    # unattributable rows, which the gsid-scoped warm never rescores
+    # (Codex #546 P1). Measured on 2026-03-25 (four sessions): the old
+    # predicate matched all 1,128 NULL rows, the new one matches 74 and
+    # spares 1,054.
+    assert "k.gaming_session_id IS NULL AND EXISTS" in query
+    assert "FROM rounds r" in query
+    assert "r.map_name = k.map_name" in query
+    assert "r.round_number = k.round_number" in query
     # BOTH branches stay date-constrained: finalization launches one
     # invalidation task per touched date, and an unconstrained gsid delete
     # from a later task would wipe rows an earlier task's warm call already
     # refreshed for the other dates (Copilot review on #546).
     assert "session_date = ?" in query
-    assert params == (137, dt.date(2026, 7, 18))
+    assert params == (dt.date(2026, 7, 18), 137, 137)
 
 
 @pytest.mark.asyncio
@@ -363,7 +371,7 @@ async def test_two_sessions_one_date_warms_by_gsid_and_spares_the_neighbour():
     query, params = adapter.calls[0]
     assert "gaming_session_id IN" in query
     assert "session_date = ?" in query          # neighbour 138 on other dates safe
-    assert params == (137, dt.date(2026, 3, 25))
+    assert params == (dt.date(2026, 3, 25), 137, 137)
     # the neighbour's gsid is never named, so its rows cannot be deleted
     assert 138 not in params
     # warm targets the gsid, not the ambiguous date

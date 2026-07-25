@@ -635,15 +635,16 @@ class VoiceSessionService:
         scope resolved once by the caller and shared with the warm step, so
         the two can never disagree (Codex #546).
 
-        LEGACY NULL-gsid ROWS — deliberate, not incidental: they are deleted
-        alongside this session's rows for the SAME calendar date. Such rows
-        pre-date the gsid stamping and cannot be attributed to either
-        session on a shared date, so leaving them would let unattributable
-        pre-computed scores survive a recompute and mix with fresh rows.
-        Deleting them is safe because the warm step immediately rescores
-        every kill in scope, and any row it cannot reproduce was by
-        definition not part of this session. Without `gsids` the delete
-        falls back to the old date-wide behaviour."""
+        LEGACY NULL-gsid ROWS are deleted only when their ROUND KEY belongs
+        to this session. An earlier revision deleted every NULL-gsid row on
+        the date, which on a shared date destroyed a NEIGHBOUR session's
+        unattributable rows: the gsid-scoped warm only rescores this
+        session, so those rows had no path back (Codex #546 P1). Matching on
+        the round key keeps the delete precise — rows this session owns are
+        removed and immediately rescored by the warm, while rows belonging
+        to the neighbour, or to no resolvable round at all, survive.
+        Without `gsids` the delete falls back to the old date-wide
+        behaviour."""
         try:
             sd = datetime.fromisoformat(str(session_date)[:10]).date()
             if gsids:
@@ -654,10 +655,16 @@ class VoiceSessionService:
                 # call already refreshed for the other dates.
                 gsid_ph = ",".join("?" * len(gsids))
                 await self.db_adapter.execute(
-                    f"DELETE FROM storytelling_kill_impact "
-                    f"WHERE ((gaming_session_id IN ({gsid_ph}) "
-                    f"OR gaming_session_id IS NULL) AND session_date = ?)",  # noqa: S608 - placeholders only, values bound
-                    (*gsids, sd),
+                    f"DELETE FROM storytelling_kill_impact k "
+                    f"WHERE k.session_date = ? AND ("
+                    f"  k.gaming_session_id IN ({gsid_ph}) "
+                    f"  OR (k.gaming_session_id IS NULL AND EXISTS ("
+                    f"      SELECT 1 FROM rounds r "
+                    f"      WHERE r.gaming_session_id IN ({gsid_ph}) "
+                    f"        AND COALESCE(r.round_start_unix, 0) = COALESCE(k.round_start_unix, 0) "
+                    f"        AND r.map_name = k.map_name "
+                    f"        AND r.round_number = k.round_number)))",  # noqa: S608 - placeholders only, values bound
+                    (sd, *gsids, *gsids),
                 )
             else:
                 await self.db_adapter.execute(
