@@ -8814,11 +8814,11 @@ ALTER TABLE proximity_weapon_accuracy
     ADD COLUMN IF NOT EXISTS round_number INTEGER,
     ADD COLUMN IF NOT EXISTS round_start_unix BIGINT;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_prox_revive_identity
-    ON proximity_revive (round_start_unix, map_name, medic_guid, revived_guid, revive_time)
-    WHERE round_start_unix IS NOT NULL;
+    ON proximity_revive (round_start_unix, round_number, map_name, medic_guid, revived_guid, revive_time)
+    WHERE round_start_unix IS NOT NULL AND round_number IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_prox_wacc_identity
-    ON proximity_weapon_accuracy (round_start_unix, map_name, player_guid, weapon_id)
-    WHERE round_start_unix IS NOT NULL;
+    ON proximity_weapon_accuracy (round_start_unix, round_number, map_name, player_guid, weapon_id)
+    WHERE round_start_unix IS NOT NULL AND round_number IS NOT NULL;
 
 -- 054: server-side KIS shadow audit
 CREATE TABLE IF NOT EXISTS storytelling_kis_shadow_audit (

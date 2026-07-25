@@ -576,9 +576,9 @@ async function _loadMomentsStrip() {
     if (!host || (!_sessionDate && _sessionId == null)) return;
     let data;
     try {
-        // Prefer gaming_session_id (SS-D straggler, audit 2026-07-25): a
-        // calendar date holding TWO gaming sessions makes the backend 409,
-        // which the catch below swallows — the strip just silently vanished.
+        // Prefer gaming_session_id (SS-D straggler, audit 2026-07-25):
+        // a calendar date holding TWO gaming sessions makes the backend
+        // 409, which the catch below swallows — the strip silently vanished.
         const scopeQ = _sessionId != null
             ? `gaming_session_id=${encodeURIComponent(_sessionId)}`
             : `session_date=${encodeURIComponent(_sessionDate)}`;

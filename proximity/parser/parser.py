@@ -1085,19 +1085,21 @@ class ProximityParserV4:
 
         round_end_unix = int(self.metadata.get("round_end_unix") or 0)
         round_start_unix = int(self.metadata.get("round_start_unix") or 0)
-        # rounds.round_date/round_time are stored in the GAME SERVER's local
-        # time (Europe/Ljubljana). A naive fromtimestamp() converts via the
-        # HOST's timezone instead — on a UTC host that shifts the ±45-min
-        # linker window by 1-2 hours, producing orphans or wrong-round links
-        # (audit 2026-07-25 S8). Convert explicitly, then drop tzinfo to
-        # keep the naive-datetime contract the linker expects.
-        from zoneinfo import ZoneInfo
-        local_tz = ZoneInfo(os.getenv("SLOMIX_LOCAL_TZ", "Europe/Ljubljana"))
+        # HOST-local naive is the round_linker's contract, NOT a bug (audit
+        # 2026-07-25 S8, resolved on review of #549): candidate_dt values
+        # are built with host-local datetime.fromtimestamp(unix) and the
+        # canonical-id lookup calls target_dt.timestamp(), which interprets
+        # naive as host-local — so fromtimestamp() here round-trips the
+        # ABSOLUTE unix instant exactly on any host timezone. Converting to
+        # a fixed zone first (tried and reverted) would shift the instant on
+        # any host whose tz differs from it. The genuinely tz-sensitive path
+        # is the STRING round_date/round_time fallback inside the linker,
+        # tracked separately (docs/KNOWN_ISSUES.md).
         target_dt = None
         if round_end_unix > 0:
-            target_dt = datetime.fromtimestamp(round_end_unix, tz=local_tz).replace(tzinfo=None)
+            target_dt = datetime.fromtimestamp(round_end_unix)  # noqa: DTZ006 — intentional: linker candidates/timestamp() are host-local naive; this round-trips the absolute instant
         elif round_start_unix > 0:
-            target_dt = datetime.fromtimestamp(round_start_unix, tz=local_tz).replace(tzinfo=None)
+            target_dt = datetime.fromtimestamp(round_start_unix)  # noqa: DTZ006 — intentional: same host-local round-trip contract
 
         try:
             from bot.core.round_linker import resolve_round_id_with_reason
@@ -3451,12 +3453,12 @@ class ProximityParserV4:
             conflict = "ON CONFLICT DO NOTHING"
             if has_identity:
                 columns += ["session_date", "round_number", "round_start_unix"]
-                values += [session_date, self.metadata.get('round_number'), rsu_val]
-                if rsu_val is not None:
+                values += [session_date, self.metadata.get('round_num'), rsu_val]
+                if rsu_val is not None and self.metadata.get('round_num') is not None:
                     conflict = (
-                        "ON CONFLICT (round_start_unix, map_name, medic_guid, "
+                        "ON CONFLICT (round_start_unix, round_number, map_name, medic_guid, "
                         "revived_guid, revive_time) "
-                        "WHERE round_start_unix IS NOT NULL DO NOTHING"
+                        "WHERE round_start_unix IS NOT NULL AND round_number IS NOT NULL DO NOTHING"
                     )
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""
@@ -3489,11 +3491,11 @@ class ProximityParserV4:
             conflict = "ON CONFLICT DO NOTHING"
             if has_identity:
                 columns += ["session_date", "round_number", "round_start_unix"]
-                values += [session_date, self.metadata.get('round_number'), rsu_val]
-                if rsu_val is not None:
+                values += [session_date, self.metadata.get('round_num'), rsu_val]
+                if rsu_val is not None and self.metadata.get('round_num') is not None:
                     conflict = (
-                        "ON CONFLICT (round_start_unix, map_name, player_guid, weapon_id) "
-                        "WHERE round_start_unix IS NOT NULL DO NOTHING"
+                        "ON CONFLICT (round_start_unix, round_number, map_name, player_guid, weapon_id) "
+                        "WHERE round_start_unix IS NOT NULL AND round_number IS NOT NULL DO NOTHING"
                     )
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""
