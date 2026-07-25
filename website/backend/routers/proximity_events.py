@@ -31,21 +31,32 @@ async def get_proximity_events(
     """
     payload = _proximity_stub_meta(range_days)
     safe_limit = max(1, min(int(limit or 250), 1000))
-    where_sql, params, scope = _build_proximity_where_clause(
-        range_days,
-        session_date,
-        map_name,
-        round_number,
-        round_start_unix,
-        alias="e",
-    )
-    scoped_params = list(params)
-    scoped_params.append(safe_limit)
-    limit_placeholder = len(scoped_params)
+    # Scope is built AFTER the capability probe below: the shared round-quality
+    # gate references e.round_id, so on the legacy schema variant this endpoint
+    # explicitly supports (combat_engagement without round_id) an
+    # unconditionally-gated clause would make the very fallback query that
+    # exists for that variant fail with an undefined column (review on #548).
+    where_sql = ""
+    params: list = []
+    scope: dict = {}
+    scoped_params: list = []
+    limit_placeholder = 1
     try:
         has_round_id_column = await _table_column_exists(
             db, "combat_engagement", "round_id"
         )
+        where_sql, params, scope = _build_proximity_where_clause(
+            range_days,
+            session_date,
+            map_name,
+            round_number,
+            round_start_unix,
+            alias="e",
+            round_quality_gate=has_round_id_column,
+        )
+        scoped_params = list(params)
+        scoped_params.append(safe_limit)
+        limit_placeholder = len(scoped_params)
         if has_round_id_column:
             query = """
                 SELECT e.id,

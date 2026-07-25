@@ -89,16 +89,27 @@ async def get_proximity_leaderboards(
         since = datetime.now(timezone.utc).replace(tzinfo=None).date() - timedelta(days=max(1, min(range_days, 3650)))
 
     # Build scope filter helper for leaderboard queries
-    def _lb_scope(table_alias: str = "", has_round_number: bool = False):
+    def _lb_scope(
+        table_alias: str = "",
+        has_round_number: bool = False,
+        has_round_start_unix: bool | None = None,
+    ):
         """Build WHERE clause fragments and params for leaderboard scope.
 
         A selected session_date filters with `=` (audit 2026-07-25 S3 — the
         old `>=` showed the chosen session PLUS every session after it);
-        `>=` remains only for the rolling range_days window. Exact-round
-        disambiguation accepts round_start_unix so a map replayed twice in
-        one night stays separable, and every query carries the shared
-        bot/validity round gate (S6).
+        `>=` remains only for the rolling range_days window. Every query
+        carries the shared bot/validity round gate (S6).
+
+        `has_round_start_unix` is SEPARATE from `has_round_number` and
+        defaults to it, because KROGT deliberately opts out (review on
+        #548): its contribution/event queries join lives by
+        `(round_id, guid)`, so a row correctly linked by round_id but with
+        a missing or differing source-native round_start_unix must NOT be
+        filtered away — only the lives query narrows by that timestamp.
         """
+        if has_round_start_unix is None:
+            has_round_start_unix = has_round_number
         prefix = f"{table_alias}." if table_alias else ""
         op = "=" if parsed_date else ">="
         clauses = [f"{prefix}session_date {op} $1"]
@@ -112,7 +123,7 @@ async def get_proximity_leaderboards(
             clauses.append(f"{prefix}round_number = ${idx}")
             params.append(round_number)
             idx += 1
-        if has_round_number and round_start_unix is not None and int(round_start_unix) > 0:
+        if has_round_start_unix and round_start_unix is not None and int(round_start_unix) > 0:
             clauses.append(f"{prefix}round_start_unix = ${idx}")
             params.append(int(round_start_unix))
             idx += 1
@@ -611,7 +622,9 @@ async def get_proximity_leaderboards(
             # be an undefined-column error, codex P2 round 2). Event queries
             # don't need it: they join lives by (round_id, guid), so events
             # from other rounds can never credit a selected round's lives.
-            scope_where, scope_params, rsu_idx = _lb_scope("pt", has_round_number=True)
+            scope_where, scope_params, rsu_idx = _lb_scope(
+                "pt", has_round_number=True, has_round_start_unix=False,
+            )
             if round_start_unix is not None:
                 scope_where += f" AND pt.round_start_unix = ${rsu_idx}"
                 scope_params = (*scope_params, round_start_unix)
@@ -633,7 +646,11 @@ async def get_proximity_leaderboards(
                 return {"status": "ok", "category": "krogt", "entries": []}
 
             async def _krogt_events(sql: str, alias: str, has_rn: bool) -> list:
-                where_sql, params, _idx = _lb_scope(alias, has_round_number=has_rn)
+                # has_round_start_unix=False on purpose — see _lb_scope's
+                # docstring and the lives-query comment above.
+                where_sql, params, _idx = _lb_scope(
+                    alias, has_round_number=has_rn, has_round_start_unix=False,
+                )
                 return await db.fetch_all(sql.format(scope=where_sql), params)
 
             events: list = []

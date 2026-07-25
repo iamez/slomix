@@ -296,3 +296,75 @@ def test_cohesion_timeline_empty_is_safe():
     from website.backend.routers.proximity_teamplay import _concatenated_timeline
     assert _concatenated_timeline([]) == []
     assert _concatenated_timeline(None) == []
+
+
+# ---------------------------------------------------------------------------
+# The gate must not leak into queries that opt out
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_krogt_contribution_queries_keep_round_start_unix_off():
+    """KROGT joins contribution events to lives by (round_id, guid); a row
+    correctly linked by round_id but carrying a missing/differing native
+    round_start_unix must not be filtered away. Only the LIVES query narrows
+    by that timestamp (review on #548)."""
+    class _LivesDB(_CaptureDB):
+        async def fetch_all(self, query, params=None):
+            self._note(query, params)
+            if "FROM player_track pt" in " ".join(query.split()):
+                # (round_id, guid8, name, spawn_ms, death_ms) — KROGT returns
+                # early on empty lives, so the contribution queries below
+                # would never run with the plain capturing fake.
+                return [(7, "AAAA1111", "P1", i * 1000, i * 1000 + 900)
+                        for i in range(12)]
+            return []
+
+    db = _LivesDB()
+    resp = await _get(db, "/api/proximity/leaderboards", {
+        "category": "krogt", "session_date": "2026-07-18",
+        "round_number": 1, "round_start_unix": 1784402640,
+    })
+    assert resp.status_code == 200
+
+    lives = [q for q, _ in db.queries if "FROM player_track pt" in q]
+    events = [q for q, _ in db.queries
+              if "proximity_combat_position" in q or "proximity_revive" in q
+              or "proximity_objective_run" in q]
+    assert lives, "lives query never ran"
+    assert events, "no contribution queries ran"
+    assert all("round_start_unix" in q for q in lives)
+    assert not any("round_start_unix" in q for q in events), (
+        "contribution queries must not filter on round_start_unix"
+    )
+    # the shared bot/validity gate still applies everywhere
+    assert all(GATE_FRAGMENT in q for q in lives + events)
+
+
+@pytest.mark.asyncio
+async def test_events_builds_scope_after_the_round_id_capability_probe():
+    """/proximity/events has a documented fallback for a combat_engagement
+    without round_id; the gate references e.round_id, so the scope must be
+    built only after the probe answers (review on #548)."""
+    from website.backend.routers import proximity_events
+
+    class _NoRoundIdDB(_CaptureDB):
+        async def fetch_val(self, query, params=None):
+            self._note(query, params)
+            # information_schema probe -> column absent
+            return False
+
+    db = _NoRoundIdDB()
+    app = FastAPI()
+    app.include_router(proximity_events.router, prefix="/api")
+    app.dependency_overrides[get_db] = lambda: db
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://t") as client:
+        resp = await client.get("/api/proximity/events",
+                                params={"session_date": "2026-07-18"})
+
+    assert resp.status_code == 200
+    engagement_queries = [q for q, _ in db.queries if "combat_engagement" in q]
+    assert engagement_queries, "no engagement query ran"
+    assert not any(GATE_FRAGMENT in q for q in engagement_queries), (
+        "gate must be omitted when combat_engagement has no round_id"
+    )
