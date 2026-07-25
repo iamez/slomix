@@ -606,11 +606,16 @@ class VoiceSessionService:
                 )
                 gsids = [int(r[0]) for r in (rows or []) if r and r[0] is not None]
             if gsids:
+                # Both branches constrained to THIS call's date (Copilot
+                # review on #546): finalization launches one invalidation
+                # task per touched date, and an unconstrained gsid delete
+                # from a later task would wipe rows an earlier task's warm
+                # call already refreshed for the other dates.
                 gsid_ph = ",".join("?" * len(gsids))
                 await self.db_adapter.execute(
                     f"DELETE FROM storytelling_kill_impact "
-                    f"WHERE gaming_session_id IN ({gsid_ph}) "
-                    f"OR (session_date = ? AND gaming_session_id IS NULL)",  # noqa: S608 - placeholders only, values bound
+                    f"WHERE ((gaming_session_id IN ({gsid_ph}) "
+                    f"OR gaming_session_id IS NULL) AND session_date = ?)",  # noqa: S608 - placeholders only, values bound
                     (*gsids, sd),
                 )
             else:

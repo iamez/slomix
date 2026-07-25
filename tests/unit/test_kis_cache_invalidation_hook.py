@@ -99,6 +99,11 @@ async def test_delete_with_round_ids_scopes_to_this_sessions_gsids():
     assert "gaming_session_id IN" in query
     # NULL-gsid leftovers on the date go too — but ONLY the NULL ones
     assert "gaming_session_id IS NULL" in query
+    # BOTH branches stay date-constrained: finalization launches one
+    # invalidation task per touched date, and an unconstrained gsid delete
+    # from a later task would wipe rows an earlier task's warm call already
+    # refreshed for the other dates (Copilot review on #546).
+    assert "session_date = ?" in query
     assert params == (137, dt.date(2026, 7, 18))
 
 

@@ -85,7 +85,13 @@ async def test_legacy_date_path_stamps_gsid_after_insert():
     assert "k.map_name = r.map_name" in q
     assert "k.round_number = r.round_number" in q
     # Ambiguous keys (one round key -> two gsids) must be skipped, not guessed.
-    assert "HAVING COUNT(DISTINCT gaming_session_id) = 1" in q
+    assert "HAVING COUNT(DISTINCT rr.gaming_session_id) = 1" in q
+    # Rejected rounds never justify a stamp (session_scope's canonical gate).
+    assert "rr.is_valid IS DISTINCT FROM FALSE" in q
+    assert "rr.round_status IN ('completed', 'substitution')" in q
+    # Perf: the rounds aggregation is bounded to the keys this compute wrote,
+    # not the whole rounds table (Copilot review on #546).
+    assert "k2.gaming_session_id IS NULL AND k2.session_date = ANY($1)" in q
     assert params == ([DATE1],)
 
 
