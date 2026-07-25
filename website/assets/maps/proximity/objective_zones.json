@@ -1,8 +1,8 @@
 {
   "meta": {
-    "source": "/home/samba/share/slomix_discord/proximity/objective_coords_from_etmain.json",
-    "map_count": 18,
-    "objective_count": 88,
+    "source": "proximity/objective_coords_from_etmain.json",
+    "map_count": 19,
+    "objective_count": 97,
     "default_radius": 500
   },
   "maps": {
@@ -210,110 +210,6 @@
         }
       ]
     },
-    "decay_sw": {
-      "map_name": "decay_sw",
-      "aliases": [
-        "decay_sw"
-      ],
-      "objectives": [
-        {
-          "id": "decay_sw:the_health_and_ammo_cabinets",
-          "name": "the Health and Ammo Cabinets",
-          "lua_name": "the_health_and_ammo_cabinets",
-          "type": "objective",
-          "target": "cabinet_cm_marker",
-          "x": 126.0,
-          "y": -1619.5,
-          "z": 290.5,
-          "radius": 500,
-          "source_pk3": "decay_sw.pk3"
-        },
-        {
-          "id": "decay_sw:access_codes",
-          "name": "Access Codes",
-          "lua_name": "access_codes",
-          "type": "objective",
-          "target": "secret_docs",
-          "x": 3273.0,
-          "y": -498.0,
-          "z": 65.0,
-          "radius": 500,
-          "source_pk3": "decay_sw.pk3"
-        },
-        {
-          "id": "decay_sw:vault_generator",
-          "name": "vault generator",
-          "lua_name": "vault_generator",
-          "type": "objective",
-          "target": "vault_gen",
-          "x": 1003.0,
-          "y": 3262.0,
-          "z": 15.0,
-          "radius": 500,
-          "source_pk3": "decay_sw.pk3"
-        },
-        {
-          "id": "decay_sw:transmitter",
-          "name": "Transmitter",
-          "lua_name": "transmitter",
-          "type": "objective",
-          "target": "transmitter_cmm1",
-          "x": -719.0,
-          "y": -255.0,
-          "z": 133.0,
-          "radius": 500,
-          "source_pk3": "decay_sw.pk3"
-        },
-        {
-          "id": "decay_sw:neutral_command_post",
-          "name": "Neutral Command Post",
-          "lua_name": "neutral_command_post",
-          "type": "command_post",
-          "target": "t10000437",
-          "x": -932.0,
-          "y": 2305.0,
-          "z": 221.0,
-          "radius": 500,
-          "source_pk3": "decay_sw.pk3"
-        },
-        {
-          "id": "decay_sw:truck",
-          "name": "Truck",
-          "lua_name": "truck",
-          "type": "escort",
-          "target": "truck_cmm1",
-          "x": 3412.0,
-          "y": 2573.0,
-          "z": 133.0,
-          "radius": 500,
-          "source_pk3": "decay_sw.pk3"
-        },
-        {
-          "id": "decay_sw:the_fence",
-          "name": "The Fence",
-          "lua_name": "the_fence",
-          "type": "objective",
-          "target": "axisfence_1",
-          "x": 722.0,
-          "y": 2581.0,
-          "z": 280.0,
-          "radius": 500,
-          "source_pk3": "decay_sw.pk3"
-        },
-        {
-          "id": "decay_sw:axis_gold",
-          "name": "Axis Gold",
-          "lua_name": "axis_gold",
-          "type": "objective",
-          "target": "axis_gold_cm_marker",
-          "x": 1373.0,
-          "y": 4294.0,
-          "z": 210.0,
-          "radius": 500,
-          "source_pk3": "decay_sw.pk3"
-        }
-      ]
-    },
     "erdenberg_t2": {
       "map_name": "erdenberg_t2",
       "aliases": [
@@ -331,130 +227,6 @@
           "z": -382.0,
           "radius": 500,
           "source_pk3": "erdenberg_t2.pk3"
-        }
-      ]
-    },
-    "et_beach": {
-      "map_name": "et_beach",
-      "aliases": [
-        "et_beach"
-      ],
-      "objectives": [
-        {
-          "id": "et_beach:war_documents",
-          "name": "War Documents",
-          "lua_name": "war_documents",
-          "type": "objective",
-          "target": "documents_marker",
-          "x": 3272.0,
-          "y": 1927.0,
-          "z": 640.0,
-          "radius": 500,
-          "source_pk3": "et_beach.pk3"
-        },
-        {
-          "id": "et_beach:transmitter",
-          "name": "Transmitter",
-          "lua_name": "transmitter",
-          "type": "objective",
-          "target": "transmitter_marker",
-          "x": 3292.0,
-          "y": 2937.0,
-          "z": 1254.0,
-          "radius": 500,
-          "source_pk3": "et_beach.pk3"
-        },
-        {
-          "id": "et_beach:the_sea_wall_breach",
-          "name": "the Sea Wall breach",
-          "lua_name": "the_sea_wall_breach",
-          "type": "objective",
-          "target": "t372",
-          "x": 1076.0,
-          "y": 1065.0,
-          "z": 790.0,
-          "radius": 500,
-          "source_pk3": "et_beach.pk3"
-        },
-        {
-          "id": "et_beach:the_health_cabinet",
-          "name": "the Health Cabinet",
-          "lua_name": "the_health_cabinet",
-          "type": "objective",
-          "target": "eb_health_marker",
-          "x": 3272.0,
-          "y": -544.0,
-          "z": 1184.0,
-          "radius": 500,
-          "source_pk3": "et_beach.pk3"
-        },
-        {
-          "id": "et_beach:health_and_ammo_cabinet",
-          "name": "Health and Ammo Cabinet",
-          "lua_name": "health_and_ammo_cabinet",
-          "type": "objective",
-          "target": "eb_ammo_marker",
-          "x": 3408.0,
-          "y": -464.0,
-          "z": 1184.0,
-          "radius": 500,
-          "source_pk3": "et_beach.pk3"
-        },
-        {
-          "id": "et_beach:command_post",
-          "name": "Command Post",
-          "lua_name": "command_post",
-          "type": "command_post",
-          "target": "neutral_compost_built",
-          "x": 2824.0,
-          "y": 1240.0,
-          "z": 1012.0,
-          "radius": 500,
-          "source_pk3": "et_beach.pk3"
-        },
-        {
-          "id": "et_beach:ammo_cabinet",
-          "name": "Ammo Cabinet",
-          "lua_name": "ammo_cabinet",
-          "type": "objective",
-          "target": "t1077",
-          "x": 3408.0,
-          "y": -464.0,
-          "z": 1184.0,
-          "radius": 500,
-          "source_pk3": "et_beach.pk3"
-        }
-      ]
-    },
-    "et_brewdog": {
-      "map_name": "et_brewdog",
-      "aliases": [
-        "et_brewdog"
-      ],
-      "objectives": [
-        {
-          "id": "et_brewdog:axis_transmitter",
-          "name": "Axis Transmitter",
-          "lua_name": "axis_transmitter",
-          "type": "objective",
-          "target": "transmitter_cm_marker",
-          "x": -2560.0,
-          "y": 2352.0,
-          "z": 328.0,
-          "radius": 500,
-          "source_pk3": "et_brewdog_b6.pk3"
-        },
-        {
-          "id": "et_brewdog:quiz_answers",
-          "name": "Quiz Answers",
-          "lua_name": "quiz_answers",
-          "type": "objective",
-          "target": "docs_cm_marker",
-          "x": 1440.0,
-          "y": 2024.0,
-          "z": 408.0,
-          "radius": 500,
-          "source_pk3": "et_brewdog_b6.pk3"
         }
       ]
     },
@@ -563,50 +335,6 @@
           "z": -56.0,
           "radius": 500,
           "source_pk3": "etl_sp_delivery_v5.pk3"
-        }
-      ]
-    },
-    "etl_supply": {
-      "map_name": "etl_supply",
-      "aliases": [
-        "etl_supply"
-      ],
-      "objectives": [
-        {
-          "id": "etl_supply:truck",
-          "name": "Truck",
-          "lua_name": "truck",
-          "type": "escort",
-          "target": "truck_construct",
-          "x": -2368.0,
-          "y": 688.0,
-          "z": 0.0,
-          "radius": 500,
-          "source_pk3": "etl_supply_v14.pk3"
-        },
-        {
-          "id": "etl_supply:depot_fence",
-          "name": "Depot Fence",
-          "lua_name": "depot_fence",
-          "type": "objective",
-          "target": "fence",
-          "x": 144.0,
-          "y": -1792.0,
-          "z": 52.0,
-          "radius": 500,
-          "source_pk3": "etl_supply_v14.pk3"
-        },
-        {
-          "id": "etl_supply:forward_spawn_door",
-          "name": "Forward spawn door",
-          "lua_name": "forward_spawn_door",
-          "type": "objective",
-          "target": "forward_spawn_gate",
-          "x": -68.0,
-          "y": 2368.0,
-          "z": 304.0,
-          "radius": 500,
-          "source_pk3": "etl_supply_v14.pk3"
         }
       ]
     },
@@ -726,71 +454,119 @@
         }
       ]
     },
-    "radar": {
-      "map_name": "radar",
+    "etl_frostbite": {
+      "map_name": "etl_frostbite",
       "aliases": [
-        "radar"
+        "etl_frostbite"
       ],
       "objectives": [
         {
-          "id": "radar:escape_truck",
-          "name": "Escape Truck",
-          "lua_name": "escape_truck",
-          "type": "escort",
-          "target": "truck_fake",
-          "x": -1280.0,
-          "y": 560.0,
-          "z": 1416.0,
-          "radius": 500,
-          "source_pk3": "pak0.pk3"
-        },
-        {
-          "id": "radar:east_radar_parts",
-          "name": "East Radar Parts",
-          "lua_name": "east_radar_parts",
+          "id": "frostbite:main_door",
+          "name": "Main Door",
+          "lua_name": "main_door",
           "type": "objective",
-          "target": "circuit2",
-          "x": 264.0,
-          "y": -3104.0,
-          "z": 1536.0,
+          "target": "t182",
+          "x": -32.0,
+          "y": 208.0,
+          "z": 352.0,
           "radius": 500,
-          "source_pk3": "pak0.pk3"
+          "source_pk3": "Frostbite.pk3"
         },
         {
-          "id": "radar:west_radar_parts",
-          "name": "West Radar Parts",
-          "lua_name": "west_radar_parts",
+          "id": "frostbite:storage_wall",
+          "name": "Storage Wall",
+          "lua_name": "storage_wall",
           "type": "objective",
-          "target": "circuit1",
-          "x": -1928.0,
-          "y": -2280.0,
-          "z": 1536.0,
+          "target": "t217",
+          "x": -32.0,
+          "y": 208.0,
+          "z": 352.0,
           "radius": 500,
-          "source_pk3": "pak0.pk3"
+          "source_pk3": "Frostbite.pk3"
         },
         {
-          "id": "radar:command_post",
-          "name": "Command Post",
-          "lua_name": "command_post",
-          "type": "command_post",
-          "target": "neutral_radio_built",
-          "x": 3192.0,
-          "y": -1294.0,
-          "z": 1556.0,
+          "id": "frostbite:transmitter",
+          "name": "Transmitter",
+          "lua_name": "transmitter",
+          "type": "objective",
+          "target": "transmitter_cmd_marker",
+          "x": -4544.0,
+          "y": 2240.0,
+          "z": -96.0,
           "radius": 500,
-          "source_pk3": "pak0.pk3"
+          "source_pk3": "Frostbite.pk3"
         },
         {
-          "id": "radar:health_and_ammo_cabinets",
+          "id": "frostbite:health_and_ammo_cabinets",
           "name": "Health and Ammo Cabinets",
           "lua_name": "health_and_ammo_cabinets",
           "type": "objective",
-          "target": "axis_hacab_mcm",
-          "x": -2522.0,
-          "y": 3362.0,
-          "z": 1448.0,
+          "target": "south_hacabinet_cm_marker",
+          "x": -150.0,
+          "y": -662.0,
+          "z": 296.0,
           "radius": 500,
-          "source_pk3": "pak0.pk3"
+          "source_pk3": "Frostbite.pk3"
+        },
+        {
+          "id": "frostbite:platform_mg",
+          "name": "Platform MG",
+          "lua_name": "platform_mg",
+          "type": "objective",
+          "target": "platformmg42_target",
+          "x": -1512.0,
+          "y": 1868.0,
+          "z": 45.0,
+          "radius": 500,
+          "source_pk3": "Frostbite.pk3"
+        },
+        {
+          "id": "frostbite:axis_command_post",
+          "name": "Axis Command Post",
+          "lua_name": "axis_command_post",
+          "type": "command_post",
+          "target": "axis_compost_built",
+          "x": -5056.0,
+          "y": 1896.0,
+          "z": -108.0,
+          "radius": 500,
+          "source_pk3": "Frostbite.pk3"
+        },
+        {
+          "id": "frostbite:documents",
+          "name": "Documents",
+          "lua_name": "documents",
+          "type": "objective",
+          "target": "docs_cm_marker",
+          "x": 816.0,
+          "y": 160.0,
+          "z": 432.0,
+          "radius": 500,
+          "source_pk3": "Frostbite.pk3"
+        },
+        {
+          "id": "frostbite:the_gramophone",
+          "name": "the Gramophone",
+          "lua_name": "the_gramophone",
+          "type": "objective",
+          "target": "record",
+          "x": -299.0,
+          "y": 1264.0,
+          "z": 343.0,
+          "radius": 500,
+          "source_pk3": "Frostbite.pk3"
+        },
+        {
+          "id": "frostbite:allied_command_post",
+          "name": "Allied Command Post",
+          "lua_name": "allied_command_post",
+          "type": "command_post",
+          "target": "t2019",
+          "x": -1836.0,
+          "y": 404.0,
+          "z": 444.0,
+          "radius": 500,
+          "source_pk3": "Frostbite.pk3"
         }
       ]
     },
@@ -1203,6 +979,346 @@
           "z": -24.0,
           "radius": 500,
           "source_pk3": "te_escape2_fixed.pk3"
+        }
+      ]
+    },
+    "decay_sw": {
+      "map_name": "decay_sw",
+      "aliases": [
+        "decay_sw"
+      ],
+      "objectives": [
+        {
+          "id": "decay_sw:the_health_and_ammo_cabinets",
+          "name": "the Health and Ammo Cabinets",
+          "lua_name": "the_health_and_ammo_cabinets",
+          "type": "objective",
+          "target": "cabinet_cm_marker",
+          "x": 126.0,
+          "y": -1619.5,
+          "z": 290.5,
+          "radius": 500,
+          "source_pk3": "decay_sw.pk3"
+        },
+        {
+          "id": "decay_sw:access_codes",
+          "name": "Access Codes",
+          "lua_name": "access_codes",
+          "type": "objective",
+          "target": "secret_docs",
+          "x": 3273.0,
+          "y": -498.0,
+          "z": 65.0,
+          "radius": 500,
+          "source_pk3": "decay_sw.pk3"
+        },
+        {
+          "id": "decay_sw:vault_generator",
+          "name": "vault generator",
+          "lua_name": "vault_generator",
+          "type": "objective",
+          "target": "vault_gen",
+          "x": 1003.0,
+          "y": 3262.0,
+          "z": 15.0,
+          "radius": 500,
+          "source_pk3": "decay_sw.pk3"
+        },
+        {
+          "id": "decay_sw:transmitter",
+          "name": "Transmitter",
+          "lua_name": "transmitter",
+          "type": "objective",
+          "target": "transmitter_cmm1",
+          "x": -719.0,
+          "y": -255.0,
+          "z": 133.0,
+          "radius": 500,
+          "source_pk3": "decay_sw.pk3"
+        },
+        {
+          "id": "decay_sw:neutral_command_post",
+          "name": "Neutral Command Post",
+          "lua_name": "neutral_command_post",
+          "type": "command_post",
+          "target": "t10000437",
+          "x": -932.0,
+          "y": 2305.0,
+          "z": 221.0,
+          "radius": 500,
+          "source_pk3": "decay_sw.pk3"
+        },
+        {
+          "id": "decay_sw:truck",
+          "name": "Truck",
+          "lua_name": "truck",
+          "type": "escort",
+          "target": "truck_cmm1",
+          "x": 3412.0,
+          "y": 2573.0,
+          "z": 133.0,
+          "radius": 500,
+          "source_pk3": "decay_sw.pk3"
+        },
+        {
+          "id": "decay_sw:the_fence",
+          "name": "The Fence",
+          "lua_name": "the_fence",
+          "type": "objective",
+          "target": "axisfence_1",
+          "x": 722.0,
+          "y": 2581.0,
+          "z": 280.0,
+          "radius": 500,
+          "source_pk3": "decay_sw.pk3"
+        },
+        {
+          "id": "decay_sw:axis_gold",
+          "name": "Axis Gold",
+          "lua_name": "axis_gold",
+          "type": "objective",
+          "target": "axis_gold_cm_marker",
+          "x": 1373.0,
+          "y": 4294.0,
+          "z": 210.0,
+          "radius": 500,
+          "source_pk3": "decay_sw.pk3"
+        }
+      ]
+    },
+    "et_beach": {
+      "map_name": "et_beach",
+      "aliases": [
+        "et_beach"
+      ],
+      "objectives": [
+        {
+          "id": "et_beach:war_documents",
+          "name": "War Documents",
+          "lua_name": "war_documents",
+          "type": "objective",
+          "target": "documents_marker",
+          "x": 3272.0,
+          "y": 1927.0,
+          "z": 640.0,
+          "radius": 500,
+          "source_pk3": "et_beach.pk3"
+        },
+        {
+          "id": "et_beach:transmitter",
+          "name": "Transmitter",
+          "lua_name": "transmitter",
+          "type": "objective",
+          "target": "transmitter_marker",
+          "x": 3292.0,
+          "y": 2937.0,
+          "z": 1254.0,
+          "radius": 500,
+          "source_pk3": "et_beach.pk3"
+        },
+        {
+          "id": "et_beach:the_sea_wall_breach",
+          "name": "the Sea Wall breach",
+          "lua_name": "the_sea_wall_breach",
+          "type": "objective",
+          "target": "t372",
+          "x": 1076.0,
+          "y": 1065.0,
+          "z": 790.0,
+          "radius": 500,
+          "source_pk3": "et_beach.pk3"
+        },
+        {
+          "id": "et_beach:the_health_cabinet",
+          "name": "the Health Cabinet",
+          "lua_name": "the_health_cabinet",
+          "type": "objective",
+          "target": "eb_health_marker",
+          "x": 3272.0,
+          "y": -544.0,
+          "z": 1184.0,
+          "radius": 500,
+          "source_pk3": "et_beach.pk3"
+        },
+        {
+          "id": "et_beach:health_and_ammo_cabinet",
+          "name": "Health and Ammo Cabinet",
+          "lua_name": "health_and_ammo_cabinet",
+          "type": "objective",
+          "target": "eb_ammo_marker",
+          "x": 3408.0,
+          "y": -464.0,
+          "z": 1184.0,
+          "radius": 500,
+          "source_pk3": "et_beach.pk3"
+        },
+        {
+          "id": "et_beach:command_post",
+          "name": "Command Post",
+          "lua_name": "command_post",
+          "type": "command_post",
+          "target": "neutral_compost_built",
+          "x": 2824.0,
+          "y": 1240.0,
+          "z": 1012.0,
+          "radius": 500,
+          "source_pk3": "et_beach.pk3"
+        },
+        {
+          "id": "et_beach:ammo_cabinet",
+          "name": "Ammo Cabinet",
+          "lua_name": "ammo_cabinet",
+          "type": "objective",
+          "target": "t1077",
+          "x": 3408.0,
+          "y": -464.0,
+          "z": 1184.0,
+          "radius": 500,
+          "source_pk3": "et_beach.pk3"
+        }
+      ]
+    },
+    "et_brewdog": {
+      "map_name": "et_brewdog",
+      "aliases": [
+        "et_brewdog"
+      ],
+      "objectives": [
+        {
+          "id": "et_brewdog:axis_transmitter",
+          "name": "Axis Transmitter",
+          "lua_name": "axis_transmitter",
+          "type": "objective",
+          "target": "transmitter_cm_marker",
+          "x": -2560.0,
+          "y": 2352.0,
+          "z": 328.0,
+          "radius": 500,
+          "source_pk3": "et_brewdog_b6.pk3"
+        },
+        {
+          "id": "et_brewdog:quiz_answers",
+          "name": "Quiz Answers",
+          "lua_name": "quiz_answers",
+          "type": "objective",
+          "target": "docs_cm_marker",
+          "x": 1440.0,
+          "y": 2024.0,
+          "z": 408.0,
+          "radius": 500,
+          "source_pk3": "et_brewdog_b6.pk3"
+        }
+      ]
+    },
+    "etl_supply": {
+      "map_name": "etl_supply",
+      "aliases": [
+        "etl_supply"
+      ],
+      "objectives": [
+        {
+          "id": "etl_supply:truck",
+          "name": "Truck",
+          "lua_name": "truck",
+          "type": "escort",
+          "target": "truck_construct",
+          "x": -2368.0,
+          "y": 688.0,
+          "z": 0.0,
+          "radius": 500,
+          "source_pk3": "etl_supply_v14.pk3"
+        },
+        {
+          "id": "etl_supply:depot_fence",
+          "name": "Depot Fence",
+          "lua_name": "depot_fence",
+          "type": "objective",
+          "target": "fence",
+          "x": 144.0,
+          "y": -1792.0,
+          "z": 52.0,
+          "radius": 500,
+          "source_pk3": "etl_supply_v14.pk3"
+        },
+        {
+          "id": "etl_supply:forward_spawn_door",
+          "name": "Forward spawn door",
+          "lua_name": "forward_spawn_door",
+          "type": "objective",
+          "target": "forward_spawn_gate",
+          "x": -68.0,
+          "y": 2368.0,
+          "z": 304.0,
+          "radius": 500,
+          "source_pk3": "etl_supply_v14.pk3"
+        }
+      ]
+    },
+    "radar": {
+      "map_name": "radar",
+      "aliases": [
+        "radar"
+      ],
+      "objectives": [
+        {
+          "id": "radar:escape_truck",
+          "name": "Escape Truck",
+          "lua_name": "escape_truck",
+          "type": "escort",
+          "target": "truck_fake",
+          "x": -1280.0,
+          "y": 560.0,
+          "z": 1416.0,
+          "radius": 500,
+          "source_pk3": "pak0.pk3"
+        },
+        {
+          "id": "radar:east_radar_parts",
+          "name": "East Radar Parts",
+          "lua_name": "east_radar_parts",
+          "type": "objective",
+          "target": "circuit2",
+          "x": 264.0,
+          "y": -3104.0,
+          "z": 1536.0,
+          "radius": 500,
+          "source_pk3": "pak0.pk3"
+        },
+        {
+          "id": "radar:west_radar_parts",
+          "name": "West Radar Parts",
+          "lua_name": "west_radar_parts",
+          "type": "objective",
+          "target": "circuit1",
+          "x": -1928.0,
+          "y": -2280.0,
+          "z": 1536.0,
+          "radius": 500,
+          "source_pk3": "pak0.pk3"
+        },
+        {
+          "id": "radar:command_post",
+          "name": "Command Post",
+          "lua_name": "command_post",
+          "type": "command_post",
+          "target": "neutral_radio_built",
+          "x": 3192.0,
+          "y": -1294.0,
+          "z": 1556.0,
+          "radius": 500,
+          "source_pk3": "pak0.pk3"
+        },
+        {
+          "id": "radar:health_and_ammo_cabinets",
+          "name": "Health and Ammo Cabinets",
+          "lua_name": "health_and_ammo_cabinets",
+          "type": "objective",
+          "target": "axis_hacab_mcm",
+          "x": -2522.0,
+          "y": 3362.0,
+          "z": 1448.0,
+          "radius": 500,
+          "source_pk3": "pak0.pk3"
         }
       ]
     }
