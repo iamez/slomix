@@ -18,6 +18,13 @@ from website.backend.routers.proximity_helpers import (
 
 router = APIRouter()
 
+# Power Rating (the /proximity/leaderboards?category=power composite) had no
+# version constant and no registry entry until 2026-07-25, which is how it
+# carried two unvalidated axes unnoticed. v2 = the metric-validity pass:
+# AWARENESS dropped its inverted dodge term, MECHANICAL left the composite
+# (return_fire_ms has no signal). Bump on any change to the axes or weights.
+POWER_FORMULA_VERSION = "power-v2"
+
 
 def _percentile_rank_map(guid_values: dict[str, float]) -> dict[str, float]:
     """Compute percentile rank (0.0-1.0) for a dict of guid->value.
@@ -140,21 +147,10 @@ async def get_proximity_leaderboards(
                 if r[0] in guid_set:
                     move_map[r[0]] = (float(r[1] or 0), float(r[2] or 0))
 
-            # 3. Dodge reaction (awareness axis)
-            dodge_rows = await db.fetch_all(
-                f"""
-                SELECT target_guid,
-                       ROUND(AVG(dodge_reaction_ms)::numeric, 0) AS avg_dodge
-                FROM proximity_reaction_metric
-                WHERE dodge_reaction_ms IS NOT NULL AND {scope_where}
-                GROUP BY target_guid
-                """,
-                scope_params,
-            )
-            dodge_map: dict[str, int] = {}
-            for r in (dodge_rows or []):
-                if r[0] in guid_set:
-                    dodge_map[r[0]] = int(r[1] or 5000)
+            # (3. The dodge-reaction query that used to live here was removed
+            # on 2026-07-25 along with the awareness half it fed — see the
+            # AWARENESS comment below. The raw metric remains available via
+            # /proximity/reactions and /proximity/movement-stats.)
 
             # 4. Crossfire participation (teamplay axis)
             cf_rows = await db.fetch_all(
@@ -283,9 +279,18 @@ async def get_proximity_leaderboards(
                 sp, spd = move_map.get(g, (0.0, 0.0))
                 aggression = min(100, sp * 0.6 + min(spd / 300, 1) * 100 * 0.4)
 
+                # AWARENESS — escape rate only since 2026-07-25.
+                # The axis used to be half escape_rate and half
+                # `100 - dodge_ms/50`, i.e. "faster dodge = more aware".
+                # Measured on the production DB, dodge_reaction_ms runs the
+                # OTHER way against the very outcome this axis is about:
+                # sub-300ms "reactions" escape 22.0% of engagements while
+                # 1000ms+ escape 65.7%. (Most likely selection: a player
+                # killed instantly never gets to record a later dodge.) The
+                # two halves therefore pulled against each other, so the
+                # unvalidated half is gone rather than reweighted.
                 esc_rate = info["escapes"] / max(info["total"], 1) * 100
-                d_ms = dodge_map.get(g, 5000)
-                awareness = min(100, esc_rate * 0.5 + max(0, 100 - d_ms / 50) * 0.5)
+                awareness = min(100, esc_rate)
 
                 # Teamplay: percentile-weighted across 5 ET-specific dimensions
                 if use_pct:
@@ -307,21 +312,37 @@ async def get_proximity_leaderboards(
                 avg_tm, tm_cnt = timing_map.get(g, (0.0, 0))
                 timing = min(100, avg_tm * 100 * min(tm_cnt / 5, 1))
 
-                rf_ms = rf_map.get(g, 3000)
-                mechanical = min(100, max(0, 100 - rf_ms / 30))
+                # MECHANICAL — dropped from the composite on 2026-07-25.
+                # It was `100 - return_fire_ms/30`, but return_fire_ms shows
+                # no signal at all against engagement survival: 40.1% /
+                # 34.9% / 36.8% / 41.5% escape across its four bands (a flat
+                # U, not a gradient). Neither candidate replacement holds up
+                # either — weapon accuracy is r=0.053 against kills and
+                # headshot rate is r=-0.610 — so no substitute is invented
+                # here. The raw value is still returned for inspection; it
+                # just no longer moves the score.
+                rf_ms = rf_map.get(g)
+                mechanical = (
+                    min(100, max(0, 100 - rf_ms / 30)) if rf_ms is not None else None
+                )
 
-                composite = round((aggression + awareness + teamplay + timing + mechanical) / 5, 1)
+                composite = round((aggression + awareness + teamplay + timing) / 4, 1)
                 results.append({
                     "guid": g, "name": info["name"], "value": composite,
                     "axes": {
                         "aggression": round(aggression, 1), "awareness": round(awareness, 1),
                         "teamplay": round(teamplay, 1), "timing": round(timing, 1),
-                        "mechanical": round(mechanical, 1),
+                    },
+                    # reported, NOT part of the composite (see comment above)
+                    "unscored": {
+                        "mechanical": round(mechanical, 1) if mechanical is not None else None,
                     },
                 })
 
             results.sort(key=lambda x: x["value"], reverse=True)
-            return {"status": "ok", "category": "power", "entries": results[:safe_limit]}
+            return {"status": "ok", "category": "power",
+                    "formula_version": POWER_FORMULA_VERSION,
+                    "entries": results[:safe_limit]}
 
         elif category == "spawn":
             scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)

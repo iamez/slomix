@@ -61,7 +61,12 @@ from .base import (
 # TODO). A kill whose victim died inside an objective sphere now earns
 # OBJECTIVE_AREA_MULTIPLIER — a real change to total_impact for obj-area kills,
 # so the version bumps to invalidate pre-fix cache rows.
-FORMULA_VERSION = "kis-v4"
+# v4 -> v5 (2026-07-25): the PUSH multiplier is retired (see _score_kill's
+# push block for the measurements). Kills during a push predicted the round
+# winner no better than any other kill (50.9% vs 50.8%), while the metric
+# gating them was inverse with kill activity. 8.5% of kills lose an average
+# 1.515x boost, so every cached row must be rescored.
+FORMULA_VERSION = "kis-v5"
 
 
 def _scope_row_filter(
@@ -385,20 +390,39 @@ class _KisMixin:
                 carrier_mult = CARRIER_KILL_MULTIPLIER
             is_carrier = True
 
-        # Push context — quality-gated with tighter window
+        # Push context — DESCRIPTIVE ONLY since v5 (2026-07-25).
+        #
+        # The multiplier was retired after a validity audit measured on the
+        # production DB, not because the CONCEPT is wrong but because
+        # nothing we capture supports it:
+        #   * kills during a "push" belong to the round winner 50.9% of the
+        #     time vs 50.8% for every other kill — indistinguishable from
+        #     the ~50% baseline. (For contrast, on the same test crossfire
+        #     kills reach 52.2% and objective-area kills 53.4%, which is why
+        #     those multipliers stay.)
+        #   * push_quality is monotonically INVERSE with kills in its window
+        #     (<0.5 -> 0.90 kills; the 0.9-1.2 band this code gated on ->
+        #     0.60; 1.2+ -> 0.43), because `alignment x speed` peaks when a
+        #     team sprints unopposed out of spawn and drops on contact.
+        #   * no push field predicts kills: push_quality r=-0.111,
+        #     alignment r=-0.025, avg_speed r=-0.116, participants r=0.001.
+        # It boosted 8.5% of kills by an average 1.515x for a property that
+        # predicts nothing, so the honest fix is to stop scoring on it
+        # rather than swap in another unvalidated formula.
+        #
+        # `is_during_push` is still recorded: it is a true statement about
+        # the moment and feeds narrative//proximity panels. Only the SCORE
+        # contribution is gone. Restore a multiplier only once some push
+        # signal is shown to separate outcomes.
         push_mult = 1.0
         is_push = False
         if round_key in pushes:
-            best_pq = 0.0
             for push_start, push_end, pq, toward_obj in pushes[round_key]:
-                if push_start <= kill_time <= push_end + PUSH_BUFFER_MS:
-                    if (pq >= PUSH_QUALITY_THRESHOLD
-                            and toward_obj not in PUSH_TOWARD_EXCLUDE):
-                        if pq > best_pq:
-                            best_pq = pq
-            if best_pq > 0:
-                push_mult = 1.0 + min(best_pq * 0.5, 1.0)
-                is_push = True
+                if (push_start <= kill_time <= push_end + PUSH_BUFFER_MS
+                        and pq >= PUSH_QUALITY_THRESHOLD
+                        and toward_obj not in PUSH_TOWARD_EXCLUDE):
+                    is_push = True
+                    break
 
         # Crossfire context (kill within 3s of crossfire event)
         cf_mult = 1.0
