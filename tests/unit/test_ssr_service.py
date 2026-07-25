@@ -69,7 +69,9 @@ class FakeDB:
 @pytest.mark.asyncio
 async def test_compute_aggregates_group_relative():
     res = await SsrService(FakeDB()).compute()
-    assert res["formula_version"] == "ssr-v0.2"
+    # v0.3: situational_share dropped is_during_push with the kis-v5
+    # retirement — a component change, so the version had to move with it.
+    assert res["formula_version"] == "ssr-v0.3"
     by = {p["player_guid"]: p for p in res["players"]}
 
     assert "DDDD4444" not in by, "below min-session gate must not be rated"

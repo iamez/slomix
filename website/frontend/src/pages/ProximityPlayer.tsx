@@ -77,24 +77,29 @@ function polarToXY(angle: number, radius: number): [number, number] {
   return [CX + radius * Math.cos(rad), CY + radius * Math.sin(rad)];
 }
 
-function pentagonPoints(radius: number): string {
-  return Array.from({ length: 5 }, (_, i) => {
-    const [x, y] = polarToXY((360 / 5) * i, radius);
+// Grid outline for an N-axis radar. Was hardcoded to a pentagon; the radar
+// became four-axis in power-v2 (Mechanical retired), and a hardcoded 5 made
+// the whole chart render nothing for every player.
+function gridPoints(radius: number, sides: number): string {
+  return Array.from({ length: sides }, (_, i) => {
+    const [x, y] = polarToXY((360 / sides) * i, radius);
     return `${x},${y}`;
   }).join(' ');
 }
 
 function RadarChart({ axes, composite }: { axes: { label: string; value: number }[]; composite: number }) {
-  if (axes.length !== 5) return null;
+  // A radar needs at least a triangle; below that there is no shape to draw.
+  if (axes.length < 3) return null;
+  const sides = axes.length;
 
   const dataPoints = axes.map((a, i) => {
     const frac = Math.min(a.value, 100) / 100;
-    return polarToXY((360 / 5) * i, R * frac);
+    return polarToXY((360 / sides) * i, R * frac);
   });
   const dataPath = dataPoints.map(([x, y]) => `${x},${y}`).join(' ');
 
   // Label positions pushed slightly further out
-  const labelPositions = axes.map((_, i) => polarToXY((360 / 5) * i, R + 28));
+  const labelPositions = axes.map((_, i) => polarToXY((360 / sides) * i, R + 28));
 
   return (
     <svg viewBox={`0 0 ${RADAR_SIZE} ${RADAR_SIZE}`} className="w-full max-w-[320px] mx-auto">
@@ -102,7 +107,7 @@ function RadarChart({ axes, composite }: { axes: { label: string; value: number 
       {[0.33, 0.66, 1].map((scale) => (
         <polygon
           key={scale}
-          points={pentagonPoints(R * scale)}
+          points={gridPoints(R * scale, sides)}
           fill="none"
           stroke="rgba(148,163,184,0.15)"
           strokeWidth="1"
@@ -111,7 +116,7 @@ function RadarChart({ axes, composite }: { axes: { label: string; value: number 
 
       {/* Axis lines */}
       {axes.map((_, i) => {
-        const [x, y] = polarToXY((360 / 5) * i, R);
+        const [x, y] = polarToXY((360 / sides) * i, R);
         return <line key={i} x1={CX} y1={CY} x2={x} y2={y} stroke="rgba(148,163,184,0.1)" strokeWidth="1" />;
       })}
 

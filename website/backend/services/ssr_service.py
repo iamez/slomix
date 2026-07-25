@@ -35,8 +35,14 @@ from website.backend.services.storytelling.kis import (
 )
 from website.backend.utils.et_constants import strip_et_colors
 
-FORMULA_VERSION = "ssr-v0.2"  # v0.2: +opening_net, +trade_discipline (owner-
-                              # approved tables, PR #467 merged)
+FORMULA_VERSION = "ssr-v0.3"  # v0.2: +opening_net, +trade_discipline (owner-
+                              # approved tables, PR #467 merged).
+                              # v0.3 (2026-07-25): situational_share no longer
+                              # counts is_during_push, following the kis-v5
+                              # retirement. That changes the component, hence
+                              # percentiles and final scores, so the version
+                              # bumps rather than silently republishing
+                              # v0.2 numbers computed a different way.
 MIN_SESSIONS = 5           # owner answer A6
 MIN_COMPONENTS = 3         # a 1-component player must not top the board
 MIN_ACQ_EVENTS = 15
