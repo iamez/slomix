@@ -29,6 +29,7 @@ from website.backend.services.storytelling_service import (
     DISTANCE_NORMAL,
     LOW_HEALTH_MULTIPLIER,
     LOW_HEALTH_THRESHOLD,
+    OBJECTIVE_AREA_MULTIPLIER,
     OUTCOME_GIBBED,
     OUTCOME_REVIVED,
     OUTCOME_TAPPED,
@@ -448,6 +449,14 @@ async def get_kis_formula():
             "normal": {"value": DISTANCE_NORMAL, "threshold": "100-800u"},
             "melee": {"value": DISTANCE_MELEE, "threshold": "<100u"},
         },
+        "objective_multipliers": {
+            "objective_area": {
+                "value": OBJECTIVE_AREA_MULTIPLIER,
+                "description": "Victim died inside one of the map's objective "
+                               "zones (3D sphere check vs objective_zones.json) "
+                               "— kills at the objective matter more (KIS v4)",
+            },
+        },
         "oksii_multipliers": {
             "health": {
                 "value": LOW_HEALTH_MULTIPLIER,
@@ -486,7 +495,7 @@ async def get_kis_formula():
             "compression": 0.25,
             "description": "Above 5.0: total = 5.0 + (raw - 5.0) × 0.25. Max ~8.5",
         },
-        "formula": "total_impact = soft_cap(base × carrier × push × crossfire × spawn × outcome × class × distance × health × alive × reinf)",
+        "formula": "total_impact = soft_cap(base × carrier × push × crossfire × spawn × outcome × class × distance × health × alive × reinf × objective_area)",
     }
 
 

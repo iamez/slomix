@@ -499,10 +499,15 @@ class _KisMixin:
 
                 # Objective-area check — victim position vs the map's objective
                 # spheres. Coordinates may be absent on older/partial rows.
+                # All THREE coordinates are required: the zones are 3D spheres,
+                # and substituting a missing z with ground level (the old
+                # `vz or 0`) made any kill under/over a vertically-stacked
+                # objective (goldrush bank, supply depot) a false positive.
+                # A kill we cannot place in 3D scores neutral, not boosted.
                 vx, vy, vz = cp.get('victim_x'), cp.get('victim_y'), cp.get('victim_z')
-                if vx is not None and vy is not None:
+                if vx is not None and vy is not None and vz is not None:
                     zones = _load_objective_zones().get((map_name or '').lower())
-                    if zones and _objective_zone_index(vx, vy, vz or 0, zones) >= 0:
+                    if zones and _objective_zone_index(vx, vy, vz, zones) >= 0:
                         obj_mult = OBJECTIVE_AREA_MULTIPLIER
                         is_objective_area = True
 
