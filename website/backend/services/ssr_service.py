@@ -93,8 +93,13 @@ class SsrService:
         rows = await self.db.fetch_all(
             "SELECT UPPER(LEFT(killer_guid, 8)) AS g8,"
             "       SUM(total_impact) AS total,"
+            # is_during_push is NOT in this filter: the push multiplier was
+            # retired in kis-v5 after push kills measured at the round-winner
+            # baseline (50.9% vs 50.8%). Counting it as "situational" would
+            # keep crediting a signal the score itself no longer recognises —
+            # the flag survives as narrative context only (Codex #553).
             "       SUM(total_impact) FILTER ("
-            "           WHERE is_carrier_kill OR is_during_push"
+            "           WHERE is_carrier_kill"
             "              OR is_crossfire OR is_objective_area) AS situ "
             "FROM storytelling_kill_impact "
             # formula_version pin (2026-07-25): without it this SUM mixes

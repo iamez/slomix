@@ -125,7 +125,10 @@ async def get_proximity_player_radar(
     range_days: int = 90,
     db: DatabaseAdapter = Depends(get_db),
 ):
-    """5-axis radar data: Aggression, Awareness, Teamplay, Timing, Mechanical."""
+    """4-axis radar (power-v2): Aggression, Awareness, Teamplay, Timing.
+
+    Mechanical left the radar with the 2026-07-25 validity pass; it and the
+    raw reaction times are returned under `unscored`."""
     since = datetime.now(timezone.utc).replace(tzinfo=None).date() - timedelta(days=max(1, min(range_days, 3650)))
     try:
         # 5 independent axis queries — parallelise. Teamplay axis stays
@@ -170,9 +173,14 @@ async def get_proximity_player_radar(
         total_eng = int(awareness_row[0] or 0) if awareness_row else 0
         escapes = int(awareness_row[1] or 0) if awareness_row else 0
         escape_rate = escapes / max(total_eng, 1) * 100
-        dodge_ms = int(dodge_row[0] or 5000) if dodge_row and dodge_row[0] else 5000
-        dodge_score = max(0, 100 - (dodge_ms / 50))  # Lower dodge = better
-        awareness = min(100, escape_rate * 0.5 + dodge_score * 0.5)
+        # AWARENESS — escape rate only, matching power-v2 on the leaderboard.
+        # The old half `100 - dodge_ms/50` assumed faster dodge = more aware,
+        # but dodge_reaction_ms runs the OTHER way against this very outcome
+        # (sub-300ms "reactions" escape 22.0%, 1000ms+ escape 65.7%), so the
+        # two halves pulled against each other. Kept as a reported-only value
+        # below so the number does not silently vanish from the profile.
+        dodge_ms = int(dodge_row[0]) if dodge_row and dodge_row[0] else None
+        awareness = min(100, escape_rate)
 
         # Teamplay: reuse percentile-normalized prox_team score (6 metrics).
         # Only call compute_prox_scores when player has enough engagements (>=10),
@@ -282,15 +290,19 @@ async def get_proximity_player_radar(
         timing_count = int(timing_row[1] or 0) if timing_row else 0
         timing = min(100, avg_timing * 100 * min(timing_count / 5, 1))
 
-        rf_ms = int(rf_row[0] or 3000) if rf_row and rf_row[0] else 3000
-        rf_score = max(0, 100 - (rf_ms / 30))
-        mechanical = min(100, rf_score)
+        # MECHANICAL — reported, not scored (same call as power-v2).
+        # return_fire_ms shows no signal against engagement survival
+        # (40.1/34.9/36.8/41.5% escape across its bands), and the candidate
+        # replacements were measured and rejected rather than substituted
+        # (accuracy r=0.053 vs kills, headshot rate r=-0.610).
+        rf_ms = int(rf_row[0]) if rf_row and rf_row[0] else None
+        mechanical = min(100, max(0, 100 - rf_ms / 30)) if rf_ms is not None else None
 
         # The composite averages only REAL axis scores: an 'unavailable'
         # Teamplay is a placeholder 0 by contract, and averaging it in would
         # depress the composite by a value explicitly declared not-a-score
         # (Codex on #518).
-        composite_axes = [aggression, awareness, timing, mechanical]
+        composite_axes = [aggression, awareness, timing]
         if teamplay_source != "unavailable":
             composite_axes.append(teamplay)
         return {
@@ -299,8 +311,17 @@ async def get_proximity_player_radar(
                 {"label": "Awareness", "value": round(awareness, 1)},
                 {"label": "Teamplay", "value": round(teamplay, 1)},
                 {"label": "Timing", "value": round(timing, 1)},
-                {"label": "Mechanical", "value": round(mechanical, 1)},
             ],
+            # Measured but deliberately NOT part of the radar or the
+            # composite — see the AWARENESS/MECHANICAL comments above.
+            # Surfaced so the raw values stay inspectable and the UI can
+            # label them as descriptive rather than dropping them silently.
+            "unscored": {
+                "mechanical": round(mechanical, 1) if mechanical is not None else None,
+                "avg_return_fire_ms": rf_ms,
+                "avg_dodge_reaction_ms": dodge_ms,
+            },
+            "formula_version": "power-v2",
             "composite": round(sum(composite_axes) / len(composite_axes), 1),
             # IMP-003 teamplay formula contract: which formula produced the
             # Teamplay axis, its version/window, and — for the CF/TR fallback —

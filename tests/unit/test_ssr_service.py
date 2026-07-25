@@ -34,7 +34,9 @@ class FakeDB:
                     ("BBBB2222", "bravo", MIN_SESSIONS),
                     ("CCCC3333", "^1char^7lie", MIN_SESSIONS + 1),
                     ("DDDD4444", "rookie", MIN_SESSIONS - 1)]
-        if "is_carrier_kill OR is_during_push" in query:
+        # Matches the situational filter WITHOUT is_during_push: the push
+        # signal left the filter in kis-v5 (see ssr_service._kis_shares).
+        if "is_carrier_kill" in query and "is_objective_area" in query:
             return [("AAAA1111", 100.0, 50.0),   # share 0.5
                     ("BBBB2222", 100.0, 20.0),   # share 0.2
                     ("DDDD4444", 100.0, 90.0)]   # below gate -> ignored
