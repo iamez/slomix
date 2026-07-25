@@ -36,11 +36,10 @@ async def get_proximity_events(
     # explicitly supports (combat_engagement without round_id) an
     # unconditionally-gated clause would make the very fallback query that
     # exists for that variant fail with an undefined column (review on #548).
-    where_sql = ""
-    params: list = []
+    # Only `scope` needs a pre-value: the except branch below reports it even
+    # if the probe itself fails. Everything else is assigned inside the try
+    # before any use (CodeQL flagged the redundant initialisers).
     scope: dict = {}
-    scoped_params: list = []
-    limit_placeholder = 1
     try:
         has_round_id_column = await _table_column_exists(
             db, "combat_engagement", "round_id"
