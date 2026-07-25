@@ -1085,11 +1085,19 @@ class ProximityParserV4:
 
         round_end_unix = int(self.metadata.get("round_end_unix") or 0)
         round_start_unix = int(self.metadata.get("round_start_unix") or 0)
+        # rounds.round_date/round_time are stored in the GAME SERVER's local
+        # time (Europe/Ljubljana). A naive fromtimestamp() converts via the
+        # HOST's timezone instead — on a UTC host that shifts the ±45-min
+        # linker window by 1-2 hours, producing orphans or wrong-round links
+        # (audit 2026-07-25 S8). Convert explicitly, then drop tzinfo to
+        # keep the naive-datetime contract the linker expects.
+        from zoneinfo import ZoneInfo
+        local_tz = ZoneInfo(os.getenv("SLOMIX_LOCAL_TZ", "Europe/Ljubljana"))
         target_dt = None
         if round_end_unix > 0:
-            target_dt = datetime.fromtimestamp(round_end_unix)
+            target_dt = datetime.fromtimestamp(round_end_unix, tz=local_tz).replace(tzinfo=None)
         elif round_start_unix > 0:
-            target_dt = datetime.fromtimestamp(round_start_unix)
+            target_dt = datetime.fromtimestamp(round_start_unix, tz=local_tz).replace(tzinfo=None)
 
         try:
             from bot.core.round_linker import resolve_round_id_with_reason
@@ -3415,6 +3423,15 @@ class ProximityParserV4:
         """Import revive events to proximity_revive table"""
         if not await self._table_has_column('proximity_revive', 'revived_guid'):
             return
+        # Round identity columns landed with migration 065 (audit 2026-07-25
+        # S9): before it this table had no natural key, so the bare
+        # `ON CONFLICT DO NOTHING` below had nothing to conflict against and
+        # every reprocessed file silently doubled revive counts. With the
+        # identity present, re-imports dedupe against the partial unique
+        # index (round_start_unix IS NOT NULL).
+        has_identity = await self._table_has_column('proximity_revive', 'round_start_unix')
+        rsu = int(self.metadata.get('round_start_unix') or 0)
+        rsu_val = rsu if rsu > 0 else None
         for evt in self.revive_events:
             columns = [
                 "round_id", "map_name",
@@ -3431,11 +3448,21 @@ class ProximityParserV4:
                 evt.time, evt.x, evt.y, evt.z,
                 evt.distance_to_enemy, evt.under_fire, evt.nearest_enemy_guid,
             ]
+            conflict = "ON CONFLICT DO NOTHING"
+            if has_identity:
+                columns += ["session_date", "round_number", "round_start_unix"]
+                values += [session_date, self.metadata.get('round_number'), rsu_val]
+                if rsu_val is not None:
+                    conflict = (
+                        "ON CONFLICT (round_start_unix, map_name, medic_guid, "
+                        "revived_guid, revive_time) "
+                        "WHERE round_start_unix IS NOT NULL DO NOTHING"
+                    )
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""
                 INSERT INTO proximity_revive ({", ".join(columns)})
                 VALUES ({placeholders})
-                ON CONFLICT DO NOTHING
+                {conflict}
             """
             await self.db_adapter.execute(query, tuple(values))
 
@@ -3443,6 +3470,10 @@ class ProximityParserV4:
         """Import weapon accuracy data to proximity_weapon_accuracy table"""
         if not await self._table_has_column('proximity_weapon_accuracy', 'player_guid'):
             return
+        # Same S9 dedup contract as _import_revive_events above (migration 065).
+        has_identity = await self._table_has_column('proximity_weapon_accuracy', 'round_start_unix')
+        rsu = int(self.metadata.get('round_start_unix') or 0)
+        rsu_val = rsu if rsu > 0 else None
         for wa in self.weapon_accuracy:
             columns = [
                 "round_id", "map_name",
@@ -3455,11 +3486,20 @@ class ProximityParserV4:
                 wa.player_guid, wa.player_name, wa.team,
                 wa.weapon_id, wa.shots_fired, wa.hits, wa.kills, wa.headshots,
             ]
+            conflict = "ON CONFLICT DO NOTHING"
+            if has_identity:
+                columns += ["session_date", "round_number", "round_start_unix"]
+                values += [session_date, self.metadata.get('round_number'), rsu_val]
+                if rsu_val is not None:
+                    conflict = (
+                        "ON CONFLICT (round_start_unix, map_name, player_guid, weapon_id) "
+                        "WHERE round_start_unix IS NOT NULL DO NOTHING"
+                    )
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""
                 INSERT INTO proximity_weapon_accuracy ({", ".join(columns)})
                 VALUES ({placeholders})
-                ON CONFLICT DO NOTHING
+                {conflict}
             """
             await self.db_adapter.execute(query, tuple(values))
 

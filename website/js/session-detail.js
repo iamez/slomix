@@ -573,11 +573,17 @@ const _MOMENT_TYPE_LABELS = {
 
 async function _loadMomentsStrip() {
     const host = document.getElementById('sd-moments-strip');
-    if (!host || !_sessionDate) return;
+    if (!host || (!_sessionDate && _sessionId == null)) return;
     let data;
     try {
+        // Prefer gaming_session_id (SS-D straggler, audit 2026-07-25): a
+        // calendar date holding TWO gaming sessions makes the backend 409,
+        // which the catch below swallows — the strip just silently vanished.
+        const scopeQ = _sessionId != null
+            ? `gaming_session_id=${encodeURIComponent(_sessionId)}`
+            : `session_date=${encodeURIComponent(_sessionDate)}`;
         data = await fetchJSON(
-            `${API_BASE}/storytelling/moments?session_date=${encodeURIComponent(_sessionDate)}&limit=5`);
+            `${API_BASE}/storytelling/moments?${scopeQ}&limit=5`);
     } catch (_) {
         return; // optional enrichment — never block the page
     }
@@ -691,11 +697,16 @@ async function _loadObjectivePressure() {
 
 async function _loadLifeCards() {
     const host = document.getElementById('sd-life-cards');
-    if (!host || !_sessionDate) return;
+    if (!host || (!_sessionDate && _sessionId == null)) return;
     let data;
     try {
+        // Prefer gaming_session_id — same 409-on-shared-date swallow as the
+        // moments strip above (SS-D straggler, audit 2026-07-25).
+        const scopeQ = _sessionId != null
+            ? `gaming_session_id=${encodeURIComponent(_sessionId)}`
+            : `session_date=${encodeURIComponent(_sessionDate)}`;
         data = await fetchJSON(
-            `${API_BASE}/storytelling/best-lives?session_date=${encodeURIComponent(_sessionDate)}&limit=5`);
+            `${API_BASE}/storytelling/best-lives?${scopeQ}&limit=5`);
     } catch (_) {
         return; // optional enrichment — never block the page
     }
