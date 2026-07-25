@@ -421,9 +421,15 @@ async def get_kis_formula():
                 "description": "Carrier kill + teammate returned objective within 10s",
             },
             "push": {
-                "value": "1.0 + quality×0.5 (range 1.45-2.0, requires quality≥0.9 toward objective)",
+                "value": 1.0,
+                "status": "retired in kis-v5 (2026-07-25)",
                 "threshold": PUSH_QUALITY_THRESHOLD,
-                "description": "Kill during high-quality coordinated team push toward objective",
+                "description": "NO LONGER SCORED. Kills during a push predicted "
+                               "the round winner 50.9% of the time vs 50.8% for "
+                               "all other kills — indistinguishable from the ~50% "
+                               "baseline — and push_quality was inverse with kill "
+                               "activity. The is_during_push flag is still "
+                               "recorded for narrative use.",
             },
             "crossfire": {
                 "value": CROSSFIRE_MULTIPLIER,
@@ -495,7 +501,7 @@ async def get_kis_formula():
             "compression": 0.25,
             "description": "Above 5.0: total = 5.0 + (raw - 5.0) × 0.25. Max ~8.5",
         },
-        "formula": "total_impact = soft_cap(base × carrier × push × crossfire × spawn × outcome × class × distance × health × alive × reinf × objective_area)",
+        "formula": "total_impact = soft_cap(base × carrier × crossfire × spawn × outcome × class × distance × health × alive × reinf × objective_area)",
     }
 
 

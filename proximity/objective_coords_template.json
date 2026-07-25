@@ -515,6 +515,18 @@
         "y": null,
         "z": null
       }
+    ],
+    "et_brewdog": [
+      {
+        "name": "Axis Transmitter",
+        "lua_name": "axis_transmitter",
+        "type": "objective"
+      },
+      {
+        "name": "Quiz Answers",
+        "lua_name": "quiz_answers",
+        "type": "objective"
+      }
     ]
   }
 }
