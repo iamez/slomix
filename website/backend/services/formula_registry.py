@@ -110,6 +110,19 @@ def get_registry() -> list[dict]:
                        "health/alive/reinf), soft cap 5.0.",
         },
         {
+            "name": "pwc",
+            "version": "pwc-v2",
+            "status": "live",
+            "module": "website/backend/services/storytelling/win_contribution.py",
+            "surface": "/api/storytelling/win-contribution, Smart Stats MVP",
+            "summary": "Player Win Contribution: 8 weighted shares (kills .22, "
+                       "objectives .20, revives .12, crossfire .10, trade .10, "
+                       "damage .10, survival .08, clutch .08). Derived: WIS "
+                       "(win-loss delta x harmonic confidence), WAA, and "
+                       "Bayesian-shrunk waa_bayes (prior C=2) for MVP. "
+                       "Session-ephemeral — no persistence.",
+        },
+        {
             "name": "box_scoring",
             "version": "v1",
             "status": "live",

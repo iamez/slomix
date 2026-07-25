@@ -2,6 +2,29 @@
 
 ---
 
+## Data-Correctness Audit deferrals (2026-07-25)
+
+Open follow-ups from the full data-correctness audit (deep report is local:
+`docs/AUDIT_DATA_CORRECTNESS_2026-07-25.md`, gitignored by convention).
+Fixed in the same program: KIS gsid backfill (#546), KIS v4 full recompute
+(#547), proximity serving-layer sweep (#548), revive/weapon-accuracy
+identity + dedup + tz-aware linking (#549).
+
+| Issue | Severity | Notes |
+|------|----------|-------|
+| **Deployment drift (prod + puran)** | High | Prod VM runs v1.25.0 (`b29977c0`) — everything #495+ is not live. Puran runs a hand-edited `proximity_tracker.lua` based on #378 (flags flipped by hand, no #403 duration clamp) and webhook v1.7.0 (missing the #343 detect_pause Lua 5.4 crash fix). Owner-gated: prod needs migrations 061+063 (+064/065) BEFORE the code deploy. `shot_fired=true` on puran is INTENTIONAL — never blind-copy the repo file. |
+| **KIS v2 residue** | Medium | 1,812 `kis-v2` rows remain after the #547 full recompute: 88 from gsid 127 (scope resolver rejects it — no accepted rounds) + 1,724 identity-orphans whose round keys match no gsid-stamped round. Unattributable by design; revisit only if a session-level attribution source appears. |
+| **Proximity NULL-round_id orphans** | Medium | Rows imported before migration 065 with a NULL `round_id` carry no round identity (revive/weapon-accuracy) or only a date (other tables) and cannot be relinked or deduped against linked siblings — e.g. one etl_adlernest R2 (gsid 138) has its weapon-accuracy only in identity-less form. Serving keeps them (dropping would shrink long-standing totals). |
+| **Proximity is date-scoped, not gsid** (S7) | Medium | The /proximity/ routers still scope by `session_date`; a midnight-crossing session shows only its pre-midnight rounds when a date is selected (gsid 138: 2 rounds / 88 kills invisible). Storytelling already migrated (GamingSessionScope); proximity needs the same treatment. |
+| **`/skill/composite` + React `client.ts` single-date** | Medium | Last SS-D holdouts; `/skill/composite` also lacks `is_valid` and bot filters entirely. |
+| **skill_router SDS denied source** | Low | Still reads PCS `denied_playtime` (capped) — PR #541's own noted follow-up. |
+| **KIS `distance_multiplier` stub** | Low | Hardcoded `DISTANCE_NORMAL` (kis.py TODO) but stored/returned as a real per-kill field. Needs per-kill distance data. |
+| **`website/migrations/` has no ledger** | Low | The #545 drift guard cannot cover it (documented in that PR). |
+| **`storytelling/loaders.py` per-date only** | Low | Safe today only because `_load_context_for_dates` merges per-date; any future direct caller inherits the midnight bug. |
+| **Formula registry gaps** | Low | PWC/WIS/WAA now registered (this PR); still missing: archetypes, moments, synergy, momentum, gravity/space/enabler/lurker, objective_pressure, session_matrix, rivalries, season_awards. 15/20 versions are hand-typed with no verifying test. |
+
+---
+
 ## Planned: Lua Time Stats Overhaul (Feb 20, 2026) - Major Feature
 
 **Summary**: Add comprehensive per-player time tracking to `stats_discord_webhook.lua`, replacing reliance on the c0rnp0rn Lua's buggy time stats. This is a multi-component upgrade covering **all time-related metrics**.
