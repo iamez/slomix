@@ -60,10 +60,23 @@ def _app(db) -> FastAPI:
     return app
 
 
+_req_counter = 0
+
+
 async def _get(db, path, params):
+    # Unique X-Forwarded-For per request: slowapi's limiter keys on the
+    # client IP and its in-memory storage is shared across every FastAPI
+    # app built in the same pytest process — running the full suite (KROGT
+    # tests hit the same /leaderboards route) blew the 10/minute budget and
+    # 429'd the later requests here (failed exactly this way in CI).
+    global _req_counter
+    _req_counter += 1
     transport = ASGITransport(app=_app(db))
     async with AsyncClient(transport=transport, base_url="http://t") as client:
-        return await client.get(path, params=params)
+        return await client.get(
+            path, params=params,
+            headers={"X-Forwarded-For": f"10.99.{_req_counter // 250}.{_req_counter % 250}"},
+        )
 
 
 # ---------------------------------------------------------------------------
