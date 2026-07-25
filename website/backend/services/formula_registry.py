@@ -144,6 +144,21 @@ def get_registry() -> list[dict]:
                        "`unscored`. Was unversioned and unregistered before v2.",
         },
         {
+            "name": "player_radar",
+            "version": "player-radar-v2",
+            "status": "live",
+            "module": "website/backend/routers/proximity_player.py",
+            "surface": "/api/proximity/player/{guid}/radar (profile radar chart)",
+            "summary": "Same four axis DEFINITIONS as power_rating (aggression, "
+                       "awareness, teamplay, timing; mechanical retired to "
+                       "`unscored`) but different INPUTS: Teamplay comes from "
+                       "the per-player prox score or its CF/TR fallback rather "
+                       "than population percentiles, so the same player scores "
+                       "differently here than on the leaderboard. Registered "
+                       "separately so that difference is visible rather than "
+                       "implied to be one formula.",
+        },
+        {
             "name": "krogt",
             "version": "v1",
             "status": "live",

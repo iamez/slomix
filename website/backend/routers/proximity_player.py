@@ -321,7 +321,14 @@ async def get_proximity_player_radar(
                 "avg_return_fire_ms": rf_ms,
                 "avg_dodge_reaction_ms": dodge_ms,
             },
-            "formula_version": "power-v2",
+            # Distinct identity: this radar shares power-v2's axis
+            # DEFINITIONS but not its inputs — Teamplay here comes from the
+            # per-player prox score (or the CF/TR fallback), not from the
+            # leaderboard's population percentiles, so the two produce
+            # different numbers for the same player. Publishing both as
+            # "power-v2" would claim an equivalence that does not hold.
+            "formula_version": "player-radar-v2",
+            "axis_definitions_from": "power-v2",
             "composite": round(sum(composite_axes) / len(composite_axes), 1),
             # IMP-003 teamplay formula contract: which formula produced the
             # Teamplay axis, its version/window, and — for the CF/TR fallback —
