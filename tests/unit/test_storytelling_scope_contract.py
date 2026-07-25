@@ -66,7 +66,10 @@ class _FakeStorytellingService:
     async def kis_compute_with_shadow(self, sd):
         return {"status": "read_only"}
 
-    async def get_kis_leaderboard(self, sd, limit=20):
+    async def get_kis_leaderboard(self, scope, limit=20):
+        # #543 changed the real signature from a date to a GamingSessionScope;
+        # the call is positional so the stale `sd` name still passed — name it
+        # accurately so a future signature drift can't hide behind the fake.
         return []
 
     async def compute_team_synergy(self, scope):

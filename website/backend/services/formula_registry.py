@@ -47,6 +47,11 @@ def _power_version() -> str:
     return POWER_FORMULA_VERSION
 
 
+def _pwc_version() -> str:
+    from website.backend.services.storytelling.win_contribution import FORMULA_VERSION
+    return FORMULA_VERSION
+
+
 def _prox_version() -> str:
     from website.backend.services.prox_scoring import FORMULA_VERSION
     return FORMULA_VERSION
@@ -118,6 +123,35 @@ def get_registry() -> list[dict]:
                        "~50% round-winner baseline (50.9% vs 50.8%) while the "
                        "gating metric ran inverse to kill activity; "
                        "is_during_push is still recorded but no longer scored.",
+        },
+        {
+            "name": "pwc",
+            "version": _pwc_version(),
+            "status": "live",
+            "module": "website/backend/services/storytelling/win_contribution.py",
+            "surface": "/api/storytelling/win-contribution, Smart Stats MVP",
+            "summary": "Player Win Contribution: 8 weighted components (kills "
+                       ".22, objectives .20, revives .12, crossfire .10, trade "
+                       ".10, damage .10, survival .08, clutch .08). Seven are "
+                       "team-total shares (player / team sum); SURVIVAL is not "
+                       "— it is min(player_alive / team_AVERAGE_alive, 2.0), so "
+                       "it centres on 1.0 and caps at 2x rather than summing to "
+                       "1 across the team. CONDITIONAL: in a "
+                       "round where every player has zero objectives, the .20 "
+                       "objective weight is dropped and redistributed (kills "
+                       "+.06, damage +.03, revives +.03, crossfire +.03, trade "
+                       "+.03, survival +.02; clutch unchanged) — common on "
+                       "fullhold/short rounds, so the fixed weights above are "
+                       "not what those rounds actually use. Derived: WIS "
+                       "(win-loss delta x harmonic confidence), WAA, and "
+                       "Bayesian-shrunk waa_bayes (prior C=2) for MVP. "
+                       "MVP: only players with rounds_won > 0 AND "
+                       "total_rounds >= max(2, max_rounds_played // 2) are "
+                       "eligible, ranked by waa_bayes then total_pwc then "
+                       "rounds_won; if NOBODY qualifies (late joiners only, no "
+                       "round winners) it falls back to the highest total_pwc "
+                       "and waa_bayes is ignored entirely. "
+                       "Session-ephemeral — no persistence.",
         },
         {
             "name": "box_scoring",
