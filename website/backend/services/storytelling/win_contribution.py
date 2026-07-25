@@ -15,6 +15,16 @@ from .base import (
 if TYPE_CHECKING:
     from website.backend.services.session_scope import GamingSessionScope
 
+# Owner version constant for PWC, following the KIS / s.effort pattern:
+# the formula lives here, so the version lives here too and the registry
+# IMPORTS it rather than carrying a hand-typed copy that can drift.
+#
+# v2: PCS (72%) + proximity (28%) split, with the zero-objective
+# redistribution branch. Bump on ANY change to the weights, the
+# redistribution, the derived WIS/WAA/waa_bayes definitions, or the MVP
+# eligibility rule — all of them move published numbers.
+FORMULA_VERSION = "pwc-v2"
+
 
 class _WinContributionMixin:
     """Win Contribution methods for StorytellingService."""
