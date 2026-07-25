@@ -420,10 +420,17 @@ class VoiceSessionService:
             # midnight-crossing session would otherwise leave the
             # post-midnight date's cache stale (codex, "Invalidate all KIS
             # dates touched by the session").
+            # Resolve the gaming_session_id set ONCE and drive both halves of
+            # the invalidation with it. Previously the delete was gsid-scoped
+            # while the warm was date-only, so on a calendar date holding two
+            # gaming sessions the warm hit the story-scope contract's
+            # ambiguous-date 409 AFTER the delete had already succeeded —
+            # leaving the cache empty with nothing to refill it (Codex #546).
+            session_gsids = await self._session_gsids(session_ids)
             session_dates = await self._session_dates_touched(session_ids)
             for sd in (session_dates or [start_date or str(latest_date)]):
                 asyncio.create_task(
-                    self._invalidate_kis_cache(sd, round_ids=session_ids),
+                    self._invalidate_kis_cache(sd, gsids=session_gsids),
                     name="kis-cache-invalidate",
                 )
 
@@ -480,6 +487,28 @@ class VoiceSessionService:
         except Exception as e:
             logger.error(f"❌ Error finalizing session results: {e}", exc_info=True)
 
+    async def _session_gsids(self, round_ids) -> list[int]:
+        """Distinct gaming_session_id values behind this session's rounds.
+
+        Resolved once at finalize so the KIS delete and the KIS warm act on
+        the SAME scope. `round_ids` are `rounds.id` values (see
+        _session_start_date for why that distinction is spelled out at every
+        call site). Empty list on failure — callers degrade to the legacy
+        date-wide behaviour rather than skipping invalidation."""
+        try:
+            if not round_ids:
+                return []
+            placeholders = ",".join("?" * len(round_ids))
+            rows = await self.db_adapter.fetch_all(
+                f"SELECT DISTINCT gaming_session_id FROM rounds "
+                f"WHERE id IN ({placeholders}) AND gaming_session_id IS NOT NULL",  # noqa: S608 - placeholders only, values bound
+                tuple(round_ids),
+            )
+            return [int(r[0]) for r in (rows or []) if r and r[0] is not None]
+        except Exception:
+            logger.warning("session gsid lookup failed", exc_info=True)
+            return []
+
     async def _session_dates_touched(self, round_ids) -> list[str]:
         """Every distinct calendar date this session's rounds touch.
 
@@ -502,7 +531,7 @@ class VoiceSessionService:
             logger.warning("session dates-touched lookup failed", exc_info=True)
             return []
 
-    async def _invalidate_kis_cache(self, session_date: str, round_ids=None) -> None:
+    async def _invalidate_kis_cache(self, session_date: str, gsids=None) -> None:
         """Delete stale storytelling_kill_impact rows for session_date, then
         proactively warm the cache with a fresh compute.
 
@@ -547,10 +576,17 @@ class VoiceSessionService:
         bot-only change should not race with that (codex, "Serialize KIS
         invalidation with in-flight computes"). Best-effort; must never
         raise."""
-        await self._delete_kis_rows(session_date, round_ids=round_ids)
-        await self._warm_kis_cache(session_date)
+        await self._delete_kis_rows(session_date, gsids=gsids)
+        # Warm the SAME scope that was just deleted. Warming by gaming
+        # session id also sidesteps the ambiguous-date 409 the story-scope
+        # contract raises when one calendar date holds two sessions.
+        if gsids:
+            for gsid in gsids:
+                await self._warm_kis_cache(session_date, gaming_session_id=gsid)
+        else:
+            await self._warm_kis_cache(session_date)
 
-    async def _warm_kis_cache(self, session_date: str) -> None:
+    async def _warm_kis_cache(self, session_date: str, gaming_session_id: int | None = None) -> None:
         """Proactively trigger a fresh KIS compute right after invalidation
         (see _invalidate_kis_cache for why). Mirrors
         session_digest_service.py's _fetch_kis_top call pattern.
@@ -571,8 +607,14 @@ class VoiceSessionService:
             headers = {"X-Internal-Token": secret}
             timeout = aiohttp.ClientTimeout(total=15)
             async with aiohttp.ClientSession(timeout=timeout) as sess, \
-                    sess.get(url, params={"session_date": str(session_date)[:10],
-                                           "limit": 1},
+                    sess.get(url, params=(
+                        # Prefer the gsid: the story-scope contract 409s an
+                        # ambiguous date, which would leave the just-deleted
+                        # cache empty with nothing to refill it (Codex #546).
+                        {"gaming_session_id": gaming_session_id, "limit": 1}
+                        if gaming_session_id is not None
+                        else {"session_date": str(session_date)[:10], "limit": 1}
+                    ),
                              headers=headers) as resp:
                 if resp.status == 200:
                     logger.info("✅ KIS cache warmed for %s", session_date)
@@ -583,28 +625,27 @@ class VoiceSessionService:
             logger.warning("KIS cache warm failed for %s (url=%s): %s",
                             session_date, url, e)
 
-    async def _delete_kis_rows(self, session_date: str, round_ids=None) -> None:
+    async def _delete_kis_rows(self, session_date: str, gsids=None) -> None:
         """Delete THIS session's cached KIS rows for session_date.
 
         A bare `WHERE session_date = ?` wiped every gaming session sharing
         that calendar date (multi-gsid dates exist: 2026-03-25 held four),
         including a neighbour session's correctly-computed rows that nothing
-        would recompute until someone happened to view it. With round_ids
-        (rounds.id values, as passed by the finalization caller) the delete
-        is scoped to this session's gaming_session_id(s) plus the date's
-        unattributable NULL-gsid leftovers; without them it falls back to
-        the old date-wide behaviour."""
+        would recompute until someone happened to view it. `gsids` is the
+        scope resolved once by the caller and shared with the warm step, so
+        the two can never disagree (Codex #546).
+
+        LEGACY NULL-gsid ROWS — deliberate, not incidental: they are deleted
+        alongside this session's rows for the SAME calendar date. Such rows
+        pre-date the gsid stamping and cannot be attributed to either
+        session on a shared date, so leaving them would let unattributable
+        pre-computed scores survive a recompute and mix with fresh rows.
+        Deleting them is safe because the warm step immediately rescores
+        every kill in scope, and any row it cannot reproduce was by
+        definition not part of this session. Without `gsids` the delete
+        falls back to the old date-wide behaviour."""
         try:
             sd = datetime.fromisoformat(str(session_date)[:10]).date()
-            gsids: list[int] = []
-            if round_ids:
-                placeholders = ",".join("?" * len(round_ids))
-                rows = await self.db_adapter.fetch_all(
-                    f"SELECT DISTINCT gaming_session_id FROM rounds "
-                    f"WHERE id IN ({placeholders}) AND gaming_session_id IS NOT NULL",  # noqa: S608 - placeholders only, values bound
-                    tuple(round_ids),
-                )
-                gsids = [int(r[0]) for r in (rows or []) if r and r[0] is not None]
             if gsids:
                 # Both branches constrained to THIS call's date (Copilot
                 # review on #546): finalization launches one invalidation
