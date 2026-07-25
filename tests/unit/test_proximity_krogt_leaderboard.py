@@ -42,7 +42,11 @@ class FakeKrogtDB:
         if "from proximity_revive" in n:
             self.revive_sql = n
             return list(self.revives)
-        if "from rounds" in n:
+        # The shared round-quality gate embeds an `... exists (select 1
+        # from rounds rq ...)` subquery in EVERY scoped query, so "from
+        # rounds" alone would shadow the primary-table branches below —
+        # only the real durations query selects FROM rounds as its base.
+        if "from rounds" in n and "from rounds rq" not in n:
             return list(self.durations)
         if "from proximity_objective_run" in n:
             return list(self.objectives)

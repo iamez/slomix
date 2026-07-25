@@ -138,8 +138,11 @@ async def get_proximity_dashboard(
             range_days=range_days, session_date=parsed_date, map_name=map_name, db=db),
         "revives": lambda: get_proximity_revives(
             range_days=range_days, session_date=parsed_date, map_name=map_name, db=db),
-        "weapon_accuracy": lambda: get_proximity_weapon_accuracy(
-            range_days=range_days, map_name=map_name, db=db),
+        # Forwards the full scope now that the endpoint accepts it (review
+        # on #548): otherwise this section alone kept returning a rolling
+        # multi-session window inside a composite response the caller
+        # scoped to one session/round.
+        "weapon_accuracy": lambda: get_proximity_weapon_accuracy(**full, db=db),
         "prox_scores": lambda: get_prox_scores(request=request, range_days=range_days, db=db),
         "prox_formula": get_prox_scores_formula,
     }
@@ -393,7 +396,10 @@ async def get_proximity_summary(
             "SUM(CASE WHEN is_crossfire THEN 1 ELSE 0 END) AS crossfire_events, "
             "SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes, "
             "SUM(CASE WHEN outcome = 'killed' THEN 1 ELSE 0 END) AS kills "
-            f"FROM combat_engagement {where_sql}",
+            f"FROM combat_engagement {where_sql} "
+            # self-rows (world/self-kill artifacts, ~12% of the table) are
+            # not real engagements — they deflated escape/kill rates (S14)
+            "AND killer_guid IS DISTINCT FROM target_guid",
             query_params,
         )
         total_engagements = engagement_row[0] if engagement_row else 0
@@ -414,8 +420,8 @@ async def get_proximity_summary(
             """
             SELECT COUNT(*)
             FROM (
-                SELECT FLOOR(COALESCE(end_x, start_x) / 256.0)::int AS grid_x,
-                       FLOOR(COALESCE(end_y, start_y) / 256.0)::int AS grid_y
+                SELECT FLOOR(COALESCE(end_x, start_x) / 512.0)::int AS grid_x,
+                       FLOOR(COALESCE(end_y, start_y) / 512.0)::int AS grid_y
                 FROM combat_engagement
             """
             f" {where_sql} "
@@ -454,9 +460,16 @@ async def get_proximity_summary(
         )
         guid_name_map = await _load_scoped_guid_name_map(db, where_sql, query_params)
         top_duos = _compute_scoped_duos(duo_rows, 10, guid_name_map=guid_name_map)
+        # Above 5000 crossfire rows in scope the Python aggregation only saw
+        # the newest slice — say so instead of presenting a truncated
+        # ranking as complete (S13).
+        top_duos_partial = len(duo_rows or []) >= 5000
 
-        # v5 teamplay counts
+        # v5 teamplay counts. A failed count is UNKNOWN, not zero — the old
+        # `except -> 0` made a missing/renamed table indistinguishable from
+        # "no events" (S15 / DEEP_RCA A5).
         v5_counts = {}
+        v5_counts_unknown: list[str] = []
         for tbl in ['proximity_spawn_timing', 'proximity_team_cohesion',
                      'proximity_crossfire_opportunity', 'proximity_team_push',
                      'proximity_lua_trade_kill']:
@@ -467,7 +480,8 @@ async def get_proximity_summary(
                 v5_counts[tbl] = int(cnt or 0)
             except Exception:
                 logger.exception("Failed to count v5 table %s", tbl)
-                v5_counts[tbl] = 0
+                v5_counts[tbl] = None
+                v5_counts_unknown.append(tbl)
 
         payload.update(
             {
@@ -502,7 +516,9 @@ async def get_proximity_summary(
                 else None,
                 "sample_rounds": int(sample_rounds or 0),
                 "top_duos": top_duos,
+                "top_duos_partial": top_duos_partial,
                 "v5_counts": v5_counts,
+                "v5_counts_unknown": v5_counts_unknown,
             }
         )
     except Exception:

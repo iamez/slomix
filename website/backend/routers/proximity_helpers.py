@@ -107,6 +107,14 @@ class ProximityQueryBuilder:
                 self.where_parts.append(f"round_start_unix = ${len(self.params)}")
         return self
 
+    def with_round_quality_gate(self, alias: str = "") -> "ProximityQueryBuilder":
+        """Exclude bot-round / rejected-round rows (see _round_quality_gate_sql).
+
+        Only valid for tables that carry a round_id column."""
+        prefix = f"{alias}." if alias else ""
+        self.where_parts.append(_round_quality_gate_sql(prefix))
+        return self
+
     def with_raw(self, clause: str, *values: Any) -> "ProximityQueryBuilder":
         """Append a raw WHERE clause whose ``$1,$2,...`` placeholders are
         renumbered to continue from the builder's current param count.
@@ -159,6 +167,76 @@ def _parse_iso_date(value: str | None) -> Any | None:
         )
 
 
+def _round_quality_gate_sql(prefix: str) -> str:
+    """Exclude rows from bot rounds and rejected rounds (audit 2026-07-25 S6).
+
+    Every proximity KPI, leaderboard and heatmap previously mixed bot-test
+    rounds and invalid rounds into the same aggregates the rest of the
+    platform (ET Rating v3, SSR, season awards) explicitly gates out.
+    Rows whose round_id is NULL (unlinked orphans, ~7% on some tables) are
+    KEPT — they cannot be attributed either way, and dropping them would
+    silently shrink long-standing totals; the orphan problem is tracked
+    separately (round-linkage workstream).
+
+    Owner decision (2026-07-25): hard gate everywhere, no include_bots flag.
+    """
+    return (
+        f"({prefix}round_id IS NULL OR EXISTS ("
+        "SELECT 1 FROM rounds rq "
+        f"WHERE rq.id = {prefix}round_id "
+        "AND rq.is_bot_round IS DISTINCT FROM TRUE "
+        "AND rq.is_valid IS DISTINCT FROM FALSE))"
+    )
+
+
+async def attribution_breakdown(
+    db, table: str, where_sql: str, params, alias: str = "",
+) -> dict:
+    """Count how the round-quality gate actually classified the rows.
+
+    The gate (`_round_quality_gate_sql`) is an ATTRIBUTION gate, not a pure
+    quality gate: it drops rows linked to a rejected/bot round, but KEEPS
+    rows whose `round_id` is NULL because those cannot be judged either way.
+    Calling that "quality-gated" would overstate it (Codex #548), so any
+    surface that scores on gated rows should report this breakdown and let
+    the caller see how much of its evidence is unattributed.
+
+    `where_sql` must be the gated clause; this recomputes the same scope
+    without the gate to obtain the totals.
+    """
+    prefix = f"{alias}." if alias else ""
+    gate = _round_quality_gate_sql(prefix)
+    ungated = where_sql.replace(f" AND {gate}", "").replace(gate, "TRUE")
+    row = await db.fetch_one(
+        f"SELECT COUNT(*) AS total,"  # nosec B608 - clause built by _build_proximity_where_clause
+        f" COUNT(*) FILTER (WHERE {prefix}round_id IS NOT NULL AND EXISTS ("
+        f"   SELECT 1 FROM rounds rq WHERE rq.id = {prefix}round_id"
+        f"   AND rq.is_bot_round IS DISTINCT FROM TRUE"
+        f"   AND rq.is_valid IS DISTINCT FROM FALSE)) AS linked_valid,"
+        f" COUNT(*) FILTER (WHERE {prefix}round_id IS NOT NULL AND NOT EXISTS ("
+        f"   SELECT 1 FROM rounds rq WHERE rq.id = {prefix}round_id"
+        f"   AND rq.is_bot_round IS DISTINCT FROM TRUE"
+        f"   AND rq.is_valid IS DISTINCT FROM FALSE)) AS linked_invalid_excluded,"
+        f" COUNT(*) FILTER (WHERE {prefix}round_id IS NULL) AS unlinked_accepted"
+        f" FROM {table} {prefix.rstrip('.') or ''} {ungated}",
+        params,
+    )
+    total = int(row[0] or 0) if row else 0
+    lv = int(row[1] or 0) if row else 0
+    lie = int(row[2] or 0) if row else 0
+    ua = int(row[3] or 0) if row else 0
+    scored = lv + ua
+    return {
+        "total_rows": total,
+        "linked_valid": lv,
+        "linked_invalid_excluded": lie,
+        "unlinked_accepted": ua,
+        # share of the SCORED rows whose attribution is actually known
+        "attributable_coverage": round(lv / scored, 4) if scored else None,
+        "mode": "compatibility",  # unlinked rows are kept; see docstring
+    }
+
+
 def _build_proximity_where_clause(
     range_days: int,
     session_date: str | None,
@@ -168,6 +246,7 @@ def _build_proximity_where_clause(
     alias: str | None = None,
     player_guid: str | None = None,
     player_guid_columns: list[str] | None = None,
+    round_quality_gate: bool = True,
 ) -> tuple[str, list[Any], dict[str, Any]]:
     prefix = f"{alias}." if alias else ""
     params: list[Any] = []
@@ -215,6 +294,13 @@ def _build_proximity_where_clause(
         else:
             # Default: target_guid (engagement tables)
             clauses.append(f"{prefix}target_guid = ${pidx}")
+
+    if round_quality_gate:
+        # No params — pure EXISTS subquery against rounds. Callers querying
+        # tables WITHOUT a round_id column (map_kill_heatmap,
+        # map_movement_heatmap, proximity_hit_region_summary) must pass
+        # round_quality_gate=False.
+        clauses.append(_round_quality_gate_sql(prefix))
 
     scope = {
         "session_date": parsed_session_date.isoformat() if parsed_session_date else None,

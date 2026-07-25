@@ -1084,6 +1084,7 @@ async def get_proximity_combat_position_stats(
     where_sql, params = (
         ProximityQueryBuilder()
         .with_session_scope(session_date, range_days)
+        .with_round_quality_gate()
         .with_map_name(map_name)
         .with_round(round_number, round_start_unix)
         .build()
