@@ -81,11 +81,15 @@ async def test_legacy_date_path_stamps_gsid_after_insert():
     # Only rows this compute touched, and only the still-NULL ones.
     assert "k.gaming_session_id IS NULL" in q
     # Canonical round-key join — the same triple every scoped reader uses.
-    assert "k.round_start_unix = r.round_start_unix" in q
+    # COALESCE, not equality: _build_scope normalizes an absent start to 0,
+    # so requiring > 0 would skip accepted legacy rounds entirely.
+    assert "COALESCE(k.round_start_unix, 0) = r.round_start_unix" in q
     assert "k.map_name = r.map_name" in q
     assert "k.round_number = r.round_number" in q
     # Ambiguous keys (one round key -> two gsids) must be skipped, not guessed.
     assert "HAVING COUNT(DISTINCT rr.gaming_session_id) = 1" in q
+    # canonical gate parity with session_scope._ROUND_GATE_SQL
+    assert "rr.round_number IN (1, 2)" in q
     # Rejected rounds never justify a stamp (session_scope's canonical gate).
     assert "rr.is_valid IS DISTINCT FROM FALSE" in q
     assert "rr.round_status IN ('completed', 'substitution')" in q

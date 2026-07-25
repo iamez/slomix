@@ -400,12 +400,17 @@ class _KisMixin:
                 UPDATE storytelling_kill_impact k
                 SET gaming_session_id = r.gsid
                 FROM (
-                    SELECT rr.round_start_unix, rr.map_name, rr.round_number,
+                    -- Same canonical gate as migration 064 and
+                    -- session_scope._ROUND_GATE_SQL: round_number IN (1, 2)
+                    -- excludes R0 summaries, and the start time is
+                    -- COALESCEd to 0 because _build_scope normalizes an
+                    -- absent start to 0 rather than dropping the round.
+                    SELECT COALESCE(rr.round_start_unix, 0) AS round_start_unix,
+                           rr.map_name, rr.round_number,
                            MIN(rr.gaming_session_id) AS gsid
                     FROM rounds rr
                     WHERE rr.gaming_session_id IS NOT NULL
-                      AND rr.round_start_unix IS NOT NULL
-                      AND rr.round_start_unix > 0
+                      AND rr.round_number IN (1, 2)
                       AND rr.is_valid IS DISTINCT FROM FALSE
                       AND (rr.round_status IN ('completed', 'substitution')
                            OR rr.round_status IS NULL)
@@ -414,12 +419,12 @@ class _KisMixin:
                           FROM storytelling_kill_impact k2
                           WHERE k2.gaming_session_id IS NULL AND {inner_filter}
                       )
-                    GROUP BY rr.round_start_unix, rr.map_name, rr.round_number
+                    GROUP BY COALESCE(rr.round_start_unix, 0), rr.map_name, rr.round_number
                     HAVING COUNT(DISTINCT rr.gaming_session_id) = 1
                 ) r
                 WHERE k.gaming_session_id IS NULL
                   AND {stamp_filter}
-                  AND k.round_start_unix = r.round_start_unix
+                  AND COALESCE(k.round_start_unix, 0) = r.round_start_unix
                   AND k.map_name = r.map_name
                   AND k.round_number = r.round_number
                 """,  # nosec B608 - filters built by _scope_row_filter from internal constants, all values $N-bound

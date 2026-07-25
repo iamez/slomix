@@ -33,19 +33,27 @@
 UPDATE storytelling_kill_impact k
 SET gaming_session_id = r.gsid
 FROM (
-    SELECT round_start_unix, map_name, round_number,
+    -- Mirrors session_scope._ROUND_GATE_SQL exactly, including
+    -- round_number IN (1, 2): the canonical scope excludes R0 summaries and
+    -- any other non-play round, so stamping them would let rows the scope
+    -- never returns show up in gsid-filtered readers (Codex #546).
+    -- round_start_unix is COALESCEd to 0 rather than required > 0, because
+    -- _build_scope normalizes a NULL/absent start to 0 as the key. Requiring
+    -- > 0 silently skipped every accepted legacy round whose start time was
+    -- never captured, leaving those sessions unattributed forever.
+    SELECT COALESCE(round_start_unix, 0) AS round_start_unix,
+           map_name, round_number,
            MIN(gaming_session_id) AS gsid
     FROM rounds
     WHERE gaming_session_id IS NOT NULL
-      AND round_start_unix IS NOT NULL
-      AND round_start_unix > 0
+      AND round_number IN (1, 2)
       AND is_valid IS DISTINCT FROM FALSE
       AND (round_status IN ('completed', 'substitution') OR round_status IS NULL)
-    GROUP BY round_start_unix, map_name, round_number
+    GROUP BY COALESCE(round_start_unix, 0), map_name, round_number
     HAVING COUNT(DISTINCT gaming_session_id) = 1
 ) r
 WHERE k.gaming_session_id IS NULL
-  AND k.round_start_unix = r.round_start_unix
+  AND COALESCE(k.round_start_unix, 0) = r.round_start_unix
   AND k.map_name = r.map_name
   AND k.round_number = r.round_number;
 
@@ -60,9 +68,10 @@ WHERE k.gaming_session_id IS NOT NULL
   AND NOT EXISTS (
       SELECT 1 FROM rounds r
       WHERE r.gaming_session_id = k.gaming_session_id
-        AND r.round_start_unix = k.round_start_unix
+        AND COALESCE(r.round_start_unix, 0) = COALESCE(k.round_start_unix, 0)
         AND r.map_name = k.map_name
         AND r.round_number = k.round_number
+        AND r.round_number IN (1, 2)
         AND r.is_valid IS DISTINCT FROM FALSE
         AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
   );
