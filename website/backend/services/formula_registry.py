@@ -130,6 +130,12 @@ def get_registry() -> list[dict]:
                        "not what those rounds actually use. Derived: WIS "
                        "(win-loss delta x harmonic confidence), WAA, and "
                        "Bayesian-shrunk waa_bayes (prior C=2) for MVP. "
+                       "MVP: only players with rounds_won > 0 AND "
+                       "total_rounds >= max(2, max_rounds_played // 2) are "
+                       "eligible, ranked by waa_bayes then total_pwc then "
+                       "rounds_won; if NOBODY qualifies (late joiners only, no "
+                       "round winners) it falls back to the highest total_pwc "
+                       "and waa_bayes is ignored entirely. "
                        "Session-ephemeral — no persistence.",
         },
         {
