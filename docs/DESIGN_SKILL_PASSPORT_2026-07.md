@@ -70,11 +70,26 @@ Vsaka os je 0–100, izračunana kot **evidence-weighted percentil znotraj naše
 |----|----------|----------------------|
 | **FRAG** | Čista ubojna moč in kvaliteta ubojev | KIS (kontekstualni impact), K/D, accuracy, headshot % |
 | **TEAMPLAY** | Koliko igra z ekipo | crossfire participacija, trade responsiveness, revives, PWC crossfire+trade share, cohesion (koliko časa blizu ekipe) |
-| **OBJECTIVE** | Delo za zmago, ki ga K/D spregleda | objective pressure sekunde, carrier events/returns, construction, KIS `is_objective_area` delež, useless-defense (negativno) |
+| **OBJECTIVE** | Delo za zmago, ki ga K/D spregleda | objective pressure sekunde, carrier events/returns, construction, KIS `is_objective_area` delež, useless-defense (negativno) — ⚠️ **rabi kurirane cone**, glej §4.1a |
 | **LURK / SPACE** | Ownerjeva os: samostojno ustvarjanje prostora in priložnosti | lurker `solo_pct`, space_created (produktivne smrti), enabler (asisti), gravity (koliko pozornosti nase potegne) |
 | **CLUTCH** | Vrednost pod pritiskom | solo-clutch KIS multiplierji, low-HP kills, outnumbered situacije, best-lives |
 
 Igralec ni "78" — igralec je npr. **FRAG 61 · TEAMPLAY 84 · OBJECTIVE 72 · LURK 91 · CLUTCH 55**, kar se prevede v čitljivo značko: *"Lurker/Enabler"*. Ownerjev lastni opis (*"lurker/teamplayer, ki nastavlja priložnosti s sacrificem"*) mora iz teh številk pasti ven sam od sebe — to je sprejemni test.
+
+### 4.1a Kurirane objective cone (predpogoj za OBJECTIVE os)
+
+`_load_zones()` vrne **vse** vnose iz `objective_zones.json`, vključno z **9 od 72 con, ki so health/ammo omarice** (in Command Post-i). Za `is_objective_area` je to sprejemljivo — kill pri omarici res pogosto pomeni boj za oskrbo — a **za OBJECTIVE os ni**: igralec, ki kampira pri omarici, bi dobil enako kredit kot tisti, ki dela na dinamitu.
+
+Zato OBJECTIVE os pred uporabo filtrira cone po tipu:
+
+| Tip cone | V OBJECTIVE osi? |
+|----------|------------------|
+| `objective` (dinamit, dokumenti, vrata, ovire) | ✅ da |
+| `escort` (tank, tovornjak) | ✅ da |
+| `command_post` | ⚠️ nižja utež — je delo za ekipo, a ne zmagovalni pogoj |
+| health/ammo omarice (trenutno tipizirane kot `objective`) | ❌ ne |
+
+Ker so omarice danes v datoteki tipizirane kot `objective`, jih je treba ali pretipizirati (novo polje `scoring_relevant`), ali filtrirati po imenu — čistejše je prvo. To je **predpogoj**, ne kasnejša izboljšava.
 
 ### 4.2 Evidence weighting (jedro Z2/Z3)
 
@@ -87,6 +102,8 @@ pool_mean    = povprečje osi čez cel bazen (prior)
 
 shrunk = (n * mean(raw_i) + C * pool_mean) / (n + C)        # C = 5 sej
 ```
+
+**Kaj je `n` (popravljeno po reviewu):** NE število sej. Enodnevni cameo (ena runda) bi štel enako kot cel večer, in igralec bi lahko dosegel `confidence = 1` po 15 sejah, v katerih je imel za posamezno os komaj kaj opazovanj. `n` je zato **število opazovanj, specifičnih za to os** — npr. za CLUTCH število clutch situacij, za OBJECTIVE število objective-relevantnih dogodkov, za FRAG število ubojev. Vsaka os ima tako svoj `n` in svoj `confidence`; seja z eno rundo prispeva sorazmerno malo.
 
 - Igralec z **1 sejo** je potegnjen skoraj do sredine bazena (nima še dokaza).
 - Igralec z **20+ sejami** je praktično pri svoji pravi vrednosti.
@@ -116,7 +133,7 @@ Verzijski bump → **novi** posnetki, stari ostanejo označeni (kot to že dela 
 
 **Kdaj se posnetek zapiše (popravljeno po reviewu):** NE takoj ob koncu seje. KIS se računa leno in ima lastno svežinsko preverbo za pozne proximity/stats importe, zato bi takojšen zapis lahko trajno zamrznil delne podatke. Posnetek nastane šele, ko so izpolnjeni pogoji:
 
-1. vse pričakovane runde seje imajo `round_correlations` popolne (ali je potekel 6-urni timeout, ki ga uporablja obstoječi orphan mehanizem), **in**
+1. vse pričakovane runde seje imajo `round_correlations` popolne — **a pozor (popravljeno po reviewu): `round_correlation_service` označi korelacijo kot `complete`, ko prispeta oba stats fajla, kar NE pomeni, da je prispela tudi proximity telemetrija.** Gate mora zato preverjati telemetrijske zastavice (`has_r1/r2_proximity`), ne le `complete` — sicer se zamrzne posnetek, v katerem so proximity osi (TEAMPLAY, LURK, OBJECTIVE) prazne. Ali je potekel 6-urni timeout iz obstoječega orphan mehanizma, **in**
 2. KIS za ta gsid je aktualne verzije in ni "stale" po obstoječi svežinski preverbi.
 
 Do takrat je seja `pending`. Če pozni import vseeno pride po zamrznitvi, posnetek **ni** tiho prepisan — zapiše se nov z `supersedes` sklicem, tako da ostane vidno, da se je kaj spremenilo.
@@ -136,7 +153,7 @@ Naši večeri niso homogeni: 3v3 in 6v6 sta drugačni igri, poleg tega **owner s
 | Faza | Vsebina | Ocena |
 |------|---------|-------|
 | **P0** | Tabela `player_skill_passport_snapshot` (gsid, guid, os, raw, `pool_mean`/`pool_n`/`pool_sd`, `percentile_at_time`, formula_version, n_sessions, format, `supersedes`) + zapis, **sprožen šele ob izpolnjenih pogojih iz §4.3**, ne ob koncu seje | 1 PR |
-| **P1** | Backfill posnetkov iz obstoječe zgodovine (38 sej z viri) — vse osi so izračunljive za nazaj | 1 PR + skripta |
+| **P1** | Backfill posnetkov iz obstoječe zgodovine. ⚠️ **NE predpostavljaj, da je vseh 38 sej uporabnih:** `migrations/062` pravi, da so capability zapisi za obstoječe `proximity_processed_files` vrstice NEZNANI, torej za starejše seje ne vemo, katere Lua sekcije so sploh bile zajete. Backfill mora najprej ugotoviti dejansko pokritost per seja in osi brez vira pustiti NULL (ne 0) | 1 PR + skripta |
 | **P2** | Agregacijski servis: shrinkage, confidence, percentil znotraj bazena, per-format | 1 PR |
 | **P3** | Endpoint `/api/skill/passport/{guid}` + značke (playstyle label iz osi) | 1 PR |
 | **P4** | Kalibracija na 14 igralcih z ≥10 sejami; ownerjev sprejemni test ("ali me sistem prepozna kot lurkerja?") | brez kode |
