@@ -30,6 +30,7 @@ async def get_proximity_support_summary(
     where_sql, params = (
         ProximityQueryBuilder()
         .with_session_scope(session_date, range_days)
+        .with_round_quality_gate()
         .with_map_name(map_name)
         .with_round(round_number, round_start_unix)
         .build()
@@ -103,6 +104,7 @@ async def get_proximity_movement_stats(
     where_sql, params = (
         ProximityQueryBuilder(["peak_speed IS NOT NULL"])
         .with_session_scope(session_date, range_days)
+        .with_round_quality_gate()
         .with_map_name(map_name)
         .with_player_guid("player_guid", player_guid)
         .with_round(round_number, round_start_unix)

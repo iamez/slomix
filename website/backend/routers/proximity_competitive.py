@@ -386,6 +386,11 @@ async def get_personal_bests(
         "session_date": str(sd),
         "description": "New personal records set this session (players with prior history only).",
         "cards": cards,
+        # Honest-scope metadata (audit 2026-07-25 S2): PB cards compare the
+        # whole session against the player's whole history — map/round
+        # filters the page sends are not applicable here.
+        "scope_applied": {"session_date": str(sd)},
+        "scope_note": "session-vs-history comparison; map/round filters are not applied",
     }
 
 

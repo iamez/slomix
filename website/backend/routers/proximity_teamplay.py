@@ -170,19 +170,35 @@ async def get_proximity_aim_lock(
     track targets, plus how tight (avg_err_deg, lower = better) and at what
     range (avg_dist). Closes the loop between shot data and real targets.
     """
+    # player filter on `guid` (the LOCKER) only — the old OR across
+    # ["guid","target_guid"] combined with GROUP BY guid meant filtering
+    # the panel to player X returned rows keyed by the players who locked
+    # onto X, not X (audit 2026-07-25 S12).
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
-        player_guid=player_guid, player_guid_columns=["guid", "target_guid"],
+        player_guid=player_guid, player_guid_columns=["guid"],
     )
     query_params = tuple(params)
     leaders = await db.fetch_all(
         f"""
         SELECT guid, MAX(player_name) AS name,
                COUNT(*) AS locks,
-               ROUND(AVG(duration_ms)::numeric, 0) AS avg_lock_ms,
-               SUM(duration_ms) AS total_lock_ms,
-               ROUND(AVG(avg_err_deg)::numeric, 2) AS avg_err_deg,
-               ROUND(AVG(avg_dist)::numeric, 0) AS avg_dist,
+               -- LEAST() clamps to the physical maximum (samples x 400ms
+               -- interval + 400): 56 historical rows were written before
+               -- the Lua last_seen/duration clamp and inflated total_lock
+               -- rankings by up to 36x (audit 2026-07-25 S12).
+               -- GREATEST(COALESCE(samples,0),1) keeps the bound valid for
+               -- rows with a NULL/0 sample count, which would otherwise
+               -- clamp to 400ms (or NULL) and UNDER-report (review on #548).
+               ROUND(AVG(LEAST(duration_ms, GREATEST(COALESCE(samples, 0), 1) * 400 + 400))::numeric, 0) AS avg_lock_ms,
+               SUM(LEAST(duration_ms, GREATEST(COALESCE(samples, 0), 1) * 400 + 400)) AS total_lock_ms,
+               -- avg_err_deg/avg_dist are already per-row averages OVER
+               -- `samples`, so a plain AVG() weights a 2-sample flick the
+               -- same as a 40-sample track — weight by samples instead.
+               ROUND((SUM(avg_err_deg * GREATEST(COALESCE(samples, 0), 1))
+                      / NULLIF(SUM(GREATEST(COALESCE(samples, 0), 1)), 0))::numeric, 2) AS avg_err_deg,
+               ROUND((SUM(avg_dist * GREATEST(COALESCE(samples, 0), 1))
+                      / NULLIF(SUM(GREATEST(COALESCE(samples, 0), 1)), 0))::numeric, 0) AS avg_dist,
                COUNT(DISTINCT target_guid) AS targets
         FROM proximity_aim_lock {where_sql}
         GROUP BY guid
@@ -215,6 +231,44 @@ async def get_proximity_aim_lock(
     }
 
 
+# Visual separator between concatenated rounds on the cohesion timeline.
+_ROUND_GAP_MS = 15_000
+
+
+def _concatenated_timeline(rows) -> list[dict]:
+    """Lay rounds out back-to-back on one synthetic axis.
+
+    `sample_time` is ms-since-ROUND-start, so a multi-round scope needs an
+    absolute axis. Anchoring on `round_start_unix * 1000` (the first attempt)
+    preserved the real wall-clock gaps between rounds — the canvas
+    normalizes to global min/max, so hours of downtime ate the whole width
+    and squeezed each round into an unreadable sliver (review on #548).
+
+    Instead each round starts where the previous one ended (plus a small
+    fixed gap), so the drawn width is proportional to actual PLAY time.
+    `round_start_unix` stays in the payload for round-boundary annotation.
+    """
+    offsets: dict[int, int] = {}
+    cursor = 0
+    # rows arrive ordered by (round_start_unix, sample_time, team)
+    for rsu in dict.fromkeys(int(r[3] or 0) for r in (rows or [])):
+        offsets[rsu] = cursor
+        round_span = max(
+            (int(r[0] or 0) for r in rows if int(r[3] or 0) == rsu), default=0
+        )
+        cursor += round_span + _ROUND_GAP_MS
+    return [
+        {
+            "time": offsets.get(int(r[3] or 0), 0) + int(r[0] or 0),
+            "team": r[1],
+            "dispersion": float(r[2] or 0),
+            "round_start_unix": int(r[3] or 0),
+            "round_time": int(r[0] or 0),
+        }
+        for r in (rows or [])
+    ]
+
+
 @router.get("/proximity/cohesion")
 @handle_router_errors("Proximity endpoint error")
 async def get_proximity_cohesion(
@@ -243,13 +297,26 @@ async def get_proximity_cohesion(
         """,
         query_params,
     )
-    # Sampled timeline (limit to avoid huge payloads)
+    # Sampled timeline. Fixes vs the old `ORDER BY sample_time LIMIT 2000`
+    # (audit 2026-07-25 S13): sample_time is ms-since-ROUND-start, so at
+    # session scope every round was superimposed on one axis and the LIMIT
+    # kept only the opening minutes of the mixed pile.
+    #
+    # Downsampling ranks TIMESTAMPS, not rows (DENSE_RANK over the
+    # (round, sample_time) pair): both team rows of a kept sample share one
+    # rank, so the modulo can never keep AXIS and drop ALLIES — a row-wise
+    # ROW_NUMBER with an even stride could wipe one team's whole line
+    # (review on #548).
     timeline = await db.fetch_all(
         f"""
-        SELECT sample_time, team, dispersion
-        FROM proximity_team_cohesion {where_sql}
-        ORDER BY sample_time
-        LIMIT 2000
+        SELECT sample_time, team, dispersion, round_start_unix FROM (
+            SELECT sample_time, team, dispersion, round_start_unix,
+                   DENSE_RANK() OVER (ORDER BY round_start_unix, sample_time) AS ts_rank,
+                   COUNT(*) OVER () AS total
+            FROM proximity_team_cohesion {where_sql}
+        ) t
+        WHERE (t.ts_rank - 1) % GREATEST(1, CEIL(t.total / 2000.0)::int) = 0
+        ORDER BY round_start_unix, sample_time, team
         """,
         query_params,
     )
@@ -279,10 +346,7 @@ async def get_proximity_cohesion(
             }
             for r in (team_summary or [])
         ],
-        "timeline": [
-            {"time": int(r[0] or 0), "team": r[1], "dispersion": float(r[2] or 0)}
-            for r in (timeline or [])
-        ],
+        "timeline": _concatenated_timeline(timeline),
         "buddy_pairs": [
             {"guids": r[0], "times_paired": int(r[1] or 0), "avg_distance": float(r[2] or 0)}
             for r in (buddy_pairs or [])
