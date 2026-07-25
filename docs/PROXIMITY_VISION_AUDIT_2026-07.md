@@ -69,13 +69,13 @@ beeline_distance=2696, path_efficiency=0.407, enemies_nearby=2,
 nearby_teammates=0, run_type=contested_solo, self_kills=0, team_kills=0
 ```
 
-To **je** ocena odločitve: kako naravnost je šel, ali je šel sam v contested prostor, koliko sovražnikov je bilo blizu. Manjka samo, da isto logiko razširimo z inženirja na **vsak gib** — vsi vhodni podatki (pozicije, zdravje, soigralci, sovražniki, faza) so že v `player_track.path`.
+To **je** ocena odločitve: kako naravnost je šel, ali je šel sam v contested prostor, koliko sovražnikov je bilo blizu. Manjka samo, da isto logiko razširimo z inženirja na **vsak gib**. Vhodni podatki za prostorski/situacijski del (pozicije, zdravje, soigralci, sovražniki) so že v `player_track.path`; **faza runde pa NI** — to je ločena vrzel, obravnavana pri DQL-3.
 
 ---
 
 ## 3. Predlog: Decision Quality Layer (DQL)
 
-Trije gradniki, vsak samostojno uporaben. **Nobeden ne zahteva sprememb Lua** — vse računamo iz obstoječih poti.
+Trije gradniki, vsak samostojno uporaben. **DQL-1 in DQL-2 ne zahtevata sprememb Lua** — računata se iz obstoječih poti. **DQL-3 je izjema** in rabi dodaten vir faznega stanja (glej tam).
 
 ### DQL-1 — Kontekst giba (temelj)
 
@@ -95,14 +95,38 @@ Za vsak **dogodek** (kill, smrt, plant, revive, push) primerjamo kontekst tik pr
 |-----------|-----------|-----------|
 | Push naprej | ekipa sledi (cohesion pade < X), pridobiš prostor/objective | greš sam, umreš, ekipa izgubi prostor (že merimo kot useless-defense) |
 | Zadrževanje / lurk | ustvariš priložnost soigralcem (enabler/gravity) | pasivnost brez učinka |
-| Sacrifice | umreš, a ekipa v naslednjih N sekundah napreduje | umreš brez posledice |
+| Sacrifice | umreš, a ekipa v naslednjih N sekundah napreduje **in je napredek povezan s tvojo smrtjo** (glej spodaj) | umreš brez posledice |
 | Objective run | `path_efficiency` visok, timing usklajen z ekipo | contested_solo brez podpore |
 
-Ownerjev "sacrifice, ki nastavi priložnost" postane **merljiv**: smrt + napredek ekipe v oknu po njej = pozitivna odločitev, ne minus v K/D.
+Ownerjev "sacrifice, ki nastavi priložnost" postane **merljiv** — a ne naivno.
 
-### DQL-3 — Fazna zavest (rabi V2 dopolnitev)
+**Zakaj golo časovno okno ne zadošča (popravljeno po reviewu):** pravilo *"smrt + napredek ekipe v N sekundah = sacrifice"* bi nagradilo vsako smrt, ki ji slučajno sledi napredek — tudi če je bila na drugem koncu mape ali če je ekipa napredovala povsem neodvisno. Igralec bi lahko "nabiral" točke z brezveznim umiranjem ob pravem času.
 
-Rundo razrežemo na faze iz objective dogodkov (`OBJECTIVE_RUNS`, `CONSTRUCTION_EVENTS`, carrier): *"pred prvim plantom"*, *"med escortom"*, *"po padcu prve ovire"*. Vsaka odločitev se ocenjuje glede na fazo — kill v mrtvem času ni isto kot kill 10 s pred iztekom pri zadnjem objectivu.
+Zato mora sacrifice zahtevati **vzročne dokaze**, ne le sosledje. Vsi so izračunljivi iz obstoječih podatkov:
+
+| Dokaz | Kako ga preverimo |
+|-------|-------------------|
+| **Prostorska povezanost** | napredek se je zgodil tam, kjer si umrl (ali na poti, ki jo je tvoja smrt odprla) — imamo pozicije obojih |
+| **Odvzeta pozornost** | nasprotniki, ki so te ubili/streljali vate, so bili v tistem oknu zasedeni s tabo namesto z branjenjem — imamo `gravity`, `focus_fire`, aim-lock ciljanje |
+| **Nasprotna baza (counterfactual)** | primerjava s podobnimi situacijami BREZ smrti: če ekipa enako pogosto napreduje tudi brez nje, smrt ni bila vzrok |
+| **Izključitev trivialnih smrti** | selfkill, fall damage, smrt v mrtvem času ali daleč od vsakega objectiva se ne štejejo |
+
+Šele ko so ti pogoji izpolnjeni, se smrt označi kot sacrifice. Brez tega je metrika izigravanju odprta in bi ownerja (ki *dejansko* igra tako) postavila v isti koš z nekom, ki samo pogosto umira.
+
+### DQL-3 — Fazna zavest (rabi V2 dopolnitev — in NOV vir)
+
+**Pomembna omejitev (popravljeno po reviewu):** `player_track.path` vsebuje samo polja iz §V1 — **nima** pojma o fazi ali o tem, kateri objective je trenutno aktiven. Za razliko od DQL-1 in DQL-2 ta gradnik torej **ni** izračunljiv zgolj iz obstoječih poti.
+
+Faze bi izpeljali iz dogodkovnih tabel (`OBJECTIVE_RUNS`, `CONSTRUCTION_EVENTS`, carrier), a to da le **časovne žige dokončanih akcij**, ne stanja igre. Na mapah s **sekvenčnimi, opcijskimi ali vzporednimi** objectivi (goldrush: tank → banka → dokumenti; supply: več poti) iz tega ni mogoče zanesljivo sklepati, kaj je bilo v danem trenutku *aktivno* in kaj *še nedosegljivo*.
+
+Zato DQL-3 potrebuje **enega od dveh** dodatnih virov — to je odločitev, ki jo mora owner sprejeti, preden se karkoli začne:
+
+| Možnost | Kaj pomeni | Cena |
+|---------|-----------|------|
+| **A. Ročni fazni model per mapa** | za vsako mapo zapišemo graf odvisnosti objectivov (kaj odklene kaj) in fazo izpeljemo iz že zajetih dogodkov | brez Lua sprememb; delo je v definicijah (14+ map) |
+| **B. Lua doda stanje objectivov** | tracker periodično zapiše stanje vsakega objectiva (aktiven/zaklenjen/opravljen) | najbolj zanesljivo, a **zahteva Lua spremembo + redeploy na puran** — kar sicer nikjer drugje ne rabimo |
+
+Dokler ta odločitev ne pade, DQL-3 ostaja **odložen**; DQL-1 in DQL-2 nista odvisna od njega.
 
 ---
 
@@ -114,14 +138,14 @@ Rundo razrežemo na faze iz objective dogodkov (`OBJECTIVE_RUNS`, `CONSTRUCTION_
 | **2** | DQL-1 kontekst giba (izolacija, približevanje objectivu, lokalna premoč) | temelj za vse ostalo; vhodi že obstajajo | M |
 | **3** | Razširi `OBJECTIVE_RUNS` logiko na vse igralce (ne samo inženirje) | dokazano deluje, samo posplošitev | M |
 | **4** | DQL-2 ocena odločitev + "sacrifice score" | ownerjeva osrednja želja; hrani LURK/OBJECTIVE osi Passporta | L |
-| **5** | DQL-3 faze runde | največ dodane vrednosti, a rabi 1+3 | L |
+| **5** | DQL-3 faze runde | največ dodane vrednosti, a rabi 1+3 **in ownerjevo odločitev A/B o viru faznega stanja** (§DQL-3) | L |
 | **6** | Puran Lua redeploy (aim-lock clamp) | ni blokada za DQL, a čisti podatke | S (owner-gated) |
 
 ---
 
 ## 5. Kaj NE potrebujemo
 
-- **Ne rabimo novega Lua zajema.** Vse zgoraj se izračuna iz obstoječih 223 MB poti. Lua spremembe pomenijo redeploy na puran in tveganje — brez potrebe.
+- **Ne rabimo novega Lua zajema za DQL-1 in DQL-2.** Oba se izračunata iz obstoječih 223 MB poti; Lua spremembe pomenijo redeploy na puran in tveganje. **Izjema je DQL-3**: fazno stanje objectivov v poteh NE obstaja, zato zanj potrebujemo bodisi ročni fazni model per mapa (možnost A, brez Lua) bodisi novo Lua polje (možnost B) — ownerjeva odločitev.
 - **Ne rabimo več podatkov, rabimo več pomena.** Zajemamo ~3.400 zapisov na rundo in jih prikazujemo kot povprečja. Vrzel je interpretacija, ne zajem.
 - **Ne rabimo dohitevati gibhuba pri log-statih.** Oni imajo XP/stance/shove iz logov; mi imamo prostor in čas, ki ga oni **ne morejo** imeti. DQL je nekaj, česar iz strežniških logov ni mogoče izpeljati.
 
