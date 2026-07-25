@@ -99,11 +99,14 @@ Za vsako os in igralca:
 
 ```
 raw_i        = per-session vrednost osi (že jo znamo izračunati)
-n            = število sej z veljavnimi podatki za to os
+n_axis       = število OPAZOVANJ te osi (ne sej — glej spodaj)
 pool_mean    = povprečje osi čez cel bazen (prior)
+C_axis       = prior v ISTI enoti kot n_axis
 
-shrunk = (n * mean(raw_i) + C * pool_mean) / (n + C)        # C = 5 sej
+shrunk = (n_axis * mean(raw_i) + C_axis * pool_mean) / (n_axis + C_axis)
 ```
+
+⚠️ **`C` mora biti v isti enoti kot `n` (popravek po reviewu).** Prvotni zapis je mešal enoti: `n` v opazovanjih, `C = 5 sej`. To ni le nedoslednost — pri osi z veliko opazovanji na sejo (FRAG: ~40 ubojev) bi prior 5 izginil že po eni seji, pri osi z malo (CLUTCH: nekaj situacij) pa bi dušil še po dvajsetih. Vsaka os zato dobi **svoj `C_axis`**, kalibriran kot mediana opazovanj te osi na sejo × želeno število sej zaupanja. Vrednosti se določijo na obstoječih 63 igralcih, ne uganejo.
 
 **Kaj je `n` (popravljeno po reviewu):** NE število sej. Enodnevni cameo (ena runda) bi štel enako kot cel večer, in igralec bi lahko dosegel `confidence = 1` po 15 sejah, v katerih je imel za posamezno os komaj kaj opazovanj. `n` je zato **število opazovanj, specifičnih za to os** — npr. za CLUTCH število clutch situacij, za OBJECTIVE število objective-relevantnih dogodkov, za FRAG število ubojev. Vsaka os ima tako svoj `n` in svoj `confidence`; seja z eno rundo prispeva sorazmerno malo.
 
@@ -133,12 +136,16 @@ Iz tega sledita **dve različni številki, ki ju je treba ločeno prikazati**:
 
 Verzijski bump → **novi** posnetki, stari ostanejo označeni (kot to že dela `s_effort_service`, edini sistem z dobro verzijsko higieno).
 
+**Označevanje samo po sebi NI dovolj (popravek po reviewu).** Če se formula spremeni sredi sezone, agregat čez mešane verzije še vedno sešteva neprimerljive številke — natanko napaka, ki jo je audit našel pri KIS (26k v2 + 7k v4). Zato: **vsak historični agregat mora biti vezan na eno verzijo.** Ob bumpu sta dovoljeni le dve poti — (a) preračun celotne zgodovine na novo verzijo (kot `backfill_kis_recompute.py`), ali (b) prikaz, ki verzije eksplicitno loči in jih nikoli ne sešteje. Tiho mešanje ni tretja možnost.
+
 **Kdaj se posnetek zapiše (popravljeno po reviewu):** NE takoj ob koncu seje. KIS se računa leno in ima lastno svežinsko preverbo za pozne proximity/stats importe, zato bi takojšen zapis lahko trajno zamrznil delne podatke. Posnetek nastane šele, ko so izpolnjeni pogoji:
 
-1. vse pričakovane runde seje imajo `round_correlations` popolne — **a pozor (popravljeno po reviewu): `round_correlation_service` označi korelacijo kot `complete`, ko prispeta oba stats fajla, kar NE pomeni, da je prispela tudi proximity telemetrija.** Gate mora zato preverjati telemetrijske zastavice (`has_r1/r2_proximity`), ne le `complete` — sicer se zamrzne posnetek, v katerem so proximity osi (TEAMPLAY, LURK, OBJECTIVE) prazne. Ali je potekel 6-urni timeout iz obstoječega orphan mehanizma, **in**
+1. vse pričakovane runde seje imajo `round_correlations` popolne — **a pozor (popravljeno po reviewu): `round_correlation_service` označi korelacijo kot `complete`, ko prispeta oba stats fajla, kar NE pomeni, da je prispela tudi proximity telemetrija.** Gate mora zato preverjati telemetrijske zastavice (`has_r1/r2_proximity`), ne le `complete` — sicer se zamrzne posnetek, v katerem so proximity osi (TEAMPLAY, LURK, OBJECTIVE) prazne. **Timeout NE sme obiti tega pogoja (popravek po reviewu):** 6-urni orphan timeout pomeni "telemetrija ne pride več", ne "telemetrija je prišla". Če ob izteku manjka, se posnetek vseeno zapiše, a osi brez vira dobijo **NULL z razlogom** (`missing_telemetry`), nikoli izračunano vrednost — sicer bi manjkajoč zajem izgledal kot slaba izvedba igralca. **In**
 2. KIS za ta gsid je aktualne verzije in ni "stale" po obstoječi svežinski preverbi.
 
 Do takrat je seja `pending`. Če pozni import vseeno pride po zamrznitvi, posnetek **ni** tiho prepisan — zapiše se nov z `supersedes` sklicem, tako da ostane vidno, da se je kaj spremenilo.
+
+**Kaj nadomestni posnetek nosi (popravek po reviewu):** populacija se je medtem lahko premaknila, zato nov posnetek **ne sme** dobiti današnjega `pool_mean`/percentila, kot da bi bil izračunan takrat. Pravilo: nadomestni prevzame **populacijski kontekst izvirnika** (isti `pool_mean`/`pool_n`/`pool_sd`), spremeni pa `raw` in iz njega izpeljan `percentile_at_time`. Tako popravek odraža nove podatke o *igralcu*, ne poznejših sprememb *bazena*. Historični agregat sešteva le zadnji posnetek v vsaki verigi.
 
 ### 4.4 Formatna ločnica (posnemamo gibhub)
 
