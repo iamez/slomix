@@ -55,7 +55,15 @@ ALTER TABLE proximity_weapon_accuracy
 UPDATE proximity_revive pr
 SET round_number = r.round_number,
     round_start_unix = r.round_start_unix,
-    session_date = COALESCE(pr.session_date, SUBSTRING(r.round_date, 1, 10)::date)
+    -- Guarded cast: a single legacy round with a non-ISO round_date would
+    -- otherwise raise `invalid input syntax for type date` and abort the
+    -- whole transactional migration before either table is fixed. An
+    -- unparseable date simply leaves session_date NULL, which the rest of
+    -- this migration already tolerates.
+    session_date = COALESCE(
+        pr.session_date,
+        CASE WHEN SUBSTRING(r.round_date, 1, 10) ~ '^\d{4}-\d{2}-\d{2}$'
+             THEN SUBSTRING(r.round_date, 1, 10)::date END)
 FROM rounds r
 WHERE pr.round_id = r.id
   AND pr.round_start_unix IS NULL
@@ -64,7 +72,10 @@ WHERE pr.round_id = r.id
 UPDATE proximity_weapon_accuracy pw
 SET round_number = r.round_number,
     round_start_unix = r.round_start_unix,
-    session_date = COALESCE(pw.session_date, SUBSTRING(r.round_date, 1, 10)::date)
+    session_date = COALESCE(
+        pw.session_date,
+        CASE WHEN SUBSTRING(r.round_date, 1, 10) ~ '^\d{4}-\d{2}-\d{2}$'
+             THEN SUBSTRING(r.round_date, 1, 10)::date END)
 FROM rounds r
 WHERE pw.round_id = r.id
   AND pw.round_start_unix IS NULL
