@@ -22,13 +22,15 @@ Iz tega sledijo štiri zahteve, ki jih noben obstoječi sistem ne izpolnjuje:
 
 ---
 
-## 2. Zakaj je to zdaj mogoče (in prej ni bilo)
+## 2. Predpogoji — kaj mora biti izpolnjeno, PREDEN se to sploh začne
 
-Trije predpogoji so pravkar padli:
+⚠️ **Nobeden od teh treh ni izpolnjen v tej veji.** Vsi so v odprtih PR-jih; dokler ne merga(mo), Passport ni izvedljiv in ta dokument opisuje prihodnje, ne trenutno stanje.
 
-1. **Verzijska higiena** (#547): vsa zgodovina je zdaj kis-v4 → seje so med sabo primerljive.
-2. **gsid atribucija** (#546): vsaka KIS vrstica ve, kateri igralni seji pripada → agregacija čez seje je sploh možna.
-3. **Čisti serving layer** (#548/#549): bot runde izločene, duplikati pobrisani, scope pošten → vhodni podatki niso več onesnaženi.
+1. **Verzijska higiena** — čaka **#547**. Danes migracija `060` vsem obstoječim vrsticam vtisne `kis-v2`, KIS servis pa prepiše samo scope, ki ga nekdo zahteva; globalnega v4 preračuna ni. Dokler #547 ne teče, seje **niso** med sabo primerljive (potrjeno: pred zagonom 26.288 v2 proti 7.217 v4).
+2. **gsid atribucija** — čaka **#546**. Migracija `063` je stolpec dodala, a ga eksplicitno pustila NULL za vso zgodovino in za legacy compute pot. Brez backfilla je 87 % vrstic neatribuiranih; seja čez polnoč ali dve seji na isti datum sta neločljivi.
+3. **Čisti serving layer** — čaka **#548/#549**: bot runde izločene, duplikati pobrisani, scope pošten.
+
+**Vrstni red je obvezen:** brez 1 in 2 vsaka agregacija čez seje sešteva mešane formule in izpušča 87 % zgodovine, kar je slabše kot današnje stanje.
 
 **Podatkovna baza (dev, 2026-07-25):** 63 igralcev, od tega **14 z ≥10 sejami**, 9 s 3–9 sejami, 40 z <3. Najbolj aktiven igralec ima 111 sej. To je majhen, a globok vzorec — natanko tak, ki *zahteva* shrinkage in *ne dopušča* naivnih percentilov.
 
@@ -95,11 +97,29 @@ Poleg tega vsak profil izpiše **`confidence`** (`min(1, n/15)`) in **`n_session
 
 ### 4.3 Zamrznjeni posnetki (rešuje Z4 in tiho preračunavanje zgodovine)
 
-Danes se `get_player_session_history` preračuna proti **današnji** populaciji percentilov — pretekla seja tako spremeni oceno, ne da bi se karkoli zgodilo. Predlog:
+Danes se `get_player_session_history` preračuna proti **današnji** populaciji percentilov — pretekla seja tako spremeni oceno, ne da bi se karkoli zgodilo.
 
-- ob koncu vsake seje se zapiše **immutable posnetek** per igralec/os: surova vrednost, `formula_version`, `n_sessions` ob tistem trenutku;
-- Passport = agregat teh posnetkov, ne re-kalkulacija;
-- verzijski bump → **novi** posnetki, stari ostanejo označeni (kot to že dela `s_effort_service`, edini sistem z dobro verzijsko higieno).
+**Kaj se zamrzne (popravljeno po reviewu):** shraniti samo `raw` + `formula_version` + `n_sessions` **problema ne reši** — če se percentil in `pool_mean` jemljeta iz *trenutne* populacije, vsak nov igralec ali seja spet tiho premakne zgodovinske ocene. Zato posnetek hrani **oboje**:
+
+| Polje | Zakaj |
+|-------|-------|
+| `raw` | surova vrednost osi za to sejo |
+| `pool_mean`, `pool_n`, `pool_sd` | populacijski kontekst **ob tistem trenutku** — brez tega shrinkage ni reproduciren |
+| `percentile_at_time` | zamrznjena relativna vrednost = "kje si bil takrat med svojimi" |
+| `formula_version`, `n_sessions`, `format` | verzijska in vzorčna sled |
+
+Iz tega sledita **dve različni številki, ki ju je treba ločeno prikazati**:
+- **Historični pogled** (npr. "tvoja sezona") = agregat `percentile_at_time` → se **nikoli** ne spremeni za nazaj;
+- **Trenutni pogled** ("kje si danes med aktivnimi") = preračun proti današnji populaciji → se **sme** premikati, ker odgovarja na drugo vprašanje.
+
+Verzijski bump → **novi** posnetki, stari ostanejo označeni (kot to že dela `s_effort_service`, edini sistem z dobro verzijsko higieno).
+
+**Kdaj se posnetek zapiše (popravljeno po reviewu):** NE takoj ob koncu seje. KIS se računa leno in ima lastno svežinsko preverbo za pozne proximity/stats importe, zato bi takojšen zapis lahko trajno zamrznil delne podatke. Posnetek nastane šele, ko so izpolnjeni pogoji:
+
+1. vse pričakovane runde seje imajo `round_correlations` popolne (ali je potekel 6-urni timeout, ki ga uporablja obstoječi orphan mehanizem), **in**
+2. KIS za ta gsid je aktualne verzije in ni "stale" po obstoječi svežinski preverbi.
+
+Do takrat je seja `pending`. Če pozni import vseeno pride po zamrznitvi, posnetek **ni** tiho prepisan — zapiše se nov z `supersedes` sklicem, tako da ostane vidno, da se je kaj spremenilo.
 
 ### 4.4 Formatna ločnica (posnemamo gibhub)
 
@@ -115,7 +135,7 @@ Naši večeri niso homogeni: 3v3 in 6v6 sta drugačni igri, poleg tega **owner s
 
 | Faza | Vsebina | Ocena |
 |------|---------|-------|
-| **P0** | Tabela `player_skill_passport_snapshot` (gsid, guid, os, raw, formula_version, n, format) + zapis ob koncu seje | 1 PR |
+| **P0** | Tabela `player_skill_passport_snapshot` (gsid, guid, os, raw, `pool_mean`/`pool_n`/`pool_sd`, `percentile_at_time`, formula_version, n_sessions, format, `supersedes`) + zapis, **sprožen šele ob izpolnjenih pogojih iz §4.3**, ne ob koncu seje | 1 PR |
 | **P1** | Backfill posnetkov iz obstoječe zgodovine (38 sej z viri) — vse osi so izračunljive za nazaj | 1 PR + skripta |
 | **P2** | Agregacijski servis: shrinkage, confidence, percentil znotraj bazena, per-format | 1 PR |
 | **P3** | Endpoint `/api/skill/passport/{guid}` + značke (playstyle label iz osi) | 1 PR |
