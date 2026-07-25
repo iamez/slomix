@@ -140,14 +140,19 @@ class ProximityCog(
         "proximity_objective_focus",
         "proximity_objective_run",
         "proximity_reaction_metric",
-        # proximity_revive excluded: no round_number/round_start_unix/session_date columns
+        # revive + weapon_accuracy joined the fanout with migration 065
+        # (round_number/round_start_unix/session_date columns added; the
+        # parser stamps them on every new import). Historical rows imported
+        # BEFORE 065 with a NULL round_id have no identity to match on and
+        # stay orphans — only rows carrying the identity can be (re)linked.
+        "proximity_revive",
         "proximity_spawn_timing",
         "proximity_support_summary",
         "proximity_team_cohesion",
         "proximity_team_push",
         "proximity_trade_event",
         "proximity_vehicle_progress",
-        # proximity_weapon_accuracy excluded: no round_number/round_start_unix/session_date columns
+        "proximity_weapon_accuracy",
         # Codex §18/L3: these three had among the WORST wrong-round-linkage
         # rates, precisely because they were missing from this fanout — a
         # bad/NULL round_id here was never even retried by the 5-minute
