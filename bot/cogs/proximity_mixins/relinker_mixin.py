@@ -108,6 +108,12 @@ class _ProximityRelinkerMixin:
                 "proximity_support_summary", "proximity_team_push",
                 "proximity_trade_event", "proximity_vehicle_progress",
                 "combat_engagement", "player_track",
+                # revive + weapon_accuracy gained the identity columns with
+                # migration 065 — without them here a NULL/stale link present
+                # ONLY in these two tables would never be discovered (their
+                # membership in _PROXIMITY_ROUND_ID_TABLES only makes them
+                # update targets once a round is discovered elsewhere).
+                "proximity_revive", "proximity_weapon_accuracy",
             ]
             null_legs = " UNION ".join(
                 f"SELECT map_name, round_number, round_start_unix, session_date "
