@@ -1,7 +1,14 @@
 {
   "meta": {
     "etmain_dir": "/home/samba/share/etmain",
-    "filtered_by_template": true
+    "filtered_by_template": true,
+    "added_2026_07_25": [
+      "decay_sw",
+      "et_beach",
+      "et_brewdog",
+      "etl_supply",
+      "radar"
+    ]
   },
   "maps": {
     "adlernest": [
@@ -875,6 +882,324 @@
         "z": -24,
         "source_pk3": "te_escape2_fixed3.pk3",
         "source_bsp": "maps/te_escape2.bsp"
+      }
+    ],
+    "decay_sw": [
+      {
+        "name": "the Health and Ammo Cabinets",
+        "lua_name": "the_health_and_ammo_cabinets",
+        "target": "cabinet_cm_marker",
+        "type": "objective",
+        "x": 126,
+        "y": -1619.5,
+        "z": 290.5,
+        "source_pk3": "decay_sw.pk3",
+        "source_bsp": "maps/decay_sw.bsp"
+      },
+      {
+        "name": "Access Codes",
+        "lua_name": "access_codes",
+        "target": "secret_docs",
+        "type": "objective",
+        "x": 3273,
+        "y": -498,
+        "z": 65,
+        "source_pk3": "decay_sw.pk3",
+        "source_bsp": "maps/decay_sw.bsp"
+      },
+      {
+        "name": "vault generator",
+        "lua_name": "vault_generator",
+        "target": "vault_gen",
+        "type": "objective",
+        "x": 1003,
+        "y": 3262,
+        "z": 15,
+        "source_pk3": "decay_sw.pk3",
+        "source_bsp": "maps/decay_sw.bsp"
+      },
+      {
+        "name": "Transmitter",
+        "lua_name": "transmitter",
+        "target": "transmitter_cmm1",
+        "type": "objective",
+        "x": -719,
+        "y": -255,
+        "z": 133,
+        "source_pk3": "decay_sw.pk3",
+        "source_bsp": "maps/decay_sw.bsp"
+      },
+      {
+        "name": "Neutral Command Post",
+        "lua_name": "neutral_command_post",
+        "target": "t10000437",
+        "type": "command_post",
+        "x": -932,
+        "y": 2305,
+        "z": 221,
+        "source_pk3": "decay_sw.pk3",
+        "source_bsp": "maps/decay_sw.bsp"
+      },
+      {
+        "name": "Truck",
+        "lua_name": "truck",
+        "target": "truck_cmm1",
+        "type": "escort",
+        "x": 3412,
+        "y": 2573,
+        "z": 133,
+        "source_pk3": "decay_sw.pk3",
+        "source_bsp": "maps/decay_sw.bsp"
+      },
+      {
+        "name": "The Fence",
+        "lua_name": "the_fence",
+        "target": "axisfence_1",
+        "type": "objective",
+        "x": 722,
+        "y": 2581,
+        "z": 280,
+        "source_pk3": "decay_sw.pk3",
+        "source_bsp": "maps/decay_sw.bsp"
+      },
+      {
+        "name": "Axis Gold",
+        "lua_name": "axis_gold",
+        "target": "axis_gold_cm_marker",
+        "type": "objective",
+        "x": 1373,
+        "y": 4294,
+        "z": 210,
+        "source_pk3": "decay_sw.pk3",
+        "source_bsp": "maps/decay_sw.bsp"
+      },
+      {
+        "name": "the Health and Ammo Cabinets",
+        "lua_name": "the_health_and_ammo_cabinets",
+        "target": "t10000467",
+        "type": "objective",
+        "x": -607.5,
+        "y": 4460,
+        "z": 263.5,
+        "source_pk3": "decay_sw.pk3",
+        "source_bsp": "maps/decay_sw.bsp"
+      }
+    ],
+    "et_beach": [
+      {
+        "name": "War Documents",
+        "lua_name": "war_documents",
+        "target": "documents_marker",
+        "type": "objective",
+        "x": 3272,
+        "y": 1927,
+        "z": 640,
+        "source_pk3": "et_beach.pk3",
+        "source_bsp": "maps/et_beach.bsp"
+      },
+      {
+        "name": "Transmitter",
+        "lua_name": "transmitter",
+        "target": "transmitter_marker",
+        "type": "objective",
+        "x": 3292,
+        "y": 2937,
+        "z": 1254,
+        "source_pk3": "et_beach.pk3",
+        "source_bsp": "maps/et_beach.bsp"
+      },
+      {
+        "name": "the Sea Wall breach",
+        "lua_name": "the_sea_wall_breach",
+        "target": "t372",
+        "type": "objective",
+        "x": 1076,
+        "y": 1065,
+        "z": 790,
+        "source_pk3": "et_beach.pk3",
+        "source_bsp": "maps/et_beach.bsp"
+      },
+      {
+        "name": "the Health Cabinet",
+        "lua_name": "the_health_cabinet",
+        "target": "eb_health_marker",
+        "type": "objective",
+        "x": 3272,
+        "y": -544,
+        "z": 1184,
+        "source_pk3": "et_beach.pk3",
+        "source_bsp": "maps/et_beach.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinet",
+        "lua_name": "health_and_ammo_cabinet",
+        "target": "eb_ammo_marker",
+        "type": "objective",
+        "x": 3408,
+        "y": -464,
+        "z": 1184,
+        "source_pk3": "et_beach.pk3",
+        "source_bsp": "maps/et_beach.bsp"
+      },
+      {
+        "name": "Command Post",
+        "lua_name": "command_post",
+        "target": "neutral_compost_built",
+        "type": "command_post",
+        "x": 2824,
+        "y": 1240,
+        "z": 1012,
+        "source_pk3": "et_beach.pk3",
+        "source_bsp": "maps/et_beach.bsp"
+      },
+      {
+        "name": "Ammo Cabinet",
+        "lua_name": "ammo_cabinet",
+        "target": "t1077",
+        "type": "objective",
+        "x": 3408,
+        "y": -464,
+        "z": 1184,
+        "source_pk3": "et_beach.pk3",
+        "source_bsp": "maps/et_beach.bsp"
+      }
+    ],
+    "et_brewdog": [
+      {
+        "name": "Axis Transmitter",
+        "lua_name": "axis_transmitter",
+        "target": "transmitter_cm_marker",
+        "type": "objective",
+        "x": -2560,
+        "y": 2352,
+        "z": 328,
+        "source_pk3": "et_brewdog_b6.pk3",
+        "source_bsp": "maps/et_brewdog.bsp"
+      },
+      {
+        "name": "Quiz Answers",
+        "lua_name": "quiz_answers",
+        "target": "docs_cm_marker",
+        "type": "objective",
+        "x": 1440,
+        "y": 2024,
+        "z": 408,
+        "source_pk3": "et_brewdog_b6.pk3",
+        "source_bsp": "maps/et_brewdog.bsp"
+      }
+    ],
+    "etl_supply": [
+      {
+        "name": "Truck",
+        "lua_name": "truck",
+        "target": "truck_construct",
+        "type": "escort",
+        "x": -2368,
+        "y": 688,
+        "z": 0,
+        "source_pk3": "etl_supply_v14.pk3",
+        "source_bsp": "maps/etl_supply.bsp"
+      },
+      {
+        "name": "Depot Fence",
+        "lua_name": "depot_fence",
+        "target": "fence",
+        "type": "objective",
+        "x": 144,
+        "y": -1792,
+        "z": 52,
+        "source_pk3": "etl_supply_v14.pk3",
+        "source_bsp": "maps/etl_supply.bsp"
+      },
+      {
+        "name": "Forward spawn door",
+        "lua_name": "forward_spawn_door",
+        "target": "forward_spawn_gate",
+        "type": "objective",
+        "x": -68,
+        "y": 2368,
+        "z": 304,
+        "source_pk3": "etl_supply_v14.pk3",
+        "source_bsp": "maps/etl_supply.bsp"
+      }
+    ],
+    "radar": [
+      {
+        "name": "Escape Truck",
+        "lua_name": "escape_truck",
+        "target": "truck_fake",
+        "type": "escort",
+        "x": -1280,
+        "y": 560,
+        "z": 1416,
+        "source_pk3": "pak0.pk3",
+        "source_bsp": "maps/radar.bsp"
+      },
+      {
+        "name": "East Radar Parts",
+        "lua_name": "east_radar_parts",
+        "target": "circuit2",
+        "type": "objective",
+        "x": 264,
+        "y": -3104,
+        "z": 1536,
+        "source_pk3": "pak0.pk3",
+        "source_bsp": "maps/radar.bsp"
+      },
+      {
+        "name": "West Radar Parts",
+        "lua_name": "west_radar_parts",
+        "target": "circuit1",
+        "type": "objective",
+        "x": -1928,
+        "y": -2280,
+        "z": 1536,
+        "source_pk3": "pak0.pk3",
+        "source_bsp": "maps/radar.bsp"
+      },
+      {
+        "name": "Command Post",
+        "lua_name": "command_post",
+        "target": "neutral_radio_built",
+        "type": "command_post",
+        "x": 3192,
+        "y": -1294,
+        "z": 1556,
+        "source_pk3": "pak0.pk3",
+        "source_bsp": "maps/radar.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinets",
+        "lua_name": "health_and_ammo_cabinets",
+        "target": "axis_hacab_mcm",
+        "type": "objective",
+        "x": -2522,
+        "y": 3362,
+        "z": 1448,
+        "source_pk3": "pak0.pk3",
+        "source_bsp": "maps/radar.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinets",
+        "lua_name": "health_and_ammo_cabinets",
+        "target": "axis_hacab_mcm2",
+        "type": "objective",
+        "x": -1082,
+        "y": -3826,
+        "z": 1280,
+        "source_pk3": "pak0.pk3",
+        "source_bsp": "maps/radar.bsp"
+      },
+      {
+        "name": "Health and Ammo Cabinets",
+        "lua_name": "health_and_ammo_cabinets",
+        "target": "lms_hacab_mcm",
+        "type": "objective",
+        "x": 2826,
+        "y": -1144,
+        "z": 1556,
+        "source_pk3": "pak0.pk3",
+        "source_bsp": "maps/radar.bsp"
       }
     ]
   }
