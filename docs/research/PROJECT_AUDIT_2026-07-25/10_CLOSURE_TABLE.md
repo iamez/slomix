@@ -11,44 +11,49 @@ marked OPEN.
 
 ## 1. Head SHAs at time of action
 
-| PR | Branch | Head at close | Codex snapshot head | Changed since review? |
-|---|---|---|---|---|
-| #546 | `fix/kis-gsid-backfill` | merged `fc82c11` | `656df3c` | yes — re-reviewed, 0 open |
-| #547 | `fix/kis-v4-recompute` | `9b6e92c0a63c` | `fd9044f` | yes — hardened after review |
-| #548 | `fix/proximity-serving-layer` | `3b3938f` | `3b3938f` | no |
-| #549 | `fix/data-integrity-dedup` | see PR | `00a3c27` | yes — re-reviewed, 0 open |
-| #550 | `chore/audit-housekeeping` | `0e303d4` | `0e303d4` | no |
-| #551 | `docs/vision-design-2026-07` | `8fc2ed8`+ | `5fd56fd` | yes — docs only, review withheld |
-| #552 | `feat/objective-zones-missing-maps` | merged `1a80736` | `dcc2589` | yes — re-reviewed, 0 open |
-| #553 | `fix/invalid-scoring-terms` | see PR | `8077ad3` | yes — re-reviewed |
-| #554 | `fix/narrative-baseline-cutoff` | new | n/a | new (DATA-01) |
+Every head was re-checked before acting. Where a head had moved past the
+Codex snapshot, the earlier review was treated as evidence rather than as
+approval, and the PR was re-reviewed before merging.
+
+| PR | Final state | Codex snapshot head | Moved after review? |
+|---|---|---|---|
+| #546 | merged `fc82c11` | `656df3c` | yes — re-reviewed to 0 open |
+| #547 | merged `3a92cd0` | `fd9044f` | yes — hardened, then rebased onto v5 |
+| #548 | merged `ab2809d` | `3b3938f` | yes — carried the #553 integration |
+| #549 | merged `7aff22e` | `00a3c27` | yes — re-reviewed to 0 open |
+| #550 | merged `25e7ffb` | `0e303d4` | yes — merged main, added PWC version |
+| #551 | OPEN `docs/vision-design-2026-07` | `5fd56fd` | yes — review withheld by Codex |
+| #552 | merged `1a80736` | `dcc2589` | yes — narrowed to et_brewdog |
+| #553 | merged `7d6a2d2` | `8077ad3` | yes — re-reviewed to 0 open |
+| #554 | OPEN `fix/narrative-baseline-cutoff` | n/a | new (DATA-01) |
+| #557 | OPEN — this document | n/a | new |
 
 ---
 
 ## 2. Finding → commit → test → evidence
 
-| # | Finding (severity) | Commit | Test | Runtime evidence | Residual risk |
+| # | Finding (severity) | Commit / PR | Test | Runtime evidence | Residual risk |
 |---|---|---|---|---|---|
 | KIS-01 | #546 delete/warm scope mismatch (HIGH) | `9cfc939` | `test_kis_cache_invalidation_hook.py` — two-sessions-one-date, multi-gsid warm fan-out, no-gsid fallback, warm params | warm now sends `gaming_session_id`, avoiding the story-scope 409 that followed a successful delete | residual in-flight-compute race unchanged (pre-existing, documented in `_invalidate_kis_cache`) |
-| KIS-01b | NULL-gsid rows deleted across sessions (HIGH, P1) | `de9c213`+ | same file — delete predicate asserts round-key EXISTS clause | 2026-03-25 (4 sessions): old predicate matched **1,128** NULL rows, new matches **74**, spares **1,054** | rows matching no resolvable round are never deleted and never rescored — by design |
+| KIS-01b | NULL-gsid rows deleted across sessions (HIGH, P1) | `de9c213`, `759a5cd` | same file — delete predicate asserts round-key EXISTS clause | 2026-03-25 (4 sessions): old predicate matched **1,128** NULL rows, new matches **74**, spares **1,054** | rows matching no resolvable round are never deleted and never rescored — by design |
 | KIS-01c | 064 diverged from canonical gate | `de9c213` | `test_kis_gsid_stamping.py` — asserts `round_number IN (1,2)` and COALESCE join | migration re-applied on dev, 0 further rows; no R0 rows existed (19,172 R1 + 14,905 R2, 0 R0) | legacy rounds with no start time now attributable; previously skipped |
 | FORM-01a | SSR credited retired push signal (HIGH) | `12e84cc` | `test_ssr_service.py` fixture dispatches on the new predicate | `situ` filter no longer contains `is_during_push` | — |
 | FORM-01b | SSR formula changed without a version bump | `8dcfbbd` | `test_ssr_service.py` pins `ssr-v0.3` | registry imports live, follows automatically | — |
 | FORM-01c | Player radar duplicated both retired terms | `12e84cc` | — (endpoint shape asserted via registry test) | awareness = escape-rate only; mechanical → `unscored`; `player-radar-v2` | — |
 | FORM-01d | React radar hardcoded 5 axes (P1) | `8dcfbbd` | `npx tsc --noEmit` clean | chart rendered **nothing** for every player before the fix | Vitest coverage for the component not added |
-| FORM-01e | `power-v2` published by two different formulas | `8dcfbbd`+ | registry contract test | radar → `player-radar-v2` + `axis_definitions_from` | — |
+| FORM-01e | `power-v2` published by two different formulas | `8dcfbbd`, `622abb7` | registry contract test | radar → `player-radar-v2` + `axis_definitions_from` | — |
 | FORM-01f | Retired-term sweep | `12e84cc` | — | remaining `is_during_push` consumers report COUNTS/context only, never score | — |
-| INT-02 | #548 ↔ #553 semantic conflict (HIGH) | `796b00a` (branch `integ/548-553`) | `test_proximity_serving_layer_audit.py` — 4-axis composite + surviving #548 semantics | conflict resolved by rule; full suite 3,703 pass | **not yet landed** — see §4 |
+| INT-02 | #548 ↔ #553 semantic conflict (HIGH) | `796b00a` (branch `integ/548-553`) | `test_proximity_serving_layer_audit.py` — 4-axis composite + surviving #548 semantics | conflict resolved by rule; landed with #548 (`ab2809d`), full suite 3,733 pass | strict mode not implemented; compatibility mode is labelled in the response |
 | INT-02b | Gate is attribution, not quality | `796b00a` | attribution bucket split + coverage denominator | live DB 2026-07-01+: 17,229 total / 15,894 linked-valid / 0 invalid / **1,335 unlinked (92.2% coverage)** | compatibility mode keeps unknown rows; strict mode not implemented |
 | PARSER-01a | #549 stale PR description | PR body edit | — | description now states the host-local contract and why the tz change was reverted | — |
 | PARSER-01b | No direct migration/parser tests | `5e2431c` | `test_migration_065_dedup.py` (11 tests) | — | no live-fixture integration test (unit-level SQL assertions only) |
 | PARSER-01c | Orphan dedup ignored `round_number` | `759a5cd` | same file, count assertion | — | — |
 | PARSER-01d | `DO NOTHING` discarded resolved links | `759a5cd` | link-refresh clauses + no-measurement-update assertion | live DB, rolled-back txn: unlinked insert then replay with `round_id=11013` → one row, `round_id=11013` | — |
-| PARSER-01e | Unguarded legacy date cast | latest on branch | — | rolled-back txn: `'BROKEN-DATE'` → NULL, `'2026-07-21 20:00'` → date | dev has 0 non-ISO rows; prod unverified |
+| PARSER-01e | Unguarded legacy date cast | merged with #549 | — | rolled-back txn: `'BROKEN-DATE'` → NULL, `'2026-07-21 20:00'` → date | dev has 0 non-ISO rows; prod unverified |
 | ZONE-01 | #552 body vs diff, invariants, EOF | `feca16f` | `test_objective_zone_catalog.py` (7 tests) | catalog 15 maps / 74 objectives; gate passes | 4 low-play maps deliberately deferred (cabinet dedup, transforms, curated etl_supply) |
-| KIS-02 | #547 recompute controls | `9b6e92c` | `test_kis_recompute_controls.py` (7 tests) | dry-run default; `--apply` without backup refuses; without `--expect-db` refuses; mismatched target aborts pre-connect | **#547 not yet rebased onto v5** — see §4 |
-| DATA-01 | Narrative baseline cutoff | `#554` | `test_narrative_baseline_cutoff.py` (3 tests) | cutoff = `scope.gaming_session_id` | — |
-| DOC-01 | #551 design threads | `8fc2ed8` | — | 13 threads closed with decisions (units, leakage, survivorship, capability, versioning) | **review withheld** — fresh Codex review required |
+| KIS-02 | #547 recompute controls | `9b6e92c` | `test_kis_recompute_controls.py` (7 tests) | dry-run default; `--apply` without backup refuses; without `--expect-db` refuses; mismatched target aborts pre-connect. After the rebase the tool reports `Formula target: kis-v5` with no edit, because it imports the version live | recompute has NOT been run on production; dev only |
+| DATA-01 | Narrative baseline cutoff | PR #554 (open) | `test_narrative_baseline_cutoff.py` (5 tests) | cutoff = `scope.gaming_session_id`; ordering assumption verified: 0 violations across all sessions | bound is id-based, not temporal — documented at the call site |
+| DOC-01 | #551 design threads | PR #551 (open) | — | 13 threads closed with decisions (units, leakage, survivorship, capability, versioning) | **review withheld** — fresh Codex review required |
 
 ---
 
