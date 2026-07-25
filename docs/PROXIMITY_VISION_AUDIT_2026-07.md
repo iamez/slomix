@@ -23,7 +23,7 @@ Vizijo razbijem na tri zahteve:
 
 ### V1 — popolna telemetrija: **✅ ŽE DOSEŽENO** (in bolje, kot si owner misli)
 
-Lua `proximity_tracker.lua` v6.10 vzorči **vsakih 200 ms** in za vsak vzorec zapiše:
+Lua `proximity_tracker.lua` vzorči **vsakih 200 ms** in za vsak vzorec zapiše:
 
 ```
 time, x, y, z, health, speed, weapon, stance, sprint, event

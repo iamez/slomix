@@ -3,6 +3,8 @@
 **Status:** PREDLOG za ownerjevo odločitev. Nič od tega ni implementirano; brez GO se ne kodira.
 **Datum:** 2026-07-25 · **Kontekst:** audit `docs/AUDIT_DATA_CORRECTNESS_2026-07-25.md` §4 (koherenca scoringa)
 
+**Kratice:** **KIS** = Kill Impact Score (kontekstualna vrednost posameznega ubojа, `storytelling/kis.py`) · **PWC** = Player Win Contribution (delež prispevka k zmagi runde, `win_contribution.py`) · **SSR** = Situational Skill Rating (`ssr_service.py`) · **ET Rating** = obstoječi enodimenzionalni skalar (`skill_rating_service.py`)
+
 ---
 
 ## 1. Ownerjeva vizija (dobesedno, 2026-07-25)
@@ -87,7 +89,7 @@ shrunk = (n * mean(raw_i) + C * pool_mean) / (n + C)        # C = 5 sej
 - Igralec z **1 sejo** je potegnjen skoraj do sredine bazena (nima še dokaza).
 - Igralec z **20+ sejami** je praktično pri svoji pravi vrednosti.
 - Nihče ne "izstreli" na vrh po enem dobrem večeru — rešuje točno gibhubovo 22-rund napako.
-- `C = 5` je izhodišče (SSR že uporablja prag 5 sej); kalibriramo na obstoječih 63 igralcih.
+- `C = 5` je izhodišče (SSR — Situational Skill Rating, `ssr_service.py` — že uporablja prag 5 sej); kalibriramo na obstoječih 63 igralcih.
 
 Poleg tega vsak profil izpiše **`confidence`** (`min(1, n/15)`) in **`n_sessions`** — ne kot okrasek, ampak vidno ob vsaki osi. Ko je `n < 3`, os prikažemo kot *"premalo podatkov"*, ne kot številko.
 
