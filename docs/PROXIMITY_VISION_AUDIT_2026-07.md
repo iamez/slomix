@@ -21,7 +21,7 @@ Vizijo razbijem na tri zahteve:
 
 ## 2. Verdikt po zahtevah
 
-### V1 — popolna telemetrija: **✅ ŽE DOSEŽENO** (in bolje, kot si owner misli)
+### V1 — popolna telemetrija: **✅ DOSEŽENO za pozicijo/stanje** (ena vrzel: zvezna smer pogleda)
 
 Lua `proximity_tracker.lua` vzorči **vsakih 200 ms** in za vsak vzorec zapiše:
 
@@ -29,7 +29,11 @@ Lua `proximity_tracker.lua` vzorči **vsakih 200 ms** in za vsak vzorec zapiše:
 time, x, y, z, health, speed, weapon, stance, sprint, event
 ```
 
-To ni "približno kje je igralec" — to je **kje je, s koliko življenja, s katerim orožjem, v kateri drži, ali sprinta in kaj se mu je ravno zgodilo.** Točno V1.
+To ni "približno kje je igralec" — to je **kje je, s koliko življenja, s katerim orožjem, v kateri drži, ali sprinta in kaj se mu je ravno zgodilo.**
+
+**Ena prava vrzel (popravljeno po reviewu): smer pogleda.** Pot NE vsebuje viewangles, zato iz nje ni mogoče ločiti igralca, ki pravilno drži choke, od tistega, ki na istem mestu gleda stran. Za odločitveno oceno (DQL) je to pomembna razlika. Viewangles obstajajo, a le **dogodkovno**: `SHOT_FIRED` (ob strelu) in `AIM_LOCK` (ko je križec na sovražniku) — torej vemo, kam je gledal, kadar je streljal ali koga sledil, ne pa med zatišjem.
+
+V1 je torej **dosežen za pozicijo/stanje, ne pa za neprekinjeno orientacijo.** Če se izkaže, da DQL rabi zvezno smer pogleda, je to edina postavka v tem dokumentu, ki bi zahtevala Lua spremembo (dodatno polje v vzorcu poti).
 
 V bazi (`player_track.path`, JSONB): **57.311 poti, 223 MB.** Ena runda etl_adlernest R2 (272 s) da 50 poti in v isti datoteki še:
 
@@ -126,7 +130,12 @@ Zato DQL-3 potrebuje **enega od dveh** dodatnih virov — to je odločitev, ki j
 | **A. Ročni fazni model per mapa** | za vsako mapo zapišemo graf odvisnosti objectivov (kaj odklene kaj) in fazo izpeljemo iz že zajetih dogodkov | brez Lua sprememb; delo je v definicijah (14+ map) |
 | **B. Lua doda stanje objectivov** | tracker periodično zapiše stanje vsakega objectiva (aktiven/zaklenjen/opravljen) | najbolj zanesljivo, a **zahteva Lua spremembo + redeploy na puran** — kar sicer nikjer drugje ne rabimo |
 
-Dokler ta odločitev ne pade, DQL-3 ostaja **odložen**; DQL-1 in DQL-2 nista odvisna od njega.
+Dokler ta odločitev ne pade, DQL-3 ostaja **odložen**. DQL-1 od njega ni odvisen.
+
+**DQL-2 pa je delno odvisen (popravljeno po reviewu):** ocene, ki vsebujejo pojem *"koristnega prostora"* ali *"pravega objectiva"*, na mapah s sekvenčnimi/opcijskimi/vzporednimi cilji brez faze niso zanesljive — push proti drugemu objectivu, ko je aktiven prvi, izgleda enako kot pravi push. Zato se DQL-2 uvede v dveh korakih:
+
+- **Faza A (brez DQL-3):** ocene, ki so fazno nevtralne — trade responsiveness, izolacija/lurk, sacrifice s kavzalnimi dokazi, objective-run kvaliteta (ta ima svoj kontekst že v zapisu).
+- **Faza B (po DQL-3):** ocene, ki potrebujejo *"kateri cilj je zdaj pomemben"* — vrednost pridobljenega prostora, kvaliteta pusha, obrambne odločitve.
 
 ---
 
