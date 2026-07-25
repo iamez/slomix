@@ -115,9 +115,13 @@ def get_registry() -> list[dict]:
             "status": "live",
             "module": "website/backend/services/storytelling/win_contribution.py",
             "surface": "/api/storytelling/win-contribution, Smart Stats MVP",
-            "summary": "Player Win Contribution: 8 weighted shares (kills .22, "
-                       "objectives .20, revives .12, crossfire .10, trade .10, "
-                       "damage .10, survival .08, clutch .08). CONDITIONAL: in a "
+            "summary": "Player Win Contribution: 8 weighted components (kills "
+                       ".22, objectives .20, revives .12, crossfire .10, trade "
+                       ".10, damage .10, survival .08, clutch .08). Seven are "
+                       "team-total shares (player / team sum); SURVIVAL is not "
+                       "— it is min(player_alive / team_AVERAGE_alive, 2.0), so "
+                       "it centres on 1.0 and caps at 2x rather than summing to "
+                       "1 across the team. CONDITIONAL: in a "
                        "round where every player has zero objectives, the .20 "
                        "objective weight is dropped and redistributed (kills "
                        "+.06, damage +.03, revives +.03, crossfire +.03, trade "
