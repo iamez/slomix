@@ -29,6 +29,7 @@ from website.backend.services.storytelling_service import (
     DISTANCE_NORMAL,
     LOW_HEALTH_MULTIPLIER,
     LOW_HEALTH_THRESHOLD,
+    OBJECTIVE_AREA_MULTIPLIER,
     OUTCOME_GIBBED,
     OUTCOME_REVIVED,
     OUTCOME_TAPPED,
@@ -453,6 +454,14 @@ async def get_kis_formula():
             "long_range": {"value": DISTANCE_LONG_RANGE, "threshold": ">800u"},
             "normal": {"value": DISTANCE_NORMAL, "threshold": "100-800u"},
             "melee": {"value": DISTANCE_MELEE, "threshold": "<100u"},
+        },
+        "objective_multipliers": {
+            "objective_area": {
+                "value": OBJECTIVE_AREA_MULTIPLIER,
+                "description": "Victim died inside one of the map's objective "
+                               "zones (3D sphere check vs objective_zones.json) "
+                               "— kills at the objective matter more (KIS v4)",
+            },
         },
         "oksii_multipliers": {
             "health": {
