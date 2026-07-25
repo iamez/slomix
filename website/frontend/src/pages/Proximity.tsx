@@ -47,7 +47,12 @@ function formatLeaderDetail(category: string, entry: ProximityLeaderboardEntry):
     case 'power': {
       const axes = entry.axes as Record<string, number> | undefined;
       if (!axes) return '';
-      return `A:${axes.aggression} W:${axes.awareness} T:${axes.teamplay} Ti:${axes.timing} M:${axes.mechanical}`;
+      // `mechanical` left the composite on 2026-07-25 (return_fire_ms has no
+      // signal); it now arrives under `unscored` and is labelled as such.
+      const unscored = (entry as { unscored?: Record<string, number | null> }).unscored;
+      const mech = unscored?.mechanical;
+      const base = `A:${axes.aggression} W:${axes.awareness} T:${axes.teamplay} Ti:${axes.timing}`;
+      return mech == null ? base : `${base} (M:${mech}, unscored)`;
     }
     case 'spawn': return `${entry.timed_kills ?? 0} kills, ${entry.avg_denial_ms ?? 0}ms denial`;
     case 'crossfire': return `${entry.total ?? 0} opportunities, ${entry.avg_delay_ms ?? 0}ms avg delay`;
