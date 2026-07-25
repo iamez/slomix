@@ -8792,7 +8792,7 @@ CREATE INDEX IF NOT EXISTS idx_parimutuel_bets_market ON parimutuel_bets (market
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- Drift closure (IMP-001, caught by tests/integration/test_fresh_bootstrap_parity.py):
--- objects that migrations 030/051/053/054/056/059/060/063 create but
+-- objects that migrations 030/051/053/054/056/059/060/063/065 create but
 -- earlier regenerations of this dump missed. A fresh bootstrap `--baseline`s
 -- the ledger against THIS file, so every migration effect must exist here.
 -- All statements are idempotent (IF NOT EXISTS) — safe on populated DBs.
@@ -8804,6 +8804,21 @@ ALTER TABLE storytelling_kill_impact
 CREATE INDEX IF NOT EXISTS idx_kis_gaming_session_id
     ON storytelling_kill_impact (gaming_session_id)
     WHERE gaming_session_id IS NOT NULL;
+
+-- 065: revive/weapon_accuracy round identity + dedup unique indexes
+-- (audit 2026-07-25 S9 — see migrations/065 for the full rationale)
+ALTER TABLE proximity_revive
+    ADD COLUMN IF NOT EXISTS round_number INTEGER,
+    ADD COLUMN IF NOT EXISTS round_start_unix BIGINT;
+ALTER TABLE proximity_weapon_accuracy
+    ADD COLUMN IF NOT EXISTS round_number INTEGER,
+    ADD COLUMN IF NOT EXISTS round_start_unix BIGINT;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_prox_revive_identity
+    ON proximity_revive (round_start_unix, round_number, map_name, medic_guid, revived_guid, revive_time)
+    WHERE round_start_unix IS NOT NULL AND round_number IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_prox_wacc_identity
+    ON proximity_weapon_accuracy (round_start_unix, round_number, map_name, player_guid, weapon_id)
+    WHERE round_start_unix IS NOT NULL AND round_number IS NOT NULL;
 
 -- 054: server-side KIS shadow audit
 CREATE TABLE IF NOT EXISTS storytelling_kis_shadow_audit (

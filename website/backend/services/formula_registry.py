@@ -42,6 +42,16 @@ def _kis_version() -> str:
     return FORMULA_VERSION
 
 
+def _power_version() -> str:
+    from website.backend.routers.proximity_scoring import POWER_FORMULA_VERSION
+    return POWER_FORMULA_VERSION
+
+
+def _pwc_version() -> str:
+    from website.backend.services.storytelling.win_contribution import FORMULA_VERSION
+    return FORMULA_VERSION
+
+
 def _prox_version() -> str:
     from website.backend.services.prox_scoring import FORMULA_VERSION
     return FORMULA_VERSION
@@ -105,13 +115,18 @@ def get_registry() -> list[dict]:
             "status": "live",
             "module": "website/backend/services/storytelling/kis.py",
             "surface": "/api/storytelling/*, Smart Stats, Story, momentum",
-            "summary": "Kill Impact Score: base x 11 context multipliers "
-                       "(carrier/push/crossfire/spawn/outcome/class/distance/"
-                       "health/alive/reinf), soft cap 5.0.",
+            "summary": "Kill Impact Score: base x 10 context multipliers "
+                       "(carrier/crossfire/spawn/outcome/class/distance/"
+                       "health/alive/reinf/objective_area), soft cap 5.0. "
+                       "The PUSH multiplier "
+                       "was retired in v5 (2026-07-25): push kills matched the "
+                       "~50% round-winner baseline (50.9% vs 50.8%) while the "
+                       "gating metric ran inverse to kill activity; "
+                       "is_during_push is still recorded but no longer scored.",
         },
         {
             "name": "pwc",
-            "version": "pwc-v2",
+            "version": _pwc_version(),
             "status": "live",
             "module": "website/backend/services/storytelling/win_contribution.py",
             "surface": "/api/storytelling/win-contribution, Smart Stats MVP",
@@ -146,6 +161,36 @@ def get_registry() -> list[dict]:
             "surface": "BOX score panel, session scoring (canonical 2-pt scale)",
             "summary": "Oksii-style stopwatch map scoring; the session-score "
                        "canon every surface agrees on.",
+        },
+        {
+            "name": "power_rating",
+            "version": _power_version(),
+            "status": "live",
+            "module": "website/backend/routers/proximity_scoring.py",
+            "surface": "/api/proximity/leaderboards?category=power (Power Rating tab)",
+            "summary": "4-axis composite, equally weighted: aggression, "
+                       "awareness, teamplay (5 percentile sub-metrics), timing. "
+                       "v2 (2026-07-25) after a validity audit: AWARENESS lost "
+                       "its inverted dodge-reaction half (sub-300ms 'reactions' "
+                       "escape 22% vs 65.7% for 1000ms+), and MECHANICAL left "
+                       "the composite because return_fire_ms shows no signal "
+                       "(40/35/37/42% across bands); it is still reported under "
+                       "`unscored`. Was unversioned and unregistered before v2.",
+        },
+        {
+            "name": "player_radar",
+            "version": "player-radar-v2",
+            "status": "live",
+            "module": "website/backend/routers/proximity_player.py",
+            "surface": "/api/proximity/player/{guid}/radar (profile radar chart)",
+            "summary": "Same four axis DEFINITIONS as power_rating (aggression, "
+                       "awareness, teamplay, timing; mechanical retired to "
+                       "`unscored`) but different INPUTS: Teamplay comes from "
+                       "the per-player prox score or its CF/TR fallback rather "
+                       "than population percentiles, so the same player scores "
+                       "differently here than on the leaderboard. Registered "
+                       "separately so that difference is visible rather than "
+                       "implied to be one formula.",
         },
         {
             "name": "krogt",

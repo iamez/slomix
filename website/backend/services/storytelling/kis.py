@@ -61,7 +61,12 @@ from .base import (
 # TODO). A kill whose victim died inside an objective sphere now earns
 # OBJECTIVE_AREA_MULTIPLIER — a real change to total_impact for obj-area kills,
 # so the version bumps to invalidate pre-fix cache rows.
-FORMULA_VERSION = "kis-v4"
+# v4 -> v5 (2026-07-25): the PUSH multiplier is retired (see _score_kill's
+# push block for the measurements). Kills during a push predicted the round
+# winner no better than any other kill (50.9% vs 50.8%), while the metric
+# gating them was inverse with kill activity. 8.5% of kills lose an average
+# 1.515x boost, so every cached row must be rescored.
+FORMULA_VERSION = "kis-v5"
 
 
 def _scope_row_filter(
@@ -189,6 +194,26 @@ class _KisMixin:
                 f"WHERE {row_filter} AND formula_version = {fv_placeholder}",  # nosec B608 - row_filter from _scope_row_filter, all values $N-bound
                 (*scope_params, FORMULA_VERSION)
             )
+            # Coverage guard (Copilot review on #546): count>0 alone is NOT
+            # a complete cache. A midnight-crossing session whose legacy
+            # compute covered only ONE date fragment leaves partial rows
+            # that — once stamped with the gsid by migration 064 — would
+            # satisfy a bare existence check forever, and the missing
+            # fragment would never be scored. Every kill in scope gets
+            # exactly one cache row, so cached == source-kill count is the
+            # complete-cache invariant on BOTH paths.
+            if existing and existing[0] > 0:
+                ko_count_row = await self.db.fetch_one(
+                    f"SELECT COUNT(*) FROM proximity_kill_outcome ko WHERE {ko_row_filter}",  # nosec B608 - ko_row_filter from _scope_row_filter, all values $N-bound
+                    scope_params,
+                )
+                ko_count = ko_count_row[0] if ko_count_row else 0
+                if existing[0] != ko_count:
+                    logger.info(
+                        "KIS cache incomplete for dates=%s (%d cached vs %d source kills) — recomputing",
+                        date_list, existing[0], ko_count,
+                    )
+                    existing = None
             if existing and existing[0] > 0:
                 kis_ts = existing[1]
                 ctx = await self.db.fetch_one(
@@ -254,9 +279,15 @@ class _KisMixin:
         tx = getattr(self.db, "transaction", None)
         if callable(tx):
             async with tx():
-                await self._store_scored_kills(row_filter, scope_params, gaming_session_id, scored)
+                await self._store_scored_kills(
+                    row_filter, scope_params, gaming_session_id, scored,
+                    dates=dates, round_keys=round_keys,
+                )
         else:  # SQLite dev adapter has no transaction context
-            await self._store_scored_kills(row_filter, scope_params, gaming_session_id, scored)
+            await self._store_scored_kills(
+                row_filter, scope_params, gaming_session_id, scored,
+                dates=dates, round_keys=round_keys,
+            )
 
         logger.info("KIS computed for dates=%s: %d kills scored", date_list, len(scored))
         return {"status": "computed", "kills_scored": len(scored)}
@@ -307,6 +338,8 @@ class _KisMixin:
         scope_params: tuple,
         gaming_session_id: int | None,
         scored: list,
+        dates: tuple[date, ...] = (),
+        round_keys: tuple[tuple[int, str, int], ...] | None = None,
     ) -> None:
         # Same precise round-key filter as the fetch above (or the unchanged
         # date filter on the legacy path) — a broader delete here would wipe
@@ -345,6 +378,63 @@ class _KisMixin:
                  kill_time_ms, killer_guid_canonical, formula_version, gaming_session_id)
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
             """, batch)
+
+        if gaming_session_id is None:
+            # Legacy session_date path: rows above were inserted with a NULL
+            # gaming_session_id, which every gsid-filtered reader
+            # (useless-defense, PWC crossfire, enabler — #533/#535/#539)
+            # treats as "not part of any gaming session". Stamp them from
+            # rounds via the canonical round key, exactly like migration 064
+            # backfilled the historical rows — otherwise each legacy
+            # recompute would silently recreate the NULL-gsid regression.
+            # Keys mapping to more than one distinct gsid are skipped (a
+            # wrong stamp is worse than NULL); orphan keys stay NULL.
+            # Scope-bounded (Copilot review on #546): the rounds aggregation
+            # is restricted to the round keys THIS compute just wrote, so
+            # the GROUP BY never walks the whole rounds table on a
+            # per-session recompute. Both filters bind the same $1, so one
+            # param set serves both. Rejected rounds (is_valid = FALSE, or
+            # a round_status outside completed/substitution/NULL) are
+            # excluded to mirror session_scope's canonical gate — a stamp
+            # from a rejected round would leak that round's kills into
+            # every direct gaming_session_id reader.
+            stamp_filter, stamp_params = _scope_row_filter(round_keys, dates, prefix="k")
+            inner_filter, _ = _scope_row_filter(round_keys, dates, prefix="k2")
+            await self.db.execute(
+                f"""
+                UPDATE storytelling_kill_impact k
+                SET gaming_session_id = r.gsid
+                FROM (
+                    -- Same canonical gate as migration 064 and
+                    -- session_scope._ROUND_GATE_SQL: round_number IN (1, 2)
+                    -- excludes R0 summaries, and the start time is
+                    -- COALESCEd to 0 because _build_scope normalizes an
+                    -- absent start to 0 rather than dropping the round.
+                    SELECT COALESCE(rr.round_start_unix, 0) AS round_start_unix,
+                           rr.map_name, rr.round_number,
+                           MIN(rr.gaming_session_id) AS gsid
+                    FROM rounds rr
+                    WHERE rr.gaming_session_id IS NOT NULL
+                      AND rr.round_number IN (1, 2)
+                      AND rr.is_valid IS DISTINCT FROM FALSE
+                      AND (rr.round_status IN ('completed', 'substitution')
+                           OR rr.round_status IS NULL)
+                      AND (rr.round_start_unix, rr.map_name, rr.round_number) IN (
+                          SELECT DISTINCT k2.round_start_unix, k2.map_name, k2.round_number
+                          FROM storytelling_kill_impact k2
+                          WHERE k2.gaming_session_id IS NULL AND {inner_filter}
+                      )
+                    GROUP BY COALESCE(rr.round_start_unix, 0), rr.map_name, rr.round_number
+                    HAVING COUNT(DISTINCT rr.gaming_session_id) = 1
+                ) r
+                WHERE k.gaming_session_id IS NULL
+                  AND {stamp_filter}
+                  AND COALESCE(k.round_start_unix, 0) = r.round_start_unix
+                  AND k.map_name = r.map_name
+                  AND k.round_number = r.round_number
+                """,  # nosec B608 - filters built by _scope_row_filter from internal constants, all values $N-bound
+                stamp_params,
+            )
 
     def _score_kill(self, kill, carrier_kills, carrier_returns, pushes, crossfires,
                     spawn_timings, victim_classes, combat_positions=None):
@@ -385,20 +475,39 @@ class _KisMixin:
                 carrier_mult = CARRIER_KILL_MULTIPLIER
             is_carrier = True
 
-        # Push context — quality-gated with tighter window
+        # Push context — DESCRIPTIVE ONLY since v5 (2026-07-25).
+        #
+        # The multiplier was retired after a validity audit measured on the
+        # production DB, not because the CONCEPT is wrong but because
+        # nothing we capture supports it:
+        #   * kills during a "push" belong to the round winner 50.9% of the
+        #     time vs 50.8% for every other kill — indistinguishable from
+        #     the ~50% baseline. (For contrast, on the same test crossfire
+        #     kills reach 52.2% and objective-area kills 53.4%, which is why
+        #     those multipliers stay.)
+        #   * push_quality is monotonically INVERSE with kills in its window
+        #     (<0.5 -> 0.90 kills; the 0.9-1.2 band this code gated on ->
+        #     0.60; 1.2+ -> 0.43), because `alignment x speed` peaks when a
+        #     team sprints unopposed out of spawn and drops on contact.
+        #   * no push field predicts kills: push_quality r=-0.111,
+        #     alignment r=-0.025, avg_speed r=-0.116, participants r=0.001.
+        # It boosted 8.5% of kills by an average 1.515x for a property that
+        # predicts nothing, so the honest fix is to stop scoring on it
+        # rather than swap in another unvalidated formula.
+        #
+        # `is_during_push` is still recorded: it is a true statement about
+        # the moment and feeds narrative//proximity panels. Only the SCORE
+        # contribution is gone. Restore a multiplier only once some push
+        # signal is shown to separate outcomes.
         push_mult = 1.0
         is_push = False
         if round_key in pushes:
-            best_pq = 0.0
             for push_start, push_end, pq, toward_obj in pushes[round_key]:
-                if push_start <= kill_time <= push_end + PUSH_BUFFER_MS:
-                    if (pq >= PUSH_QUALITY_THRESHOLD
-                            and toward_obj not in PUSH_TOWARD_EXCLUDE):
-                        if pq > best_pq:
-                            best_pq = pq
-            if best_pq > 0:
-                push_mult = 1.0 + min(best_pq * 0.5, 1.0)
-                is_push = True
+                if (push_start <= kill_time <= push_end + PUSH_BUFFER_MS
+                        and pq >= PUSH_QUALITY_THRESHOLD
+                        and toward_obj not in PUSH_TOWARD_EXCLUDE):
+                    is_push = True
+                    break
 
         # Crossfire context (kill within 3s of crossfire event)
         cf_mult = 1.0

@@ -411,7 +411,6 @@ def test_shadow_query_includes_all_context_ctes():
     for table in (
         "proximity_carrier_kill",
         "proximity_carrier_return",
-        "proximity_team_push",
         "proximity_crossfire_opportunity",
         "proximity_spawn_timing",
         "proximity_reaction_metric",
@@ -432,7 +431,9 @@ def test_shadow_query_joins_every_context_on_map_name():
     from website.backend.services.storytelling.kis_shadow import _build_shadow_kis_query
     q = _build_shadow_kis_query()
     # One "<alias>.map_name = ko.map_name" per joined context source.
-    for alias in ("pu", "cf", "st", "ck", "cr", "vc", "cp"):
+    # "pu" (proximity_team_push) dropped in kis-v5: the push multiplier
+    # is retired, so the CTE that fed it no longer exists.
+    for alias in ("cf", "st", "ck", "cr", "vc", "cp"):
         assert f"{alias}.map_name = ko.map_name" in q, (
             f"shadow join for {alias} is missing the map_name predicate"
         )
