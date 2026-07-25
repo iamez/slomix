@@ -272,7 +272,11 @@ export default function ProximityPlayer({ params }: { params?: Record<string, st
           <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4 self-start">
             Player Radar
           </h3>
-          {radar?.axes?.length === 5 ? (
+          {/* >= 3 axes, not exactly 5: the radar became four-axis in
+              power-v2 when Mechanical was retired. A hardcoded 5 here hid
+              the panel entirely, the same way the hardcoded pentagon inside
+              RadarChart blanked the chart. */}
+          {radar?.axes && radar.axes.length >= 3 ? (
             <>
               <RadarChart
                 axes={radar.teamplay_source === 'cf_tr_fallback' || radar.teamplay_source === 'unavailable'

@@ -123,7 +123,12 @@ async def get_proximity_leaderboards(
                 scope_params,
             )
             if not eng_rows:
-                return {"status": "ok", "category": "power", "entries": []}
+                # An empty board still declares which formula produced it —
+                # a consumer cannot otherwise tell "no data" from "old
+                # formula".
+                return {"status": "ok", "category": "power",
+                        "formula_version": POWER_FORMULA_VERSION,
+                        "entries": []}
 
             guid_set = {r[0] for r in eng_rows}
             eng_map: dict[str, dict] = {}
