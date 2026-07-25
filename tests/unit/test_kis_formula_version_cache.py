@@ -31,12 +31,18 @@ class _FakeDB:
 
     def __init__(self, existing_version: str | None, *,
                  kis_ts: datetime | None = CACHE_TS,
-                 ctx_ts: datetime | None = OLDER):
+                 ctx_ts: datetime | None = OLDER,
+                 source_kills: int = 5):
         self._existing_version = existing_version
         self._kis_ts = kis_ts
         self._ctx_ts = ctx_ts
+        # How many proximity_kill_outcome rows the scope holds — the
+        # coverage guard compares the cached-row count against this
+        # (cached == source is the complete-cache invariant).
+        self._source_kills = source_kills
         self.count_query_params: tuple | None = None
         self.freshness_checked = False
+        self.coverage_checked = False
 
     async def fetch_one(self, query, params=None):
         if "storytelling_kill_impact" in query and "COUNT(*)" in query and "GREATEST" not in query:
@@ -47,6 +53,9 @@ class _FakeDB:
             if requested_version == self._existing_version:
                 return (5, self._kis_ts)
             return (0, None)
+        if "proximity_kill_outcome" in query and "COUNT(*)" in query:
+            self.coverage_checked = True
+            return (self._source_kills,)
         if "GREATEST" in query:
             self.freshness_checked = True
             return (self._ctx_ts,)
@@ -113,6 +122,30 @@ async def test_missing_cache_timestamp_forces_recompute():
     result = await StorytellingService(db=db).compute_session_kis(SD)
 
     assert result["status"] != "cached"
+
+
+@pytest.mark.asyncio
+async def test_partial_cache_is_not_a_cache_hit():
+    """Coverage guard (Copilot review on #546): a midnight-crossing session
+    whose legacy compute covered only ONE date fragment leaves partial rows.
+    Once stamped with the gsid (migration 064) they'd satisfy a bare
+    existence check forever and the missing fragment would never be scored —
+    so cached-count != source-kill-count must fall through to a recompute."""
+    db = _FakeDB(existing_version=FORMULA_VERSION, source_kills=9)  # cache has 5
+    result = await StorytellingService(db=db).compute_session_kis(SD)
+
+    assert db.coverage_checked is True
+    assert result["status"] != "cached"
+
+
+@pytest.mark.asyncio
+async def test_complete_cache_still_served():
+    """Counts match (5 == 5) → coverage guard passes, freshness decides."""
+    db = _FakeDB(existing_version=FORMULA_VERSION, source_kills=5)
+    result = await StorytellingService(db=db).compute_session_kis(SD)
+
+    assert db.coverage_checked is True
+    assert result == {"status": "cached", "kills_scored": 5}
 
 
 @pytest.mark.asyncio

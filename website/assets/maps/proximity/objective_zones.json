@@ -1,8 +1,8 @@
 {
   "meta": {
     "source": "proximity/objective_coords_from_etmain.json",
-    "map_count": 13,
-    "objective_count": 63,
+    "map_count": 15,
+    "objective_count": 74,
     "default_radius": 500
   },
   "maps": {
@@ -979,6 +979,38 @@
           "z": -24.0,
           "radius": 500,
           "source_pk3": "te_escape2_fixed.pk3"
+        }
+      ]
+    },
+    "et_brewdog": {
+      "map_name": "et_brewdog",
+      "aliases": [
+        "et_brewdog"
+      ],
+      "objectives": [
+        {
+          "id": "et_brewdog:axis_transmitter",
+          "name": "Axis Transmitter",
+          "lua_name": "axis_transmitter",
+          "type": "objective",
+          "target": "transmitter_cm_marker",
+          "x": -2560.0,
+          "y": 2352.0,
+          "z": 328.0,
+          "radius": 500,
+          "source_pk3": "et_brewdog_b6.pk3"
+        },
+        {
+          "id": "et_brewdog:quiz_answers",
+          "name": "Quiz Answers",
+          "lua_name": "quiz_answers",
+          "type": "objective",
+          "target": "docs_cm_marker",
+          "x": 1440.0,
+          "y": 2024.0,
+          "z": 408.0,
+          "radius": 500,
+          "source_pk3": "et_brewdog_b6.pk3"
         }
       ]
     }

@@ -1085,11 +1085,21 @@ class ProximityParserV4:
 
         round_end_unix = int(self.metadata.get("round_end_unix") or 0)
         round_start_unix = int(self.metadata.get("round_start_unix") or 0)
+        # HOST-local naive is the round_linker's contract, NOT a bug (audit
+        # 2026-07-25 S8, resolved on review of #549): candidate_dt values
+        # are built with host-local datetime.fromtimestamp(unix) and the
+        # canonical-id lookup calls target_dt.timestamp(), which interprets
+        # naive as host-local — so fromtimestamp() here round-trips the
+        # ABSOLUTE unix instant exactly on any host timezone. Converting to
+        # a fixed zone first (tried and reverted) would shift the instant on
+        # any host whose tz differs from it. The genuinely tz-sensitive path
+        # is the STRING round_date/round_time fallback inside the linker,
+        # tracked separately (docs/KNOWN_ISSUES.md).
         target_dt = None
         if round_end_unix > 0:
-            target_dt = datetime.fromtimestamp(round_end_unix)
+            target_dt = datetime.fromtimestamp(round_end_unix)  # noqa: DTZ006 — intentional: linker candidates/timestamp() are host-local naive; this round-trips the absolute instant
         elif round_start_unix > 0:
-            target_dt = datetime.fromtimestamp(round_start_unix)
+            target_dt = datetime.fromtimestamp(round_start_unix)  # noqa: DTZ006 — intentional: same host-local round-trip contract
 
         try:
             from bot.core.round_linker import resolve_round_id_with_reason
@@ -3415,6 +3425,15 @@ class ProximityParserV4:
         """Import revive events to proximity_revive table"""
         if not await self._table_has_column('proximity_revive', 'revived_guid'):
             return
+        # Round identity columns landed with migration 065 (audit 2026-07-25
+        # S9): before it this table had no natural key, so the bare
+        # `ON CONFLICT DO NOTHING` below had nothing to conflict against and
+        # every reprocessed file silently doubled revive counts. With the
+        # identity present, re-imports dedupe against the partial unique
+        # index (round_start_unix IS NOT NULL).
+        has_identity = await self._table_has_column('proximity_revive', 'round_start_unix')
+        rsu = int(self.metadata.get('round_start_unix') or 0)
+        rsu_val = rsu if rsu > 0 else None
         for evt in self.revive_events:
             columns = [
                 "round_id", "map_name",
@@ -3431,11 +3450,33 @@ class ProximityParserV4:
                 evt.time, evt.x, evt.y, evt.z,
                 evt.distance_to_enemy, evt.under_fire, evt.nearest_enemy_guid,
             ]
+            conflict = "ON CONFLICT DO NOTHING"
+            if has_identity:
+                columns += ["session_date", "round_number", "round_start_unix"]
+                values += [session_date, self.metadata.get('round_num'), rsu_val]
+                if rsu_val is not None and self.metadata.get('round_num') is not None:
+                    # DO UPDATE, not DO NOTHING, for the LINK fields only.
+                    # A file replayed after its correct `rounds` row finally
+                    # exists carries a freshly resolved round_id; DO NOTHING
+                    # threw that away and left the row stale or unlinked
+                    # forever, which is exactly what the relinker exists to
+                    # avoid. Measurement columns are deliberately NOT
+                    # refreshed — the identity key already fixes the event,
+                    # so a differing value would mean a re-parse we should
+                    # not silently prefer.
+                    conflict = (
+                        "ON CONFLICT (round_start_unix, round_number, map_name, medic_guid, "
+                        "revived_guid, revive_time) "
+                        "WHERE round_start_unix IS NOT NULL AND round_number IS NOT NULL "
+                        "DO UPDATE SET round_id = COALESCE(EXCLUDED.round_id, proximity_revive.round_id) "
+                        "WHERE proximity_revive.round_id IS DISTINCT FROM EXCLUDED.round_id "
+                        "  AND EXCLUDED.round_id IS NOT NULL"
+                    )
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""
                 INSERT INTO proximity_revive ({", ".join(columns)})
                 VALUES ({placeholders})
-                ON CONFLICT DO NOTHING
+                {conflict}
             """
             await self.db_adapter.execute(query, tuple(values))
 
@@ -3443,6 +3484,10 @@ class ProximityParserV4:
         """Import weapon accuracy data to proximity_weapon_accuracy table"""
         if not await self._table_has_column('proximity_weapon_accuracy', 'player_guid'):
             return
+        # Same S9 dedup contract as _import_revive_events above (migration 065).
+        has_identity = await self._table_has_column('proximity_weapon_accuracy', 'round_start_unix')
+        rsu = int(self.metadata.get('round_start_unix') or 0)
+        rsu_val = rsu if rsu > 0 else None
         for wa in self.weapon_accuracy:
             columns = [
                 "round_id", "map_name",
@@ -3455,11 +3500,24 @@ class ProximityParserV4:
                 wa.player_guid, wa.player_name, wa.team,
                 wa.weapon_id, wa.shots_fired, wa.hits, wa.kills, wa.headshots,
             ]
+            conflict = "ON CONFLICT DO NOTHING"
+            if has_identity:
+                columns += ["session_date", "round_number", "round_start_unix"]
+                values += [session_date, self.metadata.get('round_num'), rsu_val]
+                if rsu_val is not None and self.metadata.get('round_num') is not None:
+                    # Link-only refresh — see the revive insert above.
+                    conflict = (
+                        "ON CONFLICT (round_start_unix, round_number, map_name, player_guid, weapon_id) "
+                        "WHERE round_start_unix IS NOT NULL AND round_number IS NOT NULL "
+                        "DO UPDATE SET round_id = COALESCE(EXCLUDED.round_id, proximity_weapon_accuracy.round_id) "
+                        "WHERE proximity_weapon_accuracy.round_id IS DISTINCT FROM EXCLUDED.round_id "
+                        "  AND EXCLUDED.round_id IS NOT NULL"
+                    )
             placeholders = ", ".join(f"${i}" for i in range(1, len(values) + 1))
             query = f"""
                 INSERT INTO proximity_weapon_accuracy ({", ".join(columns)})
                 VALUES ({placeholders})
-                ON CONFLICT DO NOTHING
+                {conflict}
             """
             await self.db_adapter.execute(query, tuple(values))
 

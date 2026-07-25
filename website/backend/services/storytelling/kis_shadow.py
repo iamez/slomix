@@ -14,7 +14,7 @@ behind an env feature flag (`KIS_SHADOW_MODE_ENABLED`, default off).
 Which multipliers move to SQL (full re-implementation in this module):
 
 - carrier_multiplier         (carrier kill detect + chain window check)
-- push_multiplier            (quality-gated, tightest matching push)
+- push_multiplier            (retired in kis-v5 — fixed at 1.0)
 - crossfire_multiplier       (±3s window around any crossfire event)
 - spawn_multiplier           (best score across matching spawn_timing rows)
 - reinf_multiplier           (graduated tier lookup via CASE)
@@ -78,8 +78,6 @@ from .base import (
     OUTCOME_GIBBED,
     OUTCOME_REVIVED,
     OUTNUMBERED_MULTIPLIER,
-    PUSH_BUFFER_MS,
-    PUSH_QUALITY_THRESHOLD,
     SOLO_CLUTCH_MULTIPLIER,
     SOLO_CLUTCH_THRESHOLD,
     SPAWN_TIMING_WINDOW_MS,
@@ -137,13 +135,6 @@ def _build_shadow_kis_query() -> str:
         -- carrier return events keyed by round
         SELECT round_start_unix, round_number, map_name, return_time
         FROM proximity_carrier_return
-        WHERE session_date = $1
-    ),
-    pu AS (
-        SELECT round_start_unix, round_number, map_name, start_time, end_time,
-               COALESCE(push_quality, 0)::numeric AS push_quality,
-               COALESCE(toward_objective, '') AS toward_objective
-        FROM proximity_team_push
         WHERE session_date = $1
     ),
     cf AS (
@@ -207,20 +198,13 @@ def _build_shadow_kis_query() -> str:
             ELSE 1.0::numeric
         END AS carrier_mult,
 
-        -- push_mult: 1.0 + min(best_pq * 0.5, 1.0); skip pushes failing quality / excluded objective
-        COALESCE(
-            (
-                SELECT 1.0::numeric + LEAST(MAX(pu.push_quality) * 0.5, 1.0::numeric)
-                FROM pu
-                WHERE pu.round_start_unix = ko.round_start_unix
-                  AND pu.round_number = ko.round_number
-                  AND pu.map_name = ko.map_name
-                  AND ko.kill_time BETWEEN pu.start_time AND pu.end_time + {PUSH_BUFFER_MS}
-                  AND pu.push_quality >= {PUSH_QUALITY_THRESHOLD}::numeric
-                  AND pu.toward_objective NOT IN ('NO', 'N/A', '')
-            ),
-            1.0::numeric
-        ) AS push_mult,
+        -- push_mult: RETIRED in kis-v5 (2026-07-25) — always 1.0, mirroring
+        -- _score_kill. The Python side stopped scoring pushes after they
+        -- measured at the round-winner baseline (50.9% vs 50.8%); if this
+        -- shadow kept the old `1.0 + min(pq*0.5, 1.0)` bonus it would report
+        -- a permanent Python/SQL delta on every push kill and mask real
+        -- parity drift, which is the only thing this shadow exists to find.
+        1.0::numeric AS push_mult,
 
         -- crossfire_mult: any cf event within ±CROSSFIRE_TIMING_WINDOW_MS
         CASE

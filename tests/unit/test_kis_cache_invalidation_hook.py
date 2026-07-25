@@ -33,14 +33,22 @@ def _svc():
 
 
 class _FakeAdapter:
-    def __init__(self, raise_exc=None):
+    def __init__(self, raise_exc=None, gsid_rows=None):
         self._raise = raise_exc
+        self._gsid_rows = gsid_rows if gsid_rows is not None else []
         self.calls = []
+        self.fetches = []
 
     async def execute(self, query, params=()):
         self.calls.append((query, params))
         if self._raise:
             raise self._raise
+
+    async def fetch_all(self, query, params=()):
+        self.fetches.append((query, params))
+        if self._raise:
+            raise self._raise
+        return self._gsid_rows
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +71,63 @@ async def test_delete_deletes_by_session_date_as_a_date_object():
     # bare string here is the exact bug class PR #455 hit on
     # player_skill_history (codex, s_effort_service.py precedent).
     assert params == (dt.date(2026, 7, 7),)
+
+
+@pytest.mark.asyncio
+async def test_delete_with_round_ids_scopes_to_this_sessions_gsids():
+    """A bare `session_date = ?` delete wiped EVERY gaming session sharing
+    that calendar date (multi-gsid dates exist — 2026-03-25 held four),
+    including a neighbour session's correctly-computed rows that nothing
+    would recompute. With round_ids the delete must target this session's
+    gaming_session_id(s), plus only the date's unattributable NULL-gsid
+    leftovers — never the neighbour's stamped rows."""
+    svc = _svc()
+    adapter = _FakeAdapter(gsid_rows=[(137,)])
+    svc.db_adapter = adapter
+
+    await svc._delete_kis_rows("2026-07-18", gsids=[137])  # noqa: SLF001
+
+    # scope comes from the caller now — no second resolution here
+    assert adapter.fetches == []
+
+    assert len(adapter.calls) == 1
+    query, params = adapter.calls[0]
+    assert "DELETE FROM storytelling_kill_impact" in query
+    assert "k.gaming_session_id IN" in query
+    # NULL-gsid rows are removed ONLY when their round key belongs to this
+    # session. Deleting every NULL row on the date destroyed a neighbour's
+    # unattributable rows, which the gsid-scoped warm never rescores
+    # (Codex #546 P1). Measured on 2026-03-25 (four sessions): the old
+    # predicate matched all 1,128 NULL rows, the new one matches 74 and
+    # spares 1,054.
+    assert "k.gaming_session_id IS NULL AND EXISTS" in query
+    assert "FROM rounds r" in query
+    assert "r.map_name = k.map_name" in query
+    assert "r.round_number = k.round_number" in query
+    # BOTH branches stay date-constrained: finalization launches one
+    # invalidation task per touched date, and an unconstrained gsid delete
+    # from a later task would wipe rows an earlier task's warm call already
+    # refreshed for the other dates (Copilot review on #546).
+    assert "session_date = ?" in query
+    assert params == (dt.date(2026, 7, 18), 137, 137)
+
+
+@pytest.mark.asyncio
+async def test_delete_falls_back_to_date_wide_when_gsids_unresolvable():
+    """No resolvable gaming_session_id (legacy rounds, resolution failure)
+    must degrade to the previous date-wide behaviour, not skip deletion —
+    a stale mid-session snapshot is worse than an over-wide delete."""
+    svc = _svc()
+    adapter = _FakeAdapter(gsid_rows=[])
+    svc.db_adapter = adapter
+
+    await svc._delete_kis_rows("2026-07-18", gsids=[])  # noqa: SLF001
+
+    assert len(adapter.calls) == 1
+    query, params = adapter.calls[0]
+    assert "WHERE session_date = ?" in query
+    assert "gaming_session_id IN" not in query
+    assert params == (dt.date(2026, 7, 18),)
 
 
 @pytest.mark.asyncio
@@ -278,3 +343,100 @@ async def test_dates_touched_never_raises_on_db_failure():
 
     dates = await svc._session_dates_touched([9001])  # noqa: SLF001
     assert dates == []
+
+
+# ---------------------------------------------------------------------------
+# Codex #546 — delete and warm MUST act on one resolved scope
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_two_sessions_one_date_warms_by_gsid_and_spares_the_neighbour():
+    """A calendar date holding TWO gaming sessions was the failure case: the
+    delete was gsid-scoped while the warm was date-only, so the warm hit the
+    story-scope contract's ambiguous-date 409 AFTER the delete succeeded and
+    the cache stayed empty. Finalizing session 137 must (a) delete only 137's
+    rows plus the date's unattributable NULL-gsid leftovers, leaving 138
+    untouched, and (b) warm by gaming_session_id."""
+    svc = _svc()
+    adapter = _FakeAdapter()
+    svc.db_adapter = adapter
+    warmed: list[tuple] = []
+
+    async def _warm(sd, gaming_session_id=None):
+        warmed.append((sd, gaming_session_id))
+    svc._warm_kis_cache = _warm  # noqa: SLF001
+
+    await svc._invalidate_kis_cache("2026-03-25", gsids=[137])  # noqa: SLF001
+
+    query, params = adapter.calls[0]
+    assert "gaming_session_id IN" in query
+    assert "session_date = ?" in query          # neighbour 138 on other dates safe
+    assert params == (dt.date(2026, 3, 25), 137, 137)
+    # the neighbour's gsid is never named, so its rows cannot be deleted
+    assert 138 not in params
+    # warm targets the gsid, not the ambiguous date
+    assert warmed == [("2026-03-25", 137)]
+
+
+@pytest.mark.asyncio
+async def test_every_resolved_gsid_gets_warmed():
+    """When one date legitimately belongs to several finalized sessions,
+    each resolved gsid is warmed — a single warm would leave the rest of the
+    deleted scope unrefilled."""
+    svc = _svc()
+    svc.db_adapter = _FakeAdapter()
+    warmed: list[tuple] = []
+
+    async def _warm(sd, gaming_session_id=None):
+        warmed.append((sd, gaming_session_id))
+    svc._warm_kis_cache = _warm  # noqa: SLF001
+
+    await svc._invalidate_kis_cache("2026-03-25", gsids=[137, 138])  # noqa: SLF001
+
+    assert warmed == [("2026-03-25", 137), ("2026-03-25", 138)]
+
+
+@pytest.mark.asyncio
+async def test_warm_without_gsid_falls_back_to_the_date():
+    """Unresolvable scope (legacy rounds) must still warm, by date, rather
+    than silently skip and leave a deleted cache empty."""
+    svc = _svc()
+    svc.db_adapter = _FakeAdapter()
+    warmed: list[tuple] = []
+
+    async def _warm(sd, gaming_session_id=None):
+        warmed.append((sd, gaming_session_id))
+    svc._warm_kis_cache = _warm  # noqa: SLF001
+
+    await svc._invalidate_kis_cache("2026-03-25", gsids=[])  # noqa: SLF001
+
+    assert warmed == [("2026-03-25", None)]
+
+
+@pytest.mark.asyncio
+async def test_warm_sends_gaming_session_id_not_session_date():
+    sess = _Sess(status=200)
+    with patch("aiohttp.ClientSession", return_value=sess):
+        await _warm_svc()._warm_kis_cache("2026-03-25", gaming_session_id=137)  # noqa: SLF001
+    assert sess.params == {"gaming_session_id": 137, "limit": 1}
+    assert "session_date" not in sess.params
+
+
+@pytest.mark.asyncio
+async def test_session_gsids_resolves_once_from_round_ids():
+    svc = _svc()
+    svc.db_adapter = _FakeAdapter(gsid_rows=[(137,), (138,)])
+    gsids = await svc._session_gsids([9001, 9002])  # noqa: SLF001
+    assert gsids == [137, 138]
+
+
+@pytest.mark.asyncio
+async def test_session_gsids_never_raises():
+    svc = _svc()
+
+    class _Raising:
+        async def fetch_all(self, *a, **kw):
+            raise RuntimeError("db down")
+
+    svc.db_adapter = _Raising()
+    assert await svc._session_gsids([9001]) == []  # noqa: SLF001

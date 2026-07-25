@@ -14,10 +14,18 @@ from website.backend.routers.proximity_helpers import (
     _load_scoped_guid_name_map,
     _parse_iso_date,
     _round_quality_gate_sql,
+    attribution_breakdown,
     logger,
 )
 
 router = APIRouter()
+
+# Power Rating (the /proximity/leaderboards?category=power composite) had no
+# version constant and no registry entry until 2026-07-25, which is how it
+# carried two unvalidated axes unnoticed. v2 = the metric-validity pass:
+# AWARENESS dropped its inverted dodge term, MECHANICAL left the composite
+# (return_fire_ms has no signal). Bump on any change to the axes or weights.
+POWER_FORMULA_VERSION = "power-v2"
 
 
 def _percentile_rank_map(guid_values: dict[str, float]) -> dict[str, float]:
@@ -150,7 +158,12 @@ async def get_proximity_leaderboards(
                 scope_params,
             )
             if not eng_rows:
-                return {"status": "ok", "category": "power", "entries": []}
+                # An empty board still declares which formula produced it —
+                # a consumer cannot tell "no data" from "old formula"
+                # otherwise.
+                return {"status": "ok", "category": "power",
+                        "formula_version": POWER_FORMULA_VERSION,
+                        "entries": []}
 
             guid_set = {r[0] for r in eng_rows}
             eng_map: dict[str, dict] = {}
@@ -174,21 +187,11 @@ async def get_proximity_leaderboards(
                 if r[0] in guid_set:
                     move_map[r[0]] = (float(r[1] or 0), float(r[2] or 0))
 
-            # 3. Dodge reaction (awareness axis)
-            dodge_rows = await db.fetch_all(
-                f"""
-                SELECT target_guid,
-                       ROUND(AVG(dodge_reaction_ms)::numeric, 0) AS avg_dodge
-                FROM proximity_reaction_metric
-                WHERE dodge_reaction_ms IS NOT NULL AND {scope_where}
-                GROUP BY target_guid
-                """,
-                scope_params,
-            )
-            dodge_map: dict[str, int] = {}
-            for r in (dodge_rows or []):
-                if r[0] in guid_set and r[1] is not None:
-                    dodge_map[r[0]] = int(r[1])
+            # (3. The dodge-reaction query that used to live here was removed
+            # on 2026-07-25 with the awareness half it fed — see AWARENESS
+            # below. #548's NULL-safe data-presence handling went with it;
+            # nothing consumes the value now. The raw metric remains
+            # available via /proximity/reactions and /proximity/movement-stats.)
 
             # 4. Crossfire participation (teamplay axis)
             cf_rows = await db.fetch_all(
@@ -318,18 +321,14 @@ async def get_proximity_leaderboards(
             pct_sp = {g: 1.0 - p for g, p in pct_sp_raw.items()}
             use_pct = bool(pct_cf)
 
-            # Neutral fallback for the two non-percentile axes: the pool
-            # MEDIAN of players with real data — not an arbitrary constant
-            # that silently scores no-data players as slow (S5).
-            def _median(vals: list[float], fallback: float) -> float:
-                if not vals:
-                    return fallback
-                s = sorted(vals)
-                m = len(s) // 2
-                return s[m] if len(s) % 2 else (s[m - 1] + s[m]) / 2
-
-            dodge_neutral = _median([float(v) for v in dodge_map.values()], 5000.0)
-            rf_neutral = _median([float(v) for v in rf_map.values()], 3000.0)
+            # #548 introduced pool-median neutrals so that no-data players
+            # stopped being scored with a fabricated constant (audit S5).
+            # Both consumers are gone in power-v2: awareness dropped the
+            # dodge term entirely and mechanical left the composite, so a
+            # neutral is no longer needed for either. The S5 principle it
+            # encoded — absent data must never become an invented value —
+            # survives as `mechanical = None` and the percentile pools below,
+            # which still admit only players with real observations.
 
             # Compute composite scores
             results = []
@@ -338,12 +337,18 @@ async def get_proximity_leaderboards(
                 sp, spd = move_map.get(g, (0.0, 0.0))
                 aggression = min(100, sp * 0.6 + min(spd / 300, 1) * 100 * 0.4)
 
+                # AWARENESS — escape rate only since 2026-07-25.
+                # The axis used to be half escape_rate and half
+                # `100 - dodge_ms/50`, i.e. "faster dodge = more aware".
+                # Measured on the production DB, dodge_reaction_ms runs the
+                # OTHER way against the very outcome this axis is about:
+                # sub-300ms "reactions" escape 22.0% of engagements while
+                # 1000ms+ escape 65.7%. (Most likely selection: a player
+                # killed instantly never gets to record a later dodge.) The
+                # two halves therefore pulled against each other, so the
+                # unvalidated half is gone rather than reweighted.
                 esc_rate = info["escapes"] / max(info["total"], 1) * 100
-                d_ms = dodge_map.get(g)
-                if d_ms is None:
-                    d_ms = dodge_neutral
-                    defaulted.append("awareness.dodge")
-                awareness = min(100, esc_rate * 0.5 + max(0, 100 - d_ms / 50) * 0.5)
+                awareness = min(100, esc_rate)
 
                 # Teamplay: percentile-weighted across 5 ET-specific dimensions
                 if use_pct:
@@ -365,31 +370,57 @@ async def get_proximity_leaderboards(
                 avg_tm, tm_cnt = timing_map.get(g, (0.0, 0))
                 timing = min(100, avg_tm * 100 * min(tm_cnt / 5, 1))
 
+                # MECHANICAL — reported, not scored (2026-07-25).
+                # It was `100 - return_fire_ms/30`, but return_fire_ms shows
+                # no signal at all against engagement survival: 40.1% /
+                # 34.9% / 36.8% / 41.5% escape across its four bands (a flat
+                # U, not a gradient). Neither candidate replacement holds up
+                # either — weapon accuracy is r=0.053 against kills and
+                # headshot rate is r=-0.610 — so no substitute is invented.
+                # #548's data-presence rule still applies: absent data stays
+                # None rather than becoming a fabricated neutral.
                 rf_ms = rf_map.get(g)
-                if rf_ms is None:
-                    rf_ms = rf_neutral
-                    defaulted.append("mechanical.return_fire")
-                mechanical = min(100, max(0, 100 - rf_ms / 30))
+                mechanical = (
+                    min(100, max(0, 100 - rf_ms / 30)) if rf_ms is not None else None
+                )
 
+                # #548 axes_defaulted is retained for the axes that REMAIN
+                # scored. The retired awareness.dodge / mechanical.return_fire
+                # entries are gone because a term that no longer moves the
+                # score cannot be "defaulted" — reporting them would imply a
+                # contribution that no longer exists.
                 for pool, label in ((tp_st, "teamplay.spawn_timing"),
                                     (tp_pm, "teamplay.permanence"),
                                     (tp_sp, "teamplay.support")):
                     if use_pct and g not in pool:
                         defaulted.append(label)
 
-                composite = round((aggression + awareness + teamplay + timing + mechanical) / 5, 1)
+                composite = round((aggression + awareness + teamplay + timing) / 4, 1)
                 results.append({
                     "guid": g, "name": info["name"], "value": composite,
                     "axes": {
                         "aggression": round(aggression, 1), "awareness": round(awareness, 1),
                         "teamplay": round(teamplay, 1), "timing": round(timing, 1),
-                        "mechanical": round(mechanical, 1),
+                    },
+                    # reported, NOT part of the composite (see comment above)
+                    "unscored": {
+                        "mechanical": round(mechanical, 1) if mechanical is not None else None,
                     },
                     "axes_defaulted": defaulted,
                 })
 
             results.sort(key=lambda x: x["value"], reverse=True)
-            return {"status": "ok", "category": "power", "entries": results[:safe_limit]}
+            # The round gate keeps rows whose round_id is NULL (unknown
+            # attribution) — report that rather than implying every scored
+            # row is proven valid (Codex #548).
+            eng_where, eng_params, _ = _lb_scope(has_round_number=True)
+            attribution = await attribution_breakdown(
+                db, "combat_engagement", eng_where, eng_params,
+            )
+            return {"status": "ok", "category": "power",
+                    "formula_version": POWER_FORMULA_VERSION,
+                    "attribution": attribution,
+                    "entries": results[:safe_limit]}
 
         elif category == "spawn":
             scope_where, scope_params, next_idx = _lb_scope(has_round_number=True)

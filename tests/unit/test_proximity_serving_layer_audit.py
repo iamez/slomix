@@ -368,3 +368,57 @@ async def test_events_builds_scope_after_the_round_id_capability_probe():
     assert not any(GATE_FRAGMENT in q for q in engagement_queries), (
         "gate must be omitted when combat_engagement has no round_id"
     )
+
+
+# ---------------------------------------------------------------------------
+# #548 + #553 integration: the gate is an ATTRIBUTION gate, and says so
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_attribution_breakdown_separates_valid_excluded_and_unknown():
+    """The round gate keeps NULL-round_id rows because they cannot be judged.
+    Calling the result "quality-gated" would overstate it, so the endpoint
+    reports the three buckets and the attributable coverage (Codex #548)."""
+    from website.backend.routers.proximity_helpers import attribution_breakdown
+
+    class _Counts:
+        async def fetch_one(self, query, params=None):
+            self.query = " ".join(query.split())
+            return (1000, 900, 20, 80)
+
+    db = _Counts()
+    out = await attribution_breakdown(db, "combat_engagement", "WHERE x", ())
+
+    assert out["total_rows"] == 1000
+    assert out["linked_valid"] == 900
+    assert out["linked_invalid_excluded"] == 20
+    assert out["unlinked_accepted"] == 80
+    # coverage is over SCORED rows (valid + unknown), not over total
+    assert out["attributable_coverage"] == pytest.approx(900 / 980, abs=1e-4)
+    assert out["mode"] == "compatibility"
+
+
+@pytest.mark.asyncio
+async def test_power_leaderboard_reports_attribution_and_power_v2():
+    db = _CaptureDB()
+    resp = await _get(db, "/api/proximity/leaderboards",
+                      {"category": "power", "session_date": "2026-07-18"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["formula_version"] == "power-v2"
+
+
+def test_power_composite_is_four_axes_without_mechanical():
+    """The integrated result keeps #548's scope/data-presence work and
+    #553's retirement: four scored axes, mechanical reported separately."""
+    import inspect
+
+    from website.backend.routers import proximity_scoring
+
+    src = inspect.getsource(proximity_scoring.get_proximity_leaderboards)
+    assert "(aggression + awareness + teamplay + timing) / 4" in src
+    assert "mechanical) / 5" not in src
+    # #548 semantics that must survive the merge
+    assert "axes_defaulted" in src
+    assert "killer_guid IS DISTINCT FROM target_guid" in src
+    assert "SUM(sum_angle) / NULLIF(SUM(cnt), 0)" in src

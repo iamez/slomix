@@ -1,7 +1,10 @@
 {
   "meta": {
     "etmain_dir": "/home/samba/share/etmain",
-    "filtered_by_template": true
+    "filtered_by_template": true,
+    "added_2026_07_25": [
+      "et_brewdog"
+    ]
   },
   "maps": {
     "adlernest": [
@@ -875,6 +878,30 @@
         "z": -24,
         "source_pk3": "te_escape2_fixed3.pk3",
         "source_bsp": "maps/te_escape2.bsp"
+      }
+    ],
+    "et_brewdog": [
+      {
+        "name": "Axis Transmitter",
+        "lua_name": "axis_transmitter",
+        "target": "transmitter_cm_marker",
+        "type": "objective",
+        "x": -2560,
+        "y": 2352,
+        "z": 328,
+        "source_pk3": "et_brewdog_b6.pk3",
+        "source_bsp": "maps/et_brewdog.bsp"
+      },
+      {
+        "name": "Quiz Answers",
+        "lua_name": "quiz_answers",
+        "target": "docs_cm_marker",
+        "type": "objective",
+        "x": 1440,
+        "y": 2024,
+        "z": 408,
+        "source_pk3": "et_brewdog_b6.pk3",
+        "source_bsp": "maps/et_brewdog.bsp"
       }
     ]
   }

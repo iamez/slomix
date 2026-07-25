@@ -189,6 +189,54 @@ def _round_quality_gate_sql(prefix: str) -> str:
     )
 
 
+async def attribution_breakdown(
+    db, table: str, where_sql: str, params, alias: str = "",
+) -> dict:
+    """Count how the round-quality gate actually classified the rows.
+
+    The gate (`_round_quality_gate_sql`) is an ATTRIBUTION gate, not a pure
+    quality gate: it drops rows linked to a rejected/bot round, but KEEPS
+    rows whose `round_id` is NULL because those cannot be judged either way.
+    Calling that "quality-gated" would overstate it (Codex #548), so any
+    surface that scores on gated rows should report this breakdown and let
+    the caller see how much of its evidence is unattributed.
+
+    `where_sql` must be the gated clause; this recomputes the same scope
+    without the gate to obtain the totals.
+    """
+    prefix = f"{alias}." if alias else ""
+    gate = _round_quality_gate_sql(prefix)
+    ungated = where_sql.replace(f" AND {gate}", "").replace(gate, "TRUE")
+    row = await db.fetch_one(
+        f"SELECT COUNT(*) AS total,"  # nosec B608 - clause built by _build_proximity_where_clause
+        f" COUNT(*) FILTER (WHERE {prefix}round_id IS NOT NULL AND EXISTS ("
+        f"   SELECT 1 FROM rounds rq WHERE rq.id = {prefix}round_id"
+        f"   AND rq.is_bot_round IS DISTINCT FROM TRUE"
+        f"   AND rq.is_valid IS DISTINCT FROM FALSE)) AS linked_valid,"
+        f" COUNT(*) FILTER (WHERE {prefix}round_id IS NOT NULL AND NOT EXISTS ("
+        f"   SELECT 1 FROM rounds rq WHERE rq.id = {prefix}round_id"
+        f"   AND rq.is_bot_round IS DISTINCT FROM TRUE"
+        f"   AND rq.is_valid IS DISTINCT FROM FALSE)) AS linked_invalid_excluded,"
+        f" COUNT(*) FILTER (WHERE {prefix}round_id IS NULL) AS unlinked_accepted"
+        f" FROM {table} {prefix.rstrip('.') or ''} {ungated}",
+        params,
+    )
+    total = int(row[0] or 0) if row else 0
+    lv = int(row[1] or 0) if row else 0
+    lie = int(row[2] or 0) if row else 0
+    ua = int(row[3] or 0) if row else 0
+    scored = lv + ua
+    return {
+        "total_rows": total,
+        "linked_valid": lv,
+        "linked_invalid_excluded": lie,
+        "unlinked_accepted": ua,
+        # share of the SCORED rows whose attribution is actually known
+        "attributable_coverage": round(lv / scored, 4) if scored else None,
+        "mode": "compatibility",  # unlinked rows are kept; see docstring
+    }
+
+
 def _build_proximity_where_clause(
     range_days: int,
     session_date: str | None,
