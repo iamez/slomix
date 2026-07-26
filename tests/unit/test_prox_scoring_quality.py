@@ -119,11 +119,14 @@ async def test_any_source_failure_returns_degraded(monkeypatch):
     assert result["players"] == []
 
 
-def test_canonical_formula_version_is_v2_1():
-    """2.1 = IMP-003 semantics (trades denominator = sessions PLAYED,
+def test_canonical_formula_version_is_v3_0():
+    """3.0 = #556 metric-validity pass: 13 of 18 metrics measured
+    non-predictive (two of them INVERTED) against round outcome and were
+    retired from the score. Earlier: 2.1 = IMP-003 semantics (trades
+    denominator = sessions PLAYED,
     exact-round true-zero fill, single-player MIN_ENGAGEMENTS)."""
-    assert prox_scoring.FORMULA_VERSION == "2.1"
-    assert prox_scoring.FORMULA_VERSION_QUALITY == "prox-web-v2.1"
+    assert prox_scoring.FORMULA_VERSION == "3.0"
+    assert prox_scoring.FORMULA_VERSION_QUALITY == "prox-web-v3.0"
 
 
 @pytest.mark.asyncio
@@ -168,7 +171,9 @@ async def test_low_coverage_player_dropped_from_leaderboard(monkeypatch):
     async def fake_fetch(db, range_days, **kwargs):
         full = {**_full_metric_row("GUID_FULL", "Full"),
                 "name": "Full", "engagements": 40, "tracks": 10}
-        # Sparse player: only escape_rate present → coverage well below 80%.
+        # Sparse player: escape_rate is now the whole Combat category (#556),
+        # so a player with ONLY it sits at 0.40 coverage — still well below
+        # the 0.80 gate, which is what this test is about.
         sparse = {"escape_rate": 0.5, "name": "Sparse",
                   "engagements": 40, "tracks": 10}
         sources = [{"source": s, "success": True, "row_count": 2,
@@ -188,10 +193,17 @@ def test_metric_effective_weights_match_category_weighting():
     sum to the CATEGORY_WEIGHTS total, not treat each category as ~1/3 (#512)."""
     eff = prox_scoring._metric_effective_weights()  # noqa: SLF001
     assert sum(eff.values()) == pytest.approx(sum(prox_scoring.CATEGORY_WEIGHTS.values()))
-    # escape_rate: Combat(0.40) x (0.20 / combat_total 1.0) = 0.08
-    assert eff["escape_rate"] == pytest.approx(0.08)
-    # stance_variety: Game Sense(0.25) x (0.15 / 1.0) = 0.0375
-    assert eff["stance_variety"] == pytest.approx(0.0375)
+    # escape_rate is the ONLY surviving prox_combat metric after #556, so it
+    # carries the whole category: Combat(0.40) x (1.00 / 1.00) = 0.40.
+    assert eff["escape_rate"] == pytest.approx(0.40)
+    # denied_time: Game Sense(0.25) x (0.20 / gamesense_total 0.35)
+    assert eff["denied_time"] == pytest.approx(0.25 * 0.20 / 0.35)
+    # A metric #556 retired contributes NOTHING to the composite, so it must
+    # not appear in the coverage weights at all — a player missing it must not
+    # be penalised for missing something that no longer counts.
+    for retired in ("stance_variety", "dodge_ms", "sprint_discipline",
+                    "crossfire_rate", "trades_per_session"):
+        assert retired not in eff, f"{retired} is retired but still weighted"
 
 
 @pytest.mark.asyncio
@@ -201,7 +213,12 @@ async def test_response_coverage_is_min_of_returned_players(monkeypatch):
                 "name": "Full", "engagements": 40, "tracks": 10}
         partial = {**_full_metric_row("GUID_PART", "Part"),
                    "name": "Part", "engagements": 40, "tracks": 10}
-        del partial["stance_variety"]  # drop one light metric → coverage ~0.96
+        # #556 retired stance_variety, so dropping it no longer moves coverage
+        # at all. distance_per_life is the lightest metric that still SCORES
+        # (Game Sense 0.25 x 0.15/0.35 = 0.107), which leaves this player at
+        # ~0.893 — below Full but still above the 0.80 gate, which is exactly
+        # the situation this test needs.
+        del partial["distance_per_life"]
         sources = [{"source": s, "success": True, "row_count": 2,
                     "error_code": None, "duration_ms": 5} for s in SOURCE_LABELS]
         return {"GUID_FULL": full, "GUID_PART": partial}, sources
