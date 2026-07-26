@@ -27,6 +27,8 @@
 --
 -- Idempotent: `DROP TABLE IF EXISTS`. Safe to re-run.
 --
+-- HISTORICAL NOTE (superseded 2026-07-26 by the ownership-tolerant DO block
+-- below, which lets any role run this):
 -- RUN AS postgres SUPERUSER:
 --   Dev / prod: `voice_members` is owned by `postgres` (historic
 --   bot-install artefact), so `etlegacy_user` can't DROP it. Apply via
@@ -36,8 +38,40 @@
 
 BEGIN;
 
-DROP TABLE IF EXISTS voice_members CASCADE;
-DROP TABLE IF EXISTS server_status_history_backup_20260207 CASCADE;
+-- Ownership-tolerant drops (2026-07-26). `voice_members` is owned by
+-- `postgres` on both dev and prod (a historic bot-install artefact), so a
+-- plain DROP fails for `etlegacy_user` and this migration stayed PENDING
+-- forever. That is not cosmetic: `apply_migrations.py --only` refuses to
+-- run while ANY unrelated migration is pending, so a permanently-pending
+-- 045 blocked every future targeted deploy.
+--
+-- Each table is dropped only if the current role can actually drop it
+-- (owner or superuser). Anything it cannot drop is left in place with a
+-- NOTICE instead of aborting — these are orphan tables with no readers and
+-- no FK dependencies, so leaving one behind is harmless, whereas blocking
+-- every deploy is not. Re-running as postgres later still removes them.
+DO $$
+DECLARE
+    t text;
+    tbl_owner text;
+BEGIN
+    FOREACH t IN ARRAY ARRAY['voice_members', 'server_status_history_backup_20260207']
+    LOOP
+        SELECT tableowner INTO tbl_owner FROM pg_tables
+        WHERE schemaname = 'public' AND tablename = t;
+
+        IF tbl_owner IS NULL THEN
+            RAISE NOTICE '045: % already absent', t;
+        ELSIF pg_has_role(current_user, tbl_owner, 'USAGE') THEN
+            EXECUTE format('DROP TABLE IF EXISTS %I CASCADE', t);
+            RAISE NOTICE '045: dropped %', t;
+        ELSE
+            RAISE NOTICE '045: skipping % (owned by %, current role % cannot drop it) '
+                         '— re-run this migration as postgres to remove it',
+                         t, tbl_owner, current_user;
+        END IF;
+    END LOOP;
+END $$;
 
 INSERT INTO schema_migrations (version, filename, applied_by)
 VALUES ('045_drop_orphan_monitoring_tables',
