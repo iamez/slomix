@@ -190,3 +190,35 @@ def test_descriptive_percentile_is_present_when_the_sample_exists():
     )
     assert breakdown["headshot_pct"]["percentile"] == pytest.approx(0.9)
     assert breakdown["headshot_pct"]["raw"] == pytest.approx(0.42)
+
+
+@pytest.mark.asyncio
+async def test_descriptive_failure_is_still_reported_in_quality(monkeypatch):
+    """Keeping the ranking must not mean hiding the failure: a response whose
+    descriptive rows are missing has to say which source went down."""
+    from tests.unit.test_prox_scoring_quality import _full_metric_row
+    from website.backend.services.prox_scoring import compute_prox_scores
+
+    async def fake_fetch(db, range_days, **kwargs):
+        players = {
+            g: {**_full_metric_row(g, g), "name": g,
+                "engagements": 40, "tracks": 10}
+            for g in ("G1", "G2")
+        }
+        sources = [
+            {"source": s, "success": s != "proximity_hit_region",
+             "row_count": 0 if s == "proximity_hit_region" else 2,
+             "error_code": "RuntimeError" if s == "proximity_hit_region" else None,
+             "duration_ms": 5}
+            for s in SOURCE_LABELS
+        ]
+        return players, sources
+
+    monkeypatch.setattr(prox_scoring, "_fetch_raw_metrics", fake_fetch)
+    result = await compute_prox_scores(object())
+    q = result["quality"]
+    assert result["status"] == "ok"
+    assert "proximity_hit_region" in q["failed_sources"], (
+        "a kept ranking still has to disclose which source failed"
+    )
+    assert q["successful_sources"] == len(SOURCE_LABELS) - 1

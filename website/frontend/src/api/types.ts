@@ -1392,10 +1392,17 @@ export interface DangerZonesResponse {
 // Proximity Composite Scores (v5.2)
 export interface ProxMetricBreakdown {
   raw: number | null;
-  percentile: number;
+  /** null when the player has no sample. #556: a missing sample used to be
+   *  published as the pool's neutral 0.5 fill, which read as a genuine median
+   *  result. Renderers must check for null — `null * 100` is 0 in JS, which
+   *  would show missing telemetry as a 0th-percentile result instead. */
+  percentile: number | null;
   weight: number;
   contribution: number;
   label: string;
+  /** Set on metrics #556 retired from the score. They are still measured and
+   *  shown, but carry weight 0 and contribute nothing to the category. */
+  retired_in?: string;
 }
 
 export interface ProxCategoryBreakdown {

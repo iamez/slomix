@@ -471,9 +471,16 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
             "formula_version": FORMULA_VERSION_QUALITY,
             "quality": {
                 "ranking_available": bool(players),
-                "successful_sources": len(sources),
+                # Derived from the actual results, not assumed. A
+                # descriptive-only failure keeps status "ok" but must still be
+                # visible here — otherwise the response claims all 10 sources
+                # succeeded while its descriptive rows are quietly missing,
+                # and nothing explains why (Codex review).
+                "successful_sources": sum(1 for s in sources if s["success"]),
                 "total_sources": len(sources),
-                "failed_sources": [],
+                "failed_sources": [
+                    s["source"] for s in sources if not s["success"]
+                ],
                 "metric_weight_coverage": round(coverage, 3),
                 # Always present so the quality-contract shape doesn't depend on
                 # the dataset (empty/healthy responses carried it only after the
