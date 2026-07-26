@@ -1,0 +1,196 @@
+"""Release-config contract (Codex REL-01).
+
+A release config is the only thing standing between "deploy the new code"
+and "deploy the new code against a schema that cannot serve it". These
+tests make the ways that goes wrong impossible to merge:
+
+1. the config for the current version does not exist at all — which is
+   exactly how v1.27.0 shipped 063 with no config;
+2. the config names a migration file that is not in the repo;
+3. a migration the code needs is missing from the config — the runner's
+   `--only` preflight then refuses mid-deploy, after services have stopped;
+4. a post-1.26.0 config has no active TRUSTED_HOSTS entry, without which
+   the web process raises at import and never starts;
+5. a migration exists that no config ever ships, so it can only reach a
+   target by hand.
+
+Everything here parses the configs the way bash would when
+deploy_release.sh sources them: assignments at the start of a line, and
+commented-out entries do not count.
+"""
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+import pytest
+
+CONFIG_DIR = Path("scripts/release_configs")
+MIGRATIONS_DIR = Path("migrations")
+CLAUDE_MD = Path("CLAUDE.md")
+
+# Migrations whose absence breaks the CURRENT code, not merely the schema.
+# Keep this list in step with the code that reads the objects they create.
+CODE_REQUIRES = {
+    "063_kis_gaming_session_id.sql":
+        "storytelling_kill_impact.gaming_session_id — read as a WHERE filter "
+        "by useless-defense, PWC crossfire and enabler",
+    "064_backfill_kis_gaming_session_id.sql":
+        "without the backfill that column is ~87% NULL and those panels "
+        "return empty for every historical session",
+    "065_dedup_revive_weapon_accuracy.sql":
+        "round identity + UNIQUE that the parser's ON CONFLICT targets name",
+}
+
+
+def _current_version() -> str:
+    text = CLAUDE_MD.read_text(encoding="utf-8")
+    m = re.search(r"\*\*Version\*\*:\s*([0-9]+\.[0-9]+\.[0-9]+)", text)
+    assert m, "could not read the project version from CLAUDE.md"
+    return m.group(1)
+
+
+def _configs() -> list[Path]:
+    return sorted(CONFIG_DIR.glob("v*.sh"))
+
+
+def _newest_config() -> Path:
+    """The config that will carry whatever is on main right now.
+
+    Between releases, CLAUDE.md still names the LAST released version while
+    main already holds the next release's code, so the current-version config
+    is the wrong thing to check for code requirements — the newest one is.
+    """
+    def key(p: Path) -> tuple[int, ...]:
+        return tuple(int(x) for x in p.stem.lstrip("v").split("."))
+
+    configs = _configs()
+    assert configs, "scripts/release_configs/ has no configs at all"
+    return max(configs, key=key)
+
+
+def _array_entries(config: Path, name: str, *, required: bool) -> list[str]:
+    """Entries bash would actually see when it sources `name=( ... )`.
+
+    Two things this must get right, both of which bit earlier versions of
+    this file:
+
+    * anchor to a real assignment at the start of a line. Several configs
+      carry a `#   MIGRATIONS=()` template line in their header, and an
+      unanchored non-greedy match binds to that empty pair instead — which
+      made these checks pass over v1.14.2 and v1.20.0 by being blind to them.
+    * drop commented-out lines inside the block. `# "064_....sql"` is NOT in
+      the array bash builds, so counting it as present would let someone
+      remove a required migration from the deploy while CI stayed green.
+    """
+    body = config.read_text(encoding="utf-8")
+    block = re.search(rf"^{name}=\((.*?)^\)", body, re.S | re.M)
+    if not block:
+        assert not required, (
+            f"{config.name} has no {name}=( ... ) assignment at line start; "
+            f"deploy_release.sh would source it with an empty {name} set"
+        )
+        return []
+    active = "\n".join(
+        line for line in block.group(1).splitlines()
+        if not line.lstrip().startswith("#")
+    )
+    return re.findall(r'"([^"]*)"', active)
+
+
+def _migrations_in(config: Path) -> list[str]:
+    return [e for e in _array_entries(config, "MIGRATIONS", required=True)
+            if e.endswith(".sql")]
+
+
+def _flags_in(config: Path) -> list[str]:
+    return _array_entries(config, "FLAGS", required=False)
+
+
+def test_a_config_exists_for_the_current_version():
+    """v1.27.0 shipped migration 063 with no config at all; the next deploy
+    would then have run current code against a schema without it."""
+    version = _current_version()
+    path = CONFIG_DIR / f"v{version}.sh"
+    assert path.exists(), (
+        f"no release config for the current version v{version}. "
+        f"Create {path} listing the migrations this release needs."
+    )
+
+
+@pytest.mark.parametrize("config", _configs(), ids=lambda p: p.name)
+def test_every_named_migration_exists(config):
+    for name in _migrations_in(config):
+        assert (MIGRATIONS_DIR / name).exists(), (
+            f"{config.name} names {name}, which is not in migrations/"
+        )
+
+
+def test_newest_config_carries_every_code_required_migration():
+    """The runner refuses `--only` while anything outside the set is
+    un-applied, so an incomplete list aborts the deploy AFTER services stop."""
+    config = _newest_config()
+    listed = set(_migrations_in(config))
+    missing = {m: why for m, why in CODE_REQUIRES.items() if m not in listed}
+    assert not missing, (
+        f"{config.name} omits migrations the current code depends on:\n"
+        + "\n".join(f"  {m}: {why}" for m, why in missing.items())
+    )
+
+
+def _version_of(config: Path) -> tuple[int, ...]:
+    return tuple(int(x) for x in config.stem.lstrip("v").split("."))
+
+
+# TRUSTED_HOSTS became a hard start-up requirement in v1.26.0 (host/path
+# security). Older tags predate it and must not be judged against it.
+_TRUSTED_HOSTS_SINCE = (1, 26, 0)
+
+
+@pytest.mark.parametrize(
+    "config",
+    [c for c in _configs() if _version_of(c) >= _TRUSTED_HOSTS_SINCE],
+    ids=lambda p: p.name,
+)
+def test_configs_since_1_26_declare_trusted_hosts(config):
+    """main.py resolves TRUSTED_HOSTS at import under the production posture
+    and raises without it — the web service simply will not start."""
+    active = [f for f in _flags_in(config) if f.startswith("TRUSTED_HOSTS=")]
+    assert active, (
+        f"{config.name} has no active TRUSTED_HOSTS entry in FLAGS; deploying "
+        f"this tag would leave the web service unable to start. A commented "
+        f"out or header-only mention does not count — bash never sees it."
+    )
+    assert active[0].partition("=")[2].strip(), (
+        f"{config.name} sets TRUSTED_HOSTS to an empty value"
+    )
+
+
+def test_no_migration_is_silently_absent_from_every_config():
+    """A migration in the repo that no config ever names can only reach a
+    target by hand. Numbers below the oldest config are exempt."""
+    named: set[str] = set()
+    for config in _configs():
+        named.update(_migrations_in(config))
+    # Compare parsed integers, not fixed-width strings: once the sequence
+    # reaches 100_*.sql a `^0\d\d_` filter would quietly exempt every new
+    # migration from this contract.
+    def number(name: str) -> int | None:
+        m = re.match(r"^(\d+)_", name)
+        return int(m.group(1)) if m else None
+
+    numbered = {
+        p.name: n for p in MIGRATIONS_DIR.glob("*.sql")
+        if (n := number(p.name)) is not None
+    }
+    oldest_named = min(
+        (n for f in named if (n := number(f)) is not None), default=None
+    )
+    if oldest_named is None:
+        pytest.fail("no release config names a numbered migration")
+    orphans = sorted(
+        f for f, n in numbered.items() if n >= oldest_named and f not in named
+    )
+    assert not orphans, (
+        "migrations no release config ever ships: " + ", ".join(orphans)
+    )
