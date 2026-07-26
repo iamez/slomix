@@ -63,7 +63,7 @@ BEGIN
         IF tbl_owner IS NULL THEN
             RAISE NOTICE '045: % already absent', t;
         ELSIF pg_has_role(current_user, tbl_owner, 'USAGE') THEN
-            EXECUTE format('DROP TABLE IF EXISTS %I CASCADE', t);
+            EXECUTE format('DROP TABLE IF EXISTS public.%I CASCADE', t);
             RAISE NOTICE '045: dropped %', t;
         ELSE
             RAISE NOTICE '045: skipping % (owned by %, current role % cannot drop it) '

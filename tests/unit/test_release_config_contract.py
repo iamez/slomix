@@ -63,9 +63,17 @@ def _newest_config() -> Path:
 
 def _migrations_in(config: Path) -> list[str]:
     body = config.read_text(encoding="utf-8")
-    block = re.search(r"MIGRATIONS=\((.*?)\)", body, re.S)
-    if not block:
-        return []
+    # Anchor to a real assignment at the start of a line. Several configs
+    # carry a `#   MIGRATIONS=()` template line in their header, and an
+    # unanchored non-greedy match binds to that empty pair instead — which
+    # made these checks silently pass over v1.14.2 and v1.20.0 entirely.
+    block = re.search(
+        r"^MIGRATIONS=\((.*?)^\)", body, re.S | re.M
+    )
+    assert block, (
+        f"{config.name} has no MIGRATIONS=( ... ) assignment at line start; "
+        f"deploy_release.sh would source it with an empty migration set"
+    )
     return re.findall(r'"([^"]+\.sql)"', block.group(1))
 
 
