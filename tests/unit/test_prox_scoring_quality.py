@@ -110,13 +110,47 @@ class FakeDB:
 
 
 @pytest.mark.asyncio
-async def test_any_source_failure_returns_degraded(monkeypatch):
-    result = await compute_prox_scores(FakeDB(fail_source="proximity_hit_region"))
+async def test_score_critical_source_failure_returns_degraded(monkeypatch):
+    """A source feeding a SCORED metric poisons the percentile pool everyone
+    is ranked against, so the ranking is withheld (AUD-008)."""
+    result = await compute_prox_scores(FakeDB(fail_source="combat_engagement"))
     assert result["status"] == "degraded"
     assert result["formula_version"] == FORMULA_VERSION_QUALITY
     assert result["quality"]["ranking_available"] is False
-    assert "proximity_hit_region" in result["quality"]["failed_sources"]
+    assert "combat_engagement" in result["quality"]["failed_sources"]
     assert result["players"] == []
+
+
+@pytest.mark.asyncio
+async def test_descriptive_only_source_failure_keeps_the_ranking(monkeypatch):
+    """#556: proximity_hit_region now feeds only headshot_pct, which is
+    retired and weighs nothing. Taking the whole leaderboard down for it
+    would be an outage we inflicted on ourselves (Codex P1)."""
+    assert "proximity_hit_region" not in prox_scoring.SCORE_CRITICAL_SOURCES
+
+    async def fake_fetch(db, range_days, **kwargs):
+        players = {
+            g: {**_full_metric_row(g, g), "name": g,
+                "engagements": 40, "tracks": 10}
+            for g in ("GUID_A", "GUID_B")
+        }
+        sources = [
+            {"source": s, "success": s != "proximity_hit_region",
+             "row_count": 0 if s == "proximity_hit_region" else 2,
+             "error_code": "RuntimeError" if s == "proximity_hit_region" else None,
+             "duration_ms": 5}
+            for s in SOURCE_LABELS
+        ]
+        return players, sources
+
+    monkeypatch.setattr(prox_scoring, "_fetch_raw_metrics", fake_fetch)
+    result = await compute_prox_scores(object())
+    assert result["status"] == "ok", (
+        "a descriptive-only source failure must not withhold the ranking"
+    )
+    assert len(result["players"]) == 2, (
+        "players were dropped by a source that cannot move any score"
+    )
 
 
 def test_canonical_formula_version_is_v3_0():
@@ -196,8 +230,10 @@ def test_metric_effective_weights_match_category_weighting():
     # escape_rate is the ONLY surviving prox_combat metric after #556, so it
     # carries the whole category: Combat(0.40) x (1.00 / 1.00) = 0.40.
     assert eff["escape_rate"] == pytest.approx(0.40)
-    # denied_time: Game Sense(0.25) x (0.20 / gamesense_total 0.35)
-    assert eff["denied_time"] == pytest.approx(0.25 * 0.20 / 0.35)
+    # #556 normalised the within-category weights to sum to 1.0 so the
+    # published weight equals the one the score uses. denied_time is 0.571 of
+    # Game Sense: 0.25 x 0.571.
+    assert eff["denied_time"] == pytest.approx(0.25 * 0.571)
     # A metric #556 retired contributes NOTHING to the composite, so it must
     # not appear in the coverage weights at all — a player missing it must not
     # be penalised for missing something that no longer counts.

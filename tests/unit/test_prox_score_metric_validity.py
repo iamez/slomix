@@ -84,7 +84,10 @@ def test_retired_metrics_contribute_zero():
         _score, breakdown = prox_scoring._compute_category_score(  # noqa: SLF001
             raw, cat_key, percentiles,
         )
-        desc = breakdown.get("__descriptive__", {})
+        # Retired metrics live in the SAME flat map as scored ones, marked
+        # `retired_in` — a nested sub-dict would have rendered as one blank
+        # row in every consumer that iterates this map.
+        desc = {k: v for k, v in breakdown.items() if v.get("retired_in")}
         assert set(desc) == set(retired), f"{cat_key} lost descriptive metrics"
         for key, entry in desc.items():
             assert entry["contribution"] == 0.0, f"{key} still contributes"
@@ -148,9 +151,42 @@ async def test_descriptive_metrics_get_real_percentiles(monkeypatch):
     result = await compute_prox_scores(object())
     seen = set()
     for p in result["players"]:
-        desc = p["breakdown"]["prox_combat"]["__descriptive__"]
-        seen.add(desc["headshot_pct"]["percentile"])
+        seen.add(p["breakdown"]["prox_combat"]["headshot_pct"]["percentile"])
     assert len(seen) > 1, (
         f"every descriptive percentile came back identical ({seen}) — the "
         f"retired metrics are not being ranked, only neutral-filled"
     )
+
+
+def test_descriptive_percentile_is_null_when_the_sample_is_missing():
+    """The percentile pool neutral-fills a missing GUID with 0.5 so the SCORE
+    arithmetic stays honest. A descriptive row has no arithmetic, so
+    publishing that fill would present missing telemetry as a genuine median
+    result — the exact ambiguity this change set out to remove."""
+    for cat_key, retired in prox_scoring.RETIRED_METRICS.items():
+        if not retired:
+            continue
+        percentiles = {m: {"G": 0.5} for m in retired}  # G present in the pool
+        raw = {"__guid__": "G"}  # ...but no raw sample for any metric
+        _score, breakdown = prox_scoring._compute_category_score(  # noqa: SLF001
+            raw, cat_key, percentiles,
+        )
+        for key in retired:
+            entry = breakdown[key]
+            assert entry["raw"] is None
+            assert entry["percentile"] is None, (
+                f"{key}: missing telemetry published as percentile "
+                f"{entry['percentile']} — reads as a real median result"
+            )
+
+
+def test_descriptive_percentile_is_present_when_the_sample_exists():
+    """The null above must come from a missing sample, not from descriptive
+    rows never being ranked at all."""
+    cat_key = "prox_combat"
+    percentiles = {"headshot_pct": {"G": 0.9}}
+    _score, breakdown = prox_scoring._compute_category_score(  # noqa: SLF001
+        {"__guid__": "G", "headshot_pct": 0.42}, cat_key, percentiles,
+    )
+    assert breakdown["headshot_pct"]["percentile"] == pytest.approx(0.9)
+    assert breakdown["headshot_pct"]["raw"] == pytest.approx(0.42)
