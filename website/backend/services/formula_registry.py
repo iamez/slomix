@@ -207,7 +207,13 @@ def get_registry() -> list[dict]:
             "module": "website/backend/services/prox_scoring.py",
             "surface": "/api/proximity scoring endpoints",
             "summary": "combat 0.40 / team 0.35 / gamesense 0.25, "
-                       "min 10 engagements.",
+                       "min 10 engagements. v3.0 (#556) scores only the 5 "
+                       "metrics measured predictive of the round outcome "
+                       "(escape rate, spawn timing, revive magnet, "
+                       "distance/life, denied time); the other 13 are "
+                       "reported as descriptive and weigh nothing. Combat "
+                       "now rests on a single metric while still carrying "
+                       "0.40 of the composite — open question on #556.",
         },
         {
             "name": "prox_score_bot",

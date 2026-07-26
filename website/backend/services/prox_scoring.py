@@ -22,14 +22,66 @@ logger = logging.getLogger(__name__)
 
 # Canonical version history: 1.0 → 2.0 (midrank normalization + coverage
 # gating, #512) → 2.1 (IMP-003: trades_per_session denominator = sessions
-# PLAYED, exact-round true-zero fill, single-player MIN_ENGAGEMENTS). Any
-# change to what the numbers MEAN bumps this — the registry and UI import it.
-FORMULA_VERSION = "2.1"
+# PLAYED, exact-round true-zero fill, single-player MIN_ENGAGEMENTS) → 3.0
+# (#556: every metric measured against round outcome; 13 of 18 failed and were
+# retired from the score). Any change to what the numbers MEAN bumps this —
+# the registry and UI import it.
+#
+# ── HOW 3.0 WAS DERIVED (#556) ──────────────────────────────────────────────
+#
+# Each metric was measured WITHIN round: a player is compared only against the
+# others in the same round, so round length, map, and opponent quality cannot
+# drive the result. The question asked of every metric was "does the half of
+# the round's players this metric scores HIGHER win that round more often?",
+# with 95% confidence intervals bootstrapped over 1000 resamples OF ROUNDS
+# (teammates share an outcome, so a per-player interval would be too narrow).
+# 619 rounds / 11,538 player-rounds, baseline win rate 0.500.
+#
+#   metric                  win-rate spread     95% CI            verdict
+#   distance_per_life           +0.158    [+0.120, +0.197]    kept
+#   denied_time                 +0.150    [+0.103, +0.196]    kept
+#   escape_rate                 +0.083    [+0.050, +0.115]    kept
+#   spawn_score                 +0.063    [+0.027, +0.098]    kept
+#   revive_rate_as_victim       +0.042    [+0.002, +0.081]    kept
+#   headshot_pct                +0.041    [-0.001, +0.084]    retired
+#   timed_kills                 +0.040    [-0.002, +0.083]    retired
+#   kpr                         +0.028    [-0.009, +0.064]    retired
+#   trades_per_session          +0.014    [-0.038, +0.068]    retired
+#   support_reaction_ms         +0.011    [-0.020, +0.048]    retired
+#   crossfire_rate              +0.008    [-0.051, +0.063]    retired
+#   focus_survival              +0.006    [-0.030, +0.047]    retired
+#   post_spawn_rush             -0.001    [-0.046, +0.042]    retired
+#   stance_variety              -0.004    [-0.038, +0.031]    retired
+#   peak_speed                  -0.004    [-0.043, +0.036]    retired
+#   return_fire_ms              +0.005    [-0.030, +0.040]    retired
+#   dodge_ms                    -0.033    [-0.067, -0.002]    retired (INVERTED)
+#   sprint_discipline           -0.132    [-0.167, -0.094]    retired (INVERTED)
+#
+# Two of these were scoring players BACKWARDS. The formula rewarded fast dodge
+# reactions and high sprint usage; both associate with LOSING the round. That
+# reproduces #553, which retired the same two terms from power-v2 on an
+# independent measurement (engagement survival rather than round outcome).
+#
+# "Retired" means retired FROM THE SCORE, not deleted: every one is still
+# computed and returned under `descriptive` in the breakdown, so nothing
+# disappears from the UI. Several are plainly meaningful to players
+# (headshot %, trade kills, crossfire) — the finding is only that they do not
+# predict who wins the round, which is the one thing a composite RANKING
+# claims to know. Four sit just barely across zero (headshot_pct, timed_kills,
+# kpr, and dodge_ms on the other side); more sessions may resolve them, and
+# re-running the measurement is the way to decide, not intuition.
+#
+# No replacements were invented. CATEGORY_WEIGHTS were left untouched because
+# nothing measured here justifies a particular split — but note that
+# prox_combat now rests on a single metric while still carrying 0.40 of the
+# overall, which is tracked as an open question on #556 rather than silently
+# re-tuned here. `metrics_scored` in the response makes that thinness visible.
+FORMULA_VERSION = "3.0"
 # Quality-contract semantics (audit AUD-008): a failed source withholds the
 # ranking instead of silently substituting neutral 0.5; ties use midrank; a
 # player is scored only above MIN_METRIC_WEIGHT_COVERAGE of real (non-missing)
 # metric weight. The detailed variant string carried in score responses.
-FORMULA_VERSION_QUALITY = "prox-web-v2.1"
+FORMULA_VERSION_QUALITY = "prox-web-v3.0"
 
 # ── METRIC SEMANTICS (IMP-003) — the 0-vs-NULL contract per metric ──────────
 # metric                numerator / denominator            0 when …            NULL when …
@@ -75,39 +127,60 @@ CATEGORY_WEIGHTS = {
 METRICS = {
     "prox_combat": {
         "label": "Combat",
-        "description": "Individual fighting skill — aim, reflexes, kill quality",
+        "description": "Individual fighting skill — surviving the fights you are in",
         "metrics": {
-            "headshot_pct":     {"weight": 0.20, "invert": False, "label": "Headshot %"},
-            "escape_rate":      {"weight": 0.20, "invert": False, "label": "Escape Rate"},
-            "return_fire_ms":   {"weight": 0.20, "invert": True,  "label": "Return Fire Speed"},
-            "kpr":              {"weight": 0.15, "invert": False, "label": "Kill Permanence"},
-            "peak_speed":       {"weight": 0.10, "invert": False, "label": "Peak Speed"},
-            "dodge_ms":         {"weight": 0.15, "invert": True,  "label": "Dodge Speed"},
+            "escape_rate":      {"weight": 1.00, "invert": False, "label": "Escape Rate"},
         },
     },
     "prox_team": {
         "label": "Team",
-        "description": "Team coordination — trades, crossfire, support, revive dependency",
+        "description": "Team coordination — arriving with the team, being worth reviving",
+        # Weights are normalised to sum to 1.0 per category. They keep the
+        # 0.20 : 0.15 RATIO these two always had; what changed is that the
+        # published number now equals the one the score actually uses.
+        # Before, _compute_category_score normalised internally while the
+        # formula endpoint and the breakdown still published the raw 0.20,
+        # so Spawn Timing was advertised as 20% of Team while really being
+        # 57% of it (Codex review).
         "metrics": {
-            "spawn_score":           {"weight": 0.20, "invert": False, "label": "Spawn Timing"},
-            "crossfire_rate":        {"weight": 0.20, "invert": False, "label": "Crossfire Rate"},
-            "support_reaction_ms":   {"weight": 0.15, "invert": True,  "label": "Support Speed"},
-            "trades_per_session":    {"weight": 0.20, "invert": False, "label": "Trade Kills"},
-            "revive_rate_as_victim": {"weight": 0.15, "invert": False, "label": "Revive Magnet"},
-            "focus_survival":        {"weight": 0.10, "invert": False, "label": "Focus Survival"},
+            "spawn_score":           {"weight": 0.571, "invert": False, "label": "Spawn Timing"},
+            "revive_rate_as_victim": {"weight": 0.429, "invert": False, "label": "Revive Magnet"},
         },
     },
     "prox_gamesense": {
         "label": "Game Sense",
-        "description": "Positioning, movement discipline, timing",
+        "description": "Positioning and map presence, and time taken off the enemy",
+        # Normalised, same 0.15 : 0.20 ratio as before (see prox_team).
         "metrics": {
-            "distance_per_life":  {"weight": 0.15, "invert": False, "label": "Distance/Life"},
-            "sprint_discipline":  {"weight": 0.15, "invert": False, "label": "Sprint Usage"},
-            "post_spawn_rush":    {"weight": 0.15, "invert": False, "label": "Post-Spawn Rush"},
-            "stance_variety":     {"weight": 0.15, "invert": False, "label": "Stance Variety"},
-            "timed_kills":        {"weight": 0.20, "invert": False, "label": "Timed Kills"},
-            "denied_time":        {"weight": 0.20, "invert": False, "label": "Denied Enemy Time"},
+            "distance_per_life":  {"weight": 0.429, "invert": False, "label": "Distance/Life"},
+            "denied_time":        {"weight": 0.571, "invert": False, "label": "Denied Enemy Time"},
         },
+    },
+}
+
+# Retired from the score by #556, still computed and reported under
+# `descriptive` so the UI keeps showing them. Weights are the ones they used
+# to carry, kept only so the change is legible in a diff and in the response.
+# Do not read these as contributions — they contribute nothing.
+RETIRED_METRICS = {
+    "prox_combat": {
+        "headshot_pct":   {"weight": 0.20, "invert": False, "label": "Headshot %"},
+        "return_fire_ms": {"weight": 0.20, "invert": True,  "label": "Return Fire Speed"},
+        "kpr":            {"weight": 0.15, "invert": False, "label": "Kill Permanence"},
+        "peak_speed":     {"weight": 0.10, "invert": False, "label": "Peak Speed"},
+        "dodge_ms":       {"weight": 0.15, "invert": True,  "label": "Dodge Speed"},
+    },
+    "prox_team": {
+        "crossfire_rate":      {"weight": 0.20, "invert": False, "label": "Crossfire Rate"},
+        "support_reaction_ms": {"weight": 0.15, "invert": True,  "label": "Support Speed"},
+        "trades_per_session":  {"weight": 0.20, "invert": False, "label": "Trade Kills"},
+        "focus_survival":      {"weight": 0.10, "invert": False, "label": "Focus Survival"},
+    },
+    "prox_gamesense": {
+        "sprint_discipline": {"weight": 0.15, "invert": False, "label": "Sprint Usage"},
+        "post_spawn_rush":   {"weight": 0.15, "invert": False, "label": "Post-Spawn Rush"},
+        "stance_variety":    {"weight": 0.15, "invert": False, "label": "Stance Variety"},
+        "timed_kills":       {"weight": 0.20, "invert": False, "label": "Timed Kills"},
     },
 }
 
@@ -199,6 +272,38 @@ def _compute_category_score(
             "label": metric_cfg["label"],
         }
 
+    # Metrics #556 retired: still measured and shown, contributing nothing.
+    # They go in the SAME flat map as the scored ones, marked `retired_in`
+    # and carrying weight 0.0. A nested "__descriptive__" sub-dict was the
+    # obvious shape, but every consumer iterates this map expecting each
+    # value to be a metric breakdown with .label/.percentile — the nested
+    # entry would have rendered as one blank NaN row while hiding all 13
+    # (Copilot and Codex both caught this). `contribution: 0.0` is not a
+    # rounding artefact here, it is the whole point.
+    for metric_key, metric_cfg in RETIRED_METRICS.get(category_key, {}).items():
+        raw = player_raw.get(metric_key)
+        pctl_map = percentile_maps.get(metric_key, {})
+        guid = player_raw.get("__guid__", "")
+        # A player with no sample gets the neutral 0.5 fill from the pool.
+        # For a SCORED metric that fill keeps the arithmetic honest, but a
+        # descriptive row has no arithmetic — publishing 0.5 would present
+        # missing telemetry as a genuine median result, which is exactly the
+        # ambiguity this change set out to remove (Codex review).
+        if raw is None:
+            pctl = None
+        else:
+            pctl = pctl_map.get(guid, 0.5)
+            if metric_cfg["invert"]:
+                pctl = 1.0 - pctl
+        breakdown[metric_key] = {
+            "raw": round(raw, 3) if raw is not None else None,
+            "percentile": round(pctl, 3) if pctl is not None else None,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": metric_cfg["label"],
+            "retired_in": "prox-web-v3.0",
+        }
+
     return round(score, 2), breakdown
 
 
@@ -235,6 +340,28 @@ PROX_SOURCE_LABELS = (
     "proximity_hit_region", "proximity_crossfire_opportunity",
     "proximity_lua_trade_kill", "proximity_focus_fire",
 )
+
+# Sources that feed at least one SCORED metric. AUD-008 withholds the whole
+# ranking when a source fails, because a missing source poisons the percentile
+# pool everyone is ranked against. After #556 retired 13 metrics, three
+# sources feed nothing but descriptive rows — an outage there cannot move a
+# single score, so taking the leaderboard down for it would be an outage we
+# inflicted on ourselves (Codex P1).
+#
+#   proximity_hit_region            -> headshot_pct              (retired)
+#   proximity_crossfire_opportunity -> crossfire_rate            (retired)
+#   proximity_lua_trade_kill        -> trades_per_session        (retired)
+#   proximity_focus_fire            -> focus_survival            (retired)
+#
+# proximity_reaction_metric also only feeds retired metrics (return_fire_ms,
+# dodge_ms, support_reaction_ms) and is listed here for the same reason.
+SCORE_CRITICAL_SOURCES = frozenset({
+    "combat_engagement",              # escape_rate
+    "proximity_spawn_timing",         # spawn_score
+    "player_track",                   # distance_per_life
+    "proximity_kill_outcome_killer",  # denied_time
+    "proximity_kill_outcome_victim",  # revive_rate_as_victim
+})
 
 try:  # touching .labels() creates the child series at 0
     from website.backend.metrics import PROX_SOURCE_QUERIES as _PSQ
@@ -311,10 +438,25 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
     )
 
     # AUD-008: a failed source poisons the whole percentile pool — withhold.
-    if any(not s["success"] for s in sources):
+    # Scoped to sources that actually feed a scored metric (#556): a failure
+    # in descriptive-only telemetry drops those rows from the response but
+    # cannot change any score, so it must not take the ranking down with it.
+    critical_failed = [
+        s["source"] for s in sources
+        if not s["success"] and s["source"] in SCORE_CRITICAL_SOURCES
+    ]
+    if critical_failed:
         _emit_degraded_gauge(metric_scope, True)
         return _degraded(sources)
     _emit_degraded_gauge(metric_scope, False)
+    descriptive_failed = [
+        s["source"] for s in sources if not s["success"]
+    ]
+    if descriptive_failed:
+        logger.warning(
+            "prox_scoring: descriptive-only source(s) failed, ranking kept: %s",
+            ", ".join(descriptive_failed),
+        )
 
     def _ok(players, coverage=None, dropped=0):
         # Response-level coverage reflects the ACTUAL returned players (min of
@@ -329,9 +471,16 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
             "formula_version": FORMULA_VERSION_QUALITY,
             "quality": {
                 "ranking_available": bool(players),
-                "successful_sources": len(sources),
+                # Derived from the actual results, not assumed. A
+                # descriptive-only failure keeps status "ok" but must still be
+                # visible here — otherwise the response claims all 10 sources
+                # succeeded while its descriptive rows are quietly missing,
+                # and nothing explains why (Codex review).
+                "successful_sources": sum(1 for s in sources if s["success"]),
                 "total_sources": len(sources),
-                "failed_sources": [],
+                "failed_sources": [
+                    s["source"] for s in sources if not s["success"]
+                ],
                 "metric_weight_coverage": round(coverage, 3),
                 # Always present so the quality-contract shape doesn't depend on
                 # the dataset (empty/healthy responses carried it only after the
@@ -379,6 +528,13 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
     all_metric_keys = set()
     for cat in METRICS.values():
         all_metric_keys.update(cat["metrics"].keys())
+    # Retired metrics are still REPORTED (as `descriptive`), so they still need
+    # a real percentile pool. Leaving them out here would not have raised
+    # anything — every descriptive percentile would silently have come back as
+    # the neutral 0.5 default below, which reads like "average" rather than
+    # "not computed".
+    for retired in RETIRED_METRICS.values():
+        all_metric_keys.update(retired.keys())
 
     percentile_maps: dict[str, dict[str, float]] = {}
     for mkey in all_metric_keys:
@@ -425,13 +581,21 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
             for k in CATEGORY_WEIGHTS
         )
 
-        # Radar data (5-axis: three categories + 2 highlight axes)
+        # Radar data: one axis per category (3). Was 5 until #556 —
+        # see the note below on the two dropped sub-axes.
         radar = [
             {"label": METRICS["prox_combat"]["label"], "value": category_scores["prox_combat"]},
             {"label": METRICS["prox_team"]["label"], "value": category_scores["prox_team"]},
             {"label": METRICS["prox_gamesense"]["label"], "value": category_scores["prox_gamesense"]},
-            {"label": "Aim", "value": _sub_score(category_breakdowns, "prox_combat", ["headshot_pct", "return_fire_ms"])},
-            {"label": "Clutch", "value": _sub_score(category_breakdowns, "prox_combat", ["escape_rate", "dodge_ms"])},
+            # #556: "Aim" was headshot_pct + return_fire_ms and "Clutch" was
+            # escape_rate + dodge_ms. Three of those four measured as
+            # non-predictive of the round outcome and dodge_ms measured
+            # INVERTED, so an "Aim" axis built from them ranked players by
+            # terms the score itself no longer trusts. Only escape_rate
+            # survived, and it is already the Combat category — a separate
+            # axis repeating it would double-count. Both sub-axes are dropped
+            # rather than rebuilt from metrics that have not been shown to
+            # mean anything.
         ]
 
         results.append({
@@ -445,6 +609,14 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
             "prox_overall": round(overall, 2),
             "prox_radar": radar,
             "breakdown": category_breakdowns,
+            # #556: how many metrics in each category actually carry weight.
+            # prox_combat is down to one, so a consumer can see that its 0.40
+            # share of the composite rests on a single measurement instead of
+            # having to infer it from the breakdown.
+            "metrics_scored": {
+                cat_key: len(cat_cfg["metrics"])
+                for cat_key, cat_cfg in METRICS.items()
+            },
             "metric_weight_coverage": round(coverage, 3),
             "missing_metrics": missing,
         })

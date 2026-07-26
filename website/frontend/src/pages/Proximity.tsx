@@ -573,12 +573,18 @@ function ProxScoresPanel() {
                           {formula?.categories[catKey]?.label ?? catKey}
                         </div>
                         {Object.entries(metrics).map(([mk, m]) => (
-                          <div key={mk} className="flex items-center gap-1 text-[10px]">
-                            <span className="text-slate-500 w-20 truncate">{m.label}</span>
+                          <div key={mk} className={`flex items-center gap-1 text-[10px]${m.retired_in ? ' opacity-50' : ''}`}>
+                            <span className="text-slate-500 w-20 truncate" title={m.retired_in ? `not scored since ${m.retired_in}` : undefined}>
+                              {m.label}{m.retired_in ? ' \u00b7 not scored' : ''}
+                            </span>
                             <div className="flex-1 h-1.5 rounded-full bg-slate-700 overflow-hidden">
-                              <div className="h-full rounded-full bg-cyan-500/60" style={{ width: `${m.percentile * 100}%` }} />
+                              {m.percentile !== null && (
+                                <div className={`h-full rounded-full ${m.retired_in ? 'bg-slate-500/60' : 'bg-cyan-500/60'}`} style={{ width: `${m.percentile * 100}%` }} />
+                              )}
                             </div>
-                            <span className="text-slate-400 font-mono w-8 text-right">{(m.percentile * 100).toFixed(0)}</span>
+                            <span className="text-slate-400 font-mono w-8 text-right">
+                              {m.percentile === null ? '\u2014' : (m.percentile * 100).toFixed(0)}
+                            </span>
                           </div>
                         ))}
                       </div>

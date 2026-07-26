@@ -3418,11 +3418,21 @@ function renderProxScores(data, formula) {
                 const color = SCORE_COLORS[catKey] || '#22d3ee';
                 return `<div>
                     <div class="text-[11px] font-bold uppercase mb-1" style="color:${color}">${escapeHtml(catLabel)}</div>
-                    ${Object.entries(metrics).map(([, m]) => `<div class="flex items-center gap-1 text-[10px]">
-                        <span class="text-slate-500 w-20 truncate">${escapeHtml(m.label)}</span>
-                        <div class="flex-1 h-1.5 rounded-full bg-slate-700 overflow-hidden"><div class="h-full rounded-full bg-cyan-500/60" style="width:${(m.percentile * 100)}%"></div></div>
-                        <span class="text-slate-400 font-mono w-6 text-right">${(m.percentile * 100).toFixed(0)}</span>
-                    </div>`).join('')}
+                    ${Object.entries(metrics).map(([, m]) => {
+                        // #556: a retired metric is still shown but carries no
+                        // weight, and a null percentile means "no sample" —
+                        // `null * 100` is 0 in JS, which would render missing
+                        // telemetry as a real 0th-percentile result.
+                        const hasPct = m.percentile !== null && m.percentile !== undefined;
+                        const bar = hasPct
+                            ? `<div class="h-full rounded-full ${m.retired_in ? 'bg-slate-500/60' : 'bg-cyan-500/60'}" style="width:${(m.percentile * 100)}%"></div>`
+                            : '';
+                        return `<div class="flex items-center gap-1 text-[10px]${m.retired_in ? ' opacity-50' : ''}">
+                        <span class="text-slate-500 w-20 truncate">${escapeHtml(m.label)}${m.retired_in ? ' \u00b7 not scored' : ''}</span>
+                        <div class="flex-1 h-1.5 rounded-full bg-slate-700 overflow-hidden">${bar}</div>
+                        <span class="text-slate-400 font-mono w-6 text-right">${hasPct ? (m.percentile * 100).toFixed(0) : '\u2014'}</span>
+                    </div>`;
+                    }).join('')}
                 </div>`;
             }).join('')}</div>` : ''}
             <div class="text-[10px] text-slate-600 mt-2">${p.engagements || 0} engagements, ${p.tracks || 0} tracks</div>
