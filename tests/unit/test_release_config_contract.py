@@ -2,13 +2,21 @@
 
 A release config is the only thing standing between "deploy the new code"
 and "deploy the new code against a schema that cannot serve it". These
-tests make the three ways that goes wrong impossible to merge:
+tests make the ways that goes wrong impossible to merge:
 
 1. the config for the current version does not exist at all — which is
    exactly how v1.27.0 shipped 063 with no config;
 2. the config names a migration file that is not in the repo;
 3. a migration the code needs is missing from the config — the runner's
-   `--only` preflight then refuses mid-deploy, after services have stopped.
+   `--only` preflight then refuses mid-deploy, after services have stopped;
+4. a post-1.26.0 config has no active TRUSTED_HOSTS entry, without which
+   the web process raises at import and never starts;
+5. a migration exists that no config ever ships, so it can only reach a
+   target by hand.
+
+Everything here parses the configs the way bash would when
+deploy_release.sh sources them: assignments at the start of a line, and
+commented-out entries do not count.
 """
 from __future__ import annotations
 
@@ -61,20 +69,42 @@ def _newest_config() -> Path:
     return max(configs, key=key)
 
 
-def _migrations_in(config: Path) -> list[str]:
+def _array_entries(config: Path, name: str, *, required: bool) -> list[str]:
+    """Entries bash would actually see when it sources `name=( ... )`.
+
+    Two things this must get right, both of which bit earlier versions of
+    this file:
+
+    * anchor to a real assignment at the start of a line. Several configs
+      carry a `#   MIGRATIONS=()` template line in their header, and an
+      unanchored non-greedy match binds to that empty pair instead — which
+      made these checks pass over v1.14.2 and v1.20.0 by being blind to them.
+    * drop commented-out lines inside the block. `# "064_....sql"` is NOT in
+      the array bash builds, so counting it as present would let someone
+      remove a required migration from the deploy while CI stayed green.
+    """
     body = config.read_text(encoding="utf-8")
-    # Anchor to a real assignment at the start of a line. Several configs
-    # carry a `#   MIGRATIONS=()` template line in their header, and an
-    # unanchored non-greedy match binds to that empty pair instead — which
-    # made these checks silently pass over v1.14.2 and v1.20.0 entirely.
-    block = re.search(
-        r"^MIGRATIONS=\((.*?)^\)", body, re.S | re.M
+    block = re.search(rf"^{name}=\((.*?)^\)", body, re.S | re.M)
+    if not block:
+        assert not required, (
+            f"{config.name} has no {name}=( ... ) assignment at line start; "
+            f"deploy_release.sh would source it with an empty {name} set"
+        )
+        return []
+    active = "\n".join(
+        line for line in block.group(1).splitlines()
+        if not line.lstrip().startswith("#")
     )
-    assert block, (
-        f"{config.name} has no MIGRATIONS=( ... ) assignment at line start; "
-        f"deploy_release.sh would source it with an empty migration set"
-    )
-    return re.findall(r'"([^"]+\.sql)"', block.group(1))
+    return re.findall(r'"([^"]*)"', active)
+
+
+def _migrations_in(config: Path) -> list[str]:
+    return [e for e in _array_entries(config, "MIGRATIONS", required=True)
+            if e.endswith(".sql")]
+
+
+def _flags_in(config: Path) -> list[str]:
+    return _array_entries(config, "FLAGS", required=False)
 
 
 def test_a_config_exists_for_the_current_version():
@@ -125,9 +155,14 @@ _TRUSTED_HOSTS_SINCE = (1, 26, 0)
 def test_configs_since_1_26_declare_trusted_hosts(config):
     """main.py resolves TRUSTED_HOSTS at import under the production posture
     and raises without it — the web service simply will not start."""
-    assert "TRUSTED_HOSTS=" in config.read_text(encoding="utf-8"), (
-        f"{config.name} does not set TRUSTED_HOSTS; deploying this tag would "
-        f"leave the web service unable to start"
+    active = [f for f in _flags_in(config) if f.startswith("TRUSTED_HOSTS=")]
+    assert active, (
+        f"{config.name} has no active TRUSTED_HOSTS entry in FLAGS; deploying "
+        f"this tag would leave the web service unable to start. A commented "
+        f"out or header-only mention does not count — bash never sees it."
+    )
+    assert active[0].partition("=")[2].strip(), (
+        f"{config.name} sets TRUSTED_HOSTS to an empty value"
     )
 
 
@@ -137,13 +172,24 @@ def test_no_migration_is_silently_absent_from_every_config():
     named: set[str] = set()
     for config in _configs():
         named.update(_migrations_in(config))
+    # Compare parsed integers, not fixed-width strings: once the sequence
+    # reaches 100_*.sql a `^0\d\d_` filter would quietly exempt every new
+    # migration from this contract.
+    def number(name: str) -> int | None:
+        m = re.match(r"^(\d+)_", name)
+        return int(m.group(1)) if m else None
+
     numbered = {
-        p.name for p in MIGRATIONS_DIR.glob("*.sql")
-        if re.match(r"^0\d\d_", p.name)
+        p.name: n for p in MIGRATIONS_DIR.glob("*.sql")
+        if (n := number(p.name)) is not None
     }
-    oldest_named = min((n[:3] for n in named), default="999")
+    oldest_named = min(
+        (n for f in named if (n := number(f)) is not None), default=None
+    )
+    if oldest_named is None:
+        pytest.fail("no release config names a numbered migration")
     orphans = sorted(
-        n for n in numbered if n[:3] >= oldest_named and n not in named
+        f for f, n in numbered.items() if n >= oldest_named and f not in named
     )
     assert not orphans, (
         "migrations no release config ever ships: " + ", ".join(orphans)

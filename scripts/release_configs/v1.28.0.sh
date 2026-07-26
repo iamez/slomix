@@ -19,31 +19,49 @@
 # safe and makes the deploy independent of prod's exact ledger state — which
 # is known to have drifted (see 06_DEPLOY_OPS in the audit package).
 #
-# 045 is included deliberately. It was PENDING forever because `voice_members`
-# is owned by `postgres` and `etlegacy_user` cannot DROP it — which, given the
-# --only preflight above, silently blocked EVERY future targeted deploy. It
-# now uses an ownership-tolerant DO block: it drops what the current role can
-# drop and leaves anything else in place with a NOTICE instead of failing.
+# ─── MANDATORY PRE-DEPLOY STEP: MIGRATION 045 ────────────────────────────────
+#
+# 045 DROPs `voice_members`, which is owned by `postgres`. `etlegacy_user`
+# cannot drop it, so 045 FAILS under the runner and sits PENDING forever —
+# and by the --only rule above, one stuck row blocks every targeted deploy.
+#
+# 045 was NOT edited to fix this. Any target that recorded it successfully
+# stores that file's checksum, and a changed file makes the runner refuse
+# every later apply AND validate run; `--mark` cannot repair that, because it
+# skips filenames already recorded success=TRUE. Such a target would need
+# manual ledger surgery to deploy again. So 045 stays byte-for-byte as it is,
+# and 066 carries the ownership-tolerant cleanup instead.
+#
+# Before deploying, check the target and reconcile 045 if it is pending:
+#
+#     python scripts/apply_migrations.py --status | grep 045
+#
+#   * [APPLIED] — nothing to do.
+#   * [PENDING] — pick one:
+#       sudo -u postgres psql -d etlegacy -f migrations/045_*.sql   # really drops it
+#       python scripts/apply_migrations.py --mark 045_drop_orphan_monitoring_tables.sql
+#     `--mark` records it without running the SQL, which is correct here: the
+#     table it fails to drop is an unreferenced orphan and 066 will retry the
+#     cleanup with whatever privileges the deploy role actually has.
+#
+#   Then: python scripts/apply_migrations.py --validate   # must exit 0
 #
 # 046-051 were applied to dev by hand and appear in no release config at all,
 # so no target has ever received them through the deploy path. They are listed
 # here for the same --only reason: if prod's ledger is missing any of them, an
 # unlisted pending migration aborts the whole run.
 #
-#   PRE-DEPLOY RECONCILIATION (do this before the deploy, not during it):
-#   050 creates its UNIQUE index without IF NOT EXISTS, so if the object is
-#   already present on the target but has no ledger row — the exact drift this
-#   audit found — the migration step fails and takes the transaction with it.
-#   Do NOT edit the migration to fix this: it is already applied elsewhere and
-#   editing it puts every target into checksum drift, which the startup guard
-#   (#545) and `--validate` both fail on. Reconcile instead:
+# The same reconciliation applies to 050. It creates its UNIQUE index without
+# IF NOT EXISTS, so if that object already exists on the target but has no
+# ledger row — the exact drift this audit found — the migration step fails and
+# takes the transaction with it. As with 045, do not edit the file; mark it:
 #
 #     python scripts/apply_migrations.py --status        # what is really there
 #     # for each migration whose objects already exist on the target:
 #     python scripts/apply_migrations.py --mark 050_round_canonical_id_unique.sql
 #     python scripts/apply_migrations.py --validate      # must exit 0
 #
-#   Then run the deploy, which will skip everything already marked.
+# The deploy then skips everything already marked.
 #
 # ─── SCHEMA THIS RELEASE'S CODE REQUIRES ─────────────────────────────────────
 #
@@ -105,6 +123,7 @@ MIGRATIONS=(
   "063_kis_gaming_session_id.sql"
   "064_backfill_kis_gaming_session_id.sql"
   "065_dedup_revive_weapon_accuracy.sql"
+  "066_drop_orphan_monitoring_tables_tolerant.sql"
 )
 FLAGS=(
   "TRUSTED_HOSTS=www.slomix.fyi,slomix.fyi,localhost,127.0.0.1"
