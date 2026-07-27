@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from website.backend.map_geometry import Pk3GeometryIndex  # noqa: E402
+from website.backend.map_geometry import Pk3GeometryIndex, SurfaceType  # noqa: E402
 
 
 def _parse_args() -> argparse.Namespace:
@@ -60,10 +60,15 @@ def main() -> int:
                 "planes": len(bsp.planes),
                 "nodes": len(bsp.nodes),
                 "leafs": len(bsp.leafs),
+                "leaf_surfaces": len(bsp.leaf_surfaces),
                 "leaf_brushes": len(bsp.leaf_brushes),
                 "models": len(bsp.models),
                 "brushes": len(bsp.brushes),
                 "brush_sides": len(bsp.brush_sides),
+                "draw_vertices": len(bsp.draw_vertices),
+                "draw_indexes": len(bsp.draw_indexes),
+                "surfaces": len(bsp.surfaces),
+                "patch_surfaces": sum(surface.surface_type is SurfaceType.PATCH for surface in bsp.surfaces),
             }
 
     rendered = json.dumps(manifest, indent=2, sort_keys=True) + "\n"

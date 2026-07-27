@@ -29,7 +29,12 @@ _LEAF = struct.Struct("<12i")
 _MODEL = struct.Struct("<6f4i")
 _BRUSH = struct.Struct("<3i")
 _BRUSH_SIDE = struct.Struct("<2i")
+_DRAW_VERTEX = struct.Struct("<10f4B")
+_SURFACE = struct.Struct("<12i12f2i")
 _INT32 = struct.Struct("<i")
+
+_MAX_PATCH_VERTICES = 1024
+_MAX_PATCH_GRID_SIZE = 129
 
 
 class BspFormatError(ValueError):
@@ -58,6 +63,15 @@ class LumpType(IntEnum):
     LIGHTMAPS = 14
     LIGHTGRID = 15
     VISIBILITY = 16
+
+
+class SurfaceType(IntEnum):
+    BAD = 0
+    PLANAR = 1
+    PATCH = 2
+    TRIANGLE_SOUP = 3
+    FLARE = 4
+    FOLIAGE = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,6 +137,39 @@ class BspBrushSide:
 
 
 @dataclass(frozen=True, slots=True)
+class BspDrawVertex:
+    position: tuple[float, float, float]
+    texture_coords: tuple[float, float]
+    lightmap_coords: tuple[float, float]
+    normal: tuple[float, float, float]
+    color: tuple[int, int, int, int]
+
+
+@dataclass(frozen=True, slots=True)
+class BspSurface:
+    shader_index: int
+    fog_index: int
+    surface_type: SurfaceType
+    first_vertex: int
+    num_vertices: int
+    first_index: int
+    num_indexes: int
+    lightmap_index: int
+    lightmap_x: int
+    lightmap_y: int
+    lightmap_width: int
+    lightmap_height: int
+    lightmap_origin: tuple[float, float, float]
+    lightmap_vectors: tuple[
+        tuple[float, float, float],
+        tuple[float, float, float],
+        tuple[float, float, float],
+    ]
+    patch_width: int
+    patch_height: int
+
+
+@dataclass(frozen=True, slots=True)
 class BspFile:
     source: str
     byte_length: int
@@ -133,10 +180,14 @@ class BspFile:
     planes: tuple[BspPlane, ...]
     nodes: tuple[BspNode, ...]
     leafs: tuple[BspLeaf, ...]
+    leaf_surfaces: tuple[int, ...]
     leaf_brushes: tuple[int, ...]
     models: tuple[BspModel, ...]
     brushes: tuple[BspBrush, ...]
     brush_sides: tuple[BspBrushSide, ...]
+    draw_vertices: tuple[BspDrawVertex, ...]
+    draw_indexes: tuple[int, ...]
+    surfaces: tuple[BspSurface, ...]
     magic: bytes = BSP_MAGIC
     version: int = BSP_VERSION
 
@@ -254,6 +305,41 @@ def parse_entities(text: str, *, source: str = "") -> tuple[dict[str, str], ...]
     return tuple(entities)
 
 
+def _parse_surfaces(data: memoryview, source: str) -> tuple[BspSurface, ...]:
+    surfaces: list[BspSurface] = []
+    for index, values in enumerate(_records(data, _SURFACE, LumpType.SURFACES, source)):
+        try:
+            surface_type = SurfaceType(values[2])
+        except ValueError as exc:
+            raise BspFormatError(_context(source, f"surface {index} has unknown type {values[2]}")) from exc
+
+        surfaces.append(
+            BspSurface(
+                shader_index=values[0],
+                fog_index=values[1],
+                surface_type=surface_type,
+                first_vertex=values[3],
+                num_vertices=values[4],
+                first_index=values[5],
+                num_indexes=values[6],
+                lightmap_index=values[7],
+                lightmap_x=values[8],
+                lightmap_y=values[9],
+                lightmap_width=values[10],
+                lightmap_height=values[11],
+                lightmap_origin=(values[12], values[13], values[14]),
+                lightmap_vectors=(
+                    (values[15], values[16], values[17]),
+                    (values[18], values[19], values[20]),
+                    (values[21], values[22], values[23]),
+                ),
+                patch_width=values[24],
+                patch_height=values[25],
+            )
+        )
+    return tuple(surfaces)
+
+
 def _validate_span(first: int, count: int, total: int, label: str, source: str) -> None:
     if first < 0 or count < 0 or first + count > total:
         raise BspFormatError(_context(source, f"{label} span ({first}, {count}) exceeds available count {total}"))
@@ -276,7 +362,18 @@ def _validate_references(bsp: BspFile) -> None:
         if not 0 <= leaf_brush < len(bsp.brushes):
             raise BspFormatError(_context(source, f"leaf brush {index} references invalid brush {leaf_brush}"))
 
+    for index, leaf_surface in enumerate(bsp.leaf_surfaces):
+        if not 0 <= leaf_surface < len(bsp.surfaces):
+            raise BspFormatError(_context(source, f"leaf surface {index} references invalid surface {leaf_surface}"))
+
     for index, leaf in enumerate(bsp.leafs):
+        _validate_span(
+            leaf.first_leaf_surface,
+            leaf.num_leaf_surfaces,
+            len(bsp.leaf_surfaces),
+            f"leaf {index} surfaces",
+            source,
+        )
         _validate_span(
             leaf.first_leaf_brush,
             leaf.num_leaf_brushes,
@@ -296,8 +393,68 @@ def _validate_references(bsp: BspFile) -> None:
 
     for index, model in enumerate(bsp.models):
         _validate_span(model.first_brush, model.num_brushes, len(bsp.brushes), f"model {index} brushes", source)
-        if model.first_surface < 0 or model.num_surfaces < 0:
-            raise BspFormatError(_context(source, f"model {index} has a negative surface span"))
+        _validate_span(
+            model.first_surface,
+            model.num_surfaces,
+            len(bsp.surfaces),
+            f"model {index} surfaces",
+            source,
+        )
+
+    for index, surface in enumerate(bsp.surfaces):
+        if not 0 <= surface.shader_index < len(bsp.shaders):
+            raise BspFormatError(_context(source, f"surface {index} has invalid shader {surface.shader_index}"))
+        _validate_span(
+            surface.first_vertex,
+            surface.num_vertices,
+            len(bsp.draw_vertices),
+            f"surface {index} vertices",
+            source,
+        )
+        _validate_span(
+            surface.first_index,
+            surface.num_indexes,
+            len(bsp.draw_indexes),
+            f"surface {index} indexes",
+            source,
+        )
+        for draw_index in bsp.draw_indexes[surface.first_index : surface.first_index + surface.num_indexes]:
+            if not 0 <= draw_index < surface.num_vertices:
+                raise BspFormatError(
+                    _context(
+                        source,
+                        f"surface {index} draw index {draw_index} exceeds vertex count {surface.num_vertices}",
+                    )
+                )
+
+        if surface.surface_type is not SurfaceType.PATCH:
+            continue
+        width = surface.patch_width
+        height = surface.patch_height
+        control_points = width * height
+        if width <= 2 or height <= 2 or not width % 2 or not height % 2:
+            raise BspFormatError(_context(source, f"patch surface {index} has invalid dimensions {width}x{height}"))
+        if width > _MAX_PATCH_GRID_SIZE or height > _MAX_PATCH_GRID_SIZE:
+            raise BspFormatError(
+                _context(
+                    source,
+                    f"patch surface {index} dimensions {width}x{height} exceed grid maximum {_MAX_PATCH_GRID_SIZE}",
+                )
+            )
+        if control_points > _MAX_PATCH_VERTICES:
+            raise BspFormatError(
+                _context(
+                    source,
+                    f"patch surface {index} has {control_points} control points; maximum is {_MAX_PATCH_VERTICES}",
+                )
+            )
+        if control_points != surface.num_vertices:
+            raise BspFormatError(
+                _context(
+                    source,
+                    f"patch surface {index} dimensions require {control_points} vertices, found {surface.num_vertices}",
+                )
+            )
 
 
 def parse_bsp(raw: bytes | bytearray | memoryview, *, source: str = "") -> BspFile:
@@ -367,6 +524,15 @@ def parse_bsp(raw: bytes | bytearray | memoryview, *, source: str = "") -> BspFi
             num_brushes,
         ) in _records(_lump_data(data, lumps, LumpType.LEAFS), _LEAF, LumpType.LEAFS, source)
     )
+    leaf_surfaces = tuple(
+        value
+        for (value,) in _records(
+            _lump_data(data, lumps, LumpType.LEAF_SURFACES),
+            _INT32,
+            LumpType.LEAF_SURFACES,
+            source,
+        )
+    )
     leaf_brushes = tuple(
         value
         for (value,) in _records(_lump_data(data, lumps, LumpType.LEAF_BRUSHES), _INT32, LumpType.LEAF_BRUSHES, source)
@@ -398,6 +564,46 @@ def parse_bsp(raw: bytes | bytearray | memoryview, *, source: str = "") -> BspFi
             _lump_data(data, lumps, LumpType.BRUSH_SIDES), _BRUSH_SIDE, LumpType.BRUSH_SIDES, source
         )
     )
+    draw_vertices = tuple(
+        BspDrawVertex(
+            position=(x, y, z),
+            texture_coords=(texture_s, texture_t),
+            lightmap_coords=(lightmap_s, lightmap_t),
+            normal=(normal_x, normal_y, normal_z),
+            color=(red, green, blue, alpha),
+        )
+        for (
+            x,
+            y,
+            z,
+            texture_s,
+            texture_t,
+            lightmap_s,
+            lightmap_t,
+            normal_x,
+            normal_y,
+            normal_z,
+            red,
+            green,
+            blue,
+            alpha,
+        ) in _records(
+            _lump_data(data, lumps, LumpType.DRAW_VERTS),
+            _DRAW_VERTEX,
+            LumpType.DRAW_VERTS,
+            source,
+        )
+    )
+    draw_indexes = tuple(
+        value
+        for (value,) in _records(
+            _lump_data(data, lumps, LumpType.DRAW_INDEXES),
+            _INT32,
+            LumpType.DRAW_INDEXES,
+            source,
+        )
+    )
+    surfaces = _parse_surfaces(_lump_data(data, lumps, LumpType.SURFACES), source)
 
     bsp = BspFile(
         source=source,
@@ -409,10 +615,14 @@ def parse_bsp(raw: bytes | bytearray | memoryview, *, source: str = "") -> BspFi
         planes=planes,
         nodes=nodes,
         leafs=leafs,
+        leaf_surfaces=leaf_surfaces,
         leaf_brushes=leaf_brushes,
         models=models,
         brushes=brushes,
         brush_sides=brush_sides,
+        draw_vertices=draw_vertices,
+        draw_indexes=draw_indexes,
+        surfaces=surfaces,
     )
     _validate_references(bsp)
     return bsp
