@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from discord.ext import tasks
 
@@ -146,15 +146,32 @@ class _ProximityRelinkerMixin:
                 # update targets once a round is discovered elsewhere).
                 "proximity_revive", "proximity_weapon_accuracy",
             ]
-            null_legs = " UNION ".join(
+            now = datetime.now(timezone.utc)
+            cutoff = now - timedelta(hours=_PERMANENT_ORPHAN_AGE_HOURS)
+            cutoff_unix = int(cutoff.timestamp())
+            cutoff_date = cutoff.date()
+            recent_source = (
+                "(round_start_unix >= $1 OR "
+                "((round_start_unix IS NULL OR round_start_unix <= 0) "
+                "AND session_date >= $2))"
+            )
+            recent_source_alias = (
+                "(pko.round_start_unix >= $1 OR "
+                "((pko.round_start_unix IS NULL OR pko.round_start_unix <= 0) "
+                "AND pko.session_date >= $2))"
+            )
+            # Each leg may report the same round many times. De-duplicate
+            # once at the outer SELECT instead of forcing PostgreSQL to sort
+            # and unique after every UNION node in this 50-leg query.
+            null_legs = " UNION ALL ".join(
                 f"SELECT map_name, round_number, round_start_unix, session_date "
-                f"FROM {t} WHERE round_id IS NULL"
+                f"FROM {t} WHERE round_id IS NULL AND {recent_source}"
                 for t in tables_with_round_number
             )
-            mismatch_legs = " UNION ".join(
+            mismatch_legs = " UNION ALL ".join(
                 f"SELECT pko.map_name, pko.round_number, pko.round_start_unix, pko.session_date "
                 f"FROM {t} pko JOIN rounds r ON r.id = pko.round_id "
-                f"WHERE pko.round_start_unix IS NOT NULL "
+                f"WHERE {recent_source_alias} "
                 f"  AND r.round_start_unix IS NOT NULL "
                 f"  AND pko.round_start_unix != r.round_start_unix"
                 for t in tables_with_round_number
@@ -165,23 +182,25 @@ class _ProximityRelinkerMixin:
                 "SELECT map_name, round_number, round_start_unix, "
                 "CASE WHEN round_start_unix IS NOT NULL "
                 "THEN TO_TIMESTAMP(round_start_unix)::date ELSE NULL END AS session_date "
-                "FROM lua_round_teams WHERE round_id IS NULL"
+                "FROM lua_round_teams WHERE round_id IS NULL "
+                "AND round_start_unix >= $1"
             )
             lua_teams_mismatch_leg = (
                 "SELECT pko.map_name, pko.round_number, pko.round_start_unix, "
                 "CASE WHEN pko.round_start_unix IS NOT NULL "
                 "THEN TO_TIMESTAMP(pko.round_start_unix)::date ELSE NULL END AS session_date "
                 "FROM lua_round_teams pko JOIN rounds r ON r.id = pko.round_id "
-                "WHERE pko.round_start_unix IS NOT NULL "
+                "WHERE pko.round_start_unix >= $1 "
                 "  AND r.round_start_unix IS NOT NULL "
                 "  AND pko.round_start_unix != r.round_start_unix"
             )
-            null_legs = f"{null_legs} UNION {lua_teams_null_leg}"
-            mismatch_legs = f"{mismatch_legs} UNION {lua_teams_mismatch_leg}"
+            null_legs = f"{null_legs} UNION ALL {lua_teams_null_leg}"
+            mismatch_legs = f"{mismatch_legs} UNION ALL {lua_teams_mismatch_leg}"
             unlinked = await db.fetch_all(
                 f"SELECT DISTINCT map_name, round_number, round_start_unix, session_date "
-                f"FROM ({null_legs} UNION {mismatch_legs}) sub "
-                f"ORDER BY session_date DESC LIMIT 50"
+                f"FROM ({null_legs} UNION ALL {mismatch_legs}) sub "
+                f"ORDER BY session_date DESC LIMIT 50",
+                (cutoff_unix, cutoff_date),
             )
 
             if not unlinked:
@@ -190,13 +209,11 @@ class _ProximityRelinkerMixin:
             linked = 0
             failed = 0
             stale_skipped = 0
-            # Both `now` and `target_dt` are tz-aware UTC so the 48-h
+            # Both `now` and `target_dt` are tz-aware UTC so the configured
             # cutoff below isn't affected by the host's UTC offset.
             # Previously (P3 bug) `datetime.utcnow()` was compared against
             # `datetime.fromtimestamp(...)` which returns LOCAL naive —
             # the age calculation silently drifted by ±1–2h on the prod VPS.
-            now = datetime.now(timezone.utc)
-
             for row in unlinked:
                 map_name = row[0] if isinstance(row, (list, tuple)) else row.get('map_name') or row['map_name']
                 round_number = row[1] if isinstance(row, (list, tuple)) else row.get('round_number') or row['round_number']
@@ -211,10 +228,9 @@ class _ProximityRelinkerMixin:
                     except (ValueError, TypeError, OSError):
                         pass  # Invalid timestamp format; fall back to date-based resolution
 
-                # Skip permanent orphans — rows whose target time is older
-                # than the configured threshold will never resolve and
-                # only spam the log. Counted separately so an operator can
-                # still see them in the summary line.
+                # Defensive boundary recheck. The discovery SQL already
+                # removes permanent orphans; this protects the sub-second
+                # edge between its integer cutoff and datetime comparison.
                 if target_dt is not None:
                     age_hours = (now - target_dt).total_seconds() / 3600.0
                     if age_hours > _PERMANENT_ORPHAN_AGE_HOURS:

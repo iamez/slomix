@@ -8904,3 +8904,44 @@ CREATE INDEX IF NOT EXISTS weapon_stats_mv_round_date_substr
 -- the live DB will not contain these objects at all — then delete this block.
 DROP TABLE IF EXISTS voice_members CASCADE;
 DROP TABLE IF EXISTS server_status_history_backup_20260207 CASCADE;
+
+-- 068: partial covering indexes for every remaining relinker discovery leg.
+CREATE INDEX IF NOT EXISTS idx_proximity_carrier_event_round_lookup_unlinked
+    ON proximity_carrier_event (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_carrier_kill_round_lookup_unlinked
+    ON proximity_carrier_kill (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_carrier_return_round_lookup_unlinked
+    ON proximity_carrier_return (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_combat_position_round_lookup_unlinked
+    ON proximity_combat_position (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_construction_event_round_lookup_unlinked
+    ON proximity_construction_event (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_escort_credit_round_lookup_unlinked
+    ON proximity_escort_credit (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_focus_fire_round_lookup_unlinked
+    ON proximity_focus_fire (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_hit_region_round_lookup_unlinked
+    ON proximity_hit_region (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_kill_outcome_round_lookup_unlinked
+    ON proximity_kill_outcome (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_objective_run_round_lookup_unlinked
+    ON proximity_objective_run (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_revive_round_lookup_unlinked
+    ON proximity_revive (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_vehicle_progress_round_lookup_unlinked
+    ON proximity_vehicle_progress (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_weapon_accuracy_round_lookup_unlinked
+    ON proximity_weapon_accuracy (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;

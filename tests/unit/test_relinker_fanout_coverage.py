@@ -37,9 +37,11 @@ class _CapturingDB:
 
     def __init__(self):
         self.captured_query: str | None = None
+        self.captured_params: tuple | None = None
 
     async def fetch_all(self, query, params=None):
         self.captured_query = " ".join(str(query).split())
+        self.captured_params = params
         return []
 
 
@@ -84,6 +86,38 @@ async def test_detection_query_lua_round_teams_synthesizes_session_date():
     assert "TO_TIMESTAMP(round_start_unix)::date" in db.captured_query
     # Never a bare reference to a session_date COLUMN on this table.
     assert "lua_round_teams WHERE round_id IS NULL" in db.captured_query
+
+
+@pytest.mark.asyncio
+async def test_detection_query_deduplicates_only_once_after_union_all_legs():
+    db = _CapturingDB()
+    svc = _relinker()
+    svc.bot = _FakeBot(db)
+
+    await svc._relink_null_round_ids()
+
+    assert db.captured_query is not None
+    assert db.captured_query.startswith(
+        "SELECT DISTINCT map_name, round_number, round_start_unix, session_date"
+    )
+    assert "UNION ALL" in db.captured_query
+    assert "UNION" not in db.captured_query.replace("UNION ALL", "")
+
+
+@pytest.mark.asyncio
+async def test_detection_query_pushes_the_permanent_orphan_cutoff_into_every_leg():
+    db = _CapturingDB()
+    svc = _relinker()
+    svc.bot = _FakeBot(db)
+
+    await svc._relink_null_round_ids()
+
+    assert db.captured_query is not None
+    assert db.captured_params is not None
+    assert "round_start_unix >= $1" in db.captured_query
+    assert "round_start_unix IS NULL OR round_start_unix <= 0" in db.captured_query
+    assert "AND session_date >= $2" in db.captured_query
+    assert len(db.captured_params) == 2
 
 
 class _FanoutCapturingDB:
