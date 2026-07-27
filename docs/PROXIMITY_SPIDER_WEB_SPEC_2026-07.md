@@ -139,10 +139,10 @@ Everything a collision trace needs is present and populated:
 
 | Lump | Size | Approx count |
 |---|---:|---|
-| `planes` | 1,512,544 B | ~63,000 |
-| `brushes` | 130,404 B | ~8,150 |
-| `brushsides` | 927,960 B | — |
-| `nodes` / `leafs` / `leafbrushes` | 60,336 / 84,288 / 84,808 B | BSP tree for fast traversal |
+| `planes` | 1,512,544 B | 94,534 |
+| `brushes` | 130,404 B | 10,867 |
+| `brushsides` | 927,960 B | 115,995 |
+| `nodes` / `leafs` / `leafbrushes` | 60,336 / 84,288 / 84,808 B | 1,676 / 1,756 / 21,202; BSP tree for fast traversal |
 | `entities` | 65,814 B | 540 entities, 34 classnames |
 
 This is the standard Quake3-derived collision model. A ray-vs-brush trace against it is well-trodden work, not research.
@@ -597,7 +597,7 @@ Walk `/home/samba/share/etmain`, map `map_name → (pk3, bsp)`. Record a sha256 
 From the entity lump: spawn points by team (`team_CTF_bluespawn`, `team_CTF_redspawn`) with their `spawnflags`; objective volumes (`trigger_objective_info`); objective markers (`team_WOLF_objective`); doors and movers. This supersedes the sphere-with-radius-500 approximation in `objective_zones.json` — keep that file as the fallback for maps without a pk3, and **label which source each zone came from** so a consumer can tell a measured volume from a guessed sphere.
 
 **W4 — collision trace.**
-Ray-vs-brush against brushes whose shader contents mark them solid (see W2), using the BSP tree to avoid testing all ~8,150. Standard Quake3-derived model. The output is **line-of-sight availability**, never "saw" (§3.1 B2).
+Ray-vs-brush against brushes whose shader contents mark them solid (see W2), using the BSP tree to avoid testing all 10,867 on `etl_adlernest`. Standard Quake3-derived model. The output is **line-of-sight availability**, never "saw" (§3.1 B2).
 
 **Static traversal alone is wrong for a subset of sightlines.** Doors, `script_mover` entities and constructibles are **dynamic entity submodels**: their collision is not in the world BSP tree, and whether they block a line depends on their state and transform at time `t`. Adlernest alone has 5 `func_door_rotating` and 28 `script_mover`.
 
@@ -815,6 +815,7 @@ Map assets, checked by reading the archives in `/home/samba/share/etmain` direct
 - Coverage: 1,767 of 1,929 R1/R2 rounds (91.6%) are on a map we hold; missing are `etl_frostbite` (151), `et_beach` (4), `radar` (2), `sp_delivery_te` (2), `etl_supply` (2), `mp_sillyctf` (1)
 - BSP format: magic and version read from the first 8 bytes of each BSP → `IBSP` v47 on all 13 available maps
 - Lump sizes: header parsed as 17 `(offset, length)` int32 pairs on `etl_adlernest.bsp` → planes 1,512,544 B; brushes 130,404 B; brushsides 927,960 B; entities 65,814 B
+- Lump record counts: decoded with the ET `qfiles.h` layouts (`dplane_t` 16 B, `dbrush_t` 12 B, `dbrushside_t` 8 B, `dnode_t` 36 B, `dleaf_t` 48 B) → planes 94,534; brushes 10,867; brushsides 115,995; nodes 1,676; leafs 1,756; leafbrushes 21,202
 - Entity classes: regex over the entity lump → 540 entities, 34 classnames; per-map spawn / objective-trigger / WOLF-objective counts as tabulated in §2.5
 - `.objdata` / `.script` presence: checked per archive → present on all 13 available maps
 - Duplicate provision: `te_escape2` supplied by three pk3s; sha256 of each BSP compared → byte-identical
@@ -831,6 +832,8 @@ Checks added in rev 3, after review:
 Related: #556 (metric validity method), #560 (track linkage fix), #551 (open design review), `docs/PROXIMITY_VISION_AUDIT_2026-07.md`, `docs/DESIGN_SKILL_PASSPORT_2026-07.md`.
 
 ### Revision history
+
+**Rev 4 (2026-07-27)** — W1/W2 implementation validation corrected two arithmetic errors in §2.5.1 and W4. The lump byte lengths were right, but the plane and brush estimates had used the wrong record sizes: `1,512,544 / 16 = 94,534` planes and `130,404 / 12 = 10,867` brushes. The strict reader also decoded all 20 unique BSPs in the 22-archive inventory as populated `IBSP` v47 files; this does not change the 13-map played-map coverage boundary.
 
 **Rev 3 (2026-07-27)** — review of rev 2 found **five further factual errors**, all of the same shape: a claim asserted from a read query without checking the write path or the helper's actual behaviour.
 
