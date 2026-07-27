@@ -14,6 +14,8 @@ own fix.
 """
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
+
 import pytest
 
 from bot.services.lua_round_storage_mixin import _LuaRoundStorageMixin
@@ -108,6 +110,7 @@ async def test_lua_resolver_defers_missing_or_ambiguous_exact_start():
 async def test_lua_resolver_does_not_fuzzy_match_an_invalid_present_start():
     adapter = _FakeAdapter()
     svc = _svc(adapter)
+    svc._resolve_round_id_for_metadata = AsyncMock(return_value=42)
 
     assert await svc._resolve_lua_round_id_for_metadata({
         "map_name": "supply",
@@ -115,7 +118,27 @@ async def test_lua_resolver_does_not_fuzzy_match_an_invalid_present_start():
         "round_start_unix": "not-a-timestamp",
         "round_end_unix": 1_776_800_900,
     }) is None
+    svc._resolve_round_id_for_metadata.assert_not_awaited()
     assert adapter.updates == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("missing_start", [0, "0"])
+async def test_lua_resolver_uses_legacy_path_for_normalized_missing_start(
+    missing_start,
+):
+    adapter = _FakeAdapter()
+    svc = _svc(adapter)
+    svc._resolve_round_id_for_metadata = AsyncMock(return_value=42)
+    metadata = {
+        "map_name": "supply",
+        "round_number": 1,
+        "round_start_unix": missing_start,
+        "round_end_unix": 1_776_800_900,
+    }
+
+    assert await svc._resolve_lua_round_id_for_metadata(metadata) == 42
+    svc._resolve_round_id_for_metadata.assert_awaited_once_with(None, metadata)
 
 
 @pytest.mark.asyncio

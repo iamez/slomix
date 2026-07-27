@@ -28,8 +28,8 @@ class _LuaRoundStorageMixin:
         Lua carries the same ``round_start_unix`` used by the canonical round
         key. If that value is present, a missing or non-unique exact target is
         a race/ambiguity and must remain unlinked until the matching stats row
-        exists. Only legacy payloads without a start timestamp use the shared
-        fuzzy resolver's end-time compatibility path.
+        exists. Only legacy payloads without a positive start timestamp use
+        the shared fuzzy resolver's end-time compatibility path.
         """
         map_name = metadata.get("map_name") or metadata.get("map")
         round_number = metadata.get("round_number") or metadata.get("round")
@@ -50,7 +50,10 @@ class _LuaRoundStorageMixin:
             )
             return None
 
-        if map_name and round_number and round_start_unix > 0:
+        if round_start_unix <= 0:
+            return await self._resolve_round_id_for_metadata(None, metadata)
+
+        if map_name and round_number:
             rows = await self.db_adapter.fetch_all(
                 "SELECT id FROM rounds "
                 "WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM(?)) "
