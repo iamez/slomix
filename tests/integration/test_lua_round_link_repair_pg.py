@@ -2,7 +2,6 @@
 
 import os
 import sys
-import uuid
 from pathlib import Path
 
 import pytest
@@ -32,40 +31,40 @@ async def _connect_or_skip():
 @pytest.fixture
 async def pg():
     conn = await _connect_or_skip()
-    namespace = f"luarepair_{uuid.uuid4().hex[:8]}"
-    await conn.execute(f"CREATE SCHEMA {namespace}")
-    await conn.execute(f"SET search_path TO {namespace}")
-    await conn.execute(
-        """
-        CREATE TABLE rounds (
-            id INTEGER PRIMARY KEY,
-            map_name TEXT,
-            round_number INTEGER,
-            round_start_unix BIGINT
-        );
-        CREATE TABLE lua_round_teams (
-            id INTEGER PRIMARY KEY,
-            match_id TEXT NOT NULL,
-            round_number INTEGER,
-            map_name TEXT,
-            round_start_unix BIGINT,
-            captured_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-            round_id INTEGER,
-            UNIQUE(match_id, round_number)
-        );
-        CREATE TABLE lua_spawn_stats (
-            id INTEGER PRIMARY KEY,
-            match_id TEXT NOT NULL,
-            round_number INTEGER NOT NULL,
-            map_name TEXT,
-            round_id INTEGER,
-            captured_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-        );
-        """
-    )
-    yield conn
-    await conn.execute(f"DROP SCHEMA {namespace} CASCADE")
-    await conn.close()
+    try:
+        # Temporary tables are connection-local and shadow production tables,
+        # so the service user can run this test without CREATE SCHEMA rights.
+        await conn.execute(
+            """
+            CREATE TEMP TABLE rounds (
+                id INTEGER PRIMARY KEY,
+                map_name TEXT,
+                round_number INTEGER,
+                round_start_unix BIGINT
+            );
+            CREATE TEMP TABLE lua_round_teams (
+                id INTEGER PRIMARY KEY,
+                match_id TEXT NOT NULL,
+                round_number INTEGER,
+                map_name TEXT,
+                round_start_unix BIGINT,
+                captured_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                round_id INTEGER,
+                UNIQUE(match_id, round_number)
+            );
+            CREATE TEMP TABLE lua_spawn_stats (
+                id INTEGER PRIMARY KEY,
+                match_id TEXT NOT NULL,
+                round_number INTEGER NOT NULL,
+                map_name TEXT,
+                round_id INTEGER,
+                captured_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+        )
+        yield conn
+    finally:
+        await conn.close()
 
 
 @pytest.mark.asyncio
@@ -147,5 +146,5 @@ async def test_migration_rebinds_exact_unlinks_unknown_and_prevents_duplicates(p
         await pg.execute(
             "INSERT INTO lua_round_teams "
             "(id, match_id, round_number, map_name, round_start_unix, round_id) "
-            "VALUES (5, 'duplicate-round', 1, 'supply', 100, 1)"
+            "VALUES (8, 'duplicate-round', 1, 'supply', 100, 1)"
         )
