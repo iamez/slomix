@@ -12,9 +12,13 @@ from bot.ultimate_bot import UltimateETLegacyBot
 class _FakeDB:
     def __init__(self):
         self.calls = []
+        self.batch_calls = []
 
     async def execute(self, query, params):
         self.calls.append((query, params))
+
+    async def executemany(self, query, params):
+        self.batch_calls.append((query, params))
 
     async def fetch_one(self, query, params=None):
         # Return None for lua_round_teams ID lookup
@@ -34,6 +38,9 @@ class _FakeBot:
 
     async def _has_lua_round_teams_round_id(self):
         return self._has_round_id
+
+    async def _has_lua_spawn_stats_table(self):
+        return True
 
     async def _resolve_round_correlation_context(self, round_id, fallback_match_id, fallback_map_name, fallback_round_number):
         return fallback_match_id, fallback_map_name, fallback_round_number
@@ -85,6 +92,7 @@ async def test_store_lua_round_teams_param_count_with_round_id_column():
     assert len(params) == 24
     assert params[2] == 9825  # round_id is 3rd param
     assert "round_id" in query
+    assert "WHEN EXCLUDED.round_start_unix IS NOT NULL" in query
     _assert_query_placeholders_align(query, 24)
 
 
@@ -100,3 +108,20 @@ async def test_store_lua_round_teams_param_count_without_round_id_column():
     assert len(params) == 23
     assert "round_id" not in query
     _assert_query_placeholders_align(query, 23)
+
+
+@pytest.mark.asyncio
+async def test_store_lua_spawn_stats_never_preserves_a_stale_link():
+    fake_bot = _FakeBot(has_round_id=True, resolved_round_id=None)
+
+    await UltimateETLegacyBot._store_lua_spawn_stats(
+        fake_bot,
+        _sample_round_metadata(),
+        [{"guid": "A1", "name": "AxisOne", "spawns": 2, "deaths": 1}],
+    )
+
+    assert len(fake_bot.db_adapter.batch_calls) == 1
+    query, params = fake_bot.db_adapter.batch_calls[0]
+    assert "round_id = EXCLUDED.round_id" in query
+    assert "COALESCE(EXCLUDED.round_id, lua_spawn_stats.round_id)" not in query
+    assert params[0][2] is None
