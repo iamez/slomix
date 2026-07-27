@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from website.backend.map_geometry import Pk3GeometryIndex
+from website.backend.map_geometry import MapAssetKind, Pk3GeometryIndex
 
 ETMAIN = Path("/home/samba/share/etmain")
 
@@ -55,17 +55,28 @@ def test_every_observed_played_map_has_geometry_or_an_explicit_missing_result(ge
     assert set(manifest["summary"]["missing_maps"]) == MISSING_GEOMETRY
     assert manifest["summary"]["with_geometry"] == 13
     assert manifest["summary"]["without_geometry"] == 6
+    for kind in MapAssetKind:
+        counts = manifest["summary"]["asset_status_counts"][kind.value]
+        assert counts == {"resolved": 13, "missing": 6, "ambiguous": 0}
 
 
-def test_te_escape2_duplicate_providers_are_byte_identical(geometry_index):
-    providers = geometry_index.providers_for("te_escape2")
+def test_te_escape2_duplicate_consumed_assets_are_byte_identical(geometry_index):
+    for kind in MapAssetKind:
+        providers = geometry_index.providers_for_asset("te_escape2", kind)
+        assert [provider.pk3_path.name for provider in providers] == [
+            "te_escape2_fixed.pk3",
+            "te_escape2_fixed2.pk3",
+            "te_escape2_fixed3.pk3",
+        ]
+        assert len({provider.sha256 for provider in providers}) == 1
 
-    assert [provider.pk3_path.name for provider in providers] == [
-        "te_escape2_fixed.pk3",
-        "te_escape2_fixed2.pk3",
-        "te_escape2_fixed3.pk3",
-    ]
-    assert len({provider.sha256 for provider in providers}) == 1
+
+def test_every_indexed_bsp_map_has_unambiguous_stage_inputs(geometry_index):
+    assert len(geometry_index.map_names) == 20
+    assert len(geometry_index.asset_map_names) == 22
+    for map_name in geometry_index.map_names:
+        assert geometry_index.resolve_asset(map_name, "script").status == "resolved", map_name
+        assert geometry_index.resolve_asset(map_name, "objdata").status == "resolved", map_name
 
 
 def test_all_indexed_map_bsps_strictly_parse_as_populated_ibsp_v47(geometry_index):

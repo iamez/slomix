@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and optionally decode a read-only ET PK3/BSP geometry inventory."""
+"""Build a hashed ET map-asset inventory and optionally decode BSP geometry."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def _parse_args() -> argparse.Namespace:
         "--played-map",
         action="append",
         default=[],
-        help="Played map to resolve. Repeat for every map; omitted means all discovered BSP maps.",
+        help="Played map to resolve. Repeat per map; omitted means all discovered BSP maps.",
     )
     parser.add_argument(
         "--parse",
