@@ -1,7 +1,9 @@
+import hashlib
 from types import SimpleNamespace
 
 from scripts.repair_lua_round_links import (
     RepairAction,
+    backup_manifest_problems,
     check_expectations,
     fingerprint_actions,
 )
@@ -69,3 +71,42 @@ def test_apply_refuses_a_projection_with_duplicate_links():
     assert "repair projection retains 1 duplicate round_id group(s)" in check_expectations(
         stats, args
     )
+
+
+def _write_backup_manifest(tmp_path, *, identity="localhost:5432/etlegacy"):
+    dump = tmp_path / "etlegacy.sql.gz"
+    dump.write_bytes(b"verified backup payload")
+    manifest = tmp_path / "etlegacy.sql.gz.manifest"
+    manifest.write_text(
+        "\n".join([
+            f"db_identity={identity}",
+            f"dump_file={dump}",
+            f"sha256={hashlib.sha256(dump.read_bytes()).hexdigest()}",
+            "created_unix=1785177600",
+        ]) + "\n",
+        encoding="utf-8",
+    )
+    return manifest, dump
+
+
+def test_backup_manifest_binds_database_and_dump_checksum(tmp_path):
+    manifest, _dump = _write_backup_manifest(tmp_path)
+
+    assert backup_manifest_problems(
+        manifest, "localhost:5432/etlegacy"
+    ) == []
+    assert backup_manifest_problems(
+        manifest, "prod.example:5432/etlegacy"
+    ) == [
+        "backup database mismatch: manifest localhost:5432/etlegacy, "
+        "repair prod.example:5432/etlegacy"
+    ]
+
+
+def test_backup_manifest_rejects_a_changed_dump(tmp_path):
+    manifest, dump = _write_backup_manifest(tmp_path)
+    dump.write_bytes(b"changed after backup")
+
+    assert backup_manifest_problems(
+        manifest, "localhost:5432/etlegacy"
+    ) == [f"backup checksum mismatch: {dump}"]

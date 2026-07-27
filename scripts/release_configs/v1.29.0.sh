@@ -9,9 +9,10 @@
 # in v1.28.0.sh, then run --validate.
 #
 # Migration 067 repairs only provable Lua round links. Run the guarded
-# scripts/repair_lua_round_links.py dry-run and take a database backup before
-# deployment. Non-provable historical links are preserved but quarantined by
-# setting round_id to NULL; the migration then enforces one Lua row per round.
+# scripts/repair_lua_round_links.py dry-run, run scripts/db_backup.sh, and pass
+# its verified manifest to --apply before deployment. Non-provable historical
+# links are preserved but quarantined by setting round_id to NULL; the
+# migration then enforces one Lua row per round.
 MIGRATIONS=(
   "045_drop_orphan_monitoring_tables.sql"
   "046_fix_proximity_round_id_exact_match.sql"

@@ -14,7 +14,7 @@ own fix.
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -193,6 +193,22 @@ async def test_link_lua_round_teams_rejects_a_neighboring_caller_round():
         "round_start_unix": 1_776_800_000,
     })
 
+    assert adapter.updates == []
+
+
+@pytest.mark.asyncio
+async def test_link_lua_round_teams_quietly_defers_a_missing_exact_target():
+    adapter = _FakeAdapter(exact_round_candidates=[])
+    svc = _svc(adapter)
+
+    with patch("bot.services.lua_round_storage_mixin.logger.warning") as warning:
+        await svc._link_lua_round_teams(round_id=42, metadata={
+            "map_name": "supply",
+            "round_number": 1,
+            "round_start_unix": 1_776_800_000,
+        })
+
+    warning.assert_not_called()
     assert adapter.updates == []
 
 

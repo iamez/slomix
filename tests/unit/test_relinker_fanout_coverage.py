@@ -123,6 +123,28 @@ async def test_fanout_links_lua_round_teams_with_dedicated_template():
     assert len(lua_updates) == 1
     query, params = lua_updates[0]
     assert "session_date" not in query
-    assert "round_number = $3" in query
-    assert "round_start_unix = $4" in query
-    assert params == (999, "supply", 1, target_unix)
+    assert "SET round_id = target.id" in query
+    assert "HAVING COUNT(*) = 1" in query
+    assert "round_number = $2" in query
+    assert "round_start_unix = $3" in query
+    assert params == ("supply", 1, target_unix)
+
+
+@pytest.mark.asyncio
+async def test_fanout_lua_update_cannot_use_the_fuzzy_round_id():
+    target_unix = int(time.time()) - 300
+    round_date = time.strftime("%Y-%m-%d", time.localtime(target_unix))
+    db = _FanoutCapturingDB(target_unix, round_date)
+    svc = _relinker()
+    svc.bot = _FakeBot(db)
+
+    await svc._relink_null_round_ids()
+
+    lua_updates = [
+        (q, p) for q, p in db.executed if "UPDATE lua_round_teams" in q
+    ]
+    assert len(lua_updates) == 1
+    query, params = lua_updates[0]
+    assert "HAVING COUNT(*) = 1" in query
+    assert 999 not in params
+    assert params == ("supply", 1, target_unix)

@@ -58,6 +58,18 @@ _RELINK_LUA_TEAMS_TEMPLATE = (
     "WHERE map_name = $2 AND round_number = $3 AND round_start_unix = $4 "
     "  AND (round_id IS NULL OR round_id != $1)"
 )
+_RELINK_LUA_TEAMS_EXACT_TEMPLATE = (
+    "UPDATE lua_round_teams l SET round_id = target.id "
+    "FROM ("
+    "  SELECT MIN(id) AS id FROM rounds "
+    "  WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM($1)) "
+    "    AND round_number = $2 AND round_start_unix = $3 "
+    "  HAVING COUNT(*) = 1"
+    ") target "
+    "WHERE LOWER(BTRIM(l.map_name)) = LOWER(BTRIM($1)) "
+    "  AND l.round_number = $2 AND l.round_start_unix = $3 "
+    "  AND (l.round_id IS NULL OR l.round_id != target.id)"
+)
 _relink_primary_cache: dict[str, str] = {}
 _relink_fallback_cache: dict[str, str] = {}
 
@@ -206,6 +218,11 @@ class _ProximityRelinkerMixin:
                     failed += 1
                     continue
 
+                try:
+                    has_positive_start = int(round_start_unix) > 0
+                except (TypeError, ValueError):
+                    has_positive_start = False
+
                 # Fan out 21 independent table updates per round in parallel
                 # (background task on backlog can be hundreds of rounds × 21
                 # tables = thousands of sequential round-trips otherwise).
@@ -222,6 +239,7 @@ class _ProximityRelinkerMixin:
                     sd: str = session_date,
                     rsu: int = round_start_unix,
                     sem: asyncio.Semaphore = _link_sem,
+                    exact_start: bool = has_positive_start,
                 ) -> None:
                     async with sem:
                         try:
@@ -230,10 +248,16 @@ class _ProximityRelinkerMixin:
                                 # the dedicated template (map+round_number+
                                 # round_start_unix) instead of the generic
                                 # primary one.
-                                await db.execute(
-                                    _RELINK_LUA_TEAMS_TEMPLATE,
-                                    (rid, mn, rn, rsu),
-                                )
+                                if exact_start:
+                                    await db.execute(
+                                        _RELINK_LUA_TEAMS_EXACT_TEMPLATE,
+                                        (mn, rn, rsu),
+                                    )
+                                else:
+                                    await db.execute(
+                                        _RELINK_LUA_TEAMS_TEMPLATE,
+                                        (rid, mn, rn, rsu),
+                                    )
                             else:
                                 await db.execute(
                                     _relink_sql(table),

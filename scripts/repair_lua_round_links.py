@@ -9,9 +9,9 @@ Dry-run is the default. It fingerprints the exact action set:
 * any duplicate non-NULL team round_id remaining in the projection -> refuse.
 
 ``--apply`` requires the dry-run counts, fingerprint, target database identity,
-and an explicit backup acknowledgement. The candidate set is re-measured after
-write-blocking locks on both the source and target tables, and all
-postconditions are checked before commit.
+and a verified manifest emitted by ``scripts/db_backup.sh`` for that same
+database. The candidate set is re-measured after write-blocking locks on both
+the source and target tables, and all postconditions are checked before commit.
 """
 
 from __future__ import annotations
@@ -69,6 +69,69 @@ def fingerprint_actions(actions: list[RepairAction]) -> str:
         for a in sorted(actions, key=lambda item: (item.table, item.row_id))
     )
     return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def backup_manifest_problems(
+    manifest_path: str | Path | None,
+    expected_db_identity: str,
+) -> list[str]:
+    """Verify that a completed backup belongs to this exact repair target."""
+    if not manifest_path:
+        return ["--backup-manifest is required with --apply"]
+
+    path = Path(manifest_path)
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        return [f"cannot read backup manifest {path}: {exc}"]
+
+    values: dict[str, str] = {}
+    problems = []
+    for line in lines:
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            problems.append(f"invalid backup manifest line: {line!r}")
+            continue
+        key, value = line.split("=", 1)
+        if key in values:
+            problems.append(f"duplicate backup manifest key: {key}")
+        values[key] = value
+
+    required = ("db_identity", "dump_file", "sha256", "created_unix")
+    problems.extend(
+        f"backup manifest missing {key}" for key in required if not values.get(key)
+    )
+    if problems:
+        return problems
+
+    if values["db_identity"] != expected_db_identity:
+        problems.append(
+            "backup database mismatch: "
+            f"manifest {values['db_identity']}, repair {expected_db_identity}"
+        )
+
+    dump_path = Path(values["dump_file"])
+    if not dump_path.is_absolute():
+        dump_path = path.parent / dump_path
+    try:
+        if dump_path.stat().st_size <= 0:
+            problems.append(f"backup dump is empty: {dump_path}")
+        else:
+            digest = hashlib.sha256()
+            with dump_path.open("rb") as dump_file:
+                for chunk in iter(lambda: dump_file.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            if digest.hexdigest() != values["sha256"]:
+                problems.append(f"backup checksum mismatch: {dump_path}")
+    except OSError as exc:
+        problems.append(f"cannot verify backup dump {dump_path}: {exc}")
+
+    try:
+        int(values["created_unix"])
+    except ValueError:
+        problems.append("backup manifest created_unix is not an integer")
+    return problems
 
 
 def _duplicate_groups(round_ids: list[int | None]) -> int:
@@ -264,7 +327,10 @@ def _print_report(stats: dict[str, Any], *, apply: bool) -> None:
 def _parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true", help="write changes (default: dry-run)")
-    parser.add_argument("--i-have-a-backup", action="store_true", help="required with --apply")
+    parser.add_argument(
+        "--backup-manifest",
+        help="verified .manifest path printed by scripts/db_backup.sh; required with --apply",
+    )
     parser.add_argument("--expect-rebind-count", type=int)
     parser.add_argument("--expect-quarantine-count", type=int)
     parser.add_argument("--expect-current-duplicate-groups", type=int)
@@ -276,8 +342,8 @@ def _parse_args():
 
 def main() -> int:
     args = _parse_args()
-    if args.apply and not args.i_have_a_backup:
-        print("Refusing --apply without --i-have-a-backup (run scripts/db_backup.sh first).")
+    if args.apply and not args.backup_manifest:
+        print("Refusing --apply without --backup-manifest (run scripts/db_backup.sh first).")
         return 1
 
     conn = _connect()
@@ -294,6 +360,17 @@ def main() -> int:
         )
 
         if args.apply:
+            backup_problems = backup_manifest_problems(
+                args.backup_manifest,
+                db_identity,
+            )
+            if backup_problems:
+                conn.rollback()
+                print("\nABORTED - backup verification failed, nothing written:")
+                for problem in backup_problems:
+                    print(f"  - {problem}")
+                return 1
+            print(f"verified backup manifest: {args.backup_manifest}")
             cur.execute("LOCK TABLE rounds IN SHARE MODE")
             cur.execute(
                 "LOCK TABLE lua_round_teams, lua_spawn_stats "
@@ -311,7 +388,7 @@ def main() -> int:
                 return 1
             print("\nDRY-RUN - no changes written. After a backup, re-run with:")
             print(
-                f"  --apply --i-have-a-backup "
+                f"  --apply --backup-manifest <path-printed-by-db_backup.sh> "
                 f"--expect-rebind-count {stats['rebind_count']} "
                 f"--expect-quarantine-count {stats['quarantine_count']} "
                 "--expect-current-duplicate-groups "
