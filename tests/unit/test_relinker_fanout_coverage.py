@@ -124,7 +124,9 @@ async def test_fanout_links_lua_round_teams_with_dedicated_template():
     query, params = lua_updates[0]
     assert "session_date" not in query
     assert "SET round_id = target.id" in query
-    assert "HAVING COUNT(*) = 1" in query
+    assert query.count("HAVING COUNT(*) = 1") == 2
+    assert "FROM lua_round_teams" in query
+    assert "WHERE l.id = source.id" in query
     assert "round_number = $2" in query
     assert "round_start_unix = $3" in query
     assert params == ("supply", 1, target_unix)
@@ -145,6 +147,6 @@ async def test_fanout_lua_update_cannot_use_the_fuzzy_round_id():
     ]
     assert len(lua_updates) == 1
     query, params = lua_updates[0]
-    assert "HAVING COUNT(*) = 1" in query
+    assert query.count("HAVING COUNT(*) = 1") == 2
     assert 999 not in params
     assert params == ("supply", 1, target_unix)

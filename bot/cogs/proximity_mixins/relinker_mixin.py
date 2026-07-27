@@ -61,13 +61,17 @@ _RELINK_LUA_TEAMS_TEMPLATE = (
 _RELINK_LUA_TEAMS_EXACT_TEMPLATE = (
     "UPDATE lua_round_teams l SET round_id = target.id "
     "FROM ("
+    "  SELECT MIN(id) AS id FROM lua_round_teams "
+    "  WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM($1)) "
+    "    AND round_number = $2 AND round_start_unix = $3 "
+    "  HAVING COUNT(*) = 1"
+    ") source, ("
     "  SELECT MIN(id) AS id FROM rounds "
     "  WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM($1)) "
     "    AND round_number = $2 AND round_start_unix = $3 "
     "  HAVING COUNT(*) = 1"
     ") target "
-    "WHERE LOWER(BTRIM(l.map_name)) = LOWER(BTRIM($1)) "
-    "  AND l.round_number = $2 AND l.round_start_unix = $3 "
+    "WHERE l.id = source.id "
     "  AND (l.round_id IS NULL OR l.round_id != target.id)"
 )
 _relink_primary_cache: dict[str, str] = {}
