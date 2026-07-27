@@ -66,6 +66,43 @@ def _find_position_at_time(path: list, target_ms: int) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
+# player_track -> round linkage
+# ---------------------------------------------------------------------------
+
+# `player_track` carries a real `round_id` FK, but every query here used to
+# join on (session_date, round_number, map_name) instead. When the same map
+# and round number is played more than once on one date — routine in a long
+# session — that key matches EVERY repeat, so one track row was pulled into
+# several rounds at once. Measured on the dev database: 24,428 track rows were
+# bound to more than one round, and round 10188 (sw_goldrush_te R2) returned
+# 591 tracks where it has 113. The replay was showing the union of every
+# same-map round that day, with players appearing repeatedly at positions
+# taken from a different round.
+#
+# The FK alone is not enough either: 5.1% of track rows are still unlinked
+# (round_id IS NULL), and switching to the FK outright would have taken 59
+# rounds' replay dark. So unlinked rows fall back to the date key, but ONLY
+# when that key is unambiguous — exactly one round matches it. Ambiguous
+# unlinked rows are dropped rather than guessed at, because attributing a
+# track to the wrong round is worse than not showing it.
+#
+# Measured effect: rounds covered 720 (FK only) -> 739, tracks bound to more
+# than one round 24,428 -> 0, and no new duplicate (round, player, spawn).
+_TRACK_ROUND_JOIN = """
+        JOIN rounds r
+          ON pt.round_id = r.id
+          OR (pt.round_id IS NULL
+              AND pt.session_date = r.round_date::date
+              AND pt.round_number = r.round_number
+              AND pt.map_name = r.map_name
+              AND (SELECT COUNT(*) FROM rounds r2
+                   WHERE r2.round_date::date = pt.session_date
+                     AND r2.round_number = pt.round_number
+                     AND r2.map_name = pt.map_name) = 1)
+"""
+
+
+# ---------------------------------------------------------------------------
 # Timeline
 # ---------------------------------------------------------------------------
 
@@ -350,12 +387,10 @@ async def get_round_timeline(db, round_id: int) -> dict:
     events.sort(key=lambda e: (e["t_ms"] or 0, e["type"]))
 
     # ---- Round metadata ----
-    meta = await db.fetch_one("""
+    meta = await db.fetch_one(f"""
         SELECT pt.map_name, MAX(pt.death_time_ms) AS duration_ms
         FROM player_track pt
-        JOIN rounds r ON r.round_date::date = pt.session_date
-                     AND r.round_number = pt.round_number
-                     AND r.map_name = pt.map_name
+{_TRACK_ROUND_JOIN}
         WHERE r.id = $1
         GROUP BY pt.map_name
         LIMIT 1
@@ -379,13 +414,11 @@ async def get_round_timeline(db, round_id: int) -> dict:
 
 async def get_player_positions(db, round_id: int, time_ms: int) -> dict:
     """Get all player positions at a specific time T using player_track.path JSONB."""
-    tracks = await db.fetch_all("""
+    tracks = await db.fetch_all(f"""
         SELECT pt.player_guid, pt.player_name, pt.team, pt.player_class,
                pt.spawn_time_ms, pt.death_time_ms, pt.path, pt.map_name
         FROM player_track pt
-        JOIN rounds r ON r.round_date::date = pt.session_date
-                     AND r.round_number = pt.round_number
-                     AND r.map_name = pt.map_name
+{_TRACK_ROUND_JOIN}
         WHERE r.id = $1
         ORDER BY pt.player_guid, pt.spawn_time_ms
     """, (round_id,))
@@ -461,13 +494,11 @@ async def get_player_positions(db, round_id: int, time_ms: int) -> dict:
 
 async def get_player_paths(db, round_id: int, from_ms: int, to_ms: int) -> dict:
     """Get player movement paths for a time window (for trail rendering)."""
-    tracks = await db.fetch_all("""
+    tracks = await db.fetch_all(f"""
         SELECT pt.player_guid, pt.player_name, pt.team, pt.player_class,
                pt.spawn_time_ms, pt.death_time_ms, pt.path, pt.map_name
         FROM player_track pt
-        JOIN rounds r ON r.round_date::date = pt.session_date
-                     AND r.round_number = pt.round_number
-                     AND r.map_name = pt.map_name
+{_TRACK_ROUND_JOIN}
         WHERE r.id = $1
           AND pt.spawn_time_ms <= $3
           AND (pt.death_time_ms >= $2 OR pt.death_time_ms IS NULL)
