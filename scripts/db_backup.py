@@ -8,7 +8,7 @@ import hashlib
 import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404 - fixed pg_dump invocation; never executes a shell
 import sys
 import tempfile
 import time
@@ -72,23 +72,24 @@ def create_backup() -> tuple[Path, Path, str]:
     if output_path.exists() or manifest_path.exists():
         raise FileExistsError(f"backup destination already exists: {output_path}")
 
+    pg_dump = shutil.which("pg_dump")
+    if pg_dump is None:
+        raise FileNotFoundError("pg_dump was not found on PATH")
     command = [
-        "pg_dump",
-        "-h",
-        host,
-        "-p",
-        str(port),
-        "-U",
-        user,
-        "-d",
-        database,
+        str(Path(pg_dump).resolve()),
         "--no-owner",
         "--no-privileges",
         "--clean",
         "--if-exists",
     ]
     child_env = os.environ.copy()
-    child_env["PGPASSWORD"] = password
+    child_env.update({
+        "PGHOST": host,
+        "PGPORT": str(port),
+        "PGDATABASE": database,
+        "PGUSER": user,
+        "PGPASSWORD": password,
+    })
     db_identity = f"{host}:{port}/{database}"
 
     fd, temporary_name = tempfile.mkstemp(
@@ -97,7 +98,7 @@ def create_backup() -> tuple[Path, Path, str]:
     os.close(fd)
     temporary_path = Path(temporary_name)
     try:
-        with tempfile.TemporaryFile() as stderr, subprocess.Popen(
+        with tempfile.TemporaryFile() as stderr, subprocess.Popen(  # nosec B603
             command,
             stdout=subprocess.PIPE,
             stderr=stderr,
