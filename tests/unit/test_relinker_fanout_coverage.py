@@ -115,7 +115,8 @@ async def test_detection_query_pushes_the_permanent_orphan_cutoff_into_every_leg
     assert db.captured_query is not None
     assert db.captured_params is not None
     assert "round_start_unix >= $1" in db.captured_query
-    assert "round_start_unix IS NULL AND session_date >= $2" in db.captured_query
+    assert "round_start_unix IS NULL OR round_start_unix <= 0" in db.captured_query
+    assert "AND session_date >= $2" in db.captured_query
     assert len(db.captured_params) == 2
 
 
