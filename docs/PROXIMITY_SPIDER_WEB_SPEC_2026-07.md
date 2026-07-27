@@ -2,7 +2,7 @@
 
 **Status:** specification for delegation. No production code was written for it.
 **Date:** 2026-07-27
-**Every number in this document came from a query run against the dev database on that date.** Where a claim could not be verified, it says so.
+**Every empirical data number in this document came from a recorded query/check against the dev system on that date.** Explicitly labelled candidate thresholds, test budgets and modelling parameters are engineering choices to freeze and validate, not measured facts. Where a claim could not be verified, it says so.
 
 ---
 
