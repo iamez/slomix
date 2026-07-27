@@ -631,7 +631,8 @@ class PostgreSQLDatabaseManager:
                     axis_score INTEGER DEFAULT 0,
                     allies_score INTEGER DEFAULT 0,
                     round_id INTEGER,
-                    UNIQUE(match_id, round_number)
+                    UNIQUE(match_id, round_number),
+                    UNIQUE(round_id)
                 )
             ''')
 
