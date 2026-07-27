@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 
 from discord.ext import tasks
 
+from bot.services.lua_round_storage_mixin import _lua_exact_source_lock_key
+
 logger = logging.getLogger("bot.cogs.proximity")
 
 # Rounds whose target_dt is older than this are treated as permanent
@@ -57,6 +59,35 @@ _RELINK_LUA_TEAMS_TEMPLATE = (
     "UPDATE lua_round_teams SET round_id = $1 "
     "WHERE map_name = $2 AND round_number = $3 AND round_start_unix = $4 "
     "  AND (round_id IS NULL OR round_id != $1)"
+)
+_RELINK_LUA_TEAMS_EXACT_TEMPLATE = (
+    "WITH source_state AS ("
+    "  SELECT COUNT(*) AS source_count FROM lua_round_teams "
+    "  WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM($1)) "
+    "    AND round_number = $2 AND round_start_unix = $3 "
+    "), target_state AS ("
+    "  SELECT COUNT(*) AS target_count, MIN(id) AS target_id FROM rounds "
+    "  WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM($1)) "
+    "    AND round_number = $2 AND round_start_unix = $3 "
+    ") "
+    "UPDATE lua_round_teams l SET round_id = CASE "
+    "  WHEN source_state.source_count = 1 AND target_state.target_count = 1 "
+    "    THEN target_state.target_id ELSE NULL END "
+    "FROM source_state, target_state "
+    "WHERE LOWER(BTRIM(l.map_name)) = LOWER(BTRIM($1)) "
+    "  AND l.round_number = $2 AND l.round_start_unix = $3 "
+    "  AND l.round_id IS DISTINCT FROM CASE "
+    "    WHEN source_state.source_count = 1 AND target_state.target_count = 1 "
+    "      THEN target_state.target_id ELSE NULL END"
+)
+_RELINK_LUA_SPAWN_FROM_TEAMS_TEMPLATE = (
+    "UPDATE lua_spawn_stats s SET round_id = l.round_id "
+    "FROM lua_round_teams l "
+    "WHERE LOWER(BTRIM(l.map_name)) = LOWER(BTRIM($1)) "
+    "  AND l.round_number = $2 AND l.round_start_unix = $3 "
+    "  AND s.match_id = l.match_id AND s.round_number = l.round_number "
+    "  AND LOWER(BTRIM(s.map_name)) IS NOT DISTINCT FROM LOWER(BTRIM(l.map_name)) "
+    "  AND s.round_id IS DISTINCT FROM l.round_id"
 )
 _relink_primary_cache: dict[str, str] = {}
 _relink_fallback_cache: dict[str, str] = {}
@@ -192,15 +223,45 @@ class _ProximityRelinkerMixin:
 
                 round_date_str = str(session_date) if session_date else None
 
-                round_id = await resolve_round_id(
-                    db,
-                    map_name,
-                    round_number,
-                    target_dt=target_dt,
-                    round_date=round_date_str,
-                    window_minutes=120,
-                    quiet=True,  # relinker retries every 5min — log at DEBUG, not WARNING
-                )
+                try:
+                    exact_start_unix = int(round_start_unix)
+                    has_positive_start = exact_start_unix > 0
+                except (TypeError, ValueError):
+                    exact_start_unix = 0
+                    has_positive_start = False
+
+                if has_positive_start:
+                    # Positive telemetry timestamps are source-native keys.
+                    # Resolve this key before any fuzzy lookup; otherwise a
+                    # whitespace/case variation in the source map can make
+                    # the fuzzy resolver exit before Lua's normalized exact
+                    # update gets a chance to run.
+                    exact_rows = await db.fetch_all(
+                        "SELECT id FROM rounds "
+                        "WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM($1)) "
+                        "  AND round_number = $2 AND round_start_unix = $3 "
+                        "ORDER BY id LIMIT 2",
+                        (map_name, round_number, exact_start_unix),
+                    )
+                    if len(exact_rows) == 1:
+                        exact_row = exact_rows[0]
+                        round_id = int(
+                            exact_row[0]
+                            if isinstance(exact_row, (list, tuple))
+                            else exact_row["id"]
+                        )
+                    else:
+                        round_id = None
+                else:
+                    round_id = await resolve_round_id(
+                        db,
+                        map_name,
+                        round_number,
+                        target_dt=target_dt,
+                        round_date=round_date_str,
+                        window_minutes=120,
+                        quiet=True,  # relinker retries every 5min — log at DEBUG, not WARNING
+                    )
 
                 if round_id is None:
                     failed += 1
@@ -222,6 +283,7 @@ class _ProximityRelinkerMixin:
                     sd: str = session_date,
                     rsu: int = round_start_unix,
                     sem: asyncio.Semaphore = _link_sem,
+                    exact_start: bool = has_positive_start,
                 ) -> None:
                     async with sem:
                         try:
@@ -230,10 +292,28 @@ class _ProximityRelinkerMixin:
                                 # the dedicated template (map+round_number+
                                 # round_start_unix) instead of the generic
                                 # primary one.
-                                await db.execute(
-                                    _RELINK_LUA_TEAMS_TEMPLATE,
-                                    (rid, mn, rn, rsu),
-                                )
+                                if exact_start:
+                                    lock_key = _lua_exact_source_lock_key(
+                                        mn, int(rn), int(rsu)
+                                    )
+                                    async with db.transaction():
+                                        await db.fetch_val(
+                                            "SELECT pg_advisory_xact_lock($1)",
+                                            (lock_key,),
+                                        )
+                                        await db.execute(
+                                            _RELINK_LUA_TEAMS_EXACT_TEMPLATE,
+                                            (mn, rn, rsu),
+                                        )
+                                        await db.execute(
+                                            _RELINK_LUA_SPAWN_FROM_TEAMS_TEMPLATE,
+                                            (mn, rn, rsu),
+                                        )
+                                else:
+                                    await db.execute(
+                                        _RELINK_LUA_TEAMS_TEMPLATE,
+                                        (rid, mn, rn, rsu),
+                                    )
                             else:
                                 await db.execute(
                                     _relink_sql(table),
@@ -241,6 +321,8 @@ class _ProximityRelinkerMixin:
                                 )
                         except Exception as e:
                             logger.warning("Re-linker: %s primary update failed: %s", table, e)
+                            if table == "lua_round_teams":
+                                return
                             try:
                                 await db.execute(
                                     _relink_sql(table, fallback=True),

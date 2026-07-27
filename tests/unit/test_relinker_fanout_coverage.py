@@ -8,10 +8,14 @@ NULL or wrong round_id in any of them was never found, and never fixed, by
 the 5-minute cron. L2 (test_relinker_fanout_coverage's earlier revision)
 locked in that gap; this revision locks in the fix.
 """
+# ruff: noqa: SLF001
+
 from __future__ import annotations
 
 import importlib
 import time
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -87,22 +91,32 @@ class _FanoutCapturingDB:
     the fanout issues so the lua_round_teams special-case SQL/params can be
     asserted directly."""
 
-    def __init__(self, target_unix: int, round_date: str):
+    def __init__(self, target_unix: int, round_date: str, map_name: str = "supply"):
         self.executed: list[tuple[str, tuple]] = []
+        self.fetched: list[tuple[str, tuple | None]] = []
         self._target_unix = target_unix
         self._round_date = round_date
+        self._map_name = map_name
 
     async def fetch_all(self, query, params=None):
         q = " ".join(str(query).split())
+        self.fetched.append((q, params))
         if "SELECT DISTINCT map_name" in q:
-            return [("supply", 1, self._target_unix, self._round_date)]
-        # rounds candidate lookup inside resolve_round_id_with_reason
-        if "FROM rounds" in q:
-            return [(999, self._round_date, "000000", None, self._target_unix)]
+            return [(self._map_name, 1, self._target_unix, self._round_date)]
+        if "SELECT id FROM rounds" in q:
+            return [(999,)]
         return []
 
     async def execute(self, query, params=None):
         self.executed.append((" ".join(str(query).split()), params))
+
+    @asynccontextmanager
+    async def transaction(self):
+        yield self
+
+    async def fetch_val(self, query, params=None):
+        self.executed.append((" ".join(str(query).split()), params))
+        return None
 
 
 @pytest.mark.asyncio
@@ -118,11 +132,95 @@ async def test_fanout_links_lua_round_teams_with_dedicated_template():
     await svc._relink_null_round_ids()
 
     lua_updates = [
-        (q, p) for q, p in db.executed if "UPDATE lua_round_teams" in q
+        (q, p) for q, p in db.executed if "UPDATE lua_round_teams l" in q
     ]
     assert len(lua_updates) == 1
     query, params = lua_updates[0]
     assert "session_date" not in query
-    assert "round_number = $3" in query
-    assert "round_start_unix = $4" in query
-    assert params == (999, "supply", 1, target_unix)
+    assert "source_state.source_count = 1" in query
+    assert "target_state.target_count = 1" in query
+    assert "ELSE NULL" in query
+    assert "FROM lua_round_teams" in query
+    assert "round_number = $2" in query
+    assert "round_start_unix = $3" in query
+    assert params == ("supply", 1, target_unix)
+    spawn_update = next(
+        (query, params)
+        for query, params in db.executed
+        if "UPDATE lua_spawn_stats s" in query
+    )
+    assert "s.match_id = l.match_id" in spawn_update[0]
+    assert spawn_update[1] == ("supply", 1, target_unix)
+
+
+@pytest.mark.asyncio
+async def test_fanout_lua_update_cannot_use_the_fuzzy_round_id():
+    target_unix = int(time.time()) - 300
+    round_date = time.strftime("%Y-%m-%d", time.localtime(target_unix))
+    db = _FanoutCapturingDB(target_unix, round_date)
+    svc = _relinker()
+    svc.bot = _FakeBot(db)
+
+    await svc._relink_null_round_ids()
+
+    lua_updates = [
+        (q, p) for q, p in db.executed if "UPDATE lua_round_teams l" in q
+    ]
+    assert len(lua_updates) == 1
+    query, params = lua_updates[0]
+    assert "source_state.source_count = 1" in query
+    assert "target_state.target_count = 1" in query
+    assert 999 not in params
+    assert params == ("supply", 1, target_unix)
+
+
+@pytest.mark.asyncio
+async def test_positive_start_resolves_normalized_exact_target_before_fuzzy(monkeypatch):
+    target_unix = int(time.time()) - 300
+    round_date = time.strftime("%Y-%m-%d", time.localtime(target_unix))
+    db = _FanoutCapturingDB(target_unix, round_date, map_name=" Supply ")
+    svc = _relinker()
+    svc.bot = _FakeBot(db)
+    fuzzy = AsyncMock(side_effect=AssertionError("fuzzy resolver must not run"))
+    monkeypatch.setattr("bot.core.round_linker.resolve_round_id", fuzzy)
+
+    await svc._relink_null_round_ids()
+
+    assert fuzzy.await_count == 0
+    exact_query, exact_params = next(
+        (query, params)
+        for query, params in db.fetched
+        if "SELECT id FROM rounds" in query
+    )
+    assert "LOWER(BTRIM(map_name)) = LOWER(BTRIM($1))" in exact_query
+    assert exact_params == (" Supply ", 1, target_unix)
+    lua_params = next(
+        params for query, params in db.executed if "UPDATE lua_round_teams l" in query
+    )
+    assert lua_params == (" Supply ", 1, target_unix)
+
+
+@pytest.mark.asyncio
+async def test_lua_exact_failure_never_falls_back_to_generic_update():
+    class _FailingLuaDB(_FanoutCapturingDB):
+        async def execute(self, query, params=None):
+            normalized = " ".join(str(query).split())
+            self.executed.append((normalized, params))
+            if "UPDATE lua_round_teams l" in normalized:
+                raise RuntimeError("forced exact update failure")
+
+    target_unix = int(time.time()) - 300
+    round_date = time.strftime("%Y-%m-%d", time.localtime(target_unix))
+    db = _FailingLuaDB(target_unix, round_date)
+    svc = _relinker()
+    svc.bot = _FakeBot(db)
+
+    await svc._relink_null_round_ids()
+
+    lua_queries = [
+        query
+        for query, _params in db.executed
+        if "UPDATE lua_round_teams l" in query
+    ]
+    assert len(lua_queries) == 1
+    assert "UPDATE lua_round_teams l" in lua_queries[0]
