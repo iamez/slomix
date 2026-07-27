@@ -8,6 +8,7 @@ from ``self.config``.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import datetime
 
@@ -161,6 +162,23 @@ class _LuaRoundStorageMixin:
             return None
         value = row[0] if isinstance(row, (list, tuple)) else row["round_id"]
         return int(value) if value is not None else None
+
+    @staticmethod
+    def _lua_exact_source_lock_key(
+        map_name: str,
+        round_number: int,
+        round_start_unix: int,
+    ) -> int:
+        """Return a stable signed bigint advisory-lock key for one Lua source."""
+        source_key = (
+            f"{map_name.strip().lower()}\0{round_number}\0{round_start_unix}"
+        ).encode()
+        digest = hashlib.blake2b(
+            source_key,
+            digest_size=8,
+            person=b"slomix-lua",
+        ).digest()
+        return int.from_bytes(digest, byteorder="big", signed=True)
 
     async def _resolve_lua_spawn_team_identity(
         self,
@@ -675,14 +693,20 @@ class _LuaRoundStorageMixin:
                 )
 
             if has_round_id and has_exact_start:
-                # Serialize exact-source writers. The table lock is held on
-                # the transaction's pinned connection, so two payloads with
-                # different match_ids but the same source-native key cannot
-                # each observe themselves as the sole source and claim the
-                # same target round.
+                # Serialize only writers for this source-native key. The
+                # transaction-scoped advisory lock runs on the adapter's
+                # pinned transaction connection, so unrelated rounds remain
+                # concurrent while duplicate sources cannot both claim the
+                # same target.
+                source_lock_key = self._lua_exact_source_lock_key(
+                    map_name,
+                    fallback_round_number,
+                    exact_start_unix,
+                )
                 async with self.db_adapter.transaction():
-                    await self.db_adapter.execute(
-                        "LOCK TABLE lua_round_teams IN SHARE ROW EXCLUSIVE MODE"
+                    await self.db_adapter.fetch_val(
+                        "SELECT pg_advisory_xact_lock(?)",
+                        (source_lock_key,),
                     )
                     await self.db_adapter.execute(query, params)
                     round_id = await self._reconcile_lua_exact_source(
