@@ -151,8 +151,14 @@ class _ProximityRelinkerMixin:
             cutoff_unix = int(cutoff.timestamp())
             cutoff_date = cutoff.date()
             recent_source = (
-                "((round_start_unix IS NOT NULL AND round_start_unix >= $1) "
-                "OR (round_start_unix IS NULL AND session_date >= $2))"
+                "(round_start_unix >= $1 OR "
+                "((round_start_unix IS NULL OR round_start_unix <= 0) "
+                "AND session_date >= $2))"
+            )
+            recent_source_alias = (
+                "(pko.round_start_unix >= $1 OR "
+                "((pko.round_start_unix IS NULL OR pko.round_start_unix <= 0) "
+                "AND pko.session_date >= $2))"
             )
             # Each leg may report the same round many times. De-duplicate
             # once at the outer SELECT instead of forcing PostgreSQL to sort
@@ -165,7 +171,7 @@ class _ProximityRelinkerMixin:
             mismatch_legs = " UNION ALL ".join(
                 f"SELECT pko.map_name, pko.round_number, pko.round_start_unix, pko.session_date "
                 f"FROM {t} pko JOIN rounds r ON r.id = pko.round_id "
-                f"WHERE pko.round_start_unix >= $1 "
+                f"WHERE {recent_source_alias} "
                 f"  AND r.round_start_unix IS NOT NULL "
                 f"  AND pko.round_start_unix != r.round_start_unix"
                 for t in tables_with_round_number

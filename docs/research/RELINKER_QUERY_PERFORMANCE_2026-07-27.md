@@ -24,7 +24,8 @@ snapshot, the SQL returned 50 rows and Python considered all 50 stale.
    `SELECT DISTINCT`, preserving the result set.
 2. Push the existing six-hour cutoff into every NULL and mismatch leg. Rows
    with a positive source timestamp use the exact Unix cutoff. Legacy rows
-   without one use the cutoff date so the date-only resolver remains usable.
+   without one (NULL or non-positive sentinel) use the cutoff date so the
+   date-only resolver remains usable.
 3. Migration 068 adds the 13 missing partial covering indexes; the bootstrap
    schema carries the same index set.
 4. Release config v1.30.0 includes migration 068. The migration is written
@@ -39,10 +40,10 @@ back.
 
 | Metric | Before | After |
 |---|---:|---:|
-| Execution time, runs (ms) | 2149.682 / 1577.947 / 1665.248 | 213.254 / 191.086 / 185.455 |
-| Median execution time | 1665.248 ms | 191.086 ms |
-| Median improvement | - | 88.53% |
-| Median shared blocks read | 72,128 | 34,304 |
+| Execution time, runs (ms) | 1597.099 / 1541.296 / 1544.506 | 194.154 / 179.770 / 179.520 |
+| Median execution time | 1544.506 ms | 179.770 ms |
+| Median improvement | - | 88.36% |
+| Median shared blocks read | 63,163 | 34,415 |
 | Temp blocks read/written | 542 / 544 | 0 / 0 |
 | Returned rows on snapshot | 50 (all stale in Python) | 0 |
 
@@ -54,7 +55,7 @@ all older than the same six-hour policy and would not reach a write.
 
 - Missing tables before: 13 of 24.
 - Covered tables inside the measurement transaction: 24 of 24.
-- Transactional build time for all 13 indexes: 163.426 ms.
+- Transactional build time for all 13 indexes: 149.468 ms.
 - Total measured index size: 204,800 bytes (200 KiB).
 - The transaction was rolled back; the dev catalog returned to its original
   11-index state.
