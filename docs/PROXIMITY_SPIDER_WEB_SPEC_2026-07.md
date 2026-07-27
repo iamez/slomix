@@ -265,11 +265,19 @@ Measured cost of `get_player_positions` today: **27 ms** (round 11042, 6 players
 ```
 RoundTimeline
   round_id, map_name, round_number
-  capture_interval_ms: int | null
-  capture_interval_source: "header" | "inferred" | "unknown"
-  tick_ms            = capture_interval_ms
+  capture_policy: CapturePolicy
+  analysis_tick_ms: int             # consumer choice; never implied by capture cadence
   t_start, t_end     (from min/max sample time)
   snapshots: list[Snapshot]
+
+CapturePolicy
+  mode: "fixed" | "adaptive" | "unknown"
+  observation_interval_ms: int | null
+  persist_heartbeat_ms: int | null
+  burst_interval_ms, burst_window_ms: int | null
+  max_position_staleness_ms, velocity_max_dt_ms: int | null
+  change_thresholds: dict | null
+  policy_version, source
 
 Snapshot
   t_ms
@@ -295,7 +303,9 @@ Edge
   engaged: bool              # in a shared engagement at t
 ```
 
-`position_sample_interval` is written in each raw file header and parsed into transient parser metadata, but is not currently persisted with the processed round. Persist both its value and `source = header` before materialising timelines. For historical files without recoverable header metadata, infer a cadence only from sufficiently many ordinary consecutive samples across multiple same-life tracks, publish the support and require one consistent value; otherwise cadence is `unknown` and regular-grid reconstruction is unavailable. The parser's current 1,000 ms default is a software fallback, not evidence about a file.
+`position_sample_interval` is written in each raw file header and parsed into transient parser metadata, but is not currently persisted with the processed round. For fixed-rate historical files, persist it as `observation_interval_ms` with `mode = fixed` and `source = header` before materialising timelines. For historical files without recoverable header metadata, infer a cadence only from sufficiently many ordinary consecutive samples across multiple same-life tracks, publish the support and require one consistent value; otherwise cadence is `unknown`. The parser's current 1,000 ms default is a software fallback, not evidence about a file.
+
+Capture cadence and analysis cadence are different contracts. A future adaptive file is intentionally irregular and must carry its complete policy/threshold manifest; a consumer may evaluate requested times with causal floor state and explicit staleness, but must never invent a regular capture grid. A policy field being absent is `unknown`, not the current repo default.
 
 ### 4.3 Resolving overlapping lives — mandatory
 
@@ -314,13 +324,13 @@ Rationale: the later spawn is the more recent state; determinism matters more th
 
 Do **not** interpolate positions. Take the last sample at or before `t` — **floor**, not nearest — and record `stale_ms`.
 
-**The existing helper does not do this.** `_find_position_at_time()` uses `bisect_left` and then returns whichever neighbour is closer, so when the following sample is nearer it returns a position from **after** `t`. For a replay slider that is invisible; for a relational layer it means one player's position can come from the future while another's comes from the past, in the same snapshot. A floor variant is required before the web reuses it — either a new function or a flag on the existing one, but not a silent change to it, because the replay page depends on current behaviour. Consumers decide their own tolerance; a metric that silently invents a position between capture samples is inventing movement that may not have happened. Reject a `PlayerState` whose `stale_ms` exceeds a caller-supplied threshold; the default is `2 * capture_interval_ms`, not a hard-coded 400 ms. Unknown cadence means unknown default tolerance.
+**The existing helper does not do this.** `_find_position_at_time()` uses `bisect_left` and then returns whichever neighbour is closer, so when the following sample is nearer it returns a position from **after** `t`. For a replay slider that is invisible; for a relational layer it means one player's position can come from the future while another's comes from the past, in the same snapshot. A floor variant is required before the web reuses it — either a new function or a flag on the existing one, but not a silent change to it, because the replay page depends on current behaviour. Consumers decide their own tolerance; a metric that silently invents a position between capture samples is inventing movement that may not have happened. Reject a `PlayerState` whose `stale_ms` exceeds a caller-supplied threshold. For fixed capture the default is `2 * observation_interval_ms`; adaptive capture uses the policy's explicit `max_position_staleness_ms`. Unknown policy means unknown default tolerance.
 
 #### 4.4.1 Directional velocity is derived, not captured
 
 The stored path sample has scalar horizontal `speed`, but Layer 4 needs a direction. The live Lua can read `ps.velocity`, yet the player-track writer serialises only `speed`; `vx/vy/vz` therefore cannot be copied from the row or reconstructed with a future sample.
 
-Derive velocity only from the selected life's two causal floor samples. At an exact `spawn`, death, revive or other track discontinuity it is null. For an ordinary sample, use the immediately preceding sample from the same `track_id` only when `0 < dt_ms <= 2 * capture_interval_ms`. Convert units explicitly: `dt_seconds = dt_ms / 1000.0`, then `vx/vy/vz = (current_position - previous_position) / dt_seconds`, in game units per second. Never bridge two lives, interpolate, or look ahead. Validate the derived horizontal magnitude against the stored scalar speeds at the endpoints and a named physical cap with a measured tolerance. A stale interval, teleport, discontinuity or implausible disagreement yields null plus a machine-readable `velocity_reason`; it is not clamped into plausibility. Velocity staleness follows position staleness, and no velocity-dependent candidate may run until this derivation has been validated against held-out ordinary movement segments.
+Derive velocity only from the selected life's two causal floor samples. At an exact `spawn`, death, revive or other track discontinuity it is null. For an ordinary sample, use the immediately preceding sample from the same `track_id` only when `0 < dt_ms <= velocity_max_dt_ms`; for fixed historical capture that may default to `2 * observation_interval_ms`, while adaptive capture must declare it. Convert units explicitly: `dt_seconds = dt_ms / 1000.0`, then `vx/vy/vz = (current_position - previous_position) / dt_seconds`, in game units per second. Never bridge two lives, interpolate, or look ahead. Validate the derived horizontal magnitude against the stored scalar speeds at the endpoints and a named physical cap with a measured tolerance. A stale interval, teleport, discontinuity or implausible disagreement yields null plus a machine-readable `velocity_reason`; it is not clamped into plausibility. Velocity staleness follows position staleness, and no velocity-dependent candidate may run until this derivation has been validated against held-out ordinary movement segments.
 
 ### 4.5 Edges
 
@@ -335,6 +345,32 @@ Derive velocity only from the selected life's two causal floor samples. At an ex
 ### 4.6 What Layer 1 must not do
 
 No scoring. Layer 1 is reconstruction only. If it produces a number that ranks players, it is out of scope.
+
+### 4.7 Capture cadence, server cost and storage — measure before changing 200 ms
+
+The repo tracker currently observes active players every **200 ms**. Historical effective cadence confirms this is real, not merely a default: monthly median `duration_ms / (sample_count - 1)` is 198–199 ms. The dev database currently holds **57,311 tracks / 7,989,430 samples**; `player_track` occupies about **223 MB**, of which the compressed JSONB paths account for **177 MB**, or roughly **23.2 stored path bytes per sample**. July contains about 1.05 million samples. At current traffic, PostgreSQL storage is manageable; this measurement says nothing about raw text retention, Lua table overhead, garbage collection or frame-time cost on the game server.
+
+The current implementation couples unrelated semantics to one throttle. Every `sampleAllPlayers()` pass records the trajectory and also drives objective-distance accumulation, carrier positions, power-up polling, vehicle positions and aim-lock checks. `checkEscapes()` samples engagement paths on the same interval, and objective time increments by `config.position_sample_interval` rather than measured elapsed time. Therefore changing the interval — especially making it adaptive — would silently change existing metrics unless these schedulers and duration integration are separated first.
+
+**Recommended candidate: event-preserving, error-bounded adaptive capture.** Do not jump directly from 200 to 400/1,000 ms. Evaluate this layered policy offline first:
+
+1. Exact samples when an existing lifecycle/gameplay callback or capability-proven writer fires: spawn, death, revive, damage, weapon fire, captured objective/carrier transition and round boundary. An objective transition that is not currently captured remains missing; the adaptive sampler must not invent it.
+2. A bounded observation loop for active movement, initially retaining the existing 200 ms reference cadence. Persistence is sparse: store when stance/weapon/health changes, a teleport/discontinuity occurs, or actual position deviates from the causal constant-velocity prediction by more than a frozen spatial error bound.
+3. A maximum heartbeat (initial candidate 1,000 ms) even when prediction remains good, so silence is bounded and missing capture is distinguishable from stationary movement.
+4. Optionally keep a small in-memory high-rate ring per active player and flush the pre-event window plus a short post-event burst around damage/fire/objective events. This can improve combat timing without storing the entire round at the burst rate. Ring cadence/window are hypotheses, not approved constants.
+5. Keep observation cadence, persistence policy and every semantic sensor scheduler independent. Time aggregates integrate actual `dt`; no metric may multiply sample count by a nominal interval.
+
+This design reduces stored samples and end-of-round serialization without necessarily reducing polling CPU. A slower observation loop reduces CPU but also removes information before the change detector can see it; a faster ring improves resolution but costs more `gentity` reads. Treat these as separate axes in the benchmark.
+
+**Alternative sources to evaluate, not assume:**
+
+- ET:Legacy's [official changelog](https://github.com/etlegacy/etlegacy/wiki/Changelog) documents server-side full demo recording capable of replaying the map from every player's point of view. Use controlled server demos as a potential high-frequency reference or offline source only after verifying exact fields, clock, snapshot loss, version compatibility, parser complexity, file size and recording overhead. Network snapshots are not automatically authoritative game-state samples.
+- A native ET:L/gamecode delta logger can observe state transitions and serialize compact binary records more efficiently than Lua tables. It has the highest maintenance/deploy cost and requires an owner-approved server fork; consider it only if the measured Lua budget fails.
+- ETLTV adds another snapshot pipeline and operational dependency. It is not justified solely to replace the current 200 ms tracker unless the demo experiment proves a clear fidelity/cost advantage.
+
+**Storage representation experiment.** Replay existing 200 ms tracks through the candidate sparsifier before touching Lua. Compare current JSONB against per-track delta encoding (`dt`, quantised `dx/dy/dz`, changed-field bitmask) compressed in round-sized chunks. Keep queryable summaries and provenance in PostgreSQL; do not normalize eight million samples into indexed rows or delete raw files without measuring table/index overhead and proving lossless reprocessing. Quantisation may not exceed the current writer's 0.1-unit precision without a separate fidelity result.
+
+The offline comparison uses chronological discovery/confirmation blocks and publishes: retained-sample ratio; raw/compressed/DB bytes; max/p50/p95 spatial error at original timestamps; velocity/direction error; event recall; teleport and turn recall; coverage/staleness distributions; and stability of every downstream candidate. Thresholds are chosen on discovery and frozen before confirmation. A smaller file is not a pass if it changes a validated metric or hides the pre-engagement movement this project exists to measure.
 
 ---
 
@@ -728,6 +764,7 @@ Everything here requires a game-server deploy and is **owner-gated**.
 | C3 | Objective state over time (dynamite planted, doors, checkpoints) | §9 W5 derives only the possible transition graph offline. Existing timestamped events may replay part of a round; C3 is required wherever they do not uniquely determine live state | Low–medium |
 | C4 | Line-of-sight trace (`et.trap_Trace`) | **Reclassified.** Offline W4 can model covered geometry, but only after brush + patch + dynamic-state handling. C4 is the **ground truth that validates W4** (W6) | **High, measure first** |
 | C5 | Teammate engagement state (is this player under attack right now) | Partially derivable from `combat_engagement`, but a live flag is exact | Low |
+| C6 | Versioned capture-policy manifest + performance counters; optional adaptive shadow capture | Fixed 200 ms currently couples storage cadence to several sensor semantics and exposes no CPU/RAM/GC budget. §4.7 can optimize storage offline, but only a controlled server run can measure Lua cost and event fidelity | Medium; test server only |
 
 Note how C3 and C4 changed. Both were listed as "only possible via Lua" in the first revision. Static structure and partial state are available offline, but C3 remains required wherever observed transitions cannot uniquely replay state. C1 supplies continuous attention; C4's justification has shifted from capability to verification.
 
@@ -744,6 +781,15 @@ Note how C3 and C4 changed. Both were listed as "only possible via Lua" in the f
 - **Never `lua_restart`** — it has crashed the server before. Always a full map load.
 - **`c0rnp0rn*.lua` is not ours. Do not touch it.**
 - C4 must have its server cost measured on a test map before it is enabled in production. A trace per player-pair per tick is not free.
+- C6 must first separate player observation, persisted trajectory, objective integration, engagement path, carrier/vehicle and aim-lock schedulers. Never deploy an adaptive interval while any existing aggregate still multiplies by `position_sample_interval`.
+
+### 10.4 C6 experiment order
+
+1. **Offline, no Lua change:** replay stored 200 ms tracks through fixed 400/1,000 ms, error-bounded change-point, heartbeat and event-preserving candidates. Reject lossy policies under the §4.7 fidelity table.
+2. **Controlled test map, owner-gated:** instrument baseline 200 ms and the selected candidate with sample-pass wall time, calls/player, Lua `collectgarbage("count")` high-water, collection count/pause proxy, samples retained, bytes buffered, end-of-round serialization time and output bytes. Run representative 0/6/12-player scenarios; use bots only for repeatability, never as model-validation players.
+3. **Shadow only:** if a higher-rate ring or server demo is tested, retain the 200 ms stream as the comparison truth and prevent the candidate from feeding production metrics. Record `sv_fps`, tracker/build hash, map, player count and every capture-policy field.
+4. **Freeze and confirm:** choose all thresholds on discovery runs, then repeat on untouched maps/sessions. Initial engineering budgets are mean capture work ≤1% and p99 ≤5% of the configured server-frame budget, no visible frame hitch, bounded Lua memory, 100% recall of lifecycle and capability-proven objective reference events, and all predeclared reconstruction tolerances passing. If baseline already violates a budget, report both absolute and delta cost rather than making the candidate look good against a bad baseline.
+5. **Production enablement:** separate owner approval after a soak test. Rollback is one versioned policy flag; old and new files remain independently parseable through their manifests.
 
 ---
 
@@ -765,7 +811,7 @@ Measurable, not descriptive.
 - **A3.** No player appears twice in a snapshot, and no life is alive at its exact `death_time_ms`. Overlap conflicts (§4.3) are counted and exposed.
 - **A4.** Full-round reconstruction under **1 s** for a 12-minute round; if not, materialise (see §13.1).
 - **A5.** Directional velocity is causal, same-life and expressed in game units/second after explicit ms-to-seconds conversion. Its availability, stale/null reason distribution, scalar-speed disagreement and held-out physical-cap violations are published before any velocity-dependent candidate consumes it.
-- **A6.** Every timeline reports capture cadence and provenance. Header values are preferred; historical inference publishes support/conflicts; unknown cadence yields no invented fixed grid or hard-coded staleness tolerance.
+- **A6.** Every timeline reports the complete capture policy and provenance. Fixed-rate header values are preferred; historical inference publishes support/conflicts; adaptive files declare observation, heartbeat, burst, staleness and change thresholds plus policy version. Unknown policy yields no invented fixed grid or hard-coded staleness tolerance.
 
 ### Phase B — Layers 2 and 3
 - **B1.** Inferred wave phase is independently validated against qualifying normal `player_track` spawn clusters (§5.3), with frozen support/jitter/residual thresholds and published coverage/exclusions. A unanimous tracker-derived offset that lacks independent spawn support remains `unvalidated`, not exact.
@@ -792,6 +838,7 @@ Measurable, not descriptive.
 - **C3.** A controlled objective sequence on one map (plant/construct/destroy/checkpoint as applicable) produces ordered, timestamped state transitions that match a hand-audited server log/demo; missing or duplicate transitions fail the gate rather than being repaired silently.
 - **C4.** `et.trap_Trace` capture cost and output volume are measured under representative player counts on a test map before enablement, and paired offline/live trace fixtures are produced for W6. W6, not C4, owns the agreement verdict.
 - **C5.** Controlled damage/no-damage windows show the captured teammate-under-attack state entering and leaving at the declared times, including a stationary target whose `combat_engagement` remains open; no state may inherit the 15-second engagement staleness accidentally.
+- **C6.** The offline sparsification table and controlled 0/6/12-player test publish fidelity, CPU/frame-budget, Lua memory/GC, buffered samples, serialization latency and raw/DB byte results for baseline and candidate. All semantic sensors run on independent schedulers, duration aggregates use actual elapsed time, recall of lifecycle and capability-proven objective reference events is 100%, and the frozen confirmation policy passes §4.7/§10.4 before any production enablement.
 
 ---
 
@@ -893,6 +940,7 @@ Accumulation multiplies whatever it accumulates. If a per-round signal is noise,
 2. **89 bot-only rounds are unflagged (§13.2).** Backfill `is_bot_round` as a separate change before the web, or filter by GUID prefix inside it? Backfill is cleaner and benefits every other consumer.
 3. **PR #551** (`DESIGN_SKILL_PASSPORT`, `PROXIMITY_VISION_AUDIT`) remains open with 19 unresolved review threads. Their findings are incorporated here as §3; the PR itself still needs a decision.
 4. **PR #555** (release 1.28.0) is open and awaiting a call.
+5. **Capture policy (§4.7/C6):** after the offline replay benchmark, approve one controlled test-server candidate or retain fixed 200 ms. No production Lua change is implied by this specification.
 
 ---
 
@@ -952,9 +1000,28 @@ Checks added in rev 8:
 - Public obituary inventory: terminal events contain 39,930 `killed`, 12,543 `selfkill`, 973 `teamkill`, 159 `fallen` and 91 `world` rows; the last four categories have zero `proximity_kill_outcome` rows by construction
 - Preliminary independent clock check: 37,756 matched spawn candidates across 576 rounds / 1,144 round-team groups; median residual 25 ms, p95 7,025 ms, 89.1% within 1 second; only 961/1,141 groups with at least three observations put ≥90% within 250 ms
 
+Checks added in rev 9:
+
+- Capture write path: `config.position_sample_interval = 200`; `et_RunFrame` calls `sampleAllPlayers`, which shares that throttle across player tracks, objective accumulation, carrier/power-up/vehicle polling and aim-lock dispatch; engagement paths use the same interval separately
+- Duration coupling: objective `time_within_radius_ms` increments by the configured nominal interval rather than actual elapsed time, so changing to irregular persistence without scheduler separation would change the metric
+- Historical cadence: monthly median `duration_ms / (sample_count - 1)` is 198–199 ms from February through July 2026
+- Storage baseline: 57,311 tracks, 7,989,430 samples, 223 MB total `player_track` relation, 177 MB stored JSONB paths, about 23.2 path bytes/sample; July contains 1,051,237 samples
+- Alternative reference: ET:Legacy's official changelog documents server-side full demo recording with every player's point of view; exact telemetry completeness/performance remains unverified and is assigned to C6 rather than assumed
+
 Related: #556 (metric validity method), #560 (track linkage fix), #551 (open design review), `docs/PROXIMITY_VISION_AUDIT_2026-07.md`, `docs/DESIGN_SKILL_PASSPORT_2026-07.md`.
 
 ### Revision history
+
+**Rev 9 (2026-07-27)** — capture/performance/storage design requested by the owner. Fixed 200 ms is now a measured baseline rather than an unquestioned constant. The spec separates observation cadence, sparse persistence, analysis cadence and semantic sensor schedulers; proposes offline error-bounded/event-preserving capture evaluation; and adds owner-gated C6 performance, memory, serialization, storage and demo-reference gates. No Lua deployment is authorized.
+
+| Owner concern | Closure in rev 9 |
+|---|---|
+| Is 200 ms too much or too little? | Treat it as a reference; choose only from measured fidelity/cost frontiers (§4.7, C6) |
+| Can capture be event/adaptive instead? | Event samples + error-bounded change points + heartbeat + optional ring/burst (§4.7) |
+| Will cadence changes corrupt existing metrics? | Mandatory scheduler separation and actual-`dt` integration before any adaptive test (§4.7, §10.4, C6) |
+| Server performance and RAM | Controlled wall-time/frame-budget, Lua memory/GC and serialization gates (§10.4, C6) |
+| Storage growth | Measured DB baseline plus delta/chunk compression experiment; no premature row-normalisation or deletion (§4.7) |
+| Is there another source? | Server full-demo and native logger are research alternatives, not assumed replacements (§4.7) |
 
 **Rev 8 (2026-07-27)** — fourth post-review closure. The 98.7% wave-offset result is now correctly labelled internal consistency and requires validation against independent normal-spawn observations; a preliminary DB check confirms a sharp 25 ms median but a material 7,025 ms p95 error tail. Public obituary beliefs include every death category via canonical terminal player-track events instead of the enemy-kill-only outcome table. Exact enemy-wave phase is separated from recipient clock belief and remains oracle-only until an observable cue. Layer B acceptance gates enforce all three boundaries.
 
@@ -974,7 +1041,7 @@ Related: #556 (metric validity method), #560 (track linkage fix), #551 (open des
 | Confirmation trajectories fitted their own graph | Rolling prior-only discovery and frozen confirmation artifacts (§5.6, W4b, §8) |
 | Life remained alive at death timestamp | Half-open `[spawn, death)` selection and event-only death sample (§4.3, A3) |
 | Straight-line distance called tactical isolation | Geometric separation retained; support time uses validated W4b routes (§4.5, §7.4) |
-| Phase C criteria omitted/misnumbered captures | Dedicated C1-C5 gates; W6 remains separate (§12) |
+| Phase C criteria omitted/misnumbered captures | Dedicated C1-C5 gates at rev 7; W6 remains separate (§12). Later rev 9 adds capture-policy gate C6 |
 | Victim death validation reused one writer coordinate | Victim check labelled consistency-only; attacker/shot comparisons separated (A1) |
 | Timeline hard-coded 200 ms | Header/persisted or evidence-qualified inferred cadence, otherwise unknown (§4.2, A6) |
 | Rounds were treated as independent clusters | Within-round comparison, whole-session chronological split/bootstrap (§8) |
