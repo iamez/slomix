@@ -1,6 +1,7 @@
--- Repair lua_round_teams links created by the historical nearest-neighbour
--- race, propagate the proven identity into Lua spawn telemetry, then enforce
--- the one-Lua-row-per-round contract.
+-- Enforce the postconditions of the guarded Lua round-link repair and the
+-- one-Lua-row-per-round contract. Historical data mutation is deliberately
+-- not owned by this migration: scripts/repair_lua_round_links.py must first
+-- preview, fingerprint and apply the action set with a verified backup.
 --
 -- Safe policy:
 --   * exactly one round matching source-native
@@ -11,20 +12,54 @@
 --   * spawn rows inherit only a repaired team row with the same
 --     (match_id, round_number, normalized map_name); otherwise they unlink.
 --
--- `scripts/repair_lua_round_links.py` previews and fingerprints this same
--- action set before an owner runs its guarded --apply mode. This migration is
--- idempotent so it may subsequently run through the normal ledger runner.
+-- `scripts/repair_lua_round_links.py` previews and fingerprints this action
+-- set before an owner runs its guarded --apply mode. This migration refuses
+-- dirty historical state, so a normal deploy cannot bypass that guard.
 
 BEGIN;
 
 DO $$
 DECLARE
+    pending_team_actions integer;
+    pending_spawn_actions integer;
     projected_duplicate_groups integer;
 BEGIN
     -- Keep the lock in a transaction-bearing statement even when the fresh-
     -- bootstrap parity test replays the unwrapped migration statement-wise.
     LOCK TABLE rounds IN SHARE MODE;
     LOCK TABLE lua_round_teams, lua_spawn_stats IN SHARE ROW EXCLUSIVE MODE;
+
+    SELECT COUNT(*) INTO pending_team_actions
+    FROM lua_round_teams l
+    LEFT JOIN rounds linked ON linked.id = l.round_id
+    WHERE l.round_id IS NOT NULL
+      AND (
+          l.round_start_unix IS NULL
+          OR l.round_start_unix <= 0
+          OR linked.id IS NULL
+          OR linked.round_start_unix IS DISTINCT FROM l.round_start_unix
+          OR LOWER(BTRIM(linked.map_name))
+                IS DISTINCT FROM LOWER(BTRIM(l.map_name))
+          OR linked.round_number IS DISTINCT FROM l.round_number
+      );
+
+    SELECT COUNT(*) INTO pending_spawn_actions
+    FROM lua_spawn_stats s
+    WHERE s.round_id IS DISTINCT FROM (
+        SELECT CASE WHEN COUNT(*) = 1 THEN MIN(l.round_id) ELSE NULL END
+        FROM lua_round_teams l
+        WHERE l.match_id = s.match_id
+          AND l.round_number = s.round_number
+          AND LOWER(BTRIM(l.map_name))
+                IS NOT DISTINCT FROM LOWER(BTRIM(s.map_name))
+    );
+
+    IF pending_team_actions > 0 OR pending_spawn_actions > 0 THEN
+        RAISE EXCEPTION
+            '067 refused: guarded Lua repair still has team_actions=% and spawn_actions=%; run scripts/repair_lua_round_links.py --apply first',
+            pending_team_actions,
+            pending_spawn_actions;
+    END IF;
 
     WITH wrong AS (
         SELECT

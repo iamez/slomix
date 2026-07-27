@@ -208,24 +208,49 @@ class _ProximityRelinkerMixin:
 
                 round_date_str = str(session_date) if session_date else None
 
-                round_id = await resolve_round_id(
-                    db,
-                    map_name,
-                    round_number,
-                    target_dt=target_dt,
-                    round_date=round_date_str,
-                    window_minutes=120,
-                    quiet=True,  # relinker retries every 5min — log at DEBUG, not WARNING
-                )
+                try:
+                    exact_start_unix = int(round_start_unix)
+                    has_positive_start = exact_start_unix > 0
+                except (TypeError, ValueError):
+                    exact_start_unix = 0
+                    has_positive_start = False
+
+                if has_positive_start:
+                    # Positive telemetry timestamps are source-native keys.
+                    # Resolve this key before any fuzzy lookup; otherwise a
+                    # whitespace/case variation in the source map can make
+                    # the fuzzy resolver exit before Lua's normalized exact
+                    # update gets a chance to run.
+                    exact_rows = await db.fetch_all(
+                        "SELECT id FROM rounds "
+                        "WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM($1)) "
+                        "  AND round_number = $2 AND round_start_unix = $3 "
+                        "ORDER BY id LIMIT 2",
+                        (map_name, round_number, exact_start_unix),
+                    )
+                    if len(exact_rows) == 1:
+                        exact_row = exact_rows[0]
+                        round_id = int(
+                            exact_row[0]
+                            if isinstance(exact_row, (list, tuple))
+                            else exact_row["id"]
+                        )
+                    else:
+                        round_id = None
+                else:
+                    round_id = await resolve_round_id(
+                        db,
+                        map_name,
+                        round_number,
+                        target_dt=target_dt,
+                        round_date=round_date_str,
+                        window_minutes=120,
+                        quiet=True,  # relinker retries every 5min — log at DEBUG, not WARNING
+                    )
 
                 if round_id is None:
                     failed += 1
                     continue
-
-                try:
-                    has_positive_start = int(round_start_unix) > 0
-                except (TypeError, ValueError):
-                    has_positive_start = False
 
                 # Fan out 21 independent table updates per round in parallel
                 # (background task on backlog can be hundreds of rounds × 21
@@ -269,6 +294,8 @@ class _ProximityRelinkerMixin:
                                 )
                         except Exception as e:
                             logger.warning("Re-linker: %s primary update failed: %s", table, e)
+                            if table == "lua_round_teams":
+                                return
                             try:
                                 await db.execute(
                                     _relink_sql(table, fallback=True),

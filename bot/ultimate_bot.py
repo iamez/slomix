@@ -1434,7 +1434,23 @@ class UltimateETLegacyBot(
                 - end_reason
         """
         try:
-            round_id = await self._resolve_round_id_for_metadata(filename, metadata)
+            raw_start_unix = metadata.get("round_start_unix")
+            if raw_start_unix in (None, ""):
+                round_id = await self._resolve_round_id_for_metadata(filename, metadata)
+            else:
+                try:
+                    has_exact_start = int(raw_start_unix) > 0
+                except (TypeError, ValueError):
+                    has_exact_start = True
+
+                if has_exact_start:
+                    # A positive (or malformed-but-present) Lua start is a
+                    # source-native identity. Resolve it before touching the
+                    # rounds row so a neighbour cannot be overwritten into a
+                    # false exact match by the metadata below.
+                    round_id = await self._resolve_lua_round_id_for_metadata(metadata)
+                else:
+                    round_id = await self._resolve_round_id_for_metadata(filename, metadata)
             if not round_id:
                 logger.warning(f"Could not resolve round_id for metadata override: {filename}")
                 return

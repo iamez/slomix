@@ -3,7 +3,10 @@
 # ruff: noqa: SLF001
 
 import os
+import re
 import sys
+from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -83,7 +86,7 @@ async def pg():
 
 
 @pytest.mark.asyncio
-async def test_migration_rebinds_exact_unlinks_unknown_and_prevents_duplicates(pg):
+async def test_migration_refuses_dirty_state_then_enforces_guarded_repair(pg):
     await pg.executemany(
         "INSERT INTO rounds (id, map_name, round_number, round_start_unix) "
         "VALUES ($1, $2, $3, $4)",
@@ -128,6 +131,30 @@ async def test_migration_rebinds_exact_unlinks_unknown_and_prevents_duplicates(p
 
     migration = Path("migrations/067_repair_lua_round_links.sql").read_text()
     body = unwrap_outer_transaction(migration)
+
+    with pytest.raises(asyncpg.RaiseError, match="guarded Lua repair"):
+        async with pg.transaction():
+            await pg.execute(body)
+
+    # The failed migration must not mutate the dirty source rows.
+    assert await pg.fetchval(
+        "SELECT round_id FROM lua_round_teams WHERE id = 2"
+    ) == 1
+
+    # Simulate the owner-only guarded repair. Migration 067 is allowed to
+    # enforce its constraint only after both action sets are already clean.
+    await pg.execute(
+        """
+        UPDATE lua_round_teams
+        SET round_id = CASE id
+            WHEN 1 THEN 1 WHEN 2 THEN 3 WHEN 3 THEN 2
+            WHEN 5 THEN 5 WHEN 6 THEN 7 ELSE NULL END;
+        UPDATE lua_spawn_stats
+        SET round_id = CASE id
+            WHEN 1 THEN 1 WHEN 2 THEN 3 WHEN 4 THEN 5
+            WHEN 6 THEN 7 ELSE NULL END;
+        """
+    )
     await pg.execute(body)
 
     links = await pg.fetch(
@@ -169,24 +196,54 @@ class _AsyncpgAdapter:
     def __init__(self, conn):
         self.conn = conn
 
+    @staticmethod
+    def _translate(query):
+        counter = 0
+
+        def replace(_match):
+            nonlocal counter
+            counter += 1
+            return f"${counter}"
+
+        return re.sub(r"\?", replace, query)
+
+    @asynccontextmanager
+    async def transaction(self):
+        async with self.conn.transaction():
+            yield self.conn
+
+    async def execute(self, query, params=None):
+        await self.conn.execute(self._translate(query), *(params or ()))
+
     async def executemany(self, query, params):
-        await self.conn.executemany(query, params)
+        await self.conn.executemany(self._translate(query), params)
+
+    async def fetch_one(self, query, params=None):
+        return await self.conn.fetchrow(self._translate(query), *(params or ()))
+
+    async def fetch_all(self, query, params=None):
+        return await self.conn.fetch(self._translate(query), *(params or ()))
+
+    async def fetch_val(self, query, params=None):
+        return await self.conn.fetchval(self._translate(query), *(params or ()))
 
 
 class _SpawnWriter:
-    def __init__(self, conn, resolved_round_id):
+    def __init__(self, conn):
         self.db_adapter = _AsyncpgAdapter(conn)
-        self.resolved_round_id = resolved_round_id
 
     async def _has_lua_spawn_stats_table(self):
         return True
 
-    async def _resolve_lua_round_id_for_metadata(self, _metadata):
-        return self.resolved_round_id
+    async def _resolve_lua_spawn_team_identity(self, **kwargs):
+        return await _LuaRoundStorageMixin._resolve_lua_spawn_team_identity(
+            self,
+            **kwargs,
+        )
 
 
 @pytest.mark.asyncio
-async def test_spawn_upsert_preserves_legacy_link_but_clears_exact_defer(pg):
+async def test_spawn_upsert_follows_team_identity_and_preserves_without_one(pg):
     metadata = {
         "map_name": "supply",
         "round_number": 1,
@@ -194,20 +251,87 @@ async def test_spawn_upsert_preserves_legacy_link_but_clears_exact_defer(pg):
         "round_end_unix": 1_776_800_900,
     }
     spawn = [{"guid": "A1", "name": "AxisOne", "spawns": 2, "deaths": 1}]
-    writer = _SpawnWriter(pg, resolved_round_id=1)
+    match_id = datetime.fromtimestamp(  # noqa: DTZ006 - mirrors writer contract
+        metadata["round_end_unix"]
+    ).strftime(
+        "%Y-%m-%d-%H%M%S"
+    )
+    await pg.execute(
+        "INSERT INTO lua_round_teams "
+        "(id, match_id, round_number, map_name, round_start_unix, round_id) "
+        "VALUES (1, $1, 1, 'supply', 0, 1)",
+        match_id,
+    )
+    writer = _SpawnWriter(pg)
 
-    await _LuaRoundStorageMixin._store_lua_spawn_stats(writer, metadata, spawn)
-    writer.resolved_round_id = None
     await _LuaRoundStorageMixin._store_lua_spawn_stats(writer, metadata, spawn)
     assert await pg.fetchval(
         "SELECT round_id FROM lua_spawn_stats WHERE player_guid = 'A1'"
     ) == 1
 
-    metadata["round_start_unix"] = 1_776_800_000
+    await pg.execute("UPDATE lua_round_teams SET round_id = NULL WHERE id = 1")
     await _LuaRoundStorageMixin._store_lua_spawn_stats(writer, metadata, spawn)
     assert await pg.fetchval(
         "SELECT round_id FROM lua_spawn_stats WHERE player_guid = 'A1'"
     ) is None
+
+    await pg.execute("DELETE FROM lua_round_teams WHERE id = 1")
+    await pg.execute("UPDATE lua_spawn_stats SET round_id = 1")
+    await _LuaRoundStorageMixin._store_lua_spawn_stats(writer, metadata, spawn)
+    assert await pg.fetchval(
+        "SELECT round_id FROM lua_spawn_stats WHERE player_guid = 'A1'"
+    ) == 1
+
+
+@pytest.mark.asyncio
+async def test_live_exact_reconcile_unlinks_duplicate_sources_and_spawn_rows(pg):
+    await pg.execute(
+        "INSERT INTO rounds (id, map_name, round_number, round_start_unix) "
+        "VALUES (1, 'supply', 1, 100)"
+    )
+    await pg.execute(
+        "INSERT INTO lua_round_teams "
+        "(id, match_id, round_number, map_name, round_start_unix, round_id) "
+        "VALUES (1, 'source-a', 1, ' Supply ', 100, NULL); "
+        "INSERT INTO lua_spawn_stats "
+        "(id, match_id, round_number, map_name, round_id) "
+        "VALUES (1, 'source-a', 1, 'supply', NULL)"
+    )
+    writer = _SpawnWriter(pg)
+
+    resolved = await _LuaRoundStorageMixin._reconcile_lua_exact_source(
+        writer,
+        match_id="source-a",
+        map_name="supply",
+        round_number=1,
+        round_start_unix=100,
+    )
+    assert resolved == 1
+    assert await pg.fetchval("SELECT round_id FROM lua_round_teams WHERE id = 1") == 1
+    assert await pg.fetchval("SELECT round_id FROM lua_spawn_stats WHERE id = 1") == 1
+
+    await pg.execute(
+        "INSERT INTO lua_round_teams "
+        "(id, match_id, round_number, map_name, round_start_unix, round_id) "
+        "VALUES (2, 'source-b', 1, 'SUPPLY', 100, NULL); "
+        "INSERT INTO lua_spawn_stats "
+        "(id, match_id, round_number, map_name, round_id) "
+        "VALUES (2, 'source-b', 1, 'SUPPLY', 1)"
+    )
+    resolved = await _LuaRoundStorageMixin._reconcile_lua_exact_source(
+        writer,
+        match_id="source-b",
+        map_name="supply",
+        round_number=1,
+        round_start_unix=100,
+    )
+    assert resolved is None
+    assert await pg.fetchval(
+        "SELECT COUNT(*) FROM lua_round_teams WHERE round_id IS NOT NULL"
+    ) == 0
+    assert await pg.fetchval(
+        "SELECT COUNT(*) FROM lua_spawn_stats WHERE round_id IS NOT NULL"
+    ) == 0
 
 
 @pytest.mark.asyncio
