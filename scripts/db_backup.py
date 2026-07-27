@@ -8,13 +8,14 @@ import hashlib
 import os
 import re
 import shutil
-import subprocess  # nosec B404 - fixed pg_dump invocation; never executes a shell
+import subprocess  # nosec B404
 import sys
 import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
 
+# The only subprocess is a fixed pg_dump argv and never executes a shell.
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -72,16 +73,8 @@ def create_backup() -> tuple[Path, Path, str]:
     if output_path.exists() or manifest_path.exists():
         raise FileExistsError(f"backup destination already exists: {output_path}")
 
-    pg_dump = shutil.which("pg_dump")
-    if pg_dump is None:
+    if shutil.which("pg_dump") is None:
         raise FileNotFoundError("pg_dump was not found on PATH")
-    command = [
-        str(Path(pg_dump).resolve()),
-        "--no-owner",
-        "--no-privileges",
-        "--clean",
-        "--if-exists",
-    ]
     child_env = os.environ.copy()
     child_env.update({
         "PGHOST": host,
@@ -98,8 +91,9 @@ def create_backup() -> tuple[Path, Path, str]:
     os.close(fd)
     temporary_path = Path(temporary_name)
     try:
-        with tempfile.TemporaryFile() as stderr, subprocess.Popen(  # nosec B603
-            command,
+        # PATH is operator-controlled and the binary was proven present above.
+        with tempfile.TemporaryFile() as stderr, subprocess.Popen(  # nosec B603 B607
+            ["pg_dump", "--no-owner", "--no-privileges", "--clean", "--if-exists"],
             stdout=subprocess.PIPE,
             stderr=stderr,
             env=child_env,
