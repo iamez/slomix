@@ -79,7 +79,11 @@ def test_all_indexed_map_bsps_strictly_parse_as_populated_ibsp_v47(geometry_inde
         assert bsp.planes, map_name
         assert bsp.nodes, map_name
         assert bsp.leafs, map_name
+        assert bsp.leaf_surfaces, map_name
         assert bsp.leaf_brushes, map_name
         assert bsp.models, map_name
         assert bsp.brushes, map_name
         assert bsp.brush_sides, map_name
+        assert bsp.draw_vertices, map_name
+        assert bsp.draw_indexes, map_name
+        assert bsp.surfaces, map_name
