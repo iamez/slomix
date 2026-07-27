@@ -95,6 +95,13 @@ def test_parse_bsp_refuses_out_of_bounds_lump():
         parse_bsp(raw)
 
 
+def test_parse_bsp_treats_etlegacy_lump_length_as_unsigned():
+    raw = bytearray(_build_bsp())
+    struct.pack_into("<iI", raw, 8, HEADER_SIZE, 0xFFFFFFFF)
+    with pytest.raises(BspFormatError, match="exceeds the file bounds"):
+        parse_bsp(raw)
+
+
 def test_parse_bsp_refuses_misaligned_structured_lump():
     lumps = _valid_lumps()
     lumps[LumpType.SHADERS] += b"x"

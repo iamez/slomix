@@ -589,9 +589,9 @@ This section did not exist in the first revision, because the first revision bel
 Walk `/home/samba/share/etmain`, map `map_name → (pk3, bsp)`. Record a sha256 per BSP. Handle one map being provided by several pk3s: today `te_escape2` comes from three and all three BSPs are byte-identical, so pick deterministically and **assert the hashes match** rather than assuming it. Emit an explicit "no geometry" result for the six maps we do not hold — `etl_frostbite` above all, at 151 rounds.
 
 **W2 — BSP reader.**
-`IBSP` v47. Read the header (17 lumps, each an `(offset, length)` int32 pair) and parse `shaders`, `planes`, `brushes`, `brushsides`, `nodes`, `leafs`, `leafbrushes`, `models`, `entities`. Refuse any file whose magic or version differs instead of guessing at the layout.
+`IBSP` v47. Read the header (17 lumps, each a signed int32 offset plus an unsigned int32 length) and parse `shaders`, `planes`, `brushes`, `brushsides`, `nodes`, `leafs`, `leafbrushes`, `models`, `entities`. Refuse any file whose magic or version differs instead of guessing at the layout. This is not a vanilla-ET assumption: the current [ET:Legacy `qfiles.h`](https://github.com/etlegacy/etlegacy/blob/master/src/qcommon/qfiles.h) retains `BSP_VERSION 47`, the same 17 lumps, and the same `dplane_t`, `dbrush_t`, and `dbrushside_t` layouts.
 
-**The `shaders` lump is not optional.** Brush and brush-side records carry shader *indices*; the shader lump supplies the `contents` and `surfaceflags` that say whether a brush is solid, a clip volume, water, a trigger, or a non-colliding visual. Tracing "all brushes" makes triggers and clip brushes opaque and produces sightlines that are blocked by nothing. Filter on the content flags — solid and player-clip block a player trace; trigger volumes and non-solid detail do not.
+**The `shaders` lump is not optional.** Brush and brush-side records carry shader *indices*; the shader lump supplies the `contents` and `surfaceflags` that say whether a brush is solid, a clip volume, water, a trigger, or a non-colliding visual. Tracing "all brushes" makes triggers and clip brushes opaque and produces sightlines that are blocked by nothing. W2 preserves the raw flags; W4 must define a named mask per trace purpose. A movement/player-box trace includes solid and player-clip. A line-of-sight ray must not treat a player-clip-only volume as opaque. Trigger volumes and non-solid detail block neither.
 
 **W3 — entity extraction.**
 From the entity lump: spawn points by team (`team_CTF_bluespawn`, `team_CTF_redspawn`) with their `spawnflags`; objective volumes (`trigger_objective_info`); objective markers (`team_WOLF_objective`); doors and movers. This supersedes the sphere-with-radius-500 approximation in `objective_zones.json` — keep that file as the fallback for maps without a pk3, and **label which source each zone came from** so a consumer can tell a measured volume from a guessed sphere.
@@ -601,11 +601,14 @@ Ray-vs-brush against brushes whose shader contents mark them solid (see W2), usi
 
 **Static traversal alone is wrong for a subset of sightlines.** Doors, `script_mover` entities and constructibles are **dynamic entity submodels**: their collision is not in the world BSP tree, and whether they block a line depends on their state and transform at time `t`. Adlernest alone has 5 `func_door_rotating` and 28 `script_mover`.
 
+ET:Legacy also has runtime collision features that do not change the BSP v47 binary layout. In particular, `func_fakebrush` and ET:L-only custom entity loading can add a player-clipping box from entity fields or an external entity source. The current 20 BSP entity lumps contain zero `func_fakebrush` records, but that does **not** prove the live server adds none. ET:L's documented `CONTENTS_PLAYERCLIP` behaviour is exactly why movement and visibility masks must remain separate: a fake brush can block a player while deliberately not blocking bullets, projectiles, or sight.
+
 The consequence is not uniform — most of a map is static world geometry and traces through it are correct. But a sightline that crosses a door is exactly the kind that decides a duel. Required handling:
 
 1. Load the entity submodels (`models` lump) alongside the world model.
 2. Where a trace crosses a dynamic entity's bounds, mark the result **`indeterminate`** rather than guessing a state, until the stage model (W5) or Lua capture can supply that state.
-3. Report the indeterminate share. If it is small, the trace is still useful; if it is large on a given map, say so rather than averaging it away.
+3. Before validation, inventory the actual server's ET:L custom-entity sources and `func_fakebrush` instances. Where the runtime entity set cannot be reconstructed, mark the affected map/server configuration **`indeterminate`** rather than assuming the BSP entity lump is complete.
+4. Report the indeterminate share. If it is small, the trace is still useful; if it is large on a given map, say so rather than averaging it away.
 
 **W5 — stage model.**
 Parse `.objdata` for the objective list per team with primary/secondary/additional classification, and `.script` for the stage logic (`wm_objective_status`, `trigger stolen`, `trigger dropped`, `wm_setwinner`). Produce, per map, an ordered stage model and the mapping from stage to active spawn points and live objective.
@@ -618,6 +621,8 @@ Once §10 C4 is available, compare offline traces against `et.trap_Trace` result
 ### 9.2 Risks
 
 - **Brush-based collision is not the same as the engine's player trace.** The engine traces a bounding box, not a ray, and has its own edge behaviour. Expect disagreements at corners; W6 quantifies them.
+- **ET:L trace masks are purpose-specific.** `CONTENTS_PLAYERCLIP` belongs in movement traces but not automatically in line-of-sight or shot traces. Every W4 result must state the mask it used.
+- **The BSP entity lump may not be the live entity set.** ET:L custom entity loading and runtime-created `func_fakebrush` boxes must be inventoried from the actual server configuration before W4 can claim complete collision coverage.
 - **Cost.** A trace per player-pair per 200 ms tick is 66 pairs × 3,600 ticks ≈ 238k traces for one 12-minute round. Measure before committing to a per-tick design; consider a coarser visibility cadence than the movement cadence.
 - **`etl_frostbite`** is 151 rounds with objective coordinates but no BSP. Anything geometry-derived must be null there, not silently substituted.
 
@@ -815,8 +820,9 @@ Map assets, checked by reading the archives in `/home/samba/share/etmain` direct
 - Coverage: 1,767 of 1,929 R1/R2 rounds (91.6%) are on a map we hold; missing are `etl_frostbite` (151), `et_beach` (4), `radar` (2), `sp_delivery_te` (2), `etl_supply` (2), `mp_sillyctf` (1)
 - BSP format: magic and version read from the first 8 bytes of each BSP → `IBSP` v47 on all 13 available maps
 - Lump sizes: header parsed as 17 `(offset, length)` int32 pairs on `etl_adlernest.bsp` → planes 1,512,544 B; brushes 130,404 B; brushsides 927,960 B; entities 65,814 B
-- Lump record counts: decoded with the ET `qfiles.h` layouts (`dplane_t` 16 B, `dbrush_t` 12 B, `dbrushside_t` 8 B, `dnode_t` 36 B, `dleaf_t` 48 B) → planes 94,534; brushes 10,867; brushsides 115,995; nodes 1,676; leafs 1,756; leafbrushes 21,202
+- Lump record counts: decoded with the ET:Legacy `qfiles.h` layouts (`dplane_t` 16 B, `dbrush_t` 12 B, `dbrushside_t` 8 B, `dnode_t` 36 B, `dleaf_t` 48 B) → planes 94,534; brushes 10,867; brushsides 115,995; nodes 1,676; leafs 1,756; leafbrushes 21,202
 - Entity classes: regex over the entity lump → 540 entities, 34 classnames; per-map spawn / objective-trigger / WOLF-objective counts as tabulated in §2.5
+- ET:L compatibility: current ET:Legacy `qfiles.h` checked directly → `IBSP` v47 and the same W2 record layouts; all 20 local BSP entity lumps checked → zero `func_fakebrush`, with live custom-entity sources still unverified
 - `.objdata` / `.script` presence: checked per archive → present on all 13 available maps
 - Duplicate provision: `te_escape2` supplied by three pk3s; sha256 of each BSP compared → byte-identical
 
@@ -833,7 +839,7 @@ Related: #556 (metric validity method), #560 (track linkage fix), #551 (open des
 
 ### Revision history
 
-**Rev 4 (2026-07-27)** — W1/W2 implementation validation corrected two arithmetic errors in §2.5.1 and W4. The lump byte lengths were right, but the plane and brush estimates had used the wrong record sizes: `1,512,544 / 16 = 94,534` planes and `130,404 / 12 = 10,867` brushes. The strict reader also decoded all 20 unique BSPs in the 22-archive inventory as populated `IBSP` v47 files; this does not change the 13-map played-map coverage boundary.
+**Rev 4 (2026-07-27)** — W1/W2 implementation validation corrected two arithmetic errors in §2.5.1 and W4. The lump byte lengths were right, but the plane and brush estimates had used the wrong record sizes: `1,512,544 / 16 = 94,534` planes and `130,404 / 12 = 10,867` brushes. The strict reader also decoded all 20 unique BSPs in the 22-archive inventory as populated `IBSP` v47 files; this does not change the 13-map played-map coverage boundary. Owner review then raised the ET-vs-ET:L compatibility question: the current ET:Legacy `qfiles.h` confirms the same v47 layouts, while ET:L runtime collision (`func_fakebrush`, custom entity loading) requires a new W4 inventory gate and purpose-specific trace masks.
 
 **Rev 3 (2026-07-27)** — review of rev 2 found **five further factual errors**, all of the same shape: a claim asserted from a read query without checking the write path or the helper's actual behaviour.
 
