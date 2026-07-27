@@ -10,11 +10,11 @@
 
 Cilj: proximity ne sme le vedeti, **kje** je igralec, ampak ali je njegov premik v tistem trenutku skladen s pozicijami soigralcev, z uro runde in s fazo respawn valov nasprotnika. Čas runde je tretji nasprotnik.
 
-**Dobra novica iz raziskave:** podatke večinoma **že imamo**. `player_track.path` vsebuje 7.989.430 pozicijskih vzorcev na 200 ms in vsi igralci v rundi delijo isto časovno os — rundo lahko prerežemo v poljubnem trenutku in dobimo pozicijo vseh. Ta stolpec je bil stisnjen v `avg_speed`, `sprint_percentage` in `total_distance` — tri metrike, ki so v #556 izmerile kot šum. Signal nismo izgubili pri zajemu, ampak pri agregaciji.
+**Dobra novica iz raziskave:** velik del podatkov **že imamo**. `player_track.path` vsebuje 7.989.430 pozicijskih vzorcev pri trenutni 200 ms politiki in vsi zajeti viri v rundi delijo isto časovno os. Rundo lahko prerežemo v poljubnem trenutku za igralce, ki imajo takrat veljavno sled; post-revive vrzeli (§13.2b) pomenijo, da pozicija vseh igralcev ni zagotovljena in mora biti tak posnetek označen kot nepopoln oziroma nedostopen. Stolpec je bil stisnjen v `avg_speed`, `sprint_percentage` in `total_distance` — tri metrike, ki so se v #556 izmerile kot šum. Veliko signala smo izgubili pri agregaciji, del pa ga zaradi vrzeli nikoli nismo zajeli.
 
-**Druga dobra novica:** fazo respawn vala je mogoče rekonstruirati za **vso zgodovino** brez spremembe Lue. Formulo se da obrniti in offset izračunati nazaj iz obstoječih ubojev — deluje v 98,7 % primerov.
+**Druga dobra novica:** fazo respawn vala je mogoče rekonstruirati za del zgodovine brez spremembe Lue. Med 1.266 `(runda, ekipa)` skupinami z vsaj tremi uporabnimi timing vrsticami jih je 1.249 (98,7 %) interno skladnih, toda to ni coverage vse zgodovine in ni dokaz točnosti. Neodvisni preliminarni spawn-check je pri zamrznjenem diagnostičnem pragu prestalo 961 od 1.141 podprtih skupin; končna uporaba je dovoljena samo skupinam, ki prestanejo §5.3 z objavljenim imenovalcem in izključitvami.
 
-**Tretja dobra novica — popravek prve različice tega dokumenta:** prvotno je tu pisalo, da vidnosti (kdo koga dejansko vidi) za zgodovino ni mogoče izračunati. **To ni res.** Same mape v `/home/samba/share/etmain` nosijo `.bsp` s polno geometrijo (10 MB za Adlernest), plus `.objdata` z opisi objectivov in `.script` z logiko stopenj. Vidnost se torej **da** izračunati offline, za vso zgodovino, brez dotikanja igralnega strežnika — rabi pa BSP collision parser, kar je resno delo.
+**Tretja dobra novica — popravek prve različice tega dokumenta:** prvotno je tu pisalo, da vidnosti za zgodovino ni mogoče niti modelirati. **To ni res.** Same mape v `/home/samba/share/etmain` nosijo `.bsp` z geometrijo (10 MB za Adlernest), plus `.objdata` z opisi objektivov in `.script` z logiko stopenj. Offline se lahko izračuna geometrijska razpoložljivost vidne linije za pokriti, rekonstruirani del zgodovine; to še ni dokaz, da je igralec nekoga videl, in ni popolno za manjkajoče BSP-je, neznana dinamična stanja ali runtime entitete. Potreben je BSP collision parser in W6 validacija, kar je resno delo.
 
 Napaka je nastala tako, da je Codexov review iskal po *repu*, kjer geometrije res ni, jaz pa sem njegov sklep prevzel, ne da bi odprl same mape. Owner je ves čas pravil, da ".pk3 ima koordinate objektivov in vsega" — imel je prav.
 
@@ -32,7 +32,7 @@ Napaka je nastala tako, da je Codexov review iskal po *repu*, kjer geometrije re
 
 ### What the web is
 
-A relational, per-moment reconstruction of a round: for any time `t`, the position and state of every player, the relationships between them, the phase of both teams' reinforcement cycles, and an estimate of what each team could plausibly have known at that moment.
+A relational, per-moment reconstruction of a round: for any time `t`, the available position/state of each trackable player, explicit roster/trajectory gaps, relationships among valid states, validated reinforcement-cycle phases, and an estimate of what each recipient could plausibly have known at that moment. It never fills a missing active player with silence.
 
 ### What it is explicitly not
 
@@ -249,7 +249,7 @@ Rule: derive objective contribution from **what the player did** (carried, plant
 
 | Function | Purpose |
 |---|---|
-| `get_player_positions(db, round_id, time_ms)` | state of every player at `t` |
+| `get_player_positions(db, round_id, time_ms)` | matched track states at `t`; it can omit active post-revive players (§13.2b) |
 | `get_player_paths(db, round_id, from_ms, to_ms)` | trajectories in a window |
 | `get_round_timeline(db, round_id)` | all events merged chronologically |
 | `_find_position_at_time(path, target_ms)` | bisect over one path |
@@ -277,7 +277,15 @@ CapturePolicy
   burst_interval_ms, burst_window_ms: int | null
   max_position_staleness_ms, velocity_max_dt_ms: int | null
   change_thresholds: dict | null
+  enabled_capabilities: dict[str, bool | "unknown"]
+  sensor_schedules: dict[str, SensorSchedule]
   policy_version, source
+
+SensorSchedule
+  mode: "event" | "fixed" | "adaptive" | "disabled" | "unknown"
+  interval_ms: int | null
+  integration: "actual_dt" | "event_count" | "none" | "unknown"
+  scheduler_version, completeness
 
 Snapshot
   t_ms
@@ -305,7 +313,7 @@ Edge
 
 `position_sample_interval` is written in each raw file header and parsed into transient parser metadata, but is not currently persisted with the processed round. For fixed-rate historical files, persist it as `observation_interval_ms` with `mode = fixed` and `source = header` before materialising timelines. For historical files without recoverable header metadata, infer a cadence only from sufficiently many ordinary consecutive samples across multiple same-life tracks, publish the support and require one consistent value; otherwise cadence is `unknown`. The parser's current 1,000 ms default is a software fallback, not evidence about a file.
 
-Capture cadence and analysis cadence are different contracts. A future adaptive file is intentionally irregular and must carry its complete policy/threshold manifest; a consumer may evaluate requested times with causal floor state and explicit staleness, but must never invent a regular capture grid. A policy field being absent is `unknown`, not the current repo default.
+Capture cadence and analysis cadence are different contracts. A future adaptive file is intentionally irregular and must carry its complete policy/threshold manifest; a consumer may evaluate requested times with causal floor state and explicit staleness, but must never invent a regular capture grid. The manifest also records each semantic sensor independently — trajectory observation/persistence, objective integration, engagement path, carrier/power-up, vehicle, aim-lock, shot, damage, lifecycle and any future callback — including whether it is enabled, its event/fixed/adaptive mode, cadence, integration rule, implementation version and completeness. Two files with the same trajectory policy but different sensor schedules are not equivalent. A policy field being absent is `unknown`, not the current repo default.
 
 ### 4.3 Resolving overlapping lives — mandatory
 
@@ -334,12 +342,12 @@ Derive velocity only from the selected life's two causal floor samples. At an ex
 
 ### 4.5 Edges
 
-- **Distance edges:** pairwise 3D distance between alive players. For a 6v6 that is at most 66 pairs per tick; at the currently common 200 ms cadence a 12-minute round is 3,600 ticks. Budget from the round's actual cadence (§11). This is geometric separation only, not tactical support distance through the map.
-- **Engagement edges:** an engagement in `combat_engagement` with `start_time_ms <= t <= end_time_ms` links its `target_guid` to every `attackers[].guid`.
+- **Distance edges:** pairwise 3D distance between alive players. For a 6v6 that is at most 66 pairs per requested analysis tick. A 12-minute round at `analysis_tick_ms = 200` is 3,600 ticks and at 1,000 ms is 720; budget from timeline duration and the consumer's **analysis cadence**, never capture/persistence cadence. This is geometric separation only, not tactical support distance through the map.
+- **Engagement-participation edges:** an engagement in `combat_engagement` with `start_time_ms <= t <= end_time_ms` may link its `target_guid` only to an attacker whose stored `first_hit_ms <= t`. The final attacker list includes participants who joined later, so omitting this per-attacker filter leaks future participation. Missing/invalid first-hit provenance makes that attacker edge unavailable before the engagement closes; do not substitute engagement start.
 
   **An open engagement is not an active attack.** The tracker does not close one when damage stops: `checkEscapes` needs `escape_time_ms = 5000` **and** 300 units of movement, and otherwise the engagement stays open until a `stale_timeout` of **15,000 ms**. So "engagement open at `t`" can mean "was shot at up to fifteen seconds ago and has been standing still since".
 
-  For "is this teammate under attack right now", use the last damage timestamp instead — `attackers[].last_hit_ms` — with a stated recency window, and treat the open-engagement flag as the weaker signal "recently contested".
+  The final `attackers[].last_hit_ms` is overwritten on every hit and serialized only at close, so it is **not a historical per-tick clock**: using it between hits leaks the later final hit, while filtering it out loses earlier hits. For target-level world truth, reconstruct recent damage from timestamped `position_path` entries whose `event = 'hit'`; those rows do not identify the attacker for each hit. Attacker-specific active-hit history and recipient knowledge remain unavailable unless a true hit-event/capability capture supplies them. The open-engagement flag means only "recently contested".
 - **Geometric separation:** a player's straight-line distance to their nearest living teammate. `proximity_team_cohesion` already computes a team-level `straggler_count` and one `buddy_pair`; the web supersedes it with per-player values but should be cross-checked against it (§11). Call this separation, not tactical isolation: walls and stacked floors can make a nearby teammate unable to support the player.
 
 ### 4.6 What Layer 1 must not do
@@ -348,14 +356,32 @@ No scoring. Layer 1 is reconstruction only. If it produces a number that ranks p
 
 ### 4.7 Capture cadence, server cost and storage — measure before changing 200 ms
 
-The repo tracker currently observes active players every **200 ms**. Historical effective cadence confirms this is real, not merely a default: monthly median `duration_ms / (sample_count - 1)` is 198–199 ms. The dev database currently holds **57,311 tracks / 7,989,430 samples**; `player_track` occupies about **223 MB**, of which the compressed JSONB paths account for **177 MB**, or roughly **23.2 stored path bytes per sample**. July contains about 1.05 million samples. At current traffic, PostgreSQL storage is manageable; this measurement says nothing about raw text retention, Lua table overhead, garbage collection or frame-time cost on the game server.
+The repo tracker currently observes active players every **200 ms**. Historical effective cadence confirms this is real, not merely a default: monthly median `duration_ms / (sample_count - 1)` is 198–199 ms. On the dev database, PostgreSQL reports **57,311 tracks / 7,989,430 samples** and these exact byte counts: main heap `pg_relation_size = 30,834,688`; table including TOAST/FSM/VM `pg_table_size = 221,724,672`; table indexes `pg_indexes_size = 12,197,888`; total `pg_total_relation_size = 233,922,560` (**223.1 MiB**). The associated TOAST relation reports 188,317,696 heap bytes, 2,465,792 index bytes and 190,857,216 total bytes. Separately, `SUM(pg_column_size(path)) = 185,644,744` bytes (**177.0 MiB**, **23.24 bytes/sample**); that is a sum of stored JSONB datum sizes, not allocated TOAST-relation size. July contains about 1.05 million samples. At current traffic, PostgreSQL storage is manageable; this measurement says nothing about raw text retention, Lua table overhead, garbage collection or frame-time cost on the game server.
+
+Reproduce the storage baseline in bytes; convert to MiB only for display:
+
+```sql
+SELECT pg_relation_size('player_track'::regclass),
+       pg_table_size('player_track'::regclass),
+       pg_indexes_size('player_track'::regclass),
+       pg_total_relation_size('player_track'::regclass),
+       COUNT(*), SUM(jsonb_array_length(path)), SUM(pg_column_size(path))
+FROM player_track;
+
+SELECT c.reltoastrelid::regclass,
+       pg_relation_size(c.reltoastrelid),
+       pg_indexes_size(c.reltoastrelid),
+       pg_total_relation_size(c.reltoastrelid)
+FROM pg_class c
+WHERE c.oid = 'player_track'::regclass;
+```
 
 The current implementation couples unrelated semantics to one throttle. Every `sampleAllPlayers()` pass records the trajectory and also drives objective-distance accumulation, carrier positions, power-up polling, vehicle positions and aim-lock checks. `checkEscapes()` samples engagement paths on the same interval, and objective time increments by `config.position_sample_interval` rather than measured elapsed time. Therefore changing the interval — especially making it adaptive — would silently change existing metrics unless these schedulers and duration integration are separated first.
 
 **Recommended candidate: event-preserving, error-bounded adaptive capture.** Do not jump directly from 200 to 400/1,000 ms. Evaluate this layered policy offline first:
 
-1. Exact samples when an existing lifecycle/gameplay callback or capability-proven writer fires: spawn, death, revive, damage, weapon fire, captured objective/carrier transition and round boundary. An objective transition that is not currently captured remains missing; the adaptive sampler must not invent it.
-2. A bounded observation loop for active movement, initially retaining the existing 200 ms reference cadence. Persistence is sparse: store when stance/weapon/health changes, a teleport/discontinuity occurs, or actual position deviates from the causal constant-velocity prediction by more than a frozen spatial error bound.
+1. Exact samples when an existing lifecycle/gameplay callback or capability-proven writer fires: spawn, death, revive, damage, weapon fire, captured objective/carrier transition and round boundary. An objective transition that is not currently captured remains missing; the adaptive sampler must not invent it. The manifest declares the eligible reference event set per enabled capability.
+2. A bounded observation loop for active movement, initially retaining the existing 200 ms reference cadence. The first candidate preserves the §4.4 floor contract: store when stance/weapon/health changes, a teleport/discontinuity occurs, or distance from the **last persisted** position exceeds a frozen spatial bound at an observation tick. Constant-velocity movement must therefore emit samples; prediction error is not a valid bound for a consumer that is forbidden to extrapolate. A predictor-based alternative is a separate reconstruction contract and may be tested only if its causal extrapolation, uncertainty and downstream consumers are specified and independently validated first.
 3. A maximum heartbeat (initial candidate 1,000 ms) even when prediction remains good, so silence is bounded and missing capture is distinguishable from stationary movement.
 4. Optionally keep a small in-memory high-rate ring per active player and flush the pre-event window plus a short post-event burst around damage/fire/objective events. This can improve combat timing without storing the entire round at the burst rate. Ring cadence/window are hypotheses, not approved constants.
 5. Keep observation cadence, persistence policy and every semantic sensor scheduler independent. Time aggregates integrate actual `dt`; no metric may multiply sample count by a nominal interval.
@@ -370,7 +396,7 @@ This design reduces stored samples and end-of-round serialization without necess
 
 **Storage representation experiment.** Replay existing 200 ms tracks through the candidate sparsifier before touching Lua. Compare current JSONB against per-track delta encoding (`dt`, quantised `dx/dy/dz`, changed-field bitmask) compressed in round-sized chunks. Keep queryable summaries and provenance in PostgreSQL; do not normalize eight million samples into indexed rows or delete raw files without measuring table/index overhead and proving lossless reprocessing. Quantisation may not exceed the current writer's 0.1-unit precision without a separate fidelity result.
 
-The offline comparison uses chronological discovery/confirmation blocks and publishes: retained-sample ratio; raw/compressed/DB bytes; max/p50/p95 spatial error at original timestamps; velocity/direction error; event recall; teleport and turn recall; coverage/staleness distributions; and stability of every downstream candidate. Thresholds are chosen on discovery and frozen before confirmation. A smaller file is not a pass if it changes a validated metric or hides the pre-engagement movement this project exists to measure.
+The offline comparison uses chronological discovery/confirmation blocks and publishes: retained-sample ratio; raw/compressed/DB bytes; max/p50/p95 floor-reconstruction spatial error at every original 200 ms timestamp; velocity/direction error; per-enabled-capability event recall; teleport and turn recall; coverage/staleness distributions; and stability of every downstream candidate. The 200 ms source is a **compatibility baseline only**: it cannot establish fidelity for turns, excursions or events between its ticks. Any sub-200 ms claim requires a separately validated higher-rate demo/native stream or callback-level controlled fixture with clock/alignment and loss measured first. Thresholds are chosen on discovery and frozen before confirmation. A smaller file is not a pass if it changes a validated metric or hides the pre-engagement movement this project exists to measure.
 
 ---
 
@@ -499,9 +525,9 @@ This is the most original part of the design and the one most easily overclaimed
 
 | Channel | Source | Certainty |
 |---|---|---|
-| **Public obituary** | deduplicated `player_track.death_time_ms` + terminal `path[-1].event` obituary records, enriched from `proximity_kill_outcome` where present | **High but non-spatial.** `proximity_kill_outcome` alone is incomplete: its writer excludes self-kill, falling, world damage and team-kill. Every public obituary supports `observed_out_of_action` at that instant; revivability, limbo state and killer/source detail may remain unknown. Later tracker outcomes are server truth and are not automatically public observations. |
+| **Public obituary** | best-effort deduplicated terminal `player_track` events plus `proximity_kill_outcome`; future C7 general obituary stream | **High but non-spatial when present; historically incomplete.** `proximity_kill_outcome` excludes self-kill, falling, world damage and team-kill, while `player_track` emits no second terminal event when a revived player dies again before a normal respawn because the active track was never resumed. A present obituary supports `observed_out_of_action`; absence cannot prove no death. |
 | **Gunfire** | `proximity_shot_fired` (648,214 rows, with `origin_x/y/z`) | Medium and **capability-gated**. An audible recipient learns an uncertain source region, not the exact telemetry coordinate. The radius and localisation error are named model parameters. |
-| **Damage contact** | `combat_engagement.attackers[].last_hit_ms` | Asymmetric. The attacker has a resolved target at the hit. The victim has evidence of an incoming threat, but not automatically the attacker's GUID or exact position. Nearby teammates receive nothing without separate audible, visible or communication evidence. |
+| **Damage contact** | `combat_engagement.position_path[event='hit']` plus final attacker summary | Asymmetric and target-level only in history. A hit proves server-side damage, not that an indirect/area attacker identified the victim. The victim receives non-spatial incoming-damage evidence, not an invented bearing, attacker GUID or position. Nearby teammates receive nothing without separate audible, visible or communication evidence. Final `last_hit_ms` cannot reconstruct the historical hit sequence. |
 | **Server lifecycle truth** | `player_track.death_time_ms` + `proximity_kill_outcome` | High reconstruction evidence for the oracle/world state, but not a belief source by itself; use the write-path state machine and recipient rules below. |
 | **Voice macros** | `proximity_comm_event` | **Currently unusable:** feature flag `comm_events` is off, 96 rows total. |
 | **Line-of-sight availability** | BSP trace (§9) | An oracle upper-bound diagnostic for covered static geometry, not an observation and never a belief source by itself. |
@@ -523,7 +549,7 @@ Use it as an **upper bound on what could have been seen** and never insert a bel
 
 **Beliefs are per recipient, not per team.** Damage gives different evidence to attacker and victim, gives none automatically to nearby teammates, and gunfire only reaches its audible radius. A single team-wide set cannot express any of that: it would hand a player on the far side of the map the same knowledge as the one standing next to the fight. Hold a belief set **per player**, and derive team-level views by union when a team-level question is asked.
 
-**Contact is asymmetric.** A damage row proves that the attacker hit and therefore had a resolved target at that instant. It does not prove that the victim identified the attacker by GUID or exact position; absent an aim-lock, return fire or another recipient-specific attention event, the victim receives only an anonymous uncertain incoming-threat/bearing region. Teammates receive no contact belief by proximity alone. Audible gunfire, their own visibility/attention or a captured communication event may independently create one.
+**Contact is asymmetric and weapon-aware.** A direct bullet hit plus recipient-specific attention evidence may establish that the attacker resolved the target. The current `et_Damage` callback itself proves only a server attacker/target pair and also includes delayed/area causes such as grenades, artillery, airstrikes and landmines; those must not hand the attacker a subject they may never have seen. The victim receives only anonymous, non-spatial incoming-damage evidence unless a captured recipient-observable cue supplies direction or identity. No current engagement field records perceived damage bearing. Teammates receive no contact belief by proximity alone. Audible gunfire, their own attention or a captured communication event may independently create one.
 
 **Keep world truth separate from player belief.** The following server lifecycle reconstructs what actually happened and may drive Layer 1/oracle diagnostics. Its transitions follow the Lua write path:
 
@@ -536,7 +562,7 @@ Use it as an **upper bound on what could have been seen** and never insert a bel
 
 There is no permanent `terminally_out` state during a live respawn round. Do not decrement a ground-truth available-player count past the next observed spawn, and do not manufacture a transition after `gibbed` when the spawn evidence is missing. An unresolved lifecycle remains explicitly uncertain.
 
-The **belief** lifecycle is narrower. Build its public death stream from every obituary callback, not only `proximity_kill_outcome`. The parser reads a track-level `death_type`, but the current relational schema does not store a dedicated column; the category survives as the terminal JSON path sample's `event`. Use `player_track.death_time_ms` plus `path[-1].event IN ('killed', 'selfkill', 'fallen', 'world', 'teamkill')` as the canonical event row, enrich it from `proximity_kill_outcome` only on exact resolved round + victim + timestamp identity, and exclude `round_end`, `disconnect`, `shutdown` and `unknown`. An unmatched outcome row must not create a second public obituary; a track row without a trustworthy terminal event cannot feed the stream. This gives every holder the non-spatial victim fact `observed_out_of_action`; revivability/limbo and missing killer/MOD detail stay unknown unless separately observed. Until historical base/enrichment coverage is measured, the public roster lifecycle is unavailable rather than partially populated.
+The **belief** lifecycle is narrower. Existing history has no complete general-obituary relation. Use `player_track.death_time_ms` plus terminal `path[-1].event IN ('killed', 'selfkill', 'fallen', 'world', 'teamkill')` as a best-effort base, enrich from `proximity_kill_outcome` only on exact resolved round + victim + timestamp identity, and exclude `round_end`, `disconnect`, `shutdown` and `unknown`. But this base is not canonical after a revive: `et_Obituary` already removed the active track, the revive path does not start a replacement, and a repeat death before normal respawn makes `endPlayerTrack()` a no-op. Therefore any interval/player whose lifecycle can enter that gap has **incomplete obituary capability**; absence of an event is unknown and roster-dependent historical beliefs are unavailable unless another independently complete source covers it. C7 adds one event per `et_Obituary` callback for future files. An unmatched outcome row must not create a second public obituary, and a present event gives only the non-spatial `observed_out_of_action` fact.
 
 `revived`, `gibbed`, `tapped_out`, the new `player_track` and the 30-second `expired` cleanup are server-side telemetry; they do not globally update an opponent's belief. A holder changes that subject's state only from recipient-observable evidence: their own contact/attention, audible or visible evidence, a capability-proven communication event, or another explicitly modelled public game cue. A public reinforcement wave may support a labelled probability that downed opponents could be active again, but it does not identify which GUID spawned. Without such evidence the holder retains `uncertain_after_down`, never exact server truth. `round_end` is public and ends all live-round beliefs.
 
@@ -547,7 +573,7 @@ The **belief** lifecycle is narrower. Build its public death stream from every o
 ```
 BeliefItem
   holder_guid      # WHO knows this — beliefs are not shared by fiat
-  kind             # "position_region" | "roster_state"
+  kind             # "position_region" | "roster_state" | "nonspatial_contact"
   region           # spatial distribution/centre+radius; null for roster facts
   t_observed
   source           # gunfire/contact_hit/incoming_damage/public_obituary/aim_lock
@@ -576,7 +602,8 @@ Derived per player, per tick:
 - `known_enemy_count` — **distinct resolved subjects** above a confidence threshold, never a count of belief items. `proximity_shot_fired` emits one row per shot, and contact and down evidence repeat for the same person; counting items turns one enemy firing a burst into a phantom squad. Unresolved gunfire regions are not distinct enemies unless an explicit probabilistic association model supports that conclusion.
 - `nearest_known_enemy_distance` — a distance interval/distribution when the belief is a region, not false point precision
 - `moved_into_unknown` — did the player move toward a region with no recent belief coverage
-- `teammate_under_attack` — from the latest `combat_engagement.attackers[].last_hit_ms`, **not** from an open engagement edge. Start with the explicit, configurable `UNDER_ATTACK_RECENCY_MS = 1000`; publish it as a modelling parameter and run sensitivity checks before validation. An open engagement can remain stale for 15 seconds and means only "recently contested" (§4.5).
+- `world_target_under_attack` — oracle/world truth only, from recent timestamped `combat_engagement.position_path[event='hit']` entries for that target under an explicit sensitivity-tested window. It cannot identify which attacker produced each hit and never uses the final `last_hit_ms` as a per-tick history.
+- `holder_knows_teammate_under_attack` — recipient-specific and currently unavailable unless the holder has capability-proven audible/visible/communication evidence or a future C5 capture explicitly records recipient observability. Server truth that a remote teammate was hit is not automatically the holder's knowledge.
 
 ### 6.4 Acceptance for Layer 3
 
@@ -615,15 +642,15 @@ Own-team positions are a different case: teammates share a voice channel we cann
 
 | Candidate | Built from | Notes |
 |---|---|---|
-| Space control share | Layer 1 positions + velocities + **§9 navigable topology** | Blocked until W4b lands: BSP parsing and collision rays do not create walkable connectivity; without topology a Voronoi over the bounding box is dominated by solid rock |
+| Space control share | Own-team Layer 1 state + opponent position/**velocity belief distributions** + **§9 navigable topology** | Blocked until W4b and Layer 3 validation. Never pair a stale believed opponent position with that opponent's true current velocity; derive motion only from holder-observable belief history or mark velocity unknown |
 | Reachability advantage | W4b movement graph + historical edge-time distributions | Learn on a navigable graph from prior data; do not assume a constant or allow paths through walls, floors or closed routes |
-| **Stage-aware objective control** | control × distance to the **currently live** objective volume | See 7.4.1 — the space that matters moves during the round |
+| **Stage-aware objective control** | control × distance to the **set of concurrently live** objective volumes | See 7.4.1 — publish objective-specific values; no single scalar until a frozen aggregation rule is validated |
 | Wave-phase alignment | recipient `ClockBelief` (§6.3) + §5.6 | Was the player advancing under the enemy-wave phase distribution they could plausibly know; exact reconstructed phase is oracle-only and never a scoring fallback |
 | Tactical isolation / support time | **Validated W4b route travel time** to nearest living teammate | Blocked until topology validation; straight-line Layer 1 distance is published only as geometric separation and must not cross walls/floors by implication |
 | Information-consistent movement | Layer 3 | Did the player move into space the team had no coverage of |
-| Teammate-support presence | Layer 1 engagement edges | Was the player near a teammate who was under attack |
+| Teammate-support presence | recipient-specific `holder_knows_teammate_under_attack` + validated route support time | Historically blocked where recipient evidence is unavailable; `world_target_under_attack` is an oracle diagnostic, and an open engagement edge is never current-attack truth |
 | **Sacrifice that opens space** | 7.4.2 | The owner's own playstyle, and the hardest thing in this list to measure |
-| Exposure | BSP line-of-sight availability (§9) | How many enemy positions had a clear line to this player |
+| Exposure | target-body BSP line-of-sight availability (§9) | How many believed enemy states had at least one clear ray to a stance-adjusted target bound; exact enemy states remain oracle-only |
 
 #### 7.4.1 Stage awareness is not optional
 
@@ -631,7 +658,7 @@ Stopwatch objectives are **sequential**. On Adlernest the Allies must first stea
 
 A metric that scores "control near the objective" against a static point is therefore **systematically wrong for the later part of every round**, and wrong in a direction that rewards whoever camped the first objective longest.
 
-Every candidate above that references "the objective" must resolve **which objective is live at time `t`** from a timestamped per-round state replay (§9 W5) or explicitly restrict itself to a stage whose activity is independently observed. `.objdata` and `.script` supply the possible transition graph only; they do not prove when any transition happened in a historical round. Any missing, contradictory or incomplete transition sequence makes the live objective `unknown` for the affected interval.
+Every candidate above that references objectives must resolve the **set of concurrently live objectives at time `t`** from a timestamped per-round state replay (§9 W5) or explicitly restrict itself to a stage whose activity is independently observed. ET can expose a primary objective alongside constructible, command-post or route objectives; choosing one discards legitimate control. Publish an objective-specific value keyed by objective identity. A scalar union/min/weighted aggregation is a separate pre-registered hypothesis whose weights and overlap handling must pass §8; it is not an implementation convenience. `.objdata` and `.script` supply the possible transition graph only; they do not prove when any transition happened in a historical round. Any missing, contradictory or incomplete transition sequence makes the affected live-objective set `unknown` for that interval.
 
 #### 7.4.2 Sacrifice that opens space
 
@@ -711,12 +738,12 @@ Handle one member being provided by several pk3s explicitly. Byte-identical prov
 **Brushes are not the whole ET:Legacy collision world.** ET:L's [`CMod_LoadPatches`](https://github.com/etlegacy/etlegacy/blob/master/src/qcommon/cm_load.c) scans `MST_PATCH` draw surfaces, reads their control points from `drawverts`, copies contents/surface flags from the referenced shader and calls `CM_GeneratePatchCollide`. Curved solid walls, arches and terrain can therefore block an engine trace without any brush doing so. W2 must validate every surface's shader, vertex and index ranges and preserve patch width/height and control points. A parser that omits these lumps is an incomplete W2, even if every brush parses correctly.
 
 **W3 — entity extraction.**
-From the entity lump: spawn points by team (`team_CTF_bluespawn`, `team_CTF_redspawn`) with their `spawnflags`; objective volumes (`trigger_objective_info`); objective markers (`team_WOLF_objective`); doors and movers. This supersedes the sphere-with-radius-500 approximation in `objective_zones.json` — keep that file as the fallback for maps without a pk3, and **label which source each zone came from** so a consumer can tell a measured volume from a guessed sphere.
+From the entity lump: spawn points by team (`team_CTF_bluespawn`, `team_CTF_redspawn`) with their `spawnflags`; objective volumes (`trigger_objective_info`); objective markers (`team_WOLF_objective`); doors and movers. This supersedes the sphere-with-radius-500 approximation in `objective_zones.json`. The legacy sphere may remain for display or an explicitly non-geometry metadata consumer, with `source = legacy_guess`; it may **never** enter geometry-backed control, distance-to-volume, exposure or reachability metrics. A map without a measured volume returns null for those metrics.
 
 **W4a — collision trace.**
 Implement both convex brush collision and ET:L-compatible patch collision facets, using the BSP leaf brush/surface references to avoid testing the whole map. A brush-only clear result is invalid where a trace can cross a solid `MST_PATCH`; until patch collision is implemented and validated, such a trace returns **`indeterminate`**, never clear. The output is **line-of-sight availability**, never "saw" (§3.1 B2).
 
-Trace endpoints are stance-adjusted eye positions, matching the live Lua's current heights: prone `z + 12`, crouched `z + 36`, standing `z + 56`. If stance is unavailable at either endpoint, return `indeterminate` or evaluate a labelled interval across plausible heights; never silently trace from feet or assume standing. Keep trace masks purpose-specific as described above.
+Trace from the observer's stance-adjusted eye — matching the live Lua's current heights: prone `z + 12`, crouched `z + 36`, standing `z + 56` — to a declared set of points on the **stance-adjusted target bounds**, not only target eye-to-eye. At minimum include head/eye, upper torso and lateral shoulder/side points derived from engine-equivalent stance bounds; freeze the point set and declare whether any-clear or a covered-fraction rule defines availability. Around cover, a target body can be exposed while its eye is blocked, so eye-to-eye alone is a narrower diagnostic and must not be called an upper bound on exposure. If stance/bounds are unavailable at either endpoint, return `indeterminate` or evaluate a labelled interval across plausible states; never silently trace from feet or assume standing. W6 live traces must use the same endpoints and mask. Keep masks purpose-specific as described above.
 
 **W4b — navigable topology.**
 Collision answers whether a particular segment intersects geometry; it does not create a movement graph. Build an empirical directed graph (or engine-equivalent navmesh) over walkable space from historical trajectories and geometry. It must preserve vertical levels and model stairs, jumps, drops, doors, movers and stage-dependent connections. Each node/edge records observation count, time range and stage/capability provenance. Fit rolling discovery graphs from earlier match blocks and freeze the final confirmation graph before opening confirmation trajectories (§5.6, §8); held-out paths may not modify topology, coverage or edge times. Validate on those held-out journeys; uncovered connections remain unknown. Space control, spawn reachability, tactical isolation and travel-time surfaces are blocked until this deliverable passes validation.
@@ -734,7 +761,7 @@ ET:Legacy can also add collision outside the static BSP entity set through custo
 **W5 — stage graph and per-round state replay.**
 Parse the independently resolved W1 `.objdata` for the objective list per team with primary/secondary/additional classification, and the resolved `.script` for the possible stage logic (`wm_objective_status`, `trigger stolen`, `trigger dropped`, `wm_setwinner`). An ambiguous input blocks W5 for that map; do not silently read the script beside the chosen BSP. Produce, per map, a static transition graph and candidate mappings from state to selectable spawn sets, dynamic routes and live objectives.
 
-Then replay each historical round from **timestamped observed transitions** such as carrier events, construction/destruction events, checkpoint/objective events and any future C3 capture. First inventory which event families are actually complete per tracker version. A static script proves that a transition can happen, not that it did happen at time `t`. Where an event is missing, duplicated, out of order, or insufficient to distinguish two legal states, return `unknown` from that point until a later observation uniquely re-establishes state. Never infer transition time merely from the final round result.
+Then replay each historical round from **timestamped observed transitions** such as carrier events, construction/destruction events, checkpoint/objective events and any future C3 capture. The replay state contains **sets** of concurrently live objectives and selectable spawns, plus dynamic route state; it never collapses those sets to one convenient objective. First inventory which event families are actually complete per tracker version. A static script proves that a transition can happen, not that it did happen at time `t`. Where an event is missing, duplicated, out of order, or insufficient to distinguish two legal states, return `unknown` from that point until a later observation uniquely re-establishes state. Never infer transition time merely from the final round result.
 
 **This is the deliverable with the most unknowns.** Map scripts are hand-written and vary. Report two separate coverages: (1) maps with a defensible static transition graph and (2) historical round-time with an unambiguous replayed state. Return null for the rest rather than inventing one. Do not let §7.4.1 depend on a stage model that silently guesses.
 
@@ -746,7 +773,7 @@ Once §10 C4 is available, compare offline traces against `et.trap_Trace` result
 - **Brush-and-patch collision still is not automatically the engine's player trace.** Movement uses a bounding box, LOS uses a ray, and the engine has edge behaviour and dynamic entities. Expect disagreements at corners; W6 quantifies them.
 - **ET:L trace masks are purpose-specific.** `CONTENTS_PLAYERCLIP` belongs in movement traces but not automatically in line-of-sight or shot traces. Every W4 result must state the mask it used.
 - **The BSP entity lump may not be the live entity set.** ET:L custom entity loading and runtime-created `func_fakebrush` boxes must be inventoried from the actual server configuration before W4 can claim complete collision coverage.
-- **Cost.** A trace per player-pair per 200 ms tick is 66 pairs × 3,600 ticks ≈ 238k traces for one 12-minute round. Measure before committing to a per-tick design; consider a coarser visibility cadence than the movement cadence.
+- **Cost.** At most 66 player pairs times `ceil(round_duration_ms / analysis_tick_ms)` requested ticks, multiplied by the number of target-body endpoints, can become expensive. The 200 ms capture interval is not a trace budget. Measure before committing to an analysis cadence, cache static repeated queries where valid, and allow visibility cadence to differ from movement analysis cadence.
 - **`etl_frostbite`** is 151 rounds with objective coordinates but no BSP. Anything geometry-derived must be null there, not silently substituted.
 
 ---
@@ -763,8 +790,9 @@ Everything here requires a game-server deploy and is **owner-gated**.
 | C2 | `reinf_offset` in the file header, plus a wave timeline | §5's inference is 98.7% internally consistent but not independently validated; capture removes the inference and enables a controlled truth check | Very low |
 | C3 | Objective state over time (dynamite planted, doors, checkpoints) | §9 W5 derives only the possible transition graph offline. Existing timestamped events may replay part of a round; C3 is required wherever they do not uniquely determine live state | Low–medium |
 | C4 | Line-of-sight trace (`et.trap_Trace`) | **Reclassified.** Offline W4 can model covered geometry, but only after brush + patch + dynamic-state handling. C4 is the **ground truth that validates W4** (W6) | **High, measure first** |
-| C5 | Teammate engagement state (is this player under attack right now) | Partially derivable from `combat_engagement`, but a live flag is exact | Low |
+| C5 | Recipient-observable teammate-under-attack cues plus exact world hit events | Historical `position_path[event='hit']` provides target-level world truth but not what each teammate knew; final attacker summaries cannot reconstruct each hit | Low–medium |
 | C6 | Versioned capture-policy manifest + performance counters; optional adaptive shadow capture | Fixed 200 ms currently couples storage cadence to several sensor semantics and exposes no CPU/RAM/GC budget. §4.7 can optimize storage offline, but only a controlled server run can measure Lua cost and event fidelity | Medium; test server only |
+| C7 | General non-spatial obituary event on every `et_Obituary` callback | Tracks miss repeat deaths after revive and kill outcomes exclude several public death categories; complete future roster belief needs an independent callback stream | Very low |
 
 Note how C3 and C4 changed. Both were listed as "only possible via Lua" in the first revision. Static structure and partial state are available offline, but C3 remains required wherever observed transitions cannot uniquely replay state. C1 supplies continuous attention; C4's justification has shifted from capability to verification.
 
@@ -781,14 +809,14 @@ Note how C3 and C4 changed. Both were listed as "only possible via Lua" in the f
 - **Never `lua_restart`** — it has crashed the server before. Always a full map load.
 - **`c0rnp0rn*.lua` is not ours. Do not touch it.**
 - C4 must have its server cost measured on a test map before it is enabled in production. A trace per player-pair per tick is not free.
-- C6 must first separate player observation, persisted trajectory, objective integration, engagement path, carrier/vehicle and aim-lock schedulers. Never deploy an adaptive interval while any existing aggregate still multiplies by `position_sample_interval`.
+- C6 must first separate player observation, persisted trajectory, objective integration, engagement path, carrier/vehicle and aim-lock schedulers. Persist every scheduler contract and enabled capability. Never deploy an adaptive interval while any existing aggregate still multiplies by `position_sample_interval`.
 
 ### 10.4 C6 experiment order
 
-1. **Offline, no Lua change:** replay stored 200 ms tracks through fixed 400/1,000 ms, error-bounded change-point, heartbeat and event-preserving candidates. Reject lossy policies under the §4.7 fidelity table.
-2. **Controlled test map, owner-gated:** instrument baseline 200 ms and the selected candidate with sample-pass wall time, calls/player, Lua `collectgarbage("count")` high-water, collection count/pause proxy, samples retained, bytes buffered, end-of-round serialization time and output bytes. Run representative 0/6/12-player scenarios; use bots only for repeatability, never as model-validation players.
-3. **Shadow only:** if a higher-rate ring or server demo is tested, retain the 200 ms stream as the comparison truth and prevent the candidate from feeding production metrics. Record `sv_fps`, tracker/build hash, map, player count and every capture-policy field.
-4. **Freeze and confirm:** choose all thresholds on discovery runs, then repeat on untouched maps/sessions. Initial engineering budgets are mean capture work ≤1% and p99 ≤5% of the configured server-frame budget, no visible frame hitch, bounded Lua memory, 100% recall of lifecycle and capability-proven objective reference events, and all predeclared reconstruction tolerances passing. If baseline already violates a budget, report both absolute and delta cost rather than making the candidate look good against a bad baseline.
+1. **Offline, no Lua change:** replay stored 200 ms tracks through fixed 400/1,000 ms, floor-error-bounded change-point, heartbeat and event-preserving candidates. Reject lossy policies under the §4.7 fidelity table. This can prove 200 ms compatibility, not sub-200 ms fidelity.
+2. **Controlled test map, owner-gated:** instrument baseline 200 ms and the selected candidate. Attribute monotonic wall time and calls to **every** observation loop, semantic scheduler, event callback, ring flush and serializer, then aggregate total capture work by server frame. Sample Lua `collectgarbage("count")` before/after each frame; report high-water and count downward sawtooth transitions as a collection proxy, while callback elapsed time on those frames is a conservative pause upper bound. Also record calls/player, samples retained, bytes buffered, end-of-round serialization time, absolute output bytes and bytes per active-player-minute. Run representative quiet and combat-heavy 0/6/12-player scenarios; use bots only for repeatability, never as model-validation players.
+3. **References and shadow only:** retain the 200 ms stream as a compatibility baseline and prevent the candidate from feeding production metrics. A sub-200 ms ring/burst claim additionally requires a validated higher-rate server demo/native logger or callback-level fixture that measures its own clock alignment and loss; never call the 200 ms stream truth for events it cannot observe. Record `sv_fps`, tracker/build hash, map, player count and the complete capture/sensor-policy manifest.
+4. **Freeze numeric budgets, then confirm:** choose thresholds on discovery runs and commit them before untouched maps/sessions. Initial budgets at 12 players are: total capture work mean ≤1%, p99 ≤5% and maximum single-frame capture/GC pause ≤20% of `1000 / sv_fps`; candidate tracker heap high-water ≤ both baseline + 2 MiB and 1.25× baseline; end-of-round serialization p95 ≤ one server-frame budget and no worse than baseline p95; total raw output bytes per player-minute ≤ baseline. Define each timer boundary and sample denominator in the manifest. The eligible reference-event set is the union of **every event class the enabled policy promises** — lifecycle, damage, weapon fire, objective/carrier, round boundary and any enabled trigger — and each class requires 100% recall in controlled fixtures. All §4.7 reconstruction tolerances must also pass. If baseline violates a budget, report it as a blocker; a candidate does not pass merely by being better than a bad baseline.
 5. **Production enablement:** separate owner approval after a soak test. Rollback is one versioned policy flag; old and new files remain independently parseable through their manifests.
 
 ---
@@ -811,13 +839,13 @@ Measurable, not descriptive.
 - **A3.** No player appears twice in a snapshot, and no life is alive at its exact `death_time_ms`. Overlap conflicts (§4.3) are counted and exposed.
 - **A4.** Full-round reconstruction under **1 s** for a 12-minute round; if not, materialise (see §13.1).
 - **A5.** Directional velocity is causal, same-life and expressed in game units/second after explicit ms-to-seconds conversion. Its availability, stale/null reason distribution, scalar-speed disagreement and held-out physical-cap violations are published before any velocity-dependent candidate consumes it.
-- **A6.** Every timeline reports the complete capture policy and provenance. Fixed-rate header values are preferred; historical inference publishes support/conflicts; adaptive files declare observation, heartbeat, burst, staleness and change thresholds plus policy version. Unknown policy yields no invented fixed grid or hard-coded staleness tolerance.
+- **A6.** Every timeline reports the complete capture policy and provenance. Fixed-rate header values are preferred; historical inference publishes support/conflicts; adaptive files declare observation, heartbeat, burst, staleness and change thresholds plus policy version. Every semantic sensor declares capability, event/fixed/adaptive scheduler, interval, actual-dt/event integration rule, version and completeness. Unknown policy yields no invented fixed grid, sensor coverage or hard-coded staleness tolerance.
 
 ### Phase B — Layers 2 and 3
 - **B1.** Inferred wave phase is independently validated against qualifying normal `player_track` spawn clusters (§5.3), with frozen support/jitter/residual thresholds and published coverage/exclusions. A unanimous tracker-derived offset that lacks independent spawn support remains `unvalidated`, not exact.
 - **B2.** Internal offset agreement and independent spawn residuals are reported per round/team. The 17 known-inconsistent groups are null with their candidate sets exposed, never averaged or mode-selected; every failed or unsupported validation group is also null to non-oracle consumers.
 - **B3.** Every opponent-dependent candidate is checked for P6 compliance. The §6.4 oracle delta is reported, including a negative result, but the oracle never becomes a shipping fallback.
-- **B3a.** Public obituary coverage includes `killed`, `selfkill`, `fallen`, `world` and `teamkill`, with enemy-kill enrichment deduplicated by exact resolved event identity. Recipient enemy-clock state is unknown until an observable cue; tests prove that exact Layer 2 offsets cannot enter player beliefs at round start.
+- **B3a.** Historical obituary evaluation reports each death category, repeat-death-after-revive gaps and source completeness separately; roster-dependent beliefs are unavailable where a complete stream cannot be proven. Future C7 fixtures capture every `et_Obituary` callback exactly once, with enemy-kill enrichment deduplicated by exact resolved event identity. Recipient enemy-clock state is unknown until an observable cue; tests prove that exact Layer 2 offsets cannot enter player beliefs at round start.
 
 ### Phase B — Layer 4
 - **B4.** Every candidate and tried parameter variant in §7.4 is declared in a frozen family manifest, measured on a chronological discovery/untouched-confirmation split under §8, and included in the full published table.
@@ -826,10 +854,10 @@ Measurable, not descriptive.
 ### BSP toolchain (§9)
 - **W1.** Every played map reports provider/member/hash records and an independent resolution for BSP, `.script` and `.objdata`. Equal duplicates are proven by hash; differing duplicates use independently verified live precedence or remain `ambiguous`. Every map resolves to exactly one BSP or an explicit missing/ambiguous geometry result, and the six uncovered maps are named rather than silently absent.
 - **W2.** Parser refuses any file that is not `IBSP` v47, validates all parsed cross-references, and exposes brush plus `MST_PATCH` collision inputs (`leafsurfaces`, `drawverts`, `drawindexes`, `surfaces`).
-- **W3.** Objective volumes extracted for every covered map, and each published zone states whether it came from a **measured volume** or the legacy sphere.
-- **W4a.** Brush + patch trace uses a named mask and stance-adjusted eye endpoints, preserves `indeterminate` for unresolved geometry/state, and is validated against hand-checked cases before any metric consumes it. Cost per trace is measured and stated.
+- **W3.** Objective volumes extracted for every covered map, and each published zone states whether it came from a **measured volume** or the legacy sphere. Geometry-backed metrics reject the legacy sphere and return null without a measured volume.
+- **W4a.** Brush + patch trace uses a named mask from observer eye to a frozen stance-adjusted target-body point set, preserves `indeterminate` for unresolved geometry/state, and is validated against hand-checked cases before any metric consumes it. Eye-to-eye is separately labelled; cost per endpoint/trace is measured and stated.
 - **W4b.** Prior-only navigable graphs reproduce held-out observed routes and travel times within published tolerances; uncovered or stage-ambiguous connections remain unknown. The frozen confirmation graph hash is in the family manifest, and confirmation paths never alter it. Space/reachability/isolation metrics consume no pre-validation graph.
-- **W5.** Report both static-graph map coverage and unambiguous per-round state-time coverage. A partial answer is acceptable; a fabricated transition time is not.
+- **W5.** Report both static-graph map coverage and unambiguous per-round state-time coverage. Replay sets of concurrent objectives/spawns/routes and publish objective-specific outputs; a partial answer is acceptable, while a fabricated transition time or arbitrary single-objective selection is not.
 - **W6.** Once §10 C4 exists, offline-vs-live agreement rate published. Until then every visibility output is labelled unvalidated.
 
 ### Phase C (§10)
@@ -837,8 +865,9 @@ Measurable, not descriptive.
 - **C2.** Captured per-team `reinf_offset` and wave timeline are populated and reproduce `time_to_next_spawn` for controlled kills within a named tolerance; inferred-vs-captured agreement and every disagreement are published.
 - **C3.** A controlled objective sequence on one map (plant/construct/destroy/checkpoint as applicable) produces ordered, timestamped state transitions that match a hand-audited server log/demo; missing or duplicate transitions fail the gate rather than being repaired silently.
 - **C4.** `et.trap_Trace` capture cost and output volume are measured under representative player counts on a test map before enablement, and paired offline/live trace fixtures are produced for W6. W6, not C4, owns the agreement verdict.
-- **C5.** Controlled damage/no-damage windows show the captured teammate-under-attack state entering and leaving at the declared times, including a stationary target whose `combat_engagement` remains open; no state may inherit the 15-second engagement staleness accidentally.
-- **C6.** The offline sparsification table and controlled 0/6/12-player test publish fidelity, CPU/frame-budget, Lua memory/GC, buffered samples, serialization latency and raw/DB byte results for baseline and candidate. All semantic sensors run on independent schedulers, duration aggregates use actual elapsed time, recall of lifecycle and capability-proven objective reference events is 100%, and the frozen confirmation policy passes §4.7/§10.4 before any production enablement.
+- **C5.** Controlled damage/no-damage windows show exact world hit state and each recipient-observable teammate cue entering/leaving at declared times, including indirect damage and a stationary target whose engagement remains open. A remote teammate without a cue receives no belief; no state inherits the 15-second engagement staleness or a future final `last_hit_ms`.
+- **C6.** The offline sparsification table and controlled quiet/combat-heavy 0/6/12-player test publish floor fidelity, total per-frame capture CPU, per-path attribution, Lua memory/GC, buffered samples, serialization latency and raw/DB bytes for baseline and candidate. Every semantic sensor runs on a persisted independent scheduler, duration aggregates use actual elapsed time, every enabled promised event class has 100% fixture recall, sub-200 ms claims use a separately validated reference, and all frozen numeric §10.4 budgets pass before production enablement.
+- **C7.** A controlled sequence containing enemy kill, team-kill, self-kill, fall/world death, revive and repeat death produces exactly one ordered general-obituary event per `et_Obituary` callback. The manifest proves completeness; no dependency on an active `player_track` or enemy-kill writer is permitted.
 
 ---
 
@@ -870,7 +899,7 @@ So 89 rounds that the current logic would flag are sitting unflagged, because th
 
 Note also that the flag being FALSE on the 2 mixed rounds is **correct**: a round with more humans than bots is not bot-dominated. Those two still contain bot players whose tracks would enter per-player aggregates, which is a separate concern from the round flag and is what the per-GUID `OMNIBOT%` filter in consumers exists for.
 
-For this workstream: apply both. Gate rounds on `is_bot_round` (once backfilled) **and** filter players on `player_guid LIKE 'OMNIBOT%'`, because the two catch different things.
+For this workstream: apply both. Gate rounds on `is_bot_round` (once backfilled) **and** exclude bot players with `player_guid NOT LIKE 'OMNIBOT%'` plus every separately verified legacy bot prefix. The positive `LIKE` predicate would keep bots and discard humans. Publish counts removed by each predicate because the two gates catch different things.
 
 ### 13.2b Revived players have no trajectory after death
 
@@ -882,7 +911,7 @@ ET is a medic-heavy game; in the sampled rounds most players run MEDIC. This is 
 - Any "distance travelled" or "space controlled" figure silently omits post-revive life.
 - The §4.3 overlap rule interacts with this: the next track row for that player starts at their next spawn, so the gap is invisible unless you look for it.
 
-**Required:** quantify the gap before building on trajectories. Use `proximity_revive` as the complete revive-callback source and cross-check the enemy-kill subset against `proximity_kill_outcome.outcome = 'revived'`; the latter omits reviveable deaths outside its enemy-kill writer gate. Measure what fraction of round-time per player falls into an unsampled post-revive window. If it is material, this becomes a §10 capture item (resume the track on revive) and every trajectory-derived metric carries the caveat until then.
+**Required:** quantify the gap before building on trajectories. Use `proximity_revive` as the complete revive-callback source and cross-check the enemy-kill subset against `proximity_kill_outcome.outcome = 'revived'`; the latter omits reviveable deaths outside its enemy-kill writer gate. Measure what fraction of round-time per player falls into an unsampled post-revive window. Every snapshot intersecting a known or unresolved post-revive active interval is unavailable for complete-roster reconstruction and excluded from validation unless another independently verified source reconstructs it. A caveat is not sufficient. Future capture work resumes the track on revive and C7 records every later obituary independently.
 
 This was not in the first revision at all and it is the most consequential data-quality finding in this document.
 
@@ -895,7 +924,7 @@ This was not in the first revision at all and it is the most consequential data-
 - 5.1% of `player_track` rows have `round_id IS NULL`. The helper falls back to the date key only when it is unambiguous.
 
 ### 13.5 Round validity
-Use the established gate: `round_number IN (1,2) AND is_valid IS DISTINCT FROM FALSE AND (round_status IN ('completed','substitution') OR round_status IS NULL)`. See `_round_quality_gate_sql()` in `website/backend/routers/proximity_helpers.py` and `GamingSessionScope` in `website/backend/services/session_scope.py`.
+Use the established gate: `round_number IN (1,2) AND is_valid IS DISTINCT FROM FALSE AND is_bot_round IS DISTINCT FROM TRUE AND (round_status IN ('completed','substitution') OR round_status IS NULL)`. This round predicate does not replace the negative per-player bot-GUID filter in §13.2. See `_round_quality_gate_sql()` in `website/backend/routers/proximity_helpers.py` and `GamingSessionScope` in `website/backend/services/session_scope.py`.
 
 ---
 
@@ -991,9 +1020,9 @@ Checks added in rev 7:
 - Match dependence: paired R1/R2 rounds and multi-map rows share `gaming_session_id`; validation therefore compares within round but splits/resamples whole session blocks
 - Outcome observability: `revived`, `tapped_out` and `expired` arise from server callbacks/cleanup, not from a public kill-feed event, so they are world-state evidence only unless a recipient-specific observation exists
 
-Checks added in rev 8:
+Checks added in rev 8 (category inventory, not complete-callback proof):
 
-- Public obituary completeness: `et_Obituary` always calls `endPlayerTrack`, but `recordKillOutcomeDeath` runs only for `death_type == "killed"`; self-kill, falling, world damage and team-kill are absent from `proximity_kill_outcome`
+- Public obituary categories: `et_Obituary` calls `endPlayerTrack`, but `recordKillOutcomeDeath` runs only for `death_type == "killed"`; self-kill, falling, world damage and team-kill are absent from `proximity_kill_outcome`. Rev 10 establishes that `endPlayerTrack` also emits nothing for a repeat death during the post-revive no-track gap, so this is not a complete callback stream
 - Death-type persistence: the parser reads the raw track-level category but `player_track` has no dedicated `death_type` column; the category is retained in the terminal JSON path sample's `event`
 - Independent clock evidence: new non-revive `player_track` lives provide observed normal-spawn timestamps; tracker-derived `time_to_next_spawn` rows cannot validate the seed decoding that produced them
 - Enemy clock observability: exact recovered offsets are server hindsight. No existing source makes them recipient knowledge from round start, so they remain oracle-only without a timestamped recipient cue
@@ -1005,12 +1034,34 @@ Checks added in rev 9:
 - Capture write path: `config.position_sample_interval = 200`; `et_RunFrame` calls `sampleAllPlayers`, which shares that throttle across player tracks, objective accumulation, carrier/power-up/vehicle polling and aim-lock dispatch; engagement paths use the same interval separately
 - Duration coupling: objective `time_within_radius_ms` increments by the configured nominal interval rather than actual elapsed time, so changing to irregular persistence without scheduler separation would change the metric
 - Historical cadence: monthly median `duration_ms / (sample_count - 1)` is 198–199 ms from February through July 2026
-- Storage baseline: 57,311 tracks, 7,989,430 samples, 223 MB total `player_track` relation, 177 MB stored JSONB paths, about 23.2 path bytes/sample; July contains 1,051,237 samples
+- Storage baseline: 57,311 tracks, 7,989,430 samples, 233,922,560 bytes from `pg_total_relation_size`, and 185,644,744 bytes from `SUM(pg_column_size(path))` (23.24 bytes/sample); exact heap/table/index/TOAST components and SQL are now recorded in §4.7
 - Alternative reference: ET:Legacy's official changelog documents server-side full demo recording with every player's point of view; exact telemetry completeness/performance remains unverified and is assigned to C6 rather than assumed
+
+Checks added in rev 10:
+
+- Review-thread closure: all unresolved current anchors were re-read together; fixes cover post-revive repeat obituaries, all-player/whole-history overclaims, negative bot filtering, per-attacker first-hit edges, final-summary time leakage, recipient-specific damage/support evidence, concurrent objectives, legacy sphere exclusion, target-body LOS and belief-only opponent velocity
+- Storage reproduction: `pg_relation_size`, `pg_table_size`, `pg_indexes_size`, `pg_total_relation_size`, TOAST relation sizes and `SUM(pg_column_size(path))` were queried separately in bytes; §4.7 no longer conflates allocated relation size with summed datum size
+- Capture contract: floor-error persistence, complete per-sensor scheduler provenance, per-enabled-event-class recall, total per-frame instrumentation, separately validated sub-200 ms truth and numeric CPU/RAM/GC/serialization/output budgets are now mandatory
 
 Related: #556 (metric validity method), #560 (track linkage fix), #551 (open design review), `docs/PROXIMITY_VISION_AUDIT_2026-07.md`, `docs/DESIGN_SKILL_PASSPORT_2026-07.md`.
 
 ### Revision history
+
+**Rev 10 (2026-07-27)** — exact-head Codex review closure plus full unresolved-thread audit. This revision withdraws two residual overclaims: historical tracks do not guarantee every active player's position after revive, and terminal track events are not a complete obituary stream for repeat deaths in that gap. It also turns the adaptive-capture proposal into a consumer-consistent contract: the first candidate bounds floor reconstruction, 200 ms is compatibility evidence rather than sub-tick truth, every sensor/event class is manifested and timed, and numeric resource budgets are frozen before confirmation. No Lua or production change is authorized.
+
+| #561 finding cluster | Closure in rev 10 |
+|---|---|
+| Floor consumer vs prediction-error sparsifier | Bound displacement from last persisted floor state; predictor is a separate contract (§4.7) |
+| Capture/analysis cadence recoupled | Edge/trace cost uses `analysis_tick_ms` and duration (§4.5, §9.2) |
+| Incomplete event/performance gates | All enabled event classes, every callback/scheduler and numeric CPU/RAM/GC/serialization/output budgets (§10.4, C6) |
+| 200 ms called truth for faster bursts | Compatibility-only; sub-200 ms claims need validated demo/native/callback truth (§4.7, §10.4) |
+| Storage quantities conflated | Exact SQL, byte values and heap/table/index/TOAST/datum meanings (§4.7) |
+| Sensor schedules absent from manifest | Capability, cadence, integration, version and completeness per sensor (§4.2, A6, C6) |
+| Revive gap broke all-player and obituary claims | Incomplete snapshots unavailable; future independent general obituary C7 (§0, §6, §10, §13.2b) |
+| Final attacker summaries leaked future hits | `first_hit_ms` gates participation; timestamped target hit path is world truth; no per-tick `last_hit_ms` (§4.5, §6) |
+| Damage/support beliefs used server knowledge | Direct-attention/weapon gate, no invented bearing, recipient-specific teammate cue (§6, §7.4, C5) |
+| Geometry/objective semantic gaps | Legacy spheres barred; target-body LOS; concurrent objective sets; belief-only opponent velocity (§7.4, W3-W5) |
+| Bot predicates incomplete/inverted | Round bot gate plus negative per-player GUID exclusions (§13.2, §13.5) |
 
 **Rev 9 (2026-07-27)** — capture/performance/storage design requested by the owner. Fixed 200 ms is now a measured baseline rather than an unquestioned constant. The spec separates observation cadence, sparse persistence, analysis cadence and semantic sensor schedulers; proposes offline error-bounded/event-preserving capture evaluation; and adds owner-gated C6 performance, memory, serialization, storage and demo-reference gates. No Lua deployment is authorized.
 
@@ -1023,12 +1074,12 @@ Related: #556 (metric validity method), #560 (track linkage fix), #551 (open des
 | Storage growth | Measured DB baseline plus delta/chunk compression experiment; no premature row-normalisation or deletion (§4.7) |
 | Is there another source? | Server full-demo and native logger are research alternatives, not assumed replacements (§4.7) |
 
-**Rev 8 (2026-07-27)** — fourth post-review closure. The 98.7% wave-offset result is now correctly labelled internal consistency and requires validation against independent normal-spawn observations; a preliminary DB check confirms a sharp 25 ms median but a material 7,025 ms p95 error tail. Public obituary beliefs include every death category via canonical terminal player-track events instead of the enemy-kill-only outcome table. Exact enemy-wave phase is separated from recipient clock belief and remains oracle-only until an observable cue. Layer B acceptance gates enforce all three boundaries.
+**Rev 8 (2026-07-27)** — fourth post-review closure. The 98.7% wave-offset result is now correctly labelled internal consistency and requires validation against independent normal-spawn observations; a preliminary DB check confirms a sharp 25 ms median but a material 7,025 ms p95 error tail. It expanded obituary category coverage beyond the enemy-kill-only outcome table, but rev 10 later withdrew the mistaken claim that terminal tracks form a complete callback stream after revives. Exact enemy-wave phase is separated from recipient clock belief and remains oracle-only until an observable cue.
 
 | #561 review finding | Closure in rev 8 |
 |---|---|
 | Directional velocity absent | Already closed by causal, unit-correct `vx/vy/vz` in rev 7 (§4.2, §4.4.1, A5) |
-| Public kill-feed omitted non-enemy deaths | Complete terminal-event obituary union with exact deduplication and coverage gate (§6.1, §6.3, B3a) |
+| Public kill-feed omitted non-enemy deaths | Category union with exact deduplication; rev 10 adds the missing repeat-death boundary and future C7 (§6.1, §6.3, B3a) |
 | Inferred clock validated against its own writer | Independent normal-spawn cluster validation; unsupported groups unavailable (§5.2–5.3, B1–B2) |
 | Exact enemy offset treated as player knowledge | Per-recipient `ClockBelief`; exact phase/reachability oracle-only without a cue (§5.6, §6.3, §7.4, B3a) |
 
@@ -1046,12 +1097,12 @@ Related: #556 (metric validity method), #560 (track linkage fix), #551 (open des
 | Timeline hard-coded 200 ms | Header/persisted or evidence-qualified inferred cadence, otherwise unknown (§4.2, A6) |
 | Rounds were treated as independent clusters | Within-round comparison, whole-session chronological split/bootstrap (§8) |
 
-**Rev 6 (2026-07-27)** — second post-review closure for seven findings discovered after rev 5. This revision follows the Lua writer for lifecycle and spawn semantics, adds causal directional velocity, makes contact recipient-asymmetric, replaces open-engagement attack state with last-hit recency, adds chronological family-wise confirmation, and expands W1 from a BSP chooser into an independent consumed-asset resolver.
+**Rev 6 (2026-07-27)** — second post-review closure for seven findings discovered after rev 5. This revision follows the Lua writer for lifecycle and spawn semantics, adds causal directional velocity, makes contact recipient-asymmetric, attempted to replace open-engagement attack state with last-hit recency, adds chronological family-wise confirmation, and expands W1 from a BSP chooser into an independent consumed-asset resolver. Rev 10 later corrects the last-hit attempt because the serialized value is the final summary, not a time series.
 
 | #561 review finding | Closure in rev 6 |
 |---|---|
 | Kill outcomes collapsed into a false terminal state | Writer-derived `active/downed/waiting/unknown/round_over` transitions (§6.3) |
-| Open engagement used as current attack | `last_hit_ms` with explicit 1,000 ms starting parameter (§4.5, §6.3) |
+| Open engagement used as current attack | Initial `last_hit_ms` remedy was insufficient; rev 10 uses timestamped hit-path world truth and recipient-specific evidence (§4.5, §6.3) |
 | Individual CIs ignored multiple testing | Frozen family, chronological confirmation and max-T/Holm gate (§8, B4-B5) |
 | Damage contact was shared symmetrically | Attacker, victim and teammate evidence separated (§6.1, §6.3) |
 | Layer 4 had only scalar speed | Same-life causal floor-derived `vx/vy/vz`, null on discontinuity (§4.2, §4.4.1, A5) |
