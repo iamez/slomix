@@ -358,11 +358,13 @@ reinf_offset ≡ (interval − time_to_next_spawn − kill_time)   (mod interval
 
 Every row of `proximity_spawn_timing` supplies `kill_time`, `enemy_spawn_interval` and `time_to_next_spawn`, so **each kill independently determines the offset** for the victim's team in that round.
 
-### 5.2 Measured reliability
+### 5.2 Measured internal consistency — not accuracy
 
 Over groups of `(round_id, victim_team)` with at least 3 kills: **1,249 of 1,266 groups (98.7%) yield exactly one offset value.** The 17 inconsistent groups do **not** contain more than one `enemy_spawn_interval`, so a mid-round spawn-time change is not the explanation; the cause is unresolved.
 
-**Consequence: Layer 2 works without a Lua change only for groups whose recovered offsets are unanimous.** The 17 inconsistent groups are unresolved historical data and must remain null. The Phase C capture (§10) makes future rounds exact and removes the inference.
+That result proves only that rows written by the same tracker calculation agree with one another. It does **not** prove that the tracker decoded `CS_REINFSEEDS` correctly or used the correct time origin: a systematic error would produce the same unanimous but shifted offset in every row.
+
+**Consequence: unanimity is necessary but not sufficient.** The 17 inconsistent groups are unresolved historical data and remain null. Every other inferred historical clock remains `unvalidated` until its predicted wave landings agree with an independent spawn observation under the gate below. Phase C capture (§10) makes future reconstruction direct, but the captured value still receives a controlled-game agreement check.
 
 ### 5.3 Required algorithm
 
@@ -374,14 +376,17 @@ For each (round_id, team) where round_id IS NOT NULL:
                    for each spawn_timing row of that team
                    where interval > 0 and ttn is not null ]
     if len(candidates) < 3:            -> offset = None, confidence = "insufficient"
-    elif all equal:                    -> offset = that value, confidence = "exact"
+    elif all equal:                    -> offset = that value,
+                                          confidence = "internally_consistent_unvalidated"
     else:                              -> offset = None, confidence = "inconsistent",
                                           distinct_candidates = sorted(unique(candidates))
 ```
 
 Never average and never select the mode. An average of two valid-but-different offsets is a third value that is wrong for both; a mode merely hides the rows that disagree. Until the cause of a disagreement is explained by an independently verified rule, the whole `(round_id, team)` clock is unknown.
 
-Then for any `t`:
+**Independent historical validation gate.** Use observed normal reinforcement landings from new `player_track.spawn_time_ms` lives, never the `time_to_next_spawn` value that generated the candidate offset. A qualifying spawn observation must be a non-revive track start in the same resolved round, after an earlier same-player death life; exclude initial joins, active-life team changes, reconnects, ambiguous overlapping lives and any row without exact round linkage. Group same-team starts into wave landings with a predeclared jitter tolerance. For every eligible `(round_id, team)` compare predicted landing times from the recovered offset against those observed clusters and publish residuals, exclusions and coverage. Set the clock to `validated` only if a minimum support count and a frozen residual tolerance pass; otherwise it is `unvalidated` or `inconsistent`, never silently usable. Because the post-revive trajectory gap (§13.2b) can separate the prior recorded death from the eventual normal spawn, it may affect attribution but does not manufacture a track start; publish that case separately.
+
+Only after that independent gate, for any `t`:
 
 ```
 phase(team, t)        = ((offset + t) mod interval) / interval        ∈ [0, 1)
@@ -427,6 +432,8 @@ reachable_upper(team, T)     = union(
 )
 ```
 
+These equations reconstruct **world/server truth**. They do not imply that a player knew the enemy offset. Own-team HUD timing and enemy-team belief are separate information channels (§6.3). Exact enemy reachability is therefore an oracle diagnostic unless the consuming holder has a recipient-specific clock belief; it is never a silent input to a shippable movement score.
+
 `travel_time` requires a **navigable topology**, not only point-to-point speed samples. Build an empirical directed movement graph (or an engine-equivalent navmesh) from eligible **prior** trajectories, with edges that preserve walls, floors, stairs, jumps, drops, doors and stage-dependent routes. Learn travel-time distributions on those edges from the same prior-only corpus. A straight-line estimate reintroduces P2 through the back door, while a collision ray alone cannot establish that a route is walkable.
 
 The graph is a fitted model, not neutral preprocessing. For a historical discovery evaluation, each scored block uses a graph fitted only on earlier match blocks (rolling-origin folds), or a graph frozen before the entire evaluation window. For confirmation, freeze graph topology, edge-time distributions, stage mappings and spawn-choice priors using discovery blocks only, before opening the confirmation data. Confirmation trajectories may be routed through existing graph coverage for scoring but may not create nodes/edges, alter coverage or update travel times.
@@ -454,7 +461,7 @@ This is the most original part of the design and the one most easily overclaimed
 
 | Channel | Source | Certainty |
 |---|---|---|
-| **Kill feed** | `proximity_kill_outcome.kill_time`, both guids | **High but non-spatial.** The public obituary supports `downed_revivable`, not permanent death. Later tracker outcomes are server truth and are not automatically public observations. |
+| **Public obituary** | deduplicated `player_track.death_time_ms` + terminal `path[-1].event` obituary records, enriched from `proximity_kill_outcome` where present | **High but non-spatial.** `proximity_kill_outcome` alone is incomplete: its writer excludes self-kill, falling, world damage and team-kill. Every public obituary supports `observed_out_of_action` at that instant; revivability, limbo state and killer/source detail may remain unknown. Later tracker outcomes are server truth and are not automatically public observations. |
 | **Gunfire** | `proximity_shot_fired` (648,214 rows, with `origin_x/y/z`) | Medium and **capability-gated**. An audible recipient learns an uncertain source region, not the exact telemetry coordinate. The radius and localisation error are named model parameters. |
 | **Damage contact** | `combat_engagement.attackers[].last_hit_ms` | Asymmetric. The attacker has a resolved target at the hit. The victim has evidence of an incoming threat, but not automatically the attacker's GUID or exact position. Nearby teammates receive nothing without separate audible, visible or communication evidence. |
 | **Server lifecycle truth** | `player_track.death_time_ms` + `proximity_kill_outcome` | High reconstruction evidence for the oracle/world state, but not a belief source by itself; use the write-path state machine and recipient rules below. |
@@ -491,7 +498,11 @@ Use it as an **upper bound on what could have been seen** and never insert a bel
 
 There is no permanent `terminally_out` state during a live respawn round. Do not decrement a ground-truth available-player count past the next observed spawn, and do not manufacture a transition after `gibbed` when the spawn evidence is missing. An unresolved lifecycle remains explicitly uncertain.
 
-The **belief** lifecycle is narrower. A public obituary gives every holder the non-spatial fact `downed_revivable`. `revived`, `gibbed`, `tapped_out`, the new `player_track` and the 30-second `expired` cleanup are server-side telemetry; they do not globally update an opponent's belief. A holder changes that subject's state only from recipient-observable evidence: their own contact/attention, audible or visible evidence, a capability-proven communication event, or another explicitly modelled public game cue. A public reinforcement wave may support a labelled probability that downed opponents could be active again, but it does not identify which GUID spawned. Without such evidence the holder retains `uncertain_after_down`, never exact server truth. `round_end` is public and ends all live-round beliefs.
+The **belief** lifecycle is narrower. Build its public death stream from every obituary callback, not only `proximity_kill_outcome`. The parser reads a track-level `death_type`, but the current relational schema does not store a dedicated column; the category survives as the terminal JSON path sample's `event`. Use `player_track.death_time_ms` plus `path[-1].event IN ('killed', 'selfkill', 'fallen', 'world', 'teamkill')`, deduplicate an enriched enemy-kill row by resolved round + victim + timestamp, and exclude `round_end`, `disconnect`, `shutdown` and `unknown`. A row without a trustworthy terminal event cannot feed the public stream. This gives every holder the non-spatial victim fact `observed_out_of_action`; revivability/limbo and missing killer/MOD detail stay unknown unless separately observed. Until historical union/deduplication coverage is measured, the public roster lifecycle is unavailable rather than partially populated.
+
+`revived`, `gibbed`, `tapped_out`, the new `player_track` and the 30-second `expired` cleanup are server-side telemetry; they do not globally update an opponent's belief. A holder changes that subject's state only from recipient-observable evidence: their own contact/attention, audible or visible evidence, a capability-proven communication event, or another explicitly modelled public game cue. A public reinforcement wave may support a labelled probability that downed opponents could be active again, but it does not identify which GUID spawned. Without such evidence the holder retains `uncertain_after_down`, never exact server truth. `round_end` is public and ends all live-round beliefs.
+
+**Clock belief is also per recipient.** The reconstructed Layer 2 offset is server truth, not common knowledge. A holder may use their own team's displayed reinforcement countdown only after its historical reconstruction passes §5.3 validation. The holder's enemy clock begins `unknown`; it may become a phase distribution only after a timestamped cue that this recipient could observe (for example, a capability-proven sight/audible event associated with an enemy wave, or captured communication), with the observation error and propagation rule recorded. An observed wave constrains phase modulo the known interval; it does not reveal exact spawn choice or retroactively expose the clock from round start. Discord callouts remain absent, so this is a lower bound. With no recipient-specific cue, exact enemy phase and reachability remain oracle-only.
 
 **Audible evidence is spatially uncertain.** The stored gunfire origin is ground truth available to the analyst, not a coordinate heard by the player. Represent what the holder could infer as a region or probability distribution whose uncertainty grows with time. At minimum record a centre estimate, radius/error model and decay; do not expose the exact telemetry origin as a belief point.
 
@@ -501,11 +512,23 @@ BeliefItem
   kind             # "position_region" | "roster_state"
   region           # spatial distribution/centre+radius; null for roster facts
   t_observed
-  source           # gunfire/contact_hit/incoming_damage/down/aim_lock/killfeed
+  source           # gunfire/contact_hit/incoming_damage/public_obituary/aim_lock
   subject_guid     # may be null for gunfire if the shooter is unresolvable
-  roster_state     # downed_revivable/uncertain_after_down/possibly_active/round_over
+  roster_state     # observed_out_of_action/downed_revivable/uncertain_after_down/possibly_active/round_over
   capability       # explicit manifest evidence for optional capture sources
   confidence(t)    # decays from 1.0
+```
+
+```
+ClockBelief
+  holder_guid
+  subject_team
+  phase_distribution   # null while unknown; never an unstated exact scalar
+  t_observed
+  source               # own_hud/observed_wave/captured_comm
+  observation_error_ms
+  capability
+  confidence(t)
 ```
 
 Decay must be explicit and configurable, e.g. `confidence(t) = exp(−(t − t_observed) / τ)` with a separate `τ` per source. **Do not tune τ against the outcome you later test with** — that is the same leakage as P1. Pick τ from game reasoning (roughly: how long is a position worth acting on), fix it, then measure.
@@ -557,7 +580,7 @@ Own-team positions are a different case: teammates share a voice channel we cann
 | Space control share | Layer 1 positions + velocities + **§9 navigable topology** | Blocked until W4b lands: BSP parsing and collision rays do not create walkable connectivity; without topology a Voronoi over the bounding box is dominated by solid rock |
 | Reachability advantage | W4b movement graph + historical edge-time distributions | Learn on a navigable graph from prior data; do not assume a constant or allow paths through walls, floors or closed routes |
 | **Stage-aware objective control** | control × distance to the **currently live** objective volume | See 7.4.1 — the space that matters moves during the round |
-| Wave-phase alignment | Layer 2 + §5.6 | Was the player advancing when the enemy wave was furthest from reaching him |
+| Wave-phase alignment | recipient `ClockBelief` (§6.3) + §5.6 | Was the player advancing under the enemy-wave phase distribution they could plausibly know; exact reconstructed phase is oracle-only and never a scoring fallback |
 | Tactical isolation / support time | **Validated W4b route travel time** to nearest living teammate | Blocked until topology validation; straight-line Layer 1 distance is published only as geometric separation and must not cross walls/floors by implication |
 | Information-consistent movement | Layer 3 | Did the player move into space the team had no coverage of |
 | Teammate-support presence | Layer 1 engagement edges | Was the player near a teammate who was under attack |
@@ -699,7 +722,7 @@ Everything here requires a game-server deploy and is **owner-gated**.
 | # | Capture | Why it cannot be done otherwise | Cost risk |
 |---|---|---|---|
 | C1 | `view_yaw` / `view_pitch` in each position sample at that file's capture cadence | **B2 — genuinely blocked offline.** Facing is known only at shot time, and geometry does not supply it | Low |
-| C2 | `reinf_offset` in the file header, plus a wave timeline | §5 infers it at 98.7%; capture makes it exact and removes the inference | Very low |
+| C2 | `reinf_offset` in the file header, plus a wave timeline | §5's inference is 98.7% internally consistent but not independently validated; capture removes the inference and enables a controlled truth check | Very low |
 | C3 | Objective state over time (dynamite planted, doors, checkpoints) | §9 W5 derives only the possible transition graph offline. Existing timestamped events may replay part of a round; C3 is required wherever they do not uniquely determine live state | Low–medium |
 | C4 | Line-of-sight trace (`et.trap_Trace`) | **Reclassified.** Offline W4 can model covered geometry, but only after brush + patch + dynamic-state handling. C4 is the **ground truth that validates W4** (W6) | **High, measure first** |
 | C5 | Teammate engagement state (is this player under attack right now) | Partially derivable from `combat_engagement`, but a live flag is exact | Low |
@@ -743,9 +766,10 @@ Measurable, not descriptive.
 - **A6.** Every timeline reports capture cadence and provenance. Header values are preferred; historical inference publishes support/conflicts; unknown cadence yields no invented fixed grid or hard-coded staleness tolerance.
 
 ### Phase B — Layers 2 and 3
-- **B1.** Wave phase computed for ≥95% of rounds that have `proximity_spawn_timing` rows; the rest explicitly null with a reason.
-- **B2.** Offset agreement reported per round; the 17 known-inconsistent groups are null with their candidate sets exposed, never averaged or mode-selected.
+- **B1.** Inferred wave phase is independently validated against qualifying normal `player_track` spawn clusters (§5.3), with frozen support/jitter/residual thresholds and published coverage/exclusions. A unanimous tracker-derived offset that lacks independent spawn support remains `unvalidated`, not exact.
+- **B2.** Internal offset agreement and independent spawn residuals are reported per round/team. The 17 known-inconsistent groups are null with their candidate sets exposed, never averaged or mode-selected; every failed or unsupported validation group is also null to non-oracle consumers.
 - **B3.** Every opponent-dependent candidate is checked for P6 compliance. The §6.4 oracle delta is reported, including a negative result, but the oracle never becomes a shipping fallback.
+- **B3a.** Public obituary coverage includes `killed`, `selfkill`, `fallen`, `world` and `teamkill`, with enemy-kill enrichment deduplicated by exact resolved event identity. Recipient enemy-clock state is unknown until an observable cue; tests prove that exact Layer 2 offsets cannot enter player beliefs at round start.
 
 ### Phase B — Layer 4
 - **B4.** Every candidate and tried parameter variant in §7.4 is declared in a frozen family manifest, measured on a chronological discovery/untouched-confirmation split under §8, and included in the full published table.
@@ -809,7 +833,7 @@ ET is a medic-heavy game; in the sampled rounds most players run MEDIC. This is 
 - Any "distance travelled" or "space controlled" figure silently omits post-revive life.
 - The §4.3 overlap rule interacts with this: the next track row for that player starts at their next spawn, so the gap is invisible unless you look for it.
 
-**Required:** quantify the gap before building on trajectories. `proximity_kill_outcome.outcome = 'revived'` gives the revive events; measure what fraction of round-time per player falls into an unsampled post-revive window. If it is material, this becomes a §10 capture item (resume the track on revive) and every trajectory-derived metric carries the caveat until then.
+**Required:** quantify the gap before building on trajectories. Use `proximity_revive` as the complete revive-callback source and cross-check the enemy-kill subset against `proximity_kill_outcome.outcome = 'revived'`; the latter omits reviveable deaths outside its enemy-kill writer gate. Measure what fraction of round-time per player falls into an unsampled post-revive window. If it is material, this becomes a §10 capture item (resume the track on revive) and every trajectory-derived metric carries the caveat until then.
 
 This was not in the first revision at all and it is the most consequential data-quality finding in this document.
 
@@ -917,9 +941,25 @@ Checks added in rev 7:
 - Match dependence: paired R1/R2 rounds and multi-map rows share `gaming_session_id`; validation therefore compares within round but splits/resamples whole session blocks
 - Outcome observability: `revived`, `tapped_out` and `expired` arise from server callbacks/cleanup, not from a public kill-feed event, so they are world-state evidence only unless a recipient-specific observation exists
 
+Checks added in rev 8:
+
+- Public obituary completeness: `et_Obituary` always calls `endPlayerTrack`, but `recordKillOutcomeDeath` runs only for `death_type == "killed"`; self-kill, falling, world damage and team-kill are absent from `proximity_kill_outcome`
+- Death-type persistence: the parser reads the raw track-level category but `player_track` has no dedicated `death_type` column; the category is retained in the terminal JSON path sample's `event`
+- Independent clock evidence: new non-revive `player_track` lives provide observed normal-spawn timestamps; tracker-derived `time_to_next_spawn` rows cannot validate the seed decoding that produced them
+- Enemy clock observability: exact recovered offsets are server hindsight. No existing source makes them recipient knowledge from round start, so they remain oracle-only without a timestamped recipient cue
+
 Related: #556 (metric validity method), #560 (track linkage fix), #551 (open design review), `docs/PROXIMITY_VISION_AUDIT_2026-07.md`, `docs/DESIGN_SKILL_PASSPORT_2026-07.md`.
 
 ### Revision history
+
+**Rev 8 (2026-07-27)** — fourth post-review closure. The 98.7% wave-offset result is now correctly labelled internal consistency and requires validation against independent normal-spawn observations. Public obituary beliefs include every death category via terminal player-track events instead of the enemy-kill-only outcome table. Exact enemy-wave phase is separated from recipient clock belief and remains oracle-only until an observable cue. Layer B acceptance gates enforce all three boundaries.
+
+| #561 review finding | Closure in rev 8 |
+|---|---|
+| Directional velocity absent | Already closed by causal, unit-correct `vx/vy/vz` in rev 7 (§4.2, §4.4.1, A5) |
+| Public kill-feed omitted non-enemy deaths | Complete terminal-event obituary union with exact deduplication and coverage gate (§6.1, §6.3, B3a) |
+| Inferred clock validated against its own writer | Independent normal-spawn cluster validation; unsupported groups unavailable (§5.2–5.3, B1–B2) |
+| Exact enemy offset treated as player knowledge | Per-recipient `ClockBelief`; exact phase/reachability oracle-only without a cue (§5.6, §6.3, §7.4, B3a) |
 
 **Rev 7 (2026-07-27)** — third post-review closure. The reconstruction contract now derives cadence per capture, uses half-open lives and correctly scaled causal velocity. The information model separates server truth from recipient-observable beliefs. Tactical isolation moves behind navigable route time. All learned topology and validation now use chronological, intact `gaming_session_id` blocks, and Phase C has one acceptance gate per requested capture.
 
