@@ -109,6 +109,8 @@ class _LuaRoundStorageMixin:
                 exact_target_round_id = await self._resolve_lua_round_id_for_metadata(
                     metadata
                 )
+                if exact_target_round_id is None:
+                    return
                 if exact_target_round_id != round_id:
                     logger.warning(
                         "Lua round link target mismatch: caller_round_id=%s "
@@ -634,6 +636,10 @@ class _LuaRoundStorageMixin:
             timestamp = datetime.fromtimestamp(round_end)  # noqa: DTZ006 — match_id format mirrors local-time strftime used by postgresql_database_manager and the CET-running game server
             match_id = timestamp.strftime('%Y-%m-%d-%H%M%S')
             round_id = await self._resolve_lua_round_id_for_metadata(round_metadata)
+            try:
+                has_exact_start = int(round_metadata.get("round_start_unix") or 0) > 0
+            except (TypeError, ValueError):
+                has_exact_start = False
 
             query = """
                 INSERT INTO lua_spawn_stats (
@@ -648,7 +654,10 @@ class _LuaRoundStorageMixin:
                     $11, $12
                 )
                 ON CONFLICT (match_id, round_number, player_guid) DO UPDATE SET
-                    round_id = EXCLUDED.round_id,
+                    round_id = CASE
+                        WHEN $13 THEN EXCLUDED.round_id
+                        ELSE COALESCE(EXCLUDED.round_id, lua_spawn_stats.round_id)
+                    END,
                     player_name = EXCLUDED.player_name,
                     spawn_count = EXCLUDED.spawn_count,
                     death_count = EXCLUDED.death_count,
@@ -682,6 +691,7 @@ class _LuaRoundStorageMixin:
                         int(entry.get("dead_seconds") or 0),
                         int(entry.get("avg_respawn") or 0),
                         int(entry.get("max_respawn") or 0),
+                        has_exact_start,
                     )
                 )
             if batch_params:
