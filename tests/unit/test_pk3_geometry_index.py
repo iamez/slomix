@@ -67,6 +67,26 @@ def test_identical_duplicate_providers_are_kept_and_selected_deterministically(t
     assert resolution.selected == resolution.providers[0]
 
 
+def test_provider_order_has_exact_case_tie_breakers(tmp_path):
+    content = b"same script"
+    _write_pk3(tmp_path / "a.pk3", {"maps/duel.script": content})
+    _write_pk3(tmp_path / "A.pk3", {"maps/duel.script": content})
+    _write_pk3(
+        tmp_path / "members.pk3",
+        {
+            "maps/CASE.script": content,
+            "maps/case.script": content,
+        },
+    )
+
+    index = Pk3GeometryIndex.scan(tmp_path)
+
+    duel = index.resolve_asset("duel", "script")
+    assert [provider.pk3_path.name for provider in duel.providers] == ["A.pk3", "a.pk3"]
+    case = index.resolve_asset("case", "script")
+    assert [provider.member for provider in case.providers] == ["maps/CASE.script", "maps/case.script"]
+
+
 def test_differing_bsp_providers_are_reported_as_ambiguous(tmp_path):
     _write_pk3(tmp_path / "one.pk3", {"maps/duel.bsp": b"first"})
     _write_pk3(tmp_path / "two.pk3", {"maps/duel.bsp": b"second"})

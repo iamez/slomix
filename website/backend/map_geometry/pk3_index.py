@@ -7,7 +7,7 @@ import zipfile
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Literal
@@ -25,7 +25,7 @@ class AssetContentChangedError(Pk3IndexError):
     """An indexed map asset no longer matches its recorded content."""
 
 
-class MapAssetKind(str, Enum):  # noqa: UP042 - production still runs Python 3.10
+class MapAssetKind(StrEnum):
     """Direct ``maps/`` inputs consumed by the Spider Web toolchain."""
 
     BSP = "bsp"
@@ -110,8 +110,9 @@ def _hash_member(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
     return digest.hexdigest()
 
 
-def _provider_key(provider: MapAssetProvider) -> tuple[str, str, int]:
-    return (str(provider.pk3_path).casefold(), provider.member.casefold(), provider.member_index)
+def _provider_key(provider: MapAssetProvider) -> tuple[str, str, str, str, int]:
+    path = str(provider.pk3_path)
+    return (path.casefold(), path, provider.member.casefold(), provider.member, provider.member_index)
 
 
 class Pk3GeometryIndex:

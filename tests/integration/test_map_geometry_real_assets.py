@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 
 from website.backend.map_geometry import MapAssetKind, Pk3GeometryIndex
 
-ETMAIN = Path("/home/samba/share/etmain")
+ETMAIN = Path(os.environ.get("SLOMIX_ETMAIN_DIR", "/home/samba/share/etmain"))
+RUN_REAL_ASSET_TESTS = os.environ.get("SLOMIX_RUN_REAL_ASSET_TESTS") == "1"
 
 PLAYED_MAPS = {
     "adlernest",
@@ -40,7 +42,13 @@ MISSING_GEOMETRY = {
     "sp_delivery_te",
 }
 
-pytestmark = pytest.mark.skipif(not ETMAIN.is_dir(), reason="developer ET map assets are not installed")
+pytestmark = [
+    pytest.mark.skipif(
+        not RUN_REAL_ASSET_TESTS,
+        reason="real ET map asset tests require SLOMIX_RUN_REAL_ASSET_TESTS=1",
+    ),
+    pytest.mark.skipif(not ETMAIN.is_dir(), reason="configured ET map asset directory is not installed"),
+]
 
 
 @pytest.fixture(scope="module")
