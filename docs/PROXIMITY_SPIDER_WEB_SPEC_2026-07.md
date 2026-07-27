@@ -14,9 +14,15 @@ Cilj: proximity ne sme le vedeti, **kje** je igralec, ampak ali je njegov premik
 
 **Druga dobra novica:** fazo respawn vala je mogoče rekonstruirati za **vso zgodovino** brez spremembe Lue. Formulo se da obrniti in offset izračunati nazaj iz obstoječih ubojev — deluje v 98,7 % primerov.
 
-**Slaba novica, ki jo je treba sprejeti:** vidnosti (kdo koga dejansko vidi) za zgodovino **ni mogoče** izračunati. V repu ni geometrije map, samo slike. Enako smer pogleda med gibanjem. Oboje rabi novo Lua verzijo in nove seje.
+**Tretja dobra novica — popravek prve različice tega dokumenta:** prvotno je tu pisalo, da vidnosti (kdo koga dejansko vidi) za zgodovino ni mogoče izračunati. **To ni res.** Same mape v `/home/samba/share/etmain` nosijo `.bsp` s polno geometrijo (10 MB za Adlernest), plus `.objdata` z opisi objectivov in `.script` z logiko stopenj. Vidnost se torej **da** izračunati offline, za vso zgodovino, brez dotikanja igralnega strežnika — rabi pa BSP collision parser, kar je resno delo.
 
-**Kaj je v tem dokumentu:** štirje sloji (mreža → ura → informacijsko stanje → kakovost giba), vsak s podatkovnim modelom, algoritmom, robnimi pogoji in merljivimi kriteriji sprejema. Plus seznam pasti, ki so bile v prejšnjih poskusih dejansko izmerjene kot napačne.
+Napaka je nastala tako, da je Codexov review iskal po *repu*, kjer geometrije res ni, jaz pa sem njegov sklep prevzel, ne da bi odprl same mape. Owner je ves čas pravil, da ".pk3 ima koordinate objektivov in vsega" — imel je prav.
+
+**Kar iz map dobimo poleg vidnosti:** spawn točke obeh ekip (42–159 na mapo), objective **volumne** namesto krogel s polmerom 500, ter vrata in premikala, ki med rundo spreminjajo poti. Spawn točke plus faza vala pomenijo, da lahko izračunamo, **kje bo nasprotnik po naslednjem valu** — to je "tretji nasprotnik" narejen konkretno.
+
+**Kar ostaja resnično blokirano:** smer pogleda med gibanjem (zajemamo jo le ob strelu) rabi novo Lua verzijo in nove seje.
+
+**Kaj je v tem dokumentu:** štirje sloji (mreža → ura → informacijsko stanje → kakovost giba), vsak s podatkovnim modelom, algoritmom, robnimi pogoji in merljivimi kriteriji sprejema. Plus BSP toolchain (§9), kopičenje čez seje (§14) in seznam pasti, ki so bile v prejšnjih poskusih dejansko izmerjene kot napačne.
 
 **Železno pravilo:** nobena formula ne dobi uteži, dokler ne prestane merjenja iz #556.
 
@@ -53,7 +59,7 @@ A relational, per-moment reconstruction of a round: for any time `t`, the positi
 | `rounds` | **1,929** (R1/R2) | of which **720** have trajectories |
 | `objective_zones.json` | 15 maps / 74 objectives | extracted from `.pk3` in `/home/samba/share/etmain` (22 pk3 present) |
 
-Objective coverage is better than it looks: the 15 covered maps account for roughly **99% of rounds played**. Uncovered maps are `et_beach` (4 rounds), `decay_sw` (3), `radar` (2), `etl_supply` (2), `sp_delivery_te` (2), `mp_sillyctf` (1).
+Objective *coordinate* coverage is good: the 15 maps in `objective_zones.json` account for roughly **99% of rounds played**. Note this is not the same as **geometry** coverage, which is 91.6% — see §2.5.3, where `etl_frostbite` has coordinates but no BSP.
 
 ### 2.2 The shared clock — the single most important property
 
@@ -99,6 +105,74 @@ Header keys: `map`, `round`, `crossfire_window`, `escape_time`, `escape_distance
 
 **Note the header does NOT contain the reinforcement offset** — only the interval. See §5.
 
+### 2.5 Map assets — the largest untapped source
+
+`/home/samba/share/etmain` holds **22 `.pk3` archives**. Each is a zip; each map ships three files that matter here:
+
+| File | Contents |
+|---|---|
+| `maps/<map>.bsp` | full geometry — `IBSP` **version 47** (RTCW/ET) |
+| `maps/<map>.objdata` | objective descriptions per team, classified primary / secondary / additional |
+| `maps/<map>.script` | stage logic: `wm_objective_status`, `trigger stolen`, `trigger dropped`, `wm_setwinner` |
+
+**Consistency is total across every available map.** Checked on all 13 maps that both exist as pk3 and appear in our round data:
+
+| map | BSP | ver | objdata | script | spawns | obj triggers | WOLF objectives |
+|---|---|---:|---|---|---:|---:|---:|
+| adlernest | IBSP | 47 | yes | yes | 45 | 6 | 3 |
+| braundorf_b4 | IBSP | 47 | yes | yes | 61 | 7 | 4 |
+| bremen_b3 | IBSP | 47 | yes | yes | 81 | 9 | 5 |
+| decay_sw | IBSP | 47 | yes | yes | 119 | 10 | 5 |
+| erdenberg_t2 | IBSP | 47 | yes | yes | 98 | 4 | 5 |
+| et_brewdog | IBSP | 47 | yes | yes | 42 | 4 | 3 |
+| etl_adlernest | IBSP | 47 | yes | yes | 97 | 6 | 3 |
+| etl_ice | IBSP | 47 | yes | yes | 97 | 7 | 5 |
+| etl_sp_delivery | IBSP | 47 | yes | yes | 97 | 5 | 3 |
+| supply | IBSP | 47 | yes | yes | 159 | 9 | 4 |
+| sw_goldrush_te | IBSP | 47 | yes | yes | 145 | 10 | 4 |
+| sw_oasis_b3 | IBSP | 47 | yes | yes | 116 | 11 | 4 |
+| te_escape2 | IBSP | 47 | yes | yes | 48 | 6 | 3 |
+
+#### 2.5.1 BSP lumps (measured on `etl_adlernest.bsp`, 10.2 MB)
+
+Everything a collision trace needs is present and populated:
+
+| Lump | Size | Approx count |
+|---|---:|---|
+| `planes` | 1,512,544 B | ~63,000 |
+| `brushes` | 130,404 B | ~8,150 |
+| `brushsides` | 927,960 B | — |
+| `nodes` / `leafs` / `leafbrushes` | 60,336 / 84,288 / 84,808 B | BSP tree for fast traversal |
+| `entities` | 65,814 B | 540 entities, 34 classnames |
+
+This is the standard Quake3-derived collision model. A ray-vs-brush trace against it is well-trodden work, not research.
+
+#### 2.5.2 Entity classes that matter
+
+From the entity lump of `etl_adlernest`:
+
+| classname | count | why it matters |
+|---|---:|---|
+| `team_CTF_bluespawn` | 64 | Allied spawn points |
+| `team_CTF_redspawn` | 32 | Axis spawn points |
+| `trigger_objective_info` | 6 | objective **volumes**, not points |
+| `team_WOLF_objective` | 3 | objective markers |
+| `script_mover` | 28 | movers that change routes mid-round |
+| `func_door_rotating` | 5 | doors that open/close routes |
+| `trigger_hurt` / `trigger_heal` / `trigger_ammo` | 2 / 2 / 2 | hazards and supply |
+
+**Spawn points plus wave phase (§5) give the reachable enemy set at any moment.** That is the concrete form of the "third opponent" and it is available today.
+
+#### 2.5.3 Coverage and its limits
+
+Measured across all 1,929 R1/R2 rounds: **1,767 rounds (91.6%) are on a map whose pk3 we hold.**
+
+Missing, with round counts: **`etl_frostbite` (151)**, `et_beach` (4), `radar` (2), `sp_delivery_te` (2), `etl_supply` (2), `mp_sillyctf` (1).
+
+`etl_frostbite` is the one that matters — 7.8% of all rounds, and it **does** have objective coordinates in `objective_zones.json` (from an earlier extraction) but **no BSP here**. Anything requiring geometry must return null for frostbite, not silently fall back to a sphere.
+
+`te_escape2` is provided by three pk3s (`te_escape2_fixed`, `_fixed2`, `_fixed3`). Their BSPs are **byte-identical** (same sha256), so there is no version conflict today — but the toolchain must verify that rather than assume it, and must pick deterministically.
+
 ---
 
 ## §3 Hard constraints
@@ -107,11 +181,16 @@ These are not opinions. Each was checked, and each has killed a plausible-soundi
 
 ### 3.1 Blockers — cannot be done with historical data at all
 
-**B1. Offline line-of-sight is impossible.**
-A repo-wide search finds no BSP, AAS, or navmesh asset and no offline trace implementation — only raster map images. `et.trap_Trace` exists solely inside the live Lua tracker. Any design that needs "could A see B" for historical rounds is dead on arrival. It requires §9.
+> **Correction to the first revision of this document.** B1 previously read *"Offline line-of-sight is impossible — a repo-wide search finds no BSP, AAS or navmesh asset."* **That was wrong**, and it was wrong in the most damaging direction: it closed off work that is in fact tractable.
+>
+> The repo-wide search was accurate as far as it went — there is no geometry *in the repository*. But the maps themselves sit in `/home/samba/share/etmain`, and every one of them ships a complete BSP (§2.5). The claim was inherited from the #551 review without opening a single pk3. The owner had been saying all along that ".pk3 ima koordinate objektivov in vsega"; he was right and the analysis was not.
+>
+> B1 is therefore **withdrawn** and replaced by the §9 workstream. B2 below stands.
 
 **B2. There are no continuous view angles in trajectories.**
-`view_yaw` / `view_pitch` exist only in `proximity_shot_fired` and the aim-lock log — i.e. **at the moment of firing**. Between shots, facing is unknown. Field-of-view exposure over time cannot be computed for history. Requires §9.
+`view_yaw` / `view_pitch` exist only in `proximity_shot_fired` and the aim-lock log — i.e. **at the moment of firing**. Between shots, facing is unknown. Field-of-view exposure over time cannot be computed for history. This one genuinely does require §10.
+
+Note the practical consequence of B2 surviving while B1 falls: with geometry we can answer *"was there an unobstructed line between A and B"*, which is a **necessary** condition for seeing. We still cannot answer *"was A looking that way"*, which is the **sufficient** one. Treat offline visibility as **line-of-sight availability**, never as "A saw B", and name it that way in every output.
 
 **B3. Objective-run quality cannot be scored yet.**
 `approach_killed` / `denied` rows number zero, so there is no failure class to contrast successful runs against. Any "was this run good" metric would be measuring successes against nothing.
@@ -139,6 +218,23 @@ Measured at **r = 0.897** against engagement volume. It largely restates "this p
 **P6. Never judge a decision using information the player did not have.**
 Using an opponent's true telemetry position when that opponent was unseen and unrevealed retroactively condemns a rational choice. This is both the owner's explicit requirement and an independent finding in the #551 review. It is the reason §6 exists, and it applies to **every** metric in §7.
 
+**P7. Never infer objective contribution from class.**
+The owner raised this directly: *"ni samo inženir class tisti ki dela obj — medici tudi delajo objective, npr. prinesejo docse."* He is right, and the map files prove it structurally rather than anecdotally. From `etl_adlernest.objdata`:
+
+```
+wm_objective_allied_desc 1 "Primary Objective:**Steal the documents."
+wm_objective_allied_desc 2 "Primary Objective:**Transmit the documents at the transmitter."
+wm_objective_allied_desc 3 "Secondary Objective:**Construct the command post..."
+wm_objective_allied_desc 4 "Secondary Objective:**Dynamite the door controls...
+                            *Alternatively, a covert could infiltrate..."
+```
+
+Objectives 1 and 2 — the **primary** ones — are carrying tasks, open to any class. Only construction and dynamite are engineer-gated, and objective 4 explicitly offers a covert-ops alternative. A model that reads "engineer" as "the one who does objectives" gets the primary objective of the map backwards.
+
+This has already produced a wrong number once in this project. A "medics do 69.4% of objective work" figure was reported; the real statement is that 69.4% of **carrier events** were medics. Of 4,588 objective events, 45.3% are carries, and medics account for **28.2% of objective work overall**. The denominator was the error, and the class framing is what invited it.
+
+Rule: derive objective contribution from **what the player did** (carried, planted, defused, constructed, escorted), never from what class they were holding.
+
 ---
 
 ## §4 Layer 1 — the web
@@ -154,7 +250,7 @@ Using an opponent's true telemetry position when that opponent was unseen and un
 | `get_round_timeline(db, round_id)` | all events merged chronologically |
 | `_find_position_at_time(path, target_ms)` | bisect over one path |
 | `_ensure_path_list(path)` | JSONB-or-text normalisation |
-| `_TRACK_ROUND_JOIN` | correct track→round linkage (see §12.4) |
+| `_TRACK_ROUND_JOIN` | correct track→round linkage (see §13.4) |
 
 **The web extends this module or a sibling that imports it. Do not re-implement slicing.**
 
@@ -280,6 +376,28 @@ time_to_next(team, t) = interval − ((offset + t) mod interval)
 
 `rounds.round_start_unix` / `round_end_unix` give wall-clock bounds; sample times give in-round bounds. The **stopwatch time limit** (how long the attacking team has) is not currently stored. Until it is, express clock position as elapsed and as fraction of the round actually played, and label it as such. Do not present a fraction-of-limit that we cannot compute.
 
+### 5.6 Reachability — what the clock is actually *for*
+
+Wave phase on its own is a number between 0 and 1. It becomes tactical only when combined with **where the enemy respawns**, and §2.5.2 supplies exactly that: 42–159 spawn entities per map, tagged by team.
+
+For any time `t`:
+
+```
+next_wave(team)      = t + time_to_next(team, t)                     # §5.3
+reachable(team, T)   = { p : travel_time(spawn_point, p) <= T − next_wave(team) }
+```
+
+`travel_time` should be **learned from the 7.99 M trajectory samples**, not assumed from a constant speed: measure realistic point-to-point times per map from how players actually moved. A straight-line estimate reintroduces P2 through the back door.
+
+Two things fall out of this that nothing in the current system can express:
+
+- **"You are somewhere the next wave reaches before your team can support you."** That is the measurable form of the owner's *"če si na napačen čas na napačnih kordinatih, si izven pozicije."*
+- **A position's value is a function of phase.** The same coordinates are strong just after a wave (enemies far, spawn drained) and weak just before it. Any space-control metric that ignores phase is averaging two opposite situations.
+
+Spawn points are also **stage-dependent** — maps move forward spawns as objectives complete. Read the `spawnflags` on the spawn entities and cross-reference the stage logic in `.script` (§9); do not treat all spawn entities as simultaneously active.
+
+Not yet verified: whether stage-to-spawn mapping can be resolved for every map from `.script` alone. Treat that as the first question the §9 workstream has to answer, and null the reachability model where it cannot.
+
 ---
 
 ## §6 Layer 3 — information state
@@ -295,7 +413,11 @@ This is the most original part of the design and the one most easily overclaimed
 | **Contact** | `combat_engagement` time ranges + `attackers` | High for the participants; medium for nearby teammates. |
 | **Deaths** | `player_track` `death_time_ms` + position | High for the player who died. |
 | **Voice macros** | `proximity_comm_event` | **Currently unusable:** feature flag `comm_events` is off, 96 rows total. |
-| **Line of sight** | — | **Impossible offline (B1).** |
+| **Line-of-sight availability** | BSP trace (§9) | **Available offline** for 91.6% of rounds. See the caveat below. |
+
+**On line-of-sight, precisely.** B1 is withdrawn (§3.1): geometry exists and a trace is implementable. But B2 stands, so what the trace yields is *"there was an unobstructed line between these two points"* — a **necessary, not sufficient** condition for having seen someone. Facing is unknown between shots.
+
+Use it as an **upper bound on what could have been seen**, and combine it with what we do know about attention: a player who fired at time `t` was facing their target (`view_yaw`/`view_pitch` in `proximity_shot_fired`), so shots give occasional ground truth to calibrate against. Never label the output "saw"; label it "had line of sight".
 
 ### 6.2 What must be stated plainly in any output
 
@@ -358,13 +480,40 @@ None of these are approved. Each is a hypothesis to be measured under §8.
 
 | Candidate | Built from | Notes |
 |---|---|---|
-| Space control share | Layer 1 positions + velocities | Restrict to walkable space; naive Voronoi over the bounding box will be dominated by out-of-bounds area |
+| Space control share | Layer 1 positions + velocities | Restrict to walkable space using BSP (§9); a naive Voronoi over the bounding box is dominated by solid rock |
 | Reachability advantage | learned per-map speeds from the 7.99 M samples | Learn from data, do not assume a constant |
-| Objective-relevant control | control × proximity to live objective | Needs objective phase; until then use static objective points and label the limitation |
-| Wave-phase alignment | Layer 2 | Was the player advancing when the enemy wave was furthest away |
+| **Stage-aware objective control** | control × distance to the **currently live** objective volume | See 7.4.1 — the space that matters moves during the round |
+| Wave-phase alignment | Layer 2 + §5.6 | Was the player advancing when the enemy wave was furthest from reaching him |
 | Isolation | Layer 1 edges | Distance to nearest living teammate; the honest version of "straggler" |
 | Information-consistent movement | Layer 3 | Did the player move into space the team had no coverage of |
 | Teammate-support presence | Layer 1 engagement edges | Was the player near a teammate who was under attack |
+| **Sacrifice that opens space** | 7.4.2 | The owner's own playstyle, and the hardest thing in this list to measure |
+| Exposure | BSP line-of-sight availability (§9) | How many enemy positions had a clear line to this player |
+
+#### 7.4.1 Stage awareness is not optional
+
+Stopwatch objectives are **sequential**. On Adlernest the Allies must first steal the documents, then transmit them; the door controls gate access before either. The space that matters at minute 2 is not the space that matters at minute 8.
+
+A metric that scores "control near the objective" against a static point is therefore **systematically wrong for the later part of every round**, and wrong in a direction that rewards whoever camped the first objective longest.
+
+Every candidate above that references "the objective" must resolve **which objective is live at time `t`** (§9 supplies the stage model) or explicitly restrict itself to the first stage and say so.
+
+#### 7.4.2 Sacrifice that opens space
+
+The owner describes himself as *"lurker/teamplayer, ki rad nastavlja ekipi priložnosti z svojim sacrificem"* — a player whose value shows up as opportunities for others, often at the cost of his own life. Under every current metric that behaviour reads as dying a lot.
+
+This is the single clearest case of value that generates no statistic for the player who created it, and it is why "off-ball value" (§7.2) is in this document at all. It needs a named, measurable definition rather than a hope that some composite picks it up.
+
+Proposed shape — **hypothesis, to be measured under §8, not to be shipped on plausibility**:
+
+> In the window after player A dies, did A's team gain something A's death plausibly caused? Candidate consequences: enemies drawn away from the objective route, a teammate completing an objective action, or a net gain in team space control.
+
+Required guards, or this metric becomes "dying is good":
+
+1. **Attribution, not correlation.** The enemies who killed A must be the ones displaced. Use the engagement edges (§4.5), not a time window alone.
+2. **Compare against the counterfactual class.** Deaths in the same map region, same stage, same wave phase, that produced *no* team gain. Without that denominator, every death looks productive some of the time.
+3. **Leakage.** The baseline of "what usually happens after a death here" must not include the evaluated round (P1).
+4. If the measurement says it does not predict round outcome, **it does not ship** — even though it is the owner's own playstyle. Especially then.
 
 ### 7.5 Weighting
 
@@ -394,31 +543,69 @@ A table of every candidate with: n rounds, spread, 95% CI, verdict. This table i
 
 ### 8.5 Reference implementation
 
-The #556 measurement is reproducible: build a per-(player, round) dataset joined to round outcome, group by round, split each round's players at the median of the metric, and compare win rates of the two halves. Watch for §12.3 (GUID length) when joining proximity to `player_comprehensive_stats`.
+The #556 measurement is reproducible: build a per-(player, round) dataset joined to round outcome, group by round, split each round's players at the median of the metric, and compare win rates of the two halves. Watch for §13.3 (GUID length) when joining proximity to `player_comprehensive_stats`.
 
 ---
 
-## §9 Phase C — Lua v7 capture
+## §9 Workstream: the BSP toolchain
+
+This section did not exist in the first revision, because the first revision believed map geometry was unavailable. It is the largest new piece of work and it unlocks the most.
+
+**It touches no game server and requires no deploy.** It reads files that are already on the box and covers **91.6% of all rounds ever played** (§2.5.3).
+
+### 9.1 Deliverables, in dependency order
+
+**W1 — pk3 index.**
+Walk `/home/samba/share/etmain`, map `map_name → (pk3, bsp)`. Record a sha256 per BSP. Handle one map being provided by several pk3s: today `te_escape2` comes from three and all three BSPs are byte-identical, so pick deterministically and **assert the hashes match** rather than assuming it. Emit an explicit "no geometry" result for the six maps we do not hold — `etl_frostbite` above all, at 151 rounds.
+
+**W2 — BSP reader.**
+`IBSP` v47. Read the header (17 lumps, each an `(offset, length)` int32 pair) and parse `planes`, `brushes`, `brushsides`, `nodes`, `leafs`, `leafbrushes`, `models`, `entities`. Refuse any file whose magic or version differs instead of guessing at the layout.
+
+**W3 — entity extraction.**
+From the entity lump: spawn points by team (`team_CTF_bluespawn`, `team_CTF_redspawn`) with their `spawnflags`; objective volumes (`trigger_objective_info`); objective markers (`team_WOLF_objective`); doors and movers. This supersedes the sphere-with-radius-500 approximation in `objective_zones.json` — keep that file as the fallback for maps without a pk3, and **label which source each zone came from** so a consumer can tell a measured volume from a guessed sphere.
+
+**W4 — collision trace.**
+Ray-vs-brush against solid brushes, using the BSP tree to avoid testing all ~8,150. Standard Quake3-derived model. The output is **line-of-sight availability**, never "saw" (§3.1 B2).
+
+**W5 — stage model.**
+Parse `.objdata` for the objective list per team with primary/secondary/additional classification, and `.script` for the stage logic (`wm_objective_status`, `trigger stolen`, `trigger dropped`, `wm_setwinner`). Produce, per map, an ordered stage model and the mapping from stage to active spawn points and live objective.
+
+**This is the deliverable with the most unknowns.** Map scripts are hand-written and vary. The first job of W5 is to establish **for how many of the 13 maps a stage model can actually be derived**, and to return null for the rest rather than inventing one. Do not let §7.4.1 depend on a stage model that silently guesses.
+
+**W6 — validation against live Lua.**
+Once §10 C4 is available, compare offline traces against `et.trap_Trace` results on the same positions. This is the only way to know whether W4 is correct. Until then, treat every visibility number as unvalidated and say so in the output.
+
+### 9.2 Risks
+
+- **Brush-based collision is not the same as the engine's player trace.** The engine traces a bounding box, not a ray, and has its own edge behaviour. Expect disagreements at corners; W6 quantifies them.
+- **Cost.** A trace per player-pair per 200 ms tick is 66 pairs × 3,600 ticks ≈ 238k traces for one 12-minute round. Measure before committing to a per-tick design; consider a coarser visibility cadence than the movement cadence.
+- **`etl_frostbite`** is 151 rounds with objective coordinates but no BSP. Anything geometry-derived must be null there, not silently substituted.
+
+---
+
+## §10 Phase C — Lua v7 capture
 
 Everything here requires a game-server deploy and is **owner-gated**.
 
-### 9.1 Captures requested
+### 10.1 Captures requested
 
 | # | Capture | Why it cannot be done otherwise | Cost risk |
 |---|---|---|---|
-| C1 | `view_yaw` / `view_pitch` in the 200 ms position samples | B2 — facing is known only at shot time | Low |
-| C2 | `reinf_offset` in the file header, plus a wave timeline | §5 currently infers it; capture makes it exact | Very low |
-| C3 | Objective state over time (which objective is live, dynamite planted, doors, checkpoints) | Objective *phase* is unknown; only static coordinates exist | Low–medium |
-| C4 | Line-of-sight trace (`et.trap_Trace`) | B1 — impossible offline | **High, measure first** |
+| C1 | `view_yaw` / `view_pitch` in the 200 ms position samples | **B2 — genuinely blocked offline.** Facing is known only at shot time, and geometry does not supply it | Low |
+| C2 | `reinf_offset` in the file header, plus a wave timeline | §5 infers it at 98.7%; capture makes it exact and removes the inference | Very low |
+| C3 | Objective state over time (dynamite planted, doors, checkpoints) | **Downgraded.** §9 W5 derives the *structure* offline; live *state* transitions are partly reconstructible from `proximity_carrier_event` and `proximity_construction_event`. Capture closes the remainder | Low–medium |
+| C4 | Line-of-sight trace (`et.trap_Trace`) | **Reclassified.** No longer the only route — §9 W4 does this offline for 91.6% of rounds. C4's value is now as the **ground truth that validates W4** (W6) | **High, measure first** |
 | C5 | Teammate engagement state (is this player under attack right now) | Partially derivable from `combat_engagement`, but a live flag is exact | Low |
 
-### 9.2 Opportunistic fixes while in the file
+Note how C3 and C4 changed. Both were listed as "only possible via Lua" in the first revision. Neither is. C1 is now the only capture here that is strictly required to unblock something, and C4's justification has shifted from capability to verification.
+
+### 10.2 Opportunistic fixes while in the file
 
 - `spawn_timing_score = 0` sentinel collides with a real score of zero (1,494 of 39,895 rows). Emit a distinct null.
 - `enemy_spawn_interval = 0` rows should not be written at all.
 - Re-check the reinforcement-offset read path against the live build (see gotchas).
 
-### 9.3 Gotchas — read before touching the server
+### 10.3 Gotchas — read before touching the server
 
 - **Puran runs an older tracker than the repo:** `16bf9fc4` (2026-06-22). Do not assume repo behaviour is live behaviour.
 - **Live `shot_fired = true` is deliberate** and differs from the repo default. **Never blind-copy the repo file over the live one.**
@@ -428,7 +615,7 @@ Everything here requires a game-server deploy and is **owner-gated**.
 
 ---
 
-## §10 Phase D — visualisation
+## §11 Phase D — visualisation
 
 Deferred by explicit owner decision: *"podatki zdaj, vizualizacija ko bo signal dokazan."*
 
@@ -436,7 +623,7 @@ When it happens: a new page, not a modification of existing ones. Time slider ac
 
 ---
 
-## §11 Acceptance criteria
+## §12 Acceptance criteria
 
 Measurable, not descriptive.
 
@@ -455,20 +642,29 @@ Measurable, not descriptive.
 - **B4.** Every candidate in §7.4 measured under §8, with the full table published.
 - **B5.** No signal with a zero-crossing interval receives weight.
 
-### Phase C
+### BSP toolchain (§9)
+- **W1.** Every played map resolves to exactly one BSP or to an explicit "no geometry" result. The six uncovered maps are named in the output, not silently absent.
+- **W2.** Parser refuses any file that is not `IBSP` v47 rather than misreading it.
+- **W3.** Objective volumes extracted for every covered map, and each published zone states whether it came from a **measured volume** or the legacy sphere.
+- **W4.** Trace validated against hand-checked cases on at least one map before any metric consumes it. Cost per trace measured and stated.
+- **W5.** Reported honestly: **for how many of the 13 maps a stage model could actually be derived**. A partial answer is acceptable; a fabricated one is not.
+- **W6.** Once §10 C4 exists, offline-vs-live agreement rate published. Until then every visibility output is labelled unvalidated.
+
+### Phase C (§10)
 - **C1.** Before/after comparison on one map showing the new fields populated.
 - **C2.** Server cost of C4 measured and stated before enablement.
+- **C3.** W6 agreement rate published, and the offline trace corrected or withdrawn if it disagrees materially.
 
 ---
 
-## §12 Data-quality prerequisites
+## §13 Data-quality prerequisites
 
 These will bite the implementer. They are listed with the measurement so nobody has to rediscover them.
 
-### 12.1 Overlapping lives
+### 13.1 Overlapping lives
 3,674 same-GUID pairs overlap in time across 49 rounds (2,925 human). See §4.3 for the required rule.
 
-### 12.2 The bot gate exists, is applied everywhere, and does nothing
+### 13.2 The bot gate exists, is applied everywhere, and does nothing
 
 This one deserves care, because the surface reading is the opposite of the truth.
 
@@ -490,29 +686,61 @@ Until the flag is fixed, filter on `player_guid LIKE 'OMNIBOT%'` at the player l
 
 *(Correction to the description of PR #560, which said all bots share one GUID. They do not — there are 13. The duplicate `(round, player, spawn)` rows noted there are 216 human and 114 bot, not bot-only.)*
 
-### 12.3 GUID length mismatch
+### 13.3 GUID length mismatch
 `player_comprehensive_stats.player_guid` is **8 characters**; proximity tables use **32**. Join with `LEFT(proximity_guid, 8) = pcs_guid`. Omitting this produces a silent zero-row join, not an error — which is exactly how the first #556 measurement attempt produced empty results for all 18 metrics.
 
-### 12.4 Round identity
+### 13.4 Round identity
 - `rounds` has **`id`**, not `round_id`. The proximity tables' `round_id` references `rounds.id`.
 - To link `player_track` to a round, use **`_TRACK_ROUND_JOIN`** from `replay_service.py`. Do not join on `(session_date, round_number, map_name)`: when a map is replayed on the same date that key matches every repeat. Before PR #560 that bound 24,428 track rows to more than one round, and one 8-player round rendered 14 players and 70 "alive" lives.
 - 5.1% of `player_track` rows have `round_id IS NULL`. The helper falls back to the date key only when it is unambiguous.
 
-### 12.5 Round validity
+### 13.5 Round validity
 Use the established gate: `round_number IN (1,2) AND is_valid IS DISTINCT FROM FALSE AND (round_status IN ('completed','substitution') OR round_status IS NULL)`. See `_round_quality_gate_sql()` in `website/backend/routers/proximity_helpers.py` and `GamingSessionScope` in `website/backend/services/session_scope.py`.
 
 ---
 
-## §13 Open questions for the owner
+## §14 Cross-session accumulation
+
+The first revision of this document was entirely round-scoped, which missed the owner's founding requirement. He has stated it repeatedly and from the beginning:
+
+> *"skozi čas bomo zajeli veliko sessionov in takrat bodo scori, ki jih collectamo, imeli veliko večjo težo"*
+> *"več skillov ima lahko igralec... jaz osebno sem lurker/teamplayer"*
+
+A per-round signal that is never accumulated cannot deliver either half of that: neither the growing weight of evidence, nor a multi-dimensional profile.
+
+### 14.1 What accumulates
+
+Web-derived signals that survive §8 become **axis evidence**, not leaderboard entries. The axes follow the owner's own vocabulary — teamplay, lurk, objective, carry — and a player has a value on each, with a confidence that grows as sessions accumulate.
+
+This is the same subject as `docs/DESIGN_SKILL_PASSPORT_2026-07.md` (PR #551). **Do not build a second, parallel accumulation model.** The web supplies inputs; the Passport owns the accumulation. If the two disagree on shrinkage or versioning, the Passport wins and this document is wrong.
+
+### 14.2 Constraints inherited from the #551 review
+
+These were raised against the Passport design and apply verbatim to anything accumulating web signals. They are unresolved on that PR, so treat them as requirements rather than settled decisions.
+
+1. **Keep shrinkage weights in one evidence unit.** A prior of `C = 5 sessions` cannot be combined with an `n` counted in kills or in axis-specific opportunities. Fifteen kills in one session and one kill in fifteen sessions are not the same evidence, and an unweighted mean of per-session values treats them as such.
+2. **Persist the axis evidence count in every snapshot.** Storing only `n_sessions` makes shrinkage, confidence and the insufficient-data gate unreconstructable later, because `n_axis` differs in unit per axis.
+3. **Restrict the percentile pool to evidence-qualified players.** If profiles below the evidence threshold are withheld from display but still shape the pool, the many low-evidence players drag the prior toward themselves.
+4. **A formula version bump does not make history comparable.** Labelling later snapshots with a new version leaves the historical aggregate averaging percentiles produced by different axis definitions. Reads must be pinned to one formula generation, exactly as `KIS_FORMULA_VERSION` now pins the KIS reads.
+5. **Define how a superseding snapshot preserves history.** When telemetry arrives late and the population has moved on, the replacement row carries a different `percentile_at_time` and a different pool. Decide explicitly whether historical reads see the original or the replacement, and store enough of the original pool to recompute — mean, size and standard deviation are **not** sufficient to re-derive an empirical percentile.
+6. **Do not let a timeout bypass telemetry completeness.** A six-hour "snapshot anyway" branch produces profiles whose teamplay, lurk and objective axes were computed without their inputs, and nothing downstream can tell them apart from complete ones.
+
+### 14.3 The honest constraint on all of it
+
+Accumulation multiplies whatever it accumulates. If a per-round signal is noise, a season of it is confident noise, which is worse — it looks authoritative. **§8 comes first, always.** Nothing enters the accumulation layer that has not already survived the round-level measurement.
+
+---
+
+## §15 Open questions for the owner
 
 1. **Materialise or compute on demand?** `get_player_positions` is 27–51 ms per call today. A full 3,600-tick reconstruction is a different order of magnitude. Decide after A4 is measured.
-2. **The bot flag is never set (§12.2).** Fix it as a separate change before the web, or handle bots by GUID prefix inside the web?
+2. **The bot flag is never set (§13.2).** Fix it as a separate change before the web, or handle bots by GUID prefix inside the web?
 3. **PR #551** (`DESIGN_SKILL_PASSPORT`, `PROXIMITY_VISION_AUDIT`) remains open with 19 unresolved review threads. Their findings are incorporated here as §3; the PR itself still needs a decision.
 4. **PR #555** (release 1.28.0) is open and awaiting a call.
 
 ---
 
-## §14 Provenance
+## §16 Provenance
 
 Verified on the dev database (`etlegacy` @ localhost) on 2026-07-27. Key checks, all repeatable:
 
@@ -523,4 +751,30 @@ Verified on the dev database (`etlegacy` @ localhost) on 2026-07-27. Key checks,
 - Bot share: `player_guid LIKE 'OMNIBOT%'` → 13 guids, 7,687 of 57,311 tracks
 - Linkage: comparison of the date-key join against `round_id` → 24,428 multi-round track rows before PR #560, 0 after
 
+Map assets, checked by reading the archives in `/home/samba/share/etmain` directly:
+
+- pk3 inventory: 22 archives; `map_name → bsp` index built by scanning `maps/*.bsp` in each
+- Coverage: 1,767 of 1,929 R1/R2 rounds (91.6%) are on a map we hold; missing are `etl_frostbite` (151), `et_beach` (4), `radar` (2), `sp_delivery_te` (2), `etl_supply` (2), `mp_sillyctf` (1)
+- BSP format: magic and version read from the first 8 bytes of each BSP → `IBSP` v47 on all 13 available maps
+- Lump sizes: header parsed as 17 `(offset, length)` int32 pairs on `etl_adlernest.bsp` → planes 1,512,544 B; brushes 130,404 B; brushsides 927,960 B; entities 65,814 B
+- Entity classes: regex over the entity lump → 540 entities, 34 classnames; per-map spawn / objective-trigger / WOLF-objective counts as tabulated in §2.5
+- `.objdata` / `.script` presence: checked per archive → present on all 13 available maps
+- Duplicate provision: `te_escape2` supplied by three pk3s; sha256 of each BSP compared → byte-identical
+
 Related: #556 (metric validity method), #560 (track linkage fix), #551 (open design review), `docs/PROXIMITY_VISION_AUDIT_2026-07.md`, `docs/DESIGN_SKILL_PASSPORT_2026-07.md`.
+
+### Revision history
+
+**Rev 2 (2026-07-27)** — written after the owner asked whether the spec actually captured what he wanted from proximity. It did not; seven gaps were found and closed:
+
+| # | Gap | Where |
+|---|---|---|
+| 1 | Offline line-of-sight declared impossible — **wrong** | §3.1 (B1 withdrawn), §9 |
+| 2 | Objective zones left as spheres though volumes exist | §2.5.2, §9 W3 |
+| 3 | Objective phase attributed to Lua though `.script` supplies it offline | §9 W5, §10 C3 |
+| 4 | Class-agnostic objective work — the owner's explicit correction — absent entirely | §3.2 P7 |
+| 5 | Stopwatch stages: "the space that matters" moves during a round | §7.4.1 |
+| 6 | Sacrifice that opens space — the owner's own playstyle — unnamed | §7.4.2 |
+| 7 | Cross-session accumulation missing; the spec was wholly round-scoped | §14 |
+
+Gaps 1 and 3 were **incorrect claims**, not omissions, and both closed off tractable work. Both are marked in place as corrections rather than quietly rewritten.
