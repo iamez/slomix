@@ -1,8 +1,8 @@
 # Proximity relinker query performance (N3)
 
-Date: 2026-07-27  
-Target: dev PostgreSQL `192.168.64.116:5432/etlegacy`  
-Production writes: none  
+Date: 2026-07-27
+Target: dev PostgreSQL `192.168.64.116:5432/etlegacy`
+Production writes: none
 Dev schema changes: none persisted; index builds ran inside one transaction
 and were rolled back after measurement.
 
