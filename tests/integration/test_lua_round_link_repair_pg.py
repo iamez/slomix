@@ -231,7 +231,7 @@ class _AsyncpgAdapter:
     @asynccontextmanager
     async def transaction(self):
         # One test connection stands in for the pool; production serialization
-        # is provided by the explicit table lock inside this transaction.
+        # is provided by the source-key advisory lock inside this transaction.
         async with self._transaction_lock, self.conn.transaction():
             yield self.conn
 
@@ -266,6 +266,10 @@ class _SpawnWriter:
 
 
 class _TeamWriter(_SpawnWriter):
+    _lua_exact_source_lock_key = staticmethod(
+        _LuaRoundStorageMixin._lua_exact_source_lock_key
+    )
+
     def __init__(self, conn):
         super().__init__(conn)
         self.correlation_service = None

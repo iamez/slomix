@@ -16,6 +16,7 @@ class _FakeDB:
     def __init__(self, *, team_exists=False, team_round_id=None):
         self.calls = []
         self.batch_calls = []
+        self.fetch_val_calls = []
         self.team_exists = team_exists
         self.team_round_id = team_round_id
 
@@ -34,8 +35,16 @@ class _FakeDB:
             return (self.team_round_id,)
         return None
 
+    async def fetch_val(self, query, params=None):
+        self.fetch_val_calls.append((query, params))
+        return None
+
 
 class _FakeBot:
+    _lua_exact_source_lock_key = staticmethod(
+        UltimateETLegacyBot._lua_exact_source_lock_key
+    )
+
     def __init__(
         self,
         has_round_id: bool,
@@ -126,9 +135,11 @@ async def test_store_lua_round_teams_param_count_with_round_id_column():
     assert "round_id" in query
     assert "WHEN EXCLUDED.round_start_unix > 0" in query
     _assert_query_placeholders_align(query, 24)
-    assert any(
-        "LOCK TABLE lua_round_teams" in query
-        for query, _params in fake_bot.db_adapter.calls
+    assert len(fake_bot.db_adapter.fetch_val_calls) == 1
+    lock_query, lock_params = fake_bot.db_adapter.fetch_val_calls[0]
+    assert "pg_advisory_xact_lock" in lock_query
+    assert lock_params == (
+        UltimateETLegacyBot._lua_exact_source_lock_key("supply", 2, 1770843050),
     )
     reconcile_query = next(
         query
@@ -216,3 +227,22 @@ async def test_store_lua_spawn_stats_uses_only_persisted_team_round_id():
     _query, params = fake_bot.db_adapter.batch_calls[0]
     assert params[0][2] == 9825
     assert params[0][12] is True
+
+
+def test_lua_source_lock_key_is_normalized_stable_and_source_specific():
+    lock_key = UltimateETLegacyBot._lua_exact_source_lock_key(
+        " Supply ",
+        2,
+        1770843050,
+    )
+    assert lock_key == UltimateETLegacyBot._lua_exact_source_lock_key(
+        "SUPPLY",
+        2,
+        1770843050,
+    )
+    assert lock_key != UltimateETLegacyBot._lua_exact_source_lock_key(
+        "supply",
+        1,
+        1770843050,
+    )
+    assert -(2**63) <= lock_key < 2**63
