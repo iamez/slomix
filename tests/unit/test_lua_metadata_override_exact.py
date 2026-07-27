@@ -10,10 +10,16 @@ from bot.ultimate_bot import UltimateETLegacyBot
 
 
 class _DB:
-    def __init__(self):
+    def __init__(self, candidate_row=(None, "supply", 1)):
         self.executed: list[tuple[str, tuple]] = []
+        self.candidate_row = candidate_row
 
     async def fetch_one(self, query, params=None):
+        if "SELECT round_start_unix, map_name, round_number" in query:
+            return self.candidate_row
+        if "RETURNING id" in query:
+            self.executed.append((query, params))
+            return (params[-1],)
         if "FROM rounds WHERE id" in query:
             return (600, 20, 1)
         if "information_schema.columns" in query:
@@ -25,8 +31,14 @@ class _DB:
 
 
 class _Bot:
-    def __init__(self, *, exact_round_id=None, fuzzy_round_id=None):
-        self.db_adapter = _DB()
+    def __init__(
+        self,
+        *,
+        exact_round_id=None,
+        fuzzy_round_id=None,
+        candidate_row=(None, "supply", 1),
+    ):
+        self.db_adapter = _DB(candidate_row)
         self.exact_round_id = exact_round_id
         self.fuzzy_round_id = fuzzy_round_id
         self.exact_calls = 0
@@ -57,7 +69,11 @@ def _metadata(start_unix):
 
 @pytest.mark.asyncio
 async def test_positive_lua_start_cannot_overwrite_fuzzy_neighbour():
-    bot = _Bot(exact_round_id=None, fuzzy_round_id=41)
+    bot = _Bot(
+        exact_round_id=None,
+        fuzzy_round_id=41,
+        candidate_row=(1_776_700_000, "supply", 1),
+    )
 
     await UltimateETLegacyBot._apply_round_metadata_override(
         bot,
@@ -66,8 +82,34 @@ async def test_positive_lua_start_cannot_overwrite_fuzzy_neighbour():
     )
 
     assert bot.exact_calls == 1
-    assert bot.fuzzy_calls == 0
+    assert bot.fuzzy_calls == 1
     assert bot.db_adapter.executed == []
+
+
+@pytest.mark.asyncio
+async def test_positive_lua_start_initializes_matching_fresh_import():
+    bot = _Bot(exact_round_id=None, fuzzy_round_id=42)
+
+    with patch(
+        "bot.core.round_canonical.update_canonical_id_if_possible",
+        new=AsyncMock(),
+    ):
+        await UltimateETLegacyBot._apply_round_metadata_override(
+            bot,
+            "2026-01-01-supply-round-1.txt",
+            _metadata(1_776_800_000),
+        )
+
+    assert bot.exact_calls == 1
+    assert bot.fuzzy_calls == 1
+    update_query, update_params = next(
+        (query, params)
+        for query, params in bot.db_adapter.executed
+        if "UPDATE rounds" in query
+    )
+    assert "round_start_unix IS NULL OR round_start_unix <= 0" in update_query
+    assert "RETURNING id" in update_query
+    assert update_params[-1] == 42
 
 
 @pytest.mark.asyncio

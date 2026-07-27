@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import importlib
 import time
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock
 
 import pytest
@@ -109,6 +110,14 @@ class _FanoutCapturingDB:
     async def execute(self, query, params=None):
         self.executed.append((" ".join(str(query).split()), params))
 
+    @asynccontextmanager
+    async def transaction(self):
+        yield self
+
+    async def fetch_val(self, query, params=None):
+        self.executed.append((" ".join(str(query).split()), params))
+        return None
+
 
 @pytest.mark.asyncio
 async def test_fanout_links_lua_round_teams_with_dedicated_template():
@@ -123,18 +132,25 @@ async def test_fanout_links_lua_round_teams_with_dedicated_template():
     await svc._relink_null_round_ids()
 
     lua_updates = [
-        (q, p) for q, p in db.executed if "UPDATE lua_round_teams" in q
+        (q, p) for q, p in db.executed if "UPDATE lua_round_teams l" in q
     ]
     assert len(lua_updates) == 1
     query, params = lua_updates[0]
     assert "session_date" not in query
-    assert "SET round_id = target.id" in query
-    assert query.count("HAVING COUNT(*) = 1") == 2
+    assert "source_state.source_count = 1" in query
+    assert "target_state.target_count = 1" in query
+    assert "ELSE NULL" in query
     assert "FROM lua_round_teams" in query
-    assert "WHERE l.id = source.id" in query
     assert "round_number = $2" in query
     assert "round_start_unix = $3" in query
     assert params == ("supply", 1, target_unix)
+    spawn_update = next(
+        (query, params)
+        for query, params in db.executed
+        if "UPDATE lua_spawn_stats s" in query
+    )
+    assert "s.match_id = l.match_id" in spawn_update[0]
+    assert spawn_update[1] == ("supply", 1, target_unix)
 
 
 @pytest.mark.asyncio
@@ -148,11 +164,12 @@ async def test_fanout_lua_update_cannot_use_the_fuzzy_round_id():
     await svc._relink_null_round_ids()
 
     lua_updates = [
-        (q, p) for q, p in db.executed if "UPDATE lua_round_teams" in q
+        (q, p) for q, p in db.executed if "UPDATE lua_round_teams l" in q
     ]
     assert len(lua_updates) == 1
     query, params = lua_updates[0]
-    assert query.count("HAVING COUNT(*) = 1") == 2
+    assert "source_state.source_count = 1" in query
+    assert "target_state.target_count = 1" in query
     assert 999 not in params
     assert params == ("supply", 1, target_unix)
 
@@ -178,7 +195,7 @@ async def test_positive_start_resolves_normalized_exact_target_before_fuzzy(monk
     assert "LOWER(BTRIM(map_name)) = LOWER(BTRIM($1))" in exact_query
     assert exact_params == (" Supply ", 1, target_unix)
     lua_params = next(
-        params for query, params in db.executed if "UPDATE lua_round_teams" in query
+        params for query, params in db.executed if "UPDATE lua_round_teams l" in query
     )
     assert lua_params == (" Supply ", 1, target_unix)
 
@@ -200,6 +217,10 @@ async def test_lua_exact_failure_never_falls_back_to_generic_update():
 
     await svc._relink_null_round_ids()
 
-    lua_queries = [query for query, _params in db.executed if "lua_round_teams" in query]
+    lua_queries = [
+        query
+        for query, _params in db.executed
+        if "UPDATE lua_round_teams l" in query
+    ]
     assert len(lua_queries) == 1
     assert "UPDATE lua_round_teams l" in lua_queries[0]
