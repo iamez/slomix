@@ -92,7 +92,7 @@ async def test_store_lua_round_teams_param_count_with_round_id_column():
     assert len(params) == 24
     assert params[2] == 9825  # round_id is 3rd param
     assert "round_id" in query
-    assert "WHEN EXCLUDED.round_start_unix IS NOT NULL" in query
+    assert "WHEN EXCLUDED.round_start_unix > 0" in query
     _assert_query_placeholders_align(query, 24)
 
 

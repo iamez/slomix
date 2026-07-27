@@ -444,7 +444,7 @@ class _LuaRoundStorageMixin:
                         axis_players = EXCLUDED.axis_players,
                         allies_players = EXCLUDED.allies_players,
                         round_id = CASE
-                            WHEN EXCLUDED.round_start_unix IS NOT NULL
+                            WHEN EXCLUDED.round_start_unix > 0
                                 THEN EXCLUDED.round_id
                             ELSE COALESCE(EXCLUDED.round_id, lua_round_teams.round_id)
                         END,
