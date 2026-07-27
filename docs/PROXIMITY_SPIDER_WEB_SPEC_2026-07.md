@@ -163,7 +163,7 @@ From the entity lump of `etl_adlernest`:
 | `func_door_rotating` | 5 | doors that open/close routes |
 | `trigger_hurt` / `trigger_heal` / `trigger_ammo` | 2 / 2 / 2 | hazards and supply |
 
-**Spawn points plus wave phase (§5) are necessary but not sufficient for a reachable-enemy set.** Reachability additionally needs a validated navigation topology and the spawn point that was active at that time. The BSP collision model does not supply either fact by itself; §5.6 and §9 make those gates explicit.
+**Spawn points plus wave phase (§5) are necessary but not sufficient for a reachable-enemy set.** Reachability additionally needs a validated navigation topology and the stage-valid set of selectable spawn points at that time. The BSP collision model does not supply either fact by itself, and the stage alone does not reveal one player's choice; §5.6 and §9 make those gates explicit.
 
 #### 2.5.3 Coverage and its limits
 
@@ -279,6 +279,9 @@ Snapshot
 PlayerState
   guid, name, team, player_class
   x, y, z, speed, health, sprint, stance, weapon
+  vx, vy, vz: float | null     # causal floor-derived direction; never interpolated
+  velocity_stale_ms: int | null
+  velocity_quality, velocity_reason
   alive: bool
   track_id: int              # which life row this came from
   stale_ms: int              # t_ms - sample.time; see 4.4
@@ -308,6 +311,12 @@ Rationale: the later spawn is the more recent state; determinism matters more th
 Do **not** interpolate positions. Take the last sample at or before `t` — **floor**, not nearest — and record `stale_ms`.
 
 **The existing helper does not do this.** `_find_position_at_time()` uses `bisect_left` and then returns whichever neighbour is closer, so when the following 200 ms sample is nearer it returns a position from **after** `t`. For a replay slider that is invisible; for a relational layer it means one player's position can come from the future while another's comes from the past, in the same snapshot. A floor variant is required before the web reuses it — either a new function or a flag on the existing one, but not a silent change to it, because the replay page depends on current behaviour. Consumers decide their own tolerance; a metric that silently invents a position between two samples 200 ms apart is inventing movement that may not have happened. Reject a `PlayerState` whose `stale_ms` exceeds a caller-supplied threshold (suggested default 400 ms — two intervals).
+
+#### 4.4.1 Directional velocity is derived, not captured
+
+The stored path sample has scalar horizontal `speed`, but Layer 4 needs a direction. The live Lua can read `ps.velocity`, yet the player-track writer serialises only `speed`; `vx/vy/vz` therefore cannot be copied from the row or reconstructed with a future sample.
+
+Derive velocity only from the selected life's two causal floor samples. At an exact `spawn`, death, revive or other track discontinuity it is null. For an ordinary sample, use the immediately preceding sample from the same `track_id` only when `0 < dt <= 400 ms`, then compute `(current_position - previous_position) / dt`. Never bridge two lives, interpolate, or look ahead. Validate the derived horizontal magnitude against the stored scalar speeds at the endpoints and a named physical cap with a measured tolerance. A stale interval, teleport, discontinuity or implausible disagreement yields null plus a machine-readable `velocity_reason`; it is not clamped into plausibility. Velocity staleness follows position staleness, and no velocity-dependent candidate may run until this derivation has been validated against held-out ordinary movement segments.
 
 ### 4.5 Edges
 
@@ -406,8 +415,12 @@ Wave phase on its own is a number between 0 and 1. It becomes tactical only when
 For any time `t`:
 
 ```
-next_wave(team)      = t + time_to_next(team, t)                     # §5.3
-reachable(team, T)   = { p : travel_time(spawn_point, p) <= T − next_wave(team) }
+next_wave(team)              = t + time_to_next(team, t)             # §5.3
+selectable_spawns(team, t)   = stage-valid spawn choices at t
+reachable_upper(team, T)     = union(
+  { p : travel_time(spawn, p) <= T - next_wave(team) }
+  for spawn in selectable_spawns(team, t)
+)
 ```
 
 `travel_time` requires a **navigable topology**, not only point-to-point speed samples. Build an empirical directed movement graph (or an engine-equivalent navmesh) from the 7.99 M trajectories, with edges that preserve walls, floors, stairs, jumps, drops, doors and stage-dependent routes. Learn travel-time distributions on those edges from past trajectories. A straight-line estimate reintroduces P2 through the back door, while a collision ray alone cannot establish that a route is walkable.
@@ -421,7 +434,9 @@ Two things fall out of this that nothing in the current system can express:
 
 Spawn points are also **stage-dependent** — maps move forward spawns as objectives complete. `spawnflags`, `.objdata` and `.script` describe possible entities and transitions, not when a transition happened in a historical round. Cross-reference them with a timestamped per-round objective-state replay (§9 W5); do not treat all spawn entities as simultaneously active.
 
-Where the active spawn, route state or navigation connectivity cannot be reconstructed for time `t`, reachability is null. Static map scripts alone are never evidence that a particular historical transition already occurred.
+Even a correctly replayed stage usually determines a **set of selectable spawns**, not which one an individual selected. The dormant Lua `spawn_select` capability defaults to false, so per-player choice is unknown unless that round's manifest proves the capability complete. Without that evidence, publish a union/distribution over every selectable spawn, explicitly labelled as an upper bound; never choose one arbitrarily. Optional spawn-choice probabilities may be learned only from prior rounds and must expose their sample and calibration coverage.
+
+Where the selectable-spawn set, route state or navigation connectivity cannot be reconstructed for time `t`, reachability is null. Static map scripts alone are never evidence that a particular historical transition already occurred. Uncertainty within a known selectable set remains a distribution/union rather than collapsing the entire result to a guessed point.
 
 ---
 
@@ -435,8 +450,8 @@ This is the most original part of the design and the one most easily overclaimed
 |---|---|---|
 | **Kill feed** | `proximity_kill_outcome.kill_time`, both guids | **High but non-spatial.** The obituary reveals that a player is **downed and revivable**, not permanently dead. `outcome` later distinguishes `revived`, `gibbed`, `tapped_out`, `round_end` and `expired`. |
 | **Gunfire** | `proximity_shot_fired` (648,214 rows, with `origin_x/y/z`) | Medium and **capability-gated**. An audible recipient learns an uncertain source region, not the exact telemetry coordinate. The radius and localisation error are named model parameters. |
-| **Contact** | `combat_engagement` time ranges + `attackers` | High for the participants; medium for nearby teammates. |
-| **Downs and outcomes** | `player_track.death_time_ms` + `proximity_kill_outcome` | High for the downed player; roster state changes only when a revive, gib, tap-out/respawn or terminal outcome is observed. |
+| **Damage contact** | `combat_engagement.attackers[].last_hit_ms` | Asymmetric. The attacker has a resolved target at the hit. The victim has evidence of an incoming threat, but not automatically the attacker's GUID or exact position. Nearby teammates receive nothing without separate audible, visible or communication evidence. |
+| **Downs and outcomes** | `player_track.death_time_ms` + `proximity_kill_outcome` | High lifecycle evidence, but outcome names are not all terminal states; use the write-path state machine below. |
 | **Voice macros** | `proximity_comm_event` | **Currently unusable:** feature flag `comm_events` is off, 96 rows total. |
 | **Line-of-sight availability** | BSP trace (§9) | An oracle upper-bound diagnostic for covered static geometry, not an observation and never a belief source by itself. |
 
@@ -455,9 +470,20 @@ Use it as an **upper bound on what could have been seen** and never insert a bel
 
 ### 6.3 Suggested model (parameters are choices, not facts)
 
-**Beliefs are per recipient, not per team.** §6.1 says contact is high-certainty for the participants and weaker for nearby teammates, and gunfire only reaches its audible radius. A single team-wide set cannot express any of that: it would hand a player on the far side of the map the same knowledge as the one standing next to the fight. Hold a belief set **per player**, and derive team-level views by union when a team-level question is asked.
+**Beliefs are per recipient, not per team.** Damage gives different evidence to attacker and victim, gives none automatically to nearby teammates, and gunfire only reaches its audible radius. A single team-wide set cannot express any of that: it would hand a player on the far side of the map the same knowledge as the one standing next to the fight. Hold a belief set **per player**, and derive team-level views by union when a team-level question is asked.
 
-**Not every source is spatial.** The kill feed is global but says nothing about position, so it cannot produce coordinates. Model it as a separate, non-spatial lifecycle fact: `active -> downed_revivable -> revived | terminally_out`. Do not decrement an alive/available count permanently at obituary time; do so only after an observed gib, tap-out/respawn boundary or other terminal outcome. An unresolved down remains explicitly uncertain.
+**Contact is asymmetric.** A damage row proves that the attacker hit and therefore had a resolved target at that instant. It does not prove that the victim identified the attacker by GUID or exact position; absent an aim-lock, return fire or another recipient-specific attention event, the victim receives only an anonymous uncertain incoming-threat/bearing region. Teammates receive no contact belief by proximity alone. Audible gunfire, their own visibility/attention or a captured communication event may independently create one.
+
+**Not every source is spatial.** The kill feed is global but says nothing about position, so it cannot produce coordinates. Model it as a separate, non-spatial lifecycle fact whose transitions follow the Lua write path:
+
+- obituary: `active -> downed_revivable`
+- `revived`: `downed_revivable -> active` (the known post-revive trajectory gap in §13.2b still applies)
+- `gibbed`: `downed_revivable -> waiting_for_spawn`; return to `active` only on the next explicit normal-spawn event or new `player_track` life
+- `tapped_out`: emitted inside the normal-spawn callback immediately before the new active track, so state at that outcome timestamp is `active`, not terminal
+- `expired`: cleanup after 30 seconds, therefore `unknown`, not evidence of permanent death
+- `round_end`: `round_over`
+
+There is no permanent `terminally_out` state during a live respawn round. Do not decrement an available-player count past the next observed spawn, and do not manufacture a transition after `gibbed` when the spawn evidence is missing. An unresolved lifecycle remains explicitly uncertain.
 
 **Audible evidence is spatially uncertain.** The stored gunfire origin is ground truth available to the analyst, not a coordinate heard by the player. Represent what the holder could infer as a region or probability distribution whose uncertainty grows with time. At minimum record a centre estimate, radius/error model and decay; do not expose the exact telemetry origin as a belief point.
 
@@ -467,9 +493,9 @@ BeliefItem
   kind             # "position_region" | "roster_state"
   region           # spatial distribution/centre+radius; null for roster facts
   t_observed
-  source           # "gunfire" | "contact" | "down" | "aim_lock" | "killfeed"
+  source           # gunfire/contact_hit/incoming_damage/down/aim_lock/killfeed
   subject_guid     # may be null for gunfire if the shooter is unresolvable
-  roster_state     # downed_revivable/revived/terminally_out, roster kind only
+  roster_state     # active/downed_revivable/waiting_for_spawn/unknown/round_over
   capability       # explicit manifest evidence for optional capture sources
   confidence(t)    # decays from 1.0
 ```
@@ -481,7 +507,7 @@ Derived per player, per tick:
 - `known_enemy_count` — **distinct resolved subjects** above a confidence threshold, never a count of belief items. `proximity_shot_fired` emits one row per shot, and contact and down evidence repeat for the same person; counting items turns one enemy firing a burst into a phantom squad. Unresolved gunfire regions are not distinct enemies unless an explicit probabilistic association model supports that conclusion.
 - `nearest_known_enemy_distance` — a distance interval/distribution when the belief is a region, not false point precision
 - `moved_into_unknown` — did the player move toward a region with no recent belief coverage
-- `teammate_under_attack` — from engagement edges (§4.5); this is the owner's explicit request and it is **directly available**, no modelling needed
+- `teammate_under_attack` — from the latest `combat_engagement.attackers[].last_hit_ms`, **not** from an open engagement edge. Start with the explicit, configurable `UNDER_ATTACK_RECENCY_MS = 1000`; publish it as a modelling parameter and run sensitivity checks before validation. An open engagement can remain stale for 15 seconds and means only "recently contested" (§4.5).
 
 ### 6.4 Acceptance for Layer 3
 
@@ -571,19 +597,27 @@ Compare a player only against **the other players in the same round**. Between-r
 
 ### 8.2 Bootstrap over rounds, not players
 
-Teammates share an outcome, so per-player intervals are far too narrow. Resample **rounds** with replacement, 1000 times, and take the 2.5th and 97.5th percentiles.
+Teammates share an outcome, so per-player intervals are far too narrow. Resample **rounds** with replacement, never individual players. The #556 exploratory pass used 1,000 resamples and the 2.5th/97.5th percentiles; final confirmation must use the joint family procedure and tail-stability requirement in §8.4.
 
-### 8.3 Judge by the interval, not the point estimate
+### 8.3 Separate discovery from confirmation
 
-A metric is kept only if its 95% CI **excludes zero**. In the #556 pass, `kpr` had a spread of +0.028 and would have passed a naive threshold; its interval was [−0.009, +0.064] and it was retired.
+Individual 95% intervals are not a shipping gate when many candidates and parameter variants were tried: by chance alone, roughly one in twenty null variants can look positive. Pre-register a chronological split before measuring outcomes; the default is the earliest 70% of eligible rounds for discovery and the latest untouched 30% for confirmation, with the exact date cutoff and minimum round counts published.
 
-### 8.4 Required output per phase
+Discovery may choose formulas and parameters. Before opening confirmation data, freeze every candidate id, exact formula, parameter values, expected direction, filters, split cutoff and outcome definition in a versioned **family manifest** and publish its hash. The family includes every candidate and parameterised variant tried in that discovery programme, including variants later abandoned. Confirmation is run once. Retuning after seeing it creates a new hypothesis and requires a new untouched future holdout; it cannot be re-labelled as confirmation.
 
-A table of every candidate with: n rounds, spread, 95% CI, verdict. This table is a deliverable, not a working note. Anything not in it does not ship.
+### 8.4 Control the family-wise error over rounds
 
-### 8.5 Reference implementation
+The confirmation inference remains round-clustered (§8.2) and must account for the whole frozen family. Preferred: a round-level max-T bootstrap or permutation that produces simultaneous 95% family-wise confidence intervals. Acceptable fallback: round-clustered p-values with Holm correction at family alpha 0.05. Publish the method and random seed; use enough resamples for stable tail estimates (1,000 is exploratory, not a final multiplicity-adjusted result).
 
-The #556 measurement is reproducible: build a per-(player, round) dataset joined to round outcome, group by round, split each round's players at the median of the metric, and compare win rates of the two halves. Watch for §13.3 (GUID length) when joining proximity to `player_comprehensive_stats`.
+A signal ships only when its effect has the frozen direction in both discovery and confirmation **and** its simultaneous 95% interval excludes zero (or its Holm-adjusted result passes). A point estimate, an individual unadjusted interval, or the best-looking member of a parameter sweep is insufficient. In the #556 pass, `kpr` had a spread of +0.028 and would have passed a naive threshold; even its individual interval was [−0.009, +0.064], so it was retired before this stronger gate.
+
+### 8.5 Required output per phase
+
+Publish the frozen family manifest and a table of **every** candidate/variant with discovery and confirmation round counts, spread, raw interval/p-value, simultaneous interval or adjusted p-value, expected/observed direction and verdict. The table is a deliverable, not a working note. Anything absent from the declared family or output does not ship.
+
+### 8.6 Reference implementation
+
+The #556 measurement is reproducible: build a per-(player, round) dataset joined to round outcome, group by round, split each round's players at the median of the metric, and compare win rates of the two halves. Preserve chronological order for the discovery/confirmation cutoff and resample whole rounds jointly across all family members for simultaneous inference. Watch for §13.3 (GUID length) when joining proximity to `player_comprehensive_stats`.
 
 ---
 
@@ -596,7 +630,9 @@ This section did not exist in the first revision, because the first revision bel
 ### 9.1 Deliverables, in dependency order
 
 **W1 — pk3 index.**
-Walk `/home/samba/share/etmain`, map `map_name → (pk3, bsp)`. Record a sha256 per BSP. Handle one map being provided by several pk3s: today `te_escape2` comes from three and all three BSPs are byte-identical, so pick deterministically and **assert the hashes match** rather than assuming it. Emit an explicit "no geometry" result for the six maps we do not hold — `etl_frostbite` above all, at 151 rounds.
+Walk `/home/samba/share/etmain` and inventory every input the toolchain will consume, initially `maps/<map>.bsp`, `maps/<map>.script` and `maps/<map>.objdata`. Record `map_name`, asset kind, archive provider, exact member path, size and sha256 for **every provider**; extend the same contract to any external/custom entity source discovered later. Resolve each asset kind independently — a selected BSP does not imply that its archive also supplies the live script or objdata.
+
+Handle one member being provided by several pk3s explicitly. Byte-identical providers may collapse to one deterministic representative while retaining the complete provider list. If hashes differ, follow the actual live ET filesystem/pak precedence only when that order has been independently proven and recorded as provenance. Otherwise the asset is `ambiguous` with no selected provider; never let filesystem iteration order choose game semantics. Today `te_escape2` has three byte-identical BSPs, but the earlier check did **not** establish that their scripts and objdata are identical. Emit explicit missing/ambiguous states, including "no geometry" for the six maps we do not hold — `etl_frostbite` above all, at 151 rounds.
 
 **W2 — BSP reader.**
 `IBSP` v47. Read the header (17 lumps, each a signed int32 offset plus an unsigned int32 length) and parse `shaders`, `planes`, `brushes`, `brushsides`, `nodes`, `leafs`, `leafbrushes`, `leafsurfaces`, `models`, `entities`, `drawverts`, `drawindexes` and `surfaces`. Refuse any file whose magic or version differs instead of guessing at the layout. This is not a vanilla-ET assumption: the current [ET:Legacy `qfiles.h`](https://github.com/etlegacy/etlegacy/blob/master/src/qcommon/qfiles.h) retains `BSP_VERSION 47`, the same 17 lumps and the required record layouts.
@@ -626,7 +662,7 @@ The consequence is not uniform — most of a map is static world geometry and ca
 4. Report the indeterminate share. If it is small, the trace is still useful; if it is large on a given map, say so rather than averaging it away.
 
 **W5 — stage graph and per-round state replay.**
-Parse `.objdata` for the objective list per team with primary/secondary/additional classification, and `.script` for the possible stage logic (`wm_objective_status`, `trigger stolen`, `trigger dropped`, `wm_setwinner`). Produce, per map, a static transition graph and candidate mappings from state to spawn points, dynamic routes and live objectives.
+Parse the independently resolved W1 `.objdata` for the objective list per team with primary/secondary/additional classification, and the resolved `.script` for the possible stage logic (`wm_objective_status`, `trigger stolen`, `trigger dropped`, `wm_setwinner`). An ambiguous input blocks W5 for that map; do not silently read the script beside the chosen BSP. Produce, per map, a static transition graph and candidate mappings from state to selectable spawn sets, dynamic routes and live objectives.
 
 Then replay each historical round from **timestamped observed transitions** such as carrier events, construction/destruction events, checkpoint/objective events and any future C3 capture. First inventory which event families are actually complete per tracker version. A static script proves that a transition can happen, not that it did happen at time `t`. Where an event is missing, duplicated, out of order, or insufficient to distinguish two legal states, return `unknown` from that point until a later observation uniquely re-establishes state. Never infer transition time merely from the final round result.
 
@@ -694,6 +730,7 @@ Measurable, not descriptive.
 - **A2.** Team-level aggregates derived from Layer 1 (centroid, dispersion, straggler count) reproduce `proximity_team_cohesion` for the same tick within tolerance.
 - **A3.** No player appears twice in a snapshot. Overlap conflicts (§4.3) are counted and exposed.
 - **A4.** Full-round reconstruction under **1 s** for a 12-minute round; if not, materialise (see §13.1).
+- **A5.** Directional velocity is causal and same-life only. Its availability, stale/null reason distribution, scalar-speed disagreement and held-out physical-cap violations are published before any velocity-dependent candidate consumes it.
 
 ### Phase B — Layers 2 and 3
 - **B1.** Wave phase computed for ≥95% of rounds that have `proximity_spawn_timing` rows; the rest explicitly null with a reason.
@@ -701,11 +738,11 @@ Measurable, not descriptive.
 - **B3.** Every opponent-dependent candidate is checked for P6 compliance. The §6.4 oracle delta is reported, including a negative result, but the oracle never becomes a shipping fallback.
 
 ### Phase B — Layer 4
-- **B4.** Every candidate in §7.4 measured under §8, with the full table published.
-- **B5.** No signal with a zero-crossing interval receives weight.
+- **B4.** Every candidate and tried parameter variant in §7.4 is declared in a frozen family manifest, measured on a chronological discovery/untouched-confirmation split under §8, and included in the full published table.
+- **B5.** No signal receives weight unless its direction replicates and its simultaneous 95% family-wise interval excludes zero, or the documented Holm-adjusted round-clustered test passes at family alpha 0.05.
 
 ### BSP toolchain (§9)
-- **W1.** Every played map resolves to exactly one BSP or to an explicit "no geometry" result. The six uncovered maps are named in the output, not silently absent.
+- **W1.** Every played map reports provider/member/hash records and an independent resolution for BSP, `.script` and `.objdata`. Equal duplicates are proven by hash; differing duplicates use independently verified live precedence or remain `ambiguous`. Every map resolves to exactly one BSP or an explicit missing/ambiguous geometry result, and the six uncovered maps are named rather than silently absent.
 - **W2.** Parser refuses any file that is not `IBSP` v47, validates all parsed cross-references, and exposes brush plus `MST_PATCH` collision inputs (`leafsurfaces`, `drawverts`, `drawindexes`, `surfaces`).
 - **W3.** Objective volumes extracted for every covered map, and each published zone states whether it came from a **measured volume** or the legacy sphere.
 - **W4a.** Brush + patch trace uses a named mask and stance-adjusted eye endpoints, preserves `indeterminate` for unresolved geometry/state, and is validated against hand-checked cases before any metric consumes it. Cost per trace is measured and stated.
@@ -854,9 +891,28 @@ Checks added in rev 3, after review:
 - Engagement closure: `proximity_tracker.lua` → `escape_time_ms = 5000`, `stale_timeout = 15000`
 - Revive gap: `endPlayerTrack` call sites in `proximity_tracker.lua` → invoked from the obituary path at :4095
 
+Checks added in rev 6, after following the writer rather than interpreting field names:
+
+- Kill lifecycle: `finalizeKillOutcome` plus `et_ClientSpawn` → `revived` is emitted on the revive callback; `tapped_out` is emitted inside a normal spawn callback immediately before `createPlayerTrack`; `gibbed` awaits later spawn evidence; `expired` is the 30-second cleanup fallback
+- Directional velocity: `getPlayerVelocity` reads `ps.velocity`, while `createPlayerTrack`/`samplePlayer` serialise only scalar horizontal `speed`
+- Spawn choice: `features.spawn_select = false` by default; its writer is capability-gated in the normal-spawn callback and excluded from the revive path
+- Duplicate assets: the earlier archive check proved only duplicate BSP equality. Presence of `.script`/`.objdata` was checked, but their duplicate hashes and the live pak precedence were not; W1 now treats those as separate evidence requirements
+
 Related: #556 (metric validity method), #560 (track linkage fix), #551 (open design review), `docs/PROXIMITY_VISION_AUDIT_2026-07.md`, `docs/DESIGN_SKILL_PASSPORT_2026-07.md`.
 
 ### Revision history
+
+**Rev 6 (2026-07-27)** — second post-review closure for seven findings discovered after rev 5. This revision follows the Lua writer for lifecycle and spawn semantics, adds causal directional velocity, makes contact recipient-asymmetric, replaces open-engagement attack state with last-hit recency, adds chronological family-wise confirmation, and expands W1 from a BSP chooser into an independent consumed-asset resolver.
+
+| #561 review finding | Closure in rev 6 |
+|---|---|
+| Kill outcomes collapsed into a false terminal state | Writer-derived `active/downed/waiting/unknown/round_over` transitions (§6.3) |
+| Open engagement used as current attack | `last_hit_ms` with explicit 1,000 ms starting parameter (§4.5, §6.3) |
+| Individual CIs ignored multiple testing | Frozen family, chronological confirmation and max-T/Holm gate (§8, B4-B5) |
+| Damage contact was shared symmetrically | Attacker, victim and teammate evidence separated (§6.1, §6.3) |
+| Layer 4 had only scalar speed | Same-life causal floor-derived `vx/vy/vz`, null on discontinuity (§4.2, §4.4.1, A5) |
+| Duplicate script/objdata inputs were unchecked | Per-kind provider/member/hash resolution; unresolved conflicts are ambiguous (W1, W5) |
+| One active spawn was assumed | Stage yields selectable set; per-player choice remains capability-gated (§5.6) |
 
 **Rev 5 (2026-07-27)** — post-review closure for the 11 open #561 findings. Unanimity replaces mode selection for inferred clocks; capture capabilities gate optional evidence; LOS is oracle-only unless a recipient-confirmed event exists; killfeed state is downed/revivable; gunfire beliefs carry spatial uncertainty; P6 is unconditional; counterfactuals are chronological; navigation topology is a separate W4b deliverable; W2/W4 include ET:L patch collision and stance-adjusted eye rays; W5 separates the static stage graph from timestamped per-round state replay. Unknown data now propagates as `unknown`/`unavailable`/`indeterminate` rather than a guessed value.
 
