@@ -2,6 +2,7 @@
 
 # ruff: noqa: SLF001
 
+import asyncio
 import os
 import re
 import sys
@@ -52,11 +53,30 @@ async def pg():
                 round_start_unix BIGINT
             );
             CREATE TEMP TABLE lua_round_teams (
-                id INTEGER PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 match_id TEXT NOT NULL,
                 round_number INTEGER,
                 map_name TEXT,
                 round_start_unix BIGINT,
+                round_end_unix BIGINT,
+                axis_players JSONB,
+                allies_players JSONB,
+                actual_duration_seconds INTEGER,
+                total_pause_seconds INTEGER,
+                pause_count INTEGER,
+                end_reason TEXT,
+                winner_team INTEGER,
+                defender_team INTEGER,
+                time_limit_minutes INTEGER,
+                lua_warmup_seconds INTEGER,
+                lua_warmup_start_unix BIGINT,
+                lua_pause_events JSONB,
+                surrender_team INTEGER,
+                surrender_caller_guid TEXT,
+                surrender_caller_name TEXT,
+                axis_score INTEGER,
+                allies_score INTEGER,
+                lua_version TEXT,
                 captured_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                 round_id INTEGER,
                 UNIQUE(match_id, round_number)
@@ -195,6 +215,7 @@ async def test_migration_refuses_dirty_state_then_enforces_guarded_repair(pg):
 class _AsyncpgAdapter:
     def __init__(self, conn):
         self.conn = conn
+        self._transaction_lock = asyncio.Lock()
 
     @staticmethod
     def _translate(query):
@@ -209,7 +230,9 @@ class _AsyncpgAdapter:
 
     @asynccontextmanager
     async def transaction(self):
-        async with self.conn.transaction():
+        # One test connection stands in for the pool; production serialization
+        # is provided by the explicit table lock inside this transaction.
+        async with self._transaction_lock, self.conn.transaction():
             yield self.conn
 
     async def execute(self, query, params=None):
@@ -240,6 +263,35 @@ class _SpawnWriter:
             self,
             **kwargs,
         )
+
+
+class _TeamWriter(_SpawnWriter):
+    def __init__(self, conn):
+        super().__init__(conn)
+        self.correlation_service = None
+
+    async def _has_lua_round_teams_round_id(self):
+        return True
+
+    async def _resolve_lua_round_id_for_metadata(self, metadata):
+        assert metadata["round_start_unix"] == 100
+        return 1
+
+    async def _reconcile_lua_exact_source(self, **kwargs):
+        return await _LuaRoundStorageMixin._reconcile_lua_exact_source(
+            self,
+            **kwargs,
+        )
+
+    async def _resolve_round_correlation_context(
+        self,
+        _round_id,
+        *,
+        fallback_match_id,
+        fallback_map_name,
+        fallback_round_number,
+    ):
+        return fallback_match_id, fallback_map_name, fallback_round_number
 
 
 @pytest.mark.asyncio
@@ -332,6 +384,39 @@ async def test_live_exact_reconcile_unlinks_duplicate_sources_and_spawn_rows(pg)
     assert await pg.fetchval(
         "SELECT COUNT(*) FROM lua_spawn_stats WHERE round_id IS NOT NULL"
     ) == 0
+
+
+@pytest.mark.asyncio
+async def test_concurrent_live_team_writers_cannot_claim_duplicate_source(pg):
+    await pg.execute(
+        "INSERT INTO rounds (id, map_name, round_number, round_start_unix) "
+        "VALUES (1, 'supply', 1, 100); "
+        "ALTER TABLE lua_round_teams "
+        "ADD CONSTRAINT lua_round_teams_round_id_key UNIQUE (round_id)"
+    )
+    writer = _TeamWriter(pg)
+
+    def metadata(round_end_unix):
+        return {
+            "map_name": "supply",
+            "round_number": 1,
+            "round_start_unix": 100,
+            "round_end_unix": round_end_unix,
+            "axis_players": [],
+            "allies_players": [],
+        }
+
+    results = await asyncio.gather(
+        _LuaRoundStorageMixin._store_lua_round_teams(writer, metadata(200)),
+        _LuaRoundStorageMixin._store_lua_round_teams(writer, metadata(201)),
+    )
+
+    assert sorted(results, key=lambda value: value is None) == [1, None]
+    rows = await pg.fetch(
+        "SELECT match_id, round_id FROM lua_round_teams ORDER BY match_id"
+    )
+    assert len(rows) == 2
+    assert [row["round_id"] for row in rows] == [None, None]
 
 
 @pytest.mark.asyncio
