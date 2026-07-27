@@ -105,6 +105,20 @@ async def test_lua_resolver_defers_missing_or_ambiguous_exact_start():
 
 
 @pytest.mark.asyncio
+async def test_lua_resolver_does_not_fuzzy_match_an_invalid_present_start():
+    adapter = _FakeAdapter()
+    svc = _svc(adapter)
+
+    assert await svc._resolve_lua_round_id_for_metadata({
+        "map_name": "supply",
+        "round_number": 1,
+        "round_start_unix": "not-a-timestamp",
+        "round_end_unix": 1_776_800_900,
+    }) is None
+    assert adapter.updates == []
+
+
+@pytest.mark.asyncio
 async def test_link_lua_round_teams_uses_exact_source_start():
     start_unix = 1_776_800_000
     adapter = _FakeAdapter(exact_lua_candidates=[(77, 999)])

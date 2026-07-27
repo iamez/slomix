@@ -14,12 +14,14 @@
 
 BEGIN;
 
-LOCK TABLE lua_round_teams IN SHARE ROW EXCLUSIVE MODE;
-
 DO $$
 DECLARE
     projected_duplicate_groups integer;
 BEGIN
+    -- Keep the lock in a transaction-bearing statement even when the fresh-
+    -- bootstrap parity test replays the unwrapped migration statement-wise.
+    LOCK TABLE lua_round_teams IN SHARE ROW EXCLUSIVE MODE;
+
     WITH wrong AS (
         SELECT
             l.id,

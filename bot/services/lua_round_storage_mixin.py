@@ -33,12 +33,22 @@ class _LuaRoundStorageMixin:
         """
         map_name = metadata.get("map_name") or metadata.get("map")
         round_number = metadata.get("round_number") or metadata.get("round")
+        raw_start_unix = metadata.get("round_start_unix")
+
+        if raw_start_unix in (None, ""):
+            return await self._resolve_round_id_for_metadata(None, metadata)
+
         try:
             round_number = int(round_number or 0)
-            round_start_unix = int(metadata.get("round_start_unix") or 0)
+            round_start_unix = int(raw_start_unix)
         except (TypeError, ValueError):
-            round_number = 0
-            round_start_unix = 0
+            webhook_logger.info(
+                "Lua round link deferred: invalid exact source key map=%s round=%s start=%r",
+                map_name,
+                round_number,
+                raw_start_unix,
+            )
+            return None
 
         if map_name and round_number and round_start_unix > 0:
             rows = await self.db_adapter.fetch_all(
@@ -61,7 +71,13 @@ class _LuaRoundStorageMixin:
             )
             return None
 
-        return await self._resolve_round_id_for_metadata(None, metadata)
+        webhook_logger.info(
+            "Lua round link deferred: incomplete exact source key map=%s round=%s start=%s",
+            map_name,
+            round_number,
+            round_start_unix,
+        )
+        return None
 
     async def _link_lua_round_teams(self, round_id: int, metadata: dict) -> None:
         """
