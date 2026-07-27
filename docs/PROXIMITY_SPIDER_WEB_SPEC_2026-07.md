@@ -57,7 +57,7 @@ A relational, per-moment reconstruction of a round: for any time `t`, the positi
 | `proximity_spawn_timing` | **39,895** | `kill_time, enemy_spawn_interval, time_to_next_spawn, spawn_timing_score, killer_reinf, victim_reinf` |
 | `proximity_combat_position` | **36,494** | `attacker_x/y/z, victim_x/y/z` |
 | `rounds` | **1,929** (R1/R2) | of which **720** have trajectories |
-| `objective_zones.json` | 15 maps / 74 objectives | extracted from `.pk3` in `/home/samba/share/etmain` (22 pk3 present) |
+| `website/assets/maps/proximity/objective_zones.json` | 15 maps / 74 objectives | extracted from `.pk3` in `/home/samba/share/etmain` (22 pk3 present) |
 
 Objective *coordinate* coverage is good: the 15 maps in `objective_zones.json` account for roughly **99% of rounds played**. Note this is not the same as **geometry** coverage, which is 91.6% — see §2.5.3, where `etl_frostbite` has coordinates but no BSP.
 
@@ -188,7 +188,9 @@ These are not opinions. Each was checked, and each has killed a plausible-soundi
 > B1 is therefore **withdrawn** and replaced by the §9 workstream. B2 below stands.
 
 **B2. There are no continuous view angles in trajectories.**
-`view_yaw` / `view_pitch` exist only in `proximity_shot_fired` and the aim-lock log — i.e. **at the moment of firing**. Between shots, facing is unknown. Field-of-view exposure over time cannot be computed for history. This one genuinely does require §10.
+`view_yaw` / `view_pitch` exist **only** in `proximity_shot_fired` — i.e. at the moment of firing. Between shots, facing is unknown.
+
+Correction: an earlier draft also named the aim-lock log as an angle source. It is not. `proximity_aim_lock` stores `avg_err_deg`, `avg_dist`, `samples` and a lock window — no yaw or pitch. What it actually is, is **line-of-sight evidence**: the Lua samples candidates periodically and records a window only after `trap_Trace` confirms visibility. That makes it valuable to §9 W6 as live-trace ground truth, and useless as a facing source. Field-of-view exposure over time cannot be computed for history. This one genuinely does require §10.
 
 Note the practical consequence of B2 surviving while B1 falls: with geometry we can answer *"was there an unobstructed line between A and B"*, which is a **necessary** condition for seeing. We still cannot answer *"was A looking that way"*, which is the **sufficient** one. Treat offline visibility as **line-of-sight availability**, never as "A saw B", and name it that way in every output.
 
@@ -288,7 +290,7 @@ Edge
 
 ### 4.3 Resolving overlapping lives — mandatory
 
-**3,674 pairs of same-GUID lives overlap in `[spawn_time_ms, death_time_ms]`, across 49 rounds; 2,925 of those pairs are human, not bot.** Slicing at `t` can therefore find more than one candidate life for one player. `get_player_positions` currently takes the first match it encounters (`break`), which is arbitrary and non-deterministic across query plans.
+**3,674 pairs of same-GUID lives overlap in `[spawn_time_ms, death_time_ms]`, across 49 rounds; 2,925 of those pairs are human, not bot.** Slicing at `t` can therefore find more than one candidate life for one player. `get_player_positions` currently takes the first match it encounters (`break`). Correction to an earlier draft: that **is** deterministic — the query carries `ORDER BY pt.player_guid, pt.spawn_time_ms`. The defect is the choice, not the stability: it deterministically picks the **earliest** overlapping life, which is the wrong one.
 
 Required rule:
 
@@ -301,12 +303,18 @@ Rationale: the later spawn is the more recent state; determinism matters more th
 
 ### 4.4 Staleness, not interpolation
 
-Do **not** interpolate positions. Take the last sample at or before `t` and record `stale_ms`. Consumers decide their own tolerance; a metric that silently invents a position between two samples 200 ms apart is inventing movement that may not have happened. Reject a `PlayerState` whose `stale_ms` exceeds a caller-supplied threshold (suggested default 400 ms — two intervals).
+Do **not** interpolate positions. Take the last sample at or before `t` — **floor**, not nearest — and record `stale_ms`.
+
+**The existing helper does not do this.** `_find_position_at_time()` uses `bisect_left` and then returns whichever neighbour is closer, so when the following 200 ms sample is nearer it returns a position from **after** `t`. For a replay slider that is invisible; for a relational layer it means one player's position can come from the future while another's comes from the past, in the same snapshot. A floor variant is required before the web reuses it — either a new function or a flag on the existing one, but not a silent change to it, because the replay page depends on current behaviour. Consumers decide their own tolerance; a metric that silently invents a position between two samples 200 ms apart is inventing movement that may not have happened. Reject a `PlayerState` whose `stale_ms` exceeds a caller-supplied threshold (suggested default 400 ms — two intervals).
 
 ### 4.5 Edges
 
 - **Distance edges:** pairwise 3D distance between alive players. For a 6v6 that is at most 66 pairs per tick; a 12-minute round at 200 ms is 3,600 ticks. Budget accordingly (§11).
-- **Engagement edges:** an engagement in `combat_engagement` with `start_time_ms <= t <= end_time_ms` links its `target_guid` to every `attackers[].guid`. This is the answer to "is a teammate currently under attack".
+- **Engagement edges:** an engagement in `combat_engagement` with `start_time_ms <= t <= end_time_ms` links its `target_guid` to every `attackers[].guid`.
+
+  **An open engagement is not an active attack.** The tracker does not close one when damage stops: `checkEscapes` needs `escape_time_ms = 5000` **and** 300 units of movement, and otherwise the engagement stays open until a `stale_timeout` of **15,000 ms**. So "engagement open at `t`" can mean "was shot at up to fifteen seconds ago and has been standing still since".
+
+  For "is this teammate under attack right now", use the last damage timestamp instead — `attackers[].last_hit_ms` — with a stated recency window, and treat the open-engagement flag as the weaker signal "recently contested".
 - **Isolation:** a player's distance to their nearest living teammate. `proximity_team_cohesion` already computes a team-level `straggler_count` and one `buddy_pair`; the web supersedes it with per-player values but should be cross-checked against it (§11).
 
 ### 4.6 What Layer 1 must not do
@@ -343,8 +351,10 @@ Over groups of `(round_id, victim_team)` with at least 3 kills: **1,249 of 1,266
 
 ### 5.3 Required algorithm
 
+`round_id` is nullable on the proximity tables and migrations 014/015 deliberately leave ambiguous rows unresolved. In a batch implementation PostgreSQL groups every NULL together, which would blend kills from unrelated rounds into one bogus offset. **Filter `round_id IS NOT NULL` before grouping.**
+
 ```
-For each (round_id, team):
+For each (round_id, team) where round_id IS NOT NULL:
     candidates = [ (interval − ttn − kill_time) mod interval
                    for each spawn_timing row of that team
                    where interval > 0 and ttn is not null ]
@@ -374,7 +384,19 @@ time_to_next(team, t) = interval − ((offset + t) mod interval)
 
 ### 5.5 Round remaining
 
-`rounds.round_start_unix` / `round_end_unix` give wall-clock bounds; sample times give in-round bounds. The **stopwatch time limit** (how long the attacking team has) is not currently stored. Until it is, express clock position as elapsed and as fraction of the round actually played, and label it as such. Do not present a fraction-of-limit that we cannot compute.
+Correction to an earlier draft, which claimed the stopwatch time limit is not stored. **It is.** `rounds` carries `time_limit`, `round_stopwatch_state`, `time_to_beat_seconds` and `next_timelimit_minutes`, and the import path populates the first of them.
+
+Measured on all 1,929 R1/R2 rounds:
+
+| Field | Populated | Shape |
+|---|---:|---|
+| `time_limit` | **1,929 / 1,929** | text `"M:SS"` — e.g. `"10:00"`, `"5:43"`, plus a `"0"` sentinel |
+| `round_stopwatch_state` | 0 / 1,929 | exists, never written |
+| `time_to_beat_seconds` | 0 / 1,929 | exists, never written |
+
+So a true fraction-of-limit **is** computable. Two things to handle: `time_limit` is a **string**, not seconds, so parse `M:SS`; and `"0"` is a sentinel, not a zero-length round — treat it as unknown.
+
+`round_stopwatch_state` and `time_to_beat_seconds` being empty means the R1-versus-R2 comparison a stopwatch match is actually about ("did we beat their time") is still not directly available; derive it from paired round times, or populate those fields, but do not read them as they stand.
 
 ### 5.6 Reachability — what the clock is actually *for*
 
@@ -408,7 +430,7 @@ This is the most original part of the design and the one most easily overclaimed
 
 | Channel | Source | Certainty |
 |---|---|---|
-| **Kill feed** | `proximity_kill_outcome.kill_time`, both guids | **High.** ET shows obituaries to everyone, so every kill is information to both teams. |
+| **Kill feed** | `proximity_kill_outcome.kill_time`, both guids | **High but non-spatial.** The obituary tells everyone *who* died and *to whom* — not *where*. It is evidence about the roster, not the map. |
 | **Gunfire** | `proximity_shot_fired` (648,214 rows, with `origin_x/y/z`) | Medium. A shot is audible within a radius; the radius is a modelling choice and must be a named parameter. |
 | **Contact** | `combat_engagement` time ranges + `attackers` | High for the participants; medium for nearby teammates. |
 | **Deaths** | `player_track` `death_time_ms` + position | High for the player who died. |
@@ -427,14 +449,18 @@ Use it as an **upper bound on what could have been seen**, and combine it with w
 
 ### 6.3 Suggested model (parameters are choices, not facts)
 
-Maintain, per team, a set of belief items:
+**Beliefs are per recipient, not per team.** §6.1 says contact is high-certainty for the participants and weaker for nearby teammates, and gunfire only reaches its audible radius. A single team-wide set cannot express any of that: it would hand a player on the far side of the map the same knowledge as the one standing next to the fight. Hold a belief set **per player**, and derive team-level views by union when a team-level question is asked.
+
+**Not every source is spatial.** The kill feed is global but says nothing about position, so it cannot produce coordinates. Model it as a separate, non-spatial fact (`enemy_alive_count`, "this specific enemy is dead for the next N seconds") rather than forcing it into a location.
 
 ```
 BeliefItem
-  x, y, z          # where the enemy was believed to be
-  t_observed       # when the evidence arrived
-  source           # "killfeed" | "gunfire" | "contact" | "death"
-  subject_guid     # may be null for gunfire if the shooter is not resolvable
+  holder_guid      # WHO knows this — beliefs are not shared by fiat
+  kind             # "position" | "roster"
+  x, y, z          # position kind only; null for roster facts
+  t_observed
+  source           # "gunfire" | "contact" | "death" | "los" | "killfeed"
+  subject_guid     # may be null for gunfire if the shooter is unresolvable
   confidence(t)    # decays from 1.0
 ```
 
@@ -442,7 +468,7 @@ Decay must be explicit and configurable, e.g. `confidence(t) = exp(−(t − t_o
 
 Derived per player, per tick:
 
-- `known_enemy_count` — belief items above a confidence threshold
+- `known_enemy_count` — **distinct subjects** above a confidence threshold, never a count of belief items. `proximity_shot_fired` emits one row per shot, and contact and death evidence repeat for the same person; counting items turns one enemy firing a burst into a phantom squad. Where the subject is unresolvable (some gunfire), cluster by position and time before counting, and say what the clustering assumes.
 - `nearest_known_enemy_distance`
 - `moved_into_unknown` — did the player move toward a region with no recent belief coverage
 - `teammate_under_attack` — from engagement edges (§4.5); this is the owner's explicit request and it is **directly available**, no modelling needed
@@ -478,9 +504,13 @@ This is a solved genre in spatio-temporal sports analytics. Concepts that map di
 
 None of these are approved. Each is a hypothesis to be measured under §8.
 
+**P6 binds this whole table, not just the row that mentions information.** Layer 1 hands back the true positions of every player, including opponents nobody had seen. A space-control or objective-control number built straight from those positions judges the player against knowledge he did not have — the exact failure P6 forbids. Every candidate that consumes opponent positions must consume **believed** opponent positions (§6), and the true-position variant may exist only as the §6.4 comparison baseline, never as a shipped metric.
+
+Own-team positions are a different case: teammates share a voice channel we cannot capture, so treating own-team positions as known is a defensible simplification. State it as one.
+
 | Candidate | Built from | Notes |
 |---|---|---|
-| Space control share | Layer 1 positions + velocities | Restrict to walkable space using BSP (§9); a naive Voronoi over the bounding box is dominated by solid rock |
+| Space control share | Layer 1 positions + velocities + **§9 walkable space** | Blocked until §9 W2/W4 land: without topology a Voronoi over the bounding box is dominated by solid rock, and "control" of a wall is meaningless |
 | Reachability advantage | learned per-map speeds from the 7.99 M samples | Learn from data, do not assume a constant |
 | **Stage-aware objective control** | control × distance to the **currently live** objective volume | See 7.4.1 — the space that matters moves during the round |
 | Wave-phase alignment | Layer 2 + §5.6 | Was the player advancing when the enemy wave was furthest from reaching him |
@@ -559,13 +589,23 @@ This section did not exist in the first revision, because the first revision bel
 Walk `/home/samba/share/etmain`, map `map_name → (pk3, bsp)`. Record a sha256 per BSP. Handle one map being provided by several pk3s: today `te_escape2` comes from three and all three BSPs are byte-identical, so pick deterministically and **assert the hashes match** rather than assuming it. Emit an explicit "no geometry" result for the six maps we do not hold — `etl_frostbite` above all, at 151 rounds.
 
 **W2 — BSP reader.**
-`IBSP` v47. Read the header (17 lumps, each an `(offset, length)` int32 pair) and parse `planes`, `brushes`, `brushsides`, `nodes`, `leafs`, `leafbrushes`, `models`, `entities`. Refuse any file whose magic or version differs instead of guessing at the layout.
+`IBSP` v47. Read the header (17 lumps, each an `(offset, length)` int32 pair) and parse `shaders`, `planes`, `brushes`, `brushsides`, `nodes`, `leafs`, `leafbrushes`, `models`, `entities`. Refuse any file whose magic or version differs instead of guessing at the layout.
+
+**The `shaders` lump is not optional.** Brush and brush-side records carry shader *indices*; the shader lump supplies the `contents` and `surfaceflags` that say whether a brush is solid, a clip volume, water, a trigger, or a non-colliding visual. Tracing "all brushes" makes triggers and clip brushes opaque and produces sightlines that are blocked by nothing. Filter on the content flags — solid and player-clip block a player trace; trigger volumes and non-solid detail do not.
 
 **W3 — entity extraction.**
 From the entity lump: spawn points by team (`team_CTF_bluespawn`, `team_CTF_redspawn`) with their `spawnflags`; objective volumes (`trigger_objective_info`); objective markers (`team_WOLF_objective`); doors and movers. This supersedes the sphere-with-radius-500 approximation in `objective_zones.json` — keep that file as the fallback for maps without a pk3, and **label which source each zone came from** so a consumer can tell a measured volume from a guessed sphere.
 
 **W4 — collision trace.**
-Ray-vs-brush against solid brushes, using the BSP tree to avoid testing all ~8,150. Standard Quake3-derived model. The output is **line-of-sight availability**, never "saw" (§3.1 B2).
+Ray-vs-brush against brushes whose shader contents mark them solid (see W2), using the BSP tree to avoid testing all ~8,150. Standard Quake3-derived model. The output is **line-of-sight availability**, never "saw" (§3.1 B2).
+
+**Static traversal alone is wrong for a subset of sightlines.** Doors, `script_mover` entities and constructibles are **dynamic entity submodels**: their collision is not in the world BSP tree, and whether they block a line depends on their state and transform at time `t`. Adlernest alone has 5 `func_door_rotating` and 28 `script_mover`.
+
+The consequence is not uniform — most of a map is static world geometry and traces through it are correct. But a sightline that crosses a door is exactly the kind that decides a duel. Required handling:
+
+1. Load the entity submodels (`models` lump) alongside the world model.
+2. Where a trace crosses a dynamic entity's bounds, mark the result **`indeterminate`** rather than guessing a state, until the stage model (W5) or Lua capture can supply that state.
+3. Report the indeterminate share. If it is small, the trace is still useful; if it is large on a given map, say so rather than averaging it away.
 
 **W5 — stage model.**
 Parse `.objdata` for the objective list per team with primary/secondary/additional classification, and `.script` for the stage logic (`wm_objective_status`, `trigger stolen`, `trigger dropped`, `wm_setwinner`). Produce, per map, an ordered stage model and the mapping from stage to active spawn points and live objective.
@@ -664,27 +704,42 @@ These will bite the implementer. They are listed with the measurement so nobody 
 ### 13.1 Overlapping lives
 3,674 same-GUID pairs overlap in time across 49 rounds (2,925 human). See §4.3 for the required rule.
 
-### 13.2 The bot gate exists, is applied everywhere, and does nothing
+### 13.2 The bot flag is computed but never backfilled
 
-This one deserves care, because the surface reading is the opposite of the truth.
+An earlier draft of this section claimed `rounds.is_bot_round` "is never set by anything". **That was wrong**, and it is the second claim in this document to have been asserted from a read query without checking the write path.
 
-`_round_quality_gate_sql()` (`website/backend/routers/proximity_helpers.py:170`) is a hard gate applied across proximity surfaces by owner decision (2026-07-25, no `include_bots` flag). It reads:
+The flag **is** computed and written: `is_bot_dominated_round()` in `bot/community_stats_parser.py:108` returns true when bots are the only players or a strict majority, and the import path sets it (`community_stats_parser.py:1062`). `_round_quality_gate_sql()` (`website/backend/routers/proximity_helpers.py:170`) reads it correctly, and `prediction_engine.py` gates on it too.
 
-```sql
-(prefix.round_id IS NULL OR EXISTS (
-   SELECT 1 FROM rounds rq
-   WHERE rq.id = prefix.round_id
-     AND rq.is_bot_round IS DISTINCT FROM TRUE
-     AND rq.is_valid   IS DISTINCT FROM FALSE))
-```
+What is actually true is narrower and fixable:
 
-So the intent and the plumbing are both correct. But **`rounds.is_bot_round` is FALSE for all 1,929 R1/R2 rounds and TRUE for none** — the flag is never set by anything. The bot half of that gate is therefore a permanent no-op, while reading as if bots were excluded.
+| Measured | Value |
+|---|---:|
+| Rounds with trajectories | 720 |
+| ...containing any bot | 91 |
+| ...**bot-only** (no human at all) | **89** |
+| ...mixed bots + humans | 2 |
+| Bot-only rounds flagged `is_bot_round = TRUE` | **0** |
+| Date range of those 89 rounds | 2026-03-24 → 2026-06-21 |
 
-Meanwhile the data contains **13 distinct `OMNIBOT*` GUIDs across 7,687 tracks — 13.4% of all tracks**. Bot movement is currently measured as if it were human, everywhere.
+So 89 rounds that the current logic would flag are sitting unflagged, because they predate it and nothing backfilled them. That is a **historical backfill gap**, not a missing implementation, and the fix is a backfill — not new gate code.
 
-Until the flag is fixed, filter on `player_guid LIKE 'OMNIBOT%'` at the player level and treat a round as bot-contaminated above a stated share threshold. Whichever is chosen, **state it in the output**: 13.4% is far too large to leave implicit, and a gate that silently does nothing is worse than no gate, because it stops anyone from looking.
+Note also that the flag being FALSE on the 2 mixed rounds is **correct**: a round with more humans than bots is not bot-dominated. Those two still contain bot players whose tracks would enter per-player aggregates, which is a separate concern from the round flag and is what the per-GUID `OMNIBOT%` filter in consumers exists for.
 
-*(Correction to the description of PR #560, which said all bots share one GUID. They do not — there are 13. The duplicate `(round, player, spawn)` rows noted there are 216 human and 114 bot, not bot-only.)*
+For this workstream: apply both. Gate rounds on `is_bot_round` (once backfilled) **and** filter players on `player_guid LIKE 'OMNIBOT%'`, because the two catch different things.
+
+### 13.2b Revived players have no trajectory after death
+
+`et_Obituary` calls `endPlayerTrack()`, which stamps `death_time` and removes the active track. `et_ClientSpawn` starts a new one only for a genuine respawn. **A player who is revived therefore has no position samples between the revive and their next real death** — the track ended at the obituary and nothing resumed it.
+
+ET is a medic-heavy game; in the sampled rounds most players run MEDIC. This is not a rare edge case, and it means:
+
+- A snapshot at time `t` can show a player as dead who was revived seconds earlier and is fighting.
+- Any "distance travelled" or "space controlled" figure silently omits post-revive life.
+- The §4.3 overlap rule interacts with this: the next track row for that player starts at their next spawn, so the gap is invisible unless you look for it.
+
+**Required:** quantify the gap before building on trajectories. `proximity_kill_outcome.outcome = 'revived'` gives the revive events; measure what fraction of round-time per player falls into an unsampled post-revive window. If it is material, this becomes a §10 capture item (resume the track on revive) and every trajectory-derived metric carries the caveat until then.
+
+This was not in the first revision at all and it is the most consequential data-quality finding in this document.
 
 ### 13.3 GUID length mismatch
 `player_comprehensive_stats.player_guid` is **8 characters**; proximity tables use **32**. Join with `LEFT(proximity_guid, 8) = pcs_guid`. Omitting this produces a silent zero-row join, not an error — which is exactly how the first #556 measurement attempt produced empty results for all 18 metrics.
@@ -712,7 +767,9 @@ A per-round signal that is never accumulated cannot deliver either half of that:
 
 Web-derived signals that survive §8 become **axis evidence**, not leaderboard entries. The axes follow the owner's own vocabulary — teamplay, lurk, objective, carry — and a player has a value on each, with a confidence that grows as sessions accumulate.
 
-This is the same subject as `docs/DESIGN_SKILL_PASSPORT_2026-07.md` (PR #551). **Do not build a second, parallel accumulation model.** The web supplies inputs; the Passport owns the accumulation. If the two disagree on shrinkage or versioning, the Passport wins and this document is wrong.
+This is the same subject as `docs/DESIGN_SKILL_PASSPORT_2026-07.md`. **That file is not on `main`** — it exists only on the branch of PR #551, which is open with 19 unresolved review threads. An implementer working from `main` will not find it.
+
+So: **do not build a second, parallel accumulation model**, and do not treat the Passport as a settled dependency either. Until #551 lands, the constraints in 14.2 below are the authority, and they are reproduced here in full precisely so this document does not depend on a file that may change or never merge. If #551 merges, the Passport owns accumulation and this section defers to it.
 
 ### 14.2 Constraints inherited from the #551 review
 
@@ -733,8 +790,9 @@ Accumulation multiplies whatever it accumulates. If a per-round signal is noise,
 
 ## §15 Open questions for the owner
 
+0. **How much round-time is lost to the post-revive trajectory gap (§13.2b)?** This has to be measured before any trajectory-derived metric is trusted, and the answer decides whether it becomes a Lua capture item.
 1. **Materialise or compute on demand?** `get_player_positions` is 27–51 ms per call today. A full 3,600-tick reconstruction is a different order of magnitude. Decide after A4 is measured.
-2. **The bot flag is never set (§13.2).** Fix it as a separate change before the web, or handle bots by GUID prefix inside the web?
+2. **89 bot-only rounds are unflagged (§13.2).** Backfill `is_bot_round` as a separate change before the web, or filter by GUID prefix inside it? Backfill is cleaner and benefits every other consumer.
 3. **PR #551** (`DESIGN_SKILL_PASSPORT`, `PROXIMITY_VISION_AUDIT`) remains open with 19 unresolved review threads. Their findings are incorporated here as §3; the PR itself still needs a decision.
 4. **PR #555** (release 1.28.0) is open and awaiting a call.
 
@@ -761,9 +819,30 @@ Map assets, checked by reading the archives in `/home/samba/share/etmain` direct
 - `.objdata` / `.script` presence: checked per archive → present on all 13 available maps
 - Duplicate provision: `te_escape2` supplied by three pk3s; sha256 of each BSP compared → byte-identical
 
+Checks added in rev 3, after review:
+
+- Bot flag write path: `grep is_bot_round` over `bot/` → computed at `community_stats_parser.py:1062` via `is_bot_dominated_round()` at :108
+- Bot rounds: per-round bot/human track counts → 720 rounds with trajectories, 91 with any bot, **89 bot-only**, 2 mixed; all 89 have `is_bot_round = FALSE`; dates 2026-03-24 → 2026-06-21
+- Stopwatch fields: `information_schema.columns` on `rounds` → `time_limit`, `round_stopwatch_state`, `time_to_beat_seconds`, `next_timelimit_minutes` all exist; populated counts 1929 / 0 / 0 over R1+R2; `time_limit` is text `"M:SS"` with a `"0"` sentinel
+- Aim-lock columns: `information_schema.columns` on `proximity_aim_lock` → `avg_err_deg`, `avg_dist`, `samples`; **no** `view_yaw` / `view_pitch`
+- Engagement closure: `proximity_tracker.lua` → `escape_time_ms = 5000`, `stale_timeout = 15000`
+- Revive gap: `endPlayerTrack` call sites in `proximity_tracker.lua` → invoked from the obituary path at :4095
+
 Related: #556 (metric validity method), #560 (track linkage fix), #551 (open design review), `docs/PROXIMITY_VISION_AUDIT_2026-07.md`, `docs/DESIGN_SKILL_PASSPORT_2026-07.md`.
 
 ### Revision history
+
+**Rev 3 (2026-07-27)** — review of rev 2 found **five further factual errors**, all of the same shape: a claim asserted from a read query without checking the write path or the helper's actual behaviour.
+
+| Claim in rev 2 | Truth |
+|---|---|
+| `is_bot_round` "is never set by anything" | It is computed and written; 89 bot-only rounds are an unbackfilled historical gap (§13.2) |
+| stopwatch time limit "is not currently stored" | `time_limit` is populated for all 1,929 rounds (§5.5) |
+| view angles are in shot_fired "and the aim-lock log" | `proximity_aim_lock` has no angles; it is LOS evidence (§3.1 B2) |
+| `get_player_positions` is "non-deterministic" | It is deterministic; it just picks the earliest overlapping life (§4.3) |
+| reuse `_find_position_at_time` for slicing | It returns the *nearest* sample, which can be after `t`; a floor variant is required (§4.4) |
+
+Also added in rev 3: the post-revive trajectory gap (§13.2b), which nothing in rev 1 or rev 2 noticed and which affects every trajectory-derived metric; per-recipient beliefs and non-spatial kill-feed facts (§6.3); the `shaders` lump and dynamic-entity collision (§9 W2/W4); and P6 binding the whole candidate table rather than one row of it (§7.4).
 
 **Rev 2 (2026-07-27)** — written after the owner asked whether the spec actually captured what he wanted from proximity. It did not; seven gaps were found and closed:
 
