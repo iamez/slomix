@@ -379,15 +379,24 @@ async def test_attribution_breakdown_separates_valid_excluded_and_unknown():
     """The round gate keeps NULL-round_id rows because they cannot be judged.
     Calling the result "quality-gated" would overstate it, so the endpoint
     reports the three buckets and the attributable coverage (Codex #548)."""
-    from website.backend.routers.proximity_helpers import attribution_breakdown
+    from website.backend.routers.proximity_helpers import (
+        _round_quality_gate_sql,
+        attribution_breakdown,
+    )
 
     class _Counts:
         async def fetch_one(self, query, params=None):
             self.query = " ".join(query.split())
             return (1000, 900, 20, 80)
 
+    gate = _round_quality_gate_sql("")
     db = _Counts()
-    out = await attribution_breakdown(db, "combat_engagement", "WHERE x", ())
+    out = await attribution_breakdown(
+        db,
+        "combat_engagement",
+        f"session_date = $1 AND {gate}",
+        ("2026-07-18",),
+    )
 
     assert out["total_rows"] == 1000
     assert out["linked_valid"] == 900
@@ -396,6 +405,42 @@ async def test_attribution_breakdown_separates_valid_excluded_and_unknown():
     # coverage is over SCORED rows (valid + unknown), not over total
     assert out["attributable_coverage"] == pytest.approx(900 / 980, abs=1e-4)
     assert out["mode"] == "compatibility"
+    assert "FROM combat_engagement WHERE session_date = $1" in db.query
+    assert gate not in db.query
+
+
+@pytest.mark.asyncio
+async def test_attribution_breakdown_accepts_where_prefix_and_rejects_bad_contracts():
+    from website.backend.routers.proximity_helpers import (
+        _round_quality_gate_sql,
+        attribution_breakdown,
+    )
+
+    class _Counts:
+        async def fetch_one(self, query, params=None):
+            self.query = " ".join(query.split())
+            return (1, 1, 0, 0)
+
+    gate = _round_quality_gate_sql("")
+    db = _Counts()
+    await attribution_breakdown(
+        db,
+        "combat_engagement",
+        f"WHERE session_date = $1 AND {gate}",
+        ("2026-07-18",),
+    )
+    assert "FROM combat_engagement WHERE session_date = $1" in db.query
+
+    with pytest.raises(ValueError, match="non-empty WHERE clause"):
+        await attribution_breakdown(db, "combat_engagement", "", ())
+
+    with pytest.raises(ValueError, match="could not remove"):
+        await attribution_breakdown(
+            db,
+            "combat_engagement",
+            "session_date = $1 AND round_id IS NOT NULL",
+            ("2026-07-18",),
+        )
 
 
 @pytest.mark.asyncio

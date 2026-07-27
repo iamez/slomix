@@ -102,7 +102,12 @@ async def get_proximity_leaderboards(
         has_round_number: bool = False,
         has_round_start_unix: bool | None = None,
     ):
-        """Build WHERE clause fragments and params for leaderboard scope.
+        """Build bare WHERE conditions and params for leaderboard scope.
+
+        The returned SQL intentionally omits the ``WHERE`` keyword because
+        leaderboard queries splice it after their own fixed ``WHERE`` terms.
+        Consumers that place it directly after ``FROM`` must add ``WHERE`` or
+        use a helper that explicitly accepts this bare form.
 
         A selected session_date filters with `=` (audit 2026-07-25 S3 — the
         old `>=` showed the chosen session PLUS every session after it);
