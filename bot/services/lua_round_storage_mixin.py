@@ -20,8 +20,27 @@ logger = get_logger("bot.core")
 webhook_logger = get_logger("bot.webhook")
 
 
+def _lua_exact_source_lock_key(
+    map_name: str,
+    round_number: int,
+    round_start_unix: int,
+) -> int:
+    """Return a stable signed bigint advisory-lock key for one Lua source."""
+    source_key = (
+        f"{map_name.strip().lower()}\0{round_number}\0{round_start_unix}"
+    ).encode()
+    digest = hashlib.blake2b(
+        source_key,
+        digest_size=8,
+        person=b"slomix-lua",
+    ).digest()
+    return int.from_bytes(digest, byteorder="big", signed=True)
+
+
 class _LuaRoundStorageMixin:
     """Lua webhook round-data persistence (teams, spawn stats) for UltimateETLegacyBot."""
+
+    _lua_exact_source_lock_key = staticmethod(_lua_exact_source_lock_key)
 
     async def _resolve_lua_round_id_for_metadata(self, metadata: dict) -> int | None:
         """Resolve Lua data by its source-native round start, never a neighbour.
@@ -86,7 +105,7 @@ class _LuaRoundStorageMixin:
     async def _reconcile_lua_exact_source(
         self,
         *,
-        match_id: str,
+        match_id: str | None,
         map_name: str,
         round_number: int,
         round_start_unix: int,
@@ -152,6 +171,9 @@ class _LuaRoundStorageMixin:
                 (map_name, round_number, round_start_unix),
             )
 
+        if match_id is None:
+            return None
+
         row = await self.db_adapter.fetch_one(
             "SELECT round_id FROM lua_round_teams "
             "WHERE match_id = ? AND round_number = ? "
@@ -162,23 +184,6 @@ class _LuaRoundStorageMixin:
             return None
         value = row[0] if isinstance(row, (list, tuple)) else row["round_id"]
         return int(value) if value is not None else None
-
-    @staticmethod
-    def _lua_exact_source_lock_key(
-        map_name: str,
-        round_number: int,
-        round_start_unix: int,
-    ) -> int:
-        """Return a stable signed bigint advisory-lock key for one Lua source."""
-        source_key = (
-            f"{map_name.strip().lower()}\0{round_number}\0{round_start_unix}"
-        ).encode()
-        digest = hashlib.blake2b(
-            source_key,
-            digest_size=8,
-            person=b"slomix-lua",
-        ).digest()
-        return int.from_bytes(digest, byteorder="big", signed=True)
 
     async def _resolve_lua_spawn_team_identity(
         self,
@@ -240,42 +245,18 @@ class _LuaRoundStorageMixin:
                     )
                     return
 
-                exact_rows = await self.db_adapter.fetch_all(
-                    "SELECT id, round_id FROM lua_round_teams "
-                    "WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM(?)) "
-                    "  AND round_number = ? AND round_start_unix = ? "
-                    "ORDER BY id LIMIT 2",
-                    (map_name, round_number, source_start_unix),
+                source_lock_key = _lua_exact_source_lock_key(
+                    map_name, round_number, source_start_unix
                 )
-                if len(exact_rows) != 1:
-                    if exact_rows:
-                        logger.warning(
-                            "Lua round link exact source is non-unique: map=%s rn=%s "
-                            "start=%s candidates=%d; deferring",
-                            map_name,
-                            round_number,
-                            source_start_unix,
-                            len(exact_rows),
-                        )
-                    return
-
-                exact_row = exact_rows[0]
-                lua_id = exact_row[0]
-                current_round_id = exact_row[1]
-                if current_round_id != round_id:
-                    await self.db_adapter.execute(
-                        "UPDATE lua_round_teams SET round_id = ? WHERE id = ?",
-                        (round_id, lua_id),
+                async with self.db_adapter.transaction():
+                    await self.db_adapter.fetch_val(
+                        "SELECT pg_advisory_xact_lock(?)", (source_lock_key,)
                     )
-                    logger.info(
-                        "Lua round exact re-link: lua_id=%s %s -> %s "
-                        "(map=%s R%s start=%s)",
-                        lua_id,
-                        current_round_id,
-                        round_id,
-                        map_name,
-                        round_number,
-                        source_start_unix,
+                    await self._reconcile_lua_exact_source(
+                        match_id=None,
+                        map_name=map_name,
+                        round_number=round_number,
+                        round_start_unix=source_start_unix,
                     )
                 return
 
@@ -698,7 +679,7 @@ class _LuaRoundStorageMixin:
                 # pinned transaction connection, so unrelated rounds remain
                 # concurrent while duplicate sources cannot both claim the
                 # same target.
-                source_lock_key = self._lua_exact_source_lock_key(
+                source_lock_key = _lua_exact_source_lock_key(
                     map_name,
                     fallback_round_number,
                     exact_start_unix,

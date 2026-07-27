@@ -12,8 +12,11 @@ no ambiguity signal — the same class of "guessing" L3 addresses in
 round_linker.py, but this is an independent implementation that needs its
 own fix.
 """
+# ruff: noqa: SLF001
+
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -41,6 +44,7 @@ class _FakeAdapter:
         self.exact_lua_candidates = exact_lua_candidates or []
         self.exact_round_candidates = exact_round_candidates or []
         self.updates: list[tuple] = []
+        self.fetch_val_calls: list[tuple] = []
         self.round_lookups: dict[int, tuple] = {}
 
     async def fetch_one(self, query, params=None):
@@ -50,7 +54,20 @@ class _FakeAdapter:
         if "FROM rounds WHERE id" in q:
             rid = params[0]
             return self.round_lookups.get(rid)
+        if "SELECT round_id FROM lua_round_teams" in q:
+            if len(self.exact_lua_candidates) == 1:
+                return (self.exact_lua_candidates[0][1],)
         return None
+
+    async def fetch_val(self, query, params=None):
+        self.fetch_val_calls.append((str(query), params))
+        if "information_schema.tables" in str(query):
+            return True
+        return None
+
+    @asynccontextmanager
+    async def transaction(self):
+        yield self
 
     async def fetch_all(self, query, params=None):
         q = " ".join(str(query).split())
@@ -157,9 +174,12 @@ async def test_link_lua_round_teams_uses_exact_source_start():
         "round_end_unix": start_unix + 900,
     })
 
-    assert adapter.updates == [
-        ("UPDATE lua_round_teams SET round_id = ? WHERE id = ?", (42, 77))
-    ]
+    assert any("WITH source_state AS" in query for query, _params in adapter.updates)
+    assert any("UPDATE lua_spawn_stats" in query for query, _params in adapter.updates)
+    assert any(
+        "pg_advisory_xact_lock" in query
+        for query, _params in adapter.fetch_val_calls
+    )
 
 
 @pytest.mark.asyncio
@@ -176,7 +196,7 @@ async def test_link_lua_round_teams_defers_nonunique_exact_source():
         "round_start_unix": 1_776_800_000,
     })
 
-    assert adapter.updates == []
+    assert any("WITH source_state AS" in query for query, _params in adapter.updates)
 
 
 @pytest.mark.asyncio

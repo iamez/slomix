@@ -41,6 +41,13 @@ BEGIN
           OR LOWER(BTRIM(linked.map_name))
                 IS DISTINCT FROM LOWER(BTRIM(l.map_name))
           OR linked.round_number IS DISTINCT FROM l.round_number
+          OR (
+              SELECT COUNT(*)
+              FROM rounds target
+              WHERE target.round_start_unix = l.round_start_unix
+                AND LOWER(BTRIM(target.map_name)) = LOWER(BTRIM(l.map_name))
+                AND target.round_number = l.round_number
+          ) <> 1
       );
 
     SELECT COUNT(*) INTO pending_spawn_actions
@@ -82,6 +89,13 @@ BEGIN
               OR LOWER(BTRIM(linked.map_name))
                     IS DISTINCT FROM LOWER(BTRIM(l.map_name))
               OR linked.round_number IS DISTINCT FROM l.round_number
+              OR (
+                  SELECT COUNT(*)
+                  FROM rounds exact_target
+                  WHERE exact_target.round_start_unix = l.round_start_unix
+                    AND LOWER(BTRIM(exact_target.map_name)) = LOWER(BTRIM(l.map_name))
+                    AND exact_target.round_number = l.round_number
+              ) <> 1
           )
         GROUP BY l.id, l.round_id
     ),
@@ -129,6 +143,13 @@ WITH exact_targets AS (
           OR LOWER(BTRIM(linked.map_name))
                 IS DISTINCT FROM LOWER(BTRIM(l.map_name))
           OR linked.round_number IS DISTINCT FROM l.round_number
+          OR (
+              SELECT COUNT(*)
+              FROM rounds exact_target
+              WHERE exact_target.round_start_unix = l.round_start_unix
+                AND LOWER(BTRIM(exact_target.map_name)) = LOWER(BTRIM(l.map_name))
+                AND exact_target.round_number = l.round_number
+          ) <> 1
       )
     GROUP BY l.id
     HAVING COUNT(target.id) = 1
@@ -154,6 +175,13 @@ WHERE l.round_id IS NOT NULL
         AND LOWER(BTRIM(linked.map_name))
               IS NOT DISTINCT FROM LOWER(BTRIM(l.map_name))
         AND linked.round_number IS NOT DISTINCT FROM l.round_number
+        AND (
+            SELECT COUNT(*)
+            FROM rounds exact_target
+            WHERE exact_target.round_start_unix = l.round_start_unix
+              AND LOWER(BTRIM(exact_target.map_name)) = LOWER(BTRIM(l.map_name))
+              AND exact_target.round_number = l.round_number
+        ) = 1
   );
 
 -- Spawn rows do not carry the source-native start timestamp. Their only
@@ -195,6 +223,13 @@ BEGIN
           OR r.round_start_unix IS DISTINCT FROM l.round_start_unix
           OR LOWER(BTRIM(r.map_name)) IS DISTINCT FROM LOWER(BTRIM(l.map_name))
           OR r.round_number IS DISTINCT FROM l.round_number
+          OR (
+              SELECT COUNT(*)
+              FROM rounds exact_target
+              WHERE exact_target.round_start_unix = l.round_start_unix
+                AND LOWER(BTRIM(exact_target.map_name)) = LOWER(BTRIM(l.map_name))
+                AND exact_target.round_number = l.round_number
+          ) <> 1
       );
 
     SELECT COUNT(*) INTO duplicate_groups

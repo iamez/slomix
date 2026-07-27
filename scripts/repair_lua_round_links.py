@@ -19,9 +19,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+_BACKUP_MAX_AGE_SECONDS = 60 * 60
+_BACKUP_FUTURE_TOLERANCE_SECONDS = 5 * 60
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -74,6 +78,8 @@ def fingerprint_actions(actions: list[RepairAction]) -> str:
 def backup_manifest_problems(
     manifest_path: str | Path | None,
     expected_db_identity: str,
+    *,
+    now_unix: int | None = None,
 ) -> list[str]:
     """Verify that a completed backup belongs to this exact repair target."""
     if not manifest_path:
@@ -128,9 +134,19 @@ def backup_manifest_problems(
         problems.append(f"cannot verify backup dump {dump_path}: {exc}")
 
     try:
-        int(values["created_unix"])
+        created_unix = int(values["created_unix"])
     except ValueError:
         problems.append("backup manifest created_unix is not an integer")
+    else:
+        now = int(time.time()) if now_unix is None else int(now_unix)
+        age_seconds = now - created_unix
+        if age_seconds < -_BACKUP_FUTURE_TOLERANCE_SECONDS:
+            problems.append("backup manifest created_unix is in the future")
+        elif age_seconds > _BACKUP_MAX_AGE_SECONDS:
+            problems.append(
+                "backup manifest is stale: "
+                f"age {age_seconds}s exceeds {_BACKUP_MAX_AGE_SECONDS}s"
+            )
     return problems
 
 
@@ -158,7 +174,9 @@ def measure(cur) -> dict[str, Any]:
          AND LOWER(BTRIM(target.map_name)) = LOWER(BTRIM(l.map_name))
          AND target.round_number = l.round_number
         WHERE l.round_id IS NOT NULL
-          AND (
+        GROUP BY l.id, l.round_id, l.captured_at
+        HAVING COUNT(target.id) <> 1
+          OR BOOL_OR(
               l.round_start_unix IS NULL
               OR l.round_start_unix <= 0
               OR linked.id IS NULL
@@ -167,7 +185,6 @@ def measure(cur) -> dict[str, Any]:
                     IS DISTINCT FROM LOWER(BTRIM(l.map_name))
               OR linked.round_number IS DISTINCT FROM l.round_number
           )
-        GROUP BY l.id, l.round_id, l.captured_at
         ORDER BY l.id
         """
     )

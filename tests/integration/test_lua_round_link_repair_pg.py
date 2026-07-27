@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 asyncpg = pytest.importorskip("asyncpg")
 
 from bot.cogs.proximity_mixins.relinker_mixin import (  # noqa: E402, PLC2701
+    _RELINK_LUA_SPAWN_FROM_TEAMS_TEMPLATE,
     _RELINK_LUA_TEAMS_EXACT_TEMPLATE,
 )
 from bot.services.lua_round_storage_mixin import _LuaRoundStorageMixin  # noqa: E402
@@ -210,6 +211,40 @@ async def test_migration_refuses_dirty_state_then_enforces_guarded_repair(pg):
             "(id, match_id, round_number, map_name, round_start_unix, round_id) "
             "VALUES (8, 'duplicate-round', 1, 'supply', 100, 1)"
         )
+
+
+@pytest.mark.asyncio
+async def test_migration_refuses_matching_link_with_ambiguous_exact_target(pg):
+    await pg.execute(
+        "INSERT INTO rounds (id, map_name, round_number, round_start_unix) "
+        "VALUES (1, 'supply', 1, 100), (2, ' SUPPLY ', 1, 100); "
+        "INSERT INTO lua_round_teams "
+        "(id, match_id, round_number, map_name, round_start_unix, round_id) "
+        "VALUES (1, 'ambiguous', 1, 'supply', 100, 1); "
+        "INSERT INTO lua_spawn_stats "
+        "(id, match_id, round_number, map_name, round_id) "
+        "VALUES (1, 'ambiguous', 1, 'supply', 1)"
+    )
+    body = unwrap_outer_transaction(
+        Path("migrations/067_repair_lua_round_links.sql").read_text()
+    )
+
+    with pytest.raises(asyncpg.RaiseError, match="guarded Lua repair"):
+        async with pg.transaction():
+            await pg.execute(body)
+
+    assert await pg.fetchval(
+        "SELECT round_id FROM lua_round_teams WHERE id = 1"
+    ) == 1
+
+    await pg.execute(
+        "UPDATE lua_round_teams SET round_id = NULL; "
+        "UPDATE lua_spawn_stats SET round_id = NULL"
+    )
+    await pg.execute(body)
+    assert await pg.fetchval(
+        "SELECT round_id FROM lua_round_teams WHERE id = 1"
+    ) is None
 
 
 class _AsyncpgAdapter:
@@ -432,10 +467,14 @@ async def test_lua_relinker_requires_one_exact_source_target(pg):
     await pg.execute(
         "INSERT INTO lua_round_teams "
         "(id, match_id, round_number, map_name, round_start_unix, round_id) "
-        "VALUES (1, 'exact-defer', 1, ' Supply ', 200, NULL)"
+        "VALUES (1, 'exact-defer', 1, ' Supply ', 200, NULL); "
+        "INSERT INTO lua_spawn_stats "
+        "(id, match_id, round_number, map_name, round_id) "
+        "VALUES (1, 'exact-defer', 1, 'supply', NULL)"
     )
 
     await pg.execute(_RELINK_LUA_TEAMS_EXACT_TEMPLATE, "supply", 1, 200)
+    await pg.execute(_RELINK_LUA_SPAWN_FROM_TEAMS_TEMPLATE, "supply", 1, 200)
     assert await pg.fetchval(
         "SELECT round_id FROM lua_round_teams WHERE id = 1"
     ) is None
@@ -445,8 +484,12 @@ async def test_lua_relinker_requires_one_exact_source_target(pg):
         "VALUES (2, 'SUPPLY', 1, 200)"
     )
     await pg.execute(_RELINK_LUA_TEAMS_EXACT_TEMPLATE, "supply", 1, 200)
+    await pg.execute(_RELINK_LUA_SPAWN_FROM_TEAMS_TEMPLATE, "supply", 1, 200)
     assert await pg.fetchval(
         "SELECT round_id FROM lua_round_teams WHERE id = 1"
+    ) == 2
+    assert await pg.fetchval(
+        "SELECT round_id FROM lua_spawn_stats WHERE id = 1"
     ) == 2
 
     await pg.execute(
@@ -470,6 +513,10 @@ async def test_lua_relinker_requires_one_exact_source_target(pg):
         "VALUES (3, 'supply', 1, 200)"
     )
     await pg.execute(_RELINK_LUA_TEAMS_EXACT_TEMPLATE, "supply", 1, 200)
+    await pg.execute(_RELINK_LUA_SPAWN_FROM_TEAMS_TEMPLATE, "supply", 1, 200)
     assert await pg.fetchval(
         "SELECT round_id FROM lua_round_teams WHERE id = 1"
-    ) == 2
+    ) is None
+    assert await pg.fetchval(
+        "SELECT round_id FROM lua_spawn_stats WHERE id = 1"
+    ) is None

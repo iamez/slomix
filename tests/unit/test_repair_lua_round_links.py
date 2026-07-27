@@ -73,7 +73,12 @@ def test_apply_refuses_a_projection_with_duplicate_links():
     )
 
 
-def _write_backup_manifest(tmp_path, *, identity="localhost:5432/etlegacy"):
+def _write_backup_manifest(
+    tmp_path,
+    *,
+    identity="localhost:5432/etlegacy",
+    created_unix=1785177600,
+):
     dump = tmp_path / "etlegacy.sql.gz"
     dump.write_bytes(b"verified backup payload")
     manifest = tmp_path / "etlegacy.sql.gz.manifest"
@@ -82,7 +87,7 @@ def _write_backup_manifest(tmp_path, *, identity="localhost:5432/etlegacy"):
             f"db_identity={identity}",
             f"dump_file={dump}",
             f"sha256={hashlib.sha256(dump.read_bytes()).hexdigest()}",
-            "created_unix=1785177600",
+            f"created_unix={created_unix}",
         ]) + "\n",
         encoding="utf-8",
     )
@@ -93,10 +98,10 @@ def test_backup_manifest_binds_database_and_dump_checksum(tmp_path):
     manifest, _dump = _write_backup_manifest(tmp_path)
 
     assert backup_manifest_problems(
-        manifest, "localhost:5432/etlegacy"
+        manifest, "localhost:5432/etlegacy", now_unix=1785177700
     ) == []
     assert backup_manifest_problems(
-        manifest, "prod.example:5432/etlegacy"
+        manifest, "prod.example:5432/etlegacy", now_unix=1785177700
     ) == [
         "backup database mismatch: manifest localhost:5432/etlegacy, "
         "repair prod.example:5432/etlegacy"
@@ -108,5 +113,17 @@ def test_backup_manifest_rejects_a_changed_dump(tmp_path):
     dump.write_bytes(b"changed after backup")
 
     assert backup_manifest_problems(
-        manifest, "localhost:5432/etlegacy"
+        manifest, "localhost:5432/etlegacy", now_unix=1785177700
     ) == [f"backup checksum mismatch: {dump}"]
+
+
+def test_backup_manifest_rejects_stale_and_future_snapshots(tmp_path):
+    stale, _dump = _write_backup_manifest(tmp_path, created_unix=1000)
+    assert backup_manifest_problems(
+        stale, "localhost:5432/etlegacy", now_unix=5001
+    ) == ["backup manifest is stale: age 4001s exceeds 3600s"]
+
+    future, _dump = _write_backup_manifest(tmp_path, created_unix=10_000)
+    assert backup_manifest_problems(
+        future, "localhost:5432/etlegacy", now_unix=9000
+    ) == ["backup manifest created_unix is in the future"]

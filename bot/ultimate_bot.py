@@ -1434,12 +1434,15 @@ class UltimateETLegacyBot(
                 - end_reason
         """
         try:
+            initializing_exact_start = False
             raw_start_unix = metadata.get("round_start_unix")
             if raw_start_unix in (None, ""):
                 round_id = await self._resolve_round_id_for_metadata(filename, metadata)
             else:
+                can_initialize_exact_start = False
                 try:
                     has_exact_start = int(raw_start_unix) > 0
+                    can_initialize_exact_start = has_exact_start
                 except (TypeError, ValueError):
                     has_exact_start = True
 
@@ -1449,6 +1452,36 @@ class UltimateETLegacyBot(
                     # rounds row so a neighbour cannot be overwritten into a
                     # false exact match by the metadata below.
                     round_id = await self._resolve_lua_round_id_for_metadata(metadata)
+                    if round_id is None and can_initialize_exact_start:
+                        candidate_id = await self._resolve_round_id_for_metadata(
+                            filename, metadata
+                        )
+                        candidate = None
+                        if candidate_id:
+                            candidate = await self.db_adapter.fetch_one(
+                                "SELECT round_start_unix, map_name, round_number "
+                                "FROM rounds WHERE id = $1",
+                                (candidate_id,),
+                            )
+                        if candidate:
+                            current_start = candidate[0]
+                            candidate_map = str(candidate[1] or "").strip().lower()
+                            candidate_round = int(candidate[2] or 0)
+                            source_map = str(
+                                metadata.get("map_name") or metadata.get("map") or ""
+                            ).strip().lower()
+                            source_round = int(
+                                metadata.get("round_number")
+                                or metadata.get("round")
+                                or 0
+                            )
+                            if (
+                                (current_start is None or int(current_start) <= 0)
+                                and candidate_map == source_map
+                                and candidate_round == source_round
+                            ):
+                                round_id = int(candidate_id)
+                                initializing_exact_start = True
                 else:
                     round_id = await self._resolve_round_id_for_metadata(filename, metadata)
             if not round_id:
@@ -1552,7 +1585,21 @@ class UltimateETLegacyBot(
                 WHERE id = ${param_num}
             """
 
-            await self.db_adapter.execute(update_query, tuple(update_values))
+            if initializing_exact_start:
+                initialized = await self.db_adapter.fetch_one(
+                    update_query
+                    + " AND (round_start_unix IS NULL OR round_start_unix <= 0)"
+                    + " RETURNING id",
+                    tuple(update_values),
+                )
+                if not initialized:
+                    logger.warning(
+                        "Lua metadata initialization lost its target guard: round_id=%s",
+                        round_id,
+                    )
+                    return
+            else:
+                await self.db_adapter.execute(update_query, tuple(update_values))
 
             # Phase 2 canonical_id dual-write: Lua arrival is primary point
             # where round_start_unix becomes set, so canonical_id computable.
