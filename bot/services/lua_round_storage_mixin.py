@@ -103,6 +103,21 @@ class _LuaRoundStorageMixin:
                 source_start_unix = 0
 
             if source_start_unix > 0:
+                exact_target_round_id = await self._resolve_lua_round_id_for_metadata(
+                    metadata
+                )
+                if exact_target_round_id != round_id:
+                    logger.warning(
+                        "Lua round link target mismatch: caller_round_id=%s "
+                        "exact_round_id=%s map=%s rn=%s start=%s; deferring",
+                        round_id,
+                        exact_target_round_id,
+                        map_name,
+                        round_number,
+                        source_start_unix,
+                    )
+                    return
+
                 exact_rows = await self.db_adapter.fetch_all(
                     "SELECT id, round_id FROM lua_round_teams "
                     "WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM(?)) "
@@ -425,7 +440,11 @@ class _LuaRoundStorageMixin:
                     ON CONFLICT (match_id, round_number) DO UPDATE SET
                         axis_players = EXCLUDED.axis_players,
                         allies_players = EXCLUDED.allies_players,
-                        round_id = COALESCE(EXCLUDED.round_id, lua_round_teams.round_id),
+                        round_id = CASE
+                            WHEN EXCLUDED.round_start_unix IS NOT NULL
+                                THEN EXCLUDED.round_id
+                            ELSE COALESCE(EXCLUDED.round_id, lua_round_teams.round_id)
+                        END,
                         round_start_unix = EXCLUDED.round_start_unix,
                         round_end_unix = EXCLUDED.round_end_unix,
                         actual_duration_seconds = EXCLUDED.actual_duration_seconds,
@@ -626,7 +645,7 @@ class _LuaRoundStorageMixin:
                     $11, $12
                 )
                 ON CONFLICT (match_id, round_number, player_guid) DO UPDATE SET
-                    round_id = COALESCE(EXCLUDED.round_id, lua_spawn_stats.round_id),
+                    round_id = EXCLUDED.round_id,
                     player_name = EXCLUDED.player_name,
                     spawn_count = EXCLUDED.spawn_count,
                     death_count = EXCLUDED.death_count,

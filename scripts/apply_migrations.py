@@ -292,15 +292,20 @@ def get_target_dsn_parts() -> dict[str, str]:
     }
 
 
-async def get_connection() -> asyncpg.Connection:
+def get_connection_kwargs() -> dict[str, Any]:
+    """Resolved connection settings shared by migration-adjacent tools."""
     target = get_target_dsn_parts()
-    return await asyncpg.connect(
-        host=target["host"],
-        port=int(target["port"]),
-        database=target["database"],
-        user=target["user"],
-        password=_env("POSTGRES_PASSWORD", "DB_PASSWORD", default=""),
-    )
+    return {
+        "host": target["host"],
+        "port": int(target["port"]),
+        "database": target["database"],
+        "user": target["user"],
+        "password": _env("POSTGRES_PASSWORD", "DB_PASSWORD", default=""),
+    }
+
+
+async def get_connection() -> asyncpg.Connection:
+    return await asyncpg.connect(**get_connection_kwargs())
 
 
 async def get_db_fingerprint(conn: asyncpg.Connection) -> dict[str, Any]:

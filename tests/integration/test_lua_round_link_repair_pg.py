@@ -50,7 +50,16 @@ async def pg():
             map_name TEXT,
             round_start_unix BIGINT,
             captured_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-            round_id INTEGER
+            round_id INTEGER,
+            UNIQUE(match_id, round_number)
+        );
+        CREATE TABLE lua_spawn_stats (
+            id INTEGER PRIMARY KEY,
+            match_id TEXT NOT NULL,
+            round_number INTEGER NOT NULL,
+            map_name TEXT,
+            round_id INTEGER,
+            captured_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
         """
     )
@@ -63,8 +72,16 @@ async def pg():
 async def test_migration_rebinds_exact_unlinks_unknown_and_prevents_duplicates(pg):
     await pg.executemany(
         "INSERT INTO rounds (id, map_name, round_number, round_start_unix) "
-        "VALUES ($1, 'supply', 1, $2)",
-        [(1, 100), (2, 200), (3, 300)],
+        "VALUES ($1, $2, $3, $4)",
+        [
+            (1, "supply", 1, 100),
+            (2, "supply", 1, 200),
+            (3, "supply", 1, 300),
+            (4, "supply", 1, None),
+            (5, "supply", 1, 400),
+            (6, "depot", 1, 500),
+            (7, "supply", 1, 500),
+        ],
     )
     await pg.executemany(
         "INSERT INTO lua_round_teams "
@@ -75,6 +92,23 @@ async def test_migration_rebinds_exact_unlinks_unknown_and_prevents_duplicates(p
             (2, "wrong-but-exact", 300, 1),
             (3, "correct-two", 200, 2),
             (4, "wrong-no-target", 999, 2),
+            (5, "linked-null-start", 400, 4),
+            (6, "wrong-map", 500, 6),
+            (7, "source-start-missing", None, 1),
+        ],
+    )
+    await pg.executemany(
+        "INSERT INTO lua_spawn_stats "
+        "(id, match_id, round_number, map_name, round_id) "
+        "VALUES ($1, $2, 1, $3, $4)",
+        [
+            (1, "correct-one", "supply", 1),
+            (2, "wrong-but-exact", "supply", 1),
+            (3, "wrong-no-target", "supply", 2),
+            (4, "linked-null-start", "supply", None),
+            (5, "no-team-row", "supply", 2),
+            (6, "wrong-map", "supply", 6),
+            (7, "source-start-missing", "supply", 1),
         ],
     )
 
@@ -90,6 +124,21 @@ async def test_migration_rebinds_exact_unlinks_unknown_and_prevents_duplicates(p
         (2, 3),
         (3, 2),
         (4, None),
+        (5, 5),
+        (6, 7),
+        (7, None),
+    ]
+    spawn_links = await pg.fetch(
+        "SELECT id, round_id FROM lua_spawn_stats ORDER BY id"
+    )
+    assert [(row["id"], row["round_id"]) for row in spawn_links] == [
+        (1, 1),
+        (2, 3),
+        (3, None),
+        (4, 5),
+        (5, None),
+        (6, 7),
+        (7, None),
     ]
 
     # The migration is idempotent and the unique contract remains in force.

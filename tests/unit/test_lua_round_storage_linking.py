@@ -121,7 +121,10 @@ async def test_lua_resolver_does_not_fuzzy_match_an_invalid_present_start():
 @pytest.mark.asyncio
 async def test_link_lua_round_teams_uses_exact_source_start():
     start_unix = 1_776_800_000
-    adapter = _FakeAdapter(exact_lua_candidates=[(77, 999)])
+    adapter = _FakeAdapter(
+        exact_lua_candidates=[(77, 999)],
+        exact_round_candidates=[(42,)],
+    )
     svc = _svc(adapter)
 
     await svc._link_lua_round_teams(round_id=42, metadata={
@@ -138,7 +141,27 @@ async def test_link_lua_round_teams_uses_exact_source_start():
 
 @pytest.mark.asyncio
 async def test_link_lua_round_teams_defers_nonunique_exact_source():
-    adapter = _FakeAdapter(exact_lua_candidates=[(10, None), (20, 999)])
+    adapter = _FakeAdapter(
+        exact_lua_candidates=[(10, None), (20, 999)],
+        exact_round_candidates=[(42,)],
+    )
+    svc = _svc(adapter)
+
+    await svc._link_lua_round_teams(round_id=42, metadata={
+        "map_name": "supply",
+        "round_number": 1,
+        "round_start_unix": 1_776_800_000,
+    })
+
+    assert adapter.updates == []
+
+
+@pytest.mark.asyncio
+async def test_link_lua_round_teams_rejects_a_neighboring_caller_round():
+    adapter = _FakeAdapter(
+        exact_lua_candidates=[(77, None)],
+        exact_round_candidates=[(99,)],
+    )
     svc = _svc(adapter)
 
     await svc._link_lua_round_teams(round_id=42, metadata={

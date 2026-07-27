@@ -1,26 +1,36 @@
 #!/usr/bin/env python3
-"""Repair wrong lua_round_teams.round_id values without guessing.
+"""Repair wrong Lua team/spawn ``round_id`` values without guessing.
 
 Dry-run is the default. It fingerprints the exact action set:
 
 * one exact source-key target -> rebind to that round;
 * no/multiple exact targets -> set round_id NULL;
-* any duplicate non-NULL round_id remaining in the projected state -> refuse.
+* spawn rows inherit only the projected identity of their matching team row;
+* any duplicate non-NULL team round_id remaining in the projection -> refuse.
 
 ``--apply`` requires the dry-run counts, fingerprint, target database identity,
 and an explicit backup acknowledgement. The candidate set is re-measured after
-a table lock and all postconditions are checked before commit.
+write-blocking locks on both the source and target tables, and all
+postconditions are checked before commit.
 """
 
 from __future__ import annotations
 
 import argparse
-import contextlib
 import hashlib
-import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.apply_migrations import (  # noqa: E402
+    get_connection_kwargs,
+    get_target_dsn_parts,
+)
 
 try:
     import psycopg2 as _pg
@@ -30,15 +40,14 @@ except ImportError:  # pragma: no cover
     except ImportError:  # pragma: no cover
         _pg = None  # type: ignore[assignment]
 
-ROOT = Path(__file__).resolve().parents[1]
-
 
 @dataclass(frozen=True)
 class RepairAction:
     row_id: int
-    old_round_id: int
+    old_round_id: int | None
     new_round_id: int | None
     candidate_count: int
+    table: str = "lua_round_teams"
 
     @property
     def kind(self) -> str:
@@ -50,23 +59,14 @@ def _connect():
         raise SystemExit(
             "This script needs a PostgreSQL driver: pip install psycopg2-binary"
         )
-    with contextlib.suppress(Exception):
-        from dotenv import load_dotenv
-
-        load_dotenv(ROOT / ".env")
-    return _pg.connect(
-        host=os.getenv("POSTGRES_HOST", "localhost"),
-        port=int(os.getenv("POSTGRES_PORT", "5432")),
-        dbname=os.getenv("POSTGRES_DATABASE", "etlegacy"),
-        user=os.getenv("POSTGRES_USER", "etlegacy_user"),
-        password=os.getenv("POSTGRES_PASSWORD", ""),
-    )
+    return _pg.connect(**get_connection_kwargs())
 
 
 def fingerprint_actions(actions: list[RepairAction]) -> str:
     payload = "\n".join(
-        f"{a.row_id}:{a.old_round_id}:{a.new_round_id if a.new_round_id is not None else 'NULL'}"
-        for a in sorted(actions, key=lambda item: item.row_id)
+        f"{a.table}:{a.row_id}:{a.old_round_id}:"
+        f"{a.new_round_id if a.new_round_id is not None else 'NULL'}"
+        for a in sorted(actions, key=lambda item: (item.table, item.row_id))
     )
     return hashlib.sha256(payload.encode()).hexdigest()
 
@@ -89,21 +89,27 @@ def measure(cur) -> dict[str, Any]:
             MIN(target.id) AS target_round_id,
             l.captured_at::date AS captured_date
         FROM lua_round_teams l
-        JOIN rounds linked ON linked.id = l.round_id
+        LEFT JOIN rounds linked ON linked.id = l.round_id
         LEFT JOIN rounds target
           ON target.round_start_unix = l.round_start_unix
          AND LOWER(BTRIM(target.map_name)) = LOWER(BTRIM(l.map_name))
          AND target.round_number = l.round_number
-        WHERE l.round_start_unix IS NOT NULL
-          AND l.round_start_unix > 0
-          AND linked.round_start_unix IS NOT NULL
-          AND l.round_start_unix <> linked.round_start_unix
+        WHERE l.round_id IS NOT NULL
+          AND (
+              l.round_start_unix IS NULL
+              OR l.round_start_unix <= 0
+              OR linked.id IS NULL
+              OR linked.round_start_unix IS DISTINCT FROM l.round_start_unix
+              OR LOWER(BTRIM(linked.map_name))
+                    IS DISTINCT FROM LOWER(BTRIM(l.map_name))
+              OR linked.round_number IS DISTINCT FROM l.round_number
+          )
         GROUP BY l.id, l.round_id, l.captured_at
         ORDER BY l.id
         """
     )
     rows = cur.fetchall()
-    actions = [
+    team_actions = [
         RepairAction(
             row_id=int(row[0]),
             old_round_id=int(row[1]),
@@ -113,11 +119,58 @@ def measure(cur) -> dict[str, Any]:
         for row in rows
     ]
 
-    cur.execute("SELECT id, round_id FROM lua_round_teams ORDER BY id")
-    all_links = [(int(row[0]), int(row[1]) if row[1] is not None else None) for row in cur.fetchall()]
-    projected_by_id = {row_id: round_id for row_id, round_id in all_links}
-    for action in actions:
+    cur.execute(
+        "SELECT id, match_id, round_number, map_name, round_id, "
+        "captured_at::date FROM lua_round_teams ORDER BY id"
+    )
+    all_team_rows = cur.fetchall()
+    projected_by_id = {
+        int(row[0]): int(row[4]) if row[4] is not None else None
+        for row in all_team_rows
+    }
+    for action in team_actions:
         projected_by_id[action.row_id] = action.new_round_id
+
+    def source_key(row) -> tuple[str, int, str | None]:
+        return (
+            str(row[1]),
+            int(row[2]),
+            None if row[3] is None else str(row[3]).strip().lower(),
+        )
+
+    projected_team_links: dict[
+        tuple[str, int, str | None], list[int | None]
+    ] = {}
+    for row in all_team_rows:
+        projected_team_links.setdefault(source_key(row), []).append(
+            projected_by_id[int(row[0])]
+        )
+
+    cur.execute(
+        "SELECT id, match_id, round_number, map_name, round_id, "
+        "captured_at::date FROM lua_spawn_stats ORDER BY id"
+    )
+    spawn_rows = cur.fetchall()
+    spawn_actions: list[RepairAction] = []
+    spawn_action_dates = []
+    for row in spawn_rows:
+        candidates = projected_team_links.get(source_key(row), [])
+        projected_round_id = candidates[0] if len(candidates) == 1 else None
+        old_round_id = int(row[4]) if row[4] is not None else None
+        if old_round_id != projected_round_id:
+            spawn_actions.append(
+                RepairAction(
+                    row_id=int(row[0]),
+                    old_round_id=old_round_id,
+                    new_round_id=projected_round_id,
+                    candidate_count=len(candidates),
+                    table="lua_spawn_stats",
+                )
+            )
+            if row[5] is not None:
+                spawn_action_dates.append(row[5])
+
+    actions = [*team_actions, *spawn_actions]
 
     cur.execute(
         """
@@ -133,14 +186,19 @@ def measure(cur) -> dict[str, Any]:
     )
     current_duplicate_groups = int(cur.fetchone()[0])
     captured_dates = [row[4] for row in rows if row[4] is not None]
+    captured_dates.extend(spawn_action_dates)
 
     return {
         "actions": actions,
         "wrong_count": len(actions),
         "rebind_count": sum(action.kind == "rebind" for action in actions),
         "quarantine_count": sum(action.kind == "quarantine" for action in actions),
-        "ambiguous_count": sum(action.candidate_count > 1 for action in actions),
-        "missing_count": sum(action.candidate_count == 0 for action in actions),
+        "team_rebind_count": sum(a.kind == "rebind" for a in team_actions),
+        "team_quarantine_count": sum(a.kind == "quarantine" for a in team_actions),
+        "spawn_rebind_count": sum(a.kind == "rebind" for a in spawn_actions),
+        "spawn_quarantine_count": sum(a.kind == "quarantine" for a in spawn_actions),
+        "ambiguous_count": sum(a.candidate_count > 1 for a in team_actions),
+        "missing_count": sum(a.candidate_count == 0 for a in team_actions),
         "current_duplicate_groups": current_duplicate_groups,
         "projected_duplicate_groups": _duplicate_groups(list(projected_by_id.values())),
         "latest_date": max(captured_dates, default=None),
@@ -182,9 +240,19 @@ def _print_report(stats: dict[str, Any], *, apply: bool) -> None:
     print("LUA ROUND LINK REPAIR - " + ("APPLY" if apply else "DRY-RUN"))
     print("=" * 72)
     print(f"target database: {stats['db_identity']}")
-    print(f"wrong linked rows: {stats['wrong_count']}")
-    print(f"  exact rebind: {stats['rebind_count']}")
+    print(f"planned repair rows: {stats['wrong_count']}")
+    print(f"  rebind to proven round: {stats['rebind_count']}")
     print(f"  quarantine to NULL: {stats['quarantine_count']}")
+    print(
+        "  team rows: "
+        f"{stats['team_rebind_count']} rebind, "
+        f"{stats['team_quarantine_count']} quarantine"
+    )
+    print(
+        "  spawn rows: "
+        f"{stats['spawn_rebind_count']} rebind, "
+        f"{stats['spawn_quarantine_count']} quarantine"
+    )
     print(f"    missing exact target: {stats['missing_count']}")
     print(f"    ambiguous exact target: {stats['ambiguous_count']}")
     print(f"current duplicate round_id groups: {stats['current_duplicate_groups']}")
@@ -218,14 +286,19 @@ def main() -> int:
     try:
         cur.execute("SELECT current_database()")
         db_name = cur.fetchone()[0]
+        target = get_target_dsn_parts()
         db_identity = "{}:{}/{}".format(
-            os.getenv("POSTGRES_HOST", "localhost"),
-            os.getenv("POSTGRES_PORT", "5432"),
+            target["host"],
+            target["port"],
             db_name,
         )
 
         if args.apply:
-            cur.execute("LOCK TABLE lua_round_teams IN SHARE MODE")
+            cur.execute("LOCK TABLE rounds IN SHARE MODE")
+            cur.execute(
+                "LOCK TABLE lua_round_teams, lua_spawn_stats "
+                "IN SHARE ROW EXCLUSIVE MODE"
+            )
 
         stats = measure(cur)
         stats["db_identity"] = db_identity
@@ -258,10 +331,21 @@ def main() -> int:
             return 1
 
         changed = 0
-        for action in stats["actions"]:
-            cur.execute(
+        update_sql = {
+            "lua_round_teams": (
                 "UPDATE lua_round_teams SET round_id = %s "
-                "WHERE id = %s AND round_id IS NOT DISTINCT FROM %s",
+                "WHERE id = %s AND round_id IS NOT DISTINCT FROM %s"
+            ),
+            "lua_spawn_stats": (
+                "UPDATE lua_spawn_stats SET round_id = %s "
+                "WHERE id = %s AND round_id IS NOT DISTINCT FROM %s"
+            ),
+        }
+        for action in stats["actions"]:
+            if action.table not in update_sql:
+                raise RuntimeError(f"unsupported repair table: {action.table}")
+            cur.execute(
+                update_sql[action.table],
                 (action.new_round_id, action.row_id, action.old_round_id),
             )
             changed += cur.rowcount

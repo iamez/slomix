@@ -16,6 +16,10 @@ def test_action_fingerprint_is_stable_and_includes_quarantine():
     assert fingerprint_actions(actions) != fingerprint_actions([
         RepairAction(10, 1, 3, 1),
     ])
+    assert fingerprint_actions(actions) != fingerprint_actions([
+        RepairAction(20, 2, None, 0, table="lua_spawn_stats"),
+        RepairAction(10, 1, 3, 1),
+    ])
 
 
 def test_apply_expectations_bind_counts_fingerprint_and_database():
