@@ -190,7 +190,11 @@ def _round_quality_gate_sql(prefix: str) -> str:
 
 
 async def attribution_breakdown(
-    db, table: str, where_sql: str, params, alias: str = "",
+    db,
+    table: str,
+    where_sql: str,
+    params,
+    alias: str = "",
 ) -> dict:
     """Count how the round-quality gate actually classified the rows.
 
@@ -201,14 +205,32 @@ async def attribution_breakdown(
     surface that scores on gated rows should report this breakdown and let
     the caller see how much of its evidence is unattributed.
 
-    `where_sql` must be the gated clause; this recomputes the same scope
-    without the gate to obtain the totals.
+    `where_sql` must be a non-empty gated clause. Both query-builder
+    conventions are accepted: ``WHERE <conditions>`` and bare
+    ``<conditions>``. This recomputes the same scope without the gate to
+    obtain the totals.
     """
     prefix = f"{alias}." if alias else ""
     gate = _round_quality_gate_sql(prefix)
-    ungated = where_sql.replace(f" AND {gate}", "").replace(gate, "TRUE")
+    gated_body = (where_sql or "").strip()
+    if re.match(r"(?i)^WHERE\b", gated_body):
+        gated_body = re.sub(r"(?i)^WHERE\b", "", gated_body, count=1).strip()
+    if not gated_body:
+        raise ValueError("attribution_breakdown requires a non-empty WHERE clause")
+
+    # Both real builders append the quality gate as their final top-level
+    # condition. Requiring that exact contract prevents a formatting or alias
+    # drift from silently leaving the gate in the supposedly ungated query.
+    if gated_body == gate:
+        ungated_body = "TRUE"
+    elif gated_body.endswith(f" AND {gate}"):
+        ungated_body = gated_body[: -len(f" AND {gate}")].rstrip()
+    else:
+        raise ValueError("attribution_breakdown could not remove the round-quality gate")
+
+    ungated_where = f"WHERE {ungated_body}"
     row = await db.fetch_one(
-        f"SELECT COUNT(*) AS total,"  # nosec B608 - clause built by _build_proximity_where_clause
+        f"SELECT COUNT(*) AS total,"  # nosec B608 - internal table and clause builders only
         f" COUNT(*) FILTER (WHERE {prefix}round_id IS NOT NULL AND EXISTS ("
         f"   SELECT 1 FROM rounds rq WHERE rq.id = {prefix}round_id"
         f"   AND rq.is_bot_round IS DISTINCT FROM TRUE"
@@ -218,7 +240,7 @@ async def attribution_breakdown(
         f"   AND rq.is_bot_round IS DISTINCT FROM TRUE"
         f"   AND rq.is_valid IS DISTINCT FROM FALSE)) AS linked_invalid_excluded,"
         f" COUNT(*) FILTER (WHERE {prefix}round_id IS NULL) AS unlinked_accepted"
-        f" FROM {table} {prefix.rstrip('.') or ''} {ungated}",
+        f" FROM {table} {prefix.rstrip('.') or ''} {ungated_where}",
         params,
     )
     total = int(row[0] or 0) if row else 0
@@ -248,6 +270,7 @@ def _build_proximity_where_clause(
     player_guid_columns: list[str] | None = None,
     round_quality_gate: bool = True,
 ) -> tuple[str, list[Any], dict[str, Any]]:
+    """Build a complete ``WHERE ...`` clause, parameters, and scope metadata."""
     prefix = f"{alias}." if alias else ""
     params: list[Any] = []
     clauses: list[str] = []
