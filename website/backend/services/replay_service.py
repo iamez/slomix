@@ -88,6 +88,13 @@ def _find_position_at_time(path: list, target_ms: int) -> dict | None:
 #
 # Measured effect: rounds covered 720 (FK only) -> 739, tracks bound to more
 # than one round 24,428 -> 0, and no new duplicate (round, player, spawn).
+#
+# The uniqueness guard is phrased against `r`, not `pt`. The fallback branch
+# has already established that the two share a date key, so "exactly one round
+# carries this key" and "no OTHER round carries r's key" are the same
+# statement — verified equal over all 56,033 joined rows, zero difference in
+# either direction. Against `r` it is a NOT EXISTS that short-circuits once,
+# rather than a COUNT(*) re-evaluated for every track row (Copilot review).
 _TRACK_ROUND_JOIN = """
         JOIN rounds r
           ON pt.round_id = r.id
@@ -95,10 +102,11 @@ _TRACK_ROUND_JOIN = """
               AND pt.session_date = r.round_date::date
               AND pt.round_number = r.round_number
               AND pt.map_name = r.map_name
-              AND (SELECT COUNT(*) FROM rounds r2
-                   WHERE r2.round_date::date = pt.session_date
-                     AND r2.round_number = pt.round_number
-                     AND r2.map_name = pt.map_name) = 1)
+              AND NOT EXISTS (SELECT 1 FROM rounds r2
+                              WHERE r2.id <> r.id
+                                AND r2.round_date::date = r.round_date::date
+                                AND r2.round_number = r.round_number
+                                AND r2.map_name = r.map_name))
 """
 
 
