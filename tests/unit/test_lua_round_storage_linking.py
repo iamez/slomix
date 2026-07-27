@@ -24,10 +24,20 @@ class _Cfg:
 
 
 class _FakeAdapter:
-    def __init__(self, *, has_round_id_column=True, null_candidates=None, stale_candidates=None):
+    def __init__(
+        self,
+        *,
+        has_round_id_column=True,
+        null_candidates=None,
+        stale_candidates=None,
+        exact_lua_candidates=None,
+        exact_round_candidates=None,
+    ):
         self.has_round_id_column = has_round_id_column
         self.null_candidates = null_candidates or []
         self.stale_candidates = stale_candidates or []
+        self.exact_lua_candidates = exact_lua_candidates or []
+        self.exact_round_candidates = exact_round_candidates or []
         self.updates: list[tuple] = []
         self.round_lookups: dict[int, tuple] = {}
 
@@ -42,6 +52,10 @@ class _FakeAdapter:
 
     async def fetch_all(self, query, params=None):
         q = " ".join(str(query).split())
+        if "SELECT id FROM rounds" in q and "round_start_unix = ?" in q:
+            return self.exact_round_candidates
+        if "SELECT id, round_id FROM lua_round_teams" in q:
+            return self.exact_lua_candidates
         if "FROM lua_round_teams" in q and "round_id IS NULL" in q:
             return self.null_candidates
         if "lrt.round_id IS NOT NULL" in q:
@@ -57,6 +71,69 @@ def _svc(adapter: _FakeAdapter) -> _LuaRoundStorageMixin:
     svc.db_adapter = adapter
     svc.config = _Cfg()
     return svc
+
+
+@pytest.mark.asyncio
+async def test_lua_resolver_requires_unique_exact_start_when_available():
+    start_unix = 1_776_800_000
+    adapter = _FakeAdapter(exact_round_candidates=[(42,)])
+    svc = _svc(adapter)
+
+    round_id = await svc._resolve_lua_round_id_for_metadata({
+        "map_name": "supply",
+        "round_number": 1,
+        "round_start_unix": start_unix,
+        # A neighbouring round can be closer to end time; it must not matter.
+        "round_end_unix": start_unix + 900,
+    })
+
+    assert round_id == 42
+
+
+@pytest.mark.asyncio
+async def test_lua_resolver_defers_missing_or_ambiguous_exact_start():
+    metadata = {
+        "map_name": "supply",
+        "round_number": 1,
+        "round_start_unix": 1_776_800_000,
+        "round_end_unix": 1_776_800_900,
+    }
+    for candidates in ([], [(10,), (20,)]):
+        adapter = _FakeAdapter(exact_round_candidates=candidates)
+        svc = _svc(adapter)
+        assert await svc._resolve_lua_round_id_for_metadata(metadata) is None
+
+
+@pytest.mark.asyncio
+async def test_link_lua_round_teams_uses_exact_source_start():
+    start_unix = 1_776_800_000
+    adapter = _FakeAdapter(exact_lua_candidates=[(77, 999)])
+    svc = _svc(adapter)
+
+    await svc._link_lua_round_teams(round_id=42, metadata={
+        "map_name": "supply",
+        "round_number": 1,
+        "round_start_unix": start_unix,
+        "round_end_unix": start_unix + 900,
+    })
+
+    assert adapter.updates == [
+        ("UPDATE lua_round_teams SET round_id = ? WHERE id = ?", (42, 77))
+    ]
+
+
+@pytest.mark.asyncio
+async def test_link_lua_round_teams_defers_nonunique_exact_source():
+    adapter = _FakeAdapter(exact_lua_candidates=[(10, None), (20, 999)])
+    svc = _svc(adapter)
+
+    await svc._link_lua_round_teams(round_id=42, metadata={
+        "map_name": "supply",
+        "round_number": 1,
+        "round_start_unix": 1_776_800_000,
+    })
+
+    assert adapter.updates == []
 
 
 @pytest.mark.asyncio

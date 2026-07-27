@@ -22,6 +22,47 @@ webhook_logger = get_logger("bot.webhook")
 class _LuaRoundStorageMixin:
     """Lua webhook round-data persistence (teams, spawn stats) for UltimateETLegacyBot."""
 
+    async def _resolve_lua_round_id_for_metadata(self, metadata: dict) -> int | None:
+        """Resolve Lua data by its source-native round start, never a neighbour.
+
+        Lua carries the same ``round_start_unix`` used by the canonical round
+        key. If that value is present, a missing or non-unique exact target is
+        a race/ambiguity and must remain unlinked until the matching stats row
+        exists. Only legacy payloads without a start timestamp use the shared
+        fuzzy resolver's end-time compatibility path.
+        """
+        map_name = metadata.get("map_name") or metadata.get("map")
+        round_number = metadata.get("round_number") or metadata.get("round")
+        try:
+            round_number = int(round_number or 0)
+            round_start_unix = int(metadata.get("round_start_unix") or 0)
+        except (TypeError, ValueError):
+            round_number = 0
+            round_start_unix = 0
+
+        if map_name and round_number and round_start_unix > 0:
+            rows = await self.db_adapter.fetch_all(
+                "SELECT id FROM rounds "
+                "WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM(?)) "
+                "  AND round_number = ? AND round_start_unix = ? "
+                "ORDER BY id LIMIT 2",
+                (map_name, round_number, round_start_unix),
+            )
+            if len(rows) == 1:
+                row = rows[0]
+                return int(row[0] if isinstance(row, (list, tuple)) else row["id"])
+
+            webhook_logger.info(
+                "Lua round link deferred: map=%s round=%s start=%s exact_candidates=%d",
+                map_name,
+                round_number,
+                round_start_unix,
+                len(rows),
+            )
+            return None
+
+        return await self._resolve_round_id_for_metadata(None, metadata)
+
     async def _link_lua_round_teams(self, round_id: int, metadata: dict) -> None:
         """
         Link lua_round_teams rows to a round_id using map + round + time proximity.
@@ -38,6 +79,51 @@ class _LuaRoundStorageMixin:
             try:
                 round_number = int(round_number)
             except (TypeError, ValueError):
+                return
+
+            try:
+                source_start_unix = int(metadata.get("round_start_unix") or 0)
+            except (TypeError, ValueError):
+                source_start_unix = 0
+
+            if source_start_unix > 0:
+                exact_rows = await self.db_adapter.fetch_all(
+                    "SELECT id, round_id FROM lua_round_teams "
+                    "WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM(?)) "
+                    "  AND round_number = ? AND round_start_unix = ? "
+                    "ORDER BY id LIMIT 2",
+                    (map_name, round_number, source_start_unix),
+                )
+                if len(exact_rows) != 1:
+                    if exact_rows:
+                        logger.warning(
+                            "Lua round link exact source is non-unique: map=%s rn=%s "
+                            "start=%s candidates=%d; deferring",
+                            map_name,
+                            round_number,
+                            source_start_unix,
+                            len(exact_rows),
+                        )
+                    return
+
+                exact_row = exact_rows[0]
+                lua_id = exact_row[0]
+                current_round_id = exact_row[1]
+                if current_round_id != round_id:
+                    await self.db_adapter.execute(
+                        "UPDATE lua_round_teams SET round_id = ? WHERE id = ?",
+                        (round_id, lua_id),
+                    )
+                    logger.info(
+                        "Lua round exact re-link: lua_id=%s %s -> %s "
+                        "(map=%s R%s start=%s)",
+                        lua_id,
+                        current_round_id,
+                        round_id,
+                        map_name,
+                        round_number,
+                        source_start_unix,
+                    )
                 return
 
             target_unix = metadata.get('round_end_unix') or metadata.get('round_start_unix')
@@ -264,7 +350,7 @@ class _LuaRoundStorageMixin:
             match_id = timestamp.strftime('%Y-%m-%d-%H%M%S')
 
             # Try to resolve round_id for direct linking (may be None if stats not imported yet)
-            round_id = await self._resolve_round_id_for_metadata(None, round_metadata)
+            round_id = await self._resolve_lua_round_id_for_metadata(round_metadata)
             try:
                 fallback_round_number = int(round_number or 0)
             except (TypeError, ValueError):
@@ -509,7 +595,7 @@ class _LuaRoundStorageMixin:
 
             timestamp = datetime.fromtimestamp(round_end)  # noqa: DTZ006 — match_id format mirrors local-time strftime used by postgresql_database_manager and the CET-running game server
             match_id = timestamp.strftime('%Y-%m-%d-%H%M%S')
-            round_id = await self._resolve_round_id_for_metadata(None, round_metadata)
+            round_id = await self._resolve_lua_round_id_for_metadata(round_metadata)
 
             query = """
                 INSERT INTO lua_spawn_stats (

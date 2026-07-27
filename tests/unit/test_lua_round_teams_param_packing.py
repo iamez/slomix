@@ -29,7 +29,7 @@ class _FakeBot:
         # correlation_service is checked via hasattr
         self.correlation_service = None
 
-    async def _resolve_round_id_for_metadata(self, _unused, _round_metadata):
+    async def _resolve_lua_round_id_for_metadata(self, _round_metadata):
         return self._resolved_round_id
 
     async def _has_lua_round_teams_round_id(self):
