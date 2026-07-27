@@ -1,8 +1,9 @@
-"""Strict, dependency-free reader for the collision-relevant subset of ET ``IBSP`` v47.
+"""Strict, dependency-free reader for the collision-relevant ET:L ``IBSP`` v47 subset.
 
-The binary layouts mirror id Software's ``qfiles.h``. Content and surface
-flags are exposed as raw 32-bit bitfields; deciding which contents block a
-particular trace is intentionally deferred to the trace implementation.
+The binary layouts mirror ET:Legacy's compatibility-preserving ``qfiles.h``.
+Content and surface flags are exposed as raw 32-bit bitfields; deciding which
+contents block a particular trace is intentionally deferred to the trace
+implementation.
 """
 
 from __future__ import annotations
@@ -17,7 +18,8 @@ BSP_MAGIC = b"IBSP"
 BSP_VERSION = 47
 
 _HEADER = struct.Struct("<4si")
-_LUMP = struct.Struct("<ii")
+# ET:Legacy qfiles.h declares fileofs as int and filelen as unsigned int.
+_LUMP = struct.Struct("<iI")
 _HEADER_SIZE = _HEADER.size + (17 * _LUMP.size)
 
 _SHADER = struct.Struct("<64sII")
