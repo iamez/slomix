@@ -754,9 +754,8 @@ The consequence is not uniform — most of a map is static world geometry and ca
 
 1. Load the entity submodels (`models` lump) alongside the world model.
 2. Where a trace crosses a dynamic entity's bounds, mark the result **`indeterminate`** rather than guessing a state, until the stage model (W5) or Lua capture can supply that state.
-3. Report the indeterminate share. If it is small, the trace is still useful; if it is large on a given map, say so rather than averaging it away.
-
-ET:Legacy can also add collision outside the static BSP entity set through custom entity loading and runtime `func_fakebrush` boxes. Inventory the actual server configuration before validation. A map whose runtime entity set cannot be reconstructed must report the affected movement/visibility scope as `indeterminate`; absence of `func_fakebrush` from the BSP lump alone is not proof of absence at runtime.
+3. Before validation, inventory the actual server's ET:L custom-entity sources and `func_fakebrush` instances. Where the runtime entity set cannot be reconstructed, mark the affected map/server configuration **`indeterminate`** rather than assuming the BSP entity lump is complete.
+4. Report the indeterminate share. If it is small, the trace is still useful; if it is large on a given map, say so rather than averaging it away.
 
 **W5 — stage graph and per-round state replay.**
 Parse the independently resolved W1 `.objdata` for the objective list per team with primary/secondary/additional classification, and the resolved `.script` for the possible stage logic (`wm_objective_status`, `trigger stolen`, `trigger dropped`, `wm_setwinner`). An ambiguous input blocks W5 for that map; do not silently read the script beside the chosen BSP. Produce, per map, a static transition graph and candidate mappings from state to selectable spawn sets, dynamic routes and live objectives.
