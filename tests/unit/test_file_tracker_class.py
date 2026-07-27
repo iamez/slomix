@@ -26,6 +26,7 @@ Pin every dedup-layer branch + the integrity-verification edges.
 from __future__ import annotations
 
 import hashlib
+import logging
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -43,6 +44,7 @@ from bot.automation.file_tracker import FileTracker
 def db():
     a = AsyncMock()
     a.fetch_one = AsyncMock(return_value=None)
+    a.fetch_all = AsyncMock(return_value=[])
     a.execute = AsyncMock(return_value=None)
     return a
 
@@ -401,3 +403,61 @@ async def test_verify_returns_false_on_db_exception(tracker, db, tmp_path):
     ok, msg = await tracker.verify_file_integrity("foo.txt", str(f))
     assert ok is False
     assert "verification error" in msg.lower()
+
+
+# ---------------------------------------------------------------------------
+# sync_local_files_to_processed_table
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_sync_ignores_sidecars_and_batches_primary_lookup(
+    tracker, db, tmp_path, monkeypatch, caplog
+):
+    local_stats = tmp_path / "local_stats"
+    local_stats.mkdir()
+    tracked = "2026-05-07-110000-oasis-round-1.txt"
+    missing = "2026-05-07-113000-oasis-round-2.txt"
+    sidecars = {
+        "2026-05-07-110000-oasis-round-1-endstats.txt",
+        "2026-05-07-110000-oasis-round-1_ws.txt",
+        "2026-05-07-110000-oasis-round-1_engagements.txt",
+    }
+    for filename in {tracked, missing, *sidecars}:
+        (local_stats / filename).write_text("fixture")
+
+    db.fetch_all.return_value = [{"filename": tracked}]
+    monkeypatch.chdir(tmp_path)
+
+    with caplog.at_level(logging.DEBUG, logger="bot.automation.file_tracker"):
+        await tracker.sync_local_files_to_processed_table()
+
+    db.fetch_all.assert_awaited_once()
+    query, params = db.fetch_all.await_args.args
+    assert "filename = ANY(?::text[])" in query
+    assert set(params[0]) == {tracked, missing}
+    db.fetch_one.assert_not_awaited()
+    assert "Found 1 unimported recent files" in caplog.text
+    assert "total primary files: 2" in caplog.text
+    assert "Ignoring 3 non-primary" in caplog.text
+    assert all(filename not in caplog.text for filename in sidecars)
+
+
+@pytest.mark.asyncio
+async def test_sync_with_only_sidecars_does_not_query_or_warn(
+    tracker, db, tmp_path, monkeypatch, caplog
+):
+    local_stats = tmp_path / "local_stats"
+    local_stats.mkdir()
+    (local_stats / "2026-05-07-110000-oasis-round-1-endstats.txt").write_text(
+        "fixture"
+    )
+    (local_stats / "2026-05-07-110000-oasis-round-1_ws.txt").write_text("fixture")
+    monkeypatch.chdir(tmp_path)
+
+    with caplog.at_level(logging.DEBUG, logger="bot.automation.file_tracker"):
+        await tracker.sync_local_files_to_processed_table()
+
+    db.fetch_all.assert_not_awaited()
+    db.fetch_one.assert_not_awaited()
+    assert "unimported" not in caplog.text.lower()

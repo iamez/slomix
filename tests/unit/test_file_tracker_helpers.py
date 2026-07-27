@@ -12,7 +12,27 @@ import hashlib
 
 import pytest
 
-from bot.automation.file_tracker import calculate_file_hash, get_file_size
+from bot.automation.file_tracker import (
+    calculate_file_hash,
+    get_file_size,
+    is_primary_stats_filename,
+)
+
+
+@pytest.mark.parametrize(
+    ("filename", "expected"),
+    [
+        ("2026-07-27-220000-sw_oasis_b3-round-1.txt", True),
+        ("2026-07-27-220000-sw_oasis_b3-round-2.txt", True),
+        ("2026-07-27-220000-sw_oasis_b3-round-1-endstats.txt", False),
+        ("2026-07-27-220000-sw_oasis_b3-round-1_ws.txt", False),
+        ("2026-07-27-220000-sw_oasis_b3-round-1_engagements.txt", False),
+        ("gametime-sw_oasis_b3-R1-1785182400.json", False),
+        ("unexpected.txt", False),
+    ],
+)
+def test_primary_stats_filename_classification(filename, expected):
+    assert is_primary_stats_filename(filename) is expected
 
 
 # ---------------------------------------------------------------------------

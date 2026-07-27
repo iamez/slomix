@@ -42,6 +42,16 @@ def get_file_size(file_path: str) -> int:
     return os.path.getsize(file_path)
 
 
+def is_primary_stats_filename(filename: str) -> bool:
+    """Return whether *filename* belongs to the primary stats pipeline.
+
+    Endstats and weapon-stat sidecars live beside primary stats files. Endstats
+    use a separate pipeline; legacy weapon sidecars are outside this importer.
+    Neither belongs in the ``processed_files`` comparison performed here.
+    """
+    return SSHHandler.parse_gamestats_filename(filename) is not None
+
+
 class FileTracker:
     """Tracks processed stats files to avoid duplicate imports"""
 
@@ -329,20 +339,32 @@ class FileTracker:
             if not os.path.exists(local_dir):
                 return
 
-            files = [f for f in os.listdir(local_dir) if f.endswith(".txt")]
+            text_files = [f for f in os.listdir(local_dir) if f.endswith(".txt")]
+            files = [f for f in text_files if is_primary_stats_filename(f)]
+
+            ignored_count = len(text_files) - len(files)
+            if ignored_count:
+                logger.debug(
+                    "Ignoring %d non-primary sidecar/unsupported files in %s",
+                    ignored_count,
+                    local_dir,
+                )
 
             if not files:
                 return
 
-            # Check which files are NOT in processed_files table
-            unimported = []
-            for filename in files:
-                check_query = "SELECT 1 FROM processed_files WHERE filename = $1"
-
-                existing = await self.db_adapter.fetch_one(check_query, (filename,))
-
-                if not existing:
-                    unimported.append(filename)
+            # One bounded lookup avoids thousands of sequential round-trips at
+            # startup while keeping the comparison scoped to local primary files.
+            existing_rows = await self.db_adapter.fetch_all(
+                "SELECT filename FROM processed_files "
+                "WHERE filename = ANY(?::text[])",
+                (files,),
+            )
+            tracked = {
+                row[0] if isinstance(row, (list, tuple)) else row["filename"]
+                for row in existing_rows
+            }
+            unimported = [filename for filename in files if filename not in tracked]
 
             # Report findings
             if unimported:
@@ -365,7 +387,8 @@ class FileTracker:
                 if actionable_unimported:
                     logger.warning(
                         f"⚠️  Found {len(actionable_unimported)} unimported recent files in local_stats/ "
-                        f"(total unimported: {len(unimported)}, total files: {len(files)})"
+                        f"(total unimported: {len(unimported)}, "
+                        f"total primary files: {len(files)})"
                     )
                     logger.warning(
                         "💡 To import them, use: python postgresql_database_manager.py "
@@ -387,7 +410,9 @@ class FileTracker:
                         f"(older than {lookback_hours}h startup lookback)"
                     )
             else:
-                logger.info(f"✅ All {len(files)} local files are tracked in database")
+                logger.info(
+                    f"✅ All {len(files)} local primary stats files are tracked in database"
+                )
 
         except Exception as e:
             logger.error(f"Error checking local files: {e}")
