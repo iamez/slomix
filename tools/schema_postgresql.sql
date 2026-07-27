@@ -5333,6 +5333,14 @@ ALTER TABLE ONLY public.lua_round_teams
 
 
 --
+-- Name: lua_round_teams lua_round_teams_round_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lua_round_teams
+    ADD CONSTRAINT lua_round_teams_round_id_key UNIQUE (round_id);
+
+
+--
 -- Name: lua_round_teams lua_round_teams_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 

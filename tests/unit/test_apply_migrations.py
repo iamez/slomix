@@ -24,6 +24,7 @@ from scripts.apply_migrations import (  # noqa: E402
     cmd_validate,
     collect_state,
     get_applied,
+    get_connection_kwargs,
     get_db_fingerprint,
     get_failed,
     requires_non_transactional,
@@ -561,6 +562,35 @@ def test_resolve_env_file_falls_back_when_website_dir_missing_entirely(tmp_path)
     """No website/ directory at all (e.g. a minimal checkout) must not
     raise — falls back to the (possibly nonexistent) root .env path."""
     assert resolve_env_file(tmp_path) == tmp_path / ".env"
+
+
+def test_connection_kwargs_share_postgres_then_legacy_db_precedence(monkeypatch):
+    names = (
+        "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_DATABASE",
+        "POSTGRES_USER", "POSTGRES_PASSWORD",
+        "DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD",
+    )
+    for name in names:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("DB_HOST", "legacy-host")
+    monkeypatch.setenv("DB_PORT", "5544")
+    monkeypatch.setenv("DB_NAME", "legacy-db")
+    monkeypatch.setenv("DB_USER", "legacy-user")
+    monkeypatch.setenv("DB_PASSWORD", "legacy-password")
+
+    assert get_connection_kwargs() == {
+        "host": "legacy-host",
+        "port": 5544,
+        "database": "legacy-db",
+        "user": "legacy-user",
+        "password": "legacy-password",
+    }
+
+    monkeypatch.setenv("POSTGRES_HOST", "postgres-host")
+    monkeypatch.setenv("POSTGRES_PASSWORD", "")
+    kwargs = get_connection_kwargs()
+    assert kwargs["host"] == "postgres-host"
+    assert kwargs["password"] == ""
 
 
 @pytest.mark.asyncio
