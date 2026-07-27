@@ -135,17 +135,19 @@ Header keys: `map`, `round`, `crossfire_window`, `escape_time`, `escape_distance
 
 #### 2.5.1 BSP lumps (measured on `etl_adlernest.bsp`, 10.2 MB)
 
-Everything a collision trace needs is present and populated:
+The static-world collision inputs are present and populated; dynamic runtime state remains a separate gate (§9):
 
-| Lump | Size | Approx count |
+| Lump | Size | Record count / detail |
 |---|---:|---|
-| `planes` | 1,512,544 B | ~63,000 |
-| `brushes` | 130,404 B | ~8,150 |
-| `brushsides` | 927,960 B | — |
-| `nodes` / `leafs` / `leafbrushes` | 60,336 / 84,288 / 84,808 B | BSP tree for fast traversal |
+| `planes` | 1,512,544 B | 94,534 |
+| `brushes` | 130,404 B | 10,867 |
+| `brushsides` | 927,960 B | 115,995 |
+| `nodes` / `leafs` / `leafbrushes` | 60,336 / 84,288 / 84,808 B | 1,676 / 1,756 / 21,202; BSP tree for fast traversal |
+| `leafsurfaces` / `drawverts` / `drawindexes` | 85,144 / 4,912,028 / 175,056 B | 21,286 / 111,637 / 43,764; surface/patch inputs |
+| `surfaces` | 1,307,592 B | 12,573 total; 200 `MST_PATCH`, 196 with `CONTENTS_SOLID` |
 | `entities` | 65,814 B | 540 entities, 34 classnames |
 
-This is the standard Quake3-derived collision model. A ray-vs-brush trace against it is well-trodden work, not research.
+This is the standard Quake3-derived brush-and-patch collision model. Reproducing its static trace is implementation work; matching ET:L's exact facet generation and runtime entities still requires W6 validation.
 
 #### 2.5.2 Entity classes that matter
 
@@ -161,7 +163,7 @@ From the entity lump of `etl_adlernest`:
 | `func_door_rotating` | 5 | doors that open/close routes |
 | `trigger_hurt` / `trigger_heal` / `trigger_ammo` | 2 / 2 / 2 | hazards and supply |
 
-**Spawn points plus wave phase (§5) give the reachable enemy set at any moment.** That is the concrete form of the "third opponent" and it is available today.
+**Spawn points plus wave phase (§5) are necessary but not sufficient for a reachable-enemy set.** Reachability additionally needs a validated navigation topology and the spawn point that was active at that time. The BSP collision model does not supply either fact by itself; §5.6 and §9 make those gates explicit.
 
 #### 2.5.3 Coverage and its limits
 
@@ -218,7 +220,7 @@ Measured at **r = 0.897** against engagement volume. It largely restates "this p
 `compute_useless_defense_deaths` (`website/backend/services/storytelling/advanced_metrics.py:625`) only checks that the victim was defending, had at least the configured reinforcement delay remaining, and was killed. It says nothing about territory.
 
 **P6. Never judge a decision using information the player did not have.**
-Using an opponent's true telemetry position when that opponent was unseen and unrevealed retroactively condemns a rational choice. This is both the owner's explicit requirement and an independent finding in the #551 review. It is the reason §6 exists, and it applies to **every** metric in §7.
+Using an opponent's true telemetry position when that opponent was unseen and unrevealed retroactively condemns a rational choice. This is both the owner's explicit requirement and an independent finding in the #551 review. It is the reason §6 exists, and it applies to **every opponent-dependent metric** in §7. This is a validity constraint, not an optimisation that may be skipped when an oracle and restricted ranking happen to agree: a candidate either consumes a validated information state or it does not ship. True opponent positions may be computed only as a named oracle diagnostic.
 
 **P7. Never infer objective contribution from class.**
 The owner raised this directly: *"ni samo inženir class tisti ki dela obj — medici tudi delajo objective, npr. prinesejo docse."* He is right, and the map files prove it structurally rather than anecdotally. From `etl_adlernest.objdata`:
@@ -347,7 +349,7 @@ Every row of `proximity_spawn_timing` supplies `kill_time`, `enemy_spawn_interva
 
 Over groups of `(round_id, victim_team)` with at least 3 kills: **1,249 of 1,266 groups (98.7%) yield exactly one offset value.** The 17 inconsistent groups do **not** contain more than one `enemy_spawn_interval`, so a mid-round spawn-time change is not the explanation; the cause is unresolved.
 
-**Consequence: Layer 2 works for all history with no Lua change.** The Phase C capture (§9) makes it exact and removes the inference, but is not a prerequisite.
+**Consequence: Layer 2 works without a Lua change only for groups whose recovered offsets are unanimous.** The 17 inconsistent groups are unresolved historical data and must remain null. The Phase C capture (§10) makes future rounds exact and removes the inference.
 
 ### 5.3 Required algorithm
 
@@ -360,12 +362,11 @@ For each (round_id, team) where round_id IS NOT NULL:
                    where interval > 0 and ttn is not null ]
     if len(candidates) < 3:            -> offset = None, confidence = "insufficient"
     elif all equal:                    -> offset = that value, confidence = "exact"
-    else:                              -> offset = mode(candidates),
-                                          confidence = "inferred",
-                                          agreement = count(mode)/len(candidates)
+    else:                              -> offset = None, confidence = "inconsistent",
+                                          distinct_candidates = sorted(unique(candidates))
 ```
 
-Never average. An average of two valid-but-different offsets is a third value that is wrong for both.
+Never average and never select the mode. An average of two valid-but-different offsets is a third value that is wrong for both; a mode merely hides the rows that disagree. Until the cause of a disagreement is explained by an independently verified rule, the whole `(round_id, team)` clock is unknown.
 
 Then for any `t`:
 
@@ -409,16 +410,18 @@ next_wave(team)      = t + time_to_next(team, t)                     # §5.3
 reachable(team, T)   = { p : travel_time(spawn_point, p) <= T − next_wave(team) }
 ```
 
-`travel_time` should be **learned from the 7.99 M trajectory samples**, not assumed from a constant speed: measure realistic point-to-point times per map from how players actually moved. A straight-line estimate reintroduces P2 through the back door.
+`travel_time` requires a **navigable topology**, not only point-to-point speed samples. Build an empirical directed movement graph (or an engine-equivalent navmesh) from the 7.99 M trajectories, with edges that preserve walls, floors, stairs, jumps, drops, doors and stage-dependent routes. Learn travel-time distributions on those edges from past trajectories. A straight-line estimate reintroduces P2 through the back door, while a collision ray alone cannot establish that a route is walkable.
+
+The graph must expose coverage. Unobserved or stage-ambiguous connections are `unknown`, not impassable and not traversable by default. Validate held-out observed journeys against graph travel times before any reachability result is consumed.
 
 Two things fall out of this that nothing in the current system can express:
 
 - **"You are somewhere the next wave reaches before your team can support you."** That is the measurable form of the owner's *"če si na napačen čas na napačnih kordinatih, si izven pozicije."*
 - **A position's value is a function of phase.** The same coordinates are strong just after a wave (enemies far, spawn drained) and weak just before it. Any space-control metric that ignores phase is averaging two opposite situations.
 
-Spawn points are also **stage-dependent** — maps move forward spawns as objectives complete. Read the `spawnflags` on the spawn entities and cross-reference the stage logic in `.script` (§9); do not treat all spawn entities as simultaneously active.
+Spawn points are also **stage-dependent** — maps move forward spawns as objectives complete. `spawnflags`, `.objdata` and `.script` describe possible entities and transitions, not when a transition happened in a historical round. Cross-reference them with a timestamped per-round objective-state replay (§9 W5); do not treat all spawn entities as simultaneously active.
 
-Not yet verified: whether stage-to-spawn mapping can be resolved for every map from `.script` alone. Treat that as the first question the §9 workstream has to answer, and null the reachability model where it cannot.
+Where the active spawn, route state or navigation connectivity cannot be reconstructed for time `t`, reachability is null. Static map scripts alone are never evidence that a particular historical transition already occurred.
 
 ---
 
@@ -430,37 +433,44 @@ This is the most original part of the design and the one most easily overclaimed
 
 | Channel | Source | Certainty |
 |---|---|---|
-| **Kill feed** | `proximity_kill_outcome.kill_time`, both guids | **High but non-spatial.** The obituary tells everyone *who* died and *to whom* — not *where*. It is evidence about the roster, not the map. |
-| **Gunfire** | `proximity_shot_fired` (648,214 rows, with `origin_x/y/z`) | Medium. A shot is audible within a radius; the radius is a modelling choice and must be a named parameter. |
+| **Kill feed** | `proximity_kill_outcome.kill_time`, both guids | **High but non-spatial.** The obituary reveals that a player is **downed and revivable**, not permanently dead. `outcome` later distinguishes `revived`, `gibbed`, `tapped_out`, `round_end` and `expired`. |
+| **Gunfire** | `proximity_shot_fired` (648,214 rows, with `origin_x/y/z`) | Medium and **capability-gated**. An audible recipient learns an uncertain source region, not the exact telemetry coordinate. The radius and localisation error are named model parameters. |
 | **Contact** | `combat_engagement` time ranges + `attackers` | High for the participants; medium for nearby teammates. |
-| **Deaths** | `player_track` `death_time_ms` + position | High for the player who died. |
+| **Downs and outcomes** | `player_track.death_time_ms` + `proximity_kill_outcome` | High for the downed player; roster state changes only when a revive, gib, tap-out/respawn or terminal outcome is observed. |
 | **Voice macros** | `proximity_comm_event` | **Currently unusable:** feature flag `comm_events` is off, 96 rows total. |
-| **Line-of-sight availability** | BSP trace (§9) | **Available offline** for 91.6% of rounds. See the caveat below. |
+| **Line-of-sight availability** | BSP trace (§9) | An oracle upper-bound diagnostic for covered static geometry, not an observation and never a belief source by itself. |
 
 **On line-of-sight, precisely.** B1 is withdrawn (§3.1): geometry exists and a trace is implementable. But B2 stands, so what the trace yields is *"there was an unobstructed line between these two points"* — a **necessary, not sufficient** condition for having seen someone. Facing is unknown between shots.
 
-Use it as an **upper bound on what could have been seen**, and combine it with what we do know about attention: a player who fired at time `t` was facing their target (`view_yaw`/`view_pitch` in `proximity_shot_fired`), so shots give occasional ground truth to calibrate against. Never label the output "saw"; label it "had line of sight".
+Use it as an **upper bound on what could have been seen** and never insert a belief merely because the ray was clear. `proximity_shot_fired` records the shooter's origin and view angles but **no `target_guid`**; firing proves a direction, not which player was perceived. A recipient-confirmed event such as an `AIM_LOCK` window may establish a subject for that holder when its capture capability is proven. A bare shot cannot. Never label an offline trace "saw"; label it "had line-of-sight availability".
+
+**Capture capability is part of the data, not an assumption.** The repository default has `features.shot_fired = false`, while the live server is known to differ, and migration 062 deliberately leaves `proximity_processed_files.capabilities` null until a manifest is populated. Existing rows prove that some shots were captured; absence of rows does not prove that nobody fired. A round may feed a gunfire-complete belief model only when its processed-file manifest explicitly proves the feature was enabled and complete. Apply the same rule to `aim_lock` and `comm_events`. If capability is false or unknown, dependent beliefs and metrics are `unavailable`, never zero.
 
 ### 6.2 What must be stated plainly in any output
 
 - **Discord voice is not capturable, ever.** The players talk on Discord; that channel does not exist in any dataset and never will. The information state is therefore a **lower bound** on what the team knew.
 - `COMM_EVENTS` captures only in-game `vsay` macros — the command type and macro id — not speech. Even switched on, it would not change the previous point.
 - The model is an **estimate**, and every panel or metric built on it must be labelled as such.
+- Missing capture capability propagates as `unavailable`; no consumer may silently replace missing evidence with "the player knew nothing".
 
 ### 6.3 Suggested model (parameters are choices, not facts)
 
 **Beliefs are per recipient, not per team.** §6.1 says contact is high-certainty for the participants and weaker for nearby teammates, and gunfire only reaches its audible radius. A single team-wide set cannot express any of that: it would hand a player on the far side of the map the same knowledge as the one standing next to the fight. Hold a belief set **per player**, and derive team-level views by union when a team-level question is asked.
 
-**Not every source is spatial.** The kill feed is global but says nothing about position, so it cannot produce coordinates. Model it as a separate, non-spatial fact (`enemy_alive_count`, "this specific enemy is dead for the next N seconds") rather than forcing it into a location.
+**Not every source is spatial.** The kill feed is global but says nothing about position, so it cannot produce coordinates. Model it as a separate, non-spatial lifecycle fact: `active -> downed_revivable -> revived | terminally_out`. Do not decrement an alive/available count permanently at obituary time; do so only after an observed gib, tap-out/respawn boundary or other terminal outcome. An unresolved down remains explicitly uncertain.
+
+**Audible evidence is spatially uncertain.** The stored gunfire origin is ground truth available to the analyst, not a coordinate heard by the player. Represent what the holder could infer as a region or probability distribution whose uncertainty grows with time. At minimum record a centre estimate, radius/error model and decay; do not expose the exact telemetry origin as a belief point.
 
 ```
 BeliefItem
   holder_guid      # WHO knows this — beliefs are not shared by fiat
-  kind             # "position" | "roster"
-  x, y, z          # position kind only; null for roster facts
+  kind             # "position_region" | "roster_state"
+  region           # spatial distribution/centre+radius; null for roster facts
   t_observed
-  source           # "gunfire" | "contact" | "death" | "los" | "killfeed"
+  source           # "gunfire" | "contact" | "down" | "aim_lock" | "killfeed"
   subject_guid     # may be null for gunfire if the shooter is unresolvable
+  roster_state     # downed_revivable/revived/terminally_out, roster kind only
+  capability       # explicit manifest evidence for optional capture sources
   confidence(t)    # decays from 1.0
 ```
 
@@ -468,14 +478,14 @@ Decay must be explicit and configurable, e.g. `confidence(t) = exp(−(t − t_o
 
 Derived per player, per tick:
 
-- `known_enemy_count` — **distinct subjects** above a confidence threshold, never a count of belief items. `proximity_shot_fired` emits one row per shot, and contact and death evidence repeat for the same person; counting items turns one enemy firing a burst into a phantom squad. Where the subject is unresolvable (some gunfire), cluster by position and time before counting, and say what the clustering assumes.
-- `nearest_known_enemy_distance`
+- `known_enemy_count` — **distinct resolved subjects** above a confidence threshold, never a count of belief items. `proximity_shot_fired` emits one row per shot, and contact and down evidence repeat for the same person; counting items turns one enemy firing a burst into a phantom squad. Unresolved gunfire regions are not distinct enemies unless an explicit probabilistic association model supports that conclusion.
+- `nearest_known_enemy_distance` — a distance interval/distribution when the belief is a region, not false point precision
 - `moved_into_unknown` — did the player move toward a region with no recent belief coverage
 - `teammate_under_attack` — from engagement edges (§4.5); this is the owner's explicit request and it is **directly available**, no modelling needed
 
 ### 6.4 Acceptance for Layer 3
 
-The belief model is only worth keeping if it **changes conclusions**. Required check: take one Layer 4 candidate metric, compute it (a) with true enemy positions and (b) with belief-restricted positions, and report how the ranking differs. If it does not differ, say so and drop the layer rather than carrying complexity that buys nothing.
+P6 is mandatory whether or not it changes one observed ranking. For every opponent-dependent Layer 4 candidate, compute (a) the information-restricted version eligible for validation and (b) a clearly named true-position **oracle diagnostic**, then report the difference. Agreement is useful evidence about sensitivity; it is not permission to ship the oracle. If a validated information state cannot be built, the opponent-dependent candidate is unavailable or dropped.
 
 ---
 
@@ -510,8 +520,8 @@ Own-team positions are a different case: teammates share a voice channel we cann
 
 | Candidate | Built from | Notes |
 |---|---|---|
-| Space control share | Layer 1 positions + velocities + **§9 walkable space** | Blocked until §9 W2/W4 land: without topology a Voronoi over the bounding box is dominated by solid rock, and "control" of a wall is meaningless |
-| Reachability advantage | learned per-map speeds from the 7.99 M samples | Learn from data, do not assume a constant |
+| Space control share | Layer 1 positions + velocities + **§9 navigable topology** | Blocked until W4b lands: BSP parsing and collision rays do not create walkable connectivity; without topology a Voronoi over the bounding box is dominated by solid rock |
+| Reachability advantage | W4b movement graph + historical edge-time distributions | Learn on a navigable graph from prior data; do not assume a constant or allow paths through walls, floors or closed routes |
 | **Stage-aware objective control** | control × distance to the **currently live** objective volume | See 7.4.1 — the space that matters moves during the round |
 | Wave-phase alignment | Layer 2 + §5.6 | Was the player advancing when the enemy wave was furthest from reaching him |
 | Isolation | Layer 1 edges | Distance to nearest living teammate; the honest version of "straggler" |
@@ -526,7 +536,7 @@ Stopwatch objectives are **sequential**. On Adlernest the Allies must first stea
 
 A metric that scores "control near the objective" against a static point is therefore **systematically wrong for the later part of every round**, and wrong in a direction that rewards whoever camped the first objective longest.
 
-Every candidate above that references "the objective" must resolve **which objective is live at time `t`** (§9 supplies the stage model) or explicitly restrict itself to the first stage and say so.
+Every candidate above that references "the objective" must resolve **which objective is live at time `t`** from a timestamped per-round state replay (§9 W5) or explicitly restrict itself to a stage whose activity is independently observed. `.objdata` and `.script` supply the possible transition graph only; they do not prove when any transition happened in a historical round. Any missing, contradictory or incomplete transition sequence makes the live objective `unknown` for the affected interval.
 
 #### 7.4.2 Sacrifice that opens space
 
@@ -542,7 +552,7 @@ Required guards, or this metric becomes "dying is good":
 
 1. **Attribution, not correlation.** The enemies who killed A must be the ones displaced. Use the engagement edges (§4.5), not a time window alone.
 2. **Compare against the counterfactual class.** Deaths in the same map region, same stage, same wave phase, that produced *no* team gain. Without that denominator, every death looks productive some of the time.
-3. **Leakage.** The baseline of "what usually happens after a death here" must not include the evaluated round (P1).
+3. **Leakage.** The baseline of "what usually happens after a death here" must use only rounds that happened **before** the evaluated round, or a corpus frozen before the entire evaluation window (P1). Merely excluding the evaluated round still leaks later rounds back into its counterfactual. Use chronological folds and publish their cut-off dates.
 4. If the measurement says it does not predict round outcome, **it does not ship** — even though it is the owner's own playstyle. Especially then.
 
 ### 7.5 Weighting
@@ -589,35 +599,48 @@ This section did not exist in the first revision, because the first revision bel
 Walk `/home/samba/share/etmain`, map `map_name → (pk3, bsp)`. Record a sha256 per BSP. Handle one map being provided by several pk3s: today `te_escape2` comes from three and all three BSPs are byte-identical, so pick deterministically and **assert the hashes match** rather than assuming it. Emit an explicit "no geometry" result for the six maps we do not hold — `etl_frostbite` above all, at 151 rounds.
 
 **W2 — BSP reader.**
-`IBSP` v47. Read the header (17 lumps, each an `(offset, length)` int32 pair) and parse `shaders`, `planes`, `brushes`, `brushsides`, `nodes`, `leafs`, `leafbrushes`, `models`, `entities`. Refuse any file whose magic or version differs instead of guessing at the layout.
+`IBSP` v47. Read the header (17 lumps, each a signed int32 offset plus an unsigned int32 length) and parse `shaders`, `planes`, `brushes`, `brushsides`, `nodes`, `leafs`, `leafbrushes`, `leafsurfaces`, `models`, `entities`, `drawverts`, `drawindexes` and `surfaces`. Refuse any file whose magic or version differs instead of guessing at the layout. This is not a vanilla-ET assumption: the current [ET:Legacy `qfiles.h`](https://github.com/etlegacy/etlegacy/blob/master/src/qcommon/qfiles.h) retains `BSP_VERSION 47`, the same 17 lumps and the required record layouts.
 
-**The `shaders` lump is not optional.** Brush and brush-side records carry shader *indices*; the shader lump supplies the `contents` and `surfaceflags` that say whether a brush is solid, a clip volume, water, a trigger, or a non-colliding visual. Tracing "all brushes" makes triggers and clip brushes opaque and produces sightlines that are blocked by nothing. Filter on the content flags — solid and player-clip block a player trace; trigger volumes and non-solid detail do not.
+**The `shaders` lump is not optional.** Brush and brush-side records carry shader *indices*; the shader lump supplies the `contents` and `surfaceflags` that say whether a brush is solid, a clip volume, water, a trigger, or a non-colliding visual. Tracing "all brushes" makes triggers and clip brushes opaque and produces sightlines that are blocked by nothing. W2 preserves the raw flags; W4 must define a named mask per trace purpose. A movement/player-box trace includes solid and player-clip. A line-of-sight ray must not treat a player-clip-only volume as opaque. Trigger volumes and non-solid detail block neither.
+
+**Brushes are not the whole ET:Legacy collision world.** ET:L's [`CMod_LoadPatches`](https://github.com/etlegacy/etlegacy/blob/master/src/qcommon/cm_load.c) scans `MST_PATCH` draw surfaces, reads their control points from `drawverts`, copies contents/surface flags from the referenced shader and calls `CM_GeneratePatchCollide`. Curved solid walls, arches and terrain can therefore block an engine trace without any brush doing so. W2 must validate every surface's shader, vertex and index ranges and preserve patch width/height and control points. A parser that omits these lumps is an incomplete W2, even if every brush parses correctly.
 
 **W3 — entity extraction.**
 From the entity lump: spawn points by team (`team_CTF_bluespawn`, `team_CTF_redspawn`) with their `spawnflags`; objective volumes (`trigger_objective_info`); objective markers (`team_WOLF_objective`); doors and movers. This supersedes the sphere-with-radius-500 approximation in `objective_zones.json` — keep that file as the fallback for maps without a pk3, and **label which source each zone came from** so a consumer can tell a measured volume from a guessed sphere.
 
-**W4 — collision trace.**
-Ray-vs-brush against brushes whose shader contents mark them solid (see W2), using the BSP tree to avoid testing all ~8,150. Standard Quake3-derived model. The output is **line-of-sight availability**, never "saw" (§3.1 B2).
+**W4a — collision trace.**
+Implement both convex brush collision and ET:L-compatible patch collision facets, using the BSP leaf brush/surface references to avoid testing the whole map. A brush-only clear result is invalid where a trace can cross a solid `MST_PATCH`; until patch collision is implemented and validated, such a trace returns **`indeterminate`**, never clear. The output is **line-of-sight availability**, never "saw" (§3.1 B2).
+
+Trace endpoints are stance-adjusted eye positions, matching the live Lua's current heights: prone `z + 12`, crouched `z + 36`, standing `z + 56`. If stance is unavailable at either endpoint, return `indeterminate` or evaluate a labelled interval across plausible heights; never silently trace from feet or assume standing. Keep trace masks purpose-specific as described above.
+
+**W4b — navigable topology.**
+Collision answers whether a particular segment intersects geometry; it does not create a movement graph. Build an empirical directed graph (or engine-equivalent navmesh) over walkable space from historical trajectories and geometry. It must preserve vertical levels and model stairs, jumps, drops, doors, movers and stage-dependent connections. Each node/edge records observation count, time range and stage/capability provenance. Validate on held-out journeys; uncovered connections remain unknown. Space control, spawn reachability and travel-time surfaces are blocked until this deliverable passes validation.
 
 **Static traversal alone is wrong for a subset of sightlines.** Doors, `script_mover` entities and constructibles are **dynamic entity submodels**: their collision is not in the world BSP tree, and whether they block a line depends on their state and transform at time `t`. Adlernest alone has 5 `func_door_rotating` and 28 `script_mover`.
 
-The consequence is not uniform — most of a map is static world geometry and traces through it are correct. But a sightline that crosses a door is exactly the kind that decides a duel. Required handling:
+The consequence is not uniform — most of a map is static world geometry and can be modelled offline after W6 validation. But a sightline that crosses a door is exactly the kind that decides a duel. Required handling:
 
 1. Load the entity submodels (`models` lump) alongside the world model.
 2. Where a trace crosses a dynamic entity's bounds, mark the result **`indeterminate`** rather than guessing a state, until the stage model (W5) or Lua capture can supply that state.
 3. Report the indeterminate share. If it is small, the trace is still useful; if it is large on a given map, say so rather than averaging it away.
 
-**W5 — stage model.**
-Parse `.objdata` for the objective list per team with primary/secondary/additional classification, and `.script` for the stage logic (`wm_objective_status`, `trigger stolen`, `trigger dropped`, `wm_setwinner`). Produce, per map, an ordered stage model and the mapping from stage to active spawn points and live objective.
+ET:Legacy can also add collision outside the static BSP entity set through custom entity loading and runtime `func_fakebrush` boxes. Inventory the actual server configuration before validation. A map whose runtime entity set cannot be reconstructed must report the affected movement/visibility scope as `indeterminate`; absence of `func_fakebrush` from the BSP lump alone is not proof of absence at runtime.
 
-**This is the deliverable with the most unknowns.** Map scripts are hand-written and vary. The first job of W5 is to establish **for how many of the 13 maps a stage model can actually be derived**, and to return null for the rest rather than inventing one. Do not let §7.4.1 depend on a stage model that silently guesses.
+**W5 — stage graph and per-round state replay.**
+Parse `.objdata` for the objective list per team with primary/secondary/additional classification, and `.script` for the possible stage logic (`wm_objective_status`, `trigger stolen`, `trigger dropped`, `wm_setwinner`). Produce, per map, a static transition graph and candidate mappings from state to spawn points, dynamic routes and live objectives.
+
+Then replay each historical round from **timestamped observed transitions** such as carrier events, construction/destruction events, checkpoint/objective events and any future C3 capture. First inventory which event families are actually complete per tracker version. A static script proves that a transition can happen, not that it did happen at time `t`. Where an event is missing, duplicated, out of order, or insufficient to distinguish two legal states, return `unknown` from that point until a later observation uniquely re-establishes state. Never infer transition time merely from the final round result.
+
+**This is the deliverable with the most unknowns.** Map scripts are hand-written and vary. Report two separate coverages: (1) maps with a defensible static transition graph and (2) historical round-time with an unambiguous replayed state. Return null for the rest rather than inventing one. Do not let §7.4.1 depend on a stage model that silently guesses.
 
 **W6 — validation against live Lua.**
 Once §10 C4 is available, compare offline traces against `et.trap_Trace` results on the same positions. This is the only way to know whether W4 is correct. Until then, treat every visibility number as unvalidated and say so in the output.
 
 ### 9.2 Risks
 
-- **Brush-based collision is not the same as the engine's player trace.** The engine traces a bounding box, not a ray, and has its own edge behaviour. Expect disagreements at corners; W6 quantifies them.
+- **Brush-and-patch collision still is not automatically the engine's player trace.** Movement uses a bounding box, LOS uses a ray, and the engine has edge behaviour and dynamic entities. Expect disagreements at corners; W6 quantifies them.
+- **ET:L trace masks are purpose-specific.** `CONTENTS_PLAYERCLIP` belongs in movement traces but not automatically in line-of-sight or shot traces. Every W4 result must state the mask it used.
+- **The BSP entity lump may not be the live entity set.** ET:L custom entity loading and runtime-created `func_fakebrush` boxes must be inventoried from the actual server configuration before W4 can claim complete collision coverage.
 - **Cost.** A trace per player-pair per 200 ms tick is 66 pairs × 3,600 ticks ≈ 238k traces for one 12-minute round. Measure before committing to a per-tick design; consider a coarser visibility cadence than the movement cadence.
 - **`etl_frostbite`** is 151 rounds with objective coordinates but no BSP. Anything geometry-derived must be null there, not silently substituted.
 
@@ -633,11 +656,11 @@ Everything here requires a game-server deploy and is **owner-gated**.
 |---|---|---|---|
 | C1 | `view_yaw` / `view_pitch` in the 200 ms position samples | **B2 — genuinely blocked offline.** Facing is known only at shot time, and geometry does not supply it | Low |
 | C2 | `reinf_offset` in the file header, plus a wave timeline | §5 infers it at 98.7%; capture makes it exact and removes the inference | Very low |
-| C3 | Objective state over time (dynamite planted, doors, checkpoints) | **Downgraded.** §9 W5 derives the *structure* offline; live *state* transitions are partly reconstructible from `proximity_carrier_event` and `proximity_construction_event`. Capture closes the remainder | Low–medium |
-| C4 | Line-of-sight trace (`et.trap_Trace`) | **Reclassified.** No longer the only route — §9 W4 does this offline for 91.6% of rounds. C4's value is now as the **ground truth that validates W4** (W6) | **High, measure first** |
+| C3 | Objective state over time (dynamite planted, doors, checkpoints) | §9 W5 derives only the possible transition graph offline. Existing timestamped events may replay part of a round; C3 is required wherever they do not uniquely determine live state | Low–medium |
+| C4 | Line-of-sight trace (`et.trap_Trace`) | **Reclassified.** Offline W4 can model covered geometry, but only after brush + patch + dynamic-state handling. C4 is the **ground truth that validates W4** (W6) | **High, measure first** |
 | C5 | Teammate engagement state (is this player under attack right now) | Partially derivable from `combat_engagement`, but a live flag is exact | Low |
 
-Note how C3 and C4 changed. Both were listed as "only possible via Lua" in the first revision. Neither is. C1 is now the only capture here that is strictly required to unblock something, and C4's justification has shifted from capability to verification.
+Note how C3 and C4 changed. Both were listed as "only possible via Lua" in the first revision. Static structure and partial state are available offline, but C3 remains required wherever observed transitions cannot uniquely replay state. C1 supplies continuous attention; C4's justification has shifted from capability to verification.
 
 ### 10.2 Opportunistic fixes while in the file
 
@@ -675,8 +698,8 @@ Measurable, not descriptive.
 
 ### Phase B — Layers 2 and 3
 - **B1.** Wave phase computed for ≥95% of rounds that have `proximity_spawn_timing` rows; the rest explicitly null with a reason.
-- **B2.** Offset agreement reported per round; the 17 known-inconsistent groups are flagged, not silently averaged.
-- **B3.** §6.4 delta check completed and reported, including the negative result if that is the outcome.
+- **B2.** Offset agreement reported per round; the 17 known-inconsistent groups are null with their candidate sets exposed, never averaged or mode-selected.
+- **B3.** Every opponent-dependent candidate is checked for P6 compliance. The §6.4 oracle delta is reported, including a negative result, but the oracle never becomes a shipping fallback.
 
 ### Phase B — Layer 4
 - **B4.** Every candidate in §7.4 measured under §8, with the full table published.
@@ -684,10 +707,11 @@ Measurable, not descriptive.
 
 ### BSP toolchain (§9)
 - **W1.** Every played map resolves to exactly one BSP or to an explicit "no geometry" result. The six uncovered maps are named in the output, not silently absent.
-- **W2.** Parser refuses any file that is not `IBSP` v47 rather than misreading it.
+- **W2.** Parser refuses any file that is not `IBSP` v47, validates all parsed cross-references, and exposes brush plus `MST_PATCH` collision inputs (`leafsurfaces`, `drawverts`, `drawindexes`, `surfaces`).
 - **W3.** Objective volumes extracted for every covered map, and each published zone states whether it came from a **measured volume** or the legacy sphere.
-- **W4.** Trace validated against hand-checked cases on at least one map before any metric consumes it. Cost per trace measured and stated.
-- **W5.** Reported honestly: **for how many of the 13 maps a stage model could actually be derived**. A partial answer is acceptable; a fabricated one is not.
+- **W4a.** Brush + patch trace uses a named mask and stance-adjusted eye endpoints, preserves `indeterminate` for unresolved geometry/state, and is validated against hand-checked cases before any metric consumes it. Cost per trace is measured and stated.
+- **W4b.** Navigable graph reproduces held-out observed routes and travel times within published tolerances; uncovered or stage-ambiguous connections remain unknown. Space/reachability metrics consume no pre-validation graph.
+- **W5.** Report both static-graph map coverage and unambiguous per-round state-time coverage. A partial answer is acceptable; a fabricated transition time is not.
 - **W6.** Once §10 C4 exists, offline-vs-live agreement rate published. Until then every visibility output is labelled unvalidated.
 
 ### Phase C (§10)
@@ -814,8 +838,11 @@ Map assets, checked by reading the archives in `/home/samba/share/etmain` direct
 - pk3 inventory: 22 archives; `map_name → bsp` index built by scanning `maps/*.bsp` in each
 - Coverage: 1,767 of 1,929 R1/R2 rounds (91.6%) are on a map we hold; missing are `etl_frostbite` (151), `et_beach` (4), `radar` (2), `sp_delivery_te` (2), `etl_supply` (2), `mp_sillyctf` (1)
 - BSP format: magic and version read from the first 8 bytes of each BSP → `IBSP` v47 on all 13 available maps
-- Lump sizes: header parsed as 17 `(offset, length)` int32 pairs on `etl_adlernest.bsp` → planes 1,512,544 B; brushes 130,404 B; brushsides 927,960 B; entities 65,814 B
+- Lump sizes: header parsed as one signed offset + unsigned length per lump on `etl_adlernest.bsp` → planes 1,512,544 B; brushes 130,404 B; brushsides 927,960 B; leafsurfaces 85,144 B; drawverts 4,912,028 B; drawindexes 175,056 B; surfaces 1,307,592 B; entities 65,814 B
+- Lump record counts: decoded with the ET:Legacy `qfiles.h` layouts (`dplane_t` 16 B, `dbrush_t` 12 B, `dbrushside_t` 8 B, `dnode_t` 36 B, `dleaf_t` 48 B) → planes 94,534; brushes 10,867; brushsides 115,995; nodes 1,676; leafs 1,756; leafbrushes 21,202
+- Patch inventory: decoded `drawVert_t` (44 B) and `dsurface_t` (104 B) → 111,637 drawverts, 12,573 surfaces, 200 `MST_PATCH`; shader references mark 196 patches `CONTENTS_SOLID`
 - Entity classes: regex over the entity lump → 540 entities, 34 classnames; per-map spawn / objective-trigger / WOLF-objective counts as tabulated in §2.5
+- ET:L compatibility: current ET:Legacy `qfiles.h` and `cm_load.c` checked directly → `IBSP` v47, the W2 record layouts, and separate `MST_PATCH` collision loading from surfaces + drawverts; all 20 local BSP entity lumps checked → zero `func_fakebrush`, with live custom-entity sources still unverified
 - `.objdata` / `.script` presence: checked per archive → present on all 13 available maps
 - Duplicate provision: `te_escape2` supplied by three pk3s; sha256 of each BSP compared → byte-identical
 
@@ -831,6 +858,24 @@ Checks added in rev 3, after review:
 Related: #556 (metric validity method), #560 (track linkage fix), #551 (open design review), `docs/PROXIMITY_VISION_AUDIT_2026-07.md`, `docs/DESIGN_SKILL_PASSPORT_2026-07.md`.
 
 ### Revision history
+
+**Rev 5 (2026-07-27)** — post-review closure for the 11 open #561 findings. Unanimity replaces mode selection for inferred clocks; capture capabilities gate optional evidence; LOS is oracle-only unless a recipient-confirmed event exists; killfeed state is downed/revivable; gunfire beliefs carry spatial uncertainty; P6 is unconditional; counterfactuals are chronological; navigation topology is a separate W4b deliverable; W2/W4 include ET:L patch collision and stance-adjusted eye rays; W5 separates the static stage graph from timestamped per-round state replay. Unknown data now propagates as `unknown`/`unavailable`/`indeterminate` rather than a guessed value.
+
+| #561 review finding | Closure in rev 5 |
+|---|---|
+| Unconfirmed LOS entered beliefs | LOS is oracle-only; a belief needs recipient-confirmed attention (§6.1) |
+| W2/W4 did not create navigable topology | Separate held-out-validated movement graph W4b (§5.6, §9) |
+| Static scripts did not locate historical transitions | Static graph + timestamped per-round replay, otherwise unknown (§7.4.1, W5) |
+| Missing gunfire capture looked like no gunfire | Per-round manifest gate; unknown/false makes dependants unavailable (§6.1–6.2) |
+| LOS endpoints were player origins | Stance-adjusted ET:L eye heights are mandatory (W4a) |
+| Curved patch collision was absent | W2 patch inputs + ET:L-compatible facets or indeterminate (W2, W4a) |
+| Sacrifice baseline saw future rounds | Prior-only/frozen corpus with chronological folds (§7.4.2) |
+| Obituary was treated as terminal death | Downed/revivable lifecycle with observed transitions (§6.1, §6.3) |
+| Gunfire used oracle coordinates | Region/distribution with growing spatial uncertainty (§6.3) |
+| Inconsistent clocks selected a mode | Entire group is null until independently explained (§5.3) |
+| P6 depended on one ranking delta | P6 is unconditional; oracle comparison is diagnostic only (§3.2, §6.4) |
+
+**Rev 4 (2026-07-27)** — W1/W2 implementation validation corrected two arithmetic errors in §2.5.1 and W4. The lump byte lengths were right, but the plane and brush estimates had used the wrong record sizes: `1,512,544 / 16 = 94,534` planes and `130,404 / 12 = 10,867` brushes. The strict reader also decoded all 20 unique BSPs in the 22-archive inventory as populated `IBSP` v47 files; this does not change the 13-map played-map coverage boundary. Owner review then raised the ET-vs-ET:L compatibility question: the current ET:Legacy `qfiles.h` confirms the same v47 layouts, while ET:L patch collision, runtime `func_fakebrush` and custom entity loading require expanded W2 inputs, purpose-specific masks and a live inventory gate.
 
 **Rev 3 (2026-07-27)** — review of rev 2 found **five further factual errors**, all of the same shape: a claim asserted from a read query without checking the write path or the helper's actual behaviour.
 
