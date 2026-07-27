@@ -82,6 +82,105 @@ class _LuaRoundStorageMixin:
         )
         return None
 
+    async def _reconcile_lua_exact_source(
+        self,
+        *,
+        match_id: str,
+        map_name: str,
+        round_number: int,
+        round_start_unix: int,
+    ) -> int | None:
+        """Link one exact Lua source to one exact round, or unlink the group."""
+        await self.db_adapter.execute(
+            """
+            WITH source_state AS (
+                SELECT COUNT(*) AS source_count
+                FROM lua_round_teams
+                WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM(?))
+                  AND round_number = ? AND round_start_unix = ?
+            ), target_state AS (
+                SELECT COUNT(*) AS target_count, MIN(id) AS target_id
+                FROM rounds
+                WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM(?))
+                  AND round_number = ? AND round_start_unix = ?
+            )
+            UPDATE lua_round_teams l
+            SET round_id = CASE
+                WHEN source_state.source_count = 1
+                 AND target_state.target_count = 1
+                    THEN target_state.target_id
+                ELSE NULL
+            END
+            FROM source_state, target_state
+            WHERE LOWER(BTRIM(l.map_name)) = LOWER(BTRIM(?))
+              AND l.round_number = ? AND l.round_start_unix = ?
+              AND l.round_id IS DISTINCT FROM CASE
+                  WHEN source_state.source_count = 1
+                   AND target_state.target_count = 1
+                      THEN target_state.target_id
+                  ELSE NULL
+              END
+            """,
+            (
+                map_name,
+                round_number,
+                round_start_unix,
+                map_name,
+                round_number,
+                round_start_unix,
+                map_name,
+                round_number,
+                round_start_unix,
+            ),
+        )
+
+        if await self._has_lua_spawn_stats_table():
+            await self.db_adapter.execute(
+                """
+                UPDATE lua_spawn_stats s
+                SET round_id = l.round_id
+                FROM lua_round_teams l
+                WHERE LOWER(BTRIM(l.map_name)) = LOWER(BTRIM(?))
+                  AND l.round_number = ? AND l.round_start_unix = ?
+                  AND s.match_id = l.match_id
+                  AND s.round_number = l.round_number
+                  AND LOWER(BTRIM(s.map_name))
+                        IS NOT DISTINCT FROM LOWER(BTRIM(l.map_name))
+                  AND s.round_id IS DISTINCT FROM l.round_id
+                """,
+                (map_name, round_number, round_start_unix),
+            )
+
+        row = await self.db_adapter.fetch_one(
+            "SELECT round_id FROM lua_round_teams "
+            "WHERE match_id = ? AND round_number = ? "
+            "  AND LOWER(BTRIM(map_name)) = LOWER(BTRIM(?))",
+            (match_id, round_number, map_name),
+        )
+        if not row:
+            return None
+        value = row[0] if isinstance(row, (list, tuple)) else row["round_id"]
+        return int(value) if value is not None else None
+
+    async def _resolve_lua_spawn_team_identity(
+        self,
+        *,
+        match_id: str,
+        map_name: str,
+        round_number: int,
+    ) -> tuple[bool, int | None]:
+        """Return the persisted team-row identity that spawn telemetry may use."""
+        row = await self.db_adapter.fetch_one(
+            "SELECT round_id FROM lua_round_teams "
+            "WHERE match_id = ? AND round_number = ? "
+            "  AND LOWER(BTRIM(map_name)) = LOWER(BTRIM(?))",
+            (match_id, round_number, map_name),
+        )
+        if not row:
+            return False, None
+        value = row[0] if isinstance(row, (list, tuple)) else row["round_id"]
+        return True, int(value) if value is not None else None
+
     async def _link_lua_round_teams(self, round_id: int, metadata: dict) -> None:
         """
         Link lua_round_teams rows to a round_id using map + round + time proximity.
@@ -388,16 +487,15 @@ class _LuaRoundStorageMixin:
             # Try to resolve round_id for direct linking (may be None if stats not imported yet)
             round_id = await self._resolve_lua_round_id_for_metadata(round_metadata)
             try:
+                exact_start_unix = int(round_metadata.get("round_start_unix") or 0)
+            except (TypeError, ValueError):
+                exact_start_unix = 0
+            has_exact_start = exact_start_unix > 0
+            inserted_round_id = None if has_exact_start else round_id
+            try:
                 fallback_round_number = int(round_number or 0)
             except (TypeError, ValueError):
                 fallback_round_number = 0
-            corr_match_id, corr_map_name, corr_round_number = await self._resolve_round_correlation_context(
-                round_id,
-                fallback_match_id=match_id,
-                fallback_map_name=map_name,
-                fallback_round_number=fallback_round_number,
-            )
-
             # Serialize team data as JSON
             axis_players = round_metadata.get('axis_players', [])
             allies_players = round_metadata.get('allies_players', [])
@@ -526,7 +624,7 @@ class _LuaRoundStorageMixin:
                 params = (
                     match_id,
                     round_number,
-                    round_id,
+                    inserted_round_id,
                     json.dumps(axis_players),
                     json.dumps(allies_players),
                     round_metadata.get('round_start_unix'),
@@ -576,7 +674,34 @@ class _LuaRoundStorageMixin:
                     lua_version,
                 )
 
-            await self.db_adapter.execute(query, params)
+            if has_round_id and has_exact_start:
+                # Serialize exact-source writers. The table lock is held on
+                # the transaction's pinned connection, so two payloads with
+                # different match_ids but the same source-native key cannot
+                # each observe themselves as the sole source and claim the
+                # same target round.
+                async with self.db_adapter.transaction():
+                    await self.db_adapter.execute(
+                        "LOCK TABLE lua_round_teams IN SHARE ROW EXCLUSIVE MODE"
+                    )
+                    await self.db_adapter.execute(query, params)
+                    round_id = await self._reconcile_lua_exact_source(
+                        match_id=match_id,
+                        map_name=map_name,
+                        round_number=fallback_round_number,
+                        round_start_unix=exact_start_unix,
+                    )
+            else:
+                await self.db_adapter.execute(query, params)
+
+            corr_match_id, corr_map_name, corr_round_number = (
+                await self._resolve_round_correlation_context(
+                    round_id,
+                    fallback_match_id=match_id,
+                    fallback_map_name=map_name,
+                    fallback_round_number=fallback_round_number,
+                )
+            )
 
             axis_count = len(axis_players)
             allies_count = len(allies_players)
@@ -635,11 +760,11 @@ class _LuaRoundStorageMixin:
 
             timestamp = datetime.fromtimestamp(round_end)  # noqa: DTZ006 — match_id format mirrors local-time strftime used by postgresql_database_manager and the CET-running game server
             match_id = timestamp.strftime('%Y-%m-%d-%H%M%S')
-            round_id = await self._resolve_lua_round_id_for_metadata(round_metadata)
-            try:
-                has_exact_start = int(round_metadata.get("round_start_unix") or 0) > 0
-            except (TypeError, ValueError):
-                has_exact_start = False
+            team_row_exists, round_id = await self._resolve_lua_spawn_team_identity(
+                match_id=match_id,
+                map_name=map_name,
+                round_number=int(round_number or 0),
+            )
 
             query = """
                 INSERT INTO lua_spawn_stats (
@@ -691,7 +816,7 @@ class _LuaRoundStorageMixin:
                         int(entry.get("dead_seconds") or 0),
                         int(entry.get("avg_respawn") or 0),
                         int(entry.get("max_respawn") or 0),
-                        has_exact_start,
+                        team_row_exists,
                     )
                 )
             if batch_params:

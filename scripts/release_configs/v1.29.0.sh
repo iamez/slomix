@@ -8,11 +8,10 @@
 # reconcile the legacy 045/050 ownership/object drift exactly as documented
 # in v1.28.0.sh, then run --validate.
 #
-# Migration 067 repairs only provable Lua round links. Run the guarded
-# scripts/repair_lua_round_links.py dry-run, run scripts/db_backup.sh, and pass
-# its verified manifest to --apply before deployment. Non-provable historical
-# links are preserved but quarantined by setting round_id to NULL; the
-# migration then enforces one Lua row per round.
+# Migration 067 refuses to run while any historical Lua repair action remains.
+# Run scripts/repair_lua_round_links.py in dry-run mode, run scripts/db_backup.sh,
+# and pass its verified manifest to the owner-only --apply before deployment.
+# The migration then verifies the clean state and enforces one Lua row per round.
 MIGRATIONS=(
   "045_drop_orphan_monitoring_tables.sql"
   "046_fix_proximity_round_id_exact_match.sql"
