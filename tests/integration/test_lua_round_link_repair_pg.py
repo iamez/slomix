@@ -238,6 +238,22 @@ async def test_lua_relinker_requires_one_exact_source_target(pg):
 
     await pg.execute(
         "INSERT INTO rounds (id, map_name, round_number, round_start_unix) "
+        "VALUES (4, 'supply', 1, 300)"
+    )
+    await pg.execute(
+        "INSERT INTO lua_round_teams "
+        "(id, match_id, round_number, map_name, round_start_unix, round_id) "
+        "VALUES (4, 'duplicate-source-a', 1, 'supply', 300, NULL), "
+        "       (5, 'duplicate-source-b', 1, 'SUPPLY', 300, NULL)"
+    )
+    await pg.execute(_RELINK_LUA_TEAMS_EXACT_TEMPLATE, "supply", 1, 300)
+    assert await pg.fetchval(
+        "SELECT COUNT(*) FROM lua_round_teams "
+        "WHERE round_start_unix = 300 AND round_id IS NOT NULL"
+    ) == 0
+
+    await pg.execute(
+        "INSERT INTO rounds (id, map_name, round_number, round_start_unix) "
         "VALUES (3, 'supply', 1, 200)"
     )
     await pg.execute(_RELINK_LUA_TEAMS_EXACT_TEMPLATE, "supply", 1, 200)
