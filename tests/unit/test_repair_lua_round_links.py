@@ -1,12 +1,42 @@
+# ruff: noqa: SLF001
+
 import hashlib
 from types import SimpleNamespace
+from unittest.mock import Mock
 
+import scripts.repair_lua_round_links as repair
 from scripts.repair_lua_round_links import (
     RepairAction,
     backup_manifest_problems,
     check_expectations,
     fingerprint_actions,
 )
+
+
+def test_sync_driver_receives_canonical_dbname(monkeypatch):
+    connect = Mock(return_value=object())
+    monkeypatch.setattr(repair, "_pg", SimpleNamespace(connect=connect))
+    monkeypatch.setattr(
+        repair,
+        "get_connection_kwargs",
+        lambda: {
+            "host": "db.example",
+            "port": 5432,
+            "database": "etlegacy",
+            "user": "etlegacy_user",
+            "password": "secret",
+        },
+    )
+
+    repair._connect()
+
+    connect.assert_called_once_with(
+        host="db.example",
+        port=5432,
+        dbname="etlegacy",
+        user="etlegacy_user",
+        password="secret",
+    )
 
 
 def test_action_fingerprint_is_stable_and_includes_quarantine():

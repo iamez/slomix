@@ -63,7 +63,9 @@ def _connect():
         raise SystemExit(
             "This script needs a PostgreSQL driver: pip install psycopg2-binary"
         )
-    return _pg.connect(**get_connection_kwargs())
+    connection_kwargs = get_connection_kwargs()
+    connection_kwargs["dbname"] = connection_kwargs.pop("database")
+    return _pg.connect(**connection_kwargs)
 
 
 def fingerprint_actions(actions: list[RepairAction]) -> str:
