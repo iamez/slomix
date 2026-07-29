@@ -195,6 +195,25 @@ class StandardFormatter(logging.Formatter):
         )
 
 
+class GroupWritableRotatingFileHandler(logging.handlers.RotatingFileHandler):
+    """RotatingFileHandler that re-applies 0660 after every rollover.
+
+    The one-time chmod in setup_logging() only fixes the file that already
+    exists at startup. doRollover() renames it aside and open()s a brand new
+    file using the process umask, which does NOT preserve that chmod — the
+    bot/web cross-process-group-write bug (see setup_logging()'s comment)
+    reappears the moment the file first rotates, not just on service
+    restart. Codex review on #568 caught this the one-time fix missed.
+    """
+
+    def doRollover(self) -> None:  # noqa: N802 - overriding stdlib's camelCase method name
+        super().doRollover()
+        try:
+            os.chmod(self.baseFilename, 0o660)  # nosec B103 # lgtm[py/overly-permissive-file] - group-write is intentional, see setup_logging()
+        except OSError:
+            pass
+
+
 # =============================================================================
 # Logger Setup
 # =============================================================================
@@ -247,7 +266,7 @@ def setup_logging(
 
     # Setup file handlers
     for config in LOG_FILES.values():
-        handler = logging.handlers.RotatingFileHandler(
+        handler = GroupWritableRotatingFileHandler(
             filename=LOG_DIR / config["filename"],
             maxBytes=config["max_bytes"],
             backupCount=config["backup_count"],

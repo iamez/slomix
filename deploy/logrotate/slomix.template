@@ -5,6 +5,14 @@ ${APP_DIR}/logs/*.log ${APP_DIR}/website/logs/*.log {
     compress
     delaycompress
     notifempty
+    # logrotate runs as root by default and refuses to touch logs whose
+    # parent directory is writable by a non-root group (setup_logging()
+    # makes ${APP_DIR}/logs 0770, group ${SLX_GROUP}) unless told to act as
+    # that user/group instead — the logrotate manual specifically
+    # recommends `su` for directories "directly or indirectly in control of
+    # non-privileged users". Without it, daily rotation silently no-ops on
+    # every file here (Codex review on #568).
+    su ${BOT_USER} ${SLX_GROUP}
     # 0660: the bot and web services run as different OS users sharing one
     # group (${BOT_USER}/${WEB_USER} in group ${SLX_GROUP}). 0640 leaves the
     # non-owning service with read-only access, which crash-looped the bot

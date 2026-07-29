@@ -5,6 +5,7 @@ Implements rotating file handlers, multiple log levels, and structured logging
 
 import logging
 import logging.handlers
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +13,32 @@ from pathlib import Path
 # Create logs directory if it doesn't exist
 LOGS_DIR = Path(__file__).parent.parent / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
+
+
+class GroupWritableRotatingFileHandler(logging.handlers.RotatingFileHandler):
+    """RotatingFileHandler that ensures errors.log stays 0660 across creation and rollover.
+
+    errors.log is the one file this process shares with website/backend's
+    own logging setup (both point at the same repo-root logs/errors.log).
+    In production the bot and web services run as different OS users
+    sharing one group (see slomix_vm_setup.sh BOT_USER/WEB_USER/SLX_GROUP),
+    so whichever service creates or rotates this file first must leave it
+    group-writable or the other one can't append to it — the root cause of
+    the 2026-07-13/2026-07-22 errors.log incidents. The process umask alone
+    (this handler's prior behavior) doesn't guarantee that, and rollover
+    creates a brand new file each time, so this has to run on every
+    creation/rollover, not just once at startup.
+    """
+
+    def _fix_permissions(self) -> None:
+        try:
+            os.chmod(self.baseFilename, 0o660)  # nosec B103 # lgtm[py/overly-permissive-file] - group-write is intentional, see class docstring
+        except OSError:
+            pass
+
+    def doRollover(self) -> None:  # noqa: N802 - overriding stdlib's camelCase method name
+        super().doRollover()
+        self._fix_permissions()
 
 # Custom formatter with more context
 class DetailedFormatter(logging.Formatter):
@@ -101,12 +128,13 @@ def setup_logging(log_level=logging.INFO):
     # ==================== ERROR LOG FILE ====================
     # Warnings, errors, and critical issues (WARNING+)
     error_log_file = LOGS_DIR / "errors.log"
-    error_file_handler = logging.handlers.RotatingFileHandler(
+    error_file_handler = GroupWritableRotatingFileHandler(
         error_log_file,
         maxBytes=50 * 1024 * 1024,  # 50MB (increased from 10MB)
         backupCount=3,  # Keep 3 backups (reduced from 5)
         encoding='utf-8'
     )
+    error_file_handler._fix_permissions()  # noqa: SLF001 - own subclass, fixing perms right after creation matters here
     error_file_handler.setLevel(logging.WARNING)  # Changed from ERROR to WARNING
     error_file_handler.setFormatter(DetailedFormatter(use_colors=False))
     root_logger.addHandler(error_file_handler)
