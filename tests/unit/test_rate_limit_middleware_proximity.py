@@ -11,6 +11,12 @@ from website.backend.middleware.rate_limit_middleware import RateLimitMiddleware
 MEASURED_CALLS_PER_PAGE_LOAD = 38
 
 
+async def _noop_asgi_app(scope, receive, send):
+    """Trivial ASGI callable — BaseHTTPMiddleware.__init__ expects a real
+    app, not None. Never invoked: these tests only exercise __init__'s
+    config parsing, not dispatch() (Copilot review on #579)."""
+
+
 def test_default_proximity_limit_covers_several_page_loads(monkeypatch):
     for var in (
         "RATE_LIMIT_PROXIMITY_REQUESTS_PER_WINDOW",
@@ -19,7 +25,7 @@ def test_default_proximity_limit_covers_several_page_loads(monkeypatch):
     ):
         monkeypatch.delenv(var, raising=False)
 
-    middleware = RateLimitMiddleware(app=None)
+    middleware = RateLimitMiddleware(app=_noop_asgi_app)
 
     assert middleware.proximity_limit >= MEASURED_CALLS_PER_PAGE_LOAD * 10, (
         "proximity_limit should comfortably cover 10+ full page loads per "
@@ -29,5 +35,5 @@ def test_default_proximity_limit_covers_several_page_loads(monkeypatch):
 
 def test_proximity_limit_env_override_still_works(monkeypatch):
     monkeypatch.setenv("RATE_LIMIT_PROXIMITY_REQUESTS_PER_WINDOW", "999")
-    middleware = RateLimitMiddleware(app=None)
+    middleware = RateLimitMiddleware(app=_noop_asgi_app)
     assert middleware.proximity_limit == 999

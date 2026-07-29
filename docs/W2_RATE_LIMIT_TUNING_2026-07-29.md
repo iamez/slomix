@@ -17,8 +17,8 @@ grep -F "2026-07-19 09:51:19" logs/access.log | grep "→ GET /api/proximity" | 
 # 38
 ```
 
-38 distinct `/api/proximity/*` endpoints fire (see the full list in the
-`git log` for this file) within the same second for a single proximity page
+38 distinct `/api/proximity/*` endpoints fire (full list below) within the
+same second for a single proximity page
 load — `scopes`, `summary`, `quality`, `engagements`, `hotzones`, `movers`,
 `teamplay`, `classes`, `reactions`, `events`, `trades/summary`,
 `trades/events`, `spawn-timing`, `cohesion`, `crossfire-angles`, `pushes`,
