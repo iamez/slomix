@@ -26,10 +26,20 @@ TIMESTAMP | LEVEL | access | dispatch:LINENO | → METHOD /path                 
 TIMESTAMP | LEVEL | access | dispatch:LINENO | ← METHOD /path → STATUS (Xms)         (response)
 ```
 
-Search by path and the timestamp from the paste:
+Search by path and the timestamp from the paste. The separator differs by formatter — the
+default plain-text `StandardFormatter` writes `2026-07-29 14:20:...` (space), but the optional
+JSON formatter (`LOG_FORMAT_JSON=true`) writes ISO-8601 (`2026-07-29T14:20:...`, `T` separator)
+— a space-separated grep against a JSON-formatted log matches nothing even though the record is
+there:
 
 ```bash
+# StandardFormatter (default)
 grep -F "/api/proximity/prox-scores" logs/access.log | grep "2026-07-29 14:2"
+
+# JSON formatter (LOG_FORMAT_JSON=true) — note the "T", and the path is inside a JSON string
+# field rather than free text, so grep -F on the path still works but the timestamp grep needs
+# the ISO form
+grep -F "/api/proximity/prox-scores" logs/access.log | grep "2026-07-29T14:2"
 ```
 
 **This pairing doesn't cover every request.** `QUIET_PATHS`
@@ -63,7 +73,8 @@ something's misconfigured.
 ## Step 2 — find the traceback in `logs/errors.log`
 
 ```bash
-# active file
+# active file (StandardFormatter — default; use "2026-07-29T14:2" instead if
+# LOG_FORMAT_JSON=true, same separator difference as Step 1)
 grep -B2 -A40 "2026-07-29 14:2" logs/errors.log
 # rotated backups too — RotatingFileHandler keeps 10 (errors.log.1 .. .10);
 # a traceback that rotated out of the active file may still be in one of these
@@ -102,10 +113,27 @@ always why).
 ## Step 4 — reproduce
 
 ```bash
-cd website && venv/bin/uvicorn backend.main:app --reload   # must run from website/ — backend
-                                                             # is a package under it, not repo root
-curl -s -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:8000/api/proximity/prox-scores?<params-if-known>'
+# Terminal A — the documented local setup (docs/RUNBOOK_LOCAL_LINUX.md) creates a single
+# venv/ at the repo root, not one under website/ — so from website/ it's ../venv/bin/uvicorn,
+# not venv/bin/uvicorn (some boxes additionally have a website/venv from a different setup
+# path; if `../venv/bin/uvicorn` doesn't exist on yours, check which one your box actually has).
+cd website && ../venv/bin/uvicorn backend.main:app --reload   # must run from website/ — backend
+                                                                # is a package under it, not repo root
+# leave this running in the foreground — it doesn't return until stopped
 ```
+
+```bash
+# Terminal B — uvicorn above never returns, so run the request from a second shell (or
+# background/nohup it from the first and wait for the "Application startup complete" line)
+curl -s -w '\n%{http_code}\n' 'http://127.0.0.1:8000/api/proximity/prox-scores?<params-if-known>'
+```
+
+Deliberately **not** `-o /dev/null`: a FastAPI validation error (bad/missing query param) is a
+handled response, not an exception — Step 2 already notes several 500 paths raise
+`HTTPException` without logging anything, and a validation failure is the same shape one level
+earlier (a 422 that never reaches `logger.error` at all). Its `detail` field, which names the
+exact missing/invalid parameter, only exists in the response body — discarding it with
+`-o /dev/null` throws away the one piece of diagnostic information a request like that has.
 
 Run against the local dev backend, not production. If you don't know the query params (common
 — see Step 1), try the endpoint bare first, then with whatever params the page under
@@ -126,7 +154,9 @@ $ grep -F "FB0EC84076637A9F55D579085A3225C4" logs/access.log
 No query string needed here (the guid is in the path), traceback had already rotated out of
 `errors.log` (and its backups) by 2026-07-29, so the next step was reading tracked code +
 a live replay — see `docs/W1_500_TRIAGE_2026-07-29.md` for the full result (a diagnosed,
-already-fixed dev-process-staleness cause, not a live bug).
+already-fixed dev-process-staleness cause, not a live bug). That doc is task W1's own
+deliverable, from a companion PR in this same backlog sweep — if you're reading this before
+that PR has merged, the file won't be in this tree yet; it will be once both land on `main`.
 
 ## Closing the gap long-term
 
