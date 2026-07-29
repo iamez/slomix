@@ -28,7 +28,7 @@ actual edit is an owner-gated `crontab -e` on this box.
 | Entry | Keep? | Reason |
 |---|---|---|
 | `0 3 * * * check-security.sh` | **Keep** | Daily production security check. |
-| `15 4 */4 * * backup_etlegacy.sh` | **Keep** | Production backup. **Not** a strict every-4-days interval: cron's `*/4` on the day-of-month field steps through days 1, 5, 9, …, 29 and resets each month, so the actual gap is usually 4 days but drops to as little as 2 at a month boundary (e.g. day 29 → day 1 of the next month). Described accurately here so nobody relies on a strict 4-day guarantee this schedule doesn't provide. |
+| `15 4 */4 * * backup_etlegacy.sh` | **Keep** | Production backup. **Not** a strict every-4-days interval: cron's `*/4` on the day-of-month field steps through days 1, 5, 9, …, 29 and resets each month, so the actual gap is usually 4 days but shrinks at month boundaries — most months (28/30/31 days) the day-29→day-1 wrap is a 2-4 day gap, but in a **leap-year February** day 29 exists (e.g. 2028-02-29), and the very next scheduled day is 2028-03-01 — a 1-day gap, the shortest this schedule ever produces. Described accurately here so nobody relies on a strict 4-day guarantee this schedule doesn't provide. |
 | 5 already-commented lines (2 `# ... REMOVE AFTER USE` header comments + 3 commented-out cron entries below them) | **Remove** | Already inert (leading `#`), pure clutter. Harmless but should go with the rest of this cleanup. |
 | `0 18 28 2 * tmux ... "please continue" ...` | **Remove** | Uncommented one-off from a Feb 2026 Claude session, never marked done. Cron's `day-of-month 28, month February` fires **every year in February**, not just once — left as-is it will silently re-fire in February 2027 against a `tmux` session (`-t 0`) that almost certainly won't exist by then, so it is a no-op today but not intentionally so. |
 | `37 15 25 2 * ... codex-reset ...` | **Remove** | Same pattern: uncommented one-off spinning up a `codex` read-only audit session on Feb 25, same yearly-recurrence footgun. Also embeds a long inline prompt in crontab, which is awkward to maintain regardless. |
@@ -45,15 +45,25 @@ Both "remove" one-offs are un-commented (unlike their siblings), so nothing curr
 
 ## Owner-gated step (not performed by this PR)
 
+All entries above (paths under `/home/samba/...`, `backup_etlegacy.sh` owned
+by `/home/samba/backups/`) belong to the **`samba`** user's crontab, not
+root's or any other account's. `crontab -e`/`crontab -l` operate on the
+*calling* user's table with no confirmation of whose table that is — if the
+owner runs this as root or another account instead, both the edit and the
+verification below silently apply to the wrong (empty or unrelated) table
+while these February jobs stay installed under `samba`. Be explicit:
+
 ```bash
-crontab -e   # remove all 7 lines identified above (5 already-commented clutter
-             # + 2 uncommented Feb one-offs), keep the 2 production lines
+crontab -e -u samba   # remove all 7 lines identified above (5 already-commented
+                       # clutter + 2 uncommented Feb one-offs), keep the 2
+                       # production lines. Run as `samba` or as root with
+                       # -u samba — NOT as root's own bare `crontab -e`.
 ```
 
 ## Verify
 
 ```bash
-crontab -l   # no Feb-dated one-offs, no commented "REMOVE AFTER USE" clutter;
-             # check-security.sh (daily) and backup_etlegacy.sh (day-of-month
-             # 1/5/9/.../29 schedule, see cadence note above) unchanged
+crontab -l -u samba   # no Feb-dated one-offs, no commented "REMOVE AFTER USE" clutter;
+                       # check-security.sh (daily) and backup_etlegacy.sh (day-of-month
+                       # 1/5/9/.../29 schedule, see cadence note above) unchanged
 ```
