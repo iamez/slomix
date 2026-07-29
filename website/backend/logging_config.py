@@ -265,7 +265,7 @@ def setup_logging(
         log_file = LOG_DIR / config["filename"]
         if log_file.exists():
             try:
-                os.chmod(log_file, 0o660)
+                os.chmod(log_file, 0o660)  # nosec B103 # lgtm[py/overly-permissive-file] - group-write is intentional here, see comment above
             except OSError:
                 pass
 
