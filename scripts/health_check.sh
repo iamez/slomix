@@ -14,7 +14,17 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || exit 1
+
+# Private temp directory for command output capture, not predictable
+# /tmp/health_check_*.out paths: when this script runs with elevated
+# privileges, another local user could pre-create a predictable path as a
+# symlink, and the privileged `>` redirect would truncate whatever it points
+# at before this script ever writes anything (Codex P1 review on #580).
+# mktemp -d creates it 0700, owner-only, so no other local user can even
+# traverse into it.
+HEALTH_CHECK_TMPDIR="$(mktemp -d -t health_check.XXXXXXXXXX)"
+trap 'rm -rf "$HEALTH_CHECK_TMPDIR"' EXIT
 
 FAIL_COUNT=0
 WARN_COUNT=0
@@ -34,35 +44,51 @@ section "1. Services"
 # services (etlegacy-bot/etlegacy-web here vs slomix-bot/slomix-web per
 # CLAUDE.md) — check both spellings, WARN (not FAIL) if neither systemd unit
 # exists at all, since some hosts run these under `screen` instead.
+# Check EVERY candidate before deciding, not just the first installed one:
+# a host that migrated from etlegacy-bot to slomix-bot (or vice versa) can
+# have BOTH units installed with only one actually active — breaking on the
+# first installed candidate can report FAIL on a stale inactive alias while
+# the real, active service goes unchecked (Codex review on #580).
 check_service_pair() {
     local label="$1"; shift
     local candidates=("$@")
-    local found=0
+    local any_installed=0
     for name in "${candidates[@]}"; do
-        if systemctl list-unit-files "${name}.service" >/dev/null 2>&1 \
-            && systemctl list-unit-files "${name}.service" 2>/dev/null | grep -q "${name}.service"; then
-            found=1
+        if systemctl list-unit-files "${name}.service" 2>/dev/null | grep -q "${name}.service"; then
+            any_installed=1
             if systemctl is-active --quiet "$name"; then
                 ok "$label ($name) active"
-            else
-                fail "$label ($name) not active: $(systemctl is-active "$name" 2>&1)"
+                return
             fi
-            break
         fi
     done
-    if [[ "$found" -eq 0 ]]; then
+    if [[ "$any_installed" -eq 1 ]]; then
+        fail "$label: installed unit(s) found (${candidates[*]}) but none active"
+    else
         warn "$label: no matching systemd unit found (checked: ${candidates[*]}) — may run under screen/manual process"
     fi
 }
 check_service_pair "bot" etlegacy-bot slomix-bot
 check_service_pair "web" etlegacy-web slomix-web
-for svc in postgresql redis-server tailscaled fail2ban smbd; do
-    # postgresql on this project is often versioned (postgresql@14-main) —
-    # try the bare name first, then the most common versioned form.
+# postgresql is versioned (postgresql@14-main in dev, @17-main in production
+# per CLAUDE.md) — discover whichever cluster unit is actually active rather
+# than hardcoding one version (Copilot review on #580).
+if systemctl is-active --quiet postgresql 2>/dev/null; then
+    ok "postgresql active"
+else
+    pg_unit="$(systemctl list-units --all --plain --no-legend 'postgresql@*-main.service' 2>/dev/null \
+        | awk '{print $1}' | head -1)"
+    if [[ -n "$pg_unit" ]] && systemctl is-active --quiet "$pg_unit" 2>/dev/null; then
+        ok "$pg_unit active"
+    elif [[ -n "$pg_unit" ]]; then
+        fail "$pg_unit not active: $(systemctl is-active "$pg_unit" 2>&1)"
+    else
+        warn "postgresql: no matching systemd unit found (postgresql or postgresql@*-main)"
+    fi
+fi
+for svc in redis-server tailscaled fail2ban smbd; do
     if systemctl is-active --quiet "$svc" 2>/dev/null; then
         ok "$svc active"
-    elif systemctl is-active --quiet "postgresql@14-main" 2>/dev/null && [[ "$svc" == "postgresql" ]]; then
-        ok "postgresql@14-main active"
     else
         status="$(systemctl is-active "$svc" 2>&1)"
         if [[ "$status" == "unknown" || "$status" == "could not"* ]]; then
@@ -100,9 +126,13 @@ else
         warn "website port: neither 7000 nor 8000 listening"
     fi
 
-    # Anything bound to 0.0.0.0/:: other than the website's own port is worth
-    # a second look — this project's own history includes ufw rules
-    # accidentally left open to Anywhere.
+    # Every listener bound to all interfaces (0.0.0.0/::), including the
+    # website's own port, is surfaced as a WARN for a human to eyeball —
+    # this project's own history includes ufw rules accidentally left open
+    # to Anywhere, and the website itself binding 0.0.0.0 instead of
+    # 127.0.0.1 would be exactly the kind of thing worth catching here, not
+    # excluding (Copilot review on #580: the comment previously implied an
+    # exclusion the code never implemented).
     EXPOSED="$(echo "$LISTENING" | grep -E '0\.0\.0\.0:|(\*|\[::\]):' || true)"
     if [[ -n "$EXPOSED" ]]; then
         while IFS= read -r line; do
@@ -149,6 +179,12 @@ else
 fi
 
 if command -v curl >/dev/null 2>&1; then
+    # If NEITHER base answers at all (both 000), that's a full API outage,
+    # not "wrong port for this box" — must FAIL, not silently skip (Codex
+    # review on #580: a screen/manual-process setup, or a systemd unit that
+    # stays active but stops listening, would otherwise report nothing
+    # wrong here at all).
+    any_base_answered=0
     for path in /health /api/status; do
         for base in "http://127.0.0.1:8000" "http://127.0.0.1:7000"; do
             # curl's -w already prints "000" on connection failure regardless
@@ -158,13 +194,18 @@ if command -v curl >/dev/null 2>&1; then
             code="${code:0:3}"
             if [[ "$code" =~ ^(200|304)$ ]]; then
                 ok "${base}${path} -> $code"
+                any_base_answered=1
             elif [[ "$code" == "000" || -z "$code" ]]; then
                 : # this base isn't the one running on this box — silent skip
             else
                 fail "${base}${path} -> $code"
+                any_base_answered=1
             fi
         done
     done
+    if [[ "$any_base_answered" -eq 0 ]]; then
+        fail "no response from either API base (127.0.0.1:8000 or :7000) on /health or /api/status — full outage or wrong ports"
+    fi
 else
     warn "curl not available, skipping API probe"
 fi
@@ -196,8 +237,20 @@ if [[ -d logs ]]; then
     STALE_FOUND=0
     while IFS= read -r -d '' f; do
         perms="$(stat -c '%a' "$f" 2>/dev/null || stat -f '%Lp' "$f" 2>/dev/null)"
-        if [[ "$perms" == "640" ]]; then
-            warn "log permission 0640 (should be 0660, blocks the other service's OS user): $f"
+        # client_errors.log is deliberately owner-only (0600, single writer -
+        # see website/backend/logging_config.py's OwnerOnlyRotatingFileHandler);
+        # every other *.log file needs group-write (0660) for bot/web
+        # cross-process access. Reject ANY other mode, not just the one
+        # specific 0640 value previously seen - 0644/0666 would silently
+        # pass the old check despite exposing logs or permitting unintended
+        # writes (Codex P2 review on #580).
+        if [[ "$(basename "$f")" == "client_errors.log" ]]; then
+            expected="600"
+        else
+            expected="660"
+        fi
+        if [[ "$perms" != "$expected" ]]; then
+            warn "log permission 0$perms (expected 0$expected): $f"
         fi
         if [[ -x "$f" ]]; then
             warn "log has executable bit set (likely accidental): $f"
@@ -224,14 +277,32 @@ section "6. Error rate (24h)"
 if [[ -f logs/errors.log ]]; then
     CUTOFF="$(date -d '24 hours ago' '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date -v-24H '+%Y-%m-%d %H:%M:%S' 2>/dev/null)"
     if [[ -n "$CUTOFF" ]]; then
-        COUNT=$(awk -v cutoff="$CUTOFF" '$0 >= cutoff' logs/errors.log 2>/dev/null | grep -cE '\| (ERROR|CRITICAL) *\|' || true)
-        COUNT="${COUNT:-0}"
+        # Rotated backups too (errors.log.1 .. .N, RotatingFileHandler on both
+        # bot and website) — right after a high-volume error burst triggers
+        # rotation, most/all of the last 24h can be in .1 while the fresh
+        # active file looks empty (Codex review on #580). Both the
+        # pipe-delimited plain-text format (StandardFormatter/DetailedFormatter,
+        # default) and the JSON format (LOG_FORMAT_JSON=true) are supported —
+        # JSON records have no "| ERROR |" substring at all.
+        COUNT=0
+        for f in logs/errors.log logs/errors.log.*; do
+            [[ -f "$f" ]] || continue
+            plain=$(awk -v cutoff="$CUTOFF" '$0 >= cutoff' "$f" 2>/dev/null | grep -cE '\| (ERROR|CRITICAL) *\|' || true)
+            # NOTE: the JSON count below is whole-file, not 24h-scoped — JSON
+            # records start with "{", not a sortable timestamp, so the same
+            # awk cutoff trick doesn't apply without a JSON-aware timestamp
+            # parser (jq). Acceptable for now: LOG_FORMAT_JSON is off by
+            # default, and an inflated (whole-file) count only ever produces
+            # a false WARN/FAIL, never a false OK.
+            json=$(grep -cE '"level"[[:space:]]*:[[:space:]]*"(ERROR|CRITICAL)"' "$f" 2>/dev/null || true)
+            COUNT=$((COUNT + ${plain:-0} + ${json:-0}))
+        done
         if [[ "$COUNT" -gt 100 ]]; then
-            fail "$COUNT ERROR/CRITICAL lines in errors.log in the last 24h (threshold 100)"
+            fail "$COUNT ERROR/CRITICAL lines in errors.log(+rotations) in the last 24h (threshold 100)"
         elif [[ "$COUNT" -gt 20 ]]; then
-            warn "$COUNT ERROR/CRITICAL lines in errors.log in the last 24h (threshold 20)"
+            warn "$COUNT ERROR/CRITICAL lines in errors.log(+rotations) in the last 24h (threshold 20)"
         else
-            ok "$COUNT ERROR/CRITICAL lines in errors.log in the last 24h"
+            ok "$COUNT ERROR/CRITICAL lines in errors.log(+rotations) in the last 24h"
         fi
     else
         warn "could not compute 24h cutoff (date command mismatch), skipping error-rate check"
@@ -243,16 +314,31 @@ fi
 # ===========================================================================
 # 7. Migration validation
 # ===========================================================================
+# Canonical VM (slomix_vm_setup.sh) provisions venv-bot/venv-web at the repo
+# root; dev boxes commonly use venv/ + website/venv instead. Check the
+# canonical names FIRST — falling back to a bare `venv` on a canonical VM
+# silently picks a dependency-less system interpreter and produces false
+# FAILs on both this section and the next (Codex P1 review on #580).
+find_python() {
+    local override="$1" candidate
+    if [[ -n "$override" && -x "$override" ]]; then
+        echo "$override"; return
+    fi
+    for candidate in venv-bot/bin/python venv/bin/python; do
+        if [[ -x "$candidate" ]]; then echo "$candidate"; return; fi
+    done
+    echo "python3"
+}
+
 section "7. Migrations"
 if [[ -f scripts/apply_migrations.py ]]; then
-    PYTHON_BIN="${HEALTH_CHECK_PYTHON:-venv/bin/python}"
-    [[ -x "$PYTHON_BIN" ]] || PYTHON_BIN="python3"
-    if "$PYTHON_BIN" scripts/apply_migrations.py --validate >/tmp/health_check_migrations.out 2>&1; then
+    PYTHON_BIN="$(find_python "${HEALTH_CHECK_PYTHON:-}")"
+    OUT="$HEALTH_CHECK_TMPDIR/migrations.out"
+    if "$PYTHON_BIN" scripts/apply_migrations.py --validate >"$OUT" 2>&1; then
         ok "apply_migrations.py --validate: clean"
     else
-        fail "apply_migrations.py --validate: $(tail -3 /tmp/health_check_migrations.out | tr '\n' ' ')"
+        fail "apply_migrations.py --validate: $(tail -3 "$OUT" | tr '\n' ' ')"
     fi
-    rm -f /tmp/health_check_migrations.out
 else
     warn "scripts/apply_migrations.py not found, skipping"
 fi
@@ -262,28 +348,33 @@ fi
 # ===========================================================================
 section "8. Environment drift"
 if [[ -f scripts/check_env.py ]]; then
-    if [[ -x venv/bin/python ]]; then
-        if venv/bin/python scripts/check_env.py --requirements requirements.txt >/tmp/health_check_env_bot.out 2>&1; then
-            ok "check_env.py clean for venv/ (bot)"
+    BOT_PY="$(find_python "" )"
+    if [[ -x "venv-bot/bin/python" || -x "venv/bin/python" ]]; then
+        OUT="$HEALTH_CHECK_TMPDIR/env_bot.out"
+        if "$BOT_PY" scripts/check_env.py --requirements requirements.txt >"$OUT" 2>&1; then
+            ok "check_env.py clean for $BOT_PY (bot)"
         else
-            warn "check_env.py drift in venv/ (bot): $(tail -3 /tmp/health_check_env_bot.out | tr '\n' ' ')"
+            warn "check_env.py drift for $BOT_PY (bot): $(tail -3 "$OUT" | tr '\n' ' ')"
         fi
-        rm -f /tmp/health_check_env_bot.out
     else
-        warn "venv/bin/python not found, skipping bot venv check"
+        warn "no bot venv found (checked venv-bot/, venv/), skipping bot env check"
     fi
-    if [[ -x website/venv/bin/python ]]; then
-        if website/venv/bin/python scripts/check_env.py --requirements website/requirements.txt >/tmp/health_check_env_web.out 2>&1; then
-            ok "check_env.py clean for website/venv/ (web)"
+    WEB_PY=""
+    for candidate in venv-web/bin/python website/venv/bin/python; do
+        if [[ -x "$candidate" ]]; then WEB_PY="$candidate"; break; fi
+    done
+    if [[ -n "$WEB_PY" ]]; then
+        OUT="$HEALTH_CHECK_TMPDIR/env_web.out"
+        if "$WEB_PY" scripts/check_env.py --requirements website/requirements.txt >"$OUT" 2>&1; then
+            ok "check_env.py clean for $WEB_PY (web)"
         else
-            warn "check_env.py drift in website/venv/ (web): $(tail -3 /tmp/health_check_env_web.out | tr '\n' ' ')"
+            warn "check_env.py drift for $WEB_PY (web): $(tail -3 "$OUT" | tr '\n' ' ')"
         fi
-        rm -f /tmp/health_check_env_web.out
     else
-        warn "website/venv/bin/python not found, skipping web venv check"
+        warn "no web venv found (checked venv-web/, website/venv/), skipping web env check"
     fi
 else
-    warn "scripts/check_env.py not found, skipping (see docs/TASKS_FOR_SONNET_2026-07-29.md M4)"
+    warn "scripts/check_env.py not found, skipping"
 fi
 
 # ===========================================================================
@@ -291,14 +382,16 @@ fi
 # ===========================================================================
 section "9. Round linkage"
 if [[ -f scripts/check_round_linkage_anomalies.py ]]; then
-    PYTHON_BIN="${HEALTH_CHECK_PYTHON:-venv/bin/python}"
-    [[ -x "$PYTHON_BIN" ]] || PYTHON_BIN="python3"
-    if "$PYTHON_BIN" scripts/check_round_linkage_anomalies.py >/tmp/health_check_linkage.out 2>&1; then
+    PYTHON_BIN="$(find_python "${HEALTH_CHECK_PYTHON:-}")"
+    OUT="$HEALTH_CHECK_TMPDIR/linkage.out"
+    # --fail-on-breach: without it the script exits 0 even when its own
+    # result contains threshold breaches, so this check would report OK on a
+    # database that's actually over threshold (Codex P1 review on #580).
+    if "$PYTHON_BIN" scripts/check_round_linkage_anomalies.py --fail-on-breach >"$OUT" 2>&1; then
         ok "round-linkage anomalies within thresholds"
     else
-        fail "round-linkage anomalies over threshold: $(tail -5 /tmp/health_check_linkage.out | tr '\n' ' ')"
+        fail "round-linkage anomalies over threshold: $(tail -5 "$OUT" | tr '\n' ' ')"
     fi
-    rm -f /tmp/health_check_linkage.out
 elif command -v curl >/dev/null 2>&1; then
     for base in "http://127.0.0.1:8000" "http://127.0.0.1:7000"; do
         code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "${base}/diagnostics/round-linkage" 2>/dev/null)"

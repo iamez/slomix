@@ -85,3 +85,47 @@ OK=24 WARN=29 FAIL=0
 $ echo $?
 0
 ```
+
+## Addendum — Codex/Copilot review fixes (#580)
+
+9 findings, 3 of them P1s that would have made the script report healthy
+during a real incident:
+
+- **P1 — round-linkage always "OK"**: `check_round_linkage_anomalies.py`
+  needs `--fail-on-breach` to exit non-zero on a breach at all; without it,
+  the script always exits 0 regardless of its own findings. Added the flag.
+- **P1 — predictable `/tmp/health_check_*.out` paths**: a symlink
+  pre-planted at one of those paths by another local user would have the
+  privileged `>` redirect truncate whatever it points at. Replaced with a
+  private `mktemp -d` (0700) directory, cleaned up via `trap ... EXIT`.
+- **P1 — venv discovery picked a dependency-less system Python on the
+  canonical VM**: the VM provisions `venv-bot`/`venv-web`
+  (`slomix_vm_setup.sh`), not `venv`/`website/venv` — the dev-box-only
+  names. Sections 7-9 now check the canonical names first.
+- Postgres service check only recognized `postgresql@14-main`; production
+  runs 17. Now discovers whichever `postgresql@*-main.service` is active.
+- The 0.0.0.0-exposure comment claimed an exclusion for the website port
+  that the code never implemented — fixed the comment to match the actual
+  (intentional) behavior of warning on every all-interfaces listener.
+- Neither API base answering (full outage, or `screen`/manual-process setup
+  that stopped listening) previously produced no signal at all — now FAILs
+  explicitly.
+- Log permission check only flagged exactly `0640`; `0644`/`0600`/`0666`
+  passed silently despite being wrong in different ways. Now compares
+  against the correct expected mode per file (`0600` for
+  `client_errors.log`, `0660` for everything else) and flags any mismatch.
+- Service alias check broke on the first *installed* candidate even if
+  inactive, missing a genuinely-active alias checked later in the list. Now
+  checks all candidates before deciding.
+- 24h error count only scanned the active `errors.log`, missing anything
+  already rotated into `.1`+, and only recognized the pipe-delimited
+  format, missing `LOG_FORMAT_JSON=true` records entirely. Both fixed
+  (JSON count is whole-file, not 24h-scoped — noted as a known limitation
+  in the script, since JSON records don't start with a sortable timestamp
+  and it's off by default anyway).
+
+Re-verified live after all fixes: `OK=24 WARN=38 FAIL=0`, exit 0. Disk
+induced-FAIL and mktemp cleanup re-confirmed; `--fail-on-breach` confirmed
+passed through (no live breach to trigger on this box's current data, so the
+FAIL path itself relies on the flag's own documented behavior rather than a
+fresh repro here).
