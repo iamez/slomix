@@ -89,7 +89,11 @@ package; the `/etc/openvpn/` config directory would need a separate explicit `rm
 purge doesn't always clear third-party-managed config trees.
 
 ## Verify (after owner executes either step)
+
+Same `~`-expansion caveat as the deletion command above — verify with the
+absolute path, not `~`, so this actually checks `/home/samba/.ssh` and not
+whatever account's home the verifying shell happens to be:
 ```bash
-ls ~/.ssh/            # autorized_keys (typo) gone, authorized_keys + the two old RSA keys untouched
+ls /home/samba/.ssh/    # autorized_keys (typo) gone, authorized_keys + the two old RSA keys untouched
 dpkg -l | grep openvpn  # only if the owner confirmed removal
 ```
