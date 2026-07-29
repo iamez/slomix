@@ -218,11 +218,17 @@ def setup_logging(
     # Create log directory with secure permissions
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Set directory permissions to owner-only (rwx — the x bit is required to
-    # traverse the directory); logs may contain request metadata, so deny
-    # group/other access.
+    # Set directory permissions to owner+group (rwx — the x bit is required
+    # to traverse the directory); logs may contain request metadata, so deny
+    # "other" access. Group access is required: the bot and web services run
+    # as different OS users sharing one group (see slomix_vm_setup.sh
+    # BOT_USER/WEB_USER/SLX_GROUP) and both need to create/rotate files in
+    # this directory. Owner-only (0700) locks the other service out the next
+    # time it needs to open a fresh or rotated file — this caused two
+    # production incidents (2026-07-13, 2026-07-22: errors.log permission
+    # bug crash-looped the bot).
     try:
-        os.chmod(LOG_DIR, stat.S_IRWXU)
+        os.chmod(LOG_DIR, stat.S_IRWXU | stat.S_IRWXG)
     except OSError:
         pass  # May fail on some systems, continue anyway
 
@@ -251,11 +257,15 @@ def setup_logging(
         handler.setFormatter(file_formatter)
         handler.addFilter(security_filter)
 
-        # Set file permissions (owner read/write only)
+        # Set file permissions (owner+group read/write). 0640 (group
+        # read-only) blocks the bot service — a different OS user in the
+        # same group — from writing/rotating this file once the web service
+        # touches it, which is the root cause of the 2026-07-13 and
+        # 2026-07-22 errors.log permission incidents.
         log_file = LOG_DIR / config["filename"]
         if log_file.exists():
             try:
-                os.chmod(log_file, 0o640)
+                os.chmod(log_file, 0o660)
             except OSError:
                 pass
 

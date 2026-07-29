@@ -1004,18 +1004,15 @@ info "  sudo systemctl start slomix-bot slomix-web"
 # Logrotate — prevent logs from filling the disk
 # ===========================================================================
 info "Configuring logrotate for application logs"
-cat > /etc/logrotate.d/slomix <<EOF
-${APP_DIR}/logs/*.log ${APP_DIR}/website/logs/*.log {
-    daily
-    missingok
-    rotate 14
-    compress
-    delaycompress
-    notifempty
-    create 0640 ${BOT_USER} ${SLX_GROUP}
-    sharedscripts
-}
-EOF
+# Template lives in deploy/logrotate/slomix.template so it stays diffable
+# and lintable outside this heredoc; substitute the same vars used above.
+LOGROTATE_TEMPLATE="$(dirname "${BASH_SOURCE[0]}")/deploy/logrotate/slomix.template"
+sed \
+  -e "s|\${APP_DIR}|${APP_DIR}|g" \
+  -e "s|\${BOT_USER}|${BOT_USER}|g" \
+  -e "s|\${WEB_USER}|${WEB_USER}|g" \
+  -e "s|\${SLX_GROUP}|${SLX_GROUP}|g" \
+  "${LOGROTATE_TEMPLATE}" > /etc/logrotate.d/slomix
 
 # ===========================================================================
 # Cloudflare Tunnel — install binary + create system user (config in Phase 3)
