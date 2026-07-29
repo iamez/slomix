@@ -23,19 +23,36 @@ for (const route of ROUTES) {
         consoleErrors.push(msg.text());
       }
     });
+    // Uncaught exceptions surface here, not via console — a route that
+    // throws without calling console.error (e.g. mid-loader, after the
+    // legacy section's pre-rendered text is already visible) would
+    // otherwise slip past the consoleErrors check entirely.
+    page.on('pageerror', (error) => {
+      consoleErrors.push(`pageerror: ${error.message}`);
+    });
     page.on('requestfailed', (request) => {
       failedRequests.push(`${request.method()} ${request.url()} — ${request.failure()?.errorText}`);
     });
     page.on('response', (response) => {
       // 401/403 on auth-dependent calls (e.g. /auth/me for a logged-out
-      // smoke run) are expected, not a page failure — only flag 5xx, which
-      // is what W1 (500 triage) and this test exist to catch together.
-      if (response.status() >= 500) {
-        failedRequests.push(`${response.request().method()} ${response.url()} -> ${response.status()}`);
+      // smoke run) are expected, not a page failure — those two are the
+      // only statuses under 500 that get a pass. A 404 is not expected:
+      // loadScopedProximityData() swallows a 404 from /api/proximity/summary
+      // and renders a nonempty fallback message without a console error, so
+      // treating "below 500" as "fine" let a broken endpoint through silently.
+      const status = response.status();
+      if (status >= 500 || (status >= 400 && status !== 401 && status !== 403)) {
+        failedRequests.push(`${response.request().method()} ${response.url()} -> ${status}`);
       }
     });
 
-    const response = await page.goto(route.hash, { waitUntil: 'networkidle' });
+    // route.hash ("#/sessions") is a fragment only — page.goto() on a
+    // fragment-only URL against a configured baseURL does a same-document
+    // navigation (or an invalid-URL no-op), not a real document load, so
+    // Playwright returns a null response and response?.ok() below always
+    // fails regardless of whether the app actually works. Navigate to the
+    // real path instead ("/#/sessions") so it resolves against baseURL.
+    const response = await page.goto(`/${route.hash}`, { waitUntil: 'networkidle' });
     expect(response?.ok(), `initial page load for ${route.hash}`).toBeTruthy();
 
     // "renders something, not a blank error boundary": the route's own
@@ -51,3 +68,42 @@ for (const route of ROUTES) {
     expect(failedRequests, `failed/5xx requests on ${route.hash}`).toEqual([]);
   });
 }
+
+// Each ROUTES entry above gets its own fresh page, so none of them exercise
+// an in-page transition away from the React route: resetModernRouteHost()
+// unmounting the React root and restoring legacy children hidden via
+// data-legacy-hidden. That's a distinct code path from an initial load and
+// needs its own test.
+test('smoke: navigating away from skill-rating (React) to sessions (legacy) unmounts cleanly', async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  });
+  page.on('pageerror', (error) => {
+    consoleErrors.push(`pageerror: ${error.message}`);
+  });
+
+  await page.goto('/#/skill-rating', { waitUntil: 'networkidle' });
+  const skillRatingRoot = page.locator('#view-skill-rating [data-modern-route-root]');
+  await expect(skillRatingRoot, 'React root should be mounted under skill-rating').toBeAttached();
+  await expect(async () => {
+    expect((await skillRatingRoot.innerHTML()).length).toBeGreaterThan(0);
+  }).toPass();
+
+  // In-page hash change — same mechanism a nav-link click uses — rather than
+  // page.goto(), so this actually exercises dispatchRoute()'s client-side
+  // transition instead of a fresh document load.
+  await page.evaluate(() => {
+    window.location.hash = '#/sessions';
+  });
+
+  const sessionsView = page.locator('#view-sessions');
+  await expect(sessionsView, '#view-sessions should be visible after transition').toBeVisible();
+  const sessionsText = await sessionsView.innerText();
+  expect(sessionsText.trim().length, 'sessions view should hold real content after transition').toBeGreaterThan(0);
+
+  // resetModernRouteHost() clears the React root's children on unmount.
+  await expect(skillRatingRoot, 'React root should be unmounted (emptied) after navigating away').toBeEmpty();
+
+  expect(consoleErrors, 'console errors during the transition').toEqual([]);
+});
