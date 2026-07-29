@@ -22,7 +22,15 @@ export default defineConfig({
   build: {
     outDir: outputDir,
     emptyOutDir: true,
-    sourcemap: false,
+    // 'hidden': generate .map files but don't emit the
+    // `//# sourceMappingURL=` comment, so browsers don't auto-fetch them on
+    // every page load — they're still readable at /static/modern/*.js.map
+    // for anyone who explicitly opens devtools looking for one. That's fine
+    // here: this repo (iamez/slomix) is public, so a sourcemap doesn't leak
+    // anything `git clone` doesn't already show. Without this, a pasted
+    // production stack trace points at minified/bundled code with no real
+    // file names or line numbers (W5, docs/TASKS_FOR_SONNET_2026-07-29.md).
+    sourcemap: 'hidden',
     lib: {
       entry: path.resolve(__dirname, 'src/route-host.tsx'),
       formats: ['es'],
