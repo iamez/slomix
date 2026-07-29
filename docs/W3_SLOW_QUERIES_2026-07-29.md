@@ -1,12 +1,15 @@
 # W3 — triage of slow responses (2026-07-29)
 
 Task W3 from a session working-doc (`docs/TASKS_FOR_SONNET_2026-07-29.md` — not tracked in
-this repo, not a citable source; every finding below is independently reproducible from
-`logs/access.log` and this repo's tracked code). Method: sort every `← ... → status (Xms)`
+this repo, not a citable source). `logs/access.log` is **also not tracked**
+(`.gitignore` excludes `*.log`/`logs/`) — the specific timings and dates quoted below came from
+this box's live log file and aren't independently reproducible from a fresh checkout; what *is*
+independently verifiable from tracked code is the root-cause analysis itself (the code paths
+cited match the observed symptoms). Method: sort every `← ... → status (Xms)`
 line in `logs/access.log` by duration, then read the code and surrounding log context for
 the worst offenders. Two distinct root causes found — neither is the "missing index" pattern
 the task doc used as its reference case (the re-linker UNION→UNION ALL fix). Full sorted list
-is reproducible with:
+is reproducible on this box with:
 
 ```bash
 grep -oE "← .* → [0-9]+ \([0-9]+\.[0-9]ms\)" logs/access.log | sort -t'(' -k2 -rn | head -20
@@ -105,10 +108,14 @@ each, not one simultaneous 19-way burst.
 
 **Real root cause, found by reading the code, not guessed**: `/api/live-status`
 is one of the endpoints in that fan-out, and its handler
-(`diagnostics_router.py:1153`) calls `query_game_server()`
-(`website/backend/services/game_server_query.py:60`) as a **plain synchronous
-function call inside an `async def` route** — no `await`, no
-`asyncio.to_thread()`. That function opens a raw blocking `socket.socket()`,
+(`diagnostics_router.py:1153`, at the time this analysis was done) called
+`query_game_server()` (`website/backend/services/game_server_query.py:60`) as
+a **plain synchronous function call inside an `async def` route** — no
+`await`, no `asyncio.to_thread()`. **This has since been fixed in this same
+PR**: `diagnostics_router.py:1162` now reads `server_status = await
+asyncio.to_thread(query_game_server, GAME_SERVER_HOST, GAME_SERVER_PORT)` —
+described here in the past tense as the diagnosed cause, not as a remaining
+bug. That function opens a raw blocking `socket.socket()`,
 calls `sock.sendto()` (which performs blocking DNS resolution if `host` isn't
 already an IP — a step `sock.settimeout()` does not reliably bound), then
 blocking `sock.recvfrom()` with a 3-second timeout. **A blocking call on the
@@ -137,12 +144,13 @@ mind if DB-bound queries ever stack up during a batch, but it's not needed to
 explain this specific cluster — the blocking UDP call is sufficient on its own
 and matches the evidence directly.
 
-**Recommendation**: fix `query_game_server()`'s call site to not block the
-event loop — wrap it in `await asyncio.to_thread(query_game_server, ...)` (a
-one-line change at the `diagnostics_router.py:1153` call site; the function
-itself doesn't need to change). This is a more targeted, better-evidenced fix
-than the original "batch/stagger the homepage calls" recommendation, and it's
-independent of W2 — W2's rate-limit-headroom fix doesn't touch this code path
+**Recommendation, already applied in this PR**: fixed `query_game_server()`'s
+call site to not block the event loop — wrapped in `await
+asyncio.to_thread(query_game_server, ...)` at the `diagnostics_router.py`
+call site (the function itself didn't need to change). This is a more
+targeted, better-evidenced fix than the original "batch/stagger the homepage
+calls" recommendation, and it's independent of W2 — W2's rate-limit-headroom
+fix doesn't touch this code path
 at all.
 
 ## Verify
