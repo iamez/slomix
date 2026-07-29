@@ -1,10 +1,13 @@
 """Response-shape contract tests (W8, docs/TASKS_FOR_SONNET_2026-07-29.md).
 
 The reference incident: a backend change from five radar axes to four would
-have blanked every profile chart, because the frontend component required
-exactly five and nothing asserted the contract — caught in code review, not
-by a test. Contract drift like this is quiet: nothing errors, the UI just
-shows the wrong thing or nothing.
+have blanked every profile chart, because the frontend RadarChart used to be
+hardcoded to five sides and nothing asserted the contract — caught in code
+review, not by a test. The frontend no longer hardcodes an axis count (it
+derives sides from axes.length), but the API contract itself is still fixed
+at 4 axes in a specific order (Aggression, Awareness, Teamplay, Timing) —
+that's what this test pins. Contract drift like this is quiet: nothing
+errors, the UI just shows the wrong thing or nothing.
 
 Uses the same dependency-override + stub-DB pattern as
 tests/unit/test_proximity_serving_layer_audit.py: mount just the router
@@ -27,7 +30,13 @@ from website.backend.routers.records_seasons import router as records_seasons_ro
 
 
 class _EmptyDB:
-    """Returns empty result sets for every query — exercises the no-data path."""
+    """Returns empty result sets for every query — exercises the no-data path.
+
+    fetch_val is query-aware: a real empty table makes MIN/MAX aggregates
+    return SQL NULL (-> None), while COUNT(*) returns 0 — collapsing both to
+    a constant 0 would silently hide the "should be null, not zero" contract
+    the overview endpoint promises for rounds_since/rounds_latest.
+    """
 
     async def fetch_all(self, query, params=None):
         return []
@@ -36,6 +45,8 @@ class _EmptyDB:
         return None
 
     async def fetch_val(self, query, params=None):
+        if "MIN(" in query or "MAX(" in query:
+            return None
         return 0
 
 
@@ -80,12 +91,24 @@ async def test_proximity_radar_returns_exactly_four_axes():
     assert isinstance(body["axes"], list)
     assert len(body["axes"]) == 4, (
         f"expected exactly 4 radar axes, got {len(body['axes'])} — "
-        "the frontend RadarChart is built for a fixed axis count"
+        "this is the player-radar-v2 API contract, independent of the "
+        "frontend's (now variable) axis-count support"
     )
+    # Exact label sequence: ProximityPlayer.tsx branches on
+    # `a.label === 'Teamplay'` to mark fallback/degraded sourcing, so a
+    # rename or reorder needs to fail loudly here.
+    assert [axis["label"] for axis in body["axes"]] == [
+        "Aggression", "Awareness", "Teamplay", "Timing",
+    ]
     for axis in body["axes"]:
         assert set(axis.keys()) >= {"label", "value"}
         assert isinstance(axis["label"], str) and axis["label"]
         assert isinstance(axis["value"], (int, float))
+
+    # composite is fed into RadarChart alongside axes (ProximityPlayer.tsx) —
+    # a dropped/renamed/mistyped field would silently blank that display.
+    assert "composite" in body
+    assert isinstance(body["composite"], (int, float))
 
 
 @pytest.mark.asyncio
@@ -102,11 +125,17 @@ async def test_stats_overview_required_fields_present_and_typed():
     ]
     for field in required_int_fields:
         assert field in body, f"missing required field: {field}"
-        assert isinstance(body[field], int), f"{field} should be int, got {type(body[field])}"
+        # bool is a subclass of int in Python — isinstance(True, int) is
+        # True, so a field that regressed to a JSON boolean would pass an
+        # isinstance check. formatNumber() on the frontend expects a number.
+        assert type(body[field]) is int, f"{field} should be int, got {type(body[field])}"
 
-    # Present even with no data — null, not missing/omitted.
+    # Present even with no data — null, not missing/omitted. Verified against
+    # the actual empty-table SQL behavior (MIN/MAX -> NULL), not just against
+    # this stub's default.
     for field in ("rounds_since", "rounds_latest", "most_active_overall", "most_active_14d"):
         assert field in body, f"missing required field: {field}"
+        assert body[field] is None, f"{field} should be null on the no-data path, got {body[field]!r}"
 
 
 @pytest.mark.asyncio
@@ -117,10 +146,17 @@ async def test_seasons_current_required_fields_present():
     assert response.status_code == 200
     body = response.json()
 
-    required_fields = [
-        "id", "name", "days_left", "start_date", "end_date",
+    # Every field except days_left is declared as a required (non-nullable)
+    # string in website/frontend/src/api/types.ts SeasonInfo — a regression
+    # to null/number/object there would silently break string interpolation
+    # on the frontend.
+    required_string_fields = [
+        "id", "name", "start_date", "end_date",
         "next_season_id", "next_season_name", "next_season_start",
     ]
-    for field in required_fields:
+    for field in required_string_fields:
         assert field in body, f"missing required field: {field}"
-    assert isinstance(body["days_left"], int)
+        assert type(body[field]) is str, f"{field} should be str, got {type(body[field])}"
+
+    assert "days_left" in body, "missing required field: days_left"
+    assert type(body["days_left"]) is int, f"days_left should be int, got {type(body['days_left'])}"
