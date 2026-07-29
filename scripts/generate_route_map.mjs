@@ -42,14 +42,30 @@ function buildLegacyFunctionIndex() {
 
 // 'home' is a documented exception: its route definition's load() is an
 // intentional no-op (buildHash() -> '', no discrete load call), because the
-// home view is actually populated by initApp() in app.js calling
-// loadHomePulseCards() (home.js) directly during startup, not through the
-// route dispatch mechanism every other route uses. Static analysis of "what
-// does initApp() call for the initial route" isn't reliably automatable the
-// way the load()-callback scan is for every other route, so this one file is
+// home view is actually populated by initApp()'s criticalLoads array in
+// app.js — five functions across four files, called directly during startup,
+// not through the route dispatch mechanism every other route uses:
+// loadHomePulseCards (home.js), loadOverviewStats (defined in app.js itself,
+// not exported), updateLiveSession (live-status.js), and loadQuickLeaders +
+// loadRecentMatches (leaderboard.js). Static analysis of "what does
+// initApp() call for the initial route" isn't reliably automatable the way
+// the load()-callback scan is for every other route, so this one is
 // hand-verified instead (Codex review on #575).
 const SPECIAL_CASES = {
-    home: 'website/js/home.js (via loadHomePulseCards(), called directly from initApp() in app.js — not through load(), see comment in this script)',
+    home: 'website/js/home.js + website/js/app.js + website/js/live-status.js + website/js/leaderboard.js (loadHomePulseCards / loadOverviewStats / updateLiveSession / loadQuickLeaders + loadRecentMatches, all called directly from initApp() in app.js — not through load(), see comment in this script)',
+};
+
+// 'hall-of-fame' is a documented exception: its buildHash() returns the
+// generic '#/record-book' (same as the plain 'record-book' route), because
+// the router dispatches by viewId, not hash, and both routes share
+// viewId 'record-book' — but that hash alone does NOT deep-link to the Hall
+// of Fame tab. loadRecordBookView() (website/js/record-book.js:55) defaults
+// to the 'records' tab; only the literal hash '#/hall-of-fame' is recognized
+// by this route's own parseHash() (which maps it to { tab: 'hof' }). Using
+// buildHash()'s output here would print a working-but-wrong example — a
+// human clicking it lands on the wrong tab (Codex review on #575).
+const HASH_EXAMPLE_OVERRIDES = {
+    'hall-of-fame': '#/hall-of-fame',
 };
 
 function legacyFileFor(routeKey, def, legacyIndex) {
@@ -81,7 +97,8 @@ function modernFileFor(viewId) {
 // a malformed hash with an empty segment (trailing '/' or '//') — that one
 // needs flagging as "needs params", not printed as if it were real
 // (Copilot + Codex review on #575).
-function computeHashExample(def) {
+function computeHashExample(routeKey, def) {
+    if (HASH_EXAMPLE_OVERRIDES[routeKey]) return HASH_EXAMPLE_OVERRIDES[routeKey];
     let result;
     try {
         result = def.buildHash({});
@@ -103,7 +120,7 @@ const rows = Object.entries(definitions)
         routeKey,
         viewId: def.viewId,
         mode: def.mode,
-        hashExample: computeHashExample(def),
+        hashExample: computeHashExample(routeKey, def),
         file: def.mode === VIEW_MODE.MODERN ? modernFileFor(def.viewId) : legacyFileFor(routeKey, def, legacyIndex),
     }))
     .sort((a, b) => a.routeKey.localeCompare(b.routeKey));

@@ -14,8 +14,8 @@ Generated: 2026-07-29
 | `form` | `#/form` | Legacy JS | form.js |
 | `greatshot` | `#/greatshot/demos` | Legacy JS | greatshot.js |
 | `greatshot-demo` | `#/greatshot/demos` | Legacy JS | greatshot.js |
-| `hall-of-fame` | `#/record-book` | Legacy JS | record-book.js |
-| `home` | `(root — empty hash)` | Legacy JS | website/js/home.js (via loadHomePulseCards(), called directly from initApp() in app.js — not through load(), see comment in this script) |
+| `hall-of-fame` | `#/hall-of-fame` | Legacy JS | record-book.js |
+| `home` | `(root — empty hash)` | Legacy JS | website/js/home.js + website/js/app.js + website/js/live-status.js + website/js/leaderboard.js (loadHomePulseCards / loadOverviewStats / updateLiveSession / loadQuickLeaders + loadRecentMatches, all called directly from initApp() in app.js — not through load(), see comment in this script) |
 | `leaderboards` | `#/leaderboards` | Legacy JS | leaderboard.js |
 | `maps` | `#/maps` | Legacy JS | matches.js |
 | `profile` | `#/profile` | Legacy JS | player-profile.js |
@@ -46,3 +46,7 @@ file for the `export function <name>(` that matches the `legacy.<name>()` call i
 the route's `load()` — not a filename guess. Modern (React) routes mount through
 `website/frontend/src/route-host.tsx`; the page file is matched by PascalCase
 convention against `website/frontend/src/pages/*.tsx`.
+(node:3836429) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/samba/share/slomix_discord/website/js/route-registry.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /home/samba/share/slomix_discord/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
