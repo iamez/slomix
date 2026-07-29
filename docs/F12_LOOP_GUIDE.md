@@ -1,16 +1,21 @@
 # The F12 loop — correlating a browser error to server logs and code
 
-Task W9 from `docs/TASKS_FOR_SONNET_2026-07-29.md`. The owner's usual workflow is:
-open a page, hit F12, paste whatever the console/network tab shows. This guide is
-what to do with that paste — how to find the request in the logs, what each log
-file actually holds, and how to land on the file that served the broken route.
+Task W9 from a session working-doc (`docs/TASKS_FOR_SONNET_2026-07-29.md` — not tracked in
+this repo, not a citable source; every claim below is checked against tracked code directly).
+The owner's usual workflow is: open a page, hit F12, paste whatever the console/network tab
+shows. This guide is what to do with that paste — how to find the request in the logs, what
+each log file actually holds, and how to land on the file that served the broken route.
 
 ## What a paste should always carry
 
-**The request URL and the timestamp.** Everything below depends on having both.
-A screenshot of just an error message with no URL or time is close to
-unusable — see "Known gap" below for why you can't always work backwards from
-just the error text.
+**The request URL and the timestamp — and note the timestamp's timezone.** Everything below
+depends on having both. Browser devtools show the client's local time; the backend's default
+plain-text formatter (`StandardFormatter`, `logging_config.py:176`) writes the **backend
+host's** local time (naive, no offset); the optional JSON formatter (off by default,
+`LOG_FORMAT_JSON` unset) writes UTC instead. If the browser and backend host are in different
+timezones, searching the pasted timestamp literally can miss the entry entirely — convert
+first, or search a wider window (`grep` a few minutes on either side) if the timezone isn't
+known.
 
 ## Step 1 — find the request in `logs/access.log`
 
@@ -27,59 +32,84 @@ Search by path and the timestamp from the paste:
 grep -F "/api/proximity/prox-scores" logs/access.log | grep "2026-07-29 14:2"
 ```
 
-**Known gap — no query string, no shared request ID.** The `→`/`←` lines never
-include the query string (`routed_path()` in `security_utils.py` deliberately
-logs only `request.scope["path"]`), and although the middleware generates a
-`request_id` UUID per request (visible as the `X-Request-ID` response header in
-the browser's Network tab), the plain-text log formatter
-(`StandardFormatter` in `website/backend/logging_config.py`) doesn't include it —
-only the JSON formatter does, and that's off by default (`LOG_FORMAT_JSON` unset).
-So under concurrent traffic, matching a `→` line to its `←` line is by nearest
-path+timestamp, not a hard join. If the Network tab shows an `X-Request-ID`
-header, grab it anyway — it's at least proof of exactly which request you're
-chasing even though today's logs can't look it up for you.
+**This pairing doesn't cover every request.** `QUIET_PATHS`
+(`logging_middleware.py:33-40` — `/health`, `/favicon.ico`, `/static`, `/js/`, `/css/`,
+`/assets/`) never get a `→` line, and get a `←` line only when they **fail** (`is_quiet and
+status_code < 400` is suppressed entirely). So a runtime error from a successfully-served
+script has **no access.log entry at all**, and a failed asset request has only the response
+half, not a pair. If the failing resource is under one of those paths, don't expect to find it
+here.
+
+**Known gap — no query string, and the request ID doesn't help either.** The `→`/`←` lines
+never include the query string (`routed_path()` in `security_utils.py` deliberately logs only
+`request.scope["path"]`). The middleware does generate a request ID per request
+(`str(uuid.uuid4())[:8]` — an **8-character UUID4 prefix, not a full UUID** — visible as the
+`X-Request-ID` response header in the browser's Network tab), but two things limit it: the
+plain-text formatter has no `%(request_id)s` placeholder so it never renders in the log text
+(only the JSON formatter, off by default, would show it); and for an **unhandled exception**
+specifically, the middleware's `finally` block only sets the header `if response:`
+(`logging_middleware.py:151-152`) — since an unhandled exception leaves `response` as `None`,
+the primary 500-error scenario this guide exists for may not even have the header to grab.
+Under concurrent traffic, matching a `→` line to its `←` line is by nearest path+timestamp,
+not a hard join.
 
 **Don't rely on `access.log` being pure access traffic.** Because
-`website/backend/logging_config.py` attaches all 5 file handlers to the root
-logger with no per-handler logger-name filter, every INFO+ message from *any*
-logger in the process — not just the `access` logger — lands in `access.log`
-too. Expect to see `bot.services.*`, `bot.core.*`, and `api.*` lines interleaved
-with the `→`/`←` pairs; that's normal, not a sign something's misconfigured.
+`website/backend/logging_config.py` attaches all 5 file handlers to the root logger with no
+per-handler logger-name filter, every INFO+ message from *any* logger in the process — not
+just the `access` logger — lands in `access.log` too. Expect to see `bot.services.*`,
+`bot.core.*`, and `api.*` lines interleaved with the `→`/`←` pairs; that's normal, not a sign
+something's misconfigured.
 
 ## Step 2 — find the traceback in `logs/errors.log`
 
 ```bash
-grep -B2 -A20 "2026-07-29 14:2" logs/errors.log
+# active file
+grep -B2 -A40 "2026-07-29 14:2" logs/errors.log
+# rotated backups too — RotatingFileHandler keeps 10 (errors.log.1 .. .10);
+# a traceback that rotated out of the active file may still be in one of these
+grep -B2 -A40 "2026-07-29 14:2" logs/errors.log.* 2>/dev/null
 ```
 
-`errors.log` only receives WARNING+ (see `LOG_FILES["error"]["level"]` in
-`website/backend/logging_config.py`) and rotates at 10MB × 10 backups. That
-sounds generous, but under bursty error conditions it can roll over in days,
-not months — if the paste is more than a few days old, the traceback may
-already be gone. If so, say so rather than guessing (see W1, which hit exactly
-this for 6 of 7 historical 500s).
+`errors.log` receives **ERROR and above only** (`LOG_FILES["error"]["level"]` is
+`logging.ERROR`, not `WARNING` — a plain warning won't be here at all; check `logs/web.log`
+for those). `-A40` rather than a smaller number: a traceback through the Starlette/FastAPI
+middleware stack commonly runs past 20 lines, and a truncated grep can cut off the exception
+type and root-cause message at the bottom — the most diagnostic part.
+
+Rotation isn't the only reason a traceback might be missing, either: several 500 paths raise
+`HTTPException` directly without logging an exception at all, and some handlers call
+`logger.error(...)` without `exc_info=`, writing only a one-line message with no stack. Check
+for **any** line at the right timestamp before concluding rotation ate it — an absent
+traceback sometimes means the code path never emitted one in the first place, not that it aged
+out (see W1, which hit the rotation case for 6 of 7 historical 500s, but don't assume that's
+always why).
 
 ## Step 3 — find the file that served the route
 
-- **Backend** (which router handled `/api/...`): grep the path literal across
-  `website/backend/routers/` — router prefixes are documented in
-  `website/backend/CLAUDE.md`.
-- **Frontend** (which JS/TSX rendered the page): use
-  `docs/ROUTE_MAP_2026-07.md` (generated by `scripts/generate_route_map.mjs`
-  from `website/js/route-registry.js`, the actual routing source of truth) —
-  look up the hash route to get "React" or "Legacy JS" plus the exact serving
-  file. Re-run the generator if the route map looks stale; don't hand-edit it.
+- **Backend** (which router handled `/api/...`): the checked-in route is a **decorator with
+  the parameter name**, not the literal value from the paste — e.g.
+  `/proximity/player/{guid}/radar`, not `/proximity/player/FB0EC8.../radar`. Grepping the
+  literal path from the log won't find it; normalize the dynamic segment first (strip the GUID/
+  ID back to `{param}` or just grep the stable prefix, e.g. `/proximity/player/`) across
+  `website/backend/routers/`. Router prefixes are documented in `website/backend/CLAUDE.md`;
+  remember `/api` is mounted separately from the router's own path.
+- **Frontend** (which JS/TSX rendered the page): use `docs/ROUTE_MAP_2026-07.md` (generated by
+  `scripts/generate_route_map.mjs` from `website/js/route-registry.js`, the actual routing
+  source of truth — added alongside this guide) — look up the hash route to get "React" or
+  "Legacy JS" plus the exact serving file. Re-run the generator if the route map looks stale;
+  don't hand-edit it.
 
 ## Step 4 — reproduce
 
 ```bash
+cd website && venv/bin/uvicorn backend.main:app --reload   # must run from website/ — backend
+                                                             # is a package under it, not repo root
 curl -s -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:8000/api/proximity/prox-scores?<params-if-known>'
 ```
 
-Run against the local dev backend (`website/venv/bin/uvicorn backend.main:app`),
-not production. If you don't know the query params (common — see Step 1), try
-the endpoint bare first, then with whatever params the page under investigation
-would plausibly send; note explicitly which combinations you tried.
+Run against the local dev backend, not production. If you don't know the query params (common
+— see Step 1), try the endpoint bare first, then with whatever params the page under
+investigation would plausibly send; note explicitly which combinations you tried.
 
 ## Worked example (from W1)
 
@@ -93,16 +123,16 @@ $ grep -F "FB0EC84076637A9F55D579085A3225C4" logs/access.log
 2026-07-19 11:03:51 | WARNING | access | dispatch:136 | ← GET /api/proximity/player/FB0EC84076637A9F55D579085A3225C4/radar → 500 (182.7ms)
 ```
 
-No query string needed here (the guid is in the path), traceback had already
-rotated out of `errors.log` by 2026-07-29, so the next step was a live replay —
-see `docs/W1_500_TRIAGE_2026-07-29.md` for the full result (200 today, not
-confirmed fixed vs. no-longer-triggered).
+No query string needed here (the guid is in the path), traceback had already rotated out of
+`errors.log` (and its backups) by 2026-07-29, so the next step was reading tracked code +
+a live replay — see `docs/W1_500_TRIAGE_2026-07-29.md` for the full result (a diagnosed,
+already-fixed dev-process-staleness cause, not a live bug).
 
 ## Closing the gap long-term
 
-W4 (client-side error reporting, `POST /api/client-error`) will carry the page
-URL — including its query string, since the frontend already knows what it
-asked for — directly from the browser to a dedicated log. Once shipped, prefer
-that over grepping `access.log` for anything that happens after it lands;
-this guide's Steps 1-2 remain the right approach for anything that predates it
-or bypasses the frontend (e.g. a direct API script hitting a stale bookmark).
+W4 (client-side error reporting, `POST /api/client-error`) carries the failed request's own
+URL — including its query string, since the frontend already knows what it asked for —
+directly from the browser to a dedicated log. Prefer that over grepping `access.log` for
+anything that happens after it lands; this guide's Steps 1-2 remain the right approach for
+anything that predates it or bypasses the frontend (e.g. a direct API script hitting a stale
+bookmark).
