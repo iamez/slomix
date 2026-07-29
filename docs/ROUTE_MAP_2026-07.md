@@ -15,14 +15,14 @@ Generated: 2026-07-29
 | `greatshot` | `#/greatshot/demos` | Legacy JS | greatshot.js |
 | `greatshot-demo` | `#/greatshot/demos` | Legacy JS | greatshot.js |
 | `hall-of-fame` | `#/record-book` | Legacy JS | record-book.js |
-| `home` | `(needs params)` | Legacy JS | (no legacy.* call in load()) |
+| `home` | `(root — empty hash)` | Legacy JS | website/js/home.js (via loadHomePulseCards(), called directly from initApp() in app.js — not through load(), see comment in this script) |
 | `leaderboards` | `#/leaderboards` | Legacy JS | leaderboard.js |
 | `maps` | `#/maps` | Legacy JS | matches.js |
 | `profile` | `#/profile` | Legacy JS | player-profile.js |
 | `proximity` | `#/proximity` | Legacy JS | proximity.js |
-| `proximity-player` | `#/proximity/player/` | React (modern) | website/frontend/src/pages/ProximityPlayer.tsx |
-| `proximity-replay` | `#/proximity/round/` | React (modern) | website/frontend/src/pages/ProximityReplay.tsx |
-| `proximity-teams` | `#/proximity/round//teams` | React (modern) | website/frontend/src/pages/ProximityTeams.tsx |
+| `proximity-player` | `(needs params)` | React (modern) | website/frontend/src/pages/ProximityPlayer.tsx |
+| `proximity-replay` | `(needs params)` | React (modern) | website/frontend/src/pages/ProximityReplay.tsx |
+| `proximity-teams` | `(needs params)` | React (modern) | website/frontend/src/pages/ProximityTeams.tsx |
 | `record-book` | `#/record-book` | Legacy JS | record-book.js |
 | `records` | `#/record-book` | Legacy JS | record-book.js |
 | `replay` | `#/replay` | Legacy JS | replay.js |

@@ -40,7 +40,20 @@ function buildLegacyFunctionIndex() {
     return index;
 }
 
-function legacyFileFor(def, legacyIndex) {
+// 'home' is a documented exception: its route definition's load() is an
+// intentional no-op (buildHash() -> '', no discrete load call), because the
+// home view is actually populated by initApp() in app.js calling
+// loadHomePulseCards() (home.js) directly during startup, not through the
+// route dispatch mechanism every other route uses. Static analysis of "what
+// does initApp() call for the initial route" isn't reliably automatable the
+// way the load()-callback scan is for every other route, so this one file is
+// hand-verified instead (Codex review on #575).
+const SPECIAL_CASES = {
+    home: 'website/js/home.js (via loadHomePulseCards(), called directly from initApp() in app.js — not through load(), see comment in this script)',
+};
+
+function legacyFileFor(routeKey, def, legacyIndex) {
+    if (SPECIAL_CASES[routeKey]) return SPECIAL_CASES[routeKey];
     const source = def.load.toString();
     const calls = [...source.matchAll(/legacy\.(\w+)\(/g)].map((m) => m[1]);
     const files = new Set(calls.map((name) => legacyIndex.get(name)).filter(Boolean));
@@ -60,6 +73,29 @@ function modernFileFor(viewId) {
     return exact ? `website/frontend/src/pages/${exact}` : `website/frontend/src/pages/ (no exact ${pascal}.tsx — check manually)`;
 }
 
+// buildHash({}) with no params: some route defs check for the param and
+// fall back to a real list-view hash (profile, greatshot-demo,
+// upload-detail, story, session-detail) — that fallback IS a valid example,
+// not a placeholder. Others (proximity-player/replay/teams) don't check and
+// just interpolate the missing param straight into the template, producing
+// a malformed hash with an empty segment (trailing '/' or '//') — that one
+// needs flagging as "needs params", not printed as if it were real
+// (Copilot + Codex review on #575).
+function computeHashExample(def) {
+    let result;
+    try {
+        result = def.buildHash({});
+    } catch {
+        return '(needs params)';
+    }
+    if (result === '') return '(root — empty hash)';
+    const withoutPrefix = result.replace(/^#\//, '');
+    if (withoutPrefix.includes('//') || withoutPrefix.endsWith('/')) {
+        return '(needs params)';
+    }
+    return result;
+}
+
 const legacyIndex = buildLegacyFunctionIndex();
 const definitions = listRouteDefinitions();
 const rows = Object.entries(definitions)
@@ -67,14 +103,8 @@ const rows = Object.entries(definitions)
         routeKey,
         viewId: def.viewId,
         mode: def.mode,
-        hashExample: (() => {
-            try {
-                return def.buildHash({}) || '(needs params)';
-            } catch {
-                return '(needs params)';
-            }
-        })(),
-        file: def.mode === VIEW_MODE.MODERN ? modernFileFor(def.viewId) : legacyFileFor(def, legacyIndex),
+        hashExample: computeHashExample(def),
+        file: def.mode === VIEW_MODE.MODERN ? modernFileFor(def.viewId) : legacyFileFor(routeKey, def, legacyIndex),
     }))
     .sort((a, b) => a.routeKey.localeCompare(b.routeKey));
 
