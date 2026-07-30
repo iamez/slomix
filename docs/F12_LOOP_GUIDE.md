@@ -8,8 +8,11 @@ each log file actually holds, and how to land on the file that served the broken
 
 ## What a paste should always carry
 
-**The request URL and the timestamp — and note the timestamp's timezone.** Everything below
-depends on having both. Browser devtools show the client's local time; the backend's default
+**The failing request URL, the page's address-bar URL (including its `#/hash`), and the
+timestamp — and note the timestamp's timezone.** All three matter: the request URL drives
+Steps 1-2, the page hash is what Step 3's frontend lookup is keyed on (it can't be derived from
+an `/api/...` request path, and shared endpoints are called from several pages), and everything
+depends on the timestamp. Browser devtools show the client's local time; the backend's default
 plain-text formatter (`StandardFormatter`, `logging_config.py:176`) writes the **backend
 host's** local time (naive, no offset); the optional JSON formatter (off by default,
 `LOG_FORMAT_JSON` unset) writes UTC instead. If the browser and backend host are in different
@@ -32,15 +35,21 @@ JSON formatter (`LOG_FORMAT_JSON=true`) writes ISO-8601 (`2026-07-29T14:20:...`,
 — a space-separated grep against a JSON-formatted log matches nothing even though the record is
 there:
 
+Search the rotated backups too, not just the active file: `LOG_FILES["access"]` keeps 7
+(`access.log.1`–`.7`), so anything more than a few hours old on a busy day may well have moved
+out of `access.log` while the evidence is still perfectly well retained. `grep` the glob:
+
 ```bash
 # StandardFormatter (default)
-grep -F "/api/proximity/prox-scores" logs/access.log | grep "2026-07-29 14:2"
+grep -F "/api/proximity/prox-scores" logs/access.log logs/access.log.* 2>/dev/null | grep "2026-07-29 14:2"
 
 # JSON formatter (LOG_FORMAT_JSON=true) — note the "T", and the path is inside a JSON string
 # field rather than free text, so grep -F on the path still works but the timestamp grep needs
 # the ISO form
-grep -F "/api/proximity/prox-scores" logs/access.log | grep "2026-07-29T14:2"
+grep -F "/api/proximity/prox-scores" logs/access.log logs/access.log.* 2>/dev/null | grep "2026-07-29T14:2"
 ```
+
+Only conclude "no access record exists" after the glob comes back empty.
 
 **This pairing doesn't cover every request.** `QUIET_PATHS`
 (`logging_middleware.py:33-40` — `/health`, `/favicon.ico`, `/static`, `/js/`, `/css/`,
@@ -50,18 +59,33 @@ script has **no access.log entry at all**, and a failed asset request has only t
 half, not a pair. If the failing resource is under one of those paths, don't expect to find it
 here.
 
-**Known gap — no query string, and the request ID doesn't help either.** The `→`/`←` lines
-never include the query string (`routed_path()` in `security_utils.py` deliberately logs only
-`request.scope["path"]`). The middleware does generate a request ID per request
-(`str(uuid.uuid4())[:8]` — an **8-character UUID4 prefix, not a full UUID** — visible as the
-`X-Request-ID` response header in the browser's Network tab), but two things limit it: the
-plain-text formatter has no `%(request_id)s` placeholder so it never renders in the log text
-(only the JSON formatter, off by default, would show it); and for an **unhandled exception**
-specifically, the middleware's `finally` block only sets the header `if response:`
-(`logging_middleware.py:151-152`) — since an unhandled exception leaves `response` as `None`,
-the primary 500-error scenario this guide exists for may not even have the header to grab.
-Under concurrent traffic, matching a `→` line to its `←` line is by nearest path+timestamp,
-not a hard join.
+**Known gap — no query string.** The `→`/`←` lines never include the query string
+(`routed_path()` in `security_utils.py` deliberately logs only `request.scope["path"]`).
+
+**If `LOG_FORMAT_JSON=true`, use the request ID as a hard join — don't guess by timestamp.**
+The middleware generates a request ID per request (`str(uuid.uuid4())[:8]` — an **8-character
+UUID4 prefix, not a full UUID**) and returns it as the `X-Request-ID` response header, visible
+in the browser's Network tab. `JSONFormatter` includes `request_id` in its allowlisted extras
+(`logging_config.py:153`), so in that configuration both access entries carry it and you get an
+exact match instead of a nearest-neighbour guess — which matters precisely when concurrent
+traffic makes path+timestamp ambiguous (Codex review on #576):
+
+```bash
+grep -F '"request_id": "a1b2c3d4"' logs/access.log logs/access.log.* logs/errors.log 2>/dev/null
+```
+
+Timestamp matching is the fallback for the two cases where that ID isn't usable:
+
+- **Plain-text formatter (the default).** `StandardFormatter`'s format string has no
+  `%(request_id)s` placeholder, so the ID never reaches the log text even though the header
+  exists.
+- **Unhandled exceptions**, regardless of formatter. The middleware's `finally` block only sets
+  the header `if response:` (`logging_middleware.py:151-152`), and an unhandled exception leaves
+  `response` as `None` — so the primary 500 scenario this guide exists for may have no header to
+  copy in the first place.
+
+In those cases, matching a `→` line to its `←` line is by nearest path+timestamp, not a hard
+join.
 
 **Don't rely on `access.log` being pure access traffic.** Because
 `website/backend/logging_config.py` attaches all 5 file handlers to the root logger with no
@@ -97,29 +121,55 @@ always why).
 
 ## Step 3 — find the file that served the route
 
-- **Backend** (which router handled `/api/...`): the checked-in route is a **decorator with
+- **Backend** (which handler served `/api/...`): the checked-in route is a **decorator with
   the parameter name**, not the literal value from the paste — e.g.
   `/proximity/player/{guid}/radar`, not `/proximity/player/FB0EC8.../radar`. Grepping the
   literal path from the log won't find it; normalize the dynamic segment first (strip the GUID/
-  ID back to `{param}` or just grep the stable prefix, e.g. `/proximity/player/`) across
-  `website/backend/routers/`. Router prefixes are documented in `website/backend/CLAUDE.md`;
-  remember `/api` is mounted separately from the router's own path.
-- **Frontend** (which JS/TSX rendered the page): use `docs/ROUTE_MAP_2026-07.md` (generated by
-  `scripts/generate_route_map.mjs` from `website/js/route-registry.js`, the actual routing
-  source of truth — added alongside this guide) — look up the hash route to get "React" or
-  "Legacy JS" plus the exact serving file. Re-run the generator if the route map looks stale;
-  don't hand-edit it.
+  ID back to `{param}` or just grep the stable prefix, e.g. `/proximity/player/`). Search **all
+  of `website/backend/`, not just `routers/`** — not every `/api/...` endpoint lives in a router
+  module, e.g. `/api/build` is declared straight on the app in `main.py:348` (Codex review on
+  #576):
+  ```bash
+  grep -rn '"/proximity/player/' website/backend/ --include='*.py'
+  ```
+  Router prefixes are documented in `website/backend/CLAUDE.md`; remember `/api` is mounted
+  separately from the router's own path.
+- **Frontend** (which JS/TSX rendered the page): this lookup is keyed by the **page's hash
+  route**, which is *not* derivable from the failing request URL — a Network-tab failure is
+  normally an `/api/...` path, and shared endpoints like `/api/search` are called from several
+  pages. So the paste has to include the address-bar URL (e.g. `.../#/proximity`) as well as the
+  failing request; without it, this step can't be completed for a shared endpoint (Codex review
+  on #576). With the hash in hand, look it up in `docs/ROUTE_MAP_2026-07.md` (generated by
+  `scripts/generate_route_map.mjs` from `website/js/route-registry.js`, the actual routing source
+  of truth — added alongside this guide) to get "React" or "Legacy JS" plus the exact serving
+  file. Re-run the generator if the route map looks stale; don't hand-edit it.
 
 ## Step 4 — reproduce
 
+`backend.main` refuses to import without certain env vars — it's not enough to have the runbook's
+listed variables, because that list omits some of these. `main.py:138-148` raises
+`ValueError` on an empty (or placeholder) `INTERNAL_API_SECRET` at import time, and the same
+module gates `SESSION_SECRET`, with `TRUSTED_HOSTS` required under the production
+(`SESSION_HTTPS_ONLY=true`) posture. Without them Uvicorn never reaches readiness and Terminal B
+has nothing to talk to (Codex review on #576). Easiest is to use the existing `.env` the services
+already read; otherwise export them for the shell:
+
 ```bash
-# Terminal A — the documented local setup (docs/RUNBOOK_LOCAL_LINUX.md) creates a single
-# venv/ at the repo root, not one under website/ — so from website/ it's ../venv/bin/uvicorn,
-# not venv/bin/uvicorn (some boxes additionally have a website/venv from a different setup
-# path; if `../venv/bin/uvicorn` doesn't exist on yours, check which one your box actually has).
+# Terminal A — env first. If website/.env already exists (the normal case), uvicorn picks it up
+# and you can skip these; check with `grep -c INTERNAL_API_SECRET website/.env`.
+export SESSION_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+export INTERNAL_API_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+export SESSION_HTTPS_ONLY=false     # local HTTP; otherwise TRUSTED_HOSTS is mandatory too
+
+# The documented local setup (docs/RUNBOOK_LOCAL_LINUX.md) creates a single venv/ at the repo
+# root, not one under website/ — so from website/ it's ../venv/bin/uvicorn, not venv/bin/uvicorn
+# (some boxes additionally have a website/venv from a different setup path; if
+# `../venv/bin/uvicorn` doesn't exist on yours, check which one your box actually has).
 cd website && ../venv/bin/uvicorn backend.main:app --reload   # must run from website/ — backend
                                                                 # is a package under it, not repo root
-# leave this running in the foreground — it doesn't return until stopped
+# leave this running in the foreground — it doesn't return until stopped. Wait for
+# "Application startup complete." before using Terminal B; an import-time ValueError about a
+# missing secret shows up here instead.
 ```
 
 ```bash
@@ -144,11 +194,23 @@ investigation would plausibly send; note explicitly which combinations you tried
 Paste: *"proximity page threw an error around 2026-07-19 11am, radar chart was
 blank for player FB0EC84076637A9F55D579085A3225C4."*
 
+The GUID alone matches several days' worth of (successful) requests, so filter by the date too:
+
 ```bash
-$ grep -F "FB0EC84076637A9F55D579085A3225C4" logs/access.log
-2026-07-19 11:03:51 | INFO    | access | dispatch:97  | → GET /api/proximity/player/FB0EC84076637A9F55D579085A3225C4/radar
-2026-07-19 11:03:51 | ERROR   | api.proximity | get_proximity_player_radar:232 | Proximity endpoint error
-2026-07-19 11:03:51 | WARNING | access | dispatch:136 | ← GET /api/proximity/player/FB0EC84076637A9F55D579085A3225C4/radar → 500 (182.7ms)
+$ grep -F "FB0EC84076637A9F55D579085A3225C4" logs/access.log | grep "2026-07-19"
+2026-07-19 11:03:51 | INFO     | access | dispatch:97 | → GET /api/proximity/player/FB0EC84076637A9F55D579085A3225C4/radar
+2026-07-19 11:03:51 | WARNING  | access | dispatch:136 | ← GET /api/proximity/player/FB0EC84076637A9F55D579085A3225C4/radar → 500 (182.7ms)
+```
+
+That's the request/response pair — but note what it does *not* show. The handler's own error line
+carries no GUID (it logs `Proximity endpoint error` and nothing else), so a plain `grep` for the
+GUID can never print it. Add `-A1` to pick up what was logged in between — this is where the
+"access.log holds every logger's INFO+, not just access traffic" note from Step 1 pays off:
+
+```bash
+$ grep -F -A1 "FB0EC84076637A9F55D579085A3225C4" logs/access.log | grep -A1 "2026-07-19 11:03" | head -2
+2026-07-19 11:03:51 | INFO     | access | dispatch:97 | → GET /api/proximity/player/FB0EC84076637A9F55D579085A3225C4/radar
+2026-07-19 11:03:51 | ERROR    | api.proximity | get_proximity_player_radar:232 | Proximity endpoint error
 ```
 
 No query string needed here (the guid is in the path), traceback had already rotated out of
