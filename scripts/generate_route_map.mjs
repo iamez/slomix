@@ -50,18 +50,48 @@ function buildLegacyFunctionIndex() {
 
 // 'home' is a documented exception: its route definition's load() is an
 // intentional no-op (buildHash() -> '', no discrete load call), because the
-// home view is actually populated by initApp()'s criticalLoads array in
-// app.js — five functions across four files, called directly during startup,
-// not through the route dispatch mechanism every other route uses:
-// loadHomePulseCards (home.js), loadOverviewStats (defined in app.js itself,
-// not exported), updateLiveSession (live-status.js), and loadQuickLeaders +
-// loadRecentMatches (leaderboard.js). Static analysis of "what does
-// initApp() call for the initial route" isn't reliably automatable the way
-// the load()-callback scan is for every other route, so this one is
-// hand-verified instead (Codex review on #575).
-const SPECIAL_CASES = {
-    home: 'website/js/home.js + website/js/app.js + website/js/live-status.js + website/js/leaderboard.js (loadHomePulseCards / loadOverviewStats / updateLiveSession / loadQuickLeaders + loadRecentMatches, all called directly from initApp() in app.js — not through load(), see comment in this script)',
-};
+// home view is populated by initApp() in app.js calling its loaders directly
+// during startup, not through the route dispatch mechanism every other route
+// uses.
+//
+// This list is DERIVED, not hand-written. It was hand-written twice and was
+// incomplete both times — first missing everything but home.js, then missing
+// the whole `scheduleDeferredLoads([...])` batch that populates the season
+// widgets (Codex review on #575, twice). Parsing the two arrays out of
+// initApp() keeps it honest as the startup sequence changes.
+function homeLoaderFiles(legacyIndex) {
+    const appJs = readFileSync(path.join(legacyDir, 'app.js'), 'utf8');
+    const names = new Set();
+
+    // criticalLoads.unshift(a, b, c, ...) — the synchronous startup batch.
+    const critical = appJs.match(/criticalLoads\.unshift\(([\s\S]*?)\)\s*;/);
+    if (critical) {
+        for (const m of critical[1].matchAll(/\b([A-Za-z_]\w*)\b/g)) names.add(m[1]);
+    }
+    // scheduleDeferredLoads([{ task: fn, label: '...' }, ...]) — the idle batch.
+    const deferred = appJs.match(/scheduleDeferredLoads\(\[([\s\S]*?)\]\s*\)\s*;/);
+    if (deferred) {
+        for (const m of deferred[1].matchAll(/task:\s*([A-Za-z_]\w*)/g)) names.add(m[1]);
+    }
+
+    // Functions declared in app.js itself are never `export`ed, so they aren't
+    // in the exported-symbol index — resolve those to app.js directly.
+    const localToAppJs = new Set();
+    for (const m of appJs.matchAll(/^(?:async\s+)?function\s+(\w+)\s*\(/gm)) {
+        localToAppJs.add(m[1]);
+    }
+
+    const files = new Set();
+    const unresolved = [];
+    for (const name of names) {
+        const file = legacyIndex.get(name) ?? (localToAppJs.has(name) ? 'app.js' : null);
+        if (file) files.add(`website/js/${file}`);
+        else unresolved.push(name);
+    }
+    const sorted = [...files].sort();
+    const suffix = unresolved.length ? ` (unresolved: ${unresolved.join(', ')})` : '';
+    return `${sorted.join(' + ')} — populated directly from initApp() in app.js (criticalLoads + scheduleDeferredLoads), not through load()${suffix}`;
+}
 
 // 'hall-of-fame' is a documented exception: its buildHash() returns the
 // generic '#/record-book' (same as the plain 'record-book' route), because
@@ -77,7 +107,7 @@ const HASH_EXAMPLE_OVERRIDES = {
 };
 
 function legacyFileFor(routeKey, def, legacyIndex) {
-    if (SPECIAL_CASES[routeKey]) return SPECIAL_CASES[routeKey];
+    if (routeKey === 'home') return homeLoaderFiles(legacyIndex);
     const source = def.load.toString();
     const calls = [...source.matchAll(/legacy\.(\w+)\(/g)].map((m) => m[1]);
     const files = new Set(calls.map((name) => legacyIndex.get(name)).filter(Boolean));
