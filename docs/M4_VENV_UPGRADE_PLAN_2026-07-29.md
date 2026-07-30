@@ -8,16 +8,45 @@ running service is not obviously safe, `fastapi` especially).
 ## Measured (2026-07-29)
 
 `scripts/check_env.py` is a local helper that isn't tracked in this
-repository (not part of this commit tree) — the command below isn't
-reproducible from a fresh checkout as written. Its output is reproduced
-verbatim here as the source of the drift numbers this plan is built on;
-treat it as a description of what was run, not a command you can currently
-re-run yourself. `pip list --outdated` against `website/requirements.txt`
-in the same venv is the nearest equivalent already in the repo.
+repository (not part of this commit tree), so the command that produced the
+output below isn't reproducible from a fresh checkout:
 
 ```bash
 website/venv/bin/python scripts/check_env.py --no-env --requirements website/requirements.txt
 ```
+
+Reproduce it without that helper with the snippet below. `pip list
+--outdated` is **not** a substitute — it never reads the manifest, so it
+omits a pinned-but-missing package entirely (all three BLOCKING rows here)
+and reports a correctly-pinned package as "outdated" whenever PyPI has
+something newer (Codex review on #583). `pip install --dry-run` isn't an
+option either: this venv's pip predates that flag, which is itself part of
+the drift being measured.
+
+```bash
+website/venv/bin/python - <<'PY' website/requirements.txt
+import re, sys
+from importlib.metadata import version, PackageNotFoundError
+missing, mismatch = [], []
+for line in open(sys.argv[1]):
+    m = re.match(r'^([A-Za-z0-9._-]+)==([^\s;]+)', line.split('#')[0].strip())
+    if not m:
+        continue
+    name, pinned = m.groups()
+    try:
+        got = version(name)
+    except PackageNotFoundError:
+        missing.append(f"{name} (pinned {pinned})")
+    else:
+        if got != pinned:
+            mismatch.append(f"{name}: installed {got}, pinned {pinned}")
+print("MISSING:  ", missing or "none")
+print("MISMATCH: ", mismatch or "none")
+PY
+```
+
+Verified to reproduce exactly the drift recorded below — all three missing
+packages plus all six version mismatches.
 
 ```
 BLOCKING:
@@ -50,6 +79,30 @@ Redis) — what's actually silent is that nothing tells you it downgraded
 except that one warning line in `web.log`, easy to miss unless you're
 looking for it.
 
+## Before any step: stop the service, don't just restart after
+
+Every step below mutates `site-packages` in a venv a live process is running
+out of. `pip` removes and replaces package directories in place, so a request
+or a lazy import landing mid-install can load a half-swapped module set and
+fail — and it fails *before* the restart that was supposed to make the change
+safe. This project's own deploy already does it the right way round:
+`scripts/deploy_release.sh:519-541` stops `slomix-web slomix-bot` first, then
+pips, with a comment naming "inconsistent imports" as the reason (Codex review
+on #583).
+
+So each step is: **stop → pip → start**, not pip → restart:
+
+```bash
+sudo systemctl stop slomix-web        # or etlegacy-web on this dev box
+# ... the step's pip install ...
+sudo systemctl start slomix-web
+sudo systemctl status slomix-web
+```
+
+The restart is also what makes steps 1-2 take effect at all (see their notes) —
+stopping first just means nothing is served from a half-installed tree in
+between.
+
 ## Recommended order, package by package
 
 ### 1. `prometheus-client` + `prometheus-fastapi-instrumentator` — lowest risk
@@ -68,9 +121,25 @@ Also not installed at all. Same restart caveat as step 1: the active cache
 backend is selected once in `create_cache_backend_from_env()` at import
 time, so the running process keeps using `MemoryCacheBackend` until
 restarted even after `redis` is installed and `CACHE_BACKEND=redis` is set.
-After install + restart, verify with `redis-cli monitor` (or `INFO stats`)
-that keys actually get written after a proximity page load — "the package
-imports" is not the same as "the cache backend selected it."
+
+Verify with an **unauthenticated** request, not by loading the page in your
+logged-in browser. `HTTPCacheMiddleware.dispatch()`
+(`http_cache_middleware.py:87-91`) sets `Cache-Control: private, no-store`
+and skips the cache entirely whenever a `cookie` or `authorization` header is
+present — so a normal logged-in page load produces no Redis writes at all and
+would make a correctly-working backend look dead (Codex review on #583). Hit a
+cacheable endpoint twice with a cookie-less client and watch the `X-Cache`
+header go `MISS` → `HIT`:
+
+```bash
+curl -sS -D- -o /dev/null http://127.0.0.1:8000/api/proximity/prox-scores | grep -i x-cache   # MISS
+curl -sS -D- -o /dev/null http://127.0.0.1:8000/api/proximity/prox-scores | grep -i x-cache   # HIT
+redis-cli --scan --pattern 'slomix:*' | head              # keys actually present
+```
+
+`X-Cache: BYPASS` on either call means the request carried a cookie (or the
+path isn't cacheable), not that Redis is broken. "The package imports" is not
+the same as "the cache backend selected it."
 
 ### 3. `python-dotenv`, `httpx` — low risk, minor version gaps
 1.0.1→1.2.2 and 0.27.2→0.28.1 respectively — both well inside their stable
@@ -109,10 +178,23 @@ Starlette range internally, so bumping `starlette` on its own first risks a
 combination FastAPI 0.110 doesn't support — but letting `fastapi` pull
 Starlette in transitively also means it isn't independently at "already
 current" before this step starts. There's no atomicity-preserving order
-that lands them separately; treat `pip install -U fastapi starlette` (or
-the equivalent pinned-version bump in `requirements.txt`) as one change,
-last in the sequence, after asyncpg/uvicorn/python-multipart above are
-already current.
+that lands them separately; treat it as one change, last in the sequence,
+after asyncpg/uvicorn/python-multipart above are already current.
+
+Install the **exact** analysed versions, not `-U`. `pip install -U fastapi
+starlette` resolves to "newest available at run time", so if a newer release
+lands between this analysis and the owner actually executing this
+owner-gated step, it would install a version nobody reviewed — the
+breaking-change review below would then describe a different upgrade than the
+one performed (Codex review on #583):
+
+```bash
+website/venv/bin/pip install 'fastapi==0.133.1' 'starlette==0.52.1'
+```
+
+(Those are the pins already in `website/requirements.txt`, so
+`pip install -r website/requirements.txt` is equivalent and stays in sync if
+the pins are bumped deliberately later.)
 
 23 minor versions of FastAPI is a lot of surface — checked its release
 notes for breaking changes in this specific range (not just "big gap =
@@ -145,14 +227,19 @@ isn't the same as "safe" — treat this as its own staging-tested change.
 
 ## Verify (after the owner executes any step)
 
-`scripts/check_env.py` isn't in this repository (see the note under
-"Measured" above) — the nearest in-repo equivalent is `pip list --outdated`
-against `website/requirements.txt` in the same venv. Restart the service
-after each step before checking (see the restart note on steps 1-2 above).
+Re-run the manifest comparison from the "Measured" section above (not
+`pip list --outdated` — it can't see a missing package or the pinned version
+at all). Start the service again after each step before checking; the checks
+below all need a running process.
 
 ```bash
-website/venv/bin/pip list --outdated
-# after step 1 + restart: /metrics is present (not 404) and shows slomix_* series
-# after step 2 + restart: redis-cli monitor shows writes after a page load
-# full pytest suite + upload-security tests specifically after step 4
+# 1. Manifest drift: rerun the heredoc from "Measured" — expect the row for
+#    the package(s) just handled to disappear from MISSING/MISMATCH.
+# 2. Dependency consistency (no broken transitive requirements):
+website/venv/bin/pip check
+# 3. after step 1 + restart: /metrics present (not 404) and shows slomix_* series
+curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/metrics
+# 4. after step 2 + restart: X-Cache goes MISS -> HIT on a cookie-less request
+#    (see step 2 — a logged-in page load proves nothing, it bypasses the cache)
+# 5. full pytest suite, plus the upload-security tests specifically after step 4
 ```
