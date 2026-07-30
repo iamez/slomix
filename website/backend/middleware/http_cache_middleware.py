@@ -192,12 +192,15 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
         etag = self._compute_etag(response_body)
         cache_control = self._cache_control_header(ttl)
 
-        if self._etag_matches(request.headers.get("if-none-match"), etag):
-            return Response(
-                status_code=304,
-                headers={"ETag": etag, "Cache-Control": cache_control, "X-Cache": "MISS"},
-            )
-
+        # Populate the cache before the 304 check, not after: a cache MISS
+        # whose recomputed body happens to match the client's If-None-Match
+        # (same underlying data, just an expired/evicted server-side entry)
+        # used to return 304 and skip cache_backend.set() entirely. On an
+        # expensive endpoint (e.g. lurker-profile's ~10-13s compute) with a
+        # client that keeps sending the same ETag, that left the cache
+        # permanently empty — every request recomputed from scratch forever,
+        # never warming the cache a subsequent MISS-free request could hit
+        # (Codex review on #574).
         await self.cache_backend.set(
             namespace,
             cache_key,
@@ -209,6 +212,12 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
             },
             ttl=ttl,
         )
+
+        if self._etag_matches(request.headers.get("if-none-match"), etag):
+            return Response(
+                status_code=304,
+                headers={"ETag": etag, "Cache-Control": cache_control, "X-Cache": "MISS"},
+            )
 
         headers = dict(response.headers)
         headers.pop("content-length", None)

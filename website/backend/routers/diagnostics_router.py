@@ -4,6 +4,7 @@ Diagnostics, monitoring, and live-status endpoints.
 Extracted from api.py to reduce file size and improve maintainability.
 """
 
+import asyncio
 import json
 import os
 from datetime import datetime, timedelta, timezone
@@ -1151,7 +1152,14 @@ async def get_live_status(
         voice_result["error"] = True
 
     # ========== GAME SERVER STATUS (direct UDP query) ==========
-    server_status = query_game_server(GAME_SERVER_HOST, GAME_SERVER_PORT)
+    # query_game_server() opens a blocking socket (sendto/recvfrom with a
+    # settimeout()) - called directly on an async route, it stalls the whole
+    # event loop for up to the query's duration, freezing every other
+    # concurrently in-flight request on this worker, not just this one.
+    # to_thread() moves it off the event loop thread (Codex review on #574,
+    # tying a 19s live-status outlier and a same-second slowdown across
+    # unrelated endpoints to this exact call).
+    server_status = await asyncio.to_thread(query_game_server, GAME_SERVER_HOST, GAME_SERVER_PORT)
 
     game_result = {
         "online": server_status.online,
