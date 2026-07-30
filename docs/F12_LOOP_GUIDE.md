@@ -8,11 +8,17 @@ each log file actually holds, and how to land on the file that served the broken
 
 ## What a paste should always carry
 
-**The failing request URL, the page's address-bar URL (including its `#/hash`), and the
-timestamp — and note the timestamp's timezone.** All three matter: the request URL drives
-Steps 1-2, the page hash is what Step 3's frontend lookup is keyed on (it can't be derived from
-an `/api/...` request path, and shared endpoints are called from several pages), and everything
-depends on the timestamp. Browser devtools show the client's local time; the backend's default
+**The failing request's METHOD and URL, the page's address-bar URL (including its `#/hash`),
+and the timestamp — and note the timestamp's timezone.** All four matter:
+
+- **Method + URL** drive Steps 1-2. The method isn't optional: the same mounted path can carry
+  different handlers per method — `GET /api/challenges` and `POST /api/challenges` are separate
+  functions (`challenges_router.py:51,63`) — so a URL alone can't identify which one failed, and
+  Step 4 can't replay a non-GET without knowing to send one (Codex review on #576). DevTools'
+  Network tab shows it in the request's Method column.
+- **The page hash** is what Step 3's frontend lookup is keyed on; it can't be derived from an
+  `/api/...` request path, and shared endpoints are called from several pages.
+- **The timestamp** is what everything else greps on. Browser devtools show the client's local time; the backend's default
 plain-text formatter (`StandardFormatter`, `logging_config.py:176`) writes the **backend
 host's** local time (naive, no offset); the optional JSON formatter (off by default,
 `LOG_FORMAT_JSON` unset) writes UTC instead. If the browser and backend host are in different
@@ -34,6 +40,20 @@ default plain-text `StandardFormatter` writes `2026-07-29 14:20:...` (space), bu
 JSON formatter (`LOG_FORMAT_JSON=true`) writes ISO-8601 (`2026-07-29T14:20:...`, `T` separator)
 — a space-separated grep against a JSON-formatted log matches nothing even though the record is
 there:
+
+**First, find out WHERE the logs are.** `logging_config.py:27-29` resolves every website file
+handler under `WEB_LOG_DIR` when that variable is set, falling back to the repo's `logs/` only
+when it isn't — so on a deployment that sets it, every command in this guide would grep an
+empty or stale default directory and report no evidence (Codex review on #576):
+
+```bash
+LOGDIR="${WEB_LOG_DIR:-$(grep -E '^\s*WEB_LOG_DIR=' website/.env 2>/dev/null | tail -1 | cut -d= -f2-)}"
+LOGDIR="${LOGDIR:-logs}"
+echo "using: $LOGDIR"
+```
+
+Substitute `$LOGDIR` for `logs` in every command below (this guide writes `logs/` for
+readability, since that's the default).
 
 Search the rotated backups too, not just the active file: `LOG_FILES["access"]` keeps 7
 (`access.log.1`–`.7`), so anything more than a few hours old on a busy day may well have moved
@@ -62,19 +82,30 @@ here.
 **Known gap — no query string.** The `→`/`←` lines never include the query string
 (`routed_path()` in `security_utils.py` deliberately logs only `request.scope["path"]`).
 
-**If `LOG_FORMAT_JSON=true`, use the request ID as a hard join — don't guess by timestamp.**
-The middleware generates a request ID per request (`str(uuid.uuid4())[:8]` — an **8-character
-UUID4 prefix, not a full UUID**) and returns it as the `X-Request-ID` response header, visible
-in the browser's Network tab. `JSONFormatter` includes `request_id` in its allowlisted extras
-(`logging_config.py:153`), so in that configuration both access entries carry it and you get an
-exact match instead of a nearest-neighbour guess — which matters precisely when concurrent
-traffic makes path+timestamp ambiguous (Codex review on #576):
+**If `LOG_FORMAT_JSON=true`, the request ID narrows the search a lot — but it is not a
+guaranteed unique key, and it does not reach tracebacks.** The middleware generates
+`str(uuid.uuid4())[:8]` — an **8-character UUID4 prefix, not a full UUID** — and returns it as
+the `X-Request-ID` response header, visible in the browser's Network tab. `JSONFormatter`
+includes `request_id` in its allowlisted extras (`logging_config.py:153`), so in that
+configuration both access entries carry it:
 
 ```bash
 grep -F '"request_id": "a1b2c3d4"' logs/access.log logs/access.log.* logs/errors.log 2>/dev/null
 ```
 
-Timestamp matching is the fallback for the two cases where that ID isn't usable:
+Two limits to keep in mind, both from Codex review on #576:
+
+- **It's 32 bits, so collisions are real.** By the birthday bound, retained logs containing
+  ~77,000 requests have roughly a 50% chance of some duplicated prefix. If the grep returns
+  more than one request's worth of lines, fall back to the timestamp to pick the right one —
+  don't assume a single match.
+- **The traceback usually won't carry it.** Handled failures log via bare
+  `logger.exception("…")` with no `extra={"request_id": …}` — e.g.
+  `proximity_player.py:118,342`, the very endpoint this guide's worked example uses. So the ID
+  joins the *access* records to each other, not the access record to its traceback; for that
+  hop you still correlate by timestamp (Step 2).
+
+Timestamp matching is also the fallback for the two cases where the ID isn't available at all:
 
 - **Plain-text formatter (the default).** `StandardFormatter`'s format string has no
   `%(request_id)s` placeholder, so the ID never reaches the log text even though the header
@@ -155,8 +186,14 @@ has nothing to talk to (Codex review on #576). Easiest is to use the existing `.
 already read; otherwise export them for the shell:
 
 ```bash
-# Terminal A — env first. If website/.env already exists (the normal case), uvicorn picks it up
-# and you can skip these; check with `grep -c INTERNAL_API_SECRET website/.env`.
+# Terminal A — env first. A website/.env copied from the tracked .env.example does NOT
+# satisfy this: that file ships `INTERNAL_API_SECRET=` (empty) and
+# `SESSION_SECRET=change-this-to-a-secure-random-string-in-production`, and main.py
+# rejects BOTH the empty value and that exact placeholder. So check the VALUES, not
+# just that the keys exist — a `grep -c` presence test would say 1 and be wrong
+# (Codex review on #576):
+grep -E '^(SESSION_SECRET|INTERNAL_API_SECRET)=' website/.env 2>/dev/null
+# Anything empty or still saying "change-this-..." needs replacing. Generate real ones:
 export SESSION_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
 export INTERNAL_API_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
 export SESSION_HTTPS_ONLY=false     # local HTTP; otherwise TRUSTED_HOSTS is mandatory too
@@ -175,7 +212,11 @@ cd website && ../venv/bin/uvicorn backend.main:app --reload   # must run from we
 ```bash
 # Terminal B — uvicorn above never returns, so run the request from a second shell (or
 # background/nohup it from the first and wait for the "Application startup complete" line)
-curl -s -w '\n%{http_code}\n' 'http://127.0.0.1:8000/api/proximity/prox-scores?<params-if-known>'
+# -sS, not -s: bare -s silences curl's own error message too, so a refused
+# connection/malformed URL/DNS failure collapses to a bare "000" with no
+# explanation of why nothing came back. -S keeps the diagnostic while still
+# suppressing the progress meter (Codex review on #576).
+curl -sS -w '\n%{http_code}\n' 'http://127.0.0.1:8000/api/proximity/prox-scores?<params-if-known>'
 ```
 
 Deliberately **not** `-o /dev/null`: a FastAPI validation error (bad/missing query param) is a
