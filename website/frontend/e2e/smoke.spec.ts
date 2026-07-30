@@ -83,6 +83,17 @@ for (const route of ROUTES) {
       `${route.expectSelector} rendered an error state: ${text.trim().slice(0, 200)}`,
     ).toBe(false);
 
+    // ...and not still sitting on its pre-rendered placeholder. The legacy
+    // views ship static "Loading …" markup in index.html (e.g. line 1856 for
+    // #view-sessions), so a loader that never ran — or returned without
+    // touching its container — leaves the section visible, nonempty and
+    // error-free, passing every check above while showing the user nothing
+    // (Codex review on #582).
+    await expect(
+      view,
+      `${route.expectSelector} still shows a loading placeholder — loader never resolved`,
+    ).not.toHaveText(/loading[.\s]*$|loading\s+\w+\.\.\./i, { timeout: 15_000 });
+
     expect(consoleErrors, `console errors on ${route.hash}`).toEqual([]);
     expect(failedRequests, `failed/5xx requests on ${route.hash}`).toEqual([]);
   });
@@ -122,8 +133,13 @@ test('smoke: navigating away from skill-rating (React) to sessions (legacy) unmo
   // immediately when the document is already in the requested state — the
   // previous version of this wait was a no-op on a hash-only transition (Codex
   // review on #582). Wait on the actual request instead.
+  // /api/stats/sessions — NOT /api/sessions. loadSessions() builds
+  // `${API_BASE}/stats/sessions?...` (website/js/sessions.js:1255); the wrong
+  // path meant this never matched, so every run silently burned the full 15s
+  // timeout and then asserted without having waited at all (Codex review on
+  // #582).
   const sessionsLoaded = page
-    .waitForResponse((r) => new URL(r.url()).pathname.startsWith('/api/sessions'), {
+    .waitForResponse((r) => new URL(r.url()).pathname.startsWith('/api/stats/sessions'), {
       timeout: 15_000,
     })
     .catch(() => {
