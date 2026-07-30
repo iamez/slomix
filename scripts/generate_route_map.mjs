@@ -59,6 +59,29 @@ function buildLegacyFunctionIndex() {
 // the whole `scheduleDeferredLoads([...])` batch that populates the season
 // widgets (Codex review on #575, twice). Parsing the two arrays out of
 // initApp() keeps it honest as the startup sequence changes.
+// True if `sym` appears in `text` as a call: `sym(` or `sym (`, not preceded by
+// another identifier character.
+//
+// Deliberately NOT `new RegExp(\`\\b${sym}\\s*\\(\`)`. Building a pattern from a
+// parsed symbol is both a Codacy finding and a real bug: `$` is legal in a JS
+// identifier but means end-of-input in a regex, so a symbol like `$foo` would
+// compile to a pattern that can never match, and the module would be silently
+// dropped from the route map. The character classes below are literal regexes,
+// which is fine — nothing is constructed from input.
+const IDENT_CHAR = /[\w$]/;
+const CALL_GAP = /\s/;
+
+function isCalledIn(text, sym) {
+    for (let i = text.indexOf(sym); i !== -1; i = text.indexOf(sym, i + 1)) {
+        // Must start on a word boundary, or it's a substring of a longer name.
+        if (i > 0 && IDENT_CHAR.test(text[i - 1])) continue;
+        let j = i + sym.length;
+        while (j < text.length && CALL_GAP.test(text[j])) j += 1;
+        if (text[j] === '(') return true;
+    }
+    return false;
+}
+
 function homeLoaderFiles(legacyIndex) {
     const appJs = readFileSync(path.join(legacyDir, 'app.js'), 'utf8');
     const names = new Set();
@@ -101,19 +124,19 @@ function homeLoaderFiles(legacyIndex) {
     // the bootstrap/router and imports ~30 modules, so following it would list
     // most of website/js and tell a reader nothing. Its own directly-defined
     // loaders are already included above.
+    // utils.js is the shared helper module (fetchJSON/escapeHtml/…) imported by
+    // nearly every file; listing it under every route adds no triage value,
+    // same reasoning as the app.js exclusion above.
+    const SHARED_INFRA = new Set(['route-registry.js', 'utils.js']);
     for (const file of directFiles) {
         if (file === 'app.js') continue;
         const text = readFileSync(path.join(legacyDir, file), 'utf8');
         for (const m of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*'\.\/([\w.-]+)'/g)) {
             const symbols = m[1].split(',').map((x) => x.trim().split(/\s+as\s+/).pop()).filter(Boolean);
             const target = m[2];
-            const invoked = symbols.some((sym) =>
-                new RegExp(`\\b${sym}\\s*\\(`).test(text.replace(m[0], '')),
-            );
-            // utils.js is the shared helper module (fetchJSON/escapeHtml/…)
-            // imported by nearly every file; listing it under every route adds
-            // no triage value, same reasoning as the app.js exclusion above.
-            const SHARED_INFRA = new Set(['route-registry.js', 'utils.js']);
+            // Strip the import statement itself so it isn't mistaken for a call.
+            const body = text.replace(m[0], '');
+            const invoked = symbols.some((sym) => isCalledIn(body, sym));
             if (invoked && !SHARED_INFRA.has(target)) files.add(`website/js/${target}`);
         }
     }
