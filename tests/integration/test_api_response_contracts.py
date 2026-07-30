@@ -50,6 +50,18 @@ class _EmptyDB:
         return 0
 
 
+def _is_number(value) -> bool:
+    """True for a real JSON number, False for a bool.
+
+    `isinstance(True, (int, float))` is True because bool subclasses int, so an
+    isinstance check silently accepts a field that regressed to a JSON boolean.
+    The frontend declares these as `number` and feeds them through
+    `Math.round`/`formatNumber`, which would render true/false as 1/0 rather
+    than failing visibly (Codex review on #581).
+    """
+    return type(value) in (int, float)
+
+
 def _app(router, db=None) -> FastAPI:
     app = FastAPI()
     app.include_router(router, prefix="/api")
@@ -103,12 +115,40 @@ async def test_proximity_radar_returns_exactly_four_axes():
     for axis in body["axes"]:
         assert set(axis.keys()) >= {"label", "value"}
         assert isinstance(axis["label"], str) and axis["label"]
-        assert isinstance(axis["value"], (int, float))
+        assert _is_number(axis["value"]), (
+            f"{axis['label']} value should be a number, got {type(axis['value'])}"
+        )
 
     # composite is fed into RadarChart alongside axes (ProximityPlayer.tsx) —
     # a dropped/renamed/mistyped field would silently blank that display.
     assert "composite" in body
-    assert isinstance(body["composite"], (int, float))
+    assert _is_number(body["composite"]), (
+        f"composite should be a number, got {type(body['composite'])}"
+    )
+
+    # On the no-data path the endpoint deliberately reports Teamplay as
+    # UNAVAILABLE rather than a real 0 (proximity_player.py:280 — "never
+    # convert an unknown into a real 0 rate"), and ProximityPlayer.tsx relies
+    # on that to label the axis as a placeholder. Drop or rename these and the
+    # frontend gets `undefined`, silently rendering the placeholder zero as if
+    # it were a measured score — with every other assertion here still green
+    # (Codex review on #581).
+    assert body.get("teamplay_source") == "unavailable", (
+        "empty-data path must declare Teamplay unavailable, not a real score"
+    )
+    assert body.get("teamplay_degraded") is True
+    assert body.get("teamplay_fallback_reason") == "no_participation_data"
+    assert "teamplay_formula_version" in body
+    assert "teamplay_sample_count" in body
+    # NOT asserted here: that the unavailable Teamplay placeholder is excluded
+    # from the composite average (proximity_player.py:305-307). On this no-data
+    # path every axis is 0.0, so including or excluding Teamplay both yield
+    # composite 0.0 — an arithmetic assertion would pass either way and claim
+    # coverage it doesn't have. Verifying that needs non-zero values for the
+    # other three axes, which means simulating real rows across all of this
+    # endpoint's queries — data simulation, beyond what a response-shape
+    # contract test should carry. Left explicitly uncovered rather than
+    # apparently covered.
 
 
 @pytest.mark.asyncio
