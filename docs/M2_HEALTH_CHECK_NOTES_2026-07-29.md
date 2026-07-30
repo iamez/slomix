@@ -129,3 +129,47 @@ induced-FAIL and mktemp cleanup re-confirmed; `--fail-on-breach` confirmed
 passed through (no live breach to trigger on this box's current data, so the
 FAIL path itself relies on the flag's own documented behavior rather than a
 fresh repro here).
+
+## Addendum 2 — Codex review round 3 (#580)
+
+Five more findings, one a P1, and one of them was a false-positive
+generator bad enough that it was actively hiding real signal:
+
+- **P1 — `cloudflared` wasn't checked at all.** It carries *all* public
+  traffic to www.slomix.fyi on the canonical VM (`slomix_vm_setup.sh`
+  installs and enables `cloudflared.service`, lines 1035/1064). With the
+  tunnel down the whole site is unreachable from outside even while
+  `slomix-web` reports healthy — precisely the blind spot this script exists
+  to close. Added.
+- **The 0.0.0.0-exposure check was a false positive on nearly every row.**
+  It grepped whole `ss` lines for `0.0.0.0:`, but *every* `ss -ltn` row
+  carries a literal `0.0.0.0:*` in the **Peer Address** column — so
+  correctly-loopback-bound listeners like `127.0.0.1:5432` were all reported
+  as exposed to all interfaces. Now matches only the Local Address column
+  (`awk '$4 ~ ...'`). This alone dropped the run from WARN=38 to WARN=31,
+  i.e. most of that noise was this bug burying the rows that would matter.
+- **Service-existence detection was unreliable.** The generic loop decided
+  "unit not installed" by pattern-matching `systemctl is-active` output for
+  `unknown`/`could not`, but on this box a unit whose file doesn't exist at
+  all reports plain `inactive` — so a not-installed service was
+  misclassified as installed-but-down and FAILed. Now uses
+  `list-unit-files` (the same reliable test `check_service_pair` already
+  used), with a third case: installed-but-`disabled` WARNs rather than FAILs,
+  since that's a dev-box posture, not an outage.
+- **The round-linkage API fallback probed the wrong path.** `main.py` mounts
+  the diagnostics router with `prefix="/api"`, so the served route is
+  `/api/diagnostics/round-linkage` — the unprefixed spelling in CLAUDE.md
+  404s. Also: the probe loop fell out silently when nothing answered, so a
+  fully-down API produced no signal at all. Both fixed.
+- **`WEB_LOG_DIR` was ignored.** `logging_config.py` resolves the web log
+  directory from that env var and only falls back to `<repo>/logs`. A
+  deployment that points it elsewhere would pass this check against a stale
+  repo-local `logs/` while the directory whose 0640-vs-0660 permissions have
+  twice taken the bot down went unexamined. Now scans both, de-duplicated by
+  canonical path.
+
+Verified after all fixes: `OK=24 WARN=32 FAIL=0`, exit 0 — and the FAIL
+branch was induced for real by temporarily adding `dmesg.service`
+(installed, enabled, inactive on this box — the same shape a stopped
+cloudflared has on prod): `FAIL dmesg not active: inactive`, exit 1. Removed
+again afterwards.

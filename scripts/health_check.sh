@@ -86,16 +86,30 @@ else
         warn "postgresql: no matching systemd unit found (postgresql or postgresql@*-main)"
     fi
 fi
-for svc in redis-server tailscaled fail2ban smbd; do
+# cloudflared carries ALL public traffic to www.slomix.fyi on the canonical VM
+# (slomix_vm_setup.sh installs /etc/systemd/system/cloudflared.service and
+# `systemctl enable cloudflared.service`, lines 1035/1064) — if the tunnel is
+# down the whole site is unreachable from outside even with slomix-web healthy,
+# which is exactly the blind spot a health check exists to close (Codex P1
+# review on #580).
+#
+# Existence is tested with `list-unit-files`, not by pattern-matching
+# `is-active` output: on this box `systemctl is-active cloudflared` prints
+# "inactive" for a unit whose file doesn't exist at all, so the old
+# "unknown"/"could not" match silently misclassified a not-installed service
+# as installed-but-down and FAILed on it. Not-installed WARNs (some hosts run
+# these differently, or not at all); installed-but-not-running FAILs — except
+# a unit that's installed yet deliberately `disabled`, which is a dev-box
+# posture rather than an outage, so that WARNs too.
+for svc in redis-server tailscaled fail2ban smbd cloudflared; do
     if systemctl is-active --quiet "$svc" 2>/dev/null; then
         ok "$svc active"
+    elif ! systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "${svc}.service"; then
+        warn "$svc: no matching systemd unit found (not installed on this host)"
+    elif [[ "$(systemctl is-enabled "$svc" 2>/dev/null)" == "disabled" ]]; then
+        warn "$svc installed but disabled (intentionally off on this host?): $(systemctl is-active "$svc" 2>&1)"
     else
-        status="$(systemctl is-active "$svc" 2>&1)"
-        if [[ "$status" == "unknown" || "$status" == "could not"* ]]; then
-            warn "$svc: no matching systemd unit found"
-        else
-            fail "$svc not active: $status"
-        fi
+        fail "$svc not active: $(systemctl is-active "$svc" 2>&1)"
     fi
 done
 
@@ -133,7 +147,14 @@ else
     # 127.0.0.1 would be exactly the kind of thing worth catching here, not
     # excluding (Copilot review on #580: the comment previously implied an
     # exclusion the code never implemented).
-    EXPOSED="$(echo "$LISTENING" | grep -E '0\.0\.0\.0:|(\*|\[::\]):' || true)"
+    # Match ONLY the Local Address:Port column ($4 with -H: State, Recv-Q,
+    # Send-Q, Local, Peer[, Process]). Every `ss -ltn` row carries a literal
+    # "0.0.0.0:*" in the *Peer* column, so grepping the whole line reported
+    # every correctly-loopback-bound listener (e.g. "127.0.0.1:5432") as
+    # exposed to all interfaces — a false positive on essentially every row,
+    # which is worse than no check because it buries the real ones (Codex
+    # review on #580).
+    EXPOSED="$(echo "$LISTENING" | awk '$4 ~ /^(0\.0\.0\.0|\*|\[::\]):/ {print}' || true)"
     if [[ -n "$EXPOSED" ]]; then
         while IFS= read -r line; do
             [[ -z "$line" ]] && continue
@@ -233,7 +254,35 @@ done < <(df -hP --local 2>/dev/null | tail -n +2)
 # 5. Logs — permissions, executable bit, age
 # ===========================================================================
 section "5. Logs"
-if [[ -d logs ]]; then
+# The web service's log directory is configurable: logging_config.py resolves
+# WEB_LOG_DIR and only falls back to <repo>/logs. A deployment that sets it
+# elsewhere (e.g. /var/log/slomix) would have this check pass on an empty or
+# stale repo-local logs/ while the directory that actually matters — the one
+# whose 0640-vs-0660 permissions have twice taken the bot down — goes
+# unexamined (Codex review on #580). Scan both, de-duplicated.
+LOG_DIRS=(logs)
+WEB_LOG_DIR_RESOLVED="${WEB_LOG_DIR:-}"
+if [[ -z "$WEB_LOG_DIR_RESOLVED" && -f website/.env ]]; then
+    # Not sourced: .env may contain arbitrary shell. Read the one key we need.
+    WEB_LOG_DIR_RESOLVED="$(grep -E '^\s*WEB_LOG_DIR=' website/.env 2>/dev/null \
+        | tail -1 | cut -d= -f2- | tr -d '"'"'"' ' || true)"
+fi
+if [[ -n "$WEB_LOG_DIR_RESOLVED" ]]; then
+    # Compare canonical paths so an absolute WEB_LOG_DIR pointing at the repo's
+    # own logs/ isn't scanned (and reported) twice.
+    repo_logs_real="$(readlink -f logs 2>/dev/null || echo logs)"
+    web_logs_real="$(readlink -f "$WEB_LOG_DIR_RESOLVED" 2>/dev/null || echo "$WEB_LOG_DIR_RESOLVED")"
+    if [[ "$web_logs_real" != "$repo_logs_real" ]]; then
+        if [[ -d "$WEB_LOG_DIR_RESOLVED" ]]; then
+            LOG_DIRS+=("$WEB_LOG_DIR_RESOLVED")
+        else
+            warn "WEB_LOG_DIR is set to '$WEB_LOG_DIR_RESOLVED' but that directory doesn't exist"
+        fi
+    fi
+fi
+
+for LOG_DIR_SCAN in "${LOG_DIRS[@]}"; do
+if [[ -d "$LOG_DIR_SCAN" ]]; then
     STALE_FOUND=0
     while IFS= read -r -d '' f; do
         perms="$(stat -c '%a' "$f" 2>/dev/null || stat -f '%Lp' "$f" 2>/dev/null)"
@@ -259,16 +308,17 @@ if [[ -d logs ]]; then
         if [[ "$age_secs" -gt $((7 * 86400)) ]]; then
             STALE_FOUND=1
         fi
-    done < <(find logs -maxdepth 1 -type f -name '*.log' -print0 2>/dev/null)
-    LOG_COUNT=$(find logs -maxdepth 1 -type f -name '*.log' 2>/dev/null | wc -l)
-    LOG_SIZE=$(du -sh logs 2>/dev/null | cut -f1)
-    ok "logs/ has $LOG_COUNT *.log files, $LOG_SIZE total"
+    done < <(find "$LOG_DIR_SCAN" -maxdepth 1 -type f -name '*.log' -print0 2>/dev/null)
+    LOG_COUNT=$(find "$LOG_DIR_SCAN" -maxdepth 1 -type f -name '*.log' 2>/dev/null | wc -l)
+    LOG_SIZE=$(du -sh "$LOG_DIR_SCAN" 2>/dev/null | cut -f1)
+    ok "$LOG_DIR_SCAN has $LOG_COUNT *.log files, $LOG_SIZE total"
     if [[ "$STALE_FOUND" -eq 1 ]]; then
-        warn "at least one *.log file hasn't been written to in 7+ days (may be fine if that service is idle)"
+        warn "$LOG_DIR_SCAN: at least one *.log file hasn't been written to in 7+ days (may be fine if that service is idle)"
     fi
 else
-    warn "logs/ directory not found"
+    warn "$LOG_DIR_SCAN directory not found"
 fi
+done
 
 # ===========================================================================
 # 6. ERROR/CRITICAL counts, last 24h
@@ -393,14 +443,27 @@ if [[ -f scripts/check_round_linkage_anomalies.py ]]; then
         fail "round-linkage anomalies over threshold: $(tail -5 "$OUT" | tr '\n' ' ')"
     fi
 elif command -v curl >/dev/null 2>&1; then
+    # The router is mounted with prefix="/api" (main.py: include_router(
+    # diagnostics_router.router, prefix="/api")), so the served path is
+    # /api/diagnostics/round-linkage — the unprefixed spelling in CLAUDE.md
+    # 404s. Probe the real one first, keep the bare path as a fallback in case
+    # a host mounts it differently, and FAIL if nothing answers rather than
+    # falling out of the loop silently (Codex review on #580).
+    linkage_answered=0
     for base in "http://127.0.0.1:8000" "http://127.0.0.1:7000"; do
-        code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "${base}/diagnostics/round-linkage" 2>/dev/null)"
-        code="${code:0:3}"
-        if [[ "$code" == "200" ]]; then
-            ok "GET ${base}/diagnostics/round-linkage -> 200"
-            break
-        fi
+        for route in "/api/diagnostics/round-linkage" "/diagnostics/round-linkage"; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "${base}${route}" 2>/dev/null)"
+            code="${code:0:3}"
+            if [[ "$code" == "200" ]]; then
+                ok "GET ${base}${route} -> 200"
+                linkage_answered=1
+                break 2
+            fi
+        done
     done
+    if [[ "$linkage_answered" -eq 0 ]]; then
+        fail "round-linkage: no API base answered /api/diagnostics/round-linkage (tried :8000 and :7000)"
+    fi
 else
     warn "scripts/check_round_linkage_anomalies.py not found and curl unavailable, skipping"
 fi
