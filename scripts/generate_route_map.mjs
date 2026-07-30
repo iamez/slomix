@@ -82,6 +82,32 @@ function isCalledIn(text, sym) {
     return false;
 }
 
+// Source of `function name(...) { ... }` (or `async function`), or null if it
+// can't be isolated. Brace-matched rather than regex-parsed; naive about braces
+// inside strings/comments, which is acceptable here because the caller falls
+// back to whole-file scanning when this returns null.
+function functionBody(text, name) {
+    let start = -1;
+    for (let i = text.indexOf(name); i !== -1; i = text.indexOf(name, i + 1)) {
+        if (i > 0 && IDENT_CHAR.test(text[i - 1])) continue;
+        if (!/function\s+$/.test(text.slice(Math.max(0, i - 40), i))) continue;
+        start = i;
+        break;
+    }
+    if (start === -1) return null;
+    const open = text.indexOf('{', start);
+    if (open === -1) return null;
+    let depth = 0;
+    for (let j = open; j < text.length; j += 1) {
+        if (text[j] === '{') depth += 1;
+        else if (text[j] === '}') {
+            depth -= 1;
+            if (depth === 0) return text.slice(open, j + 1);
+        }
+    }
+    return null;
+}
+
 function homeLoaderFiles(legacyIndex) {
     const appJs = readFileSync(path.join(legacyDir, 'app.js'), 'utf8');
     const names = new Set();
@@ -131,12 +157,24 @@ function homeLoaderFiles(legacyIndex) {
     for (const file of directFiles) {
         if (file === 'app.js') continue;
         const text = readFileSync(path.join(legacyDir, file), 'utf8');
+
+        // Scan ONLY the bodies of the home loaders this file contributes, not
+        // the whole file. A module usually implements unrelated functions too,
+        // and scanning all of it attributes their imports to the home route:
+        // `matches.js` is here for loadMatchesView(), but its separate
+        // loadMatchDetails() calls openModal() from auth.js (matches.js:608),
+        // which put auth.js in the home row even though no home loader reaches
+        // it on page load (Codex review on #575). Falls back to the whole file
+        // if a body can't be isolated, so a parsing miss under-scopes rather
+        // than silently dropping the module.
+        const ownLoaders = [...names].filter((n) => legacyIndex.get(n) === file);
+        const bodies = ownLoaders.map((n) => functionBody(text, n)).filter(Boolean);
+        const scope = bodies.length ? bodies.join('\n') : text;
+
         for (const m of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*'\.\/([\w.-]+)'/g)) {
             const symbols = m[1].split(',').map((x) => x.trim().split(/\s+as\s+/).pop()).filter(Boolean);
             const target = m[2];
-            // Strip the import statement itself so it isn't mistaken for a call.
-            const body = text.replace(m[0], '');
-            const invoked = symbols.some((sym) => isCalledIn(body, sym));
+            const invoked = symbols.some((sym) => isCalledIn(scope, sym));
             if (invoked && !SHARED_INFRA.has(target)) files.add(`website/js/${target}`);
         }
     }

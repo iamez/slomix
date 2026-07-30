@@ -16,7 +16,7 @@ Generated: 2026-07-30
 | `greatshot` | `#/greatshot/demos` | Legacy JS | greatshot.js |
 | `greatshot-demo` | `#/greatshot/demos` | Legacy JS | greatshot.js |
 | `hall-of-fame` | `#/hall-of-fame` | Legacy JS | record-book.js |
-| `home` | `(root — empty hash)` | Legacy JS | website/js/app.js + website/js/auth.js + website/js/home.js + website/js/leaderboard.js + website/js/live-status.js + website/js/matches.js + website/js/season-stats.js + website/js/sessions.js + website/js/tonight.js — populated directly from initApp() in app.js (criticalLoads + scheduleDeferredLoads), not through load() |
+| `home` | `(root — empty hash)` | Legacy JS | website/js/app.js + website/js/home.js + website/js/leaderboard.js + website/js/live-status.js + website/js/matches.js + website/js/season-stats.js + website/js/sessions.js + website/js/tonight.js — populated directly from initApp() in app.js (criticalLoads + scheduleDeferredLoads), not through load() |
 | `leaderboards` | `#/leaderboards` | Legacy JS | leaderboard.js |
 | `maps` | `#/maps` | Legacy JS | matches.js |
 | `profile` | `#/profile` | Legacy JS | player-profile.js |
