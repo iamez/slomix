@@ -173,3 +173,45 @@ branch was induced for real by temporarily adding `dmesg.service`
 (installed, enabled, inactive on this box — the same shape a stopped
 cloudflared has on prod): `FAIL dmesg not active: inactive`, exit 1. Removed
 again afterwards.
+
+## Addendum 3 — Codex review round 4 (#580)
+
+Four findings, all cases where a check could report healthy while something
+was actually wrong (or the reverse):
+
+- **Section 6 ignored `WEB_LOG_DIR`.** Round 3 taught section 5 to scan the
+  configured website log directory, but the 24h error count still read only
+  `logs/errors.log*` — so with `WEB_LOG_DIR` pointing elsewhere, a website
+  drowning in errors was reported healthy off the bot's log alone. Now
+  iterates the same `LOG_DIRS` set section 5 builds, and prints the scope it
+  actually counted (`N file(s) across: …`).
+- **The round-linkage API fallback could never succeed.** The route depends on
+  `require_admin_user` (`diagnostics_router.py:527`), so an anonymous probe
+  gets 401 no matter how healthy the API is — round 3's `/api` prefix fix
+  addressed the wrong half. 401/403 is now the *success* signal for "endpoint
+  exists and is being served", reported as a WARN that states plainly the
+  thresholds were **not** checked, rather than implying they were.
+- **A bot running under `screen` was indistinguishable from a crashed one.**
+  This project explicitly supports non-systemd hosts, and nothing else in the
+  script probes the bot process, so the "no systemd unit" WARN read the same
+  whether the bot was fine or had died hours ago — on precisely the hosts
+  where nothing restarts it. `check_service_pair` now takes a process pattern
+  and falls back to `pgrep -f` (OK if running, FAIL if not).
+  - While testing that, found `pgrep -f` matches the command line of whatever
+    invoked the script, so a bogus pattern still "matched" — the calling shell
+    itself. Excluding `$$`/`$PPID` wasn't enough (the hit was a grandparent),
+    so the whole ancestor chain is now excluded via `_ancestor_pids()`.
+    Confirmed both branches from a shell that never mentions the pattern: a
+    made-up pattern yields no match (FAIL), `bot.ultimate_bot` yields exactly
+    the real bot PID (OK).
+- **An unrelated app on the other candidate port produced FAILs.** Only one of
+  `:8000`/`:7000` is Slomix on a dev/manual host, and something else there
+  commonly 404s these paths — each such response incremented `FAIL_COUNT`, so
+  a healthy host scored failures from a service that isn't ours. Results are
+  now collected per base and judged after: a base that served at least one
+  Slomix path and failed another still FAILs (a real problem), while a base
+  that never served one is reported as "probably an unrelated app on this
+  port".
+
+Verified after all fixes: `OK=24 WARN=31 FAIL=0`, exit 0, and section 3 shows
+both `/health` and `/api/status` at 200 on the one base that is Slomix.

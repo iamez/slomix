@@ -49,8 +49,23 @@ section "1. Services"
 # have BOTH units installed with only one actually active — breaking on the
 # first installed candidate can report FAIL on a stale inactive alias while
 # the real, active service goes unchecked (Codex review on #580).
+# This process and every ancestor up to PID 1, one per line. Used to keep
+# `pgrep -f` from matching the command line of whatever invoked this script.
+_ancestor_pids() {
+    local pid=$$
+    while [[ -n "$pid" && "$pid" != "0" ]]; do
+        printf '%s\n' "$pid"
+        [[ "$pid" == "1" ]] && break
+        pid="$(awk '{print $4}' "/proc/$pid/stat" 2>/dev/null)"
+    done
+}
+
+# check_service_pair <label> <process-pattern|-> <unit-name>...
+#   process-pattern: pgrep -f pattern to fall back on when no systemd unit
+#   exists, or "-" for none.
 check_service_pair() {
     local label="$1"; shift
+    local proc_pattern="$1"; shift
     local candidates=("$@")
     local any_installed=0
     for name in "${candidates[@]}"; do
@@ -64,12 +79,35 @@ check_service_pair() {
     done
     if [[ "$any_installed" -eq 1 ]]; then
         fail "$label: installed unit(s) found (${candidates[*]}) but none active"
-    else
-        warn "$label: no matching systemd unit found (checked: ${candidates[*]}) — may run under screen/manual process"
+        return
     fi
+    # No systemd unit: this project explicitly supports hosts running the bot
+    # under `screen` (CLAUDE.md), and nothing else in this script probes the bot
+    # process — so a plain WARN here reported identically whether the bot was
+    # running fine or had crashed hours ago, on exactly the hosts where nothing
+    # would restart it (Codex review on #580). Fall back to looking for the
+    # actual process before giving up.
+    if [[ "$proc_pattern" != "-" ]] && command -v pgrep >/dev/null 2>&1; then
+        # Exclude this script AND its whole ancestor chain. `pgrep -f` matches
+        # full command lines, so if the pattern appears anywhere in the chain
+        # that invoked us — a wrapper script, a CI step, an interactive
+        # `bash -c` that happens to contain it — pgrep reports a hit and every
+        # service looks alive regardless. Verified while testing this: a
+        # deliberately-bogus pattern kept matching, and excluding just $$ and
+        # $PPID wasn't enough because the real match was a grandparent.
+        local matches
+        matches="$(pgrep -f "$proc_pattern" 2>/dev/null | grep -vxF -f <(_ancestor_pids) || true)"
+        if [[ -n "$matches" ]]; then
+            ok "$label: no systemd unit, but a matching process is running (pgrep -f '$proc_pattern' -> $(echo "$matches" | tr '\n' ' '))"
+        else
+            fail "$label: no systemd unit AND no process matching '$proc_pattern' — not running anywhere"
+        fi
+        return
+    fi
+    warn "$label: no matching systemd unit found (checked: ${candidates[*]}) — may run under screen/manual process"
 }
-check_service_pair "bot" etlegacy-bot slomix-bot
-check_service_pair "web" etlegacy-web slomix-web
+check_service_pair "bot" "bot.ultimate_bot" etlegacy-bot slomix-bot
+check_service_pair "web" "uvicorn.*backend.main" etlegacy-web slomix-web
 # postgresql is versioned (postgresql@14-main in dev, @17-main in production
 # per CLAUDE.md) — discover whichever cluster unit is actually active rather
 # than hardcoding one version (Copilot review on #580).
@@ -205,9 +243,16 @@ if command -v curl >/dev/null 2>&1; then
     # review on #580: a screen/manual-process setup, or a systemd unit that
     # stays active but stops listening, would otherwise report nothing
     # wrong here at all).
-    any_base_answered=0
-    for path in /health /api/status; do
-        for base in "http://127.0.0.1:8000" "http://127.0.0.1:7000"; do
+    # Collect per-base results first, then judge. Reporting a FAIL the moment
+    # any candidate answers badly punished the normal dev/manual layout: only
+    # one of :8000/:7000 is Slomix, and an unrelated app on the other port
+    # commonly answers 404 for these paths, so a perfectly healthy host scored
+    # FAILs from a service that isn't even ours (Codex review on #580, second
+    # round). A base only counts as Slomix once it answers 200/304 on at least
+    # one path; bases that never do are reported as "not this box's" instead.
+    declare -A base_ok=() base_bad=()
+    for base in "http://127.0.0.1:8000" "http://127.0.0.1:7000"; do
+        for path in /health /api/status; do
             # curl's -w already prints "000" on connection failure regardless
             # of curl's own exit code, so no `|| echo` fallback here — one
             # would double up into "000000" when curl also exits non-zero.
@@ -215,16 +260,26 @@ if command -v curl >/dev/null 2>&1; then
             code="${code:0:3}"
             if [[ "$code" =~ ^(200|304)$ ]]; then
                 ok "${base}${path} -> $code"
-                any_base_answered=1
+                base_ok["$base"]=1
             elif [[ "$code" == "000" || -z "$code" ]]; then
-                : # this base isn't the one running on this box — silent skip
+                : # nothing listening here — silent skip
             else
-                fail "${base}${path} -> $code"
-                any_base_answered=1
+                base_bad["$base"]="${base_bad[$base]:-}${base_bad[$base]:+, }${path} -> $code"
             fi
         done
     done
-    if [[ "$any_base_answered" -eq 0 ]]; then
+    for base in "${!base_bad[@]}"; do
+        if [[ -n "${base_ok[$base]:-}" ]]; then
+            # This base IS Slomix (it served one path) but failed another —
+            # a real problem worth failing on.
+            fail "${base}: ${base_bad[$base]}"
+        else
+            # Answered, but never successfully on any Slomix path — some other
+            # application on that port, not our outage to report.
+            warn "${base}: responded but no Slomix endpoint served (${base_bad[$base]}) — probably an unrelated app on this port"
+        fi
+    done
+    if [[ ${#base_ok[@]} -eq 0 ]]; then
         fail "no response from either API base (127.0.0.1:8000 or :7000) on /health or /api/status — full outage or wrong ports"
     fi
 else
@@ -324,7 +379,17 @@ done
 # 6. ERROR/CRITICAL counts, last 24h
 # ===========================================================================
 section "6. Error rate (24h)"
-if [[ -f logs/errors.log ]]; then
+# Scan EVERY resolved log directory, same set section 5 built. With WEB_LOG_DIR
+# pointing outside the repository, counting only the repo-local errors.log meant
+# a website drowning in errors was reported healthy off the bot's log alone
+# (Codex review on #580, second round).
+ERROR_LOG_FILES=()
+for _dir in "${LOG_DIRS[@]}"; do
+    for _f in "$_dir"/errors.log "$_dir"/errors.log.*; do
+        [[ -f "$_f" ]] && ERROR_LOG_FILES+=("$_f")
+    done
+done
+if [[ ${#ERROR_LOG_FILES[@]} -gt 0 ]]; then
     CUTOFF="$(date -d '24 hours ago' '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date -v-24H '+%Y-%m-%d %H:%M:%S' 2>/dev/null)"
     if [[ -n "$CUTOFF" ]]; then
         # Rotated backups too (errors.log.1 .. .N, RotatingFileHandler on both
@@ -335,8 +400,7 @@ if [[ -f logs/errors.log ]]; then
         # default) and the JSON format (LOG_FORMAT_JSON=true) are supported —
         # JSON records have no "| ERROR |" substring at all.
         COUNT=0
-        for f in logs/errors.log logs/errors.log.*; do
-            [[ -f "$f" ]] || continue
+        for f in "${ERROR_LOG_FILES[@]}"; do
             plain=$(awk -v cutoff="$CUTOFF" '$0 >= cutoff' "$f" 2>/dev/null | grep -cE '\| (ERROR|CRITICAL) *\|' || true)
             # NOTE: the JSON count below is whole-file, not 24h-scoped — JSON
             # records start with "{", not a sortable timestamp, so the same
@@ -347,18 +411,19 @@ if [[ -f logs/errors.log ]]; then
             json=$(grep -cE '"level"[[:space:]]*:[[:space:]]*"(ERROR|CRITICAL)"' "$f" 2>/dev/null || true)
             COUNT=$((COUNT + ${plain:-0} + ${json:-0}))
         done
+        SCOPE="${#ERROR_LOG_FILES[@]} file(s) across: ${LOG_DIRS[*]}"
         if [[ "$COUNT" -gt 100 ]]; then
-            fail "$COUNT ERROR/CRITICAL lines in errors.log(+rotations) in the last 24h (threshold 100)"
+            fail "$COUNT ERROR/CRITICAL lines in the last 24h (threshold 100) — $SCOPE"
         elif [[ "$COUNT" -gt 20 ]]; then
-            warn "$COUNT ERROR/CRITICAL lines in errors.log(+rotations) in the last 24h (threshold 20)"
+            warn "$COUNT ERROR/CRITICAL lines in the last 24h (threshold 20) — $SCOPE"
         else
-            ok "$COUNT ERROR/CRITICAL lines in errors.log(+rotations) in the last 24h"
+            ok "$COUNT ERROR/CRITICAL lines in the last 24h — $SCOPE"
         fi
     else
         warn "could not compute 24h cutoff (date command mismatch), skipping error-rate check"
     fi
 else
-    warn "logs/errors.log not found"
+    warn "no errors.log found in any resolved log directory (${LOG_DIRS[*]})"
 fi
 
 # ===========================================================================
@@ -447,21 +512,41 @@ elif command -v curl >/dev/null 2>&1; then
     # diagnostics_router.router, prefix="/api")), so the served path is
     # /api/diagnostics/round-linkage — the unprefixed spelling in CLAUDE.md
     # 404s. Probe the real one first, keep the bare path as a fallback in case
-    # a host mounts it differently, and FAIL if nothing answers rather than
-    # falling out of the loop silently (Codex review on #580).
-    linkage_answered=0
+    # a host mounts it differently (Codex review on #580).
+    #
+    # 200 is NOT achievable here: the route depends on require_admin_user
+    # (diagnostics_router.py:527), so an anonymous probe gets 401 no matter how
+    # healthy the API is — expecting 200 made this branch permanently
+    # unsatisfiable. 401/403 is therefore the SUCCESS signal for "the endpoint
+    # exists and the app is serving it"; the anomaly data itself simply can't be
+    # read without a session, so this degrades to a reachability check and says
+    # so rather than pretending to have checked thresholds (Codex review on
+    # #580, second round).
+    linkage_status=""
     for base in "http://127.0.0.1:8000" "http://127.0.0.1:7000"; do
         for route in "/api/diagnostics/round-linkage" "/diagnostics/round-linkage"; do
             code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "${base}${route}" 2>/dev/null)"
             code="${code:0:3}"
-            if [[ "$code" == "200" ]]; then
-                ok "GET ${base}${route} -> 200"
-                linkage_answered=1
-                break 2
-            fi
+            case "$code" in
+                401|403)
+                    warn "round-linkage: endpoint reachable at ${base}${route} (HTTP $code — admin-only, thresholds NOT checked; install scripts/check_round_linkage_anomalies.py for the real check)"
+                    linkage_status="reachable"
+                    break 2
+                    ;;
+                200)
+                    ok "GET ${base}${route} -> 200"
+                    linkage_status="ok"
+                    break 2
+                    ;;
+                5??)
+                    fail "round-linkage: ${base}${route} -> $code"
+                    linkage_status="error"
+                    break 2
+                    ;;
+            esac
         done
     done
-    if [[ "$linkage_answered" -eq 0 ]]; then
+    if [[ -z "$linkage_status" ]]; then
         fail "round-linkage: no API base answered /api/diagnostics/round-linkage (tried :8000 and :7000)"
     fi
 else
