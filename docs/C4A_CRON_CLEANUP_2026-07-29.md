@@ -51,19 +51,37 @@ root's or any other account's. `crontab -e`/`crontab -l` operate on the
 *calling* user's table with no confirmation of whose table that is — if the
 owner runs this as root or another account instead, both the edit and the
 verification below silently apply to the wrong (empty or unrelated) table
-while these February jobs stay installed under `samba`. Be explicit:
+while these February jobs stay installed under `samba`.
+
+Which invocation depends on who you are, and there is no single form that
+works both ways: `-u` is privileged-only in some cron implementations
+(cronie reports `must be privileged to use -u`), so appending it
+unconditionally would break the as-`samba` case. On this box's cron
+`crontab -l -u samba` does work when run as `samba`, but don't rely on that
+being portable — pick by caller:
 
 ```bash
-crontab -e -u samba   # remove all 7 lines identified above (5 already-commented
-                       # clutter + 2 uncommented Feb one-offs), keep the 2
-                       # production lines. Run as `samba` or as root with
-                       # -u samba — NOT as root's own bare `crontab -e`.
+# Logged in AS samba (the normal case):
+crontab -e
+
+# Running as root (or via sudo) — must target samba explicitly, otherwise
+# you edit root's own empty table and the February jobs stay installed:
+sudo crontab -u samba -e
 ```
+
+Either way: remove all 7 lines identified above (5 already-commented clutter
++ 2 uncommented Feb one-offs), keep the 2 production lines.
 
 ## Verify
 
 ```bash
-crontab -l -u samba   # no Feb-dated one-offs, no commented "REMOVE AFTER USE" clutter;
-                       # check-security.sh (daily) and backup_etlegacy.sh (day-of-month
-                       # 1/5/9/.../29 schedule, see cadence note above) unchanged
+# As samba:
+crontab -l
+
+# As root:
+sudo crontab -u samba -l
+
+# Expect: no Feb-dated one-offs, no commented "REMOVE AFTER USE" clutter;
+# check-security.sh (daily) and backup_etlegacy.sh (day-of-month
+# 1/5/9/.../29 schedule, see cadence note above) unchanged.
 ```
