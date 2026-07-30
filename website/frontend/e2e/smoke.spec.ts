@@ -70,6 +70,19 @@ for (const route of ROUTES) {
     const text = await view.innerText();
     expect(text.trim().length, `${route.expectSelector} should hold real content, not be empty`).toBeGreaterThan(0);
 
+    // "Nonempty" is not the same as "working". A route can render its own
+    // error state and still pass every check above: e.g. /api/skill/leaderboard
+    // returning HTTP 200 with an unparseable body (a proxy serving an HTML
+    // error page) makes res.json() reject, React Query handles the rejection,
+    // and SkillRating.tsx renders the "ET Rating" header plus "Failed to load
+    // skill ratings." — no 5xx, no console error, nonempty text (Codex review
+    // on #582). So assert the rendered text doesn't contain a failure message.
+    const ERROR_TEXT = /failed to load|something went wrong|unable to load|error loading/i;
+    expect(
+      ERROR_TEXT.test(text),
+      `${route.expectSelector} rendered an error state: ${text.trim().slice(0, 200)}`,
+    ).toBe(false);
+
     expect(consoleErrors, `console errors on ${route.hash}`).toEqual([]);
     expect(failedRequests, `failed/5xx requests on ${route.hash}`).toEqual([]);
   });
@@ -96,12 +109,36 @@ test('smoke: navigating away from skill-rating (React) to sessions (legacy) unmo
     expect((await skillRatingRoot.innerHTML()).length).toBeGreaterThan(0);
   }).toPass();
 
+  // Start waiting for the route's own loader BEFORE triggering the transition —
+  // set up afterwards, the wait can miss a response that already arrived.
+  //
+  // dispatchRoute() makes the view visible synchronously via setActiveView()
+  // then awaits loadRoute(), but navigateTo() discards that promise, so the DOM
+  // assertions below can all pass while the sessions request is still in flight
+  // and a loader failing a moment later would go unseen.
+  //
+  // waitForLoadState('networkidle') does NOT cover this: the initial
+  // page.goto() already reached networkidle, and Playwright resolves that call
+  // immediately when the document is already in the requested state — the
+  // previous version of this wait was a no-op on a hash-only transition (Codex
+  // review on #582). Wait on the actual request instead.
+  const sessionsLoaded = page
+    .waitForResponse((r) => new URL(r.url()).pathname.startsWith('/api/sessions'), {
+      timeout: 15_000,
+    })
+    .catch(() => {
+      // No new request (already-cached data) isn't a failure by itself — the
+      // content assertions below still have to pass.
+    });
+
   // In-page hash change — same mechanism a nav-link click uses — rather than
   // page.goto(), so this actually exercises dispatchRoute()'s client-side
   // transition instead of a fresh document load.
   await page.evaluate(() => {
     window.location.hash = '#/sessions';
   });
+
+  await sessionsLoaded;
 
   const sessionsView = page.locator('#view-sessions');
   await expect(sessionsView, '#view-sessions should be visible after transition').toBeVisible();
@@ -110,15 +147,6 @@ test('smoke: navigating away from skill-rating (React) to sessions (legacy) unmo
 
   // resetModernRouteHost() clears the React root's children on unmount.
   await expect(skillRatingRoot, 'React root should be unmounted (emptied) after navigating away').toBeEmpty();
-
-  // Wait for the route's own async loader before judging errors.
-  // dispatchRoute() makes the view visible synchronously via setActiveView(),
-  // then awaits loadRoute() — but navigateTo() discards that promise, so the
-  // assertions above can all pass while the sessions request is still in
-  // flight. Checking consoleErrors at that point would miss a loader that
-  // fails a moment later, letting a real transition regression through
-  // (Codex review on #582).
-  await page.waitForLoadState('networkidle');
 
   expect(consoleErrors, 'console errors during the transition').toEqual([]);
 });
