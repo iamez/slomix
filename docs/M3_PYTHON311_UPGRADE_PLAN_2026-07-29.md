@@ -89,39 +89,68 @@ dependency. `scripts/deploy_release.sh` already does this
 only once the new tree is ready) — follow the same order here, and stop
 the two services independently since they're rebuilt as separate steps.
 
+**Two rules for every rebuild block below**, both learned from review (Codex on
+#584):
+
+1. **All preflight checks run BEFORE the service is stopped.** A guard placed
+   after the stop is worse than none: pasted into an interactive shell, its
+   `exit` closes that shell, so the later `systemctl start` never runs and an
+   otherwise-healthy service stays down.
+2. **The rebuild is one `&&` chain.** Without it, a failed `pip install` — an
+   unreachable wheel is enough — still falls through to `systemctl start`, which
+   then boots the service on a half-built environment. `pip check` alone doesn't
+   help: it validates dependency consistency, not that the install ran.
+
 ### 2. Rebuild the bot venv
+
 ```bash
-sudo systemctl stop etlegacy-bot        # stop BEFORE touching its venv
+# ---- Preflight: nothing is stopped or moved yet. Both must print nothing. ----
 cd /home/samba/share/slomix_discord
-# Refuse rather than nest: with venv-3.10.bak already present (step 5 says to
-# keep it for days, so a re-run is likely) this mv would put the venv INSIDE it
-# and the rollback would restore the older outer copy instead.
-[ -e venv-3.10.bak ] && { echo "venv-3.10.bak exists — remove it first"; exit 1; }
-mv venv venv-3.10.bak          # keep for rollback, don't delete yet
-python3.11 -m venv venv
-venv/bin/pip install --upgrade pip
-venv/bin/pip install -r requirements.txt -r requirements-dev.txt
-venv/bin/pip check              # scripts/check_env.py isn't tracked in
-                                 # this repo — pip check is the nearest
-                                 # in-repo-usable dependency-consistency
-                                 # verification
-sudo systemctl start etlegacy-bot
+[ -e venv-3.10.bak ] && echo "BLOCKED: venv-3.10.bak exists — remove or rename it first"
+command -v python3.11 >/dev/null || echo "BLOCKED: python3.11 not installed (step 1)"
+```
+
+(The backup check matters because step 5 says to keep `venv-3.10.bak` for days,
+so a re-run is the likely case — and `mv venv venv-3.10.bak` onto an existing
+directory nests the venv *inside* it, which makes the documented rollback
+restore the older outer copy.)
+
+```bash
+# ---- Rebuild: single && chain, so nothing starts on a broken venv. ----
+sudo systemctl stop etlegacy-bot &&
+mv venv venv-3.10.bak &&                        # keep for rollback
+python3.11 -m venv venv &&
+venv/bin/pip install --upgrade pip &&
+venv/bin/pip install -r requirements.txt -r requirements-dev.txt &&
+venv/bin/pip check &&                           # scripts/check_env.py isn't
+                                                # tracked here; pip check is the
+                                                # nearest in-repo equivalent
+sudo systemctl start etlegacy-bot &&
 sudo systemctl status etlegacy-bot
+# If this stops partway the service stays DOWN deliberately — go to step 5
+# (rollback) rather than starting it on a half-built venv.
 ```
 
 ### 3. Rebuild the website venv
+
 ```bash
-sudo systemctl stop etlegacy-web        # stop BEFORE touching its venv
-cd website
-[ -e venv-3.10.bak ] && { echo "website/venv-3.10.bak exists — remove it first"; exit 1; }
-mv venv venv-3.10.bak
-python3.11 -m venv venv
-venv/bin/pip install --upgrade pip
-venv/bin/pip install -r requirements.txt
-venv/bin/pip check
-cd ..
-sudo systemctl start etlegacy-web
+# ---- Preflight ----
+cd /home/samba/share/slomix_discord/website
+[ -e venv-3.10.bak ] && echo "BLOCKED: website/venv-3.10.bak exists — remove or rename it first"
+```
+
+```bash
+# ---- Rebuild ----
+sudo systemctl stop etlegacy-web &&
+mv venv venv-3.10.bak &&
+python3.11 -m venv venv &&
+venv/bin/pip install --upgrade pip &&
+venv/bin/pip install -r requirements.txt &&
+venv/bin/pip check &&
+sudo systemctl start etlegacy-web &&
 sudo systemctl status etlegacy-web
+# Same rule: a break anywhere leaves the service stopped on purpose.
+cd ..
 ```
 
 ### 4. Production — verify only; do NOT run steps 1-3 there
@@ -174,29 +203,46 @@ ssh slomix-vm 'command -v python3.11 || echo "MISSING — install it before proc
 ssh slomix-vm 'ls -d /opt/slomix/venv-*.bak 2>/dev/null && echo "REMOVE or RENAME these first"'
 ```
 
-```bash
-sudo systemctl stop slomix-bot
-cd /opt/slomix
-# Refuse rather than nest if a previous backup is still there.
-[ -e venv-bot.bak ] && { echo "venv-bot.bak exists — remove it first"; exit 1; }
-sudo mv venv-bot venv-bot.bak
-sudo python3.11 -m venv venv-bot
-sudo venv-bot/bin/pip install --upgrade pip
-sudo venv-bot/bin/pip install -r requirements.txt
-sudo venv-bot/bin/pip check
-sudo chown -R slomix_bot:slomix venv-bot     # match slomix_vm_setup.sh:785
-sudo systemctl start slomix-bot
+Only once both preflights come back clean, run the rebuild **on the VM**. Open a
+session first — the preflights above were one-shot `ssh … '…'` invocations that
+return immediately, so pasting the block below straight after them would run it
+against your own dev box, stopping the wrong services and rebuilding the wrong
+venvs (Codex review on #584):
 
-sudo systemctl stop slomix-web
-[ -e venv-web.bak ] && { echo "venv-web.bak exists — remove it first"; exit 1; }
-sudo mv venv-web venv-web.bak
-sudo python3.11 -m venv venv-web
-sudo venv-web/bin/pip install --upgrade pip
-sudo venv-web/bin/pip install -r website/requirements.txt
-sudo venv-web/bin/pip check
-sudo chown -R slomix_web:slomix venv-web     # match slomix_vm_setup.sh:786
-sudo systemctl start slomix-web
+```bash
+ssh slomix-vm     # everything below runs THERE, not on the dev box
 ```
+
+```bash
+# ---- bot: one && chain, so nothing starts on a broken venv ----
+cd /opt/slomix &&
+sudo systemctl stop slomix-bot &&
+sudo mv venv-bot venv-bot.bak &&
+sudo python3.11 -m venv venv-bot &&
+sudo venv-bot/bin/pip install --upgrade pip &&
+sudo venv-bot/bin/pip install -r requirements.txt &&
+sudo venv-bot/bin/pip check &&
+sudo chown -R slomix_bot:slomix venv-bot &&     # match slomix_vm_setup.sh:785
+sudo systemctl start slomix-bot &&
+sudo systemctl status slomix-bot
+```
+
+```bash
+# ---- web ----
+cd /opt/slomix &&
+sudo systemctl stop slomix-web &&
+sudo mv venv-web venv-web.bak &&
+sudo python3.11 -m venv venv-web &&
+sudo venv-web/bin/pip install --upgrade pip &&
+sudo venv-web/bin/pip install -r website/requirements.txt &&
+sudo venv-web/bin/pip check &&
+sudo chown -R slomix_web:slomix venv-web &&     # match slomix_vm_setup.sh:786
+sudo systemctl start slomix-web &&
+sudo systemctl status slomix-web
+```
+
+A break anywhere in either chain leaves that service stopped deliberately — go
+to step 5 rather than starting it by hand.
 
 ### 5. Rollback, if something breaks
 Conditional per phase — do **not** blanket-delete both venvs. A bot rebuild
