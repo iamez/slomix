@@ -47,8 +47,17 @@ when it isn't — so on a deployment that sets it, every command in this guide w
 empty or stale default directory and report no evidence (Codex review on #576):
 
 ```bash
-LOGDIR="${WEB_LOG_DIR:-$(grep -E '^\s*WEB_LOG_DIR=' website/.env 2>/dev/null | tail -1 | cut -d= -f2-)}"
-LOGDIR="${LOGDIR:-logs}"
+LOGDIR="${WEB_LOG_DIR:-$(grep -E '^\s*WEB_LOG_DIR=' website/.env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' ")}"
+# A RELATIVE value resolves against the server's working directory, not yours.
+# logging_config.py does Path(os.getenv("WEB_LOG_DIR", …)).resolve(), and the
+# documented startup is `cd website && … uvicorn`, so WEB_LOG_DIR=logs means
+# website/logs — while this shell (at the repo root) would read ./logs, a
+# different directory (Codex review on #576).
+case "$LOGDIR" in
+  "")   LOGDIR="logs" ;;                 # unset -> logging_config's own default
+  /*)   ;;                               # absolute -> use as-is
+  *)    LOGDIR="website/$LOGDIR" ;;      # relative -> resolved from website/
+esac
 echo "using: $LOGDIR"
 ```
 
@@ -67,6 +76,19 @@ grep -F "/api/proximity/prox-scores" logs/access.log logs/access.log.* 2>/dev/nu
 # field rather than free text, so grep -F on the path still works but the timestamp grep needs
 # the ISO form
 grep -F "/api/proximity/prox-scores" logs/access.log logs/access.log.* 2>/dev/null | grep "2026-07-29T14:2"
+```
+
+**Decode the path before grepping it.** DevTools shows the URL as sent —
+percent-encoded — while `routed_path()` logs the *decoded* ASGI
+`scope["path"]`. `client.ts` puts player names through `encodeURIComponent()`,
+so a name with a space or `#` appears as `/api/stats/player/Bob%20Smith` in the
+paste and as `/api/stats/player/Bob Smith` in the log, and a literal grep finds
+nothing (Codex review on #576):
+
+```bash
+python3 -c 'import sys,urllib.parse; print(urllib.parse.unquote(sys.argv[1]))' \
+  '/api/stats/player/Bob%20Smith'
+# -> /api/stats/player/Bob Smith   <- grep for THIS
 ```
 
 Only conclude "no access record exists" after the glob comes back empty.
@@ -192,8 +214,17 @@ already read; otherwise export them for the shell:
 # rejects BOTH the empty value and that exact placeholder. So check the VALUES, not
 # just that the keys exist — a `grep -c` presence test would say 1 and be wrong
 # (Codex review on #576):
-grep -E '^(SESSION_SECRET|INTERNAL_API_SECRET)=' website/.env 2>/dev/null
-# Anything empty or still saying "change-this-..." needs replacing. Generate real ones:
+# Reports only whether each value is usable — never prints the value itself, so
+# this is safe to run in a recorded or shared terminal (Codex review on #576):
+for k in SESSION_SECRET INTERNAL_API_SECRET; do
+  v=$(grep -E "^\s*$k=" website/.env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' ")
+  case "$v" in
+    "")                 echo "$k: EMPTY — must be set" ;;
+    change-this-*|super-secret-*) echo "$k: PLACEHOLDER — must be replaced" ;;
+    *)                  echo "$k: looks set (${#v} chars)" ;;
+  esac
+done
+# Anything not "looks set" needs replacing. Generate real ones:
 export SESSION_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
 export INTERNAL_API_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
 export SESSION_HTTPS_ONLY=false     # local HTTP; otherwise TRUSTED_HOSTS is mandatory too
