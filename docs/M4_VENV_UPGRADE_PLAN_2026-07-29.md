@@ -110,17 +110,27 @@ column and stay in it:
 | venv | `website/venv` | `/opt/slomix/venv-web` |
 | port | 8000 | 7000 |
 
+Chain the whole thing with `&&`. Pasted into an interactive shell, a plain
+sequence runs `systemctl start` even when `pip install` just failed — bringing
+the service back up on a half-replaced environment, which is the outcome
+stopping it first was supposed to avoid (Codex review on #583):
+
 ```bash
 # dev box
-sudo systemctl stop etlegacy-web
-website/venv/bin/pip install ...        # the step's install
-sudo systemctl start etlegacy-web && sudo systemctl status etlegacy-web
+sudo systemctl stop etlegacy-web &&
+website/venv/bin/pip install ... &&           # the step's install
+sudo systemctl start etlegacy-web &&
+sudo systemctl status etlegacy-web
 
 # canonical VM (paths/ownership per docs/DEPLOYMENT_RUNBOOK.md:17-20,97-99)
-sudo systemctl stop slomix-web
-sudo -u slomix_web /opt/slomix/venv-web/bin/pip install ...
-sudo systemctl start slomix-web && sudo systemctl status slomix-web
+sudo systemctl stop slomix-web &&
+sudo -u slomix_web /opt/slomix/venv-web/bin/pip install ... &&
+sudo systemctl start slomix-web &&
+sudo systemctl status slomix-web
 ```
+
+A break anywhere leaves the service stopped on purpose — roll back rather than
+starting it by hand.
 
 Note the VM installs run **as `slomix_web`**: `slomix_vm_setup.sh` chowns that
 venv to the service account with no group write, so a plain `sudo pip` fails
@@ -161,10 +171,23 @@ cacheable endpoint twice with a cookie-less client and watch the `X-Cache`
 header go `MISS` → `HIT`:
 
 ```bash
+# Count real cache ENTRIES before and after. The MISS -> HIT sequence alone
+# proves nothing: ResilientCacheBackend falls back to MemoryCacheBackend when
+# Redis is unreachable and produces exactly the same two headers. And a bare
+# `slomix:*` scan also matches the permanent `slomix:api_cache:namespace` key
+# (created by setnx on connect) plus any stale entries, so it can be nonempty
+# with nothing newly written. `slomix:api_cache:*:*` matches only real entries
+# — verified the namespace key does NOT match it (Codex review on #583).
+before=$(redis-cli --scan --pattern 'slomix:api_cache:*:*' | wc -l)
 curl -sS -D- -o /dev/null http://127.0.0.1:8000/api/stats/overview | grep -i x-cache   # MISS
 curl -sS -D- -o /dev/null http://127.0.0.1:8000/api/stats/overview | grep -i x-cache   # HIT
-redis-cli --scan --pattern 'slomix:*' | head              # keys actually present
+after=$(redis-cli --scan --pattern 'slomix:api_cache:*:*' | wc -l)
+echo "entries: $before -> $after"     # must INCREASE, else it's the memory fallback
 ```
+
+Also worth checking `logs/web.log` for "Primary cache backend unavailable,
+using memory fallback" — `ResilientCacheBackend.connect()` logs exactly that
+line when it degrades.
 
 `/api/stats/overview` specifically, **not** a proximity endpoint: whenever any
 source query fails, the proximity scoring endpoints answer
@@ -255,13 +278,32 @@ scary"):
   staging rather than trusting that reasoning alone.
 - **0.128.0 — drops `pydantic.v1` support entirely** (min Pydantic now
   `>=2.7.0`). Grepped this repo: no `pydantic.v1` compat imports found — not
-  a blocker here.
+  a blocker here. **But Pydantic gets dragged along and nothing pins it**:
+  `website/requirements.txt` has no `pydantic==` line, so the manifest
+  comparison above never reports its current or target version, and
+  `pip install fastapi==0.133.1` will transitively upgrade whatever is
+  installed if it's below 2.7 — an unreviewed major dependency change riding
+  in on this step (Codex review on #583). Measure it explicitly first, and
+  pin what you land on:
+  ```bash
+  website/venv/bin/python -c "import pydantic; print(pydantic.VERSION)"
+  ```
+  Measured on this box: **2.12.5**, already well past the 2.7 floor, so the
+  FastAPI bump won't move it here. On any environment reporting < 2.7, treat
+  the Pydantic jump as its own reviewed change rather than a side effect.
 - **0.131.0 — deprecates `ORJSONResponse`/`UJSONResponse`.** Not used in
   this codebase — not a blocker.
 - **0.129.0 — drops Python 3.8.** Irrelevant; this project runs 3.10/3.11.
 
 No fatal blocker found for this specific codebase, but "no known blocker"
 isn't the same as "safe" — treat this as its own staging-tested change.
+
+**Test it on the runtime that will actually run it.** For the canonical VM
+that's **Python 3.13.5** (`docs/VM_ACCESS.md:18,188` — both `venv-bot` and
+`venv-web`), not the 3.10 this dev box uses. Validating the highest-risk
+upgrade in the plan only against the older local interpreter would leave the
+combination production actually runs untested; 3.13 is also where new-ish
+FastAPI/Starlette releases are most likely to differ (Codex review on #583).
 
 ## Verify (after the owner executes any step)
 
