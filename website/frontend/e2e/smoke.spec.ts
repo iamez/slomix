@@ -34,14 +34,20 @@ for (const route of ROUTES) {
       failedRequests.push(`${request.method()} ${request.url()} — ${request.failure()?.errorText}`);
     });
     page.on('response', (response) => {
-      // 401/403 on auth-dependent calls (e.g. /auth/me for a logged-out
-      // smoke run) are expected, not a page failure — those two are the
-      // only statuses under 500 that get a pass. A 404 is not expected:
-      // loadScopedProximityData() swallows a 404 from /api/proximity/summary
-      // and renders a nonempty fallback message without a console error, so
-      // treating "below 500" as "fine" let a broken endpoint through silently.
+      // Any 4xx/5xx is a failure, with ONE narrow exemption: 401/403 from an
+      // /auth/* endpoint, which is the expected answer for a logged-out smoke
+      // run (e.g. /auth/me during startup). Exempting those statuses for every
+      // URL would hide the case where auth middleware is accidentally applied
+      // to a public /api endpoint — the route can still render a nonempty
+      // fallback with no console error, so the test would pass while the page
+      // is actually broken (Codex review on #582). 404 is likewise not
+      // exempt: loadScopedProximityData() swallows a 404 from
+      // /api/proximity/summary into a fallback message without erroring.
       const status = response.status();
-      if (status >= 500 || (status >= 400 && status !== 401 && status !== 403)) {
+      if (status < 400) return;
+      const isExpectedAuthChallenge =
+        (status === 401 || status === 403) && new URL(response.url()).pathname.startsWith('/auth/');
+      if (!isExpectedAuthChallenge) {
         failedRequests.push(`${response.request().method()} ${response.url()} -> ${status}`);
       }
     });
@@ -104,6 +110,15 @@ test('smoke: navigating away from skill-rating (React) to sessions (legacy) unmo
 
   // resetModernRouteHost() clears the React root's children on unmount.
   await expect(skillRatingRoot, 'React root should be unmounted (emptied) after navigating away').toBeEmpty();
+
+  // Wait for the route's own async loader before judging errors.
+  // dispatchRoute() makes the view visible synchronously via setActiveView(),
+  // then awaits loadRoute() — but navigateTo() discards that promise, so the
+  // assertions above can all pass while the sessions request is still in
+  // flight. Checking consoleErrors at that point would miss a loader that
+  // fails a moment later, letting a real transition regression through
+  // (Codex review on #582).
+  await page.waitForLoadState('networkidle');
 
   expect(consoleErrors, 'console errors during the transition').toEqual([]);
 });
