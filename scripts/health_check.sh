@@ -145,7 +145,17 @@ for svc in redis-server tailscaled fail2ban smbd cloudflared; do
     elif ! systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "${svc}.service"; then
         warn "$svc: no matching systemd unit found (not installed on this host)"
     elif [[ "$(systemctl is-enabled "$svc" 2>/dev/null)" == "disabled" ]]; then
-        warn "$svc installed but disabled (intentionally off on this host?): $(systemctl is-active "$svc" 2>&1)"
+        # "disabled" is only benign where the service was never set up. For
+        # cloudflared specifically, /etc/cloudflared holds the tunnel
+        # credentials slomix_vm_setup.sh puts there (CF_CRED_DIR, line 330) —
+        # if that exists, this box IS a configured tunnel host and a disabled
+        # unit means the public site is unreachable while every local check
+        # stays green. That has to FAIL, not warn (Codex P1 review on #580).
+        if [[ "$svc" == "cloudflared" && -d /etc/cloudflared ]]; then
+            fail "cloudflared is configured (/etc/cloudflared present) but DISABLED — public site unreachable"
+        else
+            warn "$svc installed but disabled (intentionally off on this host?): $(systemctl is-active "$svc" 2>&1)"
+        fi
     else
         fail "$svc not active: $(systemctl is-active "$svc" 2>&1)"
     fi
@@ -315,6 +325,13 @@ section "5. Logs"
 # stale repo-local logs/ while the directory that actually matters — the one
 # whose 0640-vs-0660 permissions have twice taken the bot down — goes
 # unexamined (Codex review on #580). Scan both, de-duplicated.
+# Deliberately NOT including bot/logs. It was suggested on review, but
+# bot/logging_config.py:13 is `Path(__file__).parent.parent / "logs"` — from
+# bot/logging_config.py that resolves to <repo>/logs, not bot/logs. Verified on
+# this box: the running bot holds fds on logs/{bot,commands,database,errors,
+# webhook}.log and none in bot/logs, whose newest file is from 2025-11-28.
+# bot/logs is a leftover from an older layout; scanning it would permanently
+# WARN about 9-month-old permissions and stale mtimes.
 LOG_DIRS=(logs)
 WEB_LOG_DIR_RESOLVED="${WEB_LOG_DIR:-}"
 if [[ -z "$WEB_LOG_DIR_RESOLVED" && -f website/.env ]]; then
@@ -446,10 +463,47 @@ find_python() {
 }
 
 section "7. Migrations"
+# --validate is NOT read-only: cmd_validate() calls ensure_tracking_table()
+# (apply_migrations.py:511), which runs CREATE TABLE IF NOT EXISTS
+# schema_migrations and takes the runner advisory lock. Pointed at a fresh or
+# misconfigured database this health check would therefore CREATE a table —
+# breaking the "read-only" promise in this script's own header (Codex review on
+# #580). Confirm the ledger already exists, read-only, before invoking it.
+ledger_exists() {
+    local py="$1"
+    # Reuse apply_migrations.py's own get_connection(): it resolves the same
+    # POSTGRES_*/DB_* env names AND load_dotenv()s the repo .env, so this check
+    # talks to exactly the database --validate would. Importing the module is
+    # side-effect free (it only defines functions and loads env at import).
+    "$py" - <<'PYEOF' 2>/dev/null
+import asyncio, pathlib, sys
+sys.path.insert(0, str(pathlib.Path("scripts").resolve()))
+try:
+    from apply_migrations import get_connection
+except Exception:
+    sys.exit(2)
+async def main():
+    try:
+        conn = await get_connection()
+    except Exception:
+        sys.exit(3)
+    try:
+        found = await conn.fetchval("SELECT to_regclass('public.schema_migrations') IS NOT NULL")
+    finally:
+        await conn.close()
+    sys.exit(0 if found else 1)
+asyncio.run(main())
+PYEOF
+}
 if [[ -f scripts/apply_migrations.py ]]; then
     PYTHON_BIN="$(find_python "${HEALTH_CHECK_PYTHON:-}")"
     OUT="$HEALTH_CHECK_TMPDIR/migrations.out"
-    if "$PYTHON_BIN" scripts/apply_migrations.py --validate >"$OUT" 2>&1; then
+    set +e; ledger_exists "$PYTHON_BIN"; LEDGER_RC=$?; set -e 2>/dev/null || true
+    if [[ "$LEDGER_RC" -eq 1 ]]; then
+        warn "schema_migrations table absent — skipping --validate (it would CREATE the table; not read-only)"
+    elif [[ "$LEDGER_RC" -gt 1 ]]; then
+        warn "could not check for schema_migrations (no asyncpg or DB unreachable) — skipping --validate"
+    elif "$PYTHON_BIN" scripts/apply_migrations.py --validate >"$OUT" 2>&1; then
         ok "apply_migrations.py --validate: clean"
     else
         fail "apply_migrations.py --validate: $(tail -3 "$OUT" | tr '\n' ' ')"
