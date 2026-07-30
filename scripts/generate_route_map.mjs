@@ -83,10 +83,39 @@ function homeLoaderFiles(legacyIndex) {
 
     const files = new Set();
     const unresolved = [];
+    const directFiles = new Set();
     for (const name of names) {
         const file = legacyIndex.get(name) ?? (localToAppJs.has(name) ? 'app.js' : null);
-        if (file) files.add(`website/js/${file}`);
+        if (file) { files.add(`website/js/${file}`); directFiles.add(file); }
         else unresolved.push(name);
+    }
+
+    // One level of transitive imports, because the direct scan alone is
+    // misleading: loadHomePulseCards() in home.js imports and calls
+    // loadHomeTonightCard() from tonight.js (home.js:9,113), so triaging the
+    // home page's Tonight card would land on the wrong file (Codex review on
+    // #575). Only counts an import whose symbol is actually invoked in that
+    // file, so type-only or unused imports don't inflate the list.
+    //
+    // app.js is deliberately excluded as a SOURCE of transitive imports: it's
+    // the bootstrap/router and imports ~30 modules, so following it would list
+    // most of website/js and tell a reader nothing. Its own directly-defined
+    // loaders are already included above.
+    for (const file of directFiles) {
+        if (file === 'app.js') continue;
+        const text = readFileSync(path.join(legacyDir, file), 'utf8');
+        for (const m of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*'\.\/([\w.-]+)'/g)) {
+            const symbols = m[1].split(',').map((x) => x.trim().split(/\s+as\s+/).pop()).filter(Boolean);
+            const target = m[2];
+            const invoked = symbols.some((sym) =>
+                new RegExp(`\\b${sym}\\s*\\(`).test(text.replace(m[0], '')),
+            );
+            // utils.js is the shared helper module (fetchJSON/escapeHtml/…)
+            // imported by nearly every file; listing it under every route adds
+            // no triage value, same reasoning as the app.js exclusion above.
+            const SHARED_INFRA = new Set(['route-registry.js', 'utils.js']);
+            if (invoked && !SHARED_INFRA.has(target)) files.add(`website/js/${target}`);
+        }
     }
     const sorted = [...files].sort();
     const suffix = unresolved.length ? ` (unresolved: ${unresolved.join(', ')})` : '';
