@@ -151,66 +151,14 @@ AUTOMATION_ENABLED=true
 
 ---
 
-## NEW FEATURES (February 2026)
+## Feature History
 
-### Round Correlation System (Feb 22-26)
-- **Table**: `round_correlations` (25 columns, 10 completeness boolean flags — `has_{r1,r2}_{stats,lua_teams,gametime,endstats,proximity}`)
-- **Service**: `bot/services/round_correlation_service.py`
-- **Command**: `!correlation_status` (admin only)
-- **Purpose**: Tracks data completeness for each match (R1+R2 together)
-- **Config**: `CORRELATION_ENABLED`, `CORRELATION_DRY_RUN`, `CORRELATION_WRITE_ERROR_THRESHOLD`
-- **Status**: Live mode with guardrails enabled (schema preflight, circuit breaker)
-
-### Proximity v5 Teamplay Analytics (Feb 24)
-- **New Tables**: `proximity_spawn_timing`, `proximity_team_cohesion`, `proximity_crossfire_opportunity`, `proximity_team_push`, `proximity_lua_trade_kill`
-- **New Commands**: `!pse`, `!pco`, `!pxa`, `!ppu`, `!ptl`
-- **Parser**: ProximityParserV4 extended (backward compatible with v4 files)
-- **Website**: 5 new HTML panels with canvas cohesion timeline
-- **Migration**: `migrations/013_add_proximity_v5_teamplay.sql`
-
-### Round Linkage Anomaly Detection (Feb 26)
-- **Service**: `bot/services/round_linkage_anomaly_service.py`
-- **API**: `GET /diagnostics/round-linkage` (thresholded anomaly report)
-- **Purpose**: Detects and reports linkage drift across lua_round_teams, rounds, round_correlations
-
-### Website Redesign (Feb 23)
-- **Framework**: React 19 + TypeScript 5.9 + Tailwind CSS v4 + Framer Motion
-- **New Pages**: Sessions, Records, Awards, Activity Calendar (90-day heatmap), Maps
-- **Total Pages**: 25 (grew from 10 at the Feb 2026 redesign — see website/backend/CLAUDE.md for the current list)
-- **Features**: Player autocomplete search, achievement grid, discord badge display
-
-### Objective Coordinate Gates (Feb 26)
-- **WS11**: `scripts/proximity_objective_coords_gate.py` — prevents coordinate regressions
-- **WS12**: `WEBHOOK_TRIGGER_MODE=stats_ready_only` — enforces single trigger path
-
-### ET Rating / Skill Rating (Mar 23-26)
-- **Tables**: `player_skill_ratings` (PK: player_guid), `player_skill_history` (trend tracking)
-- **Service**: `website/backend/services/skill_rating_service.py` (9-metric percentile formula)
-- **Router**: `website/backend/routers/skill_router.py` (4 endpoints)
-- **Endpoints**: `/api/skill/leaderboard`, `/api/skill/player/{id}`, `/api/skill/player/{id}/history`, `/api/skill/formula`
-- **Frontend**: `website/frontend/src/pages/SkillRating.tsx`
-- **Migration**: `migrations/024_add_skill_ratings.sql`, `migrations/031_add_skill_history_session_scope.sql`
-- **Features**: Per-session/map drill-down, confidence indicator, server-side tiers, auto-refresh when stale >1h
-- **Status**: Live, 40 players rated
-
-### Deep RCA Audit (Mar 26)
-- **Docs**: `docs/DEEP_RCA_AUDIT_PLAN.md`, `docs/DEEP_RCA_PROXIMITY_REVIEW.md`, `docs/DEEP_RCA_SKILL_RATING_REVIEW.md`
-- **Fixed**: 20+ error masking issues (silent exceptions, empty catches), retry loop bug, parser file restore
-- **Key fix**: `file_tracker.py` now respects `success=FALSE` entries (was causing infinite retry loops)
-
-### Mandelbrot RCA v2.0 Audit + Oksii Adoption (Mar 29-30)
-- **Ruff**: Expanded to 8 rule sets (E/F/W/I/UP/B/S/T20/SIM/C4), 2257→0 errors
-- **Silent exceptions**: 23 `except: pass` + 5 silent returns → proper logging
-- **Shared constants**: `website/backend/utils/et_constants.py` (KILL_MOD_NAMES, color strip, weapon names)
-- **Memory leak**: `_compute_locks` → BoundedLockDict (max 64, LRU)
-- **Oksii adoption**: Lua v6.01 with killer_health, alive_count, reinf timing
-- **KIS v2**: 3 multipliers (health, alive, reinf) + soft cap at 5.0
-- **BOX scoring**: `website/backend/services/box_scoring_service.py` (Oksii-style stopwatch)
-- **Migration**: `migrations/033_add_oksii_adoption_fields.sql`
-- **Storytelling**: Narrative, momentum chart, KIS fix, Oksii badges on legacy website
-- **God file splits**: `proximity_router.py` (5515→13 sub-routers), `records_router.py` (3172→9 sub-routers)
-- **Tests**: 101 new unit tests (476 total), end-to-end verified with bots (33 rounds, 2781 positions)
-- **Bug fixes**: Round linker timezone (UTC vs local), revives endpoint, kill-outcomes params
+Feb-Mar 2026 feature notes (round correlation, proximity v5, website redesign,
+skill rating, RCA audits, Oksii adoption) were removed from this file on
+2026-07-29 — they were stale weight every session paid to read. `docs/archive/`
+is gitignored (not pushed to GitHub), so the full text isn't duplicated there;
+see this file's git history (or `git show <pre-2026-07-29-commit>:docs/CLAUDE.md`)
+for the removed section verbatim.
 
 ---
 
@@ -263,4 +211,4 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 
 ---
 
-**Version**: 1.27.0 <!-- x-release-please-version --> | **Last Updated**: 2026-05-13 | **Schema Version**: 2.2
+**Version**: 1.27.0 <!-- x-release-please-version --> | **Last Updated**: 2026-07-29 | **Schema Version**: 2.2
