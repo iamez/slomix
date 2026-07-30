@@ -30,7 +30,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.window_seconds = max(1, getenv_int("RATE_LIMIT_WINDOW_SECONDS", 60))
         self.standard_limit = max(1, getenv_int("RATE_LIMIT_REQUESTS_PER_WINDOW", 180))
         self.heavy_limit = max(1, getenv_int("RATE_LIMIT_HEAVY_REQUESTS_PER_WINDOW", 45))
-        self.proximity_limit = max(1, getenv_int("RATE_LIMIT_PROXIMITY_REQUESTS_PER_WINDOW", 200))
+        # A single proximity page load fans out to ~38 distinct /api/proximity/*
+        # GET requests (measured from logs/access.log, 2026-07-19 09:51:19 —
+        # see docs/W2_RATE_LIMIT_TUNING_2026-07-29.md). At the old default of
+        # 200, one IP could only load the page ~5 times per window before the
+        # *last* endpoints dispatched in a batch started 429ing — the "site
+        # rate-limits itself" pattern reported in the task backlog. 450
+        # supports ~12 full loads/window (2 tabs open + a few reloads/session
+        # switches) while still bounding a real burst.
+        self.proximity_limit = max(1, getenv_int("RATE_LIMIT_PROXIMITY_REQUESTS_PER_WINDOW", 450))
         self._trusted_proxy_networks, self._trusted_proxy_hosts = self._load_trusted_proxies(
             os.getenv("RATE_LIMIT_TRUSTED_PROXIES", self._DEFAULT_TRUSTED_PROXIES)
         )
