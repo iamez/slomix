@@ -93,6 +93,10 @@ the two services independently since they're rebuilt as separate steps.
 ```bash
 sudo systemctl stop etlegacy-bot        # stop BEFORE touching its venv
 cd /home/samba/share/slomix_discord
+# Refuse rather than nest: with venv-3.10.bak already present (step 5 says to
+# keep it for days, so a re-run is likely) this mv would put the venv INSIDE it
+# and the rollback would restore the older outer copy instead.
+[ -e venv-3.10.bak ] && { echo "venv-3.10.bak exists — remove it first"; exit 1; }
 mv venv venv-3.10.bak          # keep for rollback, don't delete yet
 python3.11 -m venv venv
 venv/bin/pip install --upgrade pip
@@ -109,6 +113,7 @@ sudo systemctl status etlegacy-bot
 ```bash
 sudo systemctl stop etlegacy-web        # stop BEFORE touching its venv
 cd website
+[ -e venv-3.10.bak ] && { echo "website/venv-3.10.bak exists — remove it first"; exit 1; }
 mv venv venv-3.10.bak
 python3.11 -m venv venv
 venv/bin/pip install --upgrade pip
@@ -127,10 +132,21 @@ docs match reality and stop:
 
 ```bash
 ssh slomix-vm '/opt/slomix/venv-bot/bin/python --version; /opt/slomix/venv-web/bin/python --version'
-# expect 3.11-3.13 => nothing to do on prod
 ```
 
-Only if that unexpectedly reports < 3.11 does prod need work, and it can't
+`pyproject.toml` requires `>=3.11,<3.14`, so the acceptable window is 3.11,
+3.12 or 3.13 — it is bounded at BOTH ends. A report of 3.14+ (plausible after
+an OS upgrade, since Debian moves fast) is *also* out of range and needs work,
+just in the other direction; saying "only < 3.11 needs work" would wave that
+through (Codex review on #584, third round):
+
+| Reported | Meaning |
+|---|---|
+| 3.11 – 3.13 | in range — nothing to do on prod |
+| < 3.11 | too old — the `StrEnum` failure applies; see below |
+| ≥ 3.14 | too new for the current pin — do NOT proceed with this plan; either widen `requires-python` after testing, or pin the venv to a supported interpreter |
+
+Only in the too-old case does prod need the rebuild below, and it can't
 reuse steps 2-3 verbatim — different paths, unit names, and ownership. Per
 `slomix_vm_setup.sh`: `APP_DIR="/opt/slomix"`, `BOT_VENV="$APP_DIR/venv-bot"`,
 `WEB_VENV="$APP_DIR/venv-web"`, units `slomix-bot`/`slomix-web`, and each venv
@@ -140,9 +156,29 @@ is chowned to its own service account (`chown -R slomix_bot:slomix`,
 `slomix_bot`/`slomix_web` — cannot write to it, so the chown is not optional
 (Codex review on #584, second round):
 
+Two preflight checks before touching anything, because both failure modes
+leave the box worse than when you started (Codex review on #584, third round):
+
+```bash
+# 1. Does a 3.11+ interpreter even exist here? The canonical bootstrap installs
+#    only generic python3/python3-venv, so `python3.11` may well be absent — and
+#    the sequence below stops the service and MOVES its working venv before ever
+#    invoking it, so discovering this late means an outage with no environment.
+ssh slomix-vm 'command -v python3.11 || echo "MISSING — install it before proceeding"'
+
+# 2. Do stale backups from a previous run exist? `mv venv-bot venv-bot.bak` with
+#    the target already present moves the venv INSIDE it
+#    (/opt/slomix/venv-bot.bak/venv-bot), so the rollback below silently restores
+#    the older outer environment instead. Step 5 recommends keeping backups for
+#    days, which makes a re-run likely.
+ssh slomix-vm 'ls -d /opt/slomix/venv-*.bak 2>/dev/null && echo "REMOVE or RENAME these first"'
+```
+
 ```bash
 sudo systemctl stop slomix-bot
 cd /opt/slomix
+# Refuse rather than nest if a previous backup is still there.
+[ -e venv-bot.bak ] && { echo "venv-bot.bak exists — remove it first"; exit 1; }
 sudo mv venv-bot venv-bot.bak
 sudo python3.11 -m venv venv-bot
 sudo venv-bot/bin/pip install --upgrade pip
@@ -152,6 +188,7 @@ sudo chown -R slomix_bot:slomix venv-bot     # match slomix_vm_setup.sh:785
 sudo systemctl start slomix-bot
 
 sudo systemctl stop slomix-web
+[ -e venv-web.bak ] && { echo "venv-web.bak exists — remove it first"; exit 1; }
 sudo mv venv-web venv-web.bak
 sudo python3.11 -m venv venv-web
 sudo venv-web/bin/pip install --upgrade pip
