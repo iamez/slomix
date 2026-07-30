@@ -82,6 +82,16 @@ function isCalledIn(text, sym) {
     return false;
 }
 
+// True if `sym` appears as a standalone identifier (not a substring).
+function isMentionedIn(text, sym) {
+    for (let i = text.indexOf(sym); i !== -1; i = text.indexOf(sym, i + 1)) {
+        const before = i === 0 ? '' : text[i - 1];
+        const after = text[i + sym.length] ?? '';
+        if (!IDENT_CHAR.test(before) && !IDENT_CHAR.test(after)) return true;
+    }
+    return false;
+}
+
 // Source of `function name(...) { ... }` (or `async function`), or null if it
 // can't be isolated. Brace-matched rather than regex-parsed; naive about braces
 // inside strings/comments, which is acceptable here because the caller falls
@@ -95,7 +105,23 @@ function functionBody(text, name) {
         break;
     }
     if (start === -1) return null;
-    const open = text.indexOf('{', start);
+    // Skip the parameter list before looking for the body brace: a default
+    // value like `loadRecordBookView(params = {})` puts a `{}` between the name
+    // and the body, and naively taking the first `{` returned that empty object
+    // as the "body" — silently scoping every scan to nothing.
+    const paren = text.indexOf('(', start);
+    if (paren === -1) return null;
+    let pd = 0;
+    let afterParams = -1;
+    for (let j = paren; j < text.length; j += 1) {
+        if (text[j] === '(') pd += 1;
+        else if (text[j] === ')') {
+            pd -= 1;
+            if (pd === 0) { afterParams = j + 1; break; }
+        }
+    }
+    if (afterParams === -1) return null;
+    const open = text.indexOf('{', afterParams);
     if (open === -1) return null;
     let depth = 0;
     for (let j = open; j < text.length; j += 1) {
@@ -106,6 +132,84 @@ function functionBody(text, name) {
         }
     }
     return null;
+}
+
+// utils.js is the shared helper module (fetchJSON/escapeHtml/…) imported by
+// nearly every file; listing it under every route adds no triage value.
+const SHARED_INFRA = new Set(['route-registry.js', 'utils.js']);
+
+// A loader that begins by looking up a DOM id and bailing out when it is absent
+// does nothing if that id is not in the served HTML. `loadMatchesView()` is
+// exactly this: `getElementById('matches-grid'); if (!grid) return;`
+// (matches.js:24) and `matches-grid` appears nowhere in website/ — the home
+// page's Recent Matches widget is `loadRecentMatches()` in leaderboard.js.
+// Listing matches.js as a home serving file sends triage to dead code
+// (Codex review on #575).
+function isDeadLoader(body, servedHtml) {
+    if (!body) return false;
+    const guard = body.match(/getElementById\(\s*['"]([\w-]+)['"]\s*\)[\s\S]{0,120}?if\s*\(\s*!\s*\w+\s*\)\s*return/);
+    if (!guard) return false;
+    return !servedHtml.includes(`id="${guard[1]}"`) && !servedHtml.includes(`id='${guard[1]}'`);
+}
+
+// One level of transitive imports out of each entry-point file, scoped to the
+// bodies of the entry points themselves. Direct-only resolution under-reports:
+// loadTonightView() calls initTonightBetting() from bets.js (tonight.js:10,42)
+// and loadRecordBookView() dispatches into records.js / hall-of-fame.js
+// (record-book.js:9-10), none of which appeared in the map. Scoping to the
+// entry body avoids the opposite error — attributing an unrelated function's
+// imports to the route (Codex review on #575).
+function transitiveFiles(entryNames, legacyIndex, files) {
+    const byFile = new Map();
+    for (const name of entryNames) {
+        const f = legacyIndex.get(name);
+        if (f && f !== 'app.js') {
+            if (!byFile.has(f)) byFile.set(f, []);
+            byFile.get(f).push(name);
+        }
+    }
+    for (const [file, loaders] of byFile) {
+        const text = readFileSync(path.join(legacyDir, file), 'utf8');
+        const bodies = loaders.map((n) => functionBody(text, n)).filter(Boolean);
+
+        // Follow same-file helpers to a fixpoint, not just one level.
+        // record-book.js delegates twice: loadRecordBookView() -> _showTab() ->
+        // _ensureLoaded(), which assigns loadRecordsView / loadHallOfFameView to
+        // a local and calls `loader()` (record-book.js:31-44). Neither the
+        // import nor a direct call appears in the entry body, so records.js and
+        // hall-of-fame.js went unreported (Codex review on #575). The iteration
+        // terminates because a file has finitely many functions and each is
+        // pulled in at most once.
+        const localFns = [...text.matchAll(/^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(/gm)]
+            .map((m) => m[1])
+            .filter((n) => !loaders.includes(n));
+        const reached = new Set();
+        let frontier = [...bodies];
+        while (frontier.length) {
+            const next = [];
+            for (const fn of localFns) {
+                if (reached.has(fn)) continue;
+                if (!frontier.some((b) => isCalledIn(b, fn))) continue;
+                reached.add(fn);
+                const fnBody = functionBody(text, fn);
+                if (fnBody) next.push(fnBody);
+            }
+            bodies.push(...next);
+            frontier = next;
+        }
+
+        const scope = bodies.length ? bodies.join('\n') : text;
+        for (const m of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*'\.\/([\w.-]+)'/g)) {
+            const symbols = m[1].split(',').map((x) => x.trim().split(/\s+as\s+/).pop()).filter(Boolean);
+            const target = m[2];
+            if (SHARED_INFRA.has(target)) continue;
+            // `isCalledIn` alone misses `loader = loadRecordsView; loader()`.
+            // A bare mention inside the (already narrowly scoped) entry/helper
+            // bodies is a real use of that import.
+            const used = symbols.some((sym) => isCalledIn(scope, sym) || isMentionedIn(scope, sym));
+            if (used) files.add(`website/js/${target}`);
+        }
+    }
 }
 
 function homeLoaderFiles(legacyIndex) {
@@ -123,6 +227,15 @@ function homeLoaderFiles(legacyIndex) {
         for (const m of deferred[1].matchAll(/task:\s*([A-Za-z_]\w*)/g)) names.add(m[1]);
     }
 
+    // Direct calls inside `if (legacyHomeEnabled) { ... }` — initLivePolling()
+    // and initLiveStatusPolling() start the home page's live widgets but sit
+    // in neither array, so harvesting only the arrays dropped live-status.js
+    // from the map (Codex review on #575).
+    // NOTE: app.js has more than one `if (legacyHomeEnabled)` block; harvest all.
+    for (const blk of appJs.matchAll(/if\s*\(legacyHomeEnabled\)\s*\{([\s\S]*?)\n    \}/g)) {
+        for (const m of blk[1].matchAll(/^\s{8}([A-Za-z_]\w*)\s*\(\s*\)\s*;/gm)) names.add(m[1]);
+    }
+
     // Functions declared in app.js itself are never `export`ed, so they aren't
     // in the exported-symbol index — resolve those to app.js directly.
     const localToAppJs = new Set();
@@ -130,56 +243,26 @@ function homeLoaderFiles(legacyIndex) {
         localToAppJs.add(m[1]);
     }
 
+    const servedHtml = readFileSync(path.join(repoRoot, 'website/index.html'), 'utf8');
     const files = new Set();
     const unresolved = [];
-    const directFiles = new Set();
+    const dead = [];
+    const live = [];
     for (const name of names) {
         const file = legacyIndex.get(name) ?? (localToAppJs.has(name) ? 'app.js' : null);
-        if (file) { files.add(`website/js/${file}`); directFiles.add(file); }
-        else unresolved.push(name);
+        if (!file) { unresolved.push(name); continue; }
+        const src = readFileSync(path.join(legacyDir, file), 'utf8');
+        if (isDeadLoader(functionBody(src, name), servedHtml)) { dead.push(`${name} (${file})`); continue; }
+        live.push(name);
+        files.add(`website/js/${file}`);
     }
+    transitiveFiles(live, legacyIndex, files);
 
-    // One level of transitive imports, because the direct scan alone is
-    // misleading: loadHomePulseCards() in home.js imports and calls
-    // loadHomeTonightCard() from tonight.js (home.js:9,113), so triaging the
-    // home page's Tonight card would land on the wrong file (Codex review on
-    // #575). Only counts an import whose symbol is actually invoked in that
-    // file, so type-only or unused imports don't inflate the list.
-    //
-    // app.js is deliberately excluded as a SOURCE of transitive imports: it's
-    // the bootstrap/router and imports ~30 modules, so following it would list
-    // most of website/js and tell a reader nothing. Its own directly-defined
-    // loaders are already included above.
-    // utils.js is the shared helper module (fetchJSON/escapeHtml/…) imported by
-    // nearly every file; listing it under every route adds no triage value,
-    // same reasoning as the app.js exclusion above.
-    const SHARED_INFRA = new Set(['route-registry.js', 'utils.js']);
-    for (const file of directFiles) {
-        if (file === 'app.js') continue;
-        const text = readFileSync(path.join(legacyDir, file), 'utf8');
-
-        // Scan ONLY the bodies of the home loaders this file contributes, not
-        // the whole file. A module usually implements unrelated functions too,
-        // and scanning all of it attributes their imports to the home route:
-        // `matches.js` is here for loadMatchesView(), but its separate
-        // loadMatchDetails() calls openModal() from auth.js (matches.js:608),
-        // which put auth.js in the home row even though no home loader reaches
-        // it on page load (Codex review on #575). Falls back to the whole file
-        // if a body can't be isolated, so a parsing miss under-scopes rather
-        // than silently dropping the module.
-        const ownLoaders = [...names].filter((n) => legacyIndex.get(n) === file);
-        const bodies = ownLoaders.map((n) => functionBody(text, n)).filter(Boolean);
-        const scope = bodies.length ? bodies.join('\n') : text;
-
-        for (const m of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*'\.\/([\w.-]+)'/g)) {
-            const symbols = m[1].split(',').map((x) => x.trim().split(/\s+as\s+/).pop()).filter(Boolean);
-            const target = m[2];
-            const invoked = symbols.some((sym) => isCalledIn(scope, sym));
-            if (invoked && !SHARED_INFRA.has(target)) files.add(`website/js/${target}`);
-        }
-    }
     const sorted = [...files].sort();
-    const suffix = unresolved.length ? ` (unresolved: ${unresolved.join(', ')})` : '';
+    const notes = [];
+    if (unresolved.length) notes.push(`unresolved: ${unresolved.join(', ')}`);
+    if (dead.length) notes.push(`skipped no-op: ${dead.join(', ')}`);
+    const suffix = notes.length ? ` (${notes.join('; ')})` : '';
     return `${sorted.join(' + ')} — populated directly from initApp() in app.js (criticalLoads + scheduleDeferredLoads), not through load()${suffix}`;
 }
 
@@ -200,11 +283,17 @@ function legacyFileFor(routeKey, def, legacyIndex) {
     if (routeKey === 'home') return homeLoaderFiles(legacyIndex);
     const source = def.load.toString();
     const calls = [...source.matchAll(/legacy\.(\w+)\(/g)].map((m) => m[1]);
-    const files = new Set(calls.map((name) => legacyIndex.get(name)).filter(Boolean));
+    const files = new Set(
+        calls.map((name) => legacyIndex.get(name)).filter(Boolean).map((f) => `website/js/${f}`),
+    );
+    // Same transitive pass the home route gets: an entry point that delegates
+    // into another module (tonight.js -> bets.js, record-book.js -> records.js /
+    // hall-of-fame.js) would otherwise be under-reported.
+    transitiveFiles(calls, legacyIndex, files);
     if (files.size === 0) {
         return calls.length ? `unresolved (calls: ${calls.join(', ')})` : '(no legacy.* call in load())';
     }
-    return [...files].join(', ');
+    return [...files].sort().map((f) => f.replace('website/js/', '')).join(', ');
 }
 
 function modernFileFor(viewId) {

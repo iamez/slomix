@@ -15,8 +15,8 @@ Generated: 2026-07-30
 | `form` | `#/form` | Legacy JS | form.js |
 | `greatshot` | `#/greatshot/demos` | Legacy JS | greatshot.js |
 | `greatshot-demo` | `#/greatshot/demos` | Legacy JS | greatshot.js |
-| `hall-of-fame` | `#/hall-of-fame` | Legacy JS | record-book.js |
-| `home` | `(root — empty hash)` | Legacy JS | website/js/app.js + website/js/home.js + website/js/leaderboard.js + website/js/live-status.js + website/js/matches.js + website/js/season-stats.js + website/js/sessions.js + website/js/tonight.js — populated directly from initApp() in app.js (criticalLoads + scheduleDeferredLoads), not through load() |
+| `hall-of-fame` | `#/hall-of-fame` | Legacy JS | hall-of-fame.js, record-book.js, records.js |
+| `home` | `(root — empty hash)` | Legacy JS | website/js/app.js + website/js/home.js + website/js/leaderboard.js + website/js/live-status.js + website/js/season-stats.js + website/js/sessions.js + website/js/tonight.js — populated directly from initApp() in app.js (criticalLoads + scheduleDeferredLoads), not through load() (skipped no-op: updateLiveSession (live-status.js), loadPredictions (app.js), loadMatchesView (matches.js)) |
 | `leaderboards` | `#/leaderboards` | Legacy JS | leaderboard.js |
 | `maps` | `#/maps` | Legacy JS | matches.js |
 | `profile` | `#/profile` | Legacy JS | player-profile.js |
@@ -24,10 +24,10 @@ Generated: 2026-07-30
 | `proximity-player` | `(needs params)` | React (modern) | website/frontend/src/pages/ProximityPlayer.tsx |
 | `proximity-replay` | `(needs params)` | React (modern) | website/frontend/src/pages/ProximityReplay.tsx |
 | `proximity-teams` | `(needs params)` | React (modern) | website/frontend/src/pages/ProximityTeams.tsx |
-| `record-book` | `#/record-book` | Legacy JS | record-book.js |
-| `records` | `#/record-book` | Legacy JS | record-book.js |
+| `record-book` | `#/record-book` | Legacy JS | hall-of-fame.js, record-book.js, records.js |
+| `records` | `#/record-book` | Legacy JS | hall-of-fame.js, record-book.js, records.js |
 | `replay` | `#/replay` | Legacy JS | replay.js |
-| `retro-viz` | `#/retro-viz` | Legacy JS | retro-viz.js |
+| `retro-viz` | `#/retro-viz` | Legacy JS | components.js, retro-viz.js |
 | `rivalries` | `#/rivalries` | Legacy JS | rivalries.js |
 | `session-detail` | `#/sessions2` | Legacy JS | session-detail.js |
 | `sessions` | `#/sessions` | Legacy JS | sessions.js |
@@ -35,7 +35,7 @@ Generated: 2026-07-30
 | `skill-rating` | `#/skill-rating` | React (modern) | website/frontend/src/pages/SkillRating.tsx |
 | `smart-stats-diag` | `#/smart-stats-diag` | Legacy JS | smart-stats-diag.js |
 | `story` | `#/story` | Legacy JS | story.js |
-| `tonight` | `#/tonight` | Legacy JS | tonight.js |
+| `tonight` | `#/tonight` | Legacy JS | bets.js, tonight.js |
 | `upload-detail` | `#/uploads` | Legacy JS | uploads.js |
 | `uploads` | `#/uploads` | Legacy JS | uploads.js |
 | `weapons` | `#/weapons` | Legacy JS | matches.js |
