@@ -32,8 +32,15 @@ class GroupWritableRotatingFileHandler(logging.handlers.RotatingFileHandler):
 
     def _fix_permissions(self) -> None:
         try:
-            os.chmod(self.baseFilename, 0o660)  # nosec B103 # lgtm[py/overly-permissive-file] - group-write is intentional, see class docstring
+            os.chmod(self.baseFilename, 0o660)  # nosec B103 - group-write is intentional, see class docstring
         except OSError:
+            # Best-effort by design: chmod can fail because the file is owned
+            # by the other service's user (the bot and web run as different
+            # accounts) or the filesystem doesn't support POSIX modes. Neither
+            # is worth taking logging down for — and raising here would break
+            # rollover, i.e. break logging to fix a permission nicety. The
+            # sibling service's own handler applies the same chmod, so in the
+            # cross-user case it gets fixed from the other side anyway.
             pass
 
     def doRollover(self) -> None:  # noqa: N802 - overriding stdlib's camelCase method name

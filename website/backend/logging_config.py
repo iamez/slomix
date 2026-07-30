@@ -209,8 +209,14 @@ class GroupWritableRotatingFileHandler(logging.handlers.RotatingFileHandler):
     def doRollover(self) -> None:  # noqa: N802 - overriding stdlib's camelCase method name
         super().doRollover()
         try:
-            os.chmod(self.baseFilename, 0o660)  # nosec B103 # lgtm[py/overly-permissive-file] - group-write is intentional, see setup_logging()
+            os.chmod(self.baseFilename, 0o660)  # nosec B103 - group-write is intentional, see setup_logging()
         except OSError:
+            # Best-effort by design: chmod can fail because the file is owned by
+            # the bot's user (both services write this one file) or the
+            # filesystem doesn't support POSIX modes. Raising here would break
+            # rollover — i.e. break logging in order to fix a permission
+            # nicety — and the bot's own handler applies the same chmod, so the
+            # cross-user case is corrected from the other side.
             pass
 
 
@@ -284,8 +290,12 @@ def setup_logging(
         log_file = LOG_DIR / config["filename"]
         if log_file.exists():
             try:
-                os.chmod(log_file, 0o660)  # nosec B103 # lgtm[py/overly-permissive-file] - group-write is intentional here, see comment above
+                os.chmod(log_file, 0o660)  # nosec B103 - group-write is intentional here, see comment above
             except OSError:
+                # Best-effort by design (same reasoning as the rollover handlers
+                # above): a file already owned by the bot's user, or a
+                # filesystem without POSIX modes, must not stop the web service
+                # from starting up with working logging.
                 pass
 
         root_logger.addHandler(handler)
