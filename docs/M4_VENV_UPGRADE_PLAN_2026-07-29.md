@@ -29,7 +29,11 @@ import re, sys
 from importlib.metadata import version, PackageNotFoundError
 missing, mismatch = [], []
 for line in open(sys.argv[1]):
-    m = re.match(r'^([A-Za-z0-9._-]+)==([^\s;]+)', line.split('#')[0].strip())
+    # `[extras]` must be tolerated: website/requirements.txt pins
+    # `uvicorn[standard]==0.41.0`, and a name-then-`==` pattern skips it
+    # silently — the earlier version of this snippet missed the uvicorn drift
+    # entirely while claiming to reproduce it (Codex review on #583).
+    m = re.match(r'^([A-Za-z0-9._-]+)(?:\[[^\]]*\])?==([^\s;]+)', line.split('#')[0].strip())
     if not m:
         continue
     name, pinned = m.groups()
@@ -46,7 +50,10 @@ PY
 ```
 
 Verified to reproduce exactly the drift recorded below — all three missing
-packages plus all six version mismatches.
+packages plus all **seven** version mismatches. (An earlier version of this
+snippet reported only six: its regex required the name to be followed
+immediately by `==`, so it silently skipped `uvicorn[standard]==0.41.0` while
+this text claimed a complete match — Codex review on #583.)
 
 ```
 BLOCKING:
@@ -90,18 +97,40 @@ safe. This project's own deploy already does it the right way round:
 pips, with a comment naming "inconsistent imports" as the reason (Codex review
 on #583).
 
-So each step is: **stop → pip → start**, not pip → restart:
+So each step is: **stop → pip → start**, not pip → restart. The unit name, the
+venv it runs from, and the port it serves are a matched set — mixing a
+production unit name with this dev box's venv path (as an earlier version of
+this section did, substituting only the stop target) points pip at an
+environment the restarted service never loads (Codex review on #583). Pick one
+column and stay in it:
+
+| | dev box (this machine) | canonical VM |
+|---|---|---|
+| unit | `etlegacy-web` | `slomix-web` |
+| venv | `website/venv` | `/opt/slomix/venv-web` |
+| port | 8000 | 7000 |
 
 ```bash
-sudo systemctl stop slomix-web        # or etlegacy-web on this dev box
-# ... the step's pip install ...
-sudo systemctl start slomix-web
-sudo systemctl status slomix-web
+# dev box
+sudo systemctl stop etlegacy-web
+website/venv/bin/pip install ...        # the step's install
+sudo systemctl start etlegacy-web && sudo systemctl status etlegacy-web
+
+# canonical VM (paths/ownership per docs/DEPLOYMENT_RUNBOOK.md:17-20,97-99)
+sudo systemctl stop slomix-web
+sudo -u slomix_web /opt/slomix/venv-web/bin/pip install ...
+sudo systemctl start slomix-web && sudo systemctl status slomix-web
 ```
+
+Note the VM installs run **as `slomix_web`**: `slomix_vm_setup.sh` chowns that
+venv to the service account with no group write, so a plain `sudo pip` fails
+the moment a pin actually changes — the same reason
+`scripts/deploy_release.sh` uses `sudo_run_as`.
 
 The restart is also what makes steps 1-2 take effect at all (see their notes) —
 stopping first just means nothing is served from a half-installed tree in
-between.
+between. Every `curl` example below uses the dev-box port 8000; use 7000 on the
+VM.
 
 ## Recommended order, package by package
 
@@ -132,10 +161,19 @@ cacheable endpoint twice with a cookie-less client and watch the `X-Cache`
 header go `MISS` → `HIT`:
 
 ```bash
-curl -sS -D- -o /dev/null http://127.0.0.1:8000/api/proximity/prox-scores | grep -i x-cache   # MISS
-curl -sS -D- -o /dev/null http://127.0.0.1:8000/api/proximity/prox-scores | grep -i x-cache   # HIT
+curl -sS -D- -o /dev/null http://127.0.0.1:8000/api/stats/overview | grep -i x-cache   # MISS
+curl -sS -D- -o /dev/null http://127.0.0.1:8000/api/stats/overview | grep -i x-cache   # HIT
 redis-cli --scan --pattern 'slomix:*' | head              # keys actually present
 ```
+
+`/api/stats/overview` specifically, **not** a proximity endpoint: whenever any
+source query fails, the proximity scoring endpoints answer
+`{"status": "degraded", ...}`, and `_is_uncacheable_status_body()`
+(`http_cache_middleware.py:309`) deliberately turns every `status: error` /
+`status: degraded` payload into `X-Cache: BYPASS-ERROR` without writing it to
+Redis — so a correctly-connected backend could never show a HIT there, and the
+check would blame Redis for an unrelated data problem (Codex review on #583).
+Confirmed on this box: `/api/stats/overview` goes `MISS` → `HIT` reliably.
 
 `X-Cache: BYPASS` on either call means the request carried a cookie (or the
 path isn't cacheable), not that Redis is broken. "The package imports" is not
@@ -235,11 +273,28 @@ below all need a running process.
 ```bash
 # 1. Manifest drift: rerun the heredoc from "Measured" — expect the row for
 #    the package(s) just handled to disappear from MISSING/MISMATCH.
+
 # 2. Dependency consistency (no broken transitive requirements):
 website/venv/bin/pip check
-# 3. after step 1 + restart: /metrics present (not 404) and shows slomix_* series
-curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/metrics
+
+# 3. after step 1 + restart: /metrics must be PRESENT and actually carry the
+#    series. A status-only check can't tell a real metrics endpoint from an
+#    empty-but-200 one, so grep the body rather than discarding it with
+#    -o /dev/null (Codex review on #583):
+curl -sS http://127.0.0.1:8000/metrics | grep -c '^slomix_'   # expect > 0
+
 # 4. after step 2 + restart: X-Cache goes MISS -> HIT on a cookie-less request
-#    (see step 2 — a logged-in page load proves nothing, it bypasses the cache)
-# 5. full pytest suite, plus the upload-security tests specifically after step 4
+#    against /api/stats/overview (see step 2 — a logged-in page load proves
+#    nothing, and a proximity endpoint can answer `degraded` and never cache)
+
+# 5. Tests do NOT run from website/venv — it has no pytest (requirements-dev.txt
+#    carries pytest/pytest-asyncio/pytest-cov, and only the bot venv installs
+#    that file). Verified: `website/venv/bin/python -c "import pytest"` fails
+#    with ModuleNotFoundError. Run them from the root venv, which imports the
+#    website package directly from the checkout, so it exercises the same source
+#    the upgraded web service runs — but NOT the upgraded dependencies. Anything
+#    that could plausibly be affected by the new pins needs a real request
+#    against the restarted service (steps 3-4), not just a green suite:
+venv/bin/python -m pytest tests/                              # after any step
+venv/bin/python -m pytest tests/ -k "upload"                  # after step 4
 ```
