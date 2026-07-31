@@ -36,6 +36,35 @@ fail() { printf 'FAIL  %s\n' "$1"; FAIL_COUNT=$((FAIL_COUNT + 1)); }
 
 section() { printf '\n-- %s --\n' "$1"; }
 
+# ---------------------------------------------------------------------------
+# Configuration lookup.
+#
+# Most of this script's early revisions hardcoded what the deployment makes
+# configurable — port 7000/8000, postgres on 127.0.0.1:5432, redis on
+# 127.0.0.1:6379 — so any supported non-default layout produced confident
+# FAILs about services that were perfectly healthy somewhere else, which is
+# worse than no check at all (Codex review on #580).
+#
+# Environment wins over the file, matching load_dotenv(override=False). The
+# file is READ, never sourced: .env may contain arbitrary shell.
+# ---------------------------------------------------------------------------
+cfg() {
+    local key="$1" default="${2:-}" val="" f
+    val="${!key:-}"
+    if [[ -z "$val" ]]; then
+        for f in .env website/.env; do
+            [[ -f "$f" ]] || continue
+            val="$(sed -n "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*//p" "$f" 2>/dev/null \
+                   | tail -1 | sed -e 's/[[:space:]]*#.*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/")"
+            [[ -n "$val" ]] && break
+        done
+    fi
+    printf '%s' "${val:-$default}"
+}
+
+# Resolved once here because sections 2 and 3 both branch on it.
+DB_TYPE="$(cfg DATABASE_TYPE postgresql)"
+
 # ===========================================================================
 # 1. Services active
 # ===========================================================================
@@ -114,12 +143,29 @@ check_service_pair "web" "uvicorn.*backend.main" etlegacy-web slomix-web
 if systemctl is-active --quiet postgresql 2>/dev/null; then
     ok "postgresql active"
 else
-    pg_unit="$(systemctl list-units --all --plain --no-legend 'postgresql@*-main.service' 2>/dev/null \
-        | awk '{print $1}' | head -1)"
-    if [[ -n "$pg_unit" ]] && systemctl is-active --quiet "$pg_unit" 2>/dev/null; then
-        ok "$pg_unit active"
-    elif [[ -n "$pg_unit" ]]; then
-        fail "$pg_unit not active: $(systemctl is-active "$pg_unit" 2>&1)"
+    # Check EVERY cluster, not `head -1`. An upgraded host keeps the old
+    # cluster's unit around (postgresql@14-main alongside an active
+    # postgresql@17-main), and taking the first match could pin the stale one
+    # and FAIL permanently while the live cluster served every query — the
+    # connectivity probe below would even pass, making the two contradict each
+    # other (Codex review on #580).
+    pg_active=""
+    pg_inactive=()
+    while read -r pg_unit; do
+        [[ -n "$pg_unit" ]] || continue
+        if systemctl is-active --quiet "$pg_unit" 2>/dev/null; then
+            pg_active="${pg_active:+$pg_active, }$pg_unit"
+        else
+            pg_inactive+=("$pg_unit")
+        fi
+    done < <(systemctl list-units --all --plain --no-legend 'postgresql@*-main.service' 2>/dev/null | awk '{print $1}')
+
+    if [[ -n "$pg_active" ]]; then
+        ok "postgresql cluster active: $pg_active"
+        # Idle clusters on an upgraded box are normal, not a fault.
+        [[ ${#pg_inactive[@]} -gt 0 ]] && ok "postgresql inactive cluster(s) ignored: ${pg_inactive[*]}"
+    elif [[ ${#pg_inactive[@]} -gt 0 ]]; then
+        fail "no active postgresql cluster (found but not running: ${pg_inactive[*]})"
     else
         warn "postgresql: no matching systemd unit found (postgresql or postgresql@*-main)"
     fi
@@ -142,6 +188,27 @@ fi
 for svc in redis-server tailscaled fail2ban smbd cloudflared; do
     if systemctl is-active --quiet "$svc" 2>/dev/null; then
         ok "$svc active"
+        # For cloudflared, `active` is necessary but nowhere near sufficient:
+        # the process stays up with revoked credentials, a lost edge
+        # connection, or a broken ingress rule, while every other probe in
+        # this script is local and therefore still green. The public site can
+        # be completely unavailable and nothing here would say so (Codex P1
+        # review on #580). Probe the public hostname when one is configured.
+        if [[ "$svc" == "cloudflared" ]]; then
+            PUBLIC_URL="$(cfg HEALTH_CHECK_PUBLIC_URL)"
+            if [[ -z "$PUBLIC_URL" ]]; then
+                warn "cloudflared active but no HEALTH_CHECK_PUBLIC_URL configured — tunnel is NOT verified end-to-end, only the process is running"
+            elif ! command -v curl >/dev/null 2>&1; then
+                warn "cloudflared active but curl unavailable — cannot verify public reachability"
+            else
+                pub_code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "${PUBLIC_URL%/}/api/status" 2>/dev/null)"
+                if [[ "${pub_code:0:3}" =~ ^(200|304)$ ]]; then
+                    ok "cloudflared tunnel serving publicly (${PUBLIC_URL%/}/api/status -> $pub_code)"
+                else
+                    fail "cloudflared is active but the public site is NOT reachable (${PUBLIC_URL%/}/api/status -> ${pub_code:-000}) — tunnel up, traffic not flowing"
+                fi
+            fi
+        fi
     elif ! systemctl list-unit-files "${svc}.service" 2>/dev/null | grep -q "${svc}.service"; then
         warn "$svc: no matching systemd unit found (not installed on this host)"
     elif [[ "$(systemctl is-enabled "$svc" 2>/dev/null)" == "disabled" ]]; then
@@ -177,15 +244,31 @@ else
             warn "port $port ($label) not listening"
         fi
     }
-    check_port_open 5432 postgres
-    check_port_open 6379 redis
-    # Website binds 7000 on the canonical VM (slomix_vm_setup.sh), but dev
-    # boxes commonly run uvicorn on 8000 directly — check both, don't fail
-    # on whichever one isn't this box's convention.
-    if echo "$LISTENING" | grep -qE ":(7000|8000) "; then
-        ok "website port (7000 or 8000) listening"
+    # Only expect a local postgres listener when postgres is actually local.
+    # A configured remote POSTGRES_HOST has nothing listening here by design.
+    PG_HOST_CFG="$(cfg POSTGRES_HOST 127.0.0.1)"
+    if [[ "$DB_TYPE" == "sqlite" ]]; then
+        ok "DATABASE_TYPE=sqlite — no local postgres listener expected"
+    elif [[ "$PG_HOST_CFG" =~ ^(127\.0\.0\.1|localhost|::1)$ ]]; then
+        check_port_open "$(cfg POSTGRES_PORT 5432)" postgres
     else
-        warn "website port: neither 7000 nor 8000 listening"
+        ok "postgres configured remotely ($PG_HOST_CFG) — no local listener expected"
+    fi
+    if [[ "$(cfg CACHE_BACKEND redis)" == "redis" && -z "$(cfg REDIS_URL)" ]]; then
+        check_port_open 6379 redis
+    else
+        ok "redis not configured as a local default backend — skipping local listener check"
+    fi
+    # Website binds 7000 on the canonical VM (slomix_vm_setup.sh) and dev boxes
+    # commonly run uvicorn on 8000, but both are overridable (WEBSITE_PORT in
+    # prod_up.sh, DEV_WEBSITE_PORT in dev_up.sh) — a host serving happily on
+    # 9000 previously warned that nothing was listening (Codex review on #580).
+    WEB_PORT_CANDIDATES="$(cfg WEBSITE_PORT) $(cfg DEV_WEBSITE_PORT) $(cfg WEBSITE_PUBLIC_PORT) 7000 8000"
+    WEB_PORT_RE="$(printf '%s' "$WEB_PORT_CANDIDATES" | tr ' ' '\n' | grep -E '^[0-9]+$' | sort -u | paste -sd'|')"
+    if echo "$LISTENING" | grep -qE ":(${WEB_PORT_RE}) "; then
+        ok "website port listening (candidates: ${WEB_PORT_RE//|/, })"
+    else
+        warn "website port: none of ${WEB_PORT_RE//|/, } listening"
     fi
 
     # Every listener bound to all interfaces (0.0.0.0/::), including the
@@ -217,24 +300,47 @@ fi
 # 3. Connectivity — postgres, redis, puran, /api/* probe
 # ===========================================================================
 section "3. Connectivity"
-if command -v pg_isready >/dev/null 2>&1; then
-    if pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
-        ok "postgres reachable (127.0.0.1:5432)"
+# Probe the backend the app is CONFIGURED to use. A remote POSTGRES_HOST, a
+# non-default port, or the SQLite mode scripts/dev_up.sh selects all made the
+# old hardcoded 127.0.0.1:5432 probe record a hard failure against a socket
+# nothing was supposed to be listening on (Codex review on #580).
+if [[ "$DB_TYPE" == "sqlite" ]]; then
+    ok "DATABASE_TYPE=sqlite — skipping postgres probe (not this deployment's backend)"
+elif command -v pg_isready >/dev/null 2>&1; then
+    PG_HOST="$(cfg POSTGRES_HOST 127.0.0.1)"
+    PG_PORT="$(cfg POSTGRES_PORT 5432)"
+    if pg_isready -h "$PG_HOST" -p "$PG_PORT" >/dev/null 2>&1; then
+        ok "postgres reachable ($PG_HOST:$PG_PORT)"
     else
-        fail "postgres not reachable (127.0.0.1:5432)"
+        fail "postgres not reachable ($PG_HOST:$PG_PORT)"
     fi
 else
     warn "pg_isready not available, skipping postgres connectivity check"
 fi
 
-if command -v redis-cli >/dev/null 2>&1; then
-    if redis-cli -h 127.0.0.1 -p 6379 ping 2>/dev/null | grep -q PONG; then
-        ok "redis reachable (127.0.0.1:6379)"
+# Same for the cache. CACHE_BACKEND=memory is a supported dev posture, and a
+# remote or password-protected instance is configured through REDIS_URL
+# (website/backend/services/http_cache_backend.py) — contacting unauthenticated
+# localhost in either case tests something the application never uses.
+CACHE_BACKEND="$(cfg CACHE_BACKEND redis)"
+REDIS_URL="$(cfg REDIS_URL)"
+if [[ "$CACHE_BACKEND" != "redis" ]]; then
+    ok "CACHE_BACKEND=$CACHE_BACKEND — skipping redis probe (not this deployment's cache)"
+elif ! command -v redis-cli >/dev/null 2>&1; then
+    warn "redis-cli not available, skipping redis connectivity check"
+elif [[ -n "$REDIS_URL" ]]; then
+    # redis-cli -u handles host, port, db and password in one flag.
+    if redis-cli -u "$REDIS_URL" ping 2>/dev/null | grep -q PONG; then
+        ok "redis reachable (REDIS_URL)"
     else
-        fail "redis not reachable (127.0.0.1:6379)"
+        fail "redis not reachable (REDIS_URL as configured)"
     fi
 else
-    warn "redis-cli not available, skipping redis connectivity check"
+    if redis-cli -h 127.0.0.1 -p 6379 ping 2>/dev/null | grep -q PONG; then
+        ok "redis reachable (127.0.0.1:6379, default)"
+    else
+        fail "redis not reachable (127.0.0.1:6379, default)"
+    fi
 fi
 
 if command -v nc >/dev/null 2>&1; then
@@ -260,9 +366,34 @@ if command -v curl >/dev/null 2>&1; then
     # FAILs from a service that isn't even ours (Codex review on #580, second
     # round). A base only counts as Slomix once it answers 200/304 on at least
     # one path; bases that never do are reported as "not this box's" instead.
+    # Candidate bases: whatever the deployment CONFIGURES first, then the two
+    # conventional defaults. prod_up.sh honours WEBSITE_PORT and dev_up.sh
+    # DEV_WEBSITE_PORT, so a service healthy on e.g. 9000 previously made both
+    # hardcoded candidates return 000 and the check declared a full outage
+    # (Codex review on #580).
+    declare -a API_BASES=()
+    for p in "$(cfg WEBSITE_PORT)" "$(cfg DEV_WEBSITE_PORT)" "$(cfg WEBSITE_PUBLIC_PORT)"; do
+        [[ -n "$p" ]] && API_BASES+=("http://127.0.0.1:${p}")
+    done
+    API_BASES+=("http://127.0.0.1:8000" "http://127.0.0.1:7000")
+    # De-duplicate, preserving the configured-first order.
+    declare -A seen_base=()
+    declare -a API_BASES_UNIQ=()
+    for base in "${API_BASES[@]}"; do
+        [[ -n "${seen_base[$base]:-}" ]] && continue
+        seen_base["$base"]=1
+        API_BASES_UNIQ+=("$base")
+    done
+
     declare -A base_ok=() base_bad=()
-    for base in "http://127.0.0.1:8000" "http://127.0.0.1:7000"; do
-        for path in /health /api/status; do
+    for base in "${API_BASES_UNIQ[@]}"; do
+        # /api/status FIRST and as the sole identity test. /health is a
+        # near-universal route name, so an unrelated app on a candidate port
+        # answering 200 there was enough to mark that base as Slomix — after
+        # which its 404 on /api/status counted as our failure, even with the
+        # real Slomix base fully healthy (Codex review on #580). Only the
+        # Slomix-specific path may promote a base.
+        for path in /api/status /health; do
             # curl's -w already prints "000" on connection failure regardless
             # of curl's own exit code, so no `|| echo` fallback here — one
             # would double up into "000000" when curl also exits non-zero.
@@ -270,7 +401,9 @@ if command -v curl >/dev/null 2>&1; then
             code="${code:0:3}"
             if [[ "$code" =~ ^(200|304)$ ]]; then
                 ok "${base}${path} -> $code"
-                base_ok["$base"]=1
+                # Only /api/status establishes that this base is Slomix. A 200
+                # on the generic /health proves someone is listening, not who.
+                [[ "$path" == "/api/status" ]] && base_ok["$base"]=1
             elif [[ "$code" == "000" || -z "$code" ]]; then
                 : # nothing listening here — silent skip
             else
@@ -290,7 +423,7 @@ if command -v curl >/dev/null 2>&1; then
         fi
     done
     if [[ ${#base_ok[@]} -eq 0 ]]; then
-        fail "no response from either API base (127.0.0.1:8000 or :7000) on /health or /api/status — full outage or wrong ports"
+        fail "no Slomix API base answered /api/status (tried: ${API_BASES_UNIQ[*]}) — full outage, or set WEBSITE_PORT/DEV_WEBSITE_PORT if this host uses another port"
     fi
 else
     warn "curl not available, skipping API probe"
@@ -356,6 +489,12 @@ fi
 for LOG_DIR_SCAN in "${LOG_DIRS[@]}"; do
 if [[ -d "$LOG_DIR_SCAN" ]]; then
     STALE_FOUND=0
+    # Rotated files are scanned too. RotatingFileHandler rolls errors.log to
+    # errors.log.1 and logrotate compresses to errors.log.1.gz — neither
+    # matches '*.log', so an old rotation could sit world-readable or
+    # group-writable indefinitely without one warning, in the very check that
+    # exists because log permissions have twice taken the bot down (Codex
+    # review on #580).
     while IFS= read -r -d '' f; do
         perms="$(stat -c '%a' "$f" 2>/dev/null || stat -f '%Lp' "$f" 2>/dev/null)"
         # client_errors.log is deliberately owner-only (0600, single writer -
@@ -365,7 +504,14 @@ if [[ -d "$LOG_DIR_SCAN" ]]; then
         # specific 0640 value previously seen - 0644/0666 would silently
         # pass the old check despite exposing logs or permitting unintended
         # writes (Codex P2 review on #580).
-        if [[ "$(basename "$f")" == "client_errors.log" ]]; then
+        #
+        # Strip the rotation suffix before deciding which mode applies:
+        # client_errors.log.1 is the same owner-only file and must not be held
+        # to the 0660 rule just because its name gained a number.
+        base_name="$(basename "$f")"
+        base_name="${base_name%.gz}"
+        base_name="$(printf '%s' "$base_name" | sed -E 's/\.[0-9]+$//')"
+        if [[ "$base_name" == "client_errors.log" ]]; then
             expected="600"
         else
             expected="660"
@@ -376,16 +522,21 @@ if [[ -d "$LOG_DIR_SCAN" ]]; then
         if [[ -x "$f" ]]; then
             warn "log has executable bit set (likely accidental): $f"
         fi
-        age_secs=$(( $(date +%s) - $(stat -c '%Y' "$f" 2>/dev/null || stat -f '%m' "$f" 2>/dev/null || echo 0) ))
-        if [[ "$age_secs" -gt $((7 * 86400)) ]]; then
-            STALE_FOUND=1
+        # Staleness applies to ACTIVE logs only. A rotated errors.log.3 is
+        # supposed to be old, so including rotations here would WARN forever
+        # on every healthy host.
+        if [[ "$f" == *.log ]]; then
+            age_secs=$(( $(date +%s) - $(stat -c '%Y' "$f" 2>/dev/null || stat -f '%m' "$f" 2>/dev/null || echo 0) ))
+            if [[ "$age_secs" -gt $((7 * 86400)) ]]; then
+                STALE_FOUND=1
+            fi
         fi
-    done < <(find "$LOG_DIR_SCAN" -maxdepth 1 -type f -name '*.log' -print0 2>/dev/null)
-    LOG_COUNT=$(find "$LOG_DIR_SCAN" -maxdepth 1 -type f -name '*.log' 2>/dev/null | wc -l)
+    done < <(find "$LOG_DIR_SCAN" -maxdepth 1 -type f \( -name '*.log' -o -name '*.log.*' \) -print0 2>/dev/null)
+    LOG_COUNT=$(find "$LOG_DIR_SCAN" -maxdepth 1 -type f \( -name '*.log' -o -name '*.log.*' \) 2>/dev/null | wc -l)
     LOG_SIZE=$(du -sh "$LOG_DIR_SCAN" 2>/dev/null | cut -f1)
-    ok "$LOG_DIR_SCAN has $LOG_COUNT *.log files, $LOG_SIZE total"
+    ok "$LOG_DIR_SCAN has $LOG_COUNT log files (incl. rotations), $LOG_SIZE total"
     if [[ "$STALE_FOUND" -eq 1 ]]; then
-        warn "$LOG_DIR_SCAN: at least one *.log file hasn't been written to in 7+ days (may be fine if that service is idle)"
+        warn "$LOG_DIR_SCAN: at least one active *.log file hasn't been written to in 7+ days (may be fine if that service is idle)"
     fi
 else
     warn "$LOG_DIR_SCAN directory not found"
@@ -498,9 +649,42 @@ PYEOF
 if [[ -f scripts/apply_migrations.py ]]; then
     PYTHON_BIN="$(find_python "${HEALTH_CHECK_PYTHON:-}")"
     OUT="$HEALTH_CHECK_TMPDIR/migrations.out"
-    set +e; ledger_exists "$PYTHON_BIN"; LEDGER_RC=$?; set -e 2>/dev/null || true
+    # Save and restore the CALLER's errexit state rather than forcing `set -e`.
+    # This script runs under `set -uo pipefail` with errexit OFF by design, so
+    # the old unconditional `set -e` switched it ON for everything that
+    # followed — after which the very next `code="$(curl ...)"` that failed to
+    # connect (exit 7) terminated the whole health check mid-run, before the
+    # remaining sections could report (Codex review on #580).
+    _prev_errexit="$(set +o | grep -E ' -o errexit$' || echo 'set +o errexit')"
+    set +e; ledger_exists "$PYTHON_BIN"; LEDGER_RC=$?; eval "$_prev_errexit"
     if [[ "$LEDGER_RC" -eq 1 ]]; then
-        warn "schema_migrations table absent — skipping --validate (it would CREATE the table; not read-only)"
+        # NOT a warning. schema_migrations absent on a database that already
+        # holds application tables means migration state is unknown and the
+        # only drift check in this script is silently skipped — the health
+        # check would exit 0 while the schema could be arbitrarily behind
+        # (Codex P1 review on #580). An genuinely empty database is the one
+        # benign case, so distinguish it rather than blanket-failing.
+        if "$PYTHON_BIN" - <<'PYEOF' 2>/dev/null
+import asyncio, pathlib, sys
+sys.path.insert(0, str(pathlib.Path("scripts").resolve()))
+from apply_migrations import get_connection
+async def main():
+    conn = await get_connection()
+    try:
+        n = await conn.fetchval(
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'"
+        )
+    finally:
+        await conn.close()
+    # 0 tables -> fresh database, nothing to be behind on.
+    sys.exit(0 if n == 0 else 1)
+asyncio.run(main())
+PYEOF
+        then
+            warn "schema_migrations absent, but the database has no tables — fresh install, nothing to validate"
+        else
+            fail "schema_migrations absent on a database that already has tables — migration state is UNKNOWN and drift cannot be checked; run scripts/apply_migrations.py"
+        fi
     elif [[ "$LEDGER_RC" -gt 1 ]]; then
         warn "could not check for schema_migrations (no asyncpg or DB unreachable) — skipping --validate"
     elif "$PYTHON_BIN" scripts/apply_migrations.py --validate >"$OUT" 2>&1; then
