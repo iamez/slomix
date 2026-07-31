@@ -1048,6 +1048,7 @@ Map assets, checked by reading the archives in `/home/samba/share/etmain` direct
 - Patch inventory: decoded `drawVert_t` (44 B) and `dsurface_t` (104 B) → 111,637 drawverts, 12,573 surfaces, 200 `MST_PATCH`; shader references mark 196 patches `CONTENTS_SOLID`
 - Entity classes: regex over the entity lump → 540 entities, 34 classnames; per-map spawn / objective-trigger / WOLF-objective counts as tabulated in §2.5
 - ET:L compatibility: current ET:Legacy `qfiles.h` and `cm_load.c` checked directly → `IBSP` v47, the W2 record layouts, and separate `MST_PATCH` collision loading from surfaces + drawverts; all 20 local BSP entity lumps checked → zero `func_fakebrush`, with live custom-entity sources still unverified
+- W3 entity geometry: `python -m scripts.analyze_map_entity_geometry --etmain-dir /home/samba/share/etmain --output /tmp/map-entity-geometry-w3.json` → 20 measured BSP maps, 2,376 team spawn points, 158 exact brush-union objective volumes, 96 objective markers and 1,058 unresolved collision-relevant brush entities; manifest `8503edd3ab28c93bd8e94805442ff75a0bbbaf669ff3927100b937eee028f867`. The separate 19-map played scope resolves 13 maps and returns explicit null geometry for all six missing maps; manifest `311286db7907e8785aa7e05e167810a457737c0ac7e25df9adc718db708de7f4`. Full method and limits are in `docs/research/MAP_ENTITY_GEOMETRY_W3_2026-07-31.md`
 - `.objdata` / `.script` presence: checked per archive → present on all 13 available maps
 - Duplicate provision: `te_escape2` supplied by three pk3s; sha256 of each BSP compared → byte-identical
 
@@ -1100,6 +1101,17 @@ Checks added in rev 10:
 Related: #556 (metric validity method), #560 (track linkage fix), #551 (open design review), `docs/PROXIMITY_VISION_AUDIT_2026-07.md`, `docs/DESIGN_SKILL_PASSPORT_2026-07.md`.
 
 ### Revision history
+
+**Rev 12 (2026-07-31)** — implemented and measured W3 entity extraction.
+Across all 20 indexed BSP maps, the read-only inventory found 2,376 team spawn
+points, 158 exact brush-union objective volumes, 96 objective markers and
+1,058 collision-relevant inline brush entities. The independent played-map
+run preserves the 13-covered/six-missing boundary and publishes null objective
+geometry for every missing BSP rather than using the legacy radius-500 sphere.
+Dynamic transforms/states and live custom-entity completeness remain
+unverified W4/W5 gates; no trace or metric is approved by this revision.
+Evidence and reproduction commands are in
+`docs/research/MAP_ENTITY_GEOMETRY_W3_2026-07-31.md`.
 
 **Rev 11 (2026-07-31)** — implemented the frozen reinforcement-clock gate.
 The old mode/25 ms quantisation path is retired. All 17 raw inconsistent groups
