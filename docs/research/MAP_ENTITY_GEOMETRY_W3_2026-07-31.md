@@ -61,11 +61,13 @@ The sign and origin transformation were checked against ET:Legacy's
 `trigger_objective_info` was checked through `InitTrigger` in
 `src/game/g_trigger.c`.
 
-The model AABB is retained only as broad-phase/provenance data and is named
-`origin_translated_bounds`. It is not a runtime world-space AABB for a mover
-that rotates or changes position. All extracted collision candidates publish
-`runtime_state = "unresolved"`; W4 must apply an observed transform/state or
-return `indeterminate`.
+The model AABB is retained as provenance and is named
+`origin_translated_bounds`. Exact containment does not use it as an
+authoritative shortcut because the BSP parser does not prove that model bounds
+enclose every referenced brush. It is also not a runtime world-space AABB for
+a mover that rotates or changes position. All extracted collision candidates
+publish `runtime_state = "unresolved"`; W4 must apply an observed
+transform/state or return `indeterminate`.
 
 The extractor fails closed on:
 
@@ -171,7 +173,7 @@ uncovered maps. Legacy radius-500 objective spheres are not substituted.
 Synthetic W1-W3 unit bundle:
 
 ```text
-47 passed
+48 passed
 ```
 
 Opt-in integration suite loading every real indexed BSP:
