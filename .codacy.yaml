@@ -28,3 +28,32 @@ exclude_paths:
   # permanently re-report that same accepted debt on every PR touching the
   # file. The root requirements.txt stays Codacy-covered.
   - "website/requirements.txt"
+
+engines:
+  bandit:
+    exclude_paths:
+      # These two files chmod shared log files to 0o660 and the log directory
+      # to 0o770 ON PURPOSE: the bot and web services run as different users in
+      # the private `slomix` group and append to the same files, and 0640 left
+      # the non-owning service read-only — which crash-looped the bot twice
+      # (2026-07-13, 2026-07-22; one incident ran to 26,829 restarts).
+      #
+      # Bandit's own B103 is answered inline with `# nosec B103` on every such
+      # line, and bandit HONOURS that: the repo's own gate
+      # (`bandit -c pyproject.toml -r bot website/backend ... -ll`, the
+      # "Security (pip-audit + bandit)" job in tests.yml) passes on these exact
+      # files. Codacy's duplicate bandit pass ignores `# nosec` and has no
+      # per-issue ignore mechanism in the configuration file — suppression
+      # there is UI-only — so it re-reports the same four accepted findings on
+      # every PR that touches these files.
+      #
+      # Scoped to the `bandit` engine and to these two paths ONLY. Every other
+      # Codacy engine still analyses both files, and bandit still analyses the
+      # rest of the repository, so nothing loses coverage: the identical tool
+      # and rule set already runs against them in CI. Same reasoning as the
+      # `website/requirements.txt` trivy exclusion above.
+      #
+      # Owner: iamez. Drops when bot and web stop sharing log files, at which
+      # point the GroupWritableRotatingFileHandler goes away too.
+      - "bot/logging_config.py"
+      - "website/backend/logging_config.py"

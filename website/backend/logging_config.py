@@ -195,6 +195,39 @@ class StandardFormatter(logging.Formatter):
         )
 
 
+class GroupWritableRotatingFileHandler(logging.handlers.RotatingFileHandler):
+    """RotatingFileHandler that re-applies 0660 after every rollover.
+
+    The one-time chmod in setup_logging() only fixes the file that already
+    exists at startup. doRollover() renames it aside and open()s a brand new
+    file using the process umask, which does NOT preserve that chmod — the
+    bot/web cross-process-group-write bug (see setup_logging()'s comment)
+    reappears the moment the file first rotates, not just on service
+    restart. Codex review on #568 caught this the one-time fix missed.
+    """
+
+    def doRollover(self) -> None:  # noqa: N802 - overriding stdlib's camelCase method name
+        super().doRollover()
+        try:
+            # SUPPRESSION (py/overly-permissive-file) — see the identical note
+            # in bot/logging_config.py. Group-write is the fix, not the defect:
+            # 0640 crash-looped the bot twice on a log both services share. The
+            # group is the private `slomix` service group, the directory stays
+            # 0770, and the alternative is losing the guarantee on every
+            # rollover — which is the exact regression review caught here once
+            # already. Owner: iamez.
+            # codeql[py/overly-permissive-file]
+            os.chmod(self.baseFilename, 0o660)  # nosec B103 - group-write is intentional, see setup_logging()
+        except OSError:
+            # Best-effort by design: chmod can fail because the file is owned by
+            # the bot's user (both services write this one file) or the
+            # filesystem doesn't support POSIX modes. Raising here would break
+            # rollover — i.e. break logging in order to fix a permission
+            # nicety — and the bot's own handler applies the same chmod, so the
+            # cross-user case is corrected from the other side.
+            pass
+
+
 # =============================================================================
 # Logger Setup
 # =============================================================================
@@ -218,11 +251,17 @@ def setup_logging(
     # Create log directory with secure permissions
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Set directory permissions to owner-only (rwx — the x bit is required to
-    # traverse the directory); logs may contain request metadata, so deny
-    # group/other access.
+    # Set directory permissions to owner+group (rwx — the x bit is required
+    # to traverse the directory); logs may contain request metadata, so deny
+    # "other" access. Group access is required: the bot and web services run
+    # as different OS users sharing one group (see slomix_vm_setup.sh
+    # BOT_USER/WEB_USER/SLX_GROUP) and both need to create/rotate files in
+    # this directory. Owner-only (0700) locks the other service out the next
+    # time it needs to open a fresh or rotated file — this caused two
+    # production incidents (2026-07-13, 2026-07-22: errors.log permission
+    # bug crash-looped the bot).
     try:
-        os.chmod(LOG_DIR, stat.S_IRWXU)
+        os.chmod(LOG_DIR, stat.S_IRWXU | stat.S_IRWXG)
     except OSError:
         pass  # May fail on some systems, continue anyway
 
@@ -241,7 +280,7 @@ def setup_logging(
 
     # Setup file handlers
     for config in LOG_FILES.values():
-        handler = logging.handlers.RotatingFileHandler(
+        handler = GroupWritableRotatingFileHandler(
             filename=LOG_DIR / config["filename"],
             maxBytes=config["max_bytes"],
             backupCount=config["backup_count"],
@@ -251,12 +290,25 @@ def setup_logging(
         handler.setFormatter(file_formatter)
         handler.addFilter(security_filter)
 
-        # Set file permissions (owner read/write only)
+        # Set file permissions (owner+group read/write). 0640 (group
+        # read-only) blocks the bot service — a different OS user in the
+        # same group — from writing/rotating this file once the web service
+        # touches it, which is the root cause of the 2026-07-13 and
+        # 2026-07-22 errors.log permission incidents.
         log_file = LOG_DIR / config["filename"]
         if log_file.exists():
             try:
-                os.chmod(log_file, 0o640)
+                # SUPPRESSION (py/overly-permissive-file). Intentional per the
+                # comment directly above: 0640 is what caused the 2026-07-13
+                # and 2026-07-22 incidents. Group is the private `slomix`
+                # service group; the directory is 0770. Owner: iamez.
+                # codeql[py/overly-permissive-file]
+                os.chmod(log_file, 0o660)  # nosec B103 - group-write is intentional here, see comment above
             except OSError:
+                # Best-effort by design (same reasoning as the rollover handlers
+                # above): a file already owned by the bot's user, or a
+                # filesystem without POSIX modes, must not stop the web service
+                # from starting up with working logging.
                 pass
 
         root_logger.addHandler(handler)
