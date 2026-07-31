@@ -1,32 +1,58 @@
 # Web error triage — 2026-07-27
 
-**Status:** diagnosis complete, no fixes applied. This document is the handoff.
+**Status:** diagnosis complete. **Re-verified 2026-07-31 — three of the five findings have since been fixed by other work.** This document is the handoff, kept as the record of what was measured and what closed it.
 **Trigger:** the owner browsed the site and found errors in the `etlegacy-bot` / `etlegacy-web` journals.
 
-Everything below was reproduced or measured on 2026-07-27 against the dev database and the running service on `127.0.0.1:8000`. Line references are against `main` at the time of writing. Where a claim was not verified, it says so.
+Everything below was reproduced or measured on 2026-07-27 against the dev database and the running service on `127.0.0.1:8000`. Line references are against `main` at the time of writing. Where a claim was not verified, it says so. **Every numeric claim was re-measured on 2026-07-31**; where the number moved, both are shown rather than the older one silently replaced.
+
+**Five findings — N1–N4 substantive, N5 cosmetic** (an earlier revision said "four" in the title and summary while the body carried an N5 section; the count is corrected rather than the section dropped, since a recorded 404 is worth keeping).
+
+| | 2026-07-27 | 2026-07-31 |
+|---|---|---|
+| N1 proximity leaderboards default | 500 | **200, fixed** |
+| N2 lua mislinks / duplicates | 44 / 37 | **0 / 0, repaired by #565** |
+| N3 re-linker query | 3.1–4.4 s | still open |
+| N4 false "876 unimported files" | 876 reported, 0 real | still open |
+| N5 `/favicon.ico` 404 | cosmetic | cosmetic |
+| Environment debt (Python 3.10) | blocking | **resolved — box is on 3.13.14** |
 
 ---
 
 ## Povzetek za ownerja (slovensko)
 
-Štiri stvari, zelo različne teže:
+Pet najdb, zelo različne teže — in tri so se med 27. in 31. julijem **že rešile**:
 
-1. **Proximity leaderboards vračajo 500 privzeto** — panel na strani je mrtev za vsakega obiskovalca. To je moj hrošč iz #548, ne Codexov. Reproduciran, vzrok znan.
-2. **44 napačno povezanih lua vrstic** (5,5 %) in 37 podvojenih — podatkovna integriteta.
-3. **Re-linker poizvedba traja 3–4,4 s** — performanca ozadja.
-4. **"876 neuvoženih datotek" je lažni alarm** — dejansko jih je 0.
+1. ~~**Proximity leaderboards vračajo 500 privzeto**~~ — **POPRAVLJENO.** Danes vrne 200 z resničnimi podatki. Poleg tega vpliv nikoli ni bil takšen, kot je pisalo tu: React stran uporablja `crossfire`, ne `power`, zato navadni obiskovalci pokvarjene privzete poti sploh niso zadeli.
+2. ~~**44 napačno povezanih lua vrstic in 37 podvojenih**~~ — **POPRAVLJENO.** Obe metriki sta danes 0. Popravek, ki ga ta dokument šele predlaga, je bil medtem napisan v #565 (`scripts/repair_lua_round_links.py` + migracija 067).
+3. **Re-linker poizvedba traja 3–4,4 s** — performanca ozadja. **Še odprto.**
+4. **"876 neuvoženih datotek" je lažni alarm** — dejansko jih je 0. **Še odprto.**
+5. **`/favicon.ico` → 404** — kozmetično, brez ukrepa.
 
-Plus latenten okoljski dolg: nova `map_geometry` koda rabi Python 3.11, živa storitev pa teče 3.10.
+Okoljski dolg (Python 3.10) je prav tako **zaprt**: box je 2026-07-31 nadgrajen na 3.13.14.
 
-Najpomembnejše: **prva je edina, ki jo uporabnik dejansko vidi.**
+Ostaneta torej **N3 in N4**, oba v ozadju in oba nevidna uporabniku.
 
 ---
 
-## N1 — `/api/proximity/leaderboards` returns 500 on the default category
+## N1 — `/api/proximity/leaderboards` returned 500 on the default category
 
-**Severity: live outage on the default code path.**
+**Severity: API bug on the default code path — NOT a visible site outage.** An earlier revision of this document called it "a live outage… the panel is dead for every visitor". That was wrong, and the correction matters because it changes the priority (Codex review on #563).
 
-### Symptom
+The shipped React Proximity page never exercises the failing default. `website/frontend/src/pages/Proximity.tsx:1499` initializes `useState('crossfire')` and passes that category explicitly to `useProximityLeaderboards(activeTab, …)` at :1502 — and `power` is not among the offered tabs at all; the file's own comment at :22 records it as cut ("cut tabs (power, spawn, trades, …)"). The two remaining `power` references (:33, :47) are value formatters, not tabs. The route catalog marks this React page as the live modern `proximity` route, so ordinary visitors got a 200.
+
+**Who was actually affected:** direct API clients that omit `category` or explicitly request `category=power`.
+
+**Re-measured 2026-07-31 — the bug itself is gone:**
+
+```
+GET /api/proximity/leaderboards                  -> 200  {"status":"ok","category":"power","formula_version":"power-v2",…}
+GET /api/proximity/leaderboards?category=power   -> 200
+GET /api/proximity/leaderboards?category=crossfire -> 200
+```
+
+The default is still `power`; it now returns real data. The root-cause analysis below is kept because the two-conventions defect it documents is the kind that recurs.
+
+### Symptom (as observed 2026-07-27)
 
 ```
 ERROR | DatabaseAdapter | fetch_one failed (SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE round_id IS NOT NULL AND EXISTS (   SELECT 1 FROM r)
@@ -120,7 +146,7 @@ The response must carry an `attribution` block with plausible numbers, not all z
 
 ---
 
-## N2 — 44 mislinked lua rows, 37 duplicate links
+## N2 — 44 mislinked lua rows, 37 duplicate link *targets* — REPAIRED 2026-07-31
 
 **Severity: data integrity. Both anomaly thresholds are configured at 0 and both are breached.**
 
@@ -138,15 +164,43 @@ Measured:
 | `round_number` mismatches | 0 |
 | mean drift | **660 s** |
 | date range | 2026-02-20 → 2026-07-19 |
-| `duplicate_lua_round_links` | **37** |
+| `duplicate_lua_round_links` | **37 duplicate _targets_, not 37 rows** |
+
+**That last figure does not mean what an earlier revision implied** (Codex review on #563). The metric in `round_linkage_anomaly_service.py:178-186` counts *groups*, not rows:
+
+```sql
+SELECT COUNT(*) FROM (
+  SELECT round_id FROM lua_round_teams WHERE round_id IS NOT NULL
+  GROUP BY round_id HAVING COUNT(*) > 1
+) t
+```
+
+So 37 was the number of `round_id` values carrying more than one Lua row — each contributing at least two rows, and some of those rows potentially also among the 44 wrong-start rows. Writing "44 + 37 rows" therefore both undercounted the group members and double-counted the overlap. Sizing a repair requires enumerating the rows inside those groups and deduplicating them against the mismatch set first.
 
 Map name and round number agree **perfectly**, and the drift is roughly one round's length. That is the signature of a nearest-neighbour mislink onto the **adjacent replay of the same map**, not random corruption. `round_linkage_anomaly_service.py` already calls this out: "the classic back-to-back-replay nearest-neighbor mislink".
 
-**Approach:** diagnose before repairing. Because map and round number match, the correct target is identifiable — the round whose `round_start_unix` actually matches. 44 + 37 rows is a small, enumerable set.
+### Re-measured 2026-07-31 — both counts are now zero
 
-Repair belongs in a **new migration**; applied migrations are immutable (editing one puts every target into checksum drift that `--mark` cannot repair). Dry-run output before `--apply`.
+```
+duplicate_lua_round_links                 0     (was 37 groups)
+wrong_start_lua_rows                      0     (was 44)
+linked lua_round_teams rows             806     (was 799)
+total / unlinked                    865 / 59
+```
 
-**Open question for the owner:** the most recent mislink is 2026-07-19, so it is not clear whether the cause is still active or this is purely historical. Establish that before repairing, or the repair will need repeating.
+**The repair this section asked for has since been written and is on `main`** — PR #565, as `scripts/repair_lua_round_links.py` plus `migrations/067_repair_lua_round_links.sql`, with `068_add_relinker_unlinked_indexes.sql` alongside.
+
+Its policy answers the determinism objection directly, and answers it the strict way rather than the convenient one — quoting the migration header:
+
+> exactly one round matching source-native (`round_start_unix`, normalized `map_name`, `round_number`) → rebind; **zero or multiple exact targets → set `round_id` NULL, never guess**; abort before mutation if this projection would retain duplicate non-NULL `round_id` values.
+
+That is what this section originally got wrong. Matching `map_name` and `round_number` against the *currently linked* round establishes only that the current link is wrong — never that exactly one *different* `rounds` row matches on `round_start_unix`. Missing stats and duplicate cross-server identities make the zero-candidate and multi-candidate cases unsafe to repair automatically, and 067 handles them by unlinking rather than by choosing.
+
+The runtime re-linker gained a stale-fix path in the same wave (#566); the dev bot log shows it working, e.g. `lua_id=77 moved 999 → 42 (dist: 198966830s→30s, map=supply R1)`.
+
+**Caveat for this box:** migration 067 is **not recorded in `schema_migrations` on dev** — the zeroes above come from the runtime re-linker and the repair script, not from 067 having run. Check 067's state per environment before assuming the invariant is enforced there.
+
+**The open question from 2026-07-27 — whether the cause was still active — is answered:** no new mislinks in the four days since, and the most recent remains 2026-07-19.
 
 ---
 
@@ -159,12 +213,23 @@ WARNING | DatabaseAdapter | SLOW QUERY (3136ms, 50 rows): SELECT DISTINCT map_na
 WARNING | DatabaseAdapter | SLOW QUERY (4401ms, 50 rows): ...
 ```
 
-Source: `bot/cogs/proximity_mixins/relinker_mixin.py:118`. It builds a `UNION` across **24 tables**, plus a matching set of mismatch legs — roughly 48 subqueries, each scanning for `round_id IS NULL`.
+Source: `bot/cogs/proximity_mixins/relinker_mixin.py:118`. **Counted exactly** (an earlier revision said "roughly 48 subqueries, each scanning for `round_id IS NULL`", which was wrong on both halves — Codex review on #563):
 
-Two concrete causes:
+| | count |
+|---|---:|
+| tables in `tables_with_round_number` | 24 |
+| null legs (`WHERE round_id IS NULL`) | 24 + `lua_round_teams` = **25** |
+| mismatch legs (`JOIN rounds` … `round_start_unix != r.round_start_unix`) | 24 + `lua_round_teams` = **25** |
+| **total subqueries** | **50** |
 
-1. **`UNION` instead of `UNION ALL`.** `UNION` deduplicates at every step, although the outer query is already `SELECT DISTINCT`.
-2. **Missing partial indexes.** Exactly **11** partial indexes on `round_id IS NULL` exist across the schema, while the query touches 24 tables. Thirteen are scanned unsupported.
+**Only half the query scans for `round_id IS NULL`.** The other 25 legs join already-linked rows to `rounds` and filter on mismatched start times — a completely different access pattern. A partial index predicated on `round_id IS NULL` cannot serve them at all.
+
+Two candidate causes, with the correction applied to the second:
+
+1. **`UNION` instead of `UNION ALL`.** `UNION` deduplicates at every step, although the outer query is already `SELECT DISTINCT`. This applies to all 50 legs.
+2. **Missing partial indexes — but they can only address the null half.** Exactly **11** partial indexes on `round_id IS NULL` exist across the schema against 25 null legs. Adding the missing ones is worth doing, yet on its own it leaves the 25 mismatch legs untouched, and nothing here establishes which half dominates the 3.1–4.4 s.
+
+**Do not prescribe indexes off this diagnosis.** Profile the two leg types separately first (`EXPLAIN (ANALYZE, BUFFERS)` on one representative null leg and one mismatch leg) and let the measurement name the cause. An implementer who adds 14 partial indexes on the strength of the old text could plausibly move the number very little.
 
 NULL volumes, for sizing the benefit:
 
@@ -211,39 +276,44 @@ So the warning has been crying wolf on every start. That is worse than silence, 
 
 ## N5 — `GET /favicon.ico → 404`
 
-Cosmetic. Listed for completeness; no fix required.
+Cosmetic; no fix required. Counted as the fifth finding rather than left uncounted — the summary above says five, not four.
 
 ---
 
-## Environment debt (found while checking the above)
+## Environment debt (found while checking the above) — RESOLVED 2026-07-31
 
 `website/backend/map_geometry/pk3_index.py:10` uses `from enum import StrEnum`, which requires **Python 3.11**.
 
-| | |
-|---|---|
-| `pyproject.toml` declares | `requires-python = ">=3.11,<3.14"` |
-| CI runs | 3.11 → all 12 checks pass |
-| **the running service uses** | **Python 3.10.12** |
+| | 2026-07-27 | 2026-07-31 |
+|---|---|---|
+| `pyproject.toml` declares | `requires-python = ">=3.11,<3.14"` | unchanged |
+| CI runs | 3.11 → all 12 checks pass | unchanged |
+| **the running service uses** | **Python 3.10.12** | **Python 3.13.14** |
 
-This is the **only** 3.11-only construct in the codebase; everything else has been de-facto 3.10-compatible. Nothing breaks today, because `map_geometry` is not imported by any live code path. **The moment W3 or W4 wires it into an API route, the web service will fail at import** — and CI cannot catch it, because CI runs the version the declaration promises rather than the one that is actually deployed.
+This was the **only** 3.11-only construct in the codebase. The risk described here — that wiring `map_geometry` into a live route would break the web service at import, invisibly to CI — is closed: the box was upgraded to **3.13.14** on 2026-07-31, which also took `pytest tests/` from `Interrupted: 2 errors during collection` to 3971 passed. See `docs/PYTHON_313_UPGRADE_2026-07-31.md`.
 
-Either upgrade the environment to 3.11 (correct — the declaration is 3.11+ and the environment is the drift) or use `class MapAssetKind(str, Enum)`, which works on both.
-
-Upgrading is not a `pip install`: it means rebuilding the venv and restarting both services. **Owner-gated** — say so before doing it, not after.
+The alternative suggested here (`class MapAssetKind(str, Enum)`, which works on both) was **not** taken, and should not be retrofitted now — the environment was the drift, not the code.
 
 ---
 
-## Suggested order
+## Suggested order (revised 2026-07-31)
 
-1. **Environment debt** — blocks anything that puts `map_geometry` on a live path
-2. **N1** — the site is visibly broken by default
-3. **N2**, **N3**, **N4** — separate PRs; the causes are unrelated and bundling them would mix risks
+N1, N2 and the environment debt are closed. What remains:
 
-Each as its own PR. No merging without the owner's approval.
+1. **N3** — profile the null and mismatch legs separately *before* proposing indexes
+2. **N4** — the false "876 unimported files" alarm, which trains everyone to ignore a real one
+
+Separate PRs; the causes are unrelated and bundling them would mix risks. No merging without the owner's approval.
 
 ## Provenance
 
-All measured 2026-07-27 against `etlegacy` on `127.0.0.1:5432` and the service on `127.0.0.1:8000`.
+Originally measured 2026-07-27 against `etlegacy` on `127.0.0.1:5432` and the service on `127.0.0.1:8000`. **Re-verified 2026-07-31** against the same database and service, now on Python 3.13.14:
+
+- N1 re-check: `curl` on the default, `?category=power` and `?category=crossfire` — all 200; `Proximity.tsx:1499` read for the actual initial tab
+- N2 re-check: the anomaly service's own two queries re-run verbatim — both 0; `schema_migrations` queried for 067/068; `migrations/067_repair_lua_round_links.sql` read on `origin/main`
+- N3 re-check: subquery legs counted by parsing `tables_with_round_number` out of `relinker_mixin.py` — 24 tables → 50 legs, 25 of them null legs
+
+Original measurements:
 
 - N1 reproduction: rebuilt the `ungated` string from `_lb_scope`'s output and executed it — `syntax error at or near ">="`
 - N1 blast radius: `curl` sweep over 20 endpoints
