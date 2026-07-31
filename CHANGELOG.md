@@ -6,6 +6,62 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.28.0](https://github.com/iamez/slomix/compare/v1.27.0...v1.28.0) (2026-07-31)
+
+
+### Features
+
+* **map geometry:** extract measured W3 BSP entities ([#587](https://github.com/iamez/slomix/issues/587)) ([be3ebcd](https://github.com/iamez/slomix/commit/be3ebcd7961e00b017c1f240dfff1b15d615d13e))
+* **ops:** add scripts/health_check.sh (M2) ([#580](https://github.com/iamez/slomix/issues/580)) ([356d1ca](https://github.com/iamez/slomix/commit/356d1ca763277c7b4e48a740d0a17e9613d1f365))
+* **proximity:** add PK3 asset index and complete BSP reader inputs ([549186c](https://github.com/iamez/slomix/commit/549186c5e764b510a1cd8d881dfdc04b20b6597f))
+* **proximity:** add PK3 index and ET BSP reader ([41f7763](https://github.com/iamez/slomix/commit/41f7763ffaf719f81e6a5605a7818f57fb09e47d))
+* **proximity:** measure post-revive trajectory gap ([#585](https://github.com/iamez/slomix/issues/585)) ([808c38d](https://github.com/iamez/slomix/commit/808c38dd4b6e1ebed45570be56ab68e22857f49a))
+* **proximity:** objective cone za et_brewdog (183 rund brez definicij) ([#552](https://github.com/iamez/slomix/issues/552)) ([1a80736](https://github.com/iamez/slomix/commit/1a807364b3279af8cf82de8032697c19bdc4241f))
+* **proximity:** parse BSP patch surfaces ([7fefe5f](https://github.com/iamez/slomix/commit/7fefe5f771d6c8ec5dd4d53afe6e2d4730a07afa))
+* **proximity:** validate reinforcement clocks ([#586](https://github.com/iamez/slomix/issues/586)) ([67fab9b](https://github.com/iamez/slomix/commit/67fab9bcc2c31ae75a368c49908a9027ffd36069))
+* **proximity:** verify all consumed PK3 map assets ([e284fc1](https://github.com/iamez/slomix/commit/e284fc16e286251be334119ba4b3494547f4c586))
+* **website,db:** KIS v4 full-history recompute — konec mešanih formul ([#547](https://github.com/iamez/slomix/issues/547)) ([3a92cd0](https://github.com/iamez/slomix/commit/3a92cd0b8669b24907e085e83a1a662b4ee79010))
+* **website:** client-side error reporting endpoint (W4) ([#578](https://github.com/iamez/slomix/issues/578)) ([f0d55a7](https://github.com/iamez/slomix/commit/f0d55a78dddd2981618affca2b72c83c9bda3608))
+
+
+### Bug Fixes
+
+* **bot:** classify file tracker inputs ([b2bfb3b](https://github.com/iamez/slomix/commit/b2bfb3b1df66ca18625828e78d964b623808d8a7))
+* close lua linkage concurrency gaps ([dfa096c](https://github.com/iamez/slomix/commit/dfa096ca0fdc274e68fb66abdfd79a0cb3537a3d))
+* close lua relink review gaps ([3c76c6b](https://github.com/iamez/slomix/commit/3c76c6b45b897091736a79ef95e95fca387d77be))
+* close lua repair integrity gaps ([2883d8f](https://github.com/iamez/slomix/commit/2883d8f307aa7006efdb215dbbeba4c2dc31f582))
+* defer duplicate lua relink sources ([be53e1f](https://github.com/iamez/slomix/commit/be53e1feb4ed3b4f8d0078ae4cd36024271d2323))
+* harden Lua linkage repair boundaries ([cd3ea43](https://github.com/iamez/slomix/commit/cd3ea43d2f6dbe0defb2bb8893f71db9dd046178))
+* keep backup connection data off argv ([97a3714](https://github.com/iamez/slomix/commit/97a3714bdf0db37d13d7c623a50a83ef546c80d2))
+* keep Lua repair checks fail closed ([f8c4ca3](https://github.com/iamez/slomix/commit/f8c4ca387bc2f4ef7446821c7b631379259b5338))
+* make pg dump invocation statically auditable ([f77cfba](https://github.com/iamez/slomix/commit/f77cfba1a196ee34dc5552901f8d47c00336246a))
+* normalize sync repair connection kwargs ([b48cb8e](https://github.com/iamez/slomix/commit/b48cb8ef069910148c7e5de26434454e451ff3cb))
+* preserve legacy Lua start fallback ([3032497](https://github.com/iamez/slomix/commit/303249741c0ce32fece3a0aebe6efd0b92af99d5))
+* prevent and repair Lua round mislinks ([54f6ae0](https://github.com/iamez/slomix/commit/54f6ae06acf6717657bee017662e7699ccb83f23))
+* prevent and repair Lua round mislinks ([6fe460a](https://github.com/iamez/slomix/commit/6fe460a56b4165e7287d6a127d6bd9b5c55c7910))
+* **proximity,db:** round identity + dedup za revive/weapon_accuracy, tz-aware linking (S8/S9) ([#549](https://github.com/iamez/slomix/issues/549)) ([7aff22e](https://github.com/iamez/slomix/commit/7aff22ebc1db5b39023ca9f7053a45f26c7e039d))
+* **proximity:** align BSP reader with ET Legacy ([545e74c](https://github.com/iamez/slomix/commit/545e74c2c42a428b2dc46549b62b4e2a34efbcb2))
+* **proximity:** close PK3 index review gaps ([aa49b17](https://github.com/iamez/slomix/commit/aa49b172f2f071f3f97fc6539a3f90e7cb68d2a8))
+* **proximity:** restore default leaderboard attribution ([360694d](https://github.com/iamez/slomix/commit/360694d5518868a5d25c3edc1e34d05699188a6a))
+* **proximity:** serving-layer correctness sweep (S2–S15, audit 2026-07-25) ([#548](https://github.com/iamez/slomix/issues/548)) ([ab2809d](https://github.com/iamez/slomix/commit/ab2809de4a4d1738a717fa362e20143ce144e27b))
+* retain date fallback for zero starts ([c9a50ed](https://github.com/iamez/slomix/commit/c9a50ed654c637bb692c96d1104831a0c67be349))
+* stop false file tracker backlog alerts ([f7e884b](https://github.com/iamez/slomix/commit/f7e884b607966ed66c1f8028ad55197634610a07))
+* **website,db:** KIS gaming_session_id backfill — historical panels empty, PWC crossfire zeroed ([#546](https://github.com/iamez/slomix/issues/546)) ([fc82c11](https://github.com/iamez/slomix/commit/fc82c1199315c47a6ae83e977ac9a16d6c669fa4))
+* **website:** generate hidden source maps for the React build (W5) ([#577](https://github.com/iamez/slomix/issues/577)) ([fb0c9da](https://github.com/iamez/slomix/commit/fb0c9da975a127af8f1d1793dbfbd5b263285bd3))
+* **website:** narrative baseline izključi samo narirano sejo (Codex DATA-01) ([#554](https://github.com/iamez/slomix/issues/554)) ([50b7abe](https://github.com/iamez/slomix/commit/50b7abe065a9fc0b12443fa3a54eb5f55e6ebfd7))
+* **website:** prox_score v3.0 — score only the metrics that measured real ([#556](https://github.com/iamez/slomix/issues/556)) ([#559](https://github.com/iamez/slomix/issues/559)) ([e830b67](https://github.com/iamez/slomix/commit/e830b67e533211da3002cd89bca6de69b97d639b))
+* **website:** raise proximity rate-limit headroom to match real usage (W2) ([#579](https://github.com/iamez/slomix/issues/579)) ([879e502](https://github.com/iamez/slomix/commit/879e502074a94c8835c2d31a4c1834ad1202f16c))
+* **website:** replay showed the union of every same-map round that day ([#560](https://github.com/iamez/slomix/issues/560)) ([8192b03](https://github.com/iamez/slomix/commit/8192b0301e0c13372960e28ab87290a25e71f4b6))
+* **website:** umik dveh scoring členov, ki ne merita ničesar (KIS push, prox awareness/mechanical) ([#553](https://github.com/iamez/slomix/issues/553)) ([7d6a2d2](https://github.com/iamez/slomix/commit/7d6a2d2c43cca336fea8ee029eaf2fe0f7ba9303))
+* **web:** stop resetting shared logs to owner-only permissions on startup ([#568](https://github.com/iamez/slomix/issues/568)) ([684558e](https://github.com/iamez/slomix/commit/684558ec92d6072129296ae6e5339430b10c5e0d))
+
+
+### Performance Improvements
+
+* bound proximity relinker discovery ([48ea30d](https://github.com/iamez/slomix/commit/48ea30dfe5f5b0bce6431f913cde98ac1fc64691))
+* bound proximity relinker discovery ([21ecfda](https://github.com/iamez/slomix/commit/21ecfda8d4e3814ace7fc5f631e365e0f41a8675))
+* scope lua writer serialization ([3102b37](https://github.com/iamez/slomix/commit/3102b37cf273d8570499d1e6a1cf44c4206676f6))
+
 ## [1.27.0](https://github.com/iamez/slomix/compare/v1.26.0...v1.27.0) (2026-07-24)
 
 
