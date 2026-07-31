@@ -1,8 +1,8 @@
 """Read-only ET map geometry primitives.
 
-The package deliberately stops at asset discovery and BSP decoding. Trace-mask
-policy, dynamic entity state, and all derived metrics belong to later Spider
-Web workstreams and must not be inferred here.
+The package deliberately stops at asset discovery, BSP decoding, and typed
+entity extraction. Trace-mask policy, dynamic entity state, and all derived
+metrics belong to later Spider Web workstreams and must not be inferred here.
 """
 
 from website.backend.map_geometry.bsp import (
@@ -26,6 +26,21 @@ from website.backend.map_geometry.bsp import (
     parse_bsp,
     parse_bsp_file,
     parse_entities,
+)
+from website.backend.map_geometry.entities import (
+    Bounds3D,
+    CollisionBrushEntity,
+    ConvexBrushVolume,
+    EntityExtractionError,
+    InlineModelGeometry,
+    MapEntityCatalog,
+    ObjectiveGeometrySource,
+    ObjectiveMarker,
+    ObjectiveVolume,
+    SpawnPoint,
+    VolumePlane,
+    entity_catalog_manifest,
+    extract_entity_catalog,
 )
 from website.backend.map_geometry.pk3_index import (
     AssetContentChangedError,
@@ -53,15 +68,28 @@ __all__ = [
     "BspPlane",
     "BspShader",
     "BspSurface",
+    "Bounds3D",
+    "CollisionBrushEntity",
+    "ConvexBrushVolume",
+    "EntityExtractionError",
     "GeometryResolution",
+    "InlineModelGeometry",
     "LumpType",
+    "MapEntityCatalog",
     "MapAssetKind",
     "MapAssetProvider",
     "MapAssetResolution",
     "Pk3GeometryIndex",
     "Pk3IndexError",
+    "ObjectiveGeometrySource",
+    "ObjectiveMarker",
+    "ObjectiveVolume",
+    "SpawnPoint",
     "SurfaceType",
     "UnsupportedBspError",
+    "VolumePlane",
+    "entity_catalog_manifest",
+    "extract_entity_catalog",
     "parse_bsp",
     "parse_bsp_file",
     "parse_entities",

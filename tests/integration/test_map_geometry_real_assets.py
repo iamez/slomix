@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from website.backend.map_geometry import MapAssetKind, Pk3GeometryIndex
+from website.backend.map_geometry import (
+    MapAssetKind,
+    ObjectiveGeometrySource,
+    Pk3GeometryIndex,
+    extract_entity_catalog,
+)
 
 ETMAIN = Path(os.environ.get("SLOMIX_ETMAIN_DIR", "/home/samba/share/etmain"))
 RUN_REAL_ASSET_TESTS = os.environ.get("SLOMIX_RUN_REAL_ASSET_TESTS") == "1"
@@ -106,3 +111,44 @@ def test_all_indexed_map_bsps_strictly_parse_as_populated_ibsp_v47(geometry_inde
         assert bsp.draw_vertices, map_name
         assert bsp.draw_indexes, map_name
         assert bsp.surfaces, map_name
+
+
+def test_w3_extracts_measured_objective_volumes_and_dynamic_inputs_for_every_bsp(
+    geometry_index,
+):
+    totals = {
+        "spawn_points": 0,
+        "objective_volumes": 0,
+        "objective_markers": 0,
+        "collision_entities": 0,
+    }
+    for map_name in geometry_index.map_names:
+        catalog = extract_entity_catalog(geometry_index.load_bsp(map_name), map_name)
+        assert catalog.spawn_points, map_name
+        assert catalog.objective_volumes, map_name
+        assert catalog.objective_markers, map_name
+        for volume in catalog.objective_volumes:
+            assert volume.source is ObjectiveGeometrySource.MEASURED_BSP_VOLUME
+            assert volume.brushes
+            assert volume.contains_point(
+                tuple(
+                    (
+                        volume.model.origin_translated_bounds.mins[index]
+                        + volume.model.origin_translated_bounds.maxs[index]
+                    )
+                    / 2
+                    for index in range(3)
+                )
+            ), (map_name, volume.entity_index)
+        assert all(entity.runtime_state == "unresolved" for entity in catalog.collision_entities)
+        totals["spawn_points"] += len(catalog.spawn_points)
+        totals["objective_volumes"] += len(catalog.objective_volumes)
+        totals["objective_markers"] += len(catalog.objective_markers)
+        totals["collision_entities"] += len(catalog.collision_entities)
+
+    assert totals == {
+        "spawn_points": 2376,
+        "objective_volumes": 158,
+        "objective_markers": 96,
+        "collision_entities": 1058,
+    }
