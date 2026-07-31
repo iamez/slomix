@@ -120,6 +120,44 @@ async def test_wave_cycles_rejects_modal_clock_with_one_conflicting_row() -> Non
 
 
 @pytest.mark.asyncio
+async def test_wave_cycles_uses_selfkill_for_clock_but_not_combat_score() -> None:
+    db = AsyncMock()
+    rows = [
+        _st(1000, A1, "AXIS", B1, "ALLIES", 10000, 9000),
+        _st(2000, B1, "ALLIES", B1, "ALLIES", 10000, 8000),
+        _st(3000, A1, "AXIS", B1, "ALLIES", 10000, 7000),
+        _st(1000, B1, "ALLIES", A1, "AXIS", 10000, 9000),
+        _st(2000, A1, "AXIS", A1, "AXIS", 10000, 8000),
+        _st(3000, B1, "ALLIES", A1, "AXIS", 10000, 7000),
+    ]
+    track_rows = [
+        (1, A1, "A", "AXIS", 0, 1000, "killed"),
+        (2, A1, "A", "AXIS", 10000, 11000, "killed"),
+        (3, A1, "A", "AXIS", 20000, 21000, "killed"),
+        (4, A1, "A", "AXIS", 30000, None, None),
+        (5, B1, "B", "ALLIES", 0, 1000, "killed"),
+        (6, B1, "B", "ALLIES", 10000, 11000, "killed"),
+        (7, B1, "B", "ALLIES", 20000, 21000, "killed"),
+        (8, B1, "B", "ALLIES", 30000, None, None),
+    ]
+    db.fetch_all = AsyncMock(side_effect=[rows, track_rows, []])
+
+    result = await get_wave_cycles(
+        session_date="2026-06-09",
+        map_name="m",
+        round_number=1,
+        round_start_unix=None,
+        db=db,
+    )
+
+    assert result["status"] == "ok"
+    assert result["clock_validation"]["AXIS"]["timing_observations"] == 3
+    assert result["clock_validation"]["ALLIES"]["timing_observations"] == 3
+    assert sum(cycle["kills_axis"] for cycle in result["cycles"]) == 2
+    assert sum(cycle["kills_allies"] for cycle in result["cycles"]) == 2
+
+
+@pytest.mark.asyncio
 async def test_first_blood_conversion_math() -> None:
     db = AsyncMock()
     # 3 rounds: A draws first blood and wins 2, loses 1.

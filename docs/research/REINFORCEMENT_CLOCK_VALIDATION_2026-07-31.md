@@ -165,7 +165,7 @@ The new code was called directly against dev PostgreSQL for exact round
 | Axis | 30,000 ms | 4,000 ms | 9 | 100% |
 
 The endpoint returned `status=ok`, protocol `reinforcement-clock-v1`, a
-318,150 ms track-derived round length, 23 cycles and zero excluded unlinked
+318,150 ms track-derived round length, 22 cycles and zero excluded unlinked
 kills. This also verifies that the ledger now covers the round boundary
 instead of truncating at the last kill. The clutch endpoint on the same round
 returned one exact round, zero skipped-no-clock rounds and four player results.

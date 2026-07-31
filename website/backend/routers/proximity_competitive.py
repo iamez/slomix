@@ -14,10 +14,9 @@ Implements the top S/M items from docs/ANALYTICS_BENCHMARK_2026-06.md:
   (new per-session records vs the player's own history).
 
 killer_reinf is deliberately NOT used (historical rows lack the CS_REINFSEEDS
-offset — bug F1, docs/PROXIMITY_E2E_AUDIT_2026-06-10.md). Wave clocks are
-derived from victim-side fields, which are correct: for the victim's team
-offset = (interval - time_to_next_spawn - kill_time) mod interval, constant
-per round (numerically verified in the E2E audit).
+offset — bug F1, docs/PROXIMITY_E2E_AUDIT_2026-06-10.md). Victim-side fields
+provide candidate offsets, but only exact internal unanimity plus independent
+normal-spawn validation makes a clock usable.
 """
 
 import re
@@ -297,8 +296,7 @@ async def get_wave_cycles(
                enemy_spawn_interval, time_to_next_spawn, round_id,
                spawn_timing_score
         FROM proximity_spawn_timing
-        {where_sql} AND killer_guid <> victim_guid
-          AND {_strict_clock_round_gate_sql()}
+        {where_sql} AND {_strict_clock_round_gate_sql()}
         ORDER BY kill_time
         """,  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
         tuple(params),
@@ -318,6 +316,7 @@ async def get_wave_cycles(
     round_id = next(iter(round_ids))
     excluded_unlinked_kills = sum(row[9] is None for row in st_rows)
     st_rows = [row for row in st_rows if row[9] == round_id]
+    combat_rows = [row for row in st_rows if row[0] != row[4]]
     lives, revives, track_end_ms = await _fetch_clock_lives_and_revives(db, round_id)
     timing_observations = [
         TimingObservation(
@@ -376,7 +375,7 @@ async def get_wave_cycles(
         end = edges[i + 1] if i + 1 < len(edges) else round_len_ms
         if end <= start:
             continue
-        seg_kills = [r for r in st_rows if start <= int(r[6] or 0) < end]
+        seg_kills = [r for r in combat_rows if start <= int(r[6] or 0) < end]
         kills_axis = sum(1 for r in seg_kills if r[2] == "AXIS")
         kills_allies = sum(1 for r in seg_kills if r[2] == "ALLIES")
         denied_axis = sum(int(r[8] or 0) for r in seg_kills if r[2] == "AXIS")
@@ -757,7 +756,7 @@ async def _fetch_round_lives_and_kills(
                victim_guid, victim_name, spawn_timing_score,
                {_strict_clock_round_gate_sql()} AS clock_round_eligible
         FROM proximity_spawn_timing
-        {where_sql} AND round_id IS NOT NULL AND killer_guid <> victim_guid
+        {where_sql} AND round_id IS NOT NULL
         """,  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
         tuple(params),
     )
@@ -798,9 +797,10 @@ async def _fetch_round_lives_and_kills(
             )
     for r in (kill_rows or []):
         key = int(r[0])
-        rounds[key]["kills"].append(
-            (int(r[1] or 0), r[2], r[3], r[4], r[5])
-        )
+        if r[3] != r[8]:
+            rounds[key]["kills"].append(
+                (int(r[1] or 0), r[2], r[3], r[4], r[5])
+            )
         if include_clocks and r[11] and not _is_bot_player(r[8], r[9]):
             rounds[key]["timings"].append(
                 TimingObservation(

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 from collections import Counter, defaultdict
 from dataclasses import asdict
@@ -146,7 +147,7 @@ def _percentile(values: list[int], percentile: float) -> int | None:
     if not values:
         return None
     ordered = sorted(values)
-    index = round((len(ordered) - 1) * percentile)
+    index = max(math.ceil(len(ordered) * percentile) - 1, 0)
     return ordered[index]
 
 
@@ -189,12 +190,7 @@ def _raw_internal_consistency(timing_rows: list[dict[str, Any]]) -> dict[str, An
         usable_rows = [
             row
             for row, observation in zip(rows, observations)
-            if observation.interval_ms > 0
-            and observation.time_to_next_spawn_ms is not None
-            and (
-                observation.spawn_timing_score is None
-                or observation.spawn_timing_score > 0
-            )
+            if timing_exclusion_reason(observation) is None
         ]
         inconsistent.append(
             {
