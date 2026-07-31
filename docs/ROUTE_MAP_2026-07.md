@@ -5,7 +5,7 @@
 redirection needed; it writes this file itself) after route-registry.js or the
 pages it references change.**
 
-Generated: 2026-07-30
+Generated: 2026-07-31
 
 | Route key | Hash example | Implementation | Serving file |
 |---|---|---|---|
@@ -16,7 +16,7 @@ Generated: 2026-07-30
 | `greatshot` | `#/greatshot/demos` | Legacy JS | greatshot.js |
 | `greatshot-demo` | `#/greatshot/demos` | Legacy JS | greatshot.js |
 | `hall-of-fame` | `#/hall-of-fame` | Legacy JS | hall-of-fame.js, record-book.js, records.js |
-| `home` | `(root — empty hash)` | Legacy JS | website/js/app.js + website/js/home.js + website/js/leaderboard.js + website/js/live-status.js + website/js/season-stats.js + website/js/sessions.js + website/js/tonight.js — populated directly from initApp() in app.js (criticalLoads + scheduleDeferredLoads), not through load() (skipped no-op: updateLiveSession (live-status.js), loadPredictions (app.js), loadMatchesView (matches.js)) |
+| `home` | `(root — empty hash)` | Legacy JS | website/js/app.js + website/js/auth.js + website/js/home.js + website/js/leaderboard.js + website/js/live-status.js + website/js/season-stats.js + website/js/sessions.js + website/js/tonight.js — populated directly from initApp() in app.js (criticalLoads + scheduleDeferredLoads), not through load() (skipped no-op: updateLiveSession (live-status.js), loadPredictions (app.js), loadMatchesView (matches.js)) |
 | `leaderboards` | `#/leaderboards` | Legacy JS | leaderboard.js |
 | `maps` | `#/maps` | Legacy JS | matches.js |
 | `profile` | `#/profile` | Legacy JS | player-profile.js |
@@ -29,7 +29,7 @@ Generated: 2026-07-30
 | `replay` | `#/replay` | Legacy JS | replay.js |
 | `retro-viz` | `#/retro-viz` | Legacy JS | components.js, retro-viz.js |
 | `rivalries` | `#/rivalries` | Legacy JS | rivalries.js |
-| `session-detail` | `#/sessions2` | Legacy JS | session-detail.js |
+| `session-detail` | `#/sessions2` | Legacy JS | retro-viz.js, session-detail.js |
 | `sessions` | `#/sessions` | Legacy JS | sessions.js |
 | `sessions2` | `#/sessions2` | Legacy JS | sessions2.js |
 | `skill-rating` | `#/skill-rating` | React (modern) | website/frontend/src/pages/SkillRating.tsx |

@@ -199,7 +199,13 @@ function transitiveFiles(entryNames, legacyIndex, files) {
         }
 
         const scope = bodies.length ? bodies.join('\n') : text;
-        for (const m of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*'\.\/([\w.-]+)'/g)) {
+        // The `(?:\?[^']*)?` accepts a cache-busting query suffix and drops it
+        // from the captured filename. Without it the pattern simply failed to
+        // match every versioned import — `from './retro-viz.js?v=20260513-v142-cf-bust'`
+        // (session-detail.js:16, and a dozen more in app.js) — so those serving
+        // files were silently missing from the generated rows rather than
+        // reported as unresolved (Codex review on #575).
+        for (const m of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*'\.\/([\w.-]+)(?:\?[^']*)?'/g)) {
             const symbols = m[1].split(',').map((x) => x.trim().split(/\s+as\s+/).pop()).filter(Boolean);
             const target = m[2];
             if (SHARED_INFRA.has(target)) continue;
@@ -210,6 +216,28 @@ function transitiveFiles(entryNames, legacyIndex, files) {
             if (used) files.add(`website/js/${target}`);
         }
     }
+}
+
+// Ids that live inside the served `#view-home` block. Used to tell a home-page
+// loader apart from unrelated app-wide wiring, so that harvesting unconditional
+// startup calls doesn't re-introduce the false positives the transitive scan
+// was narrowed to avoid.
+function homeViewIds(servedHtml) {
+    const start = servedHtml.indexOf('id="view-home"');
+    if (start === -1) return new Set();
+    const next = servedHtml.indexOf('id="view-', start + 1);
+    const block = servedHtml.slice(start, next === -1 ? servedHtml.length : next);
+    return new Set([...block.matchAll(/id="([\w-]+)"/g)].map((m) => m[1]));
+}
+
+function touchesHomeId(body, homeIds) {
+    for (const m of body.matchAll(/getElementById\(\s*['"]([\w-]+)['"]\s*\)/g)) {
+        if (homeIds.has(m[1])) return true;
+    }
+    for (const m of body.matchAll(/querySelector(?:All)?\(\s*['"]#([\w-]+)/g)) {
+        if (homeIds.has(m[1])) return true;
+    }
+    return false;
 }
 
 function homeLoaderFiles(legacyIndex) {
@@ -244,6 +272,30 @@ function homeLoaderFiles(legacyIndex) {
     }
 
     const servedHtml = readFileSync(path.join(repoRoot, 'website/index.html'), 'utf8');
+
+    // initApp() also wires the home page UNCONDITIONALLY, outside every
+    // `if (legacyHomeEnabled)` block: `initSearchListeners()` at app.js:764
+    // binds #hero-search-input and #hero-search-results (auth.js:629-630),
+    // both of which sit inside #view-home — so auth.js serves the home
+    // route's search box and was missing from its row (Codex review on #575).
+    //
+    // Counting every unconditional call here would drag in app-wide wiring
+    // that has nothing to do with home, so a call qualifies only when the
+    // function it names touches an id that is actually inside the served
+    // #view-home block.
+    const homeIds = homeViewIds(servedHtml);
+    const initAppBody = functionBody(appJs, 'initApp');
+    if (initAppBody) {
+        for (const m of initAppBody.matchAll(/^\s{4}([A-Za-z_]\w*)\s*\(\s*\)\s*;/gm)) {
+            const name = m[1];
+            if (names.has(name)) continue;
+            const file = legacyIndex.get(name) ?? (localToAppJs.has(name) ? 'app.js' : null);
+            if (!file) continue;
+            const body = functionBody(readFileSync(path.join(legacyDir, file), 'utf8'), name);
+            if (body && touchesHomeId(body, homeIds)) names.add(name);
+        }
+    }
+
     const files = new Set();
     const unresolved = [];
     const dead = [];
