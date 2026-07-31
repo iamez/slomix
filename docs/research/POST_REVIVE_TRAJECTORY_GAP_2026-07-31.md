@@ -17,19 +17,19 @@ history confirms that this is not a rare edge case:
 | Measurement | Result |
 |---|---:|
 | Raw capture files inspected | 695 |
-| Files passing exact DB quality identity and exact in-game end checks | 639 |
-| Observation window | 2026-02-11 20:38:56 UTC to 2026-07-29 21:54:19 UTC |
-| Eligible rounds containing at least one human | 582 |
-| Eligible human player-rounds | 3,649 |
+| Files passing identity, quality, capability, canonical dedup and exact-end checks | 618 |
+| Observation window | 2026-03-03 20:25:43 UTC to 2026-07-29 21:54:19 UTC |
+| Eligible rounds containing at least one human | 563 |
+| Eligible human player-rounds | 3,527 |
 | Human revive callbacks | 6,398 |
-| Human-participant rounds with at least one gap | 537 / 582 (92.27%) |
-| Player-rounds with at least one post-revive gap | 2,501 / 3,649 (68.54%) |
+| Human-participant rounds with at least one gap | 537 / 563 (95.38%) |
+| Player-rounds with at least one post-revive gap | 2,501 / 3,527 (70.91%) |
 | Merged post-revive windows | 5,255 |
 | Missing/unresolved trajectory time | 124,934,725 ms |
-| Missing time / eligible human player-round time | **8.67%** |
+| Missing time / eligible human player-round time | **8.98%** |
 | Median gap share among affected player-rounds | 9.80% |
 | P95 gap share among affected player-rounds | 29.38% |
-| Round time where a complete human-roster snapshot is unavailable | **39.94%** |
+| Round time where a complete human-roster snapshot is unavailable | **41.32%** |
 
 This closes the open measurement question in
 `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md` §13.2b. The gap is material and
@@ -66,6 +66,8 @@ disagreement in historical linked rows. Instead:
 - Raw files are matched to `rounds` by exact `(map, round, round_start_unix)`
   or exact `(map, round, round_end_unix)`.
 - A match must resolve to exactly one canonical row.
+- No canonical `rounds.id` may be represented by more than one raw capture;
+  both candidates are rejected when that invariant is breached.
 - The established round gate is applied:
   `round_number IN (1,2)`, `is_valid IS DISTINCT FROM FALSE`,
   `is_bot_round IS DISTINCT FROM TRUE`, and status is completed,
@@ -74,6 +76,11 @@ disagreement in historical linked rows. Instead:
   in this capture is `OMNIBOT`.
 - A capture with no eligible human GUID contributes no human-roster round
   time, even when its historical `is_bot_round` flag was never backfilled.
+- Tracker V5 is the minimum accepted revive-capable artifact. Git history
+  shows V5 introduced both the revive callback collection and `REVIVES`
+  output; V4 explicitly returned from revived spawns without recording one.
+  Since the writer emits the optional section only when events exist, version
+  capability distinguishes a supported zero from an unsupported absence.
 - Exact in-game round end comes from completed
   `PLAYER_TRACKS.death_type=round_end` rows. A maximum 1 ms writer jitter is
   accepted.
@@ -90,8 +97,10 @@ against the write path and is covered by unit tests.
 | No exact start/end match in `rounds` | 42 |
 | Ambiguous exact canonical identity | 1 |
 | Rejected by the established round quality gate | 4 |
+| Tracker artifact predates verified revive capture (V4) | 19 |
 | Missing/inconsistent exact in-game round end | 9 |
-| **Total excluded** | **56** |
+| Duplicate raw captures for one canonical `rounds.id` | 2 |
+| **Total excluded** | **77** |
 
 No included human player-round remained excluded for an invalid or
 overlapping track interval after the warmup boundary rule was applied.
@@ -129,7 +138,7 @@ Of 6,398 raw revive windows:
   preventing double-counting.
 
 Across all eligible player-rounds, including zero-gap players, the median gap
-share was 5.66% and nearest-rank P95 was 26.71%. Among affected player-rounds
+share was 6.05% and nearest-rank P95 was 27.14%. Among affected player-rounds
 the median was 9.80% and nearest-rank P95 was 29.38%.
 
 ## Consequences for §4
@@ -141,7 +150,7 @@ complete roster at an arbitrary timestamp:
    result when `t` intersects a known post-revive window.
 2. No interpolation may bridge a revive window. The endpoints do not prove
    where the player moved or when an unobserved repeat death occurred.
-3. Complete-roster validation must exclude the affected 39.94% of eligible
+3. Complete-roster validation must exclude the affected 41.32% of eligible
    round time. Coverage must be published beside every result.
 4. Grid, distance, path, adjacency and space-control candidates may be
    developed as infrastructure, but historical results must use only complete

@@ -40,6 +40,7 @@ if str(ROOT) not in sys.path:
 SECTION_HEADER_RE = re.compile(r"^# ([A-Z][A-Z0-9_]*)$")
 BOT_GUID_PREFIXES = ("OMNIBOT",)
 ROUND_END_JITTER_MS = 1
+MIN_REVIVE_TRACKER_VERSION = 5
 ALLOWED_ROUND_STATUSES = {"completed", "substitution", None}
 KNOWN_DEATH_TYPES = {
     "killed",
@@ -441,12 +442,13 @@ def analyze_captures(
     if duplicate_capture_count:
         capture_exclusions["duplicate_raw_identity"] += duplicate_capture_count
 
-    included: list[RawCapture] = []
+    candidate_captures: list[tuple[RawCapture, int | None]] = []
     for capture in parsed:
         if capture.identity in duplicate_identities:
             continue
+        canonical_round_id = None
         if gate_matcher is not None:
-            classification, _gate = gate_matcher.classify(capture.identity)
+            classification, gate = gate_matcher.classify(capture.identity)
             gate_matches[classification] += 1
             if classification not in {
                 "matched_start_and_end",
@@ -455,8 +457,17 @@ def analyze_captures(
             }:
                 capture_exclusions[classification] += 1
                 continue
+            assert gate is not None
+            canonical_round_id = gate.round_id
         else:
             gate_matches["skipped"] += 1
+
+        # Git history verifies that REVIVES was introduced with the V5
+        # artifact. V4 explicitly ignored revived spawns, so an absent event
+        # there means "unsupported", not a measured zero.
+        if capture.tracker_version < MIN_REVIVE_TRACKER_VERSION:
+            capture_exclusions["revive_capability_not_proven"] += 1
+            continue
 
         exact_end = capture.exact_round_end_ms
         if exact_end is None:
@@ -465,7 +476,22 @@ def analyze_captures(
         if exact_end <= 0:
             capture_exclusions["invalid_exact_round_end"] += 1
             continue
-        included.append(capture)
+        candidate_captures.append((capture, canonical_round_id))
+
+    canonical_groups: dict[int, list[RawCapture]] = defaultdict(list)
+    for capture, canonical_round_id in candidate_captures:
+        if canonical_round_id is not None:
+            canonical_groups[canonical_round_id].append(capture)
+    duplicate_canonical_ids = {round_id for round_id, grouped in canonical_groups.items() if len(grouped) > 1}
+    if duplicate_canonical_ids:
+        capture_exclusions["duplicate_canonical_round"] += sum(
+            len(canonical_groups[round_id]) for round_id in duplicate_canonical_ids
+        )
+    included = [
+        capture
+        for capture, canonical_round_id in candidate_captures
+        if canonical_round_id not in duplicate_canonical_ids
+    ]
 
     total_gap_ms = 0
     total_player_round_ms = 0
@@ -549,6 +575,7 @@ def analyze_captures(
             "files_excluded": sum(capture_exclusions.values()),
             "capture_manifest_sha256": _manifest_digest(parsed),
             "tracker_versions": dict(sorted(Counter(capture.tracker_version for capture in parsed).items())),
+            "minimum_revive_capable_tracker_version": MIN_REVIVE_TRACKER_VERSION,
             "observation_start_utc": (
                 datetime.fromtimestamp(min(observation_starts), timezone.utc).isoformat()
                 if observation_starts

@@ -236,6 +236,54 @@ def test_round_gate_requires_one_exact_identity_and_quality_pass():
     )
 
 
+def test_two_raw_identities_for_same_canonical_round_are_both_excluded(tmp_path):
+    first = _capture(
+        tmp_path,
+        identity=IDENTITY,
+        tracks=(_track("HUMAN_A", 0, 10_000, "round_end"),),
+    )
+    disagreeing_end = RoundIdentity(
+        IDENTITY.map_name,
+        IDENTITY.round_number,
+        IDENTITY.round_start_unix,
+        IDENTITY.round_end_unix + 1,
+    )
+    second = _capture(
+        tmp_path,
+        identity=disagreeing_end,
+        tracks=(_track("HUMAN_A", 0, 10_000, "round_end"),),
+    )
+    gate = RoundGate(1, IDENTITY, True, False, "completed")
+
+    result = analyze_captures(
+        [first, second],
+        gate_matcher=RoundGateMatcher([gate]),
+    )
+
+    assert result["input"]["files_included"] == 0
+    assert result["exclusions"]["captures"] == {"duplicate_canonical_round": 2}
+
+
+def test_v4_capture_is_excluded_as_revive_capability_unproven(tmp_path):
+    capture = _capture(
+        tmp_path,
+        tracks=(_track("HUMAN_A", 0, 10_000, "round_end"),),
+    )
+    capture = RawCapture(
+        capture.path,
+        capture.identity,
+        4,
+        capture.tracks,
+        capture.revives,
+        capture.revived_outcomes,
+    )
+
+    result = analyze_captures([capture], gate_matcher=None)
+
+    assert result["input"]["files_included"] == 0
+    assert result["exclusions"]["captures"] == {"revive_capability_not_proven": 1}
+
+
 def test_parser_reads_only_measurement_sections(tmp_path):
     path = tmp_path / "round_engagements.txt"
     path.write_text(
