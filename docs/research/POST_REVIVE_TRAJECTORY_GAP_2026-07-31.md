@@ -108,9 +108,10 @@ The report and JSON output contain no player names or GUID values.
 ## Independent subset cross-check
 
 The enemy-kill-only outcome writer produced 5,964 revived outcomes. All 5,964
-matched a raw revive callback on `(victim GUID, outcome time)`; there were
-zero outcome rows without a callback. Those outcomes covered 93.22% of all
-6,398 human revive callbacks.
+matched a raw revive callback on
+`(exact round identity, victim GUID, outcome time)`; there were zero outcome
+rows without a callback. Those outcomes covered 93.22% of all 6,398 human
+revive callbacks.
 
 That is the expected direction:
 
@@ -195,4 +196,5 @@ ruff check scripts/analyze_post_revive_trajectory_gap.py \
 The focused suite covers normal-spawn and round-end endpoints, repeated
 revive merging, warmup boundary normalization, bot exclusion, overlapping
 life rejection, exact-end rejection, exact canonical gate matching, raw
-section parsing and parse-exclusion accounting.
+section parsing (including pathless nine-field rows), round-scoped subset
+matching and parse-exclusion accounting.

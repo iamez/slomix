@@ -271,6 +271,57 @@ def test_parser_reads_only_measurement_sections(tmp_path):
     assert capture.revived_outcomes == (RevivedOutcome(3_000, "HUMAN_A"),)
 
 
+def test_parser_keeps_death_type_when_nine_field_row_omits_path(tmp_path):
+    path = tmp_path / "round_engagements.txt"
+    path.write_text(
+        "\n".join(
+            [
+                "# PROXIMITY_TRACKER_V6",
+                "# map=supply",
+                "# round=1",
+                "# round_start_unix=1700000000",
+                "# round_end_unix=1700000010",
+                "# PLAYER_TRACKS",
+                "HUMAN_A;name;AXIS;MEDIC;0;10000;100;round_end;50",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    capture = parse_capture(path)
+
+    assert capture.tracks[0].death_type == "round_end"
+    assert capture.exact_round_end_ms == 10_000
+
+
+def test_revive_subset_cross_check_is_round_scoped(tmp_path):
+    first = _capture(
+        tmp_path,
+        identity=IDENTITY,
+        tracks=(
+            _track("HUMAN_A", 0, 2_000, "killed"),
+            _track("HUMAN_A", 8_000, 10_000, "round_end"),
+        ),
+        revives=(Revive(3_000, "HUMAN_A"),),
+    )
+    second_identity = RoundIdentity("supply", 2, 1_700_000_020, 1_700_000_030)
+    second = _capture(
+        tmp_path,
+        identity=second_identity,
+        tracks=(
+            _track("HUMAN_A", 0, 2_000, "killed"),
+            _track("HUMAN_A", 8_000, 10_000, "round_end"),
+        ),
+        outcomes=(RevivedOutcome(3_000, "HUMAN_A"),),
+    )
+
+    result = analyze_captures([first, second], gate_matcher=None)
+
+    assert result["revive_cross_check"]["matched_enemy_kill_subset"] == 0
+    assert result["revive_cross_check"]["enemy_kill_subset_without_callback"] == 1
+
+
 def test_parse_exclusions_are_reflected_in_file_totals():
     result = analyze_captures(
         [],

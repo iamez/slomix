@@ -41,6 +41,16 @@ SECTION_HEADER_RE = re.compile(r"^# ([A-Z][A-Z0-9_]*)$")
 BOT_GUID_PREFIXES = ("OMNIBOT",)
 ROUND_END_JITTER_MS = 1
 ALLOWED_ROUND_STATUSES = {"completed", "substitution", None}
+KNOWN_DEATH_TYPES = {
+    "killed",
+    "selfkill",
+    "fallen",
+    "world",
+    "teamkill",
+    "round_end",
+    "disconnect",
+    "unknown",
+}
 
 
 class CaptureParseError(ValueError):
@@ -223,7 +233,10 @@ def parse_capture(path: Path) -> RawCapture:
                 # starts. The DB parser maps 0 to NULL for storage, but doing
                 # that here would discard a measurable player-round.
                 death_time = _required_int(parts[5], "death_time", path, line_number) if parts[5] else None
-                death_type = parts[7] if len(parts) >= 10 else None
+                # V4 rows use field 7 for the numeric sample count. V4.1+
+                # uses it for death_type, even when an empty trailing path
+                # column was omitted and the row therefore has only 9 fields.
+                death_type = parts[7] if parts[7] in KNOWN_DEATH_TYPES else None
                 tracks.append(
                     Track(
                         guid=parts[0].strip(),
@@ -468,8 +481,8 @@ def analyze_captures(
     affected_fractions: list[float] = []
     all_player_fractions: list[float] = []
     human_guids: set[str] = set()
-    primary_revives: Counter[tuple[str, int]] = Counter()
-    subset_outcomes: Counter[tuple[str, int]] = Counter()
+    primary_revives: Counter[tuple[RoundIdentity, str, int]] = Counter()
+    subset_outcomes: Counter[tuple[RoundIdentity, str, int]] = Counter()
     observation_starts: list[int] = []
     observation_ends: list[int] = []
 
@@ -485,10 +498,10 @@ def analyze_captures(
 
         for revive in capture.revives:
             if not _is_bot_guid(revive.revived_guid):
-                primary_revives[(revive.revived_guid, revive.time_ms)] += 1
+                primary_revives[(capture.identity, revive.revived_guid, revive.time_ms)] += 1
         for outcome in capture.revived_outcomes:
             if not _is_bot_guid(outcome.victim_guid):
-                subset_outcomes[(outcome.victim_guid, outcome.outcome_time_ms)] += 1
+                subset_outcomes[(capture.identity, outcome.victim_guid, outcome.outcome_time_ms)] += 1
 
         round_intervals: list[tuple[int, int]] = []
         round_affected = False
