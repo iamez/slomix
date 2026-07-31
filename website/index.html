@@ -14,6 +14,24 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 
+    <!-- Error-reporting bootstrap buffer. MUST be the first executable script
+         on the page: it installs the window.onerror / unhandledrejection
+         listeners that buffer failures until app.js can install the real
+         reporter. Loaded from <head> ahead of Tailwind, Lucide and Chart.js
+         (below and at the end of <body>) because a throw during any of THEIR
+         initialization happens before any listener exists otherwise, so the
+         reporting feature would permanently miss exactly the startup failures
+         it is there to catch (Codex review on #578).
+
+         Kept in an external file rather than inline because
+         docker/nginx/default.conf sends `script-src 'self'` with no
+         'unsafe-inline'/nonce/hash, which blocks an inline block outright in
+         the Docker deployment. See js/error-bootstrap.js for the full why.
+
+         Deliberately NOT async/defer: both would let the scripts below run
+         first, which is the whole problem. -->
+    <script src="js/error-bootstrap.js?v=20260731-head-first"></script>
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com/3.4.17"></script>
     <script src="js/tailwind-config.js"></script>
@@ -4908,6 +4926,8 @@
         </button>
     </nav>
 
+    <!-- error-bootstrap.js is loaded from <head> instead, ahead of every other
+         executable script on the page — see the comment there. -->
     <!-- JavaScript (ES6 Modules) -->
     <script type="module" src="js/app.js?v=20260623-aimlock"></script>
     <script type="module" src="js/inline-actions.js?v=20260513-v142-cf-bust"></script>

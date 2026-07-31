@@ -75,6 +75,27 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       PROMETHEUS_ENABLED: "true"
       RATE_LIMIT_ENABLED: "true"
+      # nginx (the `website` service) is the only hop in front of this API, and
+      # it reaches `api` from its bridge address on the compose network — not
+      # loopback, which is all get_trusted_client_ip() trusts by default. Without
+      # this, its X-Forwarded-For is discarded and every visitor shares one
+      # rate-limit bucket, so 20 client-error reports from one broken session
+      # would exhaust the budget for everyone (Codex P2 review on #578).
+      # Deliberately the SAME variable as the `networks:` subnet at the bottom of
+      # this file rather than a separately-overridable one: the two must agree,
+      # and two knobs would let COMPOSE_SUBNET be changed while the trust list
+      # silently kept pointing at the old range. Add an extra outer proxy hop via
+      # a compose override file if a deployment ever grows one. The forwarded
+      # chain is walked right-to-left, so a client prepending its own
+      # X-Forwarded-For still can't forge an identity.
+      RATE_LIMIT_TRUSTED_PROXIES: ${COMPOSE_SUBNET:-172.28.0.0/16}
+      # Compose does NOT auto-inject .env vars that aren't referenced here (same
+      # gotcha as TRUSTED_HOSTS above), so without these two lines the knobs
+      # documented in .env.example would silently have no effect on the
+      # containerised deployment — the code would keep using its built-in
+      # defaults (Codex review on #578).
+      RATE_LIMIT_CLIENT_ERROR_REQUESTS_PER_WINDOW: ${RATE_LIMIT_CLIENT_ERROR_REQUESTS_PER_WINDOW:-20}
+      RATE_LIMIT_CLIENT_ERROR_MAX_BODY_BYTES: ${RATE_LIMIT_CLIENT_ERROR_MAX_BODY_BYTES:-32768}
       # Betting auto-open loop (opt-in; 0 = disabled). Passed through so enabling
       # it in .env actually reaches the api container.
       BETS_LIFECYCLE_SECONDS: ${BETS_LIFECYCLE_SECONDS:-0}
@@ -142,6 +163,22 @@ services:
       - grafana_data:/var/lib/grafana
     ports:
       - "${GRAFANA_BIND_ADDRESS:-127.0.0.1}:3000:3000"
+
+networks:
+  # The default network's subnet is pinned so RATE_LIMIT_TRUSTED_PROXIES (see
+  # the api service) can name it. Browser API requests reach `api` from the
+  # `website` nginx container's bridge address, not from loopback — with the
+  # loopback-only default, nginx isn't a trusted proxy, its forwarded client
+  # address is ignored, and every visitor shares a single rate-limit bucket
+  # keyed on that one container IP (Codex P2 review on #578). Docker otherwise
+  # assigns this subnet from its own pool at create time, which isn't
+  # predictable enough to put in a trust list. COMPOSE_SUBNET feeds both this
+  # and the api service's RATE_LIMIT_TRUSTED_PROXIES, so overriding it in .env
+  # (if 172.28/16 collides on your host) keeps the two in sync by construction.
+  default:
+    ipam:
+      config:
+        - subnet: ${COMPOSE_SUBNET:-172.28.0.0/16}
 
 volumes:
   postgres_data:
