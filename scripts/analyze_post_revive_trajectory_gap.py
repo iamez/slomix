@@ -5,7 +5,9 @@ The Lua writer ends a player track in ``et_Obituary`` but does not resume it
 when ``et_ClientSpawn(..., revived=1)`` fires. This read-only tool measures the
 resulting unavailable interval directly from raw proximity capture files:
 
-* ``REVIVES`` is the complete callback source.
+* ``REVIVES`` is the primary callback source, but only captures with a later
+  ``KILL_OUTCOME`` section prove that the writer completed the relevant
+  output prefix.
 * ``KILL_OUTCOME outcome=revived`` is only an enemy-kill subset cross-check.
 * a gap starts at a revive and ends at the next normal player-track spawn, or
   at the exact in-game round end when no later spawn exists.
@@ -94,6 +96,7 @@ class RawCapture:
     tracks: tuple[Track, ...]
     revives: tuple[Revive, ...]
     revived_outcomes: tuple[RevivedOutcome, ...]
+    sections: tuple[str, ...]
 
     @property
     def exact_round_end_ms(self) -> int | None:
@@ -184,6 +187,7 @@ def parse_capture(path: Path) -> RawCapture:
     tracks: list[Track] = []
     revives: list[Revive] = []
     revived_outcomes: list[RevivedOutcome] = []
+    sections: list[str] = []
     section: str | None = None
 
     with path.open(encoding="utf-8", errors="replace") as handle:
@@ -216,6 +220,7 @@ def parse_capture(path: Path) -> RawCapture:
             section_match = SECTION_HEADER_RE.fullmatch(line)
             if section_match:
                 section_name = section_match.group(1)
+                sections.append(section_name)
                 section = {
                     "PLAYER_TRACKS": "tracks",
                     "REVIVES": "revives",
@@ -291,6 +296,7 @@ def parse_capture(path: Path) -> RawCapture:
         tracks=tuple(tracks),
         revives=tuple(revives),
         revived_outcomes=tuple(revived_outcomes),
+        sections=tuple(sections),
     )
 
 
@@ -427,6 +433,7 @@ def analyze_captures(
     captures: Iterable[RawCapture],
     *,
     gate_matcher: RoundGateMatcher | None,
+    clock_anchor_not_before_unix: int,
     files_seen: int | None = None,
     parse_exclusions: Counter[str] | None = None,
 ) -> dict[str, Any]:
@@ -467,6 +474,34 @@ def analyze_captures(
         # there means "unsupported", not a measured zero.
         if capture.tracker_version < MIN_REVIVE_TRACKER_VERSION:
             capture_exclusions["revive_capability_not_proven"] += 1
+            continue
+
+        # V5/V6 is too coarse to prove the round-live clock fix. Historical
+        # captures must be bounded by an independently verified deployment
+        # timestamp for an artifact containing the re-anchor.
+        if capture.identity.round_start_unix < clock_anchor_not_before_unix:
+            capture_exclusions["clock_anchor_not_proven"] += 1
+            continue
+
+        # REVIVES is optional when there were zero callbacks, and historical
+        # files have no EOF marker. KILL_OUTCOME is emitted later in the same
+        # synchronous writer. Its presence proves that the writer completed
+        # the entire measurement-relevant REVIVES branch, including a genuine
+        # zero when no REVIVES header was emitted.
+        kill_outcome_index = (
+            capture.sections.index("KILL_OUTCOME")
+            if "KILL_OUTCOME" in capture.sections
+            else None
+        )
+        revive_index = (
+            capture.sections.index("REVIVES")
+            if "REVIVES" in capture.sections
+            else None
+        )
+        if kill_outcome_index is None or (
+            revive_index is not None and kill_outcome_index <= revive_index
+        ):
+            capture_exclusions["revive_section_completion_not_proven"] += 1
             continue
 
         exact_end = capture.exact_round_end_ms
@@ -576,6 +611,10 @@ def analyze_captures(
             "capture_manifest_sha256": _manifest_digest(parsed),
             "tracker_versions": dict(sorted(Counter(capture.tracker_version for capture in parsed).items())),
             "minimum_revive_capable_tracker_version": MIN_REVIVE_TRACKER_VERSION,
+            "clock_anchor_not_before_unix": clock_anchor_not_before_unix,
+            "revive_section_completion_rule": (
+                "KILL_OUTCOME must be present after REVIVES when REVIVES is present"
+            ),
             "observation_start_utc": (
                 datetime.fromtimestamp(min(observation_starts), timezone.utc).isoformat()
                 if observation_starts
@@ -706,6 +745,15 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip canonical round validity gates (degraded; intended for fixtures only).",
     )
+    parser.add_argument(
+        "--clock-anchor-not-before-unix",
+        type=int,
+        required=True,
+        help=(
+            "Earliest round_start_unix covered by an independently verified "
+            "round-live clock re-anchor deployment."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -727,6 +775,7 @@ async def _run() -> int:
     result = analyze_captures(
         captures,
         gate_matcher=gate_matcher,
+        clock_anchor_not_before_unix=args.clock_anchor_not_before_unix,
         files_seen=len(paths),
         parse_exclusions=parse_exclusions,
     )

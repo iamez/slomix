@@ -913,21 +913,23 @@ ET is a medic-heavy game; in the sampled rounds most players run MEDIC. This is 
 **Required:** quantify the gap before building on trajectories. Use `proximity_revive` as the complete revive-callback source and cross-check the enemy-kill subset against `proximity_kill_outcome.outcome = 'revived'`; the latter omits reviveable deaths outside its enemy-kill writer gate. Measure what fraction of round-time per player falls into an unsampled post-revive window. Every snapshot intersecting a known or unresolved post-revive active interval is unavailable for complete-roster reconstruction and excluded from validation unless another independently verified source reconstructs it. A caveat is not sufficient. Future capture work resumes the track on revive and C7 records every later obituary independently.
 
 **Measured 2026-07-31:** the gap is material. A read-only raw-capture
-measurement over 695 files included 618 exact-identity, quality-gated,
-revive-capable, canonically deduplicated captures (563 with humans) and 3,527
-human player-rounds. It found 6,398 human revive callbacks and 5,255 merged
-unavailable windows:
+measurement over 695 files included 197 exact-identity, quality-gated,
+clock-proven, write-prefix-proven and canonically deduplicated captures, all
+with humans, and 1,252 human player-rounds. It found 2,384 human revive
+callbacks and 1,991 merged unavailable windows. The stricter cohort starts
+after the independently verified 2026-06-22 deployment of the round-live
+clock re-anchor and requires an on-disk section emitted after `REVIVES`:
 
 | Result | Value |
 |---|---:|
-| Missing/unresolved trajectory time / eligible human player-round time | **8.98%** |
-| Human-participant rounds affected | **537 / 563 (95.38%)** |
-| Human player-rounds affected | **2,501 / 3,527 (70.91%)** |
-| Median gap share among affected player-rounds | **9.80%** |
-| P95 gap share among affected player-rounds | **29.38%** |
-| Round time unavailable for complete-roster snapshots | **41.32%** |
-| Enemy-kill revived outcomes matched to the primary callback source | **5,964 / 5,964** |
-| Primary revive callbacks covered by that enemy-kill subset | **93.22%** |
+| Missing/unresolved trajectory time / eligible human player-round time | **9.37%** |
+| Human-participant rounds affected | **196 / 197 (99.49%)** |
+| Human player-rounds affected | **934 / 1,252 (74.60%)** |
+| Median gap share among affected player-rounds | **9.99%** |
+| P95 gap share among affected player-rounds | **28.80%** |
+| Round time unavailable for complete-roster snapshots | **43.75%** |
+| Enemy-kill revived outcomes matched to the primary callback source | **2,228 / 2,228** |
+| Primary revive callbacks covered by that enemy-kill subset | **93.46%** |
 
 The primary interval is conservative state/trajectory unavailability from a
 revive until the next normal tracked spawn or exact in-game round end; it is
@@ -987,7 +989,7 @@ Accumulation multiplies whatever it accumulates. If a per-round signal is noise,
 
 ## §15 Open questions for the owner
 
-0. **Resolved measurement: the post-revive trajectory gap (§13.2b) loses 8.98% of eligible human player-round time and blocks complete-roster snapshots for 41.32% of human-participant round time.** It is material and therefore a future Lua capture item. Writing/deploying that Lua remains owner-gated.
+0. **Resolved measurement: the post-revive trajectory gap (§13.2b) loses 9.37% of eligible human player-round time and blocks complete-roster snapshots for 43.75% of human-participant round time.** It is material and therefore a future Lua capture item. Writing/deploying that Lua remains owner-gated.
 1. **Materialise or compute on demand?** `get_player_positions` is 27–51 ms per call today. A full 3,600-tick reconstruction is a different order of magnitude. Decide after A4 is measured.
 2. **89 bot-only rounds are unflagged (§13.2).** Backfill `is_bot_round` as a separate change before the web, or filter by GUID prefix inside it? Backfill is cleaner and benefits every other consumer.
 3. **PR #551** (`DESIGN_SKILL_PASSPORT`, `PROXIMITY_VISION_AUDIT`) remains open with 19 unresolved review threads. Their findings are incorporated here as §3; the PR itself still needs a decision.
@@ -1006,7 +1008,7 @@ Verified on the dev database (`etlegacy` @ localhost) on 2026-07-27. Key checks,
 - Overlapping lives: self-join of `player_track` on `round_id, player_guid` with interval overlap → 3,674 pairs / 49 rounds
 - Bot share: `player_guid LIKE 'OMNIBOT%'` → 13 guids, 7,687 of 57,311 tracks
 - Linkage: comparison of the date-key join against `round_id` → 24,428 multi-round track rows before PR #560, 0 after
-- Post-revive trajectory gap: `python scripts/analyze_post_revive_trajectory_gap.py --input-dir local_proximity --output /tmp/post-revive-gap.json` → 695 files inspected, 618 included exact-identity quality-gated V5+ captures after canonical dedup (563 with at least one human), 8.98% player-round time unavailable, 41.32% complete-roster snapshot time unavailable; full method and manifest hash in `docs/research/POST_REVIVE_TRAJECTORY_GAP_2026-07-31.md`
+- Post-revive trajectory gap: `python scripts/analyze_post_revive_trajectory_gap.py --input-dir local_proximity --clock-anchor-not-before-unix 1782156546 --output /tmp/post-revive-gap.json` → 695 files inspected, 197 included exact-identity, quality-gated, clock-proven and write-prefix-proven captures after canonical dedup, 9.37% player-round time unavailable, 43.75% complete-roster snapshot time unavailable; full method, live-artifact proof and manifest hash in `docs/research/POST_REVIVE_TRAJECTORY_GAP_2026-07-31.md`
 
 Map assets, checked by reading the archives in `/home/samba/share/etmain` directly:
 

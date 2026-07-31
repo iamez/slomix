@@ -13,11 +13,22 @@ from scripts.analyze_post_revive_trajectory_gap import (
     RoundGateMatcher,
     RoundIdentity,
     Track,
-    analyze_captures,
     parse_capture,
+)
+from scripts.analyze_post_revive_trajectory_gap import (
+    analyze_captures as _analyze_captures,
 )
 
 IDENTITY = RoundIdentity("supply", 1, 1_700_000_000, 1_700_000_010)
+
+
+def analyze_captures(captures, *, gate_matcher, **kwargs):
+    return _analyze_captures(
+        captures,
+        gate_matcher=gate_matcher,
+        clock_anchor_not_before_unix=IDENTITY.round_start_unix,
+        **kwargs,
+    )
 
 
 def _track(
@@ -39,7 +50,7 @@ def _capture(
 ) -> RawCapture:
     path = tmp_path / f"{identity.round_start_unix}_engagements.txt"
     path.write_text("fixture\n", encoding="utf-8")
-    return RawCapture(path, identity, 6, tracks, revives, outcomes)
+    return RawCapture(path, identity, 6, tracks, revives, outcomes, ("KILL_OUTCOME",))
 
 
 def test_measures_gap_until_next_normal_spawn_and_cross_checks_subset(tmp_path):
@@ -276,6 +287,7 @@ def test_v4_capture_is_excluded_as_revive_capability_unproven(tmp_path):
         capture.tracks,
         capture.revives,
         capture.revived_outcomes,
+        capture.sections,
     )
 
     result = analyze_captures([capture], gate_matcher=None)
@@ -317,6 +329,7 @@ def test_parser_reads_only_measurement_sections(tmp_path):
     assert len(capture.tracks) == 2
     assert capture.revives == (Revive(3_000, "HUMAN_A"),)
     assert capture.revived_outcomes == (RevivedOutcome(3_000, "HUMAN_A"),)
+    assert capture.sections == ("PLAYER_TRACKS", "REVIVES", "KILL_OUTCOME")
 
 
 def test_parser_keeps_death_type_when_nine_field_row_omits_path(tmp_path):
@@ -368,6 +381,69 @@ def test_revive_subset_cross_check_is_round_scoped(tmp_path):
 
     assert result["revive_cross_check"]["matched_enemy_kill_subset"] == 0
     assert result["revive_cross_check"]["enemy_kill_subset_without_callback"] == 1
+
+
+def test_capture_before_verified_clock_anchor_is_excluded(tmp_path):
+    capture = _capture(
+        tmp_path,
+        tracks=(_track("HUMAN_A", 0, 10_000, "round_end"),),
+    )
+
+    result = _analyze_captures(
+        [capture],
+        gate_matcher=None,
+        clock_anchor_not_before_unix=IDENTITY.round_start_unix + 1,
+    )
+
+    assert result["input"]["files_included"] == 0
+    assert result["exclusions"]["captures"] == {"clock_anchor_not_proven": 1}
+
+
+def test_capture_without_later_section_proof_is_excluded(tmp_path):
+    capture = _capture(
+        tmp_path,
+        tracks=(_track("HUMAN_A", 0, 10_000, "round_end"),),
+    )
+    capture = RawCapture(
+        capture.path,
+        capture.identity,
+        capture.tracker_version,
+        capture.tracks,
+        capture.revives,
+        capture.revived_outcomes,
+        ("PLAYER_TRACKS",),
+    )
+
+    result = analyze_captures([capture], gate_matcher=None)
+
+    assert result["input"]["files_included"] == 0
+    assert result["exclusions"]["captures"] == {
+        "revive_section_completion_not_proven": 1,
+    }
+
+
+def test_capture_with_out_of_order_later_section_proof_is_excluded(tmp_path):
+    capture = _capture(
+        tmp_path,
+        tracks=(_track("HUMAN_A", 0, 10_000, "round_end"),),
+        revives=(Revive(3_000, "HUMAN_A"),),
+    )
+    capture = RawCapture(
+        capture.path,
+        capture.identity,
+        capture.tracker_version,
+        capture.tracks,
+        capture.revives,
+        capture.revived_outcomes,
+        ("KILL_OUTCOME", "REVIVES"),
+    )
+
+    result = analyze_captures([capture], gate_matcher=None)
+
+    assert result["input"]["files_included"] == 0
+    assert result["exclusions"]["captures"] == {
+        "revive_section_completion_not_proven": 1,
+    }
 
 
 def test_parse_exclusions_are_reflected_in_file_totals():

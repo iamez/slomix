@@ -17,19 +17,19 @@ history confirms that this is not a rare edge case:
 | Measurement | Result |
 |---|---:|
 | Raw capture files inspected | 695 |
-| Files passing identity, quality, capability, canonical dedup and exact-end checks | 618 |
-| Observation window | 2026-03-03 20:25:43 UTC to 2026-07-29 21:54:19 UTC |
-| Eligible rounds containing at least one human | 563 |
-| Eligible human player-rounds | 3,527 |
-| Human revive callbacks | 6,398 |
-| Human-participant rounds with at least one gap | 537 / 563 (95.38%) |
-| Player-rounds with at least one post-revive gap | 2,501 / 3,527 (70.91%) |
-| Merged post-revive windows | 5,255 |
-| Missing/unresolved trajectory time | 124,934,725 ms |
-| Missing time / eligible human player-round time | **8.98%** |
-| Median gap share among affected player-rounds | 9.80% |
-| P95 gap share among affected player-rounds | 29.38% |
-| Round time where a complete human-roster snapshot is unavailable | **41.32%** |
+| Files passing identity, quality, clock, write-prefix, canonical dedup and exact-end checks | 197 |
+| Observation window | 2026-06-22 19:49:55 UTC to 2026-07-29 21:54:19 UTC |
+| Eligible rounds containing at least one human | 197 |
+| Eligible human player-rounds | 1,252 |
+| Human revive callbacks | 2,384 |
+| Human-participant rounds with at least one gap | 196 / 197 (99.49%) |
+| Player-rounds with at least one post-revive gap | 934 / 1,252 (74.60%) |
+| Merged post-revive windows | 1,991 |
+| Missing/unresolved trajectory time | 47,510,700 ms |
+| Missing time / eligible human player-round time | **9.37%** |
+| Median gap share among affected player-rounds | 9.99% |
+| P95 gap share among affected player-rounds | 28.80% |
+| Round time where a complete human-roster snapshot is unavailable | **43.75%** |
 
 This closes the open measurement question in
 `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md` §13.2b. The gap is material and
@@ -61,7 +61,8 @@ The measurement deliberately does not trust the currently stored
 `player_track.round_id` links. Earlier inventory found source-start
 disagreement in historical linked rows. Instead:
 
-- Raw `REVIVES` is the primary and complete revive-callback source.
+- Raw `REVIVES` is the primary revive-callback source only after the
+  clock/write-prefix proof below.
 - Raw `KILL_OUTCOME outcome=revived` is only an enemy-kill subset cross-check.
 - Raw files are matched to `rounds` by exact `(map, round, round_start_unix)`
   or exact `(map, round, round_end_unix)`.
@@ -76,11 +77,27 @@ disagreement in historical linked rows. Instead:
   in this capture is `OMNIBOT`.
 - A capture with no eligible human GUID contributes no human-roster round
   time, even when its historical `is_bot_round` flag was never backfilled.
-- Tracker V5 is the minimum accepted revive-capable artifact. Git history
-  shows V5 introduced both the revive callback collection and `REVIVES`
-  output; V4 explicitly returned from revived spawns without recording one.
-  Since the writer emits the optional section only when events exist, version
-  capability distinguishes a supported zero from an unsupported absence.
+- Tracker V5 is the minimum revive-capable artifact, but its coarse version
+  header does **not** prove that the round clock was re-anchored. A read-only
+  audit of the live game server verified the currently installed artifact at
+  `/home/et/etlegacy-v2.83.1-x86_64/legacy/luascripts/proximity_tracker.lua`:
+  mtime `2026-06-22 21:29:06.484508274 +0200`, SHA-256
+  `16bf9fc46b33504e75c270fa129f8411b735fbfb91961b576acdee0a457257ff`,
+  and the source contains `tracker.round.start_time = levelTime` in the
+  `gamestate -> GS_PLAYING` transition. The measurement therefore rejects
+  every capture whose `round_start_unix` predates
+  `1782156546` (`2026-06-22 19:29:06 UTC`). The first included capture starts
+  20 minutes 49 seconds later. This replaces the unsafe V5/V6-version
+  inference with an independently checked artifact boundary.
+- Historical files have no EOF marker and the downloader did not perform a
+  stable-size/close handshake. Absence of an optional `REVIVES` section alone
+  therefore cannot prove zero callbacks. The synchronous Lua writer emits
+  `KILL_OUTCOME` only after it has evaluated and fully written the `REVIVES`
+  branch. Inclusion now requires an on-disk `KILL_OUTCOME` section after
+  `REVIVES` when the latter is present. This proves completion of the entire
+  measurement-relevant write prefix, including a genuine zero when
+  `REVIVES` is absent. All 200 raw captures after the artifact boundary have
+  this proof; three then fail other quality checks, leaving 197.
 - Exact in-game round end comes from completed
   `PLAYER_TRACKS.death_type=round_end` rows. A maximum 1 ms writer jitter is
   accepted.
@@ -98,9 +115,10 @@ against the write path and is covered by unit tests.
 | Ambiguous exact canonical identity | 1 |
 | Rejected by the established round quality gate | 4 |
 | Tracker artifact predates verified revive capture (V4) | 19 |
-| Missing/inconsistent exact in-game round end | 9 |
-| Duplicate raw captures for one canonical `rounds.id` | 2 |
-| **Total excluded** | **77** |
+| Revive-capable artifact but clock re-anchor not proven | 430 |
+| Missing/inconsistent exact in-game round end | 2 |
+| Missing/out-of-order later-section write-prefix proof | 0 |
+| **Total excluded** | **498** |
 
 No included human player-round remained excluded for an invalid or
 overlapping track interval after the warmup boundary rule was applied.
@@ -116,30 +134,30 @@ The report and JSON output contain no player names or GUID values.
 
 ## Independent subset cross-check
 
-The enemy-kill-only outcome writer produced 5,964 revived outcomes. All 5,964
+The enemy-kill-only outcome writer produced 2,228 revived outcomes. All 2,228
 matched a raw revive callback on
 `(exact round identity, victim GUID, outcome time)`; there were zero outcome
-rows without a callback. Those outcomes covered 93.22% of all 6,398 human
+rows without a callback. Those outcomes covered 93.46% of all 2,384 human
 revive callbacks.
 
 That is the expected direction:
 
 - `REVIVES` is complete for revive callbacks.
 - `KILL_OUTCOME` omits reviveable deaths outside its enemy-kill gate.
-- Reversing the source roles would silently lose 434 revives (6.78%).
+- Reversing the source roles would silently lose 156 revives (6.54%).
 
 ## Distribution and endpoint checks
 
-Of 6,398 raw revive windows:
+Of 2,384 raw revive windows:
 
-- 5,811 ended at the next normal tracked spawn.
-- 587 had no later normal tracked spawn and ended at exact round end.
-- Merging repeated/overlapping revives reduced them to 5,255 player windows,
+- 2,178 ended at the next normal tracked spawn.
+- 206 had no later normal tracked spawn and ended at exact round end.
+- Merging repeated/overlapping revives reduced them to 1,991 player windows,
   preventing double-counting.
 
 Across all eligible player-rounds, including zero-gap players, the median gap
-share was 6.05% and nearest-rank P95 was 27.14%. Among affected player-rounds
-the median was 9.80% and nearest-rank P95 was 29.38%.
+share was 6.83% and nearest-rank P95 was 27.09%. Among affected player-rounds
+the median was 9.99% and nearest-rank P95 was 28.80%.
 
 ## Consequences for §4
 
@@ -150,7 +168,7 @@ complete roster at an arbitrary timestamp:
    result when `t` intersects a known post-revive window.
 2. No interpolation may bridge a revive window. The endpoints do not prove
    where the player moved or when an unobserved repeat death occurred.
-3. Complete-roster validation must exclude the affected 41.32% of eligible
+3. Complete-roster validation must exclude the affected 43.75% of eligible
    round time. Coverage must be published beside every result.
 4. Grid, distance, path, adjacency and space-control candidates may be
    developed as infrastructure, but historical results must use only complete
@@ -186,6 +204,7 @@ From the repository root with the normal read-only dev DB configuration:
 ```bash
 python scripts/analyze_post_revive_trajectory_gap.py \
   --input-dir local_proximity \
+  --clock-anchor-not-before-unix 1782156546 \
   --output /tmp/post-revive-gap.json
 ```
 
@@ -204,6 +223,6 @@ ruff check scripts/analyze_post_revive_trajectory_gap.py \
 
 The focused suite covers normal-spawn and round-end endpoints, repeated
 revive merging, warmup boundary normalization, bot exclusion, overlapping
-life rejection, exact-end rejection, exact canonical gate matching, raw
-section parsing (including pathless nine-field rows), round-scoped subset
-matching and parse-exclusion accounting.
+life rejection, exact-end rejection, exact canonical gate matching, clock
+deployment cutoff, later-section proof (including ordering), raw section
+parsing, round-scoped subset matching and parse-exclusion accounting.
