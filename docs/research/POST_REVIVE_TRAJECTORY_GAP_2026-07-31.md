@@ -136,9 +136,10 @@ The measured input manifest hash is:
 c5fe14e25ab692f80628b70a91e7d1b3b617a69eb4c5e86c62bcc5656a22e730
 ```
 
-The hash covers ordered raw filenames, round identity fields and a SHA-256 of
-every raw file's complete bytes. Same-length content changes therefore change
-the manifest.
+The hash covers each successfully parsed capture's ordered raw filename,
+round identity fields and SHA-256 of its complete file bytes. Parse/identity
+failures are counted separately and are not represented in this digest.
+Same-length content changes to a parsed capture therefore change the manifest.
 The report and JSON output contain no player names or GUID values.
 
 ## Independent subset cross-check
