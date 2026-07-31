@@ -55,6 +55,8 @@ htmlcov/
 # NODE / REACT
 # ============================================
 node_modules/
+website/frontend/test-results/
+website/frontend/playwright-report/
 gemini-website/dist/
 gemini-website/.next/
 build/
