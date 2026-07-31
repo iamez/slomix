@@ -171,7 +171,7 @@ uncovered maps. Legacy radius-500 objective spheres are not substituted.
 Synthetic W1-W3 unit bundle:
 
 ```text
-46 passed
+47 passed
 ```
 
 Opt-in integration suite loading every real indexed BSP:

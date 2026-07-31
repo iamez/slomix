@@ -90,7 +90,7 @@ def test_extracts_typed_w3_entities_and_exact_translated_objective_volume():
         )
     )
 
-    catalog = extract_entity_catalog(bsp, "TEST_MAP")
+    catalog = extract_entity_catalog(bsp, "TEST_MAP.BSP")
 
     assert catalog.map_name == "test_map"
     assert [point.team for point in catalog.spawn_points] == ["ALLIES", "AXIS"]
