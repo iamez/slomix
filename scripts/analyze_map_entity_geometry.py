@@ -46,7 +46,7 @@ def _content_hash(payload: dict) -> str:
 
 
 def build_inventory(index: Pk3GeometryIndex, map_names: list[str] | None = None) -> dict:
-    resolutions = index.resolve_many(map_names if map_names else index.map_names)
+    resolutions = index.resolve_many(map_names if map_names is not None else index.map_names)
     maps: dict[str, dict] = {}
     status_counts = {"measured": 0, "no_geometry": 0, "ambiguous_geometry": 0}
     totals = {
