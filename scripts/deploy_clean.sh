@@ -119,6 +119,14 @@ build_file_list() {
   echo "scripts/apply_migrations.py"
   find migrations/ -name '*.sql' 2>/dev/null
 
+  # Post-deploy health check + the anomaly checker its section 9 shells out to.
+  # A --clean run deletes $VM_PATH/scripts first, so without shipping these the
+  # freshly-deployed VM — the exact moment you most want to run a health check —
+  # wouldn't have one (Codex on #580).
+  for f in scripts/health_check.sh scripts/check_round_linkage_anomalies.py; do
+    [ -f "$f" ] && echo "$f"
+  done
+
   # Greatshot package (website hard dependency)
   find greatshot/ -name '*.py' -not -path '*__pycache__*' -not -path '*tests/*' 2>/dev/null
 
