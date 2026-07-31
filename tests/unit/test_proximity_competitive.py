@@ -1,8 +1,8 @@
 """Unit tests for /proximity/competitive/* (proximity_competitive.py).
 
 Covers: stagger classification threshold, first-blood -> round conversion
-math, implied wave-clock derivation (offset voting), wave-cycle segmentation
-and scoring, and personal-best card detection vs history.
+math, validated wave-cycle segmentation and scoring, and personal-best card
+detection vs history.
 """
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from website.backend.routers.proximity_competitive import (
-    _implied_offsets,
     get_first_blood_conversion,
     get_personal_bests,
     get_wave_cycles,
@@ -27,26 +26,9 @@ B1, B2 = "ALLYGUID1" + "0" * 23, "ALLYGUID2" + "0" * 23
 
 
 def _st(kill_time, killer, killer_team, victim, victim_team, interval, ttn):
-    """Row shape used by get_wave_cycles / _implied_offsets."""
+    """Row shape used by get_wave_cycles."""
     return (killer, f"n_{killer[:4]}", killer_team, victim_team,
-            victim, f"n_{victim[:4]}", kill_time, interval, ttn)
-
-
-def test_implied_offsets_votes_modal_value() -> None:
-    # ALLIES interval 25000, offset 14000: ttn = interval - ((offset+t) % interval)
-    rows = []
-    for t in (12975, 31550, 60125):
-        ttn = 25000 - ((14000 + t) % 25000)
-        rows.append(_st(t, A1, "AXIS", B1, "ALLIES", 25000, ttn))
-    # AXIS interval 30000, offset 6000
-    for t in (20000, 47000):
-        ttn = 30000 - ((6000 + t) % 30000)
-        rows.append(_st(t, B1, "ALLIES", A1, "AXIS", 30000, ttn))
-
-    offsets = _implied_offsets([(r[3], r[6], r[7], r[8]) for r in rows])
-
-    assert offsets["ALLIES"] == (14000, 25000)
-    assert offsets["AXIS"] == (6000, 30000)
+            victim, f"n_{victim[:4]}", kill_time, interval, ttn, 101, 0.5)
 
 
 @pytest.mark.asyncio
@@ -58,8 +40,27 @@ async def test_wave_cycles_segmentation_and_scoring() -> None:
         _st(2000, A1, "AXIS", B1, "ALLIES", 10000, 8000),   # cycle 0-10s
         _st(4000, A1, "AXIS", B2, "ALLIES", 10000, 6000),   # cycle 0-10s
         _st(12000, A2, "AXIS", B1, "ALLIES", 10000, 8000),  # cycle 10-20s
+        _st(3000, B1, "ALLIES", A1, "AXIS", 10000, 7000),
+        _st(13000, B1, "ALLIES", A1, "AXIS", 10000, 7000),
+        _st(23000, B1, "ALLIES", A1, "AXIS", 10000, 7000),
     ]
-    db.fetch_all = AsyncMock(return_value=rows)
+    track_rows = []
+    row_id = 0
+    for guid, team in ((A1, "AXIS"), (B1, "ALLIES")):
+        for spawn in (0, 10000, 20000, 30000):
+            row_id += 1
+            track_rows.append(
+                (
+                    row_id,
+                    guid,
+                    f"n_{guid[:4]}",
+                    team,
+                    spawn,
+                    spawn + 1000 if spawn < 30000 else None,
+                    "killed" if spawn < 30000 else None,
+                )
+            )
+    db.fetch_all = AsyncMock(side_effect=[rows, track_rows, []])
 
     res = await get_wave_cycles(
         session_date="2026-06-09", map_name="m", round_number=1,
@@ -67,14 +68,55 @@ async def test_wave_cycles_segmentation_and_scoring() -> None:
     )
 
     assert res["clocks"]["ALLIES"] == {"offset_ms": 0, "interval_ms": 10000}
+    assert res["clocks"]["AXIS"] == {"offset_ms": 0, "interval_ms": 10000}
+    assert res["clock_validation"]["ALLIES"]["status"] == "validated"
+    assert res["round_len_ms"] == 30000
     first = res["cycles"][0]
     assert (first["start_ms"], first["end_ms"]) == (0, 10000)
-    assert first["kills_axis"] == 2 and first["kills_allies"] == 0
+    assert first["kills_axis"] == 2 and first["kills_allies"] == 1
     assert first["winner"] == "AXIS"
     assert first["first_blood"] == "AXIS"
     assert res["summary"]["axis_won"] == len(
         [c for c in res["cycles"] if c["winner"] == "AXIS"]
     )
+    assert max(cycle["end_ms"] for cycle in res["cycles"]) == res["round_len_ms"]
+
+
+@pytest.mark.asyncio
+async def test_wave_cycles_rejects_modal_clock_with_one_conflicting_row() -> None:
+    db = AsyncMock()
+    rows = [
+        _st(1000, A1, "AXIS", B1, "ALLIES", 10000, 9000),
+        _st(2000, A1, "AXIS", B1, "ALLIES", 10000, 8000),
+        _st(3000, A1, "AXIS", B1, "ALLIES", 10000, 6000),
+        _st(1000, B1, "ALLIES", A1, "AXIS", 10000, 9000),
+        _st(2000, B1, "ALLIES", A1, "AXIS", 10000, 8000),
+        _st(3000, B1, "ALLIES", A1, "AXIS", 10000, 7000),
+    ]
+    track_rows = [
+        (1, A1, "A", "AXIS", 0, 1000, "killed"),
+        (2, A1, "A", "AXIS", 10000, 11000, "killed"),
+        (3, A1, "A", "AXIS", 20000, 21000, "killed"),
+        (4, A1, "A", "AXIS", 30000, None, None),
+        (5, B1, "B", "ALLIES", 0, 1000, "killed"),
+        (6, B1, "B", "ALLIES", 10000, 11000, "killed"),
+        (7, B1, "B", "ALLIES", 20000, 21000, "killed"),
+        (8, B1, "B", "ALLIES", 30000, None, None),
+    ]
+    db.fetch_all = AsyncMock(side_effect=[rows, track_rows, []])
+
+    result = await get_wave_cycles(
+        session_date="2026-06-09",
+        map_name="m",
+        round_number=1,
+        round_start_unix=None,
+        db=db,
+    )
+
+    assert result["status"] == "unavailable"
+    assert result["cycles"] == []
+    assert result["clock_validation"]["ALLIES"]["status"] == "inconsistent"
+    assert result["clock_validation"]["ALLIES"]["offset_ms"] is None
 
 
 @pytest.mark.asyncio

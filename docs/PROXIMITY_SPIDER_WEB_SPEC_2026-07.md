@@ -426,7 +426,15 @@ Over groups of `(round_id, victim_team)` with at least 3 kills: **1,249 of 1,266
 
 That result proves only that rows written by the same tracker calculation agree with one another. It does **not** prove that the tracker decoded `CS_REINFSEEDS` correctly or used the correct time origin: a systematic error would produce the same unanimous but shifted offset in every row.
 
-**Consequence: unanimity is necessary but not sufficient.** The 17 inconsistent groups are unresolved historical data and remain null. Every other inferred historical clock remains `unvalidated` until its predicted wave landings agree with an independent spawn observation under the gate below. Phase C capture (§10) makes future reconstruction direct, but the captured value still receives a controlled-game agreement check.
+**Consequence: unanimity is necessary but not sufficient.** A 2026-07-31
+re-measurement identified all 17 inconsistent groups as bot-only; every usable
+row in them has an `OMNIBOT%`/`[BOT]%` identity. They remain excluded/null
+rather than receiving a selected candidate. After exact linkage, the full round
+quality gate and per-player bot gate, no human group is internally inconsistent.
+Every other inferred historical clock remains `unvalidated` until its predicted
+wave landings agree with an independent spawn observation under the gate below.
+Phase C capture (§10) makes future reconstruction direct, but the captured value
+still receives a controlled-game agreement check.
 
 A preliminary independent check confirms that this distinction is material. Start from same-round, same-player track sequences where a new life follows a terminal obituary event, then compare those spawn callbacks with the internally unanimous inferred clock. Across **37,756** matched spawn candidates in **576 rounds / 1,144 round-team groups**, the global median circular residual is **25 ms**, but p95 is **7,025 ms** and only **33,628 (89.1%)** are within 1 second. Among the **1,141** groups with at least three observations, only **961 (84.2%)** have at least 90% of observations within 250 ms. These are feasibility/diagnostic numbers before the final validity, overlap and spawn-cause exclusions; they are **not** a post-hoc shipping threshold. They show both that the recovered clock often aligns very closely and that unanimity alone would admit a substantial bad tail.
 
@@ -449,6 +457,21 @@ For each (round_id, team) where round_id IS NOT NULL:
 Never average and never select the mode. An average of two valid-but-different offsets is a third value that is wrong for both; a mode merely hides the rows that disagree. Until the cause of a disagreement is explained by an independently verified rule, the whole `(round_id, team)` clock is unknown.
 
 **Independent historical validation gate.** Use observed normal reinforcement landings from new `player_track.spawn_time_ms` lives, never the `time_to_next_spawn` value that generated the candidate offset. A qualifying spawn observation must be a non-revive track start in the same resolved round, after an earlier same-player death life; exclude initial joins, active-life team changes, reconnects, ambiguous overlapping lives and any row without exact round linkage. Group same-team starts into wave landings with a predeclared jitter tolerance. For every eligible `(round_id, team)` compare predicted landing times from the recovered offset against those observed clusters and publish residuals, exclusions and coverage. Set the clock to `validated` only if a minimum support count and a frozen residual tolerance pass; otherwise it is `unvalidated` or `inconsistent`, never silently usable. Because the post-revive trajectory gap (§13.2b) can separate the prior recorded death from the eventual normal spawn, it may affect attribution but does not manufacture a track start; publish that case separately.
+
+**Frozen implementation (`reinforcement-clock-v1`, measured 2026-07-31):**
+at least three exact unanimous timing rows; same-team callback clusters with a
+maximum 250 ms diameter; at least three independent landing clusters; and at
+least 90% of their circular residuals within 250 ms. The final query uses data
+through 2026-07-27 as discovery and 2026-07-28 onward as chronological
+confirmation. The 2026-07-29 confirmation block validated **36/36** round-team
+groups and **502/502** landing clusters; median and p95 residual were both
+25 ms. Across all quality-gated history, 878 groups validate, 126 fail and 163
+remain support-insufficient. Removing every post-revive-containing landing
+causes no confirmation failure (34 validate, two become support-insufficient);
+requiring at least two distinct players in every landing still validates
+36/36. Full data denominators, exclusions, live endpoint proof and the input
+manifest are in
+`docs/research/REINFORCEMENT_CLOCK_VALIDATION_2026-07-31.md`.
 
 Only after that independent gate, for any `t`:
 
@@ -1013,6 +1036,7 @@ Verified on the dev database (`etlegacy` @ localhost) on 2026-07-27. Key checks,
 - Bot share: `player_guid LIKE 'OMNIBOT%'` → 13 guids, 7,687 of 57,311 tracks
 - Linkage: comparison of the date-key join against `round_id` → 24,428 multi-round track rows before PR #560, 0 after
 - Post-revive trajectory gap: `python scripts/analyze_post_revive_trajectory_gap.py --input-dir local_proximity --clock-anchor-not-before-unix 1782156546 --output /tmp/post-revive-gap.json` → 695 files inspected, 197 included exact-identity, quality-gated, clock-proven and write-prefix-proven captures after canonical dedup, 9.38% of observed human participation time unavailable, 43.75% complete-roster snapshot time unavailable; the content-sensitive manifest is `c5fe14e25ab692f80628b70a91e7d1b3b617a69eb4c5e86c62bcc5656a22e730`, with full method and live-artifact proof in `docs/research/POST_REVIVE_TRAJECTORY_GAP_2026-07-31.md`
+- Reinforcement clock validation: `python -m scripts.analyze_reinforcement_clock --output /tmp/reinforcement-clock-evidence.json` → 878 quality-gated historical round-team clocks validated, 126 failed, 163 support-insufficient; chronological confirmation 36/36 groups and 502/502 landing clusters within the frozen 250 ms residual tolerance; manifest `12b7c15f8e3f234690db110ada1d50e239e8f2c056caf9b2e1997034b6e96a70`
 
 Map assets, checked by reading the archives in `/home/samba/share/etmain` directly:
 
@@ -1076,6 +1100,15 @@ Checks added in rev 10:
 Related: #556 (metric validity method), #560 (track linkage fix), #551 (open design review), `docs/PROXIMITY_VISION_AUDIT_2026-07.md`, `docs/DESIGN_SKILL_PASSPORT_2026-07.md`.
 
 ### Revision history
+
+**Rev 11 (2026-07-31)** — implemented the frozen reinforcement-clock gate.
+The old mode/25 ms quantisation path is retired. All 17 raw inconsistent groups
+were proved bot-only, while the quality-gated chronological confirmation
+validated 36/36 round-team groups and 502/502 independent landing clusters.
+Live wave-cycle/clutch consumers now receive only independently validated
+clocks and fail closed on ambiguous linkage, insufficient support, internal
+conflict or residual failure. The complete denominators and manifest are in
+`docs/research/REINFORCEMENT_CLOCK_VALIDATION_2026-07-31.md`.
 
 **Rev 10 (2026-07-27)** — exact-head Codex review closure plus full unresolved-thread audit. This revision withdraws two residual overclaims: historical tracks do not guarantee every active player's position after revive, and terminal track events are not a complete obituary stream for repeat deaths in that gap. It also turns the adaptive-capture proposal into a consumer-consistent contract: the first candidate bounds floor reconstruction, 200 ms is compatibility evidence rather than sub-tick truth, every sensor/event class is manifested and timed, and numeric resource budgets are frozen before confirmation. No Lua or production change is authorized.
 
