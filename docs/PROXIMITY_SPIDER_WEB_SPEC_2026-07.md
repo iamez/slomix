@@ -922,16 +922,20 @@ clock re-anchor and requires an on-disk section emitted after `REVIVES`:
 
 | Result | Value |
 |---|---:|
-| Missing/unresolved trajectory time / eligible human player-round time | **9.37%** |
+| Missing/unresolved trajectory time / observed human participation time | **9.38%** |
 | Human-participant rounds affected | **196 / 197 (99.49%)** |
 | Human player-rounds affected | **934 / 1,252 (74.60%)** |
-| Median gap share among affected player-rounds | **9.99%** |
-| P95 gap share among affected player-rounds | **28.80%** |
+| Median gap share among affected player-rounds | **10.00%** |
+| P95 gap share among affected player-rounds | **28.84%** |
 | Round time unavailable for complete-roster snapshots | **43.75%** |
 | Enemy-kill revived outcomes matched to the primary callback source | **2,228 / 2,228** |
 | Primary revive callbacks covered by that enemy-kill subset | **93.46%** |
 
-The primary interval is conservative state/trajectory unavailability from a
+Player-time denominators start at the first observed in-round spawn and end at
+an explicit disconnect or exact round end, so late joins do not dilute the
+rate. A round with any corrupt/excluded human participant is omitted from the
+complete-roster denominator. The primary interval is conservative
+state/trajectory unavailability from a
 revive until the next normal tracked spawn or exact in-game round end; it is
 not a claim that the player remained alive throughout. Repeated windows are
 merged. Details, exclusions, manifest hash, reproduction and §4/§7
@@ -989,7 +993,7 @@ Accumulation multiplies whatever it accumulates. If a per-round signal is noise,
 
 ## §15 Open questions for the owner
 
-0. **Resolved measurement: the post-revive trajectory gap (§13.2b) loses 9.37% of eligible human player-round time and blocks complete-roster snapshots for 43.75% of human-participant round time.** It is material and therefore a future Lua capture item. Writing/deploying that Lua remains owner-gated.
+0. **Resolved measurement: the post-revive trajectory gap (§13.2b) loses 9.38% of observed human participation time and blocks complete-roster snapshots for 43.75% of human-participant round time.** It is material and therefore a future Lua capture item. Writing/deploying that Lua remains owner-gated.
 1. **Materialise or compute on demand?** `get_player_positions` is 27–51 ms per call today. A full 3,600-tick reconstruction is a different order of magnitude. Decide after A4 is measured.
 2. **89 bot-only rounds are unflagged (§13.2).** Backfill `is_bot_round` as a separate change before the web, or filter by GUID prefix inside it? Backfill is cleaner and benefits every other consumer.
 3. **PR #551** (`DESIGN_SKILL_PASSPORT`, `PROXIMITY_VISION_AUDIT`) remains open with 19 unresolved review threads. Their findings are incorporated here as §3; the PR itself still needs a decision.
@@ -1008,7 +1012,7 @@ Verified on the dev database (`etlegacy` @ localhost) on 2026-07-27. Key checks,
 - Overlapping lives: self-join of `player_track` on `round_id, player_guid` with interval overlap → 3,674 pairs / 49 rounds
 - Bot share: `player_guid LIKE 'OMNIBOT%'` → 13 guids, 7,687 of 57,311 tracks
 - Linkage: comparison of the date-key join against `round_id` → 24,428 multi-round track rows before PR #560, 0 after
-- Post-revive trajectory gap: `python scripts/analyze_post_revive_trajectory_gap.py --input-dir local_proximity --clock-anchor-not-before-unix 1782156546 --output /tmp/post-revive-gap.json` → 695 files inspected, 197 included exact-identity, quality-gated, clock-proven and write-prefix-proven captures after canonical dedup, 9.37% player-round time unavailable, 43.75% complete-roster snapshot time unavailable; full method, live-artifact proof and manifest hash in `docs/research/POST_REVIVE_TRAJECTORY_GAP_2026-07-31.md`
+- Post-revive trajectory gap: `python scripts/analyze_post_revive_trajectory_gap.py --input-dir local_proximity --clock-anchor-not-before-unix 1782156546 --output /tmp/post-revive-gap.json` → 695 files inspected, 197 included exact-identity, quality-gated, clock-proven and write-prefix-proven captures after canonical dedup, 9.38% of observed human participation time unavailable, 43.75% complete-roster snapshot time unavailable; the content-sensitive manifest is `c5fe14e25ab692f80628b70a91e7d1b3b617a69eb4c5e86c62bcc5656a22e730`, with full method and live-artifact proof in `docs/research/POST_REVIVE_TRAJECTORY_GAP_2026-07-31.md`
 
 Map assets, checked by reading the archives in `/home/samba/share/etmain` directly:
 

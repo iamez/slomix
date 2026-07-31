@@ -119,6 +119,23 @@ def test_gap_without_later_spawn_ends_at_exact_round_end(tmp_path):
     assert result["trajectory_gap"]["raw_window_endings"] == {"round_end": 1}
 
 
+def test_late_join_uses_observed_participation_denominator(tmp_path):
+    capture = _capture(
+        tmp_path,
+        tracks=(
+            _track("HUMAN_A", 5_000, 6_000, "killed"),
+            _track("HUMAN_A", 9_000, 10_000, "round_end"),
+        ),
+        revives=(Revive(7_000, "HUMAN_A"),),
+    )
+
+    result = analyze_captures([capture], gate_matcher=None)
+
+    assert result["trajectory_gap"]["eligible_player_round_ms"] == 5_000
+    assert result["trajectory_gap"]["unavailable_ms"] == 2_000
+    assert result["trajectory_gap"]["unavailable_fraction"] == pytest.approx(0.4)
+
+
 def test_warmup_crossing_track_is_clamped_to_round_start(tmp_path):
     capture = _capture(
         tmp_path,
@@ -203,6 +220,8 @@ def test_overlapping_lives_exclude_player_round_from_both_sides(tmp_path):
     assert result["population"]["eligible_human_player_rounds"] == 1
     assert result["exclusions"]["human_player_rounds"] == {"overlapping_lives": 1}
     assert result["trajectory_gap"]["eligible_player_round_ms"] == 10_000
+    assert result["complete_roster_snapshot_unavailability"]["eligible_round_ms"] == 0
+    assert result["population"]["complete_roster_rounds_excluded_for_invalid_participant"] == 1
 
 
 def test_capture_without_exact_round_end_is_excluded(tmp_path):
@@ -463,3 +482,16 @@ def test_parse_exclusions_are_reflected_in_file_totals():
     assert result["input"]["files_seen"] == 2
     assert result["input"]["files_parsed"] == 0
     assert result["input"]["files_excluded"] == 2
+
+
+def test_manifest_hashes_capture_contents_not_only_size(tmp_path):
+    capture = _capture(
+        tmp_path,
+        tracks=(_track("HUMAN_A", 0, 10_000, "round_end"),),
+    )
+    before = analyze_captures([capture], gate_matcher=None)
+    capture.path.write_text("mixture\n", encoding="utf-8")
+    after = analyze_captures([capture], gate_matcher=None)
+
+    assert capture.path.stat().st_size == len("fixture\n")
+    assert before["input"]["capture_manifest_sha256"] != after["input"]["capture_manifest_sha256"]

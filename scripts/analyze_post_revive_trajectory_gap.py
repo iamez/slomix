@@ -323,6 +323,7 @@ def _round_player_intervals(
     round_end_ms: int,
 ) -> tuple[
     dict[str, list[tuple[int, int]]],
+    dict[str, tuple[int, int]],
     Counter[str],
     Counter[str],
 ]:
@@ -338,6 +339,7 @@ def _round_player_intervals(
     player_exclusions: Counter[str] = Counter()
     raw_window_endings: Counter[str] = Counter()
     intervals_by_guid: dict[str, list[tuple[int, int]]] = {}
+    participation_by_guid: dict[str, tuple[int, int]] = {}
 
     orphan_guids = set(revives_by_guid) - set(tracks_by_guid)
     if orphan_guids:
@@ -370,6 +372,15 @@ def _round_player_intervals(
             for previous, current in zip(ordered_tracks, ordered_tracks[1:])
         ):
             player_exclusions["overlapping_lives"] += 1
+            continue
+
+        participation_start = max(0, ordered_tracks[0].spawn_time_ms)
+        participation_end = round_end_ms
+        final_track = ordered_tracks[-1]
+        if final_track.death_type == "disconnect" and final_track.death_time_ms is not None:
+            participation_end = min(participation_end, final_track.death_time_ms)
+        if participation_start >= participation_end:
+            player_exclusions["no_observed_participation"] += 1
             continue
 
         player_revives = sorted(revives_by_guid.get(guid, []), key=lambda item: item.time_ms)
@@ -406,24 +417,31 @@ def _round_player_intervals(
             else:
                 gap_end = round_end_ms
                 raw_window_endings["round_end"] += 1
-            if gap_end > revive.time_ms:
-                raw_intervals.append((revive.time_ms, gap_end))
+            clipped_start = max(revive.time_ms, participation_start)
+            clipped_end = min(gap_end, participation_end)
+            if clipped_end > clipped_start:
+                raw_intervals.append((clipped_start, clipped_end))
 
         if not invalid_revive:
             intervals_by_guid[guid] = _merge_intervals(raw_intervals)
+            participation_by_guid[guid] = (participation_start, participation_end)
 
-    return intervals_by_guid, player_exclusions, raw_window_endings
+    return intervals_by_guid, participation_by_guid, player_exclusions, raw_window_endings
 
 
 def _manifest_digest(captures: Iterable[RawCapture]) -> str:
     digest = hashlib.sha256()
     for capture in sorted(captures, key=lambda item: item.path.name):
         identity = capture.identity
+        content_digest = hashlib.sha256()
+        with capture.path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                content_digest.update(chunk)
         digest.update(
             (
                 f"{capture.path.name}|{identity.map_name}|{identity.round_number}|"
                 f"{identity.round_start_unix}|{identity.round_end_unix}|"
-                f"{capture.path.stat().st_size}\n"
+                f"{content_digest.hexdigest()}\n"
             ).encode()
         )
     return digest.hexdigest()
@@ -536,6 +554,7 @@ def analyze_captures(
     eligible_player_rounds = 0
     affected_player_rounds = 0
     affected_rounds = 0
+    complete_roster_rounds_excluded = 0
     merged_windows = 0
     raw_window_endings: Counter[str] = Counter()
     player_exclusions: Counter[str] = Counter()
@@ -553,7 +572,12 @@ def analyze_captures(
         observation_starts.append(capture.identity.round_start_unix)
         observation_ends.append(capture.identity.round_end_unix)
 
-        intervals_by_guid, round_player_exclusions, endings = _round_player_intervals(capture, round_end_ms)
+        (
+            intervals_by_guid,
+            participation_by_guid,
+            round_player_exclusions,
+            endings,
+        ) = _round_player_intervals(capture, round_end_ms)
         player_exclusions.update(round_player_exclusions)
         raw_window_endings.update(endings)
 
@@ -567,12 +591,14 @@ def analyze_captures(
         round_intervals: list[tuple[int, int]] = []
         round_affected = False
         for guid, intervals in intervals_by_guid.items():
+            participation_start, participation_end = participation_by_guid[guid]
+            participation_ms = participation_end - participation_start
             human_guids.add(guid)
             eligible_player_rounds += 1
-            total_player_round_ms += round_end_ms
+            total_player_round_ms += participation_ms
             player_gap_ms = sum(end - start for start, end in intervals)
             total_gap_ms += player_gap_ms
-            fraction = player_gap_ms / round_end_ms
+            fraction = player_gap_ms / participation_ms
             all_player_fractions.append(fraction)
             if intervals:
                 affected_player_rounds += 1
@@ -585,12 +611,14 @@ def analyze_captures(
         # The negative per-GUID filter is authoritative for this denominator:
         # a round with no eligible human participant contributes no "human
         # complete-roster" time.
-        if intervals_by_guid:
+        if intervals_by_guid and not round_player_exclusions:
             eligible_human_rounds += 1
             if round_affected:
                 affected_rounds += 1
             total_snapshot_gap_ms += sum(end - start for start, end in _merge_intervals(round_intervals))
             total_round_ms += round_end_ms
+        elif intervals_by_guid:
+            complete_roster_rounds_excluded += 1
 
     matched_cross_check = sum(min(count, subset_outcomes[key]) for key, count in primary_revives.items())
     unmatched_subset = sum(max(0, count - primary_revives[key]) for key, count in subset_outcomes.items())
@@ -635,6 +663,7 @@ def analyze_captures(
         "population": {
             "capture_rounds_included": len(included),
             "eligible_human_rounds": eligible_human_rounds,
+            "complete_roster_rounds_excluded_for_invalid_participant": complete_roster_rounds_excluded,
             "affected_rounds": affected_rounds,
             "eligible_human_player_rounds": eligible_player_rounds,
             "affected_human_player_rounds": affected_player_rounds,
@@ -668,6 +697,9 @@ def analyze_captures(
             "unavailable_fraction": ratio(total_snapshot_gap_ms, total_round_ms),
             "unavailable_percent": (100 * total_snapshot_gap_ms / total_round_ms if total_round_ms else None),
             "rule": "a timestamp is unavailable when any eligible human has an open post-revive gap",
+            "invalid_participant_rule": (
+                "a round with any excluded human participant is omitted from this denominator"
+            ),
         },
         "exclusions": {
             "captures": dict(sorted(capture_exclusions.items())),

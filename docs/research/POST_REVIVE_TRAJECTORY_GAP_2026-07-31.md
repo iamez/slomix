@@ -26,9 +26,9 @@ history confirms that this is not a rare edge case:
 | Player-rounds with at least one post-revive gap | 934 / 1,252 (74.60%) |
 | Merged post-revive windows | 1,991 |
 | Missing/unresolved trajectory time | 47,510,700 ms |
-| Missing time / eligible human player-round time | **9.37%** |
-| Median gap share among affected player-rounds | 9.99% |
-| P95 gap share among affected player-rounds | 28.80% |
+| Missing time / observed human participation time | **9.38%** |
+| Median gap share among affected player-rounds | 10.00% |
+| P95 gap share among affected player-rounds | 28.84% |
 | Round time where a complete human-roster snapshot is unavailable | **43.75%** |
 
 This closes the open measurement question in
@@ -43,8 +43,10 @@ For each eligible human player in each included raw round:
 2. It ends at that player's next normal `PLAYER_TRACKS.spawn_time`, or at the
    exact in-game round end when there is no later normal spawn.
 3. Overlapping windows for the same player are merged before summation.
-4. The denominator is exact in-game round duration multiplied by each
-   eligible human participant in that round.
+4. Each player's denominator starts at their first in-round tracked spawn,
+   not at round zero. It ends at an explicit disconnect or exact round end.
+   This prevents a late join or reconnect from contributing time when that
+   player was not present.
 5. A complete-roster snapshot is unavailable whenever at least one eligible
    human has an open merged window.
 
@@ -77,6 +79,11 @@ disagreement in historical linked rows. Instead:
   in this capture is `OMNIBOT`.
 - A capture with no eligible human GUID contributes no human-roster round
   time, even when its historical `is_bot_round` flag was never backfilled.
+- A human rejected for overlapping/invalid lives, an invalid revive or an
+  orphan revive makes complete-roster state unprovable. Such a round is
+  excluded from the complete-roster denominator rather than being evaluated
+  from only its surviving players. The strict measured cohort contained zero
+  such rounds.
 - Tracker V5 is the minimum revive-capable artifact, but its coarse version
   header does **not** prove that the round clock was re-anchored. A read-only
   audit of the live game server verified the currently installed artifact at
@@ -126,10 +133,12 @@ overlapping track interval after the warmup boundary rule was applied.
 The measured input manifest hash is:
 
 ```text
-ad5b99de5c7d736f33776d2d634e5f1b20707590948d43d3bf45d3a9582beb67
+c5fe14e25ab692f80628b70a91e7d1b3b617a69eb4c5e86c62bcc5656a22e730
 ```
 
-The hash covers ordered raw filenames, round identity fields and file sizes.
+The hash covers ordered raw filenames, round identity fields and a SHA-256 of
+every raw file's complete bytes. Same-length content changes therefore change
+the manifest.
 The report and JSON output contain no player names or GUID values.
 
 ## Independent subset cross-check
@@ -156,8 +165,8 @@ Of 2,384 raw revive windows:
   preventing double-counting.
 
 Across all eligible player-rounds, including zero-gap players, the median gap
-share was 6.83% and nearest-rank P95 was 27.09%. Among affected player-rounds
-the median was 9.99% and nearest-rank P95 was 28.80%.
+share was 6.84% and nearest-rank P95 was 27.13%. Among affected player-rounds
+the median was 10.00% and nearest-rank P95 was 28.84%.
 
 ## Consequences for §4
 
@@ -222,7 +231,9 @@ ruff check scripts/analyze_post_revive_trajectory_gap.py \
 ```
 
 The focused suite covers normal-spawn and round-end endpoints, repeated
-revive merging, warmup boundary normalization, bot exclusion, overlapping
-life rejection, exact-end rejection, exact canonical gate matching, clock
-deployment cutoff, later-section proof (including ordering), raw section
-parsing, round-scoped subset matching and parse-exclusion accounting.
+revive merging, late-join participation bounds, warmup boundary
+normalization, bot exclusion, corrupt-player complete-roster rejection,
+content-sensitive manifests, exact-end rejection, exact canonical gate
+matching, clock deployment cutoff, later-section proof (including ordering),
+raw section parsing, round-scoped subset matching and parse-exclusion
+accounting.
