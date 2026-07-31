@@ -46,18 +46,35 @@ handler under `WEB_LOG_DIR` when that variable is set, falling back to the repo'
 when it isn't — so on a deployment that sets it, every command in this guide would grep an
 empty or stale default directory and report no evidence (Codex review on #576):
 
+Read the value the way the backend reads it, not with a `grep | cut | tr` pipeline. A
+dotenv line may be quoted, carry an inline comment, or interpolate — `WEB_LOG_DIR=${HOME}/my
+logs # local` is valid — and stripping quotes and spaces by hand turns that into
+`${HOME}/mylogs#local`, sending every command below at a directory that doesn't exist
+while reporting "no evidence" (Codex review on #576). `python-dotenv` is already a runtime
+dependency, so parsing it properly costs nothing:
+
 ```bash
-LOGDIR="${WEB_LOG_DIR:-$(grep -E '^\s*WEB_LOG_DIR=' website/.env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' ")}"
 # A RELATIVE value resolves against the server's working directory, not yours.
 # logging_config.py does Path(os.getenv("WEB_LOG_DIR", …)).resolve(), and the
 # documented startup is `cd website && … uvicorn`, so WEB_LOG_DIR=logs means
 # website/logs — while this shell (at the repo root) would read ./logs, a
 # different directory (Codex review on #576).
-case "$LOGDIR" in
-  "")   LOGDIR="logs" ;;                 # unset -> logging_config's own default
-  /*)   ;;                               # absolute -> use as-is
-  *)    LOGDIR="website/$LOGDIR" ;;      # relative -> resolved from website/
-esac
+LOGDIR=$(venv/bin/python - <<'PY'
+import os
+from pathlib import Path
+from dotenv import dotenv_values
+
+# main.py calls load_dotenv(override=False), so an already-exported value wins
+# over the file — check the environment first, in that same order.
+raw = (os.environ.get("WEB_LOG_DIR") or dotenv_values("website/.env").get("WEB_LOG_DIR") or "").strip()
+if not raw:
+    print("logs")                       # unset -> logging_config's own default
+elif Path(raw).is_absolute():
+    print(raw)                          # absolute -> use as-is
+else:
+    print(f"website/{raw}")             # relative -> resolved from website/
+PY
+)
 echo "using: $LOGDIR"
 ```
 
@@ -137,8 +154,20 @@ Timestamp matching is also the fallback for the two cases where the ID isn't ava
   `response` as `None` — so the primary 500 scenario this guide exists for may have no header to
   copy in the first place.
 
-In those cases, matching a `→` line to its `←` line is by nearest path+timestamp, not a hard
-join.
+In those cases, pairing a `→` line with its `←` line is by nearest path+timestamp — a heuristic,
+not a join, and one with a failure mode you have to check for rather than assume away:
+
+> **When two requests for the same method+path overlap, the pairing is unresolvable from the log
+> alone.** `StandardFormatter` timestamps to one-second resolution and plain-text records carry no
+> request ID, so an interleaving like `→ A`, `→ B`, `← B`, `← A` is indistinguishable from
+> `→ A`, `← A`, `→ B`, `← B`. Nearest-line matching would silently attach the pasted failure to the
+> other request's status, duration, and nearby traceback. Polling endpoints and double-fired
+> browser requests make this common, not exotic (Codex review on #576).
+>
+> Check before you rely on it: if more than one `→` for that path appears between your `→` and its
+> apparent `←`, **stop and get more evidence** — re-run with `LOG_FORMAT_JSON=true` to get the
+> request ID into the record, or reproduce the failure in isolation. Do not pick the nearest line
+> and carry on; record the ambiguity in the triage note instead.
 
 **Don't rely on `access.log` being pure access traffic.** Because
 `website/backend/logging_config.py` attaches all 5 file handlers to the root logger with no
@@ -215,18 +244,32 @@ already read; otherwise export them for the shell:
 # just that the keys exist — a `grep -c` presence test would say 1 and be wrong
 # (Codex review on #576):
 # Reports only whether each value is usable — never prints the value itself, so
-# this is safe to run in a recorded or shared terminal (Codex review on #576):
-for k in SESSION_SECRET INTERNAL_API_SECRET; do
-  v=$(grep -E "^\s*$k=" website/.env 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"' ")
-  case "$v" in
-    "")                 echo "$k: EMPTY — must be set" ;;
-    change-this-*|super-secret-*) echo "$k: PLACEHOLDER — must be replaced" ;;
-    *)                  echo "$k: looks set (${#v} chars)" ;;
-  esac
-done
-# Anything not "looks set" needs replacing. Generate real ones:
-export SESSION_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
-export INTERNAL_API_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+# this is safe to run in a recorded or shared terminal (Codex review on #576).
+# Parsed with python-dotenv, so quoting and inline comments are read the way the
+# backend reads them.
+venv/bin/python - <<'PY'
+from dotenv import dotenv_values
+
+vals = dotenv_values("website/.env")
+for k in ("SESSION_SECRET", "INTERNAL_API_SECRET"):
+    v = (vals.get(k) or "").strip()
+    if not v:
+        print(f"{k}: GENERATE  (empty)")
+    elif v.startswith(("change-this-", "super-secret-")):
+        print(f"{k}: GENERATE  (placeholder)")
+    else:
+        print(f"{k}: KEEP      (usable, {len(v)} chars)")
+PY
+
+# Export ONLY the keys the check marked GENERATE. Exporting both unconditionally would
+# REPLACE working credentials: main.py calls load_dotenv(override=False), so an exported
+# value wins over the file. That silently changes the session-signing key and the
+# internal-API credential for the replay process, turning an authenticated or internal-API
+# failure into an unrelated 401/403 instead of reaching the original handler — you'd be
+# debugging the repro harness, not the bug (Codex review on #576). Anything marked KEEP
+# must be left alone so .env supplies it.
+export SESSION_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"      # only if GENERATE
+export INTERNAL_API_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" # only if GENERATE
 export SESSION_HTTPS_ONLY=false     # local HTTP; otherwise TRUSTED_HOSTS is mandatory too
 
 # The documented local setup (docs/RUNBOOK_LOCAL_LINUX.md) creates a single venv/ at the repo
@@ -247,8 +290,35 @@ cd website && ../venv/bin/uvicorn backend.main:app --reload   # must run from we
 # connection/malformed URL/DNS failure collapses to a bare "000" with no
 # explanation of why nothing came back. -S keeps the diagnostic while still
 # suppressing the progress meter (Codex review on #576).
-curl -sS -w '\n%{http_code}\n' 'http://127.0.0.1:8000/api/proximity/prox-scores?<params-if-known>'
+#
+# -X "$METHOD" is not optional. curl defaults to GET, so replaying a captured
+# POST/PUT/PATCH/DELETE without it routes to a DIFFERENT handler — a failing
+# `POST /api/challenges` would be answered by the GET route (or 405), and the
+# replay reproduces nothing. Step 1 captures METHOD precisely so this step can
+# apply it (Codex review on #576).
+METHOD=GET   # from the captured request — do not assume
+URL='http://127.0.0.1:8000/api/proximity/prox-scores?<params-if-known>'
+
+curl -sS -X "$METHOD" -w '\n%{http_code}\n' "$URL"
 ```
+
+For a write (`POST`/`PUT`/`PATCH`), the method alone still isn't the request — the handler
+never reaches its own logic without the body and the headers that make it parse:
+
+```bash
+# Copy the payload from DevTools → Network → the failing request → Request Payload,
+# and match the Content-Type the browser actually sent. A JSON body posted without
+# this header is rejected by FastAPI's validation before the endpoint runs, so you'd
+# get a 422 that has nothing to do with the failure you're chasing.
+curl -sS -X POST \
+     -H 'Content-Type: application/json' \
+     -d '<exact request payload>' \
+     -w '\n%{http_code}\n' "$URL"
+```
+
+Endpoints behind `INTERNAL_API_SECRET` additionally need the header the middleware checks —
+without it the replay stops at 401 and never reaches the handler. Take the header name from
+the failing request rather than guessing it.
 
 Deliberately **not** `-o /dev/null`: a FastAPI validation error (bad/missing query param) is a
 handled response, not an exception — Step 2 already notes several 500 paths raise
