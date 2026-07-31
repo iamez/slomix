@@ -158,8 +158,31 @@ test('smoke: navigating away from skill-rating (React) to sessions (legacy) unmo
 
   const sessionsView = page.locator('#view-sessions');
   await expect(sessionsView, '#view-sessions should be visible after transition').toBeVisible();
-  const sessionsText = await sessionsView.innerText();
-  expect(sessionsText.trim().length, 'sessions view should hold real content after transition').toBeGreaterThan(0);
+
+  // Awaiting the response is NOT the same as awaiting the render, and asserting
+  // on #view-sessions text does not distinguish the two. waitForResponse()
+  // resolves on response HEADERS -- before fetchJSON() has read and parsed the
+  // body and before loadSessions() has written anything to the DOM -- and the
+  // .catch() above deliberately swallows the timeout, so "the loader never
+  // fired the request at all" arrives here looking identical to success.
+  //
+  // Neither case is caught by the view's own text, because the static markup
+  // already ships "Gaming Sessions" and "Loading sessions..."
+  // (website/index.html:1856), so .trim().length > 0 is true before any data
+  // exists. Poll the list itself until the placeholder is gone, which also
+  // gives a failing loader time to render its error instead of letting the
+  // console assertion below run first (Codex review on #582).
+  const sessionsList = sessionsView.locator('#sessions-list');
+  await expect(async () => {
+    const listText = await sessionsList.innerText();
+    expect(listText, 'sessions list should not still be showing its placeholder').not.toContain(
+      'Loading sessions...',
+    );
+    expect(
+      listText.trim().length,
+      'sessions list should hold rendered content after the transition',
+    ).toBeGreaterThan(0);
+  }).toPass({ timeout: 15_000 });
 
   // resetModernRouteHost() clears the React root's children on unmount.
   await expect(skillRatingRoot, 'React root should be unmounted (emptied) after navigating away').toBeEmpty();
