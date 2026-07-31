@@ -198,7 +198,9 @@ That is what this section originally got wrong. Matching `map_name` and `round_n
 
 The runtime re-linker gained a stale-fix path in the same wave (#566); the dev bot log shows it working, e.g. `lua_id=77 moved 999 → 42 (dist: 198966830s→30s, map=supply R1)`.
 
-**Caveat for this box:** migration 067 is **not recorded in `schema_migrations` on dev** — the zeroes above come from the runtime re-linker and the repair script, not from 067 having run. Check 067's state per environment before assuming the invariant is enforced there.
+**Migration 067 IS applied on dev**, recorded `success=true` at 2026-07-29 08:19:44, alongside `068_add_relinker_unlinked_indexes.sql`. `apply_migrations.py --validate` reports `Applied: 70, Failed: 0, Pending: 0, Checksum mismatches: 0 — CLEAN`.
+
+> **Correction (2026-07-31).** An earlier revision of this section claimed 067 was *not* recorded on dev, and attributed the zero counts to the runtime re-linker alone. That was wrong, and the cause is worth recording because it is silent: the check used `WHERE filename LIKE '06[78]%'`. **PostgreSQL `LIKE` has no bracket character classes** — `[`, `7`, `8`, `]` are matched literally — so the query returned zero rows and looked like a clean negative result rather than a malformed pattern. Use `LIKE '067%' OR LIKE '068%'`, or `~ '^06[78]'` for a real regex.
 
 **The open question from 2026-07-27 — whether the cause was still active — is answered:** no new mislinks in the four days since, and the most recent remains 2026-07-19.
 
@@ -310,7 +312,7 @@ Separate PRs; the causes are unrelated and bundling them would mix risks. No mer
 Originally measured 2026-07-27 against `etlegacy` on `127.0.0.1:5432` and the service on `127.0.0.1:8000`. **Re-verified 2026-07-31** against the same database and service, now on Python 3.13.14:
 
 - N1 re-check: `curl` on the default, `?category=power` and `?category=crossfire` — all 200; `Proximity.tsx:1499` read for the actual initial tab
-- N2 re-check: the anomaly service's own two queries re-run verbatim — both 0; `schema_migrations` queried for 067/068; `migrations/067_repair_lua_round_links.sql` read on `origin/main`
+- N2 re-check: the anomaly service's own two queries re-run verbatim — both 0; `migrations/067_repair_lua_round_links.sql` read on `origin/main`; `schema_migrations` queried for 067/068 (re-done 2026-07-31 after the first attempt used an invalid `LIKE '06[78]%'` pattern — see the correction above) and cross-checked against `apply_migrations.py --validate`
 - N3 re-check: subquery legs counted by parsing `tables_with_round_number` out of `relinker_mixin.py` — 24 tables → 50 legs, 25 of them null legs
 
 Original measurements:
