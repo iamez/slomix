@@ -206,3 +206,25 @@ def test_exact_volume_does_not_trust_unvalidated_model_bounds():
 
     assert not volume.model.origin_translated_bounds.contains((1.5, 0.0, 0.0))
     assert volume.contains_point((1.5, 0.0, 0.0))
+
+
+def test_full_turn_objective_angles_are_equivalent_to_no_rotation():
+    bsp = _synthetic_bsp(
+        (
+            {
+                "classname": "trigger_objective_info",
+                "model": "*1",
+                "angle": "360",
+            },
+            {
+                "classname": "trigger_objective_info",
+                "model": "*1",
+                "angles": "0 -360 720",
+            },
+        )
+    )
+
+    catalog = extract_entity_catalog(bsp, "test_map")
+
+    assert len(catalog.objective_volumes) == 2
+    assert all(volume.contains_point((0.0, 0.0, 0.0)) for volume in catalog.objective_volumes)
