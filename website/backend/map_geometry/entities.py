@@ -464,7 +464,7 @@ def _extract_collision_entity(
 def extract_entity_catalog(bsp: BspFile, map_name: str) -> MapEntityCatalog:
     """Extract W3 entities from one already validated BSP."""
 
-    normalised_map_name = map_name.strip().casefold()
+    normalised_map_name = map_name.strip().casefold().removesuffix(".bsp")
     if not normalised_map_name or "/" in normalised_map_name or "\\" in normalised_map_name:
         raise ValueError(f"invalid ET map name: {map_name!r}")
 
@@ -495,7 +495,11 @@ def extract_entity_catalog(bsp: BspFile, map_name: str) -> MapEntityCatalog:
 
 
 def entity_catalog_manifest(catalog: MapEntityCatalog) -> dict:
-    """Return a deterministic JSON-compatible W3 publication."""
+    """Return a JSON-compatible W3 publication with raw BSP provenance.
+
+    Callers producing cross-machine hashes must replace ``bsp_source`` with a
+    stable path relative to the indexed asset root, as the W3 analyzer does.
+    """
 
     def vector(value: Vector3) -> list[float]:
         return list(value)

@@ -21,18 +21,18 @@ from website.backend.map_geometry import (
 
 
 class _Index:
-    etmain_dir = Path("/maps")
     map_names = ("covered",)
 
-    def __init__(self, bsp):
+    def __init__(self, bsp, etmain_dir=Path("/maps")):
         self.bsp = bsp
+        self.etmain_dir = etmain_dir
 
     def resolve(self, map_name):
         if map_name == "covered":
             provider = MapAssetProvider(
                 map_name="covered",
                 asset_kind=MapAssetKind.BSP,
-                pk3_path=Path("/maps/covered.pk3"),
+                pk3_path=self.etmain_dir / "covered.pk3",
                 member="maps/covered.bsp",
                 member_index=0,
                 size=123,
@@ -124,3 +124,11 @@ def test_build_inventory_marks_missing_geometry_null_and_hashes_content():
         ensure_ascii=True,
     ).encode("ascii")
     assert manifest == hashlib.sha256(encoded).hexdigest()
+
+
+def test_content_hash_excludes_machine_specific_asset_root():
+    first = build_inventory(_Index(_bsp(), Path("/first/etmain")))  # type: ignore[arg-type]
+    second = build_inventory(_Index(_bsp(), Path("/second/etmain")))  # type: ignore[arg-type]
+
+    assert first["etmain_dir"] != second["etmain_dir"]
+    assert first["content_manifest_sha256"] == second["content_manifest_sha256"]
