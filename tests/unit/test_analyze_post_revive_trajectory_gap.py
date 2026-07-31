@@ -50,7 +50,13 @@ def _capture(
 ) -> RawCapture:
     path = tmp_path / f"{identity.round_start_unix}_engagements.txt"
     path.write_text("fixture\n", encoding="utf-8")
-    return RawCapture(path, identity, 6, tracks, revives, outcomes, ("KILL_OUTCOME",))
+    sections = ["PLAYER_TRACKS"]
+    if revives:
+        sections.append("REVIVES")
+    # Synthetic captures model a later non-revived outcome row even when the
+    # focused fixture does not need to represent it as RevivedOutcome.
+    sections.append("KILL_OUTCOME")
+    return RawCapture(path, identity, 6, tracks, revives, outcomes, tuple(sections))
 
 
 def test_measures_gap_until_next_normal_spawn_and_cross_checks_subset(tmp_path):
