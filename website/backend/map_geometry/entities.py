@@ -1,8 +1,9 @@
 """Typed W3 extraction from an ET BSP entity lump.
 
 Objective geometry is retained as the exact union of convex BSP brushes. The
-model AABB is useful provenance and broad-phase data, but it is not substituted
-for the brush planes. Dynamic entity state is deliberately not inferred here.
+model AABB is retained as provenance, but it is not substituted for or allowed
+to reject the brush-plane result. Dynamic entity state is deliberately not
+inferred here.
 """
 
 from __future__ import annotations
@@ -145,8 +146,6 @@ class ObjectiveVolume:
     def contains_point(self, point: Vector3, *, epsilon: float = 1e-6) -> bool:
         """Return exact point containment in the union of entity brushes."""
 
-        if not self.model.origin_translated_bounds.contains(point, epsilon=epsilon):
-            return False
         return any(brush.contains(point, epsilon=epsilon) for brush in self.brushes)
 
 

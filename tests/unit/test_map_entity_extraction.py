@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from website.backend.map_geometry import (
@@ -189,3 +191,18 @@ def test_geometry_map_without_objective_trigger_has_no_measured_volume():
 
     assert catalog.objective_markers
     assert catalog.objective_volumes == ()
+
+
+def test_exact_volume_does_not_trust_unvalidated_model_bounds():
+    bsp = _synthetic_bsp(({"classname": "trigger_objective_info", "model": "*1"},))
+    narrow_model = replace(
+        bsp.models[1],
+        mins=(-1.0, -1.0, -1.0),
+        maxs=(1.0, 1.0, 1.0),
+    )
+    bsp = replace(bsp, models=(bsp.models[0], narrow_model))
+
+    volume = extract_entity_catalog(bsp, "test_map").objective_volumes[0]
+
+    assert not volume.model.origin_translated_bounds.contains((1.5, 0.0, 0.0))
+    assert volume.contains_point((1.5, 0.0, 0.0))
