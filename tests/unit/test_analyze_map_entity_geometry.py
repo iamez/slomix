@@ -132,3 +132,21 @@ def test_content_hash_excludes_machine_specific_asset_root():
 
     assert first["etmain_dir"] != second["etmain_dir"]
     assert first["content_manifest_sha256"] == second["content_manifest_sha256"]
+
+
+def test_explicit_empty_map_scope_does_not_expand_to_every_indexed_map():
+    result = build_inventory(_Index(_bsp()), [])  # type: ignore[arg-type]
+
+    assert result["maps"] == {}
+    assert result["summary"] == {
+        "requested_maps": 0,
+        "status_counts": {
+            "measured": 0,
+            "no_geometry": 0,
+            "ambiguous_geometry": 0,
+        },
+        "spawn_points": 0,
+        "objective_volumes": 0,
+        "objective_markers": 0,
+        "collision_entities": 0,
+    }
