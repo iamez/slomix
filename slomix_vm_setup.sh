@@ -1004,18 +1004,36 @@ info "  sudo systemctl start slomix-bot slomix-web"
 # Logrotate — prevent logs from filling the disk
 # ===========================================================================
 info "Configuring logrotate for application logs"
-cat > /etc/logrotate.d/slomix <<EOF
-${APP_DIR}/logs/*.log ${APP_DIR}/website/logs/*.log {
-    daily
-    missingok
-    rotate 14
-    compress
-    delaycompress
-    notifempty
-    create 0640 ${BOT_USER} ${SLX_GROUP}
-    sharedscripts
-}
-EOF
+# Template lives in deploy/logrotate/slomix.template so it stays diffable
+# and lintable outside this heredoc; substitute the same vars used above.
+#
+# Prefer $APP_DIR: by this point in Phase 1 the repo has already been
+# cloned there (see the git clone above), which is the only location
+# guaranteed to hold it when this script was bootstrapped standalone (e.g.
+# copied to /tmp and run before the clone existed at BASH_SOURCE's own
+# directory) — Codex review on #568. Fall back to BASH_SOURCE's directory
+# for local/dev runs from within a full checkout.
+if [[ -f "${APP_DIR}/deploy/logrotate/slomix.template" ]]; then
+  LOGROTATE_TEMPLATE="${APP_DIR}/deploy/logrotate/slomix.template"
+else
+  LOGROTATE_TEMPLATE="$(dirname "${BASH_SOURCE[0]}")/deploy/logrotate/slomix.template"
+fi
+if [[ ! -f "${LOGROTATE_TEMPLATE}" ]]; then
+  error "logrotate template not found (checked ${APP_DIR}/deploy/logrotate/slomix.template and ${LOGROTATE_TEMPLATE})"
+fi
+# Write to a temp file first, then move into place — a direct `sed ... >
+# /etc/logrotate.d/slomix` truncates the destination immediately on open,
+# so a sed failure after that point would leave an empty/partial rule
+# silently in place on a production box (Copilot review on #568).
+LOGROTATE_TMP="$(mktemp)"
+sed \
+  -e "s|\${APP_DIR}|${APP_DIR}|g" \
+  -e "s|\${BOT_USER}|${BOT_USER}|g" \
+  -e "s|\${WEB_USER}|${WEB_USER}|g" \
+  -e "s|\${SLX_GROUP}|${SLX_GROUP}|g" \
+  "${LOGROTATE_TEMPLATE}" > "${LOGROTATE_TMP}"
+install -m 0644 "${LOGROTATE_TMP}" /etc/logrotate.d/slomix
+rm -f "${LOGROTATE_TMP}"
 
 # ===========================================================================
 # Cloudflare Tunnel — install binary + create system user (config in Phase 3)
