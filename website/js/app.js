@@ -11,6 +11,7 @@
 // ============================================================================
 
 import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js?v=20260513-v142-cf-bust';
+import { installErrorReporting } from './error-reporting.js';
 import { checkLoginStatus, initSearchListeners, setLoadPlayerProfile } from './auth.js';
 import { initLivePolling, initLiveStatusPolling, updateLiveSession } from './live-status.js';
 import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchDetails } from './player-profile.js?v=20260608-aimv2';
@@ -55,6 +56,10 @@ import { loadRetroVizView } from './retro-viz.js?v=20260513-v142-cf-bust';
 import { loadSessions2View } from './sessions2.js?v=20260513-v142-cf-bust';
 import { loadSessionDetailView } from './session-detail.js?v=20260720-ssd-gsid';
 import { initMobileNav } from './mobile-nav.js';
+
+// Install as early as possible so it also catches errors thrown while the
+// other modules above finish loading/initializing, not just after initApp().
+installErrorReporting();
 
 // ============================================================================
 // NAVIGATION

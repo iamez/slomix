@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { reportCaughtError } from '../lib/errorReporting';
 
 interface Props {
   children: ReactNode;
@@ -36,6 +37,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error(`[ErrorBoundary] ${this.props.viewId ?? 'unknown'}:`, error, errorInfo);
+    // componentDidCatch handles render/lifecycle/lazy-chunk failures without
+    // rethrowing as a window 'error' event, so without this call the global
+    // listeners in errorReporting.ts never see the most common fatal-UI
+    // failure class on modern pages (Codex P1 review on #578).
+    reportCaughtError(error, `${this.props.viewId ?? 'unknown'}${errorInfo.componentStack ?? ''}`);
     if (isChunkLoadError(error)) {
       try {
         const KEY = 'modern-chunk-reload-at';

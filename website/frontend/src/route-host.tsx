@@ -4,7 +4,10 @@ import { lazy, Suspense } from 'react';
 import type { ModernRouteContext } from './runtime/catalog';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Skeleton } from './components/Skeleton';
+import { installErrorReporting } from './lib/errorReporting';
 import './styles/tailwind.css';
+
+installErrorReporting();
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },

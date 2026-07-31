@@ -52,9 +52,21 @@ def test_setup_logging_leaves_dir_and_files_group_writable(tmp_path, monkeypatch
             "user can traverse/create files in it"
         )
 
-        for config in logging_config.LOG_FILES.values():
+        for name, config in logging_config.LOG_FILES.items():
             log_file = tmp_path / config["filename"]
             assert log_file.exists()
+            if name == "client_error":
+                # Deliberately NOT group-writable: client_errors.log has a
+                # single writer (the web process), so it gets the owner-only
+                # handler rather than the shared bot/web treatment. Asserted
+                # here so the two rules stay explicit rather than one silently
+                # loosening the other. See test_client_error_log_permissions.py
+                # for its rollover behaviour.
+                assert _mode(log_file) == 0o600, (
+                    "client_errors.log must stay owner-only (0600) — it is not "
+                    "one of the files the bot and web services share"
+                )
+                continue
             assert _mode(log_file) == 0o660, (
                 f"{config['filename']} must be owner+group rw (0660), "
                 "not group-read-only (0640)"
