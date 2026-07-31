@@ -65,10 +65,7 @@ class Bounds3D:
         )
 
     def contains(self, point: Vector3, *, epsilon: float = 1e-6) -> bool:
-        return all(
-            self.mins[index] - epsilon <= point[index] <= self.maxs[index] + epsilon
-            for index in range(3)
-        )
+        return all(self.mins[index] - epsilon <= point[index] <= self.maxs[index] + epsilon for index in range(3))
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,9 +90,7 @@ class ConvexBrushVolume:
     planes: tuple[VolumePlane, ...]
 
     def contains(self, point: Vector3, *, epsilon: float = 1e-6) -> bool:
-        return bool(self.planes) and all(
-            plane.contains(point, epsilon=epsilon) for plane in self.planes
-        )
+        return bool(self.planes) and all(plane.contains(point, epsilon=epsilon) for plane in self.planes)
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,8 +251,7 @@ def _parse_vector(
     if len(pieces) != 3:
         raise _error(bsp, entity_index, classname, f"{key} must contain three coordinates: {raw!r}")
     return tuple(
-        _parse_float(bsp, entity_index, classname, f"{key}[{index}]", piece)
-        for index, piece in enumerate(pieces)
+        _parse_float(bsp, entity_index, classname, f"{key}[{index}]", piece) for index, piece in enumerate(pieces)
     )
 
 
@@ -304,10 +298,7 @@ def _inline_model(
     origin = _parse_vector(bsp, entity_index, entity, "origin", required=False)
     model = bsp.models[model_index]
     local_bounds = Bounds3D(model.mins, model.maxs)
-    if any(
-        not math.isfinite(value)
-        for value in (*local_bounds.mins, *local_bounds.maxs)
-    ):
+    if any(not math.isfinite(value) for value in (*local_bounds.mins, *local_bounds.maxs)):
         raise _error(bsp, entity_index, classname, "inline model bounds are not finite")
     if any(local_bounds.mins[index] >= local_bounds.maxs[index] for index in range(3)):
         raise _error(bsp, entity_index, classname, "inline model has empty or inverted bounds")
@@ -350,9 +341,7 @@ def _brush_volume(
                 classname,
                 f"brush {brush_index} plane {plane_index} is not finite",
             )
-        translated_distance = plane.distance + sum(
-            plane.normal[index] * origin[index] for index in range(3)
-        )
+        translated_distance = plane.distance + sum(plane.normal[index] * origin[index] for index in range(3))
         planes.append(
             VolumePlane(
                 source_plane_index=plane_index,
@@ -399,14 +388,8 @@ def _extract_objective_volume(
 ) -> ObjectiveVolume:
     classname = entity["classname"]
     angle = _parse_optional_float(bsp, entity_index, entity, "angle")
-    angles = (
-        _parse_vector(bsp, entity_index, entity, "angles", required=False)
-        if "angles" in entity
-        else None
-    )
-    if (angle is not None and angle != 0.0) or (
-        angles is not None and any(value != 0.0 for value in angles)
-    ):
+    angles = _parse_vector(bsp, entity_index, entity, "angles", required=False) if "angles" in entity else None
+    if (angle is not None and angle != 0.0) or (angles is not None and any(value != 0.0 for value in angles)):
         raise _error(
             bsp,
             entity_index,
@@ -418,8 +401,7 @@ def _extract_objective_volume(
     if not model.brush_indices:
         raise _error(bsp, entity_index, classname, "objective inline model has no brushes")
     brushes = tuple(
-        _brush_volume(bsp, entity_index, classname, brush_index, model.origin)
-        for brush_index in model.brush_indices
+        _brush_volume(bsp, entity_index, classname, brush_index, model.origin) for brush_index in model.brush_indices
     )
     return ObjectiveVolume(
         entity_index=entity_index,
@@ -462,11 +444,7 @@ def _extract_collision_entity(
     entity: dict[str, str],
 ) -> CollisionBrushEntity:
     classname = entity["classname"]
-    angles = (
-        _parse_vector(bsp, entity_index, entity, "angles", required=False)
-        if "angles" in entity
-        else None
-    )
+    angles = _parse_vector(bsp, entity_index, entity, "angles", required=False) if "angles" in entity else None
     return CollisionBrushEntity(
         entity_index=entity_index,
         classname=classname,
