@@ -32,6 +32,16 @@ class GroupWritableRotatingFileHandler(logging.handlers.RotatingFileHandler):
 
     def _fix_permissions(self) -> None:
         try:
+            # SUPPRESSION (py/overly-permissive-file). Group-write is the fix,
+            # not the defect: 0640 left the non-owning service read-only on a
+            # shared log and crash-looped the bot twice (2026-07-13,
+            # 2026-07-22). The group is the private `slomix` service group from
+            # slomix_vm_setup.sh, not a world grant, and the directory stays
+            # 0770. Owner: iamez. Re-evaluate if bot and web ever stop sharing
+            # a log file, at which point this whole handler should be deleted
+            # rather than the mode narrowed. Bandit's B103 is suppressed on the
+            # same line; CodeQL does not honour `# nosec`, hence both.
+            # codeql[py/overly-permissive-file]
             os.chmod(self.baseFilename, 0o660)  # nosec B103 - group-write is intentional, see class docstring
         except OSError:
             # Best-effort by design: chmod can fail because the file is owned

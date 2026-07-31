@@ -209,6 +209,14 @@ class GroupWritableRotatingFileHandler(logging.handlers.RotatingFileHandler):
     def doRollover(self) -> None:  # noqa: N802 - overriding stdlib's camelCase method name
         super().doRollover()
         try:
+            # SUPPRESSION (py/overly-permissive-file) — see the identical note
+            # in bot/logging_config.py. Group-write is the fix, not the defect:
+            # 0640 crash-looped the bot twice on a log both services share. The
+            # group is the private `slomix` service group, the directory stays
+            # 0770, and the alternative is losing the guarantee on every
+            # rollover — which is the exact regression review caught here once
+            # already. Owner: iamez.
+            # codeql[py/overly-permissive-file]
             os.chmod(self.baseFilename, 0o660)  # nosec B103 - group-write is intentional, see setup_logging()
         except OSError:
             # Best-effort by design: chmod can fail because the file is owned by
@@ -290,6 +298,11 @@ def setup_logging(
         log_file = LOG_DIR / config["filename"]
         if log_file.exists():
             try:
+                # SUPPRESSION (py/overly-permissive-file). Intentional per the
+                # comment directly above: 0640 is what caused the 2026-07-13
+                # and 2026-07-22 incidents. Group is the private `slomix`
+                # service group; the directory is 0770. Owner: iamez.
+                # codeql[py/overly-permissive-file]
                 os.chmod(log_file, 0o660)  # nosec B103 - group-write is intentional here, see comment above
             except OSError:
                 # Best-effort by design (same reasoning as the rollover handlers

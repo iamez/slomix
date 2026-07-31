@@ -142,7 +142,14 @@ ignore = [
 "vps_scripts/*" = ["T201"]
 "website/extract_game_assets.py" = ["T201"]
 "website/backend/main.py" = ["S104", "S105"]  # S104: 0.0.0.0 behind reverse proxy; S105: validation check, not hardcoded
-"website/backend/logging_config.py" = ["S103"]  # 0o750 is intentionally restrictive
+# S103: the 0o770 log DIRECTORY mode. Group-write is deliberate — the bot and
+# web services run as different users in the private `slomix` group and share
+# log files; 0640/0750 crash-looped the bot twice (2026-07-13, 2026-07-22).
+# The file-level 0o660 chmods carry inline `# nosec B103` plus
+# `# codeql[py/overly-permissive-file]` markers instead. (The previous comment
+# here said "0o750 is intentionally restrictive", which stopped being true when
+# that mode changed.)
+"website/backend/logging_config.py" = ["S103"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["bot", "website", "proximity"]

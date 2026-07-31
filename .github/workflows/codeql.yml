@@ -47,8 +47,39 @@ jobs:
         pip install -r requirements.txt
 
     - name: Perform CodeQL Analysis
+      id: analyze
       uses: github/codeql-action/analyze@9e907b5e64f6b83e7804b09294d44122997950d6 # v4
       with:
         category: "/language:${{ matrix.language }}"
         upload: true
-        wait-for-processing: false
+        # dismiss-alerts below needs the uploaded SARIF to be processed before
+        # it can act on the alerts, so this can no longer be false.
+        wait-for-processing: true
+        output: sarif-results
+
+    # Turns `# codeql[<rule-id>]` source comments into actual dismissals.
+    #
+    # Some findings are intentional and cannot be "fixed" without undoing the
+    # thing they flag — the 0o660 log modes in bot/logging_config.py and
+    # website/backend/logging_config.py are group-writable ON PURPOSE, because
+    # 0640 crash-looped the bot twice on a log file the two services share.
+    # CodeQL does not honour `# nosec`, and a `query-filters` exclusion is NOT
+    # path-scopable, so it would blind py/overly-permissive-file across the
+    # whole repository including genuine future findings elsewhere.
+    #
+    # CodeQL's own alert-suppression queries tag such results in the SARIF's
+    # `suppressions[]`; this action reads that and dismisses the matching
+    # alerts. The justification therefore lives next to the code it excuses,
+    # gets reviewed in the PR that introduces it, and disappears when the
+    # comment does — none of which is true of a dismissal clicked in the UI.
+    #
+    # Default branch only: dismissal is a global property of an alert, so
+    # running this from a feature branch would dismiss repo-wide.
+    - name: Dismiss alerts suppressed in source
+      if: github.ref == 'refs/heads/main'
+      uses: advanced-security/dismiss-alerts@a18f986bdb40edba0dd7a74382c15d4a3d50a1c8 # v2.0.3
+      with:
+        sarif-id: ${{ steps.analyze.outputs.sarif-id }}
+        sarif-file: sarif-results/${{ matrix.language }}.sarif
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
