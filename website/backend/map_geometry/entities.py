@@ -388,7 +388,9 @@ def _extract_objective_volume(
     classname = entity["classname"]
     angle = _parse_optional_float(bsp, entity_index, entity, "angle")
     angles = _parse_vector(bsp, entity_index, entity, "angles", required=False) if "angles" in entity else None
-    if (angle is not None and angle != 0.0) or (angles is not None and any(value != 0.0 for value in angles)):
+    if (angle is not None and angle % 360.0 != 0.0) or (
+        angles is not None and any(value % 360.0 != 0.0 for value in angles)
+    ):
         raise _error(
             bsp,
             entity_index,
