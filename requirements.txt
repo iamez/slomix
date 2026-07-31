@@ -15,7 +15,7 @@ uvicorn[standard]==0.41.0
 httpx==0.28.1
 python-multipart==0.0.31
 aiofiles==25.1.0
-paramiko==4.0.0
+paramiko==5.0.0
 scp==0.15.0
 websockets==16.0
 Pillow==12.3.0
