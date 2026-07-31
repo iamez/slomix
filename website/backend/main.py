@@ -4,7 +4,9 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -50,6 +52,7 @@ from website.backend.security_utils import (
     csrf_allowed_origins,
     resolve_trusted_hosts,
     routed_path,
+    strip_surrogates,
 )
 
 # Configure logging from environment
@@ -73,6 +76,7 @@ from website.backend.routers import (
     availability,
     bets_router,
     challenges_router,
+    client_error_router,
     diagnostics_router,
     greatshot,
     greatshot_topshots,
@@ -156,6 +160,29 @@ app = FastAPI(
 if HAS_SLOWAPI:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """422 for invalid input — including input FastAPI's own handler can't render.
+
+    Pydantic v2 rejects a lone surrogate with `string_unicode`, and the stock
+    `request_validation_exception_handler` echoes the offending value back in
+    `detail`. `JSONResponse.render()` then does `.encode("utf-8")`, which cannot
+    encode a surrogate, so the 422 handler itself raises UnicodeEncodeError and
+    the request 500s.
+
+    `{"message": "\\ud800"}` is valid JSON, and a browser's `JSON.stringify()`
+    emits exactly that for a JS string holding an unpaired surrogate — so any
+    public endpoint taking a string body could be made to return 500 by a
+    one-line request. Registered app-wide rather than on one router because the
+    defect is in rendering attacker input, not in any single route (Codex review
+    on #578, which reported the symptom at the client-error endpoint).
+    """
+    return JSONResponse(
+        status_code=422,
+        content={"detail": strip_surrogates(jsonable_encoder(exc.errors()))},
+    )
 
 # CORS Middleware - must be added before other middleware
 app.add_middleware(
@@ -286,6 +313,7 @@ app.include_router(uploads.router, prefix="/api/uploads", tags=["Uploads"])
 app.include_router(availability.router, prefix="/api/availability", tags=["Availability"])
 app.include_router(planning.router, prefix="/api/planning", tags=["Planning"])
 app.include_router(challenges_router.router, prefix="/api", tags=["Challenges"])
+app.include_router(client_error_router.router, prefix="/api", tags=["Client Errors"])
 app.include_router(season_awards_router.router, prefix="/api", tags=["Season Awards"])
 app.include_router(bets_router.router, prefix="/api/bets", tags=["Parimutuel"])
 app.include_router(proximity_router.router, prefix="/api", tags=["Proximity"])

@@ -60,6 +60,21 @@ LOG_FILES = {
         "max_bytes": 20 * 1024 * 1024,  # 20 MB
         "backup_count": 7,
     },
+    "client_error": {
+        # Deliberately in a SUBDIRECTORY, not alongside the other five. The VM's
+        # logrotate rule globs `${APP_DIR}/logs/*.log` (slomix_vm_setup.sh:
+        # 1008-1016) and recreates each rotated file as `0640 ${BOT_USER}`.
+        # That glob doesn't recurse, so nesting keeps this file out of it —
+        # which matters because it's the one log that must stay 0600 and
+        # web-owned: an external rotate would hand it to the bot user at 0640,
+        # and the web process would go on writing to the renamed inode until
+        # its own size-based rollover (Codex review on #578). Rotation here is
+        # handled entirely by OwnerOnlyRotatingFileHandler.
+        "filename": "client/client_errors.log",
+        "level": logging.WARNING,
+        "max_bytes": 10 * 1024 * 1024,  # 10 MB
+        "backup_count": 5,
+    },
 }
 
 # Patterns to redact from logs (security)
@@ -228,6 +243,36 @@ class GroupWritableRotatingFileHandler(logging.handlers.RotatingFileHandler):
             pass
 
 
+class OwnerOnlyRotatingFileHandler(logging.handlers.RotatingFileHandler):
+    """RotatingFileHandler that keeps its file at 0600 across rollover.
+
+    The owner-only counterpart to GroupWritableRotatingFileHandler above, for
+    files with exactly one writer — unlike the shared bot/web files in
+    setup_logging()'s main loop, which need 0660. Same underlying bug in both
+    directions: a chmod applied once at setup time does not survive
+    doRollover() opening a fresh file under the process umask (Codex review on
+    #578, following the #568 fix for the group-writable case).
+    """
+
+    def fix_permissions(self) -> None:
+        try:
+            # No CodeQL suppression here, unlike the 0o660 handler above: 0600
+            # is owner-only and py/overly-permissive-file does not fire on it.
+            # (An earlier revision carried an `# lgtm[...]` marker; that form is
+            # not honoured by code scanning and did nothing, so it is dropped
+            # rather than left as decoration.)
+            os.chmod(self.baseFilename, 0o600)  # nosec B103 - owner-only, deliberately restrictive
+        except OSError:
+            # Best-effort, same reasoning as the group-writable handler: some
+            # filesystems don't support POSIX modes, and raising here would
+            # break rollover to fix a permission nicety.
+            pass
+
+    def doRollover(self) -> None:  # noqa: N802 - overriding stdlib's camelCase method name
+        super().doRollover()
+        self.fix_permissions()
+
+
 # =============================================================================
 # Logger Setup
 # =============================================================================
@@ -278,8 +323,22 @@ def setup_logging(
     # Select formatter
     file_formatter = JSONFormatter() if json_logs else StandardFormatter()
 
-    # Setup file handlers
-    for config in LOG_FILES.values():
+    # Setup file handlers. "client_error" is deliberately excluded from this
+    # loop: every handler here attaches to the root logger with no
+    # logger-name filter, so (pre-existing behavior, not changed here) each
+    # of these files ends up catching every INFO+ message from the whole
+    # process, not just messages that match its own name. That's tolerable
+    # for the existing five (general operational logs), but client_errors.log
+    # needs to be genuinely dedicated to client error reports — see below.
+    #
+    # GroupWritableRotatingFileHandler (not the stdlib class) because these
+    # five ARE the shared bot/web files: the 0660 mode has to be re-applied on
+    # every rollover or the non-owning service loses write access to a fresh
+    # file, which is what crash-looped the bot twice (#568). client_errors.log
+    # is excluded here and gets the owner-only handler below instead.
+    for name, config in LOG_FILES.items():
+        if name == "client_error":
+            continue
         handler = GroupWritableRotatingFileHandler(
             filename=LOG_DIR / config["filename"],
             maxBytes=config["max_bytes"],
@@ -312,6 +371,43 @@ def setup_logging(
                 pass
 
         root_logger.addHandler(handler)
+
+    # client_error: attached only to the "client_error"-named logger, with
+    # propagate=False, so this file holds *only* client error reports — not
+    # every other log message in the process the way the loop above behaves
+    # for the other five files.
+    client_error_config = LOG_FILES["client_error"]
+    client_error_path = LOG_DIR / client_error_config["filename"]
+    client_error_path.parent.mkdir(parents=True, exist_ok=True)
+    client_error_handler = OwnerOnlyRotatingFileHandler(
+        filename=client_error_path,
+        maxBytes=client_error_config["max_bytes"],
+        backupCount=client_error_config["backup_count"],
+        encoding="utf-8",
+    )
+    client_error_handler.setLevel(client_error_config["level"])
+    client_error_handler.setFormatter(file_formatter)
+    client_error_handler.addFilter(security_filter)
+    client_error_handler.fix_permissions()
+    client_error_logger = logging.getLogger("client_error")
+    client_error_logger.handlers.clear()
+    client_error_logger.propagate = False
+    client_error_logger.setLevel(client_error_config["level"])
+    client_error_logger.addHandler(client_error_handler)
+    if console_output:
+        # propagate=False means this logger's records never reach the root
+        # logger's own console handler set up below. In the Docker deployment
+        # the API container has no persistent log volume and container
+        # logging only captures stdout/stderr, so without this, client error
+        # reports were reachable ONLY at /app/logs/client_errors.log — absent
+        # from `docker logs` and permanently lost the moment the container is
+        # replaced, which is exactly when an operator would go looking
+        # (Codex P2 review on #578).
+        client_error_console_handler = logging.StreamHandler(sys.stdout)
+        client_error_console_handler.setLevel(client_error_config["level"])
+        client_error_console_handler.setFormatter(ColoredFormatter())
+        client_error_console_handler.addFilter(security_filter)
+        client_error_logger.addHandler(client_error_console_handler)
 
     # Console handler
     if console_output:
@@ -349,6 +445,11 @@ def get_access_logger() -> logging.Logger:
 def get_app_logger(name: str = "app") -> logging.Logger:
     """Get logger for application events."""
     return logging.getLogger(name)
+
+
+def get_client_error_logger() -> logging.Logger:
+    """Get logger for browser-reported client errors (logs/client_errors.log)."""
+    return logging.getLogger("client_error")
 
 
 # =============================================================================

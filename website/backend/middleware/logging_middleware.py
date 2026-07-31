@@ -9,9 +9,7 @@ Logs all HTTP requests/responses with:
 - Error tracking
 """
 
-import ipaddress
 import logging
-import os
 import re
 import time
 import uuid
@@ -23,7 +21,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from website.backend.logging_config import get_access_logger, get_security_logger
-from website.backend.security_utils import routed_path
+from website.backend.security_utils import get_trusted_client_ip, routed_path
 
 access_logger = get_access_logger()
 security_logger = get_security_logger()
@@ -80,14 +78,6 @@ def _log_safe(value: str) -> str:
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Middleware for comprehensive request/response logging."""
-
-    _DEFAULT_TRUSTED_PROXIES = "127.0.0.1,::1"
-
-    def __init__(self, app):
-        super().__init__(app)
-        self._trusted_proxy_networks, self._trusted_proxy_hosts = self._load_trusted_proxies(
-            os.getenv("RATE_LIMIT_TRUSTED_PROXIES", self._DEFAULT_TRUSTED_PROXIES)
-        )
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Generate unique request ID
@@ -187,73 +177,22 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         return response
 
     def _get_client_ip(self, request: Request) -> str:
+        """Real client IP, honouring X-Forwarded-For only from a trusted proxy.
+
+        Delegates to the shared implementation in security_utils rather than
+        keeping a second copy: this middleware's own version resolved the
+        forwarded chain LEFT to right, and the leftmost entry is exactly what
+        the client sent (nginx's `$proxy_add_x_forwarded_for` appends rather
+        than replaces). That was harmless while only loopback was trusted, but
+        adding the compose network to RATE_LIMIT_TRUSTED_PROXIES — which the
+        Docker deployment needs so visitors don't share one rate-limit bucket —
+        would have made every access.log and security.log line record a
+        client-controlled address (Codex review on #578). Both readers of that
+        env var now share one spoof-resistant parser.
         """
-        Extract real client IP, accounting for trusted reverse proxies only.
-        """
-        direct_client = request.client.host if request.client else "unknown"
-        if not self._is_trusted_proxy(direct_client):
-            return direct_client
-
-        if forwarded := request.headers.get("x-forwarded-for"):
-            for candidate in forwarded.split(","):
-                normalized = self._normalize_forwarded_ip(candidate)
-                if normalized:
-                    return normalized
-
-        if real_ip := request.headers.get("x-real-ip"):
-            normalized = self._normalize_forwarded_ip(real_ip)
-            if normalized:
-                return normalized
-
-        return direct_client
-
-    @staticmethod
-    def _load_trusted_proxies(
-        raw_value: str,
-    ) -> tuple[tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...], tuple[str, ...]]:
-        networks = []
-        hosts = []
-        for raw_entry in raw_value.split(","):
-            entry = raw_entry.strip()
-            if not entry:
-                continue
-            try:
-                if "/" in entry:
-                    networks.append(ipaddress.ip_network(entry, strict=False))
-                else:
-                    ip = ipaddress.ip_address(entry)
-                    prefix = 32 if ip.version == 4 else 128
-                    networks.append(ipaddress.ip_network(f"{entry}/{prefix}", strict=False))
-                continue
-            except ValueError:
-                hosts.append(entry.lower())
-        return tuple(networks), tuple(hosts)
-
-    @staticmethod
-    def _normalize_forwarded_ip(raw_value: str | None) -> str:
-        if not raw_value:
-            return ""
-        value = raw_value.strip().strip("\"")
-        if not value or value.lower() == "unknown":
-            return ""
-        if value.startswith("[") and "]" in value:
-            return value[1 : value.index("]")]
-        if value.count(":") == 1:
-            host, port = value.rsplit(":", 1)
-            if host and port.isdigit():
-                return host
-        return value
-
-    def _is_trusted_proxy(self, client_host: str) -> bool:
-        if not client_host:
-            return False
-        if client_host.lower() in self._trusted_proxy_hosts:
-            return True
-        try:
-            client_ip = ipaddress.ip_address(client_host)
-        except ValueError:
-            return False
-        return any(client_ip in network for network in self._trusted_proxy_networks)
+        return get_trusted_client_ip(
+            request, trusted_proxies_env_var="RATE_LIMIT_TRUSTED_PROXIES"
+        )
 
     async def _check_security(
         self,
