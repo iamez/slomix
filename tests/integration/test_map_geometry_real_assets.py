@@ -140,10 +140,7 @@ def test_w3_extracts_measured_objective_volumes_and_dynamic_inputs_for_every_bsp
                     for index in range(3)
                 )
             ), (map_name, volume.entity_index)
-        assert all(
-            entity.runtime_state == "unresolved"
-            for entity in catalog.collision_entities
-        )
+        assert all(entity.runtime_state == "unresolved" for entity in catalog.collision_entities)
         totals["spawn_points"] += len(catalog.spawn_points)
         totals["objective_volumes"] += len(catalog.objective_volumes)
         totals["objective_markers"] += len(catalog.objective_markers)

@@ -49,12 +49,7 @@ class _Index:
         )
 
     def resolve_many(self, map_names):
-        normalised = sorted(
-            {
-                name.strip().casefold().removesuffix(".bsp")
-                for name in map_names
-            }
-        )
+        normalised = sorted({name.strip().casefold().removesuffix(".bsp") for name in map_names})
         return tuple(self.resolve(name) for name in normalised)
 
     def load_bsp(self, map_name):
@@ -107,10 +102,7 @@ def test_build_inventory_marks_missing_geometry_null_and_hashes_content():
     )  # type: ignore[arg-type]
 
     assert result["maps"]["covered"]["status"] == "measured"
-    assert (
-        result["maps"]["covered"]["objective_volumes"][0]["source"]
-        == "measured_bsp_volume"
-    )
+    assert result["maps"]["covered"]["objective_volumes"][0]["source"] == "measured_bsp_volume"
     assert result["maps"]["missing"]["status"] == "no_geometry"
     assert result["maps"]["missing"]["spawn_points"] is None
     assert result["maps"]["missing"]["objective_volumes"] is None

@@ -73,9 +73,7 @@ def build_inventory(index: Pk3GeometryIndex, map_names: list[str] | None = None)
 
         selected = geometry.selected
         if selected is None:
-            raise RuntimeError(
-                f"geometry resolution for {geometry.map_name!r} has no selected provider"
-            )
+            raise RuntimeError(f"geometry resolution for {geometry.map_name!r} has no selected provider")
         catalog = extract_entity_catalog(index.load_bsp(map_name), map_name)
         publication = entity_catalog_manifest(catalog)
         relative_pk3 = selected.pk3_path.relative_to(index.etmain_dir)
