@@ -28,7 +28,7 @@ B1, B2 = "ALLYGUID1" + "0" * 23, "ALLYGUID2" + "0" * 23
 def _st(kill_time, killer, killer_team, victim, victim_team, interval, ttn):
     """Row shape used by get_wave_cycles."""
     return (killer, f"n_{killer[:4]}", killer_team, victim_team,
-            victim, f"n_{victim[:4]}", kill_time, interval, ttn, 101, 0.5)
+            victim, f"n_{victim[:4]}", kill_time, interval, ttn, 101, 0.5, True)
 
 
 @pytest.mark.asyncio
@@ -43,6 +43,9 @@ async def test_wave_cycles_segmentation_and_scoring() -> None:
         _st(3000, B1, "ALLIES", A1, "AXIS", 10000, 7000),
         _st(13000, B1, "ALLIES", A1, "AXIS", 10000, 7000),
         _st(23000, B1, "ALLIES", A1, "AXIS", 10000, 7000),
+        # These must be reported, but neither may affect validation or scoring.
+        (*_st(5000, B1, "ALLIES", A1, "AXIS", 10000, 5000)[:9], None, 0.5, False),
+        (*_st(6000, B1, "ALLIES", A1, "AXIS", 10000, 4000)[:9], 102, 0.5, False),
     ]
     track_rows = []
     row_id = 0
@@ -70,6 +73,8 @@ async def test_wave_cycles_segmentation_and_scoring() -> None:
     assert res["clocks"]["ALLIES"] == {"offset_ms": 0, "interval_ms": 10000}
     assert res["clocks"]["AXIS"] == {"offset_ms": 0, "interval_ms": 10000}
     assert res["clock_validation"]["ALLIES"]["status"] == "validated"
+    assert res["excluded_unlinked_kills"] == 1
+    assert res["excluded_ineligible_linked_kills"] == 1
     assert res["round_len_ms"] == 30000
     first = res["cycles"][0]
     assert (first["start_ms"], first["end_ms"]) == (0, 10000)
@@ -217,6 +222,7 @@ async def test_personal_bests_only_on_improvement_with_history() -> None:
 from website.backend.routers.proximity_competitive import (  # noqa: E402
     _advantage_windows,
     _detect_clutches,
+    _fetch_round_lives_and_kills,
 )
 
 
@@ -306,3 +312,102 @@ class TestDetectClutches:
         ]
         sits = _detect_clutches(lives, [], {"AXIS": (0, 12000)}, 60000)
         assert sits == []
+
+
+@pytest.mark.asyncio
+async def test_timeline_fetch_preserves_unlinked_rows_without_reading_paths() -> None:
+    db = AsyncMock()
+    track_rows = [
+        (None, date(2026, 7, 1), "supply", 1, 0, A1, "AXIS", 0, 10_000),
+    ]
+    kill_rows = [
+        (
+            None,
+            date(2026, 7, 1),
+            "supply",
+            1,
+            0,
+            5_000,
+            "AXIS",
+            A1,
+            "A",
+            "ALLIES",
+            20_000,
+            15_000,
+            B1,
+            "B",
+            0.5,
+        ),
+    ]
+    db.fetch_all = AsyncMock(side_effect=[track_rows, kill_rows])
+
+    rounds = await _fetch_round_lives_and_kills(db, "WHERE TRUE", [])
+
+    assert len(rounds) == 1
+    data = next(iter(rounds.values()))
+    assert data["lives"] == [(A1, "AXIS", 0, 10_000)]
+    assert len(data["kills"]) == 1
+    assert db.fetch_all.await_count == 2
+    assert "path ->" not in db.fetch_all.await_args_list[0].args[0]
+
+
+@pytest.mark.asyncio
+async def test_timeline_fetch_builds_clocks_from_separate_exact_track_query() -> None:
+    db = AsyncMock()
+    base_tracks = []
+    clock_tracks = []
+    row_id = 0
+    for guid, name, team in ((A1, "A", "AXIS"), (B1, "B", "ALLIES")):
+        for spawn in (0, 10_000, 20_000, 30_000):
+            row_id += 1
+            death = spawn + 1_000 if spawn < 30_000 else None
+            event = "killed" if spawn < 30_000 else None
+            base_tracks.append(
+                (101, date(2026, 7, 1), "supply", 1, 123, guid, team, spawn, death)
+            )
+            clock_tracks.append(
+                (101, row_id, guid, name, team, spawn, death, event)
+            )
+    base_kills = []
+    for kill_time, killer_team, killer, victim_team, victim in (
+        (1_000, "ALLIES", B1, "AXIS", A1),
+        (2_000, "AXIS", A1, "ALLIES", B1),
+        (11_000, "ALLIES", B1, "AXIS", A1),
+        (12_000, "AXIS", A1, "ALLIES", B1),
+        (21_000, "ALLIES", B1, "AXIS", A1),
+        (22_000, "AXIS", A1, "ALLIES", B1),
+    ):
+        interval = 10_000
+        base_kills.append(
+            (
+                101,
+                date(2026, 7, 1),
+                "supply",
+                1,
+                123,
+                kill_time,
+                killer_team,
+                killer,
+                "killer",
+                victim_team,
+                interval,
+                interval - (kill_time % interval),
+                victim,
+                "victim",
+                0.5,
+            )
+        )
+    db.fetch_all = AsyncMock(side_effect=[base_tracks, base_kills, clock_tracks, []])
+
+    rounds = await _fetch_round_lives_and_kills(
+        db,
+        "WHERE TRUE",
+        [],
+        include_clocks=True,
+    )
+
+    data = rounds[("round_id", 101)]
+    assert data["clocks"] == {"ALLIES": (0, 10_000), "AXIS": (0, 10_000)}
+    assert db.fetch_all.await_count == 4
+    assert "path ->" not in db.fetch_all.await_args_list[0].args[0]
+    assert "path ->" in db.fetch_all.await_args_list[2].args[0]

@@ -294,9 +294,10 @@ async def get_wave_cycles(
         SELECT killer_guid, killer_name, killer_team, victim_team,
                victim_guid, victim_name, kill_time,
                enemy_spawn_interval, time_to_next_spawn, round_id,
-               spawn_timing_score
+               spawn_timing_score,
+               {_strict_clock_round_gate_sql()} AS clock_round_eligible
         FROM proximity_spawn_timing
-        {where_sql} AND {_strict_clock_round_gate_sql()}
+        {where_sql}
         ORDER BY kill_time
         """,  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
         tuple(params),
@@ -304,18 +305,28 @@ async def get_wave_cycles(
     if not st_rows:
         return {"status": "ok", "scope": scope, "cycles": [], "message": "No kills in scope."}
 
-    round_ids = {int(row[9]) for row in st_rows if row[9] is not None}
+    excluded_unlinked_kills = sum(
+        row[9] is None and row[0] != row[4]
+        for row in st_rows
+    )
+    excluded_ineligible_linked_kills = sum(
+        row[9] is not None and not row[11] and row[0] != row[4]
+        for row in st_rows
+    )
+    eligible_rows = [row for row in st_rows if row[9] is not None and row[11]]
+    round_ids = {int(row[9]) for row in eligible_rows}
     if len(round_ids) != 1:
         return {
             "status": "unavailable",
             "scope": scope,
             "clock_protocol": CLOCK_PROTOCOL_VERSION,
+            "excluded_unlinked_kills": excluded_unlinked_kills,
+            "excluded_ineligible_linked_kills": excluded_ineligible_linked_kills,
             "cycles": [],
             "message": "Wave cycles require one exactly linked round.",
         }
     round_id = next(iter(round_ids))
-    excluded_unlinked_kills = sum(row[9] is None for row in st_rows)
-    st_rows = [row for row in st_rows if row[9] == round_id]
+    st_rows = [row for row in eligible_rows if row[9] == round_id]
     combat_rows = [row for row in st_rows if row[0] != row[4]]
     lives, revives, track_end_ms = await _fetch_clock_lives_and_revives(db, round_id)
     timing_observations = [
@@ -346,6 +357,7 @@ async def get_wave_cycles(
             "clock_protocol": CLOCK_PROTOCOL_VERSION,
             "clock_validation": validation_payload,
             "excluded_unlinked_kills": excluded_unlinked_kills,
+            "excluded_ineligible_linked_kills": excluded_ineligible_linked_kills,
             "cycles": [],
             "message": "Both team clocks must pass independent spawn validation.",
         }
@@ -411,6 +423,7 @@ async def get_wave_cycles(
         "clock_protocol": CLOCK_PROTOCOL_VERSION,
         "clock_validation": validation_payload,
         "excluded_unlinked_kills": excluded_unlinked_kills,
+        "excluded_ineligible_linked_kills": excluded_ineligible_linked_kills,
         "round_len_ms": round_len_ms,
         "clocks": {
             team: {"offset_ms": off, "interval_ms": iv}
@@ -737,31 +750,41 @@ async def _fetch_round_lives_and_kills(
     params: list,
     *,
     include_clocks: bool = False,
-) -> dict[int, dict]:
-    """Group player_track lives + spawn_timing kills by round identity."""
+) -> dict[tuple, dict]:
+    """Group timelines without making non-clock consumers pay clock costs."""
     track_rows = await db.fetch_all(
         f"""
-        SELECT round_id, id, player_guid, player_name, team, spawn_time_ms,
-               death_time_ms, path -> -1 ->> 'event' AS death_type,
-               {_strict_clock_round_gate_sql()} AS clock_round_eligible
+        SELECT round_id, session_date, map_name, round_number, round_start_unix,
+               player_guid, team, spawn_time_ms, death_time_ms
         FROM player_track
-        {where_sql} AND round_id IS NOT NULL
+        {where_sql}
         """,  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
         tuple(params),
     )
     kill_rows = await db.fetch_all(
         f"""
-        SELECT round_id, kill_time, killer_team, killer_guid, killer_name,
-               victim_team, enemy_spawn_interval, time_to_next_spawn,
-               victim_guid, victim_name, spawn_timing_score,
-               {_strict_clock_round_gate_sql()} AS clock_round_eligible
+        SELECT round_id, session_date, map_name, round_number, round_start_unix,
+               kill_time, killer_team, killer_guid, killer_name, victim_team,
+               enemy_spawn_interval, time_to_next_spawn, victim_guid,
+               victim_name, spawn_timing_score
         FROM proximity_spawn_timing
-        {where_sql} AND round_id IS NOT NULL
+        {where_sql}
         """,  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
         tuple(params),
     )
+    clock_track_rows = []
     revive_rows = []
     if include_clocks:
+        clock_track_rows = await db.fetch_all(
+            f"""
+            SELECT round_id, id, player_guid, player_name, team, spawn_time_ms,
+                   death_time_ms, path -> -1 ->> 'event' AS death_type
+            FROM player_track
+            {where_sql} AND round_id IS NOT NULL
+              AND {_strict_clock_round_gate_sql()}
+            """,  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
+            tuple(params),
+        )
         revive_rows = await db.fetch_all(
             f"""
             SELECT round_id, revived_guid, revived_name, revive_time
@@ -771,7 +794,7 @@ async def _fetch_round_lives_and_kills(
             """,  # nosec B608 - where_sql is $N-parameterized by _build_proximity_where_clause; no user data interpolated
             tuple(params),
         )
-    rounds: dict[int, dict] = defaultdict(
+    rounds: dict[tuple, dict] = defaultdict(
         lambda: {
             "lives": [],
             "kills": [],
@@ -782,9 +805,19 @@ async def _fetch_round_lives_and_kills(
         }
     )
     for r in (track_rows or []):
-        key = int(r[0])
-        rounds[key]["lives"].append((r[2], r[4], int(r[5] or 0), r[6]))
-        if include_clocks and r[8] and not _is_bot_player(r[2], r[3]):
+        key = _timeline_round_key(r[0], r[1], r[2], r[3], r[4])
+        rounds[key]["lives"].append((r[5], r[6], int(r[7] or 0), r[8]))
+    for r in (kill_rows or []):
+        key = _timeline_round_key(r[0], r[1], r[2], r[3], r[4])
+        if r[7] != r[12]:
+            rounds[key]["kills"].append(
+                (int(r[5] or 0), r[6], r[7], r[8], r[9])
+            )
+
+    eligible_round_ids = {int(r[0]) for r in (clock_track_rows or [])}
+    for r in (clock_track_rows or []):
+        key = ("round_id", int(r[0]))
+        if not _is_bot_player(r[2], r[3]):
             rounds[key]["clock_lives"].append(
                 PlayerLife(
                     row_id=int(r[1]),
@@ -796,24 +829,25 @@ async def _fetch_round_lives_and_kills(
                 )
             )
     for r in (kill_rows or []):
-        key = int(r[0])
-        if r[3] != r[8]:
-            rounds[key]["kills"].append(
-                (int(r[1] or 0), r[2], r[3], r[4], r[5])
-            )
-        if include_clocks and r[11] and not _is_bot_player(r[8], r[9]):
+        if (
+            include_clocks
+            and r[0] is not None
+            and int(r[0]) in eligible_round_ids
+            and not _is_bot_player(r[12], r[13])
+        ):
+            key = ("round_id", int(r[0]))
             rounds[key]["timings"].append(
                 TimingObservation(
-                    team=str(r[5] or ""),
-                    kill_time_ms=int(r[1] or 0),
-                    interval_ms=int(r[6] or 0),
-                    time_to_next_spawn_ms=int(r[7]) if r[7] is not None else None,
-                    spawn_timing_score=float(r[10]) if r[10] is not None else None,
+                    team=str(r[9] or ""),
+                    kill_time_ms=int(r[5] or 0),
+                    interval_ms=int(r[10] or 0),
+                    time_to_next_spawn_ms=int(r[11]) if r[11] is not None else None,
+                    spawn_timing_score=float(r[14]) if r[14] is not None else None,
                 )
             )
     for r in (revive_rows or []):
         if not _is_bot_player(r[1], r[2]):
-            rounds[int(r[0])]["revives"].append(
+            rounds[("round_id", int(r[0]))]["revives"].append(
                 ReviveObservation(player_guid=str(r[1]), time_ms=int(r[3]))
             )
     for data in rounds.values():
@@ -841,6 +875,24 @@ async def _fetch_round_lives_and_kills(
                 if (clock := validated_clock_tuple(validation)) is not None
             }
     return rounds
+
+
+def _timeline_round_key(
+    round_id,
+    session_date,
+    map_name,
+    round_number,
+    round_start_unix,
+) -> tuple:
+    if round_id is not None:
+        return "round_id", int(round_id)
+    return (
+        "fallback",
+        session_date,
+        map_name,
+        int(round_number or 0),
+        int(round_start_unix or 0),
+    )
 
 
 @router.get("/proximity/competitive/man-advantage")
