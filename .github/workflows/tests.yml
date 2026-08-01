@@ -176,34 +176,24 @@ jobs:
           pip install pip-audit==2.10.0 bandit==1.9.4
 
       - name: Dependency audit (pip-audit)
-        # TIME-BOXED IGNORES (audit AUD-009) — owner: iamez. Re-evaluate by
-        # 2026-10-01. The starlette-stack entries drop when the FastAPI/starlette
-        # 1.x migration lands (every fix is a 1.x MAJOR needing a compat pass);
-        # the request-routing advisory in that stack is separately mitigated at
-        # runtime. The paramiko entry drops when an upstream fix ships (none yet).
-        # Every OTHER package is gated, so a newly disclosed CVE elsewhere fails
-        # this job. Advisory IDs live only in the --ignore-vuln flags below.
+        # NO IGNORES. Every advisory is gated, in both manifests.
+        #
+        # This block previously carried six time-boxed, owner-accepted ignores
+        # (audit AUD-009): the starlette 0.x stack, held because
+        # prometheus-fastapi-instrumentator 7.x constrained starlette<1.0, plus
+        # paramiko, held pending an upstream fix. Both exit conditions are now
+        # met — instrumentator 8.x requires starlette>=1.0 and paramiko 5.0.0
+        # ships the fix — so the debt is paid rather than re-deferred, and the
+        # audit runs clean with nothing suppressed.
+        #
+        # Keep it that way: an ignore added here is a promise to come back.
+        # Prefer bumping the pin.
         run: |
-          pip-audit -r requirements.txt --progress-spinner=off \
-            --ignore-vuln CVE-2026-44405 \
-            --ignore-vuln PYSEC-2026-161 \
-            --ignore-vuln PYSEC-2026-249 \
-            --ignore-vuln PYSEC-2026-248 \
-            --ignore-vuln CVE-2026-48818 \
-            --ignore-vuln CVE-2026-48817
+          pip-audit -r requirements.txt --progress-spinner=off
           # The website venv is built from its own manifest (rsync_deploy_vm.sh,
           # slomix_vm_setup.sh) — audit it too so the web app can't lag on a
-          # vulnerable pin. Since the observability pins (IMP-005), the
-          # instrumentator constrains starlette<1.0, so the same time-boxed
-          # starlette-stack ignores as the root audit apply here (no paramiko
-          # in this manifest). PYSEC-2026-2280/2281 alias the two CVE ignores
-          # above under their PYSEC ids.
-          pip-audit -r website/requirements.txt --progress-spinner=off \
-            --ignore-vuln PYSEC-2026-161 \
-            --ignore-vuln PYSEC-2026-249 \
-            --ignore-vuln PYSEC-2026-248 \
-            --ignore-vuln PYSEC-2026-2280 \
-            --ignore-vuln PYSEC-2026-2281
+          # vulnerable pin.
+          pip-audit -r website/requirements.txt --progress-spinner=off
 
       - name: Website dependency consistency (isolated pip check)
         # The web service deploys from website/requirements.txt into its OWN venv

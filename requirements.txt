@@ -15,7 +15,7 @@ uvicorn[standard]==0.41.0
 httpx==0.28.1
 python-multipart==0.0.31
 aiofiles==25.1.0
-paramiko==4.0.0
+paramiko==5.0.0
 scp==0.15.0
 websockets==16.0
 Pillow==12.3.0
@@ -24,5 +24,5 @@ watchdog==6.0.0
 trueskill==0.4.5
 redis==7.2.1
 prometheus-client==0.24.1
-prometheus-fastapi-instrumentator==7.1.0
+prometheus-fastapi-instrumentator==8.1.0
 slowapi==0.1.9
