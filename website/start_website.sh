@@ -50,9 +50,14 @@ echo -e "  Port: ${GREEN}${WEBSITE_PORT}${NC}"
 echo -e "  Reload: ${GREEN}${WEBSITE_RELOAD}${NC}"
 echo ""
 
-# Check Python
+# Check Python. The version quoted here is read from pyproject.toml so it cannot
+# drift the way the previous hardcoded "3.8+" did — that number predated the
+# 3.11 floor by three releases and would have sent someone off to install an
+# interpreter this project no longer runs on.
 if ! command -v python3 &> /dev/null; then
-    echo -e "${RED}✗ Python3 not found! Please install Python 3.8+${NC}"
+    PY_REQ=$(grep -oE 'requires-python[[:space:]]*=[[:space:]]*"[^"]+"' "$(dirname "$0")/../pyproject.toml" 2>/dev/null \
+             | sed -E 's/.*"([^"]+)".*/\1/')
+    echo -e "${RED}✗ Python3 not found! This project requires ${PY_REQ:->=3.11,<3.14}${NC}"
     exit 1
 fi
 

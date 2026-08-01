@@ -510,13 +510,38 @@ setup_python_venv() {
     print_info "Working directory: $WORK_DIR"
     cd "$WORK_DIR"
     
-    # Check Python version
+    # Check Python version against the ACTUAL manifest, and abort rather than warn.
+    #
+    # This used to check ">= 3.10" and only print_warning. Both halves were wrong:
+    # pyproject.toml requires >=3.11, and a warning let a too-old interpreter build
+    # a venv that then failed far from the cause — `from enum import StrEnum` in
+    # website/backend/map_geometry/pk3_index.py is 3.11+, so the install "succeeded"
+    # and the failure surfaced later as an import error. Better to stop here.
+    #
+    # The bounds are READ FROM pyproject.toml rather than hardcoded, because a
+    # hardcoded copy is exactly what drifted last time. Falls back to the known
+    # values only if parsing fails.
     if command -v python3 >/dev/null 2>&1; then
         PY_VER_FULL=$(python3 -V 2>&1 | awk '{print $2}')
         print_info "Python version: $PY_VER_FULL"
-        
-        if ! version_ge "$PY_VER_FULL" "3.10"; then
-            print_warning "Python version is below 3.10, some features may not work"
+
+        PY_REQ=$(grep -oE 'requires-python[[:space:]]*=[[:space:]]*"[^"]+"' pyproject.toml 2>/dev/null \
+                 | sed -E 's/.*"([^"]+)".*/\1/')
+        PY_MIN=$(printf '%s' "$PY_REQ" | grep -oE '>=[0-9]+\.[0-9]+' | tr -d '>=')
+        PY_MAX=$(printf '%s' "$PY_REQ" | grep -oE '<[0-9]+\.[0-9]+'  | tr -d '<')
+        [ -n "$PY_MIN" ] || PY_MIN="3.11"
+        [ -n "$PY_MAX" ] || PY_MAX="3.14"
+
+        if ! version_ge "$PY_VER_FULL" "$PY_MIN"; then
+            print_error "Python $PY_VER_FULL is below the required $PY_MIN (pyproject.toml: $PY_REQ)."
+            print_error "Install a newer interpreter first — continuing would build a venv that"
+            print_error "fails later on 3.11+ syntax (e.g. 'from enum import StrEnum')."
+            exit 1
+        fi
+        if version_ge "$PY_VER_FULL" "$PY_MAX"; then
+            print_error "Python $PY_VER_FULL is at or above the unsupported $PY_MAX (pyproject.toml: $PY_REQ)."
+            print_error "pip would refuse the install anyway; use an interpreter inside the range."
+            exit 1
         fi
     fi
     
