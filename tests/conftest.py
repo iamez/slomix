@@ -6,6 +6,7 @@ Provides test fixtures for database, Discord mocks, and async operations
 import asyncio
 import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -15,6 +16,20 @@ import pytest
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+
+# Send every log the suite produces to a throwaway directory, BEFORE any bot or
+# website module is imported below — both compute their log directory at import
+# time, so setting this later has no effect.
+#
+# Without it the suite writes into the repository's real logs/. Deliberate
+# fixtures ("RuntimeError: boom", "disk full", a connection to a database named
+# `nonexistent`) landed in logs/errors.log and pushed
+# scripts/health_check.sh past its 100-errors-per-24h threshold: 113 counted,
+# essentially all of them fake. The check reported FAIL for a problem that did
+# not exist, which is exactly how a health check stops being believed.
+_TEST_LOG_DIR = Path(tempfile.mkdtemp(prefix="slomix-test-logs-"))
+os.environ.setdefault("BOT_LOG_DIR", str(_TEST_LOG_DIR))
+os.environ.setdefault("WEB_LOG_DIR", str(_TEST_LOG_DIR))
 
 # Import bot modules
 from bot.config import BotConfig

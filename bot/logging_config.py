@@ -10,9 +10,22 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Create logs directory if it doesn't exist
-LOGS_DIR = Path(__file__).parent.parent / "logs"
-LOGS_DIR.mkdir(exist_ok=True)
+# Create logs directory if it doesn't exist.
+#
+# BOT_LOG_DIR mirrors WEB_LOG_DIR on the website side
+# (website/backend/logging_config.py:29), which was already overridable. The
+# bot's path was hard-coded, so anything importing bot modules wrote into the
+# repository's real logs/ — including the test suite. That polluted
+# logs/errors.log with deliberate fixtures ("RuntimeError: boom", "disk full",
+# connections to a database literally named `nonexistent`) and pushed
+# scripts/health_check.sh over its 100-errors-per-24h threshold, so the check
+# reported FAIL for errors that were never real. A health check that cries
+# wolf is the failure mode this repo already documented for the "876
+# unimported files" alarm.
+#
+# Default is unchanged, so nothing moves unless the variable is set.
+LOGS_DIR = Path(os.getenv("BOT_LOG_DIR") or (Path(__file__).parent.parent / "logs"))
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class GroupWritableRotatingFileHandler(logging.handlers.RotatingFileHandler):
