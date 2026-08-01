@@ -151,6 +151,53 @@ version_ge() {
     [ "$(printf '%s\n' "$2" "$1" | sort -V | head -n1)" = "$2" ]
 }
 
+# Abort unless the given interpreter satisfies pyproject.toml's requires-python.
+#
+# Takes the interpreter INVOCATION, not a version string, because the thing to
+# validate differs by path through this script: an existing venv is reused via
+# $VENV_DIR/bin/python3, a root install creates the venv with
+# `sudo -u $SERVICE_USER python3`, and an unprivileged install uses plain
+# python3. Checking whichever python3 happens to be on the caller's PATH would
+# validate an interpreter that never runs anything (Codex review on #595).
+#
+# Bounds are read from pyproject.toml rather than hardcoded — a hardcoded copy
+# is what drifted last time (install.sh said 3.10 while the manifest said 3.11).
+check_python_version() {
+    local label="$1"; shift
+    local ver
+    ver=$("$@" -V 2>&1 | awk '{print $2}')
+    if [ -z "$ver" ]; then
+        print_warning "Could not determine $label Python version — skipping range check"
+        return 0
+    fi
+    print_info "$label Python version: $ver"
+
+    local req min max src
+    req=$(grep -oE 'requires-python[[:space:]]*=[[:space:]]*"[^"]+"' "$WORK_DIR/pyproject.toml" 2>/dev/null \
+          | sed -E 's/.*"([^"]+)".*/\1/')
+    if [ -n "$req" ]; then
+        min=$(printf '%s' "$req" | grep -oE '>=[0-9]+\.[0-9]+' | tr -d '>=')
+        max=$(printf '%s' "$req" | grep -oE '<[0-9]+\.[0-9]+'  | tr -d '<')
+        src="pyproject.toml: $req"
+    fi
+    # Fall back to the known bounds AND say so, so the message stays useful
+    # exactly when parsing failed (Copilot review on #595).
+    [ -n "$min" ] || { min="3.11"; src="built-in default (pyproject.toml not found or unparsable)"; }
+    [ -n "$max" ] || { max="3.14"; src="built-in default (pyproject.toml not found or unparsable)"; }
+
+    if ! version_ge "$ver" "$min"; then
+        print_error "$label Python $ver is below the required $min ($src)."
+        print_error "Install a newer interpreter first — continuing would build a venv that"
+        print_error "fails later on 3.11+ syntax (e.g. 'from enum import StrEnum')."
+        exit 1
+    fi
+    if version_ge "$ver" "$max"; then
+        print_error "$label Python $ver is at or above the unsupported $max ($src)."
+        print_error "pip would refuse the install anyway; use an interpreter inside the range."
+        exit 1
+    fi
+}
+
 detect_package_manager() {
     if command -v apt-get >/dev/null 2>&1; then
         echo "apt"
@@ -510,16 +557,6 @@ setup_python_venv() {
     print_info "Working directory: $WORK_DIR"
     cd "$WORK_DIR"
     
-    # Check Python version
-    if command -v python3 >/dev/null 2>&1; then
-        PY_VER_FULL=$(python3 -V 2>&1 | awk '{print $2}')
-        print_info "Python version: $PY_VER_FULL"
-        
-        if ! version_ge "$PY_VER_FULL" "3.10"; then
-            print_warning "Python version is below 3.10, some features may not work"
-        fi
-    fi
-    
     # Handle existing venv
     if [ -d "$VENV_DIR" ]; then
         print_warning "Virtual environment already exists at $VENV_DIR"
@@ -529,12 +566,41 @@ setup_python_venv() {
                 print_info "Removed existing venv"
             else
                 print_warning "Keeping existing venv"
-                return
             fi
         fi
     fi
-    
+
+    # Validate ANY reused venv, in every mode.
+    #
+    # This deliberately sits outside the env-only branch above: under --full or
+    # --vps an existing $VENV_DIR is reused silently, and its pip/python3 then
+    # drive installation, migrations and the systemd units. `pip install -r
+    # requirements.txt` does NOT enforce requires-python (that is a project
+    # metadata field, not a constraint on a bare requirements file), so a reused
+    # 3.10 venv installs cleanly and only fails once the service imports
+    # 3.11-only code (Codex review on #595, second round).
+    #
+    # The venv's own interpreter is what gets checked, not whatever python3 is
+    # on PATH — a box whose system python3 has moved out of range can still
+    # hold a perfectly good venv.
+    if [ -d "$VENV_DIR" ]; then
+        if [ -x "$VENV_DIR/bin/python3" ]; then
+            check_python_version "existing venv" "$VENV_DIR/bin/python3"
+        else
+            print_warning "Existing venv has no bin/python3 — cannot verify its version"
+        fi
+        [ "$MODE" = "env-only" ] && return
+    fi
+
     if [ ! -d "$VENV_DIR" ]; then
+        # Validate the interpreter that will CREATE the venv, which under a root
+        # install is the service user's python3, not root's.
+        if [[ $EUID -eq 0 ]]; then
+            check_python_version "$SERVICE_USER" sudo -u "$SERVICE_USER" python3
+        else
+            check_python_version "system" python3
+        fi
+
         print_step "Creating virtual environment..."
         if [[ $EUID -eq 0 ]]; then
             sudo -u $SERVICE_USER python3 -m venv "$WORK_DIR/$VENV_DIR"
