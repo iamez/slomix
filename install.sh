@@ -151,6 +151,53 @@ version_ge() {
     [ "$(printf '%s\n' "$2" "$1" | sort -V | head -n1)" = "$2" ]
 }
 
+# Abort unless the given interpreter satisfies pyproject.toml's requires-python.
+#
+# Takes the interpreter INVOCATION, not a version string, because the thing to
+# validate differs by path through this script: an existing venv is reused via
+# $VENV_DIR/bin/python3, a root install creates the venv with
+# `sudo -u $SERVICE_USER python3`, and an unprivileged install uses plain
+# python3. Checking whichever python3 happens to be on the caller's PATH would
+# validate an interpreter that never runs anything (Codex review on #595).
+#
+# Bounds are read from pyproject.toml rather than hardcoded — a hardcoded copy
+# is what drifted last time (install.sh said 3.10 while the manifest said 3.11).
+check_python_version() {
+    local label="$1"; shift
+    local ver
+    ver=$("$@" -V 2>&1 | awk '{print $2}')
+    if [ -z "$ver" ]; then
+        print_warning "Could not determine $label Python version — skipping range check"
+        return 0
+    fi
+    print_info "$label Python version: $ver"
+
+    local req min max src
+    req=$(grep -oE 'requires-python[[:space:]]*=[[:space:]]*"[^"]+"' "$WORK_DIR/pyproject.toml" 2>/dev/null \
+          | sed -E 's/.*"([^"]+)".*/\1/')
+    if [ -n "$req" ]; then
+        min=$(printf '%s' "$req" | grep -oE '>=[0-9]+\.[0-9]+' | tr -d '>=')
+        max=$(printf '%s' "$req" | grep -oE '<[0-9]+\.[0-9]+'  | tr -d '<')
+        src="pyproject.toml: $req"
+    fi
+    # Fall back to the known bounds AND say so, so the message stays useful
+    # exactly when parsing failed (Copilot review on #595).
+    [ -n "$min" ] || { min="3.11"; src="built-in default (pyproject.toml not found or unparsable)"; }
+    [ -n "$max" ] || { max="3.14"; src="built-in default (pyproject.toml not found or unparsable)"; }
+
+    if ! version_ge "$ver" "$min"; then
+        print_error "$label Python $ver is below the required $min ($src)."
+        print_error "Install a newer interpreter first — continuing would build a venv that"
+        print_error "fails later on 3.11+ syntax (e.g. 'from enum import StrEnum')."
+        exit 1
+    fi
+    if version_ge "$ver" "$max"; then
+        print_error "$label Python $ver is at or above the unsupported $max ($src)."
+        print_error "pip would refuse the install anyway; use an interpreter inside the range."
+        exit 1
+    fi
+}
+
 detect_package_manager() {
     if command -v apt-get >/dev/null 2>&1; then
         echo "apt"
@@ -510,41 +557,6 @@ setup_python_venv() {
     print_info "Working directory: $WORK_DIR"
     cd "$WORK_DIR"
     
-    # Check Python version against the ACTUAL manifest, and abort rather than warn.
-    #
-    # This used to check ">= 3.10" and only print_warning. Both halves were wrong:
-    # pyproject.toml requires >=3.11, and a warning let a too-old interpreter build
-    # a venv that then failed far from the cause — `from enum import StrEnum` in
-    # website/backend/map_geometry/pk3_index.py is 3.11+, so the install "succeeded"
-    # and the failure surfaced later as an import error. Better to stop here.
-    #
-    # The bounds are READ FROM pyproject.toml rather than hardcoded, because a
-    # hardcoded copy is exactly what drifted last time. Falls back to the known
-    # values only if parsing fails.
-    if command -v python3 >/dev/null 2>&1; then
-        PY_VER_FULL=$(python3 -V 2>&1 | awk '{print $2}')
-        print_info "Python version: $PY_VER_FULL"
-
-        PY_REQ=$(grep -oE 'requires-python[[:space:]]*=[[:space:]]*"[^"]+"' pyproject.toml 2>/dev/null \
-                 | sed -E 's/.*"([^"]+)".*/\1/')
-        PY_MIN=$(printf '%s' "$PY_REQ" | grep -oE '>=[0-9]+\.[0-9]+' | tr -d '>=')
-        PY_MAX=$(printf '%s' "$PY_REQ" | grep -oE '<[0-9]+\.[0-9]+'  | tr -d '<')
-        [ -n "$PY_MIN" ] || PY_MIN="3.11"
-        [ -n "$PY_MAX" ] || PY_MAX="3.14"
-
-        if ! version_ge "$PY_VER_FULL" "$PY_MIN"; then
-            print_error "Python $PY_VER_FULL is below the required $PY_MIN (pyproject.toml: $PY_REQ)."
-            print_error "Install a newer interpreter first — continuing would build a venv that"
-            print_error "fails later on 3.11+ syntax (e.g. 'from enum import StrEnum')."
-            exit 1
-        fi
-        if version_ge "$PY_VER_FULL" "$PY_MAX"; then
-            print_error "Python $PY_VER_FULL is at or above the unsupported $PY_MAX (pyproject.toml: $PY_REQ)."
-            print_error "pip would refuse the install anyway; use an interpreter inside the range."
-            exit 1
-        fi
-    fi
-    
     # Handle existing venv
     if [ -d "$VENV_DIR" ]; then
         print_warning "Virtual environment already exists at $VENV_DIR"
@@ -554,12 +566,30 @@ setup_python_venv() {
                 print_info "Removed existing venv"
             else
                 print_warning "Keeping existing venv"
+                # Validate the interpreter that will ACTUALLY run — the venv's
+                # own, not whatever python3 is on PATH. A box whose system
+                # python3 has moved to an unsupported version can still have a
+                # perfectly good venv, and aborting on the system one would
+                # block a valid reuse (Codex review on #595).
+                if [ -x "$VENV_DIR/bin/python3" ]; then
+                    check_python_version "existing venv" "$VENV_DIR/bin/python3"
+                else
+                    print_warning "Existing venv has no bin/python3 — cannot verify its version"
+                fi
                 return
             fi
         fi
     fi
-    
+
     if [ ! -d "$VENV_DIR" ]; then
+        # Validate the interpreter that will CREATE the venv, which under a root
+        # install is the service user's python3, not root's.
+        if [[ $EUID -eq 0 ]]; then
+            check_python_version "$SERVICE_USER" sudo -u "$SERVICE_USER" python3
+        else
+            check_python_version "system" python3
+        fi
+
         print_step "Creating virtual environment..."
         if [[ $EUID -eq 0 ]]; then
             sudo -u $SERVICE_USER python3 -m venv "$WORK_DIR/$VENV_DIR"
