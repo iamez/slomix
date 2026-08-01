@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.28.1](https://github.com/iamez/slomix/compare/v1.28.0...v1.28.1) (2026-08-01)
+
+
+### Bug Fixes
+
+* stop the test suite writing into the production logs ([#592](https://github.com/iamez/slomix/issues/592)) ([d4911cd](https://github.com/iamez/slomix/commit/d4911cd146701276e4bd8a8b75c0b6b25b1d8b06))
+
 ## [1.28.0](https://github.com/iamez/slomix/compare/v1.27.0...v1.28.0) (2026-07-31)
 
 
