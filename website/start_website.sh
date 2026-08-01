@@ -73,6 +73,21 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
+# Activate the venv BEFORE checking the version, because the venv's interpreter
+# is the one uvicorn and every dependency check below will use. Validating the
+# system python3 first would abort on the documented setup where /usr/bin/python3
+# is still 3.10 while the project venv is 3.13 — rejecting a perfectly good
+# environment (Codex review on #595, second round).
+if [ -d "$PROJECT_ROOT/venv" ]; then
+    echo -e "${GREEN}✓ Activating virtual environment${NC}"
+    source "$PROJECT_ROOT/venv/bin/activate"
+elif [ -d "$PROJECT_ROOT/.venv" ]; then
+    echo -e "${GREEN}✓ Activating virtual environment${NC}"
+    source "$PROJECT_ROOT/.venv/bin/activate"
+else
+    echo -e "${YELLOW}⚠ No virtual environment found, using system Python${NC}"
+fi
+
 PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
 if ! version_ge "$PYTHON_VERSION" "$PY_MIN"; then
     echo -e "${RED}✗ Python $PYTHON_VERSION is below the required $PY_MIN ($PY_SRC)${NC}"
@@ -84,17 +99,6 @@ if version_ge "$PYTHON_VERSION" "$PY_MAX"; then
     exit 1
 fi
 echo -e "${GREEN}✓ Python ${PYTHON_VERSION}${NC}"
-
-# Check if virtual environment exists
-if [ -d "$PROJECT_ROOT/venv" ]; then
-    echo -e "${GREEN}✓ Activating virtual environment${NC}"
-    source "$PROJECT_ROOT/venv/bin/activate"
-elif [ -d "$PROJECT_ROOT/.venv" ]; then
-    echo -e "${GREEN}✓ Activating virtual environment${NC}"
-    source "$PROJECT_ROOT/.venv/bin/activate"
-else
-    echo -e "${YELLOW}⚠ No virtual environment found, using system Python${NC}"
-fi
 
 # Check dependencies
 echo -e "${YELLOW}Checking dependencies...${NC}"

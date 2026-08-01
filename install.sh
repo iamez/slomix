@@ -566,19 +566,30 @@ setup_python_venv() {
                 print_info "Removed existing venv"
             else
                 print_warning "Keeping existing venv"
-                # Validate the interpreter that will ACTUALLY run — the venv's
-                # own, not whatever python3 is on PATH. A box whose system
-                # python3 has moved to an unsupported version can still have a
-                # perfectly good venv, and aborting on the system one would
-                # block a valid reuse (Codex review on #595).
-                if [ -x "$VENV_DIR/bin/python3" ]; then
-                    check_python_version "existing venv" "$VENV_DIR/bin/python3"
-                else
-                    print_warning "Existing venv has no bin/python3 — cannot verify its version"
-                fi
-                return
             fi
         fi
+    fi
+
+    # Validate ANY reused venv, in every mode.
+    #
+    # This deliberately sits outside the env-only branch above: under --full or
+    # --vps an existing $VENV_DIR is reused silently, and its pip/python3 then
+    # drive installation, migrations and the systemd units. `pip install -r
+    # requirements.txt` does NOT enforce requires-python (that is a project
+    # metadata field, not a constraint on a bare requirements file), so a reused
+    # 3.10 venv installs cleanly and only fails once the service imports
+    # 3.11-only code (Codex review on #595, second round).
+    #
+    # The venv's own interpreter is what gets checked, not whatever python3 is
+    # on PATH — a box whose system python3 has moved out of range can still
+    # hold a perfectly good venv.
+    if [ -d "$VENV_DIR" ]; then
+        if [ -x "$VENV_DIR/bin/python3" ]; then
+            check_python_version "existing venv" "$VENV_DIR/bin/python3"
+        else
+            print_warning "Existing venv has no bin/python3 — cannot verify its version"
+        fi
+        [ "$MODE" = "env-only" ] && return
     fi
 
     if [ ! -d "$VENV_DIR" ]; then
