@@ -92,7 +92,48 @@ const PROTOTYPE_TONE_STYLES = {
     }
 };
 
+// Home used to have `load: () => undefined` because initApp() fetched its data
+// unconditionally at startup. Now that the router owns it, the batches run on
+// first visit instead — which keeps the "home data loads exactly once per page
+// load" behaviour while a deep link to another route pays nothing.
+//
+// The guard also protects the two polling loops: they install intervals, so
+// re-entering home must not stack a second set.
+let _homeLoaded = false;
+
+async function loadHomeView() {
+    if (_homeLoaded) return;
+    _homeLoaded = true;
+
+    const results = await Promise.allSettled([
+        loadHomePulseCards(),
+        loadOverviewStats(),
+        updateLiveSession(),
+        loadQuickLeaders(),
+        loadRecentMatches(),
+    ]);
+    results.forEach((result, i) => {
+        if (result.status === 'rejected') {
+            console.error(`Home load ${i} failed:`, result.reason);
+        }
+    });
+
+    initLivePolling();
+    initLiveStatusPolling();
+    scheduleDeferredLoads([
+        { task: loadInsightsCharts, label: 'insights-charts' },
+        { task: loadSeasonInfo, label: 'season-info' },
+        { task: loadLastSession, label: 'last-session' },
+        { task: loadPredictions, label: 'predictions' },
+        { task: loadMatchesView, label: 'matches-view' },
+        { task: loadSeasonLeaders, label: 'season-leaders' },
+        { task: loadActivityCalendar, label: 'activity-calendar' },
+        { task: loadSeasonSummary, label: 'season-summary' },
+    ]);
+}
+
 const legacyRuntime = {
+    loadHomeView,
     loadPlayerProfile,
     loadSessionsView,
     initLeaderboardDefaults,
@@ -746,19 +787,12 @@ async function initApp() {
         if (statusText) statusText.textContent = 'Offline';
     }
 
-    const homeDefinition = getRouteDefinition('home');
-    const legacyHomeEnabled = homeDefinition?.mode === VIEW_MODE.LEGACY;
-
+    // Only the auth probe is route-agnostic. The home batches used to run here
+    // too, gated on whether the *home* route was LEGACY rather than on whether
+    // home was the route being opened — so a deep link like #/skill-rating
+    // still paid for the whole home page. They now live in loadHomeView(),
+    // dispatched by the router like every other view.
     const criticalLoads = [checkLoginStatus];
-    if (legacyHomeEnabled) {
-        criticalLoads.unshift(
-            loadHomePulseCards,
-            loadOverviewStats,
-            updateLiveSession,
-            loadQuickLeaders,
-            loadRecentMatches,
-        );
-    }
     const startupResults = await Promise.allSettled(criticalLoads.map((task) => task()));
     startupResults.forEach((result, i) => {
         if (result.status === 'rejected') {
@@ -773,21 +807,6 @@ async function initApp() {
         navigateTo(route.viewId, false, route.params);
     } else {
         navigateTo('home', false, {});
-    }
-
-    if (legacyHomeEnabled) {
-        initLivePolling();
-        initLiveStatusPolling();
-        scheduleDeferredLoads([
-            { task: loadInsightsCharts, label: 'insights-charts' },
-            { task: loadSeasonInfo, label: 'season-info' },
-            { task: loadLastSession, label: 'last-session' },
-            { task: loadPredictions, label: 'predictions' },
-            { task: loadMatchesView, label: 'matches-view' },
-            { task: loadSeasonLeaders, label: 'season-leaders' },
-            { task: loadActivityCalendar, label: 'activity-calendar' },
-            { task: loadSeasonSummary, label: 'season-summary' },
-        ]);
     }
 
     console.log('✅ Slomix App Ready');

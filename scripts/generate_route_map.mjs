@@ -48,17 +48,18 @@ function buildLegacyFunctionIndex() {
     return index;
 }
 
-// 'home' is a documented exception: its route definition's load() is an
-// intentional no-op (buildHash() -> '', no discrete load call), because the
-// home view is populated by initApp() in app.js calling its loaders directly
-// during startup, not through the route dispatch mechanism every other route
-// uses.
+// 'home' still needs its own resolver, though no longer for the original
+// reason. Its load() is now a real dispatch like every other route, but the
+// function it calls (loadHomeView) is local to app.js and therefore absent
+// from the exported-symbol index — and transitiveFiles() deliberately skips
+// app.js, so the generic path would report "unresolved". This walks
+// loadHomeView()'s body instead.
 //
 // This list is DERIVED, not hand-written. It was hand-written twice and was
 // incomplete both times — first missing everything but home.js, then missing
 // the whole `scheduleDeferredLoads([...])` batch that populates the season
-// widgets (Codex review on #575, twice). Parsing the two arrays out of
-// initApp() keeps it honest as the startup sequence changes.
+// widgets (Codex review on #575, twice). Parsing the loaders out of the
+// source keeps it honest as the startup sequence changes.
 // True if `sym` appears in `text` as a call: `sym(` or `sym (`, not preceded by
 // another identifier character.
 //
@@ -244,24 +245,19 @@ function homeLoaderFiles(legacyIndex) {
     const appJs = readFileSync(path.join(legacyDir, 'app.js'), 'utf8');
     const names = new Set();
 
-    // criticalLoads.unshift(a, b, c, ...) — the synchronous startup batch.
-    const critical = appJs.match(/criticalLoads\.unshift\(([\s\S]*?)\)\s*;/);
-    if (critical) {
-        for (const m of critical[1].matchAll(/\b([A-Za-z_]\w*)\b/g)) names.add(m[1]);
-    }
-    // scheduleDeferredLoads([{ task: fn, label: '...' }, ...]) — the idle batch.
-    const deferred = appJs.match(/scheduleDeferredLoads\(\[([\s\S]*?)\]\s*\)\s*;/);
-    if (deferred) {
-        for (const m of deferred[1].matchAll(/task:\s*([A-Za-z_]\w*)/g)) names.add(m[1]);
-    }
-
-    // Direct calls inside `if (legacyHomeEnabled) { ... }` — initLivePolling()
-    // and initLiveStatusPolling() start the home page's live widgets but sit
-    // in neither array, so harvesting only the arrays dropped live-status.js
-    // from the map (Codex review on #575).
-    // NOTE: app.js has more than one `if (legacyHomeEnabled)` block; harvest all.
-    for (const blk of appJs.matchAll(/if\s*\(legacyHomeEnabled\)\s*\{([\s\S]*?)\n    \}/g)) {
-        for (const m of blk[1].matchAll(/^\s{8}([A-Za-z_]\w*)\s*\(\s*\)\s*;/gm)) names.add(m[1]);
+    // Everything home fetches now lives in one function, loadHomeView(), which
+    // the router dispatches like any other view. Harvesting its whole body
+    // covers all three shapes at once — the Promise.allSettled([...]) batch,
+    // the scheduleDeferredLoads([{ task }]) batch, and the bare
+    // initLivePolling()/initLiveStatusPolling() calls that sit in neither and
+    // used to be dropped from the map (Codex review on #575).
+    //
+    // Before, these were harvested from initApp()'s `criticalLoads.unshift(...)`
+    // and `if (legacyHomeEnabled) { ... }` blocks, which no longer exist.
+    const homeViewBody = functionBody(appJs, 'loadHomeView');
+    if (homeViewBody) {
+        for (const m of homeViewBody.matchAll(/^\s+([A-Za-z_]\w*)\s*\(\s*\)[,;]/gm)) names.add(m[1]);
+        for (const m of homeViewBody.matchAll(/task:\s*([A-Za-z_]\w*)/g)) names.add(m[1]);
     }
 
     // Functions declared in app.js itself are never `export`ed, so they aren't
@@ -315,7 +311,7 @@ function homeLoaderFiles(legacyIndex) {
     if (unresolved.length) notes.push(`unresolved: ${unresolved.join(', ')}`);
     if (dead.length) notes.push(`skipped no-op: ${dead.join(', ')}`);
     const suffix = notes.length ? ` (${notes.join('; ')})` : '';
-    return `${sorted.join(' + ')} — populated directly from initApp() in app.js (criticalLoads + scheduleDeferredLoads), not through load()${suffix}`;
+    return `${sorted.join(' + ')} — loaded by loadHomeView() in app.js (once per page load), dispatched through load() like every other route${suffix}`;
 }
 
 // 'hall-of-fame' is a documented exception: its buildHash() returns the
