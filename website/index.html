@@ -1264,15 +1264,28 @@
                     class="w-8 h-8 bg-gradient-to-br from-brand-blue to-brand-cyan rounded-lg flex items-center justify-center font-black text-white text-xs shadow-[0_0_15px_rgba(59,130,246,0.6)]">
                     LS
                 </div>
-                <div class="font-black text-white text-lg">slomix<span class="text-brand-blue">.fyi</span></div>
+                <!-- Hidden only in the tablet band (768-1023), where the full nav
+                     turns on but the header is too narrow for it. Phones keep the
+                     wordmark: their nav is hidden, so there is room. -->
+                <div class="md:hidden lg:block font-black text-white text-lg">slomix<span class="text-brand-blue">.fyi</span></div>
             </div>
 
             <!-- Navigation Links -->
-            <div class="hidden md:flex items-center gap-1">
+            <!-- Tailwind's md: is min-width:768px, so at exactly 768 the full
+                 desktop nav turns on while the mobile bottom nav (md:hidden)
+                 turns off. At px-4/text-sm it needs ~1011px against the 720px
+                 a 768px viewport leaves after px-6 — which is why every route
+                 overflowed horizontally at 768x1024 and at no other width.
+                 Rather than push the nav to lg: (which would hand tablets the
+                 4-item phone bottom nav and strand ~10 routes), the tablet band
+                 gets a compact version: tighter padding, smaller text, and the
+                 two purely decorative items (logo wordmark, server-status pill)
+                 deferred to lg. That lands at ~616px, ~104px clear. -->
+            <div class="hidden md:flex items-center gap-0.5 lg:gap-1">
                 <div class="relative">
                     <button
                         id="link-stats"
-                        class="nav-link px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-1"
+                        class="nav-link px-2 lg:px-4 py-2 rounded-lg text-xs lg:text-sm font-bold inline-flex items-center gap-1"
                         data-nav-menu-toggle
                         aria-haspopup="true"
                         aria-expanded="false"
@@ -1307,27 +1320,27 @@
                 </div>
 
                 <button id="link-tonight" data-click-action="navigateTo('tonight')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Tonight</button>
+                    class="nav-link px-2 lg:px-4 py-2 rounded-lg text-xs lg:text-sm font-bold">Tonight</button>
                 <button id="link-proximity" data-click-action="navigateTo('proximity')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Proximity</button>
+                    class="nav-link px-2 lg:px-4 py-2 rounded-lg text-xs lg:text-sm font-bold">Proximity</button>
                 <button id="link-greatshot" data-click-action="navigateTo('greatshot')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Greatshot</button>
+                    class="nav-link px-2 lg:px-4 py-2 rounded-lg text-xs lg:text-sm font-bold">Greatshot</button>
                 <button id="link-uploads" data-click-action="navigateTo('uploads')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">Uploads</button>
+                    class="nav-link px-2 lg:px-4 py-2 rounded-lg text-xs lg:text-sm font-bold">Uploads</button>
                 <button id="link-availability" data-click-action="navigateTo('availability')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-2">
+                    class="nav-link px-2 lg:px-4 py-2 rounded-lg text-xs lg:text-sm font-bold inline-flex items-center gap-2">
                     <span class="text-brand-cyan" aria-hidden="true">#</span>ETL
                     <span id="availability-nav-badge" class="hidden rounded-full bg-brand-amber/20 text-brand-amber px-1.5 py-0.5 text-[10px] font-bold">Link</span>
                 </button>
                 <button id="link-admin" data-click-action="navigateTo('admin')"
-                    class="nav-link px-4 py-2 rounded-lg text-sm font-bold">About</button>
+                    class="nav-link px-2 lg:px-4 py-2 rounded-lg text-xs lg:text-sm font-bold">About</button>
             </div>
 
             <!-- Right Side: Auth -->
             <div class="flex items-center gap-4">
                 <!-- Server Status -->
                 <div
-                    class="hidden md:flex items-center gap-2 px-3 py-1 bg-slate-900/50 rounded-full border border-white/5">
+                    class="hidden lg:flex items-center gap-2 px-3 py-1 bg-slate-900/50 rounded-full border border-white/5">
                     <div id="server-status-dot" class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
                     <span id="server-status-text" class="text-xs font-bold text-slate-400">Offline</span>
                 </div>
