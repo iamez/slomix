@@ -848,7 +848,7 @@ function renderPlayerStats(playerStats) {
     html += '<th class="text-right pr-3">Damage</th>';
     html += '<th class="text-right pr-3">Acc%</th>';
     html += '<th class="text-right pr-3">TPM</th>';
-    html += '<th class="text-right">HS</th>';
+    html += '<th class="text-right" title="Kills by headshot. Not the same as head hits, which routinely exceed kills.">HS</th>';
     html += '</tr></thead><tbody>';
 
     for (const p of players) {
@@ -861,7 +861,9 @@ function renderPlayerStats(playerStats) {
         html += `<td class="text-right pr-3 text-white">${p.damage}</td>`;
         html += `<td class="text-right pr-3 text-white">${p.accuracy != null ? p.accuracy.toFixed(1) : '--'}</td>`;
         html += `<td class="text-right pr-3 text-white">${p.tpm != null ? p.tpm.toFixed(2) : '--'}</td>`;
-        html += `<td class="text-right text-white">${p.headshots}</td>`;
+        // headshot_kills, not headshots: the latter counts head HITS and routinely
+        // exceeds kills (greatshot_crossref.py serves both).
+        html += `<td class="text-right text-white">${p.headshot_kills ?? 0}</td>`;
         html += '</tr>';
     }
 

@@ -974,7 +974,8 @@ function renderWeapons(weapons) {
         <table class="w-full text-sm">
             <thead><tr class="text-[10px] uppercase text-slate-500 border-b border-white/10">
                 <th class="py-2 px-2 text-left">Weapon</th><th class="py-2 px-2 text-right">Kills</th>
-                <th class="py-2 px-2 text-right">Deaths</th><th class="py-2 px-2 text-right">HS</th>
+                <th class="py-2 px-2 text-right">Deaths</th>
+                <th class="py-2 px-2 text-right" title="Head hits, not headshot kills — weapon_comprehensive_stats has no per-weapon kill breakdown, so this can exceed Kills">Head hits</th>
                 <th class="py-2 px-2 text-right">Acc</th><th class="py-2 px-2 text-right">HS Acc</th>
             </tr></thead><tbody>${rows}</tbody>
         </table></div>

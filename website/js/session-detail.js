@@ -3213,7 +3213,7 @@ function _renderPlayerPanelContent(playerKey, panelId) {
                                     <th class="text-left py-1.5 px-2">Weapon</th>
                                     <th class="text-right py-1.5 px-2">K</th>
                                     <th class="text-right py-1.5 px-2">D</th>
-                                    <th class="text-right py-1.5 px-2">HS</th>
+                                    <th class="text-right py-1.5 px-2" title="Head hits, not headshot kills — weapon_comprehensive_stats has no per-weapon kill breakdown, so this can exceed K">Head hits</th>
                                     <th class="text-right py-1.5 px-2">ACC</th>
                                     <th class="text-right py-1.5 px-2">Hits/Shots</th>
                                 </tr>
