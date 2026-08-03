@@ -4,6 +4,7 @@
  */
 
 import { API_BASE, AUTH_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
+import { ensureCurrentUser } from './auth.js';
 
 const NO_STORE_FETCH = { cachePolicy: 'no-store', credentials: 'same-origin' };
 
@@ -180,9 +181,11 @@ async function refreshAvailabilityView() {
 async function loadCurrentUser() {
     currentUser = null;
     try {
-        const resp = await fetch('/auth/me', { credentials: 'same-origin', cache: 'no-store' });
-        if (!resp.ok) return;
-        const payload = await resp.json();
+        // Reuses the startup probe instead of a second /auth/me. The previous
+        // `cache: 'no-store'` only defeated the HTTP cache, not the duplicate
+        // request; the shared probe is per-page-load anyway, so a stale
+        // identity is not reachable here.
+        const payload = await ensureCurrentUser();
         currentUser = payload && payload.id ? payload : null;
     } catch (_err) {
         currentUser = null;

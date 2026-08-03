@@ -219,10 +219,51 @@ export function getCurrentUser() {
     return _currentUser;
 }
 
+// `/auth/me` answers 401 for anonymous visitors. That is the API contract, not
+// an error (logging_middleware.py:40 downgrades it deliberately, and the smoke
+// spec exempts it), but the browser still prints one console line per failed
+// request — so every extra probe is an extra line and an extra request.
+//
+// These two dedupe the probe to at most one per page load: `_authProbe` joins
+// callers that arrive while it is in flight, `_authResolved` serves callers
+// that arrive after it settled (including the anonymous null, which a plain
+// `_currentUser` null check cannot distinguish from "not asked yet").
+let _authProbe = null;
+let _authResolved = false;
+
+/**
+ * Resolve the current user, reusing the startup probe instead of issuing a new
+ * one. Returns the user object, or null when logged out.
+ *
+ * Prefer this over `fetch('/auth/me')`: `checkLoginStatus` is already in
+ * app.js's criticalLoads, so by render time the answer is cached or in flight.
+ */
+export async function ensureCurrentUser() {
+    if (_authResolved) return _currentUser;
+    try {
+        // checkLoginStatus() dedupes an in-flight probe itself, so concurrent
+        // callers join the startup request rather than issuing their own.
+        return await checkLoginStatus();
+    } catch (_e) {
+        return null;
+    }
+}
+
 export async function checkLoginStatus() {
+    if (_authProbe) return _authProbe;
+    _authProbe = _checkLoginStatus();
+    try {
+        return await _authProbe;
+    } finally {
+        _authProbe = null;
+    }
+}
+
+async function _checkLoginStatus() {
     try {
         const user = await fetchJSON(`${AUTH_BASE}/me`);
         _currentUser = user;
+        _authResolved = true;
 
         document.getElementById('auth-guest')?.classList.add('hidden');
         const userEl = document.getElementById('auth-user');
@@ -252,6 +293,7 @@ export async function checkLoginStatus() {
         return user;
     } catch (_e) {
         _currentUser = null;
+        _authResolved = true;
         document.getElementById('auth-guest')?.classList.remove('hidden');
         const userEl = document.getElementById('auth-user');
         if (userEl) {
