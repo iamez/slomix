@@ -232,6 +232,8 @@ let _authProbe = null;
 let _authResolved = false;
 let _authResolvedAt = 0;
 let _authGeneration = 0;
+let _authProbeSeq = 0;
+let _authProbeOwner = 0;
 
 // The cached answer expires. Before the dedupe, every caller re-probed, so a
 // session that changed underneath the page — cookie expiry, or a login/logout
@@ -285,8 +287,14 @@ export async function checkLoginStatus({ force = false } = {}) {
     // refreshes both fields on its own anyway (Codex on #598).
     if (!force && _authProbe) return _authProbe;
 
+    // Ownership is tracked by a numeric token rather than by comparing the two
+    // promise objects: `_authProbe === probe` says the same thing, but CodeQL's
+    // js/missing-await reads any promise in a non-promise position as a
+    // forgotten await and fails the run on it.
+    const probeId = ++_authProbeSeq;
     const probe = _checkLoginStatus();
     _authProbe = probe;
+    _authProbeOwner = probeId;
     try {
         return await probe;
     } finally {
@@ -295,7 +303,7 @@ export async function checkLoginStatus({ force = false } = {}) {
         // letting the next ensureCurrentUser() start a third probe, bump the
         // generation, and make the mutation's awaited probe return the stale
         // identity (Codex on #598).
-        if (_authProbe === probe) _authProbe = null;
+        if (_authProbeOwner === probeId) _authProbe = null;
     }
 }
 

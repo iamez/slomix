@@ -4,7 +4,7 @@
  */
 
 import { API_BASE, fetchJSON, escapeHtml, escapeJsString } from './utils.js';
-import { ensureCurrentUser } from './auth.js';
+import { ensureCurrentUser } from './auth.js?v=20260804-auth-dedupe';
 
 let currentCategory = '';
 let currentOffset = 0;

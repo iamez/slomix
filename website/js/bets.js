@@ -8,7 +8,7 @@
  * @module bets
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
-import { getCurrentUser } from './auth.js';
+import { getCurrentUser, ensureCurrentUser } from './auth.js?v=20260804-auth-dedupe';
 
 // Set element content from a template whose user-controlled parts are already
 // escapeHtml()'d. Uses the project's safeInsertHTML (insertAdjacentHTML) wrapper
@@ -211,6 +211,14 @@ export async function initTonightBetting() {
     const host = document.getElementById('tonight-betting');
     if (!host) return;
     _shell(host);
+    // The renderers read getCurrentUser() synchronously (_renderMarket,
+    // _renderWallet), so the identity has to be settled before the FIRST
+    // render, not merely started. Since initApp() stopped awaiting the auth
+    // probe before routing, a logged-in visitor opening #/tonight directly
+    // would otherwise get disabled bet buttons and no wallet until the 12s
+    // poll corrected it (Codex on #598). This joins the in-flight startup
+    // probe rather than issuing another request.
+    await ensureCurrentUser().catch(() => null);
     await _loadAndRender();
     _stopPolling();
     _interval = setInterval(() => {

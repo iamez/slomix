@@ -4,7 +4,7 @@
  */
 
 import { API_BASE, AUTH_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
-import { ensureCurrentUser } from './auth.js';
+import { ensureCurrentUser } from './auth.js?v=20260804-auth-dedupe';
 
 const NO_STORE_FETCH = { cachePolicy: 'no-store', credentials: 'same-origin' };
 

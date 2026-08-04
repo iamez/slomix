@@ -4,7 +4,7 @@
  */
 
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
-import { openModal } from './auth.js';
+import { openModal } from './auth.js?v=20260804-auth-dedupe';
 
 function formatClockTime(seconds) {
     const value = Number(seconds || 0);

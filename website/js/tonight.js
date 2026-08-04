@@ -7,7 +7,7 @@
  * @module tonight
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
-import { initTonightBetting } from './bets.js';
+import { initTonightBetting } from './bets.js?v=20260804-auth-dedupe';
 
 const POLL_MS = 8000;
 let _interval = null;

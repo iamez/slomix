@@ -5,7 +5,7 @@
  * to the availability page where account linking lives.
  * @module mobile-nav
  */
-import { ensureCurrentUser } from './auth.js';
+import { ensureCurrentUser } from './auth.js?v=20260804-auth-dedupe';
 import { parseHashRoute } from './route-registry.js';
 
 const _TAB_VIEW = { home: 'home', sessions2: 'sessions2', leaderboards: 'leaderboards' };
