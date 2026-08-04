@@ -1,8 +1,7 @@
 """Read-only ET map geometry primitives.
 
-The package deliberately stops at asset discovery, BSP decoding, and typed
-entity extraction. Trace-mask policy, dynamic entity state, and all derived
-metrics belong to later Spider Web workstreams and must not be inferred here.
+Collision traces remain fail-closed around uncompiled patches and unresolved
+runtime geometry, and they are unvalidated until the W6 live comparison.
 """
 
 from website.backend.map_geometry.bsp import (
@@ -51,11 +50,34 @@ from website.backend.map_geometry.pk3_index import (
     Pk3GeometryIndex,
     Pk3IndexError,
 )
+from website.backend.map_geometry.trace import (
+    BSP_TREE_POINT_EPSILON,
+    CONTENTS_PLAYERCLIP,
+    CONTENTS_SOLID,
+    LINE_OF_SIGHT_MASK,
+    PLAYER_BOUNDS,
+    PLAYER_MOVEMENT_MASK,
+    SURFACE_CLIP_EPSILON,
+    BspPointTracer,
+    EndpointTrace,
+    LineOfSightAvailability,
+    PlayerBounds,
+    PlayerStance,
+    PointTraceResult,
+    RuntimeGeometryCoverage,
+    TargetBodyPoint,
+    TraceMask,
+    TraceReason,
+    TraceStatus,
+    player_eye_point,
+    target_body_points,
+)
 
 __all__ = [
     "AssetContentChangedError",
     "BSP_MAGIC",
     "BSP_VERSION",
+    "BSP_TREE_POINT_EPSILON",
     "BspBrush",
     "BspBrushSide",
     "BspDrawVertex",
@@ -68,13 +90,19 @@ __all__ = [
     "BspPlane",
     "BspShader",
     "BspSurface",
+    "BspPointTracer",
     "Bounds3D",
     "CollisionBrushEntity",
+    "CONTENTS_PLAYERCLIP",
+    "CONTENTS_SOLID",
     "ConvexBrushVolume",
     "EntityExtractionError",
+    "EndpointTrace",
     "GeometryResolution",
     "InlineModelGeometry",
     "LumpType",
+    "LINE_OF_SIGHT_MASK",
+    "LineOfSightAvailability",
     "MapEntityCatalog",
     "MapAssetKind",
     "MapAssetProvider",
@@ -84,8 +112,19 @@ __all__ = [
     "ObjectiveGeometrySource",
     "ObjectiveMarker",
     "ObjectiveVolume",
+    "PLAYER_BOUNDS",
+    "PLAYER_MOVEMENT_MASK",
+    "PlayerBounds",
+    "PlayerStance",
+    "PointTraceResult",
     "SpawnPoint",
+    "SURFACE_CLIP_EPSILON",
     "SurfaceType",
+    "RuntimeGeometryCoverage",
+    "TargetBodyPoint",
+    "TraceMask",
+    "TraceReason",
+    "TraceStatus",
     "UnsupportedBspError",
     "VolumePlane",
     "entity_catalog_manifest",
@@ -93,4 +132,6 @@ __all__ = [
     "parse_bsp",
     "parse_bsp_file",
     "parse_entities",
+    "player_eye_point",
+    "target_body_points",
 ]
