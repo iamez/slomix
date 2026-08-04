@@ -243,6 +243,37 @@ def test_tolerance_matched_wrap_seam_preserves_coordinates_and_adds_topology():
     assert wrapped_hit is not None
 
 
+def test_non_coplanar_wrap_variants_only_attach_to_seam_edge_owners():
+    control_points = []
+    for row in range(3):
+        for column in range(3):
+            if column == 0:
+                point = (0.0, 0.0, float(row * 10))
+            elif column == 2:
+                point = (0.05, 0.0, float(row * 10))
+            else:
+                point = (
+                    10.0,
+                    float(row * row * 10),
+                    float((row * 10) + (10 if row == 1 else 0)),
+                )
+            control_points.append(point)
+
+    collision = build_patch_collision(tuple(control_points), 3, 3)
+
+    assert collision.wrap_width is True
+    assert all(len(facet.vertices) == 3 for facet in collision.facets)
+    assert [len(facet.containment_variants) for facet in collision.facets] == [1, 0, 0, 1]
+    transposed_points = tuple(
+        control_points[(column * 3) + row]
+        for row in range(3)
+        for column in range(3)
+    )
+    height_collision = build_patch_collision(transposed_points, 3, 3)
+    assert height_collision.wrap_height is True
+    assert [len(facet.containment_variants) for facet in height_collision.facets] == [0, 1, 1, 0]
+
+
 def test_degenerate_patch_has_no_facets_and_malformed_inputs_are_rejected():
     collision = build_patch_collision(((0.0, 0.0, 0.0),) * 9, 3, 3)
     hit, tested = trace_patch_point(
