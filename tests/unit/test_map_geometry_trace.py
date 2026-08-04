@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import replace
 
 import pytest
 
 from website.backend.map_geometry import (
+    Bounds3D,
     BspBrush,
     BspBrushSide,
     BspDrawVertex,
@@ -17,8 +19,10 @@ from website.backend.map_geometry import (
     BspPlane,
     BspShader,
     BspSurface,
+    PatchCollision,
     RuntimeGeometryCoverage,
     SurfaceType,
+    compile_bsp_patches,
     extract_entity_catalog,
 )
 from website.backend.map_geometry.trace import (
@@ -53,15 +57,15 @@ def _box_planes(mins=(-1.0, -2.0, -3.0), maxs=(1.0, 2.0, 3.0)) -> tuple[BspPlane
 
 def _trace_bsp(*, brush_contents=CONTENTS_SOLID, with_patch=False) -> BspFile:
     patch_positions = (
-        (-0.2, -4.0, -4.0),
+        (0.0, -4.0, -4.0),
         (0.0, -4.0, 0.0),
-        (0.2, -4.0, 4.0),
-        (-0.2, 0.0, -4.0),
+        (0.0, -4.0, 4.0),
+        (0.0, 0.0, -4.0),
         (0.0, 0.0, 0.0),
-        (0.2, 0.0, 4.0),
-        (-0.2, 4.0, -4.0),
+        (0.0, 0.0, 4.0),
+        (0.0, 4.0, -4.0),
         (0.0, 4.0, 0.0),
-        (0.2, 4.0, 4.0),
+        (0.0, 4.0, 4.0),
     )
     surfaces = (
         BspSurface(
@@ -259,7 +263,7 @@ def test_named_masks_distinguish_playerclip_from_line_of_sight():
     assert movement_contents.trace_mask == PLAYER_MOVEMENT_MASK
 
 
-def test_intersecting_solid_patch_is_indeterminate_until_facets_exist():
+def test_intersecting_solid_patch_blocks_with_compiled_facets():
     bsp = replace(_trace_bsp(with_patch=True), brushes=(), brush_sides=(), leaf_brushes=())
     bsp = replace(
         bsp,
@@ -269,9 +273,13 @@ def test_intersecting_solid_patch_is_indeterminate_until_facets_exist():
 
     result = _verified_tracer(bsp).trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
 
-    assert result.status is TraceStatus.INDETERMINATE
-    assert result.reason is TraceReason.SOLID_PATCH_UNCOMPILED
-    assert result.uncertain_surface_indices == (0,)
+    assert result.status is TraceStatus.BLOCKED
+    assert result.reason is TraceReason.SOLID_PATCH
+    assert result.surface_index == 0
+    assert result.patch_facet_index is not None
+    assert result.fraction == pytest.approx((5.0 - 0.125) / 10.0)
+    assert result.tested_patch_count == 1
+    assert result.tested_patch_facet_count == 1
 
 
 def test_nonintersecting_patch_does_not_poison_an_otherwise_clear_segment():
@@ -286,6 +294,316 @@ def test_nonintersecting_patch_does_not_poison_an_otherwise_clear_segment():
 
     assert result.status is TraceStatus.CLEAR
     assert result.tested_patch_count == 1
+    assert result.tested_patch_facet_count == 0
+
+
+def test_patch_collision_respects_named_los_and_playerclip_masks():
+    bsp = replace(
+        _trace_bsp(brush_contents=CONTENTS_PLAYERCLIP, with_patch=True),
+        brushes=(),
+        brush_sides=(),
+        leaf_brushes=(),
+    )
+    bsp = replace(
+        bsp,
+        leafs=tuple(replace(leaf, first_leaf_brush=0, num_leaf_brushes=0) for leaf in bsp.leafs),
+        models=(replace(bsp.models[0], first_brush=0, num_brushes=0),),
+    )
+    tracer = _verified_tracer(bsp)
+
+    line_of_sight = tracer.trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+    movement_contents = tracer.trace_segment(
+        (-5.0, 0.0, 0.0),
+        (5.0, 0.0, 0.0),
+        trace_mask=PLAYER_MOVEMENT_MASK,
+    )
+
+    assert line_of_sight.status is TraceStatus.CLEAR
+    assert line_of_sight.tested_patch_count == 0
+    assert movement_contents.status is TraceStatus.BLOCKED
+    assert movement_contents.reason is TraceReason.SOLID_PATCH
+
+
+def test_nearer_brush_wins_over_a_farther_patch_surface():
+    tracer = _verified_tracer(_trace_bsp(with_patch=True))
+
+    result = tracer.trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+
+    assert result.status is TraceStatus.BLOCKED
+    assert result.reason is TraceReason.SOLID_BRUSH
+    assert result.fraction == pytest.approx((4.0 - 0.125) / 10.0)
+    assert result.surface_index is None
+
+
+def test_nearer_patch_wins_over_a_farther_brush():
+    bsp = _trace_bsp(with_patch=True)
+    far_brush_planes = _box_planes((2.0, -2.0, -3.0), (3.0, 2.0, 3.0))
+    bsp = replace(
+        bsp,
+        planes=(bsp.planes[0], *far_brush_planes),
+        brush_sides=tuple(BspBrushSide(index + 1, 0) for index in range(6)),
+    )
+
+    result = _verified_tracer(bsp).trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+
+    assert result.status is TraceStatus.BLOCKED
+    assert result.reason is TraceReason.SOLID_PATCH
+    assert result.fraction == pytest.approx((5.0 - 0.125) / 10.0)
+    assert result.surface_index == 0
+
+
+def test_brush_and_patch_limits_follow_near_to_far_leaf_encounter_order():
+    bsp = _trace_bsp(with_patch=True)
+    slanted_patch = tuple(
+        replace(
+            vertex,
+            position=(10.0 * vertex.position[1], vertex.position[1], vertex.position[2]),
+        )
+        for vertex in bsp.draw_vertices
+    )
+    close_brush_planes = _box_planes((-0.1, -2.0, -3.0), (0.1, 2.0, 3.0))
+    bsp = replace(
+        bsp,
+        planes=(bsp.planes[0], *close_brush_planes),
+        brush_sides=tuple(BspBrushSide(index + 1, 0) for index in range(6)),
+        draw_vertices=slanted_patch,
+        leaf_surfaces=(0,),
+        leaf_brushes=(0,),
+        leafs=(
+            replace(
+                bsp.leafs[0],
+                first_leaf_surface=0,
+                num_leaf_surfaces=0,
+                first_leaf_brush=0,
+                num_leaf_brushes=1,
+            ),
+            replace(
+                bsp.leafs[1],
+                first_leaf_surface=0,
+                num_leaf_surfaces=1,
+                first_leaf_brush=1,
+                num_leaf_brushes=0,
+            ),
+        ),
+    )
+    tracer = _verified_tracer(bsp)
+
+    result = tracer.trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+
+    assert tracer._candidate_references((1, 0)) == (  # noqa: SLF001 - order is the contract
+        ("surface", 0),
+        ("brush", 0),
+    )
+    assert result.status is TraceStatus.BLOCKED
+    assert result.reason is TraceReason.SOLID_PATCH
+    assert result.surface_index == 0
+    assert result.fraction is not None
+    assert result.fraction < (4.9 - 0.125) / 10.0
+
+
+def test_failed_patch_compilation_remains_indeterminate_when_bounds_are_unknown():
+    bsp = replace(_trace_bsp(with_patch=True), brushes=(), brush_sides=(), leaf_brushes=())
+    bsp = replace(
+        bsp,
+        leafs=tuple(replace(leaf, first_leaf_brush=0, num_leaf_brushes=0) for leaf in bsp.leafs),
+        models=(replace(bsp.models[0], first_brush=0, num_brushes=0),),
+    )
+    failed = PatchCollision(
+        surface_index=0,
+        content_flags=CONTENTS_SOLID,
+        bounds=None,
+        facets=(),
+        grid_width=3,
+        grid_height=3,
+        error="synthetic compile failure",
+    )
+    tracer = BspPointTracer(
+        bsp,
+        patch_collisions=(failed,),
+        runtime_entity_completeness=RuntimeGeometryCoverage.VERIFIED,
+        runtime_entity_state=RuntimeGeometryCoverage.VERIFIED,
+    )
+
+    result = tracer.trace_segment((-5.0, 20.0, 0.0), (5.0, 20.0, 0.0))
+
+    assert result.status is TraceStatus.INDETERMINATE
+    assert result.reason is TraceReason.SOLID_PATCH_UNCOMPILED
+    assert result.uncertain_surface_indices == (0,)
+
+
+def test_nonfinite_patch_compile_failure_has_no_bounds_and_cannot_fail_open():
+    bsp = replace(_trace_bsp(with_patch=True), brushes=(), brush_sides=(), leaf_brushes=())
+    invalid_vertex = replace(bsp.draw_vertices[0], position=(math.nan, -4.0, -4.0))
+    bsp = replace(
+        bsp,
+        draw_vertices=(invalid_vertex, *bsp.draw_vertices[1:]),
+        leafs=tuple(replace(leaf, first_leaf_brush=0, num_leaf_brushes=0) for leaf in bsp.leafs),
+        models=(replace(bsp.models[0], first_brush=0, num_brushes=0),),
+    )
+
+    collisions = compile_bsp_patches(bsp)
+    result = BspPointTracer(
+        bsp,
+        patch_collisions=collisions,
+        runtime_entity_completeness=RuntimeGeometryCoverage.VERIFIED,
+        runtime_entity_state=RuntimeGeometryCoverage.VERIFIED,
+    ).trace_segment((-5.0, 1000.0, 1000.0), (5.0, 1000.0, 1000.0))
+
+    assert collisions[0].error == "patch control points must be finite"
+    assert collisions[0].bounds is None
+    assert result.status is TraceStatus.INDETERMINATE
+    assert result.reason is TraceReason.SOLID_PATCH_UNCOMPILED
+
+
+def test_injected_patch_catalog_rejects_duplicate_surface_entries():
+    bsp = _trace_bsp(with_patch=True)
+    collision = compile_bsp_patches(bsp)[0]
+
+    with pytest.raises(ValueError, match="duplicate patch collision"):
+        BspPointTracer(bsp, patch_collisions=(collision, collision))
+
+
+def test_missing_cached_patch_only_blocks_clear_when_control_bounds_intersect():
+    bsp = replace(_trace_bsp(with_patch=True), brushes=(), brush_sides=(), leaf_brushes=())
+    bsp = replace(
+        bsp,
+        leafs=tuple(replace(leaf, first_leaf_brush=0, num_leaf_brushes=0) for leaf in bsp.leafs),
+        models=(replace(bsp.models[0], first_brush=0, num_brushes=0),),
+    )
+    tracer = BspPointTracer(
+        bsp,
+        patch_collisions=(),
+        runtime_entity_completeness=RuntimeGeometryCoverage.VERIFIED,
+        runtime_entity_state=RuntimeGeometryCoverage.VERIFIED,
+    )
+
+    intersecting = tracer.trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+    distant = tracer.trace_segment((-5.0, 20.0, 0.0), (5.0, 20.0, 0.0))
+
+    assert intersecting.status is TraceStatus.INDETERMINATE
+    assert intersecting.reason is TraceReason.SOLID_PATCH_UNCOMPILED
+    assert distant.status is TraceStatus.CLEAR
+    assert distant.tested_patch_count == 1
+
+
+def test_known_patch_hit_keeps_unknown_first_hit_provenance_from_partial_catalog():
+    bsp = replace(_trace_bsp(with_patch=True), brushes=(), brush_sides=(), leaf_brushes=())
+    bsp = replace(
+        bsp,
+        surfaces=(bsp.surfaces[0], bsp.surfaces[0]),
+        leaf_surfaces=(0, 1),
+        leafs=tuple(
+            replace(leaf, first_leaf_surface=0, num_leaf_surfaces=2, num_leaf_brushes=0)
+            for leaf in bsp.leafs
+        ),
+        models=(replace(bsp.models[0], num_surfaces=2, num_brushes=0),),
+    )
+    first_collision = compile_bsp_patches(bsp)[0]
+    tracer = BspPointTracer(
+        bsp,
+        patch_collisions=(first_collision,),
+        runtime_entity_completeness=RuntimeGeometryCoverage.VERIFIED,
+        runtime_entity_state=RuntimeGeometryCoverage.VERIFIED,
+    )
+
+    result = tracer.trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+
+    assert result.status is TraceStatus.BLOCKED
+    assert result.reason is TraceReason.STATIC_GEOMETRY_BLOCKED
+    assert result.fraction is None
+    assert result.surface_index is None
+    assert result.patch_facet_index is None
+    assert result.uncertain_surface_indices == (1,)
+    assert result.uncertainty_reasons == (TraceReason.SOLID_PATCH_UNCOMPILED,)
+
+
+def test_known_brush_hit_keeps_unknown_earlier_patch_provenance():
+    bsp = _trace_bsp(with_patch=True)
+    earlier_patch = tuple(
+        replace(vertex, position=(-3.0, vertex.position[1], vertex.position[2]))
+        for vertex in bsp.draw_vertices
+    )
+    bsp = replace(bsp, draw_vertices=earlier_patch)
+    tracer = BspPointTracer(
+        bsp,
+        patch_collisions=(),
+        runtime_entity_completeness=RuntimeGeometryCoverage.VERIFIED,
+        runtime_entity_state=RuntimeGeometryCoverage.VERIFIED,
+    )
+
+    result = tracer.trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+
+    assert result.status is TraceStatus.BLOCKED
+    assert result.reason is TraceReason.STATIC_GEOMETRY_BLOCKED
+    assert result.fraction is None
+    assert result.brush_index is None
+    assert result.uncertain_surface_indices == (0,)
+
+
+def test_earlier_unresolved_patch_is_not_pruned_by_a_later_pushed_brush_fraction():
+    bsp = _trace_bsp(with_patch=True)
+    bsp = replace(
+        bsp,
+        leaf_surfaces=(0,),
+        leaf_brushes=(0,),
+        leafs=(
+            replace(
+                bsp.leafs[0],
+                first_leaf_surface=0,
+                num_leaf_surfaces=0,
+                first_leaf_brush=0,
+                num_leaf_brushes=1,
+            ),
+            replace(
+                bsp.leafs[1],
+                first_leaf_surface=0,
+                num_leaf_surfaces=1,
+                first_leaf_brush=1,
+                num_leaf_brushes=0,
+            ),
+        ),
+    )
+    failed = replace(
+        compile_bsp_patches(bsp)[0],
+        bounds=Bounds3D((1.0, -1.0, -1.0), (2.0, 1.0, 1.0)),
+        facets=(),
+        error="synthetic compile failure",
+    )
+    tracer = BspPointTracer(
+        bsp,
+        patch_collisions=(failed,),
+        runtime_entity_completeness=RuntimeGeometryCoverage.VERIFIED,
+        runtime_entity_state=RuntimeGeometryCoverage.VERIFIED,
+    )
+
+    result = tracer.trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+
+    assert tracer._candidate_references((1, 0)) == (  # noqa: SLF001 - order is the contract
+        ("surface", 0),
+        ("brush", 0),
+    )
+    assert result.status is TraceStatus.BLOCKED
+    assert result.reason is TraceReason.STATIC_GEOMETRY_BLOCKED
+    assert result.fraction is None
+    assert result.brush_index is None
+    assert result.uncertain_surface_indices == (0,)
+
+
+def test_aggregate_block_retains_proven_solid_start_flags():
+    tracer = BspPointTracer(
+        _trace_bsp(with_patch=True),
+        patch_collisions=(),
+        runtime_entity_completeness=RuntimeGeometryCoverage.VERIFIED,
+        runtime_entity_state=RuntimeGeometryCoverage.VERIFIED,
+    )
+
+    result = tracer.trace_segment((0.0, 0.0, 0.0), (0.5, 0.0, 0.0))
+
+    assert result.status is TraceStatus.BLOCKED
+    assert result.reason is TraceReason.STATIC_GEOMETRY_BLOCKED
+    assert result.start_solid is True
+    assert result.all_solid is True
+    assert result.uncertain_surface_indices == (0,)
 
 
 def test_runtime_completeness_is_a_required_clear_gate():
@@ -404,6 +722,29 @@ def test_cyclic_bsp_tree_is_indeterminate_instead_of_partially_traced():
     assert result.reason is TraceReason.INVALID_BSP_TREE
 
 
+def test_bsp_candidates_preserve_directional_near_to_far_encounter_order():
+    bsp = _trace_bsp(with_patch=True)
+    bsp = replace(
+        bsp,
+        surfaces=(bsp.surfaces[0], bsp.surfaces[0]),
+        leaf_surfaces=(0, 1),
+        models=(replace(bsp.models[0], num_surfaces=2),),
+    )
+    tracer = _verified_tracer(bsp)
+
+    forward_leaves = tracer._candidate_leaf_indices(  # noqa: SLF001 - traversal is the contract
+        (-5.0, 0.0, 0.0), (5.0, 0.0, 0.0)
+    )
+    reverse_leaves = tracer._candidate_leaf_indices(  # noqa: SLF001 - traversal is the contract
+        (5.0, 0.0, 0.0), (-5.0, 0.0, 0.0)
+    )
+
+    assert forward_leaves == (1, 0)
+    assert reverse_leaves == (0, 1)
+    assert tracer._candidate_indices(forward_leaves)[1] == (1, 0)  # noqa: SLF001
+    assert tracer._candidate_indices(reverse_leaves)[1] == (0, 1)  # noqa: SLF001
+
+
 def test_frozen_stance_bounds_and_target_endpoints_match_contract():
     assert PLAYER_BOUNDS[PlayerStance.STANDING].maxs == (18.0, 18.0, 48.0)
     assert PLAYER_BOUNDS[PlayerStance.CROUCHING].maxs == (18.0, 18.0, 24.0)
@@ -445,3 +786,30 @@ def test_body_availability_uses_any_clear_and_never_claims_sight():
     assert availability.interpretation == "line_of_sight_availability"
     assert availability.validation_status == "unvalidated_until_w6"
     assert len(availability.endpoints) == 6
+
+
+def test_all_patch_blocked_body_availability_uses_aggregate_static_reason():
+    bsp = replace(_trace_bsp(with_patch=True), brushes=(), brush_sides=(), leaf_brushes=())
+    expanded_patch = tuple(
+        replace(vertex, position=(vertex.position[0], vertex.position[1] * 8, vertex.position[2] * 8))
+        for vertex in bsp.draw_vertices
+    )
+    bsp = replace(
+        bsp,
+        draw_vertices=expanded_patch,
+        leafs=tuple(replace(leaf, first_leaf_brush=0, num_leaf_brushes=0) for leaf in bsp.leafs),
+        models=(replace(bsp.models[0], first_brush=0, num_brushes=0),),
+    )
+
+    availability = _verified_tracer(bsp).trace_line_of_sight_availability(
+        (-30.0, 0.0, -56.0),
+        PlayerStance.STANDING,
+        (30.0, 0.0, -56.0),
+        PlayerStance.STANDING,
+    )
+
+    assert availability.status is TraceStatus.BLOCKED
+    assert availability.reason is TraceReason.STATIC_GEOMETRY_BLOCKED
+    assert {endpoint.result.reason for endpoint in availability.endpoints} == {
+        TraceReason.SOLID_PATCH
+    }
