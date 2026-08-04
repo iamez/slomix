@@ -169,6 +169,7 @@ def test_w4a2_compiles_every_real_patch_without_fail_open_gaps(geometry_index):
         "wrapped": 0,
         "solid_wrapped": 0,
         "solid_nonsolid": 0,
+        "solid_empty": 0,
     }
     for map_name in geometry_index.map_names:
         bsp = geometry_index.load_bsp(map_name)
@@ -176,9 +177,7 @@ def test_w4a2_compiles_every_real_patch_without_fail_open_gaps(geometry_index):
         totals["patches"] += len(collisions)
         totals["facets"] += sum(len(collision.facets) for collision in collisions)
         totals["failures"] += sum(collision.error is not None for collision in collisions)
-        totals["wrapped"] += sum(
-            collision.wrap_width or collision.wrap_height for collision in collisions
-        )
+        totals["wrapped"] += sum(collision.wrap_width or collision.wrap_height for collision in collisions)
         totals["solid_wrapped"] += sum(
             (collision.wrap_width or collision.wrap_height) and bool(collision.content_flags & 1)
             for collision in collisions
@@ -189,14 +188,18 @@ def test_w4a2_compiles_every_real_patch_without_fail_open_gaps(geometry_index):
             for surface in bsp.surfaces
             if surface.surface_type is SurfaceType.PATCH
         )
+        totals["solid_empty"] += sum(
+            bool(collision.content_flags & 1) and not collision.facets for collision in collisions
+        )
 
     assert totals == {
         "patches": 4794,
-        "facets": 22248,
+        "facets": 22126,
         "failures": 0,
         "wrapped": 2718,
         "solid_wrapped": 2539,
         "solid_nonsolid": 0,
+        "solid_empty": 0,
     }
 
 
@@ -223,8 +226,7 @@ def test_w4a_real_spawn_segments_never_clear_with_unverified_runtime_collision(g
         assert availability.validation_status == "unvalidated_until_w6"
         if availability.status is TraceStatus.INDETERMINATE:
             assert any(
-                TraceReason.RUNTIME_ENTITY_COMPLETENESS_UNVERIFIED
-                in endpoint.result.uncertainty_reasons
+                TraceReason.RUNTIME_ENTITY_COMPLETENESS_UNVERIFIED in endpoint.result.uncertainty_reasons
                 for endpoint in availability.endpoints
             ), map_name
 

@@ -21,7 +21,6 @@ PATCH_BOUNDS_PADDING = 1.0
 PATCH_MAX_GRID_SIZE = 129
 PATCH_PLANE_EPSILON = 0.1
 _DEGENERATE_NORMAL_SQUARED = 1e-20
-_BARYCENTRIC_EPSILON = 1e-7
 
 
 class PatchCollisionError(ValueError):
@@ -29,11 +28,18 @@ class PatchCollisionError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
+class PatchBorder:
+    normal: Vector3
+    distance: float
+    inward: bool
+
+
+@dataclass(frozen=True, slots=True)
 class PatchFacet:
     normal: Vector3
     distance: float
     vertices: tuple[Vector3, ...]
-    containment_variants: tuple[tuple[Vector3, ...], ...] = ()
+    borders: tuple[PatchBorder, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,9 +74,7 @@ def _quadratic_midpoint(start: Vector3, control: Vector3, end: Vector3) -> Vecto
 def _needs_subdivision(start: Vector3, control: Vector3, end: Vector3) -> bool:
     curve_midpoint = _quadratic_midpoint(start, control, end)
     line_midpoint = _midpoint(start, end)
-    error_squared = sum(
-        (curve_midpoint[axis] - line_midpoint[axis]) ** 2 for axis in range(3)
-    )
+    error_squared = sum((curve_midpoint[axis] - line_midpoint[axis]) ** 2 for axis in range(3))
     return error_squared >= PATCH_SUBDIVIDE_DISTANCE**2
 
 
@@ -107,10 +111,7 @@ def _points_close(left: Vector3, right: Vector3) -> bool:
 def _remove_degenerate_columns(columns: list[list[Vector3]]) -> None:
     column = 0
     while column < len(columns) - 1:
-        if all(
-            _points_close(columns[column][row], columns[column + 1][row])
-            for row in range(len(columns[0]))
-        ):
+        if all(_points_close(columns[column][row], columns[column + 1][row]) for row in range(len(columns[0]))):
             del columns[column + 1]
         else:
             column += 1
@@ -143,17 +144,12 @@ def _flatten_grid(
         )
         for row in range(height)
     )
-    wrap_height = all(
-        _points_close(control_points[column], control_points[((height - 1) * width) + column])
-        for column in range(width)
-    )
-
-    columns = [
-        [control_points[(row * width) + column] for row in range(height)]
-        for column in range(width)
-    ]
+    columns = [[control_points[(row * width) + column] for row in range(height)] for column in range(width)]
     _subdivide_columns(columns)
     _remove_degenerate_columns(columns)
+    # ET:L detects the second-axis wrap only after the first-axis flattening.
+    # Removed control columns must not keep an otherwise closed axis open.
+    wrap_height = all(_points_close(column[0], column[-1]) for column in columns)
     columns = _transpose(columns)
     _subdivide_columns(columns)
     _remove_degenerate_columns(columns)
@@ -177,12 +173,12 @@ def _cross(left: Vector3, right: Vector3) -> Vector3:
     )
 
 
-def _surface_plane(
+def _find_plane(
     first: Vector3,
     second: Vector3,
     third: Vector3,
     planes: list[tuple[Vector3, float]],
-) -> tuple[Vector3, float] | None:
+) -> int | None:
     # ET:L patch planes point out of clockwise-ordered control-grid triangles.
     normal = _cross(_subtract(third, first), _subtract(second, first))
     length_squared = _dot(normal, normal)
@@ -192,16 +188,13 @@ def _surface_plane(
     unit_normal = tuple(component * inverse_length for component in normal)
     distance = _dot(first, unit_normal)
     vertices = (first, second, third)
-    for existing_normal, existing_distance in planes:
+    for plane_index, (existing_normal, existing_distance) in enumerate(planes):
         if _dot(unit_normal, existing_normal) < 0.0:
             continue
-        if all(
-            abs(_dot(vertex, existing_normal) - existing_distance) <= PATCH_PLANE_EPSILON
-            for vertex in vertices
-        ):
-            return existing_normal, existing_distance
+        if all(abs(_dot(vertex, existing_normal) - existing_distance) <= PATCH_PLANE_EPSILON for vertex in vertices):
+            return plane_index
     planes.append((unit_normal, distance))
-    return unit_normal, distance
+    return len(planes) - 1
 
 
 def _expanded_bounds(points: tuple[Vector3, ...], padding: float) -> Bounds3D:
@@ -211,42 +204,87 @@ def _expanded_bounds(points: tuple[Vector3, ...], padding: float) -> Bounds3D:
     )
 
 
-def _containment_variants(
+def _grid_plane(
+    grid_planes: list[list[tuple[int | None, int | None]]],
+    column: int,
+    row: int,
+    triangle: int,
+) -> int | None:
+    plane = grid_planes[column][row][triangle]
+    if plane is not None:
+        return plane
+    return grid_planes[column][row][1 - triangle]
+
+
+def _edge_plane(
     grid: list[list[Vector3]],
-    grid_coordinates: tuple[tuple[int, int], ...],
-    *,
-    width_boundary_row: int | None,
-    height_boundary_column: int | None,
-) -> tuple[tuple[Vector3, ...], ...]:
-    """Return alternate seam-border polygons without moving surface vertices."""
-    variants: list[tuple[Vector3, ...]] = []
-    for use_width_seam, use_height_seam in (
-        (True, False),
-        (False, True),
-        (True, True),
-    ):
-        if use_width_seam and width_boundary_row is None:
-            continue
-        if use_height_seam and height_boundary_column is None:
-            continue
-        points: list[Vector3] = []
-        for grid_column, grid_row in grid_coordinates:
-            if use_width_seam and grid_row == width_boundary_row:
-                grid_row = len(grid[0]) - 1 if width_boundary_row == 0 else 0
-            if use_height_seam and grid_column == height_boundary_column:
-                grid_column = len(grid) - 1 if height_boundary_column == 0 else 0
-            points.append(grid[grid_column][grid_row])
-        variant = tuple(points)
-        if variant not in variants:
-            variants.append(variant)
-    return tuple(variants)
+    grid_planes: list[list[tuple[int | None, int | None]]],
+    planes: list[tuple[Vector3, float]],
+    column: int,
+    row: int,
+    edge: int,
+) -> int | None:
+    if edge == 0:  # top
+        first = grid[column][row]
+        second = grid[column + 1][row]
+        surface = _grid_plane(grid_planes, column, row, 0)
+    elif edge == 1:  # right
+        first = grid[column + 1][row]
+        second = grid[column + 1][row + 1]
+        surface = _grid_plane(grid_planes, column, row, 0)
+    elif edge == 2:  # bottom
+        second = grid[column][row + 1]
+        first = grid[column + 1][row + 1]
+        surface = _grid_plane(grid_planes, column, row, 1)
+    elif edge == 3:  # left
+        second = grid[column][row]
+        first = grid[column][row + 1]
+        surface = _grid_plane(grid_planes, column, row, 1)
+    elif edge == 4:  # diagonal out of triangle 0
+        first = grid[column + 1][row + 1]
+        second = grid[column][row]
+        surface = _grid_plane(grid_planes, column, row, 0)
+    elif edge == 5:  # diagonal out of triangle 1
+        first = grid[column][row]
+        second = grid[column + 1][row + 1]
+        surface = _grid_plane(grid_planes, column, row, 1)
+    else:
+        raise PatchCollisionError(f"unsupported patch edge {edge}")
+    if surface is None:
+        return None
+    normal, _ = planes[surface]
+    up = tuple(first[axis] + (4.0 * normal[axis]) for axis in range(3))
+    return _find_plane(first, second, up, planes)
+
+
+def _facet(
+    surface_plane: int | None,
+    border_planes: tuple[int | None, ...],
+    vertices: tuple[Vector3, ...],
+    planes: list[tuple[Vector3, float]],
+) -> PatchFacet | None:
+    if surface_plane is None or any(border is None for border in border_planes):
+        return None
+    borders: list[PatchBorder] = []
+    for border_plane in border_planes:
+        assert border_plane is not None
+        normal, distance = planes[border_plane]
+        front = False
+        back = False
+        for vertex in vertices:
+            offset = _dot(vertex, normal) - distance
+            front |= offset > PATCH_PLANE_EPSILON
+            back |= offset < -PATCH_PLANE_EPSILON
+        if not front and not back:
+            return None
+        borders.append(PatchBorder(normal, distance, front and not back))
+    normal, distance = planes[surface_plane]
+    return PatchFacet(normal, distance, vertices, tuple(borders))
 
 
 def patch_control_bounds(control_points: tuple[Vector3, ...]) -> Bounds3D | None:
     """Return conservative finite control-hull bounds for a patch, if trustworthy."""
-    if not control_points or not all(
-        math.isfinite(value) for point in control_points for value in point
-    ):
+    if not control_points or not all(math.isfinite(value) for point in control_points for value in point):
         return None
     return _expanded_bounds(control_points, PATCH_BOUNDS_PADDING)
 
@@ -263,87 +301,92 @@ def build_patch_collision(
     grid, wrap_width, wrap_height = _flatten_grid(control_points, width, height)
     facets: list[PatchFacet] = []
     planes: list[tuple[Vector3, float]] = []
+    grid_planes: list[list[tuple[int | None, int | None]]] = []
     for column in range(len(grid) - 1):
+        column_planes: list[tuple[int | None, int | None]] = []
         for row in range(len(grid[0]) - 1):
             top_left = grid[column][row]
             top_right = grid[column + 1][row]
             bottom_right = grid[column + 1][row + 1]
             bottom_left = grid[column][row + 1]
-            first_vertices = (top_left, top_right, bottom_right)
-            second_vertices = (bottom_right, bottom_left, top_left)
-            width_boundary_row = (
-                0
-                if wrap_width and row == 0
-                else len(grid[0]) - 1
-                if wrap_width and row == len(grid[0]) - 2
+            column_planes.append(
+                (
+                    _find_plane(top_left, top_right, bottom_right, planes),
+                    _find_plane(bottom_right, bottom_left, top_left, planes),
+                )
+            )
+        grid_planes.append(column_planes)
+
+    for column in range(len(grid) - 1):
+        for row in range(len(grid[0]) - 1):
+            first_plane, second_plane = grid_planes[column][row]
+            top = grid_planes[column][row - 1][1] if row > 0 else grid_planes[column][-1][1] if wrap_width else None
+            if top is None or top == first_plane:
+                top = _edge_plane(grid, grid_planes, planes, column, row, 0)
+            bottom = (
+                grid_planes[column][row + 1][0]
+                if row < len(grid[0]) - 2
+                else grid_planes[column][0][0]
+                if wrap_width
                 else None
             )
-            height_boundary_column = (
-                0
-                if wrap_height and column == 0
-                else len(grid) - 1
-                if wrap_height and column == len(grid) - 2
+            if bottom is None or bottom == second_plane:
+                bottom = _edge_plane(grid, grid_planes, planes, column, row, 2)
+            left = grid_planes[column - 1][row][0] if column > 0 else grid_planes[-1][row][0] if wrap_height else None
+            if left is None or left == second_plane:
+                left = _edge_plane(grid, grid_planes, planes, column, row, 3)
+            right = (
+                grid_planes[column + 1][row][1]
+                if column < len(grid) - 2
+                else grid_planes[0][row][1]
+                if wrap_height
                 else None
             )
-            quad_coordinates = (
-                (column, row),
-                (column + 1, row),
-                (column + 1, row + 1),
-                (column, row + 1),
-            )
-            quad_variants = _containment_variants(
-                grid,
-                quad_coordinates,
-                width_boundary_row=width_boundary_row,
-                height_boundary_column=height_boundary_column,
-            )
-            first_plane = _surface_plane(*first_vertices, planes)
-            second_plane = _surface_plane(*second_vertices, planes)
+            if right is None or right == first_plane:
+                right = _edge_plane(grid, grid_planes, planes, column, row, 1)
+
+            top_left = grid[column][row]
+            top_right = grid[column + 1][row]
+            bottom_right = grid[column + 1][row + 1]
+            bottom_left = grid[column][row + 1]
             if first_plane is not None and first_plane == second_plane:
-                facets.append(
-                    PatchFacet(
-                        *first_plane,
-                        (top_left, top_right, bottom_right, bottom_left),
-                        quad_variants,
-                    )
+                facet = _facet(
+                    first_plane,
+                    (top, right, bottom, left),
+                    (top_left, top_right, bottom_right, bottom_left),
+                    planes,
                 )
+                if facet is not None:
+                    facets.append(facet)
                 continue
-            if first_plane is not None:
-                first_variants = _containment_variants(
-                    grid,
-                    (quad_coordinates[0], quad_coordinates[1], quad_coordinates[2]),
-                    width_boundary_row=0 if width_boundary_row == 0 else None,
-                    height_boundary_column=(
-                        len(grid) - 1
-                        if height_boundary_column == len(grid) - 1
-                        else None
-                    ),
-                )
-                facets.append(
-                    PatchFacet(
-                        *first_plane,
-                        first_vertices,
-                        first_variants,
-                    )
-                )
-            if second_plane is not None:
-                second_variants = _containment_variants(
-                    grid,
-                    (quad_coordinates[2], quad_coordinates[3], quad_coordinates[0]),
-                    width_boundary_row=(
-                        len(grid[0]) - 1
-                        if width_boundary_row == len(grid[0]) - 1
-                        else None
-                    ),
-                    height_boundary_column=0 if height_boundary_column == 0 else None,
-                )
-                facets.append(
-                    PatchFacet(
-                        *second_plane,
-                        second_vertices,
-                        second_variants,
-                    )
-                )
+
+            first_diagonal = second_plane
+            if first_diagonal is None:
+                first_diagonal = bottom
+                if first_diagonal is None:
+                    first_diagonal = _edge_plane(grid, grid_planes, planes, column, row, 4)
+            first_facet = _facet(
+                first_plane,
+                (top, right, first_diagonal),
+                (top_left, top_right, bottom_right),
+                planes,
+            )
+            if first_facet is not None:
+                facets.append(first_facet)
+
+            second_diagonal = first_plane
+            if second_diagonal is None:
+                second_diagonal = top
+                if second_diagonal is None:
+                    second_diagonal = _edge_plane(grid, grid_planes, planes, column, row, 5)
+            second_facet = _facet(
+                second_plane,
+                (bottom, left, second_diagonal),
+                (bottom_right, bottom_left, top_left),
+                planes,
+            )
+            if second_facet is not None:
+                facets.append(second_facet)
 
     flattened_points = tuple(point for column in grid for point in column)
     return PatchCollision(
@@ -360,44 +403,29 @@ def build_patch_collision(
     )
 
 
-def _point_in_triangle(point: Vector3, vertices: tuple[Vector3, Vector3, Vector3]) -> bool:
-    first, second, third = vertices
-    edge0 = _subtract(second, first)
-    edge1 = _subtract(third, first)
-    relative = _subtract(point, first)
-    dot00 = _dot(edge0, edge0)
-    dot01 = _dot(edge0, edge1)
-    dot11 = _dot(edge1, edge1)
-    dot20 = _dot(relative, edge0)
-    dot21 = _dot(relative, edge1)
-    denominator = (dot00 * dot11) - (dot01 * dot01)
-    if abs(denominator) <= _DEGENERATE_NORMAL_SQUARED:
-        return False
-    first_weight = ((dot11 * dot20) - (dot01 * dot21)) / denominator
-    second_weight = ((dot00 * dot21) - (dot01 * dot20)) / denominator
-    return (
-        first_weight >= -_BARYCENTRIC_EPSILON
-        and second_weight >= -_BARYCENTRIC_EPSILON
-        and first_weight + second_weight <= 1.0 + _BARYCENTRIC_EPSILON
-    )
-
-
-def _point_in_polygon(point: Vector3, vertices: tuple[Vector3, ...]) -> bool:
-    if len(vertices) == 3:
-        return _point_in_triangle(point, (vertices[0], vertices[1], vertices[2]))
-    if len(vertices) == 4:
-        return _point_in_triangle(point, (vertices[0], vertices[1], vertices[2])) or _point_in_triangle(
-            point,
-            (vertices[2], vertices[3], vertices[0]),
-        )
-    raise PatchCollisionError(f"unsupported patch facet vertex count {len(vertices)}")
-
-
-def _point_in_facet(point: Vector3, facet: PatchFacet) -> bool:
-    return any(
-        _point_in_polygon(point, vertices)
-        for vertices in (facet.vertices, *facet.containment_variants)
-    )
+def _intersects_facet_borders(
+    start: Vector3,
+    end: Vector3,
+    surface_intersection: float,
+    facet: PatchFacet,
+) -> bool:
+    """Apply ET:L's border-plane ordering at the raw surface intersection."""
+    for border in facet.borders:
+        start_distance = _dot(start, border.normal) - border.distance
+        end_distance = _dot(end, border.normal) - border.distance
+        front_facing = start_distance > 0.0
+        if start_distance == end_distance:
+            border_intersection = math.inf
+        else:
+            border_intersection = start_distance / (start_distance - end_distance)
+            if border_intersection <= 0.0:
+                border_intersection = math.inf
+        if front_facing != border.inward:
+            if border_intersection > surface_intersection:
+                return False
+        elif border_intersection < surface_intersection:
+            return False
+    return True
 
 
 def trace_patch_point(
@@ -411,7 +439,6 @@ def trace_patch_point(
     """Trace one point segment through compiled one-sided patch facets."""
     closest: PatchHit | None = None
     tested = 0
-    direction = _subtract(end, start)
     for facet_index, facet in enumerate(collision.facets):
         tested += 1
         start_distance = _dot(start, facet.normal) - facet.distance
@@ -428,11 +455,7 @@ def trace_patch_point(
         # intersection just beyond an earlier pushed brush hit does not replace it.
         if intersection <= 0.0 or intersection > limit or intersection > 1.0:
             continue
-        point = tuple(start[axis] + (intersection * direction[axis]) for axis in range(3))
-        # ET:L tests facet border-plane intersections against the raw surface
-        # intersection. Its 0.125 pushoff is calculated only after the facet hit
-        # is accepted, so containment must not use the tangentially shifted point.
-        if not _point_in_facet(point, facet):
+        if not _intersects_facet_borders(start, end, intersection, facet):
             continue
         pushed_fraction = max(0.0, (start_distance - surface_clip_epsilon) / denominator)
         if pushed_fraction <= limit:
@@ -448,9 +471,7 @@ def compile_bsp_patches(bsp: BspFile) -> tuple[PatchCollision, ...]:
             continue
         control_points = tuple(
             vertex.position
-            for vertex in bsp.draw_vertices[
-                surface.first_vertex : surface.first_vertex + surface.num_vertices
-            ]
+            for vertex in bsp.draw_vertices[surface.first_vertex : surface.first_vertex + surface.num_vertices]
         )
         content_flags = bsp.shaders[surface.shader_index].content_flags
         try:
