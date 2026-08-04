@@ -18,8 +18,9 @@ patch. The normal catalog-backed path leaves those runtime gates unverified, so 
 
 - BSP traversal clips each point segment through the node tree and tests only referenced leaf brushes/surfaces.
 - Convex brushes use the ET:L interval-clipping behavior and `SURFACE_CLIP_EPSILON = 0.125`.
-- An axis-aligned broad phase is derived only from exact axial brush planes. The final decision always uses all convex
-  half-spaces; an AABB never establishes a block.
+- An axis-aligned broad phase is derived only from exact axial brush planes. Its clip padding is scaled by each plane's
+  axial coefficient, so non-unit normals remain conservative. The final decision always uses all convex half-spaces; an
+  AABB never establishes a block.
 - Every result carries a named mask and raw bits:
   - `line_of_sight_solid`: `CONTENTS_SOLID` (`0x00000001`)
   - `player_movement_solid_playerclip`: `CONTENTS_SOLID | CONTENTS_PLAYERCLIP` (`0x00010001`)
@@ -30,7 +31,8 @@ patch. The normal catalog-backed path leaves those runtime gates unverified, so 
   standing/crouching/prone.
 - The frozen target set contains six labelled endpoints: eye-to-eye, upper torso, and four axis-aligned side points.
   Availability uses `any_clear`. Output is named `line_of_sight_availability`, never `saw`.
-- Missing stance, missing/invalid BSP traversal, intersected uncompiled solid patch, unresolved dynamic submodel,
+- Missing stance, missing/invalid BSP traversal, intersected uncompiled solid patch, any dynamic submodel without an
+  observed runtime transform,
   unverified runtime state, or unverified runtime-entity completeness remains machine-readable `indeterminate`.
 - W6 validation status is carried as `unvalidated_until_w6`.
 
@@ -45,15 +47,17 @@ reference for constants and behavior.
 1. exact box entry fraction including the 0.125 clip epsilon;
 2. a slanted half-space case that rejects an AABB-style false block;
 3. a nearly axial large-coordinate plane that cannot create a non-conservative broad-phase bound;
-4. `startsolid`/`allsolid` reporting, including overlapping brushes with equal zero-fraction hits;
-5. `PLAYERCLIP` ignored by LOS but included by the named movement-content mask;
-6. intersecting solid patch returns `indeterminate`, while a non-intersecting patch does not poison a clear segment;
-7. unverified runtime completeness cannot return clear;
-8. dynamic inline-model bounds return `indeterminate`, not an AABB-derived block;
-9. missing/cyclic BSP trees and missing stance fail closed;
-10. frozen stance bounds, eye heights, target labels, any-clear aggregation, and W6 label.
+4. non-unit axial normals receive coefficient-scaled world-space padding;
+5. empty brushes are ignored like ET:L rather than treated as universal solids;
+6. `startsolid`/`allsolid` reporting, including overlapping brushes with equal zero-fraction hits;
+7. `PLAYERCLIP` ignored by LOS but included by the named movement-content mask;
+8. intersecting solid patch returns `indeterminate`, while a non-intersecting patch does not poison a clear segment;
+9. unverified runtime completeness cannot return clear;
+10. dynamic inline-models remain `indeterminate` without supplied transforms, even if coverage flags are verified;
+11. missing/cyclic BSP trees and missing stance fail closed;
+12. frozen stance bounds, eye heights, target labels, any-clear aggregation, and W6 label.
 
-Measured targeted suite on Python 3.13.14: **50 passed** across the new trace tests plus the existing W2/W3 contracts.
+Measured targeted suite on Python 3.13.14: **53 passed** across the new trace tests plus the existing W2/W3 contracts.
 
 ## Real-asset proof
 
@@ -86,9 +90,9 @@ Result classification:
 | Catalog-backed fail-closed, pair-level | 278 | 0 | 42 |
 | Static-only diagnostic, endpoint-level | 1,674 | 246 | 0 |
 
-The 42 static-only clear pairs becoming 42 indeterminate pairs is the required runtime completeness gate, not a quality
-failure. Static-only clear means only that this incomplete kernel found no covered blocker. It is not an engine-validated
-visibility claim.
+The 42 static-only clear pairs becoming 42 indeterminate pairs is the required runtime collision gate, not a quality
+failure. Catalog flags do not supply observed transforms; static-only clear means only that this incomplete kernel found
+no covered blocker. It is not an engine-validated visibility claim.
 
 The real-asset integration test repeats one deterministic pair on every map and asserts that the normal unverified
 runtime context can never return clear.
@@ -100,9 +104,9 @@ exact brush tests, and patch AABB gates:
 
 | Per endpoint | Time |
 |---|---:|
-| p50 | 773.214 us |
-| p95 | 1,984.387 us |
-| max | 3,122.097 us |
+| p50 | 774.450 us |
+| p95 | 2,037.985 us |
+| max | 3,158.994 us |
 
 | Candidate work per endpoint | Mean | Max |
 |---|---:|---:|
@@ -115,7 +119,7 @@ The first deliberately conservative prototype traversed an average 317 leaves an
 exact brush tests to the final values above.
 
 This still fails the eventual full-round budget. At 66 pairs, six endpoints, and a 1,000 ms analysis cadence over a
-12-minute round, there are 285,120 endpoint traces. Multiplying by the measured p50 gives roughly **220 seconds**, before
+12-minute round, there are 285,120 endpoint traces. Multiplying by the measured p50 gives roughly **221 seconds**, before
 timeline reconstruction or patch facets. The 200 ms capture cadence would be five times worse. These are workload
 projections, not a benchmark of a future batched implementation.
 

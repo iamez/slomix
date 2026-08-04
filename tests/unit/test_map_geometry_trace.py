@@ -179,6 +179,30 @@ def test_nearly_axial_plane_cannot_create_a_nonconservative_broadphase_bound():
     assert result.all_solid is True
 
 
+def test_nonunit_axial_normal_scales_broadphase_clip_padding():
+    bsp = _trace_bsp()
+    planes = (
+        BspPlane((0.5, 0.0, 0.0), 0.5),
+        *bsp.planes[2:7],
+    )
+    bsp = replace(bsp, planes=(bsp.planes[0], *planes))
+
+    result = _verified_tracer(bsp).trace_segment((1.3, 0.0, 0.0), (1.2, 0.0, 0.0))
+
+    assert result.status is TraceStatus.BLOCKED
+    assert result.fraction == pytest.approx(0.5)
+
+
+def test_empty_brush_is_ignored_like_etl_instead_of_blocking_every_segment():
+    bsp = _trace_bsp()
+    bsp = replace(bsp, brushes=(replace(bsp.brushes[0], num_sides=0),))
+
+    result = _verified_tracer(bsp).trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+
+    assert result.status is TraceStatus.CLEAR
+    assert result.tested_brush_count == 1
+
+
 def test_start_inside_brush_is_blocked_and_exposes_startsolid():
     result = _verified_tracer(_trace_bsp()).trace_segment((0.0, 0.0, 0.0), (5.0, 0.0, 0.0))
 
@@ -300,6 +324,36 @@ def test_dynamic_inline_model_crossing_is_indeterminate_not_aabb_blocked():
     assert result.reason is TraceReason.DYNAMIC_ENTITY_STATE_UNRESOLVED
     assert result.uncertain_entity_indices == (0,)
     assert TraceReason.RUNTIME_ENTITY_STATE_UNVERIFIED in result.uncertainty_reasons
+
+
+def test_verified_flags_cannot_clear_without_observed_dynamic_transforms():
+    source = _trace_bsp()
+    source = replace(
+        source,
+        entities=({"classname": "func_door", "model": "*1"},),
+        models=(source.models[0], BspModel((-1.0, -2.0, -3.0), (1.0, 2.0, 3.0), 0, 0, 0, 1)),
+    )
+    catalog = extract_entity_catalog(source, "synthetic")
+    world_without_brush = replace(
+        source,
+        brushes=(),
+        brush_sides=(),
+        leaf_brushes=(),
+        leafs=tuple(replace(leaf, first_leaf_brush=0, num_leaf_brushes=0) for leaf in source.leafs),
+        models=(replace(source.models[0], first_brush=0, num_brushes=0),),
+    )
+    tracer = BspPointTracer(
+        world_without_brush,
+        collision_entities=catalog.collision_entities,
+        runtime_entity_completeness=RuntimeGeometryCoverage.VERIFIED,
+        runtime_entity_state=RuntimeGeometryCoverage.VERIFIED,
+    )
+
+    result = tracer.trace_segment((-5.0, 20.0, 0.0), (5.0, 20.0, 0.0))
+
+    assert result.status is TraceStatus.INDETERMINATE
+    assert result.reason is TraceReason.DYNAMIC_ENTITY_STATE_UNRESOLVED
+    assert result.uncertain_entity_indices == (0,)
 
 
 def test_missing_tree_and_missing_stance_fail_closed():
