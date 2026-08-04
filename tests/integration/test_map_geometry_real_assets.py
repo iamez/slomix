@@ -8,9 +8,13 @@ from pathlib import Path
 import pytest
 
 from website.backend.map_geometry import (
+    BspPointTracer,
     MapAssetKind,
     ObjectiveGeometrySource,
     Pk3GeometryIndex,
+    PlayerStance,
+    TraceReason,
+    TraceStatus,
     extract_entity_catalog,
 )
 
@@ -152,3 +156,34 @@ def test_w3_extracts_measured_objective_volumes_and_dynamic_inputs_for_every_bsp
         "objective_markers": 96,
         "collision_entities": 1058,
     }
+
+
+@pytest.mark.timeout(120)
+def test_w4a_real_spawn_segments_never_clear_with_unverified_runtime_collision(geometry_index):
+    statuses = set()
+    for map_name in geometry_index.map_names:
+        bsp = geometry_index.load_bsp(map_name)
+        catalog = extract_entity_catalog(bsp, map_name)
+        axis_spawn = next(point for point in catalog.spawn_points if point.team == "AXIS")
+        allies_spawn = next(point for point in catalog.spawn_points if point.team == "ALLIES")
+        tracer = BspPointTracer(bsp, collision_entities=catalog.collision_entities)
+
+        availability = tracer.trace_line_of_sight_availability(
+            axis_spawn.origin,
+            PlayerStance.STANDING,
+            allies_spawn.origin,
+            PlayerStance.STANDING,
+        )
+
+        statuses.add(availability.status)
+        assert availability.status is not TraceStatus.CLEAR, map_name
+        assert availability.interpretation == "line_of_sight_availability"
+        assert availability.validation_status == "unvalidated_until_w6"
+        if availability.status is TraceStatus.INDETERMINATE:
+            assert any(
+                TraceReason.RUNTIME_ENTITY_COMPLETENESS_UNVERIFIED
+                in endpoint.result.uncertainty_reasons
+                for endpoint in availability.endpoints
+            ), map_name
+
+    assert statuses <= {TraceStatus.BLOCKED, TraceStatus.INDETERMINATE}
