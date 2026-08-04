@@ -259,6 +259,9 @@ def trace_patch_point(
             continue
         intersection = start_distance / denominator
         limit = closest.fraction if closest is not None else max_fraction
+        # ET:L rejects a patch surface plane against the current trace fraction
+        # before applying this facet's pushoff. This intentionally means a raw
+        # intersection just beyond an earlier pushed brush hit does not replace it.
         if intersection <= 0.0 or intersection > limit or intersection > 1.0:
             continue
         point = tuple(start[axis] + (intersection * direction[axis]) for axis in range(3))

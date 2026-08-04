@@ -23,6 +23,8 @@ the offline result remains `unvalidated_until_w6` until paired `et.trap_Trace` f
   matching the engine's no-hit treatment rather than becoming universal solids.
 - Each remaining grid cell becomes two oriented planar facets. Point traces collide only from the facet's front side,
   use the exact plane intersection for facet containment, and report the engine-compatible 0.125 plane-distance pushoff.
+  Like ET:L, an existing pushed trace fraction limits the raw next-facet intersection before that facet applies its own
+  pushoff; a regression test freezes this order-dependent compatibility behavior.
 - Patch bounds are expanded by one game unit for the broad phase. Bounds never establish a block; the oriented facet
   test makes the final decision.
 - `CONTENTS_SOLID` and `CONTENTS_PLAYERCLIP` remain purpose-specific. A playerclip-only patch does not block the named
@@ -56,8 +58,8 @@ traces and constants; no ET:L source file is included in this MIT repository.
 11. injected patch-catalog validation; and
 12. aggregate versus endpoint-specific block provenance.
 
-Measured W2/W3/W4 targeted suite on Python 3.13.14: **65 passed**. The repository-wide suite also completed with
-**4,070 passed and 74 skipped**; the skips require unavailable test PostgreSQL credentials, optional local fixtures, or
+Measured W2/W3/W4 targeted suite on Python 3.13.14: **66 passed**. The repository-wide suite also completed with
+**4,071 passed and 74 skipped**; the skips require unavailable test PostgreSQL credentials, optional local fixtures, or
 the separately executed real-asset opt-in.
 
 ## Real-asset proof

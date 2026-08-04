@@ -70,6 +70,22 @@ def test_point_patch_trace_is_one_sided_and_bounded_at_edges():
     assert edge is not None
 
 
+def test_existing_pushed_hit_limits_raw_patch_intersection_before_patch_pushoff():
+    collision = build_patch_collision(_planar_grid(), 3, 3)
+
+    hit, _ = trace_patch_point(
+        collision,
+        (-2.0, 0.0, 0.0),
+        (2.0, 0.0, 0.0),
+        surface_clip_epsilon=0.125,
+        max_fraction=0.49,
+    )
+
+    # The raw plane intersection is 0.5 and is rejected against the existing
+    # trace fraction, even though applying this facet's pushoff would yield 0.46875.
+    assert hit is None
+
+
 def test_curved_patch_subdivides_and_hits_its_exact_quadratic_midpoint():
     collision = build_patch_collision(_curved_grid(), 3, 3)
 
