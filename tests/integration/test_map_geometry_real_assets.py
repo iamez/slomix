@@ -15,6 +15,7 @@ from website.backend.map_geometry import (
     PlayerStance,
     TraceReason,
     TraceStatus,
+    compile_bsp_patches,
     extract_entity_catalog,
 )
 
@@ -156,6 +157,18 @@ def test_w3_extracts_measured_objective_volumes_and_dynamic_inputs_for_every_bsp
         "objective_markers": 96,
         "collision_entities": 1058,
     }
+
+
+@pytest.mark.timeout(120)
+def test_w4a2_compiles_every_real_patch_without_fail_open_gaps(geometry_index):
+    totals = {"patches": 0, "facets": 0, "failures": 0}
+    for map_name in geometry_index.map_names:
+        collisions = compile_bsp_patches(geometry_index.load_bsp(map_name))
+        totals["patches"] += len(collisions)
+        totals["facets"] += sum(len(collision.facets) for collision in collisions)
+        totals["failures"] += sum(collision.error is not None for collision in collisions)
+
+    assert totals == {"patches": 4794, "facets": 39124, "failures": 0}
 
 
 @pytest.mark.timeout(120)
