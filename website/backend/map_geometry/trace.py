@@ -17,6 +17,7 @@ from website.backend.map_geometry.entities import Bounds3D, CollisionBrushEntity
 from website.backend.map_geometry.patch import (
     PatchCollision,
     compile_bsp_patches,
+    patch_control_bounds,
     trace_patch_point,
 )
 
@@ -287,6 +288,18 @@ class BspPointTracer:
                 raise ValueError(f"duplicate patch collision for surface {surface_index}")
             patch_by_surface[surface_index] = patch
         self._patch_collisions = patch_by_surface
+        self._patch_control_bounds = {
+            surface_index: patch_control_bounds(
+                tuple(
+                    vertex.position
+                    for vertex in bsp.draw_vertices[
+                        surface.first_vertex : surface.first_vertex + surface.num_vertices
+                    ]
+                )
+            )
+            for surface_index, surface in enumerate(bsp.surfaces)
+            if surface.surface_type is SurfaceType.PATCH and surface_index not in patch_by_surface
+        }
         self._trace_brushes = tuple(
             _TraceBrush(
                 content_flags=bsp.shaders[brush.shader_index].content_flags,
@@ -450,7 +463,12 @@ class BspPointTracer:
                 continue
             tested_surfaces += 1
             collision = self._patch_collisions.get(surface_index)
-            if collision is None or collision.bounds is None:
+            if collision is None:
+                bounds = self._patch_control_bounds[surface_index]
+                if bounds is None or _segment_bounds_fraction(start, end, bounds) is not None:
+                    uncertain.append(surface_index)
+                continue
+            if collision.bounds is None:
                 uncertain.append(surface_index)
                 continue
             if _segment_bounds_fraction(start, end, collision.bounds) is None:
