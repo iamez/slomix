@@ -278,6 +278,25 @@ def test_non_coplanar_wrap_uses_adjacent_planes_without_false_variant_sliver():
     ) == (height_collision.facets[1].normal, height_collision.facets[1].distance)
 
 
+def test_split_facet_is_rejected_when_its_border_straddles_the_grid_cell():
+    heights = (-6.5, 0.0, -7.9, 0.0, 0.0, 0.0, -5.7, 0.0, 8.5)
+    control_points = tuple(
+        (float(column - 1), float(row - 1), heights[(row * 3) + column])
+        for row in range(3)
+        for column in range(3)
+    )
+
+    collision = build_patch_collision(control_points, 3, 3)
+
+    assert (collision.grid_width, collision.grid_height) == (2, 2)
+    assert len(collision.facets) == 1
+    assert collision.facets[0].vertices == (
+        (1.0, 1.0, 8.5),
+        (1.0, -1.0, -7.9),
+        (-1.0, -1.0, -6.5),
+    )
+
+
 def test_second_axis_wrap_is_detected_after_first_axis_control_columns_are_removed():
     control_points = []
     for row in range(3):
