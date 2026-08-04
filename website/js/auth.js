@@ -231,6 +231,7 @@ export function getCurrentUser() {
 let _authProbe = null;
 let _authResolved = false;
 let _authResolvedAt = 0;
+let _authGeneration = 0;
 
 // The cached answer expires. Before the dedupe, every caller re-probed, so a
 // session that changed underneath the page — cookie expiry, or a login/logout
@@ -258,16 +259,31 @@ function _authAnswerIsFresh() {
 export async function ensureCurrentUser() {
     if (_authAnswerIsFresh()) return _currentUser;
     try {
-        // checkLoginStatus() dedupes an in-flight probe itself, so concurrent
-        // callers join the startup request rather than issuing their own.
+        // Deliberately NOT forced: checkLoginStatus() dedupes an in-flight
+        // probe, so concurrent callers join the startup request rather than
+        // issuing their own. Forcing here would defeat the whole point.
         return await checkLoginStatus();
     } catch (_e) {
         return null;
     }
 }
 
-export async function checkLoginStatus() {
-    if (_authProbe) return _authProbe;
+/**
+ * @param {{force?: boolean}} [options] `force` skips both the TTL and any
+ *   in-flight probe. Required after a write that changes the identity — a
+ *   link, unlink or rename — where joining the probe that was already running
+ *   would return the PRE-mutation answer and then treat it as fresh for
+ *   another minute, leaving the nav badge and the mobile Me destination out of
+ *   step with the write that just succeeded (Codex on #598).
+ */
+export async function checkLoginStatus({ force = false } = {}) {
+    if (force) {
+        _authResolved = false;
+        _authResolvedAt = 0;
+        _authProbe = null;
+    } else if (_authProbe) {
+        return _authProbe;
+    }
     _authProbe = _checkLoginStatus();
     try {
         return await _authProbe;
@@ -277,6 +293,10 @@ export async function checkLoginStatus() {
 }
 
 async function _checkLoginStatus() {
+    // A forced probe can start while an older one is still in flight. Without
+    // this the older reply lands last and writes PRE-mutation state over the
+    // fresh answer.
+    const generation = ++_authGeneration;
     let user = null;
     let definitive = false;
 
@@ -299,6 +319,11 @@ async function _checkLoginStatus() {
         // misdirect the mobile Me tab for the rest of the visit, with no way
         // back short of a reload (Codex review on #598).
         definitive = err?.status === 401 || err?.status === 403;
+    }
+
+    if (generation !== _authGeneration) {
+        // Superseded by a newer (forced) probe — that one owns the state.
+        return _currentUser;
     }
 
     if (definitive) {
@@ -357,8 +382,14 @@ async function _checkLoginStatus() {
     // from either one landed in the anonymous branch and flipped an
     // authenticated user to logged out — stickily, because _authResolved had
     // already been set (Codex review on #598).
-    await _runSideEffect(refreshProfileLinkCard);
-    if (user) await _runSideEffect(loadPromotionPreferences);
+    // Started, NOT awaited: they are UI loads, not part of the identity
+    // answer. Awaiting them left _authProbe pending whenever
+    // /auth/link/status or promotion preferences was slow, so every
+    // ensureCurrentUser() caller blocked on them too — Availability stalled at
+    // loadCurrentUser(), Uploads never resolved its owner controls, and a
+    // mobile Me tap looked inert (Codex on #598).
+    void _runSideEffect(refreshProfileLinkCard);
+    if (user) void _runSideEffect(loadPromotionPreferences);
 
     return user;
 }
@@ -471,7 +502,7 @@ export async function linkPlayer(guid, name) {
             throw new Error(err.detail || 'Failed to link');
         }
 
-        await checkLoginStatus();
+        await checkLoginStatus({ force: true });
         clearPlayerPicker();
     } catch (e) {
         alert(`Failed to link: ${e.message}`);
@@ -490,7 +521,7 @@ export async function unlinkPlayerProfile() {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.detail || 'Failed to unlink player');
         }
-        await checkLoginStatus();
+        await checkLoginStatus({ force: true });
     } catch (err) {
         alert(String(err?.message || 'Failed to unlink player'));
     }
@@ -787,7 +818,7 @@ async function _postDisplayName(action, name) {
     }
     _aliasCache = null;
     await refreshDisplayNameBlock();
-    await checkLoginStatus();
+    await checkLoginStatus({ force: true });
 }
 
 export async function refreshDisplayNameBlock() {
