@@ -351,6 +351,55 @@ def test_nearer_patch_wins_over_a_farther_brush():
     assert result.surface_index == 0
 
 
+def test_brush_and_patch_limits_follow_near_to_far_leaf_encounter_order():
+    bsp = _trace_bsp(with_patch=True)
+    slanted_patch = tuple(
+        replace(
+            vertex,
+            position=(10.0 * vertex.position[1], vertex.position[1], vertex.position[2]),
+        )
+        for vertex in bsp.draw_vertices
+    )
+    close_brush_planes = _box_planes((-0.1, -2.0, -3.0), (0.1, 2.0, 3.0))
+    bsp = replace(
+        bsp,
+        planes=(bsp.planes[0], *close_brush_planes),
+        brush_sides=tuple(BspBrushSide(index + 1, 0) for index in range(6)),
+        draw_vertices=slanted_patch,
+        leaf_surfaces=(0,),
+        leaf_brushes=(0,),
+        leafs=(
+            replace(
+                bsp.leafs[0],
+                first_leaf_surface=0,
+                num_leaf_surfaces=0,
+                first_leaf_brush=0,
+                num_leaf_brushes=1,
+            ),
+            replace(
+                bsp.leafs[1],
+                first_leaf_surface=0,
+                num_leaf_surfaces=1,
+                first_leaf_brush=1,
+                num_leaf_brushes=0,
+            ),
+        ),
+    )
+    tracer = _verified_tracer(bsp)
+
+    result = tracer.trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+
+    assert tracer._candidate_references((1, 0)) == (  # noqa: SLF001 - order is the contract
+        ("surface", 0),
+        ("brush", 0),
+    )
+    assert result.status is TraceStatus.BLOCKED
+    assert result.reason is TraceReason.SOLID_PATCH
+    assert result.surface_index == 0
+    assert result.fraction is not None
+    assert result.fraction < (4.9 - 0.125) / 10.0
+
+
 def test_failed_patch_compilation_remains_indeterminate_when_bounds_are_unknown():
     bsp = replace(_trace_bsp(with_patch=True), brushes=(), brush_sides=(), leaf_brushes=())
     bsp = replace(
