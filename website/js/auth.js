@@ -277,18 +277,25 @@ export async function ensureCurrentUser() {
  *   step with the write that just succeeded (Codex on #598).
  */
 export async function checkLoginStatus({ force = false } = {}) {
-    if (force) {
-        _authResolved = false;
-        _authResolvedAt = 0;
-        _authProbe = null;
-    } else if (_authProbe) {
-        return _authProbe;
-    }
-    _authProbe = _checkLoginStatus();
+    // `force` ONLY declines to join an in-flight probe. It deliberately does
+    // not clear _authResolved/_authResolvedAt: doing so sent a forced probe
+    // that then failed with a 5xx down the "no answer yet" branch, which
+    // replaced the known user with null — so a mutation that had SUCCEEDED
+    // left the nav and owner controls showing a guest. A successful probe
+    // refreshes both fields on its own anyway (Codex on #598).
+    if (!force && _authProbe) return _authProbe;
+
+    const probe = _checkLoginStatus();
+    _authProbe = probe;
     try {
-        return await _authProbe;
+        return await probe;
     } finally {
-        _authProbe = null;
+        // Only retract our own. An older probe settling after a forced one has
+        // replaced the shared slot would otherwise clear the NEWER promise,
+        // letting the next ensureCurrentUser() start a third probe, bump the
+        // generation, and make the mutation's awaited probe return the stale
+        // identity (Codex on #598).
+        if (_authProbe === probe) _authProbe = null;
     }
 }
 
