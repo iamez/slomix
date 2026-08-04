@@ -8939,10 +8939,11 @@ CREATE INDEX IF NOT EXISTS idx_proximity_objective_run_round_lookup_unlinked
 CREATE INDEX IF NOT EXISTS idx_proximity_shot_fired_round_lookup_unlinked
     ON proximity_shot_fired (map_name, round_number, round_start_unix, session_date)
     WHERE round_id IS NULL;
--- The mismatch leg reads linked rows and joins rounds on round_id, so it
--- cannot use the partial index above (migration 069).
-CREATE INDEX IF NOT EXISTS idx_proximity_shot_fired_round_id_linked
-    ON proximity_shot_fired (round_id)
+-- The mismatch leg joins rounds on round_id, so it cannot use the partial
+-- index above. Led by round_start_unix because the leg's selective predicate
+-- is the six-hour recency cutoff, not the join key (migration 069).
+CREATE INDEX IF NOT EXISTS idx_proximity_shot_fired_mismatch_recent
+    ON proximity_shot_fired (round_start_unix, round_id)
     WHERE round_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_proximity_revive_round_lookup_unlinked
     ON proximity_revive (map_name, round_number, round_start_unix, session_date)

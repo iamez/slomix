@@ -34,8 +34,16 @@ write, and the historical mutation deliberately lives here rather than in a
 migration so a normal deploy cannot perform it unattended.
 
 Usage:
-    python scripts/repair_shot_fired_round_links.py            # preview
-    python scripts/repair_shot_fired_round_links.py --apply    # write
+    # 1. preview, and note the repairable row count it reports
+    python scripts/repair_shot_fired_round_links.py
+
+    # 2. write, restating that count and the target database
+    python scripts/repair_shot_fired_round_links.py --apply \
+        --expect-repairable-rows 57854 --expect-db etlegacy
+
+--apply requires both expectations. A candidate set that shifted between
+preview and apply (a session landed, someone else relinked) is no longer what
+was reviewed, and the wrong database is the other way this goes badly.
 """
 
 from __future__ import annotations
@@ -94,13 +102,27 @@ LEFT JOIN siblings s USING (session_date, map_name, round_number, round_start_un
 -- Verify the sibling's round_id actually names a round with this identity.
 -- Unanimous siblings can be unanimously wrong: that is exactly the state the
 -- relinker's mismatch leg is built to detect, so it must not be propagated.
+--
+-- round_start_unix is the load-bearing check and is compared exactly: it IS
+-- the relinker's mismatch criterion (relinker_mixin compares
+-- pko.round_start_unix != r.round_start_unix), and it is timezone- and
+-- calendar-free.
+--
+-- Deliberately NOT comparing round_date. round_linker relaxes the date filter
+-- on purpose (round_linker.py:196-199): a round starting 23:5x is stored with
+-- the NEXT day's round_date while proximity recorded the previous one, so an
+-- exact date match would report correctly-linked midnight rounds as stale.
+-- round_start_unix already pins the round to the second, so the date adds no
+-- safety — only false negatives.
+--
+-- map_name is compared case- and whitespace-insensitively for the same
+-- reason: a difference there is a spelling difference, not a different round.
 LEFT JOIN rounds r
        ON r.id = s.round_id
       AND s.distinct_round_ids = 1
-      AND r.map_name = o.map_name
-      AND r.round_number = o.round_number
       AND r.round_start_unix = o.round_start_unix
-      AND r.round_date = o.session_date::text
+      AND r.round_number = o.round_number
+      AND LOWER(TRIM(r.map_name)) = LOWER(TRIM(o.map_name))
 ORDER BY o.session_date, o.map_name, o.round_number
 """
 

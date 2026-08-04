@@ -47,14 +47,23 @@ def test_survey_verifies_the_sibling_link_against_rounds():
     assert "LEFT JOIN rounds r" in sql
     for predicate in (
         "r.id = s.round_id",
-        "r.map_name = o.map_name",
         "r.round_number = o.round_number",
         "r.round_start_unix = o.round_start_unix",
-        "r.round_date = o.session_date::text",
+        "LOWER(TRIM(r.map_name)) = LOWER(TRIM(o.map_name))",
     ):
         assert predicate in sql, predicate
     # Unverified candidates must not survive into resolved_round_id.
     assert "s.distinct_round_ids = 1 AND r.id IS NOT NULL" in sql
+
+
+def test_survey_does_not_require_the_dates_to_match():
+    """round_linker relaxes the date filter on purpose: a round starting 23:5x
+    is stored under the NEXT day's round_date while proximity recorded the
+    previous one. Requiring equality here would report correctly-linked
+    midnight rounds as stale. round_start_unix already pins the round to the
+    second, so the date would add no safety — only false negatives."""
+    sql = " ".join(repair._SURVEY_SQL.split())
+    assert "r.round_date" not in sql
 
 
 def test_survey_requires_unanimous_siblings():
