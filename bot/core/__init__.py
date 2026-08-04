@@ -23,12 +23,6 @@ Modules:
 # does not.
 from typing import TYPE_CHECKING
 
-_EXPORTS = {
-    "AchievementSystem": "achievement_system",
-    "SeasonManager": "season_manager",
-    "StatsCache": "stats_cache",
-}
-
 if TYPE_CHECKING:  # pragma: no cover - deferring the import is the point
     from .achievement_system import AchievementSystem
     from .season_manager import SeasonManager
@@ -36,20 +30,28 @@ if TYPE_CHECKING:  # pragma: no cover - deferring the import is the point
 
 
 def __getattr__(name: str):
-    """Import a core module on first attribute access (PEP 562)."""
-    module_name = _EXPORTS.get(name)
-    if module_name is None:
+    """Import a core module on first attribute access (PEP 562).
+
+    Written as literal imports rather than importlib.import_module(name):
+    a module path assembled from the argument is flagged as a dynamic-import
+    sink by static analysis, and with three exports the branch is no less
+    readable than a lookup table.
+    """
+    if name == "AchievementSystem":
+        from .achievement_system import AchievementSystem as value
+    elif name == "SeasonManager":
+        from .season_manager import SeasonManager as value
+    elif name == "StatsCache":
+        from .stats_cache import StatsCache as value
+    else:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-    from importlib import import_module
-
-    value = getattr(import_module(f"{__name__}.{module_name}"), name)
     globals()[name] = value  # subsequent lookups skip __getattr__ entirely
     return value
 
 
 def __dir__() -> list[str]:
-    return sorted(set(globals()) | set(_EXPORTS))
+    return sorted(set(globals()) | set(__all__))
 
 
 __all__ = ["StatsCache", "SeasonManager", "AchievementSystem"]
