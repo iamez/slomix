@@ -58,7 +58,7 @@ class TraceReason(StrEnum):
 
 
 class RuntimeGeometryCoverage(StrEnum):
-    """Whether runtime-created collision and entity transforms are known."""
+    """Evidence flag for runtime coverage; it does not carry entity transforms."""
 
     UNVERIFIED = "unverified"
     VERIFIED = "verified"
@@ -197,7 +197,10 @@ def _brush_broadphase_bounds(sides: tuple[tuple[Vector3, float, int], ...]) -> B
             continue
         axis = nonzero_axes[0]
         coefficient = normal[axis]
-        coordinate = distance / coefficient
+        # The clip epsilon is measured in plane-distance units. Convert it to
+        # world coordinates so non-unit axial normals cannot make this bound
+        # narrower than the exact brush trace.
+        coordinate = (distance + SURFACE_CLIP_EPSILON) / coefficient
         if coefficient > 0.0:
             maxs[axis] = min(maxs[axis], coordinate)
         else:
@@ -376,6 +379,10 @@ class BspPointTracer:
 
     def _trace_brush(self, brush_index: int, start: Vector3, end: Vector3) -> _BrushHit | None:
         brush = self._trace_brushes[brush_index]
+        # ET:L never traces zero-side brushes. Treating an empty conjunction as
+        # solid would make a malformed/custom-map brush block the whole world.
+        if not brush.sides:
+            return None
         enter_fraction = -1.0
         leave_fraction = 1.0
         lead_side: int | None = None
@@ -450,19 +457,6 @@ class BspPointTracer:
                 uncertain.append(surface_index)
         return tuple(uncertain), tested
 
-    def _uncertain_entity_indices(self, start: Vector3, end: Vector3) -> tuple[int, ...]:
-        return tuple(
-            entity.entity_index
-            for entity in self._collision_entities
-            if _segment_bounds_fraction(
-                start,
-                end,
-                entity.model.origin_translated_bounds,
-                epsilon=SURFACE_CLIP_EPSILON,
-            )
-            is not None
-        )
-
     def trace_segment(
         self,
         start: Vector3,
@@ -523,7 +517,6 @@ class BspPointTracer:
                 start,
                 end,
                 brush.broadphase_bounds,
-                epsilon=SURFACE_CLIP_EPSILON,
             ) is None:
                 continue
             tested_brush_count += 1
@@ -570,7 +563,10 @@ class BspPointTracer:
             end,
             trace_mask,
         )
-        entity_indices = self._uncertain_entity_indices(start, end)
+        # Catalog bounds are not timestamped world transforms. Until W5
+        # supplies those transforms, every dynamic inline model can have moved
+        # into the segment and must keep a non-blocked result indeterminate.
+        entity_indices = tuple(entity.entity_index for entity in self._collision_entities)
         reasons: list[TraceReason] = []
         if patch_indices:
             reasons.append(TraceReason.SOLID_PATCH_UNCOMPILED)

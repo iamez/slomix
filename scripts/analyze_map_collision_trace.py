@@ -140,7 +140,7 @@ def analyze(etmain: Path, *, map_names: tuple[str, ...] | None, pairs_per_map: i
             "trace_shape": "point",
             "trace_mask": "line_of_sight_solid",
             "static_only_clear_meaning": "kernel_result_only_not_engine_validated",
-            "fail_closed_context": "runtime_entity_completeness_and_state_unverified",
+            "fail_closed_context": "runtime_entity_completeness_state_and_transforms_unverified",
         },
         "inventory": dict(inventory),
         "sample_pairs": sum(item["sample_pairs"] for item in per_map.values()),
