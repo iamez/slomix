@@ -6,5 +6,12 @@ export function navigateTo(hash: string) {
 }
 
 export function navigateToPlayer(playerName: string) {
-  navigateTo(`#/profile?name=${encodeURIComponent(playerName)}`);
+  // Path segment, not a query string. parseHashRoute() splits the hash on '?'
+  // before matching, and the profile route's parseHash only recognises
+  // `#/profile/<id>` — so `#/profile?name=X` matched nothing, load() saw no
+  // params and no-opped, and clicking a player opened a blank profile.
+  //
+  // The identifier may be a name: /api/stats/player/<id> accepts either and
+  // returns the resolved guid.
+  navigateTo(`#/profile/${encodeURIComponent(playerName)}`);
 }

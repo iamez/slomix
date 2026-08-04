@@ -290,6 +290,18 @@ async def add_build_header(request, call_next):
 async def add_security_headers(request, call_next):
     response = await call_next(request)
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    # frame-ancestors is IGNORED when delivered in a <meta> tag (CSP spec, same
+    # as report-uri and sandbox), so the copy in index.html's meta policy never
+    # did anything — browsers just log a warning about it on every page load.
+    # X-Frame-Options above already carried the protection; this makes it real
+    # in CSP terms too, for clients that honour CSP over the older header.
+    #
+    # Deliberately frame-ancestors ONLY. The rest of the policy stays in the
+    # meta tag: a header policy and a meta policy are enforced independently
+    # (the effective policy is their intersection), so duplicating the script/
+    # style/font directives here would mean two places to keep in step, and
+    # any drift between them silently blocks assets.
+    response.headers["Content-Security-Policy"] = "frame-ancestors 'self'"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
