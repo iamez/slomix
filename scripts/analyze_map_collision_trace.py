@@ -101,6 +101,13 @@ def analyze(etmain: Path, *, map_names: tuple[str, ...] | None, pairs_per_map: i
                 for collision in patch_collisions
                 if collision.content_flags & 1
             ),
+            wrapped_patches=sum(
+                collision.wrap_width or collision.wrap_height for collision in patch_collisions
+            ),
+            solid_wrapped_patches=sum(
+                (collision.wrap_width or collision.wrap_height) and bool(collision.content_flags & 1)
+                for collision in patch_collisions
+            ),
             patch_compile_failures=sum(collision.error is not None for collision in patch_collisions),
             collision_entities=len(catalog.collision_entities),
         )

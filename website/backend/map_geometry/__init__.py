@@ -45,6 +45,7 @@ from website.backend.map_geometry.entities import (
 from website.backend.map_geometry.patch import (
     PATCH_BOUNDS_PADDING,
     PATCH_MAX_GRID_SIZE,
+    PATCH_PLANE_EPSILON,
     PATCH_POINT_EPSILON,
     PATCH_SUBDIVIDE_DISTANCE,
     PatchCollision,
@@ -129,6 +130,7 @@ __all__ = [
     "ObjectiveVolume",
     "PATCH_BOUNDS_PADDING",
     "PATCH_MAX_GRID_SIZE",
+    "PATCH_PLANE_EPSILON",
     "PATCH_POINT_EPSILON",
     "PATCH_SUBDIVIDE_DISTANCE",
     "PLAYER_BOUNDS",

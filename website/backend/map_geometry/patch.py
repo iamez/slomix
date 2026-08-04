@@ -19,6 +19,7 @@ PATCH_SUBDIVIDE_DISTANCE = 16.0
 PATCH_POINT_EPSILON = 0.1
 PATCH_BOUNDS_PADDING = 1.0
 PATCH_MAX_GRID_SIZE = 129
+PATCH_PLANE_EPSILON = 0.1
 _DEGENERATE_NORMAL_SQUARED = 1e-20
 _BARYCENTRIC_EPSILON = 1e-7
 
@@ -31,7 +32,7 @@ class PatchCollisionError(ValueError):
 class PatchFacet:
     normal: Vector3
     distance: float
-    vertices: tuple[Vector3, Vector3, Vector3]
+    vertices: tuple[Vector3, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +43,8 @@ class PatchCollision:
     facets: tuple[PatchFacet, ...]
     grid_width: int
     grid_height: int
+    wrap_width: bool = False
+    wrap_height: bool = False
     error: str | None = None
 
 
@@ -120,7 +123,7 @@ def _flatten_grid(
     control_points: tuple[Vector3, ...],
     width: int,
     height: int,
-) -> list[list[Vector3]]:
+) -> tuple[list[list[Vector3]], bool, bool]:
     if width <= 2 or height <= 2 or width % 2 == 0 or height % 2 == 0:
         raise PatchCollisionError(f"invalid quadratic patch dimensions {width}x{height}")
     if width > PATCH_MAX_GRID_SIZE or height > PATCH_MAX_GRID_SIZE:
@@ -132,6 +135,18 @@ def _flatten_grid(
     if not all(math.isfinite(value) for point in control_points for value in point):
         raise PatchCollisionError("patch control points must be finite")
 
+    wrap_width = all(
+        _points_close(
+            control_points[row * width],
+            control_points[(row * width) + width - 1],
+        )
+        for row in range(height)
+    )
+    wrap_height = all(
+        _points_close(control_points[column], control_points[((height - 1) * width) + column])
+        for column in range(width)
+    )
+
     columns = [
         [control_points[(row * width) + column] for row in range(height)]
         for column in range(width)
@@ -141,7 +156,17 @@ def _flatten_grid(
     columns = _transpose(columns)
     _subdivide_columns(columns)
     _remove_degenerate_columns(columns)
-    return columns
+
+    # The working grid is transposed once, so the original width seam is now
+    # the inner row axis and the original height seam is the outer column axis.
+    # Canonicalizing tolerance-matched endpoints makes triangle containment
+    # preserve ET:L's wrapped-border continuity without inventing a gap.
+    if wrap_width:
+        for column in columns:
+            column[-1] = column[0]
+    if wrap_height:
+        columns[-1] = list(columns[0])
+    return columns, wrap_width, wrap_height
 
 
 def _subtract(left: Vector3, right: Vector3) -> Vector3:
@@ -160,7 +185,12 @@ def _cross(left: Vector3, right: Vector3) -> Vector3:
     )
 
 
-def _facet(first: Vector3, second: Vector3, third: Vector3) -> PatchFacet | None:
+def _surface_plane(
+    first: Vector3,
+    second: Vector3,
+    third: Vector3,
+    planes: list[tuple[Vector3, float]],
+) -> tuple[Vector3, float] | None:
     # ET:L patch planes point out of clockwise-ordered control-grid triangles.
     normal = _cross(_subtract(third, first), _subtract(second, first))
     length_squared = _dot(normal, normal)
@@ -168,7 +198,18 @@ def _facet(first: Vector3, second: Vector3, third: Vector3) -> PatchFacet | None
         return None
     inverse_length = 1.0 / math.sqrt(length_squared)
     unit_normal = tuple(component * inverse_length for component in normal)
-    return PatchFacet(unit_normal, _dot(first, unit_normal), (first, second, third))
+    distance = _dot(first, unit_normal)
+    vertices = (first, second, third)
+    for existing_normal, existing_distance in planes:
+        if _dot(unit_normal, existing_normal) < 0.0:
+            continue
+        if all(
+            abs(_dot(vertex, existing_normal) - existing_distance) <= PATCH_PLANE_EPSILON
+            for vertex in vertices
+        ):
+            return existing_normal, existing_distance
+    planes.append((unit_normal, distance))
+    return unit_normal, distance
 
 
 def _expanded_bounds(points: tuple[Vector3, ...], padding: float) -> Bounds3D:
@@ -196,21 +237,26 @@ def build_patch_collision(
     content_flags: int = 0,
 ) -> PatchCollision:
     """Build deterministic one-sided point-collision facets for one patch."""
-    grid = _flatten_grid(control_points, width, height)
+    grid, wrap_width, wrap_height = _flatten_grid(control_points, width, height)
     facets: list[PatchFacet] = []
+    planes: list[tuple[Vector3, float]] = []
     for column in range(len(grid) - 1):
         for row in range(len(grid[0]) - 1):
             top_left = grid[column][row]
             top_right = grid[column + 1][row]
             bottom_right = grid[column + 1][row + 1]
             bottom_left = grid[column][row + 1]
-            for points in (
-                (top_left, top_right, bottom_right),
-                (bottom_right, bottom_left, top_left),
-            ):
-                facet = _facet(*points)
-                if facet is not None:
-                    facets.append(facet)
+            first_vertices = (top_left, top_right, bottom_right)
+            second_vertices = (bottom_right, bottom_left, top_left)
+            first_plane = _surface_plane(*first_vertices, planes)
+            second_plane = _surface_plane(*second_vertices, planes)
+            if first_plane is not None and first_plane == second_plane:
+                facets.append(PatchFacet(*first_plane, (top_left, top_right, bottom_right, bottom_left)))
+                continue
+            if first_plane is not None:
+                facets.append(PatchFacet(*first_plane, first_vertices))
+            if second_plane is not None:
+                facets.append(PatchFacet(*second_plane, second_vertices))
 
     flattened_points = tuple(point for column in grid for point in column)
     return PatchCollision(
@@ -222,6 +268,8 @@ def build_patch_collision(
         # Metadata remains in the BSP patch's original parameter orientation.
         grid_width=len(grid[0]),
         grid_height=len(grid),
+        wrap_width=wrap_width,
+        wrap_height=wrap_height,
     )
 
 
@@ -245,6 +293,17 @@ def _point_in_triangle(point: Vector3, vertices: tuple[Vector3, Vector3, Vector3
         and second_weight >= -_BARYCENTRIC_EPSILON
         and first_weight + second_weight <= 1.0 + _BARYCENTRIC_EPSILON
     )
+
+
+def _point_in_facet(point: Vector3, vertices: tuple[Vector3, ...]) -> bool:
+    if len(vertices) == 3:
+        return _point_in_triangle(point, (vertices[0], vertices[1], vertices[2]))
+    if len(vertices) == 4:
+        return _point_in_triangle(point, (vertices[0], vertices[1], vertices[2])) or _point_in_triangle(
+            point,
+            (vertices[2], vertices[3], vertices[0]),
+        )
+    raise PatchCollisionError(f"unsupported patch facet vertex count {len(vertices)}")
 
 
 def trace_patch_point(
@@ -279,7 +338,7 @@ def trace_patch_point(
         # ET:L tests facet border-plane intersections against the raw surface
         # intersection. Its 0.125 pushoff is calculated only after the facet hit
         # is accepted, so containment must not use the tangentially shifted point.
-        if not _point_in_triangle(point, facet.vertices):
+        if not _point_in_facet(point, facet.vertices):
             continue
         pushed_fraction = max(0.0, (start_distance - surface_clip_epsilon) / denominator)
         if pushed_fraction <= limit:

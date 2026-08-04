@@ -33,7 +33,7 @@ def _single_axis_bulge(control_deviation: float) -> tuple[tuple[float, float, fl
     )
 
 
-def test_planar_patch_flattens_to_two_facets_and_uses_engine_pushoff():
+def test_planar_patch_flattens_to_one_quad_facet_and_uses_engine_pushoff():
     collision = build_patch_collision(_planar_grid(), 3, 3)
 
     hit, tested = trace_patch_point(
@@ -45,8 +45,9 @@ def test_planar_patch_flattens_to_two_facets_and_uses_engine_pushoff():
 
     assert collision.grid_width == 2
     assert collision.grid_height == 2
-    assert len(collision.facets) == 2
-    assert tested == 2
+    assert len(collision.facets) == 1
+    assert len(collision.facets[0].vertices) == 4
+    assert tested == 1
     assert hit is not None
     assert hit.fraction == pytest.approx((2.0 - 0.125) / 4.0)
 
@@ -110,6 +111,19 @@ def test_oblique_edge_containment_uses_raw_intersection_before_pushoff():
     assert pushed_y > 1.0
 
 
+def test_on_plane_start_is_not_a_front_side_patch_contact():
+    collision = build_patch_collision(_planar_grid(), 3, 3)
+
+    hit, _ = trace_patch_point(
+        collision,
+        (0.0, 0.0, 0.0),
+        (2.0, 0.0, 0.0),
+        surface_clip_epsilon=0.125,
+    )
+
+    assert hit is None
+
+
 def test_curved_patch_subdivides_and_hits_its_exact_quadratic_midpoint():
     collision = build_patch_collision(_curved_grid(), 3, 3)
 
@@ -154,6 +168,41 @@ def test_flattened_grid_metadata_retains_input_axis_orientation():
     collision = build_patch_collision(control_points, 5, 3)
 
     assert (collision.grid_width, collision.grid_height) == (3, 2)
+
+
+def test_nearly_coplanar_triangles_reuse_tolerance_matched_surface_plane():
+    control_points = list(_planar_grid())
+    control_points[0] = (0.05, -1.0, -1.0)
+
+    collision = build_patch_collision(tuple(control_points), 3, 3)
+
+    assert len(collision.facets) == 1
+    assert len(collision.facets[0].vertices) == 4
+
+
+def test_tolerance_matched_wrap_seam_is_canonicalized_closed():
+    control_points = []
+    for row in range(3):
+        for column in range(5):
+            if column == 4:
+                point = (0.05, 0.0, float(row))
+            else:
+                angle_points = ((0.0, 0.0), (1.0, 1.0), (2.0, 0.0), (1.0, -1.0))
+                x, y = angle_points[column]
+                point = (x, y, float(row))
+            control_points.append(point)
+
+    collision = build_patch_collision(tuple(control_points), 5, 3)
+
+    assert collision.wrap_width is True
+    assert collision.wrap_height is False
+    seam_vertices = {
+        vertex
+        for facet in collision.facets
+        for vertex in facet.vertices
+        if abs(vertex[0]) <= 0.1 and abs(vertex[1]) <= 0.1
+    }
+    assert seam_vertices == {(0.0, 0.0, 0.0), (0.0, 0.0, 2.0)}
 
 
 def test_degenerate_patch_has_no_facets_and_malformed_inputs_are_rejected():

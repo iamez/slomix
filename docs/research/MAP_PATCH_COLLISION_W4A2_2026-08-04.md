@@ -6,9 +6,9 @@ Scope: read-only offline ET:L BSP point traces; no API route, metric, database w
 ## Verdict
 
 The W4 point-trace kernel now compiles and traces every local quadratic `MST_PATCH` surface instead of treating a crossed
-patch AABB as permanent uncertainty. All **4,794** patches across the 20 local BSP maps compiled into **39,124**
-one-sided point-collision facets with **zero compilation failures**. Of those, 4,524 solid patches produced 36,652
-facets eligible for the line-of-sight mask.
+patch AABB as permanent uncertainty. All **4,794** patches across the 20 local BSP maps compiled into **22,248**
+one-sided point-collision facets with **zero compilation failures**. Of those, 4,524 solid patches produced 20,706
+facets eligible for the line-of-sight mask. The inventory contains 2,718 wrapped patches, including 2,539 solid ones.
 
 This closes the static patch portion of W4a. It does **not** make the output a claim that a player saw another player.
 Dynamic submodels, historical transforms, live custom entities and `func_fakebrush` completeness remain unresolved, and
@@ -21,8 +21,13 @@ the offline result remains `unvalidated_until_w6` until paired `et.trap_Trace` f
   curve midpoint differs from the linear midpoint by at least 16 game units, matching the ET:L compatibility constant.
 - Degenerate adjacent grid columns collapse with the 0.1-unit point tolerance. Degenerate triangles produce no facet,
   matching the engine's no-hit treatment rather than becoming universal solids.
-- Each remaining grid cell becomes two oriented planar facets. Point traces collide only from the facet's front side,
-  use the exact plane intersection for facet containment, and report the engine-compatible 0.125 plane-distance pushoff.
+- Candidate surface planes are reused when all three vertices fall within ET:L's 0.1-unit plane tolerance. Two cell
+  triangles sharing that plane are represented by one quad containment facet; non-coplanar cells remain two triangles.
+  Point traces collide only from the facet's front side, and a start exactly on the plane is not a front-side contact.
+  Wrapped control-grid endpoints are detected and canonicalized with the same 0.1-unit point tolerance so the
+  independent triangle/quad representation does not create a narrow artificial seam.
+- Each remaining facet uses the exact plane intersection for facet containment and reports the engine-compatible
+  0.125 plane-distance pushoff.
   Like ET:L, an existing pushed trace fraction limits the raw next-facet intersection before that facet applies its own
   pushoff. BSP leaves and their brush/surface references preserve near-to-far encounter order so this order-dependent
   compatibility behavior is not replaced by surface-index ordering. Facet containment is evaluated at the raw surface
@@ -55,7 +60,7 @@ traces and constants; no ET:L source file is included in this MIT repository.
 
 `tests/unit/test_map_geometry_patch.py` and `tests/unit/test_map_geometry_trace.py` cover:
 
-1. planar 3x3 control grids collapsing to two facets;
+1. planar 3x3 control grids collapsing to one tolerance-matched quad facet;
 2. exact 0.125 plane-distance pushoff;
 3. front-to-back collision and back-to-front non-collision;
 4. edge/corner inclusion and an immediately outside miss;
@@ -65,17 +70,20 @@ traces and constants; no ET:L source file is included in this MIT repository.
 8. LOS versus playerclip mask behavior;
 9. nearest brush-versus-patch ordering;
 10. fail-closed behavior for unavailable and non-finite compilation;
-11. injected patch-catalog validation and conservative partial-cache bounds; and
+11. injected patch-catalog validation and conservative partial-cache bounds;
 12. near-to-far leaf/surface encounter order;
 13. raw-intersection containment for oblique edge hits;
 14. uncertainty retention when a missing patch may precede a known patch or brush; and
 15. exact quadratic-midpoint subdivision threshold behavior;
 16. non-square flattened-grid metadata orientation;
 17. solid-start flag preservation under uncertain first-hit provenance; and
-18. aggregate versus endpoint-specific block provenance.
+18. aggregate versus endpoint-specific block provenance;
+19. on-plane starts remaining non-contacts;
+20. 0.1-unit tolerance plane reuse; and
+21. tolerance-matched wrapped-seam closure.
 
-Measured W2/W3/W4 targeted suite on Python 3.13.14: **74 passed**. The repository-wide suite also completed with
-**4,079 passed and 74 skipped**; the skips require unavailable test PostgreSQL credentials, optional local fixtures, or
+Measured W2/W3/W4 targeted suite on Python 3.13.14: **77 passed**. The repository-wide suite also completed with
+**4,082 passed and 74 skipped**. The skips require unavailable test PostgreSQL credentials, optional local fixtures, or
 the separately executed real-asset opt-in.
 
 ## Real-asset proof
@@ -93,11 +101,13 @@ Input and compilation:
 | Parsed maps | 20 |
 | BSP patch surfaces | 4,794 |
 | Solid patch surfaces | 4,524 |
-| All compiled facets | 39,124 |
-| Solid-mask facets | 36,652 |
+| Wrapped patch surfaces | 2,718 |
+| Solid wrapped patch surfaces | 2,539 |
+| All compiled facets | 22,248 |
+| Solid-mask facets | 20,706 |
 | Patch compilation failures | 0 |
-| Mean compile time per map | 36.795 ms |
-| Maximum compile time for one map | 69.166 ms |
+| Mean compile time per map | 46.727 ms |
+| Maximum compile time for one map | 102.534 ms |
 | Deterministic cross-team spawn pairs | 320 |
 | Frozen target endpoint traces | 1,920 |
 
@@ -114,7 +124,8 @@ All 12 real-asset patch hits occurred on `sw_goldrush_te` in this deterministic 
 and **0 clear**. The 12 patch results replace farther brush provenance at those endpoints rather than changing the
 pair-level any-clear result.
 
-The real-asset integration gate independently recompiles every patch and asserts the exact 4,794 / 39,124 / 0 totals.
+The real-asset integration gate independently recompiles every patch and asserts the exact patch, facet, wrap and
+failure totals.
 The existing all-map spawn test continues to prove that the normal unresolved-runtime path never returns clear.
 
 ## Cost measurement
@@ -124,23 +135,23 @@ brush broad phase/exact clipping, patch bounds and facet tests:
 
 | Per endpoint | W4a1 brush foundation | W4a2 with facets |
 |---|---:|---:|
-| p50 | 774.450 us | 830.979 us |
-| p95 | 2,037.985 us | 2,312.646 us |
-| max | 3,158.994 us | 3,967.421 us |
+| p50 | 774.450 us | 824.231 us |
+| p95 | 2,037.985 us | 2,130.745 us |
+| max | 3,158.994 us | 3,332.692 us |
 
 | Candidate work per endpoint | Mean | Max |
 |---|---:|---:|
 | BSP leaves | 21.967 | 57 |
 | Exact convex-brush tests | 15.860 | 73 |
 | Candidate solid patch surfaces | 7.520 | 83 |
-| Exact patch-facet tests | 5.838 | 224 |
+| Exact patch-facet tests | 3.546 | 112 |
 
-The p50 increased by about 7.3% and p95 by about 13.5% on this developer host. The max is sample-sensitive and increased
-by about 25.6%, so the tail requires attention before a consumer exists. Patch-surface accounting is also stricter than W4a1:
+The p50 increased by about 6.4% and p95 by about 4.6% on this developer host. The max is sample-sensitive and increased
+by about 5.5%, so the tail still requires attention before a consumer exists. Patch-surface accounting is also stricter than W4a1:
 blocked brush traces now continue far enough to determine whether a nearer patch owns the first hit.
 
 At 66 pairs, six endpoints, a 1,000 ms analysis cadence and a 12-minute round, 285,120 endpoint traces multiplied by the
-measured p50 project to roughly **237 seconds**. This remains far outside the full-round one-second budget. The 200 ms
+measured p50 project to roughly **235 seconds**. This remains far outside the full-round one-second budget. The 200 ms
 capture cadence is not an analysis budget and would multiply this cost by five.
 
 ## Remaining gates

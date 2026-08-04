@@ -278,7 +278,7 @@ def test_intersecting_solid_patch_blocks_with_compiled_facets():
     assert result.patch_facet_index is not None
     assert result.fraction == pytest.approx((5.0 - 0.125) / 10.0)
     assert result.tested_patch_count == 1
-    assert result.tested_patch_facet_count == 2
+    assert result.tested_patch_facet_count == 1
 
 
 def test_nonintersecting_patch_does_not_poison_an_otherwise_clear_segment():
