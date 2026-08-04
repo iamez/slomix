@@ -72,6 +72,16 @@ def analyze(etmain: Path, *, map_names: tuple[str, ...] | None, pairs_per_map: i
         inventory.update(
             maps=1,
             brushes=len(bsp.brushes),
+            empty_brushes=sum(brush.num_sides == 0 for brush in bsp.brushes),
+            planes=len(bsp.planes),
+            nonfinite_planes=sum(
+                not all(math.isfinite(value) for value in (*plane.normal, plane.distance))
+                for plane in bsp.planes
+            ),
+            zero_normal_planes=sum(
+                sum(component * component for component in plane.normal) == 0.0
+                for plane in bsp.planes
+            ),
             patches=sum(surface.surface_type is SurfaceType.PATCH for surface in bsp.surfaces),
             solid_patches=sum(
                 surface.surface_type is SurfaceType.PATCH

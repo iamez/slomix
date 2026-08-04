@@ -190,7 +190,9 @@ def _brush_broadphase_bounds(sides: tuple[tuple[Vector3, float, int], ...]) -> B
     mins = [-math.inf, -math.inf, -math.inf]
     maxs = [math.inf, math.inf, math.inf]
     for normal, distance, _side_index in sides:
-        nonzero_axes = [axis for axis, value in enumerate(normal) if abs(value) > 1e-6]
+        # A tiny off-axis term is still unbounded at large coordinates. Only
+        # exact axial planes can establish a conservative finite broad phase.
+        nonzero_axes = [axis for axis, value in enumerate(normal) if value != 0.0]
         if len(nonzero_axes) != 1:
             continue
         axis = nonzero_axes[0]
@@ -349,6 +351,8 @@ class BspPointTracer:
                 elif start_distance > end_distance:
                     inverse_distance = 1.0 / (start_distance - end_distance)
                     side = 0
+                    # ET:L deliberately overlaps the two point segments by the
+                    # 2*epsilon slab here so boundary geometry cannot be missed.
                     near_fraction = (start_distance + SURFACE_CLIP_EPSILON) * inverse_distance
                     far_fraction = (start_distance - SURFACE_CLIP_EPSILON) * inverse_distance
                 else:
@@ -526,6 +530,20 @@ class BspPointTracer:
             hit = self._trace_brush(brush_index, start, end)
             if hit is not None and (closest is None or hit.fraction < closest[0]):
                 closest = (hit.fraction, brush_index, hit)
+            elif hit is not None and closest is not None and hit.fraction == closest[0] == 0.0:
+                _fraction, selected_index, selected_hit = closest
+                if hit.all_solid and not selected_hit.all_solid:
+                    selected_index = brush_index
+                closest = (
+                    0.0,
+                    selected_index,
+                    _BrushHit(
+                        fraction=0.0,
+                        start_solid=selected_hit.start_solid or hit.start_solid,
+                        all_solid=selected_hit.all_solid or hit.all_solid,
+                        side_index=None,
+                    ),
+                )
 
         if closest is not None:
             fraction, brush_index, hit = closest

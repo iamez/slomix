@@ -154,6 +154,31 @@ def test_slanted_convex_half_space_rejects_aabb_style_false_positive():
     assert result.status is TraceStatus.CLEAR
 
 
+def test_nearly_axial_plane_cannot_create_a_nonconservative_broadphase_bound():
+    bsp = _trace_bsp()
+    planes = (
+        BspPlane((1.0, 1e-7, 0.0), 1.0),
+        BspPlane((-1.0, 0.0, 0.0), 4.0),
+        BspPlane((0.0, 1.0, 0.0), -9_999_999.0),
+        BspPlane((0.0, -1.0, 0.0), 10_000_001.0),
+        BspPlane((0.0, 0.0, 1.0), 1.0),
+        BspPlane((0.0, 0.0, -1.0), 1.0),
+    )
+    bsp = replace(
+        bsp,
+        planes=(bsp.planes[0], *planes),
+        brush_sides=tuple(BspBrushSide(index + 1, 0) for index in range(6)),
+    )
+
+    result = _verified_tracer(bsp).trace_segment(
+        (2.0, -10_000_000.0, 0.0),
+        (2.0, -10_000_000.0, 0.0),
+    )
+
+    assert result.status is TraceStatus.BLOCKED
+    assert result.all_solid is True
+
+
 def test_start_inside_brush_is_blocked_and_exposes_startsolid():
     result = _verified_tracer(_trace_bsp()).trace_segment((0.0, 0.0, 0.0), (5.0, 0.0, 0.0))
 
@@ -161,6 +186,36 @@ def test_start_inside_brush_is_blocked_and_exposes_startsolid():
     assert result.fraction == 0.0
     assert result.start_solid is True
     assert result.all_solid is False
+
+
+def test_equal_zero_fraction_hits_accumulate_allsolid_across_overlapping_brushes():
+    bsp = _trace_bsp()
+    enclosing_planes = _box_planes((-2.0, -3.0, -4.0), (10.0, 3.0, 4.0))
+    second_side = len(bsp.brush_sides)
+    second_plane = len(bsp.planes)
+    bsp = replace(
+        bsp,
+        planes=(*bsp.planes, *enclosing_planes),
+        brushes=(bsp.brushes[0], BspBrush(second_side, 6, 0)),
+        brush_sides=(
+            *bsp.brush_sides,
+            *(BspBrushSide(second_plane + index, 0) for index in range(6)),
+        ),
+        leaf_brushes=(0, 1, 0, 1),
+        leafs=(
+            replace(bsp.leafs[0], first_leaf_brush=0, num_leaf_brushes=2),
+            replace(bsp.leafs[1], first_leaf_brush=2, num_leaf_brushes=2),
+        ),
+        models=(replace(bsp.models[0], num_brushes=2),),
+    )
+
+    result = _verified_tracer(bsp).trace_segment((0.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+
+    assert result.status is TraceStatus.BLOCKED
+    assert result.start_solid is True
+    assert result.all_solid is True
+    assert result.brush_index == 1
+    assert result.tested_brush_count == 2
 
 
 def test_named_masks_distinguish_playerclip_from_line_of_sight():
