@@ -50,6 +50,10 @@ def test_response_header_sets_frame_ancestors():
 
 def test_x_frame_options_is_kept_alongside():
     """X-Frame-Options is the older equivalent and still the one some clients
-    honour, so the CSP header supplements it rather than replacing it."""
+    honour, so the CSP header supplements it rather than replacing it.
+
+    Applied as a default, not an assignment: uploads.py sends the stricter DENY
+    and must not be downgraded. test_security_headers_middleware.py proves that
+    behaviour; this only pins that the header is still sent at all."""
     source = MAIN_PY.read_text(encoding="utf-8")
-    assert 'response.headers["X-Frame-Options"] = "SAMEORIGIN"' in source
+    assert 'setdefault("X-Frame-Options", "SAMEORIGIN")' in source
