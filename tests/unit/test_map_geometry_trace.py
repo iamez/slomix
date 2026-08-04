@@ -296,6 +296,21 @@ def test_runtime_completeness_is_a_required_clear_gate():
     assert result.fraction is None
 
 
+def test_string_catalog_coverage_is_normalized_and_invalid_values_are_rejected():
+    catalog = extract_entity_catalog(_trace_bsp(), "synthetic")
+    tracer = BspPointTracer(
+        _trace_bsp(),
+        runtime_entity_completeness=catalog.runtime_entity_completeness,
+    )
+
+    result = tracer.trace_segment((-5.0, 20.0, 0.0), (5.0, 20.0, 0.0))
+
+    assert result.status is TraceStatus.INDETERMINATE
+    assert result.reason is TraceReason.RUNTIME_ENTITY_COMPLETENESS_UNVERIFIED
+    with pytest.raises(ValueError, match="not a valid RuntimeGeometryCoverage"):
+        BspPointTracer(_trace_bsp(), runtime_entity_completeness="unknown")
+
+
 def test_dynamic_inline_model_crossing_is_indeterminate_not_aabb_blocked():
     source = _trace_bsp()
     source = replace(

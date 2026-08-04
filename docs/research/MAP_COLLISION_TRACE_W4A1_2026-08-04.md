@@ -34,6 +34,8 @@ patch. The normal catalog-backed path leaves those runtime gates unverified, so 
 - Missing stance, missing/invalid BSP traversal, intersected uncompiled solid patch, any dynamic submodel without an
   observed runtime transform,
   unverified runtime state, or unverified runtime-entity completeness remains machine-readable `indeterminate`.
+- String coverage values from the W3 catalog are normalized to the coverage enum at construction; unknown values are
+  rejected instead of bypassing fail-closed identity checks.
 - W6 validation status is carried as `unvalidated_until_w6`.
 
 The implementation is independent Python based on the documented interval/half-space behavior. No ET:L GPL source was
@@ -53,11 +55,12 @@ reference for constants and behavior.
 7. `PLAYERCLIP` ignored by LOS but included by the named movement-content mask;
 8. intersecting solid patch returns `indeterminate`, while a non-intersecting patch does not poison a clear segment;
 9. unverified runtime completeness cannot return clear;
-10. dynamic inline-models remain `indeterminate` without supplied transforms, even if coverage flags are verified;
-11. missing/cyclic BSP trees and missing stance fail closed;
-12. frozen stance bounds, eye heights, target labels, any-clear aggregation, and W6 label.
+10. string catalog coverage is normalized and invalid coverage values are rejected;
+11. dynamic inline-models remain `indeterminate` without supplied transforms, even if coverage flags are verified;
+12. missing/cyclic BSP trees and missing stance fail closed;
+13. frozen stance bounds, eye heights, target labels, any-clear aggregation, and W6 label.
 
-Measured targeted suite on Python 3.13.14: **53 passed** across the new trace tests plus the existing W2/W3 contracts.
+Measured targeted suite on Python 3.13.14: **54 passed** across the new trace tests plus the existing W2/W3 contracts.
 
 ## Real-asset proof
 
