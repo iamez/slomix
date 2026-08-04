@@ -273,13 +273,13 @@ class BspPointTracer:
         bsp: BspFile,
         *,
         collision_entities: tuple[CollisionBrushEntity, ...] = (),
-        runtime_entity_completeness: RuntimeGeometryCoverage = RuntimeGeometryCoverage.UNVERIFIED,
-        runtime_entity_state: RuntimeGeometryCoverage = RuntimeGeometryCoverage.UNVERIFIED,
+        runtime_entity_completeness: RuntimeGeometryCoverage | str = RuntimeGeometryCoverage.UNVERIFIED,
+        runtime_entity_state: RuntimeGeometryCoverage | str = RuntimeGeometryCoverage.UNVERIFIED,
     ) -> None:
         self._bsp = bsp
         self._collision_entities = collision_entities
-        self._runtime_entity_completeness = runtime_entity_completeness
-        self._runtime_entity_state = runtime_entity_state
+        self._runtime_entity_completeness = RuntimeGeometryCoverage(runtime_entity_completeness)
+        self._runtime_entity_state = RuntimeGeometryCoverage(runtime_entity_state)
         self._trace_brushes = tuple(
             _TraceBrush(
                 content_flags=bsp.shaders[brush.shader_index].content_flags,
