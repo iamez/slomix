@@ -44,15 +44,16 @@ reference for constants and behavior.
 
 1. exact box entry fraction including the 0.125 clip epsilon;
 2. a slanted half-space case that rejects an AABB-style false block;
-3. `startsolid`/`allsolid` reporting;
-4. `PLAYERCLIP` ignored by LOS but included by the named movement-content mask;
-5. intersecting solid patch returns `indeterminate`, while a non-intersecting patch does not poison a clear segment;
-6. unverified runtime completeness cannot return clear;
-7. dynamic inline-model bounds return `indeterminate`, not an AABB-derived block;
-8. missing/cyclic BSP trees and missing stance fail closed;
-9. frozen stance bounds, eye heights, target labels, any-clear aggregation, and W6 label.
+3. a nearly axial large-coordinate plane that cannot create a non-conservative broad-phase bound;
+4. `startsolid`/`allsolid` reporting, including overlapping brushes with equal zero-fraction hits;
+5. `PLAYERCLIP` ignored by LOS but included by the named movement-content mask;
+6. intersecting solid patch returns `indeterminate`, while a non-intersecting patch does not poison a clear segment;
+7. unverified runtime completeness cannot return clear;
+8. dynamic inline-model bounds return `indeterminate`, not an AABB-derived block;
+9. missing/cyclic BSP trees and missing stance fail closed;
+10. frozen stance bounds, eye heights, target labels, any-clear aggregation, and W6 label.
 
-Measured targeted suite on Python 3.13.14: **48 passed** across the new trace tests plus the existing W2/W3 contracts.
+Measured targeted suite on Python 3.13.14: **50 passed** across the new trace tests plus the existing W2/W3 contracts.
 
 ## Real-asset proof
 
@@ -99,9 +100,9 @@ exact brush tests, and patch AABB gates:
 
 | Per endpoint | Time |
 |---|---:|
-| p50 | 812.222 us |
-| p95 | 2,049.688 us |
-| max | 3,135.985 us |
+| p50 | 773.214 us |
+| p95 | 1,984.387 us |
+| max | 3,122.097 us |
 
 | Candidate work per endpoint | Mean | Max |
 |---|---:|---:|
@@ -114,7 +115,7 @@ The first deliberately conservative prototype traversed an average 317 leaves an
 exact brush tests to the final values above.
 
 This still fails the eventual full-round budget. At 66 pairs, six endpoints, and a 1,000 ms analysis cadence over a
-12-minute round, there are 285,120 endpoint traces. Multiplying by the measured p50 gives roughly **232 seconds**, before
+12-minute round, there are 285,120 endpoint traces. Multiplying by the measured p50 gives roughly **220 seconds**, before
 timeline reconstruction or patch facets. The 200 ms capture cadence would be five times worse. These are workload
 projections, not a benchmark of a future batched implementation.
 
