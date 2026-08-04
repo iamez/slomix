@@ -65,10 +65,11 @@ traces and constants; no ET:L source file is included in this MIT repository.
 12. near-to-far leaf/surface encounter order;
 13. raw-intersection containment for oblique edge hits;
 14. uncertainty retention when a missing patch may precede a known patch or brush; and
-15. aggregate versus endpoint-specific block provenance.
+15. exact quadratic-midpoint subdivision threshold behavior; and
+16. aggregate versus endpoint-specific block provenance.
 
-Measured W2/W3/W4 targeted suite on Python 3.13.14: **71 passed**. The repository-wide suite also completed with
-**4,076 passed and 74 skipped**; the skips require unavailable test PostgreSQL credentials, optional local fixtures, or
+Measured W2/W3/W4 targeted suite on Python 3.13.14: **72 passed**. The repository-wide suite also completed with
+**4,077 passed and 74 skipped**; the skips require unavailable test PostgreSQL credentials, optional local fixtures, or
 the separately executed real-asset opt-in.
 
 ## Real-asset proof
