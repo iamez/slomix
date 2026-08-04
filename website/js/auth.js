@@ -260,11 +260,26 @@ export async function checkLoginStatus() {
 }
 
 async function _checkLoginStatus() {
-    try {
-        const user = await fetchJSON(`${AUTH_BASE}/me`);
-        _currentUser = user;
-        _authResolved = true;
+    let user = null;
+    let definitive = false;
 
+    try {
+        user = await fetchJSON(`${AUTH_BASE}/me`);
+        definitive = true;
+    } catch (err) {
+        // Only a real "you are not logged in" answer may be cached for the
+        // page load. 401/403 IS that answer (see the contract note above).
+        // A 5xx or a dropped connection is not: caching it would leave a
+        // logged-in user without their controls on Uploads/Availability and
+        // misdirect the mobile Me tab for the rest of the visit, with no way
+        // back short of a reload (Codex review on #598).
+        definitive = err?.status === 401 || err?.status === 403;
+    }
+
+    _currentUser = user;
+    if (definitive) _authResolved = true;
+
+    if (user) {
         document.getElementById('auth-guest')?.classList.add('hidden');
         const userEl = document.getElementById('auth-user');
         if (userEl) {
@@ -287,13 +302,7 @@ async function _checkLoginStatus() {
             linked_player: user.linked_player,
             linked_player_guid: user.linked_player_guid,
         });
-
-        await refreshProfileLinkCard();
-        await loadPromotionPreferences();
-        return user;
-    } catch (_e) {
-        _currentUser = null;
-        _authResolved = true;
+    } else {
         document.getElementById('auth-guest')?.classList.remove('hidden');
         const userEl = document.getElementById('auth-user');
         if (userEl) {
@@ -302,9 +311,24 @@ async function _checkLoginStatus() {
         }
         updateAdminButton(null);
         updateAvailabilityNavBadge(null);
+    }
 
-        await refreshProfileLinkCard();
-        return null;
+    // Follow-up loads are deliberately OUTSIDE the auth decision and each
+    // other's blast radius. They were inside the same try/catch, so a throw
+    // from either one landed in the anonymous branch and flipped an
+    // authenticated user to logged out — stickily, because _authResolved had
+    // already been set (Codex review on #598).
+    await _runSideEffect(refreshProfileLinkCard);
+    if (user) await _runSideEffect(loadPromotionPreferences);
+
+    return user;
+}
+
+async function _runSideEffect(fn) {
+    try {
+        await fn();
+    } catch (err) {
+        console.warn(`Post-auth step ${fn.name} failed:`, err);
     }
 }
 

@@ -568,8 +568,11 @@ function renderWeaponPlayersGrid() {
                 <div class="flex items-center justify-between text-xs py-1 border-b border-white/5 last:border-b-0">
                     <span class="text-slate-300 font-semibold">${weaponName}</span>
                     <!-- hs_rate is headshots/hits (see records_weapons.py:150-152), i.e.
-                         the share of hits that landed on the head — not a kill rate. -->
-                    <span class="text-slate-500">${kills}K · ${acc}% ACC · ${hs}% head hits</span>
+                         the share of hits that landed on the head — not a kill rate.
+                         Labelled as a RATE: "12.3% head hits" reads like a count
+                         of hits, which is what the whole column was mislabelled as
+                         before. -->
+                    <span class="text-slate-500">${kills}K · ${acc}% ACC · ${hs}% head-hit rate</span>
                 </div>
             `;
         }).join('');
