@@ -6,8 +6,8 @@ Scope: read-only offline ET:L BSP point traces; no API route, metric, database w
 ## Verdict
 
 The W4 point-trace kernel now compiles and traces every local quadratic `MST_PATCH` surface instead of treating a crossed
-patch AABB as permanent uncertainty. All **4,794** patches across the 20 local BSP maps compiled into **22,126**
-one-sided point-collision facets with **zero compilation failures**. Of those, 4,524 solid patches produced 20,617
+patch AABB as permanent uncertainty. All **4,794** patches across the 20 local BSP maps compiled into **22,048**
+one-sided point-collision facets with **zero compilation failures**. Of those, 4,524 solid patches produced 20,552
 facets eligible for the line-of-sight mask. The inventory contains 2,718 wrapped patches, including 2,539 solid ones.
 No solid patch compiled to an empty facet set.
 
@@ -29,6 +29,9 @@ the offline result remains `unvalidated_until_w6` until paired `et.trap_Trace` f
   as ET:L. Both original endpoint sets stay unchanged. Facet containment uses the neighboring facet's surface plane as
   the shared border, including across wrapped seams; open edges use a plane through the literal edge. This avoids both
   artificial seam gaps and off-plane alternate polygons that can expand a non-coplanar triangle into a false-hit sliver.
+- Border orientation is evaluated against all four corners of the source grid cell. A border plane that has cell corners
+  on both sides cannot define a trustworthy containment half-space, so that facet is rejected instead of receiving an
+  arbitrary orientation from only one split triangle.
 - Each remaining facet uses the exact surface-plane intersection and its oriented border-plane intersections for
   containment, then reports the engine-compatible 0.125 plane-distance pushoff.
   Like ET:L, an existing pushed trace fraction limits the raw next-facet intersection before that facet applies its own
@@ -91,10 +94,11 @@ plane construction, one-sided point traces and constants; no ET:L source file is
 23. ordinary and wrapped adjacency expressed by neighboring facet surface planes;
 24. rejection of the non-coplanar false-hit sliver created by off-plane seam variants; and
 25. second-axis wrap detection after first-axis control-column removal; and
-26. encounter-order retention of unresolved patches against a later pushed brush fraction.
+26. encounter-order retention of unresolved patches against a later pushed brush fraction; and
+27. rejection of a split facet whose border plane straddles the four-corner source cell.
 
-Measured W2/W3/W4 targeted suite on Python 3.13.14: **81 passed**. The repository-wide suite also completed with
-**4,086 passed and 74 skipped**. The skips require unavailable test PostgreSQL credentials, optional local fixtures, or
+Measured W2/W3/W4 targeted suite on Python 3.13.14: **82 passed**. The repository-wide suite also completed with
+**4,087 passed and 74 skipped**. The skips require unavailable test PostgreSQL credentials, optional local fixtures, or
 the separately executed real-asset opt-in.
 
 ## Real-asset proof
@@ -114,12 +118,12 @@ Input and compilation:
 | Solid patch surfaces | 4,524 |
 | Wrapped patch surfaces | 2,718 |
 | Solid wrapped patch surfaces | 2,539 |
-| All compiled facets | 22,126 |
-| Solid-mask facets | 20,617 |
+| All compiled facets | 22,048 |
+| Solid-mask facets | 20,552 |
 | Solid patches with zero facets | 0 |
 | Patch compilation failures | 0 |
-| Mean compile time per map | 101.672 ms |
-| Maximum compile time for one map | 243.449 ms |
+| Mean compile time per map | 101.078 ms |
+| Maximum compile time for one map | 243.619 ms |
 | Deterministic cross-team spawn pairs | 320 |
 | Frozen target endpoint traces | 1,920 |
 
@@ -145,14 +149,14 @@ The existing all-map spawn test continues to prove that the normal unresolved-ru
 Timings exclude PK3 scan, BSP parsing and the separately reported one-time patch compilation. They include BSP traversal,
 brush broad phase/exact clipping, patch bounds and facet tests:
 
-Building adjacency-aware border planes increased mean one-time compilation from 47.811 ms to 101.672 ms per map on this
+Building adjacency-aware border planes increased mean one-time compilation from 47.811 ms to 101.078 ms per map on this
 host. Collision objects must therefore remain immutable and cached; compilation is not suitable for a sampling hot path.
 
 | Per endpoint | W4a1 brush foundation | W4a2 with facets |
 |---|---:|---:|
-| p50 | 774.450 us | 882.130 us |
-| p95 | 2,037.985 us | 2,508.751 us |
-| max | 3,158.994 us | 3,942.639 us |
+| p50 | 774.450 us | 894.430 us |
+| p95 | 2,037.985 us | 2,490.703 us |
+| max | 3,158.994 us | 4,197.387 us |
 
 | Candidate work per endpoint | Mean | Max |
 |---|---:|---:|
@@ -161,12 +165,12 @@ host. Collision objects must therefore remain immutable and cached; compilation 
 | Candidate solid patch surfaces | 7.520 | 83 |
 | Exact patch-facet tests | 3.546 | 112 |
 
-The p50 increased by about 13.9% and p95 by about 23.1% on this developer host. The max is sample-sensitive and increased
-by about 24.8%, so the tail requires attention before a consumer exists. Patch-surface accounting is also stricter than W4a1:
+The p50 increased by about 15.5% and p95 by about 22.2% on this developer host. The max is sample-sensitive and increased
+by about 32.9%, so the tail requires attention before a consumer exists. Patch-surface accounting is also stricter than W4a1:
 blocked brush traces now continue far enough to determine whether a nearer patch owns the first hit.
 
 At 66 pairs, six endpoints, a 1,000 ms analysis cadence and a 12-minute round, 285,120 endpoint traces multiplied by the
-measured p50 project to roughly **252 seconds**. This remains far outside the full-round one-second budget. The 200 ms
+measured p50 project to roughly **255 seconds**. This remains far outside the full-round one-second budget. The 200 ms
 capture cadence is not an analysis budget and would multiply this cost by five.
 
 ## Remaining gates

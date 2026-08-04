@@ -261,6 +261,7 @@ def _facet(
     surface_plane: int | None,
     border_planes: tuple[int | None, ...],
     vertices: tuple[Vector3, ...],
+    cell_vertices: tuple[Vector3, Vector3, Vector3, Vector3],
     planes: list[tuple[Vector3, float]],
 ) -> PatchFacet | None:
     if surface_plane is None:
@@ -272,11 +273,11 @@ def _facet(
         normal, distance = planes[border_plane]
         front = False
         back = False
-        for vertex in vertices:
+        for vertex in cell_vertices:
             offset = _dot(vertex, normal) - distance
             front |= offset > PATCH_PLANE_EPSILON
             back |= offset < -PATCH_PLANE_EPSILON
-        if not front and not back:
+        if (front and back) or (not front and not back):
             return None
         borders.append(PatchBorder(normal, distance, front and not back))
     normal, distance = planes[surface_plane]
@@ -350,11 +351,13 @@ def build_patch_collision(
             top_right = grid[column + 1][row]
             bottom_right = grid[column + 1][row + 1]
             bottom_left = grid[column][row + 1]
+            cell_vertices = (top_left, top_right, bottom_right, bottom_left)
             if first_plane is not None and first_plane == second_plane:
                 facet = _facet(
                     first_plane,
                     (top, right, bottom, left),
-                    (top_left, top_right, bottom_right, bottom_left),
+                    cell_vertices,
+                    cell_vertices,
                     planes,
                 )
                 if facet is not None:
@@ -370,6 +373,7 @@ def build_patch_collision(
                 first_plane,
                 (top, right, first_diagonal),
                 (top_left, top_right, bottom_right),
+                cell_vertices,
                 planes,
             )
             if first_facet is not None:
@@ -384,6 +388,7 @@ def build_patch_collision(
                 second_plane,
                 (bottom, left, second_diagonal),
                 (bottom_right, bottom_left, top_left),
+                cell_vertices,
                 planes,
             )
             if second_facet is not None:

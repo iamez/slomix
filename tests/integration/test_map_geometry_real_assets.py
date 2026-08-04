@@ -194,7 +194,7 @@ def test_w4a2_compiles_every_real_patch_without_fail_open_gaps(geometry_index):
 
     assert totals == {
         "patches": 4794,
-        "facets": 22126,
+        "facets": 22048,
         "failures": 0,
         "wrapped": 2718,
         "solid_wrapped": 2539,
