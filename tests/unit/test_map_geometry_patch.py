@@ -25,6 +25,14 @@ def _curved_grid() -> tuple[tuple[float, float, float], ...]:
     )
 
 
+def _single_axis_bulge(control_deviation: float) -> tuple[tuple[float, float, float], ...]:
+    return tuple(
+        (control_deviation if column == 1 else 0.0, float(row), float(column))
+        for row in range(3)
+        for column in range(3)
+    )
+
+
 def test_planar_patch_flattens_to_two_facets_and_uses_engine_pushoff():
     collision = build_patch_collision(_planar_grid(), 3, 3)
 
@@ -124,6 +132,16 @@ def test_curved_patch_subdivides_and_hits_its_exact_quadratic_midpoint():
     assert hit.fraction == pytest.approx(
         (start_distance - 0.125) / (start_distance - end_distance)
     )
+
+
+def test_subdivision_threshold_uses_quadratic_midpoint_not_raw_control_deviation():
+    below_threshold = build_patch_collision(_single_axis_bulge(20.0), 3, 3)
+    at_threshold = build_patch_collision(_single_axis_bulge(32.0), 3, 3)
+
+    # Quadratic t=0.5 halves the middle control-point deviation: 20 -> 10
+    # collapses, while 32 -> 16 reaches ET:L's inclusive threshold.
+    assert (below_threshold.grid_width, below_threshold.grid_height) == (2, 2)
+    assert max(at_threshold.grid_width, at_threshold.grid_height) > 2
 
 
 def test_degenerate_patch_has_no_facets_and_malformed_inputs_are_rejected():
