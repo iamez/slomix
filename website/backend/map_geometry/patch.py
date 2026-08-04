@@ -263,11 +263,12 @@ def _facet(
     vertices: tuple[Vector3, ...],
     planes: list[tuple[Vector3, float]],
 ) -> PatchFacet | None:
-    if surface_plane is None or any(border is None for border in border_planes):
+    if surface_plane is None:
         return None
     borders: list[PatchBorder] = []
     for border_plane in border_planes:
-        assert border_plane is not None
+        if border_plane is None:
+            return None
         normal, distance = planes[border_plane]
         front = False
         back = False
