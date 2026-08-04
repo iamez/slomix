@@ -27,7 +27,8 @@ the offline result remains `unvalidated_until_w6` until paired `et.trap_Trace` f
   Wrapped control-grid endpoints are detected with the same 0.1-unit point tolerance. Both original endpoint sets stay
   unchanged; alternate containment-border polygons carry the opposite-edge topology without moving a surface plane or
   changing its hit fraction. A synthetic trace proves that this closes a tolerance-sized seam left open without the
-  topology variants.
+  topology variants. On non-coplanar cells, a seam variant attaches only to the triangle that owns that boundary edge;
+  merely touching a seam corner does not expand the other triangle.
 - Each remaining facet uses the exact plane intersection for facet containment and reports the engine-compatible
   0.125 plane-distance pushoff.
   Like ET:L, an existing pushed trace fraction limits the raw next-facet intersection before that facet applies its own
@@ -84,10 +85,11 @@ traces and constants; no ET:L source file is included in this MIT repository.
 19. on-plane starts remaining non-contacts;
 20. 0.1-unit tolerance plane reuse; and
 21. tolerance-matched wrapped-seam closure without coordinate mutation; and
-22. cross-leaf brush/patch encounter ordering with a shared trace fraction.
+22. cross-leaf brush/patch encounter ordering with a shared trace fraction; and
+23. non-coplanar seam-edge ownership without non-owner triangle expansion.
 
-Measured W2/W3/W4 targeted suite on Python 3.13.14: **78 passed**. The repository-wide suite also completed with
-**4,083 passed and 74 skipped**. The skips require unavailable test PostgreSQL credentials, optional local fixtures, or
+Measured W2/W3/W4 targeted suite on Python 3.13.14: **79 passed**. The repository-wide suite also completed with
+**4,084 passed and 74 skipped**. The skips require unavailable test PostgreSQL credentials, optional local fixtures, or
 the separately executed real-asset opt-in.
 
 ## Real-asset proof
@@ -110,8 +112,8 @@ Input and compilation:
 | All compiled facets | 22,248 |
 | Solid-mask facets | 20,706 |
 | Patch compilation failures | 0 |
-| Mean compile time per map | 47.498 ms |
-| Maximum compile time for one map | 99.350 ms |
+| Mean compile time per map | 47.811 ms |
+| Maximum compile time for one map | 100.157 ms |
 | Deterministic cross-team spawn pairs | 320 |
 | Frozen target endpoint traces | 1,920 |
 
@@ -139,9 +141,9 @@ brush broad phase/exact clipping, patch bounds and facet tests:
 
 | Per endpoint | W4a1 brush foundation | W4a2 with facets |
 |---|---:|---:|
-| p50 | 774.450 us | 889.973 us |
-| p95 | 2,037.985 us | 2,481.084 us |
-| max | 3,158.994 us | 4,196.461 us |
+| p50 | 774.450 us | 898.098 us |
+| p95 | 2,037.985 us | 2,518.011 us |
+| max | 3,158.994 us | 4,167.621 us |
 
 | Candidate work per endpoint | Mean | Max |
 |---|---:|---:|
@@ -150,12 +152,12 @@ brush broad phase/exact clipping, patch bounds and facet tests:
 | Candidate solid patch surfaces | 7.520 | 83 |
 | Exact patch-facet tests | 3.546 | 112 |
 
-The p50 increased by about 14.9% and p95 by about 21.7% on this developer host. The max is sample-sensitive and increased
-by about 32.8%, so the tail requires attention before a consumer exists. Patch-surface accounting is also stricter than W4a1:
+The p50 increased by about 16.0% and p95 by about 23.6% on this developer host. The max is sample-sensitive and increased
+by about 31.9%, so the tail requires attention before a consumer exists. Patch-surface accounting is also stricter than W4a1:
 blocked brush traces now continue far enough to determine whether a nearer patch owns the first hit.
 
 At 66 pairs, six endpoints, a 1,000 ms analysis cadence and a 12-minute round, 285,120 endpoint traces multiplied by the
-measured p50 project to roughly **254 seconds**. This remains far outside the full-round one-second budget. The 200 ms
+measured p50 project to roughly **256 seconds**. This remains far outside the full-round one-second budget. The 200 ms
 capture cadence is not an analysis budget and would multiply this cost by five.
 
 ## Remaining gates

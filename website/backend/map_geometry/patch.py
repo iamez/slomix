@@ -211,49 +211,32 @@ def _expanded_bounds(points: tuple[Vector3, ...], padding: float) -> Bounds3D:
     )
 
 
-def _cell_containment_variants(
+def _containment_variants(
     grid: list[list[Vector3]],
-    column: int,
-    row: int,
+    grid_coordinates: tuple[tuple[int, int], ...],
     *,
-    wrap_width: bool,
-    wrap_height: bool,
-) -> tuple[tuple[Vector3, Vector3, Vector3, Vector3], ...]:
+    width_boundary_row: int | None,
+    height_boundary_column: int | None,
+) -> tuple[tuple[Vector3, ...], ...]:
     """Return alternate seam-border polygons without moving surface vertices."""
-    width_boundary = wrap_width and row in {0, len(grid[0]) - 2}
-    height_boundary = wrap_height and column in {0, len(grid) - 2}
-    variants: list[tuple[Vector3, Vector3, Vector3, Vector3]] = []
-    grid_coordinates = (
-        (column, row),
-        (column + 1, row),
-        (column + 1, row + 1),
-        (column, row + 1),
-    )
+    variants: list[tuple[Vector3, ...]] = []
     for use_width_seam, use_height_seam in (
         (True, False),
         (False, True),
         (True, True),
     ):
-        if use_width_seam and not width_boundary:
+        if use_width_seam and width_boundary_row is None:
             continue
-        if use_height_seam and not height_boundary:
-            continue
-        if not use_width_seam and not use_height_seam:
+        if use_height_seam and height_boundary_column is None:
             continue
         points: list[Vector3] = []
         for grid_column, grid_row in grid_coordinates:
-            if use_width_seam:
-                if row == 0 and grid_row == 0:
-                    grid_row = len(grid[0]) - 1
-                elif row == len(grid[0]) - 2 and grid_row == len(grid[0]) - 1:
-                    grid_row = 0
-            if use_height_seam:
-                if column == 0 and grid_column == 0:
-                    grid_column = len(grid) - 1
-                elif column == len(grid) - 2 and grid_column == len(grid) - 1:
-                    grid_column = 0
+            if use_width_seam and grid_row == width_boundary_row:
+                grid_row = len(grid[0]) - 1 if width_boundary_row == 0 else 0
+            if use_height_seam and grid_column == height_boundary_column:
+                grid_column = len(grid) - 1 if height_boundary_column == 0 else 0
             points.append(grid[grid_column][grid_row])
-        variant = (points[0], points[1], points[2], points[3])
+        variant = tuple(points)
         if variant not in variants:
             variants.append(variant)
     return tuple(variants)
@@ -288,12 +271,31 @@ def build_patch_collision(
             bottom_left = grid[column][row + 1]
             first_vertices = (top_left, top_right, bottom_right)
             second_vertices = (bottom_right, bottom_left, top_left)
-            quad_variants = _cell_containment_variants(
+            width_boundary_row = (
+                0
+                if wrap_width and row == 0
+                else len(grid[0]) - 1
+                if wrap_width and row == len(grid[0]) - 2
+                else None
+            )
+            height_boundary_column = (
+                0
+                if wrap_height and column == 0
+                else len(grid) - 1
+                if wrap_height and column == len(grid) - 2
+                else None
+            )
+            quad_coordinates = (
+                (column, row),
+                (column + 1, row),
+                (column + 1, row + 1),
+                (column, row + 1),
+            )
+            quad_variants = _containment_variants(
                 grid,
-                column,
-                row,
-                wrap_width=wrap_width,
-                wrap_height=wrap_height,
+                quad_coordinates,
+                width_boundary_row=width_boundary_row,
+                height_boundary_column=height_boundary_column,
             )
             first_plane = _surface_plane(*first_vertices, planes)
             second_plane = _surface_plane(*second_vertices, planes)
@@ -307,19 +309,39 @@ def build_patch_collision(
                 )
                 continue
             if first_plane is not None:
+                first_variants = _containment_variants(
+                    grid,
+                    (quad_coordinates[0], quad_coordinates[1], quad_coordinates[2]),
+                    width_boundary_row=0 if width_boundary_row == 0 else None,
+                    height_boundary_column=(
+                        len(grid) - 1
+                        if height_boundary_column == len(grid) - 1
+                        else None
+                    ),
+                )
                 facets.append(
                     PatchFacet(
                         *first_plane,
                         first_vertices,
-                        tuple((variant[0], variant[1], variant[2]) for variant in quad_variants),
+                        first_variants,
                     )
                 )
             if second_plane is not None:
+                second_variants = _containment_variants(
+                    grid,
+                    (quad_coordinates[2], quad_coordinates[3], quad_coordinates[0]),
+                    width_boundary_row=(
+                        len(grid[0]) - 1
+                        if width_boundary_row == len(grid[0]) - 1
+                        else None
+                    ),
+                    height_boundary_column=0 if height_boundary_column == 0 else None,
+                )
                 facets.append(
                     PatchFacet(
                         *second_plane,
                         second_vertices,
-                        tuple((variant[2], variant[3], variant[0]) for variant in quad_variants),
+                        second_variants,
                     )
                 )
 
