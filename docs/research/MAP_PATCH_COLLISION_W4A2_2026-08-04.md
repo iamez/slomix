@@ -51,6 +51,8 @@ the offline result remains `unvalidated_until_w6` until paired `et.trap_Trace` f
   non-finite control points have no trusted bounds and therefore cannot fail open.
 - A known blocker still proves `blocked` when an unresolved patch may be earlier, but the result then uses aggregate
   `static_geometry_blocked`, omits the unproven first-hit fraction/provenance, and retains the uncertain surface list.
+  An unresolved patch encountered before that blocker remains uncertain even when its raw AABB entry is later than the
+  blocker's pushed fraction; patch plane pushoff can precede that bound at shallow incidence.
 - A nearer brush wins over a farther patch; a nearer patch wins over a farther known brush. Any definitive static block
   is sufficient for line-of-sight unavailability.
 - An all-endpoints blocked availability result uses the aggregate `static_geometry_blocked` reason; endpoint results
@@ -88,10 +90,11 @@ plane construction, one-sided point traces and constants; no ET:L source file is
 22. cross-leaf brush/patch encounter ordering with a shared trace fraction;
 23. ordinary and wrapped adjacency expressed by neighboring facet surface planes;
 24. rejection of the non-coplanar false-hit sliver created by off-plane seam variants; and
-25. second-axis wrap detection after first-axis control-column removal.
+25. second-axis wrap detection after first-axis control-column removal; and
+26. encounter-order retention of unresolved patches against a later pushed brush fraction.
 
-Measured W2/W3/W4 targeted suite on Python 3.13.14: **80 passed**. The repository-wide suite also completed with
-**4,085 passed and 74 skipped**. The skips require unavailable test PostgreSQL credentials, optional local fixtures, or
+Measured W2/W3/W4 targeted suite on Python 3.13.14: **81 passed**. The repository-wide suite also completed with
+**4,086 passed and 74 skipped**. The skips require unavailable test PostgreSQL credentials, optional local fixtures, or
 the separately executed real-asset opt-in.
 
 ## Real-asset proof
