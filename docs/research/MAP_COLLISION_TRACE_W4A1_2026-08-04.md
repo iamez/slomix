@@ -3,6 +3,9 @@
 Date: 2026-08-04  
 Scope: read-only offline geometry; no API route, metric, database write, Lua change, deploy, or service restart
 
+Historical note: W4a2 patch facets supersede this report's `SOLID_PATCH_UNCOMPILED` limitation. See
+`docs/research/MAP_PATCH_COLLISION_W4A2_2026-08-04.md`; the W4a1 measurements below remain the brush-only baseline.
+
 ## Verdict
 
 The convex-brush point-trace foundation is implemented and fails closed around every collision input it cannot yet

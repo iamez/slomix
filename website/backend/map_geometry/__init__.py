@@ -1,7 +1,8 @@
 """Read-only ET map geometry primitives.
 
-Collision traces remain fail-closed around uncompiled patches and unresolved
-runtime geometry, and they are unvalidated until the W6 live comparison.
+Collision traces include static brush and quadratic-patch point collision,
+remain fail-closed around unresolved runtime geometry, and are unvalidated
+until the W6 live comparison.
 """
 
 from website.backend.map_geometry.bsp import (
@@ -40,6 +41,22 @@ from website.backend.map_geometry.entities import (
     VolumePlane,
     entity_catalog_manifest,
     extract_entity_catalog,
+)
+from website.backend.map_geometry.patch import (
+    PATCH_BOUNDS_PADDING,
+    PATCH_MAX_GRID_SIZE,
+    PATCH_PLANE_EPSILON,
+    PATCH_POINT_EPSILON,
+    PATCH_SUBDIVIDE_DISTANCE,
+    PatchBorder,
+    PatchCollision,
+    PatchCollisionError,
+    PatchFacet,
+    PatchHit,
+    build_patch_collision,
+    compile_bsp_patches,
+    patch_control_bounds,
+    trace_patch_point,
 )
 from website.backend.map_geometry.pk3_index import (
     AssetContentChangedError,
@@ -112,11 +129,21 @@ __all__ = [
     "ObjectiveGeometrySource",
     "ObjectiveMarker",
     "ObjectiveVolume",
+    "PATCH_BOUNDS_PADDING",
+    "PATCH_MAX_GRID_SIZE",
+    "PATCH_PLANE_EPSILON",
+    "PATCH_POINT_EPSILON",
+    "PATCH_SUBDIVIDE_DISTANCE",
     "PLAYER_BOUNDS",
     "PLAYER_MOVEMENT_MASK",
     "PlayerBounds",
     "PlayerStance",
     "PointTraceResult",
+    "PatchBorder",
+    "PatchCollision",
+    "PatchCollisionError",
+    "PatchFacet",
+    "PatchHit",
     "SpawnPoint",
     "SURFACE_CLIP_EPSILON",
     "SurfaceType",
@@ -128,10 +155,14 @@ __all__ = [
     "UnsupportedBspError",
     "VolumePlane",
     "entity_catalog_manifest",
+    "build_patch_collision",
+    "compile_bsp_patches",
     "extract_entity_catalog",
+    "patch_control_bounds",
     "parse_bsp",
     "parse_bsp_file",
     "parse_entities",
     "player_eye_point",
     "target_body_points",
+    "trace_patch_point",
 ]
