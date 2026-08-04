@@ -274,6 +274,9 @@ def trace_patch_point(
         if intersection <= 0.0 or intersection > limit or intersection > 1.0:
             continue
         point = tuple(start[axis] + (intersection * direction[axis]) for axis in range(3))
+        # ET:L tests facet border-plane intersections against the raw surface
+        # intersection. Its 0.125 pushoff is calculated only after the facet hit
+        # is accepted, so containment must not use the tangentially shifted point.
         if not _point_in_triangle(point, facet.vertices):
             continue
         pushed_fraction = max(0.0, (start_distance - surface_clip_epsilon) / denominator)

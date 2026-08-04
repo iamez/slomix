@@ -25,7 +25,9 @@ the offline result remains `unvalidated_until_w6` until paired `et.trap_Trace` f
   use the exact plane intersection for facet containment, and report the engine-compatible 0.125 plane-distance pushoff.
   Like ET:L, an existing pushed trace fraction limits the raw next-facet intersection before that facet applies its own
   pushoff. BSP leaves and their brush/surface references preserve near-to-far encounter order so this order-dependent
-  compatibility behavior is not replaced by surface-index ordering; directional regression tests freeze both rules.
+  compatibility behavior is not replaced by surface-index ordering. Facet containment is evaluated at the raw surface
+  intersection, matching ET:L's border-plane ordering, before the reported fraction is pushed. Directional and oblique
+  edge regression tests freeze these rules.
 - Patch bounds are expanded by one game unit for the broad phase. Bounds never establish a block; the oriented facet
   test makes the final decision.
 - `CONTENTS_SOLID` and `CONTENTS_PLAYERCLIP` remain purpose-specific. A playerclip-only patch does not block the named
@@ -34,6 +36,8 @@ the offline result remains `unvalidated_until_w6` until paired `et.trap_Trace` f
 - A missing/failed compilation remains `solid_patch_uncompiled` and `indeterminate` whenever its conservative bounds
   can affect the segment. A partial cached catalog uses finite control-hull bounds to avoid poisoning distant traces;
   non-finite control points have no trusted bounds and therefore cannot fail open.
+- A known blocker still proves `blocked` when an unresolved patch may be earlier, but the result then uses aggregate
+  `static_geometry_blocked`, omits the unproven first-hit fraction/provenance, and retains the uncertain surface list.
 - A nearer brush wins over a farther patch; a nearer patch wins over a farther known brush. Any definitive static block
   is sufficient for line-of-sight unavailability.
 - An all-endpoints blocked availability result uses the aggregate `static_geometry_blocked` reason; endpoint results
@@ -58,11 +62,13 @@ traces and constants; no ET:L source file is included in this MIT repository.
 9. nearest brush-versus-patch ordering;
 10. fail-closed behavior for unavailable and non-finite compilation;
 11. injected patch-catalog validation and conservative partial-cache bounds; and
-12. near-to-far leaf/surface encounter order; and
-13. aggregate versus endpoint-specific block provenance.
+12. near-to-far leaf/surface encounter order;
+13. raw-intersection containment for oblique edge hits;
+14. uncertainty retention when a missing patch may precede a known patch or brush; and
+15. aggregate versus endpoint-specific block provenance.
 
-Measured W2/W3/W4 targeted suite on Python 3.13.14: **68 passed**. The repository-wide suite also completed with
-**4,073 passed and 74 skipped**; the skips require unavailable test PostgreSQL credentials, optional local fixtures, or
+Measured W2/W3/W4 targeted suite on Python 3.13.14: **71 passed**. The repository-wide suite also completed with
+**4,076 passed and 74 skipped**; the skips require unavailable test PostgreSQL credentials, optional local fixtures, or
 the separately executed real-asset opt-in.
 
 ## Real-asset proof
@@ -83,8 +89,8 @@ Input and compilation:
 | All compiled facets | 39,124 |
 | Solid-mask facets | 36,652 |
 | Patch compilation failures | 0 |
-| Mean compile time per map | 35.190 ms |
-| Maximum compile time for one map | 69.066 ms |
+| Mean compile time per map | 36.058 ms |
+| Maximum compile time for one map | 85.131 ms |
 | Deterministic cross-team spawn pairs | 320 |
 | Frozen target endpoint traces | 1,920 |
 
@@ -111,9 +117,9 @@ brush broad phase/exact clipping, patch bounds and facet tests:
 
 | Per endpoint | W4a1 brush foundation | W4a2 with facets |
 |---|---:|---:|
-| p50 | 774.450 us | 840.842 us |
-| p95 | 2,037.985 us | 2,224.397 us |
-| max | 3,158.994 us | 3,420.550 us |
+| p50 | 774.450 us | 825.557 us |
+| p95 | 2,037.985 us | 2,235.880 us |
+| max | 3,158.994 us | 3,506.788 us |
 
 | Candidate work per endpoint | Mean | Max |
 |---|---:|---:|
@@ -122,12 +128,12 @@ brush broad phase/exact clipping, patch bounds and facet tests:
 | Candidate solid patch surfaces | 7.520 | 83 |
 | Exact patch-facet tests | 5.838 | 224 |
 
-The p50 increased by about 8.6% and p95 by about 9.1% on this developer host. The max is sample-sensitive and increased
-by about 8.3%, so the tail requires attention before a consumer exists. Patch-surface accounting is also stricter than W4a1:
+The p50 increased by about 6.6% and p95 by about 9.7% on this developer host. The max is sample-sensitive and increased
+by about 11.0%, so the tail requires attention before a consumer exists. Patch-surface accounting is also stricter than W4a1:
 blocked brush traces now continue far enough to determine whether a nearer patch owns the first hit.
 
 At 66 pairs, six endpoints, a 1,000 ms analysis cadence and a 12-minute round, 285,120 endpoint traces multiplied by the
-measured p50 project to roughly **240 seconds**. This remains far outside the full-round one-second budget. The 200 ms
+measured p50 project to roughly **235 seconds**. This remains far outside the full-round one-second budget. The 200 ms
 capture cadence is not an analysis budget and would multiply this cost by five.
 
 ## Remaining gates
