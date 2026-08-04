@@ -19,11 +19,7 @@ def _planar_grid() -> tuple[tuple[float, float, float], ...]:
 
 
 def _curved_grid() -> tuple[tuple[float, float, float], ...]:
-    return tuple(
-        (64.0 if y == 0.0 and z == 0.0 else 0.0, y, z)
-        for y in (-1.0, 0.0, 1.0)
-        for z in (-1.0, 0.0, 1.0)
-    )
+    return tuple((64.0 if y == 0.0 and z == 0.0 else 0.0, y, z) for y in (-1.0, 0.0, 1.0) for z in (-1.0, 0.0, 1.0))
 
 
 def _single_axis_bulge(control_deviation: float) -> tuple[tuple[float, float, float], ...]:
@@ -144,9 +140,7 @@ def test_curved_patch_subdivides_and_hits_its_exact_quadratic_midpoint():
     start_distance = (-10.0 * facet.normal[0]) - facet.distance
     end_distance = (30.0 * facet.normal[0]) - facet.distance
     assert start_distance / (start_distance - end_distance) == pytest.approx(26.0 / 40.0)
-    assert hit.fraction == pytest.approx(
-        (start_distance - 0.125) / (start_distance - end_distance)
-    )
+    assert hit.fraction == pytest.approx((start_distance - 0.125) / (start_distance - end_distance))
 
 
 def test_subdivision_threshold_uses_quadratic_midpoint_not_raw_control_deviation():
@@ -160,11 +154,7 @@ def test_subdivision_threshold_uses_quadratic_midpoint_not_raw_control_deviation
 
 
 def test_flattened_grid_metadata_retains_input_axis_orientation():
-    control_points = tuple(
-        (0.0, float(column), float(row))
-        for row in range(3)
-        for column in range(5)
-    )
+    control_points = tuple((0.0, float(column), float(row)) for row in range(3) for column in range(5))
 
     collision = build_patch_collision(control_points, 5, 3)
 
@@ -181,7 +171,7 @@ def test_nearly_coplanar_triangles_reuse_tolerance_matched_surface_plane():
     assert len(collision.facets[0].vertices) == 4
 
 
-def test_tolerance_matched_wrap_seam_preserves_coordinates_and_adds_topology():
+def test_tolerance_matched_wrap_seam_preserves_coordinates_and_uses_neighbor_planes():
     control_points = []
     for row in range(3):
         for column in range(5):
@@ -214,36 +204,26 @@ def test_tolerance_matched_wrap_seam_preserves_coordinates_and_adds_topology():
         (0.05, 0.0, 0.0),
         (0.05, 0.0, 2.0),
     }
-    assert any(facet.containment_variants for facet in collision.facets)
-    alternate_seam_vertices = {
-        vertex
-        for facet in collision.facets
-        for variant in facet.containment_variants
-        for vertex in variant
-        if abs(vertex[0]) <= 0.1 and abs(vertex[1]) <= 0.1
-    }
-    assert alternate_seam_vertices == seam_vertices
-    without_seam_topology = replace(
-        collision,
-        facets=tuple(replace(facet, containment_variants=()) for facet in collision.facets),
-    )
-    open_hit, _ = trace_patch_point(
-        without_seam_topology,
-        (-0.2, 0.13, 1.0),
-        (0.03, 0.01, 1.0),
-        surface_clip_epsilon=0.125,
-    )
+    first_surface = (collision.facets[0].normal, collision.facets[0].distance)
+    last_surface = (collision.facets[-1].normal, collision.facets[-1].distance)
+    assert (
+        collision.facets[0].borders[0].normal,
+        collision.facets[0].borders[0].distance,
+    ) == last_surface
+    assert (
+        collision.facets[-1].borders[2].normal,
+        collision.facets[-1].borders[2].distance,
+    ) == first_surface
     wrapped_hit, _ = trace_patch_point(
         collision,
         (-0.2, 0.13, 1.0),
         (0.03, 0.01, 1.0),
         surface_clip_epsilon=0.125,
     )
-    assert open_hit is None
     assert wrapped_hit is not None
 
 
-def test_non_coplanar_wrap_variants_only_attach_to_seam_edge_owners():
+def test_non_coplanar_wrap_uses_adjacent_planes_without_false_variant_sliver():
     control_points = []
     for row in range(3):
         for column in range(3):
@@ -263,15 +243,54 @@ def test_non_coplanar_wrap_variants_only_attach_to_seam_edge_owners():
 
     assert collision.wrap_width is True
     assert all(len(facet.vertices) == 3 for facet in collision.facets)
-    assert [len(facet.containment_variants) for facet in collision.facets] == [1, 0, 0, 1]
-    transposed_points = tuple(
-        control_points[(column * 3) + row]
-        for row in range(3)
-        for column in range(3)
+    assert len(collision.facets) == 4
+    assert (collision.facets[0].borders[0].normal, collision.facets[0].borders[0].distance) == (
+        collision.facets[3].normal,
+        collision.facets[3].distance,
     )
+    assert (collision.facets[1].borders[0].normal, collision.facets[1].borders[0].distance) == (
+        collision.facets[2].normal,
+        collision.facets[2].distance,
+    )
+
+    first = collision.facets[0]
+    false_sliver_point = (0.025313125, 0.101, 0.1)
+    start = tuple(false_sliver_point[axis] + first.normal[axis] for axis in range(3))
+    end = tuple(false_sliver_point[axis] - first.normal[axis] for axis in range(3))
+    false_hit, _ = trace_patch_point(
+        replace(collision, facets=(first,)),
+        start,
+        end,
+        surface_clip_epsilon=0.125,
+    )
+    assert false_hit is None
+
+    transposed_points = tuple(control_points[(column * 3) + row] for row in range(3) for column in range(3))
     height_collision = build_patch_collision(transposed_points, 3, 3)
     assert height_collision.wrap_height is True
-    assert [len(facet.containment_variants) for facet in height_collision.facets] == [0, 1, 1, 0]
+    assert (
+        height_collision.facets[1].borders[1].normal,
+        height_collision.facets[1].borders[1].distance,
+    ) == (height_collision.facets[2].normal, height_collision.facets[2].distance)
+    assert (
+        height_collision.facets[2].borders[1].normal,
+        height_collision.facets[2].borders[1].distance,
+    ) == (height_collision.facets[1].normal, height_collision.facets[1].distance)
+
+
+def test_second_axis_wrap_is_detected_after_first_axis_control_columns_are_removed():
+    control_points = []
+    for row in range(3):
+        for column in range(3):
+            if row == 2:
+                point = (float(column), 10.0 if column == 1 else 0.0, 0.0)
+            else:
+                point = (float(column), float(row * 10), 0.0)
+            control_points.append(point)
+
+    collision = build_patch_collision(tuple(control_points), 3, 3)
+
+    assert collision.wrap_height is True
 
 
 def test_degenerate_patch_has_no_facets_and_malformed_inputs_are_rejected():
