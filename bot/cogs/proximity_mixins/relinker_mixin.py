@@ -29,6 +29,41 @@ logger = logging.getLogger("bot.cogs.proximity")
 _PERMANENT_ORPHAN_AGE_HOURS = 6
 
 
+# Tables the detection query scans for rounds that need (re-)linking. Hoisted
+# to module scope so the fanout-coverage test can assert it against
+# ProximityCog._PROXIMITY_ROUND_ID_TABLES: the two lists live in different
+# files and are maintained by hand, which is how proximity_shot_fired came to
+# be in neither for three months.
+#
+# Being in the fanout list alone is not enough. That list only says "update
+# this table once some round is known to need work" — this one is what makes a
+# round known. A table present in neither is invisible: its rows can be the
+# only unlinked ones for a round and nothing will ever notice.
+#
+# lua_round_teams is deliberately absent: it has no session_date column, so it
+# cannot use the generic leg shape and gets its own synthesized-date legs below.
+_DETECTION_TABLES: tuple[str, ...] = (
+    "proximity_reaction_metric", "proximity_spawn_timing",
+    "proximity_team_cohesion", "proximity_kill_outcome",
+    "proximity_carrier_event", "proximity_carrier_kill",
+    "proximity_carrier_return", "proximity_combat_position",
+    "proximity_construction_event", "proximity_crossfire_opportunity",
+    "proximity_escort_credit", "proximity_focus_fire",
+    "proximity_hit_region", "proximity_lua_trade_kill",
+    "proximity_objective_focus", "proximity_objective_run",
+    "proximity_support_summary", "proximity_team_push",
+    "proximity_trade_event", "proximity_vehicle_progress",
+    "combat_engagement", "player_track",
+    # revive + weapon_accuracy gained the identity columns with migration 065.
+    "proximity_revive", "proximity_weapon_accuracy",
+    # shot_fired: added 2026-08-04. Its absence here was the load-bearing half
+    # of the bug — the observed failure was a round whose kill_outcome linked
+    # fine and whose shot_fired did not, so no leg ever flagged that round.
+    # It carries all four identity columns, so no special-casing is needed.
+    "proximity_shot_fired",
+)
+
+
 # Relink SQL templates hoisted to module scope (audit P4). Previously
 # built anew for every unresolved round every 5 min (50 rounds × 21 tables
 # × 2 dicts ≈ 2 100 string constructions/cycle). Both dicts are built
@@ -127,25 +162,7 @@ class _ProximityRelinkerMixin:
             # exactly). lua_round_teams is handled SEPARATELY: it has no
             # session_date column at all, so it needs its own leg pair that
             # synthesizes one from round_start_unix for the UNION.
-            tables_with_round_number = [
-                "proximity_reaction_metric", "proximity_spawn_timing",
-                "proximity_team_cohesion", "proximity_kill_outcome",
-                "proximity_carrier_event", "proximity_carrier_kill",
-                "proximity_carrier_return", "proximity_combat_position",
-                "proximity_construction_event", "proximity_crossfire_opportunity",
-                "proximity_escort_credit", "proximity_focus_fire",
-                "proximity_hit_region", "proximity_lua_trade_kill",
-                "proximity_objective_focus", "proximity_objective_run",
-                "proximity_support_summary", "proximity_team_push",
-                "proximity_trade_event", "proximity_vehicle_progress",
-                "combat_engagement", "player_track",
-                # revive + weapon_accuracy gained the identity columns with
-                # migration 065 — without them here a NULL/stale link present
-                # ONLY in these two tables would never be discovered (their
-                # membership in _PROXIMITY_ROUND_ID_TABLES only makes them
-                # update targets once a round is discovered elsewhere).
-                "proximity_revive", "proximity_weapon_accuracy",
-            ]
+            tables_with_round_number = _DETECTION_TABLES
             now = datetime.now(timezone.utc)
             cutoff = now - timedelta(hours=_PERMANENT_ORPHAN_AGE_HOURS)
             cutoff_unix = int(cutoff.timestamp())
