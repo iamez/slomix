@@ -1,5 +1,6 @@
 # ruff: noqa: SLF001
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -91,6 +92,42 @@ def test_apply_replaces_stale_links_but_not_correct_ones():
     right link must not be rewritten."""
     sql = " ".join(repair._APPLY_SQL.split())
     assert "sf.round_id IS DISTINCT FROM %(round_id)s" in sql
+
+
+def test_survey_row_fields_match_the_select_list():
+    """SurveyRow is built with SurveyRow(*row), so a field added to the SELECT
+    without a matching field here silently shifts every later one. That is not
+    hypothetical: adding stale_rows moved resolved_round_id from position 5 to
+    6 while the apply loop still read 5, which would have written row COUNTS
+    into round_id."""
+    select = repair._SURVEY_SQL.split("SELECT o.session_date")[1].split("FROM orphans")[0]
+    select = "o.session_date" + select
+    # Split on top-level commas only: CASE/COALESCE and the parenthesized
+    # boolean all contain commas of their own.
+    columns, depth, current = [], 0, ""
+    for ch in select:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        if ch == "," and depth == 0:
+            columns.append(current)
+            current = ""
+        else:
+            current += ch
+    columns.append(current)
+    columns = [c.strip() for c in columns if c.strip()]
+
+    assert len(columns) == len(repair.SurveyRow._fields), (
+        f"SELECT has {len(columns)} columns, SurveyRow has "
+        f"{len(repair.SurveyRow._fields)}"
+    )
+
+
+def test_apply_reads_the_round_id_by_name():
+    """The write must take resolved_round_id, never a positional index."""
+    source = Path(repair.__file__).read_text()
+    assert '"round_id": r.resolved_round_id' in source
 
 
 def test_expect_db_is_bound_to_the_server_not_just_the_name(monkeypatch, capsys):

@@ -53,6 +53,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -155,6 +156,27 @@ WHERE sf.round_id IS DISTINCT FROM %(round_id)s
 """
 
 
+class SurveyRow(NamedTuple):
+    """One damaged round, with the sibling verdict attached.
+
+    Named rather than indexed because adding stale_rows to the SELECT silently
+    shifted resolved_round_id from position 5 to 6, and the apply loop kept
+    reading position 5 — it would have written row COUNTS into round_id across
+    every repaired row (Codex review on #599). Field order must match
+    _SURVEY_SQL's select list.
+    """
+
+    session_date: object
+    map_name: str
+    round_number: int
+    round_start_unix: int
+    damaged_rows: int
+    stale_rows: int
+    resolved_round_id: int | None
+    distinct_round_ids: int
+    sibling_link_is_stale: bool
+
+
 def _connect():
     if _pg is None:
         raise SystemExit("psycopg2/psycopg not installed")
@@ -212,15 +234,15 @@ def main() -> int:
     with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(_SURVEY_SQL)
-            rows = cur.fetchall()
+            rows = [SurveyRow(*row) for row in cur.fetchall()]
 
-        repairable = [r for r in rows if r[6] is not None]
-        skipped = [r for r in rows if r[6] is None]
-        repairable_rows = sum(r[4] for r in repairable)
-        skipped_rows = sum(r[4] for r in skipped)
-        stale_total = sum(r[5] for r in rows)
+        repairable = [r for r in rows if r.resolved_round_id is not None]
+        skipped = [r for r in rows if r.resolved_round_id is None]
+        repairable_rows = sum(r.damaged_rows for r in repairable)
+        skipped_rows = sum(r.damaged_rows for r in skipped)
+        stale_total = sum(r.stale_rows for r in rows)
 
-        print(f"\nDamaged rounds: {len(rows)}  ({sum(r[4] for r in rows):,} rows)")
+        print(f"\nDamaged rounds: {len(rows)}  ({sum(r.damaged_rows for r in rows):,} rows)")
         print(f"  of which stale (wrong round_id, not NULL): {stale_total:,} rows")
         print(f"  repairable:  {len(repairable):>3}  ({repairable_rows:,} rows)")
         print(f"  no verdict:  {len(skipped):>3}  ({skipped_rows:,} rows)")
@@ -228,13 +250,16 @@ def main() -> int:
         if skipped:
             print("\nLeft alone (needs the round_linker, not a copy):")
             for r in skipped:
-                if r[8]:
+                if r.sibling_link_is_stale:
                     why = "sibling link is stale — points at a round with a different identity"
-                elif r[7] > 1:
+                elif r.distinct_round_ids > 1:
                     why = "siblings disagree"
                 else:
                     why = "no linked sibling"
-                print(f"  {r[0]}  {r[1]:<16} R{r[2]}  {r[4]:>6,} rows  — {why}")
+                print(
+                    f"  {r.session_date}  {r.map_name:<16} R{r.round_number}  "
+                    f"{r.damaged_rows:>6,} rows  — {why}"
+                )
 
         if args.expect_repairable_rows is not None and args.expect_repairable_rows != repairable_rows:
             print(
@@ -253,11 +278,11 @@ def main() -> int:
                 cur.execute(
                     _APPLY_SQL,
                     {
-                        "round_id": r[5],
-                        "session_date": r[0],
-                        "map_name": r[1],
-                        "round_number": r[2],
-                        "round_start_unix": r[3],
+                        "round_id": r.resolved_round_id,
+                        "session_date": r.session_date,
+                        "map_name": r.map_name,
+                        "round_number": r.round_number,
+                        "round_start_unix": r.round_start_unix,
                     },
                 )
                 written += cur.rowcount
