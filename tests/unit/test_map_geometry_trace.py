@@ -490,6 +490,23 @@ def test_known_brush_hit_keeps_unknown_earlier_patch_provenance():
     assert result.uncertain_surface_indices == (0,)
 
 
+def test_aggregate_block_retains_proven_solid_start_flags():
+    tracer = BspPointTracer(
+        _trace_bsp(with_patch=True),
+        patch_collisions=(),
+        runtime_entity_completeness=RuntimeGeometryCoverage.VERIFIED,
+        runtime_entity_state=RuntimeGeometryCoverage.VERIFIED,
+    )
+
+    result = tracer.trace_segment((0.0, 0.0, 0.0), (0.5, 0.0, 0.0))
+
+    assert result.status is TraceStatus.BLOCKED
+    assert result.reason is TraceReason.STATIC_GEOMETRY_BLOCKED
+    assert result.start_solid is True
+    assert result.all_solid is True
+    assert result.uncertain_surface_indices == (0,)
+
+
 def test_runtime_completeness_is_a_required_clear_gate():
     result = BspPointTracer(_trace_bsp()).trace_segment((-5.0, 20.0, 0.0), (5.0, 20.0, 0.0))
 
