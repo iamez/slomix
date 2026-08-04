@@ -11,15 +11,23 @@ Adding it to both lists fixes new rounds, but not old ones — the relinker
 skips anything older than _PERMANENT_ORPHAN_AGE_HOURS (6h). This repairs the
 backlog.
 
-Method: propagate, never re-derive. For each orphan we look for a sibling row
-in proximity_kill_outcome carrying the SAME four identity columns
-(session_date, map_name, round_number, round_start_unix) and a non-NULL
-round_id. kill_outcome was in the fanout the whole time, so its link is the
-one the relinker already agreed on for that round. Copying it cannot invent a
-link the system would not have made itself.
+Method: propagate a VERIFIED sibling link, never re-derive. For each orphan we
+look for a sibling row in proximity_kill_outcome carrying the SAME four
+identity columns (session_date, map_name, round_number, round_start_unix) and
+a non-NULL round_id.
 
-Rounds with no linked sibling, or with siblings disagreeing on round_id, are
-left alone and reported — those need the round_linker, not a copy.
+A sibling link is not trusted on its own. The relinker exists partly because
+proximity rows can end up pointing at the WRONG round (proximity arrives before
+stats, round_linker picks the nearest neighbour, the real round is created
+later) — that is what its mismatch leg catches. Unanimous siblings can
+therefore be unanimously stale, so every candidate is checked against the
+rounds row it names: same map_name, round_number, round_start_unix and date.
+This is the relinker's own mismatch criterion, applied before copying instead
+of after.
+
+Rounds with no linked sibling, with siblings disagreeing, or whose candidate
+fails that check are left alone and reported — those need the round_linker,
+not a copy.
 
 Follows scripts/repair_lua_round_links.py: dry-run by default, --apply to
 write, and the historical mutation deliberately lives here rather than in a
@@ -76,10 +84,23 @@ siblings AS (
 )
 SELECT o.session_date, o.map_name, o.round_number, o.round_start_unix,
        o.orphan_rows,
-       CASE WHEN s.distinct_round_ids = 1 THEN s.round_id END AS resolved_round_id,
-       COALESCE(s.distinct_round_ids, 0) AS distinct_round_ids
+       CASE WHEN s.distinct_round_ids = 1 AND r.id IS NOT NULL
+            THEN s.round_id END AS resolved_round_id,
+       COALESCE(s.distinct_round_ids, 0) AS distinct_round_ids,
+       (s.round_id IS NOT NULL AND s.distinct_round_ids = 1
+        AND r.id IS NULL) AS sibling_link_is_stale
 FROM orphans o
 LEFT JOIN siblings s USING (session_date, map_name, round_number, round_start_unix)
+-- Verify the sibling's round_id actually names a round with this identity.
+-- Unanimous siblings can be unanimously wrong: that is exactly the state the
+-- relinker's mismatch leg is built to detect, so it must not be propagated.
+LEFT JOIN rounds r
+       ON r.id = s.round_id
+      AND s.distinct_round_ids = 1
+      AND r.map_name = o.map_name
+      AND r.round_number = o.round_number
+      AND r.round_start_unix = o.round_start_unix
+      AND r.round_date = o.session_date::text
 ORDER BY o.session_date, o.map_name, o.round_number
 """
 
@@ -97,7 +118,15 @@ WHERE sf.round_id IS NULL
 def _connect():
     if _pg is None:
         raise SystemExit("psycopg2/psycopg not installed")
-    return _pg.connect(**get_connection_kwargs())
+    # get_connection_kwargs() speaks asyncpg/psycopg2 ("database"), but psycopg 3
+    # only takes the libpq keyword and rejects the unexpected one, so the
+    # fallback import path would fail on connect (Codex review on #599).
+    # Translated unconditionally rather than sniffing the driver: psycopg2
+    # accepts "dbname" too, and this is what repair_lua_round_links.py:67
+    # already does.
+    connection_kwargs = get_connection_kwargs()
+    connection_kwargs["dbname"] = connection_kwargs.pop("database")
+    return _pg.connect(**connection_kwargs)
 
 
 def main() -> int:
@@ -106,12 +135,30 @@ def main() -> int:
     parser.add_argument(
         "--expect-repairable-rows",
         type=int,
-        help="abort unless the survey finds exactly this many repairable rows",
+        help="row count the dry run reported; REQUIRED with --apply",
+    )
+    parser.add_argument(
+        "--expect-db",
+        help="database name this must be run against; REQUIRED with --apply",
     )
     args = parser.parse_args()
 
+    # --apply must restate what the dry run saw. A candidate set that shifted
+    # between preview and apply (a session landed, someone else relinked) means
+    # the operator is no longer approving what they reviewed, and the wrong
+    # database is the other way this goes badly (Codex review on #599).
+    if args.apply and (args.expect_repairable_rows is None or not args.expect_db):
+        parser.error(
+            "--apply requires --expect-repairable-rows and --expect-db "
+            "(run without --apply first and pass back what it reports)"
+        )
+
     target = get_target_dsn_parts()
     print(f"Target: {target['database']} @ {target['host']}:{target['port']}")
+
+    if args.expect_db and args.expect_db != target["database"]:
+        print(f"ABORT: --expect-db={args.expect_db!r} but target is {target['database']!r}")
+        return 1
 
     with _connect() as conn:
         with conn.cursor() as cur:
@@ -128,9 +175,14 @@ def main() -> int:
         print(f"  no verdict:  {len(skipped):>3}  ({skipped_rows:,} rows)")
 
         if skipped:
-            print("\nLeft alone (no linked kill_outcome sibling, or siblings disagree):")
+            print("\nLeft alone (needs the round_linker, not a copy):")
             for r in skipped:
-                why = "siblings disagree" if r[6] > 1 else "no linked sibling"
+                if r[7]:
+                    why = "sibling link is stale — points at a round with a different identity"
+                elif r[6] > 1:
+                    why = "siblings disagree"
+                else:
+                    why = "no linked sibling"
                 print(f"  {r[0]}  {r[1]:<16} R{r[2]}  {r[4]:>6,} rows  — {why}")
 
         if args.expect_repairable_rows is not None and args.expect_repairable_rows != repairable_rows:

@@ -1,0 +1,90 @@
+# ruff: noqa: SLF001
+
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+import pytest
+
+import scripts.repair_shot_fired_round_links as repair
+
+
+def test_sync_driver_receives_canonical_dbname(monkeypatch):
+    """get_connection_kwargs() hands back the asyncpg/psycopg2 spelling
+    ("database"); psycopg 3 only accepts the libpq keyword and errors on the
+    other, so the fallback import path needs the translation."""
+    connect = Mock(return_value=object())
+    monkeypatch.setattr(repair, "_pg", SimpleNamespace(connect=connect))
+    monkeypatch.setattr(
+        repair,
+        "get_connection_kwargs",
+        lambda: {
+            "host": "db.example",
+            "port": 5432,
+            "database": "etlegacy",
+            "user": "etlegacy_user",
+            "password": "secret",
+        },
+    )
+
+    repair._connect()
+
+    connect.assert_called_once_with(
+        host="db.example",
+        port=5432,
+        dbname="etlegacy",
+        user="etlegacy_user",
+        password="secret",
+    )
+
+
+def test_survey_verifies_the_sibling_link_against_rounds():
+    """A unanimous sibling link can still be a stale one — proximity rows can
+    point at the wrong round (that is what the relinker's mismatch leg exists
+    to catch), so the candidate must be checked against the rounds row it names
+    before being copied onto the orphans."""
+    sql = " ".join(repair._SURVEY_SQL.split())
+
+    assert "LEFT JOIN rounds r" in sql
+    for predicate in (
+        "r.id = s.round_id",
+        "r.map_name = o.map_name",
+        "r.round_number = o.round_number",
+        "r.round_start_unix = o.round_start_unix",
+        "r.round_date = o.session_date::text",
+    ):
+        assert predicate in sql, predicate
+    # Unverified candidates must not survive into resolved_round_id.
+    assert "s.distinct_round_ids = 1 AND r.id IS NOT NULL" in sql
+
+
+def test_survey_requires_unanimous_siblings():
+    """Siblings split across two round_ids mean the round itself is
+    mis-linked; picking one of them would launder that into shot_fired."""
+    sql = " ".join(repair._SURVEY_SQL.split())
+    assert "COUNT(DISTINCT round_id) AS distinct_round_ids" in sql
+
+
+def test_apply_only_touches_orphans():
+    """The write must never overwrite an existing link, only fill NULLs."""
+    sql = " ".join(repair._APPLY_SQL.split())
+    assert "sf.round_id IS NULL" in sql
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--apply"],
+        ["--apply", "--expect-db=etlegacy"],
+        ["--apply", "--expect-repairable-rows=1"],
+    ],
+)
+def test_apply_refuses_without_both_expectations(monkeypatch, argv):
+    """--apply must restate what the dry run reported: a candidate set that
+    shifted between preview and apply is no longer what the operator
+    approved, and the wrong database is the other way this goes badly."""
+    monkeypatch.setattr("sys.argv", ["repair_shot_fired_round_links.py", *argv])
+
+    with pytest.raises(SystemExit) as exc:
+        repair.main()
+
+    assert exc.value.code == 2  # argparse.error()
