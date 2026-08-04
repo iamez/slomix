@@ -31,7 +31,8 @@ the offline result remains `unvalidated_until_w6` until paired `et.trap_Trace` f
   LOS mask and does block the named movement-content mask.
 - A compiled patch hit reports `solid_patch`, the BSP surface index, facet index, fraction and measured candidate work.
 - A missing/failed compilation remains `solid_patch_uncompiled` and `indeterminate` whenever its conservative bounds
-  can affect the segment. Non-finite control points have no trusted bounds and therefore cannot fail open.
+  can affect the segment. A partial cached catalog uses finite control-hull bounds to avoid poisoning distant traces;
+  non-finite control points have no trusted bounds and therefore cannot fail open.
 - A nearer brush wins over a farther patch; a nearer patch wins over a farther known brush. Any definitive static block
   is sufficient for line-of-sight unavailability.
 - An all-endpoints blocked availability result uses the aggregate `static_geometry_blocked` reason; endpoint results
@@ -55,11 +56,11 @@ traces and constants; no ET:L source file is included in this MIT repository.
 8. LOS versus playerclip mask behavior;
 9. nearest brush-versus-patch ordering;
 10. fail-closed behavior for unavailable and non-finite compilation;
-11. injected patch-catalog validation; and
+11. injected patch-catalog validation and conservative partial-cache bounds; and
 12. aggregate versus endpoint-specific block provenance.
 
-Measured W2/W3/W4 targeted suite on Python 3.13.14: **66 passed**. The repository-wide suite also completed with
-**4,071 passed and 74 skipped**; the skips require unavailable test PostgreSQL credentials, optional local fixtures, or
+Measured W2/W3/W4 targeted suite on Python 3.13.14: **67 passed**. The repository-wide suite also completed with
+**4,072 passed and 74 skipped**; the skips require unavailable test PostgreSQL credentials, optional local fixtures, or
 the separately executed real-asset opt-in.
 
 ## Real-asset proof

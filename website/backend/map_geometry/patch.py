@@ -178,6 +178,15 @@ def _expanded_bounds(points: tuple[Vector3, ...], padding: float) -> Bounds3D:
     )
 
 
+def patch_control_bounds(control_points: tuple[Vector3, ...]) -> Bounds3D | None:
+    """Return conservative finite control-hull bounds for a patch, if trustworthy."""
+    if not control_points or not all(
+        math.isfinite(value) for point in control_points for value in point
+    ):
+        return None
+    return _expanded_bounds(control_points, PATCH_BOUNDS_PADDING)
+
+
 def build_patch_collision(
     control_points: tuple[Vector3, ...],
     width: int,
@@ -295,18 +304,10 @@ def compile_bsp_patches(bsp: BspFile) -> tuple[PatchCollision, ...]:
                 content_flags=content_flags,
             )
         except PatchCollisionError as exc:
-            all_finite = bool(control_points) and all(
-                math.isfinite(value) for point in control_points for value in point
-            )
-            bounds = (
-                _expanded_bounds(control_points, PATCH_BOUNDS_PADDING)
-                if all_finite
-                else None
-            )
             collision = PatchCollision(
                 surface_index=surface_index,
                 content_flags=content_flags,
-                bounds=bounds,
+                bounds=patch_control_bounds(control_points),
                 facets=(),
                 grid_width=surface.patch_width,
                 grid_height=surface.patch_height,

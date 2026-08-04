@@ -53,6 +53,7 @@ from website.backend.map_geometry.patch import (
     PatchHit,
     build_patch_collision,
     compile_bsp_patches,
+    patch_control_bounds,
     trace_patch_point,
 )
 from website.backend.map_geometry.pk3_index import (
@@ -153,6 +154,7 @@ __all__ = [
     "build_patch_collision",
     "compile_bsp_patches",
     "extract_entity_catalog",
+    "patch_control_bounds",
     "parse_bsp",
     "parse_bsp_file",
     "parse_entities",

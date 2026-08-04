@@ -413,6 +413,29 @@ def test_injected_patch_catalog_rejects_duplicate_surface_entries():
         BspPointTracer(bsp, patch_collisions=(collision, collision))
 
 
+def test_missing_cached_patch_only_blocks_clear_when_control_bounds_intersect():
+    bsp = replace(_trace_bsp(with_patch=True), brushes=(), brush_sides=(), leaf_brushes=())
+    bsp = replace(
+        bsp,
+        leafs=tuple(replace(leaf, first_leaf_brush=0, num_leaf_brushes=0) for leaf in bsp.leafs),
+        models=(replace(bsp.models[0], first_brush=0, num_brushes=0),),
+    )
+    tracer = BspPointTracer(
+        bsp,
+        patch_collisions=(),
+        runtime_entity_completeness=RuntimeGeometryCoverage.VERIFIED,
+        runtime_entity_state=RuntimeGeometryCoverage.VERIFIED,
+    )
+
+    intersecting = tracer.trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+    distant = tracer.trace_segment((-5.0, 20.0, 0.0), (5.0, 20.0, 0.0))
+
+    assert intersecting.status is TraceStatus.INDETERMINATE
+    assert intersecting.reason is TraceReason.SOLID_PATCH_UNCOMPILED
+    assert distant.status is TraceStatus.CLEAR
+    assert distant.tested_patch_count == 1
+
+
 def test_runtime_completeness_is_a_required_clear_gate():
     result = BspPointTracer(_trace_bsp()).trace_segment((-5.0, 20.0, 0.0), (5.0, 20.0, 0.0))
 
