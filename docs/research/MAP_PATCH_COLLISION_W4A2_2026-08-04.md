@@ -89,8 +89,8 @@ Input and compilation:
 | All compiled facets | 39,124 |
 | Solid-mask facets | 36,652 |
 | Patch compilation failures | 0 |
-| Mean compile time per map | 36.058 ms |
-| Maximum compile time for one map | 85.131 ms |
+| Mean compile time per map | 36.795 ms |
+| Maximum compile time for one map | 69.166 ms |
 | Deterministic cross-team spawn pairs | 320 |
 | Frozen target endpoint traces | 1,920 |
 
@@ -117,9 +117,9 @@ brush broad phase/exact clipping, patch bounds and facet tests:
 
 | Per endpoint | W4a1 brush foundation | W4a2 with facets |
 |---|---:|---:|
-| p50 | 774.450 us | 825.557 us |
-| p95 | 2,037.985 us | 2,235.880 us |
-| max | 3,158.994 us | 3,506.788 us |
+| p50 | 774.450 us | 830.979 us |
+| p95 | 2,037.985 us | 2,312.646 us |
+| max | 3,158.994 us | 3,967.421 us |
 
 | Candidate work per endpoint | Mean | Max |
 |---|---:|---:|
@@ -128,12 +128,12 @@ brush broad phase/exact clipping, patch bounds and facet tests:
 | Candidate solid patch surfaces | 7.520 | 83 |
 | Exact patch-facet tests | 5.838 | 224 |
 
-The p50 increased by about 6.6% and p95 by about 9.7% on this developer host. The max is sample-sensitive and increased
-by about 11.0%, so the tail requires attention before a consumer exists. Patch-surface accounting is also stricter than W4a1:
+The p50 increased by about 7.3% and p95 by about 13.5% on this developer host. The max is sample-sensitive and increased
+by about 25.6%, so the tail requires attention before a consumer exists. Patch-surface accounting is also stricter than W4a1:
 blocked brush traces now continue far enough to determine whether a nearer patch owns the first hit.
 
 At 66 pairs, six endpoints, a 1,000 ms analysis cadence and a 12-minute round, 285,120 endpoint traces multiplied by the
-measured p50 project to roughly **235 seconds**. This remains far outside the full-round one-second budget. The 200 ms
+measured p50 project to roughly **237 seconds**. This remains far outside the full-round one-second budget. The 200 ms
 capture cadence is not an analysis budget and would multiply this cost by five.
 
 ## Remaining gates
