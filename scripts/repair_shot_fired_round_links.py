@@ -79,18 +79,42 @@ except ImportError:  # pragma: no cover
 # split across two round_ids is reported rather than propagated.
 _SURVEY_SQL = """
 WITH orphans AS (
-    -- Two damaged states, not one. A NULL link drops the row out of
-    -- round-scoped analytics; a STALE link is worse, because it attributes
-    -- those shots to a different round and corrupts it. Both went unrepaired
-    -- for the same reason (the table was in neither relinker list), so both
-    -- belong here. Staleness is the relinker's own criterion: the named round
-    -- starts at a different second than the row says it does.
+    -- THREE damaged states, not one:
+    --
+    --   NULL      the row is simply invisible to round-scoped analytics
+    --   STALE     worse: it attributes those shots to a different round and
+    --             corrupts that round. Staleness is the relinker's own
+    --             criterion -- the named round starts at a different second
+    --             than the row says it does.
+    --   DANGLING  round_id names a rounds row that no longer exists.
+    --
+    -- The third is reachable and nothing heals it: migration 055 created
+    -- round_id with NO foreign key, postgresql_database_manager.py:3021 does
+    -- `DELETE FROM rounds WHERE round_date BETWEEN ...` on a date-range
+    -- reimport, and its STEP 2 clears player/weapon stats, lua_round_teams and
+    -- round_awards but NOT any proximity table. The rows keep pointing at
+    -- deleted ids, and the parser's ON CONFLICT DO NOTHING means reimport
+    -- never rewrites them (Codex review on #599).
+    --
+    -- Currently zero rows on dev -- across every proximity table, not just
+    -- this one -- so this is a latent hole rather than a live defect. Cheap to
+    -- cover here; deliberately NOT added to the live relinker's detection
+    -- UNION, see the PR discussion.
+    --
+    -- Note the LEFT JOIN is load-bearing: with an inner join a dangling row
+    -- has no `cur` at all and silently drops out of the survey.
     SELECT sf.session_date, sf.map_name, sf.round_number, sf.round_start_unix,
            COUNT(*) AS orphan_rows,
-           COUNT(*) FILTER (WHERE sf.round_id IS NOT NULL) AS stale_rows
+           COUNT(*) FILTER (
+               WHERE sf.round_id IS NOT NULL AND cur.id IS NOT NULL
+           ) AS stale_rows,
+           COUNT(*) FILTER (
+               WHERE sf.round_id IS NOT NULL AND cur.id IS NULL
+           ) AS dangling_rows
     FROM proximity_shot_fired sf
     LEFT JOIN rounds cur ON cur.id = sf.round_id
     WHERE sf.round_id IS NULL
+       OR (sf.round_id IS NOT NULL AND cur.id IS NULL)
        OR (cur.round_start_unix IS NOT NULL
            AND sf.round_start_unix != cur.round_start_unix)
     GROUP BY 1, 2, 3, 4
@@ -104,7 +128,7 @@ siblings AS (
     GROUP BY 1, 2, 3, 4
 )
 SELECT o.session_date, o.map_name, o.round_number, o.round_start_unix,
-       o.orphan_rows, o.stale_rows,
+       o.orphan_rows, o.stale_rows, o.dangling_rows,
        CASE WHEN s.distinct_round_ids = 1 AND r.id IS NOT NULL
             THEN s.round_id END AS resolved_round_id,
        COALESCE(s.distinct_round_ids, 0) AS distinct_round_ids,
@@ -157,6 +181,7 @@ WHERE sf.session_date = %(session_date)s
   AND sf.round_start_unix = %(round_start_unix)s
   AND (
         sf.round_id IS NULL
+        OR NOT EXISTS (SELECT 1 FROM rounds cur WHERE cur.id = sf.round_id)
         OR EXISTS (
              SELECT 1 FROM rounds cur
              WHERE cur.id = sf.round_id
@@ -183,6 +208,7 @@ class SurveyRow(NamedTuple):
     round_start_unix: int
     damaged_rows: int
     stale_rows: int
+    dangling_rows: int
     resolved_round_id: int | None
     distinct_round_ids: int
     sibling_link_is_stale: bool
@@ -252,9 +278,11 @@ def main() -> int:
         repairable_rows = sum(r.damaged_rows for r in repairable)
         skipped_rows = sum(r.damaged_rows for r in skipped)
         stale_total = sum(r.stale_rows for r in rows)
+        dangling_total = sum(r.dangling_rows for r in rows)
 
         print(f"\nDamaged rounds: {len(rows)}  ({sum(r.damaged_rows for r in rows):,} rows)")
-        print(f"  of which stale (wrong round_id, not NULL): {stale_total:,} rows")
+        print(f"  of which stale (wrong round_id):    {stale_total:,} rows")
+        print(f"  of which dangling (round deleted):  {dangling_total:,} rows")
         print(f"  repairable:  {len(repairable):>3}  ({repairable_rows:,} rows)")
         print(f"  no verdict:  {len(skipped):>3}  ({skipped_rows:,} rows)")
 

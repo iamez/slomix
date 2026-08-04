@@ -67,6 +67,27 @@ def test_survey_does_not_require_the_dates_to_match():
     assert "r.round_date" not in sql
 
 
+def test_survey_covers_dangling_links():
+    """A third damaged state: round_id naming a rounds row that no longer
+    exists. migration 055 created the column with no foreign key, and
+    postgresql_database_manager.py:3021 deletes rounds on a date-range reimport
+    while its STEP 2 clears player/weapon stats but no proximity table — so the
+    rows keep pointing at deleted ids, and ON CONFLICT DO NOTHING means
+    reimport never rewrites them.
+
+    The LEFT JOIN is what makes this reachable at all: under an inner join a
+    dangling row has no `cur` and drops silently out of the survey."""
+    sql = " ".join(repair._SURVEY_SQL.split())
+    assert "LEFT JOIN rounds cur ON cur.id = sf.round_id" in sql
+    assert "sf.round_id IS NOT NULL AND cur.id IS NULL" in sql
+    assert "AS dangling_rows" in sql
+
+
+def test_apply_covers_dangling_links():
+    sql = " ".join(repair._APPLY_SQL.split())
+    assert "NOT EXISTS (SELECT 1 FROM rounds cur WHERE cur.id = sf.round_id)" in sql
+
+
 def test_survey_requires_unanimous_siblings():
     """Siblings split across two round_ids mean the round itself is
     mis-linked; picking one of them would launder that into shot_fired."""
@@ -92,7 +113,9 @@ def test_apply_predicate_mirrors_the_survey_predicate():
     would be committed without appearing in --expect-repairable-rows."""
     sql = " ".join(repair._APPLY_SQL.split())
     assert "sf.round_id IS DISTINCT FROM" not in sql
-    assert "sf.round_id IS NULL OR EXISTS" in sql
+    # One branch per damaged state, matching _SURVEY_SQL's three.
+    assert "sf.round_id IS NULL" in sql
+    assert "NOT EXISTS (SELECT 1 FROM rounds cur WHERE cur.id = sf.round_id)" in sql
     assert "cur.round_start_unix != sf.round_start_unix" in sql
 
 
