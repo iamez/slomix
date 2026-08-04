@@ -8,6 +8,7 @@ from dataclasses import replace
 import pytest
 
 from website.backend.map_geometry import (
+    Bounds3D,
     BspBrush,
     BspBrushSide,
     BspDrawVertex,
@@ -532,6 +533,55 @@ def test_known_brush_hit_keeps_unknown_earlier_patch_provenance():
 
     result = tracer.trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
 
+    assert result.status is TraceStatus.BLOCKED
+    assert result.reason is TraceReason.STATIC_GEOMETRY_BLOCKED
+    assert result.fraction is None
+    assert result.brush_index is None
+    assert result.uncertain_surface_indices == (0,)
+
+
+def test_earlier_unresolved_patch_is_not_pruned_by_a_later_pushed_brush_fraction():
+    bsp = _trace_bsp(with_patch=True)
+    bsp = replace(
+        bsp,
+        leaf_surfaces=(0,),
+        leaf_brushes=(0,),
+        leafs=(
+            replace(
+                bsp.leafs[0],
+                first_leaf_surface=0,
+                num_leaf_surfaces=0,
+                first_leaf_brush=0,
+                num_leaf_brushes=1,
+            ),
+            replace(
+                bsp.leafs[1],
+                first_leaf_surface=0,
+                num_leaf_surfaces=1,
+                first_leaf_brush=1,
+                num_leaf_brushes=0,
+            ),
+        ),
+    )
+    failed = replace(
+        compile_bsp_patches(bsp)[0],
+        bounds=Bounds3D((1.0, -1.0, -1.0), (2.0, 1.0, 1.0)),
+        facets=(),
+        error="synthetic compile failure",
+    )
+    tracer = BspPointTracer(
+        bsp,
+        patch_collisions=(failed,),
+        runtime_entity_completeness=RuntimeGeometryCoverage.VERIFIED,
+        runtime_entity_state=RuntimeGeometryCoverage.VERIFIED,
+    )
+
+    result = tracer.trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+
+    assert tracer._candidate_references((1, 0)) == (  # noqa: SLF001 - order is the contract
+        ("surface", 0),
+        ("brush", 0),
+    )
     assert result.status is TraceStatus.BLOCKED
     assert result.reason is TraceReason.STATIC_GEOMETRY_BLOCKED
     assert result.fraction is None

@@ -564,7 +564,7 @@ class BspPointTracer:
         selected_kind: str | None = None
         selected_brush: tuple[int, _BrushHit] | None = None
         selected_patch: tuple[int, int] | None = None
-        uncertain_patches: list[tuple[int, float | None]] = []
+        uncertain_patch_indices: list[int] = []
         start_solid = False
         all_solid = False
         tested_brush_count = 0
@@ -582,7 +582,9 @@ class BspPointTracer:
                 tested_patch_count += surface_count
                 tested_patch_facet_count += facet_count
                 if uncertain is not None:
-                    uncertain_patches.append(uncertain)
+                    surface_index, bounds_fraction = uncertain
+                    if selected_kind is None or bounds_fraction is None or bounds_fraction <= closest_fraction:
+                        uncertain_patch_indices.append(surface_index)
                 if patch_hit is not None and patch_hit[0] < closest_fraction:
                     closest_fraction, surface_index, facet_index = patch_hit
                     selected_kind = "surface"
@@ -619,11 +621,7 @@ class BspPointTracer:
                 selected_kind = "brush"
                 selected_patch = None
 
-        patch_indices = tuple(
-            surface_index
-            for surface_index, bounds_fraction in uncertain_patches
-            if bounds_fraction is None or bounds_fraction <= closest_fraction
-        )
+        patch_indices = tuple(uncertain_patch_indices)
         if patch_indices and selected_kind is not None:
             return PointTraceResult(
                 status=TraceStatus.BLOCKED,
