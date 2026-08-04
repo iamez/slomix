@@ -552,6 +552,29 @@ def test_cyclic_bsp_tree_is_indeterminate_instead_of_partially_traced():
     assert result.reason is TraceReason.INVALID_BSP_TREE
 
 
+def test_bsp_candidates_preserve_directional_near_to_far_encounter_order():
+    bsp = _trace_bsp(with_patch=True)
+    bsp = replace(
+        bsp,
+        surfaces=(bsp.surfaces[0], bsp.surfaces[0]),
+        leaf_surfaces=(0, 1),
+        models=(replace(bsp.models[0], num_surfaces=2),),
+    )
+    tracer = _verified_tracer(bsp)
+
+    forward_leaves = tracer._candidate_leaf_indices(  # noqa: SLF001 - traversal is the contract
+        (-5.0, 0.0, 0.0), (5.0, 0.0, 0.0)
+    )
+    reverse_leaves = tracer._candidate_leaf_indices(  # noqa: SLF001 - traversal is the contract
+        (5.0, 0.0, 0.0), (-5.0, 0.0, 0.0)
+    )
+
+    assert forward_leaves == (1, 0)
+    assert reverse_leaves == (0, 1)
+    assert tracer._candidate_indices(forward_leaves)[1] == (1, 0)  # noqa: SLF001
+    assert tracer._candidate_indices(reverse_leaves)[1] == (0, 1)  # noqa: SLF001
+
+
 def test_frozen_stance_bounds_and_target_endpoints_match_contract():
     assert PLAYER_BOUNDS[PlayerStance.STANDING].maxs == (18.0, 18.0, 48.0)
     assert PLAYER_BOUNDS[PlayerStance.CROUCHING].maxs == (18.0, 18.0, 24.0)

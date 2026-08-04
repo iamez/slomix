@@ -325,7 +325,8 @@ class BspPointTracer:
         if not self._bsp.nodes:
             return (0,) if len(self._bsp.leafs) == 1 else None
 
-        leaves: set[int] = set()
+        leaves: list[int] = []
+        seen_leaves: set[int] = set()
         stack: list[tuple[int, Vector3, Vector3]] = [(0, start, end)]
         visited_nodes: set[int] = set()
         while stack:
@@ -381,8 +382,10 @@ class BspPointTracer:
             leaf_index = -node_index - 1
             if leaf_index >= len(self._bsp.leafs):
                 return None
-            leaves.add(leaf_index)
-        return tuple(sorted(leaves))
+            if leaf_index not in seen_leaves:
+                seen_leaves.add(leaf_index)
+                leaves.append(leaf_index)
+        return tuple(leaves)
 
     def _trace_brush(self, brush_index: int, start: Vector3, end: Vector3) -> _BrushHit | None:
         brush = self._trace_brushes[brush_index]
@@ -426,21 +429,25 @@ class BspPointTracer:
         return None
 
     def _candidate_indices(self, leaf_indices: tuple[int, ...]) -> tuple[tuple[int, ...], tuple[int, ...]]:
-        brush_indices: set[int] = set()
-        surface_indices: set[int] = set()
+        brush_indices: list[int] = []
+        surface_indices: list[int] = []
+        seen_brushes: set[int] = set()
+        seen_surfaces: set[int] = set()
         for leaf_index in leaf_indices:
             leaf = self._bsp.leafs[leaf_index]
-            brush_indices.update(
-                self._bsp.leaf_brushes[
-                    leaf.first_leaf_brush : leaf.first_leaf_brush + leaf.num_leaf_brushes
-                ]
-            )
-            surface_indices.update(
-                self._bsp.leaf_surfaces[
-                    leaf.first_leaf_surface : leaf.first_leaf_surface + leaf.num_leaf_surfaces
-                ]
-            )
-        return tuple(sorted(brush_indices)), tuple(sorted(surface_indices))
+            for brush_index in self._bsp.leaf_brushes[
+                leaf.first_leaf_brush : leaf.first_leaf_brush + leaf.num_leaf_brushes
+            ]:
+                if brush_index not in seen_brushes:
+                    seen_brushes.add(brush_index)
+                    brush_indices.append(brush_index)
+            for surface_index in self._bsp.leaf_surfaces[
+                leaf.first_leaf_surface : leaf.first_leaf_surface + leaf.num_leaf_surfaces
+            ]:
+                if surface_index not in seen_surfaces:
+                    seen_surfaces.add(surface_index)
+                    surface_indices.append(surface_index)
+        return tuple(brush_indices), tuple(surface_indices)
 
     def _trace_patches(
         self,
