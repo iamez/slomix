@@ -73,17 +73,54 @@ def test_survey_requires_unanimous_siblings():
     assert "COUNT(DISTINCT round_id) AS distinct_round_ids" in sql
 
 
-def test_apply_only_touches_orphans():
-    """The write must never overwrite an existing link, only fill NULLs."""
+def test_survey_covers_stale_links_not_just_nulls():
+    """A wrong non-NULL round_id is the worse of the two damaged states: a NULL
+    drops the row out of round-scoped analytics, a stale link attributes those
+    shots to another round and corrupts it. Both went unrepaired for the same
+    reason, so both must be surveyed."""
+    sql = " ".join(repair._SURVEY_SQL.split())
+    assert "sf.round_id IS NULL OR" in sql
+    assert "sf.round_start_unix != cur.round_start_unix" in sql
+
+
+def test_apply_replaces_stale_links_but_not_correct_ones():
+    """Mirrors the relinker's own `(round_id IS NULL OR round_id != $1)`. The
+    target round_id is verified to start at exactly this row's
+    round_start_unix, so any OTHER round_id on a row with this identity names a
+    round starting elsewhere — stale by definition. Rows already holding the
+    right link must not be rewritten."""
     sql = " ".join(repair._APPLY_SQL.split())
-    assert "sf.round_id IS NULL" in sql
+    assert "sf.round_id IS DISTINCT FROM %(round_id)s" in sql
+
+
+def test_expect_db_is_bound_to_the_server_not_just_the_name(monkeypatch, capsys):
+    """dev and prod are both called 'etlegacy' (.env.example and the Docker
+    defaults use that name), so a name-only guard would pass on production
+    while the operator believed they had preview-checked dev."""
+    monkeypatch.setattr(
+        repair,
+        "get_target_dsn_parts",
+        lambda: {"host": "prod.example", "port": "5432", "database": "etlegacy"},
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "repair_shot_fired_round_links.py",
+            "--apply",
+            "--expect-repairable-rows=1",
+            "--expect-db=localhost:5432/etlegacy",
+        ],
+    )
+
+    assert repair.main() == 1
+    assert "ABORT" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
     "argv",
     [
         ["--apply"],
-        ["--apply", "--expect-db=etlegacy"],
+        ["--apply", "--expect-db=localhost:5432/etlegacy"],
         ["--apply", "--expect-repairable-rows=1"],
     ],
 )

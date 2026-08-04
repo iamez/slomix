@@ -37,13 +37,15 @@ Usage:
     # 1. preview, and note the repairable row count it reports
     python scripts/repair_shot_fired_round_links.py
 
-    # 2. write, restating that count and the target database
+    # 2. write, restating that count and the exact server the preview ran on
     python scripts/repair_shot_fired_round_links.py --apply \
-        --expect-repairable-rows 57854 --expect-db etlegacy
+        --expect-repairable-rows 115018 \
+        --expect-db localhost:5432/etlegacy
 
 --apply requires both expectations. A candidate set that shifted between
 preview and apply (a session landed, someone else relinked) is no longer what
-was reviewed, and the wrong database is the other way this goes badly.
+was reviewed. --expect-db is host:port/database rather than the bare name
+because dev and prod are both called 'etlegacy'.
 """
 
 from __future__ import annotations
@@ -76,10 +78,20 @@ except ImportError:  # pragma: no cover
 # split across two round_ids is reported rather than propagated.
 _SURVEY_SQL = """
 WITH orphans AS (
-    SELECT session_date, map_name, round_number, round_start_unix,
-           COUNT(*) AS orphan_rows
-    FROM proximity_shot_fired
-    WHERE round_id IS NULL
+    -- Two damaged states, not one. A NULL link drops the row out of
+    -- round-scoped analytics; a STALE link is worse, because it attributes
+    -- those shots to a different round and corrupts it. Both went unrepaired
+    -- for the same reason (the table was in neither relinker list), so both
+    -- belong here. Staleness is the relinker's own criterion: the named round
+    -- starts at a different second than the row says it does.
+    SELECT sf.session_date, sf.map_name, sf.round_number, sf.round_start_unix,
+           COUNT(*) AS orphan_rows,
+           COUNT(*) FILTER (WHERE sf.round_id IS NOT NULL) AS stale_rows
+    FROM proximity_shot_fired sf
+    LEFT JOIN rounds cur ON cur.id = sf.round_id
+    WHERE sf.round_id IS NULL
+       OR (cur.round_start_unix IS NOT NULL
+           AND sf.round_start_unix != cur.round_start_unix)
     GROUP BY 1, 2, 3, 4
 ),
 siblings AS (
@@ -91,7 +103,7 @@ siblings AS (
     GROUP BY 1, 2, 3, 4
 )
 SELECT o.session_date, o.map_name, o.round_number, o.round_start_unix,
-       o.orphan_rows,
+       o.orphan_rows, o.stale_rows,
        CASE WHEN s.distinct_round_ids = 1 AND r.id IS NOT NULL
             THEN s.round_id END AS resolved_round_id,
        COALESCE(s.distinct_round_ids, 0) AS distinct_round_ids,
@@ -126,10 +138,16 @@ LEFT JOIN rounds r
 ORDER BY o.session_date, o.map_name, o.round_number
 """
 
+# `round_id IS DISTINCT FROM` rather than `IS NULL`, matching the relinker's
+# own `(round_id IS NULL OR round_id != $1)`: the target round_id has been
+# verified to start at exactly this row's round_start_unix, so any OTHER
+# round_id on a row with this identity necessarily names a round that starts
+# elsewhere — that is the definition of the stale link being replaced. Rows
+# already carrying the right link are untouched.
 _APPLY_SQL = """
 UPDATE proximity_shot_fired sf
 SET round_id = %(round_id)s
-WHERE sf.round_id IS NULL
+WHERE sf.round_id IS DISTINCT FROM %(round_id)s
   AND sf.session_date = %(session_date)s
   AND sf.map_name = %(map_name)s
   AND sf.round_number = %(round_number)s
@@ -161,7 +179,11 @@ def main() -> int:
     )
     parser.add_argument(
         "--expect-db",
-        help="database name this must be run against; REQUIRED with --apply",
+        help=(
+            "server this must run against as host:port/database; REQUIRED with "
+            "--apply. The database name alone is not an identity: dev and prod "
+            "are both called 'etlegacy'"
+        ),
     )
     args = parser.parse_args()
 
@@ -176,10 +198,15 @@ def main() -> int:
         )
 
     target = get_target_dsn_parts()
-    print(f"Target: {target['database']} @ {target['host']}:{target['port']}")
+    # Bound to host:port/database, not the bare name. .env.example and the
+    # Docker defaults both call the database 'etlegacy', so a name-only guard
+    # passes on production while the operator believes they preview-checked dev
+    # (Codex review on #599).
+    identity = f"{target['host']}:{target['port']}/{target['database']}"
+    print(f"Target: {identity}")
 
-    if args.expect_db and args.expect_db != target["database"]:
-        print(f"ABORT: --expect-db={args.expect_db!r} but target is {target['database']!r}")
+    if args.expect_db and args.expect_db != identity:
+        print(f"ABORT: --expect-db={args.expect_db!r} but target is {identity!r}")
         return 1
 
     with _connect() as conn:
@@ -187,21 +214,23 @@ def main() -> int:
             cur.execute(_SURVEY_SQL)
             rows = cur.fetchall()
 
-        repairable = [r for r in rows if r[5] is not None]
-        skipped = [r for r in rows if r[5] is None]
+        repairable = [r for r in rows if r[6] is not None]
+        skipped = [r for r in rows if r[6] is None]
         repairable_rows = sum(r[4] for r in repairable)
         skipped_rows = sum(r[4] for r in skipped)
+        stale_total = sum(r[5] for r in rows)
 
-        print(f"\nOrphan rounds: {len(rows)}  ({sum(r[4] for r in rows):,} rows)")
+        print(f"\nDamaged rounds: {len(rows)}  ({sum(r[4] for r in rows):,} rows)")
+        print(f"  of which stale (wrong round_id, not NULL): {stale_total:,} rows")
         print(f"  repairable:  {len(repairable):>3}  ({repairable_rows:,} rows)")
         print(f"  no verdict:  {len(skipped):>3}  ({skipped_rows:,} rows)")
 
         if skipped:
             print("\nLeft alone (needs the round_linker, not a copy):")
             for r in skipped:
-                if r[7]:
+                if r[8]:
                     why = "sibling link is stale — points at a round with a different identity"
-                elif r[6] > 1:
+                elif r[7] > 1:
                     why = "siblings disagree"
                 else:
                     why = "no linked sibling"
