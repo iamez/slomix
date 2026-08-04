@@ -86,6 +86,22 @@ def test_existing_pushed_hit_limits_raw_patch_intersection_before_patch_pushoff(
     assert hit is None
 
 
+def test_oblique_edge_containment_uses_raw_intersection_before_pushoff():
+    collision = build_patch_collision(_planar_grid(), 3, 3)
+
+    hit, _ = trace_patch_point(
+        collision,
+        (-2.0, 1.3, 0.0),
+        (2.0, 0.7, 0.0),
+        surface_clip_epsilon=0.125,
+    )
+
+    assert hit is not None
+    assert hit.fraction == pytest.approx((2.0 - 0.125) / 4.0)
+    pushed_y = 1.3 + (hit.fraction * (0.7 - 1.3))
+    assert pushed_y > 1.0
+
+
 def test_curved_patch_subdivides_and_hits_its_exact_quadratic_midpoint():
     collision = build_patch_collision(_curved_grid(), 3, 3)
 

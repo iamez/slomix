@@ -458,7 +458,7 @@ class BspPointTracer:
         max_fraction: float,
     ) -> tuple[tuple[float, int, int] | None, tuple[int, ...], int, int]:
         closest: tuple[float, int, int] | None = None
-        uncertain: list[int] = []
+        uncertain: list[tuple[int, float | None]] = []
         tested_surfaces = 0
         tested_facets = 0
         for surface_index in surface_indices:
@@ -472,16 +472,20 @@ class BspPointTracer:
             collision = self._patch_collisions.get(surface_index)
             if collision is None:
                 bounds = self._patch_control_bounds[surface_index]
-                if bounds is None or _segment_bounds_fraction(start, end, bounds) is not None:
-                    uncertain.append(surface_index)
+                bounds_fraction = (
+                    None if bounds is None else _segment_bounds_fraction(start, end, bounds)
+                )
+                if bounds is None or bounds_fraction is not None:
+                    uncertain.append((surface_index, bounds_fraction))
                 continue
             if collision.bounds is None:
-                uncertain.append(surface_index)
+                uncertain.append((surface_index, None))
                 continue
-            if _segment_bounds_fraction(start, end, collision.bounds) is None:
+            bounds_fraction = _segment_bounds_fraction(start, end, collision.bounds)
+            if bounds_fraction is None:
                 continue
             if collision.error is not None:
-                uncertain.append(surface_index)
+                uncertain.append((surface_index, bounds_fraction))
                 continue
             hit, facet_count = trace_patch_point(
                 collision,
@@ -493,7 +497,13 @@ class BspPointTracer:
             tested_facets += facet_count
             if hit is not None and (closest is None or hit.fraction < closest[0]):
                 closest = (hit.fraction, surface_index, hit.facet_index)
-        return closest, tuple(uncertain), tested_surfaces, tested_facets
+        known_fraction = closest[0] if closest is not None else max_fraction
+        relevant_uncertain = tuple(
+            surface_index
+            for surface_index, bounds_fraction in uncertain
+            if bounds_fraction is None or bounds_fraction <= known_fraction
+        )
+        return closest, relevant_uncertain, tested_surfaces, tested_facets
 
     def trace_segment(
         self,
@@ -589,6 +599,27 @@ class BspPointTracer:
             trace_mask,
             closest[0] if closest is not None else 1.0,
         )
+        if patch_indices and (patch_hit is not None or closest is not None):
+            return PointTraceResult(
+                status=TraceStatus.BLOCKED,
+                reason=TraceReason.STATIC_GEOMETRY_BLOCKED,
+                trace_mask=trace_mask,
+                fraction=None,
+                start_solid=False,
+                all_solid=False,
+                brush_index=None,
+                brush_side_index=None,
+                surface_index=None,
+                patch_facet_index=None,
+                uncertain_surface_indices=patch_indices,
+                uncertain_entity_indices=(),
+                uncertainty_reasons=(TraceReason.SOLID_PATCH_UNCOMPILED,),
+                visited_leaf_count=len(leaf_indices),
+                tested_brush_count=tested_brush_count,
+                tested_patch_count=tested_patch_count,
+                tested_patch_facet_count=tested_patch_facet_count,
+            )
+
         if patch_hit is not None:
             fraction, surface_index, facet_index = patch_hit
             return PointTraceResult(

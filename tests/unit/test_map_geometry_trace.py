@@ -436,6 +436,60 @@ def test_missing_cached_patch_only_blocks_clear_when_control_bounds_intersect():
     assert distant.tested_patch_count == 1
 
 
+def test_known_patch_hit_keeps_unknown_first_hit_provenance_from_partial_catalog():
+    bsp = replace(_trace_bsp(with_patch=True), brushes=(), brush_sides=(), leaf_brushes=())
+    bsp = replace(
+        bsp,
+        surfaces=(bsp.surfaces[0], bsp.surfaces[0]),
+        leaf_surfaces=(0, 1),
+        leafs=tuple(
+            replace(leaf, first_leaf_surface=0, num_leaf_surfaces=2, num_leaf_brushes=0)
+            for leaf in bsp.leafs
+        ),
+        models=(replace(bsp.models[0], num_surfaces=2, num_brushes=0),),
+    )
+    first_collision = compile_bsp_patches(bsp)[0]
+    tracer = BspPointTracer(
+        bsp,
+        patch_collisions=(first_collision,),
+        runtime_entity_completeness=RuntimeGeometryCoverage.VERIFIED,
+        runtime_entity_state=RuntimeGeometryCoverage.VERIFIED,
+    )
+
+    result = tracer.trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+
+    assert result.status is TraceStatus.BLOCKED
+    assert result.reason is TraceReason.STATIC_GEOMETRY_BLOCKED
+    assert result.fraction is None
+    assert result.surface_index is None
+    assert result.patch_facet_index is None
+    assert result.uncertain_surface_indices == (1,)
+    assert result.uncertainty_reasons == (TraceReason.SOLID_PATCH_UNCOMPILED,)
+
+
+def test_known_brush_hit_keeps_unknown_earlier_patch_provenance():
+    bsp = _trace_bsp(with_patch=True)
+    earlier_patch = tuple(
+        replace(vertex, position=(-3.0, vertex.position[1], vertex.position[2]))
+        for vertex in bsp.draw_vertices
+    )
+    bsp = replace(bsp, draw_vertices=earlier_patch)
+    tracer = BspPointTracer(
+        bsp,
+        patch_collisions=(),
+        runtime_entity_completeness=RuntimeGeometryCoverage.VERIFIED,
+        runtime_entity_state=RuntimeGeometryCoverage.VERIFIED,
+    )
+
+    result = tracer.trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+
+    assert result.status is TraceStatus.BLOCKED
+    assert result.reason is TraceReason.STATIC_GEOMETRY_BLOCKED
+    assert result.fraction is None
+    assert result.brush_index is None
+    assert result.uncertain_surface_indices == (0,)
+
+
 def test_runtime_completeness_is_a_required_clear_gate():
     result = BspPointTracer(_trace_bsp()).trace_segment((-5.0, 20.0, 0.0), (5.0, 20.0, 0.0))
 
