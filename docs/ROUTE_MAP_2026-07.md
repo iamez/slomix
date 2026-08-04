@@ -5,7 +5,7 @@
 redirection needed; it writes this file itself) after route-registry.js or the
 pages it references change.**
 
-Generated: 2026-08-03
+Generated: 2026-08-04
 
 | Route key | Hash example | Implementation | Serving file |
 |---|---|---|---|

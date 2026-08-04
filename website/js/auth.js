@@ -230,6 +230,23 @@ export function getCurrentUser() {
 // `_currentUser` null check cannot distinguish from "not asked yet").
 let _authProbe = null;
 let _authResolved = false;
+let _authResolvedAt = 0;
+
+// The cached answer expires. Before the dedupe, every caller re-probed, so a
+// session that changed underneath the page — cookie expiry, or a login/logout
+// in another tab — was noticed on the next route. A page-lifetime cache would
+// have traded that away: Availability's periodic refresh would keep enabling
+// authenticated controls, Uploads would keep showing owner actions, and the
+// mobile Me tab would keep a stale linked player until reload (Codex on #598).
+//
+// A minute is short enough that a stale identity cannot persist meaningfully
+// on a page left open, and long enough that a burst of callers on one route
+// still costs a single request — which is the point of the dedupe.
+const AUTH_TTL_MS = 60_000;
+
+function _authAnswerIsFresh() {
+    return _authResolved && (Date.now() - _authResolvedAt) < AUTH_TTL_MS;
+}
 
 /**
  * Resolve the current user, reusing the startup probe instead of issuing a new
@@ -239,7 +256,7 @@ let _authResolved = false;
  * app.js's criticalLoads, so by render time the answer is cached or in flight.
  */
 export async function ensureCurrentUser() {
-    if (_authResolved) return _currentUser;
+    if (_authAnswerIsFresh()) return _currentUser;
     try {
         // checkLoginStatus() dedupes an in-flight probe itself, so concurrent
         // callers join the startup request rather than issuing their own.
@@ -264,7 +281,15 @@ async function _checkLoginStatus() {
     let definitive = false;
 
     try {
-        user = await fetchJSON(`${AUTH_BASE}/me`);
+        // no-store: fetchJSON's default is stale-while-revalidate, which would
+        // hand back the cached logged-in identity after a logout and only
+        // discover the 401 in a background refresh whose result nobody reads.
+        // That silently defeated the TTL above. An identity probe must always
+        // be the server's current answer — the dedupe below is what keeps the
+        // request count down, not the response cache. (availability.js used
+        // `cache: 'no-store'` for this same reason before it was routed
+        // through here.)
+        user = await fetchJSON(`${AUTH_BASE}/me`, { cachePolicy: 'no-store' });
         definitive = true;
     } catch (err) {
         // Only a real "you are not logged in" answer may be cached for the
@@ -276,8 +301,22 @@ async function _checkLoginStatus() {
         definitive = err?.status === 401 || err?.status === 403;
     }
 
-    _currentUser = user;
-    if (definitive) _authResolved = true;
+    if (definitive) {
+        _currentUser = user;
+        _authResolved = true;
+        _authResolvedAt = Date.now();
+    } else if (!_authResolved) {
+        // No answer yet and none now: render as guest, but leave _authResolved
+        // false so the next caller retries.
+        _currentUser = null;
+    }
+    // else: an inconclusive refresh (5xx after the fetch cache expired, called
+    // explicitly after linking or a rename) must NOT wipe an identity we
+    // already know. Overwriting it here while _authResolved stayed true
+    // recreated exactly the sticky-anonymous bug this function was changed to
+    // avoid (Codex on #598).
+
+    user = _currentUser;
 
     if (user) {
         document.getElementById('auth-guest')?.classList.add('hidden');

@@ -792,12 +792,18 @@ async function initApp() {
     // home was the route being opened — so a deep link like #/skill-rating
     // still paid for the whole home page. They now live in loadHomeView(),
     // dispatched by the router like every other view.
-    const criticalLoads = [checkLoginStatus];
-    const startupResults = await Promise.allSettled(criticalLoads.map((task) => task()));
-    startupResults.forEach((result, i) => {
-        if (result.status === 'rejected') {
-            console.error(`Startup task ${i} failed:`, result.reason);
-        }
+    // Started, NOT awaited before routing. The old startup batch ran the home
+    // loaders concurrently with this probe; awaiting it here would put every
+    // home visit behind one or two auth round trips (checkLoginStatus also
+    // awaits /auth/link/status, and promotion preferences when signed in), and
+    // a hung auth request would leave the view empty even though its own data
+    // was reachable (Codex on #598).
+    //
+    // Route loaders that need the identity call ensureCurrentUser(), which
+    // joins this same in-flight probe rather than issuing a second one.
+    const authProbe = checkLoginStatus().catch((error) => {
+        console.error('Startup auth probe failed:', error);
+        return null;
     });
 
     initSearchListeners();
@@ -808,6 +814,8 @@ async function initApp() {
     } else {
         navigateTo('home', false, {});
     }
+
+    await authProbe;
 
     console.log('✅ Slomix App Ready');
 }
