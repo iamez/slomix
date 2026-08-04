@@ -117,7 +117,9 @@ def _verified_tracer(bsp: BspFile) -> BspPointTracer:
 
 
 def test_exact_convex_brush_blocks_and_reports_engine_clip_fraction():
-    result = _verified_tracer(_trace_bsp()).trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+    tracer = _verified_tracer(_trace_bsp())
+    result = tracer.trace_segment((-5.0, 0.0, 0.0), (5.0, 0.0, 0.0))
+    reverse = tracer.trace_segment((5.0, 0.0, 0.0), (-5.0, 0.0, 0.0))
 
     assert result.status is TraceStatus.BLOCKED
     assert result.reason is TraceReason.SOLID_BRUSH
@@ -126,6 +128,9 @@ def test_exact_convex_brush_blocks_and_reports_engine_clip_fraction():
     assert result.fraction == pytest.approx((4.0 - 0.125) / 10.0)
     assert result.visited_leaf_count == 2
     assert result.tested_brush_count == 1  # Deduplicated across leaf references.
+    assert reverse.status is TraceStatus.BLOCKED
+    assert reverse.fraction == result.fraction
+    assert reverse.visited_leaf_count == 2
 
 
 def test_slanted_convex_half_space_rejects_aabb_style_false_positive():

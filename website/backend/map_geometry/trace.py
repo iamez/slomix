@@ -342,6 +342,8 @@ class BspPointTracer:
                 if start_distance < end_distance:
                     inverse_distance = 1.0 / (start_distance - end_distance)
                     side = 1
+                    # ET:L CM_TraceThroughTree uses the same fraction twice in
+                    # this direction when the traced shape is a point (offset=0).
                     near_fraction = (start_distance + SURFACE_CLIP_EPSILON) * inverse_distance
                     far_fraction = near_fraction
                 elif start_distance > end_distance:
