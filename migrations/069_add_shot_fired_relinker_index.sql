@@ -15,8 +15,21 @@
 -- statements. Production applies this while services are stopped through
 -- deploy_release.sh. IF NOT EXISTS makes retries safe.
 
+-- Shape copied from 068: this one serves the relink UPDATE, whose WHERE
+-- constrains all four columns in this order.
 CREATE INDEX IF NOT EXISTS idx_proximity_shot_fired_round_lookup_unlinked
     ON proximity_shot_fired (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;
+
+-- The DISCOVERY leg is a different query and 068's shape does not serve it:
+-- it constrains neither map_name nor round_number, only the six-hour cutoff
+-- (round_start_unix >= $1, with a session_date fallback). With those two
+-- unconstrained leading columns PostgreSQL cannot seek, so every five-minute
+-- run would still read all historical NULL entries -- and on this table that
+-- backlog is the whole point (Codex review on #599). Leading with the cutoff
+-- columns makes the leg seekable.
+CREATE INDEX IF NOT EXISTS idx_proximity_shot_fired_unlinked_recent
+    ON proximity_shot_fired (round_start_unix, session_date)
     WHERE round_id IS NULL;
 
 -- The mismatch leg reads round_id IS NOT NULL rows and joins rounds on

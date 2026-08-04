@@ -84,14 +84,24 @@ def test_survey_covers_stale_links_not_just_nulls():
     assert "sf.round_start_unix != cur.round_start_unix" in sql
 
 
-def test_apply_replaces_stale_links_but_not_correct_ones():
-    """Mirrors the relinker's own `(round_id IS NULL OR round_id != $1)`. The
-    target round_id is verified to start at exactly this row's
-    round_start_unix, so any OTHER round_id on a row with this identity names a
-    round starting elsewhere — stale by definition. Rows already holding the
-    right link must not be rewritten."""
+def test_apply_predicate_mirrors_the_survey_predicate():
+    """The write set must be exactly what the survey counted. A looser
+    predicate (`round_id IS DISTINCT FROM`) would also rewrite rows linked to a
+    different round starting at the same second, or whose linked round has a
+    NULL round_start_unix — rows the survey does not call damaged, so they
+    would be committed without appearing in --expect-repairable-rows."""
     sql = " ".join(repair._APPLY_SQL.split())
-    assert "sf.round_id IS DISTINCT FROM %(round_id)s" in sql
+    assert "sf.round_id IS DISTINCT FROM" not in sql
+    assert "sf.round_id IS NULL OR EXISTS" in sql
+    assert "cur.round_start_unix != sf.round_start_unix" in sql
+
+
+def test_apply_rolls_back_when_the_write_set_differs_from_the_survey():
+    """--expect-repairable-rows only bounds anything if the actual rowcount is
+    checked against it before COMMIT."""
+    source = Path(repair.__file__).read_text()
+    assert "if written != repairable_rows:" in source
+    assert "conn.rollback()" in source
 
 
 def test_survey_row_fields_match_the_select_list():

@@ -139,20 +139,31 @@ LEFT JOIN rounds r
 ORDER BY o.session_date, o.map_name, o.round_number
 """
 
-# `round_id IS DISTINCT FROM` rather than `IS NULL`, matching the relinker's
-# own `(round_id IS NULL OR round_id != $1)`: the target round_id has been
-# verified to start at exactly this row's round_start_unix, so any OTHER
-# round_id on a row with this identity necessarily names a round that starts
-# elsewhere — that is the definition of the stale link being replaced. Rows
-# already carrying the right link are untouched.
+# The damaged-row predicate is a copy of _SURVEY_SQL's, not a looser
+# equivalent. `round_id IS DISTINCT FROM %(round_id)s` would have been looser:
+# it also rewrites a row linked to a DIFFERENT round that starts at the same
+# second, or one whose linked round has a NULL round_start_unix — neither of
+# which the survey counts as damaged. Those rows would be written and committed
+# without appearing in --expect-repairable-rows, which is exactly what that
+# flag is supposed to bound (Codex review on #599).
+#
+# Rows already carrying a correct link match neither branch and are untouched.
 _APPLY_SQL = """
 UPDATE proximity_shot_fired sf
 SET round_id = %(round_id)s
-WHERE sf.round_id IS DISTINCT FROM %(round_id)s
-  AND sf.session_date = %(session_date)s
+WHERE sf.session_date = %(session_date)s
   AND sf.map_name = %(map_name)s
   AND sf.round_number = %(round_number)s
   AND sf.round_start_unix = %(round_start_unix)s
+  AND (
+        sf.round_id IS NULL
+        OR EXISTS (
+             SELECT 1 FROM rounds cur
+             WHERE cur.id = sf.round_id
+               AND cur.round_start_unix IS NOT NULL
+               AND cur.round_start_unix != sf.round_start_unix
+           )
+      )
 """
 
 
@@ -286,6 +297,19 @@ def main() -> int:
                     },
                 )
                 written += cur.rowcount
+
+        # The write set must equal what the survey counted. Anything else means
+        # the data moved under us between preview and apply (a session landed,
+        # the relinker ran), so the operator is no longer approving what they
+        # reviewed. Roll back rather than commit a superset.
+        if written != repairable_rows:
+            conn.rollback()
+            print(
+                f"\nABORT (rolled back): would have written {written:,} rows, "
+                f"survey counted {repairable_rows:,}. Re-run the preview."
+            )
+            return 1
+
         conn.commit()
         print(f"\nWrote round_id on {written:,} rows across {len(repairable)} rounds.")
 
