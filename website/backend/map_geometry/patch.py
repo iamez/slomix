@@ -33,6 +33,7 @@ class PatchFacet:
     normal: Vector3
     distance: float
     vertices: tuple[Vector3, ...]
+    containment_variants: tuple[tuple[Vector3, ...], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,15 +158,6 @@ def _flatten_grid(
     _subdivide_columns(columns)
     _remove_degenerate_columns(columns)
 
-    # The working grid is transposed once, so the original width seam is now
-    # the inner row axis and the original height seam is the outer column axis.
-    # Canonicalizing tolerance-matched endpoints makes triangle containment
-    # preserve ET:L's wrapped-border continuity without inventing a gap.
-    if wrap_width:
-        for column in columns:
-            column[-1] = column[0]
-    if wrap_height:
-        columns[-1] = list(columns[0])
     return columns, wrap_width, wrap_height
 
 
@@ -219,6 +211,54 @@ def _expanded_bounds(points: tuple[Vector3, ...], padding: float) -> Bounds3D:
     )
 
 
+def _cell_containment_variants(
+    grid: list[list[Vector3]],
+    column: int,
+    row: int,
+    *,
+    wrap_width: bool,
+    wrap_height: bool,
+) -> tuple[tuple[Vector3, Vector3, Vector3, Vector3], ...]:
+    """Return alternate seam-border polygons without moving surface vertices."""
+    width_boundary = wrap_width and row in {0, len(grid[0]) - 2}
+    height_boundary = wrap_height and column in {0, len(grid) - 2}
+    variants: list[tuple[Vector3, Vector3, Vector3, Vector3]] = []
+    grid_coordinates = (
+        (column, row),
+        (column + 1, row),
+        (column + 1, row + 1),
+        (column, row + 1),
+    )
+    for use_width_seam, use_height_seam in (
+        (True, False),
+        (False, True),
+        (True, True),
+    ):
+        if use_width_seam and not width_boundary:
+            continue
+        if use_height_seam and not height_boundary:
+            continue
+        if not use_width_seam and not use_height_seam:
+            continue
+        points: list[Vector3] = []
+        for grid_column, grid_row in grid_coordinates:
+            if use_width_seam:
+                if row == 0 and grid_row == 0:
+                    grid_row = len(grid[0]) - 1
+                elif row == len(grid[0]) - 2 and grid_row == len(grid[0]) - 1:
+                    grid_row = 0
+            if use_height_seam:
+                if column == 0 and grid_column == 0:
+                    grid_column = len(grid) - 1
+                elif column == len(grid) - 2 and grid_column == len(grid) - 1:
+                    grid_column = 0
+            points.append(grid[grid_column][grid_row])
+        variant = (points[0], points[1], points[2], points[3])
+        if variant not in variants:
+            variants.append(variant)
+    return tuple(variants)
+
+
 def patch_control_bounds(control_points: tuple[Vector3, ...]) -> Bounds3D | None:
     """Return conservative finite control-hull bounds for a patch, if trustworthy."""
     if not control_points or not all(
@@ -248,15 +288,40 @@ def build_patch_collision(
             bottom_left = grid[column][row + 1]
             first_vertices = (top_left, top_right, bottom_right)
             second_vertices = (bottom_right, bottom_left, top_left)
+            quad_variants = _cell_containment_variants(
+                grid,
+                column,
+                row,
+                wrap_width=wrap_width,
+                wrap_height=wrap_height,
+            )
             first_plane = _surface_plane(*first_vertices, planes)
             second_plane = _surface_plane(*second_vertices, planes)
             if first_plane is not None and first_plane == second_plane:
-                facets.append(PatchFacet(*first_plane, (top_left, top_right, bottom_right, bottom_left)))
+                facets.append(
+                    PatchFacet(
+                        *first_plane,
+                        (top_left, top_right, bottom_right, bottom_left),
+                        quad_variants,
+                    )
+                )
                 continue
             if first_plane is not None:
-                facets.append(PatchFacet(*first_plane, first_vertices))
+                facets.append(
+                    PatchFacet(
+                        *first_plane,
+                        first_vertices,
+                        tuple((variant[0], variant[1], variant[2]) for variant in quad_variants),
+                    )
+                )
             if second_plane is not None:
-                facets.append(PatchFacet(*second_plane, second_vertices))
+                facets.append(
+                    PatchFacet(
+                        *second_plane,
+                        second_vertices,
+                        tuple((variant[2], variant[3], variant[0]) for variant in quad_variants),
+                    )
+                )
 
     flattened_points = tuple(point for column in grid for point in column)
     return PatchCollision(
@@ -295,7 +360,7 @@ def _point_in_triangle(point: Vector3, vertices: tuple[Vector3, Vector3, Vector3
     )
 
 
-def _point_in_facet(point: Vector3, vertices: tuple[Vector3, ...]) -> bool:
+def _point_in_polygon(point: Vector3, vertices: tuple[Vector3, ...]) -> bool:
     if len(vertices) == 3:
         return _point_in_triangle(point, (vertices[0], vertices[1], vertices[2]))
     if len(vertices) == 4:
@@ -304,6 +369,13 @@ def _point_in_facet(point: Vector3, vertices: tuple[Vector3, ...]) -> bool:
             (vertices[2], vertices[3], vertices[0]),
         )
     raise PatchCollisionError(f"unsupported patch facet vertex count {len(vertices)}")
+
+
+def _point_in_facet(point: Vector3, facet: PatchFacet) -> bool:
+    return any(
+        _point_in_polygon(point, vertices)
+        for vertices in (facet.vertices, *facet.containment_variants)
+    )
 
 
 def trace_patch_point(
@@ -338,7 +410,7 @@ def trace_patch_point(
         # ET:L tests facet border-plane intersections against the raw surface
         # intersection. Its 0.125 pushoff is calculated only after the facet hit
         # is accepted, so containment must not use the tangentially shifted point.
-        if not _point_in_facet(point, facet.vertices):
+        if not _point_in_facet(point, facet):
             continue
         pushed_fraction = max(0.0, (start_distance - surface_clip_epsilon) / denominator)
         if pushed_fraction <= limit:

@@ -428,9 +428,11 @@ class BspPointTracer:
             return _BrushHit(max(0.0, enter_fraction), False, False, lead_side)
         return None
 
-    def _candidate_indices(self, leaf_indices: tuple[int, ...]) -> tuple[tuple[int, ...], tuple[int, ...]]:
-        brush_indices: list[int] = []
-        surface_indices: list[int] = []
+    def _candidate_references(
+        self,
+        leaf_indices: tuple[int, ...],
+    ) -> tuple[tuple[str, int], ...]:
+        references: list[tuple[str, int]] = []
         seen_brushes: set[int] = set()
         seen_surfaces: set[int] = set()
         for leaf_index in leaf_indices:
@@ -440,70 +442,67 @@ class BspPointTracer:
             ]:
                 if brush_index not in seen_brushes:
                     seen_brushes.add(brush_index)
-                    brush_indices.append(brush_index)
+                    references.append(("brush", brush_index))
             for surface_index in self._bsp.leaf_surfaces[
                 leaf.first_leaf_surface : leaf.first_leaf_surface + leaf.num_leaf_surfaces
             ]:
                 if surface_index not in seen_surfaces:
                     seen_surfaces.add(surface_index)
-                    surface_indices.append(surface_index)
-        return tuple(brush_indices), tuple(surface_indices)
+                    references.append(("surface", surface_index))
+        return tuple(references)
 
-    def _trace_patches(
+    def _candidate_indices(
         self,
-        surface_indices: tuple[int, ...],
+        leaf_indices: tuple[int, ...],
+    ) -> tuple[tuple[int, ...], tuple[int, ...]]:
+        references = self._candidate_references(leaf_indices)
+        return (
+            tuple(index for kind, index in references if kind == "brush"),
+            tuple(index for kind, index in references if kind == "surface"),
+        )
+
+    def _trace_patch_surface(
+        self,
+        surface_index: int,
         start: Vector3,
         end: Vector3,
         trace_mask: TraceMask,
         max_fraction: float,
-    ) -> tuple[tuple[float, int, int] | None, tuple[int, ...], int, int]:
-        closest: tuple[float, int, int] | None = None
-        uncertain: list[tuple[int, float | None]] = []
-        tested_surfaces = 0
-        tested_facets = 0
-        for surface_index in surface_indices:
-            surface = self._bsp.surfaces[surface_index]
-            if surface.surface_type is not SurfaceType.PATCH:
-                continue
-            shader = self._bsp.shaders[surface.shader_index]
-            if not shader.content_flags & trace_mask.content_bits:
-                continue
-            tested_surfaces += 1
-            collision = self._patch_collisions.get(surface_index)
-            if collision is None:
-                bounds = self._patch_control_bounds[surface_index]
-                bounds_fraction = (
-                    None if bounds is None else _segment_bounds_fraction(start, end, bounds)
-                )
-                if bounds is None or bounds_fraction is not None:
-                    uncertain.append((surface_index, bounds_fraction))
-                continue
-            if collision.bounds is None:
-                uncertain.append((surface_index, None))
-                continue
-            bounds_fraction = _segment_bounds_fraction(start, end, collision.bounds)
-            if bounds_fraction is None:
-                continue
-            if collision.error is not None:
-                uncertain.append((surface_index, bounds_fraction))
-                continue
-            hit, facet_count = trace_patch_point(
-                collision,
-                start,
-                end,
-                surface_clip_epsilon=SURFACE_CLIP_EPSILON,
-                max_fraction=closest[0] if closest is not None else max_fraction,
+    ) -> tuple[tuple[float, int, int] | None, tuple[int, float | None] | None, int, int]:
+        surface = self._bsp.surfaces[surface_index]
+        if surface.surface_type is not SurfaceType.PATCH:
+            return None, None, 0, 0
+        shader = self._bsp.shaders[surface.shader_index]
+        if not shader.content_flags & trace_mask.content_bits:
+            return None, None, 0, 0
+        collision = self._patch_collisions.get(surface_index)
+        if collision is None:
+            bounds = self._patch_control_bounds[surface_index]
+            bounds_fraction = None if bounds is None else _segment_bounds_fraction(start, end, bounds)
+            uncertain = (
+                (surface_index, bounds_fraction)
+                if bounds is None or bounds_fraction is not None
+                else None
             )
-            tested_facets += facet_count
-            if hit is not None and (closest is None or hit.fraction < closest[0]):
-                closest = (hit.fraction, surface_index, hit.facet_index)
-        known_fraction = closest[0] if closest is not None else max_fraction
-        relevant_uncertain = tuple(
-            surface_index
-            for surface_index, bounds_fraction in uncertain
-            if bounds_fraction is None or bounds_fraction <= known_fraction
+            return None, uncertain, 1, 0
+        if collision.bounds is None:
+            return None, (surface_index, None), 1, 0
+        bounds_fraction = _segment_bounds_fraction(start, end, collision.bounds)
+        if bounds_fraction is None:
+            return None, None, 1, 0
+        if collision.error is not None:
+            return None, (surface_index, bounds_fraction), 1, 0
+        hit, facet_count = trace_patch_point(
+            collision,
+            start,
+            end,
+            surface_clip_epsilon=SURFACE_CLIP_EPSILON,
+            max_fraction=max_fraction,
         )
-        return closest, relevant_uncertain, tested_surfaces, tested_facets
+        resolved_hit = (
+            None if hit is None else (hit.fraction, surface_index, hit.facet_index)
+        )
+        return resolved_hit, None, 1, facet_count
 
     def trace_segment(
         self,
@@ -560,10 +559,38 @@ class BspPointTracer:
                 tested_patch_facet_count=0,
             )
 
-        brush_indices, surface_indices = self._candidate_indices(leaf_indices)
-        closest: tuple[float, int, _BrushHit] | None = None
+        candidate_references = self._candidate_references(leaf_indices)
+        closest_fraction = 1.0
+        selected_kind: str | None = None
+        selected_brush: tuple[int, _BrushHit] | None = None
+        selected_patch: tuple[int, int] | None = None
+        uncertain_patches: list[tuple[int, float | None]] = []
+        start_solid = False
+        all_solid = False
         tested_brush_count = 0
-        for brush_index in brush_indices:
+        tested_patch_count = 0
+        tested_patch_facet_count = 0
+        for candidate_kind, candidate_index in candidate_references:
+            if candidate_kind == "surface":
+                patch_hit, uncertain, surface_count, facet_count = self._trace_patch_surface(
+                    candidate_index,
+                    start,
+                    end,
+                    trace_mask,
+                    closest_fraction,
+                )
+                tested_patch_count += surface_count
+                tested_patch_facet_count += facet_count
+                if uncertain is not None:
+                    uncertain_patches.append(uncertain)
+                if patch_hit is not None and patch_hit[0] < closest_fraction:
+                    closest_fraction, surface_index, facet_index = patch_hit
+                    selected_kind = "surface"
+                    selected_patch = (surface_index, facet_index)
+                    selected_brush = None
+                continue
+
+            brush_index = candidate_index
             brush = self._trace_brushes[brush_index]
             if not brush.content_flags & trace_mask.content_bits:
                 continue
@@ -575,38 +602,36 @@ class BspPointTracer:
                 continue
             tested_brush_count += 1
             hit = self._trace_brush(brush_index, start, end)
-            if hit is not None and (closest is None or hit.fraction < closest[0]):
-                closest = (hit.fraction, brush_index, hit)
-            elif hit is not None and closest is not None and hit.fraction == closest[0] == 0.0:
-                _fraction, selected_index, selected_hit = closest
-                if hit.all_solid and not selected_hit.all_solid:
-                    selected_index = brush_index
-                closest = (
-                    0.0,
-                    selected_index,
-                    _BrushHit(
-                        fraction=0.0,
-                        start_solid=selected_hit.start_solid or hit.start_solid,
-                        all_solid=selected_hit.all_solid or hit.all_solid,
-                        side_index=None,
-                    ),
-                )
+            if hit is None:
+                continue
+            start_solid = start_solid or hit.start_solid
+            all_solid = all_solid or hit.all_solid
+            if hit.fraction < closest_fraction:
+                closest_fraction = hit.fraction
+                selected_kind = "brush"
+                selected_brush = (brush_index, hit)
+                selected_patch = None
+            elif hit.fraction == closest_fraction == 0.0 and (
+                selected_kind == "brush" or hit.all_solid
+            ):
+                if selected_brush is None or (hit.all_solid and not selected_brush[1].all_solid):
+                    selected_brush = (brush_index, hit)
+                selected_kind = "brush"
+                selected_patch = None
 
-        patch_hit, patch_indices, tested_patch_count, tested_patch_facet_count = self._trace_patches(
-            surface_indices,
-            start,
-            end,
-            trace_mask,
-            closest[0] if closest is not None else 1.0,
+        patch_indices = tuple(
+            surface_index
+            for surface_index, bounds_fraction in uncertain_patches
+            if bounds_fraction is None or bounds_fraction <= closest_fraction
         )
-        if patch_indices and (patch_hit is not None or closest is not None):
+        if patch_indices and selected_kind is not None:
             return PointTraceResult(
                 status=TraceStatus.BLOCKED,
                 reason=TraceReason.STATIC_GEOMETRY_BLOCKED,
                 trace_mask=trace_mask,
                 fraction=None,
-                start_solid=closest[2].start_solid if closest is not None else False,
-                all_solid=closest[2].all_solid if closest is not None else False,
+                start_solid=start_solid,
+                all_solid=all_solid,
                 brush_index=None,
                 brush_side_index=None,
                 surface_index=None,
@@ -620,15 +645,15 @@ class BspPointTracer:
                 tested_patch_facet_count=tested_patch_facet_count,
             )
 
-        if patch_hit is not None:
-            fraction, surface_index, facet_index = patch_hit
+        if selected_kind == "surface" and selected_patch is not None:
+            surface_index, facet_index = selected_patch
             return PointTraceResult(
                 status=TraceStatus.BLOCKED,
                 reason=TraceReason.SOLID_PATCH,
                 trace_mask=trace_mask,
-                fraction=fraction,
-                start_solid=False,
-                all_solid=False,
+                fraction=closest_fraction,
+                start_solid=start_solid,
+                all_solid=all_solid,
                 brush_index=None,
                 brush_side_index=None,
                 surface_index=surface_index,
@@ -642,15 +667,15 @@ class BspPointTracer:
                 tested_patch_facet_count=tested_patch_facet_count,
             )
 
-        if closest is not None:
-            fraction, brush_index, hit = closest
+        if selected_kind == "brush" and selected_brush is not None:
+            brush_index, hit = selected_brush
             return PointTraceResult(
                 status=TraceStatus.BLOCKED,
                 reason=TraceReason.SOLID_BRUSH,
                 trace_mask=trace_mask,
-                fraction=fraction,
-                start_solid=hit.start_solid,
-                all_solid=hit.all_solid,
+                fraction=closest_fraction,
+                start_solid=start_solid,
+                all_solid=all_solid,
                 brush_index=brush_index,
                 brush_side_index=hit.side_index,
                 surface_index=None,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import pytest
 
@@ -180,14 +181,19 @@ def test_nearly_coplanar_triangles_reuse_tolerance_matched_surface_plane():
     assert len(collision.facets[0].vertices) == 4
 
 
-def test_tolerance_matched_wrap_seam_is_canonicalized_closed():
+def test_tolerance_matched_wrap_seam_preserves_coordinates_and_adds_topology():
     control_points = []
     for row in range(3):
         for column in range(5):
             if column == 4:
                 point = (0.05, 0.0, float(row))
             else:
-                angle_points = ((0.0, 0.0), (1.0, 1.0), (2.0, 0.0), (1.0, -1.0))
+                angle_points = (
+                    (0.0, 0.0),
+                    (64.0, 64.0),
+                    (128.0, 0.0),
+                    (64.0, -64.0),
+                )
                 x, y = angle_points[column]
                 point = (x, y, float(row))
             control_points.append(point)
@@ -202,7 +208,39 @@ def test_tolerance_matched_wrap_seam_is_canonicalized_closed():
         for vertex in facet.vertices
         if abs(vertex[0]) <= 0.1 and abs(vertex[1]) <= 0.1
     }
-    assert seam_vertices == {(0.0, 0.0, 0.0), (0.0, 0.0, 2.0)}
+    assert seam_vertices == {
+        (0.0, 0.0, 0.0),
+        (0.0, 0.0, 2.0),
+        (0.05, 0.0, 0.0),
+        (0.05, 0.0, 2.0),
+    }
+    assert any(facet.containment_variants for facet in collision.facets)
+    alternate_seam_vertices = {
+        vertex
+        for facet in collision.facets
+        for variant in facet.containment_variants
+        for vertex in variant
+        if abs(vertex[0]) <= 0.1 and abs(vertex[1]) <= 0.1
+    }
+    assert alternate_seam_vertices == seam_vertices
+    without_seam_topology = replace(
+        collision,
+        facets=tuple(replace(facet, containment_variants=()) for facet in collision.facets),
+    )
+    open_hit, _ = trace_patch_point(
+        without_seam_topology,
+        (-0.2, 0.13, 1.0),
+        (0.03, 0.01, 1.0),
+        surface_clip_epsilon=0.125,
+    )
+    wrapped_hit, _ = trace_patch_point(
+        collision,
+        (-0.2, 0.13, 1.0),
+        (0.03, 0.01, 1.0),
+        surface_clip_epsilon=0.125,
+    )
+    assert open_hit is None
+    assert wrapped_hit is not None
 
 
 def test_degenerate_patch_has_no_facets_and_malformed_inputs_are_rejected():
