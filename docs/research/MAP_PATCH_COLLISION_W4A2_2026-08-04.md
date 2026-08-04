@@ -32,6 +32,10 @@ the offline result remains `unvalidated_until_w6` until paired `et.trap_Trace` f
   test makes the final decision.
 - `CONTENTS_SOLID` and `CONTENTS_PLAYERCLIP` remain purpose-specific. A playerclip-only patch does not block the named
   LOS mask and does block the named movement-content mask.
+- Patch eligibility follows ET:L's collision path and uses shader content bits. Current ET:L loads `SURF_NONSOLID`
+  into patch metadata but `CM_TraceThroughLeaf` gates curves only on `patch->contents`; shader compilation normally
+  clears the solid content for `nonsolid`. Across all 4,794 local patches, **zero** combine `SURF_NONSOLID` with
+  `CONTENTS_SOLID`; the real-asset gate freezes that measured invariant instead of inventing divergent runtime behavior.
 - A compiled patch hit reports `solid_patch`, the BSP surface index, facet index, fraction and measured candidate work.
 - A missing/failed compilation remains `solid_patch_uncompiled` and `indeterminate` whenever its conservative bounds
   can affect the segment. A partial cached catalog uses finite control-hull bounds to avoid poisoning distant traces;
@@ -65,11 +69,13 @@ traces and constants; no ET:L source file is included in this MIT repository.
 12. near-to-far leaf/surface encounter order;
 13. raw-intersection containment for oblique edge hits;
 14. uncertainty retention when a missing patch may precede a known patch or brush; and
-15. exact quadratic-midpoint subdivision threshold behavior; and
-16. aggregate versus endpoint-specific block provenance.
+15. exact quadratic-midpoint subdivision threshold behavior;
+16. non-square flattened-grid metadata orientation;
+17. solid-start flag preservation under uncertain first-hit provenance; and
+18. aggregate versus endpoint-specific block provenance.
 
-Measured W2/W3/W4 targeted suite on Python 3.13.14: **72 passed**. The repository-wide suite also completed with
-**4,077 passed and 74 skipped**; the skips require unavailable test PostgreSQL credentials, optional local fixtures, or
+Measured W2/W3/W4 targeted suite on Python 3.13.14: **74 passed**. The repository-wide suite also completed with
+**4,079 passed and 74 skipped**; the skips require unavailable test PostgreSQL credentials, optional local fixtures, or
 the separately executed real-asset opt-in.
 
 ## Real-asset proof

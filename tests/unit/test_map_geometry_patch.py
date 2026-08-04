@@ -144,6 +144,18 @@ def test_subdivision_threshold_uses_quadratic_midpoint_not_raw_control_deviation
     assert max(at_threshold.grid_width, at_threshold.grid_height) > 2
 
 
+def test_flattened_grid_metadata_retains_input_axis_orientation():
+    control_points = tuple(
+        (0.0, float(column), float(row))
+        for row in range(3)
+        for column in range(5)
+    )
+
+    collision = build_patch_collision(control_points, 5, 3)
+
+    assert (collision.grid_width, collision.grid_height) == (3, 2)
+
+
 def test_degenerate_patch_has_no_facets_and_malformed_inputs_are_rejected():
     collision = build_patch_collision(((0.0, 0.0, 0.0),) * 9, 3, 3)
     hit, tested = trace_patch_point(

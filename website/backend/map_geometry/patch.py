@@ -218,8 +218,10 @@ def build_patch_collision(
         content_flags=content_flags,
         bounds=_expanded_bounds(flattened_points, PATCH_BOUNDS_PADDING),
         facets=tuple(facets),
-        grid_width=len(grid),
-        grid_height=len(grid[0]),
+        # _flatten_grid returns the once-transposed engine working grid.
+        # Metadata remains in the BSP patch's original parameter orientation.
+        grid_width=len(grid[0]),
+        grid_height=len(grid),
     )
 
 
