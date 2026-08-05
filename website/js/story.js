@@ -1296,7 +1296,7 @@ function renderInvisibleValue(gravity, space, enabler, lurker, defense) {
     container.appendChild(headerRow);
 
     // Tab bar
-    const tabBar = _el('div', 'flex gap-1.5 mb-4');
+    const tabBar = _el('div', 'flex flex-wrap gap-1.5 mb-4');
     const tabButtons = {};
     IV_TABS.forEach(tab => {
         const has = hasData(tab);
@@ -1478,7 +1478,7 @@ function renderWinContribution(data) {
     }
 
     // Legend
-    const legendRow = _el('div', 'flex gap-4 mb-4');
+    const legendRow = _el('div', 'flex flex-wrap gap-4 mb-4');
     PWC_COMPONENTS.forEach(c => {
         legendRow.appendChild(_el('span', 'inline-flex items-center gap-1.5 text-[10px] text-slate-400',
             _el('span', `w-2.5 h-2.5 rounded-sm ${c.color}`),
