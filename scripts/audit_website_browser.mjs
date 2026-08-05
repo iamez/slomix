@@ -21,8 +21,8 @@
  * Writes results.json + JPEG screenshots to the output directory. Never writes
  * into the repo.
  */
-import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { createHash, createHmac } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -90,45 +90,67 @@ const ROUTES = [
 // ---------------------------------------------------------------------------
 
 /**
- * Locate the interpreter, in the same order and with the same override as
- * scripts/db_backup.sh — this repo has had several venv layouts, so hardcoding
- * one made the audit fail on otherwise-valid checkouts.
+ * Read one key out of website/.env without pulling in a parser: the file is a
+ * plain KEY=value list and we need exactly one value from it.
  */
-function resolvePython() {
-    if (process.env.SLOMIX_PYTHON) return process.env.SLOMIX_PYTHON;
-    for (const candidate of ['venv-web/bin/python', 'venv/bin/python', '.venv/bin/python']) {
-        const full = path.join(REPO_ROOT, candidate);
-        if (existsSync(full)) return full;
+function readEnvValue(key) {
+    const file = path.join(REPO_ROOT, 'website/.env');
+    for (const line of readFileSync(file, 'utf-8').split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eq = trimmed.indexOf('=');
+        if (eq < 0 || trimmed.slice(0, eq).trim() !== key) continue;
+        return trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
     }
-    return 'python3';
+    return null;
 }
 
 /**
  * Mint a Starlette SessionMiddleware cookie for the owner.
  *
- * Delegated to Python rather than reimplemented: itsdangerous derives its key
- * and encodes its timestamp in ways that are easy to get subtly wrong, and the
- * server verifies with the real library. tests/security/test_real_stack_security.py
- * builds the same value the same way.
+ * This reimplements itsdangerous.TimestampSigner rather than shelling out to
+ * Python for it, and the parameters are not guesses — they are what
+ * TimestampSigner("...") reports: salt b"itsdangerous.Signer", key_derivation
+ * "django-concat", digest sha1, separator ".". So:
+ *
+ *   key = sha1(salt + b"signer" + secret)
+ *   signed = value + "." + b64url(hmac_sha1(key, value))
+ *
+ * Verified against the real library rather than trusted: for secret
+ * "test-secret" both produce derived key 21b7e712fa66402b6702c99e54af1f799ff0c9c7
+ * and sign("HELLO.anOwdg") -> "HELLO.anOwdg.9TxU301SQLTkyeCVHBI20RR-S6E",
+ * byte for byte. The end-to-end check is stronger still: the server unsigns
+ * this cookie with the actual library, so a wrong signature shows up
+ * immediately as an anonymous owner pass.
+ *
+ * tests/security/test_real_stack_security.py builds the same value in Python.
  */
 function mintOwnerSession() {
-    const script = `
-import base64, json, os, sys
-sys.path.insert(0, ${JSON.stringify(REPO_ROOT)})
-from dotenv import dotenv_values
-import itsdangerous
-env = dotenv_values(os.path.join(${JSON.stringify(REPO_ROOT)}, "website/.env"))
-secret = env.get("SESSION_SECRET") or os.getenv("SESSION_SECRET")
-if not secret:
-    raise SystemExit("SESSION_SECRET not found in website/.env")
-payload = base64.b64encode(json.dumps({
-    "user": {"id": "231165917604741121", "username": "audit-owner"}
-}).encode("utf-8"))
-print(itsdangerous.TimestampSigner(str(secret)).sign(payload).decode("utf-8"))
-`;
-    return execFileSync(resolvePython(), ['-c', script], {
-        encoding: 'utf-8',
-    }).trim();
+    const secret = readEnvValue('SESSION_SECRET') || process.env.SESSION_SECRET;
+    if (!secret) throw new Error('SESSION_SECRET not found in website/.env');
+
+    const b64url = (buf) => buf.toString('base64')
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+    const payload = Buffer.from(JSON.stringify({
+        user: { id: '231165917604741121', username: 'audit-owner' },
+    }), 'utf-8').toString('base64');
+
+    // itsdangerous encodes the timestamp as big-endian bytes, minimal width.
+    const now = Math.floor(Date.now() / 1000);
+    const stampBytes = [];
+    for (let n = now; n > 0; n = Math.floor(n / 256)) stampBytes.unshift(n % 256);
+    const value = `${payload}.${b64url(Buffer.from(stampBytes))}`;
+
+    const key = createHash('sha1')
+        .update(Buffer.concat([
+            Buffer.from('itsdangerous.Signer', 'utf-8'),
+            Buffer.from('signer', 'utf-8'),
+            Buffer.from(String(secret), 'utf-8'),
+        ]))
+        .digest();
+
+    return `${value}.${b64url(createHmac('sha1', key).update(Buffer.from(value, 'utf-8')).digest())}`;
 }
 
 // ---------------------------------------------------------------------------
