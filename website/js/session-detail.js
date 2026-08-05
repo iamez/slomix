@@ -336,6 +336,15 @@ export async function loadSessionDetailView({ sessionId, sessionDate, tab } = {}
         </div>`;
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
+    // Reset per entry, not per date-path: loadSessionDetailView() runs again on
+    // every SPA navigation, and a stale value survives into the NEXT view.
+    // Concretely, date -> click "Session 142" lands on the sessionId path, which
+    // repopulates _sessionDate from the per-session payload while the previous
+    // date's ids were still here — so the merged-sessions notice rendered on a
+    // single-session view, which is precisely the confusion it exists to remove
+    // (Codex on #605).
+    _mergedSessionIds = [];
+
     try {
         if (_sessionId) {
             try {

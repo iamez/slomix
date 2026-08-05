@@ -212,13 +212,12 @@ class SessionDataService:
         """The gaming sessions that have at least one round on `target_date`.
 
         fetch_session_data_by_date() computes this internally and then throws it
-        away, returning only round ids. Callers that need to TELL THE USER what
+        away, returning only round ids. Callers that need to tell the user what
         they are looking at need the session ids themselves: a date can hold
-        more than one gaming session (9 dates do, one of them four), and that
-        method deliberately merges them all so a midnight-crossing session is
-        never shown cut in half. Without this, /api/sessions/{date} presented
-        two separate evenings as a single "session detail" with nothing in the
-        payload to reveal it.
+        more than one gaming session, and that method deliberately merges them
+        all so a midnight-crossing session is never shown cut in half. Without
+        this, /api/sessions/{date} presented several evenings as a single
+        "session detail" with nothing in the payload to reveal it.
 
         Kept as its own method rather than widening the existing 4-tuple return,
         which has three callers including bot/cogs/session_cog.py.
