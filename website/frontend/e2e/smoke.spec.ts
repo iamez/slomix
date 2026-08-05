@@ -15,8 +15,9 @@ import { test, expect, type ConsoleMessage } from '@playwright/test';
 // Scoped by URL, not by message text, so a 401 from any non-/auth endpoint
 // still fails. That is the case worth catching.
 function isExpectedAuthConsoleError(msg: ConsoleMessage): boolean {
-  const url = msg.location()?.url ?? '';
-  return /\b(401|403)\b/.test(msg.text()) && url.includes('/auth/');
+  // location() returns a plain object with a non-optional `url: string`
+  // (playwright-core types.d.ts), so `?.` and `?? ''` were both dead branches.
+  return /\b(401|403)\b/.test(msg.text()) && msg.location().url.includes('/auth/');
 }
 
 const ROUTES: Array<{ name: string; hash: string; expectSelector: string }> = [
