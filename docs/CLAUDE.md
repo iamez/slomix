@@ -96,9 +96,17 @@ All in `bot/core/`: achievement_system, checks, correlation_context, database_ad
 ```bash
 pip install -r requirements.txt
 python -m bot.ultimate_bot
-# Production VM: systemd-managed
-#   sudo systemctl status slomix-bot slomix-web
-#   sudo journalctl -u slomix-bot -f
+# systemd-managed, on the dev box AND the production VM. The units are
+# etlegacy-*, NOT slomix-* — `systemctl is-active slomix-web` answers
+# "inactive" for a unit that does not exist, which reads as "not running"
+# and invites someone to start a second instance by hand. Both units are
+# Restart=always, so a hand-started copy wins the port race and systemd's
+# own restart then fails with EADDRINUSE in a loop.
+#   sudo systemctl restart etlegacy-bot.service etlegacy-web.service
+#   sudo journalctl -f -u etlegacy-bot.service -u etlegacy-web.service -o cat
+# Those two restarts and `journalctl -u etlegacy-web` are NOPASSWD in
+# sudoers (`sudo -n -l` to confirm) — no password needed, so there is no
+# reason to manage these processes any other way.
 # (Some historical hosts still run the bot under `screen -r slomix`.)
 ```
 
