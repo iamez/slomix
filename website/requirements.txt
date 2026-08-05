@@ -47,6 +47,16 @@ starlette==1.3.1
 # test_web_does_not_import_bot_discord.py keeps it that way — nothing else would
 # fail if an eager import came back, the venv would just quietly need them again.
 #
-# cryptography and aiosqlite stay: they are genuinely the web service's own,
-# reached through the redis client (redis/utils.py) and
-# website/backend/local_database_adapter.py's SQLite dev fallback respectively.
+# cryptography and aiosqlite stay, and both are the web service's OWN — not
+# transitive the way the two above were:
+#
+#   cryptography  website/backend/services/contact_handle_crypto.py:11 imports
+#                 cryptography.fernet directly, to encrypt the Telegram/Signal
+#                 contact handles; availability.py:28 pulls that service in at
+#                 router import. The redis client happens to import it too, but
+#                 that is incidental — an earlier position in the startup order,
+#                 not the reason it is needed (Codex review on #604).
+#                 Note the import is try/except-guarded, so removing this pin
+#                 would NOT crash: encryption would silently turn itself off.
+#   aiosqlite     website/backend/local_database_adapter.py, for the SQLite dev
+#                 fallback (scripts/dev_up.sh defaults DATABASE_TYPE=sqlite).
