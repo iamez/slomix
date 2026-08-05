@@ -35,7 +35,8 @@ To ni "približno kje je igralec" — to je **kje je, s koliko življenja, s kat
 
 V1 je torej **dosežen za pozicijo/stanje, ne pa za neprekinjeno orientacijo.** Če se izkaže, da DQL rabi zvezno smer pogleda, je to edina postavka v tem dokumentu, ki bi zahtevala Lua spremembo (dodatno polje v vzorcu poti).
 
-V bazi (`player_track.path`, JSONB): **57.311 poti, 223 MB.** Ena runda etl_adlernest R2 (272 s) da 50 poti in v isti datoteki še:
+V bazi (`player_track.path`, JSONB): **63.058 poti, 246 MB** (premerjeno 2026-08-05;
+ob pisanju 2026-07-25 je bilo 57.311 poti / 223 MB — raste za ~500 poti na dan). Ena runda etl_adlernest R2 (272 s) da 50 poti in v isti datoteki še:
 
 | Sekcija | Vrstic v tej rundi | Kaj je |
 |---------|-------------------|--------|
@@ -55,9 +56,18 @@ V bazi (`player_track.path`, JSONB): **57.311 poti, 223 MB.** Ena runda etl_adle
 
 `objective_zones.json`: **14 map, 72 objektivov**, tipi `objective` / `command_post` / `escort` — vsak s koordinato in radijem. Uporablja se za KIS `is_objective_area` (v4).
 
+> ⚠️ Ob preverjanju 2026-08-05: `meta` blok v tej datoteki trdi `map_count: 13,
+> objective_count: 63`, dejansko pa vsebuje **14 map in 72 objektivov**. Števci v
+> `meta` niso bili posodobljeni ob zadnjem dodajanju mape. Nič jih ne bere (koda
+> gre neposredno v `maps`), zato ni posledic — a je zavajajoče za bralca.
+
 **Vrzeli:**
 
-1. **Manjkajoča mapa, ki jo največ igramo po te_escape2:** `et_brewdog` (45 rund v zadnjih sejah) **nima definicij**. Vsak kill na brewdogu tako šteje kot "ne pri objectivu", kar sistematsko podceni delo na tej mapi.
+1. **Manjkajoča mapa med najbolj igranimi:** `et_brewdog` **nima definicij**.
+   Premerjeno 2026-08-05: **33 rund v zadnjih 30 dneh** (3. najbolj igrana, za
+   `te_escape2` 93 in `etl_adlernest` 43), **192 rund od 2025-01-23**. Vsak kill
+   na brewdogu tako šteje kot "ne pri objectivu", kar sistematsko podceni delo na
+   tej mapi. Manjka tudi `et_beach` (6 rund v 30 dneh).
 2. **Zone so točke z radijem, ne faze.** Sistem ve *"tu je dinamit"*, ne ve pa *"ta objective je trenutno aktiven / že padel / še ni dosegljiv"*. V stopwatchu je isti prostor v 2. minuti nepomemben in v 6. odločilen — te razlike ne poznamo.
 3. **Ni pojma napadalec/branilec po fazi.** Imamo `defender_team` na rundi, nimamo pa "kaj je bil cilj v tem trenutku".
 
@@ -216,7 +226,7 @@ Dokler ta odločitev ne pade, DQL-3 ostaja **odložen**. DQL-1 od njega ni odvis
 | Prio | Ukrep | Zakaj prvi | Napor |
 |------|-------|-----------|-------|
 | **0** | **Popraviti dva živa scoring defekta** (§2a): KIS push multiplier na obrnjeni metriki, prox_score awareness/mechanical osi | ne gre za nov feature — trenutno aktivno kvarita rezultate | S–M |
-| **1** | `et_brewdog` (+ manjkajoče) v `objective_zones.json` | 45 rund trenutno šteje kot "brez objectiva" — čista izguba točnih podatkov, majhen napor | S |
+| **1** | `et_brewdog` (+ manjkajoče) v `objective_zones.json` | 33 rund v 30 dneh (192 vseh) šteje kot "brez objectiva" — čista izguba točnih podatkov, majhen napor | S |
 | **1b** | **`carrier_event` izenačiti z `objective_run`** (enemies_nearby, nearby_teammates, run_type) | 45 % objective dogodkov je nošenja (69 % od tega medici) in zanje nimamo nobenega konteksta; `path_samples` že obstaja na vseh 2.079 vrsticah | M |
 | **2** | DQL-1 kontekst giba (izolacija, približevanje objectivu, lokalna premoč) | temelj za vse ostalo; vhodi že obstajajo | M |
 | **3** | Razširi `OBJECTIVE_RUNS` logiko na vse igralce (ne samo inženirje) | dokazano deluje, samo posplošitev | M |
@@ -228,7 +238,7 @@ Dokler ta odločitev ne pade, DQL-3 ostaja **odložen**. DQL-1 od njega ni odvis
 
 ## 5. Kaj NE potrebujemo
 
-- **Ne rabimo novega Lua zajema za DQL-1 in DQL-2.** Oba se izračunata iz obstoječih 223 MB poti; Lua spremembe pomenijo redeploy na puran in tveganje. **Izjema je DQL-3**: fazno stanje objectivov v poteh NE obstaja, zato zanj potrebujemo bodisi ročni fazni model per mapa (možnost A, brez Lua) bodisi novo Lua polje (možnost B) — ownerjeva odločitev.
+- **Ne rabimo novega Lua zajema za DQL-1 in DQL-2.** Oba se izračunata iz obstoječih ~246 MB poti; Lua spremembe pomenijo redeploy na puran in tveganje. **Izjema je DQL-3**: fazno stanje objectivov v poteh NE obstaja, zato zanj potrebujemo bodisi ročni fazni model per mapa (možnost A, brez Lua) bodisi novo Lua polje (možnost B) — ownerjeva odločitev.
 - **Ne rabimo več podatkov, rabimo več pomena.** Zajemamo ~3.400 zapisov na rundo in jih prikazujemo kot povprečja. Vrzel je interpretacija, ne zajem.
 - **Ne rabimo dohitevati gibhuba pri log-statih.** Oni imajo XP/stance/shove iz logov; mi imamo prostor in čas, ki ga oni **ne morejo** imeti. DQL je nekaj, česar iz strežniških logov ni mogoče izpeljati.
 
