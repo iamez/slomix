@@ -96,17 +96,20 @@ All in `bot/core/`: achievement_system, checks, correlation_context, database_ad
 ```bash
 pip install -r requirements.txt
 python -m bot.ultimate_bot
-# systemd-managed, on the dev box AND the production VM. The units are
-# etlegacy-*, NOT slomix-* — `systemctl is-active slomix-web` answers
-# "inactive" for a unit that does not exist, which reads as "not running"
-# and invites someone to start a second instance by hand. Both units are
-# Restart=always, so a hand-started copy wins the port race and systemd's
-# own restart then fails with EADDRINUSE in a loop.
-#   sudo systemctl restart etlegacy-bot.service etlegacy-web.service
-#   sudo journalctl -f -u etlegacy-bot.service -u etlegacy-web.service -o cat
-# Those two restarts and `journalctl -u etlegacy-web` are NOPASSWD in
-# sudoers (`sudo -n -l` to confirm) — no password needed, so there is no
-# reason to manage these processes any other way.
+# systemd-managed on both the dev box and the production VM, but the UNIT
+# NAMES DIFFER PER HOST: dev uses etlegacy-bot/etlegacy-web, the production
+# VM uses slomix-bot/slomix-web (scripts/deploy_release.sh restarts the
+# slomix-* pair). Discover, never assume — scripts/health_check.sh checks
+# both spellings and explains why:
+#   systemctl list-units --all 'etlegacy-*' 'slomix-*'
+# This matters because `systemctl is-active <nonexistent-unit>` answers
+# "inactive", which reads as "not running" and invites starting a second
+# instance by hand. Don't: both units are Restart=always, so a hand-started
+# copy wins the port race and systemd's own restart then fails with
+# EADDRINUSE in a loop (that happened on 2026-08-05).
+#   sudo systemctl restart etlegacy-bot.service etlegacy-web.service   # dev
+# On the dev box those restarts are NOPASSWD in sudoers; confirm per host
+# with `sudo -n -l` rather than assuming it, since sudoers is host-specific.
 # (Some historical hosts still run the bot under `screen -r slomix`.)
 ```
 
