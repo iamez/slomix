@@ -830,7 +830,13 @@ function renderPlayerStats(playerStats) {
         deaths: Number(stats.deaths || 0),
         damage: Number(stats.damage_given || stats.damage || 0),
         accuracy: stats.accuracy != null ? Number(stats.accuracy) : null,
-        headshots: Number(stats.headshots || stats.headshot_kills || 0),
+        // Unlike weapon_comprehensive_stats, greatshot's `headshots` really is
+        // a KILL count: detectors.py:19 sets it from `hit_region == "head"` on
+        // a kill event. No fallback to headshot_kills — this payload comes from
+        // the demo analysis JSON on disk (greatshot.py:411-421), whose player
+        // stats carry only accuracy/damage_given/deaths/headshots/kills, so a
+        // fallback would just be dead code implying a field that never arrives.
+        headshots: Number(stats.headshots || 0),
         tpm: stats.tpm != null
             ? Number(stats.tpm)
             : (stats.time_played_minutes != null ? Number(stats.time_played_minutes) : null),
@@ -848,7 +854,7 @@ function renderPlayerStats(playerStats) {
     html += '<th class="text-right pr-3">Damage</th>';
     html += '<th class="text-right pr-3">Acc%</th>';
     html += '<th class="text-right pr-3">TPM</th>';
-    html += '<th class="text-right">HS</th>';
+    html += '<th class="text-right" title="Kills by headshot. Not the same as head hits, which routinely exceed kills.">HS</th>';
     html += '</tr></thead><tbody>';
 
     for (const p of players) {

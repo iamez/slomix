@@ -62,6 +62,23 @@ export function safeInsertHTML(element, position, html) {
  * @param {string} url - The URL to fetch
  * @returns {Promise<any>} - Parsed JSON response
  */
+/**
+ * Error for a non-OK response, carrying the status code.
+ *
+ * Callers need to tell "the server answered, and the answer was no" from "the
+ * request never got an answer". auth.js caches the anonymous result for the
+ * page load, so it must only do that for a definitive 401/403 — a 5xx or a
+ * dropped connection has to stay retryable.
+ *
+ * @param {Response} res
+ * @returns {Error & {status: number}}
+ */
+function httpError(res) {
+    const err = new Error(`HTTP ${res.status}`);
+    err.status = res.status;
+    return err;
+}
+
 export async function fetchJSON(url, options = {}) {
     const method = (options.method || 'GET').toUpperCase();
     const cachePolicy = options.cachePolicy || 'swr';
@@ -72,7 +89,7 @@ export async function fetchJSON(url, options = {}) {
 
     if (method !== 'GET' || cachePolicy === 'no-store') {
         const res = await fetch(url, options);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw httpError(res);
         return await res.json();
     }
 
@@ -85,7 +102,7 @@ export async function fetchJSON(url, options = {}) {
         if (!inFlightRequests.has(cacheKey)) {
             const refreshPromise = fetch(url, options)
                 .then(async (res) => {
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    if (!res.ok) throw httpError(res);
                     const data = await res.json();
                     responseCache.set(cacheKey, {
                         data,
@@ -112,7 +129,7 @@ export async function fetchJSON(url, options = {}) {
 
     const requestPromise = fetch(url, options)
         .then(async (res) => {
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            if (!res.ok) throw httpError(res);
             const data = await res.json();
             responseCache.set(cacheKey, {
                 data,

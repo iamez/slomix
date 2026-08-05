@@ -4,7 +4,7 @@
  */
 
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
-import { openModal } from './auth.js';
+import { openModal } from './auth.js?v=20260804-auth-dedupe';
 
 function formatClockTime(seconds) {
     const value = Number(seconds || 0);
@@ -479,7 +479,10 @@ function renderWeaponHallOfFame() {
                 </div>
                 <div class="text-lg font-black text-white">${escapeHtml(entry.player_name || 'Unknown')}</div>
                 <div class="text-xs text-slate-400 mt-1">
-                    ${entry.kills} kills · ${entry.headshots || 0} HS · ${entry.accuracy || 0}% acc
+                    <!-- "head hits", not "HS": weapon_comprehensive_stats has no
+                         headshot_kills column, so this is hit-location data and can
+                         legitimately exceed kills. Labelling it HS read as a broken stat. -->
+                    ${entry.kills} kills · ${entry.headshots || 0} head hits · ${entry.accuracy || 0}% acc
                 </div>
             </div>
         `;
@@ -564,7 +567,12 @@ function renderWeaponPlayersGrid() {
             return `
                 <div class="flex items-center justify-between text-xs py-1 border-b border-white/5 last:border-b-0">
                     <span class="text-slate-300 font-semibold">${weaponName}</span>
-                    <span class="text-slate-500">${kills}K · ${acc}% ACC · ${hs}% HS</span>
+                    <!-- hs_rate is headshots/hits (see records_weapons.py:150-152), i.e.
+                         the share of hits that landed on the head — not a kill rate.
+                         Labelled as a RATE: "12.3% head hits" reads like a count
+                         of hits, which is what the whole column was mislabelled as
+                         before. -->
+                    <span class="text-slate-500">${kills}K · ${acc}% ACC · ${hs}% head-hit rate</span>
                 </div>
             `;
         }).join('');
@@ -729,7 +737,7 @@ export async function loadMatchDetails(matchId, skipTabs = false) {
                                 <th class="text-right py-2 px-2 font-bold">DPM</th>
                                 <th class="text-right py-2 px-2 font-bold">DMG↑/↓</th>
                                 <th class="text-right py-2 px-2 font-bold">ACC</th>
-                                <th class="text-right py-2 px-2 font-bold">HS</th>
+                                <th class="text-right py-2 px-2 font-bold" title="Kills by headshot. Not the same as head hits — see the weapon breakdown for those.">HS</th>
                                 <th class="text-right py-2 px-2 font-bold">UK</th>
                                 <th class="text-right py-2 px-2 font-bold">REV↑/↓</th>
                                 <th class="text-right py-2 px-2 font-bold">Time</th>
@@ -760,7 +768,9 @@ export async function loadMatchDetails(matchId, skipTabs = false) {
                         <td class="text-right py-2 px-2 font-mono text-brand-cyan font-bold">${player.dpm}</td>
                         <td class="text-right py-2 px-2 font-mono text-brand-purple">${(player.damage_given/1000).toFixed(1)}k/${(player.damage_received/1000).toFixed(1)}k</td>
                         <td class="text-right py-2 px-2 font-mono text-slate-300">${player.accuracy}% (${player.hits || 0}/${player.shots || 0})</td>
-                        <td class="text-right py-2 px-2 font-mono text-slate-300">${player.headshots}</td>
+                        <!-- headshot_kills, NOT headshots: the latter counts head HITS and
+                             routinely exceeds kills, which is what made this column look broken. -->
+                        <td class="text-right py-2 px-2 font-mono text-slate-300">${player.headshot_kills ?? 0}</td>
                         <td class="text-right py-2 px-2 font-mono text-brand-emerald">${player.useful_kills || 0}</td>
                         <td class="text-right py-2 px-2 font-mono text-brand-emerald">${player.revives_given || 0}/${player.times_revived || 0}</td>
                         <td class="text-right py-2 px-2 font-mono text-slate-400">${formatClockTime(player.time_played || 0)}</td>
@@ -1031,7 +1041,11 @@ async function togglePlayerDetails(roundId, playerGuid, rowElement) {
                                         <th class="text-left py-2 px-2">Weapon</th>
                                         <th class="text-right py-2 px-2">K</th>
                                         <th class="text-right py-2 px-2">D</th>
-                                        <th class="text-right py-2 px-2">HS</th>
+                                        <!-- Head HITS. Per-weapon headshot kills are not stored
+                                             (weapon_comprehensive_stats has kills/hits/headshots only),
+                                             so this column cannot be a kill count and must not be
+                                             labelled as one — it can exceed K by design. -->
+                                        <th class="text-right py-2 px-2" title="Hits that landed on the head. Not headshot kills — per-weapon kill-by-headshot is not recorded.">Head hits</th>
                                         <th class="text-right py-2 px-2">ACC</th>
                                         <th class="text-right py-2 px-2">Hits/Shots</th>
                                     </tr>
