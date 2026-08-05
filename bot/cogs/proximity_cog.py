@@ -146,6 +146,13 @@ class ProximityCog(
         # BEFORE 065 with a NULL round_id have no identity to match on and
         # stay orphans — only rows carrying the identity can be (re)linked.
         "proximity_revive",
+        # Same gap as combat_engagement/player_track below, found 2026-08-04:
+        # proximity_shot_fired was in LINKAGE_INVENTORY_TABLES (so its orphan
+        # rate was measured) but in neither the fanout nor the detection query
+        # (so it was never repaired). 38 rounds / 59,752 rows had round_id NULL,
+        # going back to 2026-05-19 — roughly one round per session, while
+        # kill_outcome for those SAME rounds was linked fine.
+        "proximity_shot_fired",
         "proximity_spawn_timing",
         "proximity_support_summary",
         "proximity_team_cohesion",
