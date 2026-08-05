@@ -427,7 +427,11 @@ if (passes.includes('owner')) {
 }
 
 for (const pass of passes) {
-    const context = await browser.newContext({ ignoreHTTPSErrors: true });
+    // No ignoreHTTPSErrors: the audit targets a plain-HTTP dev server, so
+    // turning off certificate validation bought nothing and made the tool
+    // silently accept a bad certificate if it were ever pointed at HTTPS —
+    // which is precisely the kind of thing an audit should report, not skip.
+    const context = await browser.newContext();
     if (pass === 'owner') {
         const { hostname } = new URL(BASE_URL);
         await context.addCookies([
