@@ -70,6 +70,40 @@ async def test_detection_query_now_includes_combat_engagement_and_player_track()
     assert "FROM player_track WHERE round_id IS NULL" in db.captured_query
 
 
+def test_shot_fired_is_in_the_fanout_update_list():
+    """proximity_shot_fired was measured but never repaired: it sits in
+    linkage_inventory's LINKAGE_INVENTORY_TABLES, so its orphan rate showed up
+    in the reports, while being absent from both lists that actually fix it."""
+    assert "proximity_shot_fired" in ProximityCog._PROXIMITY_ROUND_ID_TABLES
+
+
+@pytest.mark.asyncio
+async def test_detection_query_includes_shot_fired():
+    """The load-bearing half. The observed failure (2026-08-04) was a round
+    whose kill_outcome linked fine and whose shot_fired did not — so with
+    shot_fired missing from the detection UNION, no leg ever reported that
+    round as needing work and the fanout never ran for it, however many
+    tables were in the update list."""
+    db = _CapturingDB()
+    svc = _relinker()
+    svc.bot = _FakeBot(db)
+
+    await svc._relink_null_round_ids()
+
+    assert db.captured_query is not None
+    assert "FROM proximity_shot_fired WHERE round_id IS NULL" in db.captured_query
+
+
+def test_every_detection_table_is_also_a_fanout_target():
+    """The two lists are maintained by hand in different files, which is how
+    shot_fired ended up in neither. A table that can flag a round as unlinked
+    but cannot be updated would spin the cron forever without fixing itself."""
+    detection_only = set(relinker._DETECTION_TABLES) - set(
+        ProximityCog._PROXIMITY_ROUND_ID_TABLES
+    )
+    assert not detection_only, f"detected but never updated: {sorted(detection_only)}"
+
+
 @pytest.mark.asyncio
 async def test_detection_query_lua_round_teams_synthesizes_session_date():
     """lua_round_teams has no session_date column — the detection query
