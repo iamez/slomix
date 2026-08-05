@@ -208,6 +208,33 @@ class SessionDataService:
 
         return sessions, session_ids, session_ids_str, player_count
 
+    async def get_gaming_session_ids_for_date(self, target_date: str) -> list[int]:
+        """The gaming sessions that have at least one round on `target_date`.
+
+        fetch_session_data_by_date() computes this internally and then throws it
+        away, returning only round ids. Callers that need to TELL THE USER what
+        they are looking at need the session ids themselves: a date can hold
+        more than one gaming session (9 dates do, one of them four), and that
+        method deliberately merges them all so a midnight-crossing session is
+        never shown cut in half. Without this, /api/sessions/{date} presented
+        two separate evenings as a single "session detail" with nothing in the
+        payload to reveal it.
+
+        Kept as its own method rather than widening the existing 4-tuple return,
+        which has three callers including bot/cogs/session_cog.py.
+        """
+        rows = await self.db_adapter.fetch_all(
+            """
+            SELECT DISTINCT gaming_session_id
+            FROM rounds
+            WHERE SUBSTR(round_date, 1, 10) = ?
+              AND gaming_session_id IS NOT NULL
+            ORDER BY gaming_session_id
+            """,
+            (target_date,),
+        )
+        return [int(row[0]) for row in rows or []]
+
     async def get_hardcoded_teams(self, session_ids: list[int]) -> dict | None:
         """
         Get hardcoded team assignments from session_teams table
