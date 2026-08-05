@@ -1321,6 +1321,21 @@
                         <button id="link-form" role="menuitem" tabindex="-1" data-click-action="navigateTo('form')"
                             class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-2">
                             <span class="w-1.5 h-1.5 rounded-full bg-brand-purple"></span>Form</button>
+                        <!-- Maps, Weapons and Awards are complete, working pages that had NO
+                             entry point anywhere: not in this menu, not elsewhere in the
+                             markup, and no navigateTo('maps'|'weapons'|'awards') in any .js
+                             or .tsx. They were reachable only by typing the URL, which is why
+                             every review that walked the UI missed them (browser audit,
+                             docs/research/WEBSITE_APP_AUDIT_2026-08-05.md). -->
+                        <button id="link-maps" role="menuitem" tabindex="-1" data-click-action="navigateTo('maps')"
+                            class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-teal-400"></span>Maps</button>
+                        <button id="link-weapons" role="menuitem" tabindex="-1" data-click-action="navigateTo('weapons')"
+                            class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-orange-400"></span>Weapons</button>
+                        <button id="link-awards" role="menuitem" tabindex="-1" data-click-action="navigateTo('awards')"
+                            class="nav-link w-full text-left px-3 py-2 rounded-lg text-sm font-bold inline-flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full bg-brand-gold"></span>Awards</button>
                     </div>
                 </div>
 
@@ -2313,6 +2328,13 @@
                         <div class="text-sm font-bold text-slate-400">Player Journey</div>
                         <div class="flex items-center gap-2">
                             <select id="proximity-journey-player" aria-label="Journey player" class="w-56 rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200"></select>
+                            <!-- #/proximity/player/<guid> had NO entry point anywhere in the
+                                 app — no button, no link, nothing in any .js or .tsx. Same for
+                                 the two round routes, linked from Replay. This select already
+                                 knows the guid, so it is the natural place to offer it. -->
+                            <button id="proximity-journey-open" type="button" disabled
+                                class="text-[10px] font-bold px-2 py-1 rounded-lg border border-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/20 disabled:opacity-40 disabled:cursor-not-allowed transition">
+                                Player detail →</button>
                             <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-brand-emerald/10 text-brand-emerald">per round</span>
                         </div>
                     </div>

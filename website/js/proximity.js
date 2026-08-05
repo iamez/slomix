@@ -2366,14 +2366,35 @@ function journeyScopeKey() {
 function bindJourneyPanel() {
     const select = document.getElementById('proximity-journey-player');
     if (!select) return;
+    // #/proximity/player/<guid> is a real, working React route that nothing in
+    // the app ever linked to — no button, no row click, no reference in any .js
+    // or .tsx (browser audit, docs/research/WEBSITE_APP_AUDIT_2026-08-05.md).
+    // This select already resolves the guid, so it is the cheapest honest entry
+    // point; the button follows the selection and stays disabled until there is
+    // something to open.
+    const openBtn = document.getElementById('proximity-journey-open');
+    const syncOpenBtn = () => {
+        if (!openBtn) return;
+        openBtn.disabled = !select.value;
+    };
+
     if (!select.dataset.bound) {
         select.dataset.bound = '1';
         select.onchange = () => {
             proximityJourneyState.guid = select.value || '';
             proximityJourneyState.payload = null;
+            syncOpenBtn();
             void loadPlayerJourney();
         };
     }
+    if (openBtn && !openBtn.dataset.bound) {
+        openBtn.dataset.bound = '1';
+        openBtn.addEventListener('click', () => {
+            const guid = select.value;
+            if (guid) window.location.hash = `#/proximity/player/${encodeURIComponent(guid)}`;
+        });
+    }
+    syncOpenBtn();
     // Repopulate on every scoped load; invalidate stale payload on scope change.
     const key = journeyScopeKey();
     if (key !== proximityJourneyState.scopeKey) {
