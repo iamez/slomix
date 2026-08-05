@@ -22,7 +22,7 @@
  * into the repo.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -90,6 +90,20 @@ const ROUTES = [
 // ---------------------------------------------------------------------------
 
 /**
+ * Locate the interpreter, in the same order and with the same override as
+ * scripts/db_backup.sh — this repo has had several venv layouts, so hardcoding
+ * one made the audit fail on otherwise-valid checkouts.
+ */
+function resolvePython() {
+    if (process.env.SLOMIX_PYTHON) return process.env.SLOMIX_PYTHON;
+    for (const candidate of ['venv-web/bin/python', 'venv/bin/python', '.venv/bin/python']) {
+        const full = path.join(REPO_ROOT, candidate);
+        if (existsSync(full)) return full;
+    }
+    return 'python3';
+}
+
+/**
  * Mint a Starlette SessionMiddleware cookie for the owner.
  *
  * Delegated to Python rather than reimplemented: itsdangerous derives its key
@@ -112,7 +126,7 @@ payload = base64.b64encode(json.dumps({
 }).encode("utf-8"))
 print(itsdangerous.TimestampSigner(str(secret)).sign(payload).decode("utf-8"))
 `;
-    return execFileSync(path.join(REPO_ROOT, 'venv/bin/python'), ['-c', script], {
+    return execFileSync(resolvePython(), ['-c', script], {
         encoding: 'utf-8',
     }).trim();
 }
