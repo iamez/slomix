@@ -40,8 +40,22 @@ async function loadMapFilter(selectElement) {
         const maps = await fetchJSON(`${API_BASE}/stats/maps`);
         if (maps && Array.isArray(maps)) {
             const currentVal = selectElement.value;
+            // /api/stats/maps returns OBJECTS -- {name, total_rounds, ...} --
+            // not strings. Interpolating one gives String(obj), so every option
+            // rendered as the literal "[object Object]", 18 of them, which is
+            // the breakage reported on the Record Book page.
+            //
+            // It was not merely ugly: the option VALUE was "[object Object]"
+            // too, so picking a map filtered the records by that string and
+            // matched nothing. The filter has never worked.
+            //
+            // Accepts a bare string as well, so a future endpoint returning the
+            // simpler shape does not silently regress to the same symptom.
+            const names = maps
+                .map((entry) => (typeof entry === 'string' ? entry : entry?.name))
+                .filter((name) => typeof name === 'string' && name.length > 0);
             selectElement.innerHTML = '<option value="">All Maps</option>' +
-                maps.map(map => `<option value="${escapeHtml(map)}">${escapeHtml(map)}</option>`).join('');
+                names.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
             selectElement.value = currentVal;
         }
     } catch (e) {
