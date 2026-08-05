@@ -5,18 +5,18 @@
 redirection needed; it writes this file itself) after route-registry.js or the
 pages it references change.**
 
-Generated: 2026-07-31
+Generated: 2026-08-04
 
 | Route key | Hash example | Implementation | Serving file |
 |---|---|---|---|
 | `admin` | `#/admin` | Legacy JS | admin-panel.js |
-| `availability` | `#/availability` | Legacy JS | availability.js |
+| `availability` | `#/availability` | Legacy JS | auth.js, availability.js |
 | `awards` | `#/awards` | Legacy JS | awards.js |
 | `form` | `#/form` | Legacy JS | form.js |
 | `greatshot` | `#/greatshot/demos` | Legacy JS | greatshot.js |
 | `greatshot-demo` | `#/greatshot/demos` | Legacy JS | greatshot.js |
 | `hall-of-fame` | `#/hall-of-fame` | Legacy JS | hall-of-fame.js, record-book.js, records.js |
-| `home` | `(root — empty hash)` | Legacy JS | website/js/app.js + website/js/auth.js + website/js/home.js + website/js/leaderboard.js + website/js/live-status.js + website/js/season-stats.js + website/js/sessions.js + website/js/tonight.js — populated directly from initApp() in app.js (criticalLoads + scheduleDeferredLoads), not through load() (skipped no-op: updateLiveSession (live-status.js), loadPredictions (app.js), loadMatchesView (matches.js)) |
+| `home` | `(root — empty hash)` | Legacy JS | website/js/app.js + website/js/auth.js + website/js/home.js + website/js/leaderboard.js + website/js/live-status.js + website/js/season-stats.js + website/js/sessions.js + website/js/tonight.js — loaded by loadHomeView() in app.js (once per page load), dispatched through load() like every other route (skipped no-op: updateLiveSession (live-status.js), loadPredictions (app.js), loadMatchesView (matches.js)) |
 | `leaderboards` | `#/leaderboards` | Legacy JS | leaderboard.js |
 | `maps` | `#/maps` | Legacy JS | matches.js |
 | `profile` | `#/profile` | Legacy JS | player-profile.js |
@@ -36,8 +36,8 @@ Generated: 2026-07-31
 | `smart-stats-diag` | `#/smart-stats-diag` | Legacy JS | smart-stats-diag.js |
 | `story` | `#/story` | Legacy JS | story.js |
 | `tonight` | `#/tonight` | Legacy JS | bets.js, tonight.js |
-| `upload-detail` | `#/uploads` | Legacy JS | uploads.js |
-| `uploads` | `#/uploads` | Legacy JS | uploads.js |
+| `upload-detail` | `#/uploads` | Legacy JS | auth.js, uploads.js |
+| `uploads` | `#/uploads` | Legacy JS | auth.js, uploads.js |
 | `weapons` | `#/weapons` | Legacy JS | matches.js |
 
 Total: 30 routes — 4 React, 26 legacy.

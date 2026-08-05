@@ -58,7 +58,7 @@ const ROUTE_DEFINITIONS = Object.freeze({
         surfaceType: 'read-heavy',
         migrationWave: 'A',
         buildHash: () => '',
-        load: () => undefined,
+        load: ({ legacy }) => legacy.loadHomeView(),
     },
     sessions: {
         viewId: 'sessions',

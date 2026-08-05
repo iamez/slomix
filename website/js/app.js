@@ -12,13 +12,13 @@
 
 import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js?v=20260513-v142-cf-bust';
 import { installErrorReporting } from './error-reporting.js';
-import { checkLoginStatus, initSearchListeners, setLoadPlayerProfile } from './auth.js';
+import { checkLoginStatus, initSearchListeners, setLoadPlayerProfile } from './auth.js?v=20260804-auth-dedupe';
 import { initLivePolling, initLiveStatusPolling, updateLiveSession } from './live-status.js';
 import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchDetails } from './player-profile.js?v=20260608-aimv2';
 import { loadLeaderboard, loadQuickLeaders, loadRecentMatches, setNavigateTo as setLeaderboardNavigateTo, initLeaderboardDefaults } from './leaderboard.js';
 import { loadSeasonInfo, loadLastSession, loadSessionsView, loadSessionMVP, toggleSeasonDetails } from './sessions.js';
 import { loadHomePulseCards } from './home.js';
-import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from './matches.js';
+import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from './matches.js?v=20260804-auth-dedupe';
 import { loadFormView } from './form.js';
 
 import { loadRecordsView } from './records.js';
@@ -29,8 +29,8 @@ import { loadReplayView } from './replay.js';
 import { loadRivalriesView } from './rivalries.js';
 import { loadSmartStatsDiagView } from './smart-stats-diag.js?v=20260607-aim';
 import { loadAdminPanelView } from './admin-panel.js';
-import { loadUploadsView, loadUploadDetail } from './uploads.js';
-import { loadAvailabilityView } from './availability.js';
+import { loadUploadsView, loadUploadDetail } from './uploads.js?v=20260804-auth-dedupe';
+import { loadAvailabilityView } from './availability.js?v=20260804-auth-dedupe';
 import {
     initGreatshotModule,
     loadGreatshotView,
@@ -51,11 +51,11 @@ import { loadSeasonLeaders, loadActivityCalendar, loadSeasonSummary } from './se
 import { loadHallOfFameView } from './hall-of-fame.js';
 import { loadRecordBookView } from './record-book.js';
 import { openWrapped } from './wrapped.js';
-import { loadTonightView } from './tonight.js';
+import { loadTonightView } from './tonight.js?v=20260804-auth-dedupe';
 import { loadRetroVizView } from './retro-viz.js?v=20260513-v142-cf-bust';
 import { loadSessions2View } from './sessions2.js?v=20260513-v142-cf-bust';
 import { loadSessionDetailView } from './session-detail.js?v=20260720-ssd-gsid';
-import { initMobileNav } from './mobile-nav.js';
+import { initMobileNav } from './mobile-nav.js?v=20260804-auth-dedupe';
 
 // Install as early as possible so it also catches errors thrown while the
 // other modules above finish loading/initializing, not just after initApp().
@@ -92,7 +92,48 @@ const PROTOTYPE_TONE_STYLES = {
     }
 };
 
+// Home used to have `load: () => undefined` because initApp() fetched its data
+// unconditionally at startup. Now that the router owns it, the batches run on
+// first visit instead — which keeps the "home data loads exactly once per page
+// load" behaviour while a deep link to another route pays nothing.
+//
+// The guard also protects the two polling loops: they install intervals, so
+// re-entering home must not stack a second set.
+let _homeLoaded = false;
+
+async function loadHomeView() {
+    if (_homeLoaded) return;
+    _homeLoaded = true;
+
+    const results = await Promise.allSettled([
+        loadHomePulseCards(),
+        loadOverviewStats(),
+        updateLiveSession(),
+        loadQuickLeaders(),
+        loadRecentMatches(),
+    ]);
+    results.forEach((result, i) => {
+        if (result.status === 'rejected') {
+            console.error(`Home load ${i} failed:`, result.reason);
+        }
+    });
+
+    initLivePolling();
+    initLiveStatusPolling();
+    scheduleDeferredLoads([
+        { task: loadInsightsCharts, label: 'insights-charts' },
+        { task: loadSeasonInfo, label: 'season-info' },
+        { task: loadLastSession, label: 'last-session' },
+        { task: loadPredictions, label: 'predictions' },
+        { task: loadMatchesView, label: 'matches-view' },
+        { task: loadSeasonLeaders, label: 'season-leaders' },
+        { task: loadActivityCalendar, label: 'activity-calendar' },
+        { task: loadSeasonSummary, label: 'season-summary' },
+    ]);
+}
+
 const legacyRuntime = {
+    loadHomeView,
     loadPlayerProfile,
     loadSessionsView,
     initLeaderboardDefaults,
@@ -746,24 +787,23 @@ async function initApp() {
         if (statusText) statusText.textContent = 'Offline';
     }
 
-    const homeDefinition = getRouteDefinition('home');
-    const legacyHomeEnabled = homeDefinition?.mode === VIEW_MODE.LEGACY;
-
-    const criticalLoads = [checkLoginStatus];
-    if (legacyHomeEnabled) {
-        criticalLoads.unshift(
-            loadHomePulseCards,
-            loadOverviewStats,
-            updateLiveSession,
-            loadQuickLeaders,
-            loadRecentMatches,
-        );
-    }
-    const startupResults = await Promise.allSettled(criticalLoads.map((task) => task()));
-    startupResults.forEach((result, i) => {
-        if (result.status === 'rejected') {
-            console.error(`Startup task ${i} failed:`, result.reason);
-        }
+    // Only the auth probe is route-agnostic. The home batches used to run here
+    // too, gated on whether the *home* route was LEGACY rather than on whether
+    // home was the route being opened — so a deep link like #/skill-rating
+    // still paid for the whole home page. They now live in loadHomeView(),
+    // dispatched by the router like every other view.
+    // Started, NOT awaited before routing. The old startup batch ran the home
+    // loaders concurrently with this probe; awaiting it here would put every
+    // home visit behind one or two auth round trips (checkLoginStatus also
+    // awaits /auth/link/status, and promotion preferences when signed in), and
+    // a hung auth request would leave the view empty even though its own data
+    // was reachable (Codex on #598).
+    //
+    // Route loaders that need the identity call ensureCurrentUser(), which
+    // joins this same in-flight probe rather than issuing a second one.
+    const authProbe = checkLoginStatus().catch((error) => {
+        console.error('Startup auth probe failed:', error);
+        return null;
     });
 
     initSearchListeners();
@@ -775,20 +815,7 @@ async function initApp() {
         navigateTo('home', false, {});
     }
 
-    if (legacyHomeEnabled) {
-        initLivePolling();
-        initLiveStatusPolling();
-        scheduleDeferredLoads([
-            { task: loadInsightsCharts, label: 'insights-charts' },
-            { task: loadSeasonInfo, label: 'season-info' },
-            { task: loadLastSession, label: 'last-session' },
-            { task: loadPredictions, label: 'predictions' },
-            { task: loadMatchesView, label: 'matches-view' },
-            { task: loadSeasonLeaders, label: 'season-leaders' },
-            { task: loadActivityCalendar, label: 'activity-calendar' },
-            { task: loadSeasonSummary, label: 'season-summary' },
-        ]);
-    }
+    await authProbe;
 
     console.log('✅ Slomix App Ready');
 }

@@ -4,6 +4,7 @@
  */
 
 import { API_BASE, fetchJSON, escapeHtml, escapeJsString } from './utils.js';
+import { ensureCurrentUser } from './auth.js?v=20260804-auth-dedupe';
 
 let currentCategory = '';
 let currentOffset = 0;
@@ -171,9 +172,9 @@ function setupUploadForm() {
     const formSection = document.getElementById('upload-form-section');
     const authActions = document.getElementById('upload-auth-actions');
 
-    // Check if user is logged in (session cookie)
-    fetch('/auth/me', { credentials: 'same-origin' })
-        .then(r => r.ok ? r.json() : null)
+    // Check if user is logged in (session cookie). Reuses the startup probe
+    // rather than issuing a second /auth/me.
+    ensureCurrentUser()
         .then(user => {
             if (user && user.id) {
                 if (formSection) formSection.classList.remove('hidden');
@@ -780,9 +781,7 @@ export async function loadUploadDetail(uploadId) {
 // explicit confirmation (the file is gone for good).
 async function _maybeShowOwnerDelete(data) {
     try {
-        const r = await fetch('/auth/me', { credentials: 'same-origin' });
-        if (!r.ok) return;
-        const user = await r.json();
+        const user = await ensureCurrentUser();
         if (!user || String(user.id) !== String(data.uploader_discord_id)) return;
         const host = document.getElementById('upload-detail-owner-actions');
         if (!host) return;

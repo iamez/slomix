@@ -95,7 +95,17 @@ async def get_match_details(match_id: str, db: DatabaseAdapter = Depends(get_db)
                 quad_kills,
                 multi_kills,
                 mega_kills,
-                player_guid
+                player_guid,
+                -- Appended LAST on purpose: the row mapping below is positional,
+                -- so inserting anywhere else silently shifts every index after it.
+                --
+                -- `headshots` (row[8]) counts head HITS, not kills — it routinely
+                -- exceeds `kills` (e.g. WS_MP40 across all data: 104,066 kills vs
+                -- 121,960 headshots), which is what made the UI look broken.
+                -- `headshot_kills` is the metric a "HS" column next to kills is
+                -- expected to show. Both are served so the UI can label each
+                -- honestly instead of picking one and hoping.
+                headshot_kills
             FROM player_comprehensive_stats
             WHERE round_date = $1
               AND map_name = $2
@@ -155,6 +165,9 @@ async def get_match_details(match_id: str, db: DatabaseAdapter = Depends(get_db)
             "multi_kills": row[22] or 0,
             "mega_kills": row[23] or 0,
             "player_guid": row[24],
+            # row[8] is head HITS; this is kills by headshot. Kept as separate
+            # keys so no caller has to guess which one it received.
+            "headshot_kills": row[25] or 0,
             "dpm": round(dpm, 1),
             "kd": round(kd, 2),
         }

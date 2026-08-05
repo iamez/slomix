@@ -5,7 +5,7 @@
  * to the availability page where account linking lives.
  * @module mobile-nav
  */
-import { checkLoginStatus, getCurrentUser } from './auth.js';
+import { ensureCurrentUser } from './auth.js?v=20260804-auth-dedupe';
 import { parseHashRoute } from './route-registry.js';
 
 const _TAB_VIEW = { home: 'home', sessions2: 'sessions2', leaderboards: 'leaderboards' };
@@ -37,10 +37,9 @@ export function initMobileNav(navigateTo) {
             if (key === 'me') {
                 // The auth cache may still be empty if the session check hasn't
                 // finished on first load — resolve it lazily before deciding.
-                let user = getCurrentUser();
-                if (!user) {
-                    try { user = await checkLoginStatus(); } catch (_e) { user = null; }
-                }
+                // ensureCurrentUser() remembers the anonymous answer too, so
+                // repeated taps while logged out don't re-probe /auth/me.
+                const user = await ensureCurrentUser();
                 if (user && user.linked_player_guid) {
                     navigateTo('profile', true, { id: user.linked_player_guid });
                 } else {

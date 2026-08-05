@@ -219,11 +219,146 @@ export function getCurrentUser() {
     return _currentUser;
 }
 
-export async function checkLoginStatus() {
-    try {
-        const user = await fetchJSON(`${AUTH_BASE}/me`);
-        _currentUser = user;
+// `/auth/me` answers 401 for anonymous visitors. That is the API contract, not
+// an error (logging_middleware.py:40 downgrades it deliberately, and the smoke
+// spec exempts it), but the browser still prints one console line per failed
+// request — so every extra probe is an extra line and an extra request.
+//
+// These two dedupe the probe to at most one per page load: `_authProbe` joins
+// callers that arrive while it is in flight, `_authResolved` serves callers
+// that arrive after it settled (including the anonymous null, which a plain
+// `_currentUser` null check cannot distinguish from "not asked yet").
+let _authProbe = null;
+let _authResolved = false;
+let _authResolvedAt = 0;
+let _authGeneration = 0;
+let _authProbeSeq = 0;
+let _authProbeOwner = 0;
 
+// The cached answer expires. Before the dedupe, every caller re-probed, so a
+// session that changed underneath the page — cookie expiry, or a login/logout
+// in another tab — was noticed on the next route. A page-lifetime cache would
+// have traded that away: Availability's periodic refresh would keep enabling
+// authenticated controls, Uploads would keep showing owner actions, and the
+// mobile Me tab would keep a stale linked player until reload (Codex on #598).
+//
+// A minute is short enough that a stale identity cannot persist meaningfully
+// on a page left open, and long enough that a burst of callers on one route
+// still costs a single request — which is the point of the dedupe.
+const AUTH_TTL_MS = 60_000;
+
+function _authAnswerIsFresh() {
+    return _authResolved && (Date.now() - _authResolvedAt) < AUTH_TTL_MS;
+}
+
+/**
+ * Resolve the current user, reusing the startup probe instead of issuing a new
+ * one. Returns the user object, or null when logged out.
+ *
+ * Prefer this over `fetch('/auth/me')`: `checkLoginStatus` is already in
+ * app.js's criticalLoads, so by render time the answer is cached or in flight.
+ */
+export async function ensureCurrentUser() {
+    if (_authAnswerIsFresh()) return _currentUser;
+    try {
+        // Deliberately NOT forced: checkLoginStatus() dedupes an in-flight
+        // probe, so concurrent callers join the startup request rather than
+        // issuing their own. Forcing here would defeat the whole point.
+        return await checkLoginStatus();
+    } catch (_e) {
+        return null;
+    }
+}
+
+/**
+ * @param {{force?: boolean}} [options] `force` skips both the TTL and any
+ *   in-flight probe. Required after a write that changes the identity — a
+ *   link, unlink or rename — where joining the probe that was already running
+ *   would return the PRE-mutation answer and then treat it as fresh for
+ *   another minute, leaving the nav badge and the mobile Me destination out of
+ *   step with the write that just succeeded (Codex on #598).
+ */
+export async function checkLoginStatus({ force = false } = {}) {
+    // `force` ONLY declines to join an in-flight probe. It deliberately does
+    // not clear _authResolved/_authResolvedAt: doing so sent a forced probe
+    // that then failed with a 5xx down the "no answer yet" branch, which
+    // replaced the known user with null — so a mutation that had SUCCEEDED
+    // left the nav and owner controls showing a guest. A successful probe
+    // refreshes both fields on its own anyway (Codex on #598).
+    if (!force && _authProbe) return _authProbe;
+
+    // Ownership is tracked by a numeric token rather than by comparing the two
+    // promise objects: `_authProbe === probe` says the same thing, but CodeQL's
+    // js/missing-await reads any promise in a non-promise position as a
+    // forgotten await and fails the run on it.
+    const probeId = ++_authProbeSeq;
+    const probe = _checkLoginStatus();
+    _authProbe = probe;
+    _authProbeOwner = probeId;
+    try {
+        return await probe;
+    } finally {
+        // Only retract our own. An older probe settling after a forced one has
+        // replaced the shared slot would otherwise clear the NEWER promise,
+        // letting the next ensureCurrentUser() start a third probe, bump the
+        // generation, and make the mutation's awaited probe return the stale
+        // identity (Codex on #598).
+        if (_authProbeOwner === probeId) _authProbe = null;
+    }
+}
+
+async function _checkLoginStatus() {
+    // A forced probe can start while an older one is still in flight. Without
+    // this the older reply lands last and writes PRE-mutation state over the
+    // fresh answer.
+    const generation = ++_authGeneration;
+    let user = null;
+    let definitive = false;
+
+    try {
+        // no-store: fetchJSON's default is stale-while-revalidate, which would
+        // hand back the cached logged-in identity after a logout and only
+        // discover the 401 in a background refresh whose result nobody reads.
+        // That silently defeated the TTL above. An identity probe must always
+        // be the server's current answer — the dedupe below is what keeps the
+        // request count down, not the response cache. (availability.js used
+        // `cache: 'no-store'` for this same reason before it was routed
+        // through here.)
+        user = await fetchJSON(`${AUTH_BASE}/me`, { cachePolicy: 'no-store' });
+        definitive = true;
+    } catch (err) {
+        // Only a real "you are not logged in" answer may be cached for the
+        // page load. 401/403 IS that answer (see the contract note above).
+        // A 5xx or a dropped connection is not: caching it would leave a
+        // logged-in user without their controls on Uploads/Availability and
+        // misdirect the mobile Me tab for the rest of the visit, with no way
+        // back short of a reload (Codex review on #598).
+        definitive = err?.status === 401 || err?.status === 403;
+    }
+
+    if (generation !== _authGeneration) {
+        // Superseded by a newer (forced) probe — that one owns the state.
+        return _currentUser;
+    }
+
+    if (definitive) {
+        _currentUser = user;
+        _authResolved = true;
+        _authResolvedAt = Date.now();
+    } else if (!_authResolved) {
+        // No answer yet and none now: render as guest, but leave _authResolved
+        // false so the next caller retries.
+        _currentUser = null;
+    }
+    // else: an inconclusive refresh (5xx after the fetch cache expired, called
+    // explicitly after linking or a rename) must NOT wipe an identity we
+    // already know. Overwriting it here while _authResolved stayed true
+    // recreated exactly the sticky-anonymous bug this function was changed to
+    // avoid (Codex on #598).
+
+    user = _currentUser;
+
+    if (user) {
         document.getElementById('auth-guest')?.classList.add('hidden');
         const userEl = document.getElementById('auth-user');
         if (userEl) {
@@ -246,12 +381,7 @@ export async function checkLoginStatus() {
             linked_player: user.linked_player,
             linked_player_guid: user.linked_player_guid,
         });
-
-        await refreshProfileLinkCard();
-        await loadPromotionPreferences();
-        return user;
-    } catch (_e) {
-        _currentUser = null;
+    } else {
         document.getElementById('auth-guest')?.classList.remove('hidden');
         const userEl = document.getElementById('auth-user');
         if (userEl) {
@@ -260,9 +390,30 @@ export async function checkLoginStatus() {
         }
         updateAdminButton(null);
         updateAvailabilityNavBadge(null);
+    }
 
-        await refreshProfileLinkCard();
-        return null;
+    // Follow-up loads are deliberately OUTSIDE the auth decision and each
+    // other's blast radius. They were inside the same try/catch, so a throw
+    // from either one landed in the anonymous branch and flipped an
+    // authenticated user to logged out — stickily, because _authResolved had
+    // already been set (Codex review on #598).
+    // Started, NOT awaited: they are UI loads, not part of the identity
+    // answer. Awaiting them left _authProbe pending whenever
+    // /auth/link/status or promotion preferences was slow, so every
+    // ensureCurrentUser() caller blocked on them too — Availability stalled at
+    // loadCurrentUser(), Uploads never resolved its owner controls, and a
+    // mobile Me tap looked inert (Codex on #598).
+    void _runSideEffect(refreshProfileLinkCard);
+    if (user) void _runSideEffect(loadPromotionPreferences);
+
+    return user;
+}
+
+async function _runSideEffect(fn) {
+    try {
+        await fn();
+    } catch (err) {
+        console.warn(`Post-auth step ${fn.name} failed:`, err);
     }
 }
 
@@ -366,7 +517,7 @@ export async function linkPlayer(guid, name) {
             throw new Error(err.detail || 'Failed to link');
         }
 
-        await checkLoginStatus();
+        await checkLoginStatus({ force: true });
         clearPlayerPicker();
     } catch (e) {
         alert(`Failed to link: ${e.message}`);
@@ -385,7 +536,7 @@ export async function unlinkPlayerProfile() {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.detail || 'Failed to unlink player');
         }
-        await checkLoginStatus();
+        await checkLoginStatus({ force: true });
     } catch (err) {
         alert(String(err?.message || 'Failed to unlink player'));
     }
@@ -682,7 +833,7 @@ async function _postDisplayName(action, name) {
     }
     _aliasCache = null;
     await refreshDisplayNameBlock();
-    await checkLoginStatus();
+    await checkLoginStatus({ force: true });
 }
 
 export async function refreshDisplayNameBlock() {
