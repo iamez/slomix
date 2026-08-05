@@ -362,16 +362,16 @@ export async function loadPlayerRecentMatches(playerIdentifier) {
             const html = `
                 <div class="glass-card p-4 rounded-lg hover:bg-white/10 transition cursor-pointer">
                     <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-4">
-                            <div class="w-12 h-12 rounded-lg bg-slate-800 border border-white/10 flex items-center justify-center">
+                        <div class="flex items-center gap-4 min-w-0">
+                            <div class="w-12 h-12 shrink-0 rounded-lg bg-slate-800 border border-white/10 flex items-center justify-center">
                                 <span class="text-xs font-bold text-slate-400 uppercase">${badge}</span>
                             </div>
-                            <div>
-                                <div class="font-bold text-white">${safeMapName}</div>
-                                <div class="text-xs text-slate-400 font-mono">${matchDate} • Round ${match.round_number}</div>
+                            <div class="min-w-0">
+                                <div class="font-bold text-white truncate">${safeMapName}</div>
+                                <div class="text-xs text-slate-400 font-mono truncate">${matchDate} • Round ${match.round_number}</div>
                             </div>
                         </div>
-                        <div class="flex gap-6 text-right">
+                        <div class="flex gap-3 sm:gap-6 text-right shrink-0">
                             <div>
                                 <div class="text-xs text-slate-500 uppercase">K/D</div>
                                 <div class="text-lg font-bold ${kdColor}">${kd}</div>
