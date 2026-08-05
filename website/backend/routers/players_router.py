@@ -56,23 +56,55 @@ async def search_player(request: Request, query: str, db: DatabaseAdapter = Depe
     # round count is the tiebreak that sinks stale bot aliases without hard-
     # coding a `[BOT]` rule, which would be a naming convention masquerading as
     # a filter.
+    #
+    # Two CTEs rather than one GROUP BY, because a guid carries many aliases
+    # (Codex on #606):
+    #   matched   one row per (guid, alias) that matched, with its own rank.
+    #   best      the alias to rank and SHOW: the best-ranked one, then the
+    #             most-used. Ranking or displaying MAX(player_name) picks the
+    #             lexicographically largest alias, which need not be the one
+    #             the user typed — an exact match could land in the "no match"
+    #             bucket, and searching "vid" listed a guid as `[BOT]wajs`
+    #             because that was its largest alias. The name here is only a
+    #             FALLBACK: batch_resolve_display_names() below prefers a
+    #             canonical display name where one exists.
+    #   activity  counts ALL rounds for those guids, not only the rows the
+    #             ILIKE kept. Counting matched rows alone under-ranks anyone
+    #             who has since changed name.
     sql = """
-        SELECT player_guid, MAX(player_name) as player_name
-        FROM player_comprehensive_stats
-        WHERE player_name ILIKE ?
-        GROUP BY player_guid
-        ORDER BY
-            CASE
-                WHEN LOWER(MAX(player_name)) = LOWER(?) THEN 0
-                WHEN LOWER(MAX(player_name)) LIKE LOWER(?) THEN 1
-                ELSE 2
-            END,
-            COUNT(*) DESC,
-            MAX(player_name)
+        WITH matched AS (
+            SELECT player_guid,
+                   player_name,
+                   CASE
+                       WHEN LOWER(player_name) = LOWER(?) THEN 0
+                       WHEN LOWER(player_name) LIKE LOWER(?) THEN 1
+                       ELSE 2
+                   END AS match_rank,
+                   COUNT(*) AS alias_rounds
+            FROM player_comprehensive_stats
+            WHERE player_name ILIKE ?
+            GROUP BY player_guid, player_name
+        ),
+        best AS (
+            SELECT DISTINCT ON (player_guid)
+                   player_guid, player_name, match_rank
+            FROM matched
+            ORDER BY player_guid, match_rank, alias_rounds DESC, player_name
+        ),
+        activity AS (
+            SELECT player_guid, COUNT(*) AS total_rounds
+            FROM player_comprehensive_stats
+            WHERE player_guid IN (SELECT player_guid FROM best)
+            GROUP BY player_guid
+        )
+        SELECT b.player_guid, b.player_name
+        FROM best b
+        JOIN activity a ON a.player_guid = b.player_guid
+        ORDER BY b.match_rank, a.total_rounds DESC, b.player_name
         LIMIT 10
     """
     rows = await db.fetch_all(
-        sql, (f"%{safe_query}%", query, f"{safe_query}%")
+        sql, (query, f"{safe_query}%", f"%{safe_query}%")
     )
     name_map = await batch_resolve_display_names(
         db, [(guid, player_name or "Unknown") for guid, player_name in rows]
