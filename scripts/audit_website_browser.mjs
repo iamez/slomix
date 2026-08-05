@@ -15,14 +15,15 @@
  * Usage, from the repo root:
  *   node scripts/audit_website_browser.mjs                    # both passes
  *   node scripts/audit_website_browser.mjs --anon-only
+ *   node scripts/audit_website_browser.mjs --owner-only
  *   node scripts/audit_website_browser.mjs --out /tmp/audit
  *   AUDIT_BASE_URL=http://192.168.64.116:8000 node scripts/audit_website_browser.mjs
  *
  * Writes results.json + JPEG screenshots to the output directory. Never writes
  * into the repo.
  */
-import { createHash, createHmac } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,6 +34,7 @@ const { chromium } = await import(
 
 const BASE_URL = process.env.AUDIT_BASE_URL ?? 'http://127.0.0.1:8000';
 const ANON_ONLY = process.argv.includes('--anon-only');
+const OWNER_ONLY = process.argv.includes('--owner-only');
 const OUT_DIR = (() => {
     const i = process.argv.indexOf('--out');
     return i !== -1 && process.argv[i + 1]
@@ -90,67 +92,45 @@ const ROUTES = [
 // ---------------------------------------------------------------------------
 
 /**
- * Read one key out of website/.env without pulling in a parser: the file is a
- * plain KEY=value list and we need exactly one value from it.
+ * Locate the interpreter, in the same order and with the same override as
+ * scripts/db_backup.sh — this repo has had several venv layouts, so hardcoding
+ * one made the audit fail on otherwise-valid checkouts.
  */
-function readEnvValue(key) {
-    const file = path.join(REPO_ROOT, 'website/.env');
-    for (const line of readFileSync(file, 'utf-8').split('\n')) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) continue;
-        const eq = trimmed.indexOf('=');
-        if (eq < 0 || trimmed.slice(0, eq).trim() !== key) continue;
-        return trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
+function resolvePython() {
+    if (process.env.SLOMIX_PYTHON) return process.env.SLOMIX_PYTHON;
+    for (const candidate of ['venv-web/bin/python', 'venv/bin/python', '.venv/bin/python']) {
+        const full = path.join(REPO_ROOT, candidate);
+        if (existsSync(full)) return full;
     }
-    return null;
+    return 'python3';
 }
 
 /**
  * Mint a Starlette SessionMiddleware cookie for the owner.
  *
- * This reimplements itsdangerous.TimestampSigner rather than shelling out to
- * Python for it, and the parameters are not guesses — they are what
- * TimestampSigner("...") reports: salt b"itsdangerous.Signer", key_derivation
- * "django-concat", digest sha1, separator ".". So:
- *
- *   key = sha1(salt + b"signer" + secret)
- *   signed = value + "." + b64url(hmac_sha1(key, value))
- *
- * Verified against the real library rather than trusted: for secret
- * "test-secret" both produce derived key 21b7e712fa66402b6702c99e54af1f799ff0c9c7
- * and sign("HELLO.anOwdg") -> "HELLO.anOwdg.9TxU301SQLTkyeCVHBI20RR-S6E",
- * byte for byte. The end-to-end check is stronger still: the server unsigns
- * this cookie with the actual library, so a wrong signature shows up
- * immediately as an anonymous owner pass.
- *
- * tests/security/test_real_stack_security.py builds the same value in Python.
+ * Delegated to Python rather than reimplemented: itsdangerous derives its key
+ * and encodes its timestamp in ways that are easy to get subtly wrong, and the
+ * server verifies with the real library. tests/security/test_real_stack_security.py
+ * builds the same value the same way.
  */
 function mintOwnerSession() {
-    const secret = readEnvValue('SESSION_SECRET') || process.env.SESSION_SECRET;
-    if (!secret) throw new Error('SESSION_SECRET not found in website/.env');
-
-    const b64url = (buf) => buf.toString('base64')
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-
-    const payload = Buffer.from(JSON.stringify({
-        user: { id: '231165917604741121', username: 'audit-owner' },
-    }), 'utf-8').toString('base64');
-
-    // itsdangerous encodes the timestamp as big-endian bytes, minimal width.
-    const now = Math.floor(Date.now() / 1000);
-    const stampBytes = [];
-    for (let n = now; n > 0; n = Math.floor(n / 256)) stampBytes.unshift(n % 256);
-    const value = `${payload}.${b64url(Buffer.from(stampBytes))}`;
-
-    const key = createHash('sha1')
-        .update(Buffer.concat([
-            Buffer.from('itsdangerous.Signer', 'utf-8'),
-            Buffer.from('signer', 'utf-8'),
-            Buffer.from(String(secret), 'utf-8'),
-        ]))
-        .digest();
-
-    return `${value}.${b64url(createHmac('sha1', key).update(Buffer.from(value, 'utf-8')).digest())}`;
+    const script = `
+import base64, json, os, sys
+sys.path.insert(0, ${JSON.stringify(REPO_ROOT)})
+from dotenv import dotenv_values
+import itsdangerous
+env = dotenv_values(os.path.join(${JSON.stringify(REPO_ROOT)}, "website/.env"))
+secret = env.get("SESSION_SECRET") or os.getenv("SESSION_SECRET")
+if not secret:
+    raise SystemExit("SESSION_SECRET not found in website/.env")
+payload = base64.b64encode(json.dumps({
+    "user": {"id": "231165917604741121", "username": "audit-owner"}
+}).encode("utf-8"))
+print(itsdangerous.TimestampSigner(str(secret)).sign(payload).decode("utf-8"))
+`;
+    return execFileSync(resolvePython(), ['-c', script], {
+        encoding: 'utf-8',
+    }).trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -420,19 +400,31 @@ mkdirSync(path.join(OUT_DIR, 'shots'), { recursive: true });
 const browser = await chromium.launch();
 const results = [];
 
-const passes = ANON_ONLY ? ['anon'] : ['anon', 'owner'];
-let ownerCookie = null;
-if (passes.includes('owner')) {
-    ownerCookie = mintOwnerSession();
-}
+// Each pass carries its own authentication decision as a flag. It used to be
+// derived by comparing the label (`pass === 'owner'`) a few lines below the
+// cookie code, which a static analyser reads as string equality in a
+// security-sensitive context and reports as a timing attack (Codacy, critical —
+// the actual finding on this PR). The label is not a secret: it is one of two
+// literals, and it only ever names a screenshot file and a column of output.
+// The flag is clearer regardless — the decision is stated once, where the passes
+// are defined, instead of being re-derived from a string in the loop body.
+const ANON_PASS = { label: 'anon', asOwner: false };
+const OWNER_PASS = { label: 'owner', asOwner: true };
+let passes = [ANON_PASS, OWNER_PASS];
+if (ANON_ONLY) passes = [ANON_PASS];
+// --owner-only re-checks the signed-in surfaces (admin, uploads, greatshot)
+// without paying for the anonymous sweep first.
+else if (OWNER_ONLY) passes = [OWNER_PASS];
 
-for (const pass of passes) {
+const ownerCookie = passes.some((entry) => entry.asOwner) ? mintOwnerSession() : null;
+
+for (const { label, asOwner } of passes) {
     // No ignoreHTTPSErrors: the audit targets a plain-HTTP dev server, so
     // turning off certificate validation bought nothing and made the tool
     // silently accept a bad certificate if it were ever pointed at HTTPS —
     // which is precisely the kind of thing an audit should report, not skip.
     const context = await browser.newContext();
-    if (pass === 'owner') {
+    if (asOwner) {
         const { hostname } = new URL(BASE_URL);
         await context.addCookies([
             { name: 'session', value: ownerCookie, domain: hostname, path: '/' },
@@ -440,7 +432,7 @@ for (const pass of passes) {
     }
     for (const route of ROUTES) {
         for (const viewport of VIEWPORTS) {
-            const r = await auditRoute(context, route, viewport, pass, OUT_DIR);
+            const r = await auditRoute(context, route, viewport, label, OUT_DIR);
             results.push(r);
             const flags = [
                 r.consoleErrors.length && `${r.consoleErrors.length} console`,
@@ -451,7 +443,7 @@ for (const pass of passes) {
                 r.stuckPanels?.length && `${r.stuckPanels.length} stuck`,
             ].filter(Boolean);
             process.stdout.write(
-                `  ${pass.padEnd(5)} ${route.name.padEnd(38)} ${viewport.name.padEnd(13)}` +
+                `  ${label.padEnd(5)} ${route.name.padEnd(38)} ${viewport.name.padEnd(13)}` +
                 `${String(r.requestCount).padStart(4)} req (${String(r.apiRequestCount).padStart(3)} api)  ${flags.join(', ') || 'clean'}\n`,
             );
         }
