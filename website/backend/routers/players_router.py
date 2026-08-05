@@ -43,16 +43,37 @@ async def search_player(request: Request, query: str, db: DatabaseAdapter = Depe
     # Escape LIKE wildcards (%, _) in user input to prevent SQL injection
     safe_query = escape_like_pattern(query)
 
-    # Case-insensitive search (ILIKE is Postgres specific)
+    # Case-insensitive search (ILIKE is Postgres specific).
+    #
+    # Ordered by RELEVANCE, not alphabetically. Alphabetical put anything whose
+    # name starts with a bracket or digit first, which in practice meant bots:
+    # searching "vid" returned three `[BOT]vid` entries — 6, 60 and 19 rounds,
+    # none played since March — ahead of the actual player `vid`, who has 2,477
+    # rounds and played yesterday. Whoever typed the name got the wrong profile
+    # offered first (master review P1-4).
+    #
+    # Exact name wins, then a prefix match, then whoever actually plays. The
+    # round count is the tiebreak that sinks stale bot aliases without hard-
+    # coding a `[BOT]` rule, which would be a naming convention masquerading as
+    # a filter.
     sql = """
         SELECT player_guid, MAX(player_name) as player_name
         FROM player_comprehensive_stats
         WHERE player_name ILIKE ?
         GROUP BY player_guid
-        ORDER BY MAX(player_name)
+        ORDER BY
+            CASE
+                WHEN LOWER(MAX(player_name)) = LOWER(?) THEN 0
+                WHEN LOWER(MAX(player_name)) LIKE LOWER(?) THEN 1
+                ELSE 2
+            END,
+            COUNT(*) DESC,
+            MAX(player_name)
         LIMIT 10
     """
-    rows = await db.fetch_all(sql, (f"%{safe_query}%",))
+    rows = await db.fetch_all(
+        sql, (f"%{safe_query}%", query, f"{safe_query}%")
+    )
     name_map = await batch_resolve_display_names(
         db, [(guid, player_name or "Unknown") for guid, player_name in rows]
     )

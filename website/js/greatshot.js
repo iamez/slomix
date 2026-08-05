@@ -386,12 +386,29 @@ function renderMultiProgress() {
     listEl.innerHTML = html;
 }
 
+// The 2s interval fires `void pollMultiAnalysisStatus()` with nothing stopping
+// a second tick starting while the first is still working. One tick used to
+// issue one request per pending demo SEQUENTIALLY, so with several demos in
+// flight a tick could easily outlast the interval and the ticks stacked, each
+// adding another N requests (master review P1-3).
+let _multiPollInFlight = false;
+
 /** Poll status for all pending demos. */
 async function pollMultiAnalysisStatus() {
+    if (_multiPollInFlight) return;
     if (!isAnalysisPollingAllowed()) {
         pauseAnalysisPolling();
         return;
     }
+    _multiPollInFlight = true;
+    try {
+        await _pollMultiAnalysisStatusOnce();
+    } finally {
+        _multiPollInFlight = false;
+    }
+}
+
+async function _pollMultiAnalysisStatusOnce() {
 
     const stillPending = [];
     for (const [demoId, entry] of pendingDemos) {
@@ -424,17 +441,21 @@ async function pollMultiAnalysisStatus() {
     const phaseEl = document.getElementById('analysis-phase');
     if (phaseEl) phaseEl.textContent = `Analyzing ${done}/${total} complete...`;
 
-    for (const demoId of stillPending) {
+    // Concurrent, not sequential: a tick now takes about as long as ONE request
+    // instead of the sum of them. allSettled so a single failing demo does not
+    // abandon the rest — a failure just means this demo keeps its old status
+    // and is retried on the next tick, same as before.
+    await Promise.allSettled(stillPending.map(async (demoId) => {
         try {
             const data = await fetchJSONWithAuth(`${API_BASE}/greatshot/${encodeURIComponent(demoId)}/status`);
             const entry = pendingDemos.get(demoId);
-            if (!entry) continue;
+            if (!entry) return;
             entry.status = data.status;
             entry.data = data;
         } catch (_) {
             // keep trying
         }
-    }
+    }));
 
     renderMultiProgress();
 
