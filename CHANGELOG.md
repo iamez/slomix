@@ -6,6 +6,24 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.29.0](https://github.com/iamez/slomix/compare/v1.28.0...v1.29.0) (2026-08-05)
+
+
+### Features
+
+* **map geometry:** add fail-closed W4a brush trace foundation ([#600](https://github.com/iamez/slomix/issues/600)) ([1c20964](https://github.com/iamez/slomix/commit/1c20964524f29663edc0a90bb54223de23e9e083))
+* **map geometry:** add W4a2 patch collision facets ([#602](https://github.com/iamez/slomix/issues/602)) ([c37d272](https://github.com/iamez/slomix/commit/c37d272f876e5c0b836577ad63e6ec5916cd66df))
+
+
+### Bug Fixes
+
+* make website/requirements.txt describe what the web service needs ([#597](https://github.com/iamez/slomix/issues/597)) ([bc421ca](https://github.com/iamez/slomix/commit/bc421caca673e0559c0489ea415fe92aa1cb2e10))
+* **website:** trust and stability cleanup — weapons HS mislabel, one /auth/me probe per page load, home data loaded on the home route, and the shared header fitted at tablet width ([#598](https://github.com/iamez/slomix/issues/598)) ([73b87746](https://github.com/iamez/slomix/commit/73b87746))
+* **proximity:** relink proximity_shot_fired, which nothing ever repaired ([#599](https://github.com/iamez/slomix/issues/599)) ([0f95fea](https://github.com/iamez/slomix/commit/0f95fea8a68d77f85c55d0dbe2b379ec4edbc565))
+* stop the repo lying about which Python it needs ([#595](https://github.com/iamez/slomix/issues/595)) ([2f716d0](https://github.com/iamez/slomix/commit/2f716d04a501c1024bb70168d9f227a2cf5a0b22))
+* stop the test suite writing into the production logs ([#592](https://github.com/iamez/slomix/issues/592)) ([d4911cd](https://github.com/iamez/slomix/commit/d4911cd146701276e4bd8a8b75c0b6b25b1d8b06))
+* **website:** deliver frame-ancestors as a header, fix the profile deep link ([#601](https://github.com/iamez/slomix/issues/601)) ([1867ca1](https://github.com/iamez/slomix/commit/1867ca169ad36cdde0bfcafe86e8c4d0bfc73c41))
+
 ## [1.28.0](https://github.com/iamez/slomix/compare/v1.27.0...v1.28.0) (2026-07-31)
 
 
