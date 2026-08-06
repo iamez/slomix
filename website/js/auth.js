@@ -753,7 +753,59 @@ export async function searchHeroPlayer(query) {
 /**
  * Initialize search input event listeners
  */
+// The hero search advertises a CMD+K badge (index.html:1435) that was never
+// bound to anything — pressing it did the browser's own thing, or nothing.
+// Also: the badge said CMD on every platform, while the site's users are on
+// Linux and Windows, where it is Ctrl.
+//
+// The input lives inside #view-home, so from another route there is nothing to
+// focus; the shortcut navigates home first and focuses once the view is shown.
+function _initSearchShortcut() {
+    const isMac = /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || '');
+
+    // Label the badge for the platform actually in use.
+    document.querySelectorAll('[data-search-shortcut-badge]').forEach((el) => {
+        el.textContent = isMac ? 'CMD+K' : 'CTRL+K';
+    });
+
+    const focusHeroSearch = () => {
+        const input = document.getElementById('hero-search-input');
+        if (!input) return false;
+        // offsetParent is null for a display:none ancestor — i.e. home is not
+        // the active view, so focusing would silently do nothing visible.
+        if (!input.offsetParent) return false;
+        input.focus();
+        input.select();
+        return true;
+    };
+
+    document.addEventListener('keydown', (event) => {
+        const modifier = isMac ? event.metaKey : event.ctrlKey;
+        if (!modifier || event.altKey || event.shiftKey) return;
+        if (String(event.key).toLowerCase() !== 'k') return;
+
+        event.preventDefault();
+        if (focusHeroSearch()) return;
+
+        // Not on home: go there, then focus once the view has been swapped in.
+        // A single rAF is not enough — navigateTo() sets location.hash and
+        // RETURNS when the hash differs, so the route is dispatched later from
+        // the hashchange handler. Retry over a short budget instead of guessing
+        // one frame.
+        if (typeof window.navigateTo !== 'function') return;
+        window.navigateTo('home');
+
+        let attemptsLeft = 30;   // ~500ms at 60fps, then give up quietly
+        const tryFocus = () => {
+            if (focusHeroSearch()) return;
+            if (--attemptsLeft > 0) requestAnimationFrame(tryFocus);
+        };
+        requestAnimationFrame(tryFocus);
+    });
+}
+
 export function initSearchListeners() {
+    _initSearchShortcut();
     const profileSearchInput = document.getElementById('profile-link-search-input');
     if (profileSearchInput) {
         profileSearchInput.addEventListener('input', (e) => {
