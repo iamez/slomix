@@ -31,6 +31,7 @@ MIGRATIONS=(
   "067_repair_lua_round_links.sql"
   "068_add_relinker_unlinked_indexes.sql"
   "069_add_shot_fired_relinker_index.sql"
+  "070_uploads_expires_at.sql"
 )
 FLAGS=(
   "TRUSTED_HOSTS=www.slomix.fyi,slomix.fyi,localhost,127.0.0.1"
