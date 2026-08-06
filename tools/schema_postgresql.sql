@@ -4357,6 +4357,7 @@ CREATE TABLE public.uploads (
     status text DEFAULT 'active'::text NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    expires_at timestamp without time zone,
     CONSTRAINT uploads_category_check CHECK ((category = ANY (ARRAY['config'::text, 'hud'::text, 'archive'::text, 'clip'::text]))),
     CONSTRAINT uploads_status_check CHECK ((status = ANY (ARRAY['active'::text, 'quarantined'::text, 'deleted'::text])))
 );
@@ -8017,6 +8018,13 @@ CREATE INDEX idx_upload_tags_tag ON public.upload_tags USING btree (tag);
 --
 
 CREATE INDEX idx_upload_tags_upload ON public.upload_tags USING btree (upload_id);
+
+
+--
+-- Name: idx_uploads_active_expires_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_uploads_active_expires_at ON public.uploads USING btree (expires_at) WHERE ((status = 'active'::text) AND (expires_at IS NOT NULL));
 
 
 --
