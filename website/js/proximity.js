@@ -18,7 +18,22 @@ const proximityScopeState = {
     mapName: null,
     roundNumber: null,
     roundStartUnix: null,
+    // Player is a scope dimension like session/map/round, but a partial one:
+    // only some endpoints honour player_guid. See updateScopeUIText, which is
+    // what writes the caption saying so.
+    players: [],
+    playerGuid: null,
 };
+
+// How many of this page's ~50 endpoints accept player_guid. There is no list
+// here on purpose — the opt-in lives at the call sites, as `playerScoped: true`
+// on scopedUrl/buildScopeParams, so a second list could only ever drift out of
+// step with them. This number exists solely so the scope caption can state the
+// split out loud: silently showing team numbers under a player's name would be
+// a lie. It counts DISTINCT endpoints, not call sites: prox-scores opts in
+// twice (the dashboard batch and its own loader), so there are 17 call
+// sites and 16 endpoints.
+const PLAYER_SCOPED_ENDPOINTS = 16;
 
 const proximityVizState = {
     showObjectiveZones: true,
@@ -226,9 +241,14 @@ function getScopeDescription() {
     return parts.join(' • ');
 }
 
-function buildScopeParams({ includeRange = true, extra = {} } = {}) {
+function buildScopeParams({ includeRange = true, playerScoped = false, extra = {} } = {}) {
     const params = new URLSearchParams();
     if (includeRange) params.set('range_days', String(DEFAULT_RANGE_DAYS));
+    // Opt-in: only call sites whose endpoint actually filters by player_guid
+    // pass playerScoped, so the rest keep returning honest team-wide numbers.
+    if (playerScoped && proximityScopeState.playerGuid) {
+        params.set('player_guid', proximityScopeState.playerGuid);
+    }
     if (proximityScopeState.sessionDate) params.set('session_date', proximityScopeState.sessionDate);
     if (proximityScopeState.mapName) params.set('map_name', proximityScopeState.mapName);
     if (proximityScopeState.roundNumber != null) params.set('round_number', String(proximityScopeState.roundNumber));
@@ -283,9 +303,26 @@ function ensureValidScopeSelection() {
     }
 }
 
+function selectedScopePlayerName() {
+    if (!proximityScopeState.playerGuid) return null;
+    const row = proximityScopeState.players.find(
+        (p) => (p.guid || p.player_guid) === proximityScopeState.playerGuid
+    );
+    return stripEtColors(row?.name || row?.player_name || proximityScopeState.playerGuid);
+}
+
 function updateScopeUIText() {
     const scope = getScopeDescription();
-    setText('proximity-scope-caption', scope);
+    // Only the scope caption mentions the player: getScopeDescription() also
+    // labels panels that stay team-wide (Data Trust, heatmap, timeline), and
+    // putting a player's name on those would misdescribe what they show.
+    const player = selectedScopePlayerName();
+    setText(
+        'proximity-scope-caption',
+        player
+            ? `${scope} • ${player} — ${PLAYER_SCOPED_ENDPOINTS} panels follow this player, the rest stay team-wide`
+            : scope
+    );
     setText('proximity-window-label', scope);
     setText('proximity-timeline-scope', `Scope: ${scope}`);
     setText('proximity-heatmap-scope', `Scope: ${scope}`);
@@ -341,11 +378,64 @@ function renderScopeSelectors() {
         : '';
     setSelectOptions(roundSelect, roundOptions, selectedRoundValue);
 
+    const playerSelect = document.getElementById('proximity-player-select');
+    const playerOptions = [{ value: '', label: 'Whole team' }];
+    proximityScopeState.players.forEach((player) => {
+        const guid = player.guid || player.player_guid;
+        if (!guid) return;
+        playerOptions.push({
+            value: guid,
+            label: stripEtColors(player.name || player.player_name || guid),
+        });
+    });
+    setSelectOptions(playerSelect, playerOptions, proximityScopeState.playerGuid || '');
+
     if (sessionSelect) sessionSelect.disabled = proximityScopeState.sessions.length === 0;
     if (mapSelect) mapSelect.disabled = !selectedSession;
     if (roundSelect) roundSelect.disabled = !selectedMap;
+    if (playerSelect) playerSelect.disabled = proximityScopeState.players.length === 0;
 
     updateScopeUIText();
+}
+
+// GET /proximity/players for the current session/map/round, so the Player
+// selector offers exactly who played in the selected scope — and so the
+// selected player is VALIDATED against that scope before anything is fetched
+// with their guid.
+//
+// Awaited by loadScopedProximityData rather than fired off beside it. Running
+// it in parallel was a race: a session change would start player-scoped
+// requests carrying the PREVIOUS guid, and if that player did not appear in the
+// new scope the guid was cleared afterwards with nothing reloading — leaving
+// zeroed player panels under a caption that said team-wide (Copilot and
+// CodeRabbit on #612).
+//
+// `loadId` is the caller's generation token, so a slow response from an
+// abandoned scope cannot overwrite the current player list.
+async function loadScopePlayers(loadId) {
+    let rows = [];
+    try {
+        const data = await fetchJSON(scopedUrl('/proximity/players', { includeRange: false }));
+        rows = Array.isArray(data) ? data : (data?.players || []);
+    } catch {
+        rows = [];
+    }
+    if (loadId !== undefined && loadId !== proximityScopedLoadId) return;
+
+    proximityScopeState.players = rows;
+
+    // Clear the selection whenever the player is not in the fresh list — INCLUDING
+    // when that list is empty. Keeping the guid on an empty list (a failed request,
+    // or a scope nobody played) left a stale player_guid on every scoped endpoint
+    // while the selector sat disabled, so the page filtered by someone the user
+    // could no longer see or change.
+    if (proximityScopeState.playerGuid) {
+        const stillPresent = rows.some(
+            (p) => (p.guid || p.player_guid) === proximityScopeState.playerGuid
+        );
+        if (!stillPresent) proximityScopeState.playerGuid = null;
+    }
+    renderScopeSelectors();
 }
 
 function setText(id, value) {
@@ -1836,6 +1926,12 @@ async function loadScopedProximityData() {
     resetProximityValues();
     const stateEl = document.getElementById('proximity-state');
     updateScopeUIText();
+    // Awaited: the panels below are fetched WITH the player guid, so the guid
+    // has to be validated against this scope first. One small request ahead of
+    // ~50 is a cheap price for not rendering a player's numbers under a caption
+    // that says team-wide.
+    await loadScopePlayers(loadId);
+    if (loadId !== proximityScopedLoadId) return;
     // Session-wide panel: no-op while collapsed, cached per session when open.
     loadInvisibleValuePanel();
 
@@ -1920,29 +2016,29 @@ async function loadScopedProximityData() {
                 combatPosStatsRes,
                 aimLockRes
             ] = await Promise.allSettled([
-                fetchJSON(scopedUrl('/proximity/engagements')),
-                fetchJSON(scopedUrl('/proximity/hotzones')),
-                fetchJSON(scopedUrl('/proximity/movers')),
+                fetchJSON(scopedUrl('/proximity/engagements', { playerScoped: true })),
+                fetchJSON(scopedUrl('/proximity/hotzones', { playerScoped: true })),
+                fetchJSON(scopedUrl('/proximity/movers', { playerScoped: true })),
                 fetchJSON(scopedUrl('/proximity/teamplay', { extra: { limit: 6 } })),
                 fetchJSON(scopedUrl('/proximity/classes')),
-                fetchJSON(scopedUrl('/proximity/reactions', { extra: { limit: 6 } })),
+                fetchJSON(scopedUrl('/proximity/reactions', { playerScoped: true, extra: { limit: 6 } })),
                 fetchJSON(scopedUrl('/proximity/events', { extra: { limit: DEFAULT_EVENTS_LIMIT } })),
                 fetchJSON(scopedUrl('/proximity/trades/summary')),
                 fetchJSON(scopedUrl('/proximity/trades/events', { extra: { limit: 10 } })),
-                fetchJSON(scopedUrl('/proximity/spawn-timing')),
+                fetchJSON(scopedUrl('/proximity/spawn-timing', { playerScoped: true })),
                 fetchJSON(scopedUrl('/proximity/cohesion')),
-                fetchJSON(scopedUrl('/proximity/crossfire-angles')),
-                fetchJSON(scopedUrl('/proximity/pushes')),
-                fetchJSON(scopedUrl('/proximity/lua-trades')),
-                fetchJSON(scopedUrl('/proximity/kill-outcomes')),
-                fetchJSON(scopedUrl('/proximity/kill-outcomes/player-stats')),
-                fetchJSON(scopedUrl('/proximity/hit-regions')),
+                fetchJSON(scopedUrl('/proximity/crossfire-angles', { playerScoped: true })),
+                fetchJSON(scopedUrl('/proximity/pushes', { playerScoped: true })),
+                fetchJSON(scopedUrl('/proximity/lua-trades', { playerScoped: true })),
+                fetchJSON(scopedUrl('/proximity/kill-outcomes', { playerScoped: true })),
+                fetchJSON(scopedUrl('/proximity/kill-outcomes/player-stats', { playerScoped: true })),
+                fetchJSON(scopedUrl('/proximity/hit-regions', { playerScoped: true })),
                 fetchJSON(scopedUrl('/proximity/hit-regions/headshot-rates')),
-                fetchJSON(scopedUrl('/proximity/movement-stats')),
-                fetchJSON(scopedUrl('/proximity/prox-scores', { extra: { min_engagements: 30 } })),
+                fetchJSON(scopedUrl('/proximity/movement-stats', { playerScoped: true })),
+                fetchJSON(scopedUrl('/proximity/prox-scores', { playerScoped: true, extra: { min_engagements: 30 } })),
                 fetchJSON(scopedUrl('/proximity/prox-scores/formula', { includeRange: false })),
-                fetchJSON(scopedUrl('/proximity/weapon-accuracy')),
-                fetchJSON(scopedUrl('/proximity/revives')),
+                fetchJSON(scopedUrl('/proximity/weapon-accuracy', { playerScoped: true })),
+                fetchJSON(scopedUrl('/proximity/revives', { playerScoped: true })),
                 fetchJSON(scopedUrl('/proximity/carrier-events')),
                 fetchJSON(scopedUrl('/proximity/carrier-kills')),
                 fetchJSON(scopedUrl('/proximity/carrier-returns')),
@@ -1954,7 +2050,7 @@ async function loadScopedProximityData() {
                 fetchJSON(scopedUrl('/proximity/objective-focus')),
                 fetchJSON(scopedUrl('/proximity/support-summary')),
                 fetchJSON(scopedUrl('/proximity/combat-position-stats')),
-                fetchJSON(scopedUrl('/proximity/aim-lock'))
+                fetchJSON(scopedUrl('/proximity/aim-lock', { playerScoped: true }))
             ]);
             if (loadId !== proximityScopedLoadId) return;
 
@@ -2211,6 +2307,17 @@ function bindScopeEvents() {
         });
     }
 
+    const playerSelect = document.getElementById('proximity-player-select');
+    if (playerSelect && !playerSelect.dataset.bound) {
+        playerSelect.dataset.bound = '1';
+        playerSelect.addEventListener('change', async () => {
+            proximityScopeState.playerGuid = playerSelect.value || null;
+            renderScopeSelectors();
+            await loadScopedProximityData();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        });
+    }
+
     if (resetBtn && !resetBtn.dataset.bound) {
         resetBtn.dataset.bound = '1';
         resetBtn.addEventListener('click', async () => {
@@ -2218,6 +2325,7 @@ function bindScopeEvents() {
             proximityScopeState.mapName = null;
             proximityScopeState.roundNumber = null;
             proximityScopeState.roundStartUnix = null;
+            proximityScopeState.playerGuid = null;
             renderScopeSelectors();
             await loadScopedProximityData();
             if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -4360,7 +4468,7 @@ function bindV52PanelEvents() {
                 b.className = 'prox-scores-range-btn text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-500 border border-white/10';
             });
             btn.className = 'prox-scores-range-btn text-[10px] px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/40';
-            const scoreParams = buildScopeParams({ extra: { min_engagements: 30 } });
+            const scoreParams = buildScopeParams({ playerScoped: true, extra: { min_engagements: 30 } });
             scoreParams.set('range_days', btn.dataset.days);
             fetchJSON(`${API_BASE}/proximity/prox-scores?${scoreParams}`).then(d => {
                 fetchJSON(scopedUrl('/proximity/prox-scores/formula', { includeRange: false })).then(f => renderProxScores(d, f)).catch(() => renderProxScores(d, null));
