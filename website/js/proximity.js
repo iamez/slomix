@@ -19,14 +19,20 @@ const proximityScopeState = {
     roundNumber: null,
     roundStartUnix: null,
     // Player is a scope dimension like session/map/round, but a partial one:
-    // only PLAYER_SCOPED_ENDPOINTS honour player_guid. See setScopeCaption.
+    // only some endpoints honour player_guid. See updateScopeUIText, which is
+    // what writes the caption saying so.
     players: [],
     playerGuid: null,
 };
 
-// The endpoints that accept player_guid. Anything not listed here stays
-// team-wide when a player is selected, which the scope caption says out loud —
-// silently showing team numbers under a player's name would be a lie.
+// How many of this page's ~50 endpoints accept player_guid. There is no list
+// here on purpose — the opt-in lives at the call sites, as `playerScoped: true`
+// on scopedUrl/buildScopeParams, so a second list could only ever drift out of
+// step with them. This number exists solely so the scope caption can state the
+// split out loud: silently showing team numbers under a player's name would be
+// a lie. It counts DISTINCT endpoints, not call sites: prox-scores opts in
+// twice (the dashboard batch and its own loader), so there are 17 call
+// sites and 16 endpoints.
 const PLAYER_SCOPED_ENDPOINTS = 16;
 
 const proximityVizState = {
@@ -393,18 +399,38 @@ function renderScopeSelectors() {
 }
 
 // GET /proximity/players for the current session/map/round, so the Player
-// selector offers exactly who played in the selected scope.
-async function loadScopePlayers() {
+// selector offers exactly who played in the selected scope — and so the
+// selected player is VALIDATED against that scope before anything is fetched
+// with their guid.
+//
+// Awaited by loadScopedProximityData rather than fired off beside it. Running
+// it in parallel was a race: a session change would start player-scoped
+// requests carrying the PREVIOUS guid, and if that player did not appear in the
+// new scope the guid was cleared afterwards with nothing reloading — leaving
+// zeroed player panels under a caption that said team-wide (Copilot and
+// CodeRabbit on #612).
+//
+// `loadId` is the caller's generation token, so a slow response from an
+// abandoned scope cannot overwrite the current player list.
+async function loadScopePlayers(loadId) {
+    let rows = [];
     try {
         const data = await fetchJSON(scopedUrl('/proximity/players', { includeRange: false }));
-        const rows = Array.isArray(data) ? data : (data?.players || []);
-        proximityScopeState.players = rows;
+        rows = Array.isArray(data) ? data : (data?.players || []);
     } catch {
-        proximityScopeState.players = [];
+        rows = [];
     }
-    // The selected player may not have played in the new scope.
-    if (proximityScopeState.playerGuid && proximityScopeState.players.length) {
-        const stillPresent = proximityScopeState.players.some(
+    if (loadId !== undefined && loadId !== proximityScopedLoadId) return;
+
+    proximityScopeState.players = rows;
+
+    // Clear the selection whenever the player is not in the fresh list — INCLUDING
+    // when that list is empty. Keeping the guid on an empty list (a failed request,
+    // or a scope nobody played) left a stale player_guid on every scoped endpoint
+    // while the selector sat disabled, so the page filtered by someone the user
+    // could no longer see or change.
+    if (proximityScopeState.playerGuid) {
+        const stillPresent = rows.some(
             (p) => (p.guid || p.player_guid) === proximityScopeState.playerGuid
         );
         if (!stillPresent) proximityScopeState.playerGuid = null;
@@ -1900,9 +1926,12 @@ async function loadScopedProximityData() {
     resetProximityValues();
     const stateEl = document.getElementById('proximity-state');
     updateScopeUIText();
-    // Repopulate the Player selector for the new scope; the panels below do not
-    // wait on it, so a slow players call never delays the dashboard.
-    void loadScopePlayers();
+    // Awaited: the panels below are fetched WITH the player guid, so the guid
+    // has to be validated against this scope first. One small request ahead of
+    // ~50 is a cheap price for not rendering a player's numbers under a caption
+    // that says team-wide.
+    await loadScopePlayers(loadId);
+    if (loadId !== proximityScopedLoadId) return;
     // Session-wide panel: no-op while collapsed, cached per session when open.
     loadInvisibleValuePanel();
 
