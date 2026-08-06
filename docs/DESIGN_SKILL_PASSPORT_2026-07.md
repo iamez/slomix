@@ -1,0 +1,212 @@
+# Design: Skill Passport — večdimenzionalen profil igralca
+
+**Status:** PREDLOG za ownerjevo odločitev. Nič od tega ni implementirano; brez GO se ne kodira.
+**Datum:** 2026-07-25 · **Kontekst:** audit `docs/AUDIT_DATA_CORRECTNESS_2026-07-25.md` §4 (koherenca scoringa)
+
+**Kratice:** **KIS** = Kill Impact Score (kontekstualna vrednost posameznega ubojа, `storytelling/kis.py`) · **PWC** = Player Win Contribution (delež prispevka k zmagi runde, `win_contribution.py`) · **SSR** = Situational Skill Rating (`ssr_service.py`) · **ET Rating** = obstoječi enodimenzionalni skalar (`skill_rating_service.py`)
+
+---
+
+## 1. Ownerjeva vizija (dobesedno, 2026-07-25)
+
+> "Da nas projekt lahko pokaže dejanski skill igralca… koliko je igralec dober, koliko se trudi, koliko igra z ekipo in koliko sam. Skozi čas bodo številke (KIS/PWC + drugi algoritmi) nabrale ogromno podatkov in mi bi s tem lahko naredili ornk statistiko in določili skill igralcu. **Več skillov ima lahko igralec** — nekdo je dober teamplayer in premika objective in se trudi da ekipa zmaga. Takih primerov in playstilov je veliko. Jaz osebno sem lurker/teamplayer, ki rad nastavlja ekipi priložnosti s svojim sacrificem."
+
+Iz tega sledijo štiri zahteve, ki jih noben obstoječi sistem ne izpolnjuje:
+
+| # | Zahteva | Stanje danes |
+|---|---------|--------------|
+| Z1 | **Več osi, ne ena številka** — igralec ima lahko več skillov hkrati | ET Rating = 1 skalar; archetypes obstajajo, a so session-ephemeral |
+| Z2 | **Evidence se nabira čez seje** — več sej = trdnejša ocena | KIS board se resetira vsako sejo; ET Rating se vsako uro preračuna iz nič |
+| Z3 | **Več sej = večja teža** | Nihče: igralec s 40 sejami je obravnavan enako kot s 3 |
+| Z4 | **Zgodovina mora ostati primerljiva** | Do PR #547 je bila tabela mešanica kis-v2 in v4 |
+
+---
+
+## 2. Predpogoji — kaj mora biti izpolnjeno, PREDEN se to sploh začne
+
+⚠️ **Nobeden od teh treh ni izpolnjen v tej veji.** Vsi so v odprtih PR-jih; dokler ne merga(mo), Passport ni izvedljiv in ta dokument opisuje prihodnje, ne trenutno stanje.
+
+1. **Verzijska higiena** — čaka **#547**. Danes migracija `060` vsem obstoječim vrsticam vtisne `kis-v2`, KIS servis pa prepiše samo scope, ki ga nekdo zahteva; globalnega v4 preračuna ni. Dokler #547 ne teče, seje **niso** med sabo primerljive (potrjeno: pred zagonom 26.288 v2 proti 7.217 v4).
+2. **gsid atribucija** — čaka **#546**. Migracija `063` je stolpec dodala, a ga eksplicitno pustila NULL za vso zgodovino in za legacy compute pot. Brez backfilla je 87 % vrstic neatribuiranih; seja čez polnoč ali dve seji na isti datum sta neločljivi.
+3. **Čisti serving layer** — čaka **#548/#549**: bot runde izločene, duplikati pobrisani, scope pošten.
+
+**Vrstni red je obvezen:** brez 1 in 2 vsaka agregacija čez seje sešteva mešane formule in izpušča 87 % zgodovine, kar je slabše kot današnje stanje.
+
+**Podatkovna baza (dev, 2026-07-25):** 63 igralcev, od tega **14 z ≥10 sejami**, 9 s 3–9 sejami, 40 z <3. Najbolj aktiven igralec ima 111 sej. To je majhen, a globok vzorec — natanko tak, ki *zahteva* shrinkage in *ne dopušča* naivnih percentilov.
+
+---
+
+## 3. Primerjava: kaj dela gibhub.gg (in kje je njihova šibka točka)
+
+Owner: *"gibhub.gg so vse naše ideje vzeli iz prototipa in jih naredili skoraj bolj kot midva, pri njih so statsi točni."*
+
+Preveril sem njihov javni API (`/api/players/{id}`, `/api/leaderboards`).
+
+**Kar delajo dobro in bi morali posnemati:**
+
+| Njihovo | Opis | Naš status |
+|---------|------|-----------|
+| **Tiers per format** | `tier: "B"` ločeno za 3v3 (`size=6`) in 6v6 (`size=12`) — diskretna razvrstitev, ki jo človek razume | Nimamo; ET Rating je zvezno število brez formata |
+| **Lifetime blok** | En kanoničen agregat: matches/rounds/kills/…/`utro`/`bait_score` | Razpršeno po endpointih |
+| **Playstyle metrike** | `bait_score` (!), `stance_*_sec` (prone/crouch/sprint/lean/mg/carrier), `classes_played_seconds` | Delno (lurker, gravity), a session-only |
+| **Relacijski podatki** | `top_killers`, `top_victims`, `best/worst_teammates`, `easiest/hardest_opponents` | Rivalries obstaja, a ni v profilu |
+| **objective_breakdown** | Po tipu: planted/defused/destroyed/repaired/taken/secured/carrierkilled | Imamo surovo, ni agregirano v profil |
+
+**Kje imajo luknjo — in to je natanko naša priložnost:**
+
+UTRO lestvica (`?metric=utro&size=6`, 177 igralcev) vrne na 1. mestu igralca z **22 rundami** (value 1.2741), tik nad igralcem s **741 rundami** (1.2727). **Brez sample-size korekcije.** Kdor odigra dva dobra večera, prehiti nekoga s tremi leti igre. To je točno napaka, ki jo Z3 prepoveduje.
+
+**Naša strukturna prednost:** gibhub bere strežniške loge — imajo XP, stance čase, shove, distanco. **Nimajo pa pozicijske telemetrije.** Mi imamo 200 ms vzorce pozicij, crossfire geometrijo, spawn timing, aim tracking. Osi kot *lurk*, *space creation*, *enabler*, *objective pressure* so iz logov **fizično neizračunljive**. To je edini prostor, kjer jih ne dohitevamo, ampak delamo nekaj, česar sploh ne morejo.
+
+---
+
+## 4. Predlog: Skill Passport
+
+### 4.1 Pet osi (predlog — owner naj potrdi/preimenuje)
+
+Vsaka os je 0–100, izračunana kot **evidence-weighted percentil znotraj našega bazena**, ne absolutna vrednost.
+
+⚠️ **Predpogoj, ki je pomembnejši od uteži:** sistematski test proximity metrik (`PROXIMITY_VISION_AUDIT_2026-07.md` §2a) je pokazal, da je od devetih preverjenih **nesporno zdrava ena** (`spawn_timing_score`); štiri kažejo v obratno smer od zatrjevane, dve nimata signala, dve sta zamešani z volumnom. Passport ne sme brati nobene metrike, ki ni prestala tega testa — sicer bi večdimenzionalni profil zgolj lepše zapakiral iste napake. Vsaka os spodaj mora pred uporabo prestati isti test: **ali korelira s tem, kar trdi, in ali loči skupine.**
+
+| Os | Kaj meri | Viri, ki jih ŽE imamo |
+|----|----------|----------------------|
+| **FRAG** | Čista ubojna moč in kvaliteta ubojev | KIS (kontekstualni impact), K/D, accuracy, headshot % |
+| **TEAMPLAY** | Koliko igra z ekipo | crossfire participacija, trade responsiveness, revives, PWC crossfire+trade share, cohesion (koliko časa blizu ekipe) |
+| **OBJECTIVE** | Delo za zmago, ki ga K/D spregleda | objective pressure sekunde, carrier events/returns, construction, KIS `is_objective_area` delež, useless-defense (negativno) — ⚠️ **rabi kurirane cone**, glej §4.1a |
+| **LURK / SPACE** | Ownerjeva os: samostojno ustvarjanje prostora in priložnosti | lurker `solo_pct`, space_created (produktivne smrti), enabler (asisti) — ⚠️ **`gravity` NE v surovi obliki**: korelira 0,897 s številom spopadov in 0,724 s smrtmi, torej meri večinoma volumen bojev in umiranje, ne odvrnjene pozornosti (glej revizijo metrik v PROXIMITY_VISION_AUDIT §2a) |
+| **CLUTCH** | Vrednost pod pritiskom | solo-clutch KIS multiplierji, low-HP kills, outnumbered situacije, best-lives |
+
+Igralec ni "78" — igralec je npr. **FRAG 61 · TEAMPLAY 84 · OBJECTIVE 72 · LURK 91 · CLUTCH 55**, kar se prevede v čitljivo značko: *"Lurker/Enabler"*. Ownerjev lastni opis (*"lurker/teamplayer, ki nastavlja priložnosti s sacrificem"*) mora iz teh številk pasti ven sam od sebe — to je sprejemni test.
+
+### 4.1a Kurirane objective cone (predpogoj za OBJECTIVE os)
+
+`_load_zones()` vrne **vse** vnose iz `objective_zones.json`, vključno z **9 od 72 con, ki so health/ammo omarice** (in Command Post-i). Za `is_objective_area` je to sprejemljivo — kill pri omarici res pogosto pomeni boj za oskrbo — a **za OBJECTIVE os ni**: igralec, ki kampira pri omarici, bi dobil enako kredit kot tisti, ki dela na dinamitu.
+
+Zato OBJECTIVE os pred uporabo filtrira cone po tipu:
+
+| Tip cone | V OBJECTIVE osi? |
+|----------|------------------|
+| `objective` (dinamit, dokumenti, vrata, ovire) | ✅ da |
+| `escort` (tank, tovornjak) | ✅ da |
+| `command_post` | ⚠️ nižja utež — je delo za ekipo, a ne zmagovalni pogoj |
+| health/ammo omarice (trenutno tipizirane kot `objective`) | ❌ ne |
+
+Ker so omarice danes v datoteki tipizirane kot `objective`, jih je treba ali pretipizirati (novo polje `scoring_relevant`), ali filtrirati po imenu — čistejše je prvo. To je **predpogoj**, ne kasnejša izboljšava.
+
+### 4.2 Evidence weighting (jedro Z2/Z3)
+
+Za vsako os in igralca:
+
+```text
+raw_i        = vrednost osi za eno OPAZOVANJE (ne za sejo — glej opombo)
+n_axis       = število OPAZOVANJ te osi (ne sej — glej spodaj)
+pool_mean    = povprečje osi čez KVALIFICIRAN bazen (prior) — glej opombo
+C_axis       = prior v ISTI enoti kot n_axis
+
+shrunk = (n_axis * mean(raw_i) + C_axis * pool_mean) / (n_axis + C_axis)
+```
+
+⚠️ **Preklop na opazovanja mora zajeti tudi `raw_i` (druga runda reviewa, Codex #551).**
+Prvi popravek je `n` premaknil s sej na opazovanja, `raw_i` pa pustil kot vrednost na sejo. S tem je `mean(raw_i)` ostalo **neuteženo povprečje sej**, uteženo pa s številom opazovanj — seja z eno rundo bi štela enako kot cel večer, torej ravno tisto, kar naj bi popravek odpravil. `raw_i` je zato vrednost enega opazovanja, `mean(raw_i)` pa povprečje čez vsa opazovanja, ne čez seje.
+
+⚠️ **`C` mora biti v isti enoti kot `n` (popravek po reviewu).** Prvotni zapis je mešal enoti: `n` v opazovanjih, `C = 5 sej`. To ni le nedoslednost — pri osi z veliko opazovanji na sejo (FRAG: ~40 ubojev) bi prior 5 izginil že po eni seji, pri osi z malo (CLUTCH: nekaj situacij) pa bi dušil še po dvajsetih. Vsaka os zato dobi **svoj `C_axis`**, kalibriran kot mediana opazovanj te osi na sejo × želeno število sej zaupanja. Vrednosti se določijo na obstoječih 63 igralcih, ne uganejo.
+
+**Kaj je `n` (popravljeno po reviewu):** NE število sej. Enodnevni cameo (ena runda) bi štel enako kot cel večer, in igralec bi lahko dosegel `confidence = 1` po 15 sejah, v katerih je imel za posamezno os komaj kaj opazovanj. `n` je zato **število opazovanj, specifičnih za to os** — npr. za CLUTCH število clutch situacij, za OBJECTIVE število objective-relevantnih dogodkov, za FRAG število ubojev. Vsaka os ima tako svoj `n` in svoj `confidence`; seja z eno rundo prispeva sorazmerno malo.
+
+- Igralec z **1 sejo** je potegnjen skoraj do sredine bazena (nima še dokaza).
+- Igralec z **20+ sejami** je praktično pri svoji pravi vrednosti.
+- Nihče ne "izstreli" na vrh po enem dobrem večeru — rešuje točno gibhubovo 22-rund napako.
+- `C = 5` je izhodišče (SSR — Situational Skill Rating, `ssr_service.py` — že uporablja prag 5 sej); kalibriramo na obstoječih 63 igralcih.
+
+⚠️ **Bazen ni cela populacija (Codex #551).** Prior je bil definiran čez vse igralce, čeprav se profili z `n_axis < 3` ne prikazujejo. Pri tej populaciji množica igralcev z malo dokazi potegne `pool_mean` k sebi in s tem sistematsko popači os za vse ostale — prior za kvalificirane igralce bi bil sestavljen večinoma iz nekvalificiranih. Bazen je zato omejen na igralce, ki za **to os** in **ta format** presežejo isti prag dokazov, ki velja za prikaz.
+
+Poleg tega vsak profil izpiše **`confidence`** (`min(1, n/15)`) in **`n_sessions`** — ne kot okrasek, ampak vidno ob vsaki osi. Ko je `n < 3`, os prikažemo kot *"premalo podatkov"*, ne kot številko.
+
+### 4.3 Zamrznjeni posnetki (rešuje Z4 in tiho preračunavanje zgodovine)
+
+Danes se `get_player_session_history` preračuna proti **današnji** populaciji percentilov — pretekla seja tako spremeni oceno, ne da bi se karkoli zgodilo.
+
+**Kaj se zamrzne (popravljeno po reviewu):** shraniti samo `raw` + `formula_version` + `n_sessions` **problema ne reši** — če se percentil in `pool_mean` jemljeta iz *trenutne* populacije, vsak nov igralec ali seja spet tiho premakne zgodovinske ocene. Zato posnetek hrani **oboje**:
+
+| Polje | Zakaj |
+|-------|-------|
+| `raw` | surova vrednost osi za to sejo |
+| `pool_mean`, `pool_n`, `pool_sd` | populacijski kontekst **ob tistem trenutku** — brez tega shrinkage ni reproduciren |
+| `percentile_at_time` | zamrznjena relativna vrednost = "kje si bil takrat med svojimi" |
+| `formula_version`, `n_axis`, `n_sessions`, `format` | verzijska in vzorčna sled. **`n_axis` je obvezen** (Codex #551): §4.2 iz njega izpelje krčenje, zaupanje in prag nezadostnih podatkov, in njegova enota se po oseh razlikuje — brez njega posnetka ni mogoče ponovno prebrati. |
+| `pool_quantiles` | **Dodano po drugem reviewu.** `pool_mean`/`pool_n`/`pool_sd` ne zadoščajo za izpeljavo *novega* empiričnega percentila, ko pozna telemetrija spremeni `raw`: dve različni porazdelitvi z istimi tremi momenti dasta različna percentila. Hraniti je treba kvantile (ali samo porazdelitev). |
+
+Iz tega sledita **dve različni številki, ki ju je treba ločeno prikazati**:
+- **Historični pogled** (npr. "tvoja sezona") = agregat `percentile_at_time` → se **nikoli** ne spremeni za nazaj;
+- **Trenutni pogled** ("kje si danes med aktivnimi") = preračun proti današnji populaciji → se **sme** premikati, ker odgovarja na drugo vprašanje.
+
+Verzijski bump → **novi** posnetki, stari ostanejo označeni (kot to že dela `s_effort_service`, edini sistem z dobro verzijsko higieno).
+
+**Označevanje samo po sebi NI dovolj (popravek po reviewu).** Če se formula spremeni sredi sezone, agregat čez mešane verzije še vedno sešteva neprimerljive številke — natanko napaka, ki jo je audit našel pri KIS (26k v2 + 7k v4). Zato: **vsak historični agregat mora biti vezan na eno verzijo.** Ob bumpu sta dovoljeni le dve poti — (a) preračun celotne zgodovine na novo verzijo (kot `backfill_kis_recompute.py`), ali (b) prikaz, ki verzije eksplicitno loči in jih nikoli ne sešteje. Tiho mešanje ni tretja možnost.
+
+**Kdaj se posnetek zapiše (popravljeno po reviewu):** NE takoj ob koncu seje. KIS se računa leno in ima lastno svežinsko preverbo za pozne proximity/stats importe, zato bi takojšen zapis lahko trajno zamrznil delne podatke. Posnetek nastane šele, ko so izpolnjeni pogoji:
+
+1. vse pričakovane runde seje imajo `round_correlations` popolne — **a pozor (popravljeno po reviewu): `round_correlation_service` označi korelacijo kot `complete`, ko prispeta oba stats fajla, kar NE pomeni, da je prispela tudi proximity telemetrija.** Gate mora zato preverjati telemetrijske zastavice (`has_r1/r2_proximity`), ne le `complete` — sicer se zamrzne posnetek, v katerem so proximity osi (TEAMPLAY, LURK, OBJECTIVE) prazne. **Timeout NE sme obiti tega pogoja (popravek po reviewu):** 6-urni orphan timeout pomeni "telemetrija ne pride več", ne "telemetrija je prišla". Če ob izteku manjka, se posnetek vseeno zapiše, a osi brez vira dobijo **NULL z razlogom** (`missing_telemetry`), nikoli izračunano vrednost — sicer bi manjkajoč zajem izgledal kot slaba izvedba igralca. **In**
+2. KIS za ta gsid je aktualne verzije in ni "stale" po obstoječi svežinski preverbi.
+
+Do takrat je seja `pending`. Če pozni import vseeno pride po zamrznitvi, posnetek **ni** tiho prepisan — zapiše se nov z `supersedes` sklicem, tako da ostane vidno, da se je kaj spremenilo.
+
+**Kaj nadomestni posnetek nosi (popravek po reviewu):** populacija se je medtem lahko premaknila, zato nov posnetek **ne sme** dobiti današnjega `pool_mean`/percentila, kot da bi bil izračunan takrat. Pravilo: nadomestni prevzame **populacijski kontekst izvirnika v celoti** — `pool_mean`, `pool_n`, `pool_sd` **in `pool_quantiles`** — spremeni pa `raw` in iz njega izpeljan `percentile_at_time`. Kvantili so tu nujni in ne okrasni: nov percentil se izpelje prav iz njih, zato bi njihova izpustitev pomenila, da nadomestni posnetek percentil računa proti drugačni porazdelitvi od izvirnika (Codex #551). Tako popravek odraža nove podatke o *igralcu*, ne poznejših sprememb *bazena*. Historični agregat sešteva le zadnji posnetek v vsaki verigi.
+
+### 4.4 Formatna ločnica (posnemamo gibhub)
+
+Naši večeri niso homogeni: 3v3 in 6v6 sta drugačni igri, poleg tega **owner sredi večera menja postave za balans**. Zato:
+
+- vsaka os se hrani **per format** (velikost postave iz `rounds`/`lua_round_teams`);
+- team-based osi (TEAMPLAY, OBJECTIVE) se pripisujejo **per rundo**, ne per tekmo — menjava postave sredi tekme ne sme pripisati zaslug napačni ekipi;
+- Passport privzeto prikaže format, ki ga igralec igra največ, z možnostjo preklopa.
+
+---
+
+## 5. Implementacijski načrt (šele po GO)
+
+| Faza | Vsebina | Ocena |
+|------|---------|-------|
+| **P0** | Tabela `player_skill_passport_snapshot` (gsid, guid, os, raw, `pool_mean`/`pool_n`/`pool_sd`, `percentile_at_time`, formula_version, n_sessions, format, `supersedes`) + zapis, **sprožen šele ob izpolnjenih pogojih iz §4.3**, ne ob koncu seje | 1 PR |
+| **P1** | Backfill posnetkov iz obstoječe zgodovine. ⚠️ **NE predpostavljaj, da je vseh 38 sej uporabnih:** `migrations/062` pravi, da so capability zapisi za obstoječe `proximity_processed_files` vrstice NEZNANI, torej za starejše seje ne vemo, katere Lua sekcije so sploh bile zajete. Backfill mora najprej ugotoviti dejansko pokritost per seja in osi brez vira pustiti NULL (ne 0) | 1 PR + skripta |
+| **P2** | Agregacijski servis: shrinkage, confidence, percentil znotraj bazena, per-format | 1 PR |
+| **P3** | Endpoint `/api/skill/passport/{guid}` + značke (playstyle label iz osi) | 1 PR |
+| **P4** | Kalibracija na 14 igralcih z ≥10 sejami; ownerjev sprejemni test ("ali me sistem prepozna kot lurkerja?") | brez kode |
+| **P5** | Šele po P4: leaderboard per os in "kdo je najbolj X" | 1 PR |
+
+UI/UX se namerno ne dotikamo — Passport najprej živi kot JSON + Discord izpis.
+
+---
+
+## 6. Odprta vprašanja za ownerja
+
+1. **Osi**: je 5 pravih? Manjka kaj (npr. *SUPPORT* ločen od TEAMPLAY — medic/ammo delo)? Je katera odveč?
+2. **Imena**: FRAG/TEAMPLAY/OBJECTIVE/LURK/CLUTCH — ali raje ET-jezik (npr. *fragger, glue, objective, ghost, clutch*)?
+3. **Prag zaupanja**: naj se os pod 3 sejami skrije, ali prikaže sivo z opozorilom?
+4. **Formati**: ločiti 3v3/6v6 (kot gibhub) ali za naš community združiti, ker je vzorec majhen?
+5. **Značke**: naj sistem dodeli en glavni label (npr. "Lurker") ali dva ("Lurker/Enabler")?
+6. **Javnost**: je Passport viden vsem, ali samo igralcu (nekatere osi so lahko občutljive — npr. useless-defense)?
+7. **Tiers**: bi želel tudi diskretno lestvico A/B/C kot gibhub, poleg zveznih osi?
+
+---
+
+## Odzivi na review (Codex, PR #551) — 2026-08-06
+
+Sedem P2 pripomb na ta dokument. Vse sprejete: vsaka kaže na mesto, kjer je
+predlog trdil več, kot shema ali formula dejansko zdrži.
+
+| # | Pripomba | Odziv |
+|---|----------|-------|
+| 1 | Uteži krčenja naj bodo v isti enoti dokazov | **Sprejeto.** §4.2 definira `n` kot uboje oziroma priložnosti, specifične za os, formula pa jih meša s `C = 5` **sejami**. Dve različni enoti v isti enačbi. Bodisi je `C` izražen v enotah osi, bodisi je `n` preštet v sejah — pri obeh oseh isto, sicer krčenje ni primerljivo med osmi. |
+| 2 | Šesturni timeout ne sme obiti popolnosti telemetrije | **Sprejeto.** Veja, dodana za primer zamude proximity uvoza, dovoli zamrznitev posnetka tudi takrat, ko telemetrija ni prispela. To trajno zabetonira nepopoln posnetek — natanko tisto, kar naj bi zamrzovanje preprečilo. Timeout sme sprožiti *ponovni poskus*, ne zamrznitve. |
+| 3 | Zgodovinski agregati naj ostanejo znotraj ene verzije formule | **Sprejeto.** Označevanje poznejših posnetkov z novo verzijo ne naredi agregata na vrstici 129 primerljivega; agregat mora biti razrezan po verziji formule, ne le opremljen z njo. |
+| 4 | Opredeli, kako nadomestni posnetek ohrani zgodovino | **Sprejeto.** Ko telemetrija prispe pozno in se je populacija medtem spremenila, nova vrstica nosi drugačen `percentile_at_time` in drugačen kontekst bazena. Dokument mora povedati, ali zgodovinski pogled bere prvotni ali nadomestni posnetek — trenutno ne pove. |
+| 5 | V vsakem posnetku hrani število dokazov po osi | **Sprejeto.** Shema hrani le `n_sessions`, medtem ko §4.2 iz `n_axis` izpelje krčenje, zaupanje in prag nezadostnih podatkov — in enota `n_axis` se po oseh razlikuje. Brez njega posnetka ni mogoče ponovno prebrati. |
+| 6 | Ohrani kalibracijo, potrebno za nadomestne percentile | **Sprejeto.** Kopiranje povprečja, velikosti in standardnega odklona ne zadošča za izpeljavo novega empiričnega percentila: različne porazdelitve z istimi tremi momenti dajo različne percentile. Hraniti je treba kvantile ali samo porazdelitev. |
+| 7 | Bazen percentilov omeji na igralce z dovolj dokazi | **Sprejeto.** Prior je definiran čez cel bazen, čeprav se profili z `n < 3` ne prikazujejo. Pri tej populaciji množica igralcev z malo dokazi potegne prior k sebi, kar sistematsko popači osi za vse ostale. |
+
+**Kaj to pomeni za predlog.** Nobena od sedmih ne ruši zamisli Passporta, vse
+skupaj pa premaknejo njegovo težišče: preden je smiselno računati katerokoli os,
+mora biti dorečena **enota dokazov** (#1, #5), **kdaj je posnetek sploh
+zamrznljiv** (#2, #4) in **kdo je v bazenu** (#7). To je predpogoj, ne
+podrobnost izvedbe.
