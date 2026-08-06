@@ -86,19 +86,19 @@ nearby_teammates=0, run_type=contested_solo, self_kills=0, team_kills=0
 Kontekstna polja (`enemies_nearby`, `nearby_teammates`, `run_type`, `escort_guids`) **so** pravi gradniki ocene odločitve. Toda dve stvari, ki sta se pokazali šele ob ownerjevem ugovoru (2026-07-25) in ju je treba povedati naravnost:
 
 **(a) To NI "inženirska" tabela, ki bi jo bilo treba le posplošiti — je tabela, ki pokriva napačno manjšino.**
-`proximity_objective_run` pozna samo štiri akcije, vse inženirske: `dynamite_plant` (1.058), `objective_destroyed` (656), `construction_complete` (643), `dynamite_defuse` (152) — skupaj **2.509**. Nošenje dokumentov/zastave je v ločeni tabeli `proximity_carrier_event` z **2.079** zapisi.
+`proximity_objective_run` pozna samo štiri akcije, vse inženirske: `dynamite_plant` (1.058), `objective_destroyed` (656), `construction_complete` (643), `dynamite_defuse` (152) — skupaj **2.509**. Nošenje dokumentov/zastave je v ločeni tabeli `proximity_carrier_event` z **2.079** zapisi. *(Vse številke v tem odstavku so meritev 2026-07-25. Sveža meritev in edini nabor, ki velja za deleže spodaj, je 2026-08-06: 2.886 in 2.481.)*
 
 **Pošten razrez (dvakrat popravljeno).** Prvotno besedilo je 69,4 % predstavilo kot delež vsega objective dela; to je bil delež *nosilcev*. Popravek je nato navedel še „28,2 % opravijo medici", kar se ne izide z lastnima številkama tega dokumenta (45,3 % × 69,4 % = 31,4 %) — ujel Codex.
 
 Preračunano proti bazi 2026-08-06: **5.367 objective dogodkov, od tega 2.481 nošenj = 46,2 %** (ob pisanju 2026-07-25 je bilo 4.588 oziroma 45,3 %). Deleža po razredih **ne navajam več**: `proximity_carrier_event` nima stolpca za razred, izpeljati ga je mogoče le s spojem na `player_track`, in moj poskus takega spoja je dal 97,4 % — številko, ki ji ne zaupam dovolj, da bi jo objavil. Sklep na tem ne stoji in ostane: **46 % objective dogodkov je nošenja in zanje nimamo niti enega konteksta odločitve.**
 
-| Polje | objective_run (2.509, inženir) | carrier_event (2.079, 69 % medici) |
+| Polje | objective_run (2.886, inženir) | carrier_event (2.481, nošenje) |
 |---|---|---|
 | `enemies_nearby` / `nearby_teammates` | ✅ | ❌ |
 | `run_type`, `escort_guids` | ✅ | ❌ |
 | geometrija (distance/beeline/efficiency) | ✅ | ✅ — **samo to** |
 
-Bogat kontekst torej pokriva 55 % objective dogodkov, 45 % (nošenje) pa nima ničesar. Prva naloga ni "posplošiti z inženirja", ampak **carrier_event izenačiti z objective_run**.
+Bogat kontekst torej pokriva **53,8 %** objective dogodkov, **46,2 %** (nošenje) pa nima ničesar — isti nabor 2026-08-06 kot zgoraj. Prva naloga ni "posplošiti z inženirja", ampak **carrier_event izenačiti z objective_run**.
 
 **(b) `path_efficiency` ni ocena odločitve — je merilo ravnosti in kaže v napačno smer.** Formula je `beeline / dejanska_pot` (Lua vrstica 2862). Izmerjeno na naši bazi:
 
@@ -146,7 +146,7 @@ Ownerjev ugovor na `path_efficiency` ("nima duše, samo matematika") je sprožil
 > pasove, ki so izračunani; z manjkajočim modalnim pasom tabela sama po sebi ne
 > zadošča in jo je treba dopolniti, preden se na njej karkoli gradi.
 
-1. **KIS push multiplier stoji na obrnjeni metriki.** `PUSH_QUALITY_THRESHOLD = 0,9` zajame ravno pas z **najmanj** uboji. Vzrok je v formuli: `push_quality = poravnanost × (hitrost/300)` je največja, ko cela ekipa sprinta v isto smer — kar se zgodi ob **odsotnosti stika** (tek iz spawna). Ob dejanskem stiku se hitrost zmanjša in ekipa razprši → "nizka kvaliteta". KIS torej ojača uboje med nemotenim sprintom. (Formula je tudi neomejena: max 2,16, 4.124 od 84.309 vrstic nad 1,0.)
+1. **KIS push multiplier stoji na obrnjeni metriki.** `PUSH_QUALITY_THRESHOLD = 0,9` zajame pas z najmanj uboji **med izmerjenimi** — s pridržkom, ker pas 0,5–0,9, ki je največji, ni bil izmerjen in bi lahko imel še nižjo stopnjo (Codex, #551). Trditev „zajame pas z najmanj uboji" torej velja šele, ko je manjkajoči pas izračunan. Vzrok je v formuli: `push_quality = poravnanost × (hitrost/300)` je največja, ko cela ekipa sprinta v isto smer — kar se zgodi ob **odsotnosti stika** (tek iz spawna). Ob dejanskem stiku se hitrost zmanjša in ekipa razprši → "nizka kvaliteta". KIS torej ojača uboje med nemotenim sprintom. (Formula je tudi neomejena: max 2,16, 4.124 od 84.309 vrstic nad 1,0.)
 
 2. **~~prox_score "awareness" os se sama s sabo bori.~~ NAPAČNO — popravljeno po reviewu (Codex, #551).** Preveril sem v kodi: `proximity_scoring.py:288` računa
    `awareness = min(100, esc_rate * 0.5 + max(0, 100 - d_ms / 50) * 0.5)`.

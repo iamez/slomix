@@ -151,7 +151,7 @@ Verzijski bump → **novi** posnetki, stari ostanejo označeni (kot to že dela 
 
 Do takrat je seja `pending`. Če pozni import vseeno pride po zamrznitvi, posnetek **ni** tiho prepisan — zapiše se nov z `supersedes` sklicem, tako da ostane vidno, da se je kaj spremenilo.
 
-**Kaj nadomestni posnetek nosi (popravek po reviewu):** populacija se je medtem lahko premaknila, zato nov posnetek **ne sme** dobiti današnjega `pool_mean`/percentila, kot da bi bil izračunan takrat. Pravilo: nadomestni prevzame **populacijski kontekst izvirnika** (isti `pool_mean`/`pool_n`/`pool_sd`), spremeni pa `raw` in iz njega izpeljan `percentile_at_time`. Tako popravek odraža nove podatke o *igralcu*, ne poznejših sprememb *bazena*. Historični agregat sešteva le zadnji posnetek v vsaki verigi.
+**Kaj nadomestni posnetek nosi (popravek po reviewu):** populacija se je medtem lahko premaknila, zato nov posnetek **ne sme** dobiti današnjega `pool_mean`/percentila, kot da bi bil izračunan takrat. Pravilo: nadomestni prevzame **populacijski kontekst izvirnika v celoti** — `pool_mean`, `pool_n`, `pool_sd` **in `pool_quantiles`** — spremeni pa `raw` in iz njega izpeljan `percentile_at_time`. Kvantili so tu nujni in ne okrasni: nov percentil se izpelje prav iz njih, zato bi njihova izpustitev pomenila, da nadomestni posnetek percentil računa proti drugačni porazdelitvi od izvirnika (Codex #551). Tako popravek odraža nove podatke o *igralcu*, ne poznejših sprememb *bazena*. Historični agregat sešteva le zadnji posnetek v vsaki verigi.
 
 ### 4.4 Formatna ločnica (posnemamo gibhub)
 
