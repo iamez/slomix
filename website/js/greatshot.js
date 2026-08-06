@@ -393,6 +393,14 @@ function renderMultiProgress() {
 // adding another N requests (master review P1-3).
 let _multiPollInFlight = false;
 
+// Which analysis batch a poll belongs to. _multiPollInFlight stops two ticks of
+// the SAME batch overlapping; this stops a tick of an ABANDONED batch finishing
+// after a new one started (CodeRabbit on #607). Without it a stale tick would,
+// after its await, evaluate allDone over the NEW batch's pendingDemos and could
+// call stopAnalysisPolling() on it — killing the polling for an analysis that
+// had only just begun.
+let _analysisBatchId = 0;
+
 /** Poll status for all pending demos. */
 async function pollMultiAnalysisStatus() {
     if (_multiPollInFlight) return;
@@ -409,6 +417,11 @@ async function pollMultiAnalysisStatus() {
 }
 
 async function _pollMultiAnalysisStatusOnce() {
+    // Captured before the first await; checked after it. Everything below this
+    // point acts on the GLOBAL pendingDemos map, so a tick whose batch has been
+    // replaced must not write to it, and above all must not decide that the new
+    // batch is "all done" and stop its polling.
+    const batchId = _analysisBatchId;
 
     const stillPending = [];
     for (const [demoId, entry] of pendingDemos) {
@@ -448,6 +461,7 @@ async function _pollMultiAnalysisStatusOnce() {
     await Promise.allSettled(stillPending.map(async (demoId) => {
         try {
             const data = await fetchJSONWithAuth(`${API_BASE}/greatshot/${encodeURIComponent(demoId)}/status`);
+            if (batchId !== _analysisBatchId) return;
             const entry = pendingDemos.get(demoId);
             if (!entry) return;
             entry.status = data.status;
@@ -456,6 +470,8 @@ async function _pollMultiAnalysisStatusOnce() {
             // keep trying
         }
     }));
+
+    if (batchId !== _analysisBatchId) return;   // a new batch replaced this one
 
     renderMultiProgress();
 
@@ -503,6 +519,8 @@ async function uploadDemo(form) {
     stopAnalysisPolling();
     showAnalysisProgress(false);
     pendingDemos.clear();
+    // Any poll still in flight now belongs to a batch nobody is watching.
+    _analysisBatchId += 1;
 
     // Toggle single vs multi progress UI
     const singlePhases = document.getElementById('analysis-phases-single');
