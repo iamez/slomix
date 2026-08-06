@@ -52,6 +52,61 @@ objective runs — scoped to a session, a map, a round, or a single player.
 **Handles demos.** Upload a demo, get multi-kills and sprees detected and clips cut
 for rendering.
 
+## How it works
+
+A round ends, the server writes a stats file, and about three seconds later the
+result is in PostgreSQL and posted to Discord. Two paths feed it: SSH polling on a
+60-second cycle, and a Lua webhook that fires as soon as the round ends. Whichever
+arrives first wins; the other is skipped because the filename is already recorded as
+processed. A SHA-256 of the file is stored alongside that record — not to
+deduplicate, but to notice later if a file changed underneath us after it was
+imported.
+
+Between the file and the database sit the four problems stopwatch creates. They are
+worth spelling out, because most of the parser exists for them.
+
+**Round 2 is cumulative — but not entirely.** ET:Legacy's second-round file reports
+totals for the whole map, so the parser subtracts the matched round 1 values field by
+field. Except that **23 of the 57 fields are already per-round**: the game's own Lua
+resets those variables between rounds, so subtracting would zero them out. XP, kill
+assists, headshot kills, death sprees and objectives are in that group. The parser
+carries the list; nothing downstream recalculates a differential.
+
+**A map is two files that have to find each other.** Round 1 and round 2 arrive
+minutes apart as separate files. Pairing is by map and a 45-minute window, with the
+side swap accounted for — the team that defended in round 1 attacks in round 2, so
+"winner" means nothing until both halves are known.
+
+**A session is not a date.** An evening that starts at 22:40 and ends at 01:30 is one
+session, not two. Grouping is by a 60-minute inactivity gap and stored as
+`gaming_session_id`; every session query keys on that id rather than on a calendar
+date, which is what keeps midnight crossovers intact.
+
+**A player is a GUID.** Names change mid-evening and are reused. Every aggregate
+groups by `player_guid`, never by `player_name`, and display names are resolved
+separately at render time.
+
+### The telemetry side
+
+The Lua tracker samples every player's position, health, weapon, stance and speed
+every **200 ms**, and team spread every **500 ms**. Around that it records each shot
+with origin and view angles, hit regions, engagements and reaction times, aim-lock
+traces, spawn timing, kill outcomes with the killer's remaining health, crossfire
+geometry, team pushes, revives, trades and objective runs.
+
+That lands in **29 `proximity_*` tables**, currently **1.26 GB** and 63,058 recorded
+player paths. Every row is linked back to a round, which is less trivial than it
+sounds: the tracker writes before the stats file exists, so rows are matched to their
+round afterwards by map, round number and start time.
+
+### Stack
+
+Python 3.11+ with `asyncpg` throughout, PostgreSQL 17 (101 tables, schema managed by
+committed migrations with a checksum ledger), FastAPI for the API, `discord.py` for
+the bot, Lua on the game server, and a web front end that runs legacy JS as the
+production surface with React 19 alongside it. Tests: 4,200, plus Playwright smoke
+runs against the real pages.
+
 ## Direction
 
 The project is built for a fixed group of about 65 players, not for growth, and that
