@@ -285,6 +285,11 @@ async function handleUpload(e) {
         titleInput.value = '';
         descInput.value = '';
         tagsInput.value = '';
+        // Back to Forever, like every other field goes back to empty. Leaving
+        // "7 days" selected would silently apply it to the NEXT upload too,
+        // which is the one choice here a user cannot undo later (CodeRabbit
+        // on #615).
+        if (retentionSelect) retentionSelect.value = '';
         const nameEl = document.getElementById('upload-drop-filename');
         if (nameEl) { nameEl.textContent = ''; nameEl.classList.add('hidden'); }
 
@@ -772,7 +777,7 @@ export async function loadUploadDetail(uploadId) {
                 </div>
             </div>
         `;
-        _maybeShowOwnerDelete(data);
+        _maybeShowDeleteButton(data);
     } catch (err) {
         container.innerHTML = `
             <div class="glass-card rounded-xl p-12 text-center" style="animation: fadeSlideUp 0.4s ease-out both;">
@@ -784,7 +789,9 @@ export async function loadUploadDetail(uploadId) {
     }
 }
 
-// Delete: shown to the uploader AND to admins. The decision is the server's —
+// Delete: shown to the uploader AND to admins — hence the name change from
+// _maybeShowOwnerDelete, which stopped being true when admins gained the
+// ability (Copilot on #615). The decision is the server's —
 // the detail payload carries can_delete for this session, computed by the same
 // rule the DELETE endpoint enforces, so the button and the answer cannot drift
 // apart and the admin list never reaches the browser.
@@ -792,7 +799,7 @@ export async function loadUploadDetail(uploadId) {
 // Falls back to the uploader check for a payload from an older backend, so a
 // stale cached response degrades to the previous behaviour rather than hiding
 // the button from someone who owns the file.
-async function _maybeShowOwnerDelete(data) {
+async function _maybeShowDeleteButton(data) {
     try {
         if (data.can_delete === false) return;
         if (data.can_delete !== true) {

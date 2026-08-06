@@ -539,12 +539,12 @@ async def download_upload(
 
 
 # ---------------------------------------------------------------------------
-# DELETE /api/uploads/{upload_id}  —  Delete upload (owner only)
+# DELETE /api/uploads/{upload_id}  —  Delete upload (uploader or admin)
 # ---------------------------------------------------------------------------
 
 @router.delete("/{upload_id}")
 async def delete_upload(upload_id: str, request: Request, db=Depends(get_db)):
-    """Soft-delete an upload (owner only)."""
+    """Soft-delete an upload. Allowed for the uploader, or for an admin."""
     require_ajax_csrf_header(request)  # CSRF: state-changing, requires X-Requested-With
     user = _require_user(request)
     discord_id = int(user["id"])
@@ -607,19 +607,31 @@ async def sweep_expired_uploads(request: Request, db=Depends(get_db)):
     storage = _get_storage()
     swept, file_errors = 0, 0
     for upload_id, stored_path in ((r[0], r[1]) for r in rows):
-        # Mark it gone first. If the unlink fails we have an orphaned file,
-        # which is recoverable; the reverse — a deleted file still listed as
-        # active — hands users a download that 500s.
+        # Remove the file FIRST, and only mark the row deleted if that worked.
+        #
+        # The other order looks safer and is not: marking first means a failed
+        # unlink leaves a row the next sweep will never select again, because
+        # the sweep looks for status = 'active'. The file would then sit on disk
+        # forever with nothing tracking it (CodeRabbit on #615).
+        #
+        # Leaving the row active on failure is safe here precisely because it
+        # has already lapsed: _LIVE hides expired rows from every read, so it
+        # cannot be listed or downloaded — it is invisible AND retryable, which
+        # is what we want.
+        try:
+            storage.delete_upload(stored_path)
+        except Exception:
+            file_errors += 1
+            logger.warning(
+                "sweep-expired: could not remove file for %s, leaving it active for the next sweep",
+                upload_id, exc_info=True,
+            )
+            continue
         await db.execute(
             "UPDATE uploads SET status = 'deleted', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
             (upload_id,),
         )
         swept += 1
-        try:
-            storage.delete_upload(stored_path)
-        except Exception:
-            file_errors += 1
-            logger.warning("sweep-expired: could not remove file for %s", upload_id, exc_info=True)
 
     logger.info(
         "sweep-expired: %s uploads swept, %s file errors, by admin=%s",
