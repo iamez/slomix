@@ -28,6 +28,15 @@ COMMENT ON COLUMN uploads.expires_at IS
 -- Serves both the read filter and the sweep. Partial, because the only rows
 -- either one cares about are active ones that actually have a deadline --
 -- which, with lifetime as the default, is expected to stay a small minority.
+--
+-- Non-CONCURRENTLY on purpose. CREATE INDEX takes a write lock, which is worth
+-- weighing (CodeRabbit on #615) -- but `uploads` is the community file library,
+-- not a telemetry table: 5 rows on dev, and production is the same order of
+-- magnitude. The build is sub-millisecond. The runner is transactional and
+-- rejects CONCURRENTLY, and deploy_release.sh applies migrations with the
+-- services stopped anyway, so there is no concurrent writer to block.
+-- If this table ever grows into the millions, build the index by hand with
+-- CONCURRENTLY and record it with --mark.
 CREATE INDEX IF NOT EXISTS idx_uploads_active_expires_at
     ON uploads (expires_at)
     WHERE status = 'active' AND expires_at IS NOT NULL;

@@ -128,9 +128,13 @@ async def test_sweep_requires_admin():
 
 
 @pytest.mark.asyncio
-async def test_sweep_marks_deleted_before_unlinking():
-    """Order matters. An orphaned file is recoverable; a row still marked
-    active whose file is gone hands users a download that fails."""
+async def test_sweep_unlinks_before_marking_deleted():
+    """Order matters, and it is the opposite of what looks safer.
+
+    Marking first would leave a failed unlink behind a row the next sweep can
+    never select again — the sweep looks for status = 'active' — so the file
+    would sit on disk forever with nothing tracking it.
+    """
     db = AsyncMock()
     db.fetch_all.return_value = [("abc", "/data/abc.cfg")]
     calls: list[str] = []
@@ -142,13 +146,18 @@ async def test_sweep_marks_deleted_before_unlinking():
          patch.object(U, "_get_storage", return_value=storage):
         out = await U.sweep_expired_uploads(_req(user_id=99), db=db)
 
-    assert calls == ["db", "file"]
+    assert calls == ["file", "db"]
     assert out == {"success": True, "swept": 1, "file_errors": 0}
 
 
 @pytest.mark.asyncio
-async def test_sweep_keeps_going_when_a_file_cannot_be_removed():
-    """One unreadable path must not strand the rest of the batch."""
+async def test_a_failed_unlink_stays_eligible_for_the_next_sweep():
+    """The row whose file could not be removed must stay active, so a later
+    sweep retries it. It is not visible meanwhile: _LIVE hides expired rows
+    from every read, so it is invisible AND retryable.
+
+    One unreadable path must also not strand the rest of the batch.
+    """
     db = AsyncMock()
     db.fetch_all.return_value = [("a", "/x/a"), ("b", "/x/b"), ("c", "/x/c")]
     storage = MagicMock()
@@ -158,8 +167,9 @@ async def test_sweep_keeps_going_when_a_file_cannot_be_removed():
          patch.object(U, "_get_storage", return_value=storage):
         out = await U.sweep_expired_uploads(_req(user_id=99), db=db)
 
-    assert out == {"success": True, "swept": 3, "file_errors": 1}
-    assert db.execute.await_count == 3
+    # Two swept, not three: "a" keeps its row so the next sweep can try again.
+    assert out == {"success": True, "swept": 2, "file_errors": 1}
+    assert db.execute.await_count == 2
 
 
 @pytest.mark.asyncio
