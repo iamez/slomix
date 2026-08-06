@@ -5,6 +5,10 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  # A merge queue tests each PR against the FUTURE state of main, and it does
+  # that by pushing to a temporary merge_group ref. Without this trigger the
+  # queue would enqueue a PR and then wait forever for checks that never run.
+  merge_group:
 
 permissions:
   contents: read

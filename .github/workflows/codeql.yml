@@ -5,6 +5,7 @@ on:
     branches: [ main, develop, feature/** ]
   pull_request:
     branches: [ main, develop ]
+  merge_group:          # required for the merge queue -- see tests.yml
   schedule:
     - cron: '0 2 * * 0'  # Weekly Sunday scan
 

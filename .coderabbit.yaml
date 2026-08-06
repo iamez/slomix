@@ -1,0 +1,146 @@
+# CodeRabbit configuration
+#
+# Written 2026-08-06, after CodeRabbit had been running on defaults since it was
+# installed mid-batch. Three things were measurably wrong for this repo:
+#
+#   1. It duplicated CI. tests.yml already runs ruff, shellcheck, bandit,
+#      pip-audit, tsc and lint:js. Its own ruff/shellcheck passes could only ever
+#      repeat what CI had already said, at the cost of review budget.
+#   2. It reviewed generated files. tools/schema_postgresql.sql is 8,883 lines of
+#      pg_dump output and appeared in a PR diff; billing past the plan limit is
+#      per file, so that is the most expensive worthless file in the repository.
+#   3. It kept hitting the review limit ("Review limit reached ... next review
+#      available in 9 minutes" on #615), because every push re-triggers a review
+#      and our PRs get several pushes while review threads are answered.
+#
+# What it does NOT duplicate is JavaScript linting: there is no eslint config
+# anywhere in this repo, and `npm run lint:js` is only `node --check` over
+# website/js — syntax, not style, and it never looks at scripts/*.mjs. So
+# eslint/biome/oxc stay on deliberately; they are the only real JS linting here.
+#
+# Schema: https://docs.coderabbit.ai/reference/configuration
+
+language: en-US
+
+reviews:
+  # Default, stated so a future change is a decision rather than a drift.
+  # 'chill' reports bugs, security and logic errors and stays quiet about naming
+  # and style, which is right for a repo that already has strong CI linting.
+  profile: chill
+
+  high_level_summary: true
+  review_status: true
+  poem: false
+
+  auto_review:
+    enabled: true
+    # The default is the default branch only. Every recent PR here targets main,
+    # so nothing has been missed — but branch-to-branch PRs are part of how this
+    # project works, and under the default they would be silently unreviewed.
+    base_branches:
+      - main
+      - "^integration/.*"
+    # Left false ON PURPOSE, and it is the main lever against the review limit:
+    # open a PR as a draft while iterating, mark it ready once, and get one
+    # review instead of one per push.
+    drafts: false
+
+  path_filters:
+    # pg_dump output. Regenerated wholesale; reviewing it says nothing.
+    - "!tools/schema_postgresql.sql"
+    # Vite build output.
+    - "!website/static/modern/chunks/**"
+    - "!website/static/modern/route-host.js"
+    - "!**/*.min.js"
+    - "!**/node_modules/**"
+
+  tools:
+    # Both already run in tests.yml. Turning them off loses no coverage.
+    ruff:
+      enabled: false
+    shellcheck:
+      enabled: false
+
+  pre_merge_checks:
+    # This project does not use GitHub issues, so these two checks can only ever
+    # report "skipped because no linked issues were found".
+    issue_assessment:
+      # Quoted deliberately: YAML parses a bare `off` as the boolean false, not
+      # as the string the schema expects.
+      mode: "off"
+
+  path_instructions:
+    - path: "{bot,website/backend}/**/*.py"
+      instructions: |
+        This project is PostgreSQL-only in production. Flag SQLite-isms
+        (INSERT OR REPLACE, AUTOINCREMENT, sqlite_master) as bugs, not style.
+        Query parameters use `?` placeholders through the database adapter —
+        never f-string interpolation of values into SQL.
+
+        Public GET endpoints must NEVER write to the database. A read endpoint
+        that inserts, updates or deletes is a finding even when it looks
+        harmless (an audit log, a cache warm, a counter).
+
+        Session queries: scope by `gaming_session_id`, never by date — a session
+        can cross midnight, and a date can hold several sessions. Aggregate by
+        `player_guid`, never by `player_name`, because players rename freely.
+        The session gap threshold is 60 minutes, not 30.
+
+    - path: "**/*proximity*"
+      instructions: |
+        Proximity tables store 32-character GUIDs. `player_comprehensive_stats`
+        stores 8-character ones. The filters here are equality tests, so passing
+        an 8-character GUID matches ZERO rows while every endpoint still returns
+        HTTP 200 — the page renders entirely zeros with nothing reporting a
+        problem. Treat any code path that could hand a short GUID to a proximity
+        query as a bug, and flag a proximity page that cannot distinguish "no
+        data for this player" from "this GUID matched nothing".
+
+        Note also that `*_guid_canonical` columns are a mix of 8- and 32-char
+        values and are not a safe substitute.
+
+    - path: "migrations/**"
+      instructions: |
+        Applied migrations are immutable. A fix for a past migration goes in a
+        NEW numbered file — editing one that has already run is a finding, since
+        the runner records a checksum and the ledger will drift.
+
+        Every new migration must also be (a) listed in the current
+        `scripts/release_configs/v*.sh` MIGRATIONS array, or no release will ever
+        ship it, and (b) reflected in `tools/schema_postgresql.sql`, which is what
+        a fresh install bootstraps from. Both have contract tests; a migration
+        missing from either is a real failure, not a nit.
+
+        DDL needs the table owner. The runner loads website/.env
+        (POSTGRES_USER=website_app) while the tables are owned by etlegacy_user,
+        so ALTER TABLE / CREATE INDEX must run with the owner's credentials.
+
+    - path: "website/js/**/*.js"
+      instructions: |
+        The legacy JS under website/js is production truth; the React app under
+        website/frontend runs in parallel. Prefer changes here.
+
+        Tailwind class names built at runtime do not exist in the compiled CSS —
+        an interpolated class is dead code. Payload-driven colours belong on
+        `style`, and `escapeHtml()` does NOT make a value safe inside a CSS
+        declaration: a value containing `;` can inject further properties, so
+        validate the shape (e.g. a 6-digit hex) instead.
+
+        A fetch whose body is never consumed does not complete: the response
+        arrives but the request stays open and the page never reaches
+        networkidle. Always read the body, including on the error path.
+
+    - path: "{scripts,.github}/**"
+      instructions: |
+        Service unit names are host-specific: etlegacy-bot/etlegacy-web on the
+        dev box, slomix-bot/slomix-web on the production VM. Code or docs that
+        assume one set for both hosts is a finding — `systemctl is-active` on a
+        unit that does not exist answers "inactive", which reads as "not
+        running" and invites starting a second instance by hand.
+
+        Never start these services directly; they are systemd units with
+        Restart=always, so a hand-started copy wins the port race and systemd's
+        own restart then fails with EADDRINUSE in a loop.
+
+chat:
+  auto_reply: true
