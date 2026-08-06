@@ -34,6 +34,100 @@ export function setLoadMatchDetails(fn) {
 /**
  * Load player profile page
  */
+/**
+ * Fill the Achievements card.
+ *
+ * The card was fully built in index.html — count, progress bar, unlocked badges
+ * and a "Next Milestones" block — and /api/stats/player/<id> has always returned
+ * a matching `achievements` payload (unlocked, next, total_unlocked,
+ * total_possible, progress) from calculate_player_achievements(). Only the JS
+ * between them was never written, so every profile showed
+ * "Loading achievements..." forever and the bar sat at 0%
+ * (docs/research/WEBSITE_APP_AUDIT_2026-08-05.md).
+ *
+ * Nothing new is computed here: this renders what the API already sends.
+ */
+function _renderAchievements(ach) {
+    const unlockedHost = document.getElementById('profile-achievements-unlocked');
+    const countEl = document.getElementById('profile-achievement-count');
+    const barEl = document.getElementById('profile-achievement-bar');
+    const nextHost = document.getElementById('profile-achievements-next');
+    if (!unlockedHost) return;
+
+    const unlocked = Array.isArray(ach?.unlocked) ? ach.unlocked : [];
+    const next = Array.isArray(ach?.next) ? ach.next : [];
+    const total = Number(ach?.total_possible) || 0;
+
+    if (!ach) {
+        // Reset EVERY part of the card, not just this one container. On an SPA
+        // navigation the previous player's count, progress bar and milestone
+        // list would otherwise stay on screen under the new player's name
+        // (Copilot on #610). The container's own classes are left alone —
+        // overwriting className dropped the badge layout for later renders too.
+        unlockedHost.textContent = '';
+        safeInsertHTML(unlockedHost, 'beforeend',
+            '<span class="text-slate-500 text-sm">Achievements unavailable.</span>');
+        if (countEl) countEl.textContent = '—';
+        if (barEl) barEl.style.width = '0%';
+        if (nextHost) nextHost.classList.add('hidden');
+        return;
+    }
+
+    if (countEl) countEl.textContent = total ? `${unlocked.length} / ${total}` : String(unlocked.length);
+    if (barEl) barEl.style.width = `${Math.max(0, Math.min(100, Number(ach.progress) || 0))}%`;
+
+    // Colour comes from the payload, so it goes on `style` rather than into a
+    // class name — an interpolated Tailwind class would not exist at runtime.
+    //
+    // escapeHtml() makes a value safe as HTML, NOT as CSS: a value containing
+    // `;` would close the declaration and inject further properties into the
+    // style attribute (Copilot on #610). Since these are used both as a colour
+    // and as `${c}33` / `${c}1a` alpha suffixes, the only shape that actually
+    // works is a 6-digit hex — so require exactly that and fall back otherwise.
+    const badgeColor = (value) => (
+        /^#[0-9a-fA-F]{6}$/.test(String(value || '')) ? String(value) : '#94a3b8'
+    );
+    unlockedHost.textContent = '';
+    if (!unlocked.length) {
+        safeInsertHTML(unlockedHost, 'beforeend',
+            '<span class="text-slate-500 text-sm">No achievements yet — play a session to start.</span>');
+    } else {
+        safeInsertHTML(unlockedHost, 'beforeend', unlocked.map((a) => `
+            <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs font-bold"
+                  style="color:${badgeColor(a.color)};border-color:${badgeColor(a.color)}33;background:${badgeColor(a.color)}1a"
+                  title="${escapeHtml(String(a.title || ''))}">
+                <span aria-hidden="true">${escapeHtml(String(a.emoji || '•'))}</span>
+                <span>${escapeHtml(String(a.title || ''))}</span>
+            </span>`).join(''));
+    }
+
+    if (!nextHost) return;
+    const list = nextHost.querySelector('.space-y-2');
+    if (!list) return;
+    if (!next.length) {
+        nextHost.classList.add('hidden');
+        return;
+    }
+    nextHost.classList.remove('hidden');
+    list.textContent = '';
+    safeInsertHTML(list, 'beforeend', next.slice(0, 4).map((a) => {
+        const pct = Math.max(0, Math.min(100, Number(a.progress) || 0));
+        return `
+            <div>
+                <div class="flex items-baseline justify-between text-xs mb-1">
+                    <span class="text-slate-300 font-bold">
+                        <span aria-hidden="true">${escapeHtml(String(a.emoji || '•'))}</span>
+                        ${escapeHtml(String(a.title || ''))}
+                    </span>
+                    <span class="text-slate-500 font-mono tabular-nums">${escapeHtml(String(a.current ?? '?'))} / ${escapeHtml(String(a.threshold ?? '?'))}</span>
+                </div>
+                <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div class="h-full bg-brand-cyan" style="width:${pct}%"></div>
+                </div>
+            </div>`;
+    }).join(''));
+}
+
 export async function loadPlayerProfile(playerIdentifier) {
     // Keep #/profile/<id> shareable WITHOUT re-entrant dispatch. The route
     // registry's profile.load also calls this function, so if we navigated
@@ -72,6 +166,8 @@ export async function loadPlayerProfile(playerIdentifier) {
         if (profilePlaytime) profilePlaytime.textContent = stats.playtime_hours + 'h';
         if (profileSeen) profileSeen.textContent = new Date(stats.last_seen).toLocaleDateString();
         if (profileDpm) profileDpm.textContent = stats.dpm;
+
+        _renderAchievements(data.achievements);
 
         // Update Cards
         const profileKd = document.getElementById('profile-kd');
