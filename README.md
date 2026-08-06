@@ -121,7 +121,7 @@ that needs daily manual feeding. Every new page replaces or merges an old one â€
 | **Stats Per Player Per Round** | 57 fields |
 | **Discord Commands** | 81 across 21 cogs |
 | **Database Tables** | 101 (managed via committed SQL migrations) |
-| **Test Coverage** | 4,200 tests, CI green |
+| **Tests** | 4,200 collected, CI green |
 | **Data Span** | Jan 2025 â€” Aug 2026 (19 months) |
 
 ---

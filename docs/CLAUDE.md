@@ -85,7 +85,7 @@ All in `bot/cogs/`: achievements, admin, admin_predictions, analytics, automatio
 
 ### 19 Core Modules
 
-All in `bot/core/`: achievement_system, checks, correlation_context, database_adapter, endstats_pagination_view, frag_potential, guid_utils, lazy_pagination_view, match_tracker, pagination_view, round_canonical, round_contract, round_linker, season_manager, stats_cache, substitution_detector, team_manager, utils.
+All in `bot/core/`: achievement_system, checks, correlation_context, database_adapter, endstats_pagination_view, frag_potential, guid_utils, lazy_pagination_view, match_tracker, pagination_view, round_canonical, round_contract, round_linker, season_manager, stats_cache, stopwatch_pairing, substitution_detector, team_manager, utils.
 
 ---
 
