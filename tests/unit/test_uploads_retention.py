@@ -171,3 +171,29 @@ async def test_sweep_with_nothing_to_do_touches_no_storage():
         out = await U.sweep_expired_uploads(_req(user_id=99), db=db)
     assert out == {"success": True, "swept": 0, "file_errors": 0}
     storage.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# The form fields must be Form(), not bare defaults
+# ---------------------------------------------------------------------------
+
+def test_upload_text_fields_are_declared_as_form_parameters():
+    """A plain scalar default on a POST is a QUERY parameter to FastAPI, while
+    the upload form sends multipart/form-data — so such a field silently never
+    arrives, with no error anywhere.
+
+    This is not hypothetical. Before the fix, the dev database held 5 uploads:
+    0 with a title different from the filename, 0 with a description, and
+    upload_tags was empty. The Title / Description / Tags inputs had never done
+    anything, and retention_days was about to inherit the same fate.
+    """
+    import inspect
+    from fastapi.params import Form as FormParam
+
+    sig = inspect.signature(U.upload_file)
+    for name in ("title", "description", "tags", "category", "retention_days"):
+        default = sig.parameters[name].default
+        assert isinstance(default, FormParam), (
+            f"{name} must be declared as Form(...); a bare default makes it a "
+            f"query parameter and the multipart form field is dropped silently"
+        )
