@@ -7,7 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
 from website.backend.dependencies import _configured_admin_ids, get_db, require_admin_user
@@ -112,11 +112,18 @@ def _get_validators():
 async def upload_file(
     request: Request,
     file: UploadFile = File(...),
-    title: str = "",
-    description: str = "",
-    tags: str = "",
-    category: str = "",
-    retention_days: int | None = None,
+    # Form(...), not bare defaults. A plain scalar on a POST is a QUERY
+    # parameter to FastAPI, while the upload form sends multipart/form-data —
+    # so these never arrived. Measured before the fix: of 5 uploads in the dev
+    # database, 0 had a title different from the filename, 0 had a description,
+    # and upload_tags held 0 rows. The Title / Description / Tags inputs had
+    # never done anything, and retention_days would have been silently dropped
+    # the same way.
+    title: str = Form(""),
+    description: str = Form(""),
+    tags: str = Form(""),
+    category: str = Form(""),
+    retention_days: int | None = Form(None),
     db=Depends(get_db),
 ):
     """Upload a config, HUD, archive, or clip file.
@@ -124,17 +131,22 @@ async def upload_file(
     retention_days: 7, 30 or 90 to have the upload lapse automatically.
     Omit it (or send nothing) for the default, which is to keep it forever.
     """
-    if retention_days is not None and retention_days not in _RETENTION_DAYS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid retention_days. Allowed: {sorted(_RETENTION_DAYS)}, or omit for lifetime",
-        )
     require_ajax_csrf_header(request)  # CSRF: state-changing, requires X-Requested-With
     user = _require_user(request)
     discord_id = int(user["id"])
     username = user.get("username", "Unknown")
 
     _check_rate_limit(discord_id)
+
+    # Input validation comes AFTER the CSRF and session gates, not before: an
+    # unauthenticated caller should be turned away by 403, not told which
+    # retention values this endpoint accepts. Putting it first also broke
+    # test_uploads_csrf, which asserts a missing CSRF header is what fails.
+    if retention_days is not None and retention_days not in _RETENTION_DAYS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid retention_days. Allowed: {sorted(_RETENTION_DAYS)}, or omit for lifetime",
+        )
 
     v = _get_validators()
     storage = _get_storage()
