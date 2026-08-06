@@ -49,7 +49,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 ET:Legacy Game Server -> SSH Monitor -> Parser -> PostgreSQL -> Discord Bot -> Users
-                         (60s poll)    (57 fields)  (101 tables)  (80+ commands)
+                         (60s poll)    (57 fields)  (101 tables)  (107 commands)
 ```
 
 ### Key Patterns
@@ -212,7 +212,7 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 
 - Parser: 100% functional, R2 differential validated, Oksii fields backward-compatible
 - Database: PostgreSQL (101 tables), no corruption
-- Bot: 81 commands across 21 Cogs, all functional
+- Bot: 107 commands across 21 Cogs and their mixins, all functional
 - Website: Upload library, availability polls, greatshot, storytelling, skill rating, BOX scoring
 - Automation: SSH monitoring, voice detection, Lua webhook (v1.7.0)
 - Lua: v6.01 with Oksii adoption (killer_health, alive_count, reinf timing)
