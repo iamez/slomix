@@ -169,7 +169,12 @@ async def test_a_failed_unlink_stays_eligible_for_the_next_sweep():
 
     # Two swept, not three: "a" keeps its row so the next sweep can try again.
     assert out == {"success": True, "swept": 2, "file_errors": 1}
-    assert db.execute.await_count == 2
+
+    # Assert WHICH rows were updated, not just how many. A count of 2 would also
+    # pass if the sweep had marked "a" deleted and skipped "b" or "c" — the exact
+    # inversion of the contract this test exists to protect (CodeRabbit on #615).
+    updated = [call.args[1][0] for call in db.execute.await_args_list]
+    assert updated == ["b", "c"], f"expected only b and c to be marked deleted, got {updated}" 
 
 
 @pytest.mark.asyncio
