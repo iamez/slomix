@@ -1,16 +1,32 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type ConsoleMessage } from '@playwright/test';
 
 // W7: five routes to start (not the full 30 from docs/ROUTE_MAP_2026-07.md),
 // mixing legacy JS and React so both frontends are covered. Each page must
 // load, render real content (not a blank error boundary), and produce zero
 // console errors / zero failed network requests — that's the part that
 // turns the F12 loop (W9) into something automated instead of anecdotal.
+// The browser logs its OWN line for every failed request, so the 401 that
+// /auth/me answers to an anonymous visitor arrives on the console as well as on
+// the response handler. That handler exempts it deliberately — it is the API
+// contract, not a fault (logging_middleware.py:40) — and without the same
+// exemption here the suite can never pass a logged-out run. It never had been:
+// the first real execution of this file failed all seven tests on that one line.
+//
+// Scoped by URL, not by message text, so a 401 from any non-/auth endpoint
+// still fails. That is the case worth catching.
+function isExpectedAuthConsoleError(msg: ConsoleMessage): boolean {
+  // location() returns a plain object with a non-optional `url: string`
+  // (playwright-core types.d.ts), so `?.` and `?? ''` were both dead branches.
+  return /\b(401|403)\b/.test(msg.text()) && msg.location().url.includes('/auth/');
+}
+
 const ROUTES: Array<{ name: string; hash: string; expectSelector: string }> = [
   { name: 'home', hash: '#/', expectSelector: '#view-home' },
   { name: 'sessions (legacy)', hash: '#/sessions', expectSelector: '#view-sessions' },
   { name: 'leaderboards (legacy)', hash: '#/leaderboards', expectSelector: '#view-leaderboards' },
   { name: 'proximity (legacy)', hash: '#/proximity', expectSelector: '#view-proximity' },
   { name: 'skill-rating (React)', hash: '#/skill-rating', expectSelector: '#view-skill-rating' },
+  { name: 'record-book (legacy)', hash: '#/record-book', expectSelector: '#view-record-book' },
 ];
 
 for (const route of ROUTES) {
@@ -19,9 +35,9 @@ for (const route of ROUTES) {
     const failedRequests: string[] = [];
 
     page.on('console', (msg) => {
-      if (msg.type() === 'error') {
-        consoleErrors.push(msg.text());
-      }
+      if (msg.type() !== 'error') return;
+      if (isExpectedAuthConsoleError(msg)) return;
+      consoleErrors.push(msg.text());
     });
     // Uncaught exceptions surface here, not via console — a route that
     // throws without calling console.error (e.g. mid-loader, after the
@@ -83,6 +99,45 @@ for (const route of ROUTES) {
       `${route.expectSelector} rendered an error state: ${text.trim().slice(0, 200)}`,
     ).toBe(false);
 
+    // A stringified object reaching the DOM is always a bug, and it is the one
+    // check none of the above catches: "[object Object]" is nonempty, is not an
+    // error message and is not a loading placeholder, so the route passes every
+    // other assertion while showing the user nothing meaningful.
+    //
+    // Found exactly this on #/record-book: /api/stats/maps returns objects, and
+    // the map filter interpolated them straight into <option>, producing 18 of
+    // these — with "[object Object]" as the option VALUE too, so the filter
+    // matched nothing and had never worked.
+    expect(
+      text.includes('[object Object]'),
+      `${route.expectSelector} rendered a stringified object`,
+    ).toBe(false);
+
+    // The text check above would not have caught the ACTUAL bug on its own: the
+    // option VALUE was "[object Object]" too, and a value never appears in
+    // innerText. So assert the options directly — and wait for them, because
+    // loadRecordBookView() resolves before its map filter has populated, so an
+    // immediate read sees only the default option (CodeRabbit on #607).
+    if (route.hash === '#/record-book') {
+      const mapFilter = page.locator('#records-map-filter option');
+      await expect
+        .poll(async () => mapFilter.count(), { timeout: 15_000 })
+        .toBeGreaterThan(1);
+      const options = await mapFilter.evaluateAll((els) =>
+        (els as HTMLOptionElement[])
+          .filter((el) => el.value !== '')
+          .map((el) => ({ value: el.value, label: el.textContent ?? '' })),
+      );
+      expect(options.length, 'map filter should offer at least one map').toBeGreaterThan(0);
+      for (const opt of options) {
+        expect(opt.value, `map option value: ${opt.value}`).not.toContain('[object Object]');
+        expect(opt.label, `map option label: ${opt.label}`).not.toContain('[object Object]');
+        // Value and label are the same map name; if they drift, the filter is
+        // matching on something other than what the user picked.
+        expect(opt.value).toBe(opt.label.trim());
+      }
+    }
+
     // ...and not still sitting on its pre-rendered placeholder. The legacy
     // views ship static "Loading …" markup in index.html (e.g. line 1856 for
     // #view-sessions), so a loader that never ran — or returned without
@@ -107,7 +162,9 @@ for (const route of ROUTES) {
 test('smoke: navigating away from skill-rating (React) to sessions (legacy) unmounts cleanly', async ({ page }) => {
   const consoleErrors: string[] = [];
   page.on('console', (msg) => {
-    if (msg.type() === 'error') consoleErrors.push(msg.text());
+    if (msg.type() !== 'error') return;
+    if (isExpectedAuthConsoleError(msg)) return;
+    consoleErrors.push(msg.text());
   });
   page.on('pageerror', (error) => {
     consoleErrors.push(`pageerror: ${error.message}`);

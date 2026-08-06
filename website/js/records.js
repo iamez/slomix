@@ -40,8 +40,34 @@ async function loadMapFilter(selectElement) {
         const maps = await fetchJSON(`${API_BASE}/stats/maps`);
         if (maps && Array.isArray(maps)) {
             const currentVal = selectElement.value;
-            selectElement.innerHTML = '<option value="">All Maps</option>' +
-                maps.map(map => `<option value="${escapeHtml(map)}">${escapeHtml(map)}</option>`).join('');
+            // /api/stats/maps returns OBJECTS -- {name, total_rounds, ...} --
+            // not strings. Interpolating one gives String(obj), so every option
+            // rendered as the literal "[object Object]", 18 of them, which is
+            // the breakage reported on the Record Book page.
+            //
+            // It was not merely ugly: the option VALUE was "[object Object]"
+            // too, so picking a map filtered the records by that string and
+            // matched nothing. The filter has never worked.
+            //
+            // Accepts a bare string as well, so a future endpoint returning the
+            // simpler shape does not silently regress to the same symptom.
+            const names = maps
+                .map((entry) => (typeof entry === 'string' ? entry : entry?.name))
+                .filter((name) => typeof name === 'string' && name.length > 0);
+            // Built with DOM nodes rather than interpolated markup, because
+            // escapeHtml() does NOT escape quotation marks — it sets textContent
+            // and reads innerHTML back, and a quote needs no escaping in text.
+            // Interpolated into value="…" a map name containing a double quote
+            // would close the attribute and could add an event handler
+            // (CodeRabbit on #607). Verified: `te" onmouseover=… x="` survives
+            // escapeHtml with both quotes intact.
+            //
+            // Setting .value and .textContent cannot inject anything, whatever
+            // the map name contains.
+            selectElement.replaceChildren();
+            const allOption = new Option('All Maps', '');
+            selectElement.add(allOption);
+            names.forEach((name) => selectElement.add(new Option(name, name)));
             selectElement.value = currentVal;
         }
     } catch (e) {
