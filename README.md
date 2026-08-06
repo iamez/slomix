@@ -30,6 +30,19 @@ second round's stats file is cumulative rather than per-round, sessions cross
 midnight, and players change name freely. Most of the code exists to get those four
 things right before anything is displayed.
 
+### Scale
+
+| | |
+|---|---|
+| Rounds parsed | 2,987 since January 2025 |
+| Stored per player, per round | 57 fields |
+| Telemetry | 29 tables, 1.26 GB, 63,058 player paths |
+| Database | 101 tables, 72 migrations |
+| Discord | 107 commands across 21 cogs and their mixins |
+| Web API | 247 endpoints across 48 routers |
+| Code | ~107k lines of Python, ~8.8k of Lua |
+| Tests | 4,219 across 304 files |
+
 ## What it does
 
 **Reads the game.** SSH polling on a 60-second cycle plus a Lua webhook for
@@ -107,6 +120,38 @@ the bot, Lua on the game server, and a web front end that runs legacy JS as the
 production surface with React 19 alongside it. Tests: 4,200, plus Playwright smoke
 runs against the real pages.
 
+## Keeping it honest
+
+A dataset is only worth as much as its weakest import, so most of the defensive work
+sits between the file and the table rather than in the queries above it.
+
+**Six checkpoints before a row is committed** — download integrity, duplicate
+rejection, parser validation, a seven-check aggregate comparison, per-insert
+verification, and the database's own constraints. Four of the six block; the
+aggregate check warns rather than blocks, deliberately, because a mismatch there is
+usually a parser question rather than a corrupt file.
+
+**Schema changes are a ledger, not a habit.** All 72 migrations are recorded with
+who applied them and when, and 49 carry a SHA-256 of the file they were applied
+from. Editing an applied migration is caught as checksum drift at service startup;
+the fix goes in a new migration rather than the old one. A separate contract test
+refuses to let a migration exist that no release configuration ships, and another
+compares the bootstrap schema dump against what the migrations actually produce —
+so a fresh install cannot silently come up missing a column.
+
+**4,219 tests across 304 files**, plus Playwright smoke runs that load the real
+pages and fail on a console error, a failed request, an error state, or a loading
+placeholder that never resolved. Twelve checks run on every pull request: two Python
+versions, JavaScript and shell linting, a React typecheck, dependency audit, static
+analysis and a Docker build.
+
+**And a browser is part of the toolchain.** `scripts/audit_website_browser.mjs`
+walks every route at four viewport sizes, signed in and signed out, recording
+console errors, failed requests, request counts, layout overflow, dead states and
+stringified objects that reached the DOM. That last check is not theoretical — it is
+how an eighteen-entry map filter was found rendering `[object Object]`, with the
+same string as each option's value, which meant the filter had never worked.
+
 ## Direction
 
 The project is built for a fixed group of about 65 players, not for growth, and that
@@ -125,21 +170,20 @@ to stay current. For a group this size, removing a page is as valuable as adding
 
 ---
 
-## Production Numbers
+## What is actually in there
+
+Nineteen months of one group's games, not a public dataset. The engineering scale is
+in [Scale](#scale) above; these are the games themselves.
 
 | Metric | Value |
 |--------|-------|
-| **Kills Tracked** | 230,343 |
-| **Headshot Kills** | 49,918 |
-| **Damage Dealt** | 45.2 million |
-| **Revives Given** | 26,412 |
-| **Rounds Parsed** | 2,987 |
-| **Unique Players** | 65 |
-| **Stats Per Player Per Round** | 57 fields |
-| **Discord Commands** | 107 across 21 cogs and their mixins |
-| **Database Tables** | 101 (managed via committed SQL migrations) |
-| **Tests** | 4,200 collected, CI green |
-| **Data Span** | Jan 2025 — Aug 2026 (19 months) |
+| **Kills** | 230,343 |
+| **Headshot kills** | 49,918 |
+| **Damage dealt** | 45.2 million |
+| **Revives given** | 26,412 |
+| **Rounds** | 2,987 |
+| **Unique players** | 65 |
+| **Span** | January 2025 — August 2026 |
 
 ---
 
