@@ -63,26 +63,28 @@ export function safeInsertHTML(element, position, html) {
  * @returns {Promise<any>} - Parsed JSON response
  */
 /**
- * Error for a non-OK response, carrying the status code.
+ * Error for a non-OK response, carrying the status code and the server's own
+ * message. Async because it READS THE BODY, which it must.
  *
- * Callers need to tell "the server answered, and the answer was no" from "the
- * request never got an answer". auth.js caches the anonymous result for the
- * page load, so it must only do that for a definitive 401/403 — a 5xx or a
+ * A fetch whose body is never consumed does not complete: the response arrives,
+ * the request stays open, the connection is held, and the page never reaches
+ * networkidle. Observed signed in on #/session-detail/date/<date>, where two
+ * storytelling endpoints answer 409 AMBIGUOUS_SESSION_DATE — the page rendered,
+ * but had still not settled after 45s. Anonymously, with no 409s, the same page
+ * settles in 2.1s.
+ *
+ * Reading it also makes the error worth catching: the server's detail travels
+ * on `detail` instead of being discarded, so a caller can tell
+ * AMBIGUOUS_SESSION_DATE from any other 409.
+ *
+ * Callers also need to tell "the server answered, and the answer was no" from
+ * "the request never got an answer". auth.js caches the anonymous result for
+ * the page load, so it must only do that for a definitive 401/403 — a 5xx or a
  * dropped connection has to stay retryable.
  *
  * @param {Response} res
- * @returns {Error & {status: number}}
+ * @returns {Promise<Error & {status: number, detail: string|null}>}
  */
-// The body MUST be consumed even when we are only going to throw. A fetch whose
-// body is never read stays open: the response arrives, but the request never
-// completes, so the connection is held and the page never reaches networkidle.
-// Observed on #/session-detail/date/<date> signed in, where two storytelling
-// endpoints answer 409 AMBIGUOUS_SESSION_DATE — the page still rendered, but it
-// had not settled after 45s (anonymously, with no 409s, it settles in 2.8s).
-//
-// Reading it also makes the error useful: the server's own detail travels with
-// the exception instead of being discarded, so callers can distinguish
-// AMBIGUOUS_SESSION_DATE from any other 409.
 async function httpError(res) {
     let detail = null;
     try {
