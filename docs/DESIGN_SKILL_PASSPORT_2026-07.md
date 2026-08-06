@@ -181,3 +181,26 @@ UI/UX se namerno ne dotikamo — Passport najprej živi kot JSON + Discord izpis
 5. **Značke**: naj sistem dodeli en glavni label (npr. "Lurker") ali dva ("Lurker/Enabler")?
 6. **Javnost**: je Passport viden vsem, ali samo igralcu (nekatere osi so lahko občutljive — npr. useless-defense)?
 7. **Tiers**: bi želel tudi diskretno lestvico A/B/C kot gibhub, poleg zveznih osi?
+
+---
+
+## Odzivi na review (Codex, PR #551) — 2026-08-06
+
+Sedem P2 pripomb na ta dokument. Vse sprejete: vsaka kaže na mesto, kjer je
+predlog trdil več, kot shema ali formula dejansko zdrži.
+
+| # | Pripomba | Odziv |
+|---|----------|-------|
+| 1 | Uteži krčenja naj bodo v isti enoti dokazov | **Sprejeto.** §4.2 definira `n` kot uboje oziroma priložnosti, specifične za os, formula pa jih meša s `C = 5` **sejami**. Dve različni enoti v isti enačbi. Bodisi je `C` izražen v enotah osi, bodisi je `n` preštet v sejah — pri obeh oseh isto, sicer krčenje ni primerljivo med osmi. |
+| 2 | Šesturni timeout ne sme obiti popolnosti telemetrije | **Sprejeto.** Veja, dodana za primer zamude proximity uvoza, dovoli zamrznitev posnetka tudi takrat, ko telemetrija ni prispela. To trajno zabetonira nepopoln posnetek — natanko tisto, kar naj bi zamrzovanje preprečilo. Timeout sme sprožiti *ponovni poskus*, ne zamrznitve. |
+| 3 | Zgodovinski agregati naj ostanejo znotraj ene verzije formule | **Sprejeto.** Označevanje poznejših posnetkov z novo verzijo ne naredi agregata na vrstici 129 primerljivega; agregat mora biti razrezan po verziji formule, ne le opremljen z njo. |
+| 4 | Opredeli, kako nadomestni posnetek ohrani zgodovino | **Sprejeto.** Ko telemetrija prispe pozno in se je populacija medtem spremenila, nova vrstica nosi drugačen `percentile_at_time` in drugačen kontekst bazena. Dokument mora povedati, ali zgodovinski pogled bere prvotni ali nadomestni posnetek — trenutno ne pove. |
+| 5 | V vsakem posnetku hrani število dokazov po osi | **Sprejeto.** Shema hrani le `n_sessions`, medtem ko §4.2 iz `n_axis` izpelje krčenje, zaupanje in prag nezadostnih podatkov — in enota `n_axis` se po oseh razlikuje. Brez njega posnetka ni mogoče ponovno prebrati. |
+| 6 | Ohrani kalibracijo, potrebno za nadomestne percentile | **Sprejeto.** Kopiranje povprečja, velikosti in standardnega odklona ne zadošča za izpeljavo novega empiričnega percentila: različne porazdelitve z istimi tremi momenti dajo različne percentile. Hraniti je treba kvantile ali samo porazdelitev. |
+| 7 | Bazen percentilov omeji na igralce z dovolj dokazi | **Sprejeto.** Prior je definiran čez cel bazen, čeprav se profili z `n < 3` ne prikazujejo. Pri tej populaciji množica igralcev z malo dokazi potegne prior k sebi, kar sistematsko popači osi za vse ostale. |
+
+**Kaj to pomeni za predlog.** Nobena od sedmih ne ruši zamisli Passporta, vse
+skupaj pa premaknejo njegovo težišče: preden je smiselno računati katerokoli os,
+mora biti dorečena **enota dokazov** (#1, #5), **kdaj je posnetek sploh
+zamrznljiv** (#2, #4) in **kdo je v bazenu** (#7). To je predpogoj, ne
+podrobnost izvedbe.
