@@ -57,7 +57,7 @@ ET:Legacy Game Server -> SSH Monitor -> Parser -> PostgreSQL -> Discord Bot -> U
 - **SSH Monitoring**: Only `endstats_monitor` task loop handles SSH (SSHMonitor disabled - race condition fix)
 - **R2 Differential**: Round 2 files contain CUMULATIVE stats; parser subtracts R1 values automatically
 - **Lua Webhook** (`vps_scripts/stats_discord_webhook.lua` v1.7.0): Real-time round notification, fixes surrender timing bug. Data stored in `lua_round_teams` table.
-- **Cog Pattern**: 20 Cogs in `bot/cogs/`, 18 core modules in `bot/core/`, services in `bot/services/`
+- **Cog Pattern**: 21 Cogs in `bot/cogs/`, 19 core modules in `bot/core/`, services in `bot/services/`
 
 ### Timing Configuration
 
@@ -73,17 +73,17 @@ ET:Legacy Game Server -> SSH Monitor -> Parser -> PostgreSQL -> Discord Bot -> U
 
 ### Core Files
 
-- `bot/ultimate_bot.py` - Main bot entry point, loads 20 Cogs, on_ready handler
+- `bot/ultimate_bot.py` - Main bot entry point, loads 21 Cogs, on_ready handler
 - `bot/community_stats_parser.py` - R1/R2 differential parser
 - `postgresql_database_manager.py` - **ONLY tool for DB operations**
 - `bot/core/database_adapter.py` - Async PostgreSQL/SQLite abstraction
 - `bot/core/stats_cache.py` - 5-minute TTL query cache
 
-### 20 Cogs (Command Modules)
+### 21 Cogs (Command Modules)
 
-All in `bot/cogs/`: achievements, admin, admin_predictions, analytics, automation_commands, availability_poll, last_session, leaderboard, link, matchup, permission_management, predictions, proximity, server_control, session, session_management, stats, sync, team, team_management.
+All in `bot/cogs/`: achievements, admin, admin_predictions, analytics, automation_commands, availability_poll, last_session, leaderboard, link, matchup, on_this_day, permission_management, predictions, proximity, server_control, session, session_management, stats, sync, team, team_management.
 
-### 18 Core Modules
+### 19 Core Modules
 
 All in `bot/core/`: achievement_system, checks, correlation_context, database_adapter, endstats_pagination_view, frag_potential, guid_utils, lazy_pagination_view, match_tracker, pagination_view, round_canonical, round_contract, round_linker, season_manager, stats_cache, substitution_detector, team_manager, utils.
 
@@ -201,11 +201,11 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 
 - Parser: 100% functional, R2 differential validated, Oksii fields backward-compatible
 - Database: PostgreSQL (101 tables), no corruption
-- Bot: 80+ commands across 20 Cogs, all functional
+- Bot: 81 commands across 21 Cogs, all functional
 - Website: Upload library, availability polls, greatshot, storytelling, skill rating, BOX scoring
 - Automation: SSH monitoring, voice detection, Lua webhook (v1.7.0)
 - Lua: v6.01 with Oksii adoption (killer_health, alive_count, reinf timing)
-- Code quality: Ruff 0 errors, 3,302 tests, mypy configured
+- Code quality: Ruff 0 errors, 4,200 tests, mypy configured
 - Production Ready: Fully tested and validated
 
 ---
