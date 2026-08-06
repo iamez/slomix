@@ -113,6 +113,31 @@ for (const route of ROUTES) {
       `${route.expectSelector} rendered a stringified object`,
     ).toBe(false);
 
+    // The text check above would not have caught the ACTUAL bug on its own: the
+    // option VALUE was "[object Object]" too, and a value never appears in
+    // innerText. So assert the options directly — and wait for them, because
+    // loadRecordBookView() resolves before its map filter has populated, so an
+    // immediate read sees only the default option (CodeRabbit on #607).
+    if (route.hash === '#/record-book') {
+      const mapFilter = page.locator('#records-map-filter option');
+      await expect
+        .poll(async () => mapFilter.count(), { timeout: 15_000 })
+        .toBeGreaterThan(1);
+      const options = await mapFilter.evaluateAll((els) =>
+        (els as HTMLOptionElement[])
+          .filter((el) => el.value !== '')
+          .map((el) => ({ value: el.value, label: el.textContent ?? '' })),
+      );
+      expect(options.length, 'map filter should offer at least one map').toBeGreaterThan(0);
+      for (const opt of options) {
+        expect(opt.value, `map option value: ${opt.value}`).not.toContain('[object Object]');
+        expect(opt.label, `map option label: ${opt.label}`).not.toContain('[object Object]');
+        // Value and label are the same map name; if they drift, the filter is
+        // matching on something other than what the user picked.
+        expect(opt.value).toBe(opt.label.trim());
+      }
+    }
+
     // ...and not still sitting on its pre-rendered placeholder. The legacy
     // views ship static "Loading …" markup in index.html (e.g. line 1856 for
     // #view-sessions), so a loader that never ran — or returned without
