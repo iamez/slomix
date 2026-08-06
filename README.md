@@ -6,7 +6,7 @@ built for one 6v6 stopwatch community that has been playing together for two dec
 
 [![Version](https://img.shields.io/badge/version-1.29.0)](CHANGELOG.md) <!-- x-release-please-version -->
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
-[![PostgreSQL 17](https://img.shields.io/badge/postgresql-17-336791)](https://www.postgresql.org/)
+[![PostgreSQL 17 in production](https://img.shields.io/badge/postgresql-17_prod_%7C_14_CI-336791)](https://www.postgresql.org/)
 [![FastAPI](https://img.shields.io/badge/api-FastAPI-009688)](https://fastapi.tiangolo.com/)
 [![discord.py 2.6.4](https://img.shields.io/badge/discord.py-2.6.4-5865F2)](https://discordpy.readthedocs.io/)
 [![Tests](https://img.shields.io/badge/tests-4200-success)](tests/)
@@ -37,7 +37,7 @@ near-real-time round notifications. Round 2 differentials, R1↔R2 pairing, sess
 grouping on a 60-minute gap, substitution detection, and bot-round exclusion are all
 handled by the parser rather than by each query.
 
-**Answers in Discord.** 81 commands across 21 cogs: session summaries, per-player
+**Answers in Discord.** 107 commands across 21 cogs and their mixins: session summaries, per-player
 and per-map statistics, head-to-head records, availability polls for the next game
 night, and a post-session digest.
 
@@ -136,7 +136,7 @@ to stay current. For a group this size, removing a page is as valuable as adding
 | **Rounds Parsed** | 2,987 |
 | **Unique Players** | 65 |
 | **Stats Per Player Per Round** | 57 fields |
-| **Discord Commands** | 81 across 21 cogs |
+| **Discord Commands** | 107 across 21 cogs and their mixins |
 | **Database Tables** | 101 (managed via committed SQL migrations) |
 | **Tests** | 4,200 collected, CI green |
 | **Data Span** | Jan 2025 — Aug 2026 (19 months) |
@@ -174,7 +174,7 @@ to stay current. For a group this size, removing a page is as valuable as adding
 
 | Project | Status | Description |
 |---------|--------|-------------|
-| **Discord Bot** (this repo) | ✅ Production | 81 commands, 21 cogs, full automation, AI predictions |
+| **Discord Bot** (this repo) | ✅ Production | 107 commands, 21 cogs, full automation, AI predictions |
 | **Website** (`/website/`) | ✅ Production | FastAPI + legacy JS + React 19 modern routes: Home, Tonight, sessions/archive, profiles, Record Book, proximity, Greatshot |
 | **Lua Webhook** (`vps_scripts/`) | ✅ Production | Real-time round notifications, stopwatch timing, logical-team feed, pause/team capture |
 | **Greatshot** (`/greatshot/`) | ✅ Production | Demo upload, highlight detection, clip extraction, render pipeline |
@@ -533,7 +533,7 @@ See `.env.example` for all options.
 ### Sessions & Scoring
 `!last_session` · `!last_session graphs` · `!session` · `!rounds` · `!session_score` · `!awards` · `!season_info`
 
-### Matchups & Predictions** (rivalries live on the web at `/#/rivalries`)
+### Matchups & Predictions (rivalries live on the web at `/#/rivalries`)
 `!matchup A vs B` · `!duo_perf p1 p2` · `!nemesis` · `!head_to_head` · `!team_record` · `!predictions` · `!prediction_stats` · `!prediction_trends` · `!prediction_leaderboard` · `!map_predictions`
 
 ### Account Management
@@ -719,7 +719,7 @@ pytest tests/test_greatshot_scanner_golden.py
 - [docs/reference/TIMING_DATA_SOURCES.md](docs/reference/TIMING_DATA_SOURCES.md) — Stats file vs Lua timing
 
 ### Reference
-- [docs/COMMANDS.md](docs/COMMANDS.md) — Every bot command
+- [docs/COMMANDS.md](docs/COMMANDS.md) — Every visible bot command
 - [CHANGELOG.md](CHANGELOG.md) — Version history, generated from commits
 
 ---
