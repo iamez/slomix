@@ -252,6 +252,14 @@ async function handleUpload(e) {
     if (titleInput.value.trim()) formData.append('title', titleInput.value.trim());
     if (descInput.value.trim()) formData.append('description', descInput.value.trim());
     if (tagsInput.value.trim()) formData.append('tags', tagsInput.value.trim());
+    // Empty value = keep forever, which is the default and the first option.
+    // Send nothing in that case: the backend treats an absent retention_days as
+    // lifetime, so "" would have to be parsed into None somewhere, and an empty
+    // string reaching an int field is a 422 waiting to happen.
+    const retentionSelect = document.getElementById('upload-retention-select');
+    if (retentionSelect && retentionSelect.value) {
+        formData.append('retention_days', retentionSelect.value);
+    }
 
     try {
         const data = await new Promise((resolve, reject) => {
@@ -288,6 +296,11 @@ async function handleUpload(e) {
         titleInput.value = '';
         descInput.value = '';
         tagsInput.value = '';
+        // Back to Forever, like every other field goes back to empty. Leaving
+        // "7 days" selected would silently apply it to the NEXT upload too,
+        // which is the one choice here a user cannot undo later (CodeRabbit
+        // on #615).
+        if (retentionSelect) retentionSelect.value = '';
         const nameEl = document.getElementById('upload-drop-filename');
         if (nameEl) { nameEl.textContent = ''; nameEl.classList.add('hidden'); }
 
@@ -775,7 +788,7 @@ export async function loadUploadDetail(uploadId) {
                 </div>
             </div>
         `;
-        _maybeShowOwnerDelete(data);
+        _maybeShowDeleteButton(data);
     } catch (err) {
         container.innerHTML = `
             <div class="glass-card rounded-xl p-12 text-center" style="animation: fadeSlideUp 0.4s ease-out both;">
@@ -787,13 +800,23 @@ export async function loadUploadDetail(uploadId) {
     }
 }
 
-// Owner-only delete: the DELETE endpoint always existed, but there was no UI
-// for it. Shown only when /auth/me matches the uploader; double-gated by an
-// explicit confirmation (the file is gone for good).
-async function _maybeShowOwnerDelete(data) {
+// Delete: shown to the uploader AND to admins — hence the name change from
+// _maybeShowOwnerDelete, which stopped being true when admins gained the
+// ability (Copilot on #615). The decision is the server's —
+// the detail payload carries can_delete for this session, computed by the same
+// rule the DELETE endpoint enforces, so the button and the answer cannot drift
+// apart and the admin list never reaches the browser.
+//
+// Falls back to the uploader check for a payload from an older backend, so a
+// stale cached response degrades to the previous behaviour rather than hiding
+// the button from someone who owns the file.
+async function _maybeShowDeleteButton(data) {
     try {
-        const user = await ensureCurrentUser();
-        if (!user || String(user.id) !== String(data.uploader_discord_id)) return;
+        if (data.can_delete === false) return;
+        if (data.can_delete !== true) {
+            const user = await ensureCurrentUser();
+            if (!user || String(user.id) !== String(data.uploader_discord_id)) return;
+        }
         const host = document.getElementById('upload-detail-owner-actions');
         if (!host) return;
         host.innerHTML = `

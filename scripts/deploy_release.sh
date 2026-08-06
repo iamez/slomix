@@ -559,7 +559,32 @@ if $SKIP_MIGRATIONS; then
   log "5/8  Skipping migration APPLY (--skip-migrations) — ledger validation still runs"
 elif [ ${#MIGRATIONS[@]} -gt 0 ]; then
   log "5/8  Apply ${#MIGRATIONS[@]} migration(s) via apply_migrations.py (transactional + ledger)"
-  run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --only ${MIGRATIONS[*]}"
+  # DDL runs as the SCHEMA OWNER, not as the web role.
+  #
+  # apply_migrations.py loads website/.env (deliberately -- it must validate
+  # against the same database the service uses, PX-DB-001), and that file sets
+  # POSTGRES_USER=website_app. But the tables are owned by etlegacy_user, and
+  # PostgreSQL lets only the owner run ALTER TABLE / CREATE INDEX. website_app
+  # is not a member of etlegacy_user, so any DDL migration fails with
+  # "must be owner of table ..." partway through the deploy. Migration 069 hit
+  # exactly this, and 070 would have hit it next (CodeRabbit on #615).
+  #
+  # load_dotenv() does not override variables already in the environment, so
+  # exporting them here wins over website/.env while leaving every other value
+  # -- host, port, DATABASE -- exactly as the service resolves it. Same database,
+  # different role: PX-DB-001 stays satisfied.
+  #
+  # Credentials come from the VM's ROOT .env, which is the bot's, i.e. the
+  # owner's. Read on the VM and never echoed.
+  run_remote "cd $VM_PATH && \
+    OWNER_USER=\$(grep -m1 '^POSTGRES_USER=' .env | cut -d= -f2-) && \
+    OWNER_PASS=\$(grep -m1 '^POSTGRES_PASSWORD=' .env | cut -d= -f2-) && \
+    if [ -z \"\$OWNER_USER\" ] || [ -z \"\$OWNER_PASS\" ]; then \
+      echo 'ERROR: could not read POSTGRES_USER/POSTGRES_PASSWORD from the VM root .env — DDL would run as the web role and fail on ALTER TABLE' >&2; \
+      exit 1; \
+    fi && \
+    POSTGRES_USER=\$OWNER_USER POSTGRES_PASSWORD=\$OWNER_PASS \
+      $VM_PY scripts/apply_migrations.py --only ${MIGRATIONS[*]}"
 else
   log "5/8  No migrations queued — validating ledger only"
 fi
