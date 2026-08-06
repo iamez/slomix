@@ -88,7 +88,7 @@ Kontekstna polja (`enemies_nearby`, `nearby_teammates`, `run_type`, `escort_guid
 **(a) To NI "inženirska" tabela, ki bi jo bilo treba le posplošiti — je tabela, ki pokriva napačno manjšino.**
 `proximity_objective_run` pozna samo štiri akcije, vse inženirske: `dynamite_plant` (1.058), `objective_destroyed` (656), `construction_complete` (643), `dynamite_defuse` (152) — skupaj **2.509**. Nošenje dokumentov/zastave je v ločeni tabeli `proximity_carrier_event` z **2.079** zapisi. *(Vse številke v tem odstavku so meritev 2026-07-25. Sveža meritev in edini nabor, ki velja za deleže spodaj, je 2026-08-06: 2.886 in 2.481.)*
 
-**Pošten razrez (dvakrat popravljeno).** Prvotno besedilo je 69,4 % predstavilo kot delež vsega objective dela; to je bil delež *nosilcev*. Popravek je nato navedel še „28,2 % opravijo medici", kar se ne izide z lastnima številkama tega dokumenta (45,3 % × 69,4 % = 31,4 %) — ujel Codex.
+**Pošten razrez (dvakrat popravljeno).** Prvotno besedilo je 69,4 % predstavilo kot delež vsega objective dela; to je bil delež *nosilcev*. Popravek je nato navedel še „28,2 % opravijo medici“, kar se ne izide z lastnima številkama tega dokumenta (45,3 % × 69,4 % = 31,4 %) — ujel Codex.
 
 Preračunano proti bazi 2026-08-06: **5.367 objective dogodkov, od tega 2.481 nošenj = 46,2 %** (ob pisanju 2026-07-25 je bilo 4.588 oziroma 45,3 %). Deleža po razredih **ne navajam več**: `proximity_carrier_event` nima stolpca za razred, izpeljati ga je mogoče le s spojem na `player_track`, in moj poskus takega spoja je dal 97,4 % — številko, ki ji ne zaupam dovolj, da bi jo objavil. Sklep na tem ne stoji in ostane: **46 % objective dogodkov je nošenja in zanje nimamo niti enega konteksta odločitve.**
 
@@ -111,7 +111,7 @@ Bogat kontekst torej pokriva **53,8 %** objective dogodkov, **46,2 %** (nošenje
 
 Učinkovitost tudi **raste** s številom sovražnikov v bližini (0 → 0,532; 1 → 0,556; 2+ → 0,571), pri nosilcih pa je **ubit (0,501) nad secural (0,489)**. Standardni odkloni (0,19–0,23) presegajo razlike med skupinami. Metrika nagrajuje tek naravnost skozi nevarnost in kaznuje kritje, čakanje na soigralce in flank — v ET-ju najboljša pot pogosto **ni** najbolj ravna.
 
-**(c) Neuspehov sploh ne beležimo:** `approach_killed` = 0 vrstic, `run_type='denied'` = 0, `killer_guid` prazen pri vseh 2.509 zapisih. Vidimo samo uspele akcije, torej iz te tabele ni mogoče primerjati dobre odločitve s slabo (survivorship bias).
+**(c) Neuspehov sploh ne beležimo.** Premerjeno 2026-08-06 na **2.886** vrsticah (ob pisanju 2.509): `run_type='denied'` = **0**, `killer_guid` neprazen = **0**, edine vrednosti `run_type` so `assisted` / `contested_solo` / `solo` / `team_effort` / `unopposed` — same uspešne. Popravek imena: **`approach_killed` sploh ni stolpec** te tabele; prvotno besedilo je navajalo polje, ki ne obstaja (Codex, #551). Vidimo samo uspele akcije, torej iz te tabele ni mogoče primerjati dobre odločitve s slabo (survivorship bias).
 
 Vhodni podatki za pravo oceno **obstajajo** (`player_track.path` z zdravjem/hitrostjo/držo, pozicije vseh igralcev v vsakem trenutku, kill heatmap); **faza runde pa NE** — ločena vrzel pri DQL-3.
 
@@ -146,11 +146,11 @@ Ownerjev ugovor na `path_efficiency` ("nima duše, samo matematika") je sprožil
 > pasove, ki so izračunani; z manjkajočim modalnim pasom tabela sama po sebi ne
 > zadošča in jo je treba dopolniti, preden se na njej karkoli gradi.
 
-1. **KIS push multiplier stoji na obrnjeni metriki.** `PUSH_QUALITY_THRESHOLD = 0,9` zajame pas z najmanj uboji **med izmerjenimi** — s pridržkom, ker pas 0,5–0,9, ki je največji, ni bil izmerjen in bi lahko imel še nižjo stopnjo (Codex, #551). Trditev „zajame pas z najmanj uboji" torej velja šele, ko je manjkajoči pas izračunan. Vzrok je v formuli: `push_quality = poravnanost × (hitrost/300)` je največja, ko cela ekipa sprinta v isto smer — kar se zgodi ob **odsotnosti stika** (tek iz spawna). Ob dejanskem stiku se hitrost zmanjša in ekipa razprši → "nizka kvaliteta". KIS torej ojača uboje med nemotenim sprintom. (Formula je tudi neomejena: max 2,16, 4.124 od 84.309 vrstic nad 1,0.)
+1. **KIS push multiplier stoji na obrnjeni metriki.** `PUSH_QUALITY_THRESHOLD = 0.9` zajame pas z najmanj uboji **med izmerjenimi** — s pridržkom, ker pas 0,5–0,9, ki je največji, ni bil izmerjen in bi lahko imel še nižjo stopnjo (Codex, #551). Trditev „zajame pas z najmanj uboji“ torej velja šele, ko je manjkajoči pas izračunan. Vzrok je v formuli: `push_quality = poravnanost × (hitrost/300)` je največja, ko cela ekipa sprinta v isto smer — kar se zgodi ob **odsotnosti stika** (tek iz spawna). Ob dejanskem stiku se hitrost zmanjša in ekipa razprši → "nizka kvaliteta". KIS torej ojača uboje med nemotenim sprintom. (Formula je tudi neomejena: max 2,16, 4.124 od 84.309 vrstic nad 1,0.)
 
 2. **~~prox_score "awareness" os se sama s sabo bori.~~ NAPAČNO — popravljeno po reviewu (Codex, #551).** Preveril sem v kodi: `proximity_scoring.py:288` računa
    `awareness = min(100, esc_rate * 0.5 + max(0, 100 - d_ms / 50) * 0.5)`.
-   Surovi `dodge_ms` je res „manj je bolje", a ga prav to odštevanje **obrne** — 1.000 ms
+   Surovi `dodge_ms` je res „manj je bolje“, a ga prav to odštevanje **obrne** — 1.000 ms
    da 80, 5.000 ms da 0. Obe polovici osi torej kažeta v isto smer in os se s sabo ne bori.
    Ta ugotovitev odpade. Kar ostane: **"mechanical" os stoji na `return_fire_ms`, ki nima
    signala** — to je bilo izmerjeno in drži.
@@ -205,7 +205,7 @@ Ownerjev "sacrifice, ki nastavi priložnost" postane **merljiv** — a ne naivno
 
 Zato mora sacrifice zahtevati **več kot sosledje**. Pogoji spodaj so izračunljivi iz obstoječih podatkov:
 
-> ⚠️ Popravek poimenovanja (Codex, #551): tudi ujemanje po podobnih situacijah ostane > **opazovalno, ne vzročno**. Faza runde, stanje nasprotnika, stanje soigralcev in > igralčeva lastna izbira so nemerjeni in lahko pojasnijo razliko. Spodnji pogoji zožijo > primerjavo in odpravijo najbolj očitno farmanje, ne dokazujejo pa vzroka — dokler tega > ne moremo trditi, se metrika ne sme predstavljati kot „ta smrt je ekipi pomagala".
+> ⚠️ Popravek poimenovanja (Codex, #551): tudi ujemanje po podobnih situacijah ostane > **opazovalno, ne vzročno**. Faza runde, stanje nasprotnika, stanje soigralcev in > igralčeva lastna izbira so nemerjeni in lahko pojasnijo razliko. Spodnji pogoji zožijo > primerjavo in odpravijo najbolj očitno farmanje, ne dokazujejo pa vzroka — dokler tega > ne moremo trditi, se metrika ne sme predstavljati kot „ta smrt je ekipi pomagala“.
 
 | Dokaz | Kako ga preverimo |
 |-------|-------------------|
