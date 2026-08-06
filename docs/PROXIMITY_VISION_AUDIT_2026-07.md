@@ -251,3 +251,32 @@ Dokler ta odločitev ne pade, DQL-3 ostaja **odložen**. DQL-1 od njega ni odvis
 3. **Sacrifice okno**: koliko sekund po smrti še šteje kot "posledica moje smrti"? (predlog: 10 s, kot carrier chain)
 4. **Fazna delitev**: naj jo izpeljem avtomatsko iz objective dogodkov, ali želiš ročno definirane faze per mapa?
 5. **Prikaz**: naj DQL najprej pride kot Discord izpis (`!decisions`), ali kot API + tvoj obstoječi /proximity/ panel?
+
+---
+
+## Odzivi na review (Codex, PR #551) — preverjeno 2026-08-06
+
+Dvanajst P2 pripomb na ta dokument. Nobene nisem zavrnil kot neutemeljene;
+tri so bile v besedilu že naslovljene, devet spreminja predlog. Kjer je bila
+trditev preverljiva, sem jo preveril in ne le sprejel.
+
+| # | Pripomba | Odziv |
+|---|----------|-------|
+| 1 | Izgubljenega prostora ne izpeljuj iz useless-defense | **Sprejeto.** `compute_useless_defense_deaths` gleda le oddaljenost žrtve od objectiva — o tem, ali je ekipa izgubila prostor, ne pove nič. DQL-2 mora izgubo prostora izpeljati iz pozicij, ne reciklirati te metrike. |
+| 2 | Ravna pot ni kakovost odločitve | **Že v dokumentu**, §V3(b), in review to potrjuje: `contested_solo` ima najvišjo `path_efficiency` (0,585), `team_effort` skoraj najnižjo (0,468). Metrika kaže v napačno smer. |
+| 3 | Chokepointa ne sklepaj iz gostote prehodov | **Sprejeto.** Gostota ne loči ozkega grla od običajnega prehodnega vozlišča (spawn, staging). Rabi signal zožitve ali pogojevanje s kill-gostoto. |
+| 4 | Pred FOV izpostavljenostjo zajemi smer pogleda | **Sprejeto**, in to je ista vrzel kot §V1: poti nimajo viewangles. FOV komponenta DQL-1 je blokirana na istem mestu. |
+| 5 | Kakovost objective-runov odloži, dokler ne beležimo neuspehov | **Že v dokumentu**, §V3(c): `approach_killed` = 0 vrstic, `run_type='denied'` = 0. Sprejeto kot izrecna vrstna omejitev, ne le opomba. |
+| 6 | Ocenjevane runde izloči iz danger baseline | **Sprejeto.** `map_kill_heatmap` je kumulativen agregat, zato ocenjevana runda pušča svoj izid v lasten vhod. |
+| 7 | Gravitacija ni dokaz koristnega lurkanja | **Sprejeto.** Rabi dokaz, da je nastala priložnost za soigralca, ne le prisotnost. |
+| 8 | Odločitve sodi po informaciji, ki jo je igralec imel | **Sprejeto.** Uporaba resnične pozicije skritega nasprotnika da DQL vednost, ki je igralec ni imel. |
+| 9 | Popravi imenovalec pri nosilcih | **Že popravljeno** v §V3(a): 69,4 % je delež *nosilcev*, ne delež vsega objective dela. |
+| 10 | Pred offline zakritjem rabiš vir geometrije | **Sprejeto, in preverjeno danes.** V repu ni razčlenjevalnika BSP, navmesha, AAS ne sledenja žarkov; `.bsp` se pojavi izključno kot končnica imena datoteke (`players_router.py:1526`, `api_helpers.py:120`) in kot vnos v `map_assets_manifest_from_etmain.json`. `website/backend/map_geometry/` vsebuje samo `__pycache__` in v gitu ni ničesar. Zakritje v DQL-1 je blokirano. |
+| 11 | Danger baseline gradi le iz podatkov, znanih ob ocenjevanju | **Sprejeto**, isti razred kot #6: leave-one-round-out ne zadošča, ker je agregat vezan na mapo/celico brez časovne dimenzije. |
+| 12 | `path_samples` ni shranjena pot nosilca | **Sprejeto, in preverjeno.** Migracija 028 ga definira kot `path_samples INTEGER NOT NULL DEFAULT 0`, in v shemi je `proximity_carrier_event.path_samples : integer` — torej **števec vzorcev, ne trajektorija**. P1b iz njega ne more izpeljati `enemies_nearby`, soigralcev ne `run_type`.
+
+**Kaj to pomeni za predlog.** DQL-1 (zakritje, FOV) je blokiran na dveh
+manjkajočih virih — geometriji in smeri pogleda — in ne le na fazi objectiva,
+kot je dokument trdil. DQL-2 potrebuje lasten izračun izgubljenega prostora.
+Ocenjevanje objective-runov mora počakati na beleženje neuspehov. To so
+omejitve načrta, ne razlogi proti njemu; dokument je zdaj o njih iskren.
