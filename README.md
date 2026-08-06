@@ -457,7 +457,9 @@ This also starts Prometheus (`http://localhost:9090`) and Grafana (`http://local
 ### Prerequisites
 
 - Python 3.11+
-- PostgreSQL 12+
+- PostgreSQL 12 or newer — the schema uses stored generated columns, which is
+  where the floor comes from. **CI runs 14 and production runs 17**; those are the
+  two versions actually tested.
 - Docker + Docker Compose (for `make dev` workflow)
 - Discord Bot Token
 - (Optional) SSH access to ET:Legacy game server
