@@ -174,7 +174,7 @@ async def test_a_failed_unlink_stays_eligible_for_the_next_sweep():
     # pass if the sweep had marked "a" deleted and skipped "b" or "c" — the exact
     # inversion of the contract this test exists to protect (CodeRabbit on #615).
     updated = [call.args[1][0] for call in db.execute.await_args_list]
-    assert updated == ["b", "c"], f"expected only b and c to be marked deleted, got {updated}" 
+    assert updated == ["b", "c"], f"expected only b and c to be marked deleted, got {updated}"
 
 
 @pytest.mark.asyncio
