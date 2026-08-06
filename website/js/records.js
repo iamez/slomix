@@ -54,8 +54,20 @@ async function loadMapFilter(selectElement) {
             const names = maps
                 .map((entry) => (typeof entry === 'string' ? entry : entry?.name))
                 .filter((name) => typeof name === 'string' && name.length > 0);
-            selectElement.innerHTML = '<option value="">All Maps</option>' +
-                names.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
+            // Built with DOM nodes rather than interpolated markup, because
+            // escapeHtml() does NOT escape quotation marks — it sets textContent
+            // and reads innerHTML back, and a quote needs no escaping in text.
+            // Interpolated into value="…" a map name containing a double quote
+            // would close the attribute and could add an event handler
+            // (CodeRabbit on #607). Verified: `te" onmouseover=… x="` survives
+            // escapeHtml with both quotes intact.
+            //
+            // Setting .value and .textContent cannot inject anything, whatever
+            // the map name contains.
+            selectElement.replaceChildren();
+            const allOption = new Option('All Maps', '');
+            selectElement.add(allOption);
+            names.forEach((name) => selectElement.add(new Option(name, name)));
             selectElement.value = currentVal;
         }
     } catch (e) {
