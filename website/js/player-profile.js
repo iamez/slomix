@@ -59,8 +59,17 @@ function _renderAchievements(ach) {
     const total = Number(ach?.total_possible) || 0;
 
     if (!ach) {
-        unlockedHost.textContent = 'Achievements unavailable.';
-        unlockedHost.className = 'text-slate-500 text-sm mb-4';
+        // Reset EVERY part of the card, not just this one container. On an SPA
+        // navigation the previous player's count, progress bar and milestone
+        // list would otherwise stay on screen under the new player's name
+        // (Copilot on #610). The container's own classes are left alone —
+        // overwriting className dropped the badge layout for later renders too.
+        unlockedHost.textContent = '';
+        safeInsertHTML(unlockedHost, 'beforeend',
+            '<span class="text-slate-500 text-sm">Achievements unavailable.</span>');
+        if (countEl) countEl.textContent = '—';
+        if (barEl) barEl.style.width = '0%';
+        if (nextHost) nextHost.classList.add('hidden');
         return;
     }
 
@@ -69,6 +78,15 @@ function _renderAchievements(ach) {
 
     // Colour comes from the payload, so it goes on `style` rather than into a
     // class name — an interpolated Tailwind class would not exist at runtime.
+    //
+    // escapeHtml() makes a value safe as HTML, NOT as CSS: a value containing
+    // `;` would close the declaration and inject further properties into the
+    // style attribute (Copilot on #610). Since these are used both as a colour
+    // and as `${c}33` / `${c}1a` alpha suffixes, the only shape that actually
+    // works is a 6-digit hex — so require exactly that and fall back otherwise.
+    const badgeColor = (value) => (
+        /^#[0-9a-fA-F]{6}$/.test(String(value || '')) ? String(value) : '#94a3b8'
+    );
     unlockedHost.textContent = '';
     if (!unlocked.length) {
         safeInsertHTML(unlockedHost, 'beforeend',
@@ -76,7 +94,7 @@ function _renderAchievements(ach) {
     } else {
         safeInsertHTML(unlockedHost, 'beforeend', unlocked.map((a) => `
             <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full border text-xs font-bold"
-                  style="color:${escapeHtml(String(a.color || '#94a3b8'))};border-color:${escapeHtml(String(a.color || '#94a3b8'))}33;background:${escapeHtml(String(a.color || '#94a3b8'))}1a"
+                  style="color:${badgeColor(a.color)};border-color:${badgeColor(a.color)}33;background:${badgeColor(a.color)}1a"
                   title="${escapeHtml(String(a.title || ''))}">
                 <span aria-hidden="true">${escapeHtml(String(a.emoji || '•'))}</span>
                 <span>${escapeHtml(String(a.title || ''))}</span>
