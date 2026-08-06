@@ -63,19 +63,47 @@ export function safeInsertHTML(element, position, html) {
  * @returns {Promise<any>} - Parsed JSON response
  */
 /**
- * Error for a non-OK response, carrying the status code.
+ * Error for a non-OK response, carrying the status code and the server's own
+ * message. Async because it READS THE BODY, which it must.
  *
- * Callers need to tell "the server answered, and the answer was no" from "the
- * request never got an answer". auth.js caches the anonymous result for the
- * page load, so it must only do that for a definitive 401/403 — a 5xx or a
+ * A fetch whose body is never consumed does not complete: the response arrives,
+ * the request stays open, the connection is held, and the page never reaches
+ * networkidle. Observed signed in on #/session-detail/date/<date>, where two
+ * storytelling endpoints answer 409 AMBIGUOUS_SESSION_DATE — the page rendered,
+ * but had still not settled after 45s. Anonymously, with no 409s, the same page
+ * settles in 2.1s.
+ *
+ * Reading it also makes the error worth catching: the server's detail travels
+ * on `detail` instead of being discarded, so a caller can tell
+ * AMBIGUOUS_SESSION_DATE from any other 409.
+ *
+ * Callers also need to tell "the server answered, and the answer was no" from
+ * "the request never got an answer". auth.js caches the anonymous result for
+ * the page load, so it must only do that for a definitive 401/403 — a 5xx or a
  * dropped connection has to stay retryable.
  *
  * @param {Response} res
- * @returns {Error & {status: number}}
+ * @returns {Promise<Error & {status: number, detail: string|null}>}
  */
-function httpError(res) {
-    const err = new Error(`HTTP ${res.status}`);
+async function httpError(res) {
+    let detail = null;
+    try {
+        const text = await res.text();
+        if (text) {
+            try {
+                const parsed = JSON.parse(text);
+                detail = parsed?.detail ?? parsed?.message ?? parsed?.error ?? text;
+            } catch {
+                detail = text;
+            }
+        }
+    } catch {
+        // A body that cannot be read is not worth failing over — the status is
+        // the part the caller acts on.
+    }
+    const err = new Error(detail ? `HTTP ${res.status}: ${detail}` : `HTTP ${res.status}`);
     err.status = res.status;
+    err.detail = detail;
     return err;
 }
 
@@ -89,7 +117,7 @@ export async function fetchJSON(url, options = {}) {
 
     if (method !== 'GET' || cachePolicy === 'no-store') {
         const res = await fetch(url, options);
-        if (!res.ok) throw httpError(res);
+        if (!res.ok) throw await httpError(res);
         return await res.json();
     }
 
@@ -102,7 +130,7 @@ export async function fetchJSON(url, options = {}) {
         if (!inFlightRequests.has(cacheKey)) {
             const refreshPromise = fetch(url, options)
                 .then(async (res) => {
-                    if (!res.ok) throw httpError(res);
+                    if (!res.ok) throw await httpError(res);
                     const data = await res.json();
                     responseCache.set(cacheKey, {
                         data,
@@ -129,7 +157,7 @@ export async function fetchJSON(url, options = {}) {
 
     const requestPromise = fetch(url, options)
         .then(async (res) => {
-            if (!res.ok) throw httpError(res);
+            if (!res.ok) throw await httpError(res);
             const data = await res.json();
             responseCache.set(cacheKey, {
                 data,
