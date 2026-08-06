@@ -8,176 +8,30 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/web-FastAPI-009688)](https://fastapi.tiangolo.com/)
 [![Data Integrity](https://img.shields.io/badge/data%20integrity-6%20layers-blue)](docs/SAFETY_VALIDATION_SYSTEMS.md)
-[![Tests](https://img.shields.io/badge/tests-3246%20passing-success)](tests/)
+[![Tests](https://img.shields.io/badge/tests-4200%20passing-success)](tests/)
 [![Discord.py](https://img.shields.io/badge/discord.py-2.6.4-5865F2)](https://discordpy.readthedocs.io/)
 
 A **production-grade** Discord bot + web dashboard + demo analysis pipeline with **6-layer data validation**, **real-time Lua telemetry**, **AI match predictions**, and **demo highlight detection** for ET:Legacy game servers.
 
 ---
 
-## 🔥 Recent Updates (June 2026)
+## 🔥 Recent Updates
 
-### **🧭 VISION_2026 — Sprints S1–S7 + Trust Hardening (June 2026)** 🆕
+The release history that used to sit here — sprints S1–S7, the deep audits, the
+1.20/1.21 go-live, Form Index and the rest, roughly 165 lines covering March to
+June 2026 — was removed on 2026-08-06. It had stopped at June while the project
+shipped through v1.29.0, so it was no longer "recent" and no longer true, and
+every reader paid to scroll it.
 
-**The platform pivoted from "stats viewer" to *the operating system of a 20-year
-community* — the website becomes the memory of every game night, the bot becomes
-the pipeline. Seven research-driven sprints shipped, followed by targeted
-correctness, UX, and deploy hardening.** See the
-[Vision & Roadmap](#-vision--roadmap) section below.
+It is not lost, and it is not duplicated either:
 
-- 🌅 **S1 · JUTRO / Morning** (#384) — **Morning Discord digest** posted after every
-  session (winner, score by map, MVP, new personal bests, one narrative lede — every
-  element a deep-link into the site). **Home pulse cards** (next session / last night /
-  movers vs your own form). **Own-form verdict strip** on Session Detail (Leetify-style
-  Great/Good/Average/Subpar vs *your* last sessions) + a baseline-delta helper ("23 frags
-  — 6 above your average") so no generated number ships without context
-- 🪪 **S2 · RAČUN / Account** (#386) — Web **display-name & alias** management, a single
-  sanctioned session + role gate (`require_user` / `require_admin` + CSRF) for every write
-  endpoint, and a bot-round `is_valid` forward-fix so test/bot rounds never pollute stats
-- 🌆 **S3 · VEČER / Evening** (#389) — **Peer-voted MVP** (the community decides, not a
-  formula), **weekly challenge**, Planning-Room lobby with confirmed / standby / sub tiers
-  + a one-click "need N more" ping, and a **captain draft** that proposes ET-Rating-balanced
-  teams with manual override
-- 🏟️ **S4 · TEKMA / Competition** (#391) — Quarterly **season** surfacing, **engraved season
-  awards** + a Hall-of-Fame "Season Champions" wall (MVP / Iron Man / Most Improved / Oracle),
-  **parimutuel session-winner betting** (valueless points, pool-split payout, atomic
-  `FOR UPDATE` settlement) that pulls the bench and non-players in, and **per-map
-  fastest-objective records** ("segments") + a personal-best digest line
-- 🪪 **S5 · IDENTITETA / Identity** (#395) — Profile IA changed from "big stats table"
-  into a career surface: identity strip, ET Rating/tier, archetype, one focus line,
-  duo synergy, History tab with rating sparkline + season awards, and a mobile bottom
-  nav with `Home / Last Session / Me / Boards`
-- 🗄️ **S6 · SPOMIN / Memory** (#397) — **On This Day** throwback service, consolidated
-  **Record Book** (Records + Hall of Fame + Season Champions in one tabbed surface),
-  and **Slomix Wrapped** canvas cards from season-scoped player facts
-- 🔴 **S7 · LIVE / Tonight** (#398, #402) — Dedicated `/#/tonight` hub with logical-team
-  stopwatch scoring, live server pulse, map strip, rosters, momentum graph, R2
-  time-to-beat chase, hold-probability curve, and a Home live card
-- 🎲 **Tonight fun-betting stage 2** (#403, #406) — Betting panel moved into the live
-  Tonight flow, cache staleness fixed, hindsight bets blocked, and roster-bound settle
-  added so payouts follow the actual team roster instead of fragile positional labels
-- 🔬 **Deep audit remediation** (#403, #405, #409) — Correctness/security/UX sweep:
-  aim-lock duration inflation fixed, bot-polluted season awards excluded, `prox_overall`
-  now honors session/map/round scope, orphan R2 imports are marked invalid instead of
-  inflating aggregates, Sessions gained keyboard/a11y fixes, and duplicated session
-  timing helpers moved into a shared mixin
-- 🧱 **Dual-frontend deploy resilience** (#407, #411) — React modern-route assets are
-  built during deploy, cache-busted by git SHA, swapped atomically, retried once on
-  transient chunk/CSS failures, and show a user-facing reload panel instead of a
-  developer-only "Modern Route Offline" dead end
+- **[CHANGELOG.md](CHANGELOG.md)** is generated by release-please from
+  `feat:` / `fix:` / `perf:` commits and is always current.
+- The removed text is in this file's git history —
+  `git show <pre-2026-08-06-commit>:README.md`.
+- `docs/CHANGELOG.md` holds the long-form historical notes (frozen).
 
-### **🎯 v1.16.0: Full Aim Analytics — v9 True-Aim Shipped (May 19-20)**
-
-**The flagship `mode=aim` lens on the Player Combat Map turns per-shot
-origin + view-angles into a rich, research-grounded read of how a player
-holds, sweeps, and looks while shooting.**
-
-- 🌹 **5th lens on the Player Combat Map** (#346) — `Kills from`, `Victims die`, `Player dies`, `Presence` joined by **Aim**: origin density + a per-zone **16-bucket yaw rose** + a mean-aim tick per hotspot. Pitch profile (up / level / down), spread metrics, and narrative one-liners surface side-by-side
-- 🧮 **Wrap-safe circular statistics** — yaw lives on a circle (±180°), so an arithmetic mean is silently wrong (e.g. 170° and −170° average to 0° but the true mean is ~180°). The new `_circular_yaw_stats` helper does it right: `atan2(mean sin, mean cos)`, mean resultant length `R`, circular std, and a **Rayleigh test** for directional-vs-uniform. Verified live against a real human (1,506 shots) — endpoint matched a manual `psql` cross-check to **0.001°**, while the wrong arithmetic mean would have been off by **38°**
-- 📖 **Storytelling, not verdicts** — narrative lines are generated only from real statistics (sample size, dominant compass-sector, ±°  spread, pitch tendency, Rayleigh significance). No fabricated "center" — defensible reads like *"1,506 shots tracked · Most shots aimed SW (28% of fire) · Wide horizontal coverage (±71°) · Level aim (avg +1° pitch)"*
-- 🧰 **NEW additive endpoint** `GET /api/proximity/player-aim` — does **not** touch the existing `mode=aim` on the shared `player-heatmap` (3 consumers + ~30 tests stayed green). Dual-stack: legacy JS = production truth, React = parallel
-- 🔬 **Research-grounded design** — methodology cross-checked against esports analytics (Leetify, scope.gg), circular-statistics literature, NBA hex-bin shot-chart practice, and spatial-DB downsampling patterns before a line of code was written (`docs/PROXIMITY_AIM_ANALYTICS_PLAN.md`)
-- ✅ **Validated on real all-night session** — 30,905 shots from 6 distinct humans across 8 maps; yaw spans `[−180,180]`, pitch `[−71,88]`, **both-zero = 0%** ⇒ `ps.viewangles` binding rock-solid on humans, not just bots
-
-### **🗺️ v1.15.0: Proximity Page Major Redesign + Lua 5.4 Production-Grade (May 14-19)**
-
-**The biggest single proximity push since v6.01: map-first information architecture, every audit finding closed, and two latent Lua-5.4 incompatibilities shipped + caught + fixed under live load.**
-
-- 🗺️ **Map-first information architecture** (#328, #330, #332, #334, #336) — the Player Combat Map is the hero; the page reads top-to-bottom as a single player's story (`HERO Combat Map → Player Story → Map Context → Engagements & Trades → Roles & Classes → Round Replay`). 8 KPIs trimmed to 5, 7 leaderboards consolidated to 3 contextual ones, redundant per-panel "Map name…" inputs replaced by the page-level Scope (#340)
-- 🎯 **Per-player heatmap, 4 perspectives** (#328) — `Kills from / Victims die / Player dies / Presence`, every lens scoped to a selected player + map + range. A1 (heatmap blank on calibrated maps) + A2 (no per-player filter) + A6 (256 vs 512 grid drift) closed. Server-side stride downsamples presence (>8 k samples never ship raw)
-- 🎯 **Per-player Hit Region Distribution** (#339) — head / arms / body / legs breakdown tied to the same player selector
-- 🔓 **Home widget endpoints restored + sanitised** (#338) — `/api/live-status`, `monitoring/status`, `voice-activity/*`, `server-activity/history` accidentally got admin-gated by an earlier security sweep. Restored public, with a strict whitelist sanitiser (no Discord-ID/avatar leak; dropped dead `voice_members` path)
-- 🔥 **Webhook `bit`-library crash on Lua 5.4** (#343) — `stats_discord_webhook.lua:1264` used LuaJIT/5.1 `bit.band(bit.lshift(1,4), cs)`. ET:Legacy 2.83.1's Lua 5.4 has **no `bit` library** → every `et_RunFrame` raised `attempt to index a nil value (global 'bit')`, spamming the console for hours. Replaced with native `((1 << 4) & cs) ~= 0` and bumped webhook to v1.7.1
-- 🔥 **SHOT_FIRED `outputData` crash on Lua 5.4** (#345) — `proximity_tracker.lua:3157` formatted `round(…, 1)` float origin with `%d`. Lua 5.4 rejects non-integer floats for `%d` ("number has no integer representation"), the throw escaped `outputDataInner`, `trap_FS_CloseWrite` never ran, and **every round's proximity file was left unclosed/corrupt while `shot_fired=true`**. Fix: truncate toward zero in Lua (`math.floor` for ≥0, `math.ceil` for <0 — plain `floor` is off-by-one for negative world coords) then `%d`. Caught by the runbook's *"verify clean end-to-end on a real round"* gate exactly as planned
-- 🧰 **Hard-stop deploy discipline** — every SSH write was guarded with backup + anchored sed + a surgical-change proof (`revert(line) == known-good SHA`), so each live change was provably exactly the intended one token
-
-### **⚡ v1.14.x: Deprecation Cleanup, Perf, Audit Sweep (May 10-12)**
-
-- 🧹 **Timezone-aware Datetime Migration** (#214, #216, #222, #230) — Killed every `datetime.utcnow()` and raw `datetime.fromtimestamp()` / `date.today()` in the codebase. Enabled ruff DTZ005 + DTZ007 with explicit `noqa` rationales on the 253 sites that legitimately need naive datetimes (Lua wall-clock, file-mtime, etc.). No more silent UTC/local mixups
-- 🔬 **Mega Audit v6** (#210) — Verified-real sweep: 12 actual fixes shipped, 16 false positives ruled out with evidence. Audit methodology refined to demand proof-of-bug, not just code smells
-- 📖 **Useless-Defense-Deaths Metric** (#204) — Captures defensive deaths that didn't help the team (panic deaths far from objectives). New endpoint feeds storytelling
-- 🩺 **DB Drift Differential Mode** (#201) — `scripts/check_db_drift.py --diff` shows row-level deltas between prod and dev DBs, not just schema delta
-- 🔒 **Atomic Stats Insert + Weapon Savepoint** (#199) — `_insert_player_stats` wrapped in a single transaction with a savepoint around weapon stats. Partial-import inconsistencies impossible
-- 🛡️ **TOCTOU Closure on player_aliases** (#197) — Closed race window in alias creation; silent excepts in parser now log
-- 📝 **Storytelling Math + Narrative Polish** (#205, #208, #228) — Spawn-rush filter, NULL/0 `round_start_unix` filter in enabler/lurker, narrative wordalisation overhaul
-- ⚡ **KIS Single-Pass Spawn Aggregation** (#241) — `spawn_mult` + `reinf_mult` merged into one pass over `spawn_timings` (was two passes)
-- 🚄 **Records Parallelisation** (#243) — 13 sequential queries on `/api/records` collapsed into `asyncio.gather`. Page-load cut substantially
-- 🐛 **Error Handler Exc-Info Fix** (#234) — `exc_info=True` replaced with `exc_info=error` so structured loggers actually capture the exception chain instead of the implicit one
-
-### **🎨 v1.13.x: Session Detail UX Redesign + Canonical GUID Plumbing (May 7-8)**
-
-- 🎯 **Session Detail Faza A** (#186) — Major UX redesign of the Session Detail page on the legacy website. Cleaner header, tighter rows, better R1/R2 split, mobile-friendly
-- 🔗 ***_guid_canonical INSERT Fix** (cdb7f51) — Parser helper + KIS now populate `*_guid_canonical` columns on insert (forward-compat), unblocking the broader canonical-ID rollout
-- 🚑 **compare_mixin.py Un-ignored** (8f78e19) — File was accidentally in `.gitignore`; stats_cog `!compare` was broken on prod until this landed
-- 🧰 **Sync Helper Hardening** (#190, #192, #195) — RCA-driven robustness pass on `scripts/sync_*.sh`: env-loading via `set -a`, base64-encoded SQL over SSH (no quoting hell), and two follow-ups for nits missed in the first ultrareview
-
-### **🎯 v1.12.0: Website Information-Architecture Redesign (May 7)**
-
-**The website got dramatically simpler — fewer pages, clearer hierarchy, less code.**
-
-- 🪶 **Stats Dropdown Minimalised** (#178) — 13 menu items → 6. Things that should be subordinate (records subpages, awards drill-downs) moved out of top-level nav
-- 🎨 **Availability Page As #ETL** (#182) — Redesigned to feel like a Discord channel: bigger fonts, bolder colors, clearer "who's coming tonight?" semantics
-- ✂️ **About Page Replaces System Overview** (#179) — Old `/#/system-overview` was 7,000 lines of internal architecture. Replaced with a focused `/#/about` page aimed at actual visitors. Net **-7,000 LOC**
-- 🐞 **R0 Double-Counting + TIR Formula Fix** (#176) — PCS aggregations were double-counting R0 (warmup) rounds in some leaderboards; TIR formula corrected across the board. Cross-leaderboard numbers now consistent
-
-### **🛡️ v1.11.1: Mass Test Coverage Sweep + Security Hardening (May 6-7)**
-
-**+2,266 unit tests in a single PR (#173) — 5.4× growth — plus two P1 security fixes.**
-
-- 🧪 **Test Coverage 593 → 2,859** — Mandelbrot-style audit sweep added focused tests across 50+ modules: notifier helpers, telegram/signal connectors, scheduler quiet-hours, achievement ledger, BoundedLockDict, file_tracker dedup, replay_service primitives, prox_scoring percentile math, session-matrix aggregation, monitoring allowlist, stopwatch scoring, and dozens more. Every test docstring documents the regression it catches
-- 🔒 **Symlink TOCTOU Fix** — `upload_store.resolve_download_path` post-resolve `is_symlink()` check never fired (resolve() follows symlinks). Now walks candidate parents BEFORE resolve(), bounded at storage root so symlinked-mount deploys still work
-- 🩹 **JSON Null Roster Normalisation** — `TeamManager._decode_json_array` returned `None` for stored JSON `null` (legacy/malformed rows), then crashed `len(...)` downstream. Now normalises null and non-list shapes to `[]`
-- 🐛 **Observed Tripwires Pinned** — `_format_delta_seconds(None)` AttributeError, `_is_reminder_due(None)` AttributeError — both now have explicit tests so a fix is a deliberate change, not silent
-
-### **🧬 v1.11.0: Round Canonical ID + Correlation Saga (May 6)**
-
-**Content-addressed round identity + 6-phase rollout to eliminate orphan correlations.**
-
-- 🆔 **Round Canonical ID** — `sha256(round_start_unix:map_name:round_number)[:16]` as a stable cross-source identifier (Phases 1-4: schema → dual-write → UNIQUE constraint → primary lookup). Idempotent ingest, zero collision risk in our scale window
-- ⏱️ **Saga Timeout for Stale Pending Correlations** (Phase 6) — Long-pending pending rows time out gracefully instead of blocking later imports
-- 🧹 **Periodic Correlation Sweep** (Phase D + E) — Cleanup tool + scheduled sweep finally closes the orphan-row regression. Cleanup script now preserves multi-match days (best-of-3 style) instead of nuking them
-- 🔬 **Strategy 3 Cross-Pollination Fix** — Back-to-back same-map matches no longer mix kill data into the wrong round (600s proximity window + canonical merge)
-- 🩹 **Re-linker Repairs Mismatched round_id** — Catches and corrects existing wrong assignments instead of just adding new links
-- 🔧 **Storytelling Completeness Diag** — `/diagnostics/storytelling-completeness` endpoint with corrected `rounds_correlated` counter
-- 🎨 **Stats Dropdown Reorder + Smart Stats Verification UI** — Verification panel for KIS audit transparency
-
-### **♻️ v1.10.x: Lua Retry Buffer + Quick-Leaders Cleanup (April 25 → May 4)**
-
-- 💾 **Lua v1.7.0 Persistent Retry Buffer** (#152) — Game-server Lua now disk-buffers webhook payloads when Discord rejects them, replays on reconnect. No more lost round notifications during transient network glitches
-- 🧽 **Quick-Leaders Dead Code Removal** (#154) — Eliminated stale `session_date` fallback queries that masked actual data integrity issues
-
-### **🚀 v1.9.0: The Big Rollup — Proximity v6.01, Oksii Adoption, KIS v3 (April 25)**
-
-**The largest single release: proximity overhaul, Oksii Lua adoption, scoring v3, and complete website redesign.**
-
-- 🎯 **Proximity v6.01 Objective Intelligence** (#53) — Carrier kills, returns, construction events, vehicle progress with full backend + frontend coverage
-- 🩹 **Oksii Lua Adoption** — `killer_health`, `alive_count`, reinf timing flow into KIS v2 multipliers + BOX scoring service
-- 🧠 **KIS v3 — Graduated Reinforcement** (#121) — UTRO-inspired 7-tier reinf multiplier (0.70-1.40) replaces binary bonus
-- ⚔️ **Player Rivalries** — H2H stats, nemesis/prey/rival classification at `/#/rivalries`
-- 🏆 **Win Contribution (PWC/WIS/WAA)** — 5-component formula, dynamic weight redistribution, MVP detection
-- 🔮 **Match Predictions** (Phase 1-7) — 4-factor algorithm with auto voice-channel detection
-- 🎬 **Greatshot Demo Pipeline** — Upload → UDT scan → highlight detect → cut → render
-- 🛠️ **Round Correlation System** — `match_id` canonicalisation + linkage diagnostics
-- 📊 **Diagnostics: DB Pool Capacity** (#149) — Live pool utilisation metrics
-- 🔥 **Combat Heatmap Overlay** (#145) — Map-image-based grid overlay for kill/death hotzones
-- 🧱 **God File Decomposition** — `proximity_router.py` 5,515 → 14 sub-routers; `records_router.py` 3,172 → 10 sub-routers
-
-### **📜 Earlier milestones (Mar–Apr 2026)** — condensed
-
-<details><summary>Click to expand the spring 2026 release history</summary>
-
-- **v1.6.0 — Fairness Overhaul + Story Expansion** (Apr 20-21, PR #76/#78/#121) — Bayesian MVP shrinkage (no more 1-round wonders), WIS v2 harmonic confidence, PWC zero-team-kill fix, BOX score panel, KIS v3 graduated reinforcement, 2× faster storytelling (`asyncio.gather`, 360→36 queries)
-- **v1.5.x — Runtime Bug Sweep + Performance RCA** (Apr 19-20, 14 PRs) — Round-linker race + midnight crossover fix, serialized correlations (migration 040), schema drift → zero, hot-path indexes (autocomplete 50ms → <1ms)
-- **v1.5.0 — Security + Session Detail 2.0** (Apr 17, PR #79/#80) — `require_admin_user` gate on diagnostics, centralized `strip_et_colors`, Player × Map matrix with stopwatch side-swap + substitution handling
-- **Mandelbrot RCA v2.0 + Oksii Adoption** (Mar 29-30) — Oksii Lua v6.01 (`killer_health`, `alive_count`, reinf timing) → KIS v2, BOX scoring, god-file decomposition (`proximity_router.py` 5515 → 14 sub-routers), ruff 2257 → 0
-- **v1.5.0 — Round Replay Timeline, Momentum Chart & Codacy Zero** (Mar 28, 53 commits) — Dual-pane replay (`/#/replay`, 420+ events/round, 200ms positions), 30s-window momentum chart, auto session narrative, 11 moment detectors, **58 Codacy issues → 0** (22 XSS, 7 SQLi, zero suppressions)
-- **v1.4.0 — Rivalries, Win Contribution & Smart Stats Phase 2** (Mar 27) — H2H rivalries + nemesis/prey/rival, PWC/WIS/WAA win contribution, 9 player archetypes, 35-weapon mapping
-- **v1.3.0 — Smart Storytelling, Proximity Pipeline & Deep RCA** (Mar 26-27) — Kill Impact Score (7 multipliers), 5 moment detectors, Team Synergy (5-axis), STATS_READY pipeline redesign
-- **v1.1.0 — Stats Accuracy Audit, React 19 & Proximity v5** (Mar 2026) — Full accuracy audit, R0 double-counting fix, React 19 + TypeScript 5.9, ET Rating system
-
-</details>
-
-**[📖 Full Changelog](CHANGELOG.md)**
+Same treatment `docs/CLAUDE.md` had on 2026-07-29, and for the same reason.
 
 ---
 
@@ -258,17 +112,17 @@ that needs daily manual feeding. Every new page replaces or merges an old one �
 
 | Metric | Value |
 |--------|-------|
-| **Kills Tracked** | 197,618 |
-| **Headshot Kills** | 41,994 |
-| **Damage Dealt** | 38.5 million |
-| **Revives Given** | 19,447 |
-| **Rounds Parsed** | 2,541 |
-| **Unique Players** | 59 |
+| **Kills Tracked** | 230,343 |
+| **Headshot Kills** | 49,918 |
+| **Damage Dealt** | 45.2 million |
+| **Revives Given** | 26,412 |
+| **Rounds Parsed** | 2,987 |
+| **Unique Players** | 65 |
 | **Stats Per Player Per Round** | 57 fields |
-| **Discord Commands** | 100+ across 20 cogs |
+| **Discord Commands** | 81 across 21 cogs |
 | **Database Tables** | 101 (managed via committed SQL migrations) |
-| **Test Coverage** | 3,246 tests, CI green |
-| **Data Span** | Jan 2025 — Jun 2026 (18 months) |
+| **Tests** | 4,200 collected, CI green |
+| **Data Span** | Jan 2025 — Aug 2026 (19 months) |
 
 ---
 
@@ -303,7 +157,7 @@ that needs daily manual feeding. Every new page replaces or merges an old one �
 
 | Project | Status | Description |
 |---------|--------|-------------|
-| **Discord Bot** (this repo) | ✅ Production | 100+ commands, 20 cogs, full automation, AI predictions |
+| **Discord Bot** (this repo) | ✅ Production | 81 commands, 21 cogs, full automation, AI predictions |
 | **Website** (`/website/`) | ✅ Production | FastAPI + legacy JS + React 19 modern routes: Home, Tonight, sessions/archive, profiles, Record Book, proximity, Greatshot |
 | **Lua Webhook** (`vps_scripts/`) | ✅ Production | Real-time round notifications, stopwatch timing, logical-team feed, pause/team capture |
 | **Greatshot** (`/greatshot/`) | ✅ Production | Demo upload, highlight detection, clip extraction, render pipeline |
