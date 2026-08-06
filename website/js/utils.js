@@ -73,9 +73,35 @@ export function safeInsertHTML(element, position, html) {
  * @param {Response} res
  * @returns {Error & {status: number}}
  */
-function httpError(res) {
-    const err = new Error(`HTTP ${res.status}`);
+// The body MUST be consumed even when we are only going to throw. A fetch whose
+// body is never read stays open: the response arrives, but the request never
+// completes, so the connection is held and the page never reaches networkidle.
+// Observed on #/session-detail/date/<date> signed in, where two storytelling
+// endpoints answer 409 AMBIGUOUS_SESSION_DATE — the page still rendered, but it
+// had not settled after 45s (anonymously, with no 409s, it settles in 2.8s).
+//
+// Reading it also makes the error useful: the server's own detail travels with
+// the exception instead of being discarded, so callers can distinguish
+// AMBIGUOUS_SESSION_DATE from any other 409.
+async function httpError(res) {
+    let detail = null;
+    try {
+        const text = await res.text();
+        if (text) {
+            try {
+                const parsed = JSON.parse(text);
+                detail = parsed?.detail ?? parsed?.message ?? parsed?.error ?? text;
+            } catch {
+                detail = text;
+            }
+        }
+    } catch {
+        // A body that cannot be read is not worth failing over — the status is
+        // the part the caller acts on.
+    }
+    const err = new Error(detail ? `HTTP ${res.status}: ${detail}` : `HTTP ${res.status}`);
     err.status = res.status;
+    err.detail = detail;
     return err;
 }
 
@@ -89,7 +115,7 @@ export async function fetchJSON(url, options = {}) {
 
     if (method !== 'GET' || cachePolicy === 'no-store') {
         const res = await fetch(url, options);
-        if (!res.ok) throw httpError(res);
+        if (!res.ok) throw await httpError(res);
         return await res.json();
     }
 
@@ -102,7 +128,7 @@ export async function fetchJSON(url, options = {}) {
         if (!inFlightRequests.has(cacheKey)) {
             const refreshPromise = fetch(url, options)
                 .then(async (res) => {
-                    if (!res.ok) throw httpError(res);
+                    if (!res.ok) throw await httpError(res);
                     const data = await res.json();
                     responseCache.set(cacheKey, {
                         data,
@@ -129,7 +155,7 @@ export async function fetchJSON(url, options = {}) {
 
     const requestPromise = fetch(url, options)
         .then(async (res) => {
-            if (!res.ok) throw httpError(res);
+            if (!res.ok) throw await httpError(res);
             const data = await res.json();
             responseCache.set(cacheKey, {
                 data,
