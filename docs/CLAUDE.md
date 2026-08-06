@@ -96,9 +96,20 @@ All in `bot/core/`: achievement_system, checks, correlation_context, database_ad
 ```bash
 pip install -r requirements.txt
 python -m bot.ultimate_bot
-# Production VM: systemd-managed
-#   sudo systemctl status slomix-bot slomix-web
-#   sudo journalctl -u slomix-bot -f
+# systemd-managed on both the dev box and the production VM, but the UNIT
+# NAMES DIFFER PER HOST: dev uses etlegacy-bot/etlegacy-web, the production
+# VM uses slomix-bot/slomix-web (scripts/deploy_release.sh restarts the
+# slomix-* pair). Discover, never assume — scripts/health_check.sh checks
+# both spellings and explains why:
+#   systemctl list-units --all 'etlegacy-*' 'slomix-*'
+# This matters because `systemctl is-active <nonexistent-unit>` answers
+# "inactive", which reads as "not running" and invites starting a second
+# instance by hand. Don't: both units are Restart=always, so a hand-started
+# copy wins the port race and systemd's own restart then fails with
+# EADDRINUSE in a loop (that happened on 2026-08-05).
+#   sudo systemctl restart etlegacy-bot.service etlegacy-web.service   # dev
+# On the dev box those restarts are NOPASSWD in sudoers; confirm per host
+# with `sudo -n -l` rather than assuming it, since sudoers is host-specific.
 # (Some historical hosts still run the bot under `screen -r slomix`.)
 ```
 
