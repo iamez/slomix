@@ -2409,9 +2409,20 @@ function bindJourneyPanel() {
                 players.map((p) => ({ value: p.guid, label: stripEtColors(p.name || p.guid) })),
             );
             setSelectOptions(select, opts, proximityJourneyState.guid || '');
+            // setSelectOptions silently resets select.value when the previously
+            // selected guid is no longer among the options, and it does NOT fire
+            // onchange — so the button stayed enabled with nothing to open
+            // (Copilot on #609). Re-read the select and re-sync afterwards.
+            if (proximityJourneyState.guid && select.value !== proximityJourneyState.guid) {
+                proximityJourneyState.guid = select.value || '';
+                proximityJourneyState.payload = null;
+            }
         } catch (err) {
             console.warn('[proximity] journey players load failed', err);
         }
+        // After success AND after failure: a failed load leaves the select on
+        // whatever it held, and the button must agree with it either way.
+        syncOpenBtn();
         void loadPlayerJourney();
     })();
 }
