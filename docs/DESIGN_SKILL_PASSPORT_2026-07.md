@@ -97,14 +97,17 @@ Ker so omarice danes v datoteki tipizirane kot `objective`, jih je treba ali pre
 
 Za vsako os in igralca:
 
-```
-raw_i        = per-session vrednost osi (že jo znamo izračunati)
+```text
+raw_i        = vrednost osi za eno OPAZOVANJE (ne za sejo — glej opombo)
 n_axis       = število OPAZOVANJ te osi (ne sej — glej spodaj)
-pool_mean    = povprečje osi čez cel bazen (prior)
+pool_mean    = povprečje osi čez KVALIFICIRAN bazen (prior) — glej opombo
 C_axis       = prior v ISTI enoti kot n_axis
 
 shrunk = (n_axis * mean(raw_i) + C_axis * pool_mean) / (n_axis + C_axis)
 ```
+
+⚠️ **Preklop na opazovanja mora zajeti tudi `raw_i` (druga runda reviewa, Codex #551).**
+Prvi popravek je `n` premaknil s sej na opazovanja, `raw_i` pa pustil kot vrednost na sejo. S tem je `mean(raw_i)` ostalo **neuteženo povprečje sej**, uteženo pa s številom opazovanj — seja z eno rundo bi štela enako kot cel večer, torej ravno tisto, kar naj bi popravek odpravil. `raw_i` je zato vrednost enega opazovanja, `mean(raw_i)` pa povprečje čez vsa opazovanja, ne čez seje.
 
 ⚠️ **`C` mora biti v isti enoti kot `n` (popravek po reviewu).** Prvotni zapis je mešal enoti: `n` v opazovanjih, `C = 5 sej`. To ni le nedoslednost — pri osi z veliko opazovanji na sejo (FRAG: ~40 ubojev) bi prior 5 izginil že po eni seji, pri osi z malo (CLUTCH: nekaj situacij) pa bi dušil še po dvajsetih. Vsaka os zato dobi **svoj `C_axis`**, kalibriran kot mediana opazovanj te osi na sejo × želeno število sej zaupanja. Vrednosti se določijo na obstoječih 63 igralcih, ne uganejo.
 
@@ -114,6 +117,8 @@ shrunk = (n_axis * mean(raw_i) + C_axis * pool_mean) / (n_axis + C_axis)
 - Igralec z **20+ sejami** je praktično pri svoji pravi vrednosti.
 - Nihče ne "izstreli" na vrh po enem dobrem večeru — rešuje točno gibhubovo 22-rund napako.
 - `C = 5` je izhodišče (SSR — Situational Skill Rating, `ssr_service.py` — že uporablja prag 5 sej); kalibriramo na obstoječih 63 igralcih.
+
+⚠️ **Bazen ni cela populacija (Codex #551).** Prior je bil definiran čez vse igralce, čeprav se profili z `n_axis < 3` ne prikazujejo. Pri tej populaciji množica igralcev z malo dokazi potegne `pool_mean` k sebi in s tem sistematsko popači os za vse ostale — prior za kvalificirane igralce bi bil sestavljen večinoma iz nekvalificiranih. Bazen je zato omejen na igralce, ki za **to os** in **ta format** presežejo isti prag dokazov, ki velja za prikaz.
 
 Poleg tega vsak profil izpiše **`confidence`** (`min(1, n/15)`) in **`n_sessions`** — ne kot okrasek, ampak vidno ob vsaki osi. Ko je `n < 3`, os prikažemo kot *"premalo podatkov"*, ne kot številko.
 
@@ -128,7 +133,8 @@ Danes se `get_player_session_history` preračuna proti **današnji** populaciji 
 | `raw` | surova vrednost osi za to sejo |
 | `pool_mean`, `pool_n`, `pool_sd` | populacijski kontekst **ob tistem trenutku** — brez tega shrinkage ni reproduciren |
 | `percentile_at_time` | zamrznjena relativna vrednost = "kje si bil takrat med svojimi" |
-| `formula_version`, `n_sessions`, `format` | verzijska in vzorčna sled |
+| `formula_version`, `n_axis`, `n_sessions`, `format` | verzijska in vzorčna sled. **`n_axis` je obvezen** (Codex #551): §4.2 iz njega izpelje krčenje, zaupanje in prag nezadostnih podatkov, in njegova enota se po oseh razlikuje — brez njega posnetka ni mogoče ponovno prebrati. |
+| `pool_quantiles` | **Dodano po drugem reviewu.** `pool_mean`/`pool_n`/`pool_sd` ne zadoščajo za izpeljavo *novega* empiričnega percentila, ko pozna telemetrija spremeni `raw`: dve različni porazdelitvi z istimi tremi momenti dasta različna percentila. Hraniti je treba kvantile (ali samo porazdelitev). |
 
 Iz tega sledita **dve različni številki, ki ju je treba ločeno prikazati**:
 - **Historični pogled** (npr. "tvoja sezona") = agregat `percentile_at_time` → se **nikoli** ne spremeni za nazaj;

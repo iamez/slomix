@@ -25,7 +25,7 @@ Vizijo razbijem na tri zahteve:
 
 Lua `proximity_tracker.lua` vzorči **vsakih 200 ms** in za vsak vzorec zapiše:
 
-```
+```text
 time, x, y, z, health, speed, weapon, stance, sprint, event
 ```
 
@@ -33,7 +33,7 @@ To ni "približno kje je igralec" — to je **kje je, s koliko življenja, s kat
 
 **Ena prava vrzel (popravljeno po reviewu): smer pogleda.** Pot NE vsebuje viewangles, zato iz nje ni mogoče ločiti igralca, ki pravilno drži choke, od tistega, ki na istem mestu gleda stran. Za odločitveno oceno (DQL) je to pomembna razlika. Viewangles obstajajo, a le **dogodkovno**: `SHOT_FIRED` (ob strelu) in `AIM_LOCK` (ko je križec na sovražniku) — torej vemo, kam je gledal, kadar je streljal ali koga sledil, ne pa med zatišjem.
 
-V1 je torej **dosežen za pozicijo/stanje, ne pa za neprekinjeno orientacijo.** Če se izkaže, da DQL rabi zvezno smer pogleda, je to edina postavka v tem dokumentu, ki bi zahtevala Lua spremembo (dodatno polje v vzorcu poti).
+V1 je torej **dosežen za pozicijo/stanje, ne pa za neprekinjeno orientacijo.** Če se izkaže, da DQL rabi zvezno smer pogleda, bi to zahtevalo Lua spremembo (dodatno polje v vzorcu poti). **Ni edina** — popravek po reviewu: DQL-3 možnost B je prav tako Lua sprememba, in med predlogi je še aim-lock postavka. Prvotna formulacija je trdila, da je to edini tak primer v dokumentu; ni.
 
 V bazi (`player_track.path`, JSONB): **63.058 poti, 246 MB** (premerjeno 2026-08-05;
 ob pisanju 2026-07-25 je bilo 57.311 poti / 223 MB — raste za ~500 poti na dan). Ena runda etl_adlernest R2 (272 s) da 50 poti in v isti datoteki še:
@@ -77,7 +77,7 @@ Trenutno ocenjujemo **izide** (kill je vreden X), skoraj nič pa **odločitev** 
 
 Izjema, ki dokazuje, da je izvedljivo: `OBJECTIVE_RUNS` že **zdaj** zapisuje za vsako inženirsko akcijo:
 
-```
+```text
 action_type=dynamite_plant, approach_time_ms=29800, approach_distance=6627,
 beeline_distance=2696, path_efficiency=0.407, enemies_nearby=2,
 nearby_teammates=0, run_type=contested_solo, self_kills=0, team_kills=0
@@ -88,7 +88,9 @@ Kontekstna polja (`enemies_nearby`, `nearby_teammates`, `run_type`, `escort_guid
 **(a) To NI "inženirska" tabela, ki bi jo bilo treba le posplošiti — je tabela, ki pokriva napačno manjšino.**
 `proximity_objective_run` pozna samo štiri akcije, vse inženirske: `dynamite_plant` (1.058), `objective_destroyed` (656), `construction_complete` (643), `dynamite_defuse` (152) — skupaj **2.509**. Nošenje dokumentov/zastave je v ločeni tabeli `proximity_carrier_event` z **2.079** zapisi.
 
-**Pošten razrez (popravek po reviewu):** 69,4 % je delež *nosilcev*, NE delež vsega objective dela — prvotna formulacija je to zamešala. Od vseh 4.588 objective dogodkov je **45,3 % nošenja** in **28,2 % jih opravijo medici**; inženirji z akcijami + nošenjem opravijo večino. Sklep se s tem ne spremeni, le zaostri se pravilno: **kar 45 % objective dela — nošenje, ki ga v 69 % opravljajo medici — nima niti enega konteksta odločitve.**
+**Pošten razrez (dvakrat popravljeno).** Prvotno besedilo je 69,4 % predstavilo kot delež vsega objective dela; to je bil delež *nosilcev*. Popravek je nato navedel še „28,2 % opravijo medici", kar se ne izide z lastnima številkama tega dokumenta (45,3 % × 69,4 % = 31,4 %) — ujel Codex.
+
+Preračunano proti bazi 2026-08-06: **5.367 objective dogodkov, od tega 2.481 nošenj = 46,2 %** (ob pisanju 2026-07-25 je bilo 4.588 oziroma 45,3 %). Deleža po razredih **ne navajam več**: `proximity_carrier_event` nima stolpca za razred, izpeljati ga je mogoče le s spojem na `player_track`, in moj poskus takega spoja je dal 97,4 % — številko, ki ji ne zaupam dovolj, da bi jo objavil. Sklep na tem ne stoji in ostane: **46 % objective dogodkov je nošenja in zanje nimamo niti enega konteksta odločitve.**
 
 | Polje | objective_run (2.509, inženir) | carrier_event (2.079, 69 % medici) |
 |---|---|---|
@@ -122,7 +124,7 @@ Ownerjev ugovor na `path_efficiency` ("nima duše, samo matematika") je sprožil
 | Metrika | Test | Rezultat | Kje se uporablja |
 |---------|------|----------|------------------|
 | `spawn_timing_score` | vs dejansko odvzet čas | ✅ **ZDRAVA** — monotono 3,2 → 9,2 → 15,5 → 21,2 s | KIS spawn multiplier, spawn leaderboard |
-| `push_quality` | vs uboji v 5 s oknu | 🔴 **OBRNJENA** — <0,5 → 0,90 killov; 0,9–1,2 → 0,60; 1,2+ → 0,43 | **KIS push multiplier (prag 0,9)** |
+| `push_quality` | vs uboji v 5 s oknu | 🔴 **OBRNJENA** — <0,5 → 0,90 killov; 0,9–1,2 → 0,60; 1,2+ → 0,43 (pas 0,5–0,9 ni bil izračunan — glej opombo) | **KIS push multiplier (prag 0,9)** |
 | `dodge_reaction_ms` | vs pobeg iz spopada | 🔴 **OBRNJENA** — <300 ms → 22 % pobegov; 1000+ ms → 65,7 % | **prox_score "awareness" (nižje = bolje)** |
 | `path_efficiency` | vs težavnost in izid | 🔴 **OBRNJENA** — glej §V3 | prikaz objective runs |
 | `efficiency` (carrier) | vs izid nošenja | 🔴 **OBRNJENA** — ubit 0,501 > secural 0,489 > izgubil 0,465 | prikaz carrier eventov |
@@ -135,9 +137,23 @@ Ownerjev ugovor na `path_efficiency` ("nima duše, samo matematika") je sprožil
 
 ### Dva ŽIVA scoring defekta (ne le prikaz)
 
+> ⚠️ **Manjka pas 0,5–0,9** (Codex, #551). Prvotna analiza ga ni izračunala, in to ni
+> postranski pas: premerjeno 2026-08-06 je v `proximity_team_push` **55.193 pushev**
+> med 0,5 in 0,9, proti 31.204 pod 0,5, 8.456 med 0,9 in 1,2 in 1.037 nad 1,2 — torej
+> **največji pas od vseh štirih, izpuščen iz tabele**. Ubojev na push zanj nimam:
+> `proximity_team_push` stolpca za uboje nima, številke v tabeli so plod spoja v
+> 5-sekundnem oknu, ki ga tu nisem ponovil. Sklep o obrnjenosti zato drži le za
+> pasove, ki so izračunani; z manjkajočim modalnim pasom tabela sama po sebi ne
+> zadošča in jo je treba dopolniti, preden se na njej karkoli gradi.
+
 1. **KIS push multiplier stoji na obrnjeni metriki.** `PUSH_QUALITY_THRESHOLD = 0,9` zajame ravno pas z **najmanj** uboji. Vzrok je v formuli: `push_quality = poravnanost × (hitrost/300)` je največja, ko cela ekipa sprinta v isto smer — kar se zgodi ob **odsotnosti stika** (tek iz spawna). Ob dejanskem stiku se hitrost zmanjša in ekipa razprši → "nizka kvaliteta". KIS torej ojača uboje med nemotenim sprintom. (Formula je tudi neomejena: max 2,16, 4.124 od 84.309 vrstic nad 1,0.)
 
-2. **prox_score "awareness" os se sama s sabo bori.** Sestavljena je iz `escape_rate` (pravilna smer) in `100 − dodge_ms/50` (obrnjena smer) — polovica osi vleče proti drugi. "mechanical" os stoji na `return_fire_ms`, ki nima signala.
+2. **~~prox_score "awareness" os se sama s sabo bori.~~ NAPAČNO — popravljeno po reviewu (Codex, #551).** Preveril sem v kodi: `proximity_scoring.py:288` računa
+   `awareness = min(100, esc_rate * 0.5 + max(0, 100 - d_ms / 50) * 0.5)`.
+   Surovi `dodge_ms` je res „manj je bolje", a ga prav to odštevanje **obrne** — 1.000 ms
+   da 80, 5.000 ms da 0. Obe polovici osi torej kažeta v isto smer in os se s sabo ne bori.
+   Ta ugotovitev odpade. Kar ostane: **"mechanical" os stoji na `return_fire_ms`, ki nima
+   signala** — to je bilo izmerjeno in drži.
 
 ### Poštena omejitev teh testov
 
@@ -187,7 +203,9 @@ Ownerjev "sacrifice, ki nastavi priložnost" postane **merljiv** — a ne naivno
 
 **Zakaj golo časovno okno ne zadošča (popravljeno po reviewu):** pravilo *"smrt + napredek ekipe v N sekundah = sacrifice"* bi nagradilo vsako smrt, ki ji slučajno sledi napredek — tudi če je bila na drugem koncu mape ali če je ekipa napredovala povsem neodvisno. Igralec bi lahko "nabiral" točke z brezveznim umiranjem ob pravem času.
 
-Zato mora sacrifice zahtevati **vzročne dokaze**, ne le sosledje. Vsi so izračunljivi iz obstoječih podatkov:
+Zato mora sacrifice zahtevati **več kot sosledje**. Pogoji spodaj so izračunljivi iz obstoječih podatkov:
+
+> ⚠️ Popravek poimenovanja (Codex, #551): tudi ujemanje po podobnih situacijah ostane > **opazovalno, ne vzročno**. Faza runde, stanje nasprotnika, stanje soigralcev in > igralčeva lastna izbira so nemerjeni in lahko pojasnijo razliko. Spodnji pogoji zožijo > primerjavo in odpravijo najbolj očitno farmanje, ne dokazujejo pa vzroka — dokler tega > ne moremo trditi, se metrika ne sme predstavljati kot „ta smrt je ekipi pomagala".
 
 | Dokaz | Kako ga preverimo |
 |-------|-------------------|
@@ -227,7 +245,7 @@ Dokler ta odločitev ne pade, DQL-3 ostaja **odložen**. DQL-1 od njega ni odvis
 |------|-------|-----------|-------|
 | **0** | **Popraviti dva živa scoring defekta** (§2a): KIS push multiplier na obrnjeni metriki, prox_score awareness/mechanical osi | ne gre za nov feature — trenutno aktivno kvarita rezultate | S–M |
 | **1** | `et_brewdog` (+ manjkajoče) v `objective_zones.json` | 33 rund v 30 dneh (192 vseh) šteje kot "brez objectiva" — čista izguba točnih podatkov, majhen napor | S |
-| **1b** | **`carrier_event` izenačiti z `objective_run`** (enemies_nearby, nearby_teammates, run_type) | 45 % objective dogodkov je nošenja (69 % od tega medici) in zanje nimamo nobenega konteksta; `path_samples` že obstaja na vseh 2.079 vrsticah | M |
+| **1b** | **`carrier_event` izenačiti z `objective_run`** (enemies_nearby, nearby_teammates, run_type) | 46 % objective dogodkov je nošenja in zanje nimamo nobenega konteksta. **Vir ni `path_samples`** — ta je `INTEGER`, torej števec vzorcev, ne pot (Codex, #551). Kontekst je treba izpeljati iz `player_track.path` po času in poziciji nosilca, ali pa ga dodati v Lua ob dogodku. | M–L |
 | **2** | DQL-1 kontekst giba (izolacija, približevanje objectivu, lokalna premoč) | temelj za vse ostalo; vhodi že obstajajo | M |
 | **3** | Razširi `OBJECTIVE_RUNS` logiko na vse igralce (ne samo inženirje) | dokazano deluje, samo posplošitev | M |
 | **4** | DQL-2 ocena odločitev + "sacrifice score" | ownerjeva osrednja želja; hrani LURK/OBJECTIVE osi Passporta | L |
@@ -273,7 +291,7 @@ trditev preverljiva, sem jo preveril in ne le sprejel.
 | 9 | Popravi imenovalec pri nosilcih | **Že popravljeno** v §V3(a): 69,4 % je delež *nosilcev*, ne delež vsega objective dela. |
 | 10 | Pred offline zakritjem rabiš vir geometrije | **Sprejeto, in preverjeno danes.** V repu ni razčlenjevalnika BSP, navmesha, AAS ne sledenja žarkov; `.bsp` se pojavi izključno kot končnica imena datoteke (`players_router.py:1526`, `api_helpers.py:120`) in kot vnos v `map_assets_manifest_from_etmain.json`. `website/backend/map_geometry/` vsebuje samo `__pycache__` in v gitu ni ničesar. Zakritje v DQL-1 je blokirano. |
 | 11 | Danger baseline gradi le iz podatkov, znanih ob ocenjevanju | **Sprejeto**, isti razred kot #6: leave-one-round-out ne zadošča, ker je agregat vezan na mapo/celico brez časovne dimenzije. |
-| 12 | `path_samples` ni shranjena pot nosilca | **Sprejeto, in preverjeno.** Migracija 028 ga definira kot `path_samples INTEGER NOT NULL DEFAULT 0`, in v shemi je `proximity_carrier_event.path_samples : integer` — torej **števec vzorcev, ne trajektorija**. P1b iz njega ne more izpeljati `enemies_nearby`, soigralcev ne `run_type`.
+| 12 | `path_samples` ni shranjena pot nosilca | **Sprejeto, in preverjeno.** Migracija 028 ga definira kot `path_samples INTEGER NOT NULL DEFAULT 0`, in v shemi je `proximity_carrier_event.path_samples : integer` — torej **števec vzorcev, ne trajektorija**. P1b iz njega ne more izpeljati `enemies_nearby`, soigralcev ne `run_type`. |
 
 **Kaj to pomeni za predlog.** DQL-1 (zakritje, FOV) je blokiran na dveh
 manjkajočih virih — geometriji in smeri pogleda — in ne le na fazi objectiva,
