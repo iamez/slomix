@@ -655,8 +655,23 @@ async def get_session_details(date: str, db: DatabaseAdapter = Depends(get_db)):
             map_matches[map_name] = {"rounds": [], "map_name": map_name}
         map_matches[map_name]["rounds"].append(match)
 
+    # A date can hold more than one gaming session, and this endpoint merges
+    # them on purpose so a session that crosses midnight is never shown cut in
+    # half (fetch_session_data_by_date's docstring). Until now the payload gave
+    # no way to tell that had happened, so session-detail.js rendered two
+    # separate evenings as one "session detail" and could never resolve a
+    # gaming_session_id from the date path at all.
+    gaming_session_ids = await data_service.get_gaming_session_ids_for_date(date)
+
+    # gaming_session_id is ALWAYS present, and null when the date holds more
+    # than one session — deliberately, so the payload has one shape rather than
+    # two. A conditionally absent key is the version that breaks clients, since
+    # `resp.gaming_session_id` and `'gaming_session_id' in resp` then disagree.
+    # Every caller in this repo tests truthiness, not presence (Copilot on #605).
     return {
         "date": date,
+        "gaming_session_ids": gaming_session_ids,
+        "gaming_session_id": gaming_session_ids[0] if len(gaming_session_ids) == 1 else None,
         "player_count": player_count,
         "total_rounds": len(sessions),
         "maps_played": list(map_counts.keys()),

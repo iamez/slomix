@@ -258,6 +258,7 @@ function _tradeScopeParams() {
 // ---- Module state (reset on each page load) ----
 let _sessionId = null;
 let _sessionDate = null;
+let _mergedSessionIds = [];
 let _detailData = null;
 let _graphData = null;
 let _activeTab = 'summary';
@@ -335,6 +336,15 @@ export async function loadSessionDetailView({ sessionId, sessionDate, tab } = {}
         </div>`;
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
+    // Reset per entry, not per date-path: loadSessionDetailView() runs again on
+    // every SPA navigation, and a stale value survives into the NEXT view.
+    // Concretely, date -> click "Session 142" lands on the sessionId path, which
+    // repopulates _sessionDate from the per-session payload while the previous
+    // date's ids were still here — so the merged-sessions notice rendered on a
+    // single-session view, which is precisely the confusion it exists to remove
+    // (Codex on #605).
+    _mergedSessionIds = [];
+
     try {
         if (_sessionId) {
             try {
@@ -347,6 +357,14 @@ export async function loadSessionDetailView({ sessionId, sessionDate, tab } = {}
         if (!_detailData && _sessionDate) {
             // Date path: resolve session ID first, then load detail
             const dateResp = await fetchJSON(`${API_BASE}/sessions/${_sessionDate}`);
+            // A date can hold more than one gaming session, and /api/sessions/
+            // {date} merges them on purpose so a session crossing midnight is
+            // never shown cut in half. The payload now says which ones, so this
+            // page can stop presenting two separate evenings as one and can
+            // resolve a real id when the date maps to exactly one session.
+            _mergedSessionIds = Array.isArray(dateResp.gaming_session_ids)
+                ? dateResp.gaming_session_ids
+                : [];
             const resolvedId = dateResp.gaming_session_id || dateResp.session_id
                 || (dateResp.sessions && dateResp.sessions[0] && dateResp.sessions[0].gaming_session_id);
             if (resolvedId) {
@@ -366,6 +384,7 @@ export async function loadSessionDetailView({ sessionId, sessionDate, tab } = {}
         }
 
         _renderShell(container);
+        _bindSessionJumps(container);
         _activateTab(_initialTab);
         _loadGoodNightCard().catch((e) => console.warn('good night card failed', e));
         _loadVerdictStrip().catch((e) => console.warn('verdict strip failed', e));
@@ -890,6 +909,40 @@ function _renderMapRoundTimeline() {
         </div>`;
 }
 
+// A date-path deep link shows every gaming session that touched that date,
+// merged. That is deliberate — it is what keeps a session running 23:00-01:00
+// from being shown cut in half — but silently presenting two separate evenings
+// as one "session detail" is how a valid-looking URL ends up showing something
+// the reader did not ask for. Say so, and offer each session on its own.
+function _mergedSessionsNotice() {
+    if (!_sessionDate || _mergedSessionIds.length < 2) return '';
+    const links = _mergedSessionIds.map((id) => `
+        <button data-session-jump="${Number(id)}"
+            class="px-2 py-1 rounded-lg text-xs font-bold border border-brand-amber/40 bg-brand-amber/10 text-brand-amber hover:bg-brand-amber/20 transition">
+            Session ${Number(id)}
+        </button>`).join(' ');
+    return `
+        <div class="glass-panel rounded-xl p-4 mb-6 border border-brand-amber/30 bg-brand-amber/5">
+            <div class="flex flex-wrap items-center gap-3">
+                <i data-lucide="layers" class="w-4 h-4 text-brand-amber"></i>
+                <span class="text-sm text-slate-300">
+                    <span class="font-bold text-brand-amber">${_mergedSessionIds.length} gaming sessions</span>
+                    played on ${escapeHtml(String(_sessionDate))} — the figures below combine them.
+                </span>
+                <span class="flex flex-wrap gap-2 ml-auto">${links}</span>
+            </div>
+        </div>`;
+}
+
+function _bindSessionJumps(container) {
+    container.querySelectorAll('[data-session-jump]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-session-jump');
+            if (id) window.navigateTo('session-detail', true, { sessionId: id });
+        });
+    });
+}
+
 function _renderShell(container) {
     const scoring = _detailData.scoring || {};
     const matrix = _detailData.team_matrix || null;
@@ -925,6 +978,7 @@ function _renderShell(container) {
                 Back to Sessions
             </button>
         </div>
+        ${_mergedSessionsNotice()}
 
         <div class="glass-panel rounded-xl p-6 mb-6 overflow-hidden">
             <div class="flex flex-wrap items-start justify-between gap-4">
