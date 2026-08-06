@@ -324,6 +324,32 @@ function renderShell(container) {
     mapStatus.id = 'replay-map-status';
     rightPane.appendChild(mapStatus);
 
+    // #/proximity/round/<id> and its /teams companion are real, working React
+    // routes that nothing in the app ever linked to — no button anywhere, and no
+    // reference in any .js or .tsx (browser audit,
+    // docs/research/WEBSITE_APP_AUDIT_2026-08-05.md). This view already has the
+    // round selected, so it is the only place where those routes have an
+    // unambiguous subject. Hidden until a round is chosen.
+    const proxLinks = _el('div', 'flex items-center gap-2 mb-2 hidden');
+    proxLinks.id = 'replay-proximity-links';
+    for (const [id, label, suffix] of [
+        ['replay-open-proximity', 'Proximity replay', ''],
+        ['replay-open-teams', 'Team comparison', '/teams'],
+    ]) {
+        const btn = _el('button', 'text-[10px] font-bold px-2 py-1 rounded-lg border ' +
+            'border-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/20 transition', label);
+        btn.type = 'button';
+        btn.id = id;
+        btn.addEventListener('click', () => {
+            if (replayState.roundId != null) {
+                window.location.hash =
+                    `#/proximity/round/${encodeURIComponent(replayState.roundId)}${suffix}`;
+            }
+        });
+        proxLinks.appendChild(btn);
+    }
+    rightPane.appendChild(proxLinks);
+
     const canvas = document.createElement('canvas');
     canvas.id = 'replay-canvas';
     canvas.width = CANVAS_W;
@@ -463,6 +489,9 @@ async function selectRound(roundId) {
         spinner.appendChild(_el('p', 'text-slate-500 text-xs', 'Loading timeline...'));
         eventListEl.appendChild(spinner);
     }
+
+    const proxLinks = document.getElementById('replay-proximity-links');
+    if (proxLinks) proxLinks.classList.toggle('hidden', replayState.roundId == null);
 
     const mapStatus = document.getElementById('replay-map-status');
     if (mapStatus) mapStatus.textContent = 'Loading...';
