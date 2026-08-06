@@ -663,6 +663,11 @@ async def get_session_details(date: str, db: DatabaseAdapter = Depends(get_db)):
     # gaming_session_id from the date path at all.
     gaming_session_ids = await data_service.get_gaming_session_ids_for_date(date)
 
+    # gaming_session_id is ALWAYS present, and null when the date holds more
+    # than one session — deliberately, so the payload has one shape rather than
+    # two. A conditionally absent key is the version that breaks clients, since
+    # `resp.gaming_session_id` and `'gaming_session_id' in resp` then disagree.
+    # Every caller in this repo tests truthiness, not presence (Copilot on #605).
     return {
         "date": date,
         "gaming_session_ids": gaming_session_ids,
