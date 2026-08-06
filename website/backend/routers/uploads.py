@@ -7,10 +7,10 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
-from website.backend.dependencies import get_db
+from website.backend.dependencies import _configured_admin_ids, get_db, require_admin_user
 from website.backend.logging_config import get_app_logger
 from website.backend.middleware.auth_helpers import require_ajax_csrf_header
 
@@ -25,6 +25,36 @@ router = APIRouter()
 _rate_window: dict[int, list[float]] = defaultdict(list)
 _last_rate_cleanup: float = 0.0
 RATE_LIMIT_PER_HOUR = 10
+
+
+# An upload is visible only while it is active AND has not lapsed. NULL
+# expires_at means "keep forever", which is the default and what every row
+# uploaded before migration 070 carries — so this clause is a no-op for them.
+#
+# Kept as one string rather than repeated inline: it appears in five queries,
+# and a filter that is right in four places out of five is worse than no filter,
+# because the library and the download endpoint would then disagree.
+_LIVE = "status = 'active' AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)"
+_LIVE_U = _LIVE.replace("status", "u.status").replace("expires_at", "u.expires_at")
+
+# What the upload form offers. Lifetime is the default and is expressed as NULL,
+# not as a very large number of days — "forever" and "expires in 100 years" are
+# different promises and only one of them is true.
+_RETENTION_DAYS = {7, 30, 90}
+
+
+def _may_delete(request: Request, uploader_discord_id: int | None) -> bool:
+    """Whether the current session may delete this upload: uploader, or admin.
+
+    Same rule the DELETE endpoint enforces. Kept next to it so the button the
+    user sees and the answer they get cannot drift apart.
+    """
+    user = request.session.get("user") or {}
+    try:
+        viewer = int(user.get("id"))
+    except (TypeError, ValueError):
+        return False
+    return viewer == uploader_discord_id or viewer in _configured_admin_ids()
 
 
 def _check_rate_limit(discord_id: int) -> None:
@@ -82,19 +112,41 @@ def _get_validators():
 async def upload_file(
     request: Request,
     file: UploadFile = File(...),
-    title: str = "",
-    description: str = "",
-    tags: str = "",
-    category: str = "",
+    # Form(...), not bare defaults. A plain scalar on a POST is a QUERY
+    # parameter to FastAPI, while the upload form sends multipart/form-data —
+    # so these never arrived. Measured before the fix: of 5 uploads in the dev
+    # database, 0 had a title different from the filename, 0 had a description,
+    # and upload_tags held 0 rows. The Title / Description / Tags inputs had
+    # never done anything, and retention_days would have been silently dropped
+    # the same way.
+    title: str = Form(""),
+    description: str = Form(""),
+    tags: str = Form(""),
+    category: str = Form(""),
+    retention_days: int | None = Form(None),
     db=Depends(get_db),
 ):
-    """Upload a config, HUD, archive, or clip file."""
+    """Upload a config, HUD, archive, or clip file.
+
+    retention_days: 7, 30 or 90 to have the upload lapse automatically.
+    Omit it (or send nothing) for the default, which is to keep it forever.
+    """
     require_ajax_csrf_header(request)  # CSRF: state-changing, requires X-Requested-With
     user = _require_user(request)
     discord_id = int(user["id"])
     username = user.get("username", "Unknown")
 
     _check_rate_limit(discord_id)
+
+    # Input validation comes AFTER the CSRF and session gates, not before: an
+    # unauthenticated caller should be turned away by 403, not told which
+    # retention values this endpoint accepts. Putting it first also broke
+    # test_uploads_csrf, which asserts a missing CSRF header is what fails.
+    if retention_days is not None and retention_days not in _RETENTION_DAYS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid retention_days. Allowed: {sorted(_RETENTION_DAYS)}, or omit for lifetime",
+        )
 
     v = _get_validators()
     storage = _get_storage()
@@ -128,8 +180,10 @@ async def upload_file(
             INSERT INTO uploads
                 (id, uploader_discord_id, uploader_name, category, title, description,
                  original_filename, stored_path, extension, file_size_bytes,
-                 content_hash_sha256, mime_type, status)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'active')
+                 content_hash_sha256, mime_type, status, expires_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'active',
+                    CASE WHEN $13::int IS NULL THEN NULL
+                         ELSE CURRENT_TIMESTAMP + ($13::int * INTERVAL '1 day') END)
             """,
             (
                 saved.upload_id,
@@ -144,6 +198,7 @@ async def upload_file(
                 saved.file_size_bytes,
                 saved.content_hash_sha256,
                 v.get_content_type(saved.extension),
+                retention_days,
             ),
         )
     except Exception as e:
@@ -237,7 +292,7 @@ async def list_uploads(
     """Browse public uploads with optional filters."""
     if sort not in _UPLOAD_SORTS:
         raise HTTPException(status_code=400, detail=f"Invalid sort. Allowed: {sorted(_UPLOAD_SORTS)}")
-    conditions = ["u.status = 'active'"]
+    conditions = [_LIVE_U]
     params: list = []
     idx = 1
 
@@ -274,7 +329,8 @@ async def list_uploads(
     data_q = f"""
         SELECT u.id, u.title, u.original_filename, u.category, u.extension,
                u.file_size_bytes, u.uploader_name, u.uploader_discord_id,
-               u.download_count, u.created_at, LEFT(COALESCE(u.description, ''), 160)
+               u.download_count, u.created_at, LEFT(COALESCE(u.description, ''), 160),
+               u.expires_at
         FROM uploads u
         WHERE {where}
         ORDER BY {_UPLOAD_SORTS[sort]}
@@ -296,6 +352,9 @@ async def list_uploads(
             "download_count": r[8],
             "created_at": str(r[9]) if r[9] else None,
             "description_preview": r[10] or None,
+            # NULL means the uploader chose to keep it forever, which is the
+            # default; a value is the deadline after which it stops appearing.
+            "expires_at": str(r[11]) if r[11] else None,
             "share_url": f"/share/{r[0]}",
         }
         for r in rows
@@ -309,15 +368,21 @@ async def list_uploads(
 # ---------------------------------------------------------------------------
 
 @router.get("/{upload_id}")
-async def get_upload(upload_id: str, db=Depends(get_db)):
-    """Get details for a specific upload."""
+async def get_upload(upload_id: str, request: Request, db=Depends(get_db)):
+    """Get details for a specific upload.
+
+    Includes `can_delete` for the CURRENT session, so the client renders the
+    delete affordance from the server's answer instead of re-deriving it. The
+    admin list stays server-side — the browser is told what this user may do
+    with this upload, not who the admins are. Read-only; nothing is written.
+    """
     row = await db.fetch_one(
-        """
+        f"""
         SELECT id, title, description, original_filename, category, extension,
                file_size_bytes, mime_type, uploader_name, uploader_discord_id,
-               download_count, content_hash_sha256, created_at
+               download_count, content_hash_sha256, created_at, expires_at
         FROM uploads
-        WHERE id = $1 AND status = 'active'
+        WHERE id = $1 AND {_LIVE}
         """,
         (upload_id,),
     )
@@ -345,6 +410,8 @@ async def get_upload(upload_id: str, db=Depends(get_db)):
         "download_count": row[10],
         "content_hash": row[11],
         "created_at": str(row[12]) if row[12] else None,
+        "expires_at": str(row[13]) if row[13] else None,
+        "can_delete": _may_delete(request, row[9]),
         "tags": tags,
         "share_url": f"/share/{row[0]}",
         "download_url": f"/api/uploads/{row[0]}/download",
@@ -365,7 +432,7 @@ async def download_upload(
 ):
     """Download an uploaded file with safe headers. Supports Range requests for video seeking."""
     row = await db.fetch_one(
-        "SELECT stored_path, original_filename, mime_type, extension FROM uploads WHERE id = $1 AND status = 'active'",
+        f"SELECT stored_path, original_filename, mime_type, extension FROM uploads WHERE id = $1 AND {_LIVE}",
         (upload_id,),
     )
     if not row:
@@ -472,24 +539,30 @@ async def download_upload(
 
 
 # ---------------------------------------------------------------------------
-# DELETE /api/uploads/{upload_id}  —  Delete upload (owner only)
+# DELETE /api/uploads/{upload_id}  —  Delete upload (uploader or admin)
 # ---------------------------------------------------------------------------
 
 @router.delete("/{upload_id}")
 async def delete_upload(upload_id: str, request: Request, db=Depends(get_db)):
-    """Soft-delete an upload (owner only)."""
+    """Soft-delete an upload. Allowed for the uploader, or for an admin."""
     require_ajax_csrf_header(request)  # CSRF: state-changing, requires X-Requested-With
     user = _require_user(request)
     discord_id = int(user["id"])
 
     row = await db.fetch_one(
-        "SELECT uploader_discord_id, stored_path FROM uploads WHERE id = $1 AND status = 'active'",
+        f"SELECT uploader_discord_id, stored_path, expires_at FROM uploads WHERE id = $1 AND {_LIVE}",
         (upload_id,),
     )
     if not row:
         raise HTTPException(status_code=404, detail="Upload not found")
 
-    if row[0] != discord_id:
+    # Uploader OR admin. Until now only the uploader could remove a file, which
+    # left the library with no way to take anything down — the owner asked for
+    # exactly this. Admin identity comes from the same helper the rest of the
+    # site uses (WEBSITE_ADMIN_DISCORD_IDS / ADMIN_DISCORD_IDS / OWNER_USER_ID),
+    # so there is one definition of "admin" and not a second one here.
+    is_admin = discord_id in _configured_admin_ids()
+    if row[0] != discord_id and not is_admin:
         logger.warning("Unauthorized delete attempt: upload_id=%s by user=%s (owner=%s)", upload_id, discord_id, row[0])
         raise HTTPException(status_code=403, detail="Not authorized to delete this upload")
 
@@ -498,8 +571,73 @@ async def delete_upload(upload_id: str, request: Request, db=Depends(get_db)):
         (upload_id,),
     )
 
-    logger.info("Upload deleted: id=%s by user=%s", upload_id, discord_id)
+    logger.info(
+        "Upload deleted: id=%s by user=%s (as %s)",
+        upload_id, discord_id, "admin" if row[0] != discord_id else "uploader",
+    )
     return {"success": True, "message": "Upload deleted"}
+
+
+# ---------------------------------------------------------------------------
+# POST /api/uploads/sweep-expired  —  remove files whose retention has lapsed
+# ---------------------------------------------------------------------------
+
+@router.post("/sweep-expired")
+async def sweep_expired_uploads(request: Request, db=Depends(get_db)):
+    """Soft-delete lapsed uploads and remove their files. Admin only.
+
+    Expiry is already effective without this: every read filters on
+    expires_at, so a lapsed upload leaves the library the moment it lapses.
+    This is the step that reclaims the disk.
+
+    Deliberately a POST behind an admin gate rather than a side effect of a
+    GET — public read endpoints in this codebase must not write.
+    """
+    require_ajax_csrf_header(request)
+    admin = require_admin_user(request)
+
+    rows = await db.fetch_all(
+        "SELECT id, stored_path FROM uploads "
+        "WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP",
+        (),
+    )
+    if not rows:
+        return {"success": True, "swept": 0, "file_errors": 0}
+
+    storage = _get_storage()
+    swept, file_errors = 0, 0
+    for upload_id, stored_path in ((r[0], r[1]) for r in rows):
+        # Remove the file FIRST, and only mark the row deleted if that worked.
+        #
+        # The other order looks safer and is not: marking first means a failed
+        # unlink leaves a row the next sweep will never select again, because
+        # the sweep looks for status = 'active'. The file would then sit on disk
+        # forever with nothing tracking it (CodeRabbit on #615).
+        #
+        # Leaving the row active on failure is safe here precisely because it
+        # has already lapsed: _LIVE hides expired rows from every read, so it
+        # cannot be listed or downloaded — it is invisible AND retryable, which
+        # is what we want.
+        try:
+            storage.delete_upload(stored_path)
+        except Exception:
+            file_errors += 1
+            logger.warning(
+                "sweep-expired: could not remove file for %s, leaving it active for the next sweep",
+                upload_id, exc_info=True,
+            )
+            continue
+        await db.execute(
+            "UPDATE uploads SET status = 'deleted', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+            (upload_id,),
+        )
+        swept += 1
+
+    logger.info(
+        "sweep-expired: %s uploads swept, %s file errors, by admin=%s",
+        swept, file_errors, admin.get("id"),
+    )
+    return {"success": True, "swept": swept, "file_errors": file_errors}
 
 
 # ---------------------------------------------------------------------------
@@ -513,10 +651,10 @@ async def popular_tags(
 ):
     """Get most popular upload tags."""
     rows = await db.fetch_all(
-        """
+        f"""
         SELECT t.tag, COUNT(*) as cnt
         FROM upload_tags t
-        JOIN uploads u ON u.id = t.upload_id AND u.status = 'active'
+        JOIN uploads u ON u.id = t.upload_id AND {_LIVE_U}
         GROUP BY t.tag
         ORDER BY cnt DESC
         LIMIT $1
