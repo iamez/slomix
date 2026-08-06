@@ -40,10 +40,20 @@ reviews:
     base_branches:
       - main
       - "^integration/.*"
-    # Left false ON PURPOSE, and it is the main lever against the review limit:
-    # open a PR as a draft while iterating, mark it ready once, and get one
-    # review instead of one per push.
+    # Default. Decides only whether draft PRs are reviewed at all.
     drafts: false
+
+    # THIS is the lever against the review limit, not `drafts` above — the first
+    # version of this file said otherwise, and CodeRabbit corrected it on #616.
+    # `auto_incremental_review` is documented as "Re-run the review on each push"
+    # and defaults to true: that is what re-reviewed our PRs on every push while
+    # threads were being answered, which is how the quota ran out and reviews
+    # started being skipped without saying so.
+    #
+    # Off means one review per PR, and any further review is asked for explicitly
+    # with `@coderabbitai review`. That is the point — a review you requested and
+    # actually got, instead of one that may or may not have run.
+    auto_incremental_review: false
 
   path_filters:
     # pg_dump output. Regenerated wholesale; reviewing it says nothing.
