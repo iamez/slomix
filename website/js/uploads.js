@@ -120,6 +120,13 @@ export async function loadUploadsView() {
 function setupDragDrop() {
     const zone = document.getElementById('upload-drop-zone');
     if (!zone) return;
+    // loadUploadsView() runs on EVERY entry to the route, and these elements are
+    // static in index.html — they are never torn down — so without this each
+    // visit stacked another copy of every listener below (Codex/master review
+    // P1-2). The dataset flag lives on the element itself, so it survives
+    // exactly as long as the listeners do.
+    if (zone.dataset.dropBound === '1') return;
+    zone.dataset.dropBound = '1';
 
     const fileInput = document.getElementById('upload-file-input');
 
@@ -194,6 +201,10 @@ function setupUploadForm() {
         .catch(err => console.warn('Upload auth check failed:', err));
 
     if (!form) return;
+    // Same re-entry problem, and this one duplicated the UPLOAD itself: two
+    // visits meant handleUpload() fired twice per submit.
+    if (form.dataset.submitBound === '1') return;
+    form.dataset.submitBound = '1';
     form.addEventListener('submit', handleUpload);
 }
 
