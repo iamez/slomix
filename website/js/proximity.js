@@ -4,6 +4,7 @@
  */
 
 import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js';
+import { getRouteHash } from './route-registry.js';
 
 const DEFAULT_RANGE_DAYS = 30;
 const DEFAULT_EVENTS_LIMIT = 20;
@@ -327,6 +328,25 @@ function updateScopeUIText() {
     setText('proximity-timeline-scope', `Scope: ${scope}`);
     setText('proximity-heatmap-scope', `Scope: ${scope}`);
     setText('proximity-quality-scope', `Scope: ${scope}`);
+
+    // Link to the full per-player profile page (React, "proximity-player" route).
+    // Only 16 of 51 endpoints on this page honour player_guid (see
+    // PLAYER_SCOPED_ENDPOINTS above) — this is where someone who picked a
+    // player in the scope selector actually gets to see everything about them.
+    // guid comes straight from proximityScopeState.playerGuid, which is only
+    // ever set from the /proximity/players response (32-char canonical form) —
+    // never truncate this before building the link, or the profile page
+    // renders with every stat silently zeroed (8-char guid matches 0 rows).
+    const viewPlayerLink = document.getElementById('proximity-view-player-link');
+    if (viewPlayerLink) {
+        if (proximityScopeState.playerGuid) {
+            viewPlayerLink.href = getRouteHash('proximity-player', { guid: proximityScopeState.playerGuid });
+            viewPlayerLink.classList.remove('hidden');
+        } else {
+            viewPlayerLink.classList.add('hidden');
+            viewPlayerLink.removeAttribute('href');
+        }
+    }
 }
 
 function renderScopeSelectors() {
