@@ -281,11 +281,12 @@ function renderShell(container) {
 
     // Round selector row
     const selectorRow = _el('div', 'flex items-center gap-3 mb-4');
-    selectorRow.appendChild(_el('label', 'text-xs text-slate-400 font-bold uppercase tracking-wider', 'Round:'));
+    const roundLabel = _el('label', 'text-xs text-slate-400 font-bold uppercase tracking-wider', 'Round:');
+    roundLabel.setAttribute('for', 'replay-round-select');
+    selectorRow.appendChild(roundLabel);
 
     const select = document.createElement('select');
     select.id = 'replay-round-select';
-    select.setAttribute('aria-label', 'Round');
     select.className = 'bg-slate-800 border border-white/10 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-purple-500/50 max-w-md';
     replayState.rounds.forEach(r => {
         const opt = document.createElement('option');

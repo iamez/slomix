@@ -130,10 +130,10 @@ function setupDragDrop() {
 
     const fileInput = document.getElementById('upload-file-input');
 
-    zone.addEventListener('click', () => {
-        if (fileInput) fileInput.click();
-    });
-
+    // No click listener here: the zone is now a <label for="upload-file-input">
+    // (index.html), so the browser opens the file picker natively on click AND
+    // on keyboard activation once the input has focus — a manual fileInput.click()
+    // here would double-open it (#621 review).
     zone.addEventListener('dragover', (e) => {
         e.preventDefault();
         zone.classList.add('upload-drop-active');

@@ -3584,17 +3584,22 @@
                     <!-- Upload Form (hidden by default, shown when logged in) -->
                     <div id="upload-form-section" class="hidden mb-8">
                         <form id="upload-form" class="space-y-4">
-                            <!-- Drag & Drop Zone -->
-                            <div id="upload-drop-zone"
-                                class="upload-drop-zone border-2 border-dashed border-slate-700/60 rounded-xl p-8 text-center cursor-pointer transition-all duration-300 hover:border-brand-blue/50 hover:bg-brand-blue/5">
+                            <!-- Drag & Drop Zone. A <label for=upload-file-input> rather than a div with a
+                                 click handler: the browser wires up activation (including keyboard Enter/Space
+                                 once the underlying input has focus) natively, instead of a plain div being
+                                 unreachable by keyboard (CodeRabbit review on #621). -->
+                            <label for="upload-file-input" id="upload-drop-zone"
+                                class="upload-drop-zone block border-2 border-dashed border-slate-700/60 rounded-xl p-8 text-center cursor-pointer transition-all duration-300 hover:border-brand-blue/50 hover:bg-brand-blue/5">
                                 <div class="mb-3 inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-blue/10 border border-brand-blue/20">
                                     <svg class="w-6 h-6 text-brand-blue" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
                                 </div>
                                 <p class="text-sm font-medium text-slate-300">Drop files here or click to browse</p>
                                 <p class="text-[11px] text-slate-600 mt-1">.cfg .hud .zip .rar .mp4 .avi .mkv</p>
                                 <div id="upload-drop-filename" class="hidden mt-2 text-xs font-bold text-brand-cyan font-mono"></div>
-                                <input type="file" id="upload-file-input" aria-label="Choose file to upload" required accept=".cfg,.hud,.zip,.rar,.mp4,.avi,.mkv" class="hidden">
-                            </div>
+                                <!-- sr-only, not hidden: hidden (display:none) removes it from the tab order
+                                     entirely, which is what made this unreachable by keyboard in the first place. -->
+                                <input type="file" id="upload-file-input" required accept=".cfg,.hud,.zip,.rar,.mp4,.avi,.mkv" class="sr-only">
+                            </label>
 
                             <!-- Fields row -->
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
