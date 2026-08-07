@@ -88,6 +88,7 @@ export function PlayerLookup({
         <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-400" />
         <input
           type="text"
+          aria-label={placeholder || 'Search players'}
           value={query}
           onChange={(event) => { void handleSearch(event.target.value); }}
           onBlur={() => setTimeout(() => setOpen(false), 140)}
