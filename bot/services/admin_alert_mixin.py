@@ -21,7 +21,7 @@ class _AdminAlertMixin:
 
     async def alert_admins(self, title: str, description: str, severity: str = "warning"):
         """
-        Send critical error notifications to admin channel.
+        Send critical error notifications to every configured admin channel.
 
         Args:
             title: Short title for the alert
@@ -29,54 +29,60 @@ class _AdminAlertMixin:
             severity: One of "info", "warning", "error", "critical"
 
         Returns:
-            True if notification was sent, False otherwise
+            True if the alert was sent to at least one admin channel, False otherwise
         """
-        if not self.admin_channel_id:
-            logger.warning(f"Cannot send admin alert (no admin_channel_id configured): {title}")
+        if not self.admin_channels:
+            logger.warning(f"Cannot send admin alert (no admin_channels configured): {title}")
             return False
 
-        try:
-            channel = self.get_channel(self.admin_channel_id)
-            if not channel:
-                logger.error(f"Admin channel {self.admin_channel_id} not found")
-                return False
+        # Color based on severity
+        colors = {
+            "info": 0x3498DB,      # Blue
+            "warning": 0xF39C12,   # Orange
+            "error": 0xE74C3C,     # Red
+            "critical": 0x8B0000,  # Dark Red
+        }
+        color = colors.get(severity, colors["warning"])
 
-            # Color based on severity
-            colors = {
-                "info": 0x3498DB,      # Blue
-                "warning": 0xF39C12,   # Orange
-                "error": 0xE74C3C,     # Red
-                "critical": 0x8B0000,  # Dark Red
-            }
-            color = colors.get(severity, colors["warning"])
+        # Emoji based on severity
+        emojis = {
+            "info": "ℹ️",
+            "warning": "⚠️",
+            "error": "❌",
+            "critical": "🚨",
+        }
+        emoji = emojis.get(severity, "⚠️")
 
-            # Emoji based on severity
-            emojis = {
-                "info": "ℹ️",
-                "warning": "⚠️",
-                "error": "❌",
-                "critical": "🚨",
-            }
-            emoji = emojis.get(severity, "⚠️")
+        embed = discord.Embed(
+            title=f"{emoji} {title}",
+            description=description[:4000],  # Discord limit
+            color=color,
+            timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
+        )
+        embed.set_footer(text=f"Severity: {severity.upper()}")
 
-            embed = discord.Embed(
-                title=f"{emoji} {title}",
-                description=description[:4000],  # Discord limit
-                color=color,
-                timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
-            )
-            embed.set_footer(text=f"Severity: {severity.upper()}")
+        # Best-effort per channel: one misconfigured admin channel (e.g. the
+        # bot was removed from it) must not stop the alert reaching the
+        # others. Each admin_channels entry belongs to whichever guild this
+        # bot process is actually running against (dev or production have
+        # separate .env files, so this never crosses between them).
+        sent = False
+        for channel_id in self.admin_channels:
+            try:
+                channel = self.get_channel(channel_id)
+                if not channel:
+                    logger.error(f"Admin channel {channel_id} not found")
+                    continue
+                await channel.send(embed=embed)
+                sent = True
+            except discord.Forbidden:
+                logger.error(f"Permission denied to send to admin channel {channel_id}")
+            except Exception as e:
+                logger.error(f"Failed to send admin alert to channel {channel_id}: {e}")
 
-            await channel.send(embed=embed)
+        if sent:
             logger.info(f"Admin alert sent: {title} ({severity})")
-            return True
-
-        except discord.Forbidden:
-            logger.error(f"Permission denied to send to admin channel {self.admin_channel_id}")
-            return False
-        except Exception as e:
-            logger.error(f"Failed to send admin alert: {e}")
-            return False
+        return sent
 
     async def track_error(self, error_key: str, error_msg: str, max_consecutive: int = 3):
         """
