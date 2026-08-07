@@ -68,6 +68,17 @@ async def test_alert_admins_returns_false_when_no_channel_configured():
 
 
 @pytest.mark.asyncio
+async def test_alert_admins_treats_all_zero_channels_as_unconfigured():
+    """bot/config.py:104 defaults ADMIN_CHANNEL_ID to '0' when unset, so an
+    unconfigured bot has admin_channels == [0] — non-empty, but not a real
+    channel. Must warn-and-return-False like the empty-list case, not try
+    to send to channel 0 (Copilot review on #620)."""
+    bot = _StubBot(admin_channels=[0])
+    out = await bot.alert_admins("title", "desc")
+    assert out is False
+
+
+@pytest.mark.asyncio
 async def test_alert_admins_returns_false_when_channel_not_found():
     """admin_channel_id set but get_channel returns None (channel deleted
     or bot not in guild yet) → False, no crash."""

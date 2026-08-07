@@ -31,7 +31,13 @@ class _AdminAlertMixin:
         Returns:
             True if the alert was sent to at least one admin channel, False otherwise
         """
-        if not self.admin_channels:
+        # bot/config.py:104 defaults ADMIN_CHANNEL_ID to '0' when unset, so
+        # an unconfigured bot has admin_channels == [0] — a non-empty list
+        # that would otherwise slip past `if not self.admin_channels` and
+        # try to send to channel 0. Filter falsy IDs out before deciding
+        # whether anything is actually configured (Copilot review on #620).
+        channel_ids = [cid for cid in self.admin_channels if cid]
+        if not channel_ids:
             logger.warning(f"Cannot send admin alert (no admin_channels configured): {title}")
             return False
 
@@ -67,7 +73,7 @@ class _AdminAlertMixin:
         # bot process is actually running against (dev or production have
         # separate .env files, so this never crosses between them).
         sent = False
-        for channel_id in self.admin_channels:
+        for channel_id in channel_ids:
             try:
                 channel = self.get_channel(channel_id)
                 if not channel:
