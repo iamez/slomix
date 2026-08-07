@@ -4,7 +4,7 @@
  */
 
 import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js';
-import { getRouteHash } from './route-registry.js';
+import { getRouteHash } from './route-registry.js?v=20260720-ssd-gsid';
 
 const DEFAULT_RANGE_DAYS = 30;
 const DEFAULT_EVENTS_LIMIT = 20;
