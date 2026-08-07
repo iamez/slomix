@@ -285,6 +285,7 @@ function renderShell(container) {
 
     const select = document.createElement('select');
     select.id = 'replay-round-select';
+    select.setAttribute('aria-label', 'Round');
     select.className = 'bg-slate-800 border border-white/10 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-purple-500/50 max-w-md';
     replayState.rounds.forEach(r => {
         const opt = document.createElement('option');
@@ -415,6 +416,7 @@ function renderShell(container) {
     // Speed selector
     const speedSelect = document.createElement('select');
     speedSelect.id = 'replay-speed-select';
+    speedSelect.setAttribute('aria-label', 'Playback speed');
     speedSelect.className = 'bg-slate-800 border border-white/10 text-slate-300 text-[10px] rounded px-1 py-0.5 focus:outline-none focus:border-purple-500/50 w-14';
     for (const s of [0.5, 1, 1.5, 2, 4]) {
         const opt = document.createElement('option');

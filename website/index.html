@@ -1443,6 +1443,7 @@
                             class="relative flex items-center bg-slate-900 border border-white/10 rounded-xl p-2 shadow-2xl">
                             <i data-lucide="search" class="w-6 h-6 text-slate-400 ml-3"></i>
                             <input type="text" id="hero-search-input"
+                                aria-label="Search player"
                                 class="w-full bg-transparent border-none text-white placeholder-slate-500 focus:ring-0 px-4 py-2 text-lg font-medium"
                                 placeholder="Search player (e.g. BAMBAM)..." autocomplete="off">
                             <div class="hidden md:flex items-center gap-2 pr-2">
@@ -1888,6 +1889,7 @@
                     <div class="relative">
                         <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 pointer-events-none"></i>
                         <input id="sessions-search-input" type="text"
+                            aria-label="Search sessions by map or player name"
                             placeholder="Search by map or player name..."
                             class="w-full pl-12 pr-10 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 text-sm font-medium focus:outline-none focus:border-brand-purple/50 focus:ring-1 focus:ring-brand-purple/30 transition" />
                         <button id="sessions-search-clear"
@@ -1925,7 +1927,7 @@
                 <div id="prototype-slot-sessions2"></div>
                 <h1 class="text-3xl font-black text-white mb-6">Sessions 2.0</h1>
                 <div class="mb-6 relative">
-                    <input id="sessions2-search-input" type="text" placeholder="Search by map, player, date..."
+                    <input id="sessions2-search-input" type="text" aria-label="Search sessions by map, player, or date" placeholder="Search by map, player, date..."
                         class="w-full md:w-80 bg-slate-900/60 border border-white/10 rounded-xl px-4 py-2 pr-8 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-blue/50" />
                     <button id="sessions2-search-clear"
                         class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white text-sm hidden">&times;</button>
@@ -2452,12 +2454,12 @@
                         <div id="proximity-heatmap-scope" class="text-[11px] text-slate-500 mb-3">Scope: Last 30d window</div>
                         <div class="flex flex-wrap items-center gap-3 mb-3 text-[10px]">
                             <label class="inline-flex items-center gap-2 px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-300">
-                                <input id="proximity-toggle-objective-zones" type="checkbox" checked class="accent-brand-cyan">
+                                <input id="proximity-toggle-objective-zones" type="checkbox" aria-label="Show objective zones" checked class="accent-brand-cyan">
                                 Show objective zones
                             </label>
                             <label class="inline-flex items-center gap-2 px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-300">
                                 Heat intensity
-                                <input id="proximity-heat-intensity" type="range" min="0.6" max="1.8" step="0.1" value="1.0" class="w-20">
+                                <input id="proximity-heat-intensity" type="range" aria-label="Heat intensity" min="0.6" max="1.8" step="0.1" value="1.0" class="w-20">
                                 <span id="proximity-heat-intensity-value" class="text-slate-400 tabular-nums">1.0x</span>
                             </label>
                         </div>
@@ -2513,7 +2515,7 @@
                         <div class="flex items-center justify-between mb-4">
                             <div class="text-sm font-bold text-slate-400">Danger Zones</div>
                             <div class="flex gap-2 items-center">
-                                <select id="danger-zones-class" class="rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                                <select id="danger-zones-class" aria-label="Filter danger zones by class" class="rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
                                     <option value="">All Classes</option>
                                     <option value="SOLDIER">Soldier</option>
                                     <option value="MEDIC">Medic</option>
@@ -2534,7 +2536,7 @@
                         <div class="flex items-center justify-between mb-4">
                             <div class="text-sm font-bold text-slate-400">Combat Heatmap</div>
                             <div class="flex gap-2 items-center">
-                                <select id="combat-heatmap-perspective" class="rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
+                                <select id="combat-heatmap-perspective" aria-label="Combat heatmap perspective" class="rounded-lg bg-slate-900/70 border border-white/10 px-2 py-1 text-[11px] text-slate-200">
                                     <option value="kills">Kills</option>
                                     <option value="deaths">Deaths</option>
                                     <option value="pushes">Where pushes die</option>
@@ -2651,7 +2653,7 @@
                         <div class="flex flex-wrap items-center gap-3 mt-3 text-[10px]">
                             <label class="inline-flex items-center gap-2 px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-300">
                                 Team emphasis
-                                <select id="proximity-team-emphasis" class="rounded bg-slate-900/70 border border-white/10 px-2 py-1 text-[10px] text-slate-200">
+                                <select id="proximity-team-emphasis" aria-label="Team emphasis" class="rounded bg-slate-900/70 border border-white/10 px-2 py-1 text-[10px] text-slate-200">
                                     <option value="auto">Auto</option>
                                     <option value="target">Target focus</option>
                                     <option value="attacker">Attacker focus</option>
@@ -3230,6 +3232,7 @@
             <div class="glass-panel rounded-xl border border-white/10 p-4 mb-6">
               <label class="text-xs text-slate-400 uppercase tracking-wider font-bold mb-2 block">Select Player</label>
               <select id="rivalries-player-select"
+                aria-label="Select player"
                 class="w-full md:w-80 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-rose-500/50">
                 <option value="">-- Select Player --</option>
               </select>
@@ -3263,7 +3266,7 @@
           <!-- Session selector -->
           <div class="flex items-center gap-3 mb-6">
             <label class="text-xs text-slate-400 font-bold uppercase tracking-wider">Session:</label>
-            <select id="story-session-select" class="bg-slate-800 border border-white/10 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-amber-500/50"></select>
+            <select id="story-session-select" aria-label="Session" class="bg-slate-800 border border-white/10 text-slate-200 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-amber-500/50"></select>
           </div>
 
           <!-- Narrative -->
@@ -3590,7 +3593,7 @@
                                 <p class="text-sm font-medium text-slate-300">Drop files here or click to browse</p>
                                 <p class="text-[11px] text-slate-600 mt-1">.cfg .hud .zip .rar .mp4 .avi .mkv</p>
                                 <div id="upload-drop-filename" class="hidden mt-2 text-xs font-bold text-brand-cyan font-mono"></div>
-                                <input type="file" id="upload-file-input" required accept=".cfg,.hud,.zip,.rar,.mp4,.avi,.mkv" class="hidden">
+                                <input type="file" id="upload-file-input" aria-label="Choose file to upload" required accept=".cfg,.hud,.zip,.rar,.mp4,.avi,.mkv" class="hidden">
                             </div>
 
                             <!-- Fields row -->
@@ -3664,7 +3667,7 @@
                             Clips
                         </button>
                         <div class="flex-1"></div>
-                        <select id="upload-sort-select" onchange="window.setUploadSort(this.value)" title="Sort uploads"
+                        <select id="upload-sort-select" onchange="window.setUploadSort(this.value)" title="Sort uploads" aria-label="Sort uploads"
                             class="bg-slate-900/50 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:border-brand-blue/40 focus:outline-none transition">
                             <option value="newest">Newest</option>
                             <option value="oldest">Oldest</option>
@@ -4027,7 +4030,7 @@
                                             <div class="text-[11px] text-slate-500">DM via the bot</div>
                                         </div>
                                     </div>
-                                    <input type="checkbox" id="pref-discord"
+                                    <input type="checkbox" id="pref-discord" aria-label="Notify via Discord"
                                         class="h-5 w-5 rounded border-slate-600 bg-slate-900 text-brand-cyan focus:ring-brand-cyan">
                                 </label>
                                 <label class="group relative flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/30 px-4 py-4 cursor-pointer hover:border-brand-emerald/40 transition">
@@ -4038,7 +4041,7 @@
                                             <div class="text-[11px] text-slate-500">Linked handle required</div>
                                         </div>
                                     </div>
-                                    <input type="checkbox" id="pref-telegram"
+                                    <input type="checkbox" id="pref-telegram" aria-label="Notify via Telegram"
                                         class="h-5 w-5 rounded border-slate-600 bg-slate-900 text-brand-emerald focus:ring-brand-emerald">
                                 </label>
                                 <label class="group relative flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/30 px-4 py-4 cursor-pointer hover:border-brand-amber/40 transition">
@@ -4049,7 +4052,7 @@
                                             <div class="text-[11px] text-slate-500">Linked handle required</div>
                                         </div>
                                     </div>
-                                    <input type="checkbox" id="pref-signal"
+                                    <input type="checkbox" id="pref-signal" aria-label="Notify via Signal"
                                         class="h-5 w-5 rounded border-slate-600 bg-slate-900 text-brand-amber focus:ring-brand-amber">
                                 </label>
                             </div>
@@ -4062,7 +4065,7 @@
                                         <div class="text-[11px] text-slate-500">Plays in this tab when the queue hits the threshold.</div>
                                     </div>
                                 </div>
-                                <input type="checkbox" id="pref-ready-sound"
+                                <input type="checkbox" id="pref-ready-sound" aria-label="Get-ready sound"
                                     class="h-5 w-5 rounded border-slate-600 bg-slate-900 text-brand-amber focus:ring-brand-amber">
                             </label>
 
@@ -4363,7 +4366,7 @@
                 <div data-rb-tab="records">
                     <div class="flex justify-end mb-6">
                         <div class="relative">
-                            <select id="records-map-filter" class="bg-slate-900 border border-white/10 text-white text-sm rounded-lg focus:ring-brand-blue focus:border-brand-blue block w-full p-2.5">
+                            <select id="records-map-filter" aria-label="Filter records by map" class="bg-slate-900 border border-white/10 text-white text-sm rounded-lg focus:ring-brand-blue focus:border-brand-blue block w-full p-2.5">
                                 <option value="">All Maps</option>
                             </select>
                         </div>
@@ -4411,13 +4414,13 @@
                         <div class="flex flex-wrap items-center gap-4">
                             <div>
                                 <label class="text-xs text-slate-500 uppercase font-bold block mb-1">Award Type</label>
-                                <select id="awards-type-filter" class="bg-slate-900 border border-white/10 text-white text-sm rounded-lg focus:ring-brand-blue focus:border-brand-blue p-2.5 min-w-[180px]">
+                                <select id="awards-type-filter" aria-label="Award type" class="bg-slate-900 border border-white/10 text-white text-sm rounded-lg focus:ring-brand-blue focus:border-brand-blue p-2.5 min-w-[180px]">
                                     <option value="">All Awards</option>
                                 </select>
                             </div>
                             <div>
                                 <label class="text-xs text-slate-500 uppercase font-bold block mb-1">Time Period</label>
-                                <select id="awards-time-filter" class="bg-slate-900 border border-white/10 text-white text-sm rounded-lg focus:ring-brand-blue focus:border-brand-blue p-2.5">
+                                <select id="awards-time-filter" aria-label="Time period" class="bg-slate-900 border border-white/10 text-white text-sm rounded-lg focus:ring-brand-blue focus:border-brand-blue p-2.5">
                                     <option value="7">Last 7 Days</option>
                                     <option value="30" selected>Last 30 Days</option>
                                     <option value="90">Last 90 Days</option>
@@ -4634,12 +4637,13 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <label class="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3 cursor-pointer">
                             <span class="text-sm text-slate-300">Allow promotion pings</span>
-                            <input type="checkbox" id="profile-allow-promotions"
+                            <input type="checkbox" id="profile-allow-promotions" aria-label="Allow promotion pings"
                                 class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-purple focus:ring-brand-purple">
                         </label>
                         <div class="rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3">
                             <label class="text-[11px] text-slate-500 uppercase font-bold">Preferred channel</label>
                             <select id="profile-preferred-channel"
+                                aria-label="Preferred channel"
                                 class="mt-1 w-full rounded-lg bg-slate-900/70 border border-white/10 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-purple/60">
                                 <option value="any">Any (Telegram > Signal > Discord)</option>
                                 <option value="discord">Discord</option>
@@ -4688,7 +4692,7 @@
                         </div>
                         <div class="rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3">
                             <label class="text-[11px] text-slate-500 uppercase font-bold">Timezone</label>
-                            <input id="profile-promotions-timezone" type="text" value="Europe/Ljubljana"
+                            <input id="profile-promotions-timezone" type="text" aria-label="Timezone" value="Europe/Ljubljana"
                                 class="mt-1 w-full rounded-lg bg-slate-900/70 border border-white/10 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-purple/60">
                         </div>
                     </div>
@@ -4825,18 +4829,18 @@
             <div class="p-5 space-y-4">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <label class="flex items-center gap-2 text-sm text-slate-300">
-                        <input type="checkbox" id="availability-promote-include-available"
+                        <input type="checkbox" id="availability-promote-include-available" aria-label="Include Available users"
                             class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-purple focus:ring-brand-purple" checked>
                         Include Available users
                     </label>
                     <label class="flex items-center gap-2 text-sm text-slate-300">
-                        <input type="checkbox" id="availability-promote-include-maybe"
+                        <input type="checkbox" id="availability-promote-include-maybe" aria-label="Include Maybe users"
                             class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-purple focus:ring-brand-purple">
                         Include Maybe users
                     </label>
                 </div>
                 <label class="flex items-center gap-2 text-sm text-slate-300">
-                    <input type="checkbox" id="availability-promote-dry-run"
+                    <input type="checkbox" id="availability-promote-dry-run" aria-label="Dry run (send to me only)"
                         class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-brand-purple focus:ring-brand-purple">
                     Dry run (send to me only)
                 </label>
