@@ -22,13 +22,27 @@ from bot.services.admin_alert_mixin import _AdminAlertMixin
 
 
 class _StubBot(_AdminAlertMixin):
-    """Minimal harness — set the attributes the mixin reads."""
-    def __init__(self, admin_channel_id=None, channel=None):
-        self.admin_channel_id = admin_channel_id
+    """Minimal harness — set the attributes the mixin reads.
+
+    admin_channel_id is kept as a convenience single-channel constructor arg
+    (most tests only care about one channel); it is translated to the
+    admin_channels list the mixin actually reads. Pass admin_channels
+    directly for multi-channel broadcast tests.
+    """
+    def __init__(self, admin_channel_id=None, channel=None, admin_channels=None, channels=None):
+        if admin_channels is not None:
+            self.admin_channels = admin_channels
+        elif admin_channel_id is not None:
+            self.admin_channels = [admin_channel_id]
+        else:
+            self.admin_channels = []
         self._channel = channel
+        self._channels = channels or {}
         self._consecutive_errors: dict[str, int] = {}
 
     def get_channel(self, channel_id):
+        if self._channels:
+            return self._channels.get(channel_id)
         return self._channel
 
 
@@ -152,6 +166,35 @@ async def test_alert_admins_returns_false_on_generic_exception():
     bot = _StubBot(admin_channel_id=42, channel=ch)
     out = await bot.alert_admins("t", "d")
     assert out is False
+
+
+@pytest.mark.asyncio
+async def test_alert_admins_broadcasts_to_every_configured_admin_channel():
+    """admin_channels supports a comma-separated list (config.py:104), but
+    alert_admins used to only ever notify the first entry — the second
+    admin channel silently got nothing. Pin the fix: every configured
+    channel receives the alert."""
+    ch1, ch2 = _channel_with_send(), _channel_with_send()
+    bot = _StubBot(admin_channels=[1, 2], channels={1: ch1, 2: ch2})
+    out = await bot.alert_admins("title", "desc")
+    assert out is True
+    ch1.send.assert_awaited_once()
+    ch2.send.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_alert_admins_one_bad_channel_does_not_block_the_others():
+    """One admin channel being unreachable (bot removed, permissions
+    revoked) must not stop the alert reaching the rest."""
+    ch_forbidden = _channel_with_send()
+    ch_forbidden.send = AsyncMock(
+        side_effect=discord.Forbidden(MagicMock(status=403), "no perms"),
+    )
+    ch_ok = _channel_with_send()
+    bot = _StubBot(admin_channels=[1, 2], channels={1: ch_forbidden, 2: ch_ok})
+    out = await bot.alert_admins("title", "desc")
+    assert out is True  # at least one channel got it
+    ch_ok.send.assert_awaited_once()
 
 
 @pytest.mark.asyncio
