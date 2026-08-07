@@ -418,7 +418,7 @@ function renderPagination(total) {
     // Previous button
     if (currentPage > 0) {
         html += `
-            <button onclick="changeAwardsPage(${currentPage - 1})"
+            <button onclick="changeAwardsPage(${currentPage - 1})" aria-label="Previous page"
                 class="px-4 py-2 rounded-lg bg-slate-700 text-white hover:bg-slate-600 transition">
                 <i data-lucide="chevron-left" class="w-4 h-4"></i>
             </button>
@@ -442,7 +442,7 @@ function renderPagination(total) {
     // Next button
     if (currentPage < totalPages - 1) {
         html += `
-            <button onclick="changeAwardsPage(${currentPage + 1})"
+            <button onclick="changeAwardsPage(${currentPage + 1})" aria-label="Next page"
                 class="px-4 py-2 rounded-lg bg-slate-700 text-white hover:bg-slate-600 transition">
                 <i data-lucide="chevron-right" class="w-4 h-4"></i>
             </button>

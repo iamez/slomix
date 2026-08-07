@@ -96,7 +96,7 @@ export async function loadRetroVizView() {
         'Interactive round-by-round combat analytics'
     ) + `
         <div class="mb-6">
-            <label class="text-sm text-slate-400 mr-2">Select Round:</label>
+            <label for="retro-viz-picker" class="text-sm text-slate-400 mr-2">Select Round:</label>
             <select id="retro-viz-picker" class="bg-slate-800/80 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 min-w-[320px] focus:ring-brand-cyan focus:border-brand-cyan">
                 <option value="">Loading rounds…</option>
             </select>

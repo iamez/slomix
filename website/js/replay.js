@@ -281,7 +281,9 @@ function renderShell(container) {
 
     // Round selector row
     const selectorRow = _el('div', 'flex items-center gap-3 mb-4');
-    selectorRow.appendChild(_el('label', 'text-xs text-slate-400 font-bold uppercase tracking-wider', 'Round:'));
+    const roundLabel = _el('label', 'text-xs text-slate-400 font-bold uppercase tracking-wider', 'Round:');
+    roundLabel.setAttribute('for', 'replay-round-select');
+    selectorRow.appendChild(roundLabel);
 
     const select = document.createElement('select');
     select.id = 'replay-round-select';
@@ -415,6 +417,7 @@ function renderShell(container) {
     // Speed selector
     const speedSelect = document.createElement('select');
     speedSelect.id = 'replay-speed-select';
+    speedSelect.setAttribute('aria-label', 'Playback speed');
     speedSelect.className = 'bg-slate-800 border border-white/10 text-slate-300 text-[10px] rounded px-1 py-0.5 focus:outline-none focus:border-purple-500/50 w-14';
     for (const s of [0.5, 1, 1.5, 2, 4]) {
         const opt = document.createElement('option');
