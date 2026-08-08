@@ -9,16 +9,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Literal, TypeAlias
+from typing import Literal, NoReturn, TypeAlias
 
 from website.backend.map_geometry.pk3_index import (
+    AssetContentChangedError,
     MapAssetKind,
     MapAssetProvider,
     MapAssetResolution,
     Pk3GeometryIndex,
+    Pk3IndexError,
 )
 
+# ET:Legacy q_shared.h: MAX_TOKEN_CHARS includes the trailing NUL byte.
 _MAX_ET_TOKEN_LENGTH = 1023
+# ET:Legacy G_ScriptAction_ObjectiveStatus accepts objective numbers 1..8.
 _MAX_OBJECTIVES = 8
 _BLOCK_ACTIONS = frozenset({"create", "delete", "set"})
 
@@ -274,7 +278,7 @@ class _TokenStream:
         return token
 
     def skip_newlines(self) -> None:
-        while self.peek() is not None and self.peek().kind is _TokenKind.NEWLINE:
+        while (token := self.peek()) is not None and token.kind is _TokenKind.NEWLINE:
             self.index += 1
 
     def expect(self, kind: _TokenKind, description: str) -> _Token:
@@ -283,7 +287,7 @@ class _TokenStream:
             self.fail(f"expected {description}, found {token.value!r}", token)
         return token
 
-    def fail(self, message: str, token: _Token | None = None) -> None:
+    def fail(self, message: str, token: _Token | None = None) -> NoReturn:
         current = token or self.peek()
         location = f"{self.source}:{current.line}:{current.column}" if current else f"{self.source}:EOF"
         raise StageParseError(f"{location}: {message}")
@@ -400,12 +404,10 @@ def _lex(raw: bytes, source: str) -> tuple[_Token, ...]:
         while index < len(text) and not text[index].isspace() and text[index] not in '{}"':
             advance(text[index])
             index += 1
-        if index == start:
-            raise StageParseError(f"{source}:{line}:{column}: quote or comment must begin at a token boundary")
-        value = text[start:index]
-        if len(value.encode("utf-8")) > _MAX_ET_TOKEN_LENGTH:
+        word = text[start:index]
+        if len(word.encode("utf-8")) > _MAX_ET_TOKEN_LENGTH:
             raise StageParseError(f"{source}:{start_line}:{start_column}: token exceeds ET's 1023-byte limit")
-        tokens.append(_Token(_TokenKind.WORD, value, start_line, start_column))
+        tokens.append(_Token(_TokenKind.WORD, word, start_line, start_column))
         at_token_boundary = False
 
     return tuple(tokens)
@@ -721,7 +723,7 @@ def load_static_stage(index: Pk3GeometryIndex, map_name: str) -> StageLoadResult
         script = parse_map_script(index.read_provider(script_provider), source=script_provider.source)
         objectives = parse_objdata(index.read_provider(objdata_provider), source=objdata_provider.source)
         graph = compile_static_stage_graph(script, source=script_provider.source)
-    except StageParseError as exc:
+    except (StageParseError, AssetContentChangedError, Pk3IndexError) as exc:
         return StageLoadResult(
             normalised,
             StageLoadStatus.INVALID,

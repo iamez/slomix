@@ -197,7 +197,7 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 11 passed.
+- W5a unit tests: 14 passed.
 - Map-geometry regression suite: 103 passed.
 - Full real-map geometry/stage integration file: 8 passed in 132.71 seconds.
 - Full repository suite: 4,144 passed, 75 skipped, 30 existing warnings in 71.15 seconds.
