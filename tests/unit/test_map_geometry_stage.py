@@ -102,11 +102,19 @@ def test_map_script_uses_newlines_as_action_boundaries_and_preserves_braced_acti
     assert entity.events[0].actions[2].uses_braced_arguments is True
 
 
-def test_map_script_rejects_engine_incompatible_attached_braces_and_quotes():
-    with pytest.raises(StageParseError, match="braces must begin at a token boundary"):
+def test_map_script_matches_regular_word_punctuation_and_rejects_structural_attached_braces():
+    script = parse_map_script(
+        'manager {\nspawn {\nwm_announce prefix"suffix" marker{phase} alpha\N{NO-BREAK SPACE}beta\n}\n}\n'.encode(),
+        source="punctuation.script",
+    )
+
+    assert script.entities[0].events[0].actions[0].arguments == (
+        'prefix"suffix"',
+        "marker{phase}",
+        "alpha\N{NO-BREAK SPACE}beta",
+    )
+    with pytest.raises(StageParseError, match=r"expected '\{' after the entity name"):
         parse_map_script(b"manager{ spawn { halt } }", source="attached.script")
-    with pytest.raises(StageParseError, match="quote must begin at a token boundary"):
-        parse_map_script(b'manager { trigger bad { wm_announce prefix"suffix" } }', source="attached.script")
 
 
 def test_map_script_rejects_event_close_on_a_normal_action_line():
@@ -298,6 +306,28 @@ def test_stage_load_returns_invalid_when_indexed_asset_changes(tmp_path, monkeyp
     assert result.status is StageLoadStatus.INVALID
     assert result.model is None
     assert result.reason == "indexed bytes changed"
+
+
+def test_stage_load_wraps_unsupported_zip_compression_as_invalid(tmp_path, monkeypatch):
+    _write_pk3(
+        tmp_path / "one.pk3",
+        {
+            "maps/duel.script": b"manager {\nspawn {\nwm_setwinner 0\n}\n}\n",
+            "maps/duel.objdata": b'wm_objective_axis_desc 1 "Primary: Defend"',
+        },
+    )
+    index = Pk3GeometryIndex.scan(tmp_path)
+
+    def unsupported_compression(*_args, **_kwargs):
+        raise NotImplementedError("unsupported compression")
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", unsupported_compression)
+    result = load_static_stage(index, "duel")
+
+    assert result.status is StageLoadStatus.INVALID
+    assert result.model is None
+    assert "cannot read indexed asset" in (result.reason or "")
+    assert "unsupported compression" in (result.reason or "")
 
 
 def test_stage_load_returns_invalid_instead_of_a_partial_model(tmp_path):

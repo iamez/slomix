@@ -302,13 +302,16 @@ def _decode_asset(raw: bytes, source: str) -> str:
         raise StageParseError(f"{source}: stage text is not valid UTF-8: {exc}") from exc
 
 
+def _is_et_whitespace(character: str) -> bool:
+    return ord(character) <= 32
+
+
 def _lex(raw: bytes, source: str) -> tuple[_Token, ...]:
     text = _decode_asset(raw, source)
     tokens: list[_Token] = []
     index = 0
     line = 1
     column = 1
-    at_token_boundary = True
 
     def advance(character: str) -> None:
         nonlocal line, column
@@ -326,26 +329,15 @@ def _lex(raw: bytes, source: str) -> tuple[_Token, ...]:
             tokens.append(_Token(_TokenKind.NEWLINE, "\n", line, column))
             advance(character)
             index += 1
-            at_token_boundary = True
             continue
-        if character.isspace():
+        if _is_et_whitespace(character):
             advance(character)
             index += 1
-            at_token_boundary = True
             continue
-        if not at_token_boundary:
-            if character in "{}":
-                detail = "braces"
-            elif character == '"':
-                detail = "quote"
-            else:
-                detail = "token"
-            raise StageParseError(f"{source}:{line}:{column}: {detail} must begin at a token boundary")
         if character == "/" and following == "/":
             while index < len(text) and text[index] != "\n":
                 advance(text[index])
                 index += 1
-            at_token_boundary = True
             continue
         if character == "/" and following == "*":
             start_line, start_column = line, column
@@ -360,14 +352,6 @@ def _lex(raw: bytes, source: str) -> tuple[_Token, ...]:
             advance(text[index])
             advance(text[index + 1])
             index += 2
-            at_token_boundary = True
-            continue
-        if character in "{}":
-            kind = _TokenKind.LEFT_BRACE if character == "{" else _TokenKind.RIGHT_BRACE
-            tokens.append(_Token(kind, character, line, column))
-            advance(character)
-            index += 1
-            at_token_boundary = False
             continue
         if character == '"':
             start_line, start_column = line, column
@@ -396,19 +380,22 @@ def _lex(raw: bytes, source: str) -> tuple[_Token, ...]:
             if len(joined.encode("utf-8")) > _MAX_ET_TOKEN_LENGTH:
                 raise StageParseError(f"{source}:{start_line}:{start_column}: token exceeds ET's 1023-byte limit")
             tokens.append(_Token(_TokenKind.WORD, joined, start_line, start_column))
-            at_token_boundary = False
             continue
 
         start = index
         start_line, start_column = line, column
-        while index < len(text) and not text[index].isspace() and text[index] not in '{}"':
+        # COM_ParseExt regular words include punctuation until ASCII whitespace.
+        while index < len(text) and not _is_et_whitespace(text[index]):
             advance(text[index])
             index += 1
         word = text[start:index]
         if len(word.encode("utf-8")) > _MAX_ET_TOKEN_LENGTH:
             raise StageParseError(f"{source}:{start_line}:{start_column}: token exceeds ET's 1023-byte limit")
-        tokens.append(_Token(_TokenKind.WORD, word, start_line, start_column))
-        at_token_boundary = False
+        kind = {
+            "{": _TokenKind.LEFT_BRACE,
+            "}": _TokenKind.RIGHT_BRACE,
+        }.get(word, _TokenKind.WORD)
+        tokens.append(_Token(kind, word, start_line, start_column))
 
     return tuple(tokens)
 
