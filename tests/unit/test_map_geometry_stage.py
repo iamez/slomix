@@ -138,9 +138,30 @@ def test_map_script_matches_the_engine_entity_introducer():
 
 
 def test_map_script_preserves_engine_event_parameter_strings():
-    script = parse_map_script(b"manager {\ntrigger advance extra {\nhalt\n}\n}\n")
+    script = parse_map_script(
+        b"""target {
+ trigger advance extra {
+  halt
+ }
+}
+manager {
+ spawn {
+  trigger target "advance extra"
+ }
+}
+"""
+    )
 
     assert script.entities[0].events[0].parameters == ("advance", "extra")
+    graph = compile_static_stage_graph(script)
+    assert graph.trigger_edges[0].resolution is TriggerResolution.RESOLVED
+    assert graph.trigger_edges[0].candidate_node_ids == ("event:0",)
+
+
+def test_balanced_backslash_quote_pairs_match_engine_string_in_string_tokens():
+    script = parse_map_script(b'manager {\nspawn {\nwm_announce "say \\"hello\\""\n}\n}\n')
+
+    assert script.entities[0].events[0].actions[0].arguments == ('say "hello"',)
 
 
 def test_unknown_registry_names_make_only_their_entity_opaque():

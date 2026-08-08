@@ -51,8 +51,9 @@ The parser contract was checked against ET:Legacy primary source rather than inf
   handling. Its regular-word path retains punctuation, including quotes and braces, until ASCII whitespace. Line
   comments preserve the newline boundary; block comments do not create an action boundary. The script parser tests
   the first byte of returned tokens for structural braces, including quoted or punctuation-attached brace tokens.
-  An empty quoted token is indistinguishable from its empty control return and is rejected rather than represented
-  as an argument.
+  Balanced backslash-quote pairs use its explicit string-in-string branch and become literal quotes in the token.
+  An empty quoted token is indistinguishable from its empty control return and is rejected rather than represented as
+  an argument.
 - [`G_ScriptAction_SetMainObjective`](https://github.com/etlegacy/etlegacy/blob/master/src/game/g_script_actions.c)
   documents the target-name form while retaining compatibility handling for old scripts.
 - `G_ScriptAction_Trigger` gives `self`, `global` and `player` special dispatch semantics, while the current
@@ -83,6 +84,7 @@ older ET-compatible path applies numeric selection semantics, and it does not re
   entity alert and round end;
 - trigger-call edges with direct/self dispatch, explicit `global`/`player` runtime dispatch and the current
   `activator` no-op, plus `resolved`, `missing`, `ambiguous`, `runtime_dispatch` or `no_op` results;
+- trigger handler keys use the engine's space-joined event-parameter representation, including multi-token names;
 - independent W1 resolution of script and objdata before either file is read;
 - `missing`, `ambiguous`, `invalid` and `resolved` load states. No partial model is returned for invalid input.
 
@@ -225,10 +227,10 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 24 passed.
-- Targeted map-geometry regression suite: 98 passed.
+- W5a unit tests: 25 passed.
+- Targeted map-geometry regression suite: 99 passed.
 - Exact W5a real-asset acceptance: 1 passed, 7 deselected.
-- Full real-map geometry/stage integration file: 8 passed in 73.23 seconds (`--no-cov`).
-- Full repository suite: 4,158 passed, 75 skipped, 30 existing warnings in 51.75 seconds.
+- Full real-map geometry/stage integration file: 8 passed in 72.49 seconds (`--no-cov`).
+- Full repository suite: 4,159 passed, 75 skipped, 30 existing warnings in 48.55 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.
