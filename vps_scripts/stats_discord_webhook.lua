@@ -123,6 +123,18 @@ local configuration = {
     pending_retry_interval_seconds = 60,      -- min gap between retry sweeps
     pending_grace_seconds = 35,               -- ignore files younger than this
                                               -- (give the original curl 30s + 5s slack)
+
+    -- Live objective ping (v1.8.0, DEFAULT OFF): a lightweight Discord
+    -- notification for objective-relevant server announcements DURING a
+    -- round, reusing the same webhook/transport as the round-end embed
+    -- above. Deliberately minimal scope — see
+    -- docs/research/ENVIRONMENT_IDENTITY_RCA_2026-08-08.md's sibling
+    -- workstream-D research: this is the smallest end-to-end proof that a
+    -- mid-round event can reach Discord, not a general live-events system.
+    -- Relays the server's OWN announcement text verbatim (color-stripped)
+    -- rather than re-deriving who/what — far less code, and the server's
+    -- own wording is already human-readable.
+    objective_live_ping_enabled = false,
 }
 
 -- ============================================================================
@@ -1543,6 +1555,54 @@ function et_ClientCommand(clientNum, command)
 
     -- Return 0 to pass through (don't intercept the command)
     return 0
+end
+
+-- Live objective ping (v1.8.0, gated by objective_live_ping_enabled, DEFAULT
+-- OFF). Detects the same server announcement pattern
+-- proximity/lua/proximity_tracker.lua already uses for carrier
+-- secure/return detection ("legacy announce:" containing
+-- secured/transmitted/delivered/escaped) — proven, not new pattern-matching.
+-- Deliberately does NOT re-derive who/what happened (that would duplicate
+-- proximity_tracker.lua's carrier-state tracking in a second file); it
+-- relays the server's own announcement text, which is already
+-- human-readable once color codes are stripped.
+--
+-- et_Print carries an explicit upstream docs warning: "DO NOT TRUST STRINGS
+-- OBTAINED IN THIS WAY!" — this handler only ever forwards the string to a
+-- Discord embed description (never executed, never used as a path/command),
+-- so a malformed or adversarial console line can at worst produce a
+-- confusing Discord message, not an unsafe action.
+--
+-- content is intentionally omitted (not "STATS_READY") — that exact string
+-- is bot/services/webhook_handler_mixin.py's dispatch key for the
+-- round-completion pipeline; reusing it here would make the bot try to
+-- process a live ping as a finished round.
+function et_Print(text)
+    if not configuration.objective_live_ping_enabled then return end
+    if last_gamestate ~= GS_PLAYING then return end
+    if not string.find(text, "legacy announce:") then return end
+
+    local lower = string.lower(text)
+    local is_objective_event = string.find(lower, "secured") or string.find(lower, "transmitted")
+        or string.find(lower, "delivered") or string.find(lower, "escaped")
+    if not is_objective_event then return end
+
+    local clean_text = strip_color_codes(text):gsub("^.-legacy announce:%s*", "")
+    if clean_text == "" then return end
+
+    local payload = string.format([[{
+        "username": "ET:Legacy Live",
+        "embeds": [{
+            "title": "Objective Update",
+            "description": "%s",
+            "color": 15105570
+        }]
+    }]], json_escape(clean_text))
+
+    local ok, msg = execute_curl_async(payload)
+    if not ok then
+        log(string.format("Objective live-ping send failed: %s", msg or "unknown error"))
+    end
 end
 
 function et_ShutdownGame(restart)
