@@ -240,11 +240,19 @@ class ScriptRegistryIssue:
 
 
 @dataclass(frozen=True, slots=True)
+class ScriptSyntaxIssue:
+    command: str
+    line: int
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class ScriptEntity:
     name: str
     events: tuple[ScriptEvent, ...]
     line: int
     registry_issue: ScriptRegistryIssue | None = None
+    syntax_issue: ScriptSyntaxIssue | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -345,7 +353,7 @@ class TriggerEdge:
 class OpaqueScriptEntity:
     entity_index: int
     entity_name: str
-    issue_kind: Literal["registry_event", "registry_action", "projection"]
+    issue_kind: Literal["registry_event", "registry_action", "syntax", "projection"]
     token: str
     line: int
     reason: str
@@ -650,6 +658,7 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
         stream.expect(_TokenKind.LEFT_BRACE, "'{' after the entity name")
         events: list[ScriptEvent] = []
         registry_issue: ScriptRegistryIssue | None = None
+        syntax_issue: ScriptSyntaxIssue | None = None
         while True:
             stream.skip_newlines()
             token = stream.peek()
@@ -690,7 +699,18 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
                 braced = command in _BLOCK_ACTIONS
                 if braced:
                     stream.skip_newlines()
-                    stream.expect(_TokenKind.LEFT_BRACE, "'{' after set/create/delete")
+                    opener = stream.peek()
+                    if opener is None:
+                        stream.fail("unclosed braced action", action_name)
+                    if opener.kind is not _TokenKind.LEFT_BRACE:
+                        syntax_issue = ScriptSyntaxIssue(
+                            command,
+                            action_name.line,
+                            f"{source}:{opener.line}:{opener.column}: expected '{{' after {command}",
+                        )
+                        _skip_script_block_remainder(stream, 2)
+                        break
+                    stream.index += 1
                     while True:
                         token = stream.take()
                         if token.kind is _TokenKind.RIGHT_BRACE:
@@ -703,10 +723,10 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
                             break
                         arguments.append(stream.take().value)
                 actions.append(ScriptAction(command, tuple(arguments), action_name.line, braced))
-            if registry_issue is not None:
+            if registry_issue is not None or syntax_issue is not None:
                 break
             events.append(ScriptEvent(event, tuple(parameters), tuple(actions), event_name.line))
-        entities.append(ScriptEntity(name.value, tuple(events), name.line, registry_issue))
+        entities.append(ScriptEntity(name.value, tuple(events), name.line, registry_issue, syntax_issue))
 
     return MapScript(tuple(entities))
 
@@ -794,6 +814,18 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
                     issue.name,
                     issue.line,
                     f"{source}:{issue.line}: unknown ET script {issue.kind} {issue.name!r}",
+                )
+            )
+            continue
+        if issue := entity.syntax_issue:
+            opaque_entities.append(
+                OpaqueScriptEntity(
+                    entity_index,
+                    entity.name,
+                    "syntax",
+                    issue.command,
+                    issue.line,
+                    issue.reason,
                 )
             )
             continue
