@@ -75,16 +75,29 @@ wm_objective_axis_desc
     assert [command.command for command in catalog.other_commands] == ["ignored", "metadata"]
 
 
-def test_objdata_rejects_duplicate_identity_and_malformed_text():
-    duplicate = b"""wm_objective_axis_desc 1 "Primary: First"
+def test_objdata_uses_last_write_for_team_slots_and_rejects_malformed_text():
+    duplicate = b"""wm_mapdescription axis "First map text"
+wm_objective_axis_desc 1 "Primary: First"
+wm_mapdescription axis "Replacement map text"
 wm_objective_axis_desc 1 "Primary: Second"
 """
-    with pytest.raises(StageParseError, match="duplicate axis objective 1"):
-        parse_objdata(duplicate, source="duplicate.objdata")
+    catalog = parse_objdata(duplicate, source="duplicate.objdata")
+
+    assert catalog.map_descriptions == (MapDescription("axis", "Replacement map text", 3),)
+    assert len(catalog.objectives) == 1
+    assert (catalog.objectives[0].text, catalog.objectives[0].line) == ("Primary: Second", 4)
     with pytest.raises(StageParseError, match="unclosed quoted string"):
         parse_objdata(b'wm_objective_axis_desc 1 "broken', source="broken.objdata")
     with pytest.raises(StageParseError, match="NUL"):
         parse_objdata(b"wm_mapdescription axis nope\x00", source="nul.objdata")
+
+
+def test_trailing_unclosed_block_comment_is_engine_eof_for_both_asset_kinds():
+    catalog = parse_objdata(b'wm_objective_axis_desc 1 "Primary: Hold"\n/* trailing')
+    script = parse_map_script(b"manager {\nspawn {\nhalt\n}\n}\n/* trailing")
+
+    assert catalog.objectives[0].text == "Primary: Hold"
+    assert script.entities[0].events[0].actions[0].command == "halt"
 
 
 def test_map_script_uses_newlines_as_action_boundaries_and_preserves_braced_actions():

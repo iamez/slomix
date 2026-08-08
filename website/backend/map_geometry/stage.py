@@ -527,7 +527,6 @@ def _lex(raw: bytes, source: str, *, structural_braces: bool) -> tuple[_Token, .
                 index += 1
             continue
         if character == "/" and following == "*":
-            start_line, start_column = line, column
             advance(character)
             advance(following)
             index += 2
@@ -535,7 +534,7 @@ def _lex(raw: bytes, source: str, *, structural_braces: bool) -> tuple[_Token, .
                 advance(text[index])
                 index += 1
             if index >= len(text):
-                raise StageParseError(f"{source}:{start_line}:{start_column}: unclosed block comment")
+                break
             advance(text[index])
             advance(text[index + 1])
             index += 2
@@ -627,10 +626,11 @@ def parse_objdata(raw: bytes, *, source: str = "<objdata>") -> ObjectiveCatalog:
         )
         commands.append(AssetCommand(command, arguments, command_token.line))
 
-    descriptions: list[MapDescription] = []
-    objectives: list[ObjectiveDescription] = []
+    description_order: list[str] = []
+    descriptions_by_audience: dict[str, MapDescription] = {}
+    objective_order: list[tuple[ObjectiveTeam, int]] = []
+    objectives_by_identity: dict[tuple[ObjectiveTeam, int], ObjectiveDescription] = {}
     other: list[AssetCommand] = []
-    seen: dict[tuple[ObjectiveTeam, int], ObjectiveDescription] = {}
     objective_commands = {
         "wm_objective_axis_desc": ObjectiveTeam.AXIS,
         "wm_objective_allied_desc": ObjectiveTeam.ALLIES,
@@ -639,7 +639,13 @@ def parse_objdata(raw: bytes, *, source: str = "<objdata>") -> ObjectiveCatalog:
         if command.command == "wm_mapdescription":
             if len(command.arguments) != 2:
                 raise StageParseError(f"{source}:{command.line}: wm_mapdescription requires exactly 2 arguments")
-            descriptions.append(MapDescription(_ascii_fold(command.arguments[0]), command.arguments[1], command.line))
+            audience = _ascii_fold(command.arguments[0])
+            if audience not in {"allied", "axis", "neutral"}:
+                other.append(command)
+                continue
+            if audience not in descriptions_by_audience:
+                description_order.append(audience)
+            descriptions_by_audience[audience] = MapDescription(audience, command.arguments[1], command.line)
             continue
         team = objective_commands.get(command.command)
         if team is None:
@@ -659,12 +665,15 @@ def parse_objdata(raw: bytes, *, source: str = "<objdata>") -> ObjectiveCatalog:
             team, number, _classification(command.arguments[1]), command.arguments[1], command.line
         )
         identity = (team, number)
-        if identity in seen:
-            raise StageParseError(f"{source}:{command.line}: duplicate {team.value} objective {number}")
-        seen[identity] = objective
-        objectives.append(objective)
+        if identity not in objectives_by_identity:
+            objective_order.append(identity)
+        objectives_by_identity[identity] = objective
 
-    return ObjectiveCatalog(tuple(descriptions), tuple(objectives), tuple(other))
+    return ObjectiveCatalog(
+        tuple(descriptions_by_audience[audience] for audience in description_order),
+        tuple(objectives_by_identity[identity] for identity in objective_order),
+        tuple(other),
+    )
 
 
 def _parse_script_entity(name: _Token, tokens: tuple[_Token, ...], source: str) -> _ScriptEntityParse:

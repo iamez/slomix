@@ -55,7 +55,8 @@ The parser contract was checked against ET:Legacy primary source rather than inf
   retained until the closing backslash-quote. An empty quoted token is indistinguishable from its empty control return
   and is rejected rather than represented as an argument.
 - [`CG_LoadObjectiveData`](https://github.com/etlegacy/etlegacy/blob/master/src/cgame/cg_main.c) reads `.objdata` as a
-  token stream with fixed arity for recognized commands. Physical newlines do not delimit commands or arguments.
+  token stream with fixed arity for recognized commands. Physical newlines do not delimit commands or arguments, and
+  later declarations overwrite earlier values in the same team/audience slot.
 - Script action arguments are serialized into `MAX_INFO_STRING` before callbacks receive them. Callbacks such as
   `G_ScriptAction_Trigger` parse that serialized buffer again, so lexical quotes can regain syntactic meaning.
 - [`G_ScriptAction_SetMainObjective`](https://github.com/etlegacy/etlegacy/blob/master/src/game/g_script_actions.c)
@@ -83,6 +84,8 @@ older ET-compatible path applies numeric selection semantics, and it does not re
   nonselected boundary;
 - a fail-closed lexer with source line/column provenance, ET newline semantics, line/block comments, nested quoted
   tokens, braced `set/create/delete` arguments, NUL rejection and byte-accurate ET token-length enforcement;
+- ET-compatible EOF handling for a trailing unclosed block comment; incomplete enclosing script structure still fails
+  closed after the token stream ends;
 - lossless UTF-8 decoding with `surrogateescape`, preserving legacy single-byte asset text without changing valid
   UTF-8 display strings;
 - context-specific brace classification: first-byte braces are structural in map scripts but remain ordinary text in
@@ -264,10 +267,10 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 39 passed.
-- Targeted map-geometry regression suite: 113 passed.
-- Exact W5a real-asset acceptance: 1 passed, 7 deselected in 2.64 seconds.
-- Full real-map geometry/stage integration file: 8 passed in 79.24 seconds (`--no-cov`).
-- Full repository suite: 4,173 passed, 75 skipped, 7 warnings in 49.15 seconds.
+- W5a unit tests: 40 passed.
+- Targeted map-geometry regression suite: 114 passed.
+- Exact W5a real-asset acceptance: 1 passed, 7 deselected in 2.41 seconds.
+- Full real-map geometry/stage integration file: 8 passed in 80.25 seconds (`--no-cov`).
+- Full repository suite: 4,174 passed, 75 skipped, 7 warnings in 49.00 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.
