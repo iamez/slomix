@@ -233,10 +233,18 @@ class ScriptEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class ScriptRegistryIssue:
+    kind: Literal["event", "action"]
+    name: str
+    line: int
+
+
+@dataclass(frozen=True, slots=True)
 class ScriptEntity:
     name: str
     events: tuple[ScriptEvent, ...]
     line: int
+    registry_issue: ScriptRegistryIssue | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -438,6 +446,16 @@ def _token_kind(value: str) -> _TokenKind:
     return _TokenKind.WORD
 
 
+def _skip_script_block_remainder(stream: _TokenStream, open_blocks: int) -> None:
+    """Mirror the engine's brace-only skip path for a non-selected entity block."""
+    while open_blocks:
+        token = stream.take()
+        if token.kind is _TokenKind.LEFT_BRACE:
+            open_blocks += 1
+        elif token.kind is _TokenKind.RIGHT_BRACE:
+            open_blocks -= 1
+
+
 def _lex(raw: bytes, source: str) -> tuple[_Token, ...]:
     text = _decode_asset(raw, source)
     tokens: list[_Token] = []
@@ -620,6 +638,7 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
         stream.skip_newlines()
         stream.expect(_TokenKind.LEFT_BRACE, "'{' after the entity name")
         events: list[ScriptEvent] = []
+        registry_issue: ScriptRegistryIssue | None = None
         while True:
             stream.skip_newlines()
             token = stream.peek()
@@ -631,7 +650,9 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
             event_name = stream.expect(_TokenKind.WORD, "an event name")
             event = _ascii_fold(event_name.value)
             if event not in _ET_SCRIPT_EVENTS:
-                stream.fail(f"unknown ET script event {event_name.value!r}", event_name)
+                registry_issue = ScriptRegistryIssue("event", event_name.value, event_name.line)
+                _skip_script_block_remainder(stream, 1)
+                break
             parameters: list[str] = []
             while True:
                 token = stream.take()
@@ -651,7 +672,9 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
                 action_name = stream.expect(_TokenKind.WORD, "an action name")
                 command = _ascii_fold(action_name.value)
                 if command not in _ET_SCRIPT_ACTIONS:
-                    stream.fail(f"unknown ET script action {action_name.value!r}", action_name)
+                    registry_issue = ScriptRegistryIssue("action", action_name.value, action_name.line)
+                    _skip_script_block_remainder(stream, 2)
+                    break
                 arguments: list[str] = []
                 braced = command in _BLOCK_ACTIONS
                 if braced:
@@ -669,8 +692,10 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
                             break
                         arguments.append(stream.take().value)
                 actions.append(ScriptAction(command, tuple(arguments), action_name.line, braced))
+            if registry_issue is not None:
+                break
             events.append(ScriptEvent(event, tuple(parameters), tuple(actions), event_name.line))
-        entities.append(ScriptEntity(name.value, tuple(events), name.line))
+        entities.append(ScriptEntity(name.value, tuple(events), name.line, registry_issue))
 
     return MapScript(tuple(entities))
 
@@ -747,6 +772,8 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
     self_events_by_trigger: dict[tuple[int, str], list[str]] = {}
     indexed_events: list[tuple[int, ScriptEntity, ScriptEvent, str]] = []
     for entity_index, entity in enumerate(script.entities):
+        if entity.registry_issue is not None:
+            continue
         for event in entity.events:
             node_id = f"event:{len(indexed_events)}"
             effects = tuple(effect for action in event.actions if (effect := _effect_for(action, source)) is not None)

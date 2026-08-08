@@ -42,9 +42,10 @@ The parser contract was checked against ET:Legacy primary source rather than inf
 
 - [`G_Script_ScriptParse`](https://github.com/etlegacy/etlegacy/blob/master/src/game/g_script.c) parses entity blocks,
   event headers and action stacks. While expecting a script name, it skips every case-insensitive `entity` token as
-  an introducer. Event and action names are accepted only when present in the engine's `gScriptEvents` and
-  `gScriptActions` registries. Event parameters remain arbitrary strings consumed until a token beginning with `{`;
-  the registry does not impose parameter arity. Normal action arguments end at a physical newline.
+  an introducer. After a block name matches the concrete entity's `scriptName`, event and action names are accepted
+  only when present in the engine's `gScriptEvents` and `gScriptActions` registries. Nonmatching blocks are skipped by
+  balanced braces without registry validation. Event parameters remain arbitrary strings consumed until a token
+  beginning with `{`; the registry does not impose parameter arity. Normal action arguments end at a physical newline.
 - `set`, `create` and `delete` are the exception: their arguments are enclosed in a brace block.
 - [`COM_ParseExt`](https://github.com/etlegacy/etlegacy/blob/master/src/qcommon/q_shared.c) defines quote and comment
   handling. Its regular-word path retains punctuation, including quotes and braces, until ASCII whitespace. Line
@@ -70,13 +71,14 @@ older ET-compatible path applies numeric selection semantics, and it does not re
 
 - a fail-closed lexer with source line/column provenance, ET newline semantics, line/block comments, quoted tokens,
   braced `set/create/delete` arguments, NUL rejection and ET token-length enforcement;
-- exact current ET:Legacy event/action registry validation, `entity` introducer handling and first-byte brace
+- exact current ET:Legacy event/action registry inventory, `entity` introducer handling and first-byte brace
   classification matching the engine parser;
 - ASCII-only identifier folding and canonical ASCII integer gates prevent Python Unicode/numeric syntax from
   creating effects or trigger dispatch that ET's byte-oriented C paths would not recognize;
 - structured `.objdata` records for map descriptions and per-team objective identities;
 - explicit `primary`, `secondary`, `additional` or `unknown` classification, based only on the asset text;
-- a structured map-script AST retaining every entity, event, action and raw argument;
+- a structured map-script AST retaining every compatible entity/event/action argument plus a source-located issue
+  for any entity whose remaining contents must stay opaque;
 - typed projections for objective status, main objective, winner, autospawn, entity state, marker movement,
   entity alert and round end;
 - trigger-call edges with direct/self dispatch, explicit `global`/`player` runtime dispatch and the current
@@ -84,10 +86,15 @@ older ET-compatible path applies numeric selection semantics, and it does not re
 - independent W1 resolution of script and objdata before either file is read;
 - `missing`, `ambiguous`, `invalid` and `resolved` load states. No partial model is returned for invalid input.
 
-Every engine-recognized action remains in the AST even when it has no typed W5a projection. Unknown action or event
-names fail closed because ET:Legacy rejects them while loading the map script; silently retaining them would make an
-invalid asset look usable. Retaining known-but-unprojected actions preserves evidence without inventing stage meaning
-for animation, accumulator, sound or other commands outside W5a's approved semantic surface.
+Every engine-recognized action remains in the AST even when it has no typed W5a projection. An unfamiliar event or
+action makes only its containing `ScriptEntity` opaque: the AST records a source-located `registry_issue`, the parser
+skips the rest of that block with the engine's balanced-brace rule, and the graph emits no node, effect or edge from
+it. The whole asset is not marked invalid because ET:Legacy accepts an unfamiliar name in a block that matches no
+live entity. W5b must make the mapped stage unknown if such a block is proven selected; until BSP identity mapping is
+available, treating either all or none of these blocks as active would overstate the evidence.
+
+Known-but-unprojected actions preserve evidence without inventing stage meaning for animation, accumulator, sound or
+other commands outside W5a's approved semantic surface.
 
 ## Real-asset acceptance measurement
 
@@ -108,6 +115,7 @@ and freezes these totals:
 | Script entities | 583 |
 | Event handlers | 2,153 |
 | Actions retained | 10,057 |
+| Opaque entity blocks with registry issues | 0 |
 | Distinct action command names | 52 |
 | Objective descriptions | 250 |
 | Explicit objective classes | 232 / 250 |
@@ -211,10 +219,10 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 23 passed.
-- Targeted map-geometry regression suite: 97 passed.
+- W5a unit tests: 24 passed.
+- Targeted map-geometry regression suite: 98 passed.
 - Exact W5a real-asset acceptance: 1 passed, 7 deselected.
-- Full real-map geometry/stage integration file: 8 passed in 145.71 seconds.
-- Full repository suite: 4,157 passed, 75 skipped, 30 existing warnings in 53.37 seconds.
+- Full real-map geometry/stage integration file: 8 passed in 136.09 seconds.
+- Full repository suite: 4,158 passed, 75 skipped, 30 existing warnings in 50.38 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.
