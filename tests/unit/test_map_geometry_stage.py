@@ -143,9 +143,19 @@ def test_objdata_uses_pc_punctuation_boundaries_for_unquoted_tokens():
     ]
 
 
-def test_objdata_rejects_unmodeled_pc_literal_tokens():
-    with pytest.raises(StageParseError, match="PC literal tokens are unsupported"):
-        parse_objdata(b"wm_mapdescription axis 'literal'", source="literal.objdata")
+def test_objdata_preserves_pc_single_quoted_literal_tokens():
+    catalog = parse_objdata(
+        b"""wm_mapdescription axis 'Primary: ' /* joined */ 'Hold'
+wm_objective_axis_desc 1 'Secondary: Defend'
+""",
+        source="literal.objdata",
+    )
+
+    # PC_ReadTokenHandle strips double-quoted TT_STRING tokens only. The
+    # TT_LITERAL delimiter remains visible to CG_LoadObjectiveData.
+    assert catalog.map_descriptions == (MapDescription("axis", "'Primary: Hold'", 1),)
+    assert catalog.objectives[0].text == "'Secondary: Defend'"
+    assert catalog.objectives[0].classification is ObjectiveClass.UNKNOWN
 
 
 def test_objdata_uses_last_write_for_team_slots_and_rejects_malformed_text():

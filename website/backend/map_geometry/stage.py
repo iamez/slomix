@@ -23,9 +23,8 @@ from website.backend.map_geometry.pk3_index import (
 # ET:Legacy q_shared.h: MAX_TOKEN_CHARS includes the trailing NUL byte.
 _MAX_ET_TOKEN_LENGTH = 1023
 # The PC lexer keeps both quotes in MAX_TOKEN while reading a string. A single
-# string can therefore contain 1020 bytes; concatenation reserves one more byte.
+# PS_ReadString token can therefore contain 1020 content bytes.
 _MAX_PC_STRING_CONTENT_LENGTH = 1020
-_MAX_PC_CONCATENATED_STRING_CONTENT_LENGTH = 1019
 # ET:Legacy q_shared.h: MAX_INFO_STRING includes the trailing NUL byte.
 _MAX_ET_PARAMETER_LENGTH = 1023
 # ET:Legacy G_ScriptAction_ObjectiveStatus accepts objective numbers 1..8.
@@ -681,13 +680,11 @@ def _lex(
             raise StageParseError(f"{source}:{start_line}:{start_column}: NUL-producing PC string escape")
         return bytes((min(value, 0xFF),))
 
-    def take_pc_string() -> _Token:
+    def take_pc_string(delimiter: str) -> _Token:
         nonlocal index, line, column
         start_line, start_column = line, column
         value = bytearray()
-        segments = 0
         while True:
-            segments += 1
             advance(text[index])
             index += 1
             while True:
@@ -701,7 +698,7 @@ def _lex(
                 if character == "\\":
                     value.extend(take_pc_escape(start_line, start_column))
                     continue
-                if character == '"':
+                if character == delimiter:
                     advance(character)
                     index += 1
                     break
@@ -714,14 +711,12 @@ def _lex(
                     f"{source}:{start_line}:{start_column}: PC string exceeds ET's byte limit"
                 )
             saved = index, line, column
-            if not skip_pc_string_gap() or index >= len(text) or text[index] != '"':
+            if not skip_pc_string_gap() or index >= len(text) or text[index] != delimiter:
                 index, line, column = saved
                 break
 
-        if segments > 1 and len(value) > _MAX_PC_CONCATENATED_STRING_CONTENT_LENGTH:
-            raise StageParseError(
-                f"{source}:{start_line}:{start_column}: concatenated PC string exceeds ET's byte limit"
-            )
+        if delimiter == "'":
+            value = bytearray(b"'") + value + bytearray(b"'")
         return _Token(
             _TokenKind.WORD,
             bytes(value).decode("utf-8", errors="surrogateescape"),
@@ -775,10 +770,6 @@ def _lex(
                 suffixes += 1
             for source_character in text[start:index]:
                 advance(source_character)
-        elif character == "'":
-            raise StageParseError(
-                f"{source}:{start_line}:{start_column}: PC literal tokens are unsupported in objdata"
-            )
         else:
             punctuation = next(
                 (candidate for candidate in _PC_PUNCTUATIONS if text.startswith(candidate, index)),
@@ -832,10 +823,10 @@ def _lex(
             advance(text[index + 1])
             index += 2
             continue
+        if pc_string_tokens and character in {'"', "'"}:
+            tokens.append(take_pc_string(character))
+            continue
         if character == '"':
-            if pc_string_tokens:
-                tokens.append(take_pc_string())
-                continue
             start_line, start_column = line, column
             advance(character)
             index += 1
