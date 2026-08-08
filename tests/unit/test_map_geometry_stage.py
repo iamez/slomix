@@ -13,6 +13,7 @@ from website.backend.map_geometry.stage import (
     EntityStateEffect,
     MainObjectiveEffect,
     MainObjectiveSelectorForm,
+    MapDescription,
     ObjectiveClass,
     ObjectiveStatusEffect,
     ObjectiveTeam,
@@ -54,7 +55,24 @@ custom_metadata retained
     ]
     assert catalog.map_descriptions[0].text == "{Defend}: it"
     assert catalog.objectives[1].text == "} Capture it."
-    assert catalog.other_commands[0].command == "custom_metadata"
+    assert [command.command for command in catalog.other_commands] == ["custom_metadata", "retained"]
+
+
+def test_objdata_uses_fixed_arity_tokens_across_physical_lines():
+    catalog = parse_objdata(
+        b"""ignored metadata
+wm_mapdescription
+axis
+"Legacy map"
+wm_objective_axis_desc
+1
+"Primary: Hold it"
+"""
+    )
+
+    assert catalog.map_descriptions == (MapDescription("axis", "Legacy map", 2),)
+    assert catalog.objectives[0].text == "Primary: Hold it"
+    assert [command.command for command in catalog.other_commands] == ["ignored", "metadata"]
 
 
 def test_objdata_rejects_duplicate_identity_and_malformed_text():
@@ -207,6 +225,18 @@ def test_balanced_backslash_quote_pairs_match_engine_string_in_string_tokens():
     script = parse_map_script(b'manager {\nspawn {\nwm_announce "say \\"hello\\""\n}\n}\n')
 
     assert script.entities[0].events[0].actions[0].arguments == ('say "hello"',)
+
+
+def test_nested_backslash_quote_span_retains_ordinary_quotes():
+    script = parse_map_script(b'manager {\nspawn {\nwm_announce "say \\"a"b\\" done"\n}\n}\n')
+
+    assert script.entities[0].events[0].actions[0].arguments == ('say "a"b" done',)
+
+
+def test_legacy_single_byte_asset_text_round_trips_losslessly():
+    catalog = parse_objdata(b'wm_mapdescription axis "caf\xe9"\n')
+
+    assert catalog.map_descriptions[0].text.encode("utf-8", errors="surrogateescape") == b"caf\xe9"
 
 
 def test_unselected_inner_errors_make_only_their_entity_opaque():
@@ -413,7 +443,7 @@ def test_command_and_trigger_folding_is_ascii_only():
     assert graph.trigger_edges[0].resolution is TriggerResolution.MISSING
 
 
-def test_duplicate_trigger_handlers_are_retained_as_ambiguous_instead_of_selected():
+def test_duplicate_trigger_handlers_follow_engine_first_match_order():
     graph = compile_static_stage_graph(
         parse_map_script(
             b"""manager {
@@ -423,7 +453,56 @@ def test_duplicate_trigger_handlers_are_retained_as_ambiguous_instead_of_selecte
 }
 target {
  trigger advance {
+  wm_setwinner 0
+ }
+ trigger advance {
+  wm_setwinner 1
+ }
+}
+"""
+        )
+    )
+
+    assert graph.trigger_edges[0].resolution is TriggerResolution.RESOLVED
+    assert graph.trigger_edges[0].candidate_node_ids == ("event:1",)
+    assert graph.nodes[1].effects == (WinnerEffect(0, 8),)
+    assert graph.nodes[2].effects == (WinnerEffect(1, 11),)
+
+
+def test_later_duplicate_entity_block_cannot_supply_a_trigger_handler():
+    graph = compile_static_stage_graph(
+        parse_map_script(
+            b"""manager {
+ spawn {
+  trigger target advance
+ }
+}
+target {
+ spawn {
   halt
+ }
+}
+target {
+ trigger advance {
+  wm_setwinner 1
+ }
+}
+"""
+        )
+    )
+
+    assert graph.trigger_edges[0].resolution is TriggerResolution.MISSING
+    assert graph.trigger_edges[0].candidate_node_ids == ()
+    assert [(item.entity_name, item.issue_kind) for item in graph.opaque_entities] == [("target", "shadowed")]
+
+
+def test_callback_reparse_controls_trigger_dispatch_and_typed_projection():
+    graph = compile_static_stage_graph(
+        parse_map_script(
+            b"""manager {
+ spawn {
+  trigger "\\"target\\"" advance ignored
+  wm_setwinner "\\"1\\"" ignored
  }
 }
 target {
@@ -435,8 +514,10 @@ target {
         )
     )
 
-    assert graph.trigger_edges[0].resolution is TriggerResolution.AMBIGUOUS
-    assert graph.trigger_edges[0].candidate_node_ids == ("event:1", "event:2")
+    assert graph.nodes[0].effects == (WinnerEffect(1, 4),)
+    assert graph.trigger_edges[0].target_entity == "target"
+    assert graph.trigger_edges[0].resolution is TriggerResolution.RESOLVED
+    assert graph.trigger_edges[0].candidate_node_ids == ("event:1",)
 
 
 def test_self_trigger_resolution_is_scoped_to_the_source_entity_block():

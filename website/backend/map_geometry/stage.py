@@ -222,6 +222,7 @@ class ObjectiveCatalog:
 class ScriptAction:
     command: str
     arguments: tuple[str, ...]
+    serialized_parameters: str
     line: int
     uses_braced_arguments: bool = False
 
@@ -355,7 +356,7 @@ class TriggerEdge:
 class OpaqueScriptEntity:
     entity_index: int
     entity_name: str
-    issue_kind: Literal["registry_event", "registry_action", "syntax", "projection"]
+    issue_kind: Literal["registry_event", "registry_action", "syntax", "projection", "shadowed"]
     token: str
     line: int
     reason: str
@@ -447,10 +448,15 @@ class _TokenStream:
 def _decode_asset(raw: bytes, source: str) -> str:
     if b"\x00" in raw:
         raise StageParseError(f"{source}: NUL bytes are not valid stage text")
-    try:
-        return raw.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise StageParseError(f"{source}: stage text is not valid UTF-8: {exc}") from exc
+    return raw.decode("utf-8", errors="surrogateescape")
+
+
+def _encode_asset(text: str) -> bytes:
+    return text.encode("utf-8", errors="surrogateescape")
+
+
+def _et_byte_length(text: str) -> int:
+    return len(_encode_asset(text))
 
 
 def _is_et_whitespace(character: str) -> bool:
@@ -469,10 +475,14 @@ def _is_ascii_decimal(value: str) -> bool:
 def _serialized_parameter_length(values: list[str], *, quote_embedded_spaces: bool) -> int:
     total = max(0, len(values) - 1)
     for value in values:
-        total += len(value.encode("utf-8"))
+        total += _et_byte_length(value)
         if quote_embedded_spaces and " " in value:
             total += 2
     return total
+
+
+def _serialize_action_parameters(values: list[str]) -> str:
+    return " ".join(f'"{value}"' if " " in value else value for value in values)
 
 
 def _token_kind(value: str) -> _TokenKind:
@@ -535,6 +545,7 @@ def _lex(raw: bytes, source: str, *, structural_braces: bool) -> tuple[_Token, .
             advance(character)
             index += 1
             value: list[str] = []
+            nested = False
             while index < len(text):
                 character = text[index]
                 following = text[index + 1] if index + 1 < len(text) else ""
@@ -543,8 +554,9 @@ def _lex(raw: bytes, source: str, *, structural_braces: bool) -> tuple[_Token, .
                     advance(character)
                     advance(following)
                     index += 2
+                    nested = not nested
                     continue
-                if character == '"':
+                if character == '"' and not nested:
                     advance(character)
                     index += 1
                     break
@@ -558,7 +570,7 @@ def _lex(raw: bytes, source: str, *, structural_braces: bool) -> tuple[_Token, .
                 raise StageParseError(
                     f"{source}:{start_line}:{start_column}: empty quoted tokens are engine control boundaries"
                 )
-            if len(joined.encode("utf-8")) > _MAX_ET_TOKEN_LENGTH:
+            if _et_byte_length(joined) > _MAX_ET_TOKEN_LENGTH:
                 raise StageParseError(f"{source}:{start_line}:{start_column}: token exceeds ET's 1023-byte limit")
             kind = _token_kind(joined) if structural_braces else _TokenKind.WORD
             tokens.append(_Token(kind, joined, start_line, start_column))
@@ -571,7 +583,7 @@ def _lex(raw: bytes, source: str, *, structural_braces: bool) -> tuple[_Token, .
             advance(text[index])
             index += 1
         word = text[start:index]
-        if len(word.encode("utf-8")) > _MAX_ET_TOKEN_LENGTH:
+        if _et_byte_length(word) > _MAX_ET_TOKEN_LENGTH:
             raise StageParseError(f"{source}:{start_line}:{start_column}: token exceeds ET's 1023-byte limit")
         kind = _token_kind(word) if structural_braces else _TokenKind.WORD
         tokens.append(_Token(kind, word, start_line, start_column))
@@ -593,25 +605,27 @@ def _classification(text: str) -> ObjectiveClass:
 def parse_objdata(raw: bytes, *, source: str = "<objdata>") -> ObjectiveCatalog:
     stream = _TokenStream(_lex(raw, source, structural_braces=False), source)
     commands: list[AssetCommand] = []
-    current: list[_Token] = []
-    while token := stream.peek():
-        stream.index += 1
-        if token.kind is _TokenKind.NEWLINE:
-            if current:
-                commands.append(
-                    AssetCommand(
-                        _ascii_fold(current[0].value), tuple(item.value for item in current[1:]), current[0].line
-                    )
-                )
-                current = []
-            continue
-        if token.kind is not _TokenKind.WORD:
-            stream.fail("braces are not valid in objdata", token)
-        current.append(token)
-    if current:
-        commands.append(
-            AssetCommand(_ascii_fold(current[0].value), tuple(item.value for item in current[1:]), current[0].line)
+    command_arities = {
+        "wm_mapdescription": 2,
+        "wm_objective_axis_desc": 2,
+        "wm_objective_allied_desc": 2,
+    }
+
+    def take_word(description: str) -> _Token:
+        stream.skip_newlines()
+        return stream.expect(_TokenKind.WORD, description)
+
+    while True:
+        stream.skip_newlines()
+        if stream.peek() is None:
+            break
+        command_token = stream.expect(_TokenKind.WORD, "an objdata command")
+        command = _ascii_fold(command_token.value)
+        arguments = tuple(
+            take_word(f"argument {index + 1} for {command}").value
+            for index in range(command_arities.get(command, 0))
         )
+        commands.append(AssetCommand(command, arguments, command_token.line))
 
     descriptions: list[MapDescription] = []
     objectives: list[ObjectiveDescription] = []
@@ -748,7 +762,15 @@ def _parse_script_entity(name: _Token, tokens: tuple[_Token, ...], source: str) 
                         arguments.append(stream.take().value)
                 if _serialized_parameter_length(arguments, quote_embedded_spaces=True) > _MAX_ET_PARAMETER_LENGTH:
                     stream.fail("action parameters exceed ET's 1023-byte aggregate limit", action_name)
-                actions.append(ScriptAction(command, tuple(arguments), action_name.line, braced))
+                actions.append(
+                    ScriptAction(
+                        command,
+                        tuple(arguments),
+                        _serialize_action_parameters(arguments),
+                        action_name.line,
+                        braced,
+                    )
+                )
             events.append(ScriptEvent(event, tuple(parameters), tuple(actions), event_name.line))
     except StageParseError as exc:
         return _ScriptEntityParse(
@@ -845,26 +867,60 @@ def _integer(argument: str, *, source: str, line: int, field: str) -> int:
         raise StageParseError(f"{source}:{line}: {field} must be an integer") from exc
 
 
-def _exact_arguments(action: ScriptAction, count: int, source: str) -> None:
-    if len(action.arguments) != count:
-        raise StageParseError(f"{source}:{action.line}: {action.command} requires exactly {count} arguments")
+def _callback_arguments(action: ScriptAction, source: str) -> tuple[str, ...]:
+    tokens = _lex(
+        _encode_asset(action.serialized_parameters),
+        f"{source}:{action.line}:{action.command}:params",
+        structural_braces=False,
+    )
+    allow_line_breaks = action.command in {"wm_objective_status", "wm_set_main_objective", "wm_setwinner"}
+    arguments: list[str] = []
+    for token in tokens:
+        if token.kind is _TokenKind.NEWLINE:
+            if allow_line_breaks:
+                continue
+            break
+        arguments.append(token.value)
+    return tuple(arguments)
+
+
+def _required_arguments(action: ScriptAction, arguments: tuple[str, ...], count: int, source: str) -> None:
+    if len(arguments) < count:
+        raise StageParseError(f"{source}:{action.line}: {action.command} requires at least {count} arguments")
 
 
 def _effect_for(action: ScriptAction, source: str) -> StageEffect | None:
+    if action.command == "alertentity":
+        if not action.serialized_parameters:
+            raise StageParseError(f"{source}:{action.line}: alertentity requires a target")
+        return AlertEntityEffect(action.serialized_parameters, action.line)
+    if action.command == "wm_endround":
+        return RoundEndEffect(action.line)
+    if action.command not in {
+        "gotomarker",
+        "setautospawn",
+        "setstate",
+        "wm_objective_status",
+        "wm_set_main_objective",
+        "wm_setwinner",
+    }:
+        return None
+
+    arguments = _callback_arguments(action, source)
     if action.command == "wm_objective_status":
-        _exact_arguments(action, 3, source)
-        number = _integer(action.arguments[0], source=source, line=action.line, field="objective number")
-        team = _integer(action.arguments[1], source=source, line=action.line, field="objective team")
-        status = _integer(action.arguments[2], source=source, line=action.line, field="objective status")
+        _required_arguments(action, arguments, 3, source)
+        number = _integer(arguments[0], source=source, line=action.line, field="objective number")
+        team = _integer(arguments[1], source=source, line=action.line, field="objective team")
+        status = _integer(arguments[2], source=source, line=action.line, field="objective status")
         if not 1 <= number <= _MAX_OBJECTIVES or team not in {0, 1} or status not in {0, 1, 2}:
-            raise StageParseError(f"{source}:{action.line}: invalid wm_objective_status codes {action.arguments!r}")
+            raise StageParseError(f"{source}:{action.line}: invalid wm_objective_status codes {arguments!r}")
         return ObjectiveStatusEffect(number, team, status, action.line)
     if action.command == "wm_set_main_objective":
-        _exact_arguments(action, 2, source)
-        team = _integer(action.arguments[1], source=source, line=action.line, field="main-objective team")
+        _required_arguments(action, arguments, 2, source)
+        team = _integer(arguments[1], source=source, line=action.line, field="main-objective team")
         if team not in {0, 1}:
             raise StageParseError(f"{source}:{action.line}: invalid main-objective team {team}")
-        selector = action.arguments[0]
+        selector = arguments[0]
         selector_form = (
             MainObjectiveSelectorForm.LEGACY_NUMERIC
             if _is_ascii_decimal(selector)
@@ -872,33 +928,26 @@ def _effect_for(action: ScriptAction, source: str) -> StageEffect | None:
         )
         return MainObjectiveEffect(selector, selector_form, team, action.line)
     if action.command == "wm_setwinner":
-        _exact_arguments(action, 1, source)
-        team = _integer(action.arguments[0], source=source, line=action.line, field="winner team")
+        _required_arguments(action, arguments, 1, source)
+        team = _integer(arguments[0], source=source, line=action.line, field="winner team")
         if team not in {-1, 0, 1}:
             raise StageParseError(f"{source}:{action.line}: invalid winner team {team}")
         return WinnerEffect(team, action.line)
     if action.command == "setautospawn":
-        _exact_arguments(action, 2, source)
-        team = _integer(action.arguments[1], source=source, line=action.line, field="autospawn team")
+        _required_arguments(action, arguments, 2, source)
+        team = _integer(arguments[1], source=source, line=action.line, field="autospawn team")
         if team not in {0, 1}:
             raise StageParseError(f"{source}:{action.line}: invalid autospawn team {team}")
-        return AutoSpawnEffect(action.arguments[0], team, action.line)
+        return AutoSpawnEffect(arguments[0], team, action.line)
     if action.command == "setstate":
-        _exact_arguments(action, 2, source)
-        state = _ascii_fold(action.arguments[1])
+        _required_arguments(action, arguments, 2, source)
+        state = _ascii_fold(arguments[1])
         if state not in {"default", "invisible", "underconstruction"}:
             raise StageParseError(f"{source}:{action.line}: invalid setstate state {state!r}")
-        return EntityStateEffect(action.arguments[0], state, action.line)
+        return EntityStateEffect(arguments[0], state, action.line)
     if action.command == "gotomarker":
-        if len(action.arguments) < 2:
-            raise StageParseError(f"{source}:{action.line}: gotomarker requires a target and speed")
-        return GotoMarkerEffect(action.arguments[0], action.arguments[1:], action.line)
-    if action.command == "alertentity":
-        _exact_arguments(action, 1, source)
-        return AlertEntityEffect(action.arguments[0], action.line)
-    if action.command == "wm_endround":
-        _exact_arguments(action, 0, source)
-        return RoundEndEffect(action.line)
+        _required_arguments(action, arguments, 2, source)
+        return GotoMarkerEffect(arguments[0], arguments[1:], action.line)
     return None
 
 
@@ -906,7 +955,22 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
     eligible_entities: set[int] = set()
     effects_by_event: dict[tuple[int, int], tuple[StageEffect, ...]] = {}
     opaque_entities: list[OpaqueScriptEntity] = []
+    seen_entity_names: set[str] = set()
     for entity_index, entity in enumerate(script.entities):
+        folded_entity_name = _ascii_fold(entity.name)
+        if folded_entity_name in seen_entity_names:
+            opaque_entities.append(
+                OpaqueScriptEntity(
+                    entity_index,
+                    entity.name,
+                    "shadowed",
+                    entity.name,
+                    entity.line,
+                    f"{source}:{entity.line}: later duplicate entity block is unreachable by ET's first-match parser",
+                )
+            )
+            continue
+        seen_entity_names.add(folded_entity_name)
         if issue := entity.registry_issue:
             issue_kind: Literal["registry_event", "registry_action"] = (
                 "registry_event" if issue.kind == "event" else "registry_action"
@@ -943,7 +1007,7 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
                     if effect := _effect_for(action, source):
                         effects.append(effect)
                     if action.command == "trigger":
-                        _exact_arguments(action, 2, source)
+                        _required_arguments(action, _callback_arguments(action, source), 2, source)
                 except StageParseError as exc:
                     projection_issue = OpaqueScriptEntity(
                         entity_index,
@@ -964,8 +1028,8 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
             eligible_entities.add(entity_index)
 
     nodes: list[StageEventNode] = []
-    events_by_trigger: dict[tuple[str, str], list[str]] = {}
-    self_events_by_trigger: dict[tuple[int, str], list[str]] = {}
+    events_by_trigger: dict[tuple[str, str], str] = {}
+    self_events_by_trigger: dict[tuple[int, str], str] = {}
     indexed_events: list[tuple[int, ScriptEntity, ScriptEvent, str]] = []
     for entity_index, entity in enumerate(script.entities):
         if entity_index not in eligible_entities:
@@ -977,29 +1041,30 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
             indexed_events.append((entity_index, entity, event, node_id))
             if event.name == "trigger" and event.parameters:
                 trigger_name = _ascii_fold(" ".join(event.parameters))
-                events_by_trigger.setdefault((_ascii_fold(entity.name), trigger_name), []).append(node_id)
-                self_events_by_trigger.setdefault((entity_index, trigger_name), []).append(node_id)
+                events_by_trigger.setdefault((_ascii_fold(entity.name), trigger_name), node_id)
+                self_events_by_trigger.setdefault((entity_index, trigger_name), node_id)
 
     edges: list[TriggerEdge] = []
     for entity_index, entity, event, node_id in indexed_events:
         for action in event.actions:
             if action.command != "trigger":
                 continue
-            raw_target = action.arguments[0]
+            callback_arguments = _callback_arguments(action, source)
+            raw_target = callback_arguments[0]
             target_kind = _ascii_fold(raw_target)
-            target_trigger = action.arguments[1]
+            target_trigger = callback_arguments[1]
             if target_kind == "self":
                 dispatch = TriggerDispatch.SELF
                 target_entity = entity.name
-                candidates = tuple(self_events_by_trigger.get((entity_index, _ascii_fold(target_trigger)), ()))
+                candidate = self_events_by_trigger.get((entity_index, _ascii_fold(target_trigger)))
+                candidates = (candidate,) if candidate is not None else ()
             elif target_kind == "global":
                 dispatch = TriggerDispatch.GLOBAL
                 target_entity = raw_target
                 candidates = tuple(
                     candidate
-                    for (candidate_entity, candidate_trigger), node_ids in events_by_trigger.items()
+                    for (candidate_entity, candidate_trigger), candidate in events_by_trigger.items()
                     if candidate_trigger == _ascii_fold(target_trigger)
-                    for candidate in node_ids
                 )
             elif target_kind in {"player", "activator"}:
                 dispatch = TriggerDispatch(target_kind)
@@ -1008,7 +1073,8 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
             else:
                 dispatch = TriggerDispatch.SCRIPT_NAME
                 target_entity = raw_target
-                candidates = tuple(events_by_trigger.get((_ascii_fold(target_entity), _ascii_fold(target_trigger)), ()))
+                candidate = events_by_trigger.get((_ascii_fold(target_entity), _ascii_fold(target_trigger)))
+                candidates = (candidate,) if candidate is not None else ()
 
             if dispatch is TriggerDispatch.ACTIVATOR:
                 resolution = TriggerResolution.NO_OP
