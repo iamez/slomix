@@ -168,6 +168,7 @@ class TriggerResolution(StrEnum):
     RESOLVED = "resolved"
     MISSING = "missing"
     AMBIGUOUS = "ambiguous"
+    OPAQUE = "opaque"
     RUNTIME_DISPATCH = "runtime_dispatch"
     NO_OP = "no_op"
 
@@ -351,6 +352,7 @@ class TriggerEdge:
     target_entity: str
     target_trigger: str
     candidate_node_ids: tuple[str, ...]
+    opaque_candidate_event_ids: tuple[str, ...]
     dispatch: TriggerDispatch
     resolution: TriggerResolution
     line: int
@@ -413,6 +415,13 @@ class _ScriptEntityParse:
     entity: ScriptEntity
     consumed: int | None
     boundary_ambiguous: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _TriggerHandlerCandidate:
+    name: str | None
+    node_id: str | None
+    opaque_event_id: str | None
 
 
 class _TokenStream:
@@ -1125,16 +1134,20 @@ def _effect_for(action: ScriptAction, source: str) -> StageEffect | None:
     return None
 
 
-def _first_trigger_handler(handlers: list[tuple[str | None, str]], trigger_name: str) -> str | None:
+def _first_trigger_handler(
+    handlers: list[_TriggerHandlerCandidate],
+    trigger_name: str,
+) -> _TriggerHandlerCandidate | None:
     folded_trigger = _ascii_fold(trigger_name)
-    for handler_name, node_id in handlers:
-        if handler_name is None or handler_name == folded_trigger:
-            return node_id
+    for handler in handlers:
+        if handler.name is None or handler.name == folded_trigger:
+            return handler
     return None
 
 
 def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -> StaticStageGraph:
     eligible_entities: set[int] = set()
+    projection_opaque_entities: set[int] = set()
     effects_by_event: dict[tuple[int, int], tuple[StageEffect, ...]] = {}
     opaque_entities: list[OpaqueScriptEntity] = []
     seen_entity_names: set[str] = set()
@@ -1206,12 +1219,12 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
 
         if projection_issue is not None:
             opaque_entities.append(projection_issue)
+            projection_opaque_entities.add(entity_index)
         else:
             eligible_entities.add(entity_index)
 
     nodes: list[StageEventNode] = []
-    handlers_by_entity: dict[str, list[tuple[str | None, str]]] = {}
-    self_handlers: dict[int, list[tuple[str | None, str]]] = {}
+    node_ids_by_event: dict[tuple[int, int], str] = {}
     indexed_events: list[tuple[int, ScriptEntity, ScriptEvent, str]] = []
     for entity_index, entity in enumerate(script.entities):
         if entity_index not in eligible_entities:
@@ -1220,11 +1233,22 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
             node_id = f"event:{len(indexed_events)}"
             effects = effects_by_event[(entity_index, event_index)]
             nodes.append(StageEventNode(node_id, entity.name, event.name, event.parameters, effects, event.line))
+            node_ids_by_event[(entity_index, event_index)] = node_id
             indexed_events.append((entity_index, entity, event, node_id))
+
+    handlers_by_entity: dict[str, list[_TriggerHandlerCandidate]] = {}
+    self_handlers: dict[int, list[_TriggerHandlerCandidate]] = {}
+    for entity_index, entity in enumerate(script.entities):
+        if entity_index not in eligible_entities and entity_index not in projection_opaque_entities:
+            continue
+        for event_index, event in enumerate(entity.events):
             if event.name == "trigger":
                 trigger_name = _ascii_fold(" ".join(event.parameters)) if event.parameters else None
-                handlers_by_entity.setdefault(_ascii_fold(entity.name), []).append((trigger_name, node_id))
-                self_handlers.setdefault(entity_index, []).append((trigger_name, node_id))
+                node_id = node_ids_by_event.get((entity_index, event_index))
+                opaque_event_id = None if node_id is not None else f"opaque-event:{entity_index}:{event_index}"
+                handler = _TriggerHandlerCandidate(trigger_name, node_id, opaque_event_id)
+                handlers_by_entity.setdefault(_ascii_fold(entity.name), []).append(handler)
+                self_handlers.setdefault(entity_index, []).append(handler)
 
     edges: list[TriggerEdge] = []
     for entity_index, entity, event, node_id in indexed_events:
@@ -1239,11 +1263,11 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
                 dispatch = TriggerDispatch.SELF
                 target_entity = entity.name
                 candidate = _first_trigger_handler(self_handlers.get(entity_index, []), target_trigger)
-                candidates = (candidate,) if candidate is not None else ()
+                handler_candidates = (candidate,) if candidate is not None else ()
             elif target_kind == "global":
                 dispatch = TriggerDispatch.GLOBAL
                 target_entity = raw_target
-                candidates = tuple(
+                handler_candidates = tuple(
                     candidate
                     for handlers in handlers_by_entity.values()
                     if (candidate := _first_trigger_handler(handlers, target_trigger)) is not None
@@ -1251,7 +1275,7 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
             elif target_kind in {"player", "activator"}:
                 dispatch = TriggerDispatch(target_kind)
                 target_entity = raw_target
-                candidates = ()
+                handler_candidates = ()
             else:
                 dispatch = TriggerDispatch.SCRIPT_NAME
                 target_entity = raw_target
@@ -1259,12 +1283,23 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
                     handlers_by_entity.get(_ascii_fold(target_entity), []),
                     target_trigger,
                 )
-                candidates = (candidate,) if candidate is not None else ()
+                handler_candidates = (candidate,) if candidate is not None else ()
+
+            candidates = tuple(
+                candidate.node_id for candidate in handler_candidates if candidate.node_id is not None
+            )
+            opaque_candidates = tuple(
+                candidate.opaque_event_id
+                for candidate in handler_candidates
+                if candidate.opaque_event_id is not None
+            )
 
             if dispatch is TriggerDispatch.ACTIVATOR:
                 resolution = TriggerResolution.NO_OP
             elif dispatch in {TriggerDispatch.GLOBAL, TriggerDispatch.PLAYER}:
                 resolution = TriggerResolution.RUNTIME_DISPATCH
+            elif opaque_candidates:
+                resolution = TriggerResolution.OPAQUE
             elif len(candidates) == 1:
                 resolution = TriggerResolution.RESOLVED
             elif candidates:
@@ -1277,6 +1312,7 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
                     target_entity,
                     target_trigger,
                     candidates,
+                    opaque_candidates,
                     dispatch,
                     resolution,
                     action.line,

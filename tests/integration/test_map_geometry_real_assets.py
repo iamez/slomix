@@ -118,6 +118,7 @@ def test_w5a_parses_every_resolved_stage_asset_and_exposes_partial_static_covera
         "resolved_trigger_edges": 0,
         "missing_trigger_edges": 0,
         "ambiguous_trigger_edges": 0,
+        "opaque_trigger_edges": 0,
         "runtime_dispatch_trigger_edges": 0,
         "no_op_trigger_edges": 0,
         "legacy_numeric_main_objectives": 0,
@@ -152,6 +153,7 @@ def test_w5a_parses_every_resolved_stage_asset_and_exposes_partial_static_covera
         totals["resolved_trigger_edges"] += edge_counts[TriggerResolution.RESOLVED]
         totals["missing_trigger_edges"] += edge_counts[TriggerResolution.MISSING]
         totals["ambiguous_trigger_edges"] += edge_counts[TriggerResolution.AMBIGUOUS]
+        totals["opaque_trigger_edges"] += edge_counts[TriggerResolution.OPAQUE]
         totals["runtime_dispatch_trigger_edges"] += edge_counts[TriggerResolution.RUNTIME_DISPATCH]
         totals["no_op_trigger_edges"] += edge_counts[TriggerResolution.NO_OP]
         totals["legacy_numeric_main_objectives"] += sum(
@@ -176,6 +178,7 @@ def test_w5a_parses_every_resolved_stage_asset_and_exposes_partial_static_covera
         "resolved_trigger_edges": 1304,
         "missing_trigger_edges": 11,
         "ambiguous_trigger_edges": 0,
+        "opaque_trigger_edges": 0,
         "runtime_dispatch_trigger_edges": 0,
         "no_op_trigger_edges": 0,
         "legacy_numeric_main_objectives": 42,
