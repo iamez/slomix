@@ -952,6 +952,14 @@ def _effect_for(action: ScriptAction, source: str) -> StageEffect | None:
     return None
 
 
+def _first_trigger_handler(handlers: list[tuple[str | None, str]], trigger_name: str) -> str | None:
+    folded_trigger = _ascii_fold(trigger_name)
+    for handler_name, node_id in handlers:
+        if handler_name is None or handler_name == folded_trigger:
+            return node_id
+    return None
+
+
 def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -> StaticStageGraph:
     eligible_entities: set[int] = set()
     effects_by_event: dict[tuple[int, int], tuple[StageEffect, ...]] = {}
@@ -1029,8 +1037,8 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
             eligible_entities.add(entity_index)
 
     nodes: list[StageEventNode] = []
-    events_by_trigger: dict[tuple[str, str], str] = {}
-    self_events_by_trigger: dict[tuple[int, str], str] = {}
+    handlers_by_entity: dict[str, list[tuple[str | None, str]]] = {}
+    self_handlers: dict[int, list[tuple[str | None, str]]] = {}
     indexed_events: list[tuple[int, ScriptEntity, ScriptEvent, str]] = []
     for entity_index, entity in enumerate(script.entities):
         if entity_index not in eligible_entities:
@@ -1040,10 +1048,10 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
             effects = effects_by_event[(entity_index, event_index)]
             nodes.append(StageEventNode(node_id, entity.name, event.name, event.parameters, effects, event.line))
             indexed_events.append((entity_index, entity, event, node_id))
-            if event.name == "trigger" and event.parameters:
-                trigger_name = _ascii_fold(" ".join(event.parameters))
-                events_by_trigger.setdefault((_ascii_fold(entity.name), trigger_name), node_id)
-                self_events_by_trigger.setdefault((entity_index, trigger_name), node_id)
+            if event.name == "trigger":
+                trigger_name = _ascii_fold(" ".join(event.parameters)) if event.parameters else None
+                handlers_by_entity.setdefault(_ascii_fold(entity.name), []).append((trigger_name, node_id))
+                self_handlers.setdefault(entity_index, []).append((trigger_name, node_id))
 
     edges: list[TriggerEdge] = []
     for entity_index, entity, event, node_id in indexed_events:
@@ -1057,15 +1065,15 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
             if target_kind == "self":
                 dispatch = TriggerDispatch.SELF
                 target_entity = entity.name
-                candidate = self_events_by_trigger.get((entity_index, _ascii_fold(target_trigger)))
+                candidate = _first_trigger_handler(self_handlers.get(entity_index, []), target_trigger)
                 candidates = (candidate,) if candidate is not None else ()
             elif target_kind == "global":
                 dispatch = TriggerDispatch.GLOBAL
                 target_entity = raw_target
                 candidates = tuple(
                     candidate
-                    for (candidate_entity, candidate_trigger), candidate in events_by_trigger.items()
-                    if candidate_trigger == _ascii_fold(target_trigger)
+                    for handlers in handlers_by_entity.values()
+                    if (candidate := _first_trigger_handler(handlers, target_trigger)) is not None
                 )
             elif target_kind in {"player", "activator"}:
                 dispatch = TriggerDispatch(target_kind)
@@ -1074,7 +1082,10 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
             else:
                 dispatch = TriggerDispatch.SCRIPT_NAME
                 target_entity = raw_target
-                candidate = events_by_trigger.get((_ascii_fold(target_entity), _ascii_fold(target_trigger)))
+                candidate = _first_trigger_handler(
+                    handlers_by_entity.get(_ascii_fold(target_entity), []),
+                    target_trigger,
+                )
                 candidates = (candidate,) if candidate is not None else ()
 
             if dispatch is TriggerDispatch.ACTIVATOR:
