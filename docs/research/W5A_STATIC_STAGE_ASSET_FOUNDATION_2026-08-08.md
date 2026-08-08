@@ -41,13 +41,17 @@ an audit would convert missing callbacks and heuristic identities into false cer
 The parser contract was checked against ET:Legacy primary source rather than inferred only from the installed maps:
 
 - [`G_Script_ScriptParse`](https://github.com/etlegacy/etlegacy/blob/master/src/game/g_script.c) parses entity blocks,
-  event headers and action stacks. The first top-level token is the entity's script name, not an `entity` introducer.
-  Normal action arguments end at a physical newline.
+  event headers and action stacks. While expecting a script name, it skips every case-insensitive `entity` token as
+  an introducer. Event and action names are accepted only when present in the engine's `gScriptEvents` and
+  `gScriptActions` registries. Event parameters remain arbitrary strings consumed until a token beginning with `{`;
+  the registry does not impose parameter arity. Normal action arguments end at a physical newline.
 - `set`, `create` and `delete` are the exception: their arguments are enclosed in a brace block.
 - [`COM_ParseExt`](https://github.com/etlegacy/etlegacy/blob/master/src/qcommon/q_shared.c) defines quote and comment
   handling. Its regular-word path retains punctuation, including quotes and braces, until ASCII whitespace. Line
-  comments preserve the newline boundary; block comments do not create an action boundary. An empty quoted token is
-  indistinguishable from its empty control return and is rejected rather than represented as an argument.
+  comments preserve the newline boundary; block comments do not create an action boundary. The script parser tests
+  the first byte of returned tokens for structural braces, including quoted or punctuation-attached brace tokens.
+  An empty quoted token is indistinguishable from its empty control return and is rejected rather than represented
+  as an argument.
 - [`G_ScriptAction_SetMainObjective`](https://github.com/etlegacy/etlegacy/blob/master/src/game/g_script_actions.c)
   documents the target-name form while retaining compatibility handling for old scripts.
 - `G_ScriptAction_Trigger` gives `self`, `global` and `player` special dispatch semantics, while the current
@@ -66,6 +70,8 @@ older ET-compatible path applies numeric selection semantics, and it does not re
 
 - a fail-closed lexer with source line/column provenance, ET newline semantics, line/block comments, quoted tokens,
   braced `set/create/delete` arguments, NUL rejection and ET token-length enforcement;
+- exact current ET:Legacy event/action registry validation, `entity` introducer handling and first-byte brace
+  classification matching the engine parser;
 - ASCII-only identifier folding and canonical ASCII integer gates prevent Python Unicode/numeric syntax from
   creating effects or trigger dispatch that ET's byte-oriented C paths would not recognize;
 - structured `.objdata` records for map descriptions and per-team objective identities;
@@ -78,8 +84,10 @@ older ET-compatible path applies numeric selection semantics, and it does not re
 - independent W1 resolution of script and objdata before either file is read;
 - `missing`, `ambiguous`, `invalid` and `resolved` load states. No partial model is returned for invalid input.
 
-Unknown action commands remain in the AST. This is deliberate: discarding a command would destroy evidence, while
-inventing a stage meaning for every animation, accumulator or sound command would overstate the model.
+Every engine-recognized action remains in the AST even when it has no typed W5a projection. Unknown action or event
+names fail closed because ET:Legacy rejects them while loading the map script; silently retaining them would make an
+invalid asset look usable. Retaining known-but-unprojected actions preserves evidence without inventing stage meaning
+for animation, accumulator, sound or other commands outside W5a's approved semantic surface.
 
 ## Real-asset acceptance measurement
 
@@ -203,10 +211,10 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 21 passed.
-- Targeted map-geometry regression suite: 95 passed.
+- W5a unit tests: 23 passed.
+- Targeted map-geometry regression suite: 97 passed.
 - Exact W5a real-asset acceptance: 1 passed, 7 deselected.
-- Full real-map geometry/stage integration file: 8 passed in 132.71 seconds.
-- Full repository suite: 4,155 passed, 75 skipped, 30 existing warnings in 51.31 seconds.
+- Full real-map geometry/stage integration file: 8 passed in 145.71 seconds.
+- Full repository suite: 4,157 passed, 75 skipped, 30 existing warnings in 53.37 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.

@@ -118,8 +118,8 @@ def test_map_script_matches_regular_word_punctuation_and_rejects_structural_atta
         parse_map_script(b"manager{ spawn { halt } }", source="attached.script")
 
 
-def test_map_script_rejects_event_close_on_a_normal_action_line():
-    with pytest.raises(StageParseError, match="normal action must end at a newline"):
+def test_map_script_rejects_inline_event_close_consumed_as_an_action_argument():
+    with pytest.raises(StageParseError, match="unclosed entity"):
         parse_map_script(
             b"""manager {
  spawn { wm_setwinner 0 }
@@ -129,12 +129,30 @@ def test_map_script_rejects_event_close_on_a_normal_action_line():
         )
 
 
-def test_map_script_does_not_treat_entity_as_an_introducer_keyword():
-    script = parse_map_script(b"entity {\nspawn {\nhalt\n}\n}\n")
+def test_map_script_matches_the_engine_entity_introducer():
+    script = parse_map_script(b"entity manager {\nspawn {\nhalt\n}\n}\n")
 
-    assert script.entities[0].name == "entity"
-    with pytest.raises(StageParseError, match=r"expected '\{' after the entity name"):
-        parse_map_script(b"entity manager {\nspawn {\nhalt\n}\n}\n")
+    assert script.entities[0].name == "manager"
+    with pytest.raises(StageParseError, match="an entity name after 'entity'"):
+        parse_map_script(b"entity {\nspawn {\nhalt\n}\n}\n")
+
+
+def test_map_script_uses_engine_registries_but_preserves_event_parameter_strings():
+    script = parse_map_script(b"manager {\ntrigger advance extra {\nhalt\n}\n}\n")
+
+    assert script.entities[0].events[0].parameters == ("advance", "extra")
+    with pytest.raises(StageParseError, match="unknown ET script event 'triger'"):
+        parse_map_script(b"manager {\ntriger advance {\nhalt\n}\n}\n")
+    with pytest.raises(StageParseError, match="unknown ET script action 'wm_setwiner'"):
+        parse_map_script(b"manager {\nspawn {\nwm_setwiner 1\n}\n}\n")
+
+
+def test_quoted_braces_keep_engine_structural_semantics_in_braced_actions():
+    script = parse_map_script(b'manager {\nspawn {\nset "{" key "}"\n}\n}\n')
+
+    action = script.entities[0].events[0].actions[0]
+    assert action.uses_braced_arguments is True
+    assert action.arguments == ("key",)
 
 
 def test_map_script_rejects_empty_quoted_tokens_as_engine_boundaries():
@@ -203,11 +221,13 @@ def test_effect_projection_rejects_noncanonical_integer_syntax():
 
 
 def test_command_and_trigger_folding_is_ascii_only():
+    with pytest.raises(StageParseError, match="unknown ET script action"):
+        parse_map_script("manager {\nspawn {\nwm_\N{LATIN SMALL LETTER LONG S}etwinner 1\n}\n}\n".encode())
+
     graph = compile_static_stage_graph(
         parse_map_script(
             """manager {
  spawn {
-  wm_\N{LATIN SMALL LETTER LONG S}etwinner 1
   trigger \N{LATIN SMALL LETTER LONG S}elf advance
  }
  trigger advance {
