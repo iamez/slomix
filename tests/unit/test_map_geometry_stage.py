@@ -75,6 +75,27 @@ wm_objective_axis_desc
     assert [command.command for command in catalog.other_commands] == ["ignored", "metadata"]
 
 
+def test_objdata_uses_pc_escape_and_adjacent_string_semantics():
+    catalog = parse_objdata(
+        b'''wm_mapdescription axis "Line one\\n" /* joined */
+"Line two"
+wm_objective_axis_desc 1 "Primary:\\x20" "Hold\\33"
+''',
+        source="pc-strings.objdata",
+    )
+
+    assert catalog.map_descriptions == (MapDescription("axis", "Line one\nLine two", 1),)
+    assert catalog.objectives[0].text == "Primary: Hold!"
+    assert catalog.objectives[0].classification is ObjectiveClass.PRIMARY
+
+
+def test_objdata_rejects_newlines_and_unrepresentable_pc_string_escapes():
+    with pytest.raises(StageParseError, match="newline inside PC quoted string"):
+        parse_objdata(b'wm_mapdescription axis "first\nsecond"', source="newline.objdata")
+    with pytest.raises(StageParseError, match="unsupported PC string escape"):
+        parse_objdata(b'wm_mapdescription axis "bad\\q"', source="escape.objdata")
+
+
 def test_objdata_uses_last_write_for_team_slots_and_rejects_malformed_text():
     duplicate = b"""wm_mapdescription axis "First map text"
 wm_objective_axis_desc 1 "Primary: First"
