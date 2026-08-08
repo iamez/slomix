@@ -33,6 +33,60 @@ _MAX_OBJECTIVES = 8
 _BLOCK_ACTIONS = frozenset({"create", "delete", "set"})
 _ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
 _ET_WHITESPACE = "".join(chr(value) for value in range(33))
+_PC_PUNCTUATIONS = (
+    ">>=",
+    "<<=",
+    "...",
+    "##",
+    "&&",
+    "||",
+    ">=",
+    "<=",
+    "==",
+    "!=",
+    "*=",
+    "/=",
+    "%=",
+    "+=",
+    "-=",
+    "++",
+    "--",
+    "&=",
+    "|=",
+    "^=",
+    ">>",
+    "<<",
+    "->",
+    "::",
+    ".*",
+    "*",
+    "/",
+    "%",
+    "+",
+    "-",
+    "=",
+    "&",
+    "|",
+    "^",
+    "~",
+    "!",
+    ">",
+    "<",
+    ".",
+    ",",
+    ";",
+    ":",
+    "?",
+    "(",
+    ")",
+    "{",
+    "}",
+    "[",
+    "]",
+    "\\",
+    "#",
+    "$",
+)
 # ET:Legacy g_script.c: gScriptEvents and gScriptActions.
 _ET_SCRIPT_EVENTS = frozenset(
     {
@@ -675,6 +729,78 @@ def _lex(
             start_column,
         )
 
+    def take_pc_unquoted_token() -> _Token:
+        """Match PS_ReadToken name, number and punctuation boundaries."""
+        nonlocal index
+        start = index
+        start_line, start_column = line, column
+        character = text[index]
+        token_end: int | None = None
+        if ("a" <= character <= "z") or ("A" <= character <= "Z") or character == "_":
+            while index < len(text) and (
+                "a" <= text[index] <= "z"
+                or "A" <= text[index] <= "Z"
+                or "0" <= text[index] <= "9"
+                or text[index] == "_"
+            ):
+                advance(text[index])
+                index += 1
+        elif "0" <= character <= "9" or (
+            character == "." and index + 1 < len(text) and "0" <= text[index + 1] <= "9"
+        ):
+            if text.startswith(("0x", "0X"), index):
+                index += 2
+                while index < len(text) and (
+                    "0" <= text[index] <= "9"
+                    or "a" <= text[index] <= "f"
+                    or "A" <= text[index] <= "F"
+                ):
+                    index += 1
+            elif text.startswith(("0b", "0B"), index):
+                index += 2
+                while index < len(text) and text[index] in {"0", "1"}:
+                    index += 1
+            else:
+                while index < len(text) and ("0" <= text[index] <= "9" or text[index] == "."):
+                    index += 1
+            token_end = index
+            suffixes = 0
+            seen_suffixes: set[str] = set()
+            while index < len(text) and suffixes < 2:
+                suffix = text[index].lower()
+                if suffix not in {"l", "u"} or suffix in seen_suffixes:
+                    break
+                seen_suffixes.add(suffix)
+                index += 1
+                suffixes += 1
+            for source_character in text[start:index]:
+                advance(source_character)
+        elif character == "'":
+            raise StageParseError(
+                f"{source}:{start_line}:{start_column}: PC literal tokens are unsupported in objdata"
+            )
+        else:
+            punctuation = next(
+                (candidate for candidate in _PC_PUNCTUATIONS if text.startswith(candidate, index)),
+                None,
+            )
+            if punctuation is None:
+                raise StageParseError(
+                    f"{source}:{start_line}:{start_column}: unsupported byte in PC objdata token"
+                )
+            if punctuation.startswith("#") or punctuation == "$":
+                raise StageParseError(
+                    f"{source}:{start_line}:{start_column}: PC preprocessing is unsupported; refusing directives"
+                )
+            for source_character in punctuation:
+                advance(source_character)
+            index += len(punctuation)
+
+        value = text[start : token_end if token_end is not None else index]
+        if _et_byte_length(value) > _MAX_ET_TOKEN_LENGTH:
+            raise StageParseError(f"{source}:{start_line}:{start_column}: token exceeds ET's 1023-byte limit")
+        return _Token(_TokenKind.WORD, value, start_line, start_column)
+
     while index < len(text):
         character = text[index]
         following = text[index + 1] if index + 1 < len(text) else ""
@@ -745,14 +871,14 @@ def _lex(
             tokens.append(_Token(kind, joined, start_line, start_column))
             continue
 
+        if pc_string_tokens:
+            tokens.append(take_pc_unquoted_token())
+            continue
+
         start = index
         start_line, start_column = line, column
         # COM_ParseExt regular words include punctuation until ASCII whitespace.
         while index < len(text) and not _is_et_whitespace(text[index]):
-            if pc_string_tokens and text[index] in {"#", "$"}:
-                raise StageParseError(
-                    f"{source}:{line}:{column}: PC preprocessing is unsupported; refusing to model directives"
-                )
             advance(text[index])
             index += 1
         word = text[start:index]

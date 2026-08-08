@@ -124,6 +124,30 @@ def test_objdata_preprocessor_markers_inside_strings_and_comments_remain_text():
     assert catalog.map_descriptions == (MapDescription("axis", "Price $5 #1", 2),)
 
 
+def test_objdata_uses_pc_punctuation_boundaries_for_unquoted_tokens():
+    catalog = parse_objdata(
+        b"wm_objective_axis_desc 1 Primary:Hold custom::metadata number 1Lu",
+        source="punctuation.objdata",
+    )
+
+    assert catalog.objectives[0].text == "Primary"
+    assert catalog.objectives[0].classification is ObjectiveClass.UNKNOWN
+    assert [command.command for command in catalog.other_commands] == [
+        ":",
+        "hold",
+        "custom",
+        "::",
+        "metadata",
+        "number",
+        "1",
+    ]
+
+
+def test_objdata_rejects_unmodeled_pc_literal_tokens():
+    with pytest.raises(StageParseError, match="PC literal tokens are unsupported"):
+        parse_objdata(b"wm_mapdescription axis 'literal'", source="literal.objdata")
+
+
 def test_objdata_uses_last_write_for_team_slots_and_rejects_malformed_text():
     duplicate = b"""wm_mapdescription axis "First map text"
 wm_objective_axis_desc 1 "Primary: First"
