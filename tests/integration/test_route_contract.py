@@ -51,6 +51,7 @@ def _fetch_backend_route_paths() -> list[str]:
     env = {
         "PATH": os.environ.get("PATH", ""),
         "PYTHONPATH": str(REPO_ROOT),
+        "BOT_ENVIRONMENT": "dev",
         "SESSION_SECRET": "route-contract-test-secret-0123456789",
         "INTERNAL_API_SECRET": "route-contract-test-internal-0123456789",
         "SESSION_HTTPS_ONLY": "false",

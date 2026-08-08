@@ -375,6 +375,7 @@ def mock_config(monkeypatch):
     """
     # Override environment variables for testing
     test_env = {
+        "BOT_ENVIRONMENT": "dev",
         "DISCORD_BOT_TOKEN": "test_token_123",
         "POSTGRES_HOST": "localhost",
         "POSTGRES_DATABASE": "etlegacy_test",

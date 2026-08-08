@@ -61,6 +61,22 @@ class BotConfig:
         if os.path.exists(self.config_file):
             self._load_config_file()
 
+        # ==================== ENVIRONMENT IDENTITY ====================
+        # No default on purpose — fail closed rather than guess. This is the
+        # gap identified in docs/research/ENVIRONMENT_IDENTITY_RCA_2026-08-08.md:
+        # nothing in this codebase previously knew "am I dev or production",
+        # which is how a dev host ended up polling the real production game
+        # server (SSH_ENABLED=true, real SSH_HOST) with nothing to catch it.
+        self.bot_environment: str = self._get_config('BOT_ENVIRONMENT', '').strip().lower()
+        if self.bot_environment not in ('dev', 'production'):
+            raise ValueError(
+                "BOT_ENVIRONMENT must be set to 'dev' or 'production' "
+                f"(got: {self.bot_environment!r}). See "
+                "docs/research/ENVIRONMENT_IDENTITY_RCA_2026-08-08.md for why "
+                "this is required rather than defaulted."
+            )
+        logger.info(f"🌍 Environment: {self.bot_environment}")
+
         # ==================== LOGGING ====================
         self.log_level: str = self._get_config('LOG_LEVEL', 'INFO').upper()
 
@@ -241,6 +257,25 @@ class BotConfig:
 
         # ==================== SSH CONFIGURATION ====================
         self.ssh_enabled: bool = self._get_config('SSH_ENABLED', 'false').lower() == 'true'
+        # This exact combination — SSH_ENABLED=true outside production — is
+        # what let a dev host poll the live production game server
+        # unnoticed (docs/research/ENVIRONMENT_IDENTITY_RCA_2026-08-08.md).
+        # Require the mistake to be named explicitly rather than silent.
+        if self.ssh_enabled and self.bot_environment != 'production':
+            ssh_dev_override = self._get_config('SSH_ENABLED_DEV_OVERRIDE', 'false').lower() == 'true'
+            if not ssh_dev_override:
+                raise ValueError(
+                    "SSH_ENABLED=true with BOT_ENVIRONMENT=dev. If this is "
+                    "intentional (e.g. testing SSH from dev against a real "
+                    "game server on purpose), set SSH_ENABLED_DEV_OVERRIDE=true "
+                    "to say so explicitly. See "
+                    "docs/research/ENVIRONMENT_IDENTITY_RCA_2026-08-08.md."
+                )
+            logger.warning(
+                "⚠️ SSH_ENABLED=true on a non-production environment, allowed "
+                "via SSH_ENABLED_DEV_OVERRIDE=true. This bot IS polling a real "
+                "game server from dev."
+            )
         self.ssh_host: str = self._get_config('SSH_HOST', '')
         self.ssh_port: int = int(self._get_config('SSH_PORT', '22'))
         self.ssh_user: str = self._get_config('SSH_USER', '')
