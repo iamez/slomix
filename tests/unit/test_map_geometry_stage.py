@@ -487,6 +487,43 @@ target {
     assert graph.nodes[2].effects == (WinnerEffect(1, 11),)
 
 
+def test_parameterless_trigger_is_an_ordered_wildcard_handler():
+    graph = compile_static_stage_graph(
+        parse_map_script(
+            b"""wildcard_first {
+ trigger {
+  wm_setwinner 0
+ }
+ trigger advance {
+  wm_setwinner 1
+ }
+}
+named_first {
+ trigger advance {
+  wm_setwinner 1
+ }
+ trigger {
+  wm_setwinner 0
+ }
+}
+manager {
+ spawn {
+  trigger wildcard_first advance
+  trigger named_first advance
+  trigger named_first other
+ }
+}
+"""
+        )
+    )
+
+    wildcard_first, named_first, named_fallback = graph.trigger_edges
+    assert wildcard_first.candidate_node_ids == ("event:0",)
+    assert named_first.candidate_node_ids == ("event:2",)
+    assert named_fallback.candidate_node_ids == ("event:3",)
+    assert all(edge.resolution is TriggerResolution.RESOLVED for edge in graph.trigger_edges)
+
+
 def test_later_duplicate_entity_block_cannot_supply_a_trigger_handler():
     graph = compile_static_stage_graph(
         parse_map_script(

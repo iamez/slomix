@@ -63,7 +63,8 @@ The parser contract was checked against ET:Legacy primary source rather than inf
 - `G_ScriptAction_Trigger` gives `self`, `global` and `player` special dispatch semantics, while the current
   `activator` branch is an explicit no-op. `self` is scoped to the concrete source entity, even when another block has
   the same script name. Entity blocks and trigger handlers both use declaration-order first-match selection; later
-  duplicate blocks are unreachable. These targets are not ordinary script-name targets and are represented separately.
+  duplicate blocks are unreachable. A parameterless `trigger` event is a wildcard that matches any dispatched trigger
+  and can shadow later named handlers. These targets are not ordinary script-name targets and are represented separately.
 - Despite its name, `G_ScriptAction_EntityScriptName` sets the global `g_scriptName` cvar; it does not mutate the
   entity's runtime `scriptName`, so lexical named-trigger lookup is not invalidated by that action.
 
@@ -103,7 +104,8 @@ older ET-compatible path applies numeric selection semantics, and it does not re
 - trigger handler keys use the engine's space-joined event-parameter representation, including multi-token names;
 - callback-visible action arguments are reparsed from the engine-equivalent serialized buffer; trigger lookup uses the
   first matching entity block and handler in declaration order; later duplicate entity blocks carry explicit
-  `shadowed` provenance and do not contribute nodes or edges;
+  `shadowed` provenance and do not contribute nodes or edges; parameterless wildcard handlers participate in the same
+  ordered lookup for direct, `self` and `global` dispatch;
 - independent W1 resolution of script and objdata before either file is read;
 - `missing`, `ambiguous`, `invalid` and `resolved` load states. No partial model is returned for invalid input.
 
@@ -262,10 +264,10 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 36 passed.
-- Targeted map-geometry regression suite: 110 passed.
-- Exact W5a real-asset acceptance: 1 passed, 7 deselected in 2.39 seconds.
-- Full real-map geometry/stage integration file: 8 passed in 80.99 seconds (`--no-cov`).
-- Full repository suite: 4,170 passed, 75 skipped, 7 warnings in 49.58 seconds.
+- W5a unit tests: 37 passed.
+- Targeted map-geometry regression suite: 111 passed.
+- Exact W5a real-asset acceptance: 1 passed, 7 deselected in 2.38 seconds.
+- Full real-map geometry/stage integration file: 8 passed in 80.05 seconds (`--no-cov`).
+- Full repository suite: 4,171 passed, 75 skipped, 7 warnings in 49.12 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.
