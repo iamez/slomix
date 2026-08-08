@@ -497,9 +497,6 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
         if stream.peek() is None:
             break
         name = stream.expect(_TokenKind.WORD, "an entity name")
-        if _ascii_fold(name.value) == "entity":
-            stream.skip_newlines()
-            name = stream.expect(_TokenKind.WORD, "an entity name after 'entity'")
         stream.skip_newlines()
         stream.expect(_TokenKind.LEFT_BRACE, "'{' after the entity name")
         events: list[ScriptEvent] = []
@@ -630,19 +627,21 @@ def _effect_for(action: ScriptAction, source: str) -> StageEffect | None:
 def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -> StaticStageGraph:
     nodes: list[StageEventNode] = []
     events_by_trigger: dict[tuple[str, str], list[str]] = {}
-    indexed_events: list[tuple[ScriptEntity, ScriptEvent, str]] = []
-    for entity in script.entities:
+    self_events_by_trigger: dict[tuple[int, str], list[str]] = {}
+    indexed_events: list[tuple[int, ScriptEntity, ScriptEvent, str]] = []
+    for entity_index, entity in enumerate(script.entities):
         for event in entity.events:
             node_id = f"event:{len(indexed_events)}"
             effects = tuple(effect for action in event.actions if (effect := _effect_for(action, source)) is not None)
             nodes.append(StageEventNode(node_id, entity.name, event.name, event.parameters, effects, event.line))
-            indexed_events.append((entity, event, node_id))
+            indexed_events.append((entity_index, entity, event, node_id))
             if event.name == "trigger" and len(event.parameters) == 1:
-                key = (_ascii_fold(entity.name), _ascii_fold(event.parameters[0]))
-                events_by_trigger.setdefault(key, []).append(node_id)
+                trigger_name = _ascii_fold(event.parameters[0])
+                events_by_trigger.setdefault((_ascii_fold(entity.name), trigger_name), []).append(node_id)
+                self_events_by_trigger.setdefault((entity_index, trigger_name), []).append(node_id)
 
     edges: list[TriggerEdge] = []
-    for entity, event, node_id in indexed_events:
+    for entity_index, entity, event, node_id in indexed_events:
         for action in event.actions:
             if action.command != "trigger":
                 continue
@@ -653,7 +652,7 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
             if target_kind == "self":
                 dispatch = TriggerDispatch.SELF
                 target_entity = entity.name
-                candidates = tuple(events_by_trigger.get((_ascii_fold(target_entity), _ascii_fold(target_trigger)), ()))
+                candidates = tuple(self_events_by_trigger.get((entity_index, _ascii_fold(target_trigger)), ()))
             elif target_kind == "global":
                 dispatch = TriggerDispatch.GLOBAL
                 target_entity = raw_target

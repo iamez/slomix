@@ -129,6 +129,14 @@ def test_map_script_rejects_event_close_on_a_normal_action_line():
         )
 
 
+def test_map_script_does_not_treat_entity_as_an_introducer_keyword():
+    script = parse_map_script(b"entity {\nspawn {\nhalt\n}\n}\n")
+
+    assert script.entities[0].name == "entity"
+    with pytest.raises(StageParseError, match=r"expected '\{' after the entity name"):
+        parse_map_script(b"entity manager {\nspawn {\nhalt\n}\n}\n")
+
+
 def test_map_script_rejects_empty_quoted_tokens_as_engine_boundaries():
     with pytest.raises(StageParseError, match="empty quoted tokens are engine control boundaries"):
         parse_map_script(
@@ -239,6 +247,47 @@ target {
 
     assert graph.trigger_edges[0].resolution is TriggerResolution.AMBIGUOUS
     assert graph.trigger_edges[0].candidate_node_ids == ("event:1", "event:2")
+
+
+def test_self_trigger_resolution_is_scoped_to_the_source_entity_block():
+    with_local_handler = compile_static_stage_graph(
+        parse_map_script(
+            b"""duplicate {
+ spawn {
+  trigger self advance
+ }
+ trigger advance {
+  halt
+ }
+}
+duplicate {
+ trigger advance {
+  halt
+ }
+}
+"""
+        )
+    )
+    without_local_handler = compile_static_stage_graph(
+        parse_map_script(
+            b"""duplicate {
+ spawn {
+  trigger self advance
+ }
+}
+duplicate {
+ trigger advance {
+  halt
+ }
+}
+"""
+        )
+    )
+
+    assert with_local_handler.trigger_edges[0].resolution is TriggerResolution.RESOLVED
+    assert with_local_handler.trigger_edges[0].candidate_node_ids == ("event:1",)
+    assert without_local_handler.trigger_edges[0].resolution is TriggerResolution.MISSING
+    assert without_local_handler.trigger_edges[0].candidate_node_ids == ()
 
 
 def test_runtime_trigger_dispatch_is_not_misreported_as_a_missing_script_name():
