@@ -22,6 +22,10 @@ from website.backend.map_geometry.pk3_index import (
 
 # ET:Legacy q_shared.h: MAX_TOKEN_CHARS includes the trailing NUL byte.
 _MAX_ET_TOKEN_LENGTH = 1023
+# The PC lexer keeps both quotes in MAX_TOKEN while reading a string. A single
+# string can therefore contain 1020 bytes; concatenation reserves one more byte.
+_MAX_PC_STRING_CONTENT_LENGTH = 1020
+_MAX_PC_CONCATENATED_STRING_CONTENT_LENGTH = 1019
 # ET:Legacy q_shared.h: MAX_INFO_STRING includes the trailing NUL byte.
 _MAX_ET_PARAMETER_LENGTH = 1023
 # ET:Legacy G_ScriptAction_ObjectiveStatus accepts objective numbers 1..8.
@@ -493,7 +497,13 @@ def _token_kind(value: str) -> _TokenKind:
     return _TokenKind.WORD
 
 
-def _lex(raw: bytes, source: str, *, structural_braces: bool) -> tuple[_Token, ...]:
+def _lex(
+    raw: bytes,
+    source: str,
+    *,
+    structural_braces: bool,
+    pc_string_tokens: bool = False,
+) -> tuple[_Token, ...]:
     text = _decode_asset(raw, source)
     tokens: list[_Token] = []
     index = 0
@@ -507,6 +517,154 @@ def _lex(raw: bytes, source: str, *, structural_braces: bool) -> tuple[_Token, .
             column = 1
         else:
             column += 1
+
+    def skip_pc_string_gap() -> bool:
+        """Match PS_ReadWhiteSpace lookahead between adjacent PC strings."""
+        nonlocal index
+        while True:
+            while index < len(text) and _is_et_whitespace(text[index]):
+                advance(text[index])
+                index += 1
+            if index >= len(text):
+                return False
+            following = text[index + 1] if index + 1 < len(text) else ""
+            if text[index] == "/" and following == "/":
+                while index < len(text) and text[index] != "\n":
+                    advance(text[index])
+                    index += 1
+                if index >= len(text):
+                    return False
+                advance(text[index])
+                index += 1
+                continue
+            if text[index] == "/" and following == "*":
+                advance(text[index])
+                advance(following)
+                index += 2
+                while index < len(text) and not (
+                    text[index] == "*" and index + 1 < len(text) and text[index + 1] == "/"
+                ):
+                    advance(text[index])
+                    index += 1
+                if index >= len(text):
+                    return False
+                advance(text[index])
+                advance(text[index + 1])
+                index += 2
+                if index >= len(text):
+                    return False
+                continue
+            return True
+
+    def take_pc_escape(start_line: int, start_column: int) -> bytes:
+        """Decode PS_ReadEscapeCharacter's representable byte semantics."""
+        nonlocal index
+        escapes = {
+            "\\": b"\\",
+            "n": b"\n",
+            "r": b"\r",
+            "t": b"\t",
+            "v": b"\v",
+            "b": b"\b",
+            "f": b"\f",
+            "a": b"\a",
+            "'": b"'",
+            '"': b'"',
+            "?": b"?",
+        }
+        advance(text[index])
+        index += 1
+        if index >= len(text):
+            raise StageParseError(f"{source}:{start_line}:{start_column}: incomplete PC string escape")
+        marker = text[index]
+        if marker in escapes:
+            advance(marker)
+            index += 1
+            return escapes[marker]
+
+        if marker == "x":
+            advance(marker)
+            index += 1
+            start = index
+            while index < len(text) and (
+                "0" <= text[index] <= "9"
+                or "a" <= text[index] <= "z"
+                or "A" <= text[index] <= "Z"
+            ):
+                index += 1
+            digits = text[start:index]
+            for character in digits:
+                advance(character)
+            value = 0
+            for character in digits:
+                if "0" <= character <= "9":
+                    digit = ord(character) - ord("0")
+                elif "A" <= character <= "Z":
+                    digit = ord(character) - ord("A") + 10
+                else:
+                    digit = ord(character) - ord("a") + 10
+                value = (value << 4) + digit
+        else:
+            start = index
+            while index < len(text) and "0" <= text[index] <= "9":
+                advance(text[index])
+                index += 1
+            digits = text[start:index]
+        if not digits:
+            raise StageParseError(f"{source}:{start_line}:{start_column}: unsupported PC string escape")
+        if marker != "x":
+            value = int(digits, 10)
+        if value == 0:
+            raise StageParseError(f"{source}:{start_line}:{start_column}: NUL-producing PC string escape")
+        return bytes((min(value, 0xFF),))
+
+    def take_pc_string() -> _Token:
+        nonlocal index, line, column
+        start_line, start_column = line, column
+        value = bytearray()
+        segments = 0
+        while True:
+            segments += 1
+            advance(text[index])
+            index += 1
+            while True:
+                if index >= len(text):
+                    raise StageParseError(f"{source}:{start_line}:{start_column}: unclosed quoted string")
+                character = text[index]
+                if character == "\n":
+                    raise StageParseError(
+                        f"{source}:{start_line}:{start_column}: newline inside PC quoted string"
+                    )
+                if character == "\\":
+                    value.extend(take_pc_escape(start_line, start_column))
+                    continue
+                if character == '"':
+                    advance(character)
+                    index += 1
+                    break
+                value.extend(_encode_asset(character))
+                advance(character)
+                index += 1
+
+            if len(value) > _MAX_PC_STRING_CONTENT_LENGTH:
+                raise StageParseError(
+                    f"{source}:{start_line}:{start_column}: PC string exceeds ET's byte limit"
+                )
+            saved = index, line, column
+            if not skip_pc_string_gap() or index >= len(text) or text[index] != '"':
+                index, line, column = saved
+                break
+
+        if segments > 1 and len(value) > _MAX_PC_CONCATENATED_STRING_CONTENT_LENGTH:
+            raise StageParseError(
+                f"{source}:{start_line}:{start_column}: concatenated PC string exceeds ET's byte limit"
+            )
+        return _Token(
+            _TokenKind.WORD,
+            bytes(value).decode("utf-8", errors="surrogateescape"),
+            start_line,
+            start_column,
+        )
 
     while index < len(text):
         character = text[index]
@@ -540,6 +698,9 @@ def _lex(raw: bytes, source: str, *, structural_braces: bool) -> tuple[_Token, .
             index += 2
             continue
         if character == '"':
+            if pc_string_tokens:
+                tokens.append(take_pc_string())
+                continue
             start_line, start_column = line, column
             advance(character)
             index += 1
@@ -602,7 +763,10 @@ def _classification(text: str) -> ObjectiveClass:
 
 
 def parse_objdata(raw: bytes, *, source: str = "<objdata>") -> ObjectiveCatalog:
-    stream = _TokenStream(_lex(raw, source, structural_braces=False), source)
+    stream = _TokenStream(
+        _lex(raw, source, structural_braces=False, pc_string_tokens=True),
+        source,
+    )
     commands: list[AssetCommand] = []
     command_arities = {
         "wm_mapdescription": 2,
