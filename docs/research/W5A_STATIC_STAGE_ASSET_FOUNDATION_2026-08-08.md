@@ -70,6 +70,8 @@ older ET-compatible path applies numeric selection semantics, and it does not re
 
 `website/backend/map_geometry/stage.py` provides:
 
+- a top-level, brace-balanced entity splitter matching the nonselected-block path; selected-block parsing is bounded
+  to that entity's token slice and therefore cannot consume a later entity after an inner syntax error;
 - a fail-closed lexer with source line/column provenance, ET newline semantics, line/block comments, quoted tokens,
   braced `set/create/delete` arguments, NUL rejection and ET token-length enforcement;
 - exact current ET:Legacy event/action registry inventory, `entity` introducer handling and first-byte brace
@@ -100,6 +102,14 @@ without its required argument brace records a `syntax_issue` and makes only that
 enter this action parser for a nonmatching block. Broken outer entity structure still invalidates the asset because it
 cannot be skipped or mapped without inventing block boundaries.
 
+A known event header that reaches the entity boundary before an action-opening `{` is likewise entity-opaque. The
+top-level splitter already consumed that entity's close, so parsing resumes at the next block without borrowing its
+brace or invalidating an otherwise usable selected block.
+
+Likewise, a normal action that reaches a brace before its physical-newline boundary makes that entity opaque. The
+selected parser would consume that brace as an argument, while the nonmatching path uses it structurally; without an
+entity mapping, projecting either interpretation would be stronger than the evidence.
+
 The compiler applies the same entity-level boundary when a known command cannot be projected defensibly (for
 example, a noncanonical integer or wrong trigger arity). It validates each block atomically before adding any of its
 nodes, records an `OpaqueScriptEntity` with the failing command and reason, and excludes the entire block. This avoids
@@ -128,7 +138,7 @@ and freezes these totals:
 | Script entities | 583 |
 | Event handlers | 2,153 |
 | Actions retained | 10,057 |
-| Opaque entity blocks (registry or projection issues) | 0 |
+| Opaque entity blocks (registry, syntax or projection issues) | 0 |
 | Distinct action command names | 52 |
 | Objective descriptions | 250 |
 | Explicit objective classes | 232 / 250 |
@@ -235,7 +245,7 @@ used to fabricate a transition timestamp.
 - W5a unit tests: 25 passed.
 - Targeted map-geometry regression suite: 99 passed.
 - Exact W5a real-asset acceptance: 1 passed, 7 deselected.
-- Full real-map geometry/stage integration file: 8 passed in 72.46 seconds (`--no-cov`).
-- Full repository suite: 4,159 passed, 75 skipped, 30 existing warnings in 48.52 seconds.
+- Full real-map geometry/stage integration file: 8 passed in 73.06 seconds (`--no-cov`).
+- Full repository suite: 4,159 passed, 75 skipped, 30 existing warnings in 48.19 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.
