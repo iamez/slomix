@@ -22,6 +22,8 @@ from website.backend.map_geometry.pk3_index import (
 
 # ET:Legacy q_shared.h: MAX_TOKEN_CHARS includes the trailing NUL byte.
 _MAX_ET_TOKEN_LENGTH = 1023
+# ET:Legacy q_shared.h: MAX_INFO_STRING includes the trailing NUL byte.
+_MAX_ET_PARAMETER_LENGTH = 1023
 # ET:Legacy G_ScriptAction_ObjectiveStatus accepts objective numbers 1..8.
 _MAX_OBJECTIVES = 8
 _BLOCK_ACTIONS = frozenset({"create", "delete", "set"})
@@ -457,6 +459,15 @@ def _is_ascii_decimal(value: str) -> bool:
     return bool(digits) and all("0" <= character <= "9" for character in digits)
 
 
+def _serialized_parameter_length(values: list[str], *, quote_embedded_spaces: bool) -> int:
+    total = max(0, len(values) - 1)
+    for value in values:
+        total += len(value.encode("utf-8"))
+        if quote_embedded_spaces and " " in value:
+            total += 2
+    return total
+
+
 def _token_kind(value: str) -> _TokenKind:
     if value.startswith("{"):
         return _TokenKind.LEFT_BRACE
@@ -465,7 +476,7 @@ def _token_kind(value: str) -> _TokenKind:
     return _TokenKind.WORD
 
 
-def _lex(raw: bytes, source: str) -> tuple[_Token, ...]:
+def _lex(raw: bytes, source: str, *, structural_braces: bool) -> tuple[_Token, ...]:
     text = _decode_asset(raw, source)
     tokens: list[_Token] = []
     index = 0
@@ -542,7 +553,8 @@ def _lex(raw: bytes, source: str) -> tuple[_Token, ...]:
                 )
             if len(joined.encode("utf-8")) > _MAX_ET_TOKEN_LENGTH:
                 raise StageParseError(f"{source}:{start_line}:{start_column}: token exceeds ET's 1023-byte limit")
-            tokens.append(_Token(_token_kind(joined), joined, start_line, start_column))
+            kind = _token_kind(joined) if structural_braces else _TokenKind.WORD
+            tokens.append(_Token(kind, joined, start_line, start_column))
             continue
 
         start = index
@@ -554,7 +566,8 @@ def _lex(raw: bytes, source: str) -> tuple[_Token, ...]:
         word = text[start:index]
         if len(word.encode("utf-8")) > _MAX_ET_TOKEN_LENGTH:
             raise StageParseError(f"{source}:{start_line}:{start_column}: token exceeds ET's 1023-byte limit")
-        tokens.append(_Token(_token_kind(word), word, start_line, start_column))
+        kind = _token_kind(word) if structural_braces else _TokenKind.WORD
+        tokens.append(_Token(kind, word, start_line, start_column))
 
     return tuple(tokens)
 
@@ -571,7 +584,7 @@ def _classification(text: str) -> ObjectiveClass:
 
 
 def parse_objdata(raw: bytes, *, source: str = "<objdata>") -> ObjectiveCatalog:
-    stream = _TokenStream(_lex(raw, source), source)
+    stream = _TokenStream(_lex(raw, source, structural_braces=False), source)
     commands: list[AssetCommand] = []
     current: list[_Token] = []
     while token := stream.peek():
@@ -665,6 +678,8 @@ def _parse_script_entity(name: _Token, tokens: tuple[_Token, ...], source: str) 
                     stream.fail(f"event {event_name.value!r} reached '}}' before '{{'", token)
                 if token.kind is not _TokenKind.NEWLINE:
                     parameters.append(token.value)
+            if _serialized_parameter_length(parameters, quote_embedded_spaces=False) > _MAX_ET_PARAMETER_LENGTH:
+                stream.fail("event parameters exceed ET's 1023-byte aggregate limit", event_name)
 
             actions: list[ScriptAction] = []
             while True:
@@ -705,6 +720,8 @@ def _parse_script_entity(name: _Token, tokens: tuple[_Token, ...], source: str) 
                         if token.kind in {_TokenKind.LEFT_BRACE, _TokenKind.RIGHT_BRACE}:
                             stream.fail(f"{command} reached a brace before its newline", token)
                         arguments.append(stream.take().value)
+                if _serialized_parameter_length(arguments, quote_embedded_spaces=True) > _MAX_ET_PARAMETER_LENGTH:
+                    stream.fail("action parameters exceed ET's 1023-byte aggregate limit", action_name)
                 actions.append(ScriptAction(command, tuple(arguments), action_name.line, braced))
             events.append(ScriptEvent(event, tuple(parameters), tuple(actions), event_name.line))
     except StageParseError as exc:
@@ -717,7 +734,7 @@ def _parse_script_entity(name: _Token, tokens: tuple[_Token, ...], source: str) 
 
 
 def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
-    stream = _TokenStream(_lex(raw, source), source)
+    stream = _TokenStream(_lex(raw, source, structural_braces=True), source)
     entities: list[ScriptEntity] = []
     while True:
         stream.skip_newlines()
