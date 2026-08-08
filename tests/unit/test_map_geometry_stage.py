@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import zipfile
+import zlib
 
 import pytest
 
@@ -128,6 +129,14 @@ def test_map_script_rejects_event_close_on_a_normal_action_line():
         )
 
 
+def test_map_script_rejects_empty_quoted_tokens_as_engine_boundaries():
+    with pytest.raises(StageParseError, match="empty quoted tokens are engine control boundaries"):
+        parse_map_script(
+            b'manager {\nspawn {\nwm_announce "" suffix\n}\n}\n',
+            source="empty-token.script",
+        )
+
+
 def test_static_graph_projects_only_defensible_effects_and_resolves_trigger_edges():
     script = parse_map_script(
         b"""game_manager {
@@ -176,6 +185,34 @@ def test_legacy_numeric_main_objective_is_marked_instead_of_treated_as_a_target_
     )
 
     assert graph.nodes[0].effects == (MainObjectiveEffect("2", MainObjectiveSelectorForm.LEGACY_NUMERIC, 1, 3),)
+
+
+def test_effect_projection_rejects_noncanonical_integer_syntax():
+    script = parse_map_script(b"manager {\nspawn {\nwm_setwinner 0_1\n}\n}\n")
+
+    with pytest.raises(StageParseError, match="winner team must be a canonical ASCII integer"):
+        compile_static_stage_graph(script)
+
+
+def test_command_and_trigger_folding_is_ascii_only():
+    graph = compile_static_stage_graph(
+        parse_map_script(
+            """manager {
+ spawn {
+  wm_\N{LATIN SMALL LETTER LONG S}etwinner 1
+  trigger \N{LATIN SMALL LETTER LONG S}elf advance
+ }
+ trigger advance {
+  halt
+ }
+}
+""".encode()
+        )
+    )
+
+    assert graph.nodes[0].effects == ()
+    assert graph.trigger_edges[0].dispatch is TriggerDispatch.SCRIPT_NAME
+    assert graph.trigger_edges[0].resolution is TriggerResolution.MISSING
 
 
 def test_duplicate_trigger_handlers_are_retained_as_ambiguous_instead_of_selected():
@@ -330,6 +367,28 @@ def test_stage_load_wraps_unsupported_zip_compression_as_invalid(tmp_path, monke
     assert "unsupported compression" in (result.reason or "")
 
 
+def test_stage_load_wraps_corrupt_zip_payload_as_invalid(tmp_path, monkeypatch):
+    _write_pk3(
+        tmp_path / "one.pk3",
+        {
+            "maps/duel.script": b"manager {\nspawn {\nwm_setwinner 0\n}\n}\n",
+            "maps/duel.objdata": b'wm_objective_axis_desc 1 "Primary: Defend"',
+        },
+    )
+    index = Pk3GeometryIndex.scan(tmp_path)
+
+    def corrupt_payload(*_args, **_kwargs):
+        raise zlib.error("corrupt compressed payload")
+
+    monkeypatch.setattr(zipfile.ZipExtFile, "read", corrupt_payload)
+    result = load_static_stage(index, "duel")
+
+    assert result.status is StageLoadStatus.INVALID
+    assert result.model is None
+    assert "cannot read indexed asset" in (result.reason or "")
+    assert "corrupt compressed payload" in (result.reason or "")
+
+
 def test_stage_load_returns_invalid_instead_of_a_partial_model(tmp_path):
     _write_pk3(
         tmp_path / "one.pk3",
@@ -342,4 +401,4 @@ def test_stage_load_returns_invalid_instead_of_a_partial_model(tmp_path):
 
     assert result.status is StageLoadStatus.INVALID
     assert result.model is None
-    assert "winner team must be an integer" in (result.reason or "")
+    assert "winner team must be a canonical ASCII integer" in (result.reason or "")
