@@ -749,6 +749,10 @@ def _lex(
         start_line, start_column = line, column
         # COM_ParseExt regular words include punctuation until ASCII whitespace.
         while index < len(text) and not _is_et_whitespace(text[index]):
+            if pc_string_tokens and text[index] in {"#", "$"}:
+                raise StageParseError(
+                    f"{source}:{line}:{column}: PC preprocessing is unsupported; refusing to model directives"
+                )
             advance(text[index])
             index += 1
         word = text[start:index]
