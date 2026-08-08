@@ -51,14 +51,19 @@ The parser contract was checked against ET:Legacy primary source rather than inf
   handling. Its regular-word path retains punctuation, including quotes and braces, until ASCII whitespace. Line
   comments preserve the newline boundary; block comments do not create an action boundary. The script parser tests
   the first byte of returned tokens for structural braces, including quoted or punctuation-attached brace tokens.
-  Balanced backslash-quote pairs use its explicit string-in-string branch and become literal quotes in the token.
-  An empty quoted token is indistinguishable from its empty control return and is rejected rather than represented as
-  an argument.
+  Balanced backslash-quote pairs use its explicit string-in-string branch; ordinary quotes inside that nested span are
+  retained until the closing backslash-quote. An empty quoted token is indistinguishable from its empty control return
+  and is rejected rather than represented as an argument.
+- [`CG_LoadObjectiveData`](https://github.com/etlegacy/etlegacy/blob/master/src/cgame/cg_main.c) reads `.objdata` as a
+  token stream with fixed arity for recognized commands. Physical newlines do not delimit commands or arguments.
+- Script action arguments are serialized into `MAX_INFO_STRING` before callbacks receive them. Callbacks such as
+  `G_ScriptAction_Trigger` parse that serialized buffer again, so lexical quotes can regain syntactic meaning.
 - [`G_ScriptAction_SetMainObjective`](https://github.com/etlegacy/etlegacy/blob/master/src/game/g_script_actions.c)
   documents the target-name form while retaining compatibility handling for old scripts.
 - `G_ScriptAction_Trigger` gives `self`, `global` and `player` special dispatch semantics, while the current
   `activator` branch is an explicit no-op. `self` is scoped to the concrete source entity, even when another block has
-  the same script name. These targets are not ordinary script-name targets and are represented separately.
+  the same script name. Entity blocks and trigger handlers both use declaration-order first-match selection; later
+  duplicate blocks are unreachable. These targets are not ordinary script-name targets and are represented separately.
 - Despite its name, `G_ScriptAction_EntityScriptName` sets the global `g_scriptName` cvar; it does not mutate the
   entity's runtime `scriptName`, so lexical named-trigger lookup is not invalidated by that action.
 
@@ -75,8 +80,10 @@ older ET-compatible path applies numeric selection semantics, and it does not re
 - dual selected/nonselected entity-boundary parsing: the selected path follows event/action grammar, while the
   nonselected path uses ET:Legacy's balanced-brace skip; inner registry/syntax failures resume only at the proven
   nonselected boundary;
-- a fail-closed lexer with source line/column provenance, ET newline semantics, line/block comments, quoted tokens,
-  braced `set/create/delete` arguments, NUL rejection and ET token-length enforcement;
+- a fail-closed lexer with source line/column provenance, ET newline semantics, line/block comments, nested quoted
+  tokens, braced `set/create/delete` arguments, NUL rejection and byte-accurate ET token-length enforcement;
+- lossless UTF-8 decoding with `surrogateescape`, preserving legacy single-byte asset text without changing valid
+  UTF-8 display strings;
 - context-specific brace classification: first-byte braces are structural in map scripts but remain ordinary text in
   `.objdata` command arguments;
 - 1023-byte aggregate event/action parameter gates matching the usable `MAX_INFO_STRING` payload, including the
@@ -85,15 +92,18 @@ older ET-compatible path applies numeric selection semantics, and it does not re
   classification matching the engine parser;
 - ASCII-only identifier folding and canonical ASCII integer gates prevent Python Unicode/numeric syntax from
   creating effects or trigger dispatch that ET's byte-oriented C paths would not recognize;
-- structured `.objdata` records for map descriptions and per-team objective identities;
+- fixed-arity token-stream `.objdata` parsing with structured map descriptions and per-team objective identities;
 - explicit `primary`, `secondary`, `additional` or `unknown` classification, based only on the asset text;
-- a structured map-script AST retaining every compatible entity/event/action argument plus a source-located issue
-  for any entity whose remaining contents must stay opaque;
+- a structured map-script AST retaining every compatible lexical action argument and its exact serialized callback
+  parameter buffer, plus a source-located issue for any entity whose remaining contents must stay opaque;
 - typed projections for objective status, main objective, winner, autospawn, entity state, marker movement,
   entity alert and round end;
 - trigger-call edges with direct/self dispatch, explicit `global`/`player` runtime dispatch and the current
   `activator` no-op, plus `resolved`, `missing`, `ambiguous`, `runtime_dispatch` or `no_op` results;
 - trigger handler keys use the engine's space-joined event-parameter representation, including multi-token names;
+- callback-visible action arguments are reparsed from the engine-equivalent serialized buffer; trigger lookup uses the
+  first matching entity block and handler in declaration order; later duplicate entity blocks carry explicit
+  `shadowed` provenance and do not contribute nodes or edges;
 - independent W1 resolution of script and objdata before either file is read;
 - `missing`, `ambiguous`, `invalid` and `resolved` load states. No partial model is returned for invalid input.
 
@@ -147,7 +157,7 @@ and freezes these totals:
 | Script entities | 583 |
 | Event handlers | 2,153 |
 | Actions retained | 10,057 |
-| Opaque entity blocks (registry, syntax or projection issues) | 0 |
+| Excluded entity blocks (registry, syntax, projection or shadowing) | 0 |
 | Distinct action command names | 52 |
 | Objective descriptions | 250 |
 | Explicit objective classes | 232 / 250 |
@@ -251,10 +261,10 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 30 passed.
-- Targeted map-geometry regression suite: 104 passed.
-- Exact W5a real-asset acceptance: 1 passed, 7 deselected.
-- Full real-map geometry/stage integration file: 8 passed in 80.58 seconds (`--no-cov`).
-- Full repository suite: 4,164 passed, 75 skipped, 7 warnings in 50.16 seconds.
+- W5a unit tests: 35 passed.
+- Targeted map-geometry regression suite: 109 passed.
+- Exact W5a real-asset acceptance: 1 passed, 7 deselected in 2.42 seconds.
+- Full real-map geometry/stage integration file: 8 passed in 79.60 seconds (`--no-cov`).
+- Full repository suite: 4,169 passed, 75 skipped, 7 warnings in 49.24 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.
