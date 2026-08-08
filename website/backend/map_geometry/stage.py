@@ -403,6 +403,13 @@ class _Token:
     column: int
 
 
+@dataclass(frozen=True, slots=True)
+class _ScriptEntityParse:
+    entity: ScriptEntity
+    consumed: int | None
+    boundary_ambiguous: bool
+
+
 class _TokenStream:
     def __init__(self, tokens: tuple[_Token, ...], source: str) -> None:
         self.tokens = tokens
@@ -646,25 +653,38 @@ def parse_objdata(raw: bytes, *, source: str = "<objdata>") -> ObjectiveCatalog:
     return ObjectiveCatalog(tuple(descriptions), tuple(objectives), tuple(other))
 
 
-def _parse_script_entity(name: _Token, tokens: tuple[_Token, ...], source: str) -> ScriptEntity:
+def _parse_script_entity(name: _Token, tokens: tuple[_Token, ...], source: str) -> _ScriptEntityParse:
     stream = _TokenStream(tokens, source)
     events: list[ScriptEvent] = []
     issue_token = name
+    boundary_ambiguous = False
     try:
         while True:
             stream.skip_newlines()
-            if stream.peek() is None:
-                return ScriptEntity(name.value, tuple(events), name.line)
+            token = stream.peek()
+            if token is None:
+                stream.fail(f"unclosed entity {name.value!r}", name)
+            if token.kind is _TokenKind.RIGHT_BRACE:
+                stream.index += 1
+                return _ScriptEntityParse(
+                    ScriptEntity(name.value, tuple(events), name.line),
+                    stream.index,
+                    boundary_ambiguous,
+                )
 
             event_name = stream.expect(_TokenKind.WORD, "an event name")
             issue_token = event_name
             event = _ascii_fold(event_name.value)
             if event not in _ET_SCRIPT_EVENTS:
-                return ScriptEntity(
-                    name.value,
-                    tuple(events),
-                    name.line,
-                    ScriptRegistryIssue("event", event_name.value, event_name.line),
+                return _ScriptEntityParse(
+                    ScriptEntity(
+                        name.value,
+                        tuple(events),
+                        name.line,
+                        ScriptRegistryIssue("event", event_name.value, event_name.line),
+                    ),
+                    None,
+                    boundary_ambiguous,
                 )
 
             parameters: list[str] = []
@@ -675,7 +695,7 @@ def _parse_script_entity(name: _Token, tokens: tuple[_Token, ...], source: str) 
                 if token.kind is _TokenKind.LEFT_BRACE:
                     break
                 if token.kind is _TokenKind.RIGHT_BRACE:
-                    stream.fail(f"event {event_name.value!r} reached '}}' before '{{'", token)
+                    boundary_ambiguous = True
                 if token.kind is not _TokenKind.NEWLINE:
                     parameters.append(token.value)
             if _serialized_parameter_length(parameters, quote_embedded_spaces=False) > _MAX_ET_PARAMETER_LENGTH:
@@ -695,11 +715,15 @@ def _parse_script_entity(name: _Token, tokens: tuple[_Token, ...], source: str) 
                 issue_token = action_name
                 command = _ascii_fold(action_name.value)
                 if command not in _ET_SCRIPT_ACTIONS:
-                    return ScriptEntity(
-                        name.value,
-                        tuple(events),
-                        name.line,
-                        ScriptRegistryIssue("action", action_name.value, action_name.line),
+                    return _ScriptEntityParse(
+                        ScriptEntity(
+                            name.value,
+                            tuple(events),
+                            name.line,
+                            ScriptRegistryIssue("action", action_name.value, action_name.line),
+                        ),
+                        None,
+                        boundary_ambiguous,
                     )
 
                 arguments: list[str] = []
@@ -711,6 +735,8 @@ def _parse_script_entity(name: _Token, tokens: tuple[_Token, ...], source: str) 
                         token = stream.take()
                         if token.kind is _TokenKind.RIGHT_BRACE:
                             break
+                        if token.kind is _TokenKind.LEFT_BRACE:
+                            boundary_ambiguous = True
                         if token.kind is not _TokenKind.NEWLINE:
                             arguments.append(token.value)
                 else:
@@ -718,19 +744,51 @@ def _parse_script_entity(name: _Token, tokens: tuple[_Token, ...], source: str) 
                         if token.kind is _TokenKind.NEWLINE:
                             break
                         if token.kind in {_TokenKind.LEFT_BRACE, _TokenKind.RIGHT_BRACE}:
-                            stream.fail(f"{command} reached a brace before its newline", token)
+                            boundary_ambiguous = True
                         arguments.append(stream.take().value)
                 if _serialized_parameter_length(arguments, quote_embedded_spaces=True) > _MAX_ET_PARAMETER_LENGTH:
                     stream.fail("action parameters exceed ET's 1023-byte aggregate limit", action_name)
                 actions.append(ScriptAction(command, tuple(arguments), action_name.line, braced))
             events.append(ScriptEvent(event, tuple(parameters), tuple(actions), event_name.line))
     except StageParseError as exc:
-        return ScriptEntity(
-            name.value,
-            tuple(events),
-            name.line,
-            syntax_issue=ScriptSyntaxIssue(issue_token.value, issue_token.line, str(exc)),
+        return _ScriptEntityParse(
+            ScriptEntity(
+                name.value,
+                tuple(events),
+                name.line,
+                syntax_issue=ScriptSyntaxIssue(issue_token.value, issue_token.line, str(exc)),
+            ),
+            None,
+            boundary_ambiguous,
         )
+
+
+def _skipped_entity_end(tokens: tuple[_Token, ...], start: int) -> int | None:
+    depth = 1
+    index = start
+    while index < len(tokens):
+        token = tokens[index]
+        index += 1
+        if token.kind is _TokenKind.LEFT_BRACE:
+            depth += 1
+        elif token.kind is _TokenKind.RIGHT_BRACE:
+            depth -= 1
+            if depth == 0:
+                return index
+    return None
+
+
+def _with_boundary_issue(entity: ScriptEntity, name: _Token, source: str) -> ScriptEntity:
+    return ScriptEntity(
+        entity.name,
+        entity.events,
+        entity.line,
+        syntax_issue=ScriptSyntaxIssue(
+            name.value,
+            name.line,
+            f"{source}:{name.line}:{name.column}: entity boundary depends on selected-block brace interpretation",
+        ),
+    )
 
 
 def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
@@ -748,17 +806,32 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
         stream.expect(_TokenKind.LEFT_BRACE, "'{' after the entity name")
 
         body_start = stream.index
-        depth = 1
-        while depth:
-            if stream.peek() is None:
-                stream.fail(f"unclosed entity {name.value!r}", name)
-            token = stream.take()
-            if token.kind is _TokenKind.LEFT_BRACE:
-                depth += 1
-            elif token.kind is _TokenKind.RIGHT_BRACE:
-                depth -= 1
-        body = stream.tokens[body_start : stream.index - 1]
-        entities.append(_parse_script_entity(name, body, source))
+        skipped_end = _skipped_entity_end(stream.tokens, body_start)
+        selected = _parse_script_entity(name, stream.tokens[body_start:], source)
+        selected_end = body_start + selected.consumed if selected.consumed is not None else None
+
+        if selected.boundary_ambiguous:
+            entities.append(_with_boundary_issue(selected.entity, name, source))
+            if selected_end is not None and skipped_end == selected_end:
+                stream.index = selected_end
+                continue
+            if selected_end is None and skipped_end is not None:
+                stream.index = skipped_end
+                continue
+            break
+
+        if selected_end is not None:
+            if skipped_end != selected_end:
+                entities.append(_with_boundary_issue(selected.entity, name, source))
+                break
+            entities.append(selected.entity)
+            stream.index = selected_end
+            continue
+
+        if skipped_end is None:
+            stream.fail(f"unclosed entity {name.value!r}", name)
+        entities.append(selected.entity)
+        stream.index = skipped_end
 
     return MapScript(tuple(entities))
 

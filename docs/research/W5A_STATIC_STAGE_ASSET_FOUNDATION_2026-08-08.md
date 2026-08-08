@@ -72,8 +72,9 @@ older ET-compatible path applies numeric selection semantics, and it does not re
 
 `website/backend/map_geometry/stage.py` provides:
 
-- a top-level, brace-balanced entity splitter matching the nonselected-block path; selected-block parsing is bounded
-  to that entity's token slice and therefore cannot consume a later entity after an inner syntax error;
+- dual selected/nonselected entity-boundary parsing: the selected path follows event/action grammar, while the
+  nonselected path uses ET:Legacy's balanced-brace skip; inner registry/syntax failures resume only at the proven
+  nonselected boundary;
 - a fail-closed lexer with source line/column provenance, ET newline semantics, line/block comments, quoted tokens,
   braced `set/create/delete` arguments, NUL rejection and ET token-length enforcement;
 - context-specific brace classification: first-byte braces are structural in map scripts but remain ordinary text in
@@ -108,13 +109,15 @@ without its required argument brace records a `syntax_issue` and makes only that
 enter this action parser for a nonmatching block. Broken outer entity structure still invalidates the asset because it
 cannot be skipped or mapped without inventing block boundaries.
 
-A known event header that reaches the entity boundary before an action-opening `{` is likewise entity-opaque. The
-top-level splitter already consumed that entity's close, so parsing resumes at the next block without borrowing its
-brace or invalidating an otherwise usable selected block.
+A known event header with a `}`-prefixed parameter is likewise entity-opaque: the selected path keeps consuming event
+parameters until `{`, while the nonselected path can close the entity at that token. If selected parsing then fails and
+the nonselected boundary is proven, parsing safely resumes at that boundary.
 
-Likewise, a normal action that reaches a brace before its physical-newline boundary makes that entity opaque. The
-selected parser would consume that brace as an argument, while the nonmatching path uses it structurally; without an
-entity mapping, projecting either interpretation would be stronger than the evidence.
+The same rule applies to a normal action argument whose first byte is either brace and to a `{`-prefixed argument
+inside `set/create/delete`. The selected parser consumes the token as an argument, while the nonmatching path uses it
+structurally. When successful selected and nonselected paths produce different entity boundaries, parsing stops at the
+ambiguous region instead of rejecting the asset or inventing later entity boundaries. When the selected path fails but
+the nonselected boundary is proven, parsing safely resumes at that boundary.
 
 The compiler applies the same entity-level boundary when a known command cannot be projected defensibly (for
 example, a noncanonical integer or wrong trigger arity). It validates each block atomically before adding any of its
@@ -248,10 +251,10 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 26 passed.
-- Targeted map-geometry regression suite: 100 passed.
+- W5a unit tests: 30 passed.
+- Targeted map-geometry regression suite: 104 passed.
 - Exact W5a real-asset acceptance: 1 passed, 7 deselected.
-- Full real-map geometry/stage integration file: 8 passed in 72.78 seconds (`--no-cov`).
-- Full repository suite: 4,160 passed, 75 skipped, 30 existing warnings in 48.47 seconds.
+- Full real-map geometry/stage integration file: 8 passed in 80.58 seconds (`--no-cov`).
+- Full repository suite: 4,164 passed, 75 skipped, 7 warnings in 50.16 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.
