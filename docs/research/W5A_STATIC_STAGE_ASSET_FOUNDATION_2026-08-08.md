@@ -264,10 +264,10 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 37 passed.
-- Targeted map-geometry regression suite: 111 passed.
-- Exact W5a real-asset acceptance: 1 passed, 7 deselected in 2.38 seconds.
-- Full real-map geometry/stage integration file: 8 passed in 80.05 seconds (`--no-cov`).
-- Full repository suite: 4,171 passed, 75 skipped, 7 warnings in 49.12 seconds.
+- W5a unit tests: 39 passed.
+- Targeted map-geometry regression suite: 113 passed.
+- Exact W5a real-asset acceptance: 1 passed, 7 deselected in 2.64 seconds.
+- Full real-map geometry/stage integration file: 8 passed in 79.24 seconds (`--no-cov`).
+- Full repository suite: 4,173 passed, 75 skipped, 7 warnings in 49.15 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.
