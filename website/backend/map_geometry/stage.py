@@ -833,10 +833,11 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
         selected_end = body_start + selected.consumed if selected.consumed is not None else None
 
         if selected.boundary_ambiguous:
-            entities.append(_with_boundary_issue(selected.entity, name, source))
             if selected_end is not None and skipped_end == selected_end:
+                entities.append(selected.entity)
                 stream.index = selected_end
                 continue
+            entities.append(_with_boundary_issue(selected.entity, name, source))
             if selected_end is None and skipped_end is not None:
                 stream.index = skipped_end
                 continue
