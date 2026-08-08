@@ -41,7 +41,8 @@ an audit would convert missing callbacks and heuristic identities into false cer
 The parser contract was checked against ET:Legacy primary source rather than inferred only from the installed maps:
 
 - [`G_Script_ScriptParse`](https://github.com/etlegacy/etlegacy/blob/master/src/game/g_script.c) parses entity blocks,
-  event headers and action stacks. Normal action arguments end at a physical newline.
+  event headers and action stacks. The first top-level token is the entity's script name, not an `entity` introducer.
+  Normal action arguments end at a physical newline.
 - `set`, `create` and `delete` are the exception: their arguments are enclosed in a brace block.
 - [`COM_ParseExt`](https://github.com/etlegacy/etlegacy/blob/master/src/qcommon/q_shared.c) defines quote and comment
   handling. Its regular-word path retains punctuation, including quotes and braces, until ASCII whitespace. Line
@@ -50,7 +51,8 @@ The parser contract was checked against ET:Legacy primary source rather than inf
 - [`G_ScriptAction_SetMainObjective`](https://github.com/etlegacy/etlegacy/blob/master/src/game/g_script_actions.c)
   documents the target-name form while retaining compatibility handling for old scripts.
 - `G_ScriptAction_Trigger` gives `self`, `global` and `player` special dispatch semantics, while the current
-  `activator` branch is an explicit no-op. They are not ordinary script-name targets and are represented separately.
+  `activator` branch is an explicit no-op. `self` is scoped to the concrete source entity, even when another block has
+  the same script name. These targets are not ordinary script-name targets and are represented separately.
 
 All 42 installed `wm_set_main_objective` calls use a numeric first argument. Current ET:Legacy source looks up the
 first argument as an objective target and returns without changing state when that lookup fails; its numeric handling
@@ -201,10 +203,10 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 19 passed.
-- Targeted map-geometry regression suite: 93 passed.
+- W5a unit tests: 21 passed.
+- Targeted map-geometry regression suite: 95 passed.
 - Exact W5a real-asset acceptance: 1 passed, 7 deselected.
 - Full real-map geometry/stage integration file: 8 passed in 132.71 seconds.
-- Full repository suite: 4,153 passed, 75 skipped, 30 existing warnings in 50.72 seconds.
+- Full repository suite: 4,155 passed, 75 skipped, 30 existing warnings in 51.31 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.
