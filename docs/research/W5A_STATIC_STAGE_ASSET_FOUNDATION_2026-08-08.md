@@ -91,8 +91,8 @@ older ET-compatible path applies numeric selection semantics, and it does not re
   UTF-8 display strings;
 - context-specific brace classification: first-byte braces are structural in map scripts but remain ordinary text in
   `.objdata` command arguments;
-- 1023-byte aggregate event/action parameter gates matching the usable `MAX_INFO_STRING` payload, including the
-  engine's spaces and action-side re-quoting;
+- byte-accurate event/action callback buffers matching `Q_strcat` into `MAX_INFO_STRING`: lexical arguments remain
+  available, while serialized parameters retain the engine's spaces, action-side re-quoting and 1023-byte truncation;
 - exact current ET:Legacy event/action registry inventory, `entity` introducer handling and first-byte brace
   classification matching the engine parser;
 - ASCII-only identifier folding and canonical ASCII integer gates prevent Python Unicode/numeric syntax from
@@ -275,10 +275,10 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 50 passed.
-- Targeted map-geometry regression suite: 124 passed.
+- W5a unit tests: 52 passed.
+- Targeted map-geometry regression suite: 126 passed.
 - Exact W5a real-asset acceptance: 1 passed, 7 deselected in 2.41 seconds.
-- Full real-map geometry/stage integration file: 8 passed in 80.35 seconds (`--no-cov`).
-- Full repository suite: 4,184 passed, 75 skipped, 7 warnings in 31.75 seconds.
+- Full real-map geometry/stage integration file: 8 passed in 81.67 seconds (`--no-cov`).
+- Full repository suite: 4,186 passed, 75 skipped, 7 warnings in 32.06 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.

@@ -96,6 +96,15 @@ def test_objdata_rejects_newlines_and_unrepresentable_pc_string_escapes():
         parse_objdata(b'wm_mapdescription axis "bad\\q"', source="escape.objdata")
 
 
+def test_objdata_saturates_oversized_pc_escapes_without_leaking_value_error():
+    decimal_escape = b"\\" + b"9" * 5000
+    hex_escape = b"\\x" + b"F" * 5000
+
+    for escape in (decimal_escape, hex_escape):
+        catalog = parse_objdata(b'wm_mapdescription axis "' + escape + b'"', source="huge-escape.objdata")
+        assert catalog.map_descriptions[0].text.encode("utf-8", errors="surrogateescape") == b"\xff"
+
+
 def test_objdata_pc_path_preserves_an_empty_quoted_token():
     catalog = parse_objdata(b'wm_mapdescription axis ""', source="empty.objdata")
 
@@ -394,7 +403,7 @@ manager {
     ]
 
 
-def test_event_and_action_parameter_aggregates_respect_max_info_string():
+def test_event_and_action_parameter_buffers_match_max_info_string_truncation():
     long_a = "a" * 600
     long_b = "b" * 600
     boundary_a = "a" * 511
@@ -425,12 +434,40 @@ manager {{
 
     graph = compile_static_stage_graph(script)
 
-    assert [node.entity_name for node in graph.nodes] == ["exact_limit", "manager"]
-    assert [(item.entity_name, item.issue_kind) for item in graph.opaque_entities] == [
-        ("unused_action", "syntax"),
-        ("unused_event", "syntax"),
+    assert [node.entity_name for node in graph.nodes] == [
+        "unused_action",
+        "unused_event",
+        "exact_limit",
+        "manager",
     ]
-    assert all("1023-byte aggregate limit" in item.reason for item in graph.opaque_entities)
+    assert graph.opaque_entities == ()
+    assert len(script.entities[0].events[0].actions[0].serialized_parameters.encode()) == 1023
+    assert len(script.entities[1].events[0].serialized_parameters.encode()) == 1023
+    assert len(script.entities[2].events[0].actions[0].serialized_parameters.encode()) == 1023
+
+
+def test_truncated_action_parameters_do_not_remove_a_trigger_handler():
+    long_a = "a" * 600
+    long_b = "b" * 600
+    graph = compile_static_stage_graph(
+        parse_map_script(
+            f"""manager {{
+ spawn {{
+  trigger target advance
+ }}
+}}
+target {{
+ trigger advance {{
+  wm_announce {long_a} {long_b}
+ }}
+}}
+""".encode()
+        )
+    )
+
+    assert graph.trigger_edges[0].resolution is TriggerResolution.RESOLVED
+    assert graph.trigger_edges[0].candidate_node_ids == ("event:1",)
+    assert graph.nodes[1].serialized_event_parameters == "advance"
 
 
 def test_quoted_braces_keep_engine_structural_semantics_in_braced_actions():
