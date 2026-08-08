@@ -184,6 +184,10 @@ def test_real_app_host_gate_and_csrf_order():
         # change what is being proven). PATH is needed to exec python.
         "PATH": os.environ.get("PATH", ""),
         "PYTHONPATH": str(REPO_ROOT),
+        # This test simulates the production posture below (https-only +
+        # explicit host allow-list), so BOT_ENVIRONMENT matches that rather
+        # than "dev" — semantically accurate, not just enough to pass.
+        "BOT_ENVIRONMENT": "production",
         "SESSION_SECRET": "real-stack-test-session-secret-0123456789",
         "INTERNAL_API_SECRET": "real-stack-test-internal-secret-0123456789",
         # Production posture: https-only sessions + explicit host allow-list.

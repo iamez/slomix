@@ -88,6 +88,7 @@ def test_security_headers_do_not_clobber_route_policies():
     env = {
         "PATH": os.environ.get("PATH", ""),
         "PYTHONPATH": str(REPO_ROOT),
+        "BOT_ENVIRONMENT": "dev",
         "SESSION_SECRET": "security-headers-test-secret-0123456789",
         "INTERNAL_API_SECRET": "security-headers-test-internal-0123456789",
         "TRUSTED_HOSTS": "www.slomix.fyi,slomix.fyi,localhost,127.0.0.1",

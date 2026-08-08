@@ -96,6 +96,7 @@ def _result():
 
 
 def test_round_stats_autopost_config_defaults_enabled(monkeypatch, tmp_path):
+    monkeypatch.setenv("BOT_ENVIRONMENT", "dev")
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "test_token")
     monkeypatch.setenv("AUTOMATION_ENABLED", "false")
     monkeypatch.setenv("SSH_ENABLED", "false")
@@ -109,6 +110,7 @@ def test_round_stats_autopost_config_defaults_enabled(monkeypatch, tmp_path):
 
 
 def test_round_stats_autopost_config_false(monkeypatch, tmp_path):
+    monkeypatch.setenv("BOT_ENVIRONMENT", "dev")
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "test_token")
     monkeypatch.setenv("AUTOMATION_ENABLED", "false")
     monkeypatch.setenv("SSH_ENABLED", "false")

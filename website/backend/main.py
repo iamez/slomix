@@ -39,7 +39,7 @@ else:
     load_dotenv(os.path.join(project_root, ".env"))
 
 # Setup logging (must happen before other imports that use logging)
-from website.backend.env_utils import getenv_int
+from website.backend.env_utils import getenv_int, strip_inline_comment
 from website.backend.logging_config import get_app_logger, setup_logging
 from website.backend.middleware import (
     HTTPCacheMiddleware,
@@ -105,6 +105,21 @@ from website.backend.services.http_cache_backend import create_cache_backend_fro
 from website.backend.services.weapon_stats_mv_refresh import (
     weapon_stats_mv_refresh_loop,
 )
+
+# No default on purpose — fail closed rather than guess. Independent from
+# bot/config.py's identical check (by design, not oversight — website/ was
+# deliberately decoupled from bot/ in PR #603, see
+# docs/research/ENVIRONMENT_IDENTITY_RCA_2026-08-08.md). Read before
+# anything else so a bad value stops startup immediately.
+BOT_ENVIRONMENT = strip_inline_comment(os.getenv("BOT_ENVIRONMENT", "")).lower()
+if BOT_ENVIRONMENT not in ("dev", "production"):
+    raise ValueError(
+        "BOT_ENVIRONMENT must be set to 'dev' or 'production' "
+        f"(got: {BOT_ENVIRONMENT!r}). See "
+        "docs/research/ENVIRONMENT_IDENTITY_RCA_2026-08-08.md for why "
+        "this is required rather than defaulted."
+    )
+logger.info(f"🌍 Environment: {BOT_ENVIRONMENT}")
 
 # Configuration from environment
 WEBSITE_PORT = getenv_int("WEBSITE_PORT", 7000)

@@ -58,6 +58,7 @@ def test_web_app_starts_without_discord_or_matplotlib():
     env = {
         "PATH": os.environ.get("PATH", ""),
         "PYTHONPATH": str(REPO_ROOT),
+        "BOT_ENVIRONMENT": "dev",
         "SESSION_SECRET": "decoupling-test-secret-0123456789",
         "INTERNAL_API_SECRET": "decoupling-test-internal-0123456789",
         "TRUSTED_HOSTS": "localhost,127.0.0.1",
