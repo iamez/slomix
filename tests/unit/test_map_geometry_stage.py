@@ -137,14 +137,34 @@ def test_map_script_matches_the_engine_entity_introducer():
         parse_map_script(b"entity {\nspawn {\nhalt\n}\n}\n")
 
 
-def test_map_script_uses_engine_registries_but_preserves_event_parameter_strings():
+def test_map_script_preserves_engine_event_parameter_strings():
     script = parse_map_script(b"manager {\ntrigger advance extra {\nhalt\n}\n}\n")
 
     assert script.entities[0].events[0].parameters == ("advance", "extra")
-    with pytest.raises(StageParseError, match="unknown ET script event 'triger'"):
-        parse_map_script(b"manager {\ntriger advance {\nhalt\n}\n}\n")
-    with pytest.raises(StageParseError, match="unknown ET script action 'wm_setwiner'"):
-        parse_map_script(b"manager {\nspawn {\nwm_setwiner 1\n}\n}\n")
+
+
+def test_unknown_registry_names_make_only_their_entity_opaque():
+    script = parse_map_script(
+        b"""unused_action { spawn { wm_setwiner 1 } }
+unused_event { triger advance { halt } }
+manager {
+ spawn {
+  wm_setwinner 1
+ }
+}
+"""
+    )
+
+    action_issue = script.entities[0].registry_issue
+    event_issue = script.entities[1].registry_issue
+    assert action_issue is not None
+    assert (action_issue.kind, action_issue.name, action_issue.line) == ("action", "wm_setwiner", 1)
+    assert event_issue is not None
+    assert (event_issue.kind, event_issue.name, event_issue.line) == ("event", "triger", 2)
+    assert script.entities[2].registry_issue is None
+
+    graph = compile_static_stage_graph(script)
+    assert [(node.entity_name, node.effects) for node in graph.nodes] == [("manager", (WinnerEffect(1, 5),))]
 
 
 def test_quoted_braces_keep_engine_structural_semantics_in_braced_actions():
@@ -221,8 +241,14 @@ def test_effect_projection_rejects_noncanonical_integer_syntax():
 
 
 def test_command_and_trigger_folding_is_ascii_only():
-    with pytest.raises(StageParseError, match="unknown ET script action"):
-        parse_map_script("manager {\nspawn {\nwm_\N{LATIN SMALL LETTER LONG S}etwinner 1\n}\n}\n".encode())
+    unknown_command = parse_map_script(
+        "manager {\nspawn {\nwm_\N{LATIN SMALL LETTER LONG S}etwinner 1\n}\n}\n".encode()
+    )
+
+    issue = unknown_command.entities[0].registry_issue
+    assert issue is not None
+    assert (issue.kind, issue.name) == ("action", "wm_\N{LATIN SMALL LETTER LONG S}etwinner")
+    assert compile_static_stage_graph(unknown_command).nodes == ()
 
     graph = compile_static_stage_graph(
         parse_map_script(
