@@ -524,6 +524,76 @@ manager {
     assert all(edge.resolution is TriggerResolution.RESOLVED for edge in graph.trigger_edges)
 
 
+def test_parameterless_trigger_order_applies_to_self_dispatch():
+    graph = compile_static_stage_graph(
+        parse_map_script(
+            b"""wildcard_first {
+ spawn {
+  trigger self advance
+ }
+ trigger {
+  halt
+ }
+ trigger advance {
+  halt
+ }
+}
+named_first {
+ spawn {
+  trigger self advance
+ }
+ trigger advance {
+  halt
+ }
+ trigger {
+  halt
+ }
+}
+"""
+        )
+    )
+
+    wildcard_first, named_first = graph.trigger_edges
+    assert wildcard_first.candidate_node_ids == ("event:1",)
+    assert named_first.candidate_node_ids == ("event:4",)
+    assert all(edge.dispatch is TriggerDispatch.SELF for edge in graph.trigger_edges)
+    assert all(edge.resolution is TriggerResolution.RESOLVED for edge in graph.trigger_edges)
+
+
+def test_parameterless_trigger_order_applies_per_global_candidate():
+    graph = compile_static_stage_graph(
+        parse_map_script(
+            b"""wildcard_first {
+ trigger {
+  halt
+ }
+ trigger advance {
+  halt
+ }
+}
+named_first {
+ trigger advance {
+  halt
+ }
+ trigger {
+  halt
+ }
+}
+manager {
+ spawn {
+  trigger global advance
+ }
+}
+"""
+        )
+    )
+
+    edge = graph.trigger_edges[0]
+    assert edge.dispatch is TriggerDispatch.GLOBAL
+    assert edge.resolution is TriggerResolution.RUNTIME_DISPATCH
+    assert edge.candidate_node_ids == ("event:0", "event:2")
+
+
 def test_later_duplicate_entity_block_cannot_supply_a_trigger_handler():
     graph = compile_static_stage_graph(
         parse_map_script(
