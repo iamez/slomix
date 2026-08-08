@@ -14,6 +14,7 @@ notes. This file pins the two properties that matter for safety:
    bot/services/webhook_handler_mixin.py:214 checks for — that would make
    the bot try to process a live ping as a finished round.
 """
+import re
 from pathlib import Path
 
 import pytest
@@ -72,12 +73,23 @@ def test_live_ping_payload_never_sets_stats_ready_content() -> None:
     )
 
 
+_KEYWORD_CALL_RE = re.compile(r'string\.find\(lower,\s*"([^"]+)"\)')
+
+
 def test_live_ping_reuses_the_proven_carrier_detection_pattern() -> None:
     """The detection pattern (legacy announce: + secured/transmitted/
     delivered/escaped) must match proximity_tracker.lua's own carrier-event
-    detection exactly — it's copied from there deliberately, not
-    reinvented. A drift between the two would mean one considers an event
-    an objective capture and the other doesn't."""
+    detection **exactly** — it's copied from there deliberately, not
+    reinvented. A drift between the two (either file gaining or losing a
+    keyword in its actual `string.find(lower, ...)` condition) would mean
+    one file considers an event an objective capture and the other doesn't.
+
+    Extracts the literal keyword SET each file's detection condition
+    actually checks — not just "does this word appear somewhere in the
+    file" (a word could survive in a comment, or in the unrelated
+    round-end embed further down, while the real condition drifted).
+    (CodeRabbit + Copilot review on #624.)
+    """
     live_source = _lua_source()
     tracker_path = (
         Path(__file__).resolve().parents[2]
@@ -87,24 +99,33 @@ def test_live_ping_reuses_the_proven_carrier_detection_pattern() -> None:
     )
     tracker_source = tracker_path.read_text(encoding="utf-8")
 
-    # Scoped to the executable block, not the whole file — a keyword
-    # surviving only in a comment (or the unrelated round-end embed further
-    # down) must not pass this. (CodeRabbit review on #624.)
-    start = live_source.index("function et_Print(text)")
-    end = live_source.index("function et_ShutdownGame")
-    live_ping_block = live_source[start:end]
+    live_start = live_source.index("function et_Print(text)")
+    live_end = live_source.index("function et_ShutdownGame")
+    live_block = live_source[live_start:live_end]
 
-    for keyword in ("secured", "transmitted", "delivered", "escaped"):
-        assert f'string.find(lower, "{keyword}")' in live_ping_block, (
-            f"live-ping detection is missing the executable check for keyword: {keyword}"
-        )
-        assert keyword in tracker_source, (
-            f"proximity_tracker.lua no longer mentions {keyword!r} — the "
-            "live-ping keyword list has drifted from its source of truth"
-        )
+    tracker_start = tracker_source.index("-- Secure detection via announce")
+    tracker_end = tracker_source.index("-- v6 Phase 1.5: Flag return detection")
+    tracker_block = tracker_source[tracker_start:tracker_end]
 
-    assert '"legacy announce:"' in live_ping_block
-    assert "legacy announce:" in tracker_source
+    live_keywords = set(_KEYWORD_CALL_RE.findall(live_block))
+    tracker_keywords = set(_KEYWORD_CALL_RE.findall(tracker_block))
+
+    expected = {"secured", "transmitted", "delivered", "escaped"}
+    assert live_keywords == expected, (
+        f"live-ping's actual string.find(lower, ...) keyword set is "
+        f"{live_keywords}, expected {expected}"
+    )
+    assert tracker_keywords == expected, (
+        f"proximity_tracker.lua's carrier-detection keyword set drifted to "
+        f"{tracker_keywords}, live-ping was copied from {expected}"
+    )
+    assert live_keywords == tracker_keywords, (
+        "keyword sets differ between the two files: "
+        f"live-ping has {live_keywords}, proximity_tracker.lua has {tracker_keywords}"
+    )
+
+    assert '"legacy announce:"' in live_block
+    assert "legacy announce:" in tracker_block
 
 
 @pytest.mark.parametrize("helper", ["strip_color_codes", "json_escape", "execute_curl_async"])

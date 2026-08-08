@@ -1590,13 +1590,19 @@ function et_Print(text)
     local clean_text = strip_color_codes(text):gsub("^.-legacy announce:%s*", "")
     if clean_text == "" then return end
 
+    -- allowed_mentions: [] — the relayed text is server-controlled console
+    -- output, not something this code should trust (et_Print's own docs
+    -- warning: "DO NOT TRUST STRINGS OBTAINED IN THIS WAY!"). Without this,
+    -- an announce string that happened to contain @everyone or a mention
+    -- pattern would actually ping (Copilot review on #624).
     local payload = string.format([[{
         "username": "ET:Legacy Live",
         "embeds": [{
             "title": "Objective Update",
             "description": "%s",
             "color": 15105570
-        }]
+        }],
+        "allowed_mentions": {"parse": []}
     }]], json_escape(clean_text))
 
     local ok, msg = execute_curl_async(payload)
