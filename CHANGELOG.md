@@ -6,6 +6,63 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.30.0](https://github.com/iamez/slomix/compare/v1.29.0...v1.30.0) (2026-08-08)
+
+
+### Features
+
+* **config:** require explicit BOT_ENVIRONMENT, fail closed on drift ([7108470](https://github.com/iamez/slomix/commit/7108470627460587db49c278494398c4bb04462a))
+* **config:** require explicit BOT_ENVIRONMENT, fail closed on drift ([1586248](https://github.com/iamez/slomix/commit/15862487f13207d9188e9747488654aef73f4d46))
+* **map-geometry:** parse static W5 stage assets ([#622](https://github.com/iamez/slomix/issues/622)) ([db0c2e5](https://github.com/iamez/slomix/commit/db0c2e5267ccafea74dbf1ff8bb498567600c09d))
+* **proximity:** make player a scope dimension, not a per-panel afterthought ([6e5568a](https://github.com/iamez/slomix/commit/6e5568a00d81db3934c9858df6e3179e6d58afd8))
+* **proximity:** make player a scope dimension, not a per-panel afterthought ([09075f1](https://github.com/iamez/slomix/commit/09075f13f4d2ac09901a4be4e5f9807acc6cf773))
+* **website:** let uploaders pick a retention, and let admins delete ([5776516](https://github.com/iamez/slomix/commit/5776516d22ac8d9e1efe53f106104a75ba4f1e14))
+* **website:** let uploaders pick a retention, and let admins delete ([b87eb59](https://github.com/iamez/slomix/commit/b87eb59c6444dc916520abdfa0db88b2b065c0b7))
+
+
+### Bug Fixes
+
+* **a11y:** add accessible names to unlabeled form controls ([442f281](https://github.com/iamez/slomix/commit/442f281b6321de6cb131dad5388a0109a82f7fe1))
+* **a11y:** add accessible names to unlabeled form controls ([3f57dc9](https://github.com/iamez/slomix/commit/3f57dc9760e46f3b03742c2459a0995e92823684))
+* **a11y:** address review comments on [#621](https://github.com/iamez/slomix/issues/621) ([8d658ac](https://github.com/iamez/slomix/commit/8d658acaa324230c26a3711e61170fa8d1b9b5d7))
+* address review comments on [#623](https://github.com/iamez/slomix/issues/623) ([97da3fe](https://github.com/iamez/slomix/commit/97da3fecd2c758903060d66bc7e6fff40c1e1c07))
+* address the three review findings on the audit tool ([e02daad](https://github.com/iamez/slomix/commit/e02daad5694e78009438280c7b818a5af25fff8a))
+* **bot:** broadcast admin alerts to every configured admin channel ([a843b26](https://github.com/iamez/slomix/commit/a843b26cbf65a78d12284d0dda29d478f73401ea))
+* **bot:** broadcast admin alerts to every configured admin channel ([aaba563](https://github.com/iamez/slomix/commit/aaba56358df3c1cba76d781ebb4cfc5e41c1d98d))
+* **bot:** treat all-zero admin_channels as unconfigured ([5ff6b2a](https://github.com/iamez/slomix/commit/5ff6b2ad73ea097788ad661abd6f73b4a3d50b7f))
+* **ci:** turn off auto_incremental_review — drafts was the wrong lever ([969c88a](https://github.com/iamez/slomix/commit/969c88ada4ed1c06f291207b351c4ae625fd7f79))
+* **db:** add uploads.expires_at to the bootstrap schema dump ([0c918fb](https://github.com/iamez/slomix/commit/0c918fbec39875332a3cb64e734f1c2ec2e67bd6))
+* **docs:** correct the command count — 81 was my under-count, not the reference's ([691b3d5](https://github.com/iamez/slomix/commit/691b3d536ba2b0a235a36a029a1f5ae537e46e92))
+* fix the actual Codacy finding, and undo a rewrite based on guessing it ([f5d5528](https://github.com/iamez/slomix/commit/f5d552812e82d49a0f28145d9679b07ccd013cb6))
+* mint the audit session in Node, dropping the child_process call ([4845131](https://github.com/iamez/slomix/commit/484513175155e1122a01c5476373b8a05a0c4b7c))
+* **proximity:** keep the Player detail button in step with the select ([408fe26](https://github.com/iamez/slomix/commit/408fe26cba943207d0a0307ec05634ac09f5815d))
+* **proximity:** link the scope selector to the per-player detail page ([e919c4f](https://github.com/iamez/slomix/commit/e919c4f03854d5c74c5e0efe83f9b3248c96e44c))
+* **proximity:** link the scope selector to the per-player detail page ([3570f0a](https://github.com/iamez/slomix/commit/3570f0a9a0afe67a011bea03473e45c5c68dc5f1))
+* **proximity:** validate the selected player before fetching with their guid ([ab8a275](https://github.com/iamez/slomix/commit/ab8a275b79c206044a3bb5fe64ea88c19ba205ff))
+* **proximity:** version-tag the route-registry.js import ([541e7bf](https://github.com/iamez/slomix/commit/541e7bffe5511f37d0498008099465d3cebf1789))
+* stop the audit browser from ignoring certificate errors ([372859a](https://github.com/iamez/slomix/commit/372859a9fc690adf80778ffce1888c45c511014f))
+* **website:** clear the merged-session state between navigations ([6f5e7b4](https://github.com/iamez/slomix/commit/6f5e7b48b0391f0b6c8f8e85c372aa381c96737f))
+* **website:** drop two dead branches in the smoke console filter ([ec47847](https://github.com/iamez/slomix/commit/ec47847710be5d6c63349c8e2000cc477e79cbb4))
+* **website:** give six finished pages an entry point ([00fa6c1](https://github.com/iamez/slomix/commit/00fa6c1eb5eb8ac0e2e3667a50d02eeacbf6083d))
+* **website:** give six finished pages an entry point ([a775213](https://github.com/iamez/slomix/commit/a775213819dfb9d46f46a70b11e8240dec7fd478))
+* **website:** rank and display the alias that actually matched ([fd0d503](https://github.com/iamez/slomix/commit/fd0d50306626512cf0e7102803390cbc4011b316))
+* **website:** read error response bodies so failed requests complete ([5d583a2](https://github.com/iamez/slomix/commit/5d583a28db27769e955d29f1387d018b99308db8))
+* **website:** read error response bodies so failed requests complete ([7ce78de](https://github.com/iamez/slomix/commit/7ce78defcc6fd1e6a01d1e53a42499e4326f71e4))
+* **website:** render the Achievements card that was never wired up ([bfa4f9b](https://github.com/iamez/slomix/commit/bfa4f9b75956282286f66cd04f8a249696fb8e30))
+* **website:** render the Achievements card that was never wired up ([fd2766f](https://github.com/iamez/slomix/commit/fd2766fbaa8c9388f27a392e01b8697738e1f431))
+* **website:** reset the whole achievements card, and stop trusting colour as CSS ([de4a3d6](https://github.com/iamez/slomix/commit/de4a3d66af502cd2723066023e4d088f568b0f75))
+* **website:** six review findings on the uploads work ([c8dfb8e](https://github.com/iamez/slomix/commit/c8dfb8e1826ead79a2d1db50e6213277c8579c9d))
+* **website:** stop a date deep link presenting several sessions as one ([f77f1f8](https://github.com/iamez/slomix/commit/f77f1f8fb0bccd21e19cbd1a05318d9a9321f392))
+* **website:** stop a date deep link presenting several sessions as one ([24bc75c](https://github.com/iamez/slomix/commit/24bc75cf74ce7c7630dd8ac6a25271d95ae5ac94))
+* **website:** stop two phone-width layouts from overflowing the page ([729ac19](https://github.com/iamez/slomix/commit/729ac190ea0422fbf9f9b34c211041f342764b55))
+* **website:** stop two phone-width layouts from overflowing the page ([1b0e7b4](https://github.com/iamez/slomix/commit/1b0e7b4e8b4378ad14edbcac793e70dda3b2c873))
+* **website:** the four P1 items from the master review ([5d64ad6](https://github.com/iamez/slomix/commit/5d64ad6da82b11144562708f809f7322a04c03db))
+* **website:** the four P1 items from the master review ([e5db1e4](https://github.com/iamez/slomix/commit/e5db1e4b2af84a221f214863339d6ae7ccb1e594))
+* **website:** the Record Book [object Object], found with a real browser ([e24c76e](https://github.com/iamez/slomix/commit/e24c76eaa6945145601402f5a5e4a41991b4481d))
+* **website:** the Record Book [object Object], found with a real browser ([9a05fdd](https://github.com/iamez/slomix/commit/9a05fddcbc010158700a4e8749e29df7acb7e88d))
+* **website:** the upload form's text fields never reached the server ([917c8e9](https://github.com/iamez/slomix/commit/917c8e9f6e1ca63ad61c40574e0e73f2207ca047))
+* **website:** three CodeRabbit findings — attribute injection, a stale poll, a test that missed its own bug ([9701522](https://github.com/iamez/slomix/commit/970152251c349b9b7a2d31f28324a13e10dbc4be))
+
 ## [1.29.0](https://github.com/iamez/slomix/compare/v1.28.0...v1.29.0) (2026-08-05)
 
 
