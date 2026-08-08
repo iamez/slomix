@@ -241,7 +241,7 @@ class ScriptRegistryIssue:
 
 @dataclass(frozen=True, slots=True)
 class ScriptSyntaxIssue:
-    command: str
+    token: str
     line: int
     reason: str
 
@@ -465,16 +465,6 @@ def _token_kind(value: str) -> _TokenKind:
     return _TokenKind.WORD
 
 
-def _skip_script_block_remainder(stream: _TokenStream, open_blocks: int) -> None:
-    """Mirror the engine's brace-only skip path for a non-selected entity block."""
-    while open_blocks:
-        token = stream.take()
-        if token.kind is _TokenKind.LEFT_BRACE:
-            open_blocks += 1
-        elif token.kind is _TokenKind.RIGHT_BRACE:
-            open_blocks -= 1
-
-
 def _lex(raw: bytes, source: str) -> tuple[_Token, ...]:
     text = _decode_asset(raw, source)
     tokens: list[_Token] = []
@@ -643,6 +633,89 @@ def parse_objdata(raw: bytes, *, source: str = "<objdata>") -> ObjectiveCatalog:
     return ObjectiveCatalog(tuple(descriptions), tuple(objectives), tuple(other))
 
 
+def _parse_script_entity(name: _Token, tokens: tuple[_Token, ...], source: str) -> ScriptEntity:
+    stream = _TokenStream(tokens, source)
+    events: list[ScriptEvent] = []
+    issue_token = name
+    try:
+        while True:
+            stream.skip_newlines()
+            if stream.peek() is None:
+                return ScriptEntity(name.value, tuple(events), name.line)
+
+            event_name = stream.expect(_TokenKind.WORD, "an event name")
+            issue_token = event_name
+            event = _ascii_fold(event_name.value)
+            if event not in _ET_SCRIPT_EVENTS:
+                return ScriptEntity(
+                    name.value,
+                    tuple(events),
+                    name.line,
+                    ScriptRegistryIssue("event", event_name.value, event_name.line),
+                )
+
+            parameters: list[str] = []
+            while True:
+                if stream.peek() is None:
+                    stream.fail(f"event {event_name.value!r} reached the entity boundary before '{{'", event_name)
+                token = stream.take()
+                if token.kind is _TokenKind.LEFT_BRACE:
+                    break
+                if token.kind is _TokenKind.RIGHT_BRACE:
+                    stream.fail(f"event {event_name.value!r} reached '}}' before '{{'", token)
+                if token.kind is not _TokenKind.NEWLINE:
+                    parameters.append(token.value)
+
+            actions: list[ScriptAction] = []
+            while True:
+                stream.skip_newlines()
+                token = stream.peek()
+                if token is None:
+                    stream.fail(f"unclosed event {event_name.value!r}", event_name)
+                if token.kind is _TokenKind.RIGHT_BRACE:
+                    stream.index += 1
+                    break
+
+                action_name = stream.expect(_TokenKind.WORD, "an action name")
+                issue_token = action_name
+                command = _ascii_fold(action_name.value)
+                if command not in _ET_SCRIPT_ACTIONS:
+                    return ScriptEntity(
+                        name.value,
+                        tuple(events),
+                        name.line,
+                        ScriptRegistryIssue("action", action_name.value, action_name.line),
+                    )
+
+                arguments: list[str] = []
+                braced = command in _BLOCK_ACTIONS
+                if braced:
+                    stream.skip_newlines()
+                    stream.expect(_TokenKind.LEFT_BRACE, f"'{{' after {command}")
+                    while True:
+                        token = stream.take()
+                        if token.kind is _TokenKind.RIGHT_BRACE:
+                            break
+                        if token.kind is not _TokenKind.NEWLINE:
+                            arguments.append(token.value)
+                else:
+                    while token := stream.peek():
+                        if token.kind is _TokenKind.NEWLINE:
+                            break
+                        if token.kind in {_TokenKind.LEFT_BRACE, _TokenKind.RIGHT_BRACE}:
+                            stream.fail(f"{command} reached a brace before its newline", token)
+                        arguments.append(stream.take().value)
+                actions.append(ScriptAction(command, tuple(arguments), action_name.line, braced))
+            events.append(ScriptEvent(event, tuple(parameters), tuple(actions), event_name.line))
+    except StageParseError as exc:
+        return ScriptEntity(
+            name.value,
+            tuple(events),
+            name.line,
+            syntax_issue=ScriptSyntaxIssue(issue_token.value, issue_token.line, str(exc)),
+        )
+
+
 def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
     stream = _TokenStream(_lex(raw, source), source)
     entities: list[ScriptEntity] = []
@@ -656,77 +729,19 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
             name = stream.expect(_TokenKind.WORD, "an entity name after 'entity'")
         stream.skip_newlines()
         stream.expect(_TokenKind.LEFT_BRACE, "'{' after the entity name")
-        events: list[ScriptEvent] = []
-        registry_issue: ScriptRegistryIssue | None = None
-        syntax_issue: ScriptSyntaxIssue | None = None
-        while True:
-            stream.skip_newlines()
-            token = stream.peek()
-            if token is None:
-                stream.fail(f"unclosed entity {name.value!r}")
-            if token.kind is _TokenKind.RIGHT_BRACE:
-                stream.index += 1
-                break
-            event_name = stream.expect(_TokenKind.WORD, "an event name")
-            event = _ascii_fold(event_name.value)
-            if event not in _ET_SCRIPT_EVENTS:
-                registry_issue = ScriptRegistryIssue("event", event_name.value, event_name.line)
-                _skip_script_block_remainder(stream, 1)
-                break
-            parameters: list[str] = []
-            while True:
-                token = stream.take()
-                if token.kind is _TokenKind.LEFT_BRACE:
-                    break
-                if token.kind is not _TokenKind.NEWLINE:
-                    parameters.append(token.value)
-            actions: list[ScriptAction] = []
-            while True:
-                stream.skip_newlines()
-                token = stream.peek()
-                if token is None:
-                    stream.fail(f"unclosed event {event_name.value!r}")
-                if token.kind is _TokenKind.RIGHT_BRACE:
-                    stream.index += 1
-                    break
-                action_name = stream.expect(_TokenKind.WORD, "an action name")
-                command = _ascii_fold(action_name.value)
-                if command not in _ET_SCRIPT_ACTIONS:
-                    registry_issue = ScriptRegistryIssue("action", action_name.value, action_name.line)
-                    _skip_script_block_remainder(stream, 2)
-                    break
-                arguments: list[str] = []
-                braced = command in _BLOCK_ACTIONS
-                if braced:
-                    stream.skip_newlines()
-                    opener = stream.peek()
-                    if opener is None:
-                        stream.fail("unclosed braced action", action_name)
-                    if opener.kind is not _TokenKind.LEFT_BRACE:
-                        syntax_issue = ScriptSyntaxIssue(
-                            command,
-                            action_name.line,
-                            f"{source}:{opener.line}:{opener.column}: expected '{{' after {command}",
-                        )
-                        _skip_script_block_remainder(stream, 2)
-                        break
-                    stream.index += 1
-                    while True:
-                        token = stream.take()
-                        if token.kind is _TokenKind.RIGHT_BRACE:
-                            break
-                        if token.kind is not _TokenKind.NEWLINE:
-                            arguments.append(token.value)
-                else:
-                    while token := stream.peek():
-                        if token.kind is _TokenKind.NEWLINE:
-                            break
-                        arguments.append(stream.take().value)
-                actions.append(ScriptAction(command, tuple(arguments), action_name.line, braced))
-            if registry_issue is not None or syntax_issue is not None:
-                break
-            events.append(ScriptEvent(event, tuple(parameters), tuple(actions), event_name.line))
-        entities.append(ScriptEntity(name.value, tuple(events), name.line, registry_issue, syntax_issue))
+
+        body_start = stream.index
+        depth = 1
+        while depth:
+            if stream.peek() is None:
+                stream.fail(f"unclosed entity {name.value!r}", name)
+            token = stream.take()
+            if token.kind is _TokenKind.LEFT_BRACE:
+                depth += 1
+            elif token.kind is _TokenKind.RIGHT_BRACE:
+                depth -= 1
+        body = stream.tokens[body_start : stream.index - 1]
+        entities.append(_parse_script_entity(name, body, source))
 
     return MapScript(tuple(entities))
 
@@ -823,7 +838,7 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
                     entity_index,
                     entity.name,
                     "syntax",
-                    issue.command,
+                    issue.token,
                     issue.line,
                     issue.reason,
                 )

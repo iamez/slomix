@@ -118,15 +118,24 @@ def test_map_script_matches_regular_word_punctuation_and_rejects_structural_atta
         parse_map_script(b"manager{ spawn { halt } }", source="attached.script")
 
 
-def test_map_script_rejects_inline_event_close_consumed_as_an_action_argument():
-    with pytest.raises(StageParseError, match="unclosed entity"):
-        parse_map_script(
-            b"""manager {
- spawn { wm_setwinner 0 }
+def test_normal_action_braces_make_only_their_entity_opaque():
+    script = parse_map_script(
+        b"""unused { spawn { wm_setwinner 0 } }
+manager {
+ spawn {
+  wm_setwinner 1
+ }
 }
 """,
-            source="inline-close.script",
-        )
+        source="inline-close.script",
+    )
+
+    graph = compile_static_stage_graph(script, source="inline-close.script")
+
+    assert [(node.entity_name, node.effects) for node in graph.nodes] == [("manager", (WinnerEffect(1, 4),))]
+    assert len(graph.opaque_entities) == 1
+    assert (graph.opaque_entities[0].entity_name, graph.opaque_entities[0].issue_kind) == ("unused", "syntax")
+    assert "reached a brace before its newline" in graph.opaque_entities[0].reason
 
 
 def test_map_script_matches_the_engine_entity_introducer():
@@ -169,6 +178,7 @@ def test_unselected_inner_errors_make_only_their_entity_opaque():
         b"""unused_action { spawn { wm_setwiner 1 } }
 unused_event { triger advance { halt } }
 unused_syntax { spawn { set broken } }
+unused_event_syntax { spawn missing_action_block }
 manager {
  spawn {
   wm_setwinner 1
@@ -185,17 +195,22 @@ manager {
     assert (event_issue.kind, event_issue.name, event_issue.line) == ("event", "triger", 2)
     syntax_issue = script.entities[2].syntax_issue
     assert syntax_issue is not None
-    assert (syntax_issue.command, syntax_issue.line) == ("set", 3)
+    assert (syntax_issue.token, syntax_issue.line) == ("set", 3)
     assert "expected '{' after set" in syntax_issue.reason
-    assert script.entities[3].registry_issue is None
-    assert script.entities[3].syntax_issue is None
+    event_syntax_issue = script.entities[3].syntax_issue
+    assert event_syntax_issue is not None
+    assert (event_syntax_issue.token, event_syntax_issue.line) == ("spawn", 4)
+    assert "reached the entity boundary before '{'" in event_syntax_issue.reason
+    assert script.entities[4].registry_issue is None
+    assert script.entities[4].syntax_issue is None
 
     graph = compile_static_stage_graph(script)
-    assert [(node.entity_name, node.effects) for node in graph.nodes] == [("manager", (WinnerEffect(1, 6),))]
+    assert [(node.entity_name, node.effects) for node in graph.nodes] == [("manager", (WinnerEffect(1, 7),))]
     assert [(item.entity_name, item.issue_kind, item.token) for item in graph.opaque_entities] == [
         ("unused_action", "registry_action", "wm_setwiner"),
         ("unused_event", "registry_event", "triger"),
         ("unused_syntax", "syntax", "set"),
+        ("unused_event_syntax", "syntax", "spawn"),
     ]
 
 
