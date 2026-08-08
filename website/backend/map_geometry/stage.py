@@ -25,6 +25,8 @@ _MAX_ET_TOKEN_LENGTH = 1023
 # ET:Legacy G_ScriptAction_ObjectiveStatus accepts objective numbers 1..8.
 _MAX_OBJECTIVES = 8
 _BLOCK_ACTIONS = frozenset({"create", "delete", "set"})
+_ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+_ET_WHITESPACE = "".join(chr(value) for value in range(33))
 
 
 class StageParseError(ValueError):
@@ -306,6 +308,15 @@ def _is_et_whitespace(character: str) -> bool:
     return ord(character) <= 32
 
 
+def _ascii_fold(value: str) -> str:
+    return value.translate(_ASCII_LOWER)
+
+
+def _is_ascii_decimal(value: str) -> bool:
+    digits = value[1:] if value[:1] in {"+", "-"} else value
+    return bool(digits) and all("0" <= character <= "9" for character in digits)
+
+
 def _lex(raw: bytes, source: str) -> tuple[_Token, ...]:
     text = _decode_asset(raw, source)
     tokens: list[_Token] = []
@@ -377,6 +388,10 @@ def _lex(raw: bytes, source: str) -> tuple[_Token, ...]:
             else:
                 raise StageParseError(f"{source}:{start_line}:{start_column}: unclosed quoted string")
             joined = "".join(value)
+            if not joined:
+                raise StageParseError(
+                    f"{source}:{start_line}:{start_column}: empty quoted tokens are engine control boundaries"
+                )
             if len(joined.encode("utf-8")) > _MAX_ET_TOKEN_LENGTH:
                 raise StageParseError(f"{source}:{start_line}:{start_column}: token exceeds ET's 1023-byte limit")
             tokens.append(_Token(_TokenKind.WORD, joined, start_line, start_column))
@@ -401,7 +416,7 @@ def _lex(raw: bytes, source: str) -> tuple[_Token, ...]:
 
 
 def _classification(text: str) -> ObjectiveClass:
-    prefix = text.casefold().lstrip()
+    prefix = _ascii_fold(text).lstrip(_ET_WHITESPACE)
     if prefix.startswith(("primary objective:", "primary:")):
         return ObjectiveClass.PRIMARY
     if prefix.startswith(("secondary objective:", "secondary:")):
@@ -421,7 +436,7 @@ def parse_objdata(raw: bytes, *, source: str = "<objdata>") -> ObjectiveCatalog:
             if current:
                 commands.append(
                     AssetCommand(
-                        current[0].value.casefold(), tuple(item.value for item in current[1:]), current[0].line
+                        _ascii_fold(current[0].value), tuple(item.value for item in current[1:]), current[0].line
                     )
                 )
                 current = []
@@ -431,7 +446,7 @@ def parse_objdata(raw: bytes, *, source: str = "<objdata>") -> ObjectiveCatalog:
         current.append(token)
     if current:
         commands.append(
-            AssetCommand(current[0].value.casefold(), tuple(item.value for item in current[1:]), current[0].line)
+            AssetCommand(_ascii_fold(current[0].value), tuple(item.value for item in current[1:]), current[0].line)
         )
 
     descriptions: list[MapDescription] = []
@@ -446,7 +461,7 @@ def parse_objdata(raw: bytes, *, source: str = "<objdata>") -> ObjectiveCatalog:
         if command.command == "wm_mapdescription":
             if len(command.arguments) != 2:
                 raise StageParseError(f"{source}:{command.line}: wm_mapdescription requires exactly 2 arguments")
-            descriptions.append(MapDescription(command.arguments[0].casefold(), command.arguments[1], command.line))
+            descriptions.append(MapDescription(_ascii_fold(command.arguments[0]), command.arguments[1], command.line))
             continue
         team = objective_commands.get(command.command)
         if team is None:
@@ -455,6 +470,8 @@ def parse_objdata(raw: bytes, *, source: str = "<objdata>") -> ObjectiveCatalog:
         if len(command.arguments) != 2:
             raise StageParseError(f"{source}:{command.line}: {command.command} requires exactly 2 arguments")
         try:
+            if not _is_ascii_decimal(command.arguments[0]):
+                raise ValueError
             number = int(command.arguments[0])
         except ValueError as exc:
             raise StageParseError(f"{source}:{command.line}: objective number must be an integer") from exc
@@ -480,7 +497,7 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
         if stream.peek() is None:
             break
         name = stream.expect(_TokenKind.WORD, "an entity name")
-        if name.value.casefold() == "entity":
+        if _ascii_fold(name.value) == "entity":
             stream.skip_newlines()
             name = stream.expect(_TokenKind.WORD, "an entity name after 'entity'")
         stream.skip_newlines()
@@ -514,7 +531,7 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
                     stream.index += 1
                     break
                 action_name = stream.expect(_TokenKind.WORD, "an action name")
-                command = action_name.value.casefold()
+                command = _ascii_fold(action_name.value)
                 arguments: list[str] = []
                 braced = command in _BLOCK_ACTIONS
                 if braced:
@@ -538,13 +555,15 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
                             stream.fail("unexpected '{' in action arguments", token)
                         arguments.append(stream.take().value)
                 actions.append(ScriptAction(command, tuple(arguments), action_name.line, braced))
-            events.append(ScriptEvent(event_name.value.casefold(), tuple(parameters), tuple(actions), event_name.line))
+            events.append(ScriptEvent(_ascii_fold(event_name.value), tuple(parameters), tuple(actions), event_name.line))
         entities.append(ScriptEntity(name.value, tuple(events), name.line))
 
     return MapScript(tuple(entities))
 
 
 def _integer(argument: str, *, source: str, line: int, field: str) -> int:
+    if not _is_ascii_decimal(argument):
+        raise StageParseError(f"{source}:{line}: {field} must be a canonical ASCII integer")
     try:
         return int(argument)
     except ValueError as exc:
@@ -573,7 +592,7 @@ def _effect_for(action: ScriptAction, source: str) -> StageEffect | None:
         selector = action.arguments[0]
         selector_form = (
             MainObjectiveSelectorForm.LEGACY_NUMERIC
-            if selector.lstrip("-").isdigit()
+            if _is_ascii_decimal(selector)
             else MainObjectiveSelectorForm.TARGET_NAME
         )
         return MainObjectiveEffect(selector, selector_form, team, action.line)
@@ -591,7 +610,7 @@ def _effect_for(action: ScriptAction, source: str) -> StageEffect | None:
         return AutoSpawnEffect(action.arguments[0], team, action.line)
     if action.command == "setstate":
         _exact_arguments(action, 2, source)
-        state = action.arguments[1].casefold()
+        state = _ascii_fold(action.arguments[1])
         if state not in {"default", "invisible", "underconstruction"}:
             raise StageParseError(f"{source}:{action.line}: invalid setstate state {state!r}")
         return EntityStateEffect(action.arguments[0], state, action.line)
@@ -619,7 +638,7 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
             nodes.append(StageEventNode(node_id, entity.name, event.name, event.parameters, effects, event.line))
             indexed_events.append((entity, event, node_id))
             if event.name == "trigger" and len(event.parameters) == 1:
-                key = (entity.name.casefold(), event.parameters[0].casefold())
+                key = (_ascii_fold(entity.name), _ascii_fold(event.parameters[0]))
                 events_by_trigger.setdefault(key, []).append(node_id)
 
     edges: list[TriggerEdge] = []
@@ -629,19 +648,19 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
                 continue
             _exact_arguments(action, 2, source)
             raw_target = action.arguments[0]
-            target_kind = raw_target.casefold()
+            target_kind = _ascii_fold(raw_target)
             target_trigger = action.arguments[1]
             if target_kind == "self":
                 dispatch = TriggerDispatch.SELF
                 target_entity = entity.name
-                candidates = tuple(events_by_trigger.get((target_entity.casefold(), target_trigger.casefold()), ()))
+                candidates = tuple(events_by_trigger.get((_ascii_fold(target_entity), _ascii_fold(target_trigger)), ()))
             elif target_kind == "global":
                 dispatch = TriggerDispatch.GLOBAL
                 target_entity = raw_target
                 candidates = tuple(
                     candidate
                     for (candidate_entity, candidate_trigger), node_ids in events_by_trigger.items()
-                    if candidate_trigger == target_trigger.casefold()
+                    if candidate_trigger == _ascii_fold(target_trigger)
                     for candidate in node_ids
                 )
             elif target_kind in {"player", "activator"}:
@@ -651,7 +670,7 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
             else:
                 dispatch = TriggerDispatch.SCRIPT_NAME
                 target_entity = raw_target
-                candidates = tuple(events_by_trigger.get((target_entity.casefold(), target_trigger.casefold()), ()))
+                candidates = tuple(events_by_trigger.get((_ascii_fold(target_entity), _ascii_fold(target_trigger)), ()))
 
             if dispatch is TriggerDispatch.ACTIVATOR:
                 resolution = TriggerResolution.NO_OP

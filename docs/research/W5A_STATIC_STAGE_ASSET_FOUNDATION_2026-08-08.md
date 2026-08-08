@@ -45,7 +45,8 @@ The parser contract was checked against ET:Legacy primary source rather than inf
 - `set`, `create` and `delete` are the exception: their arguments are enclosed in a brace block.
 - [`COM_ParseExt`](https://github.com/etlegacy/etlegacy/blob/master/src/qcommon/q_shared.c) defines quote and comment
   handling. Its regular-word path retains punctuation, including quotes and braces, until ASCII whitespace. Line
-  comments preserve the newline boundary; block comments do not create an action boundary.
+  comments preserve the newline boundary; block comments do not create an action boundary. An empty quoted token is
+  indistinguishable from its empty control return and is rejected rather than represented as an argument.
 - [`G_ScriptAction_SetMainObjective`](https://github.com/etlegacy/etlegacy/blob/master/src/game/g_script_actions.c)
   documents the target-name form while retaining compatibility handling for old scripts.
 - `G_ScriptAction_Trigger` gives `self`, `global` and `player` special dispatch semantics, while the current
@@ -63,6 +64,8 @@ older ET-compatible path applies numeric selection semantics, and it does not re
 
 - a fail-closed lexer with source line/column provenance, ET newline semantics, line/block comments, quoted tokens,
   braced `set/create/delete` arguments, NUL rejection and ET token-length enforcement;
+- ASCII-only identifier folding and canonical ASCII integer gates prevent Python Unicode/numeric syntax from
+  creating effects or trigger dispatch that ET's byte-oriented C paths would not recognize;
 - structured `.objdata` records for map descriptions and per-team objective identities;
 - explicit `primary`, `secondary`, `additional` or `unknown` classification, based only on the asset text;
 - a structured map-script AST retaining every entity, event, action and raw argument;
@@ -198,10 +201,10 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 15 passed.
-- Targeted map-geometry regression suite: 89 passed.
+- W5a unit tests: 19 passed.
+- Targeted map-geometry regression suite: 93 passed.
 - Exact W5a real-asset acceptance: 1 passed, 7 deselected.
 - Full real-map geometry/stage integration file: 8 passed in 132.71 seconds.
-- Full repository suite: 4,149 passed, 75 skipped, 30 existing warnings in 50.77 seconds.
+- Full repository suite: 4,153 passed, 75 skipped, 30 existing warnings in 50.72 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.
