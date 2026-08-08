@@ -87,14 +87,23 @@ def test_live_ping_reuses_the_proven_carrier_detection_pattern() -> None:
     )
     tracker_source = tracker_path.read_text(encoding="utf-8")
 
+    # Scoped to the executable block, not the whole file — a keyword
+    # surviving only in a comment (or the unrelated round-end embed further
+    # down) must not pass this. (CodeRabbit review on #624.)
+    start = live_source.index("function et_Print(text)")
+    end = live_source.index("function et_ShutdownGame")
+    live_ping_block = live_source[start:end]
+
     for keyword in ("secured", "transmitted", "delivered", "escaped"):
-        assert keyword in live_source, f"live-ping detection is missing keyword: {keyword}"
+        assert f'string.find(lower, "{keyword}")' in live_ping_block, (
+            f"live-ping detection is missing the executable check for keyword: {keyword}"
+        )
         assert keyword in tracker_source, (
             f"proximity_tracker.lua no longer mentions {keyword!r} — the "
             "live-ping keyword list has drifted from its source of truth"
         )
 
-    assert '"legacy announce:"' in live_source
+    assert '"legacy announce:"' in live_ping_block
     assert "legacy announce:" in tracker_source
 
 
