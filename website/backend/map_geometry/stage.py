@@ -838,8 +838,8 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
             effects = effects_by_event[(entity_index, event_index)]
             nodes.append(StageEventNode(node_id, entity.name, event.name, event.parameters, effects, event.line))
             indexed_events.append((entity_index, entity, event, node_id))
-            if event.name == "trigger" and len(event.parameters) == 1:
-                trigger_name = _ascii_fold(event.parameters[0])
+            if event.name == "trigger" and event.parameters:
+                trigger_name = _ascii_fold(" ".join(event.parameters))
                 events_by_trigger.setdefault((_ascii_fold(entity.name), trigger_name), []).append(node_id)
                 self_events_by_trigger.setdefault((entity_index, trigger_name), []).append(node_id)
 
