@@ -136,7 +136,42 @@ manager {
     assert [(node.entity_name, node.effects) for node in graph.nodes] == [("manager", (WinnerEffect(1, 4),))]
     assert len(graph.opaque_entities) == 1
     assert (graph.opaque_entities[0].entity_name, graph.opaque_entities[0].issue_kind) == ("unused", "syntax")
-    assert "reached a brace before its newline" in graph.opaque_entities[0].reason
+    assert "entity boundary depends on selected-block brace interpretation" in graph.opaque_entities[0].reason
+
+
+@pytest.mark.parametrize(
+    ("event", "action"),
+    [
+        ("spawn", "wm_announce {literal"),
+        ("spawn", "wm_announce }literal"),
+        ("trigger }literal", "halt"),
+        ("spawn", "set { {literal key }"),
+    ],
+)
+def test_selected_brace_prefix_ambiguity_is_opaque_not_asset_invalid(event, action):
+    script = parse_map_script(
+        f"""manager {{
+ {event} {{
+  {action}
+ }}
+}}
+later {{
+ spawn {{
+  wm_setwinner 1
+ }}
+}}
+""".encode(),
+        source="brace-prefix.script",
+    )
+
+    graph = compile_static_stage_graph(script, source="brace-prefix.script")
+
+    assert len(script.entities) == 1
+    assert graph.nodes == ()
+    assert len(graph.opaque_entities) == 1
+    issue = graph.opaque_entities[0]
+    assert (issue.entity_name, issue.issue_kind, issue.token) == ("manager", "syntax", "manager")
+    assert "entity boundary depends on selected-block brace interpretation" in issue.reason
 
 
 def test_map_script_matches_the_engine_entity_introducer():
@@ -200,8 +235,8 @@ manager {
     assert "expected '{' after set" in syntax_issue.reason
     event_syntax_issue = script.entities[3].syntax_issue
     assert event_syntax_issue is not None
-    assert (event_syntax_issue.token, event_syntax_issue.line) == ("spawn", 4)
-    assert "reached the entity boundary before '{'" in event_syntax_issue.reason
+    assert (event_syntax_issue.token, event_syntax_issue.line) == ("unused_event_syntax", 4)
+    assert "entity boundary depends on selected-block brace interpretation" in event_syntax_issue.reason
     assert script.entities[4].registry_issue is None
     assert script.entities[4].syntax_issue is None
 
@@ -211,7 +246,7 @@ manager {
         ("unused_action", "registry_action", "wm_setwiner"),
         ("unused_event", "registry_event", "triger"),
         ("unused_syntax", "syntax", "set"),
-        ("unused_event_syntax", "syntax", "spawn"),
+        ("unused_event_syntax", "syntax", "unused_event_syntax"),
     ]
 
 
