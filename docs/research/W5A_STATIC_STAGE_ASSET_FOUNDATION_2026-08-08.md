@@ -44,7 +44,8 @@ The parser contract was checked against ET:Legacy primary source rather than inf
   event headers and action stacks. Normal action arguments end at a physical newline.
 - `set`, `create` and `delete` are the exception: their arguments are enclosed in a brace block.
 - [`COM_ParseExt`](https://github.com/etlegacy/etlegacy/blob/master/src/qcommon/q_shared.c) defines quote and comment
-  handling. Line comments preserve the newline boundary; block comments do not create an action boundary.
+  handling. Its regular-word path retains punctuation, including quotes and braces, until ASCII whitespace. Line
+  comments preserve the newline boundary; block comments do not create an action boundary.
 - [`G_ScriptAction_SetMainObjective`](https://github.com/etlegacy/etlegacy/blob/master/src/game/g_script_actions.c)
   documents the target-name form while retaining compatibility handling for old scripts.
 - `G_ScriptAction_Trigger` gives `self`, `global` and `player` special dispatch semantics, while the current
@@ -197,9 +198,10 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 14 passed.
-- Map-geometry regression suite: 103 passed.
+- W5a unit tests: 15 passed.
+- Targeted map-geometry regression suite: 89 passed.
+- Exact W5a real-asset acceptance: 1 passed, 7 deselected.
 - Full real-map geometry/stage integration file: 8 passed in 132.71 seconds.
-- Full repository suite: 4,148 passed, 75 skipped, 30 existing warnings in 50.18 seconds.
+- Full repository suite: 4,149 passed, 75 skipped, 30 existing warnings in 50.77 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.
