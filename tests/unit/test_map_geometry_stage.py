@@ -6,7 +6,7 @@ import zipfile
 
 import pytest
 
-from website.backend.map_geometry.pk3_index import Pk3GeometryIndex
+from website.backend.map_geometry.pk3_index import AssetContentChangedError, Pk3GeometryIndex
 from website.backend.map_geometry.stage import (
     AutoSpawnEffect,
     EntityStateEffect,
@@ -247,6 +247,57 @@ def test_stage_load_requires_independent_unambiguous_script_and_objdata(tmp_path
     assert result.model is None
     assert result.script_resolution.status == "ambiguous"
     assert result.objdata_resolution.status == "resolved"
+
+
+def test_stage_load_returns_a_model_with_both_selected_providers(tmp_path):
+    _write_pk3(
+        tmp_path / "one.pk3",
+        {
+            "maps/duel.script": b"manager {\nspawn {\nwm_setwinner 0\n}\n}\n",
+            "maps/duel.objdata": b'wm_objective_axis_desc 1 "Primary: Defend"',
+        },
+    )
+    result = load_static_stage(Pk3GeometryIndex.scan(tmp_path), "duel")
+
+    assert result.status is StageLoadStatus.RESOLVED
+    assert result.model is not None
+    assert result.model.map_name == "duel"
+    assert result.model.script_provider == result.script_resolution.selected
+    assert result.model.objdata_provider == result.objdata_resolution.selected
+    assert result.model.graph.nodes[0].effects == (WinnerEffect(0, 3),)
+
+
+def test_stage_load_requires_objdata_instead_of_returning_a_partial_model(tmp_path):
+    _write_pk3(
+        tmp_path / "one.pk3",
+        {"maps/duel.script": b"manager {\nspawn {\nwm_setwinner 0\n}\n}\n"},
+    )
+    result = load_static_stage(Pk3GeometryIndex.scan(tmp_path), "duel")
+
+    assert result.status is StageLoadStatus.MISSING
+    assert result.model is None
+    assert result.objdata_resolution.status == "missing"
+
+
+def test_stage_load_returns_invalid_when_indexed_asset_changes(tmp_path, monkeypatch):
+    _write_pk3(
+        tmp_path / "one.pk3",
+        {
+            "maps/duel.script": b"manager {\nspawn {\nwm_setwinner 0\n}\n}\n",
+            "maps/duel.objdata": b'wm_objective_axis_desc 1 "Primary: Defend"',
+        },
+    )
+    index = Pk3GeometryIndex.scan(tmp_path)
+
+    def changed(_provider):
+        raise AssetContentChangedError("indexed bytes changed")
+
+    monkeypatch.setattr(index, "read_provider", changed)
+    result = load_static_stage(index, "duel")
+
+    assert result.status is StageLoadStatus.INVALID
+    assert result.model is None
+    assert result.reason == "indexed bytes changed"
 
 
 def test_stage_load_returns_invalid_instead_of_a_partial_model(tmp_path):
