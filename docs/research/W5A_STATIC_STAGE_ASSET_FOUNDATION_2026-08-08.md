@@ -99,6 +99,8 @@ older ET-compatible path applies numeric selection semantics, and it does not re
   creating effects or trigger dispatch that ET's byte-oriented C paths would not recognize;
 - fixed-arity token-stream `.objdata` parsing with PC-compatible quoted-string escape/concatenation semantics,
   structured map descriptions and per-team objective identities;
+- `.objdata` containing unquoted PC `#`/`$` preprocessing tokens fails closed; W5a does not return a catalog with
+  unexpanded macros, skipped conditionals or unevaluated directives;
 - explicit `primary`, `secondary`, `additional` or `unknown` classification, based only on the asset text;
 - a structured map-script AST retaining every compatible lexical action argument and its exact serialized callback
   parameter buffer, plus a source-located issue for any entity whose remaining contents must stay opaque;
@@ -271,10 +273,10 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 44 passed.
-- Targeted map-geometry regression suite: 118 passed.
-- Exact W5a real-asset acceptance: 1 passed, 7 deselected in 2.41 seconds.
-- Full real-map geometry/stage integration file: 8 passed in 80.14 seconds (`--no-cov`).
-- Full repository suite: 4,178 passed, 75 skipped, 7 warnings in 31.82 seconds.
+- W5a unit tests: 48 passed.
+- Targeted map-geometry regression suite: 122 passed.
+- Exact W5a real-asset acceptance: 1 passed, 7 deselected in 2.40 seconds.
+- Full real-map geometry/stage integration file: 8 passed in 81.56 seconds (`--no-cov`).
+- Full repository suite: 4,182 passed, 75 skipped, 7 warnings in 31.64 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.

@@ -102,6 +102,28 @@ def test_objdata_pc_path_preserves_an_empty_quoted_token():
     assert catalog.map_descriptions == (MapDescription("axis", "", 1),)
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b'#define AXIS_OBJECTIVE "Primary: Hold"\nwm_objective_axis_desc 1 AXIS_OBJECTIVE',
+        b'#if 1\nwm_mapdescription axis "conditional"\n#endif',
+        b'$evalint(1) wm_mapdescription axis "computed"',
+    ],
+)
+def test_objdata_rejects_pc_preprocessing_instead_of_modeling_unexpanded_tokens(raw):
+    with pytest.raises(StageParseError, match="PC preprocessing is unsupported"):
+        parse_objdata(raw, source="preprocessed.objdata")
+
+
+def test_objdata_preprocessor_markers_inside_strings_and_comments_remain_text():
+    catalog = parse_objdata(
+        b'// #define ignored\nwm_mapdescription axis "Price $5 #1"',
+        source="literal-markers.objdata",
+    )
+
+    assert catalog.map_descriptions == (MapDescription("axis", "Price $5 #1", 2),)
+
+
 def test_objdata_uses_last_write_for_team_slots_and_rejects_malformed_text():
     duplicate = b"""wm_mapdescription axis "First map text"
 wm_objective_axis_desc 1 "Primary: First"
