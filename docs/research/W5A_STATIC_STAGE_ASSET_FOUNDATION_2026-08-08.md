@@ -127,7 +127,8 @@ The same rule applies to a normal action argument whose first byte is either bra
 inside `set/create/delete`. The selected parser consumes the token as an argument, while the nonmatching path uses it
 structurally. When successful selected and nonselected paths produce different entity boundaries, parsing stops at the
 ambiguous region instead of rejecting the asset or inventing later entity boundaries. When the selected path fails but
-the nonselected boundary is proven, parsing safely resumes at that boundary.
+the nonselected boundary is proven, parsing safely resumes at that boundary. If brace-prefixed arguments balance and
+both paths prove the same boundary, the selected entity is retained rather than made opaque.
 
 The compiler applies the same entity-level boundary when a known command cannot be projected defensibly (for
 example, a noncanonical integer or wrong trigger arity). It validates each block atomically before adding any of its
@@ -261,10 +262,10 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 35 passed.
-- Targeted map-geometry regression suite: 109 passed.
-- Exact W5a real-asset acceptance: 1 passed, 7 deselected in 2.42 seconds.
-- Full real-map geometry/stage integration file: 8 passed in 79.60 seconds (`--no-cov`).
-- Full repository suite: 4,169 passed, 75 skipped, 7 warnings in 49.24 seconds.
+- W5a unit tests: 36 passed.
+- Targeted map-geometry regression suite: 110 passed.
+- Exact W5a real-asset acceptance: 1 passed, 7 deselected in 2.39 seconds.
+- Full real-map geometry/stage integration file: 8 passed in 80.99 seconds (`--no-cov`).
+- Full repository suite: 4,170 passed, 75 skipped, 7 warnings in 49.58 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.

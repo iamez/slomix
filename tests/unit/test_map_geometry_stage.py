@@ -192,6 +192,24 @@ later {{
     assert "entity boundary depends on selected-block brace interpretation" in issue.reason
 
 
+def test_balanced_action_brace_prefixes_retain_the_entity_when_boundaries_agree():
+    script = parse_map_script(
+        b"""manager {
+ spawn {
+  wm_announce {literal }literal
+  wm_setwinner 1
+ }
+}
+"""
+    )
+
+    graph = compile_static_stage_graph(script)
+
+    assert script.entities[0].events[0].actions[0].arguments == ("{literal", "}literal")
+    assert graph.opaque_entities == ()
+    assert graph.nodes[0].effects == (WinnerEffect(1, 4),)
+
+
 def test_map_script_matches_the_engine_entity_introducer():
     script = parse_map_script(b"entity manager {\nspawn {\nhalt\n}\n}\n")
 
