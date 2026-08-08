@@ -27,6 +27,119 @@ _MAX_OBJECTIVES = 8
 _BLOCK_ACTIONS = frozenset({"create", "delete", "set"})
 _ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
 _ET_WHITESPACE = "".join(chr(value) for value in range(33))
+# ET:Legacy g_script.c: gScriptEvents and gScriptActions.
+_ET_SCRIPT_EVENTS = frozenset(
+    {
+        "spawn",
+        "trigger",
+        "pain",
+        "death",
+        "activate",
+        "stopcam",
+        "playerstart",
+        "built",
+        "buildstart",
+        "decayed",
+        "destroyed",
+        "rebirth",
+        "failed",
+        "dynamited",
+        "defused",
+        "mg42",
+        "message",
+        "exploded",
+    }
+)
+_ET_SCRIPT_ACTIONS = frozenset(
+    {
+        "gotomarker",
+        "playsound",
+        "playanim",
+        "wait",
+        "trigger",
+        "alertentity",
+        "togglespeaker",
+        "disablespeaker",
+        "enablespeaker",
+        "accum",
+        "globalaccum",
+        "print",
+        "faceangles",
+        "resetscript",
+        "attachtotag",
+        "halt",
+        "stopsound",
+        "entityscriptname",
+        "wm_axis_respawntime",
+        "wm_allied_respawntime",
+        "wm_number_of_objectives",
+        "wm_setwinner",
+        "wm_set_defending_team",
+        "wm_announce",
+        "wm_teamvoiceannounce",
+        "wm_addteamvoiceannounce",
+        "wm_removeteamvoiceannounce",
+        "wm_announce_icon",
+        "wm_endround",
+        "wm_set_round_timelimit",
+        "wm_voiceannounce",
+        "wm_objective_status",
+        "wm_set_main_objective",
+        "remove",
+        "setstate",
+        "followspline",
+        "followpath",
+        "abortmove",
+        "setspeed",
+        "setrotation",
+        "stoprotation",
+        "startanimation",
+        "attatchtotrain",
+        "freezeanimation",
+        "unfreezeanimation",
+        "remapshader",
+        "remapshaderflush",
+        "changemodel",
+        "setchargetimefactor",
+        "setdamagable",
+        "repairmg42",
+        "sethqstatus",
+        "printaccum",
+        "printglobalaccum",
+        "cvar",
+        "abortifwarmup",
+        "abortifnotsingleplayer",
+        "mu_start",
+        "mu_play",
+        "mu_stop",
+        "mu_queue",
+        "mu_fade",
+        "setdebuglevel",
+        "setposition",
+        "setautospawn",
+        "setmodelfrombrushmodel",
+        "fadeallsounds",
+        "construct",
+        "spawnrubble",
+        "setglobalfog",
+        "allowtankexit",
+        "allowtankenter",
+        "settankammo",
+        "addtankammo",
+        "kill",
+        "disablemessage",
+        "set",
+        "create",
+        "delete",
+        "constructible_class",
+        "constructible_chargebarreq",
+        "constructible_constructxpbonus",
+        "constructible_destructxpbonus",
+        "constructible_health",
+        "constructible_weaponclass",
+        "constructible_duration",
+    }
+)
 
 
 class StageParseError(ValueError):
@@ -317,6 +430,14 @@ def _is_ascii_decimal(value: str) -> bool:
     return bool(digits) and all("0" <= character <= "9" for character in digits)
 
 
+def _token_kind(value: str) -> _TokenKind:
+    if value.startswith("{"):
+        return _TokenKind.LEFT_BRACE
+    if value.startswith("}"):
+        return _TokenKind.RIGHT_BRACE
+    return _TokenKind.WORD
+
+
 def _lex(raw: bytes, source: str) -> tuple[_Token, ...]:
     text = _decode_asset(raw, source)
     tokens: list[_Token] = []
@@ -394,7 +515,7 @@ def _lex(raw: bytes, source: str) -> tuple[_Token, ...]:
                 )
             if len(joined.encode("utf-8")) > _MAX_ET_TOKEN_LENGTH:
                 raise StageParseError(f"{source}:{start_line}:{start_column}: token exceeds ET's 1023-byte limit")
-            tokens.append(_Token(_TokenKind.WORD, joined, start_line, start_column))
+            tokens.append(_Token(_token_kind(joined), joined, start_line, start_column))
             continue
 
         start = index
@@ -406,11 +527,7 @@ def _lex(raw: bytes, source: str) -> tuple[_Token, ...]:
         word = text[start:index]
         if len(word.encode("utf-8")) > _MAX_ET_TOKEN_LENGTH:
             raise StageParseError(f"{source}:{start_line}:{start_column}: token exceeds ET's 1023-byte limit")
-        kind = {
-            "{": _TokenKind.LEFT_BRACE,
-            "}": _TokenKind.RIGHT_BRACE,
-        }.get(word, _TokenKind.WORD)
-        tokens.append(_Token(kind, word, start_line, start_column))
+        tokens.append(_Token(_token_kind(word), word, start_line, start_column))
 
     return tuple(tokens)
 
@@ -497,6 +614,9 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
         if stream.peek() is None:
             break
         name = stream.expect(_TokenKind.WORD, "an entity name")
+        while _ascii_fold(name.value) == "entity":
+            stream.skip_newlines()
+            name = stream.expect(_TokenKind.WORD, "an entity name after 'entity'")
         stream.skip_newlines()
         stream.expect(_TokenKind.LEFT_BRACE, "'{' after the entity name")
         events: list[ScriptEvent] = []
@@ -509,14 +629,15 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
                 stream.index += 1
                 break
             event_name = stream.expect(_TokenKind.WORD, "an event name")
+            event = _ascii_fold(event_name.value)
+            if event not in _ET_SCRIPT_EVENTS:
+                stream.fail(f"unknown ET script event {event_name.value!r}", event_name)
             parameters: list[str] = []
             while True:
                 token = stream.take()
                 if token.kind is _TokenKind.LEFT_BRACE:
                     break
-                if token.kind is _TokenKind.RIGHT_BRACE:
-                    stream.fail("event parameters ended with '}' instead of '{'", token)
-                if token.kind is _TokenKind.WORD:
+                if token.kind is not _TokenKind.NEWLINE:
                     parameters.append(token.value)
             actions: list[ScriptAction] = []
             while True:
@@ -529,6 +650,8 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
                     break
                 action_name = stream.expect(_TokenKind.WORD, "an action name")
                 command = _ascii_fold(action_name.value)
+                if command not in _ET_SCRIPT_ACTIONS:
+                    stream.fail(f"unknown ET script action {action_name.value!r}", action_name)
                 arguments: list[str] = []
                 braced = command in _BLOCK_ACTIONS
                 if braced:
@@ -538,21 +661,15 @@ def parse_map_script(raw: bytes, *, source: str = "<script>") -> MapScript:
                         token = stream.take()
                         if token.kind is _TokenKind.RIGHT_BRACE:
                             break
-                        if token.kind is _TokenKind.LEFT_BRACE:
-                            stream.fail("nested action argument blocks are not supported by ET", token)
-                        if token.kind is _TokenKind.WORD:
+                        if token.kind is not _TokenKind.NEWLINE:
                             arguments.append(token.value)
                 else:
                     while token := stream.peek():
                         if token.kind is _TokenKind.NEWLINE:
                             break
-                        if token.kind is _TokenKind.RIGHT_BRACE:
-                            stream.fail("normal action must end at a newline before '}'", token)
-                        if token.kind is _TokenKind.LEFT_BRACE:
-                            stream.fail("unexpected '{' in action arguments", token)
                         arguments.append(stream.take().value)
                 actions.append(ScriptAction(command, tuple(arguments), action_name.line, braced))
-            events.append(ScriptEvent(_ascii_fold(event_name.value), tuple(parameters), tuple(actions), event_name.line))
+            events.append(ScriptEvent(event, tuple(parameters), tuple(actions), event_name.line))
         entities.append(ScriptEntity(name.value, tuple(events), name.line))
 
     return MapScript(tuple(entities))
