@@ -9,15 +9,20 @@ import pytest
 
 from website.backend.map_geometry import (
     BspPointTracer,
+    MainObjectiveEffect,
+    MainObjectiveSelectorForm,
     MapAssetKind,
     ObjectiveGeometrySource,
     Pk3GeometryIndex,
     PlayerStance,
+    StageLoadStatus,
     SurfaceType,
     TraceReason,
     TraceStatus,
+    TriggerResolution,
     compile_bsp_patches,
     extract_entity_catalog,
+    load_static_stage,
 )
 
 ETMAIN = Path(os.environ.get("SLOMIX_ETMAIN_DIR", "/home/samba/share/etmain"))
@@ -96,6 +101,75 @@ def test_every_indexed_bsp_map_has_unambiguous_stage_inputs(geometry_index):
     for map_name in geometry_index.map_names:
         assert geometry_index.resolve_asset(map_name, "script").status == "resolved", map_name
         assert geometry_index.resolve_asset(map_name, "objdata").status == "resolved", map_name
+
+
+def test_w5a_parses_every_resolved_stage_asset_and_exposes_partial_static_coverage(geometry_index):
+    totals = {
+        "entities": 0,
+        "events": 0,
+        "actions": 0,
+        "objectives": 0,
+        "known_objective_classes": 0,
+        "unknown_objective_classes": 0,
+        "effects": 0,
+        "trigger_edges": 0,
+        "resolved_trigger_edges": 0,
+        "missing_trigger_edges": 0,
+        "ambiguous_trigger_edges": 0,
+        "legacy_numeric_main_objectives": 0,
+    }
+    maps_with_complete_trigger_closure = 0
+    maps_with_complete_objective_classes = 0
+
+    for map_name in geometry_index.map_names:
+        result = load_static_stage(geometry_index, map_name)
+        assert result.status is StageLoadStatus.RESOLVED, (map_name, result.reason)
+        assert result.model is not None
+        model = result.model
+        assert model.script_provider == result.script_resolution.selected
+        assert model.objdata_provider == result.objdata_resolution.selected
+
+        events = tuple(event for entity in model.script.entities for event in entity.events)
+        unknown_classes = sum(item.classification == "unknown" for item in model.objectives.objectives)
+        edge_counts = {
+            resolution: sum(edge.resolution is resolution for edge in model.graph.trigger_edges)
+            for resolution in TriggerResolution
+        }
+        totals["entities"] += len(model.script.entities)
+        totals["events"] += len(events)
+        totals["actions"] += sum(len(event.actions) for event in events)
+        totals["objectives"] += len(model.objectives.objectives)
+        totals["known_objective_classes"] += len(model.objectives.objectives) - unknown_classes
+        totals["unknown_objective_classes"] += unknown_classes
+        totals["effects"] += sum(len(node.effects) for node in model.graph.nodes)
+        totals["trigger_edges"] += len(model.graph.trigger_edges)
+        totals["resolved_trigger_edges"] += edge_counts[TriggerResolution.RESOLVED]
+        totals["missing_trigger_edges"] += edge_counts[TriggerResolution.MISSING]
+        totals["ambiguous_trigger_edges"] += edge_counts[TriggerResolution.AMBIGUOUS]
+        totals["legacy_numeric_main_objectives"] += sum(
+            isinstance(effect, MainObjectiveEffect) and effect.selector_form is MainObjectiveSelectorForm.LEGACY_NUMERIC
+            for node in model.graph.nodes
+            for effect in node.effects
+        )
+        maps_with_complete_trigger_closure += edge_counts[TriggerResolution.RESOLVED] == len(model.graph.trigger_edges)
+        maps_with_complete_objective_classes += unknown_classes == 0
+
+    assert totals == {
+        "entities": 583,
+        "events": 2153,
+        "actions": 10057,
+        "objectives": 250,
+        "known_objective_classes": 232,
+        "unknown_objective_classes": 18,
+        "effects": 2929,
+        "trigger_edges": 1315,
+        "resolved_trigger_edges": 1304,
+        "missing_trigger_edges": 11,
+        "ambiguous_trigger_edges": 0,
+        "legacy_numeric_main_objectives": 42,
+    }
+    assert maps_with_complete_trigger_closure == 13
+    assert maps_with_complete_objective_classes == 18
 
 
 def test_all_indexed_map_bsps_strictly_parse_as_populated_ibsp_v47(geometry_index):
