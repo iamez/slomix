@@ -381,6 +381,18 @@ $SSH "cd $VM_PATH && git log --oneline -1 && systemctl is-active slomix-bot slom
 CURRENT_COMMIT=$($SSH "cd $VM_PATH && git rev-parse HEAD")
 log "Current commit: $CURRENT_COMMIT (rollback target)"
 
+# bot/config.py and website/backend/main.py now require BOT_ENVIRONMENT to be
+# set (docs/research/ENVIRONMENT_IDENTITY_RCA_2026-08-08.md) — a deploy that
+# restarts the services without it crash-loops them. Check BEFORE doing
+# anything else, not after step 7 already restarted a service into a
+# crash-loop (CodeRabbit review on #623: neither install.sh's --full/--vps
+# path nor this script backfills the value, so an existing production host
+# predating this change needs it added by hand once).
+$SSH "cd $VM_PATH && grep -q '^BOT_ENVIRONMENT=' .env" \
+  || fail "BOT_ENVIRONMENT is not set in $VM_PATH/.env on the VM. Add BOT_ENVIRONMENT=production there (and to website/.env) before deploying this release — see docs/research/ENVIRONMENT_IDENTITY_RCA_2026-08-08.md."
+$SSH "cd $VM_PATH && grep -q '^BOT_ENVIRONMENT=' website/.env" \
+  || fail "BOT_ENVIRONMENT is not set in $VM_PATH/website/.env on the VM. Add BOT_ENVIRONMENT=production there before deploying this release — see docs/research/ENVIRONMENT_IDENTITY_RCA_2026-08-08.md."
+
 # ─── 2. DB backup pre-migration ───────────────────────────────────────────────
 # Password is read *inside* the remote shell so it never enters our local
 # transcript. Both DB_PASSWORD and POSTGRES_PASSWORD prefixes are supported,
