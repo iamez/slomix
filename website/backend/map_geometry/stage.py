@@ -289,6 +289,7 @@ class ScriptAction:
 class ScriptEvent:
     name: str
     parameters: tuple[str, ...]
+    serialized_parameters: str
     actions: tuple[ScriptAction, ...]
     line: int
 
@@ -395,6 +396,7 @@ class StageEventNode:
     entity_name: str
     event_name: str
     event_parameters: tuple[str, ...]
+    serialized_event_parameters: str
     effects: tuple[StageEffect, ...]
     line: int
 
@@ -538,17 +540,17 @@ def _is_ascii_decimal(value: str) -> bool:
     return bool(digits) and all("0" <= character <= "9" for character in digits)
 
 
-def _serialized_parameter_length(values: list[str], *, quote_embedded_spaces: bool) -> int:
-    total = max(0, len(values) - 1)
-    for value in values:
-        total += _et_byte_length(value)
-        if quote_embedded_spaces and " " in value:
-            total += 2
-    return total
+def _truncate_et_parameter_buffer(value: str) -> str:
+    return _encode_asset(value)[:_MAX_ET_PARAMETER_LENGTH].decode("utf-8", errors="surrogateescape")
+
+
+def _serialize_event_parameters(values: list[str]) -> str:
+    return _truncate_et_parameter_buffer(" ".join(values))
 
 
 def _serialize_action_parameters(values: list[str]) -> str:
-    return " ".join(f'"{value}"' if " " in value else value for value in values)
+    serialized = " ".join(f'"{value}"' if " " in value else value for value in values)
+    return _truncate_et_parameter_buffer(serialized)
 
 
 def _token_kind(value: str) -> _TokenKind:
@@ -665,7 +667,7 @@ def _lex(
                     digit = ord(character) - ord("A") + 10
                 else:
                     digit = ord(character) - ord("a") + 10
-                value = (value << 4) + digit
+                value = min((value << 4) + digit, 0x100)
         else:
             start = index
             while index < len(text) and "0" <= text[index] <= "9":
@@ -675,7 +677,9 @@ def _lex(
         if not digits:
             raise StageParseError(f"{source}:{start_line}:{start_column}: unsupported PC string escape")
         if marker != "x":
-            value = int(digits, 10)
+            value = 0
+            for character in digits:
+                value = min(value * 10 + ord(character) - ord("0"), 0x100)
         if value == 0:
             raise StageParseError(f"{source}:{start_line}:{start_column}: NUL-producing PC string escape")
         return bytes((min(value, 0xFF),))
@@ -1015,8 +1019,7 @@ def _parse_script_entity(name: _Token, tokens: tuple[_Token, ...], source: str) 
                     boundary_ambiguous = True
                 if token.kind is not _TokenKind.NEWLINE:
                     parameters.append(token.value)
-            if _serialized_parameter_length(parameters, quote_embedded_spaces=False) > _MAX_ET_PARAMETER_LENGTH:
-                stream.fail("event parameters exceed ET's 1023-byte aggregate limit", event_name)
+            serialized_event_parameters = _serialize_event_parameters(parameters)
 
             actions: list[ScriptAction] = []
             while True:
@@ -1063,8 +1066,6 @@ def _parse_script_entity(name: _Token, tokens: tuple[_Token, ...], source: str) 
                         if token.kind in {_TokenKind.LEFT_BRACE, _TokenKind.RIGHT_BRACE}:
                             boundary_ambiguous = True
                         arguments.append(stream.take().value)
-                if _serialized_parameter_length(arguments, quote_embedded_spaces=True) > _MAX_ET_PARAMETER_LENGTH:
-                    stream.fail("action parameters exceed ET's 1023-byte aggregate limit", action_name)
                 actions.append(
                     ScriptAction(
                         command,
@@ -1074,7 +1075,15 @@ def _parse_script_entity(name: _Token, tokens: tuple[_Token, ...], source: str) 
                         braced,
                     )
                 )
-            events.append(ScriptEvent(event, tuple(parameters), tuple(actions), event_name.line))
+            events.append(
+                ScriptEvent(
+                    event,
+                    tuple(parameters),
+                    serialized_event_parameters,
+                    tuple(actions),
+                    event_name.line,
+                )
+            )
     except StageParseError as exc:
         return _ScriptEntityParse(
             ScriptEntity(
@@ -1353,7 +1362,17 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
         for event_index, event in enumerate(entity.events):
             node_id = f"event:{len(indexed_events)}"
             effects = effects_by_event[(entity_index, event_index)]
-            nodes.append(StageEventNode(node_id, entity.name, event.name, event.parameters, effects, event.line))
+            nodes.append(
+                StageEventNode(
+                    node_id,
+                    entity.name,
+                    event.name,
+                    event.parameters,
+                    event.serialized_parameters,
+                    effects,
+                    event.line,
+                )
+            )
             node_ids_by_event[(entity_index, event_index)] = node_id
             indexed_events.append((entity_index, entity, event, node_id))
 
@@ -1364,7 +1383,7 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
             continue
         for event_index, event in enumerate(entity.events):
             if event.name == "trigger":
-                trigger_name = _ascii_fold(" ".join(event.parameters)) if event.parameters else None
+                trigger_name = _ascii_fold(event.serialized_parameters) if event.serialized_parameters else None
                 node_id = node_ids_by_event.get((entity_index, event_index))
                 opaque_event_id = None if node_id is not None else f"opaque-event:{entity_index}:{event_index}"
                 handler = _TriggerHandlerCandidate(trigger_name, node_id, opaque_event_id)
