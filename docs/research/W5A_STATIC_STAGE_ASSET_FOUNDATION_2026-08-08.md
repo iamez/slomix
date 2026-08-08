@@ -59,6 +59,8 @@ The parser contract was checked against ET:Legacy primary source rather than inf
 - `G_ScriptAction_Trigger` gives `self`, `global` and `player` special dispatch semantics, while the current
   `activator` branch is an explicit no-op. `self` is scoped to the concrete source entity, even when another block has
   the same script name. These targets are not ordinary script-name targets and are represented separately.
+- Despite its name, `G_ScriptAction_EntityScriptName` sets the global `g_scriptName` cvar; it does not mutate the
+  entity's runtime `scriptName`, so lexical named-trigger lookup is not invalidated by that action.
 
 All 42 installed `wm_set_main_objective` calls use a numeric first argument. Current ET:Legacy source looks up the
 first argument as an objective target and returns without changing state when that lookup fails; its numeric handling
@@ -74,6 +76,10 @@ older ET-compatible path applies numeric selection semantics, and it does not re
   to that entity's token slice and therefore cannot consume a later entity after an inner syntax error;
 - a fail-closed lexer with source line/column provenance, ET newline semantics, line/block comments, quoted tokens,
   braced `set/create/delete` arguments, NUL rejection and ET token-length enforcement;
+- context-specific brace classification: first-byte braces are structural in map scripts but remain ordinary text in
+  `.objdata` command arguments;
+- 1023-byte aggregate event/action parameter gates matching the usable `MAX_INFO_STRING` payload, including the
+  engine's spaces and action-side re-quoting;
 - exact current ET:Legacy event/action registry inventory, `entity` introducer handling and first-byte brace
   classification matching the engine parser;
 - ASCII-only identifier folding and canonical ASCII integer gates prevent Python Unicode/numeric syntax from
@@ -242,10 +248,10 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 25 passed.
-- Targeted map-geometry regression suite: 99 passed.
+- W5a unit tests: 26 passed.
+- Targeted map-geometry regression suite: 100 passed.
 - Exact W5a real-asset acceptance: 1 passed, 7 deselected.
-- Full real-map geometry/stage integration file: 8 passed in 73.06 seconds (`--no-cov`).
-- Full repository suite: 4,159 passed, 75 skipped, 30 existing warnings in 48.19 seconds.
+- Full real-map geometry/stage integration file: 8 passed in 72.78 seconds (`--no-cov`).
+- Full repository suite: 4,160 passed, 75 skipped, 30 existing warnings in 48.47 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.

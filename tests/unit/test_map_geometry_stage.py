@@ -37,9 +37,9 @@ def _write_pk3(path, members: dict[str, bytes]) -> None:
 def test_objdata_preserves_team_text_and_does_not_invent_missing_classification():
     catalog = parse_objdata(
         b"""// map copy
-wm_mapdescription axis "Defend it"
+wm_mapdescription axis "{Defend}: it"
 wm_objective_axis_desc 1 "Primary Objective:**Defend it."
-wm_objective_allied_desc 1 "Capture it."
+wm_objective_allied_desc 1 "} Capture it."
 wm_objective_allied_desc 2 "Additional: Open a route."
 custom_metadata retained
 """,
@@ -52,7 +52,8 @@ custom_metadata retained
         (ObjectiveTeam.ALLIES, 1, ObjectiveClass.UNKNOWN),
         (ObjectiveTeam.ALLIES, 2, ObjectiveClass.ADDITIONAL),
     ]
-    assert catalog.objectives[1].text == "Capture it."
+    assert catalog.map_descriptions[0].text == "{Defend}: it"
+    assert catalog.objectives[1].text == "} Capture it."
     assert catalog.other_commands[0].command == "custom_metadata"
 
 
@@ -212,6 +213,45 @@ manager {
         ("unused_syntax", "syntax", "set"),
         ("unused_event_syntax", "syntax", "spawn"),
     ]
+
+
+def test_event_and_action_parameter_aggregates_respect_max_info_string():
+    long_a = "a" * 600
+    long_b = "b" * 600
+    boundary_a = "a" * 511
+    boundary_b = "b" * 511
+    script = parse_map_script(
+        f"""unused_action {{
+ spawn {{
+  wm_announce {long_a} {long_b}
+ }}
+}}
+unused_event {{
+ trigger {long_a} {long_b} {{
+  halt
+ }}
+}}
+exact_limit {{
+ spawn {{
+  wm_announce {boundary_a} {boundary_b}
+ }}
+}}
+manager {{
+ spawn {{
+  wm_setwinner 1
+ }}
+}}
+""".encode()
+    )
+
+    graph = compile_static_stage_graph(script)
+
+    assert [node.entity_name for node in graph.nodes] == ["exact_limit", "manager"]
+    assert [(item.entity_name, item.issue_kind) for item in graph.opaque_entities] == [
+        ("unused_action", "syntax"),
+        ("unused_event", "syntax"),
+    ]
+    assert all("1023-byte aggregate limit" in item.reason for item in graph.opaque_entities)
 
 
 def test_quoted_braces_keep_engine_structural_semantics_in_braced_actions():
