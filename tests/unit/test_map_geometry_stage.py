@@ -96,6 +96,12 @@ def test_objdata_rejects_newlines_and_unrepresentable_pc_string_escapes():
         parse_objdata(b'wm_mapdescription axis "bad\\q"', source="escape.objdata")
 
 
+def test_objdata_pc_path_preserves_an_empty_quoted_token():
+    catalog = parse_objdata(b'wm_mapdescription axis ""', source="empty.objdata")
+
+    assert catalog.map_descriptions == (MapDescription("axis", "", 1),)
+
+
 def test_objdata_uses_last_write_for_team_slots_and_rejects_malformed_text():
     duplicate = b"""wm_mapdescription axis "First map text"
 wm_objective_axis_desc 1 "Primary: First"
@@ -464,6 +470,32 @@ manager {
         3,
     )
     assert "winner team must be a canonical ASCII integer" in issue.reason
+
+
+def test_trigger_dispatch_retains_a_projection_opaque_handler_candidate():
+    graph = compile_static_stage_graph(
+        parse_map_script(
+            b"""manager {
+ spawn {
+  trigger target advance
+ }
+}
+target {
+ trigger advance {
+  wm_setwinner 2
+ }
+}
+"""
+        )
+    )
+
+    edge = graph.trigger_edges[0]
+    assert edge.resolution is TriggerResolution.OPAQUE
+    assert edge.candidate_node_ids == ()
+    assert edge.opaque_candidate_event_ids == ("opaque-event:1:0",)
+    assert [(item.entity_name, item.issue_kind) for item in graph.opaque_entities] == [
+        ("target", "projection")
+    ]
 
 
 def test_command_and_trigger_folding_is_ascii_only():

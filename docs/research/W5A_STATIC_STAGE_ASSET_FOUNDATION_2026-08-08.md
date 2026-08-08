@@ -105,7 +105,9 @@ older ET-compatible path applies numeric selection semantics, and it does not re
 - typed projections for objective status, main objective, winner, autospawn, entity state, marker movement,
   entity alert and round end;
 - trigger-call edges with direct/self dispatch, explicit `global`/`player` runtime dispatch and the current
-  `activator` no-op, plus `resolved`, `missing`, `ambiguous`, `runtime_dispatch` or `no_op` results;
+  `activator` no-op, plus `resolved`, `missing`, `ambiguous`, `opaque`, `runtime_dispatch` or `no_op` results;
+- incoming trigger dispatch to a handler in a projection-opaque entity retains an explicit opaque event candidate;
+  it is never reported as missing merely because that handler has no defensible typed graph node;
 - trigger handler keys use the engine's space-joined event-parameter representation, including multi-token names;
 - callback-visible action arguments are reparsed from the engine-equivalent serialized buffer; trigger lookup uses the
   first matching entity block and handler in declaration order; later duplicate entity blocks carry explicit
@@ -263,16 +265,16 @@ Before replay code is written:
 5. allow replay only for a round whose manifest covers every transition family needed by that map.
 
 The replay then starts from a uniquely defined initial state, applies timestamped observed transitions in order and
-becomes `unknown` at the first missing, duplicate, out-of-order or ambiguous transition. A later observation may
+becomes `unknown` at the first missing, duplicate, out-of-order, ambiguous or opaque transition. A later observation may
 restore a known state only when it uniquely distinguishes all legal candidates. Final round outcome must never be
 used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 42 passed.
-- Targeted map-geometry regression suite: 116 passed.
-- Exact W5a real-asset acceptance: 1 passed, 7 deselected in 2.39 seconds.
-- Full real-map geometry/stage integration file: 8 passed in 79.83 seconds (`--no-cov`).
-- Full repository suite: 4,176 passed, 75 skipped, 7 warnings in 31.77 seconds.
+- W5a unit tests: 44 passed.
+- Targeted map-geometry regression suite: 118 passed.
+- Exact W5a real-asset acceptance: 1 passed, 7 deselected in 2.41 seconds.
+- Full real-map geometry/stage integration file: 8 passed in 80.14 seconds (`--no-cov`).
+- Full repository suite: 4,178 passed, 75 skipped, 7 warnings in 31.82 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.
