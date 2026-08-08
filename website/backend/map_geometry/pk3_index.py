@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import lzma
 import zipfile
+import zlib
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -164,7 +166,7 @@ class Pk3GeometryIndex:
                                 sha256=_hash_member(archive, info),
                             )
                         )
-            except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
+            except (OSError, EOFError, zipfile.BadZipFile, RuntimeError, zlib.error, lzma.LZMAError) as exc:
                 raise Pk3IndexError(f"cannot index PK3 archive {pk3_path}: {exc}") from exc
 
         providers: dict[tuple[str, MapAssetKind], tuple[MapAssetProvider, ...]] = {}
@@ -269,7 +271,7 @@ class Pk3GeometryIndex:
                     raw = handle.read()
         except AssetContentChangedError:
             raise
-        except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
+        except (OSError, EOFError, zipfile.BadZipFile, RuntimeError, zlib.error, lzma.LZMAError) as exc:
             raise Pk3IndexError(f"cannot read indexed asset {provider.source}: {exc}") from exc
 
         actual_hash = hashlib.sha256(raw).hexdigest()
