@@ -1,9 +1,14 @@
 # Environment Identity — Mandelbrot RCA v2.0
 
-Research pass only, per Mandelbrot RCA v2.0 (Discovery → Dependency Mapping →
-Contract Extraction → Mandelbrot Zoom → RCA Deep Dive → Fix + Verify). This
-document covers phases 0-4. **No code was changed.** Phase 5 (fix + verify)
-is a separate, later step pending owner review of this document.
+Per Mandelbrot RCA v2.0 (Discovery → Dependency Mapping → Contract Extraction
+→ Mandelbrot Zoom → RCA Deep Dive → Fix + Verify). Phases 0-4 (this document)
+were written and reviewed by the owner *before* any code was touched, per
+explicit instruction. **Phase 5 (fix + verify) has since been implemented**,
+in the same PR that added this document (`BOT_ENVIRONMENT` enforcement in
+`bot/config.py` and `website/backend/main.py`, two independent
+implementations — see Phase 1's dependency-mapping section for why not a
+shared module). This header is updated to say so rather than leaving the
+document to claim "no code was changed" once that stopped being true.
 
 Scope: the "environment identity" gap first flagged in
 `docs/research/DISCORD_ROUTING_AUDIT_2026-08-06.md` §5 — no code-level
@@ -36,7 +41,7 @@ happens to be sitting in the working directory.
 
 `website/backend/security_utils.py:338-360` `resolve_trusted_hosts()`:
 
-```
+```text
 Fail-fast rule: SESSION_HTTPS_ONLY=true is this app's production posture
 (dev opts out for local HTTP). Running that posture without an explicit
 trusted-host list would silently accept any Host value, so it is a
@@ -225,7 +230,7 @@ that actually bite for this specific mechanism):
 
 ### Fault tree — top event: "a dev process behaves like, or interferes with, production"
 
-```
+```text
 Dev process affects production
 ├── OR: dev bot polls production SSH source          [CONFIRMED, currently true]
 │   ├── OR: .env copied/never reset                  [current apparent cause]
@@ -252,20 +257,27 @@ described to the owner as such rather than oversold.
 
 ---
 
-## Open questions for the owner before Phase 5 (implementation)
+## Decisions made / questions resolved (Phase 5 now implemented)
 
-1. **Shared module or two independent copies?** (Phase 1/3.5) — a real
-   architectural fork given the recent bot/website decoupling. Recommend:
-   two small independent implementations (~10 lines each), not a shared
-   import, to stay consistent with PR #603's direction — but this is a
-   judgment call, not a fact, and worth a second opinion.
-2. ~~What breaks in the test suite~~ — **measured 2026-08-08**: ~8 files,
-   one line each (see Phase 3, point 2 above). Smaller than initially
-   feared; no longer a blocker for deciding whether to proceed.
-3. **Retrofitting existing hosts** — dev's and prod's `.env` files both need
-   the new variable added manually, once, outside of any script (or
-   `deploy_release.sh`/`install.sh` need a step added). Who does this and
-   when is an owner decision, not something to automate silently.
-4. Given points 2-3 add real scope beyond "add one variable," is this still
-   worth doing now, or does it make more sense to schedule as its own
-   focused piece of work rather than folding into workstream A?
+1. **Shared module or two independent copies?** — resolved: two independent
+   implementations, per the recommendation above (owner approved
+   "implement now" without amending this point).
+2. ~~What breaks in the test suite~~ — measured 2026-08-08: 8 files, one
+   line each. Fixed in the same PR. Full suite: 4145 passed, 78 skipped
+   (all pre-existing/unrelated), 0 failed.
+3. **This dev host** — retrofitted: `BOT_ENVIRONMENT=dev` and
+   `SSH_ENABLED_DEV_OVERRIDE=true` added to this host's real (gitignored)
+   `.env` and `website/.env`, so the running services won't crash-loop on
+   next restart. Not restarted — per standing project policy, that is a
+   separate, explicit action.
+4. **Production is NOT yet retrofitted, and this is a real gap.**
+   `install.sh` (fresh installs) and `scripts/deploy_release.sh` (updates
+   to the existing production deployment) do not add `BOT_ENVIRONMENT` to
+   any generated or managed `.env` file. Confirmed by CodeRabbit's review
+   on the implementation PR (#623), independently of this document. Until
+   this is fixed, a fresh install would crash-loop immediately, and this
+   PR reaching production via a normal deploy — which does not regenerate
+   `.env` from scratch — would similarly crash-loop unless someone adds
+   `BOT_ENVIRONMENT=production` to both production `.env` files by hand
+   *before* that deploy. Tracked as follow-up work; not blocking this PR
+   from merging, but blocking it from ever reaching production safely.

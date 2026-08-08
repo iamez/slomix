@@ -67,7 +67,17 @@ class BotConfig:
         # nothing in this codebase previously knew "am I dev or production",
         # which is how a dev host ended up polling the real production game
         # server (SSH_ENABLED=true, real SSH_HOST) with nothing to catch it.
-        self.bot_environment: str = self._get_config('BOT_ENVIRONMENT', '').strip().lower()
+        # _get_config() can return a non-string (bot_config.json may hold
+        # true/null for this key) — .strip() on that raises AttributeError
+        # before the intended validation runs. Normalize to '' for any
+        # non-string so it hits the ValueError below instead (CodeRabbit
+        # review on #623).
+        _raw_bot_environment = self._get_config('BOT_ENVIRONMENT', '')
+        self.bot_environment: str = (
+            _raw_bot_environment.strip().lower()
+            if isinstance(_raw_bot_environment, str)
+            else ''
+        )
         if self.bot_environment not in ('dev', 'production'):
             raise ValueError(
                 "BOT_ENVIRONMENT must be set to 'dev' or 'production' "
@@ -273,8 +283,9 @@ class BotConfig:
                 )
             logger.warning(
                 "⚠️ SSH_ENABLED=true on a non-production environment, allowed "
-                "via SSH_ENABLED_DEV_OVERRIDE=true. This bot IS polling a real "
-                "game server from dev."
+                "via SSH_ENABLED_DEV_OVERRIDE=true. Confirm SSH_HOST is the "
+                "intended target — this config alone can't tell whether that "
+                "host is production."
             )
         self.ssh_host: str = self._get_config('SSH_HOST', '')
         self.ssh_port: int = int(self._get_config('SSH_PORT', '22'))
@@ -634,6 +645,9 @@ class BotConfig:
             output_path: Path to save example config
         """
         example = {
+            # Required — no default. "dev" here; production deployments must
+            # override to "production" (docs/research/ENVIRONMENT_IDENTITY_RCA_2026-08-08.md).
+            "BOT_ENVIRONMENT": "dev",
             "DATABASE_TYPE": "sqlite",
             "SQLITE_DB_PATH": "bot/etlegacy_production.db",
             "POSTGRES_HOST": "localhost",

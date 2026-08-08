@@ -39,7 +39,7 @@ else:
     load_dotenv(os.path.join(project_root, ".env"))
 
 # Setup logging (must happen before other imports that use logging)
-from website.backend.env_utils import getenv_int
+from website.backend.env_utils import getenv_int, strip_inline_comment
 from website.backend.logging_config import get_app_logger, setup_logging
 from website.backend.middleware import (
     HTTPCacheMiddleware,
@@ -111,7 +111,7 @@ from website.backend.services.weapon_stats_mv_refresh import (
 # deliberately decoupled from bot/ in PR #603, see
 # docs/research/ENVIRONMENT_IDENTITY_RCA_2026-08-08.md). Read before
 # anything else so a bad value stops startup immediately.
-BOT_ENVIRONMENT = os.getenv("BOT_ENVIRONMENT", "").strip().lower()
+BOT_ENVIRONMENT = strip_inline_comment(os.getenv("BOT_ENVIRONMENT", "")).lower()
 if BOT_ENVIRONMENT not in ("dev", "production"):
     raise ValueError(
         "BOT_ENVIRONMENT must be set to 'dev' or 'production' "
