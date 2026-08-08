@@ -342,9 +342,20 @@ class TriggerEdge:
 
 
 @dataclass(frozen=True, slots=True)
+class OpaqueScriptEntity:
+    entity_index: int
+    entity_name: str
+    issue_kind: Literal["registry_event", "registry_action", "projection"]
+    token: str
+    line: int
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class StaticStageGraph:
     nodes: tuple[StageEventNode, ...]
     trigger_edges: tuple[TriggerEdge, ...]
+    opaque_entities: tuple[OpaqueScriptEntity, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -767,16 +778,64 @@ def _effect_for(action: ScriptAction, source: str) -> StageEffect | None:
 
 
 def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -> StaticStageGraph:
+    eligible_entities: set[int] = set()
+    effects_by_event: dict[tuple[int, int], tuple[StageEffect, ...]] = {}
+    opaque_entities: list[OpaqueScriptEntity] = []
+    for entity_index, entity in enumerate(script.entities):
+        if issue := entity.registry_issue:
+            issue_kind: Literal["registry_event", "registry_action"] = (
+                "registry_event" if issue.kind == "event" else "registry_action"
+            )
+            opaque_entities.append(
+                OpaqueScriptEntity(
+                    entity_index,
+                    entity.name,
+                    issue_kind,
+                    issue.name,
+                    issue.line,
+                    f"{source}:{issue.line}: unknown ET script {issue.kind} {issue.name!r}",
+                )
+            )
+            continue
+
+        projection_issue: OpaqueScriptEntity | None = None
+        for event_index, event in enumerate(entity.events):
+            effects: list[StageEffect] = []
+            for action in event.actions:
+                try:
+                    if effect := _effect_for(action, source):
+                        effects.append(effect)
+                    if action.command == "trigger":
+                        _exact_arguments(action, 2, source)
+                except StageParseError as exc:
+                    projection_issue = OpaqueScriptEntity(
+                        entity_index,
+                        entity.name,
+                        "projection",
+                        action.command,
+                        action.line,
+                        str(exc),
+                    )
+                    break
+            if projection_issue is not None:
+                break
+            effects_by_event[(entity_index, event_index)] = tuple(effects)
+
+        if projection_issue is not None:
+            opaque_entities.append(projection_issue)
+        else:
+            eligible_entities.add(entity_index)
+
     nodes: list[StageEventNode] = []
     events_by_trigger: dict[tuple[str, str], list[str]] = {}
     self_events_by_trigger: dict[tuple[int, str], list[str]] = {}
     indexed_events: list[tuple[int, ScriptEntity, ScriptEvent, str]] = []
     for entity_index, entity in enumerate(script.entities):
-        if entity.registry_issue is not None:
+        if entity_index not in eligible_entities:
             continue
-        for event in entity.events:
+        for event_index, event in enumerate(entity.events):
             node_id = f"event:{len(indexed_events)}"
-            effects = tuple(effect for action in event.actions if (effect := _effect_for(action, source)) is not None)
+            effects = effects_by_event[(entity_index, event_index)]
             nodes.append(StageEventNode(node_id, entity.name, event.name, event.parameters, effects, event.line))
             indexed_events.append((entity_index, entity, event, node_id))
             if event.name == "trigger" and len(event.parameters) == 1:
@@ -789,7 +848,6 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
         for action in event.actions:
             if action.command != "trigger":
                 continue
-            _exact_arguments(action, 2, source)
             raw_target = action.arguments[0]
             target_kind = _ascii_fold(raw_target)
             target_trigger = action.arguments[1]
@@ -837,7 +895,7 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
                 )
             )
 
-    return StaticStageGraph(tuple(nodes), tuple(edges))
+    return StaticStageGraph(tuple(nodes), tuple(edges), tuple(opaque_entities))
 
 
 def load_static_stage(index: Pk3GeometryIndex, map_name: str) -> StageLoadResult:

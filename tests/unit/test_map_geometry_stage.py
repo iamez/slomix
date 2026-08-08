@@ -165,6 +165,10 @@ manager {
 
     graph = compile_static_stage_graph(script)
     assert [(node.entity_name, node.effects) for node in graph.nodes] == [("manager", (WinnerEffect(1, 5),))]
+    assert [(item.entity_name, item.issue_kind, item.token) for item in graph.opaque_entities] == [
+        ("unused_action", "registry_action", "wm_setwiner"),
+        ("unused_event", "registry_event", "triger"),
+    ]
 
 
 def test_quoted_braces_keep_engine_structural_semantics_in_braced_actions():
@@ -233,11 +237,33 @@ def test_legacy_numeric_main_objective_is_marked_instead_of_treated_as_a_target_
     assert graph.nodes[0].effects == (MainObjectiveEffect("2", MainObjectiveSelectorForm.LEGACY_NUMERIC, 1, 3),)
 
 
-def test_effect_projection_rejects_noncanonical_integer_syntax():
-    script = parse_map_script(b"manager {\nspawn {\nwm_setwinner 0_1\n}\n}\n")
+def test_invalid_typed_projection_makes_only_its_entity_opaque():
+    script = parse_map_script(
+        b"""unused {
+ spawn {
+  wm_setwinner 0_1
+ }
+}
+manager {
+ spawn {
+  wm_setwinner 1
+ }
+}
+"""
+    )
 
-    with pytest.raises(StageParseError, match="winner team must be a canonical ASCII integer"):
-        compile_static_stage_graph(script)
+    graph = compile_static_stage_graph(script)
+
+    assert [(node.entity_name, node.effects) for node in graph.nodes] == [("manager", (WinnerEffect(1, 8),))]
+    assert len(graph.opaque_entities) == 1
+    issue = graph.opaque_entities[0]
+    assert (issue.entity_name, issue.issue_kind, issue.token, issue.line) == (
+        "unused",
+        "projection",
+        "wm_setwinner",
+        3,
+    )
+    assert "winner team must be a canonical ASCII integer" in issue.reason
 
 
 def test_command_and_trigger_folding_is_ascii_only():
@@ -488,7 +514,7 @@ def test_stage_load_returns_invalid_instead_of_a_partial_model(tmp_path):
     _write_pk3(
         tmp_path / "one.pk3",
         {
-            "maps/duel.script": b"manager {\nspawn {\nwm_setwinner invalid\n}\n}\n",
+            "maps/duel.script": b"manager {\nspawn {\nwm_setwinner 1\n}\n",
             "maps/duel.objdata": b'wm_objective_axis_desc 1 "Primary: Defend"',
         },
     )
@@ -496,4 +522,4 @@ def test_stage_load_returns_invalid_instead_of_a_partial_model(tmp_path):
 
     assert result.status is StageLoadStatus.INVALID
     assert result.model is None
-    assert "winner team must be a canonical ASCII integer" in (result.reason or "")
+    assert "unclosed entity 'manager'" in (result.reason or "")

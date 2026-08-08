@@ -93,6 +93,12 @@ it. The whole asset is not marked invalid because ET:Legacy accepts an unfamilia
 live entity. W5b must make the mapped stage unknown if such a block is proven selected; until BSP identity mapping is
 available, treating either all or none of these blocks as active would overstate the evidence.
 
+The compiler applies the same entity-level boundary when a known command cannot be projected defensibly (for
+example, a noncanonical integer or wrong trigger arity). It validates each block atomically before adding any of its
+nodes, records an `OpaqueScriptEntity` with the failing command and reason, and excludes the entire block. This avoids
+rejecting an asset for arguments ET:Legacy would never inspect in a nonmatching block while also preventing effects
+from a block that would fail if selected.
+
 Known-but-unprojected actions preserve evidence without inventing stage meaning for animation, accumulator, sound or
 other commands outside W5a's approved semantic surface.
 
@@ -115,7 +121,7 @@ and freezes these totals:
 | Script entities | 583 |
 | Event handlers | 2,153 |
 | Actions retained | 10,057 |
-| Opaque entity blocks with registry issues | 0 |
+| Opaque entity blocks (registry or projection issues) | 0 |
 | Distinct action command names | 52 |
 | Objective descriptions | 250 |
 | Explicit objective classes | 232 / 250 |
@@ -222,7 +228,7 @@ used to fabricate a transition timestamp.
 - W5a unit tests: 24 passed.
 - Targeted map-geometry regression suite: 98 passed.
 - Exact W5a real-asset acceptance: 1 passed, 7 deselected.
-- Full real-map geometry/stage integration file: 8 passed in 136.09 seconds.
-- Full repository suite: 4,158 passed, 75 skipped, 30 existing warnings in 50.38 seconds.
+- Full real-map geometry/stage integration file: 8 passed in 73.23 seconds (`--no-cov`).
+- Full repository suite: 4,158 passed, 75 skipped, 30 existing warnings in 51.75 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.

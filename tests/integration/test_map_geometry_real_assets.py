@@ -109,6 +109,7 @@ def test_w5a_parses_every_resolved_stage_asset_and_exposes_partial_static_covera
         "events": 0,
         "actions": 0,
         "registry_issues": 0,
+        "opaque_entities": 0,
         "objectives": 0,
         "known_objective_classes": 0,
         "unknown_objective_classes": 0,
@@ -142,6 +143,7 @@ def test_w5a_parses_every_resolved_stage_asset_and_exposes_partial_static_covera
         totals["events"] += len(events)
         totals["actions"] += sum(len(event.actions) for event in events)
         totals["registry_issues"] += sum(entity.registry_issue is not None for entity in model.script.entities)
+        totals["opaque_entities"] += len(model.graph.opaque_entities)
         totals["objectives"] += len(model.objectives.objectives)
         totals["known_objective_classes"] += len(model.objectives.objectives) - unknown_classes
         totals["unknown_objective_classes"] += unknown_classes
@@ -165,6 +167,7 @@ def test_w5a_parses_every_resolved_stage_asset_and_exposes_partial_static_covera
         "events": 2153,
         "actions": 10057,
         "registry_issues": 0,
+        "opaque_entities": 0,
         "objectives": 250,
         "known_objective_classes": 232,
         "unknown_objective_classes": 18,
