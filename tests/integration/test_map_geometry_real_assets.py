@@ -116,6 +116,8 @@ def test_w5a_parses_every_resolved_stage_asset_and_exposes_partial_static_covera
         "resolved_trigger_edges": 0,
         "missing_trigger_edges": 0,
         "ambiguous_trigger_edges": 0,
+        "runtime_dispatch_trigger_edges": 0,
+        "no_op_trigger_edges": 0,
         "legacy_numeric_main_objectives": 0,
     }
     maps_with_complete_trigger_closure = 0
@@ -146,6 +148,8 @@ def test_w5a_parses_every_resolved_stage_asset_and_exposes_partial_static_covera
         totals["resolved_trigger_edges"] += edge_counts[TriggerResolution.RESOLVED]
         totals["missing_trigger_edges"] += edge_counts[TriggerResolution.MISSING]
         totals["ambiguous_trigger_edges"] += edge_counts[TriggerResolution.AMBIGUOUS]
+        totals["runtime_dispatch_trigger_edges"] += edge_counts[TriggerResolution.RUNTIME_DISPATCH]
+        totals["no_op_trigger_edges"] += edge_counts[TriggerResolution.NO_OP]
         totals["legacy_numeric_main_objectives"] += sum(
             isinstance(effect, MainObjectiveEffect) and effect.selector_form is MainObjectiveSelectorForm.LEGACY_NUMERIC
             for node in model.graph.nodes
@@ -166,6 +170,8 @@ def test_w5a_parses_every_resolved_stage_asset_and_exposes_partial_static_covera
         "resolved_trigger_edges": 1304,
         "missing_trigger_edges": 11,
         "ambiguous_trigger_edges": 0,
+        "runtime_dispatch_trigger_edges": 0,
+        "no_op_trigger_edges": 0,
         "legacy_numeric_main_objectives": 42,
     }
     assert maps_with_complete_trigger_closure == 13

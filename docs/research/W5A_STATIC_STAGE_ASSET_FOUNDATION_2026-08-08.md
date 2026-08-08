@@ -47,6 +47,8 @@ The parser contract was checked against ET:Legacy primary source rather than inf
   handling. Line comments preserve the newline boundary; block comments do not create an action boundary.
 - [`G_ScriptAction_SetMainObjective`](https://github.com/etlegacy/etlegacy/blob/master/src/game/g_script_actions.c)
   documents the target-name form while retaining compatibility handling for old scripts.
+- `G_ScriptAction_Trigger` gives `self`, `global` and `player` special dispatch semantics, while the current
+  `activator` branch is an explicit no-op. They are not ordinary script-name targets and are represented separately.
 
 All 42 installed `wm_set_main_objective` calls use a numeric first argument. Current ET:Legacy source looks up the
 first argument as an objective target and returns without changing state when that lookup fails; its numeric handling
@@ -65,7 +67,8 @@ older ET-compatible path applies numeric selection semantics, and it does not re
 - a structured map-script AST retaining every entity, event, action and raw argument;
 - typed projections for objective status, main objective, winner, autospawn, entity state, marker movement,
   entity alert and round end;
-- trigger-call edges with `resolved`, `missing` or `ambiguous` results;
+- trigger-call edges with direct/self dispatch, explicit `global`/`player` runtime dispatch and the current
+  `activator` no-op, plus `resolved`, `missing`, `ambiguous`, `runtime_dispatch` or `no_op` results;
 - independent W1 resolution of script and objdata before either file is read;
 - `missing`, `ambiguous`, `invalid` and `resolved` load states. No partial model is returned for invalid input.
 
@@ -100,6 +103,7 @@ and freezes these totals:
 | Trigger edges with exactly one target handler | 1,304 / 1,315 |
 | Trigger edges without a target handler | 11 / 1,315 |
 | Trigger edges with multiple target handlers | 0 / 1,315 |
+| Runtime-dispatch trigger edges in installed assets | 0 / 1,315 |
 | Maps with complete internal trigger closure | 13 / 20 |
 | Maps with explicit classes for every objective | 18 / 20 |
 
@@ -193,7 +197,7 @@ used to fabricate a transition timestamp.
 
 ## Verification performed
 
-- W5a unit tests: 10 passed.
+- W5a unit tests: 11 passed.
 - Map-geometry regression suite: 103 passed.
 - Full real-map geometry/stage integration file: 8 passed in 132.71 seconds.
 - Full repository suite: 4,144 passed, 75 skipped, 30 existing warnings in 71.15 seconds.

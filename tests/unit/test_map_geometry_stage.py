@@ -17,6 +17,7 @@ from website.backend.map_geometry.stage import (
     ObjectiveTeam,
     StageLoadStatus,
     StageParseError,
+    TriggerDispatch,
     TriggerResolution,
     WinnerEffect,
     compile_static_stage_graph,
@@ -147,8 +148,10 @@ def test_static_graph_projects_only_defensible_effects_and_resolves_trigger_edge
     )
     assert graph.nodes[1].effects == (WinnerEffect(1, 11),)
     assert graph.trigger_edges[0].resolution is TriggerResolution.RESOLVED
+    assert graph.trigger_edges[0].dispatch is TriggerDispatch.SELF
     assert graph.trigger_edges[0].candidate_node_ids == ("event:1",)
     assert graph.trigger_edges[1].resolution is TriggerResolution.MISSING
+    assert graph.trigger_edges[1].dispatch is TriggerDispatch.SCRIPT_NAME
     assert graph.trigger_edges[1].candidate_node_ids == ()
 
 
@@ -191,6 +194,40 @@ target {
 
     assert graph.trigger_edges[0].resolution is TriggerResolution.AMBIGUOUS
     assert graph.trigger_edges[0].candidate_node_ids == ("event:1", "event:2")
+
+
+def test_runtime_trigger_dispatch_is_not_misreported_as_a_missing_script_name():
+    graph = compile_static_stage_graph(
+        parse_map_script(
+            b"""manager {
+ spawn {
+  trigger global advance
+  trigger player notify
+  trigger activator notify
+ }
+ trigger advance {
+  halt
+ }
+}
+other {
+ trigger advance {
+  halt
+ }
+}
+"""
+        )
+    )
+
+    global_edge, player_edge, activator_edge = graph.trigger_edges
+    assert global_edge.dispatch is TriggerDispatch.GLOBAL
+    assert global_edge.resolution is TriggerResolution.RUNTIME_DISPATCH
+    assert global_edge.candidate_node_ids == ("event:1", "event:2")
+    assert player_edge.dispatch is TriggerDispatch.PLAYER
+    assert player_edge.resolution is TriggerResolution.RUNTIME_DISPATCH
+    assert player_edge.candidate_node_ids == ()
+    assert activator_edge.dispatch is TriggerDispatch.ACTIVATOR
+    assert activator_edge.resolution is TriggerResolution.NO_OP
+    assert activator_edge.candidate_node_ids == ()
 
 
 def test_stage_load_requires_independent_unambiguous_script_and_objdata(tmp_path):

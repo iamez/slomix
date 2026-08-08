@@ -43,6 +43,16 @@ class TriggerResolution(StrEnum):
     RESOLVED = "resolved"
     MISSING = "missing"
     AMBIGUOUS = "ambiguous"
+    RUNTIME_DISPATCH = "runtime_dispatch"
+    NO_OP = "no_op"
+
+
+class TriggerDispatch(StrEnum):
+    SELF = "self"
+    SCRIPT_NAME = "script_name"
+    GLOBAL = "global"
+    PLAYER = "player"
+    ACTIVATOR = "activator"
 
 
 class StageLoadStatus(StrEnum):
@@ -199,6 +209,7 @@ class TriggerEdge:
     target_entity: str
     target_trigger: str
     candidate_node_ids: tuple[str, ...]
+    dispatch: TriggerDispatch
     resolution: TriggerResolution
     line: int
 
@@ -628,15 +639,52 @@ def compile_static_stage_graph(script: MapScript, *, source: str = "<script>") -
             if action.command != "trigger":
                 continue
             _exact_arguments(action, 2, source)
-            target_entity = entity.name if action.arguments[0].casefold() == "self" else action.arguments[0]
-            candidates = tuple(events_by_trigger.get((target_entity.casefold(), action.arguments[1].casefold()), ()))
-            if len(candidates) == 1:
+            raw_target = action.arguments[0]
+            target_kind = raw_target.casefold()
+            target_trigger = action.arguments[1]
+            if target_kind == "self":
+                dispatch = TriggerDispatch.SELF
+                target_entity = entity.name
+                candidates = tuple(events_by_trigger.get((target_entity.casefold(), target_trigger.casefold()), ()))
+            elif target_kind == "global":
+                dispatch = TriggerDispatch.GLOBAL
+                target_entity = raw_target
+                candidates = tuple(
+                    candidate
+                    for (candidate_entity, candidate_trigger), node_ids in events_by_trigger.items()
+                    if candidate_trigger == target_trigger.casefold()
+                    for candidate in node_ids
+                )
+            elif target_kind in {"player", "activator"}:
+                dispatch = TriggerDispatch(target_kind)
+                target_entity = raw_target
+                candidates = ()
+            else:
+                dispatch = TriggerDispatch.SCRIPT_NAME
+                target_entity = raw_target
+                candidates = tuple(events_by_trigger.get((target_entity.casefold(), target_trigger.casefold()), ()))
+
+            if dispatch is TriggerDispatch.ACTIVATOR:
+                resolution = TriggerResolution.NO_OP
+            elif dispatch in {TriggerDispatch.GLOBAL, TriggerDispatch.PLAYER}:
+                resolution = TriggerResolution.RUNTIME_DISPATCH
+            elif len(candidates) == 1:
                 resolution = TriggerResolution.RESOLVED
             elif candidates:
                 resolution = TriggerResolution.AMBIGUOUS
             else:
                 resolution = TriggerResolution.MISSING
-            edges.append(TriggerEdge(node_id, target_entity, action.arguments[1], candidates, resolution, action.line))
+            edges.append(
+                TriggerEdge(
+                    node_id,
+                    target_entity,
+                    target_trigger,
+                    candidates,
+                    dispatch,
+                    resolution,
+                    action.line,
+                )
+            )
 
     return StaticStageGraph(tuple(nodes), tuple(edges))
 
