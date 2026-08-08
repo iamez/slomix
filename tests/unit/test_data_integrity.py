@@ -211,6 +211,16 @@ class TestFileHashCalculation:
 class TestConfigurationValues:
     """Test configuration timing values"""
 
+    @pytest.fixture(autouse=True)
+    def _bot_environment(self, monkeypatch):
+        """BotConfig() now requires BOT_ENVIRONMENT to be set (fail-closed,
+        see docs/research/ENVIRONMENT_IDENTITY_RCA_2026-08-08.md). Also pin
+        SSH_ENABLED=false explicitly: this dev host's real ambient config has
+        it true (the exact condition the new check exists to catch), and
+        these tests aren't about SSH at all."""
+        monkeypatch.setenv("BOT_ENVIRONMENT", "dev")
+        monkeypatch.setenv("SSH_ENABLED", "false")
+
     def test_round_match_window_default(self):
         """round_match_window_minutes should default to 45"""
         from bot.config import BotConfig

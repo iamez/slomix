@@ -15,6 +15,7 @@ class TestConfigLoadingE2E:
     def test_bot_config_loads_from_env(self, monkeypatch):
         """BotConfig initializes successfully from environment variables."""
         # Set minimal required env vars
+        monkeypatch.setenv("BOT_ENVIRONMENT", "dev")
         monkeypatch.setenv("DISCORD_BOT_TOKEN", "test_token_for_e2e")
         monkeypatch.setenv("DATABASE_TYPE", "postgres")
         monkeypatch.setenv("DB_HOST", "localhost")
@@ -34,6 +35,7 @@ class TestConfigLoadingE2E:
 
     def test_webhook_whitelist_parsing(self, monkeypatch):
         """BotConfig parses WEBHOOK_TRIGGER_WHITELIST correctly from env."""
+        monkeypatch.setenv("BOT_ENVIRONMENT", "dev")
         monkeypatch.setenv("DISCORD_BOT_TOKEN", "test_token")
         monkeypatch.setenv("AUTOMATION_ENABLED", "false")
         monkeypatch.setenv("SSH_ENABLED", "false")
@@ -48,6 +50,7 @@ class TestConfigLoadingE2E:
 
     def test_empty_webhook_whitelist(self, monkeypatch):
         """BotConfig handles empty WEBHOOK_TRIGGER_WHITELIST gracefully."""
+        monkeypatch.setenv("BOT_ENVIRONMENT", "dev")
         monkeypatch.setenv("DISCORD_BOT_TOKEN", "test_token")
         monkeypatch.setenv("AUTOMATION_ENABLED", "false")
         monkeypatch.setenv("SSH_ENABLED", "false")
@@ -60,6 +63,7 @@ class TestConfigLoadingE2E:
         assert len(config.webhook_trigger_whitelist) == 0
 
     def test_webhook_trigger_mode_defaults_to_stats_ready_only(self, monkeypatch):
+        monkeypatch.setenv("BOT_ENVIRONMENT", "dev")
         monkeypatch.setenv("DISCORD_BOT_TOKEN", "test_token")
         monkeypatch.setenv("AUTOMATION_ENABLED", "false")
         monkeypatch.setenv("SSH_ENABLED", "false")
@@ -71,6 +75,7 @@ class TestConfigLoadingE2E:
         assert config.webhook_trigger_mode == "stats_ready_only"
 
     def test_invalid_webhook_trigger_mode_falls_back_to_stats_ready_only(self, monkeypatch):
+        monkeypatch.setenv("BOT_ENVIRONMENT", "dev")
         monkeypatch.setenv("DISCORD_BOT_TOKEN", "test_token")
         monkeypatch.setenv("AUTOMATION_ENABLED", "false")
         monkeypatch.setenv("SSH_ENABLED", "false")
@@ -82,6 +87,7 @@ class TestConfigLoadingE2E:
         assert config.webhook_trigger_mode == "stats_ready_only"
 
     def test_validate_flags_websocket_conflict_for_strict_webhook_mode(self, monkeypatch):
+        monkeypatch.setenv("BOT_ENVIRONMENT", "dev")
         monkeypatch.setenv("DISCORD_BOT_TOKEN", "test_token")
         monkeypatch.setenv("AUTOMATION_ENABLED", "false")
         monkeypatch.setenv("SSH_ENABLED", "false")
