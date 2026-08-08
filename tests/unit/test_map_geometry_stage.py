@@ -164,10 +164,11 @@ def test_balanced_backslash_quote_pairs_match_engine_string_in_string_tokens():
     assert script.entities[0].events[0].actions[0].arguments == ('say "hello"',)
 
 
-def test_unknown_registry_names_make_only_their_entity_opaque():
+def test_unselected_inner_errors_make_only_their_entity_opaque():
     script = parse_map_script(
         b"""unused_action { spawn { wm_setwiner 1 } }
 unused_event { triger advance { halt } }
+unused_syntax { spawn { set broken } }
 manager {
  spawn {
   wm_setwinner 1
@@ -182,13 +183,19 @@ manager {
     assert (action_issue.kind, action_issue.name, action_issue.line) == ("action", "wm_setwiner", 1)
     assert event_issue is not None
     assert (event_issue.kind, event_issue.name, event_issue.line) == ("event", "triger", 2)
-    assert script.entities[2].registry_issue is None
+    syntax_issue = script.entities[2].syntax_issue
+    assert syntax_issue is not None
+    assert (syntax_issue.command, syntax_issue.line) == ("set", 3)
+    assert "expected '{' after set" in syntax_issue.reason
+    assert script.entities[3].registry_issue is None
+    assert script.entities[3].syntax_issue is None
 
     graph = compile_static_stage_graph(script)
-    assert [(node.entity_name, node.effects) for node in graph.nodes] == [("manager", (WinnerEffect(1, 5),))]
+    assert [(node.entity_name, node.effects) for node in graph.nodes] == [("manager", (WinnerEffect(1, 6),))]
     assert [(item.entity_name, item.issue_kind, item.token) for item in graph.opaque_entities] == [
         ("unused_action", "registry_action", "wm_setwiner"),
         ("unused_event", "registry_event", "triger"),
+        ("unused_syntax", "syntax", "set"),
     ]
 
 

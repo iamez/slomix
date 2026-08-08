@@ -95,6 +95,11 @@ it. The whole asset is not marked invalid because ET:Legacy accepts an unfamilia
 live entity. W5b must make the mapped stage unknown if such a block is proven selected; until BSP identity mapping is
 available, treating either all or none of these blocks as active would overstate the evidence.
 
+Selected-block-only syntax checks use the same boundary. In particular, a registry-valid `set`, `create` or `delete`
+without its required argument brace records a `syntax_issue` and makes only that entity opaque; ET:Legacy does not
+enter this action parser for a nonmatching block. Broken outer entity structure still invalidates the asset because it
+cannot be skipped or mapped without inventing block boundaries.
+
 The compiler applies the same entity-level boundary when a known command cannot be projected defensibly (for
 example, a noncanonical integer or wrong trigger arity). It validates each block atomically before adding any of its
 nodes, records an `OpaqueScriptEntity` with the failing command and reason, and excludes the entire block. This avoids
@@ -230,7 +235,7 @@ used to fabricate a transition timestamp.
 - W5a unit tests: 25 passed.
 - Targeted map-geometry regression suite: 99 passed.
 - Exact W5a real-asset acceptance: 1 passed, 7 deselected.
-- Full real-map geometry/stage integration file: 8 passed in 72.49 seconds (`--no-cov`).
-- Full repository suite: 4,159 passed, 75 skipped, 30 existing warnings in 48.55 seconds.
+- Full real-map geometry/stage integration file: 8 passed in 72.46 seconds (`--no-cov`).
+- Full repository suite: 4,159 passed, 75 skipped, 30 existing warnings in 48.52 seconds.
 - Ruff on changed Python files: passed.
 - `git diff --check`: passed.
