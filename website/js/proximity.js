@@ -3730,15 +3730,19 @@ function updateCombatHeatmapLegend(perspective) {
 }
 
 async function renderCombatHeatmap(mapName, perspective) {
-    if (!mapName) return;
-    const canvas = document.getElementById('combat-heatmap-canvas');
-    if (!canvas) return;
     // Monotonic render token: rapid perspective/map switches can resolve
     // out of order, letting a stale response repaint a canvas the legend
     // (updated synchronously below) no longer describes. Each await below
     // is followed by a staleness check before anything touches the canvas.
-    // (CodeRabbit finding on #626, deferred there as pre-existing.)
+    // Bumped BEFORE the early returns so that a call with a cleared map
+    // (scope reset -> mapName '') still invalidates any render in flight —
+    // otherwise the old render would pass its checks and paint the previous
+    // map's data under the new scope. (CodeRabbit finding on #626, deferred
+    // there as pre-existing; early-return ordering from #631 review.)
     const seq = ++combatHeatmapRenderSeq;
+    if (!mapName) return;
+    const canvas = document.getElementById('combat-heatmap-canvas');
+    if (!canvas) return;
     updateCombatHeatmapLegend(perspective || 'kills');
 
     // 'pushes' = "Where pushes die" (proximity slice 2): deaths of the pushing
@@ -3779,10 +3783,11 @@ async function renderCombatHeatmap(mapName, perspective) {
     // proximity-heatmap so the v5.2 combat panel no longer renders on
     // an abstract dark canvas disconnected from the actual map.
     await ensureMapTransformConfig();
+    if (seq !== combatHeatmapRenderSeq) return; // stale after transform config load
     const transform = getMapTransformEntry(mapName);
     const worldBounds = getWorldBounds(transform);
     const mapImage = await preloadMapImage(transform?.image || null);
-    if (seq !== combatHeatmapRenderSeq) return; // stale after image/transform loads
+    if (seq !== combatHeatmapRenderSeq) return; // stale after image load
     if (mapImage) {
         ctx.save();
         ctx.globalAlpha = 0.28;
