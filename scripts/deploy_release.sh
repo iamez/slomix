@@ -619,10 +619,33 @@ if $SKIP_MIGRATIONS; then
     scp -i "$VM_KEY" "$SCRIPT_DIR/apply_migrations.py" "$VM_USER@$VM_HOST:$VM_PATH/$STAGED_RUNNER"
   fi
   log "  Validating migration ledger (staged current runner; tolerating MISSING — rollback checkout may lack newer files)"
-  run_remote "cd $VM_PATH && $VM_PY $STAGED_RUNNER --validate --tolerate-missing; rc=\$?; rm -f $STAGED_RUNNER; exit \$rc"
+  # Validate must run as the DB owner role, same as the apply above: the
+  # runner loads website/.env, whose web role lacks CREATE on schema public,
+  # and ensure_tracking_table then dies with InsufficientPrivilegeError —
+  # aborting the deploy AFTER services stopped (hit on the 2026-08-10
+  # v1.30.0 deploy). Credentials come from the VM's ROOT .env.
+  run_remote "cd $VM_PATH && \
+    OWNER_USER=\$(grep -m1 '^POSTGRES_USER=' .env | cut -d= -f2-) && \
+    OWNER_PASS=\$(grep -m1 '^POSTGRES_PASSWORD=' .env | cut -d= -f2-) && \
+    if [ -z \"\$OWNER_USER\" ] || [ -z \"\$OWNER_PASS\" ]; then \
+      echo 'ERROR: could not read POSTGRES_USER/POSTGRES_PASSWORD from the VM root .env — validate would run as the web role and fail on ensure_tracking_table' >&2; \
+      rm -f $STAGED_RUNNER; \
+      exit 1; \
+    fi && \
+    POSTGRES_USER=\$OWNER_USER POSTGRES_PASSWORD=\$OWNER_PASS \
+      $VM_PY $STAGED_RUNNER --validate --tolerate-missing; rc=\$?; rm -f $STAGED_RUNNER; exit \$rc"
 else
   log "  Validating migration ledger (pending/failed/missing/checksum drift aborts deploy)"
-  run_remote "cd $VM_PATH && $VM_PY scripts/apply_migrations.py --validate"
+  # Same owner-role requirement as the --tolerate-missing branch above.
+  run_remote "cd $VM_PATH && \
+    OWNER_USER=\$(grep -m1 '^POSTGRES_USER=' .env | cut -d= -f2-) && \
+    OWNER_PASS=\$(grep -m1 '^POSTGRES_PASSWORD=' .env | cut -d= -f2-) && \
+    if [ -z \"\$OWNER_USER\" ] || [ -z \"\$OWNER_PASS\" ]; then \
+      echo 'ERROR: could not read POSTGRES_USER/POSTGRES_PASSWORD from the VM root .env — validate would run as the web role and fail on ensure_tracking_table' >&2; \
+      exit 1; \
+    fi && \
+    POSTGRES_USER=\$OWNER_USER POSTGRES_PASSWORD=\$OWNER_PASS \
+      $VM_PY scripts/apply_migrations.py --validate"
 fi
 
 # ─── 6. Update .env flags (idempotent, sudo'd) ────────────────────────────────
