@@ -73,15 +73,22 @@ psql -d etlegacy -f tools/migrations/004_add_pause_events.sql
    scp vps_scripts/stats_discord_webhook.lua user@gameserver:/path/to/etlegacy/luascripts/
    ```
 
-2. Edit the script and configure the webhook URL:
-   ```lua
-   local configuration = {
+2. Create the secret config file NEXT TO the script (v1.7.2+ — the URL no
+   longer lives in the script itself; it was rotated out of the public repo
+   on 2026-08-10). The file returns a table whose keys override the
+   script's `configuration` defaults:
+   ```bash
+   cat > /path/to/etlegacy/luascripts/stats_discord_webhook_config.lua <<'EOF'
+   return {
        discord_webhook_url = "https://discord.com/api/webhooks/YOUR_ID/YOUR_TOKEN",
-       enabled = true,
-       debug = false,
-       send_delay_seconds = 3
    }
+   EOF
+   chmod 600 /path/to/etlegacy/luascripts/stats_discord_webhook_config.lua
    ```
+   The script resolves this file via the engine's own `fs_homepath` /
+   `fs_basepath` + `fs_game` cvars (homepath wins). NEVER commit this file —
+   it is explicitly gitignored. Without it the script starts, prints a
+   `Webhook URL not configured` warning at init, and refuses to send.
 
 3. Add the script to your server's Lua loading:
    - In `server.cfg`: `set lua_modules "stats_discord_webhook"`
