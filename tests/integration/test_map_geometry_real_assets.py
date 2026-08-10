@@ -12,12 +12,14 @@ from website.backend.map_geometry import (
     AccumulatorAbortGuard,
     AccumulatorConditionalTrigger,
     AccumulatorMutation,
+    AlertEntityEffect,
     AutoSpawnEffectProjection,
     BspPointTracer,
     ControlProjectionIssue,
     EffectProjectionIssue,
     EntityIdentityNamespace,
     EntityIdentityResolution,
+    EntityTargetDisposition,
     EntityTargetEffectProjection,
     GlobalStageEffectProjection,
     GotoMarkerEffectProjection,
@@ -27,6 +29,7 @@ from website.backend.map_geometry import (
     MapAssetKind,
     ObjectiveGeometrySource,
     ObjectiveStatusEffectProjection,
+    ObjectiveWorldLinkDisposition,
     Pk3GeometryIndex,
     PlayerStance,
     StageLoadStatus,
@@ -431,6 +434,8 @@ def test_w5b_projects_every_typed_stage_effect_to_action_specific_static_candida
     projection_counts = Counter()
     details = Counter()
     missing_source_effects = Counter()
+    missing_source_alerts = []
+    target_dispositions = Counter()
     missing_objectives = []
     blocked_autospawns = []
 
@@ -454,8 +459,11 @@ def test_w5b_projects_every_typed_stage_effect_to_action_specific_static_candida
                 projection_counts[type(projection).__name__] += 1
                 if projection.source.lookup.resolution is EntityIdentityResolution.MISSING:
                     missing_source_effects[type(effect).__name__] += 1
+                    if isinstance(effect, AlertEntityEffect):
+                        missing_source_alerts.append((map_name, node.entity_name, effect.target, effect.line))
 
                 if isinstance(projection, EntityTargetEffectProjection):
+                    target_dispositions[projection.disposition] += 1
                     details[(type(effect).__name__, projection.target_lookup.resolution.value)] += 1
                     details[(type(effect).__name__, "w3_references")] += len(projection.selected_w3_references)
                 elif isinstance(projection, GotoMarkerEffectProjection):
@@ -477,6 +485,8 @@ def test_w5b_projects_every_typed_stage_effect_to_action_specific_static_candida
                         )
                 elif isinstance(projection, ObjectiveStatusEffectProjection):
                     details[("objective_status", len(projection.descriptions))] += 1
+                    details[("objective_status", projection.world_link_disposition.value)] += 1
+                    assert projection.world_entity_candidates == ()
                     if not projection.descriptions:
                         missing_objectives.append((map_name, effect.objective_number, effect.team_code, effect.line))
                 elif isinstance(projection, MainObjectiveEffectProjection):
@@ -495,6 +505,13 @@ def test_w5b_projects_every_typed_stage_effect_to_action_specific_static_candida
         "MainObjectiveEffectProjection": 42,
     }
     assert missing_source_effects == {"EntityStateEffect": 96, "AlertEntityEffect": 1}
+    assert missing_source_alerts == [("sw_goldrush_te", "defense2_toi", "rubble3", 2570)]
+    assert target_dispositions == {
+        EntityTargetDisposition.STATIC_SOURCE_AND_TARGET: 1709,
+        EntityTargetDisposition.STATIC_SOURCE_MISSING: 3,
+        EntityTargetDisposition.STATIC_TARGET_MISSING: 58,
+        EntityTargetDisposition.STATIC_SOURCE_AND_TARGET_MISSING: 94,
+    }
     assert details == {
         ("AlertEntityEffect", "group"): 64,
         ("AlertEntityEffect", "unique"): 72,
@@ -517,6 +534,7 @@ def test_w5b_projects_every_typed_stage_effect_to_action_specific_static_candida
         ("main_objective", "legacy_numeric_selector_is_unverified_for_the_live_build"): 42,
         ("objective_status", 0): 2,
         ("objective_status", 1): 670,
+        ("objective_status", ObjectiveWorldLinkDisposition.UNPROVEN_ENGINE_KEY.value): 672,
     }
     assert missing_objectives == [
         ("etl_beach", 7, 0, 53),

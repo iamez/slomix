@@ -92,6 +92,17 @@ class W3EntityKind(StrEnum):
     COLLISION_ENTITY = "collision_entity"
 
 
+class EntityTargetDisposition(StrEnum):
+    STATIC_SOURCE_AND_TARGET = "static_source_and_target"
+    STATIC_SOURCE_MISSING = "static_source_missing"
+    STATIC_TARGET_MISSING = "static_target_missing"
+    STATIC_SOURCE_AND_TARGET_MISSING = "static_source_and_target_missing"
+
+
+class ObjectiveWorldLinkDisposition(StrEnum):
+    UNPROVEN_ENGINE_KEY = "unproven_engine_key"
+
+
 @dataclass(frozen=True, slots=True)
 class BspEntityIdentity:
     entity_index: int
@@ -205,6 +216,7 @@ class EntityTargetEffectProjection:
     source: EffectSourceIdentity
     target_lookup: EntityIdentityLookup
     selected_w3_references: tuple[W3EntityReference, ...]
+    disposition: EntityTargetDisposition
     runtime_entity_completeness: str = "unverified"
 
 
@@ -235,6 +247,8 @@ class ObjectiveStatusEffectProjection:
     effect: ObjectiveStatusEffect
     source: EffectSourceIdentity
     descriptions: tuple[ObjectiveDescription, ...]
+    world_entity_candidates: tuple[W3EntityReference, ...] = ()
+    world_link_disposition: ObjectiveWorldLinkDisposition = ObjectiveWorldLinkDisposition.UNPROVEN_ENGINE_KEY
 
 
 @dataclass(frozen=True, slots=True)
@@ -541,6 +555,21 @@ def _selected_w3_references(
     return tuple(reference for reference in linked.references if reference.entity_index in selected)
 
 
+def _entity_target_disposition(
+    source: EntityIdentityLookup,
+    target: EntityIdentityLookup,
+) -> EntityTargetDisposition:
+    source_missing = source.resolution is EntityIdentityResolution.MISSING
+    target_missing = target.resolution is EntityIdentityResolution.MISSING
+    if source_missing and target_missing:
+        return EntityTargetDisposition.STATIC_SOURCE_AND_TARGET_MISSING
+    if source_missing:
+        return EntityTargetDisposition.STATIC_SOURCE_MISSING
+    if target_missing:
+        return EntityTargetDisposition.STATIC_TARGET_MISSING
+    return EntityTargetDisposition.STATIC_SOURCE_AND_TARGET
+
+
 def _goto_relative_targets(effect: GotoMarkerEffect) -> tuple[str, ...] | None:
     targets: list[str] = []
     index = 0
@@ -587,6 +616,7 @@ def project_stage_effect(
             source,
             lookup,
             _selected_w3_references(linked, lookup),
+            _entity_target_disposition(source.lookup, lookup),
         )
 
     if isinstance(effect, GotoMarkerEffect):

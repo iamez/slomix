@@ -2,15 +2,15 @@
 
 Date: 2026-08-10
 
-Status: implementation in progress; engine identity, installed accumulator projection
-and exact W3 identity joins are locally verified
+Status: implementation in progress; engine identity, installed accumulator projection,
+exact W3 identity joins and Phase 3 semantic dispositions are locally verified
 
 Branch: `agent/map-geometry-w5b-semantic-mapping`
 
 Base: `origin/main` at `8cb34d9975d1679417b782b3c05ef09bf008741c`
 
 Last head that completed the five-minute review quiet period:
-`7a851e45541e7a377e351915646d20738d84026b`
+`7485ee93b65495045ae4aa1b2fbc6468574a608b`
 
 Scope: read-only ET/ET:Legacy map assets; no database write, deploy, service restart,
 Lua change, production API integration, metric or rating change
@@ -327,7 +327,8 @@ counted as executable. The result types remain static candidates, not state clai
 Measured blocker and provenance inventory:
 
 - 97 projections originate in script blocks with no concrete static BSP script-name
-  identity; all 97 are `setstate` effects across five maps;
+  identity: 96 `setstate` and one `alertentity` effect across five maps. The alert is
+  `sw_goldrush_te` block `defense2_toi` targeting the installed `rubble3` identity;
 - across all 1,864 `setstate`/`alertentity` projections, 1,709 have both a static
   source and target, 94 have neither, 58 have a static source but no static target,
   and three have a static target but no static source;
@@ -468,9 +469,11 @@ case behaviour, class-assigned names and external/unknown identities.
 
 ### Phase 3 - map semantic domains
 
-Status: in progress. Every current typed W5a effect has an action-specific static
-projection and measured real-asset inventory. Objective marker/volume relationship
-proof, domain-level blocker classification and final publication remain pending.
+Status: complete. Every current typed W5a effect has an action-specific static
+projection and measured real-asset inventory. Entity-target effects publish the four
+source/target dispositions independently. Objective-status effects publish numbered
+descriptions while explicitly reporting that no engine key proves a world-entity
+link; the empty candidate set is not mislabelled as a missing entity.
 
 #### Objectives
 
@@ -718,7 +721,7 @@ changes, Python runtime replacement, force-push/history deletion and secret rota
   projection is complete.
 - [ ] Complete Phase 2 publication; generic identity index and exact W3 typed joins
   are complete.
-- [ ] Complete Phase 3 objective/spawn/route semantic mappings.
+- [x] Complete Phase 3 objective/spawn/route semantic mappings.
 - [ ] Complete Phase 4 accumulator and ordered-possibility modelling.
 - [ ] Complete Phase 5 static coverage analyzer and evidence report.
 - [ ] Complete all verification and review closure gates.
@@ -810,32 +813,44 @@ commented-out body. Current ET:Legacy implements a target-field lookup, while al
 installed calls use numeric arguments. This verifies neither a numeric runtime effect
 nor a conversion to target names, so all 42 stay `legacy_numeric` and unapproved.
 
+### 2026-08-10 - source and target failures remain independent
+
+A fresh run of the real projector corrected an erroneous intermediate handoff claim
+that all 97 missing sources belonged to `setstate`. The verified split is 96
+`setstate` plus one `alertentity`; the latter is `sw_goldrush_te` block
+`defense2_toi`, whose `rubble3` target resolves. Across all 1,864 entity-target
+effects, the machine-readable disposition matrix is 1,709 static source+target, 94
+neither, 58 source-only and three target-only. This distinction matters because a
+missing source and a missing target are different runtime-completeness questions and
+must not be collapsed into one generic unresolved result.
+
 ## Current handoff state
 
-Current step: publish the completed Phase 3 source/target blocker classification and
-the absence of a proven objective-description-to-world-entity key as machine-readable
-domain dispositions. Phase 2's final public coverage surface is intentionally deferred
-until these real failure modes and Phase 4 control-flow blockers are known.
+Current step: begin Phase 4's ordered accumulator-path model. Phase 3 now publishes
+the measured source/target matrix and the absence of a proven objective relationship
+as typed dispositions. Phase 2's final public coverage surface remains intentionally
+deferred until Phase 4 control-flow blockers are known.
 
-Next action: implement those explicit dispositions without inventing objective links,
-then begin Phase 4's ordered accumulator-path model. The measured Phase 3 state-effect
-matrix is 1,709 source+target, 94 neither, 58 source-only and three target-only; all
-152 missing targets and all 97 missing sources are `setstate` projections.
+Next action: freeze focused fixtures for action ordering, abort-path splitting, nested
+trigger dispatch, local versus global accumulator scope, waits/resets and cycles
+against the pinned engine source. Then implement only the symbolic execution subset
+those fixtures prove; unsupported guards remain blockers rather than guessed paths.
 
 Known blockers: none for read-only research and local implementation. Any required
 live-build inspection that changes or restarts a service becomes owner-gated; retain
 the affected semantic result as unverified and continue with independent domains.
 
-Current local verification (Python 3.13.14): the complete 190-test W1/map-geometry
-unit suite passed, and all 12 opt-in real-asset tests passed in 239.45 seconds under
+Current local verification (Python 3.13.14): the complete 194-test W1/map-geometry
+unit suite passed, and all 12 opt-in real-asset tests passed in 238.69 seconds under
 repo-wide coverage tracing. The current acceptance proves no `.ent` override exists
 for any of the 20 indexed BSP maps, includes
 all 2,929 typed effect projections and the blocker inventory above, and rechecks W1-W5a,
 patch collision and trace fail-closed baselines. An initial full-asset run exposed two
 30-second test timeouts because the effective-source helper reparsed an already loaded
 BSP; the helper now accepts that exact indexed BSP, validates its source and reuses it.
-On a later run, the two largest corpus checks took 30.39 and 47.41 seconds under
-repo-wide coverage tracing, but only 17.17 and 20.94 seconds without it. The opt-in
+On the current run, the two largest corpus checks took 47.32 and 38.68 seconds under
+repo-wide coverage tracing. Earlier direct runs without tracing measured materially
+less time. The opt-in
 real-asset module now has a measured 90-second hang guard; this is acceptance-test
 headroom, not a production performance claim or SLO change.
 The duplicate-field correction was followed by a direct scan of all 20 indexed maps;
