@@ -2,8 +2,8 @@
 
 Date: 2026-08-10
 
-Status: implementation in progress; engine identity, installed accumulator projection,
-exact W3 identity joins and Phase 3 semantic dispositions are locally verified
+Status: implementation in progress; engine identity, Phase 3 dispositions and the
+Phase 4 lossless ordered-program/override boundary are locally and externally reviewed
 
 Branch: `agent/map-geometry-w5b-semantic-mapping`
 
@@ -11,7 +11,7 @@ Base: `origin/main` at `8cb34d9975d1679417b782b3c05ef09bf008741c`
 
 Last substantive implementation head that completed the five-minute review quiet
 period and final refresh:
-`4b5fc7747fb0b141533640dcc6eecd9d275699ee`
+`1d4f59d479f716ea0a8bae0d35c09bd006c7e969`
 
 The documentation-only commit that advances this pointer cannot contain its own Git
 hash. Query PR #633 before relying on this historical checkpoint as current review
