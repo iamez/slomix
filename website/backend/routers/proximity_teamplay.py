@@ -434,21 +434,26 @@ async def get_proximity_crossfire_angles(
             f"${len(name_params) + i + 1}" for i in range(len(duo_guids))
         )
         name_rows = await db.fetch_all(
-            "SELECT player_guid, player_name, MAX(round_start_unix) AS last_seen "
+            "SELECT player_guid, player_name, MAX(round_start_unix) AS last_seen, "
+            "       MAX(id) AS last_row "
             f"FROM player_track {name_where} AND player_guid IN ({guid_ph}) "
             "GROUP BY player_guid, player_name",
             tuple(name_params) + tuple(duo_guids),
         )
-        newest: dict[str, tuple[int, str]] = {}
+        newest: dict[str, tuple[int, int, str]] = {}
         for r in name_rows or []:
             if not (r and r[0] and r[1]):
                 continue
-            guid, name, last_seen = str(r[0]), str(r[1]), int(r[2] or 0)
+            guid, name = str(r[0]), str(r[1])
+            # round_start_unix alone can't split aliases used within one
+            # round (or legacy rows stamped 0), so the insertion-ordered
+            # row id breaks that tie; the name is a last deterministic
+            # fallback (#632 review, round 2).
+            key = (int(r[2] or 0), int(r[3] or 0), name)
             current = newest.get(guid)
-            # ties broken by name to keep the result deterministic
-            if current is None or (last_seen, name) > current:
-                newest[guid] = (last_seen, name)
-        duo_names = {guid: name for guid, (_, name) in newest.items()}
+            if current is None or key > current:
+                newest[guid] = key
+        duo_names = {guid: key[2] for guid, key in newest.items()}
     return {
         "status": "ok",
         "scope": scope,

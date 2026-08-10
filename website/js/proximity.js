@@ -3159,7 +3159,7 @@ function renderTeamPushes(data) {
             <span title="Direction alignment × speed relative to sprint (~300 u/s). ≈1 means fully aligned at sprint speed; faster pushes can exceed 1.">Quality: ${t.avg_quality.toFixed(3)}</span> |
             <span title="0–1: how closely teammates' movement directions match during the push (1 = everyone moving the same way).">Alignment: ${t.avg_alignment.toFixed(3)}</span><br>
             <span title="Average movement speed during pushes, in world units per second.">Avg speed: ${t.avg_speed} u/s</span> |
-            <span title="Average players taking part in a push.">Participants: ${t.avg_participants.toFixed(1)}</span> |
+            <span title="Average of each push's peak concurrent movers (per-push maximum, then averaged).">Participants: ${t.avg_participants.toFixed(1)}</span> |
             <span title="Share of pushes heading toward an objective.">Obj-oriented: ${objPct}%</span>
         </div>`;
     }).join('');
