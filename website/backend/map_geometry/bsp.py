@@ -9,7 +9,7 @@ implementation.
 from __future__ import annotations
 
 import struct
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
@@ -43,6 +43,14 @@ class BspFormatError(ValueError):
 
 class UnsupportedBspError(BspFormatError):
     """The file is not an Enemy Territory ``IBSP`` v47 BSP."""
+
+
+class EntityProperties(dict[str, str]):
+    """Mapping-compatible entity fields with source-ordered duplicate pairs."""
+
+    def __init__(self, ordered_pairs: Iterable[tuple[str, str]]) -> None:
+        self.ordered_pairs = tuple(ordered_pairs)
+        super().__init__(self.ordered_pairs)
 
 
 class LumpType(IntEnum):
@@ -175,7 +183,7 @@ class BspFile:
     byte_length: int
     lumps: tuple[BspLump, ...]
     entity_text: str
-    entities: tuple[dict[str, str], ...]
+    entities: tuple[EntityProperties, ...]
     shaders: tuple[BspShader, ...]
     planes: tuple[BspPlane, ...]
     nodes: tuple[BspNode, ...]
@@ -270,10 +278,10 @@ def _tokenize_entities(text: str, source: str) -> Iterator[str]:
         yield text[start:index]
 
 
-def parse_entities(text: str, *, source: str = "") -> tuple[dict[str, str], ...]:
-    """Parse the Quake entity dictionary syntax into ordered entity records."""
+def parse_entities(text: str, *, source: str = "") -> tuple[EntityProperties, ...]:
+    """Parse Quake entities while retaining duplicate fields in source order."""
     tokens = iter(_tokenize_entities(text, source))
-    entities: list[dict[str, str]] = []
+    entities: list[EntityProperties] = []
 
     while True:
         try:
@@ -283,14 +291,14 @@ def parse_entities(text: str, *, source: str = "") -> tuple[dict[str, str], ...]
         if piece != "{":
             raise BspFormatError(_context(source, f"expected '{{', got {piece!r}"))
 
-        entity: dict[str, str] = {}
+        ordered_pairs: list[tuple[str, str]] = []
         while True:
             try:
                 key = next(tokens)
             except StopIteration as exc:
                 raise BspFormatError(_context(source, "unterminated entity")) from exc
             if key == "}":
-                entities.append(entity)
+                entities.append(EntityProperties(ordered_pairs))
                 break
             if key == "{":
                 raise BspFormatError(_context(source, "nested entity opening brace"))
@@ -300,7 +308,7 @@ def parse_entities(text: str, *, source: str = "") -> tuple[dict[str, str], ...]
                 raise BspFormatError(_context(source, f"missing value for entity key {key!r}")) from exc
             if value in {"{", "}"}:
                 raise BspFormatError(_context(source, f"invalid value for entity key {key!r}"))
-            entity[key] = value
+            ordered_pairs.append((key, value))
 
     return tuple(entities)
 

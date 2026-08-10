@@ -186,7 +186,7 @@ The Phase 1 reference is ET:Legacy commit
 checked out read-only on 2026-08-10. The implementation records behaviour, not just
 comments or function names:
 
-- [`G_ParseField`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_spawn.c#L740-L784)
+- [`G_ParseField`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_spawn.c#L696-L784)
   assigns generic BSP fields with ASCII-case-insensitive key matching in spawn-var
   order. In contrast, the special `G_SpawnString` helper compares exact key bytes.
 - [`SP_script_multiplayer`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script.c#L1391-L1415)
@@ -201,7 +201,7 @@ comments or function names:
   and
   [`G_ScriptAction_AlertEntity`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L2238-L2292)
   apply to every matching `targetname`.
-- [`G_ScriptAction_GotoMarker`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L1365-L1450)
+- [`G_ScriptAction_GotoMarker`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L1352-L1450)
   first selects the first registered `path_corner_2`/`info_train_spline_control`, then
   falls back to the first active entity with that `targetname`.
 - [`G_ScriptAction_SetAutoSpawn`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L170-L217)
@@ -327,10 +327,18 @@ counted as executable. The result types remain static candidates, not state clai
 Measured blocker and provenance inventory:
 
 - 97 projections originate in script blocks with no concrete static BSP script-name
-  identity: 96 `setstate` and one `alertentity` effect across five maps;
+  identity; all 97 are `setstate` effects across five maps;
+- across all 1,864 `setstate`/`alertentity` projections, 1,709 have both a static
+  source and target, 94 have neither, 58 have a static source but no static target,
+  and three have a static target but no static source;
 - `setstate` has 1,394 unique targets, 182 legitimate all-match groups and 152
-  statically missing targets; the engine tolerates the last category, but W5b cannot
+  statically missing targets. Of those 152 effects, 94 also lack a static source and
+  58 have an installed source. The engine tolerates a missing target, but W5b cannot
   call it a historical no-op while runtime entity completeness is unverified;
+- of those 152 missing-target effects, 137 names are absent from both effective
+  entities and parsed script blocks, eight match only the entity `script_name`
+  namespace, and seven match only a parsed script block. None proves a `targetname`
+  match, so namespace substitution is not permitted;
 - all 136 `alertentity` effects have static targets: 72 unique and 64 groups;
 - all 172 `gotomarker` destinations resolve under path-corner-first rules; 94 use the
   registered path-corner namespace, 78 use target-name fallback, and the installed
@@ -398,7 +406,7 @@ names before engine-source research proves the namespaces and group semantics.
 
 ### Phase 0 - freeze takeoff and baseline
 
-Status: in progress in this docs-only commit.
+Status: complete.
 
 1. Record the scope, branch base, W5a/W3 measured baseline and merge gates here.
 2. Run documentation link/path checks and `git diff --check`.
@@ -772,26 +780,54 @@ are always the effective runtime identity source. W1 now inventories PK3 and loo
 `.ent` providers. Different candidate bytes are ambiguous, and a selected override is
 not allowed to join a W3 catalog extracted from the superseded BSP entity lump.
 
+### 2026-08-10 - preserve duplicate entity fields in source order
+
+ET generic-field assignment is case-insensitive and last-assignment-wins in source
+order, while exact `G_SpawnString` lookup returns the first exact occurrence. A plain
+Python dictionary erased the evidence needed to reproduce both behaviours. Parsed
+entities now retain every ordered key/value pair while remaining mapping-compatible;
+generic aliases use the final source assignment and `team_WOLF_objective` uses the
+first exact lowercase `description`, including a present empty value. `gotomarker`
+option parsing also consumes the argument after `relative`, so a target literally
+named `relative` is not reinterpreted as a second option.
+
+### 2026-08-10 - objective relationships require a proven engine key
+
+`objflags` is not an objective-description-to-volume relationship. The checked mapper
+documentation defines it for command-map icon pulsing/type, and current ET:Legacy
+parses and stores the value without consuming it as a physical objective join. A
+`team_WOLF_objective` is a spawn/objective-region marker used by paths such as
+`setautospawn`, but this does not prove a relationship to a numbered `.objdata`
+description or a `trigger_objective_info` volume. Those links therefore remain
+explicitly unproven instead of being recovered through wording, class or proximity.
+
+### 2026-08-10 - legacy numeric main-objective calls remain blocked
+
+The original Enemy Territory source at commit
+[`40342a9e`](https://github.com/id-Software/Enemy-Territory/blob/40342a9e3690cb5b627a433d4d5cbf30e3c57698/src/game/g_script_actions.c#L2693-L2730)
+contains the numeric `G_ScriptAction_SetMainObjective` implementation only inside a
+commented-out body. Current ET:Legacy implements a target-field lookup, while all 42
+installed calls use numeric arguments. This verifies neither a numeric runtime effect
+nor a conversion to target names, so all 42 stay `legacy_numeric` and unapproved.
+
 ## Current handoff state
 
-Current step: complete Phase 3 relationship proof and domain blocker classification
-on top of the locally verified action-specific projector. Phase 2's final public
-coverage surface is intentionally deferred until these real failure modes and Phase 4
-control-flow blockers are known.
+Current step: publish the completed Phase 3 source/target blocker classification and
+the absence of a proven objective-description-to-world-entity key as machine-readable
+domain dispositions. Phase 2's final public coverage surface is intentionally deferred
+until these real failure modes and Phase 4 control-flow blockers are known.
 
-Next action: finish classifying the 152 missing state targets and 97 missing
-effect-source identities after the effective-source correction, then determine which
-objective-description, marker and measured-volume links are actually proven by engine
-keys. Do not use `objflags` as a description/volume join: current source transmits the
-field and mapper documentation calls it a command-map pulse selector, but the checked
-client does not consume it as a physical objective relationship.
+Next action: implement those explicit dispositions without inventing objective links,
+then begin Phase 4's ordered accumulator-path model. The measured Phase 3 state-effect
+matrix is 1,709 source+target, 94 neither, 58 source-only and three target-only; all
+152 missing targets and all 97 missing sources are `setstate` projections.
 
 Known blockers: none for read-only research and local implementation. Any required
 live-build inspection that changes or restarts a service becomes owner-gated; retain
 the affected semantic result as unverified and continue with independent domains.
 
-Current local verification (Python 3.13.14): the complete 165-test W1/map-geometry
-unit suite passed, and all 12 opt-in real-asset tests passed in 240.41 seconds under
+Current local verification (Python 3.13.14): the complete 190-test W1/map-geometry
+unit suite passed, and all 12 opt-in real-asset tests passed in 239.45 seconds under
 repo-wide coverage tracing. The current acceptance proves no `.ent` override exists
 for any of the 20 indexed BSP maps, includes
 all 2,929 typed effect projections and the blocker inventory above, and rechecks W1-W5a,
@@ -802,6 +838,10 @@ On a later run, the two largest corpus checks took 30.39 and 47.41 seconds under
 repo-wide coverage tracing, but only 17.17 and 20.94 seconds without it. The opt-in
 real-asset module now has a measured 90-second hang guard; this is acceptance-test
 headroom, not a production performance claim or SLO change.
+The duplicate-field correction was followed by a direct scan of all 20 indexed maps;
+none contains a `team_WOLF_objective` whose first exact lowercase `description` is
+empty, so the synthetic empty-value compatibility fix does not alter the measured
+real-asset baseline.
 Ruff and `git diff --check` passed. The full repository suite remains required before
 merge.
 
