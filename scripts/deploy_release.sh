@@ -587,12 +587,15 @@ elif [ ${#MIGRATIONS[@]} -gt 0 ]; then
   # different role: PX-DB-001 stays satisfied.
   #
   # Credentials come from the VM's ROOT .env, which is the bot's, i.e. the
-  # owner's. Read on the VM and never echoed.
+  # owner's. Read on the VM and never echoed. Accepts POSTGRES_* or the
+  # legacy DB_* names (apply_migrations.py supports both) and strips one
+  # pair of surrounding dotenv quotes, which cut would otherwise pass
+  # through to asyncpg literally (Codex on #629).
   run_remote "cd $VM_PATH && \
-    OWNER_USER=\$(grep -m1 '^POSTGRES_USER=' .env | cut -d= -f2-) && \
-    OWNER_PASS=\$(grep -m1 '^POSTGRES_PASSWORD=' .env | cut -d= -f2-) && \
+    OWNER_USER=\$({ grep -m1 '^POSTGRES_USER=' .env || grep -m1 '^DB_USER=' .env || true; } | cut -d= -f2- | sed \"s/^['\\\"]//; s/['\\\"]\$//\") && \
+    OWNER_PASS=\$({ grep -m1 '^POSTGRES_PASSWORD=' .env || grep -m1 '^DB_PASSWORD=' .env || true; } | cut -d= -f2- | sed \"s/^['\\\"]//; s/['\\\"]\$//\") && \
     if [ -z \"\$OWNER_USER\" ] || [ -z \"\$OWNER_PASS\" ]; then \
-      echo 'ERROR: could not read POSTGRES_USER/POSTGRES_PASSWORD from the VM root .env — DDL would run as the web role and fail on ALTER TABLE' >&2; \
+      echo 'ERROR: could not read owner credentials (POSTGRES_* or legacy DB_*) from the VM root .env — DDL would run as the web role and fail on ALTER TABLE' >&2; \
       exit 1; \
     fi && \
     POSTGRES_USER=\"\$OWNER_USER\" POSTGRES_PASSWORD=\"\$OWNER_PASS\" \
@@ -625,10 +628,10 @@ if $SKIP_MIGRATIONS; then
   # aborting the deploy AFTER services stopped (hit on the 2026-08-10
   # v1.30.0 deploy). Credentials come from the VM's ROOT .env.
   run_remote "cd $VM_PATH && \
-    OWNER_USER=\$(grep -m1 '^POSTGRES_USER=' .env | cut -d= -f2-) && \
-    OWNER_PASS=\$(grep -m1 '^POSTGRES_PASSWORD=' .env | cut -d= -f2-) && \
+    OWNER_USER=\$({ grep -m1 '^POSTGRES_USER=' .env || grep -m1 '^DB_USER=' .env || true; } | cut -d= -f2- | sed \"s/^['\\\"]//; s/['\\\"]\$//\") && \
+    OWNER_PASS=\$({ grep -m1 '^POSTGRES_PASSWORD=' .env || grep -m1 '^DB_PASSWORD=' .env || true; } | cut -d= -f2- | sed \"s/^['\\\"]//; s/['\\\"]\$//\") && \
     if [ -z \"\$OWNER_USER\" ] || [ -z \"\$OWNER_PASS\" ]; then \
-      echo 'ERROR: could not read POSTGRES_USER/POSTGRES_PASSWORD from the VM root .env — validate would run as the web role and fail on ensure_tracking_table' >&2; \
+      echo 'ERROR: could not read owner credentials (POSTGRES_* or legacy DB_*) from the VM root .env — validate would run as the web role and fail on ensure_tracking_table' >&2; \
       rm -f $STAGED_RUNNER; \
       exit 1; \
     fi && \
@@ -638,10 +641,10 @@ else
   log "  Validating migration ledger (pending/failed/missing/checksum drift aborts deploy)"
   # Same owner-role requirement as the --tolerate-missing branch above.
   run_remote "cd $VM_PATH && \
-    OWNER_USER=\$(grep -m1 '^POSTGRES_USER=' .env | cut -d= -f2-) && \
-    OWNER_PASS=\$(grep -m1 '^POSTGRES_PASSWORD=' .env | cut -d= -f2-) && \
+    OWNER_USER=\$({ grep -m1 '^POSTGRES_USER=' .env || grep -m1 '^DB_USER=' .env || true; } | cut -d= -f2- | sed \"s/^['\\\"]//; s/['\\\"]\$//\") && \
+    OWNER_PASS=\$({ grep -m1 '^POSTGRES_PASSWORD=' .env || grep -m1 '^DB_PASSWORD=' .env || true; } | cut -d= -f2- | sed \"s/^['\\\"]//; s/['\\\"]\$//\") && \
     if [ -z \"\$OWNER_USER\" ] || [ -z \"\$OWNER_PASS\" ]; then \
-      echo 'ERROR: could not read POSTGRES_USER/POSTGRES_PASSWORD from the VM root .env — validate would run as the web role and fail on ensure_tracking_table' >&2; \
+      echo 'ERROR: could not read owner credentials (POSTGRES_* or legacy DB_*) from the VM root .env — validate would run as the web role and fail on ensure_tracking_table' >&2; \
       exit 1; \
     fi && \
     POSTGRES_USER=\"\$OWNER_USER\" POSTGRES_PASSWORD=\"\$OWNER_PASS\" \
