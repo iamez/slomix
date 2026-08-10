@@ -537,13 +537,14 @@ function renderLeaderList(containerId, rows, formatter, emptyLabel = 'No data ye
         const sampleMeta = sampleCount
             ? `n=${formatNumber(sampleCount)} • ${confidence || 'Low'}`
             : '';
+        const confidenceTitle = 'Sample size confidence: Low = under 8 samples, Medium = 8-19, High = 20+. Rows are ranked by value, not confidence — a low-confidence row can outrank a high-confidence one.';
         const displayValue = htmlValues ? value : escapeHtml(value);
         return `
             <div class="flex items-center justify-between text-[11px] text-slate-300">
                 <span>${escapeHtml(label)}</span>
                 <span class="text-right">
                     <span class="text-slate-500">${displayValue}</span>
-                    ${sampleMeta ? `<span class="block text-[10px] text-slate-600">${escapeHtml(sampleMeta)}</span>` : ''}
+                    ${sampleMeta ? `<span class="block text-[10px] text-slate-600" title="${escapeHtml(confidenceTitle)}">${escapeHtml(sampleMeta)}</span>` : ''}
                 </span>
             </div>
         `;
@@ -3572,10 +3573,10 @@ function renderProxScores(data, formula) {
         return `<div class="flex items-center gap-1 text-[11px] px-1 py-1 rounded hover:bg-white/5 cursor-pointer prox-score-row" data-guid="${escapeHtml(p.guid)}">
             <span class="w-6 text-slate-600 font-mono">${p.rank}</span>
             <span class="flex-1 truncate text-slate-200">${escapeHtml(name)}</span>
-            <span class="w-14 text-right font-mono font-bold" style="color:${SCORE_COLORS.prox_combat}">${p.prox_combat.toFixed(1)}</span>
-            <span class="w-14 text-right font-mono font-bold" style="color:${SCORE_COLORS.prox_team}">${p.prox_team.toFixed(1)}</span>
-            <span class="w-14 text-right font-mono font-bold" style="color:${SCORE_COLORS.prox_gamesense}">${p.prox_gamesense.toFixed(1)}</span>
-            <span class="w-16 text-right font-mono font-black" style="color:${SCORE_COLORS.prox_overall}">${p.prox_overall.toFixed(1)}</span>
+            <span class="w-14 text-right font-mono font-bold" style="color:${SCORE_COLORS.prox_combat}" title="Percentile rank (0-100) among qualifying players">${p.prox_combat.toFixed(1)}<span class="text-[9px] opacity-60">%ile</span></span>
+            <span class="w-14 text-right font-mono font-bold" style="color:${SCORE_COLORS.prox_team}" title="Percentile rank (0-100) among qualifying players">${p.prox_team.toFixed(1)}<span class="text-[9px] opacity-60">%ile</span></span>
+            <span class="w-14 text-right font-mono font-bold" style="color:${SCORE_COLORS.prox_gamesense}" title="Percentile rank (0-100) among qualifying players">${p.prox_gamesense.toFixed(1)}<span class="text-[9px] opacity-60">%ile</span></span>
+            <span class="w-16 text-right font-mono font-black" style="color:${SCORE_COLORS.prox_overall}" title="Weighted composite percentile rank (0-100)">${p.prox_overall.toFixed(1)}<span class="text-[9px] opacity-60">%ile</span></span>
         </div>
         <div class="prox-score-detail hidden ml-6 mb-2 p-3 rounded-lg bg-slate-800/40 border border-white/5" data-guid="${escapeHtml(p.guid)}">
             ${p.prox_radar ? `<div class="flex gap-4 mb-2">${p.prox_radar.map(a => `<div class="text-center"><div class="text-[10px] text-slate-500">${escapeHtml(a.label)}</div><div class="text-sm font-bold text-white">${a.value.toFixed(0)}</div></div>`).join('')}</div>` : ''}
@@ -3686,10 +3687,31 @@ function renderDangerZones(mapName, classFilter) {
 
 /* ===== v5.2 Combat Heatmap ===== */
 
+// Colored-dot / kill-line swatches must stay in sync with what
+// renderCombatHeatmap() actually draws below (hotzone fill + line stroke
+// colors) — kept as one lookup so a future palette change can't update the
+// canvas without updating the legend, or vice versa.
+function updateCombatHeatmapLegend(perspective) {
+    const el = document.getElementById('combat-heatmap-legend');
+    if (!el) return;
+    const chip = (color, label, title) => `<span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-400"${title ? ` title="${escapeHtml(title)}"` : ''}><span class="w-2 h-2 rounded-full" style="background:${color}"></span>${label}</span>`;
+    if (perspective === 'pushes') {
+        el.innerHTML = chip('rgba(251, 146, 60, 0.8)', 'Push / carrier deaths', 'Deaths of the pushing team during objective-directed pushes, plus carrier deaths.');
+        return;
+    }
+    const dotChip = perspective === 'deaths'
+        ? chip('rgba(96, 165, 250, 0.8)', 'Death positions', 'Where players died in this scope.')
+        : chip('rgba(239, 68, 68, 0.8)', 'Kill positions', 'Where kills happened in this scope.');
+    el.innerHTML = dotChip
+        + chip('rgba(239, 68, 68, 0.7)', 'Axis kill line', "Line from killer to victim, colored by the killer's team.")
+        + chip('rgba(96, 165, 250, 0.7)', 'Allies kill line');
+}
+
 async function renderCombatHeatmap(mapName, perspective) {
     if (!mapName) return;
     const canvas = document.getElementById('combat-heatmap-canvas');
     if (!canvas) return;
+    updateCombatHeatmapLegend(perspective || 'kills');
 
     // 'pushes' = "Where pushes die" (proximity slice 2): deaths of the pushing
     // team during objective-directed pushes + carrier deaths, own endpoint,
