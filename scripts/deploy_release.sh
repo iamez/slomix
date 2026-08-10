@@ -592,11 +592,14 @@ elif [ ${#MIGRATIONS[@]} -gt 0 ]; then
   # semantics match exactly what bot/config.py and the runner see — a
   # grep/cut/sed reimplementation kept missing cases (Codex on #629: legacy
   # DB_* names, quoted values, inline comments). Accepts POSTGRES_* or the
-  # legacy DB_* names, same fallback order as apply_migrations.py.
+  # legacy DB_* names, same fallback order as apply_migrations.py. Values
+  # travel base64-encoded so embedded newlines survive the line-based shell
+  # transport (Codex round 4); a password ENDING in newlines stays
+  # unsupported — \$() strips those, as everywhere else in this toolchain.
   run_remote "cd $VM_PATH && \
-    CREDS=\$($VM_PY -c 'from dotenv import dotenv_values; v = dotenv_values(\".env\"); print(v.get(\"POSTGRES_USER\") or v.get(\"DB_USER\") or \"\"); print(v.get(\"POSTGRES_PASSWORD\") or v.get(\"DB_PASSWORD\") or \"\")') && \
-    OWNER_USER=\$(printf '%s\n' \"\$CREDS\" | sed -n 1p) && \
-    OWNER_PASS=\$(printf '%s\n' \"\$CREDS\" | sed -n 2p) && \
+    CREDS=\$($VM_PY -c 'import base64; from dotenv import dotenv_values; v = dotenv_values(\".env\"); b64 = lambda s: base64.b64encode((s or \"\").encode()).decode(); print(b64(v.get(\"POSTGRES_USER\") or v.get(\"DB_USER\"))); print(b64(v.get(\"POSTGRES_PASSWORD\") or v.get(\"DB_PASSWORD\")))') && \
+    OWNER_USER=\$(printf '%s\n' \"\$CREDS\" | sed -n 1p | base64 -d) && \
+    OWNER_PASS=\$(printf '%s\n' \"\$CREDS\" | sed -n 2p | base64 -d) && \
     if [ -z \"\$OWNER_USER\" ] || [ -z \"\$OWNER_PASS\" ]; then \
       echo 'ERROR: could not read owner credentials (POSTGRES_* or legacy DB_*) from the VM root .env — DDL would run as the web role and fail on ALTER TABLE' >&2; \
       exit 1; \
@@ -631,9 +634,9 @@ if $SKIP_MIGRATIONS; then
   # aborting the deploy AFTER services stopped (hit on the 2026-08-10
   # v1.30.0 deploy). Credentials come from the VM's ROOT .env.
   run_remote "cd $VM_PATH && \
-    CREDS=\$($VM_PY -c 'from dotenv import dotenv_values; v = dotenv_values(\".env\"); print(v.get(\"POSTGRES_USER\") or v.get(\"DB_USER\") or \"\"); print(v.get(\"POSTGRES_PASSWORD\") or v.get(\"DB_PASSWORD\") or \"\")') && \
-    OWNER_USER=\$(printf '%s\n' \"\$CREDS\" | sed -n 1p) && \
-    OWNER_PASS=\$(printf '%s\n' \"\$CREDS\" | sed -n 2p) && \
+    CREDS=\$($VM_PY -c 'import base64; from dotenv import dotenv_values; v = dotenv_values(\".env\"); b64 = lambda s: base64.b64encode((s or \"\").encode()).decode(); print(b64(v.get(\"POSTGRES_USER\") or v.get(\"DB_USER\"))); print(b64(v.get(\"POSTGRES_PASSWORD\") or v.get(\"DB_PASSWORD\")))') && \
+    OWNER_USER=\$(printf '%s\n' \"\$CREDS\" | sed -n 1p | base64 -d) && \
+    OWNER_PASS=\$(printf '%s\n' \"\$CREDS\" | sed -n 2p | base64 -d) && \
     if [ -z \"\$OWNER_USER\" ] || [ -z \"\$OWNER_PASS\" ]; then \
       echo 'ERROR: could not read owner credentials (POSTGRES_* or legacy DB_*) from the VM root .env — validate would run as the web role and fail on ensure_tracking_table' >&2; \
       rm -f $STAGED_RUNNER; \
@@ -645,9 +648,9 @@ else
   log "  Validating migration ledger (pending/failed/missing/checksum drift aborts deploy)"
   # Same owner-role requirement as the --tolerate-missing branch above.
   run_remote "cd $VM_PATH && \
-    CREDS=\$($VM_PY -c 'from dotenv import dotenv_values; v = dotenv_values(\".env\"); print(v.get(\"POSTGRES_USER\") or v.get(\"DB_USER\") or \"\"); print(v.get(\"POSTGRES_PASSWORD\") or v.get(\"DB_PASSWORD\") or \"\")') && \
-    OWNER_USER=\$(printf '%s\n' \"\$CREDS\" | sed -n 1p) && \
-    OWNER_PASS=\$(printf '%s\n' \"\$CREDS\" | sed -n 2p) && \
+    CREDS=\$($VM_PY -c 'import base64; from dotenv import dotenv_values; v = dotenv_values(\".env\"); b64 = lambda s: base64.b64encode((s or \"\").encode()).decode(); print(b64(v.get(\"POSTGRES_USER\") or v.get(\"DB_USER\"))); print(b64(v.get(\"POSTGRES_PASSWORD\") or v.get(\"DB_PASSWORD\")))') && \
+    OWNER_USER=\$(printf '%s\n' \"\$CREDS\" | sed -n 1p | base64 -d) && \
+    OWNER_PASS=\$(printf '%s\n' \"\$CREDS\" | sed -n 2p | base64 -d) && \
     if [ -z \"\$OWNER_USER\" ] || [ -z \"\$OWNER_PASS\" ]; then \
       echo 'ERROR: could not read owner credentials (POSTGRES_* or legacy DB_*) from the VM root .env — validate would run as the web role and fail on ensure_tracking_table' >&2; \
       exit 1; \
