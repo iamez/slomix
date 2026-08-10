@@ -9,8 +9,13 @@ Branch: `agent/map-geometry-w5b-semantic-mapping`
 
 Base: `origin/main` at `8cb34d9975d1679417b782b3c05ef09bf008741c`
 
-Last head that completed the five-minute review quiet period:
-`7485ee93b65495045ae4aa1b2fbc6468574a608b`
+Last substantive implementation head that completed the five-minute review quiet
+period and final refresh:
+`4b5fc7747fb0b141533640dcc6eecd9d275699ee`
+
+The documentation-only commit that advances this pointer cannot contain its own Git
+hash. Query PR #633 before relying on this historical checkpoint as current review
+state.
 
 Scope: read-only ET/ET:Legacy map assets; no database write, deploy, service restart,
 Lua change, production API integration, metric or rating change
