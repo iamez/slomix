@@ -5,6 +5,7 @@ from zipfile import ZipFile
 
 import pytest
 
+from website.backend.map_geometry.bsp import parse_entities
 from website.backend.map_geometry.entities import MapEntityCatalog
 from website.backend.map_geometry.pk3_index import Pk3GeometryIndex, Pk3IndexError
 from website.backend.map_geometry.stage import (
@@ -73,6 +74,18 @@ def test_generic_identity_fields_use_et_ascii_case_and_last_assignment():
     assert entity.target_name == "Final"
     assert entity.message == "Final message"
     assert index.lookup_all(EntityIdentityNamespace.SCRIPT_NAME, "doorone").selected_entity_indices == (0,)
+
+
+def test_generic_alias_resolution_follows_interleaved_duplicate_source_order():
+    entities = parse_entities(
+        '{ "classname" "misc_gamemodel" "message" "first" '
+        '"shortname" "second" "message" "third" }'
+    )
+
+    index = build_entity_identity_index(entities)
+
+    assert index.entities[0].message == "third"
+    assert index.entities[0].properties == entities[0].ordered_pairs
 
 
 def test_et_ascii_matching_does_not_apply_unicode_case_folding():
@@ -157,6 +170,28 @@ def test_team_wolf_objective_description_overrides_runtime_message_exactly():
     result = index.lookup_first(EntityIdentityNamespace.MESSAGE, "forward spawn")
     assert result.resolution is EntityIdentityResolution.UNIQUE
     assert result.selected_entity_indices == (1,)
+
+
+def test_team_wolf_objective_uses_first_duplicate_exact_description():
+    entities = parse_entities(
+        '{ "classname" "team_WOLF_objective" "description" "First Spawn" '
+        '"description" "Second Spawn" }'
+    )
+
+    index = build_entity_identity_index(entities)
+
+    assert index.entities[0].message == "First Spawn"
+    assert index.lookup_first(EntityIdentityNamespace.MESSAGE, "second spawn").resolution is (
+        EntityIdentityResolution.MISSING
+    )
+
+
+def test_team_wolf_objective_preserves_present_empty_description():
+    entities = parse_entities('{ "classname" "team_WOLF_objective" "description" "" }')
+
+    index = build_entity_identity_index(entities)
+
+    assert index.entities[0].message == ""
 
 
 def test_first_message_lookup_keeps_shadowed_candidates_as_provenance():
@@ -521,6 +556,27 @@ def test_gotomarker_trailing_relative_is_a_structured_projection_issue():
 
     assert isinstance(projection, EffectProjectionIssue)
     assert "has no target" in projection.reason
+
+
+def test_gotomarker_does_not_reinterpret_a_consumed_relative_target_as_an_option():
+    linked = _linked(
+        (
+            {"classname": "script_mover", "scriptname": "truck"},
+            {"classname": "path_corner_2", "targetname": "destination"},
+            {"classname": "path_corner_2", "targetname": "relative"},
+        )
+    )
+
+    projection = project_stage_effect(
+        GotoMarkerEffect("destination", ("100", "relative", "relative", "wait"), 10),
+        source_script_name="truck",
+        linked=linked,
+        objectives=_objectives(),
+    )
+
+    assert isinstance(projection, GotoMarkerEffectProjection)
+    assert tuple(lookup.requested_value for lookup in projection.relative_lookups) == ("relative",)
+    assert projection.relative_lookups[0].selected_entity_indices == (2,)
 
 
 def test_autospawn_retains_first_marker_and_every_team_spawn_as_runtime_candidates():

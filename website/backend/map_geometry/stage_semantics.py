@@ -13,11 +13,12 @@ ran in a historical round, or that runtime entity coverage is complete.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal, TypeAlias
 
-from website.backend.map_geometry.bsp import BspFile, parse_entities
+from website.backend.map_geometry.bsp import BspFile, EntityProperties, parse_entities
 from website.backend.map_geometry.entities import MapEntityCatalog
 from website.backend.map_geometry.pk3_index import MapAssetKind, Pk3GeometryIndex, Pk3IndexError
 from website.backend.map_geometry.stage import (
@@ -382,12 +383,18 @@ def _canonical_int(value: str) -> int | None:
     return parsed
 
 
-def _generic_field(entity: dict[str, str], *field_names: str) -> str | None:
+def _ordered_entity_items(entity: Mapping[str, str]) -> tuple[tuple[str, str], ...]:
+    if isinstance(entity, EntityProperties):
+        return entity.ordered_pairs
+    return tuple(entity.items())
+
+
+def _generic_field(entity: Mapping[str, str], *field_names: str) -> str | None:
     """Reproduce the case-insensitive, last-assignment generic field parser."""
 
     folded_names = {_ascii_fold(name) for name in field_names}
     result = None
-    for key, value in entity.items():
+    for key, value in _ordered_entity_items(entity):
         if _ascii_fold(key) in folded_names:
             result = value
     return result
@@ -407,7 +414,11 @@ def _identity_value(entity: BspEntityIdentity, namespace: EntityIdentityNamespac
     raise AssertionError(f"unsupported entity identity namespace: {namespace}")
 
 
-def _entity_identity(entity_index: int, entity: dict[str, str]) -> BspEntityIdentity:
+def _first_exact_field(entity: Mapping[str, str], field_name: str) -> str | None:
+    return next((value for key, value in _ordered_entity_items(entity) if key == field_name), None)
+
+
+def _entity_identity(entity_index: int, entity: Mapping[str, str]) -> BspEntityIdentity:
     classname = _generic_field(entity, "classname") or ""
     script_name = _generic_field(entity, "scriptName")
     script_name_source = ScriptNameSource.BSP_FIELD if script_name is not None else None
@@ -421,7 +432,8 @@ def _entity_identity(entity_index: int, entity: dict[str, str]) -> BspEntityIden
     # SP_team_WOLF_objective reads this key with the case-sensitive spawn-var
     # helper and overwrites the generic message field.
     if classname == "team_WOLF_objective":
-        message = entity.get("description", "WARNING: No objective description set")
+        description = _first_exact_field(entity, "description")
+        message = "WARNING: No objective description set" if description is None else description
 
     target_name = _generic_field(entity, "targetname")
     path_corner_name = None
@@ -440,7 +452,7 @@ def _entity_identity(entity_index: int, entity: dict[str, str]) -> BspEntityIden
         message=message,
         path_corner_name=path_corner_name,
         path_corner_source=path_corner_source,
-        properties=tuple(entity.items()),
+        properties=_ordered_entity_items(entity),
     )
 
 
@@ -531,12 +543,16 @@ def _selected_w3_references(
 
 def _goto_relative_targets(effect: GotoMarkerEffect) -> tuple[str, ...] | None:
     targets: list[str] = []
-    for index, argument in enumerate(effect.arguments):
-        if _ascii_fold(argument) != "relative":
+    index = 0
+    while index < len(effect.arguments):
+        if _ascii_fold(effect.arguments[index]) != "relative":
+            index += 1
             continue
-        if index + 1 >= len(effect.arguments):
+        index += 1
+        if index >= len(effect.arguments):
             return None
-        targets.append(effect.arguments[index + 1])
+        targets.append(effect.arguments[index])
+        index += 1
     return tuple(targets)
 
 
@@ -645,7 +661,7 @@ def project_stage_effect(
 
 
 def build_entity_identity_index(
-    entities: tuple[dict[str, str], ...],
+    entities: tuple[Mapping[str, str], ...],
     *,
     source: str = "",
     source_kind: EntitySourceKind = EntitySourceKind.BSP_LUMP,
