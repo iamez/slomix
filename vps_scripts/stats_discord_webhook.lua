@@ -72,7 +72,7 @@
 ]]--
 
 local modname = "stats_discord_webhook"
-local version = "1.7.1"
+local version = "1.7.2"
 
 -- ============================================================================
 -- CONFIGURATION - EDIT THESE VALUES
@@ -81,7 +81,7 @@ local version = "1.7.1"
 local configuration = {
     -- Discord webhook URL - create one in your control channel
     -- Format: https://discord.com/api/webhooks/WEBHOOK_ID/WEBHOOK_TOKEN
-    discord_webhook_url = "https://discord.com/api/webhooks/1463967551049437356/TlHYbosz59fxmgXrkPiqZdwMmtqewqQM1GK6vQ8tC9Ui8yHCQssMoW6vfDSFOM0Q-bOv",
+    discord_webhook_url = "REPLACE_WITH_YOUR_WEBHOOK_URL",
 
     -- Enable/disable the webhook notifications
     enabled = true,
@@ -136,6 +136,43 @@ local configuration = {
     -- own wording is already human-readable.
     objective_live_ping_enabled = false,
 }
+
+-- ============================================================================
+-- LOCAL CONFIG OVERRIDES (secrets live OUTSIDE the repository)
+-- ============================================================================
+-- The webhook URL used to be hardcoded above, which put a live Discord token
+-- in the public repository (rotated 2026-08-10). Secrets now come from a
+-- separate stats_discord_webhook_config.lua deployed next to this script and
+-- never committed (vps_scripts/ is gitignored except for this file). The
+-- config file simply returns a table whose keys override `configuration`:
+--
+--   return { discord_webhook_url = "https://discord.com/api/webhooks/ID/TOKEN" }
+--
+-- If no config file is found the URL stays at its placeholder and the
+-- existing guards refuse to send + print a warning at init.
+local config_override_paths = {
+    "/home/et/.etlegacy/legacy/luascripts/stats_discord_webhook_config.lua",
+    "luascripts/stats_discord_webhook_config.lua",
+    "stats_discord_webhook_config.lua",
+}
+
+local function apply_config_overrides()
+    for _, path in ipairs(config_override_paths) do
+        local chunk = loadfile(path)
+        if chunk then
+            local ok, overrides = pcall(chunk)
+            if ok and type(overrides) == "table" then
+                for key, value in pairs(overrides) do
+                    configuration[key] = value
+                end
+                return path
+            end
+        end
+    end
+    return nil
+end
+
+local config_override_loaded_from = apply_config_overrides()
 
 -- ============================================================================
 -- STATE TRACKING
@@ -1359,8 +1396,11 @@ function et_InitGame(levelTime, randomSeed, restart)
 
     log_runtime_paths()
 
+    if config_override_loaded_from then
+        et.G_Print(string.format("[%s] Config overrides loaded from %s\n", modname, config_override_loaded_from))
+    end
     if configuration.discord_webhook_url == "REPLACE_WITH_YOUR_WEBHOOK_URL" then
-        et.G_Print(string.format("[%s] WARNING: Webhook URL not configured!\n", modname))
+        et.G_Print(string.format("[%s] WARNING: Webhook URL not configured! Deploy stats_discord_webhook_config.lua next to this script.\n", modname))
     end
 end
 
