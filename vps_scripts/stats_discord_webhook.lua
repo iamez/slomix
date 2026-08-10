@@ -150,29 +150,78 @@ local configuration = {
 --
 -- If no config file is found the URL stays at its placeholder and the
 -- existing guards refuse to send + print a warning at init.
-local config_override_paths = {
-    "/home/et/.etlegacy/legacy/luascripts/stats_discord_webhook_config.lua",
-    "luascripts/stats_discord_webhook_config.lua",
-    "stats_discord_webhook_config.lua",
-}
+--
+-- Applied from et_InitGame (not at file scope): candidate paths come from
+-- fs_homepath/fs_game cvars so the loader follows the engine's own layout
+-- instead of hardcoding one install (homepath wins over basepath — the
+-- same VFS rule that bit the 2026-08-10 shadow-copy deploy), and
+-- et.G_Print is reliably available there for the diagnostics below.
+local config_override_loaded_from = nil
+local config_override_warnings = {}
+
+local function config_override_candidates()
+    local candidates = {}
+    local filename = "stats_discord_webhook_config.lua"
+    local ok_home, homepath = pcall(et.trap_Cvar_Get, "fs_homepath")
+    local ok_base, basepath = pcall(et.trap_Cvar_Get, "fs_basepath")
+    local ok_game, game = pcall(et.trap_Cvar_Get, "fs_game")
+    local mod = (ok_game and game and game ~= "") and game or "legacy"
+    if ok_home and homepath and homepath ~= "" then
+        table.insert(candidates, homepath .. "/" .. mod .. "/luascripts/" .. filename)
+    end
+    if ok_base and basepath and basepath ~= "" then
+        table.insert(candidates, basepath .. "/" .. mod .. "/luascripts/" .. filename)
+    end
+    -- Known deployment location as a last resort if the cvars are empty.
+    table.insert(candidates, "/home/et/.etlegacy/legacy/luascripts/" .. filename)
+    return candidates
+end
+
+local function config_file_exists(path)
+    local f = io.open(path, "r")
+    if f then f:close(); return true end
+    return false
+end
 
 local function apply_config_overrides()
-    for _, path in ipairs(config_override_paths) do
-        local chunk = loadfile(path)
-        if chunk then
-            local ok, overrides = pcall(chunk)
-            if ok and type(overrides) == "table" then
-                for key, value in pairs(overrides) do
-                    configuration[key] = value
+    config_override_warnings = {}
+    for _, path in ipairs(config_override_candidates()) do
+        if config_file_exists(path) then
+            local chunk, load_err = loadfile(path)
+            if not chunk then
+                table.insert(config_override_warnings,
+                    string.format("override %s failed to parse: %s", path, tostring(load_err)))
+            else
+                local ok, overrides = pcall(chunk)
+                if not ok then
+                    table.insert(config_override_warnings,
+                        string.format("override %s failed to run: %s", path, tostring(overrides)))
+                elseif type(overrides) ~= "table" then
+                    table.insert(config_override_warnings,
+                        string.format("override %s returned %s, expected table", path, type(overrides)))
+                else
+                    -- Only keys that already exist in `configuration`, with a
+                    -- matching value type — a typo or a stringified boolean
+                    -- must be a loud warning, not a silent no-op (#634 review).
+                    for key, value in pairs(overrides) do
+                        if configuration[key] == nil then
+                            table.insert(config_override_warnings,
+                                string.format("override %s: unknown key '%s' ignored", path, tostring(key)))
+                        elseif type(configuration[key]) ~= type(value) then
+                            table.insert(config_override_warnings,
+                                string.format("override %s: key '%s' has type %s, expected %s — ignored",
+                                    path, tostring(key), type(value), type(configuration[key])))
+                        else
+                            configuration[key] = value
+                        end
+                    end
+                    config_override_loaded_from = path
+                    return
                 end
-                return path
             end
         end
     end
-    return nil
 end
-
-local config_override_loaded_from = apply_config_overrides()
 
 -- ============================================================================
 -- STATE TRACKING
@@ -1396,8 +1445,12 @@ function et_InitGame(levelTime, randomSeed, restart)
 
     log_runtime_paths()
 
+    apply_config_overrides()
     if config_override_loaded_from then
         et.G_Print(string.format("[%s] Config overrides loaded from %s\n", modname, config_override_loaded_from))
+    end
+    for _, warning in ipairs(config_override_warnings) do
+        et.G_Print(string.format("[%s] WARNING: %s\n", modname, warning))
     end
     if configuration.discord_webhook_url == "REPLACE_WITH_YOUR_WEBHOOK_URL" then
         et.G_Print(string.format("[%s] WARNING: Webhook URL not configured! Deploy stats_discord_webhook_config.lua next to this script.\n", modname))

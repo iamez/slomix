@@ -353,6 +353,11 @@ WEBSITE_STAT_BUGS_FOUND.md
 !/vps_scripts/stats_discord_webhook.lua
 !/vps_scripts/stats_webhook_notify.py
 !/vps_scripts/__init__.py
+# The `!/vps_scripts/` line above re-includes the DIRECTORY, so new files in
+# it are NOT ignored — a broad `git add` would stage them. The secret webhook
+# config must therefore be ignored explicitly (Codex on #634; verified with
+# `git check-ignore`).
+/vps_scripts/stats_discord_webhook_config.lua
 
 # ============================================
 # DEV SCRATCH SCRIPTS (in scripts/)
