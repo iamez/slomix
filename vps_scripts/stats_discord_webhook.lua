@@ -172,8 +172,13 @@ local function config_override_candidates()
     if ok_base and basepath and basepath ~= "" then
         table.insert(candidates, basepath .. "/" .. mod .. "/luascripts/" .. filename)
     end
-    -- Known deployment location as a last resort if the cvars are empty.
-    table.insert(candidates, "/home/et/.etlegacy/legacy/luascripts/" .. filename)
+    -- Hardcoded location ONLY when the engine gave us no paths at all —
+    -- with valid cvars it must never be probed, or a relocated/multi-
+    -- instance server could silently pick up another installation's
+    -- webhook (#634 review, round 2).
+    if #candidates == 0 then
+        table.insert(candidates, "/home/et/.etlegacy/legacy/luascripts/" .. filename)
+    end
     return candidates
 end
 
@@ -185,6 +190,11 @@ end
 
 local function apply_config_overrides()
     config_override_warnings = {}
+    -- First EXISTING candidate wins outright: on a parse/run error we warn
+    -- and STOP rather than falling through to a lower-priority path — a
+    -- stale basepath copy must never silently take over from a broken
+    -- homepath one (#634 review, round 2). With no overrides applied the
+    -- placeholder guard keeps the module from sending anything (fail closed).
     for _, path in ipairs(config_override_candidates()) do
         if config_file_exists(path) then
             local chunk, load_err = loadfile(path)
@@ -216,9 +226,11 @@ local function apply_config_overrides()
                         end
                     end
                     config_override_loaded_from = path
-                    return
                 end
             end
+            -- Existing candidate fully handled (loaded or warned) — never
+            -- fall through to a lower-priority path.
+            return
         end
     end
 end
