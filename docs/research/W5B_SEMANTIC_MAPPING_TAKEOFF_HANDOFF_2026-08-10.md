@@ -10,7 +10,7 @@ Branch: `agent/map-geometry-w5b-semantic-mapping`
 Base: `origin/main` at `8cb34d9975d1679417b782b3c05ef09bf008741c`
 
 Last head that completed the five-minute review quiet period:
-`57b069cf0387e8e3480221c10e423a59614f1739`
+`7a851e45541e7a377e351915646d20738d84026b`
 
 Scope: read-only ET/ET:Legacy map assets; no database write, deploy, service restart,
 Lua change, production API integration, metric or rating change
@@ -222,6 +222,10 @@ comments or function names:
 - The script runner executes actions in order and stops the current pass when an
   action returns false or a nested event changes the script id. Static control-flow
   projection therefore cannot be reconstructed by collecting typed effects alone.
+- [`CMod_LoadCustomEntityString`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/qcommon/cm_load.c#L458-L488)
+  asks the virtual filesystem for `maps/<map>.ent` before reading the BSP entity
+  lump. An override replaces the complete entity identity source; checking only BSP
+  read paths cannot prove runtime identity completeness.
 
 These findings establish the checked current-source contract. They do not prove that
 the live server build has identical semantics. Any version-sensitive behaviour remains
@@ -287,6 +291,21 @@ names. Real-asset acceptance linked all 3,688 W3 entities exactly:
 All linked catalogs deliberately retain `runtime_entity_completeness = unverified`.
 An exact static BSP join is not evidence that every raw entity survives the active
 game-mode/custom-entity runtime load path.
+
+### Effective entity-source baseline
+
+The local W1/W5b extension indexes optional `maps/<map>.ent` providers both inside
+PK3 archives and as a loose `etmain/maps/` file. Different bytes remain ambiguous
+because this tool does not know the live virtual-filesystem precedence. Identical
+duplicates are content-resolved. Provider reads remain bound to recorded size, CRC32
+and SHA-256.
+
+The current developer asset tree has no `.ent` provider for any of the 20 indexed BSP
+maps, so their engine-effective identity source falls back to the BSP lump. This is
+measured evidence for this indexed tree, not a claim about the live server filesystem.
+If an override is later present, the identity source is labelled `ent_override`; the
+existing W3 BSP catalog source will intentionally fail its exact-source join until W3
+is extracted from the same effective entity source.
 
 ### Action-specific effect-projection baseline
 
@@ -604,6 +623,17 @@ Cost: a few semantics may require later live-build verification.
 Reason: W5a already found installed numeric main-objective calls whose behaviour is not
 safe to infer from the current target-name path. Version labels do not create parity.
 
+### BSP entity lump versus effective virtual-filesystem entity source
+
+Decision: index optional `.ent` providers and apply the engine's override-before-BSP
+rule; reject conflicting provider bytes without verified live VFS precedence.
+
+Cost: one additional optional asset kind and a deliberate W3 join blocker when an
+override is present.
+
+Reason: an `.ent` file replaces the full entity dictionary consumed by the game. A
+perfect join against the superseded BSP lump would be deterministic and wrong.
+
 ### Early draft PR versus local-only implementation
 
 Decision: open a draft PR after this takeoff commit.
@@ -627,6 +657,7 @@ readiness.
 | 11 trigger calls have no internal W5a handler | Check BSP/custom entity paths and semantic relevance; missing-in-file is not impossible-at-runtime |
 | 42 main-objective effects are legacy numeric | Keep unapproved until actual build semantics are proven |
 | Installed maps may depend on custom entity sources or pak precedence | Preserve W1 provenance and publish external/unverified dependencies |
+| `maps/<map>.ent` can replace the complete BSP entity lump | Index PK3 and loose overrides; reject byte conflicts and require W3/identity source equality |
 | Static graph is mistaken for historical state | Type/name outputs as static/candidate and keep W5c in a separate module/PR |
 | Review fixes change denominators | Re-run exact real assets and update this document/report on every semantic change |
 
@@ -734,6 +765,13 @@ plus every same-team W3 spawn candidate and labels final selection runtime-unver
 Choosing a nearest static spawn here would conflate map possibility with historical
 state.
 
+### 2026-08-10 - entity identity follows `.ent` override-before-BSP load order
+
+The engine write/load path disproved the earlier implicit assumption that BSP entities
+are always the effective runtime identity source. W1 now inventories PK3 and loose
+`.ent` providers. Different candidate bytes are ambiguous, and a selected override is
+not allowed to join a W3 catalog extracted from the superseded BSP entity lump.
+
 ## Current handoff state
 
 Current step: complete Phase 3 relationship proof and domain blocker classification
@@ -741,21 +779,31 @@ on top of the locally verified action-specific projector. Phase 2's final public
 coverage surface is intentionally deferred until these real failure modes and Phase 4
 control-flow blockers are known.
 
-Next action: determine which objective-description, marker and measured-volume links
-are actually proven by engine keys, then classify the 152 missing state targets, 97
-missing effect-source identities, two missing objective descriptions and one missing
-autospawn marker without using fuzzy text. Do not collect projections into an unordered
-state claim.
+Next action: finish classifying the 152 missing state targets and 97 missing
+effect-source identities after the effective-source correction, then determine which
+objective-description, marker and measured-volume links are actually proven by engine
+keys. Do not use `objflags` as a description/volume join: current source transmits the
+field and mapper documentation calls it a command-map pulse selector, but the checked
+client does not consume it as a physical objective relationship.
 
 Known blockers: none for read-only research and local implementation. Any required
 live-build inspection that changes or restarts a service becomes owner-gated; retain
 the affected semantic result as unverified and continue with independent domains.
 
-Current local verification (Python 3.13.14): the complete 147-test map-geometry unit
-suite passed, and all 12 opt-in real-asset tests passed in 130.90 seconds. Current
-acceptance includes all 2,929 typed effect projections and the blocker inventory above
-while rechecking W1-W5a, patch collision and trace fail-closed baselines. Ruff and
-`git diff --check` passed. The full repository suite remains required before merge.
+Current local verification (Python 3.13.14): the complete 165-test W1/map-geometry
+unit suite passed, and all 12 opt-in real-asset tests passed in 240.41 seconds under
+repo-wide coverage tracing. The current acceptance proves no `.ent` override exists
+for any of the 20 indexed BSP maps, includes
+all 2,929 typed effect projections and the blocker inventory above, and rechecks W1-W5a,
+patch collision and trace fail-closed baselines. An initial full-asset run exposed two
+30-second test timeouts because the effective-source helper reparsed an already loaded
+BSP; the helper now accepts that exact indexed BSP, validates its source and reuses it.
+On a later run, the two largest corpus checks took 30.39 and 47.41 seconds under
+repo-wide coverage tracing, but only 17.17 and 20.94 seconds without it. The opt-in
+real-asset module now has a measured 90-second hang guard; this is acceptance-test
+headroom, not a production performance claim or SLO change.
+Ruff and `git diff --check` passed. The full repository suite remains required before
+merge.
 
 ## Copy-paste handoff prompt
 

@@ -33,6 +33,7 @@ class MapAssetKind(StrEnum):
     BSP = "bsp"
     SCRIPT = "script"
     OBJDATA = "objdata"
+    ENTITY_OVERRIDE = "ent"
 
 
 _ASSET_SUFFIXES = {f".{kind.value}": kind for kind in MapAssetKind}
@@ -48,9 +49,12 @@ class MapAssetProvider:
     size: int
     crc32: int
     sha256: str
+    is_loose_file: bool = False
 
     @property
     def source(self) -> str:
+        if self.is_loose_file:
+            return str(self.pk3_path)
         return f"{self.pk3_path}!/{self.member}"
 
 
@@ -112,13 +116,14 @@ def _hash_member(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> str:
     return digest.hexdigest()
 
 
-def _provider_key(provider: MapAssetProvider) -> tuple[str, str, str, str, int]:
+def _provider_key(provider: MapAssetProvider) -> tuple[str, str, str, str, str, int]:
     path = str(provider.pk3_path)
-    return (path.casefold(), path, provider.member.casefold(), provider.member, provider.member_index)
+    storage = "loose" if provider.is_loose_file else "pk3"
+    return (storage, path.casefold(), path, provider.member.casefold(), provider.member, provider.member_index)
 
 
 class Pk3GeometryIndex:
-    """Immutable index of direct BSP, script and objdata map assets.
+    """Immutable index of direct BSP, script, objdata and entity-override assets.
 
     Different duplicate contents remain ambiguous. The index has no authority
     to infer the live engine's pak precedence from filename or scan order.
@@ -168,6 +173,38 @@ class Pk3GeometryIndex:
                         )
             except (OSError, EOFError, zipfile.BadZipFile, RuntimeError, zlib.error, lzma.LZMAError) as exc:
                 raise Pk3IndexError(f"cannot index PK3 archive {pk3_path}: {exc}") from exc
+
+        # The engine asks the virtual filesystem for maps/<map>.ent before it
+        # falls back to the BSP entity lump. Include a directly installed loose
+        # override as another provider; do not invent VFS precedence when its
+        # bytes conflict with a PK3 provider.
+        loose_maps_dir = root / "maps"
+        if loose_maps_dir.is_dir():
+            for path in sorted(loose_maps_dir.iterdir(), key=lambda item: item.name.casefold()):
+                if not path.is_file() or path.suffix.casefold() != ".ent":
+                    continue
+                member = path.relative_to(root).as_posix()
+                identity = _map_asset_identity(member)
+                if identity is None:
+                    continue
+                map_name, asset_kind = identity
+                try:
+                    raw = path.read_bytes()
+                except OSError as exc:
+                    raise Pk3IndexError(f"cannot index loose map asset {path}: {exc}") from exc
+                discovered[(map_name, asset_kind)].append(
+                    MapAssetProvider(
+                        map_name=map_name,
+                        asset_kind=asset_kind,
+                        pk3_path=path,
+                        member=member,
+                        member_index=-1,
+                        size=len(raw),
+                        crc32=zlib.crc32(raw),
+                        sha256=hashlib.sha256(raw).hexdigest(),
+                        is_loose_file=True,
+                    )
+                )
 
         providers: dict[tuple[str, MapAssetKind], tuple[MapAssetProvider, ...]] = {}
         for identity, candidates in sorted(
@@ -259,6 +296,20 @@ class Pk3GeometryIndex:
         return tuple(self.resolve(name) for name in names)
 
     def read_provider(self, provider: MapAssetProvider) -> bytes:
+        if provider.is_loose_file:
+            try:
+                raw = provider.pk3_path.read_bytes()
+            except OSError as exc:
+                raise Pk3IndexError(f"cannot read indexed asset {provider.source}: {exc}") from exc
+            if len(raw) != provider.size or zlib.crc32(raw) != provider.crc32:
+                raise AssetContentChangedError(f"loose asset metadata changed for {provider.source}")
+            actual_hash = hashlib.sha256(raw).hexdigest()
+            if actual_hash != provider.sha256:
+                raise AssetContentChangedError(
+                    f"asset content changed for {provider.source}: indexed {provider.sha256}, read {actual_hash}"
+                )
+            return raw
+
         try:
             with zipfile.ZipFile(provider.pk3_path) as archive:
                 infos = archive.infolist()
@@ -342,6 +393,7 @@ def _provider_manifest(provider: MapAssetProvider, root: Path) -> dict:
         pk3 = str(provider.pk3_path)
     return {
         "asset_kind": provider.asset_kind.value,
+        "storage": "loose" if provider.is_loose_file else "pk3",
         "pk3": pk3,
         "member": provider.member,
         "member_index": provider.member_index,
