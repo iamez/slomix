@@ -4,7 +4,7 @@
 A Discord bot, a web dashboard, and a Lua tracker that runs on the game server —
 built for one 6v6 stopwatch community that has been playing together for two decades.
 
-[![Version](https://img.shields.io/badge/version-1.29.0)](CHANGELOG.md) <!-- x-release-please-version -->
+[![Version](https://img.shields.io/badge/version-1.30.0)](CHANGELOG.md) <!-- x-release-please-version -->
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB)](https://www.python.org/)
 [![PostgreSQL 17 in production](https://img.shields.io/badge/postgresql-17_prod_%7C_14_CI-336791)](https://www.postgresql.org/)
 [![FastAPI](https://img.shields.io/badge/api-FastAPI-009688)](https://fastapi.tiangolo.com/)
