@@ -587,13 +587,16 @@ elif [ ${#MIGRATIONS[@]} -gt 0 ]; then
   # different role: PX-DB-001 stays satisfied.
   #
   # Credentials come from the VM's ROOT .env, which is the bot's, i.e. the
-  # owner's. Read on the VM and never echoed. Accepts POSTGRES_* or the
-  # legacy DB_* names (apply_migrations.py supports both) and strips one
-  # pair of surrounding dotenv quotes, which cut would otherwise pass
-  # through to asyncpg literally (Codex on #629).
+  # owner's. Read on the VM and never echoed. Resolved with python-dotenv's
+  # dotenv_values (venv-web ships it) so quoting, inline-comment, and escape
+  # semantics match exactly what bot/config.py and the runner see — a
+  # grep/cut/sed reimplementation kept missing cases (Codex on #629: legacy
+  # DB_* names, quoted values, inline comments). Accepts POSTGRES_* or the
+  # legacy DB_* names, same fallback order as apply_migrations.py.
   run_remote "cd $VM_PATH && \
-    OWNER_USER=\$({ grep -m1 '^POSTGRES_USER=' .env || grep -m1 '^DB_USER=' .env || true; } | cut -d= -f2- | sed \"s/^['\\\"]//; s/['\\\"]\$//\") && \
-    OWNER_PASS=\$({ grep -m1 '^POSTGRES_PASSWORD=' .env || grep -m1 '^DB_PASSWORD=' .env || true; } | cut -d= -f2- | sed \"s/^['\\\"]//; s/['\\\"]\$//\") && \
+    CREDS=\$($VM_PY -c 'from dotenv import dotenv_values; v = dotenv_values(\".env\"); print(v.get(\"POSTGRES_USER\") or v.get(\"DB_USER\") or \"\"); print(v.get(\"POSTGRES_PASSWORD\") or v.get(\"DB_PASSWORD\") or \"\")') && \
+    OWNER_USER=\$(printf '%s\n' \"\$CREDS\" | sed -n 1p) && \
+    OWNER_PASS=\$(printf '%s\n' \"\$CREDS\" | sed -n 2p) && \
     if [ -z \"\$OWNER_USER\" ] || [ -z \"\$OWNER_PASS\" ]; then \
       echo 'ERROR: could not read owner credentials (POSTGRES_* or legacy DB_*) from the VM root .env — DDL would run as the web role and fail on ALTER TABLE' >&2; \
       exit 1; \
@@ -628,8 +631,9 @@ if $SKIP_MIGRATIONS; then
   # aborting the deploy AFTER services stopped (hit on the 2026-08-10
   # v1.30.0 deploy). Credentials come from the VM's ROOT .env.
   run_remote "cd $VM_PATH && \
-    OWNER_USER=\$({ grep -m1 '^POSTGRES_USER=' .env || grep -m1 '^DB_USER=' .env || true; } | cut -d= -f2- | sed \"s/^['\\\"]//; s/['\\\"]\$//\") && \
-    OWNER_PASS=\$({ grep -m1 '^POSTGRES_PASSWORD=' .env || grep -m1 '^DB_PASSWORD=' .env || true; } | cut -d= -f2- | sed \"s/^['\\\"]//; s/['\\\"]\$//\") && \
+    CREDS=\$($VM_PY -c 'from dotenv import dotenv_values; v = dotenv_values(\".env\"); print(v.get(\"POSTGRES_USER\") or v.get(\"DB_USER\") or \"\"); print(v.get(\"POSTGRES_PASSWORD\") or v.get(\"DB_PASSWORD\") or \"\")') && \
+    OWNER_USER=\$(printf '%s\n' \"\$CREDS\" | sed -n 1p) && \
+    OWNER_PASS=\$(printf '%s\n' \"\$CREDS\" | sed -n 2p) && \
     if [ -z \"\$OWNER_USER\" ] || [ -z \"\$OWNER_PASS\" ]; then \
       echo 'ERROR: could not read owner credentials (POSTGRES_* or legacy DB_*) from the VM root .env — validate would run as the web role and fail on ensure_tracking_table' >&2; \
       rm -f $STAGED_RUNNER; \
@@ -641,8 +645,9 @@ else
   log "  Validating migration ledger (pending/failed/missing/checksum drift aborts deploy)"
   # Same owner-role requirement as the --tolerate-missing branch above.
   run_remote "cd $VM_PATH && \
-    OWNER_USER=\$({ grep -m1 '^POSTGRES_USER=' .env || grep -m1 '^DB_USER=' .env || true; } | cut -d= -f2- | sed \"s/^['\\\"]//; s/['\\\"]\$//\") && \
-    OWNER_PASS=\$({ grep -m1 '^POSTGRES_PASSWORD=' .env || grep -m1 '^DB_PASSWORD=' .env || true; } | cut -d= -f2- | sed \"s/^['\\\"]//; s/['\\\"]\$//\") && \
+    CREDS=\$($VM_PY -c 'from dotenv import dotenv_values; v = dotenv_values(\".env\"); print(v.get(\"POSTGRES_USER\") or v.get(\"DB_USER\") or \"\"); print(v.get(\"POSTGRES_PASSWORD\") or v.get(\"DB_PASSWORD\") or \"\")') && \
+    OWNER_USER=\$(printf '%s\n' \"\$CREDS\" | sed -n 1p) && \
+    OWNER_PASS=\$(printf '%s\n' \"\$CREDS\" | sed -n 2p) && \
     if [ -z \"\$OWNER_USER\" ] || [ -z \"\$OWNER_PASS\" ]; then \
       echo 'ERROR: could not read owner credentials (POSTGRES_* or legacy DB_*) from the VM root .env — validate would run as the web role and fail on ensure_tracking_table' >&2; \
       exit 1; \
