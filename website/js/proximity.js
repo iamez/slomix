@@ -3541,17 +3541,19 @@ function renderProxScores(data, formula) {
     // 'degraded' ONLY. quality.ranking_available is also false for a healthy
     // empty result (no qualifying players / new install), so keying off it made
     // an empty scope look like a data-source outage (Copilot/Codex review #512).
+    const subtitleEl = document.getElementById('prox-scores-subtitle');
     if (data?.status === 'degraded') {
         const failed = (data?.quality?.failed_sources ?? []).length;
         listEl.innerHTML = `<div class="text-[11px] text-amber-400/80">Proximity scores are temporarily unavailable (${failed} data source${failed === 1 ? '' : 's'} failed). Ranking withheld to avoid showing incomplete results.</div>`;
+        if (subtitleEl) subtitleEl.textContent = 'Composite rating — unavailable';
         return;
     }
     if (players.length === 0) {
         listEl.innerHTML = '<div class="text-[11px] text-slate-500">No proximity score data yet.</div>';
+        if (subtitleEl) subtitleEl.textContent = 'Composite rating — no data yet';
         return;
     }
 
-    const subtitleEl = document.getElementById('prox-scores-subtitle');
     if (subtitleEl) {
         if (formula?.categories) {
             const catCount = Object.keys(formula.categories).length;
