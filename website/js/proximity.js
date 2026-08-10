@@ -3687,24 +3687,33 @@ function renderDangerZones(mapName, classFilter) {
 
 /* ===== v5.2 Combat Heatmap ===== */
 
-// Colored-dot / kill-line swatches must stay in sync with what
-// renderCombatHeatmap() actually draws below (hotzone fill + line stroke
-// colors) — kept as one lookup so a future palette change can't update the
-// canvas without updating the legend, or vice versa.
+// Single source of truth for combat-heatmap hues (RGB triples, no alpha).
+// Both the legend swatches below and the actual canvas drawing in
+// renderCombatHeatmap() read from this object, so a palette change can't
+// leave the legend showing a color the canvas doesn't draw (or vice versa)
+// — each context still picks its own alpha (intensity ramp vs. fixed).
+const COMBAT_HEATMAP_RGB = {
+    kills: '239, 68, 68',
+    deaths: '96, 165, 250',
+    pushes: '251, 146, 60',
+    axisLine: '239, 68, 68',
+    alliesLine: '96, 165, 250',
+};
+
 function updateCombatHeatmapLegend(perspective) {
     const el = document.getElementById('combat-heatmap-legend');
     if (!el) return;
-    const chip = (color, label, title) => `<span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-400"${title ? ` title="${escapeHtml(title)}"` : ''}><span class="w-2 h-2 rounded-full" style="background:${color}"></span>${label}</span>`;
+    const chip = (rgb, alpha, label, title) => `<span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-400"${title ? ` title="${escapeHtml(title)}"` : ''}><span class="w-2 h-2 rounded-full" style="background:rgba(${rgb}, ${alpha})"></span>${label}</span>`;
     if (perspective === 'pushes') {
-        el.innerHTML = chip('rgba(251, 146, 60, 0.8)', 'Push / carrier deaths', 'Deaths of the pushing team during objective-directed pushes, plus carrier deaths.');
+        el.innerHTML = chip(COMBAT_HEATMAP_RGB.pushes, 0.8, 'Push / carrier deaths', 'Deaths of the pushing team during objective-directed pushes, plus carrier deaths.');
         return;
     }
     const dotChip = perspective === 'deaths'
-        ? chip('rgba(96, 165, 250, 0.8)', 'Death positions', 'Where players died in this scope.')
-        : chip('rgba(239, 68, 68, 0.8)', 'Kill positions', 'Where kills happened in this scope.');
+        ? chip(COMBAT_HEATMAP_RGB.deaths, 0.8, 'Death positions', 'Where players died in this scope.')
+        : chip(COMBAT_HEATMAP_RGB.kills, 0.8, 'Kill positions', 'Where kills happened in this scope.');
     el.innerHTML = dotChip
-        + chip('rgba(239, 68, 68, 0.7)', 'Axis kill line', "Line from killer to victim, colored by the killer's team.")
-        + chip('rgba(96, 165, 250, 0.7)', 'Allies kill line');
+        + chip(COMBAT_HEATMAP_RGB.axisLine, 0.7, 'Axis kill line', "Line from killer to victim, colored by the killer's team.")
+        + chip(COMBAT_HEATMAP_RGB.alliesLine, 0.7, 'Allies kill line');
 }
 
 async function renderCombatHeatmap(mapName, perspective) {
@@ -3838,10 +3847,10 @@ async function renderCombatHeatmap(mapName, perspective) {
         const intensity = clamp(Number(hz.count || 0) / maxCount, 0, 1);
         const alpha = 0.2 + intensity * 0.6;
         const fill = isPushView
-            ? `rgba(251, 146, 60, ${alpha})`
+            ? `rgba(${COMBAT_HEATMAP_RGB.pushes}, ${alpha})`
             : perspective === 'deaths'
-                ? `rgba(96, 165, 250, ${alpha})`
-                : `rgba(239, 68, 68, ${alpha})`;
+                ? `rgba(${COMBAT_HEATMAP_RGB.deaths}, ${alpha})`
+                : `rgba(${COMBAT_HEATMAP_RGB.kills}, ${alpha})`;
 
         const worldX = (gx + 0.5) * gridSize;
         const worldY = (gy + 0.5) * gridSize;
@@ -3877,8 +3886,8 @@ async function renderCombatHeatmap(mapName, perspective) {
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(v.x, v.y);
         ctx.strokeStyle = line.attacker_team === 'AXIS'
-            ? 'rgba(239, 68, 68, 0.15)'
-            : 'rgba(96, 165, 250, 0.15)';
+            ? `rgba(${COMBAT_HEATMAP_RGB.axisLine}, 0.15)`
+            : `rgba(${COMBAT_HEATMAP_RGB.alliesLine}, 0.15)`;
         ctx.lineWidth = 1;
         ctx.stroke();
     }
