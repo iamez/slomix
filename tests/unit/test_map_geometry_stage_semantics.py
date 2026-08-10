@@ -1,10 +1,12 @@
 """W5b engine-identity lookup contracts."""
 
 from types import SimpleNamespace
+from zipfile import ZipFile
 
 import pytest
 
 from website.backend.map_geometry.entities import MapEntityCatalog
+from website.backend.map_geometry.pk3_index import Pk3GeometryIndex, Pk3IndexError
 from website.backend.map_geometry.stage import (
     AlertEntityEffect,
     AutoSpawnEffect,
@@ -32,6 +34,7 @@ from website.backend.map_geometry.stage_semantics import (
     EffectProjectionIssue,
     EntityIdentityNamespace,
     EntityIdentityResolution,
+    EntitySourceKind,
     EntityTargetEffectProjection,
     GlobalStageEffectProjection,
     GotoMarkerEffectProjection,
@@ -40,6 +43,7 @@ from website.backend.map_geometry.stage_semantics import (
     ScriptNameSource,
     W3EntityKind,
     build_entity_identity_index,
+    build_indexed_entity_identity_index,
     link_w3_entity_catalog,
     project_accumulator_action,
     project_stage_effect,
@@ -211,6 +215,64 @@ def test_missing_lookup_has_no_candidates_or_selection():
     assert result.resolution is EntityIdentityResolution.MISSING
     assert result.candidate_entity_indices == ()
     assert result.selected_entity_indices == ()
+
+
+def test_indexed_identity_uses_ent_override_before_requiring_a_bsp(tmp_path):
+    archive = tmp_path / "override.pk3"
+    with ZipFile(archive, "w") as pk3:
+        pk3.writestr(
+            "maps/test.ent",
+            '{ "classname" "script_multiplayer" "scriptname" "ignored" }',
+        )
+    geometry_index = Pk3GeometryIndex.scan(tmp_path)
+
+    identities = build_indexed_entity_identity_index(geometry_index, "test")
+
+    assert identities.source_kind is EntitySourceKind.ENT_OVERRIDE
+    assert identities.source.endswith("override.pk3!/maps/test.ent")
+    assert identities.lookup_all(EntityIdentityNamespace.SCRIPT_NAME, "game_manager").selected_entity_indices == (0,)
+
+
+def test_indexed_identity_rejects_conflicting_ent_overrides_without_live_vfs_precedence(tmp_path):
+    for name, marker in (("a.pk3", "one"), ("b.pk3", "two")):
+        with ZipFile(tmp_path / name, "w") as pk3:
+            pk3.writestr("maps/test.ent", f'{{ "classname" "worldspawn" "message" "{marker}" }}')
+    geometry_index = Pk3GeometryIndex.scan(tmp_path)
+
+    with pytest.raises(Pk3IndexError, match="ambiguous entity overrides"):
+        build_indexed_entity_identity_index(geometry_index, "test")
+
+
+def test_indexed_identity_falls_back_to_bsp_lump_when_no_ent_override_exists():
+    geometry_index = SimpleNamespace(
+        resolve_asset=lambda *_args: SimpleNamespace(status="missing", selected=None),
+        load_bsp=lambda _map_name: SimpleNamespace(
+            entities=({"classname": "script_multiplayer"},),
+            source="maps/test.bsp",
+        ),
+    )
+
+    identities = build_indexed_entity_identity_index(geometry_index, "test")
+
+    assert identities.source_kind is EntitySourceKind.BSP_LUMP
+    assert identities.source == "maps/test.bsp"
+
+
+def test_indexed_identity_rejects_a_cached_bsp_from_a_different_provider():
+    geometry_index = SimpleNamespace(
+        resolve_asset=lambda *_args: SimpleNamespace(status="missing", selected=None),
+        resolve=lambda _map_name: SimpleNamespace(
+            map_name="test",
+            selected=SimpleNamespace(source="indexed.pk3!/maps/test.bsp"),
+        ),
+    )
+    cached_bsp = SimpleNamespace(
+        entities=({"classname": "script_multiplayer"},),
+        source="other.pk3!/maps/test.bsp",
+    )
+
+    with pytest.raises(Pk3IndexError, match="does not match indexed map"):
+        build_indexed_entity_identity_index(geometry_index, "test", bsp=cached_bsp)
 
 
 def _action(command: str, *arguments: str, line: int = 7) -> ScriptAction:

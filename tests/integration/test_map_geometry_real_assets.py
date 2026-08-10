@@ -34,7 +34,7 @@ from website.backend.map_geometry import (
     TraceReason,
     TraceStatus,
     TriggerResolution,
-    build_bsp_entity_identity_index,
+    build_indexed_entity_identity_index,
     compile_bsp_patches,
     extract_entity_catalog,
     link_w3_entity_catalog,
@@ -77,6 +77,10 @@ MISSING_GEOMETRY = {
 }
 
 pytestmark = [
+    # Full-corpus checks parse up to 20 large BSPs. Repo-wide coverage tracing
+    # can more than double their runtime; this remains a hang guard, not a
+    # production performance threshold.
+    pytest.mark.timeout(90),
     pytest.mark.skipif(
         not RUN_REAL_ASSET_TESTS,
         reason="real ET map asset tests require SLOMIX_RUN_REAL_ASSET_TESTS=1",
@@ -99,11 +103,16 @@ def test_every_observed_played_map_has_geometry_or_an_explicit_missing_result(ge
     assert manifest["summary"]["without_geometry"] == 6
     for kind in MapAssetKind:
         counts = manifest["summary"]["asset_status_counts"][kind.value]
-        assert counts == {"resolved": 13, "missing": 6, "ambiguous": 0}
+        expected = (
+            {"resolved": 0, "missing": 19, "ambiguous": 0}
+            if kind is MapAssetKind.ENTITY_OVERRIDE
+            else {"resolved": 13, "missing": 6, "ambiguous": 0}
+        )
+        assert counts == expected
 
 
 def test_te_escape2_duplicate_consumed_assets_are_byte_identical(geometry_index):
-    for kind in MapAssetKind:
+    for kind in (MapAssetKind.BSP, MapAssetKind.SCRIPT, MapAssetKind.OBJDATA):
         providers = geometry_index.providers_for_asset("te_escape2", kind)
         assert [provider.pk3_path.name for provider in providers] == [
             "te_escape2_fixed.pk3",
@@ -218,7 +227,9 @@ def test_w5b_indexes_engine_effective_script_identities_without_inventing_missin
 
     for map_name in geometry_index.map_names:
         bsp = geometry_index.load_bsp(map_name)
-        identities = build_bsp_entity_identity_index(bsp)
+        identities = build_indexed_entity_identity_index(geometry_index, map_name, bsp=bsp)
+        assert identities.source_kind.value == "bsp_lump", map_name
+        assert geometry_index.resolve_asset(map_name, MapAssetKind.ENTITY_OVERRIDE).status == "missing", map_name
         model = load_static_stage(geometry_index, map_name).model
         assert model is not None
 
@@ -395,7 +406,10 @@ def test_w5b_links_every_w3_entity_to_the_exact_bsp_identity(geometry_index):
     for map_name in geometry_index.map_names:
         bsp = geometry_index.load_bsp(map_name)
         catalog = extract_entity_catalog(bsp, map_name)
-        linked = link_w3_entity_catalog(build_bsp_entity_identity_index(bsp), catalog)
+        linked = link_w3_entity_catalog(
+            build_indexed_entity_identity_index(geometry_index, map_name, bsp=bsp),
+            catalog,
+        )
 
         assert linked.map_name == map_name
         assert linked.runtime_entity_completeness == "unverified"
@@ -423,7 +437,7 @@ def test_w5b_projects_every_typed_stage_effect_to_action_specific_static_candida
     for map_name in geometry_index.map_names:
         bsp = geometry_index.load_bsp(map_name)
         linked = link_w3_entity_catalog(
-            build_bsp_entity_identity_index(bsp),
+            build_indexed_entity_identity_index(geometry_index, map_name, bsp=bsp),
             extract_entity_catalog(bsp, map_name),
         )
         model = load_static_stage(geometry_index, map_name).model

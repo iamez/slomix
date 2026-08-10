@@ -17,8 +17,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal, TypeAlias
 
-from website.backend.map_geometry.bsp import BspFile
+from website.backend.map_geometry.bsp import BspFile, parse_entities
 from website.backend.map_geometry.entities import MapEntityCatalog
+from website.backend.map_geometry.pk3_index import MapAssetKind, Pk3GeometryIndex, Pk3IndexError
 from website.backend.map_geometry.stage import (
     AlertEntityEffect,
     AutoSpawnEffect,
@@ -57,6 +58,11 @@ class EntityIdentityResolution(StrEnum):
 class ScriptNameSource(StrEnum):
     BSP_FIELD = "bsp_field"
     CLASS_OVERRIDE = "class_override"
+
+
+class EntitySourceKind(StrEnum):
+    BSP_LUMP = "bsp_lump"
+    ENT_OVERRIDE = "ent_override"
 
 
 class AccumulatorScope(StrEnum):
@@ -295,6 +301,7 @@ _MAX_SAFE_SIGNED_BIT_INDEX = 30
 class BspEntityIdentityIndex:
     entities: tuple[BspEntityIdentity, ...]
     source: str = ""
+    source_kind: EntitySourceKind = EntitySourceKind.BSP_LUMP
     semantics_source_commit: str = ETLEGACY_SEMANTICS_COMMIT
     runtime_entity_completeness: str = "unverified"
 
@@ -641,17 +648,54 @@ def build_entity_identity_index(
     entities: tuple[dict[str, str], ...],
     *,
     source: str = "",
+    source_kind: EntitySourceKind = EntitySourceKind.BSP_LUMP,
 ) -> BspEntityIdentityIndex:
     """Build a deterministic W5b identity index in BSP entity order."""
 
     return BspEntityIdentityIndex(
         entities=tuple(_entity_identity(index, entity) for index, entity in enumerate(entities)),
         source=source,
+        source_kind=source_kind,
     )
 
 
 def build_bsp_entity_identity_index(bsp: BspFile) -> BspEntityIdentityIndex:
     return build_entity_identity_index(bsp.entities, source=bsp.source)
+
+
+def build_indexed_entity_identity_index(
+    geometry_index: Pk3GeometryIndex,
+    map_name: str,
+    *,
+    bsp: BspFile | None = None,
+) -> BspEntityIdentityIndex:
+    """Apply ET:Legacy's maps/<map>.ent-before-BSP identity source rule."""
+
+    override = geometry_index.resolve_asset(map_name, MapAssetKind.ENTITY_OVERRIDE)
+    if override.status == "ambiguous":
+        raise Pk3IndexError(
+            f"map {override.map_name!r} has ambiguous entity overrides and no verified live VFS precedence: "
+            f"{override.reason}"
+        )
+    if override.selected is None:
+        if bsp is None:
+            bsp = geometry_index.load_bsp(map_name)
+        else:
+            geometry = geometry_index.resolve(map_name)
+            if geometry.selected is None or geometry.selected.source != bsp.source:
+                raise Pk3IndexError(
+                    f"provided BSP source {bsp.source!r} does not match indexed map {geometry.map_name!r} provider"
+                )
+        return build_bsp_entity_identity_index(bsp)
+
+    raw = geometry_index.read_provider(override.selected)
+    text = raw.split(b"\0", 1)[0].decode("latin-1")
+    entities = parse_entities(text, source=override.selected.source)
+    return build_entity_identity_index(
+        entities,
+        source=override.selected.source,
+        source_kind=EntitySourceKind.ENT_OVERRIDE,
+    )
 
 
 def link_w3_entity_catalog(
