@@ -416,6 +416,21 @@ async def get_proximity_crossfire_angles(
         """,
         query_params,
     )
+    # Resolve duo GUIDs to display names — the frontend falls back to raw
+    # 8-char GUID prefixes when these are missing, which is what the Top
+    # Duos list used to show. player_track shares the 32-char GUID format
+    # with proximity_crossfire_opportunity.
+    duo_guids = sorted({str(g) for r in (top_duos or []) for g in (r[0], r[1]) if g})
+    duo_names: dict[str, str] = {}
+    if duo_guids:
+        name_rows = await db.fetch_all(
+            "SELECT player_guid, MAX(player_name) FROM player_track "
+            "WHERE player_guid = ANY($1) GROUP BY player_guid",
+            (duo_guids,),
+        )
+        duo_names = {
+            str(r[0]): str(r[1]) for r in (name_rows or []) if r and r[0] and r[1]
+        }
     return {
         "status": "ok",
         "scope": scope,
@@ -431,6 +446,8 @@ async def get_proximity_crossfire_angles(
         "top_duos": [
             {
                 "teammate1_guid": r[0], "teammate2_guid": r[1],
+                "name": duo_names.get(str(r[0])),
+                "partner_name": duo_names.get(str(r[1])),
                 "executions": int(r[2] or 0), "avg_angle": float(r[3] or 0),
             }
             for r in (top_duos or [])
