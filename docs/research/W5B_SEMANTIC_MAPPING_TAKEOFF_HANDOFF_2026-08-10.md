@@ -2,11 +2,15 @@
 
 Date: 2026-08-10
 
-Status: implementation in progress; engine identity foundation is locally verified
+Status: implementation in progress; engine identity, installed accumulator projection
+and exact W3 identity joins are locally verified
 
 Branch: `agent/map-geometry-w5b-semantic-mapping`
 
 Base: `origin/main` at `8cb34d9975d1679417b782b3c05ef09bf008741c`
+
+Last head that completed the five-minute review quiet period:
+`aad7514db1cec5849c45fad63633b11d499e96ae`
 
 Scope: read-only ET/ET:Legacy map assets; no database write, deploy, service restart,
 Lua change, production API integration, metric or rating change
@@ -244,6 +248,46 @@ matter. The 23 missing blocks remain an inventory, not proof that they are impos
 at runtime. The 13-map result is an identity-input denominator, not a defensible static
 graph verdict; trigger, effect, custom-entity and control-flow gates are still pending.
 
+### Installed accumulator projection baseline
+
+The current local implementation projects every installed `accum` and `globalaccum`
+action into an entity-scoped or level-scoped typed instruction. It rejects malformed
+integer syntax, out-of-range buffers, undefined signed bit shifts, unsupported
+operations and incorrect arity as structured issues. This is a typed source-program
+projection only; it does not yet execute branches or publish a possibility graph.
+
+| Projection | Count |
+|---|---:|
+| Deterministic mutations | 994 |
+| Abort guards | 313 |
+| Conditional triggers | 299 |
+| Structured issues in installed assets | 0 |
+
+The 1,606 installed projections contain 414 `set`, 24 `inc`, 289 `bitset`, 267
+`bitreset`, 149 `abort_if_equal`, 78 `abort_if_not_equal`, 39
+`abort_if_bitset`, 33 `abort_if_not_bitset`, 9 `abort_if_less_than`, 5
+`abort_if_greater_than` and 299 `trigger_if_equal` instructions. This freezes the
+observed deterministic subset without approving runtime-dependent operations that are
+not present in the installed corpus.
+
+### Exact W3 identity-join baseline
+
+The generic BSP identity index is now joined to the W3 tactical catalog only by the
+stable BSP `entity_index`. The join rejects provider/source drift, missing indices,
+one entity appearing in multiple W3 categories and classname drift. It never re-matches
+names. Real-asset acceptance linked all 3,688 W3 entities exactly:
+
+| W3 kind | Exact links |
+|---|---:|
+| Spawn points | 2,376 |
+| Objective volumes | 158 |
+| Objective markers | 96 |
+| Collision entities | 1,058 |
+
+All linked catalogs deliberately retain `runtime_entity_completeness = unverified`.
+An exact static BSP join is not evidence that every raw entity survives the active
+game-mode/custom-entity runtime load path.
+
 ## Proposed code boundary
 
 Prefer a new sibling module, tentatively
@@ -311,7 +355,8 @@ without relying on chat history.
 ### Phase 1 - verify engine identity and execution semantics
 
 Status: in progress. Identity/action namespaces and installed accumulator operations
-are source-verified; accumulator/control-flow fixtures remain pending.
+are source-verified; typed accumulator projection fixtures are complete. Ordered
+runner, nested-event, wait/reset and cycle fixtures remain before Phase 4 execution.
 
 Read current ET:Legacy primary source and pin exact source URLs/commit hashes for:
 
@@ -338,8 +383,9 @@ source citation and a unit test that would fail under the most plausible wrong r
 
 ### Phase 2 - build a generic BSP identity index
 
-Status: in progress. The generic engine-effective identity index and first/all lookup
-fixtures are implemented locally; W3 typed joins and publication remain pending.
+Status: in progress. The generic engine-effective identity index, first/all lookup
+fixtures and exact W3 typed joins are implemented locally. Semantic-effect publication
+and the final coverage surface remain pending.
 
 1. Project stable identity fields from every raw BSP entity, not only W3's typed
    subset. Preserve entity index, classname, all relevant exact names and raw-property
@@ -589,8 +635,10 @@ changes, Python runtime replacement, force-push/history deletion and secret rota
 - [x] Freeze W5b scope, boundaries, trade-offs and merge gate in this document.
 - [x] Commit and push the docs-only takeoff.
 - [x] Open a draft PR.
-- [ ] Complete Phase 1 accumulator/control-flow contract fixtures.
-- [ ] Complete Phase 2 generic identity index, W3 typed joins and publication.
+- [ ] Complete Phase 1 execution/control-flow contract fixtures; accumulator source
+  projection is complete.
+- [ ] Complete Phase 2 publication; generic identity index and exact W3 typed joins
+  are complete.
 - [ ] Complete Phase 3 objective/spawn/route semantic mappings.
 - [ ] Complete Phase 4 accumulator and ordered-possibility modelling.
 - [ ] Complete Phase 5 static coverage analyzer and evidence report.
@@ -616,22 +664,42 @@ The takeoff probe proved that W3's typed catalog is intentionally narrower than 
 set of script-selected entities. W5b will not assume that a script block absent from
 W3 is absent at runtime.
 
+### 2026-08-10 - W3 joins use entity indices, never a second name match
+
+The W3 extractor already preserves the original BSP entity index. W5b uses that key
+and validates source plus classname consistency. This makes source drift or catalog
+corruption a visible error instead of attempting to recover with a plausible string
+match.
+
+### 2026-08-10 - project installed accumulator syntax before symbolic execution
+
+The source program is first converted into typed entity/global mutations, abort guards
+and conditional triggers. Unsupported or malformed instructions are data, not ignored
+text. Ordered path execution remains a separate Phase 4 responsibility so a successful
+parse cannot be mistaken for a proven reachable effect.
+
 ## Current handoff state
 
-Current step: Phase 1 accumulator/control-flow contract fixtures, followed by the
-remaining Phase 2 W3 typed joins.
+Current step: finish Phase 1 ordered-runner/control-flow source verification, then use
+the completed identity/W3 foundation for Phase 3 objective, spawn and route effect
+mapping. Phase 2's final public coverage surface is intentionally deferred until the
+real failure modes are known.
 
-Next action: verify each identity namespace and accumulator/execution rule against
-primary ET:Legacy source. Do not begin by writing a generic string join.
+Next action: define typed action-specific semantic links for `setstate`, `gotomarker`,
+`alertentity`, `setautospawn`, objective status and main objective. Preserve the
+verified all-match versus first-match rules and explicit blockers. Do not collect
+effects into an unordered state claim.
 
 Known blockers: none for read-only research and local implementation. Any required
 live-build inspection that changes or restarts a service becomes owner-gated; retain
 the affected semantic result as unverified and continue with independent domains.
 
-Current local verification (Python 3.13.14): 10 W5b identity unit tests passed; 81
-combined W5a/W5b/W3 unit tests passed; the exact W5b real-asset identity acceptance
-passed with eight unrelated real-asset tests deselected; Ruff and `git diff --check`
-passed. The full real-asset and repository suites remain required before merge.
+Current local verification (Python 3.13.14): 21 W5b semantic unit tests passed; the
+complete 138-test map-geometry unit suite passed; and all 11 opt-in real-asset tests
+passed in 106.94 seconds. The acceptance evidence proves the 583-block identity
+baseline, every one of the 1,606 installed accumulator projections and all 3,688 W3
+identity joins while rechecking the existing W1-W5a baselines. Ruff and
+`git diff --check` passed. The full repository suite remains required before merge.
 
 ## Copy-paste handoff prompt
 

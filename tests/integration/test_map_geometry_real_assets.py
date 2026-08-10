@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 
 from website.backend.map_geometry import (
+    AccumulatorAbortGuard,
+    AccumulatorConditionalTrigger,
+    AccumulatorMutation,
     BspPointTracer,
+    ControlProjectionIssue,
     EntityIdentityNamespace,
     EntityIdentityResolution,
     MainObjectiveEffect,
@@ -25,7 +29,9 @@ from website.backend.map_geometry import (
     build_bsp_entity_identity_index,
     compile_bsp_patches,
     extract_entity_catalog,
+    link_w3_entity_catalog,
     load_static_stage,
+    project_accumulator_action,
 )
 
 ETMAIN = Path(os.environ.get("SLOMIX_ETMAIN_DIR", "/home/samba/share/etmain"))
@@ -255,6 +261,58 @@ def test_w5b_indexes_engine_effective_script_identities_without_inventing_missin
     }
 
 
+def test_w5b_projects_every_installed_accumulator_action_without_expanding_the_approved_subset(geometry_index):
+    projection_counts = {
+        "mutation": 0,
+        "abort_guard": 0,
+        "conditional_trigger": 0,
+        "issue": 0,
+    }
+    operations = {}
+
+    for map_name in geometry_index.map_names:
+        model = load_static_stage(geometry_index, map_name).model
+        assert model is not None
+        for script_entity in model.script.entities:
+            for event in script_entity.events:
+                for action in event.actions:
+                    if action.command.casefold() not in {"accum", "globalaccum"}:
+                        continue
+                    projection = project_accumulator_action(action)
+                    if isinstance(projection, AccumulatorMutation):
+                        projection_counts["mutation"] += 1
+                    elif isinstance(projection, AccumulatorAbortGuard):
+                        projection_counts["abort_guard"] += 1
+                    elif isinstance(projection, AccumulatorConditionalTrigger):
+                        projection_counts["conditional_trigger"] += 1
+                    elif isinstance(projection, ControlProjectionIssue):
+                        projection_counts["issue"] += 1
+                    else:
+                        raise AssertionError((map_name, action))
+                    operation = projection.operation
+                    operations[operation] = operations.get(operation, 0) + 1
+
+    assert projection_counts == {
+        "mutation": 994,
+        "abort_guard": 313,
+        "conditional_trigger": 299,
+        "issue": 0,
+    }
+    assert {operation.value: count for operation, count in operations.items()} == {
+        "abort_if_bitset": 39,
+        "abort_if_equal": 149,
+        "abort_if_greater_than": 5,
+        "abort_if_less_than": 9,
+        "abort_if_not_bitset": 33,
+        "abort_if_not_equal": 78,
+        "bitreset": 267,
+        "bitset": 289,
+        "inc": 24,
+        "set": 414,
+        "trigger_if_equal": 299,
+    }
+
+
 def test_all_indexed_map_bsps_strictly_parse_as_populated_ibsp_v47(geometry_index):
     assert len(geometry_index.map_names) == 20
     for map_name in geometry_index.map_names:
@@ -314,6 +372,35 @@ def test_w3_extracts_measured_objective_volumes_and_dynamic_inputs_for_every_bsp
         "objective_volumes": 158,
         "objective_markers": 96,
         "collision_entities": 1058,
+    }
+
+
+def test_w5b_links_every_w3_entity_to_the_exact_bsp_identity(geometry_index):
+    totals = {
+        "spawn_point": 0,
+        "objective_volume": 0,
+        "objective_marker": 0,
+        "collision_entity": 0,
+    }
+
+    for map_name in geometry_index.map_names:
+        bsp = geometry_index.load_bsp(map_name)
+        catalog = extract_entity_catalog(bsp, map_name)
+        linked = link_w3_entity_catalog(build_bsp_entity_identity_index(bsp), catalog)
+
+        assert linked.map_name == map_name
+        assert linked.runtime_entity_completeness == "unverified"
+        for reference in linked.references:
+            identity = linked.identity(reference)
+            assert identity.entity_index == reference.entity_index
+            assert identity.classname == reference.classname
+            totals[reference.kind.value] += 1
+
+    assert totals == {
+        "spawn_point": 2376,
+        "objective_volume": 158,
+        "objective_marker": 96,
+        "collision_entity": 1058,
     }
 
 
