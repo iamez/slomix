@@ -5,7 +5,21 @@ from types import SimpleNamespace
 import pytest
 
 from website.backend.map_geometry.entities import MapEntityCatalog
-from website.backend.map_geometry.stage import ScriptAction
+from website.backend.map_geometry.stage import (
+    AlertEntityEffect,
+    AutoSpawnEffect,
+    EntityStateEffect,
+    GotoMarkerEffect,
+    MainObjectiveEffect,
+    MainObjectiveSelectorForm,
+    ObjectiveCatalog,
+    ObjectiveClass,
+    ObjectiveDescription,
+    ObjectiveStatusEffect,
+    ObjectiveTeam,
+    RoundEndEffect,
+    ScriptAction,
+)
 from website.backend.map_geometry.stage_semantics import (
     ETLEGACY_SEMANTICS_COMMIT,
     AccumulatorAbortGuard,
@@ -13,14 +27,22 @@ from website.backend.map_geometry.stage_semantics import (
     AccumulatorMutation,
     AccumulatorOperation,
     AccumulatorScope,
+    AutoSpawnEffectProjection,
     ControlProjectionIssue,
+    EffectProjectionIssue,
     EntityIdentityNamespace,
     EntityIdentityResolution,
+    EntityTargetEffectProjection,
+    GlobalStageEffectProjection,
+    GotoMarkerEffectProjection,
+    MainObjectiveEffectProjection,
+    ObjectiveStatusEffectProjection,
     ScriptNameSource,
     W3EntityKind,
     build_entity_identity_index,
     link_w3_entity_catalog,
     project_accumulator_action,
+    project_stage_effect,
 )
 
 
@@ -290,8 +312,8 @@ def _w3_catalog(
     )
 
 
-def _w3_entity(entity_index: int, classname: str) -> SimpleNamespace:
-    return SimpleNamespace(entity_index=entity_index, classname=classname)
+def _w3_entity(entity_index: int, classname: str, **fields) -> SimpleNamespace:
+    return SimpleNamespace(entity_index=entity_index, classname=classname, **fields)
 
 
 def test_links_w3_groups_to_full_identities_only_by_bsp_entity_index():
@@ -306,7 +328,7 @@ def test_links_w3_groups_to_full_identities_only_by_bsp_entity_index():
     )
     catalog = _w3_catalog(
         spawn_points=(_w3_entity(1, "team_CTF_redspawn"),),
-        objective_markers=(_w3_entity(2, "trigger_objective_info"),),
+        objective_volumes=(_w3_entity(2, "trigger_objective_info"),),
         collision_entities=(_w3_entity(3, "func_door"),),
     )
 
@@ -316,7 +338,7 @@ def test_links_w3_groups_to_full_identities_only_by_bsp_entity_index():
     assert linked.runtime_entity_completeness == "unverified"
     assert tuple((reference.entity_index, reference.kind) for reference in linked.references) == (
         (1, W3EntityKind.SPAWN_POINT),
-        (2, W3EntityKind.OBJECTIVE_MARKER),
+        (2, W3EntityKind.OBJECTIVE_VOLUME),
         (3, W3EntityKind.COLLISION_ENTITY),
     )
     assert linked.identity(linked.references[1]).target_name == "objective"
@@ -355,3 +377,236 @@ def test_links_w3_groups_to_full_identities_only_by_bsp_entity_index():
 def test_w3_identity_link_rejects_source_index_group_and_class_drift(identities, catalog, message):
     with pytest.raises(ValueError, match=message):
         link_w3_entity_catalog(identities, catalog)
+
+
+def _linked(entities, **catalog_groups):
+    identities = build_entity_identity_index(tuple(entities), source="maps/test.bsp")
+    return link_w3_entity_catalog(identities, _w3_catalog(**catalog_groups))
+
+
+def _objectives(*descriptions: ObjectiveDescription) -> ObjectiveCatalog:
+    return ObjectiveCatalog((), descriptions, ())
+
+
+def test_projects_all_match_entity_target_and_retains_only_typed_w3_subset():
+    linked = _linked(
+        (
+            {"classname": "script_multiplayer"},
+            {"classname": "func_door", "targetname": "gate"},
+            {"classname": "target_speaker", "targetname": "GATE"},
+        ),
+        collision_entities=(_w3_entity(1, "func_door"),),
+    )
+
+    projection = project_stage_effect(
+        EntityStateEffect("gate", "invisible", 8),
+        source_script_name="game_manager",
+        linked=linked,
+        objectives=_objectives(),
+    )
+
+    assert isinstance(projection, EntityTargetEffectProjection)
+    assert projection.source.lookup.selected_entity_indices == (0,)
+    assert projection.target_lookup.resolution is EntityIdentityResolution.GROUP
+    assert projection.target_lookup.selected_entity_indices == (1, 2)
+    assert tuple(reference.entity_index for reference in projection.selected_w3_references) == (1,)
+    assert projection.runtime_entity_completeness == "unverified"
+
+    alert = project_stage_effect(
+        AlertEntityEffect("gate", 9),
+        source_script_name="game_manager",
+        linked=linked,
+        objectives=_objectives(),
+    )
+    assert isinstance(alert, EntityTargetEffectProjection)
+    assert alert.target_lookup.selected_entity_indices == (1, 2)
+
+
+def test_projects_gotomarker_destination_and_each_relative_reference_with_first_match_rules():
+    linked = _linked(
+        (
+            {"classname": "script_mover", "scriptname": "truck"},
+            {"classname": "path_corner_2", "targetname": "destination"},
+            {"classname": "info_notnull", "targetname": "destination"},
+            {"classname": "func_door", "targetname": "origin_ref"},
+        ),
+        collision_entities=(_w3_entity(0, "script_mover"), _w3_entity(3, "func_door")),
+    )
+
+    projection = project_stage_effect(
+        GotoMarkerEffect("destination", ("100", "relative", "origin_ref", "wait"), 9),
+        source_script_name="truck",
+        linked=linked,
+        objectives=_objectives(),
+    )
+
+    assert isinstance(projection, GotoMarkerEffectProjection)
+    assert projection.destination_lookup.namespace is EntityIdentityNamespace.PATH_CORNER
+    assert projection.destination_lookup.selected_entity_indices == (1,)
+    assert projection.relative_lookups[0].selected_entity_indices == (3,)
+    assert tuple(reference.entity_index for reference in projection.relative_w3_references[0]) == (3,)
+
+
+def test_gotomarker_trailing_relative_is_a_structured_projection_issue():
+    linked = _linked(({"classname": "script_mover", "scriptname": "truck"},))
+
+    projection = project_stage_effect(
+        GotoMarkerEffect("missing", ("100", "relative"), 10),
+        source_script_name="truck",
+        linked=linked,
+        objectives=_objectives(),
+    )
+
+    assert isinstance(projection, EffectProjectionIssue)
+    assert "has no target" in projection.reason
+
+
+def test_autospawn_retains_first_marker_and_every_team_spawn_as_runtime_candidates():
+    linked = _linked(
+        (
+            {"classname": "script_multiplayer"},
+            {"classname": "team_WOLF_objective", "description": "Forward Spawn"},
+            {"classname": "team_WOLF_objective", "description": "forward spawn"},
+            {"classname": "team_CTF_redspawn"},
+            {"classname": "team_CTF_bluespawn"},
+            {"classname": "team_CTF_bluespawn"},
+        ),
+        objective_markers=(
+            _w3_entity(1, "team_WOLF_objective"),
+            _w3_entity(2, "team_WOLF_objective"),
+        ),
+        spawn_points=(
+            _w3_entity(3, "team_CTF_redspawn", team="AXIS"),
+            _w3_entity(4, "team_CTF_bluespawn", team="ALLIES"),
+            _w3_entity(5, "team_CTF_bluespawn", team="ALLIES"),
+        ),
+    )
+
+    projection = project_stage_effect(
+        AutoSpawnEffect("Forward Spawn", 1, 11),
+        source_script_name="game_manager",
+        linked=linked,
+        objectives=_objectives(),
+    )
+
+    assert isinstance(projection, AutoSpawnEffectProjection)
+    assert projection.marker_lookup.resolution is EntityIdentityResolution.FIRST_MATCH
+    assert projection.marker_lookup.selected_entity_indices == (1,)
+    assert tuple(reference.entity_index for reference in projection.marker_w3_references) == (1,)
+    assert tuple(reference.entity_index for reference in projection.team_spawn_candidates) == (4, 5)
+    assert projection.blocked_reason is None
+    assert projection.selection_semantics == "runtime_active_ownership_proximity_unverified"
+
+
+def test_autospawn_rejects_a_first_message_candidate_without_spawn_marker_contract():
+    linked = _linked(
+        (
+            {"classname": "script_multiplayer"},
+            {"classname": "target_speaker", "message": "Forward Spawn"},
+            {"classname": "team_WOLF_objective", "description": "Forward Spawn"},
+        ),
+        objective_markers=(_w3_entity(2, "team_WOLF_objective"),),
+    )
+
+    projection = project_stage_effect(
+        AutoSpawnEffect("Forward Spawn", 0, 12),
+        source_script_name="game_manager",
+        linked=linked,
+        objectives=_objectives(),
+    )
+
+    assert isinstance(projection, AutoSpawnEffectProjection)
+    assert projection.marker_lookup.selected_entity_indices == (1,)
+    assert projection.blocked_reason == "first_static_message_candidate_is_not_team_WOLF_objective"
+
+
+def test_objective_status_uses_exact_team_and_number_without_text_matching():
+    linked = _linked(({"classname": "script_multiplayer"},))
+    axis = ObjectiveDescription(ObjectiveTeam.AXIS, 2, ObjectiveClass.PRIMARY, "Destroy it", 4)
+    allies = ObjectiveDescription(ObjectiveTeam.ALLIES, 2, ObjectiveClass.PRIMARY, "Defend it", 5)
+
+    projection = project_stage_effect(
+        ObjectiveStatusEffect(2, 1, 0, 13),
+        source_script_name="game_manager",
+        linked=linked,
+        objectives=_objectives(axis, allies),
+    )
+
+    assert isinstance(projection, ObjectiveStatusEffectProjection)
+    assert projection.descriptions == (allies,)
+
+
+def test_main_objective_legacy_is_blocked_and_target_form_uses_target_field_first_match():
+    linked = _linked(
+        (
+            {"classname": "script_multiplayer"},
+            {"classname": "trigger_objective_info", "target": "main_obj"},
+            {"classname": "trigger_objective_info", "target": "MAIN_OBJ"},
+        ),
+        objective_volumes=(
+            _w3_entity(1, "trigger_objective_info"),
+            _w3_entity(2, "trigger_objective_info"),
+        ),
+    )
+
+    legacy = project_stage_effect(
+        MainObjectiveEffect("2", MainObjectiveSelectorForm.LEGACY_NUMERIC, 0, 14),
+        source_script_name="game_manager",
+        linked=linked,
+        objectives=_objectives(),
+    )
+    target = project_stage_effect(
+        MainObjectiveEffect("main_obj", MainObjectiveSelectorForm.TARGET_NAME, 0, 15),
+        source_script_name="game_manager",
+        linked=linked,
+        objectives=_objectives(),
+    )
+
+    assert isinstance(legacy, MainObjectiveEffectProjection)
+    assert legacy.target_lookup is None
+    assert legacy.blocked_reason == "legacy_numeric_selector_is_unverified_for_the_live_build"
+    assert isinstance(target, MainObjectiveEffectProjection)
+    assert target.target_lookup is not None
+    assert target.target_lookup.namespace is EntityIdentityNamespace.TARGET
+    assert target.target_lookup.selected_entity_indices == (1,)
+    assert tuple(reference.entity_index for reference in target.selected_w3_references) == (1,)
+    assert target.blocked_reason is None
+
+
+def test_main_objective_does_not_skip_an_engine_first_target_of_the_wrong_class():
+    linked = _linked(
+        (
+            {"classname": "script_multiplayer"},
+            {"classname": "target_speaker", "target": "main_obj"},
+            {"classname": "trigger_objective_info", "target": "main_obj"},
+        ),
+        objective_volumes=(_w3_entity(2, "trigger_objective_info"),),
+    )
+
+    projection = project_stage_effect(
+        MainObjectiveEffect("main_obj", MainObjectiveSelectorForm.TARGET_NAME, 0, 15),
+        source_script_name="game_manager",
+        linked=linked,
+        objectives=_objectives(),
+    )
+
+    assert isinstance(projection, MainObjectiveEffectProjection)
+    assert projection.target_lookup is not None
+    assert projection.target_lookup.candidate_entity_indices == (1, 2)
+    assert projection.target_lookup.selected_entity_indices == (1,)
+    assert projection.selected_w3_references == ()
+    assert projection.blocked_reason == "first_static_target_field_candidate_is_not_trigger_objective_info"
+
+
+def test_round_end_is_retained_as_a_global_effect_with_source_identity():
+    linked = _linked(({"classname": "script_multiplayer"},))
+
+    projection = project_stage_effect(
+        RoundEndEffect(16),
+        source_script_name="game_manager",
+        linked=linked,
+        objectives=_objectives(),
+    )
+
+    assert isinstance(projection, GlobalStageEffectProjection)
+    assert projection.source.lookup.selected_entity_indices == (0,)
