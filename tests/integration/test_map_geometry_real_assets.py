@@ -9,6 +9,8 @@ import pytest
 
 from website.backend.map_geometry import (
     BspPointTracer,
+    EntityIdentityNamespace,
+    EntityIdentityResolution,
     MainObjectiveEffect,
     MainObjectiveSelectorForm,
     MapAssetKind,
@@ -20,6 +22,7 @@ from website.backend.map_geometry import (
     TraceReason,
     TraceStatus,
     TriggerResolution,
+    build_bsp_entity_identity_index,
     compile_bsp_patches,
     extract_entity_catalog,
     load_static_stage,
@@ -185,6 +188,71 @@ def test_w5a_parses_every_resolved_stage_asset_and_exposes_partial_static_covera
     }
     assert maps_with_complete_trigger_closure == 13
     assert maps_with_complete_objective_classes == 18
+
+
+def test_w5b_indexes_engine_effective_script_identities_without_inventing_missing_blocks(geometry_index):
+    totals = {
+        "blocks": 0,
+        "unique": 0,
+        "group": 0,
+        "missing": 0,
+        "selected_entities": 0,
+    }
+    missing_by_map = {}
+    maps_with_every_block_in_the_bsp_identity_scope = 0
+
+    for map_name in geometry_index.map_names:
+        bsp = geometry_index.load_bsp(map_name)
+        identities = build_bsp_entity_identity_index(bsp)
+        model = load_static_stage(geometry_index, map_name).model
+        assert model is not None
+
+        game_manager = identities.lookup_all(EntityIdentityNamespace.SCRIPT_NAME, "game_manager")
+        assert len(game_manager.selected_entity_indices) == 1, map_name
+        game_manager_entity = identities.entities[game_manager.selected_entity_indices[0]]
+        assert game_manager_entity.classname == "script_multiplayer", map_name
+
+        missing = []
+        for script_entity in model.script.entities:
+            lookup = identities.lookup_all(EntityIdentityNamespace.SCRIPT_NAME, script_entity.name)
+            totals["blocks"] += 1
+            totals[lookup.resolution.value] += 1
+            totals["selected_entities"] += len(lookup.selected_entity_indices)
+            if lookup.resolution is EntityIdentityResolution.MISSING:
+                missing.append(script_entity.name)
+
+        if missing:
+            missing_by_map[map_name] = sorted(missing)
+        else:
+            maps_with_every_block_in_the_bsp_identity_scope += 1
+
+    assert totals == {
+        "blocks": 583,
+        "unique": 510,
+        "group": 50,
+        "missing": 23,
+        "selected_entities": 1025,
+    }
+    assert maps_with_every_block_in_the_bsp_identity_scope == 13
+    assert missing_by_map == {
+        "adlernest": ["allied_spawn_flag"],
+        "braundorf_b4": ["cp_spawn"],
+        "bremen_b3": ["allied3spawn_spawns", "axis1spawn_spawns", "mtd_sm", "mtd_td"],
+        "erdenberg_t2": ["flak88_1_toi", "flak88_2_toi"],
+        "etl_beach": [
+            "allied_compost_built_lms",
+            "allied_compost_built_model_lms",
+            "allied_obj1",
+            "axis_compost_built_lms",
+            "axis_compost_built_model_lms",
+            "neutral_compost_clip_lms",
+            "neutral_compost_closed_clip_lms",
+            "neutral_compost_closed_model_lms",
+            "neutral_compost_toi_lms",
+        ],
+        "sw_battery": ["lighthouse_light", "mg42_clip_1", "reardoor_trigger1"],
+        "sw_goldrush_te": ["defense2", "defense2_toi", "defense4"],
+    }
 
 
 def test_all_indexed_map_bsps_strictly_parse_as_populated_ibsp_v47(geometry_index):

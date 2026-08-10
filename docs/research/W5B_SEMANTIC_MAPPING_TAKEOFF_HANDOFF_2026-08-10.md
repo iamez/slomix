@@ -2,7 +2,7 @@
 
 Date: 2026-08-10
 
-Status: takeoff contract committed; implementation has not started
+Status: implementation in progress; engine identity foundation is locally verified
 
 Branch: `agent/map-geometry-w5b-semantic-mapping`
 
@@ -175,6 +175,75 @@ The real assets also contain 1,465 `accum`, 141 `globalaccum`, 745 `wait`, 1,315
 `setautospawn` actions. A graph that ignores accumulator abort conditions or action
 order would publish impossible transitions. This is why control flow is part of W5b.
 
+## Frozen engine-source research
+
+The Phase 1 reference is ET:Legacy commit
+[`732518efb1c479dcd29b13361f30a2e92df1cf2a`](https://github.com/etlegacy/etlegacy/tree/732518efb1c479dcd29b13361f30a2e92df1cf2a),
+checked out read-only on 2026-08-10. The implementation records behaviour, not just
+comments or function names:
+
+- [`G_ParseField`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_spawn.c#L740-L784)
+  assigns generic BSP fields with ASCII-case-insensitive key matching in spawn-var
+  order. In contrast, the special `G_SpawnString` helper compares exact key bytes.
+- [`SP_script_multiplayer`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script.c#L1391-L1415)
+  overwrites the entity's `scriptName` with `game_manager` before script parsing. A
+  literal-BSP-only read therefore falsely reports some game-manager blocks missing.
+- [`G_Find`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_utils.c#L309-L352)
+  scans active entities in order and compares with `Q_stricmp`; that comparison folds
+  only ASCII `a-z`, not Unicode.
+- [`G_ScriptAction_Trigger`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L1720-L1848)
+  dispatches to every matching `scriptName`. Shared names are legitimate groups.
+- [`G_ScriptAction_SetState`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L4008-L4085)
+  and
+  [`G_ScriptAction_AlertEntity`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L2238-L2292)
+  apply to every matching `targetname`.
+- [`G_ScriptAction_GotoMarker`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L1365-L1450)
+  first selects the first registered `path_corner_2`/`info_train_spline_control`, then
+  falls back to the first active entity with that `targetname`.
+- [`G_ScriptAction_SetAutoSpawn`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L170-L217)
+  selects the first runtime `message` match. `SP_team_WOLF_objective` overwrites that
+  message from the exact lowercase `description` spawn key and registers a major spawn
+  marker. Actual team spawn points are filtered by active state/ownership and selected
+  by proximity to that marker, so an autospawn effect does not directly name one BSP
+  spawn point.
+- `wm_set_main_objective` looks up the first `trigger_objective_info` through its
+  `target` field, despite comments calling it a target name. All installed calls remain
+  numeric and no-op under the checked current path, so W5a's `legacy_numeric` gate
+  remains correct.
+- `accum` state belongs to one concrete entity; `globalaccum` state belongs to the
+  level. Abort guards set the current stack head to the end, while `trigger_if_equal`
+  may replace a script event and stop the caller's current pass. Installed assets use
+  only `set`, `inc`, bit set/reset, the six observed abort predicates and
+  `trigger_if_equal`; none uses random, wait-while-equal or dynamite-count operations.
+- The script runner executes actions in order and stops the current pass when an
+  action returns false or a nested event changes the script id. Static control-flow
+  projection therefore cannot be reconstructed by collecting typed effects alone.
+
+These findings establish the checked current-source contract. They do not prove that
+the live server build has identical semantics. Any version-sensitive behaviour remains
+tagged `unverified_live_build` until its artifact/source is independently identified;
+no service inspection or restart is authorized by W5b.
+
+### Engine-effective identity baseline
+
+The first W5b implementation applies the proven `script_multiplayer` class override
+and ET ASCII comparison. On the 20 installed indexed BSP maps it measures:
+
+| Identity result | Count |
+|---|---:|
+| Parsed script blocks | 583 |
+| Blocks selecting exactly one concrete BSP entity | 510 |
+| Blocks selecting a legitimate concrete-entity group | 50 |
+| Blocks without a concrete BSP identity candidate | 23 |
+| Concrete entities selected across all blocks | 1,025 |
+| Maps with a BSP candidate for every parsed block | 13 / 20 |
+
+This supersedes the naive literal-field count for engine-effective mapping but does not
+erase the takeoff probe: the difference is direct evidence that class write paths
+matter. The 23 missing blocks remain an inventory, not proof that they are impossible
+at runtime. The 13-map result is an identity-input denominator, not a defensible static
+graph verdict; trigger, effect, custom-entity and control-flow gates are still pending.
+
 ## Proposed code boundary
 
 Prefer a new sibling module, tentatively
@@ -241,7 +310,8 @@ without relying on chat history.
 
 ### Phase 1 - verify engine identity and execution semantics
 
-Status: pending.
+Status: in progress. Identity/action namespaces and installed accumulator operations
+are source-verified; accumulator/control-flow fixtures remain pending.
 
 Read current ET:Legacy primary source and pin exact source URLs/commit hashes for:
 
@@ -268,7 +338,8 @@ source citation and a unit test that would fail under the most plausible wrong r
 
 ### Phase 2 - build a generic BSP identity index
 
-Status: pending.
+Status: in progress. The generic engine-effective identity index and first/all lookup
+fixtures are implemented locally; W3 typed joins and publication remain pending.
 
 1. Project stable identity fields from every raw BSP entity, not only W3's typed
    subset. Preserve entity index, classname, all relevant exact names and raw-property
@@ -518,8 +589,8 @@ changes, Python runtime replacement, force-push/history deletion and secret rota
 - [x] Freeze W5b scope, boundaries, trade-offs and merge gate in this document.
 - [x] Commit and push the docs-only takeoff.
 - [x] Open a draft PR.
-- [ ] Complete Phase 1 engine semantics research and fixtures.
-- [ ] Complete Phase 2 generic identity index.
+- [ ] Complete Phase 1 accumulator/control-flow contract fixtures.
+- [ ] Complete Phase 2 generic identity index, W3 typed joins and publication.
 - [ ] Complete Phase 3 objective/spawn/route semantic mappings.
 - [ ] Complete Phase 4 accumulator and ordered-possibility modelling.
 - [ ] Complete Phase 5 static coverage analyzer and evidence report.
@@ -547,7 +618,8 @@ W3 is absent at runtime.
 
 ## Current handoff state
 
-Current step: Phase 1 engine-source research and contract fixtures.
+Current step: Phase 1 accumulator/control-flow contract fixtures, followed by the
+remaining Phase 2 W3 typed joins.
 
 Next action: verify each identity namespace and accumulator/execution rule against
 primary ET:Legacy source. Do not begin by writing a generic string join.
@@ -556,9 +628,10 @@ Known blockers: none for read-only research and local implementation. Any requir
 live-build inspection that changes or restarts a service becomes owner-gated; retain
 the affected semantic result as unverified and continue with independent domains.
 
-Takeoff verification: documentation-only scope; `git diff --check` passed on
-2026-08-10. No runtime test was required because this commit changes no code or
-executable contract.
+Current local verification (Python 3.13.14): 10 W5b identity unit tests passed; 81
+combined W5a/W5b/W3 unit tests passed; the exact W5b real-asset identity acceptance
+passed with eight unrelated real-asset tests deselected; Ruff and `git diff --check`
+passed. The full real-asset and repository suites remain required before merge.
 
 ## Copy-paste handoff prompt
 
