@@ -419,18 +419,36 @@ async def get_proximity_crossfire_angles(
     # Resolve duo GUIDs to display names — the frontend falls back to raw
     # 8-char GUID prefixes when these are missing, which is what the Top
     # Duos list used to show. player_track shares the 32-char GUID format
-    # with proximity_crossfire_opportunity.
+    # with proximity_crossfire_opportunity. The lookup reuses the request's
+    # scope (rebuilt without the teammate-column guid filter, which doesn't
+    # exist on player_track) so a renamed player is shown under the name
+    # they used in this scope, and the newest in-scope name wins rather
+    # than the lexicographic max (#632 review).
     duo_guids = sorted({str(g) for r in (top_duos or []) for g in (r[0], r[1]) if g})
     duo_names: dict[str, str] = {}
     if duo_guids:
-        name_rows = await db.fetch_all(
-            "SELECT player_guid, MAX(player_name) FROM player_track "
-            "WHERE player_guid = ANY($1) GROUP BY player_guid",
-            (duo_guids,),
+        name_where, name_params, _ = _build_proximity_where_clause(
+            range_days, session_date, map_name, round_number, round_start_unix,
         )
-        duo_names = {
-            str(r[0]): str(r[1]) for r in (name_rows or []) if r and r[0] and r[1]
-        }
+        guid_ph = ", ".join(
+            f"${len(name_params) + i + 1}" for i in range(len(duo_guids))
+        )
+        name_rows = await db.fetch_all(
+            "SELECT player_guid, player_name, MAX(round_start_unix) AS last_seen "
+            f"FROM player_track {name_where} AND player_guid IN ({guid_ph}) "
+            "GROUP BY player_guid, player_name",
+            tuple(name_params) + tuple(duo_guids),
+        )
+        newest: dict[str, tuple[int, str]] = {}
+        for r in name_rows or []:
+            if not (r and r[0] and r[1]):
+                continue
+            guid, name, last_seen = str(r[0]), str(r[1]), int(r[2] or 0)
+            current = newest.get(guid)
+            # ties broken by name to keep the result deterministic
+            if current is None or (last_seen, name) > current:
+                newest[guid] = (last_seen, name)
+        duo_names = {guid: name for guid, (_, name) in newest.items()}
     return {
         "status": "ok",
         "scope": scope,

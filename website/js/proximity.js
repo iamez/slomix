@@ -3066,7 +3066,7 @@ function renderCohesionTeam(summary) {
     el.innerHTML = summary.map(t => {
         const cls = t.avg_dispersion < 300 ? 'TIGHT' : t.avg_dispersion < 800 ? 'NORMAL' : t.avg_dispersion < 1500 ? 'LOOSE' : 'SCATTERED';
         return `<div class="glass-card p-3 rounded-lg border border-white/5 inline-block mr-3">
-            <strong title="Cohesion state from average dispersion: TIGHT < 300u, NORMAL < 800u, LOOSE < 1500u, SCATTERED beyond.">${t.team} — ${cls}</strong><br>
+            <strong title="Cohesion state from average dispersion: TIGHT < 300u, NORMAL < 800u, LOOSE < 1500u, SCATTERED at 1500u and above.">${t.team} — ${cls}</strong><br>
             <span title="Average distance of alive players from their team's centre point, in world units.">Dispersion: ${t.avg_dispersion}u</span> |
             <span title="Average widest gap across the team per sample, in world units.">Spread: ${t.avg_max_spread}u</span> |
             <span title="Average number of players more than 800u away from the team's centre.">Stragglers: ${t.avg_stragglers}</span> |
@@ -3156,7 +3156,7 @@ function renderTeamPushes(data) {
         return `<div class="glass-card p-3 rounded-lg border border-white/5 inline-block mr-3">
             <strong>${t.team}</strong><br>
             <span title="Coordinated multi-player advances detected in this scope.">Pushes: ${t.pushes}</span> |
-            <span title="0–1: direction alignment scaled by speed relative to sprint (~300 u/s). Higher = faster, more coordinated pushes.">Quality: ${t.avg_quality.toFixed(3)}</span> |
+            <span title="Direction alignment × speed relative to sprint (~300 u/s). ≈1 means fully aligned at sprint speed; faster pushes can exceed 1.">Quality: ${t.avg_quality.toFixed(3)}</span> |
             <span title="0–1: how closely teammates' movement directions match during the push (1 = everyone moving the same way).">Alignment: ${t.avg_alignment.toFixed(3)}</span><br>
             <span title="Average movement speed during pushes, in world units per second.">Avg speed: ${t.avg_speed} u/s</span> |
             <span title="Average players taking part in a push.">Participants: ${t.avg_participants.toFixed(1)}</span> |
