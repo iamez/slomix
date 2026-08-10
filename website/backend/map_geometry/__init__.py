@@ -106,14 +106,25 @@ from website.backend.map_geometry.stage import (
 )
 from website.backend.map_geometry.stage_semantics import (
     ETLEGACY_SEMANTICS_COMMIT,
+    AccumulatorAbortGuard,
+    AccumulatorConditionalTrigger,
+    AccumulatorMutation,
+    AccumulatorOperation,
+    AccumulatorScope,
     BspEntityIdentity,
     BspEntityIdentityIndex,
+    ControlProjectionIssue,
     EntityIdentityLookup,
     EntityIdentityNamespace,
     EntityIdentityResolution,
     ScriptNameSource,
+    W3EntityKind,
+    W3EntityReference,
+    W3LinkedIdentityIndex,
     build_bsp_entity_identity_index,
     build_entity_identity_index,
+    link_w3_entity_catalog,
+    project_accumulator_action,
 )
 from website.backend.map_geometry.trace import (
     BSP_TREE_POINT_EPSILON,
@@ -139,6 +150,11 @@ from website.backend.map_geometry.trace import (
 )
 
 __all__ = [
+    "AccumulatorAbortGuard",
+    "AccumulatorConditionalTrigger",
+    "AccumulatorMutation",
+    "AccumulatorOperation",
+    "AccumulatorScope",
     "AssetContentChangedError",
     "AlertEntityEffect",
     "AssetCommand",
@@ -166,6 +182,7 @@ __all__ = [
     "CONTENTS_PLAYERCLIP",
     "CONTENTS_SOLID",
     "ConvexBrushVolume",
+    "ControlProjectionIssue",
     "EntityExtractionError",
     "EntityIdentityLookup",
     "EntityIdentityNamespace",
@@ -240,6 +257,9 @@ __all__ = [
     "UnsupportedBspError",
     "VolumePlane",
     "WinnerEffect",
+    "W3EntityKind",
+    "W3EntityReference",
+    "W3LinkedIdentityIndex",
     "entity_catalog_manifest",
     "build_patch_collision",
     "build_bsp_entity_identity_index",
@@ -253,8 +273,10 @@ __all__ = [
     "parse_entities",
     "parse_map_script",
     "parse_objdata",
+    "project_accumulator_action",
     "player_eye_point",
     "target_body_points",
     "trace_patch_point",
     "load_static_stage",
+    "link_w3_entity_catalog",
 ]

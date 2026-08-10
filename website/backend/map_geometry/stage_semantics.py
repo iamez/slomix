@@ -15,9 +15,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from website.backend.map_geometry.bsp import BspFile
+from website.backend.map_geometry.entities import MapEntityCatalog
+from website.backend.map_geometry.stage import ScriptAction
 
 ETLEGACY_SEMANTICS_COMMIT = "732518efb1c479dcd29b13361f30a2e92df1cf2a"
 
@@ -42,6 +44,32 @@ class ScriptNameSource(StrEnum):
     CLASS_OVERRIDE = "class_override"
 
 
+class AccumulatorScope(StrEnum):
+    ENTITY = "entity"
+    GLOBAL = "global"
+
+
+class AccumulatorOperation(StrEnum):
+    SET = "set"
+    INCREMENT = "inc"
+    BIT_SET = "bitset"
+    BIT_RESET = "bitreset"
+    ABORT_IF_LESS_THAN = "abort_if_less_than"
+    ABORT_IF_GREATER_THAN = "abort_if_greater_than"
+    ABORT_IF_NOT_EQUAL = "abort_if_not_equal"
+    ABORT_IF_EQUAL = "abort_if_equal"
+    ABORT_IF_BIT_SET = "abort_if_bitset"
+    ABORT_IF_NOT_BIT_SET = "abort_if_not_bitset"
+    TRIGGER_IF_EQUAL = "trigger_if_equal"
+
+
+class W3EntityKind(StrEnum):
+    SPAWN_POINT = "spawn_point"
+    OBJECTIVE_VOLUME = "objective_volume"
+    OBJECTIVE_MARKER = "objective_marker"
+    COLLISION_ENTITY = "collision_entity"
+
+
 @dataclass(frozen=True, slots=True)
 class BspEntityIdentity:
     entity_index: int
@@ -64,6 +92,109 @@ class EntityIdentityLookup:
     candidate_entity_indices: tuple[int, ...]
     selected_entity_indices: tuple[int, ...]
     resolution: EntityIdentityResolution
+
+
+@dataclass(frozen=True, slots=True)
+class AccumulatorMutation:
+    scope: AccumulatorScope
+    buffer_index: int
+    operation: Literal[
+        AccumulatorOperation.SET,
+        AccumulatorOperation.INCREMENT,
+        AccumulatorOperation.BIT_SET,
+        AccumulatorOperation.BIT_RESET,
+    ]
+    operand: int
+    line: int
+
+
+@dataclass(frozen=True, slots=True)
+class AccumulatorAbortGuard:
+    scope: AccumulatorScope
+    buffer_index: int
+    operation: Literal[
+        AccumulatorOperation.ABORT_IF_LESS_THAN,
+        AccumulatorOperation.ABORT_IF_GREATER_THAN,
+        AccumulatorOperation.ABORT_IF_NOT_EQUAL,
+        AccumulatorOperation.ABORT_IF_EQUAL,
+        AccumulatorOperation.ABORT_IF_BIT_SET,
+        AccumulatorOperation.ABORT_IF_NOT_BIT_SET,
+    ]
+    operand: int
+    line: int
+
+
+@dataclass(frozen=True, slots=True)
+class AccumulatorConditionalTrigger:
+    scope: AccumulatorScope
+    buffer_index: int
+    operation: Literal[AccumulatorOperation.TRIGGER_IF_EQUAL]
+    operand: int
+    target_script_name: str
+    target_trigger: str
+    line: int
+
+
+@dataclass(frozen=True, slots=True)
+class ControlProjectionIssue:
+    action_command: str
+    operation: str | None
+    arguments: tuple[str, ...]
+    line: int
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class W3EntityReference:
+    entity_index: int
+    classname: str
+    kind: W3EntityKind
+
+
+@dataclass(frozen=True, slots=True)
+class W3LinkedIdentityIndex:
+    """W3 geometry identities joined to the full BSP identity namespace."""
+
+    map_name: str
+    identities: BspEntityIdentityIndex
+    references: tuple[W3EntityReference, ...]
+    runtime_entity_completeness: str = "unverified"
+
+    def identity(self, reference: W3EntityReference) -> BspEntityIdentity:
+        return self.identities.entities[reference.entity_index]
+
+    def typed_reference(self, entity_index: int) -> W3EntityReference | None:
+        return next(
+            (reference for reference in self.references if reference.entity_index == entity_index),
+            None,
+        )
+
+
+AccumulatorInstruction: TypeAlias = AccumulatorMutation | AccumulatorAbortGuard | AccumulatorConditionalTrigger
+AccumulatorProjection: TypeAlias = AccumulatorInstruction | ControlProjectionIssue
+
+_MUTATION_OPERATIONS = {
+    AccumulatorOperation.SET,
+    AccumulatorOperation.INCREMENT,
+    AccumulatorOperation.BIT_SET,
+    AccumulatorOperation.BIT_RESET,
+}
+_ABORT_OPERATIONS = {
+    AccumulatorOperation.ABORT_IF_LESS_THAN,
+    AccumulatorOperation.ABORT_IF_GREATER_THAN,
+    AccumulatorOperation.ABORT_IF_NOT_EQUAL,
+    AccumulatorOperation.ABORT_IF_EQUAL,
+    AccumulatorOperation.ABORT_IF_BIT_SET,
+    AccumulatorOperation.ABORT_IF_NOT_BIT_SET,
+}
+_BIT_OPERATIONS = {
+    AccumulatorOperation.BIT_SET,
+    AccumulatorOperation.BIT_RESET,
+    AccumulatorOperation.ABORT_IF_BIT_SET,
+    AccumulatorOperation.ABORT_IF_NOT_BIT_SET,
+}
+_MAX_ACCUMULATOR_BUFFERS = 10
+_MAX_SAFE_SIGNED_BIT_INDEX = 30
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,9 +257,7 @@ class BspEntityIdentityIndex:
         if not value:
             return ()
         return tuple(
-            entity.entity_index
-            for entity in self.entities
-            if _ascii_equal(_identity_value(entity, namespace), value)
+            entity.entity_index for entity in self.entities if _ascii_equal(_identity_value(entity, namespace), value)
         )
 
 
@@ -138,6 +267,18 @@ def _ascii_fold(value: str) -> str:
 
 def _ascii_equal(left: str | None, right: str) -> bool:
     return left is not None and _ascii_fold(left) == _ascii_fold(right)
+
+
+def _canonical_int(value: str) -> int | None:
+    if not value:
+        return None
+    digits = value[1:] if value[0] in {"+", "-"} else value
+    if not digits or any(character < "0" or character > "9" for character in digits):
+        return None
+    parsed = int(value)
+    if parsed < -(2**31) or parsed > 2**31 - 1:
+        return None
+    return parsed
 
 
 def _generic_field(entity: dict[str, str], *field_names: str) -> str | None:
@@ -202,6 +343,76 @@ def _entity_identity(entity_index: int, entity: dict[str, str]) -> BspEntityIden
     )
 
 
+def _control_issue(action: ScriptAction, operation: str | None, reason: str) -> ControlProjectionIssue:
+    return ControlProjectionIssue(
+        action_command=action.command,
+        operation=operation,
+        arguments=action.arguments,
+        line=action.line,
+        reason=reason,
+    )
+
+
+def project_accumulator_action(action: ScriptAction) -> AccumulatorProjection | None:
+    """Project the installed, deterministic accumulator subset or fail closed."""
+
+    command = _ascii_fold(action.command)
+    if command == "accum":
+        scope = AccumulatorScope.ENTITY
+    elif command == "globalaccum":
+        scope = AccumulatorScope.GLOBAL
+    else:
+        return None
+
+    if len(action.arguments) < 2:
+        return _control_issue(action, None, "accumulator action requires a buffer index and operation")
+
+    buffer_index = _canonical_int(action.arguments[0])
+    if buffer_index is None or not 0 <= buffer_index < _MAX_ACCUMULATOR_BUFFERS:
+        return _control_issue(action, action.arguments[1], "buffer index must be a canonical integer from 0 to 9")
+
+    operation_name = _ascii_fold(action.arguments[1])
+    if operation_name == "abort_if_not_equals":
+        operation_name = AccumulatorOperation.ABORT_IF_NOT_EQUAL.value
+    try:
+        operation = AccumulatorOperation(operation_name)
+    except ValueError:
+        return _control_issue(action, operation_name, "operation is outside the approved W5b accumulator subset")
+
+    required_arguments = 5 if operation is AccumulatorOperation.TRIGGER_IF_EQUAL else 3
+    if len(action.arguments) != required_arguments:
+        return _control_issue(
+            action,
+            operation.value,
+            f"{operation.value} requires exactly {required_arguments} callback arguments",
+        )
+
+    operand = _canonical_int(action.arguments[2])
+    if operand is None:
+        return _control_issue(action, operation.value, "operand must be a canonical signed 32-bit integer")
+    if operation in _BIT_OPERATIONS and not 0 <= operand <= _MAX_SAFE_SIGNED_BIT_INDEX:
+        return _control_issue(action, operation.value, "bit index must be in the defined signed-int range 0 to 30")
+
+    if operation in _MUTATION_OPERATIONS:
+        return AccumulatorMutation(scope, buffer_index, operation, operand, action.line)
+    if operation in _ABORT_OPERATIONS:
+        return AccumulatorAbortGuard(scope, buffer_index, operation, operand, action.line)
+    if operation is AccumulatorOperation.TRIGGER_IF_EQUAL:
+        target_script_name, target_trigger = action.arguments[3:]
+        if not target_script_name or not target_trigger:
+            return _control_issue(action, operation.value, "conditional trigger requires non-empty target and event")
+        return AccumulatorConditionalTrigger(
+            scope,
+            buffer_index,
+            operation,
+            operand,
+            target_script_name,
+            target_trigger,
+            action.line,
+        )
+    raise AssertionError(f"unhandled approved accumulator operation: {operation}")
+
+
 def build_entity_identity_index(
     entities: tuple[dict[str, str], ...],
     *,
@@ -217,3 +428,49 @@ def build_entity_identity_index(
 
 def build_bsp_entity_identity_index(bsp: BspFile) -> BspEntityIdentityIndex:
     return build_entity_identity_index(bsp.entities, source=bsp.source)
+
+
+def link_w3_entity_catalog(
+    identities: BspEntityIdentityIndex,
+    catalog: MapEntityCatalog,
+) -> W3LinkedIdentityIndex:
+    """Join W3 typed entities by their stable BSP entity index or fail closed."""
+
+    if identities.source != catalog.bsp_source:
+        raise ValueError(f"identity source {identities.source!r} does not match W3 source {catalog.bsp_source!r}")
+
+    grouped_entities = (
+        (W3EntityKind.SPAWN_POINT, catalog.spawn_points),
+        (W3EntityKind.OBJECTIVE_VOLUME, catalog.objective_volumes),
+        (W3EntityKind.OBJECTIVE_MARKER, catalog.objective_markers),
+        (W3EntityKind.COLLISION_ENTITY, catalog.collision_entities),
+    )
+    references: list[W3EntityReference] = []
+    seen_indices: set[int] = set()
+    for kind, entities in grouped_entities:
+        for entity in entities:
+            entity_index = entity.entity_index
+            if entity_index < 0 or entity_index >= len(identities.entities):
+                raise ValueError(f"W3 {kind.value} references unknown BSP entity index {entity_index}")
+            if entity_index in seen_indices:
+                raise ValueError(f"BSP entity index {entity_index} appears in multiple W3 entity groups")
+
+            identity = identities.entities[entity_index]
+            if identity.entity_index != entity_index:
+                raise ValueError(
+                    f"identity tuple position {entity_index} contains entity index {identity.entity_index}"
+                )
+            if identity.classname != entity.classname:
+                raise ValueError(
+                    f"W3 entity {entity_index} classname {entity.classname!r} does not match "
+                    f"BSP identity {identity.classname!r}"
+                )
+
+            seen_indices.add(entity_index)
+            references.append(W3EntityReference(entity_index, entity.classname, kind))
+
+    return W3LinkedIdentityIndex(
+        map_name=catalog.map_name,
+        identities=identities,
+        references=tuple(sorted(references, key=lambda reference: reference.entity_index)),
+    )

@@ -1,11 +1,26 @@
 """W5b engine-identity lookup contracts."""
 
+from types import SimpleNamespace
+
+import pytest
+
+from website.backend.map_geometry.entities import MapEntityCatalog
+from website.backend.map_geometry.stage import ScriptAction
 from website.backend.map_geometry.stage_semantics import (
     ETLEGACY_SEMANTICS_COMMIT,
+    AccumulatorAbortGuard,
+    AccumulatorConditionalTrigger,
+    AccumulatorMutation,
+    AccumulatorOperation,
+    AccumulatorScope,
+    ControlProjectionIssue,
     EntityIdentityNamespace,
     EntityIdentityResolution,
     ScriptNameSource,
+    W3EntityKind,
     build_entity_identity_index,
+    link_w3_entity_catalog,
+    project_accumulator_action,
 )
 
 
@@ -174,3 +189,169 @@ def test_missing_lookup_has_no_candidates_or_selection():
     assert result.resolution is EntityIdentityResolution.MISSING
     assert result.candidate_entity_indices == ()
     assert result.selected_entity_indices == ()
+
+
+def _action(command: str, *arguments: str, line: int = 7) -> ScriptAction:
+    return ScriptAction(command, arguments, " ".join(arguments), line)
+
+
+def test_projects_entity_and_global_accumulator_mutations_separately():
+    entity = project_accumulator_action(_action("accum", "2", "set", "-4"))
+    global_value = project_accumulator_action(_action("globalaccum", "2", "inc", "+3"))
+
+    assert entity == AccumulatorMutation(
+        AccumulatorScope.ENTITY,
+        2,
+        AccumulatorOperation.SET,
+        -4,
+        7,
+    )
+    assert global_value == AccumulatorMutation(
+        AccumulatorScope.GLOBAL,
+        2,
+        AccumulatorOperation.INCREMENT,
+        3,
+        7,
+    )
+
+
+def test_projects_all_abort_predicates_without_inverting_them():
+    operations = {
+        "abort_if_less_than": AccumulatorOperation.ABORT_IF_LESS_THAN,
+        "abort_if_greater_than": AccumulatorOperation.ABORT_IF_GREATER_THAN,
+        "abort_if_not_equal": AccumulatorOperation.ABORT_IF_NOT_EQUAL,
+        "abort_if_not_equals": AccumulatorOperation.ABORT_IF_NOT_EQUAL,
+        "abort_if_equal": AccumulatorOperation.ABORT_IF_EQUAL,
+        "abort_if_bitset": AccumulatorOperation.ABORT_IF_BIT_SET,
+        "abort_if_not_bitset": AccumulatorOperation.ABORT_IF_NOT_BIT_SET,
+    }
+
+    for source_name, expected in operations.items():
+        result = project_accumulator_action(_action("accum", "1", source_name, "3"))
+        assert result == AccumulatorAbortGuard(AccumulatorScope.ENTITY, 1, expected, 3, 7)
+
+
+def test_projects_conditional_trigger_with_script_name_namespace():
+    result = project_accumulator_action(_action("globalaccum", "4", "trigger_if_equal", "2", "door_group", "open"))
+
+    assert result == AccumulatorConditionalTrigger(
+        AccumulatorScope.GLOBAL,
+        4,
+        AccumulatorOperation.TRIGGER_IF_EQUAL,
+        2,
+        "door_group",
+        "open",
+        7,
+    )
+
+
+def test_non_accumulator_action_has_no_accumulator_projection():
+    assert project_accumulator_action(_action("setstate", "door", "default")) is None
+
+
+def test_unapproved_runtime_dependent_operations_fail_closed():
+    for operation in ("random", "wait_while_equal", "set_to_dynamitecount"):
+        result = project_accumulator_action(_action("accum", "0", operation, "1"))
+        assert isinstance(result, ControlProjectionIssue)
+        assert result.operation == operation
+        assert "outside the approved" in result.reason
+
+
+def test_invalid_buffer_operand_bit_and_arity_are_structured_issues():
+    actions = (
+        _action("accum", "-1", "set", "0"),
+        _action("accum", "10", "set", "0"),
+        _action("accum", "zero", "set", "0"),
+        _action("accum", "0", "set", "1tail"),
+        _action("accum", "0", "bitset", "31"),
+        _action("accum", "0", "set"),
+        _action("accum", "0", "trigger_if_equal", "1", "target"),
+    )
+
+    for action in actions:
+        assert isinstance(project_accumulator_action(action), ControlProjectionIssue)
+
+
+def _w3_catalog(
+    *,
+    source: str = "maps/test.bsp",
+    spawn_points: tuple[SimpleNamespace, ...] = (),
+    objective_volumes: tuple[SimpleNamespace, ...] = (),
+    objective_markers: tuple[SimpleNamespace, ...] = (),
+    collision_entities: tuple[SimpleNamespace, ...] = (),
+) -> MapEntityCatalog:
+    return MapEntityCatalog(
+        map_name="test",
+        bsp_source=source,
+        spawn_points=spawn_points,
+        objective_volumes=objective_volumes,
+        objective_markers=objective_markers,
+        collision_entities=collision_entities,
+    )
+
+
+def _w3_entity(entity_index: int, classname: str) -> SimpleNamespace:
+    return SimpleNamespace(entity_index=entity_index, classname=classname)
+
+
+def test_links_w3_groups_to_full_identities_only_by_bsp_entity_index():
+    identities = build_entity_identity_index(
+        (
+            {"classname": "worldspawn"},
+            {"classname": "team_CTF_redspawn", "scriptname": "axis_spawn"},
+            {"classname": "trigger_objective_info", "targetname": "objective"},
+            {"classname": "func_door", "targetname": "door"},
+        ),
+        source="maps/test.bsp",
+    )
+    catalog = _w3_catalog(
+        spawn_points=(_w3_entity(1, "team_CTF_redspawn"),),
+        objective_markers=(_w3_entity(2, "trigger_objective_info"),),
+        collision_entities=(_w3_entity(3, "func_door"),),
+    )
+
+    linked = link_w3_entity_catalog(identities, catalog)
+
+    assert linked.map_name == "test"
+    assert linked.runtime_entity_completeness == "unverified"
+    assert tuple((reference.entity_index, reference.kind) for reference in linked.references) == (
+        (1, W3EntityKind.SPAWN_POINT),
+        (2, W3EntityKind.OBJECTIVE_MARKER),
+        (3, W3EntityKind.COLLISION_ENTITY),
+    )
+    assert linked.identity(linked.references[1]).target_name == "objective"
+    assert linked.typed_reference(0) is None
+    assert linked.typed_reference(3) == linked.references[2]
+
+
+@pytest.mark.parametrize(
+    ("identities", "catalog", "message"),
+    (
+        (
+            build_entity_identity_index(({"classname": "func_door"},), source="a.bsp"),
+            _w3_catalog(source="b.bsp", collision_entities=(_w3_entity(0, "func_door"),)),
+            "does not match W3 source",
+        ),
+        (
+            build_entity_identity_index(({"classname": "worldspawn"},), source="maps/test.bsp"),
+            _w3_catalog(collision_entities=(_w3_entity(1, "func_door"),)),
+            "unknown BSP entity index",
+        ),
+        (
+            build_entity_identity_index(({"classname": "func_door"},), source="maps/test.bsp"),
+            _w3_catalog(
+                objective_volumes=(_w3_entity(0, "func_door"),),
+                collision_entities=(_w3_entity(0, "func_door"),),
+            ),
+            "multiple W3 entity groups",
+        ),
+        (
+            build_entity_identity_index(({"classname": "func_door"},), source="maps/test.bsp"),
+            _w3_catalog(collision_entities=(_w3_entity(0, "func_static"),)),
+            "does not match BSP identity",
+        ),
+    ),
+)
+def test_w3_identity_link_rejects_source_index_group_and_class_drift(identities, catalog, message):
+    with pytest.raises(ValueError, match=message):
+        link_w3_entity_catalog(identities, catalog)
