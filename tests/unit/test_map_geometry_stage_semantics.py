@@ -83,9 +83,13 @@ def test_generic_alias_resolution_follows_interleaved_duplicate_source_order():
     )
 
     index = build_entity_identity_index(entities)
+    lookup = index.lookup_first(EntityIdentityNamespace.MESSAGE, "third")
 
     assert index.entities[0].message == "third"
     assert index.entities[0].properties == entities[0].ordered_pairs
+    assert lookup.resolution is EntityIdentityResolution.UNIQUE
+    assert lookup.selected_entity_indices == (0,)
+    assert index.entities[lookup.selected_entity_indices[0]] is index.entities[0]
 
 
 def test_et_ascii_matching_does_not_apply_unicode_case_folding():
