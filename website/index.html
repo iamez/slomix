@@ -2472,6 +2472,18 @@
                                 <span class="w-3 h-3 rounded-full bg-brand-rose"></span>
                                 Size/color = kills
                             </span>
+                            <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-400" title="Command post objective zone, shown when 'Show objective zones' is checked.">
+                                <span class="w-2 h-2 rounded-full" style="background:rgba(96, 165, 250, 0.5)"></span>
+                                Command post
+                            </span>
+                            <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-400" title="Escort/tank objective zone, shown when 'Show objective zones' is checked.">
+                                <span class="w-2 h-2 rounded-full" style="background:rgba(251, 146, 60, 0.5)"></span>
+                                Escort
+                            </span>
+                            <span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-400" title="Other objective zone (dynamite, flag, construction), shown when 'Show objective zones' is checked.">
+                                <span class="w-2 h-2 rounded-full" style="background:rgba(110, 231, 183, 0.42)"></span>
+                                Other objective
+                            </span>
                         </div>
                         <div class="h-48 rounded-lg border border-white/10 relative overflow-hidden" id="proximity-heatmap-wrap">
                             <canvas id="proximity-heatmap" class="absolute inset-0 w-full h-full"></canvas>
@@ -2545,6 +2557,7 @@
                             </div>
                         </div>
                         <div class="text-[11px] text-slate-500 mb-3">Kill/death positions with kill lines — or where objective pushes &amp; carriers die (last 30 days).</div>
+                        <div id="combat-heatmap-legend" class="flex flex-wrap gap-2 mb-3 text-[10px]"></div>
                         <canvas id="combat-heatmap-canvas" width="512" height="512" class="w-full rounded-lg border border-white/10 bg-slate-950" style="max-width:512px;aspect-ratio:1"></canvas>
                     </div>
                 </div>
