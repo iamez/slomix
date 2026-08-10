@@ -18,7 +18,9 @@ from website.backend.map_geometry.stage_possibilities import (
 from website.backend.map_geometry.stage_semantics import (
     AccumulatorAbortGuard,
     AccumulatorMutation,
+    EntitySourceKind,
     EntityTargetEffectProjection,
+    W3EntityIndexLinkDisposition,
     build_entity_identity_index,
     link_w3_entity_catalog,
 )
@@ -129,3 +131,40 @@ def test_rejects_drift_between_a_stage_action_and_its_typed_effect():
 
     with pytest.raises(ValueError, match="stage-effect action.*has no projection"):
         project_ordered_stage_programs(drifted, linked)
+
+
+def test_ent_override_projects_identity_effects_without_reusing_bsp_entity_indices():
+    model, _linked = _model_and_linked()
+    identities = build_entity_identity_index(
+        (
+            {"classname": "script_multiplayer"},
+            {"classname": "func_door", "targetname": "gate"},
+            {"classname": "script_mover", "scriptname": "helper"},
+        ),
+        source="override.pk3!/maps/test.ent",
+        source_kind=EntitySourceKind.ENT_OVERRIDE,
+    )
+    bsp_catalog = MapEntityCatalog(
+        "test",
+        "geometry.pk3!/maps/test.bsp",
+        (),
+        (),
+        (),
+        (SimpleNamespace(entity_index=1, classname="func_door"),),
+    )
+    context = link_w3_entity_catalog(identities, bsp_catalog)
+
+    programs = project_ordered_stage_programs(model, context)
+    projection = programs[0].instructions[2]
+
+    assert context.catalog is None
+    assert context.references == ()
+    assert context.entity_index_link_disposition is W3EntityIndexLinkDisposition.UNPROVEN_IDENTITY_OVERRIDE
+    assert isinstance(projection, StageEffectInstruction)
+    assert isinstance(projection.projection, EntityTargetEffectProjection)
+    assert projection.projection.target_lookup.selected_entity_indices == (1,)
+    assert projection.projection.selected_w3_references == ()
+    assert (
+        projection.projection.entity_index_link_disposition
+        is W3EntityIndexLinkDisposition.UNPROVEN_IDENTITY_OVERRIDE
+    )
