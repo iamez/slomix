@@ -3488,8 +3488,8 @@ function renderMovementStats(data) {
         overEl.textContent = '';
         [
             { label: 'Total Distance', value: `${(totals.distance / 1000).toFixed(0)}K u`, cls: 'text-white' },
-            { label: 'Alive Time', value: `${(totals.alive / 60).toFixed(0)}m`, cls: 'text-white' },
-            { label: 'Sprint Time', value: `${(totals.sprint / 60).toFixed(1)}m`, cls: 'text-brand-cyan' },
+            { label: 'Alive Time', value: `${(totals.alive / 60).toFixed(0)}min`, cls: 'text-white' },
+            { label: 'Sprint Time', value: `${(totals.sprint / 60).toFixed(1)}min`, cls: 'text-brand-cyan' },
         ].forEach(x => {
             const card = document.createElement('div');
             card.className = 'text-center';
