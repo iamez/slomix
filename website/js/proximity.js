@@ -3709,6 +3709,10 @@ const COMBAT_HEATMAP_RGB = {
     alliesLine: '96, 165, 250',
 };
 
+// Bumped at every renderCombatHeatmap() call; in-flight renders re-check it
+// after each await and bail when a newer call has taken over the canvas.
+let combatHeatmapRenderSeq = 0;
+
 function updateCombatHeatmapLegend(perspective) {
     const el = document.getElementById('combat-heatmap-legend');
     if (!el) return;
@@ -3729,6 +3733,12 @@ async function renderCombatHeatmap(mapName, perspective) {
     if (!mapName) return;
     const canvas = document.getElementById('combat-heatmap-canvas');
     if (!canvas) return;
+    // Monotonic render token: rapid perspective/map switches can resolve
+    // out of order, letting a stale response repaint a canvas the legend
+    // (updated synchronously below) no longer describes. Each await below
+    // is followed by a staleness check before anything touches the canvas.
+    // (CodeRabbit finding on #626, deferred there as pre-existing.)
+    const seq = ++combatHeatmapRenderSeq;
     updateCombatHeatmapLegend(perspective || 'kills');
 
     // 'pushes' = "Where pushes die" (proximity slice 2): deaths of the pushing
@@ -3754,6 +3764,7 @@ async function renderCombatHeatmap(mapName, perspective) {
         console.warn('Proximity heatmap fetch failed:', err);
         return;
     }
+    if (seq !== combatHeatmapRenderSeq) return; // a newer render owns the canvas
 
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
@@ -3771,6 +3782,7 @@ async function renderCombatHeatmap(mapName, perspective) {
     const transform = getMapTransformEntry(mapName);
     const worldBounds = getWorldBounds(transform);
     const mapImage = await preloadMapImage(transform?.image || null);
+    if (seq !== combatHeatmapRenderSeq) return; // stale after image/transform loads
     if (mapImage) {
         ctx.save();
         ctx.globalAlpha = 0.28;
