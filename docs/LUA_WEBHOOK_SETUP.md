@@ -78,12 +78,15 @@ psql -d etlegacy -f tools/migrations/004_add_pause_events.sql
    on 2026-08-10). The file returns a table whose keys override the
    script's `configuration` defaults:
    ```bash
+   # Create the file with restrictive permissions BEFORE writing the token
+   # into it — a permissive umask or an interrupted write must never leave
+   # the secret world-readable.
+   install -m 600 /dev/null /path/to/etlegacy/luascripts/stats_discord_webhook_config.lua
    cat > /path/to/etlegacy/luascripts/stats_discord_webhook_config.lua <<'EOF'
    return {
        discord_webhook_url = "https://discord.com/api/webhooks/YOUR_ID/YOUR_TOKEN",
    }
    EOF
-   chmod 600 /path/to/etlegacy/luascripts/stats_discord_webhook_config.lua
    ```
    The script resolves this file via the engine's own `fs_homepath` /
    `fs_basepath` + `fs_game` cvars (homepath wins). NEVER commit this file —
@@ -136,7 +139,9 @@ psql -d etlegacy -f tools/migrations/004_add_pause_events.sql
 ## Troubleshooting
 
 ### Webhook not appearing in Discord
-- Check the Lua script has the correct webhook URL
+- Check `stats_discord_webhook_config.lua` (in the engine-resolved
+  `luascripts/` directory — homepath first, then basepath) contains the
+  correct webhook URL; the tracked script itself only has a placeholder
 - Check server console for `[stats_discord_webhook]` messages
 - Ensure `curl` is available on the game server
 - Enable debug mode in the Lua script: `debug = true`

@@ -182,10 +182,21 @@ local function config_override_candidates()
     return candidates
 end
 
-local function config_file_exists(path)
-    local f = io.open(path, "r")
-    if f then f:close(); return true end
-    return false
+-- Distinguishes "missing" from "present but unreadable": io.open returns nil
+-- for both, but an unreadable higher-priority config (wrong owner next to the
+-- documented chmod 600) must BLOCK, not silently yield to a lower-priority
+-- candidate (#634 review, round 3). ENOENT is errno 2 on every platform this
+-- runs on; anything else is treated as an error.
+local function probe_config_file(path)
+    local f, err, code = io.open(path, "r")
+    if f then
+        f:close()
+        return "readable"
+    end
+    if code == 2 then
+        return "missing"
+    end
+    return "error", tostring(err)
 end
 
 local function apply_config_overrides()
@@ -196,7 +207,13 @@ local function apply_config_overrides()
     -- homepath one (#634 review, round 2). With no overrides applied the
     -- placeholder guard keeps the module from sending anything (fail closed).
     for _, path in ipairs(config_override_candidates()) do
-        if config_file_exists(path) then
+        local probe, probe_err = probe_config_file(path)
+        if probe == "error" then
+            table.insert(config_override_warnings,
+                string.format("override %s unreadable: %s — refusing to fall through", path, probe_err))
+            return
+        end
+        if probe == "readable" then
             local chunk, load_err = loadfile(path)
             if not chunk then
                 table.insert(config_override_warnings,
