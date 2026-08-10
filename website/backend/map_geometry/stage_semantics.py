@@ -92,6 +92,11 @@ class W3EntityKind(StrEnum):
     COLLISION_ENTITY = "collision_entity"
 
 
+class W3EntityIndexLinkDisposition(StrEnum):
+    PROVEN_SAME_SOURCE = "proven_same_source"
+    UNPROVEN_IDENTITY_OVERRIDE = "unproven_identity_override"
+
+
 class EntityTargetDisposition(StrEnum):
     STATIC_SOURCE_AND_TARGET = "static_source_and_target"
     STATIC_SOURCE_MISSING = "static_source_missing"
@@ -186,13 +191,14 @@ class W3EntityReference:
 
 @dataclass(frozen=True, slots=True)
 class W3LinkedIdentityIndex:
-    """W3 geometry identities joined to the full BSP identity namespace."""
+    """Identity lookups plus only source-proven W3 entity-index links."""
 
     map_name: str
     identities: BspEntityIdentityIndex
-    catalog: MapEntityCatalog
+    catalog: MapEntityCatalog | None
     references: tuple[W3EntityReference, ...]
     runtime_entity_completeness: str = "unverified"
+    entity_index_link_disposition: W3EntityIndexLinkDisposition = W3EntityIndexLinkDisposition.PROVEN_SAME_SOURCE
 
     def identity(self, reference: W3EntityReference) -> BspEntityIdentity:
         return self.identities.entities[reference.entity_index]
@@ -218,6 +224,7 @@ class EntityTargetEffectProjection:
     selected_w3_references: tuple[W3EntityReference, ...]
     disposition: EntityTargetDisposition
     runtime_entity_completeness: str = "unverified"
+    entity_index_link_disposition: W3EntityIndexLinkDisposition = W3EntityIndexLinkDisposition.PROVEN_SAME_SOURCE
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,6 +236,7 @@ class GotoMarkerEffectProjection:
     relative_lookups: tuple[EntityIdentityLookup, ...]
     relative_w3_references: tuple[tuple[W3EntityReference, ...], ...]
     runtime_entity_completeness: str = "unverified"
+    entity_index_link_disposition: W3EntityIndexLinkDisposition = W3EntityIndexLinkDisposition.PROVEN_SAME_SOURCE
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,6 +248,7 @@ class AutoSpawnEffectProjection:
     team_spawn_candidates: tuple[W3EntityReference, ...]
     blocked_reason: str | None
     selection_semantics: str = "runtime_active_ownership_proximity_unverified"
+    entity_index_link_disposition: W3EntityIndexLinkDisposition = W3EntityIndexLinkDisposition.PROVEN_SAME_SOURCE
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,6 +268,7 @@ class MainObjectiveEffectProjection:
     selected_w3_references: tuple[W3EntityReference, ...]
     blocked_reason: str | None
     runtime_entity_completeness: str = "unverified"
+    entity_index_link_disposition: W3EntityIndexLinkDisposition = W3EntityIndexLinkDisposition.PROVEN_SAME_SOURCE
 
 
 @dataclass(frozen=True, slots=True)
@@ -617,6 +627,7 @@ def project_stage_effect(
             lookup,
             _selected_w3_references(linked, lookup),
             _entity_target_disposition(source.lookup, lookup),
+            entity_index_link_disposition=linked.entity_index_link_disposition,
         )
 
     if isinstance(effect, GotoMarkerEffect):
@@ -632,6 +643,7 @@ def project_stage_effect(
             _selected_w3_references(linked, destination),
             relative_lookups,
             tuple(_selected_w3_references(linked, lookup) for lookup in relative_lookups),
+            entity_index_link_disposition=linked.entity_index_link_disposition,
         )
 
     if isinstance(effect, AutoSpawnEffect):
@@ -646,7 +658,11 @@ def project_stage_effect(
         else:
             blocked_reason = None
         team = "AXIS" if effect.team_code == 0 else "ALLIES"
-        spawn_indices = {spawn.entity_index for spawn in linked.catalog.spawn_points if spawn.team == team}
+        spawn_indices = (
+            {spawn.entity_index for spawn in linked.catalog.spawn_points if spawn.team == team}
+            if linked.catalog is not None
+            else set()
+        )
         return AutoSpawnEffectProjection(
             effect,
             source,
@@ -654,6 +670,7 @@ def project_stage_effect(
             _selected_w3_references(linked, marker),
             tuple(reference for reference in linked.references if reference.entity_index in spawn_indices),
             blocked_reason=blocked_reason,
+            entity_index_link_disposition=linked.entity_index_link_disposition,
         )
 
     if isinstance(effect, ObjectiveStatusEffect):
@@ -667,6 +684,7 @@ def project_stage_effect(
                 None,
                 (),
                 "legacy_numeric_selector_is_unverified_for_the_live_build",
+                entity_index_link_disposition=linked.entity_index_link_disposition,
             )
         lookup = identities.lookup_first(EntityIdentityNamespace.TARGET, effect.selector)
         selected = identities.entities[lookup.selected_entity_indices[0]] if lookup.selected_entity_indices else None
@@ -682,6 +700,7 @@ def project_stage_effect(
             lookup,
             _selected_w3_references(linked, lookup),
             blocked_reason,
+            entity_index_link_disposition=linked.entity_index_link_disposition,
         )
 
     if isinstance(effect, (WinnerEffect, RoundEndEffect)):
@@ -748,8 +767,16 @@ def link_w3_entity_catalog(
     identities: BspEntityIdentityIndex,
     catalog: MapEntityCatalog,
 ) -> W3LinkedIdentityIndex:
-    """Join W3 typed entities by their stable BSP entity index or fail closed."""
+    """Join same-source W3 indices or retain override identities without false links."""
 
+    if identities.source_kind is EntitySourceKind.ENT_OVERRIDE:
+        return W3LinkedIdentityIndex(
+            map_name=catalog.map_name,
+            identities=identities,
+            catalog=None,
+            references=(),
+            entity_index_link_disposition=W3EntityIndexLinkDisposition.UNPROVEN_IDENTITY_OVERRIDE,
+        )
     if identities.source != catalog.bsp_source:
         raise ValueError(f"identity source {identities.source!r} does not match W3 source {catalog.bsp_source!r}")
 

@@ -403,6 +403,12 @@ contains a direct stage effect. This does not make the cycles irrelevant: an ite
 can dispatch other events before returning to itself, so the future walker must retain
 the cycle frontier and inspect downstream semantic relevance.
 
+An `.ent` override remains a valid source for script-name, target and message
+identity lookups, but its entity indices cannot be joined to the replaced BSP lump.
+The projection context therefore retains the override identities while publishing no
+W3 references and marking every affected entity-index surface
+`unproven_identity_override`. Ordinary mismatched BSP sources still fail closed.
+
 ## Proposed code boundary
 
 Prefer a new sibling module, tentatively
@@ -891,6 +897,12 @@ runtime blocker. The projector now consumes a single canonical stage-effect comm
 set shared with graph compilation and raises if any such action lacks its typed effect;
 extra effects and trigger edges were already rejected after each event projection.
 
+Review also exposed that requiring an already-linked W3 catalog made the ordered
+program unavailable when a valid `.ent` override supplied the runtime identity list.
+The context now separates source-valid identity lookups from source-proven BSP index
+links: override projections proceed, but every W3 candidate remains empty and typed as
+unproven rather than borrowing an index from the replaced BSP entity lump.
+
 ## Current handoff state
 
 Current step: classify the 38 retained runtime command families by callback control
@@ -907,8 +919,8 @@ Known blockers: none for read-only research and local implementation. Any requir
 live-build inspection that changes or restarts a service becomes owner-gated; retain
 the affected semantic result as unverified and continue with independent domains.
 
-Current local verification (Python 3.13.14): the complete 197-test W1/map-geometry
-unit suite passed, and all 13 opt-in real-asset tests passed in 293.74 seconds under
+Current local verification (Python 3.13.14): the complete 198-test W1/map-geometry
+unit suite passed, and all 13 opt-in real-asset tests passed in 286.27 seconds under
 repo-wide coverage tracing. The current acceptance proves no `.ent` override exists
 for any of the 20 indexed BSP maps, includes
 all 2,929 typed effect projections and the blocker inventory above, and rechecks W1-W5a,
