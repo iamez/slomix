@@ -540,10 +540,10 @@ function renderLeaderList(containerId, rows, formatter, emptyLabel = 'No data ye
         const confidenceTitle = 'Sample size confidence: Low = under 8 samples, Medium = 8-19, High = 20+. Rows are ranked by value, not confidence — a low-confidence row can outrank a high-confidence one.';
         const displayValue = htmlValues ? value : escapeHtml(value);
         return `
-            <div class="flex items-center justify-between text-[11px] text-slate-300">
-                <span>${escapeHtml(label)}</span>
+            <div class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-500">${escapeHtml(label)}</span>
                 <span class="text-right">
-                    <span class="text-slate-500">${displayValue}</span>
+                    <span class="text-slate-200 font-bold">${displayValue}</span>
                     ${sampleMeta ? `<span class="block text-[10px] text-slate-600" title="${escapeHtml(confidenceTitle)}">${escapeHtml(sampleMeta)}</span>` : ''}
                 </span>
             </div>
@@ -3541,22 +3541,31 @@ function renderProxScores(data, formula) {
     // 'degraded' ONLY. quality.ranking_available is also false for a healthy
     // empty result (no qualifying players / new install), so keying off it made
     // an empty scope look like a data-source outage (Copilot/Codex review #512).
+    const subtitleEl = document.getElementById('prox-scores-subtitle');
     if (data?.status === 'degraded') {
         const failed = (data?.quality?.failed_sources ?? []).length;
         listEl.innerHTML = `<div class="text-[11px] text-amber-400/80">Proximity scores are temporarily unavailable (${failed} data source${failed === 1 ? '' : 's'} failed). Ranking withheld to avoid showing incomplete results.</div>`;
+        if (subtitleEl) subtitleEl.textContent = 'Composite rating — unavailable';
         return;
     }
     if (players.length === 0) {
         listEl.innerHTML = '<div class="text-[11px] text-slate-500">No proximity score data yet.</div>';
+        if (subtitleEl) subtitleEl.textContent = 'Composite rating — no data yet';
         return;
     }
 
-    const subtitleEl = document.getElementById('prox-scores-subtitle');
     if (subtitleEl) {
-        const catCount = formula?.categories ? Object.keys(formula.categories).length : 3;
-        const metricCount = formula?.categories
-            ? Object.values(formula.categories).reduce((a, c) => a + Object.keys(c.metrics).length, 0) : 18;
-        subtitleEl.textContent = `Composite rating from ${catCount} categories, ${metricCount} metrics — v${data.version || '1.0'}`;
+        if (formula?.categories) {
+            const catCount = Object.keys(formula.categories).length;
+            const metricCount = Object.values(formula.categories).reduce((a, c) => a + Object.keys(c.metrics).length, 0);
+            subtitleEl.textContent = `Composite rating from ${catCount} categories, ${metricCount} metrics — v${data.version || '1.0'}`;
+        } else {
+            // Formula fetch failed or hasn't resolved yet — say so rather than
+            // guess a category/metric count that can go stale (#556 lesson:
+            // this exact subtitle once hardcoded "18 metrics" against a live
+            // count of 5).
+            subtitleEl.textContent = `Composite rating — v${data.version || '1.0'} (category breakdown unavailable)`;
+        }
     }
 
     // Header row
@@ -4128,13 +4137,13 @@ function renderAimPanel(resp) {
     }
     if (spreadEl) {
         const directional = Number(circ.rayleigh_p) < 0.05;
-        const chip = (label, val) => `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-white/10">${label}: <span class="text-brand-purple">${val}</span></span>`;
+        const chip = (label, val, title) => `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-white/10"${title ? ` title="${escapeHtml(title)}"` : ''}>${label}: <span class="text-brand-purple">${val}</span></span>`;
         spreadEl.innerHTML = [
-            chip('mean yaw', `${Number(circ.mean_yaw_deg || 0).toFixed(0)}°`),
-            chip('spread', `±${Number(circ.circular_std_deg || 0).toFixed(0)}°`),
-            chip('R', Number(circ.resultant_length || 0).toFixed(2)),
-            chip('aim', directional ? 'directional' : 'uniform'),
-            chip('pitch', `${Number(circ.pitch_mean_deg || 0) >= 0 ? '+' : ''}${Number(circ.pitch_mean_deg || 0).toFixed(0)}°`),
+            chip('mean yaw', `${Number(circ.mean_yaw_deg || 0).toFixed(0)}°`, 'Average horizontal aim direction across tracked shots.'),
+            chip('spread', `±${Number(circ.circular_std_deg || 0).toFixed(0)}°`, 'Circular standard deviation of yaw — how tightly clustered the aim direction is.'),
+            chip('R', Number(circ.resultant_length || 0).toFixed(2), 'Resultant vector length (0-1): how concentrated the aim direction is. 0 = spread evenly in all directions, 1 = always aimed the same way.'),
+            chip('aim', directional ? 'directional' : 'uniform', "Whether aim direction is statistically non-random (Rayleigh test, p<0.05 = 'directional')."),
+            chip('pitch', `${Number(circ.pitch_mean_deg || 0) >= 0 ? '+' : ''}${Number(circ.pitch_mean_deg || 0).toFixed(0)}°`, 'Average vertical aim angle (positive = aiming up).'),
         ].join('');
     }
     if (pitchEl) {
