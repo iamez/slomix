@@ -595,7 +595,7 @@ elif [ ${#MIGRATIONS[@]} -gt 0 ]; then
       echo 'ERROR: could not read POSTGRES_USER/POSTGRES_PASSWORD from the VM root .env — DDL would run as the web role and fail on ALTER TABLE' >&2; \
       exit 1; \
     fi && \
-    POSTGRES_USER=\$OWNER_USER POSTGRES_PASSWORD=\$OWNER_PASS \
+    POSTGRES_USER=\"\$OWNER_USER\" POSTGRES_PASSWORD=\"\$OWNER_PASS\" \
       $VM_PY scripts/apply_migrations.py --only ${MIGRATIONS[*]}"
 else
   log "5/8  No migrations queued — validating ledger only"
@@ -632,7 +632,7 @@ if $SKIP_MIGRATIONS; then
       rm -f $STAGED_RUNNER; \
       exit 1; \
     fi && \
-    POSTGRES_USER=\$OWNER_USER POSTGRES_PASSWORD=\$OWNER_PASS \
+    POSTGRES_USER=\"\$OWNER_USER\" POSTGRES_PASSWORD=\"\$OWNER_PASS\" \
       $VM_PY $STAGED_RUNNER --validate --tolerate-missing; rc=\$?; rm -f $STAGED_RUNNER; exit \$rc"
 else
   log "  Validating migration ledger (pending/failed/missing/checksum drift aborts deploy)"
@@ -644,7 +644,7 @@ else
       echo 'ERROR: could not read POSTGRES_USER/POSTGRES_PASSWORD from the VM root .env — validate would run as the web role and fail on ensure_tracking_table' >&2; \
       exit 1; \
     fi && \
-    POSTGRES_USER=\$OWNER_USER POSTGRES_PASSWORD=\$OWNER_PASS \
+    POSTGRES_USER=\"\$OWNER_USER\" POSTGRES_PASSWORD=\"\$OWNER_PASS\" \
       $VM_PY scripts/apply_migrations.py --validate"
 fi
 
