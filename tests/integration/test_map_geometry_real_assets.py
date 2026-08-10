@@ -15,6 +15,7 @@ from website.backend.map_geometry import (
     AlertEntityEffect,
     AutoSpawnEffectProjection,
     BspPointTracer,
+    ControlBarrierInstruction,
     ControlProjectionIssue,
     EffectProjectionIssue,
     EntityIdentityNamespace,
@@ -32,6 +33,7 @@ from website.backend.map_geometry import (
     ObjectiveWorldLinkDisposition,
     Pk3GeometryIndex,
     PlayerStance,
+    RuntimeActionInstruction,
     StageLoadStatus,
     SurfaceType,
     TraceReason,
@@ -43,6 +45,7 @@ from website.backend.map_geometry import (
     link_w3_entity_catalog,
     load_static_stage,
     project_accumulator_action,
+    project_ordered_stage_programs,
     project_stage_effect,
 )
 
@@ -541,6 +544,85 @@ def test_w5b_projects_every_typed_stage_effect_to_action_specific_static_candida
         ("etl_beach", 7, 1, 54),
     ]
     assert blocked_autospawns == [("erdenberg_t2", "the Command Post", 1, "no_static_message_candidate")]
+
+
+def test_w5b_projects_every_eligible_action_into_an_ordered_nonexecuted_program(geometry_index):
+    counts = Counter()
+    barriers = Counter()
+    runtime_commands = Counter()
+
+    for map_name in geometry_index.map_names:
+        bsp = geometry_index.load_bsp(map_name)
+        linked = link_w3_entity_catalog(
+            build_indexed_entity_identity_index(geometry_index, map_name, bsp=bsp),
+            extract_entity_catalog(bsp, map_name),
+        )
+        model = load_static_stage(geometry_index, map_name).model
+        assert model is not None
+
+        programs = project_ordered_stage_programs(model, linked)
+        counts["programs"] += len(programs)
+        for program in programs:
+            counts["instructions"] += len(program.instructions)
+            for instruction in program.instructions:
+                counts[type(instruction).__name__] += 1
+                if isinstance(instruction, ControlBarrierInstruction):
+                    barriers[instruction.kind.value] += 1
+                elif isinstance(instruction, RuntimeActionInstruction):
+                    runtime_commands[instruction.action.command] += 1
+
+    assert counts == {
+        "programs": 2153,
+        "instructions": 10057,
+        "RuntimeActionInstruction": 3413,
+        "StageEffectInstruction": 2929,
+        "TriggerInstruction": 1315,
+        "AccumulatorMutation": 994,
+        "ControlBarrierInstruction": 794,
+        "AccumulatorAbortGuard": 313,
+        "AccumulatorConditionalTrigger": 299,
+    }
+    assert barriers == {"wait": 745, "resetscript": 25, "halt": 24}
+    assert runtime_commands == {
+        "wm_teamvoiceannounce": 589,
+        "setchargetimefactor": 420,
+        "followspline": 302,
+        "wm_announce": 274,
+        "playsound": 241,
+        "wm_addteamvoiceannounce": 239,
+        "wm_removeteamvoiceannounce": 222,
+        "faceangles": 143,
+        "constructible_class": 110,
+        "disablespeaker": 110,
+        "stopsound": 99,
+        "remove": 91,
+        "sethqstatus": 85,
+        "enablespeaker": 71,
+        "remapshader": 70,
+        "attachtotag": 43,
+        "remapshaderflush": 35,
+        "togglespeaker": 35,
+        "setrotation": 31,
+        "startanimation": 27,
+        "wm_axis_respawntime": 20,
+        "wm_allied_respawntime": 20,
+        "wm_number_of_objectives": 20,
+        "wm_set_round_timelimit": 20,
+        "wm_set_defending_team": 17,
+        "kill": 13,
+        "stoprotation": 13,
+        "setspeed": 10,
+        "set": 9,
+        "changemodel": 8,
+        "repairmg42": 7,
+        "constructible_constructxpbonus": 5,
+        "constructible_destructxpbonus": 4,
+        "create": 4,
+        "constructible_health": 3,
+        "constructible_chargebarreq": 1,
+        "constructible_weaponclass": 1,
+        "constructible_duration": 1,
+    }
 
 
 @pytest.mark.timeout(120)

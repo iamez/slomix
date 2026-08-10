@@ -227,6 +227,21 @@ comments or function names:
 - The script runner executes actions in order and stops the current pass when an
   action returns false or a nested event changes the script id. Static control-flow
   projection therefore cannot be reconstructed by collecting typed effects alone.
+- [`G_Script_ScriptRun`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script.c#L790-L871)
+  proves that ordering/stop contract, while
+  [`G_Script_ScriptChange`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script.c#L629-L654)
+  restores the prior event only when a replacement completes synchronously without
+  another script-id change.
+- [`G_ScriptAction_Accum`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L2438-L2693)
+  and
+  [`G_ScriptAction_GlobalAccum`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L2722-L2938)
+  are the pinned evidence for local/global storage, abort-to-event-end and conditional
+  trigger dispatch.
+- [`wait`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L1651-L1718),
+  [`resetscript`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L3130-L3139)
+  and
+  [`halt`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L3198-L3240)
+  can return false and therefore remain explicit control barriers.
 - [`CMod_LoadCustomEntityString`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/qcommon/cm_load.c#L458-L488)
   asks the virtual filesystem for `maps/<map>.ent` before reading the BSP entity
   lump. An override replaces the complete entity identity source; checking only BSP
@@ -358,6 +373,35 @@ Measured blocker and provenance inventory:
   `etl_beach` objective 7 lacks both Axis and Allies descriptions;
 - all 42 installed main-objective calls remain blocked `legacy_numeric`; none is
   rewritten as an entity name.
+
+### Ordered control-program baseline
+
+The local Phase 4 foundation projects every eligible parsed action into one ordered,
+non-executed instruction. It does not yet decide which path is reachable. Exact
+real-asset accounting covers all 2,153 event nodes and all 10,057 actions:
+
+| Instruction | Count |
+|---|---:|
+| Stage-effect projection | 2,929 |
+| Runtime action with unclassified control semantics | 3,413 |
+| Plain trigger edge | 1,315 |
+| Accumulator mutation | 994 |
+| Accumulator abort guard | 313 |
+| Accumulator conditional trigger | 299 |
+| Explicit control barrier | 794 |
+
+The barriers are 745 `wait`, 25 `resetscript` and 24 `halt` actions. The 3,413
+unclassified instructions span 38 command names and remain blockers, not pass-through
+actions, until their callback return/event-replacement behaviour is source-verified.
+The most common are `wm_teamvoiceannounce` (589), `setchargetimefactor` (420),
+`followspline` (302), `wm_announce` (274), `playsound` (241),
+`wm_addteamvoiceannounce` (239) and `wm_removeteamvoiceannounce` (222).
+
+The resolved plain-trigger graph has 21 cyclic strongly connected components across
+six maps. Every current component is a one-node self-loop and none of those 21 nodes
+contains a direct stage effect. This does not make the cycles irrelevant: an iteration
+can dispatch other events before returning to itself, so the future walker must retain
+the cycle frontier and inspect downstream semantic relevance.
 
 ## Proposed code boundary
 
@@ -510,7 +554,10 @@ machine-readable reason why it does not.
 
 ### Phase 4 - model guarded ordered possibilities
 
-Status: pending.
+Status: in progress. Every eligible action is retained in source order as a typed
+stage, accumulator, trigger, barrier or unclassified-runtime instruction. Guard
+splitting, accumulator state, nested dispatch and bounded cycle traversal remain
+pending; no path reachability is published yet.
 
 1. Represent per-entity accumulator and global-accumulator state symbolically.
 2. Apply mutations in script action order.
@@ -829,33 +876,48 @@ neither, 58 source-only and three target-only. This distinction matters because 
 missing source and a missing target are different runtime-completeness questions and
 must not be collapsed into one generic unresolved result.
 
+### 2026-08-11 - project every action before executing any path
+
+Phase 4 first creates a lossless ordered program and validates that its instruction
+count equals the parsed action count. Accumulators, stage effects, plain triggers and
+the three source-verified barriers receive typed instructions. Every other runtime
+action is retained with `control_semantics_not_classified`; the executor may not skip
+it merely because its name appears cosmetic. This deliberately exposes 3,413 blockers
+now rather than producing high but indefensible path coverage.
+
+A focused drift test removed a typed `setstate` effect while leaving its parsed action
+in place. The first implementation silently reclassified that action as an unknown
+runtime blocker. The projector now consumes a single canonical stage-effect command
+set shared with graph compilation and raises if any such action lacks its typed effect;
+extra effects and trigger edges were already rejected after each event projection.
+
 ## Current handoff state
 
-Current step: begin Phase 4's ordered accumulator-path model. Phase 3 now publishes
-the measured source/target matrix and the absence of a proven objective relationship
-as typed dispositions. Phase 2's final public coverage surface remains intentionally
-deferred until Phase 4 control-flow blockers are known.
+Current step: classify the 38 retained runtime command families by callback control
+behaviour, then implement Phase 4 guard splitting and symbolic accumulator state over
+the now lossless ordered program. Phase 2's final public coverage surface remains
+intentionally deferred until these control-flow blockers are known.
 
-Next action: freeze focused fixtures for action ordering, abort-path splitting, nested
-trigger dispatch, local versus global accumulator scope, waits/resets and cycles
-against the pinned engine source. Then implement only the symbolic execution subset
-those fixtures prove; unsupported guards remain blockers rather than guessed paths.
+Next action: source-verify which runtime commands are immediate pass-through, temporal
+barriers, event replacement/termination or unsupported. Freeze fixtures for true and
+false abort branches, local versus global state, conditional and plain nested triggers,
+same-entity replacement and the 21 cycle frontiers before writing the path walker.
 
 Known blockers: none for read-only research and local implementation. Any required
 live-build inspection that changes or restarts a service becomes owner-gated; retain
 the affected semantic result as unverified and continue with independent domains.
 
-Current local verification (Python 3.13.14): the complete 194-test W1/map-geometry
-unit suite passed, and all 12 opt-in real-asset tests passed in 238.69 seconds under
+Current local verification (Python 3.13.14): the complete 197-test W1/map-geometry
+unit suite passed, and all 13 opt-in real-asset tests passed in 293.74 seconds under
 repo-wide coverage tracing. The current acceptance proves no `.ent` override exists
 for any of the 20 indexed BSP maps, includes
 all 2,929 typed effect projections and the blocker inventory above, and rechecks W1-W5a,
 patch collision and trace fail-closed baselines. An initial full-asset run exposed two
 30-second test timeouts because the effective-source helper reparsed an already loaded
 BSP; the helper now accepts that exact indexed BSP, validates its source and reuses it.
-On the current run, the two largest corpus checks took 47.32 and 38.68 seconds under
-repo-wide coverage tracing. Earlier direct runs without tracing measured materially
-less time. The opt-in
+The preceding fully timed run recorded its two largest corpus checks at 47.68 and
+47.46 seconds under repo-wide coverage tracing. Earlier direct runs without tracing
+measured materially less time. The opt-in
 real-asset module now has a measured 90-second hang guard; this is acceptance-test
 headroom, not a production performance claim or SLO change.
 The duplicate-field correction was followed by a direct scan of all 20 indexed maps;
