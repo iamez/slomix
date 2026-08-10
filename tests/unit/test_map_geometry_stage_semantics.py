@@ -36,11 +36,13 @@ from website.backend.map_geometry.stage_semantics import (
     EntityIdentityNamespace,
     EntityIdentityResolution,
     EntitySourceKind,
+    EntityTargetDisposition,
     EntityTargetEffectProjection,
     GlobalStageEffectProjection,
     GotoMarkerEffectProjection,
     MainObjectiveEffectProjection,
     ObjectiveStatusEffectProjection,
+    ObjectiveWorldLinkDisposition,
     ScriptNameSource,
     W3EntityKind,
     build_entity_identity_index,
@@ -511,6 +513,7 @@ def test_projects_all_match_entity_target_and_retains_only_typed_w3_subset():
     assert projection.target_lookup.resolution is EntityIdentityResolution.GROUP
     assert projection.target_lookup.selected_entity_indices == (1, 2)
     assert tuple(reference.entity_index for reference in projection.selected_w3_references) == (1,)
+    assert projection.disposition is EntityTargetDisposition.STATIC_SOURCE_AND_TARGET
     assert projection.runtime_entity_completeness == "unverified"
 
     alert = project_stage_effect(
@@ -521,6 +524,38 @@ def test_projects_all_match_entity_target_and_retains_only_typed_w3_subset():
     )
     assert isinstance(alert, EntityTargetEffectProjection)
     assert alert.target_lookup.selected_entity_indices == (1, 2)
+
+
+@pytest.mark.parametrize(
+    ("source_script_name", "target", "expected"),
+    (
+        ("game_manager", "gate", EntityTargetDisposition.STATIC_SOURCE_AND_TARGET),
+        ("missing_source", "gate", EntityTargetDisposition.STATIC_SOURCE_MISSING),
+        ("game_manager", "missing_target", EntityTargetDisposition.STATIC_TARGET_MISSING),
+        ("missing_source", "missing_target", EntityTargetDisposition.STATIC_SOURCE_AND_TARGET_MISSING),
+    ),
+)
+def test_entity_target_disposition_keeps_source_and_target_failures_independent(
+    source_script_name,
+    target,
+    expected,
+):
+    linked = _linked(
+        (
+            {"classname": "script_multiplayer"},
+            {"classname": "func_door", "targetname": "gate"},
+        )
+    )
+
+    projection = project_stage_effect(
+        EntityStateEffect(target, "default", 9),
+        source_script_name=source_script_name,
+        linked=linked,
+        objectives=_objectives(),
+    )
+
+    assert isinstance(projection, EntityTargetEffectProjection)
+    assert projection.disposition is expected
 
 
 def test_projects_gotomarker_destination_and_each_relative_reference_with_first_match_rules():
@@ -656,6 +691,8 @@ def test_objective_status_uses_exact_team_and_number_without_text_matching():
 
     assert isinstance(projection, ObjectiveStatusEffectProjection)
     assert projection.descriptions == (allies,)
+    assert projection.world_entity_candidates == ()
+    assert projection.world_link_disposition is ObjectiveWorldLinkDisposition.UNPROVEN_ENGINE_KEY
 
 
 def test_main_objective_legacy_is_blocked_and_target_form_uses_target_field_first_match():
