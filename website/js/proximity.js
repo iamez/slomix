@@ -3337,15 +3337,18 @@ function renderHitRegions(data) {
             const pctSpan = document.createElement('span');
             pctSpan.className = 'text-[11px] font-mono text-slate-300';
             pctSpan.textContent = `${pct}%`;
+            const barTrack = document.createElement('div');
+            barTrack.className = 'w-full h-16 flex items-end';
             const bar = document.createElement('div');
             bar.className = 'w-full rounded-t';
             bar.style.height = `${barH}%`;
             bar.style.background = r.color;
             bar.style.opacity = '0.85';
+            barTrack.appendChild(bar);
             const lbl = document.createElement('span');
             lbl.className = 'text-[11px] text-slate-400';
             lbl.textContent = r.label;
-            col.append(pctSpan, bar, lbl);
+            col.append(pctSpan, barTrack, lbl);
             barsRow.appendChild(col);
         });
         const summary = document.createElement('div');
@@ -3413,15 +3416,18 @@ async function renderPlayerHitRegions() {
         const pctSpan = document.createElement('span');
         pctSpan.className = 'text-[11px] font-mono text-slate-300';
         pctSpan.textContent = `${pct}%`;
+        const barTrack = document.createElement('div');
+        barTrack.className = 'w-full h-16 flex items-end';
         const bar = document.createElement('div');
         bar.className = 'w-full rounded-t';
         bar.style.height = `${barH}%`;
         bar.style.background = r.color;
         bar.style.opacity = '0.85';
+        barTrack.appendChild(bar);
         const lbl = document.createElement('span');
         lbl.className = 'text-[11px] text-slate-400';
         lbl.textContent = r.label;
-        col.append(pctSpan, bar, lbl);
+        col.append(pctSpan, barTrack, lbl);
         barsEl.appendChild(col);
     });
     if (capEl) {
@@ -4091,7 +4097,7 @@ function renderAimPanel(resp) {
     }
     if (spreadEl) {
         const directional = Number(circ.rayleigh_p) < 0.05;
-        const chip = (label, val) => `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-white/10">${label}: <span class="text-brand-violet">${val}</span></span>`;
+        const chip = (label, val) => `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-white/10">${label}: <span class="text-brand-purple">${val}</span></span>`;
         spreadEl.innerHTML = [
             chip('mean yaw', `${Number(circ.mean_yaw_deg || 0).toFixed(0)}°`),
             chip('spread', `±${Number(circ.circular_std_deg || 0).toFixed(0)}°`),
@@ -4109,7 +4115,9 @@ function renderAimPanel(resp) {
             const h = Math.round((Number(c) || 0) / maxC * 100);
             return `<div class="flex flex-col items-center justify-end" style="width:14%">
                 <div class="text-[9px] text-slate-400 mb-0.5">${Number(c) || 0}</div>
-                <div class="w-full rounded-t bg-brand-violet/70" style="height:${Math.max(h, 2)}%"></div>
+                <div class="w-full h-16 flex items-end">
+                    <div class="w-full rounded-t bg-brand-purple/70" style="height:${Math.max(h, 2)}%"></div>
+                </div>
                 <div class="text-[8px] text-slate-500 mt-0.5">${labels[i] || ''}</div>
             </div>`;
         }).join('');
