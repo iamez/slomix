@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -11,14 +12,21 @@ from website.backend.map_geometry import (
     AccumulatorAbortGuard,
     AccumulatorConditionalTrigger,
     AccumulatorMutation,
+    AutoSpawnEffectProjection,
     BspPointTracer,
     ControlProjectionIssue,
+    EffectProjectionIssue,
     EntityIdentityNamespace,
     EntityIdentityResolution,
+    EntityTargetEffectProjection,
+    GlobalStageEffectProjection,
+    GotoMarkerEffectProjection,
     MainObjectiveEffect,
+    MainObjectiveEffectProjection,
     MainObjectiveSelectorForm,
     MapAssetKind,
     ObjectiveGeometrySource,
+    ObjectiveStatusEffectProjection,
     Pk3GeometryIndex,
     PlayerStance,
     StageLoadStatus,
@@ -32,6 +40,7 @@ from website.backend.map_geometry import (
     link_w3_entity_catalog,
     load_static_stage,
     project_accumulator_action,
+    project_stage_effect,
 )
 
 ETMAIN = Path(os.environ.get("SLOMIX_ETMAIN_DIR", "/home/samba/share/etmain"))
@@ -402,6 +411,104 @@ def test_w5b_links_every_w3_entity_to_the_exact_bsp_identity(geometry_index):
         "objective_marker": 96,
         "collision_entity": 1058,
     }
+
+
+def test_w5b_projects_every_typed_stage_effect_to_action_specific_static_candidates(geometry_index):
+    projection_counts = Counter()
+    details = Counter()
+    missing_source_effects = Counter()
+    missing_objectives = []
+    blocked_autospawns = []
+
+    for map_name in geometry_index.map_names:
+        bsp = geometry_index.load_bsp(map_name)
+        linked = link_w3_entity_catalog(
+            build_bsp_entity_identity_index(bsp),
+            extract_entity_catalog(bsp, map_name),
+        )
+        model = load_static_stage(geometry_index, map_name).model
+        assert model is not None
+
+        for node in model.graph.nodes:
+            for effect in node.effects:
+                projection = project_stage_effect(
+                    effect,
+                    source_script_name=node.entity_name,
+                    linked=linked,
+                    objectives=model.objectives,
+                )
+                projection_counts[type(projection).__name__] += 1
+                if projection.source.lookup.resolution is EntityIdentityResolution.MISSING:
+                    missing_source_effects[type(effect).__name__] += 1
+
+                if isinstance(projection, EntityTargetEffectProjection):
+                    details[(type(effect).__name__, projection.target_lookup.resolution.value)] += 1
+                    details[(type(effect).__name__, "w3_references")] += len(projection.selected_w3_references)
+                elif isinstance(projection, GotoMarkerEffectProjection):
+                    details[
+                        (
+                            "gotomarker",
+                            projection.destination_lookup.namespace.value,
+                            projection.destination_lookup.resolution.value,
+                        )
+                    ] += 1
+                    details[("gotomarker", "relative_lookups")] += len(projection.relative_lookups)
+                elif isinstance(projection, AutoSpawnEffectProjection):
+                    details[("autospawn", projection.marker_lookup.resolution.value)] += 1
+                    details[("autospawn", "marker_w3_references")] += len(projection.marker_w3_references)
+                    details[("autospawn", "team_spawn_candidates")] += len(projection.team_spawn_candidates)
+                    if projection.blocked_reason:
+                        blocked_autospawns.append(
+                            (map_name, effect.spawn_description, effect.team_code, projection.blocked_reason)
+                        )
+                elif isinstance(projection, ObjectiveStatusEffectProjection):
+                    details[("objective_status", len(projection.descriptions))] += 1
+                    if not projection.descriptions:
+                        missing_objectives.append((map_name, effect.objective_number, effect.team_code, effect.line))
+                elif isinstance(projection, MainObjectiveEffectProjection):
+                    details[("main_objective", projection.blocked_reason)] += 1
+                elif isinstance(projection, GlobalStageEffectProjection):
+                    details[("global", type(effect).__name__)] += 1
+                elif isinstance(projection, EffectProjectionIssue):
+                    details[("issue", projection.reason)] += 1
+
+    assert projection_counts == {
+        "EntityTargetEffectProjection": 1864,
+        "ObjectiveStatusEffectProjection": 672,
+        "GotoMarkerEffectProjection": 172,
+        "AutoSpawnEffectProjection": 115,
+        "GlobalStageEffectProjection": 64,
+        "MainObjectiveEffectProjection": 42,
+    }
+    assert missing_source_effects == {"EntityStateEffect": 96, "AlertEntityEffect": 1}
+    assert details == {
+        ("AlertEntityEffect", "group"): 64,
+        ("AlertEntityEffect", "unique"): 72,
+        ("AlertEntityEffect", "w3_references"): 1636,
+        ("EntityStateEffect", "group"): 182,
+        ("EntityStateEffect", "missing"): 152,
+        ("EntityStateEffect", "unique"): 1394,
+        ("EntityStateEffect", "w3_references"): 1928,
+        ("autospawn", "first_match"): 5,
+        ("autospawn", "marker_w3_references"): 114,
+        ("autospawn", "missing"): 1,
+        ("autospawn", "team_spawn_candidates"): 7951,
+        ("autospawn", "unique"): 109,
+        ("global", "RoundEndEffect"): 22,
+        ("global", "WinnerEffect"): 42,
+        ("gotomarker", "path_corner", "first_match"): 1,
+        ("gotomarker", "path_corner", "unique"): 93,
+        ("gotomarker", "relative_lookups"): 0,
+        ("gotomarker", "target_name", "unique"): 78,
+        ("main_objective", "legacy_numeric_selector_is_unverified_for_the_live_build"): 42,
+        ("objective_status", 0): 2,
+        ("objective_status", 1): 670,
+    }
+    assert missing_objectives == [
+        ("etl_beach", 7, 0, 53),
+        ("etl_beach", 7, 1, 54),
+    ]
+    assert blocked_autospawns == [("erdenberg_t2", "the Command Post", 1, "no_static_message_candidate")]
 
 
 @pytest.mark.timeout(120)

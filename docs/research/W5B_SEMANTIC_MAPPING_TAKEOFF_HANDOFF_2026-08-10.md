@@ -10,7 +10,7 @@ Branch: `agent/map-geometry-w5b-semantic-mapping`
 Base: `origin/main` at `8cb34d9975d1679417b782b3c05ef09bf008741c`
 
 Last head that completed the five-minute review quiet period:
-`aad7514db1cec5849c45fad63633b11d499e96ae`
+`57b069cf0387e8e3480221c10e423a59614f1739`
 
 Scope: read-only ET/ET:Legacy map assets; no database write, deploy, service restart,
 Lua change, production API integration, metric or rating change
@@ -288,6 +288,44 @@ All linked catalogs deliberately retain `runtime_entity_completeness = unverifie
 An exact static BSP join is not evidence that every raw entity survives the active
 game-mode/custom-entity runtime load path.
 
+### Action-specific effect-projection baseline
+
+The local Phase 3 projector maps all 2,929 typed W5a effects through their verified
+action-specific namespaces. Every projection retains the source script-name lookup;
+an effect in a parsed block whose concrete runtime entity is unproven is not silently
+counted as executable. The result types remain static candidates, not state claims.
+
+| Projection | Count |
+|---|---:|
+| `setstate` / `alertentity` all-target projections | 1,864 |
+| Objective-status description projections | 672 |
+| `gotomarker` first-target projections | 172 |
+| `setautospawn` marker/team-candidate projections | 115 |
+| Winner / round-end global projections | 64 |
+| Main-objective projections | 42 |
+| Unhandled typed effects | 0 |
+
+Measured blocker and provenance inventory:
+
+- 97 projections originate in script blocks with no concrete static BSP script-name
+  identity: 96 `setstate` and one `alertentity` effect across five maps;
+- `setstate` has 1,394 unique targets, 182 legitimate all-match groups and 152
+  statically missing targets; the engine tolerates the last category, but W5b cannot
+  call it a historical no-op while runtime entity completeness is unverified;
+- all 136 `alertentity` effects have static targets: 72 unique and 64 groups;
+- all 172 `gotomarker` destinations resolve under path-corner-first rules; 94 use the
+  registered path-corner namespace, 78 use target-name fallback, and the installed
+  corpus has no `relative` option;
+- 114 of 115 autospawn effects select a static `team_WOLF_objective` marker; the one
+  blocker is `erdenberg_t2` Allies `the Command Post`; five successful lookups retain
+  shadowed message candidates while selecting only the engine-first marker;
+- autospawn publication retains 7,951 per-effect team spawn candidates in aggregate;
+  final spawn selection remains runtime active/ownership/proximity dependent;
+- 670 objective-status effects have exactly one team/number `.objdata` description;
+  `etl_beach` objective 7 lacks both Axis and Allies descriptions;
+- all 42 installed main-objective calls remain blocked `legacy_numeric`; none is
+  rewritten as an entity name.
+
 ## Proposed code boundary
 
 Prefer a new sibling module, tentatively
@@ -403,7 +441,9 @@ case behaviour, class-assigned names and external/unknown identities.
 
 ### Phase 3 - map semantic domains
 
-Status: pending.
+Status: in progress. Every current typed W5a effect has an action-specific static
+projection and measured real-asset inventory. Objective marker/volume relationship
+proof, domain-level blocker classification and final publication remain pending.
 
 #### Objectives
 
@@ -678,27 +718,43 @@ and conditional triggers. Unsupported or malformed instructions are data, not ig
 text. Ordered path execution remains a separate Phase 4 responsibility so a successful
 parse cannot be mistaken for a proven reachable effect.
 
+### 2026-08-10 - effect source identity is part of every semantic projection
+
+A parsed effect is attached to its source script block, and actions such as
+`gotomarker` mutate that concrete source entity. Every projection therefore carries
+the engine-effective all-match source lookup. The measured 97 effects from blocks with
+no static BSP identity remain candidates behind an explicit runtime-completeness gap,
+not executable static transitions.
+
+### 2026-08-10 - autospawn publishes candidates, not a selected spawn point
+
+The engine first selects a major-spawn marker by message, then chooses among active,
+owned player spawns using runtime proximity rules. W5b retains the first static marker
+plus every same-team W3 spawn candidate and labels final selection runtime-unverified.
+Choosing a nearest static spawn here would conflate map possibility with historical
+state.
+
 ## Current handoff state
 
-Current step: finish Phase 1 ordered-runner/control-flow source verification, then use
-the completed identity/W3 foundation for Phase 3 objective, spawn and route effect
-mapping. Phase 2's final public coverage surface is intentionally deferred until the
-real failure modes are known.
+Current step: complete Phase 3 relationship proof and domain blocker classification
+on top of the locally verified action-specific projector. Phase 2's final public
+coverage surface is intentionally deferred until these real failure modes and Phase 4
+control-flow blockers are known.
 
-Next action: define typed action-specific semantic links for `setstate`, `gotomarker`,
-`alertentity`, `setautospawn`, objective status and main objective. Preserve the
-verified all-match versus first-match rules and explicit blockers. Do not collect
-effects into an unordered state claim.
+Next action: determine which objective-description, marker and measured-volume links
+are actually proven by engine keys, then classify the 152 missing state targets, 97
+missing effect-source identities, two missing objective descriptions and one missing
+autospawn marker without using fuzzy text. Do not collect projections into an unordered
+state claim.
 
 Known blockers: none for read-only research and local implementation. Any required
 live-build inspection that changes or restarts a service becomes owner-gated; retain
 the affected semantic result as unverified and continue with independent domains.
 
-Current local verification (Python 3.13.14): 21 W5b semantic unit tests passed; the
-complete 138-test map-geometry unit suite passed; and all 11 opt-in real-asset tests
-passed in 106.94 seconds. The acceptance evidence proves the 583-block identity
-baseline, every one of the 1,606 installed accumulator projections and all 3,688 W3
-identity joins while rechecking the existing W1-W5a baselines. Ruff and
+Current local verification (Python 3.13.14): the complete 147-test map-geometry unit
+suite passed, and all 12 opt-in real-asset tests passed in 130.90 seconds. Current
+acceptance includes all 2,929 typed effect projections and the blocker inventory above
+while rechecking W1-W5a, patch collision and trace fail-closed baselines. Ruff and
 `git diff --check` passed. The full repository suite remains required before merge.
 
 ## Copy-paste handoff prompt

@@ -19,7 +19,22 @@ from typing import Literal, TypeAlias
 
 from website.backend.map_geometry.bsp import BspFile
 from website.backend.map_geometry.entities import MapEntityCatalog
-from website.backend.map_geometry.stage import ScriptAction
+from website.backend.map_geometry.stage import (
+    AlertEntityEffect,
+    AutoSpawnEffect,
+    EntityStateEffect,
+    GotoMarkerEffect,
+    MainObjectiveEffect,
+    MainObjectiveSelectorForm,
+    ObjectiveCatalog,
+    ObjectiveDescription,
+    ObjectiveStatusEffect,
+    ObjectiveTeam,
+    RoundEndEffect,
+    ScriptAction,
+    StageEffect,
+    WinnerEffect,
+)
 
 ETLEGACY_SEMANTICS_COMMIT = "732518efb1c479dcd29b13361f30a2e92df1cf2a"
 
@@ -157,6 +172,7 @@ class W3LinkedIdentityIndex:
 
     map_name: str
     identities: BspEntityIdentityIndex
+    catalog: MapEntityCatalog
     references: tuple[W3EntityReference, ...]
     runtime_entity_completeness: str = "unverified"
 
@@ -168,6 +184,84 @@ class W3LinkedIdentityIndex:
             (reference for reference in self.references if reference.entity_index == entity_index),
             None,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class EffectSourceIdentity:
+    script_name: str
+    lookup: EntityIdentityLookup
+
+
+@dataclass(frozen=True, slots=True)
+class EntityTargetEffectProjection:
+    effect: EntityStateEffect | AlertEntityEffect
+    source: EffectSourceIdentity
+    target_lookup: EntityIdentityLookup
+    selected_w3_references: tuple[W3EntityReference, ...]
+    runtime_entity_completeness: str = "unverified"
+
+
+@dataclass(frozen=True, slots=True)
+class GotoMarkerEffectProjection:
+    effect: GotoMarkerEffect
+    source: EffectSourceIdentity
+    destination_lookup: EntityIdentityLookup
+    destination_w3_references: tuple[W3EntityReference, ...]
+    relative_lookups: tuple[EntityIdentityLookup, ...]
+    relative_w3_references: tuple[tuple[W3EntityReference, ...], ...]
+    runtime_entity_completeness: str = "unverified"
+
+
+@dataclass(frozen=True, slots=True)
+class AutoSpawnEffectProjection:
+    effect: AutoSpawnEffect
+    source: EffectSourceIdentity
+    marker_lookup: EntityIdentityLookup
+    marker_w3_references: tuple[W3EntityReference, ...]
+    team_spawn_candidates: tuple[W3EntityReference, ...]
+    blocked_reason: str | None
+    selection_semantics: str = "runtime_active_ownership_proximity_unverified"
+
+
+@dataclass(frozen=True, slots=True)
+class ObjectiveStatusEffectProjection:
+    effect: ObjectiveStatusEffect
+    source: EffectSourceIdentity
+    descriptions: tuple[ObjectiveDescription, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class MainObjectiveEffectProjection:
+    effect: MainObjectiveEffect
+    source: EffectSourceIdentity
+    target_lookup: EntityIdentityLookup | None
+    selected_w3_references: tuple[W3EntityReference, ...]
+    blocked_reason: str | None
+    runtime_entity_completeness: str = "unverified"
+
+
+@dataclass(frozen=True, slots=True)
+class GlobalStageEffectProjection:
+    effect: WinnerEffect | RoundEndEffect
+    source: EffectSourceIdentity
+
+
+@dataclass(frozen=True, slots=True)
+class EffectProjectionIssue:
+    effect: StageEffect
+    source: EffectSourceIdentity
+    reason: str
+
+
+StageEffectProjection: TypeAlias = (
+    EntityTargetEffectProjection
+    | GotoMarkerEffectProjection
+    | AutoSpawnEffectProjection
+    | ObjectiveStatusEffectProjection
+    | MainObjectiveEffectProjection
+    | GlobalStageEffectProjection
+    | EffectProjectionIssue
+)
 
 
 AccumulatorInstruction: TypeAlias = AccumulatorMutation | AccumulatorAbortGuard | AccumulatorConditionalTrigger
@@ -413,6 +507,136 @@ def project_accumulator_action(action: ScriptAction) -> AccumulatorProjection | 
     raise AssertionError(f"unhandled approved accumulator operation: {operation}")
 
 
+def _effect_source(identities: BspEntityIdentityIndex, script_name: str) -> EffectSourceIdentity:
+    return EffectSourceIdentity(
+        script_name,
+        identities.lookup_all(EntityIdentityNamespace.SCRIPT_NAME, script_name),
+    )
+
+
+def _selected_w3_references(
+    linked: W3LinkedIdentityIndex,
+    lookup: EntityIdentityLookup,
+) -> tuple[W3EntityReference, ...]:
+    selected = set(lookup.selected_entity_indices)
+    return tuple(reference for reference in linked.references if reference.entity_index in selected)
+
+
+def _goto_relative_targets(effect: GotoMarkerEffect) -> tuple[str, ...] | None:
+    targets: list[str] = []
+    for index, argument in enumerate(effect.arguments):
+        if _ascii_fold(argument) != "relative":
+            continue
+        if index + 1 >= len(effect.arguments):
+            return None
+        targets.append(effect.arguments[index + 1])
+    return tuple(targets)
+
+
+def _objective_descriptions(
+    objectives: ObjectiveCatalog,
+    effect: ObjectiveStatusEffect,
+) -> tuple[ObjectiveDescription, ...]:
+    team = ObjectiveTeam.AXIS if effect.team_code == 0 else ObjectiveTeam.ALLIES
+    return tuple(
+        description
+        for description in objectives.objectives
+        if description.team is team and description.number == effect.objective_number
+    )
+
+
+def project_stage_effect(
+    effect: StageEffect,
+    *,
+    source_script_name: str,
+    linked: W3LinkedIdentityIndex,
+    objectives: ObjectiveCatalog,
+) -> StageEffectProjection:
+    """Map one typed W5a effect to exact static candidates without claiming runtime state."""
+
+    identities = linked.identities
+    source = _effect_source(identities, source_script_name)
+
+    if isinstance(effect, (EntityStateEffect, AlertEntityEffect)):
+        lookup = identities.lookup_all(EntityIdentityNamespace.TARGET_NAME, effect.target)
+        return EntityTargetEffectProjection(
+            effect,
+            source,
+            lookup,
+            _selected_w3_references(linked, lookup),
+        )
+
+    if isinstance(effect, GotoMarkerEffect):
+        destination = identities.lookup_gotomarker(effect.target)
+        relative_targets = _goto_relative_targets(effect)
+        if relative_targets is None:
+            return EffectProjectionIssue(effect, source, "gotomarker relative option has no target")
+        relative_lookups = tuple(identities.lookup_gotomarker(target) for target in relative_targets)
+        return GotoMarkerEffectProjection(
+            effect,
+            source,
+            destination,
+            _selected_w3_references(linked, destination),
+            relative_lookups,
+            tuple(_selected_w3_references(linked, lookup) for lookup in relative_lookups),
+        )
+
+    if isinstance(effect, AutoSpawnEffect):
+        marker = identities.lookup_first(EntityIdentityNamespace.MESSAGE, effect.spawn_description)
+        selected_marker = (
+            identities.entities[marker.selected_entity_indices[0]] if marker.selected_entity_indices else None
+        )
+        if selected_marker is None:
+            blocked_reason = "no_static_message_candidate"
+        elif selected_marker.classname != "team_WOLF_objective":
+            blocked_reason = "first_static_message_candidate_is_not_team_WOLF_objective"
+        else:
+            blocked_reason = None
+        team = "AXIS" if effect.team_code == 0 else "ALLIES"
+        spawn_indices = {spawn.entity_index for spawn in linked.catalog.spawn_points if spawn.team == team}
+        return AutoSpawnEffectProjection(
+            effect,
+            source,
+            marker,
+            _selected_w3_references(linked, marker),
+            tuple(reference for reference in linked.references if reference.entity_index in spawn_indices),
+            blocked_reason=blocked_reason,
+        )
+
+    if isinstance(effect, ObjectiveStatusEffect):
+        return ObjectiveStatusEffectProjection(effect, source, _objective_descriptions(objectives, effect))
+
+    if isinstance(effect, MainObjectiveEffect):
+        if effect.selector_form is MainObjectiveSelectorForm.LEGACY_NUMERIC:
+            return MainObjectiveEffectProjection(
+                effect,
+                source,
+                None,
+                (),
+                "legacy_numeric_selector_is_unverified_for_the_live_build",
+            )
+        lookup = identities.lookup_first(EntityIdentityNamespace.TARGET, effect.selector)
+        selected = identities.entities[lookup.selected_entity_indices[0]] if lookup.selected_entity_indices else None
+        if selected is None:
+            blocked_reason = "no_static_target_field_candidate"
+        elif selected.classname != "trigger_objective_info":
+            blocked_reason = "first_static_target_field_candidate_is_not_trigger_objective_info"
+        else:
+            blocked_reason = None
+        return MainObjectiveEffectProjection(
+            effect,
+            source,
+            lookup,
+            _selected_w3_references(linked, lookup),
+            blocked_reason,
+        )
+
+    if isinstance(effect, (WinnerEffect, RoundEndEffect)):
+        return GlobalStageEffectProjection(effect, source)
+
+    return EffectProjectionIssue(effect, source, f"unsupported W5b stage effect type {type(effect).__name__}")
+
+
 def build_entity_identity_index(
     entities: tuple[dict[str, str], ...],
     *,
@@ -472,5 +696,6 @@ def link_w3_entity_catalog(
     return W3LinkedIdentityIndex(
         map_name=catalog.map_name,
         identities=identities,
+        catalog=catalog,
         references=tuple(sorted(references, key=lambda reference: reference.entity_index)),
     )
