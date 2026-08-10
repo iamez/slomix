@@ -3709,6 +3709,10 @@ const COMBAT_HEATMAP_RGB = {
     alliesLine: '96, 165, 250',
 };
 
+// Bumped at every renderCombatHeatmap() call; in-flight renders re-check it
+// after each await and bail when a newer call has taken over the canvas.
+let combatHeatmapRenderSeq = 0;
+
 function updateCombatHeatmapLegend(perspective) {
     const el = document.getElementById('combat-heatmap-legend');
     if (!el) return;
@@ -3726,6 +3730,16 @@ function updateCombatHeatmapLegend(perspective) {
 }
 
 async function renderCombatHeatmap(mapName, perspective) {
+    // Monotonic render token: rapid perspective/map switches can resolve
+    // out of order, letting a stale response repaint a canvas the legend
+    // (updated synchronously below) no longer describes. Each await below
+    // is followed by a staleness check before anything touches the canvas.
+    // Bumped BEFORE the early returns so that a call with a cleared map
+    // (scope reset -> mapName '') still invalidates any render in flight —
+    // otherwise the old render would pass its checks and paint the previous
+    // map's data under the new scope. (CodeRabbit finding on #626, deferred
+    // there as pre-existing; early-return ordering from #631 review.)
+    const seq = ++combatHeatmapRenderSeq;
     if (!mapName) return;
     const canvas = document.getElementById('combat-heatmap-canvas');
     if (!canvas) return;
@@ -3754,6 +3768,19 @@ async function renderCombatHeatmap(mapName, perspective) {
         console.warn('Proximity heatmap fetch failed:', err);
         return;
     }
+    if (seq !== combatHeatmapRenderSeq) return; // a newer render owns the canvas
+
+    // Load every remaining async asset BEFORE the canvas is touched: a stale
+    // render that cleared the canvas first and bailed at a later check would
+    // leave it blank until the newer render's own fetches finish (or forever,
+    // if one of them hangs). Only the final surviving render below may
+    // resize/clear/paint — all of that is synchronous, so no interleaving.
+    await ensureMapTransformConfig();
+    if (seq !== combatHeatmapRenderSeq) return; // stale after transform config load
+    const transform = getMapTransformEntry(mapName);
+    const worldBounds = getWorldBounds(transform);
+    const mapImage = await preloadMapImage(transform?.image || null);
+    if (seq !== combatHeatmapRenderSeq) return; // stale after image load
 
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
@@ -3767,10 +3794,6 @@ async function renderCombatHeatmap(mapName, perspective) {
     // Map image underlay — matches `renderHeatmap()` pattern for
     // proximity-heatmap so the v5.2 combat panel no longer renders on
     // an abstract dark canvas disconnected from the actual map.
-    await ensureMapTransformConfig();
-    const transform = getMapTransformEntry(mapName);
-    const worldBounds = getWorldBounds(transform);
-    const mapImage = await preloadMapImage(transform?.image || null);
     if (mapImage) {
         ctx.save();
         ctx.globalAlpha = 0.28;
