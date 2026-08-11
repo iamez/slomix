@@ -1,14 +1,17 @@
 """W5b source-ordered control-program projection contracts."""
 
 from dataclasses import replace
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from website.backend.map_geometry.entities import MapEntityCatalog
+from website.backend.map_geometry.pk3_index import MapAssetKind, MapAssetProvider
 from website.backend.map_geometry.stage import (
     ObjectiveCatalog,
     ScriptAction,
+    StaticStageModel,
     compile_static_stage_graph,
     parse_map_script,
 )
@@ -43,6 +46,30 @@ def _action(command, *arguments):
     return ScriptAction(command, arguments, "", 1)
 
 
+def _asset_provider(kind: MapAssetKind) -> MapAssetProvider:
+    return MapAssetProvider(
+        "test",
+        kind,
+        Path("/assets/test.pk3"),
+        f"maps/test.{kind.value}",
+        0,
+        0,
+        0,
+        "0" * 64,
+    )
+
+
+def _stage_model(script) -> StaticStageModel:
+    return StaticStageModel(
+        "test",
+        ObjectiveCatalog((), (), ()),
+        script,
+        compile_static_stage_graph(script, source="maps/test.script"),
+        _asset_provider(MapAssetKind.SCRIPT),
+        _asset_provider(MapAssetKind.OBJDATA),
+    )
+
+
 def _model_and_linked():
     script = parse_map_script(
         b"""
@@ -70,13 +97,7 @@ def _model_and_linked():
         """,
         source="maps/test.script",
     )
-    graph = compile_static_stage_graph(script, source="maps/test.script")
-    model = SimpleNamespace(
-        map_name="test",
-        script=script,
-        graph=graph,
-        objectives=ObjectiveCatalog((), (), ()),
-    )
+    model = _stage_model(script)
     identities = build_entity_identity_index(
         (
             {"classname": "script_multiplayer"},
@@ -91,12 +112,7 @@ def _model_and_linked():
 
 def _programs(raw_script, raw_entities=None):
     script = parse_map_script(raw_script, source="maps/test.script")
-    model = SimpleNamespace(
-        map_name="test",
-        script=script,
-        graph=compile_static_stage_graph(script, source="maps/test.script"),
-        objectives=ObjectiveCatalog((), (), ()),
-    )
+    model = _stage_model(script)
     identities = build_entity_identity_index(
         raw_entities
         or (
@@ -309,6 +325,21 @@ def test_bit_constraints_find_candidates_across_the_signed_zero_boundary():
     assert bit_clear.contains(-2)
     assert bit_clear.contains(0)
     assert not bit_clear.contains(1)
+
+
+@pytest.mark.parametrize(
+    ("operation", "operand"),
+    (
+        (AccumulatorOperation.ABORT_IF_EQUAL, 2**31),
+        (AccumulatorOperation.ABORT_IF_BIT_SET, -1),
+        (AccumulatorOperation.ABORT_IF_BIT_SET, 31),
+    ),
+)
+def test_guard_refinement_rejects_out_of_contract_operands(operation, operand):
+    domain = SymbolicIntegerDomain()
+
+    assert domain.refine_guard(operation, operand, predicate_result=True) is None
+    assert domain.refine_guard(operation, operand, predicate_result=False) is None
 
 
 @pytest.mark.parametrize(
@@ -584,6 +615,7 @@ def test_non_exact_increment_fails_closed_until_symbolic_arithmetic_is_supported
         initial_state=SymbolicAccumulatorState.unknown(),
     )
 
+    assert len(paths) == 1
     assert paths[0].completion is SymbolicPathCompletion.BLOCKED
     assert paths[0].blocker_reason == "non_exact_accumulator_mutation"
     assert paths[0].blocker_line == 6
@@ -609,9 +641,116 @@ def test_signed_accumulator_overflow_fails_closed():
         initial_state=SymbolicAccumulatorState.zeroed(),
     )
 
+    assert len(paths) == 1
     assert paths[0].completion is SymbolicPathCompletion.BLOCKED
     assert paths[0].blocker_reason == "signed_accumulator_overflow_unverified"
     assert paths[0].blocker_line == 7
+
+
+def test_invalid_typed_bit_mutation_fails_closed_instead_of_raising():
+    program = _programs(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                accum 0 bitset 30
+            }
+        }
+        """
+    )[0]
+    invalid = replace(program.instructions[0], operand=31)
+    program = replace(program, instructions=(invalid,))
+
+    paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].completion is SymbolicPathCompletion.BLOCKED
+    assert paths[0].blocker_reason == "invalid_accumulator_bit_index"
+    assert paths[0].blocker_line == 6
+
+
+def test_invalid_typed_guard_operand_fails_closed_instead_of_disappearing():
+    program = _programs(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                accum 0 abort_if_bitset 30
+            }
+        }
+        """
+    )[0]
+    invalid = replace(program.instructions[0], operand=31)
+    program = replace(program, instructions=(invalid,))
+
+    paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].completion is SymbolicPathCompletion.BLOCKED
+    assert paths[0].blocker_reason == "invalid_accumulator_guard_operand"
+    assert paths[0].blocker_line == 6
+
+
+def test_symbolic_path_budget_publishes_one_fail_closed_frontier():
+    program = _programs(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                wait 1
+                wait 1
+                wait 1
+                setstate gate invisible
+            }
+        }
+        """
+    )[0]
+
+    paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+        max_paths=4,
+    )
+
+    assert len(paths) <= 4
+    frontier = next(path for path in paths if path.blocker_reason == "symbolic_path_budget_exhausted")
+    assert frontier.completion is SymbolicPathCompletion.BLOCKED
+    assert frontier.blocker_line == 8
+
+
+@pytest.mark.parametrize("max_paths", (0, -1))
+def test_symbolic_path_budget_must_be_positive(max_paths):
+    program = _programs(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                wait 1
+            }
+        }
+        """
+    )[0]
+
+    with pytest.raises(ValueError, match="max_paths must be positive"):
+        walk_symbolic_event_program(
+            program,
+            source_entity_index=0,
+            initial_state=SymbolicAccumulatorState.zeroed(),
+            max_paths=max_paths,
+        )
 
 
 def test_walker_rejects_a_concrete_entity_outside_the_script_group():
