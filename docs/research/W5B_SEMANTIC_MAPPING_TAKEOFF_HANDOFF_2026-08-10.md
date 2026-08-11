@@ -4,10 +4,9 @@ Date: 2026-08-10
 
 Last updated: 2026-08-11
 
-Status: implementation in progress; engine identity, Phase 3 dispositions and the
-Phase 4 lossless ordered-program, override boundary and runtime-control classification
-are locally and externally reviewed; the single-event symbolic walker is local and
-awaiting exact-head external review
+Status: implementation in progress. Engine identity, Phase 3 dispositions, the Phase 4
+lossless ordered program, the override boundary, runtime-control classification and the
+bounded single-event symbolic walker are locally and externally reviewed.
 
 Branch: `agent/map-geometry-w5b-semantic-mapping`
 
@@ -15,7 +14,7 @@ Base: `origin/main` at `8cb34d9975d1679417b782b3c05ef09bf008741c`
 
 Last substantive implementation head that completed the five-minute review quiet
 period and final refresh:
-`b4e6da2a2fceba2ee262d6fa6c7282900246a448`
+`9eb5975838d7bd0b990c719620c265d6df1cff5c`
 
 The documentation-only commit that advances this pointer cannot contain its own Git
 hash. Query PR #633 before relying on this historical checkpoint as current review
@@ -445,7 +444,7 @@ effect is retained but does not block later instructions in the same event pass.
 
 ### Single-event symbolic-walker checkpoint
 
-The current unreviewed Phase 4 increment walks one concrete source entity through one
+The reviewed Phase 4 increment walks one concrete source entity through one
 ordered event program. It requires the caller to provide an explicit initial state:
 `zeroed()` is valid at verified level initialization, while a standalone event whose
 history is unknown must use `unknown()` or a state propagated by the future graph
@@ -1089,11 +1088,12 @@ real-asset baseline.
 Ruff and `git diff --check` passed. The full repository suite remains required before
 merge.
 
-The refined runtime-control implementation head `b4e6da2a` and its documentation fix
-`006f11ff` completed green exact-head CI, external review, the five-minute quiet period
-and a separate final refresh on 2026-08-11. The symbolic-walker changes described above
-are not part of that reviewed checkpoint yet and must complete their own exact-head
-review cycle.
+The bounded symbolic-walker implementation through `9eb59758` completed all 13
+exact-head CI checks, incremental external review, zero unresolved threads, the
+five-minute quiet period and a separate final refresh on 2026-08-11. Local, remote and
+PR head SHAs matched during that refresh. This documentation-only checkpoint advances
+the historical reviewed-head pointer; later implementation must still repeat the same
+closure cycle.
 
 ## Copy-paste handoff prompt
 
