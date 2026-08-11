@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 from collections import Counter
 from pathlib import Path
@@ -163,6 +165,21 @@ def test_every_indexed_bsp_map_has_unambiguous_stage_inputs(geometry_index):
     for map_name in geometry_index.map_names:
         assert geometry_index.resolve_asset(map_name, "script").status == "resolved", map_name
         assert geometry_index.resolve_asset(map_name, "objdata").status == "resolved", map_name
+
+
+def test_w5b_asset_evidence_manifest_is_content_sensitive_and_deterministic(geometry_index):
+    manifest = geometry_index.manifest(geometry_index.map_names)
+    canonical_maps = json.dumps(
+        manifest["maps"],
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode()
+
+    assert len(manifest["maps"]) == 20
+    assert hashlib.sha256(canonical_maps).hexdigest() == (
+        "86ddd0ec23b3c6120136195af34aa633ad249eb358ea0fb6cd6e490dd81b220d"
+    )
 
 
 def test_w5a_parses_every_resolved_stage_asset_and_exposes_partial_static_coverage(geometry_index):
