@@ -21,7 +21,7 @@ from scripts.backfill_gametimes import (
     [
         ("", "NORMAL"),
         ("unknown", "NORMAL"),
-        ("objective", "NORMAL"),
+        ("objective", "OBJECTIVE"),
         ("time_expired", "NORMAL"),
         ("timelimit", "NORMAL"),
         ("time limit", "NORMAL"),
@@ -96,7 +96,7 @@ def test_end_reason_display_prioritizes_terminal_end_reason(
 @pytest.mark.parametrize(
     ("winner_raw", "defender_raw", "end_reason_raw", "expected_winner", "expected_defender", "expected_end"),
     [
-        ("allies", "axis", "objective", 2, 1, "NORMAL"),
+        ("allies", "axis", "objective", 2, 1, "OBJECTIVE"),
         ("9", "n/a", "mapchange", 0, 0, "MAP_CHANGE"),
         ("2", "1", "forfeit", 2, 1, "SURRENDER"),
         ("unknown", "unknown", "unexpected_value", 0, 0, "NORMAL"),
