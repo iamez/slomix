@@ -725,7 +725,9 @@ def test_symbolic_path_budget_publishes_one_fail_closed_frontier():
     )
 
     assert len(paths) <= 4
-    frontier = next(path for path in paths if path.blocker_reason == "symbolic_path_budget_exhausted")
+    frontiers = [path for path in paths if path.blocker_reason == "symbolic_path_budget_exhausted"]
+    assert len(frontiers) == 1
+    frontier = frontiers[0]
     assert frontier.completion is SymbolicPathCompletion.BLOCKED
     assert frontier.blocker_line == 8
 
