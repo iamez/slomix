@@ -6,7 +6,8 @@ Last updated: 2026-08-11
 
 Status: implementation in progress; engine identity, Phase 3 dispositions and the
 Phase 4 lossless ordered-program, override boundary and runtime-control classification
-are locally and externally reviewed
+are locally and externally reviewed; the single-event symbolic walker is local and
+awaiting exact-head external review
 
 Branch: `agent/map-geometry-w5b-semantic-mapping`
 
@@ -14,7 +15,7 @@ Base: `origin/main` at `8cb34d9975d1679417b782b3c05ef09bf008741c`
 
 Last substantive implementation head that completed the five-minute review quiet
 period and final refresh:
-`b6d1bc5ae63a4c46c6c5d14d1fc7abbaeeeb0d52`
+`b4e6da2a2fceba2ee262d6fa6c7282900246a448`
 
 The documentation-only commit that advances this pointer cannot contain its own Git
 hash. Query PR #633 before relying on this historical checkpoint as current review
@@ -442,6 +443,40 @@ parse and dispatch a new `spawn` event on the same entity. All 91 installed `rem
 actions return `qtrue` and schedule source removal for the next frame, so the lifecycle
 effect is retained but does not block later instructions in the same event pass.
 
+### Single-event symbolic-walker checkpoint
+
+The current unreviewed Phase 4 increment walks one concrete source entity through one
+ordered event program. It requires the caller to provide an explicit initial state:
+`zeroed()` is valid at verified level initialization, while a standalone event whose
+history is unknown must use `unknown()` or a state propagated by the future graph
+walker. There is deliberately no zero-valued default that could fabricate reachability
+for a later runtime trigger.
+
+The walker now:
+
+- stores entity accumulators by concrete BSP entity index and global accumulators in a
+  shared level scope;
+- executes deterministic `set`, `inc`, `bitset` and `bitreset` mutations only when the
+  resulting signed 32-bit value is proven, otherwise publishing a blocker;
+- splits every one of the six installed abort predicates into satisfiable true and
+  false domains, removes contradictory paths and suppresses later effects on the abort
+  branch;
+- retains ordered typed effects and their source identity on every surviving path;
+- preserves both immediate and delayed `wait` continuations because ET:Legacy skips
+  waits during sudden death, while `resetscript` and `halt` retain only their later-pass
+  continuation;
+- preserves both possible prior-motion and immediate paths for a non-waiting
+  `followspline`, delayed completion for waiting movement/rotation, and success plus an
+  explicit spawn-failure frontier for `create`;
+- records a machine-readable blocker reason and source line instead of stepping over a
+  nested trigger, death dispatch, script-context replacement or malformed projection.
+
+This is not yet a map possibility graph. Plain and conditional nested triggers remain
+blocked on their dispatching branches; `kill`, same-entity event replacement and the 21
+cycle frontiers are also intentionally unresolved. No real-asset reachability count is
+published until those transitions are modeled and the Phase 5 analyzer can distinguish
+a supported path from an explicit frontier.
+
 The resolved plain-trigger graph has 21 cyclic strongly connected components across
 six maps. Every current component is a one-node self-loop and none of those 21 nodes
 contains a direct stage effect. This does not make the cycles irrelevant: an iteration
@@ -520,9 +555,9 @@ without relying on chat history.
 
 ### Phase 1 - verify engine identity and execution semantics
 
-Status: in progress. Identity/action namespaces and installed accumulator operations
-are source-verified; typed accumulator projection fixtures are complete. Ordered
-runner, nested-event, wait/reset and cycle fixtures remain before Phase 4 execution.
+Status: in progress. Identity/action namespaces, installed accumulator operations,
+ordered runner and the current-pass behavior of wait/reset/halt are source-verified.
+Nested-event restoration, death dispatch and bounded cycle fixtures remain.
 
 Read current ET:Legacy primary source and pin exact source URLs/commit hashes for:
 
@@ -607,8 +642,9 @@ machine-readable reason why it does not.
 
 Status: in progress. Every eligible action is retained in source order as a typed
 stage, accumulator, trigger, barrier or source-classified runtime-control instruction.
-Guard splitting, accumulator state, nested dispatch and bounded cycle traversal remain
-pending; no path reachability is published yet.
+Single-event accumulator state, guard splitting, effect suppression and temporal
+continuations are implemented locally. Nested dispatch and bounded cycle traversal
+remain pending; no map-level path reachability is published yet.
 
 1. Represent per-entity accumulator and global-accumulator state symbolically.
 2. Apply mutations in script action order.
@@ -821,7 +857,7 @@ changes, Python runtime replacement, force-push/history deletion and secret rota
 - [x] Commit and push the docs-only takeoff.
 - [x] Open a draft PR.
 - [ ] Complete Phase 1 execution/control-flow contract fixtures; accumulator source
-  projection is complete.
+  projection and single-event barrier fixtures are complete.
 - [ ] Complete Phase 2 publication; generic identity index and exact W3 typed joins
   are complete.
 - [x] Complete Phase 3 objective/spawn/route semantic mappings.
@@ -971,25 +1007,50 @@ because the callback returns `qtrue` before the next-frame deletion. The real co
 moves exactly nine instructions from the spawn-context blocker to immediate continue;
 no installed semantic action is erased.
 
+### 2026-08-11 - require explicit entry state and split runtime-dependent waits
+
+A one-event interpreter cannot assume that an arbitrary event begins at level
+initialization. Its API therefore requires an explicit accumulator state. This costs a
+little call-site verbosity, but prevents every later trigger event from silently
+starting with zero local and global buffers. Entity-scoped values are keyed by the
+concrete selected source index; global values remain shared in the propagated state.
+
+All six supported abort predicates refine a signed 32-bit symbolic domain and retain
+only satisfiable branches. Non-exact arithmetic and unverified overflow stop at an
+explicit line-numbered frontier. `wait` publishes immediate and delayed continuations
+because the pinned callback returns immediately during sudden death, while
+`resetscript` and `halt` return false on their first pass and only continue later.
+Nested trigger/death dispatch is deliberately still a blocker rather than an assumed
+no-op; the next increment must model caller restoration and cycles before any corpus
+reachability denominator is meaningful.
+
 ## Current handoff state
 
-Current step: implement Phase 4 guard splitting and symbolic accumulator state over
-the now lossless ordered program. Fixtures cover all six special runtime control
-families and distinguish immediate current-pass continuation from deferred lifecycle
-effects. Phase 2's final public coverage surface remains intentionally deferred until
-these control-flow blockers are modeled.
+Current step: extend the local Phase 4 single-event walker into source-resolved nested
+dispatch. Guard splitting, explicit local/global accumulator state, effect suppression,
+runtime-dependent wait paths, temporal continuation, `create` failure and line-numbered
+fail-closed frontiers are implemented. Phase 2's final public coverage surface remains
+intentionally deferred until nested control-flow blockers are modeled.
 
-Next action: freeze fixtures for true and false abort branches, local versus global
-state, conditional and plain nested triggers, same-entity replacement, deferred source
-removal and the 21 cycle frontiers before writing the path walker.
+Next action: resolve plain and conditional trigger targets to concrete selected
+entities and event programs, then model ET:Legacy caller restoration. A different
+target lets the caller continue even if the callee pauses; a same-entity caller resumes
+only when the replacement completes synchronously. Carry global state across targets,
+keep local state keyed by source index, and publish a bounded cycle frontier for the 21
+self-loop components instead of iterating forever or exactly once. Apply the same
+contract to the 13 `kill` death-event dispatches only after their target lookup is
+verified.
 
 Known blockers: none for read-only research and local implementation. Any required
 live-build inspection that changes or restarts a service becomes owner-gated; retain
 the affected semantic result as unverified and continue with independent domains.
 
-Current local verification (Python 3.13.14): the complete 214-test W1/map-geometry
-unit suite passed, and all 13 opt-in real-asset tests passed in 286.38 seconds under
-repo-wide coverage tracing. The current acceptance proves no `.ent` override exists
+Current local verification (Python 3.13.14): the expanded 242-test W1/map-geometry
+unit suite passed without coverage tracing. The focused single-event module contributes
+48 passing tests. The real-asset ordered-program projection passed independently in
+24.58 seconds and still covers all 2,153 event programs. On the preceding reviewed
+head, all 13 opt-in real-asset tests passed in 286.38 seconds under repo-wide coverage
+tracing. The current acceptance proves no `.ent` override exists
 for any of the 20 indexed BSP maps, includes
 all 2,929 typed effect projections and the blocker inventory above, and rechecks W1-W5a,
 patch collision and trace fail-closed baselines. An initial full-asset run exposed two
@@ -1007,11 +1068,11 @@ real-asset baseline.
 Ruff and `git diff --check` passed. The full repository suite remains required before
 merge.
 
-The runtime-control implementation head `b6d1bc5a` completed green exact-head CI,
-incremental external review with no new findings, a five-minute quiet period and a
-separate final refresh on 2026-08-11. The following documentation-only checkpoint
-advances that historical pointer and must complete its own review cycle before later
-implementation builds on it.
+The refined runtime-control implementation head `b4e6da2a` and its documentation fix
+`006f11ff` completed green exact-head CI, external review, the five-minute quiet period
+and a separate final refresh on 2026-08-11. The symbolic-walker changes described above
+are not part of that reviewed checkpoint yet and must complete their own exact-head
+review cycle.
 
 ## Copy-paste handoff prompt
 
