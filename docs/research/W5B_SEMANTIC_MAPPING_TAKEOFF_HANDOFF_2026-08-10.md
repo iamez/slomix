@@ -6,7 +6,9 @@ Last updated: 2026-08-11
 
 Status: implementation in progress. Engine identity, Phase 3 dispositions, the Phase 4
 lossless ordered program, the override boundary, runtime-control classification and the
-bounded single-event symbolic walker are locally and externally reviewed.
+bounded single-event symbolic walker are locally and externally reviewed. The isolated
+nested-dispatch resolver is implemented and locally measured, but has not yet completed
+exact-head external review.
 
 Branch: `agent/map-geometry-w5b-semantic-mapping`
 
@@ -493,6 +495,59 @@ The projection context therefore retains the override identities while publishin
 W3 references and marking every affected entity-index surface
 `unproven_identity_override`. Ordinary mismatched BSP sources still fail closed.
 
+### Nested-dispatch resolution checkpoint
+
+The next isolated Phase 4 increment builds an index over the ordered programs and
+resolves one nested trigger without executing the target program. This separation is
+intentional: dispatch identity can be proven independently, while caller replacement,
+temporal continuation and cross-entity interleaving still need different executor
+rules.
+
+The resolver now:
+
+- accepts only a program and instruction created by the same ordered-program index;
+- applies ET's first matching named-or-wildcard trigger-handler rule;
+- resolves `trigger self` to only the concrete caller, even when several entities
+  share its script name;
+- expands script-name dispatch to every selected concrete target entity in engine
+  order;
+- retains `activator` as no-op and `global`/`player` as runtime-dependent dispatch;
+- distinguishes a missing handler, an opaque handler and a valid handler whose static
+  target identity is missing;
+- prevents a later, engine-unreachable duplicate script block from making a valid
+  first block appear opaque.
+
+Read-only acceptance across all 20 installed indexed maps reports:
+
+| Resolution level | Plain trigger | Conditional trigger |
+|---|---:|---:|
+| Source instructions resolved | 1,291 | 299 |
+| Source instructions with missing source identity | 10 | 0 |
+| Source instructions with target identity missing | 3 | 0 |
+| Source instructions with missing handler | 11 | 0 |
+| Concrete source dispatches resolved | 1,588 | 299 |
+| Concrete resolved source-target pairs | 1,937 | 299 |
+| Resolved pairs targeting the concrete caller itself | 669 | 289 |
+
+Every conditional dispatch currently has one concrete target. Plain concrete
+dispatches select one target 1,447 times, two targets 13 times, three targets 104
+times, four targets 15 times, six targets twice, eight targets six times and 32
+targets once. These are dispatch-group measurements, not path counts or reachable
+effect counts.
+
+The 1,304 graph-resolved plain instructions split into 1,291 instructions resolved
+from a concrete source, ten whose source block has no static identity and three whose
+target handler has no static identity. The existing 11 missing-handler instructions
+remain explicit. No missing row is converted into a no-op.
+
+This checkpoint does **not** invoke a target program, merge its accumulator state or
+claim nested effects reachable. Same-entity replacement can restore the caller only
+after synchronous callee completion. A different-entity callee may pause while the
+caller continues, so its future global/local mutations can interleave with later
+caller actions. Treating either case as a generic recursive function call would create
+false ordering. The next executor increment must model those cases separately or
+return an explicit concurrency frontier.
+
 ## Proposed code boundary
 
 Prefer a new sibling module, tentatively
@@ -647,8 +702,9 @@ machine-readable reason why it does not.
 Status: in progress. Every eligible action is retained in source order as a typed
 stage, accumulator, trigger, barrier or source-classified runtime-control instruction.
 Single-event accumulator state, guard splitting, effect suppression and temporal
-continuations are implemented locally. Nested dispatch and bounded cycle traversal
-remain pending; no map-level path reachability is published yet.
+continuations are implemented locally. Static nested dispatch identity is implemented
+and locally measured. Nested execution and bounded cycle/concurrency traversal remain
+pending; no map-level path reachability is published yet.
 
 1. Represent per-entity accumulator and global-accumulator state symbolically.
 2. Apply mutations in script action order.
@@ -865,6 +921,8 @@ changes, Python runtime replacement, force-push/history deletion and secret rota
 - [ ] Complete Phase 2 publication; generic identity index and exact W3 typed joins
   are complete.
 - [x] Complete Phase 3 objective/spawn/route semantic mappings.
+- [x] Resolve nested trigger handlers and concrete static target groups without
+  executing them.
 - [ ] Complete Phase 4 accumulator and ordered-possibility modelling.
 - [ ] Complete Phase 5 static coverage analyzer and evidence report.
 - [ ] Complete all verification and review closure gates.
@@ -1044,19 +1102,36 @@ proving both the projector and walker fail closed. The same review added a 4,096
 default budget and an explicit smaller-budget regression, preventing repeated waits or
 movement alternatives from growing the public analysis without bound.
 
+### 2026-08-11 - resolve nested dispatch before executing nested programs
+
+Nested trigger identity is now a separate deterministic projection. This makes the
+engine's first-handler lookup, wildcard behavior, concrete `self` identity and
+all-target script-name groups testable without introducing recursive execution at the
+same time. The real corpus contains 669 plain and 289 conditional source-target pairs
+that return to the same concrete entity, so treating every nested dispatch as an
+ordinary call would be a material semantic error rather than a rare edge case.
+
+Execution remains a later increment. A synchronously completing same-entity callee can
+restore the caller, while a temporal replacement discards that caller. A temporal
+different-entity callee can coexist with the continuing caller and mutate shared
+global state later. The first executor version must preserve this distinction and
+publish a bounded cycle or concurrency frontier whenever it cannot prove an ordering.
+
 ## Current handoff state
 
-Current step: extend the local Phase 4 single-event walker into source-resolved nested
-dispatch. Guard splitting, explicit local/global accumulator state, effect suppression,
-runtime-dependent wait paths, temporal continuation, `create` failure and line-numbered
-fail-closed frontiers are implemented. Phase 2's final public coverage surface remains
+Current step: finish exact-head review closure for the isolated nested-dispatch
+resolver. Guard splitting, explicit local/global accumulator state, effect suppression,
+runtime-dependent wait paths, temporal continuation, `create` failure, line-numbered
+fail-closed frontiers and concrete nested target selection are implemented. Nested
+programs are not yet executed. Phase 2's final public coverage surface remains
 intentionally deferred until nested control-flow blockers are modeled.
 
-Next action: resolve plain and conditional trigger targets to concrete selected
-entities and event programs, then model ET:Legacy caller restoration. A different
-target lets the caller continue even if the callee pauses; a same-entity caller resumes
-only when the replacement completes synchronously. Carry global state across targets,
-keep local state keyed by source index, and publish a bounded cycle frontier for the 21
+Next action after resolver review: integrate resolved targets into the symbolic
+executor in a bounded increment. Model same-entity synchronous restoration versus
+temporal replacement first. For different entities, continue the caller only when the
+callee result can be represented without inventing a temporal ordering; otherwise
+publish an explicit concurrency frontier. Carry global state across targets, keep
+local state keyed by source index, and publish a bounded cycle frontier for the 21
 self-loop components instead of iterating forever or exactly once. Apply the same
 contract to the 13 `kill` death-event dispatches only after their target lookup is
 verified.
@@ -1065,12 +1140,14 @@ Known blockers: none for read-only research and local implementation. Any requir
 live-build inspection that changes or restarts a service becomes owner-gated; retain
 the affected semantic result as unverified and continue with independent domains.
 
-Current local verification (Python 3.13.14): the expanded 250-test W1/map-geometry
-unit suite passed without coverage tracing. The focused single-event module contributes
-56 passing tests. The real-asset ordered-program projection passed independently in
-27.68 seconds and still covers all 2,153 event programs. On the preceding reviewed
-head, all 13 opt-in real-asset tests passed in 286.38 seconds under repo-wide coverage
-tracing. The current acceptance proves no `.ent` override exists
+Current local verification (Python 3.13.14): the expanded 260-test W1/map-geometry
+unit suite passed without coverage tracing. The focused single-event/resolver module
+contributes 66 passing tests. All 14 current opt-in real-asset tests passed in 193.48
+seconds without coverage tracing. The nested-resolver acceptance test passed alone in
+24.40 seconds and covers all 2,153 event programs plus the exact dispatch denominators
+above. On the preceding reviewed head, all 13 then-existing opt-in real-asset tests
+passed in 286.38 seconds under repo-wide coverage tracing. The current acceptance
+proves no `.ent` override exists
 for any of the 20 indexed BSP maps, includes
 all 2,929 typed effect projections and the blocker inventory above, and rechecks W1-W5a,
 patch collision and trace fail-closed baselines. An initial full-asset run exposed two

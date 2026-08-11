@@ -22,15 +22,19 @@ from website.backend.map_geometry.stage_possibilities import (
     RuntimeActionInstruction,
     StageEffectInstruction,
     SymbolicAccumulatorState,
+    SymbolicDispatchResolution,
     SymbolicIntegerDomain,
     SymbolicPathCompletion,
     TriggerInstruction,
+    build_ordered_stage_program_index,
     project_ordered_stage_programs,
+    resolve_symbolic_nested_dispatch,
     runtime_action_control_disposition,
     walk_symbolic_event_program,
 )
 from website.backend.map_geometry.stage_semantics import (
     AccumulatorAbortGuard,
+    AccumulatorConditionalTrigger,
     AccumulatorMutation,
     AccumulatorOperation,
     AccumulatorScope,
@@ -110,7 +114,7 @@ def _model_and_linked():
     return model, link_w3_entity_catalog(identities, catalog)
 
 
-def _programs(raw_script, raw_entities=None):
+def _program_index(raw_script, raw_entities=None):
     script = parse_map_script(raw_script, source="maps/test.script")
     model = _stage_model(script)
     identities = build_entity_identity_index(
@@ -123,7 +127,11 @@ def _programs(raw_script, raw_entities=None):
         source="maps/test.bsp",
     )
     catalog = MapEntityCatalog("test", "maps/test.bsp", (), (), (), ())
-    return project_ordered_stage_programs(model, link_w3_entity_catalog(identities, catalog))
+    return build_ordered_stage_program_index(model, link_w3_entity_catalog(identities, catalog))
+
+
+def _programs(raw_script, raw_entities=None):
+    return _program_index(raw_script, raw_entities).programs
 
 
 def test_projects_event_actions_in_source_order_without_executing_paths():
@@ -225,6 +233,304 @@ def test_only_actual_current_event_blockers_publish_a_blocker_reason():
 
     assert remove.blocker_reason is None
     assert faceangles.blocker_reason == "conditional_temporal_pause"
+
+
+def test_self_dispatch_selects_only_the_concrete_caller_from_a_script_group():
+    index = _program_index(
+        b"""
+        helper
+        {
+            spawn
+            {
+                trigger self go
+            }
+            trigger go
+            {
+                wm_announce nested
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "helper"},
+            {"classname": "script_mover", "scriptname": "helper"},
+        ),
+    )
+    source = index.programs[0]
+    instruction = source.instructions[0]
+    assert isinstance(instruction, TriggerInstruction)
+
+    dispatch = resolve_symbolic_nested_dispatch(index, source, instruction, source_entity_index=1)
+
+    assert dispatch.resolution is SymbolicDispatchResolution.RESOLVED
+    assert dispatch.target_node_id == index.programs[1].node.node_id
+    assert dispatch.target_entity_indices == (1,)
+
+
+def test_conditional_dispatch_uses_first_wildcard_handler_and_all_concrete_targets():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                accum 0 trigger_if_equal 1 helper go
+            }
+        }
+        helper
+        {
+            trigger
+            {
+                wm_announce wildcard
+            }
+            trigger go
+            {
+                wm_announce named
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "helper"},
+            {"classname": "script_mover", "scriptname": "helper"},
+        ),
+    )
+    source = index.programs[0]
+    instruction = source.instructions[0]
+    assert isinstance(instruction, AccumulatorConditionalTrigger)
+
+    dispatch = resolve_symbolic_nested_dispatch(index, source, instruction, source_entity_index=0)
+
+    assert dispatch.resolution is SymbolicDispatchResolution.RESOLVED
+    assert dispatch.target_node_id == index.programs[1].node.node_id
+    assert dispatch.target_entity_indices == (1, 2)
+
+
+def test_nested_dispatch_distinguishes_missing_identity_from_missing_handler():
+    missing_identity = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                accum 0 trigger_if_equal 1 helper go
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                wm_announce nested
+            }
+        }
+        """,
+        raw_entities=({"classname": "script_multiplayer"},),
+    )
+    source = missing_identity.programs[0]
+    instruction = source.instructions[0]
+    assert isinstance(instruction, AccumulatorConditionalTrigger)
+
+    identity_dispatch = resolve_symbolic_nested_dispatch(
+        missing_identity,
+        source,
+        instruction,
+        source_entity_index=0,
+    )
+
+    assert identity_dispatch.resolution is SymbolicDispatchResolution.TARGET_IDENTITY_MISSING
+    assert identity_dispatch.target_node_id == missing_identity.programs[1].node.node_id
+
+    missing_handler = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                accum 0 trigger_if_equal 1 absent go
+            }
+        }
+        """,
+        raw_entities=({"classname": "script_multiplayer"},),
+    )
+    source = missing_handler.programs[0]
+    instruction = source.instructions[0]
+    assert isinstance(instruction, AccumulatorConditionalTrigger)
+
+    handler_dispatch = resolve_symbolic_nested_dispatch(
+        missing_handler,
+        source,
+        instruction,
+        source_entity_index=0,
+    )
+
+    assert handler_dispatch.resolution is SymbolicDispatchResolution.MISSING_HANDLER
+
+
+def test_conditional_dispatch_preserves_an_opaque_handler_boundary():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                accum 0 trigger_if_equal 1 helper go
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                unsupported_action value
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "helper"},
+        ),
+    )
+    source = index.programs[0]
+    instruction = source.instructions[0]
+    assert isinstance(instruction, AccumulatorConditionalTrigger)
+
+    dispatch = resolve_symbolic_nested_dispatch(index, source, instruction, source_entity_index=0)
+
+    assert dispatch.resolution is SymbolicDispatchResolution.OPAQUE_HANDLER
+    assert dispatch.reason == "conditional trigger target is hidden by an opaque script block"
+
+
+def test_shadowed_duplicate_does_not_make_the_first_script_block_opaque():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                accum 0 trigger_if_equal 1 helper go
+            }
+        }
+        helper
+        {
+            trigger other
+            {
+                wm_announce first
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                unsupported_action value
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "helper"},
+        ),
+    )
+    source = index.programs[0]
+    instruction = source.instructions[0]
+    assert isinstance(instruction, AccumulatorConditionalTrigger)
+
+    dispatch = resolve_symbolic_nested_dispatch(index, source, instruction, source_entity_index=0)
+
+    assert dispatch.resolution is SymbolicDispatchResolution.MISSING_HANDLER
+    assert not index.has_opaque_script("helper")
+
+
+@pytest.mark.parametrize(
+    ("target", "expected"),
+    (
+        ("absent", SymbolicDispatchResolution.MISSING_HANDLER),
+        ("global", SymbolicDispatchResolution.RUNTIME_DISPATCH),
+        ("activator", SymbolicDispatchResolution.NO_OP),
+    ),
+)
+def test_plain_dispatch_retains_nonresolved_engine_categories(target, expected):
+    index = _program_index(
+        f"""
+        game_manager
+        {{
+            spawn
+            {{
+                trigger {target} go
+            }}
+        }}
+        """.encode(),
+        raw_entities=({"classname": "script_multiplayer"},),
+    )
+    source = index.programs[0]
+    instruction = source.instructions[0]
+    assert isinstance(instruction, TriggerInstruction)
+
+    dispatch = resolve_symbolic_nested_dispatch(index, source, instruction, source_entity_index=0)
+
+    assert dispatch.resolution is expected
+    assert dispatch.target_entity_indices == ()
+
+
+def test_nested_dispatch_rejects_an_instruction_from_another_program():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper go
+            }
+        }
+        helper
+        {
+            spawn
+            {
+                trigger self go
+            }
+            trigger go
+            {
+                wm_announce nested
+            }
+        }
+        """
+    )
+    source = index.programs[0]
+    foreign_instruction = index.programs[1].instructions[0]
+    assert isinstance(foreign_instruction, TriggerInstruction)
+
+    with pytest.raises(ValueError, match="does not belong"):
+        resolve_symbolic_nested_dispatch(index, source, foreign_instruction, source_entity_index=0)
+
+
+def test_nested_dispatch_rejects_equal_artifacts_from_another_index():
+    raw_script = b"""
+    game_manager
+    {
+        spawn
+        {
+            trigger helper go
+        }
+    }
+    helper
+    {
+        trigger go
+        {
+            wm_announce nested
+        }
+    }
+    """
+    index = _program_index(raw_script)
+    foreign_index = _program_index(raw_script)
+    foreign_program = foreign_index.programs[0]
+    foreign_instruction = foreign_program.instructions[0]
+    assert foreign_program == index.programs[0]
+    assert foreign_instruction == index.programs[0].instructions[0]
+
+    with pytest.raises(ValueError, match="does not belong"):
+        resolve_symbolic_nested_dispatch(
+            index,
+            foreign_program,
+            foreign_instruction,
+            source_entity_index=0,
+        )
 
 
 def test_known_abort_guard_suppresses_a_later_stage_effect():

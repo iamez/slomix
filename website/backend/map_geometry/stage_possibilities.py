@@ -9,10 +9,11 @@ explicit blockers; they are not assumed to be harmless or executable.
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from functools import cache
-from typing import TypeAlias
+from types import MappingProxyType
+from typing import Mapping, TypeAlias
 
 from website.backend.map_geometry.stage import (
     STAGE_EFFECT_COMMANDS,
@@ -20,7 +21,9 @@ from website.backend.map_geometry.stage import (
     ScriptEvent,
     StageEventNode,
     StaticStageModel,
+    TriggerDispatch,
     TriggerEdge,
+    TriggerResolution,
 )
 from website.backend.map_geometry.stage_semantics import (
     MAX_SIGNED_ACCUMULATOR_BIT_INDEX,
@@ -60,6 +63,15 @@ class SymbolicPathCompletion(StrEnum):
     EVENTUAL_COMPLETE = "eventual_complete"
     ABORTED_BY_GUARD = "aborted_by_guard"
     BLOCKED = "blocked"
+
+
+class SymbolicDispatchResolution(StrEnum):
+    RESOLVED = "resolved"
+    MISSING_HANDLER = "missing_handler"
+    OPAQUE_HANDLER = "opaque_handler"
+    RUNTIME_DISPATCH = "runtime_dispatch"
+    NO_OP = "no_op"
+    TARGET_IDENTITY_MISSING = "target_identity_missing"
 
 
 _IMMEDIATE_RUNTIME_ACTIONS = frozenset(
@@ -185,6 +197,235 @@ class OrderedEventProgram:
     event: ScriptEvent
     source: EffectSourceIdentity
     instructions: tuple[OrderedEventInstruction, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class OrderedStageProgramIndex:
+    programs: tuple[OrderedEventProgram, ...]
+    opaque_script_names: frozenset[str]
+    _programs_by_node_id: Mapping[str, OrderedEventProgram] = field(repr=False, compare=False)
+    _trigger_handlers_by_script: Mapping[str, tuple[OrderedEventProgram, ...]] = field(repr=False, compare=False)
+
+    def program(self, node_id: str) -> OrderedEventProgram:
+        try:
+            return self._programs_by_node_id[node_id]
+        except KeyError as exc:
+            raise ValueError(f"stage node {node_id!r} does not map to an ordered program") from exc
+
+    def first_trigger_handler(self, script_name: str, trigger_name: str) -> OrderedEventProgram | None:
+        folded_script = _ascii_fold(script_name)
+        folded_trigger = _ascii_fold(trigger_name)
+        return next(
+            (
+                program
+                for program in self._trigger_handlers_by_script.get(folded_script, ())
+                if (
+                    not program.node.serialized_event_parameters
+                    or _ascii_fold(program.node.serialized_event_parameters) == folded_trigger
+                )
+            ),
+            None,
+        )
+
+    def has_opaque_script(self, script_name: str) -> bool:
+        return _ascii_fold(script_name) in self.opaque_script_names
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicDispatchProjection:
+    source_node_id: str
+    source_entity_index: int
+    target_script_name: str
+    target_trigger: str
+    dispatch: TriggerDispatch
+    resolution: SymbolicDispatchResolution
+    target_node_id: str | None
+    target_entity_indices: tuple[int, ...]
+    line: int
+    reason: str | None = None
+
+
+def _unresolved_dispatch(
+    program: OrderedEventProgram,
+    *,
+    source_entity_index: int,
+    target_script_name: str,
+    target_trigger: str,
+    dispatch: TriggerDispatch,
+    resolution: SymbolicDispatchResolution,
+    line: int,
+    reason: str,
+) -> SymbolicDispatchProjection:
+    return SymbolicDispatchProjection(
+        program.node.node_id,
+        source_entity_index,
+        target_script_name,
+        target_trigger,
+        dispatch,
+        resolution,
+        None,
+        (),
+        line,
+        reason,
+    )
+
+
+def _resolved_dispatch(
+    program: OrderedEventProgram,
+    target: OrderedEventProgram,
+    *,
+    source_entity_index: int,
+    target_script_name: str,
+    target_trigger: str,
+    dispatch: TriggerDispatch,
+    target_entity_indices: tuple[int, ...],
+    line: int,
+) -> SymbolicDispatchProjection:
+    if not target_entity_indices:
+        return SymbolicDispatchProjection(
+            program.node.node_id,
+            source_entity_index,
+            target_script_name,
+            target_trigger,
+            dispatch,
+            SymbolicDispatchResolution.TARGET_IDENTITY_MISSING,
+            target.node.node_id,
+            (),
+            line,
+            "nested trigger handler has no concrete static entity identity",
+        )
+    return SymbolicDispatchProjection(
+        program.node.node_id,
+        source_entity_index,
+        target_script_name,
+        target_trigger,
+        dispatch,
+        SymbolicDispatchResolution.RESOLVED,
+        target.node.node_id,
+        target_entity_indices,
+        line,
+    )
+
+
+def resolve_symbolic_nested_dispatch(
+    index: OrderedStageProgramIndex,
+    program: OrderedEventProgram,
+    instruction: TriggerInstruction | AccumulatorConditionalTrigger,
+    *,
+    source_entity_index: int,
+) -> SymbolicDispatchProjection:
+    """Resolve one nested callback to concrete static entity candidates."""
+
+    if index.program(program.node.node_id) is not program:
+        raise ValueError(f"source program {program.node.node_id!r} does not belong to this ordered-program index")
+    if not any(candidate is instruction for candidate in program.instructions):
+        raise ValueError(f"nested instruction does not belong to source program {program.node.node_id!r}")
+    if source_entity_index not in program.source.lookup.selected_entity_indices:
+        raise ValueError(f"entity {source_entity_index} is not selected by script block {program.node.entity_name!r}")
+
+    if isinstance(instruction, AccumulatorConditionalTrigger):
+        target_script_name = instruction.target_script_name
+        target_trigger = instruction.target_trigger
+        dispatch = TriggerDispatch.SCRIPT_NAME
+        line = instruction.line
+        target = index.first_trigger_handler(target_script_name, target_trigger)
+        if target is None:
+            opaque = index.has_opaque_script(target_script_name)
+            return _unresolved_dispatch(
+                program,
+                source_entity_index=source_entity_index,
+                target_script_name=target_script_name,
+                target_trigger=target_trigger,
+                dispatch=dispatch,
+                resolution=(
+                    SymbolicDispatchResolution.OPAQUE_HANDLER if opaque else SymbolicDispatchResolution.MISSING_HANDLER
+                ),
+                line=line,
+                reason=(
+                    "conditional trigger target is hidden by an opaque script block"
+                    if opaque
+                    else "conditional trigger target has no matching handler"
+                ),
+            )
+        return _resolved_dispatch(
+            program,
+            target,
+            source_entity_index=source_entity_index,
+            target_script_name=target_script_name,
+            target_trigger=target_trigger,
+            dispatch=dispatch,
+            target_entity_indices=target.source.lookup.selected_entity_indices,
+            line=line,
+        )
+
+    edge = instruction.edge
+    if edge.resolution is TriggerResolution.NO_OP:
+        return _unresolved_dispatch(
+            program,
+            source_entity_index=source_entity_index,
+            target_script_name=edge.target_entity,
+            target_trigger=edge.target_trigger,
+            dispatch=edge.dispatch,
+            resolution=SymbolicDispatchResolution.NO_OP,
+            line=edge.line,
+            reason="engine callback performs no nested dispatch for this target kind",
+        )
+    if edge.resolution is TriggerResolution.RUNTIME_DISPATCH:
+        return _unresolved_dispatch(
+            program,
+            source_entity_index=source_entity_index,
+            target_script_name=edge.target_entity,
+            target_trigger=edge.target_trigger,
+            dispatch=edge.dispatch,
+            resolution=SymbolicDispatchResolution.RUNTIME_DISPATCH,
+            line=edge.line,
+            reason="nested target set depends on runtime entities",
+        )
+    if edge.resolution is not TriggerResolution.RESOLVED or len(edge.candidate_node_ids) != 1:
+        opaque = edge.resolution is TriggerResolution.OPAQUE
+        return _unresolved_dispatch(
+            program,
+            source_entity_index=source_entity_index,
+            target_script_name=edge.target_entity,
+            target_trigger=edge.target_trigger,
+            dispatch=edge.dispatch,
+            resolution=(
+                SymbolicDispatchResolution.OPAQUE_HANDLER if opaque else SymbolicDispatchResolution.MISSING_HANDLER
+            ),
+            line=edge.line,
+            reason=(
+                "plain trigger target is hidden by an opaque script block"
+                if opaque
+                else f"plain trigger handler is not uniquely resolved: {edge.resolution.value}"
+            ),
+        )
+
+    target = index.program(edge.candidate_node_ids[0])
+    if edge.dispatch is TriggerDispatch.SELF:
+        if source_entity_index not in target.source.lookup.selected_entity_indices:
+            return _unresolved_dispatch(
+                program,
+                source_entity_index=source_entity_index,
+                target_script_name=edge.target_entity,
+                target_trigger=edge.target_trigger,
+                dispatch=edge.dispatch,
+                resolution=SymbolicDispatchResolution.TARGET_IDENTITY_MISSING,
+                line=edge.line,
+                reason="self trigger handler does not select the concrete caller entity",
+            )
+        target_entity_indices = (source_entity_index,)
+    else:
+        target_entity_indices = target.source.lookup.selected_entity_indices
+    return _resolved_dispatch(
+        program,
+        target,
+        source_entity_index=source_entity_index,
+        target_script_name=edge.target_entity,
+        target_trigger=edge.target_trigger,
+        dispatch=edge.dispatch,
+        target_entity_indices=target_entity_indices,
+        line=edge.line,
+    )
 
 
 _SIGNED_INT_MIN = -(2**31)
@@ -815,3 +1056,31 @@ def project_ordered_stage_programs(
         )
 
     return tuple(programs)
+
+
+def build_ordered_stage_program_index(
+    model: StaticStageModel,
+    linked: W3LinkedIdentityIndex,
+) -> OrderedStageProgramIndex:
+    """Index ordered programs and opaque script names for nested dispatch."""
+
+    programs = project_ordered_stage_programs(model, linked)
+    programs_by_node_id = {program.node.node_id: program for program in programs}
+    if len(programs_by_node_id) != len(programs):
+        raise ValueError("ordered stage programs contain duplicate node ids")
+    trigger_handlers_by_script: dict[str, list[OrderedEventProgram]] = defaultdict(list)
+    for program in programs:
+        if program.node.event_name == "trigger":
+            trigger_handlers_by_script[_ascii_fold(program.node.entity_name)].append(program)
+    projected_names = {_ascii_fold(program.node.entity_name) for program in programs}
+    opaque_names = frozenset(
+        folded
+        for item in model.graph.opaque_entities
+        if (folded := _ascii_fold(item.entity_name)) not in projected_names
+    )
+    return OrderedStageProgramIndex(
+        programs,
+        opaque_names,
+        MappingProxyType(programs_by_node_id),
+        MappingProxyType({name: tuple(handlers) for name, handlers in trigger_handlers_by_script.items()}),
+    )

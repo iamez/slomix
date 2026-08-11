@@ -37,10 +37,13 @@ from website.backend.map_geometry import (
     RuntimeActionInstruction,
     StageLoadStatus,
     SurfaceType,
+    SymbolicDispatchResolution,
     TraceReason,
     TraceStatus,
+    TriggerInstruction,
     TriggerResolution,
     build_indexed_entity_identity_index,
+    build_ordered_stage_program_index,
     compile_bsp_patches,
     extract_entity_catalog,
     link_w3_entity_catalog,
@@ -48,6 +51,7 @@ from website.backend.map_geometry import (
     project_accumulator_action,
     project_ordered_stage_programs,
     project_stage_effect,
+    resolve_symbolic_nested_dispatch,
 )
 
 ETMAIN = Path(os.environ.get("SLOMIX_ETMAIN_DIR", "/home/samba/share/etmain"))
@@ -633,6 +637,82 @@ def test_w5b_projects_every_eligible_action_into_an_ordered_nonexecuted_program(
         RuntimeActionControlDisposition.MAY_DISPATCH_DEATH_EVENT.value: 13,
         RuntimeActionControlDisposition.MAY_STOP_ON_SPAWN_FAILURE.value: 4,
     }
+
+
+def test_w5b_resolves_nested_dispatch_to_concrete_static_targets(geometry_index):
+    instruction_resolutions = Counter()
+    concrete_resolutions = Counter()
+    target_group_sizes = Counter()
+    resolved_pairs = Counter()
+    same_entity_pairs = Counter()
+
+    for map_name in geometry_index.map_names:
+        bsp = geometry_index.load_bsp(map_name)
+        linked = link_w3_entity_catalog(
+            build_indexed_entity_identity_index(geometry_index, map_name, bsp=bsp),
+            extract_entity_catalog(bsp, map_name),
+        )
+        model = load_static_stage(geometry_index, map_name).model
+        assert model is not None
+        index = build_ordered_stage_program_index(model, linked)
+
+        for program in index.programs:
+            nested = tuple(
+                instruction
+                for instruction in program.instructions
+                if isinstance(instruction, (TriggerInstruction, AccumulatorConditionalTrigger))
+            )
+            for instruction in nested:
+                kind = "conditional" if isinstance(instruction, AccumulatorConditionalTrigger) else "plain"
+                source_indices = program.source.lookup.selected_entity_indices
+                if not source_indices:
+                    instruction_resolutions[(kind, "source_identity_missing")] += 1
+                    continue
+
+                resolutions = set()
+                for source_index in source_indices:
+                    dispatch = resolve_symbolic_nested_dispatch(
+                        index,
+                        program,
+                        instruction,
+                        source_entity_index=source_index,
+                    )
+                    resolutions.add(dispatch.resolution.value)
+                    concrete_resolutions[(kind, dispatch.resolution.value)] += 1
+                    if dispatch.resolution is SymbolicDispatchResolution.RESOLVED:
+                        target_group_sizes[(kind, len(dispatch.target_entity_indices))] += 1
+                        resolved_pairs[kind] += len(dispatch.target_entity_indices)
+                        same_entity_pairs[kind] += sum(
+                            target_index == source_index for target_index in dispatch.target_entity_indices
+                        )
+                assert len(resolutions) == 1
+                instruction_resolutions[(kind, resolutions.pop())] += 1
+
+    assert instruction_resolutions == {
+        ("plain", "resolved"): 1291,
+        ("plain", "source_identity_missing"): 10,
+        ("plain", "target_identity_missing"): 3,
+        ("plain", "missing_handler"): 11,
+        ("conditional", "resolved"): 299,
+    }
+    assert concrete_resolutions == {
+        ("plain", "resolved"): 1588,
+        ("plain", "target_identity_missing"): 3,
+        ("plain", "missing_handler"): 11,
+        ("conditional", "resolved"): 299,
+    }
+    assert target_group_sizes == {
+        ("plain", 1): 1447,
+        ("plain", 2): 13,
+        ("plain", 3): 104,
+        ("plain", 4): 15,
+        ("plain", 6): 2,
+        ("plain", 8): 6,
+        ("plain", 32): 1,
+        ("conditional", 1): 299,
+    }
+    assert resolved_pairs == {"plain": 1937, "conditional": 299}
+    assert same_entity_pairs == {"plain": 669, "conditional": 289}
 
 
 @pytest.mark.timeout(120)
