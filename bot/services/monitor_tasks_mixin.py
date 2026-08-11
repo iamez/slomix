@@ -35,6 +35,7 @@ from datetime import datetime
 from discord.ext import tasks
 
 from bot.automation import SSHHandler
+from bot.core.dead_hours import DEAD_HOURS_END, is_dead_hour
 from bot.logging_config import get_logger
 
 logger = get_logger("bot.core")
@@ -95,7 +96,7 @@ class _MonitorTasksMixin:
             return
 
         try:
-            # ========== DEAD HOURS CHECK (02:00-11:00 CET) ==========
+            # ========== DEAD HOURS CHECK (bot/core/dead_hours.py) ==========
             try:
                 import pytz
                 cet = pytz.timezone("Europe/Paris")
@@ -109,12 +110,18 @@ class _MonitorTasksMixin:
             now = datetime.now(cet) if cet else datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
             hour = now.hour
 
-            # Skip SSH check during dead hours (02:00-11:00)
-            if 2 <= hour < 11:
+            # Skip SSH check during dead hours. Window constants are shared
+            # with the proximity relinker's permanent-orphan cutoff
+            # (bot/core/dead_hours.py) — the two MUST agree or night rounds
+            # get written off as orphans before imports resume.
+            if is_dead_hour(hour):
                 # Log once per hour instead of every 60s
                 if not hasattr(self, '_last_dead_hour_log') or self._last_dead_hour_log != hour:
                     self._last_dead_hour_log = hour
-                    logger.info(f"⏸️ Dead hours ({hour:02d}:00 CET) - SSH checks paused until 11:00")
+                    logger.info(
+                        f"⏸️ Dead hours ({hour:02d}:00 CET) - SSH checks paused "
+                        f"until {DEAD_HOURS_END:02d}:00"
+                    )
                 return
 
             # ========== VOICE DETECTION (Player Count Check) ==========
