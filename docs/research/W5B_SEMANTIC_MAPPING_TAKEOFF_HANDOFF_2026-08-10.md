@@ -1535,8 +1535,13 @@ continuations; and cuts state-changing cycles with the named
 selecting the original handler. The corrected corpus tables above supersede the earlier
 421-complete/669-unknown classification. Focused coverage passed 109/109, the expanded
 W1-W5b unit selection passed 281/281, and the exact bounded-executor corpus acceptance
-passed in 31.98 seconds without relevance depth or work-budget exhaustion. Full
-real-asset and repository verification remain required after this documentation update.
+passed in 31.98 seconds without relevance depth or work-budget exhaustion. On final
+documentation head `d01390a2`, all 16 opt-in real-asset tests passed in 432.25 seconds
+with 496,084 KiB peak RSS, and the complete repository passed 4,339 tests with 94 skips
+and 30 warnings in 56.20 seconds. The real-asset suite is now about twice as slow as the
+pre-correction run. That is acceptable for this explicit offline acceptance gate, but
+not for a request-time API: W5c must precompute or cache this classification rather than
+repeat the corpus walk on a live request.
 
 ### Adjacent live-test handoff received 2026-08-11
 
