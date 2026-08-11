@@ -287,6 +287,14 @@ class OrderedStageProgramIndex:
     _programs_by_node_id: Mapping[str, OrderedEventProgram] = field(repr=False, compare=False)
     _trigger_handlers_by_script: Mapping[str, tuple[OrderedEventProgram, ...]] = field(repr=False, compare=False)
     _w3_kinds_by_entity: Mapping[int, frozenset[W3EntityKind]] = field(repr=False, compare=False)
+    _programs_by_instruction_line: Mapping[int, tuple[OrderedEventProgram, ...]] = field(
+        repr=False,
+        compare=False,
+    )
+    _instruction_offsets_by_node_line: Mapping[tuple[str, int], tuple[int, ...]] = field(
+        repr=False,
+        compare=False,
+    )
 
     def program(self, node_id: str) -> OrderedEventProgram:
         try:
@@ -314,6 +322,15 @@ class OrderedStageProgramIndex:
 
     def w3_kinds(self, entity_index: int) -> frozenset[W3EntityKind]:
         return self._w3_kinds_by_entity.get(entity_index, frozenset())
+
+    def programs_for_instruction_line(self, line: int) -> tuple[OrderedEventProgram, ...]:
+        return self._programs_by_instruction_line.get(line, ())
+
+    def instruction_offset(self, program: OrderedEventProgram, line: int) -> int | None:
+        if self.program(program.node.node_id) is not program:
+            raise ValueError(f"program {program.node.node_id!r} does not belong to this ordered-program index")
+        matches = self._instruction_offsets_by_node_line.get((program.node.node_id, line), ())
+        return matches[0] if len(matches) == 1 else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1358,6 +1375,17 @@ def _walk_symbolic_stage_from(
                 )
                 continue
             target = dispatch_targets[0]
+            target_program = index.program(target.death_handler_node_id)
+            if target.entity_index not in target_program.source.lookup.selected_entity_indices:
+                outcomes.append(
+                    _blocked_symbolic_path(
+                        path,
+                        reason="kill_death_dispatch_projection_invalid",
+                        line=dispatch_line,
+                        entity_index=current_entity_index,
+                    )
+                )
+                continue
 
             # ``script_mover_die`` clears ``die`` after use. Static W5b entry
             # state cannot prove whether an earlier lifecycle transition has
@@ -1397,7 +1425,7 @@ def _walk_symbolic_stage_from(
                     caller_program=program,
                     caller_entity_index=current_entity_index,
                     caller_instruction_offset=nested_index + 1,
-                    target_program=index.program(target.death_handler_node_id),
+                    target_program=target_program,
                     target_entity_indices=(target.entity_index,),
                     target_offset=0,
                     dispatch_line=dispatch_line,
@@ -1717,6 +1745,8 @@ def _collect_continuation_relevance(
     program = index.program(continuation.node_id)
     if not 0 <= continuation.instruction_offset <= len(program.instructions):
         return set(), {"invalid_frontier_continuation_offset"}
+    if continuation.source_entity_index not in program.source.lookup.selected_entity_indices:
+        return set(), {"frontier_continuation_entity_not_selected"}
     key = (continuation.node_id, continuation.source_entity_index, continuation.instruction_offset)
     if key in active:
         return set(), set()
@@ -1802,51 +1832,32 @@ def _collect_continuation_relevance(
     return domains, unknown_reasons
 
 
-def _instruction_offset(program: OrderedEventProgram, line: int) -> int | None:
-    matches = tuple(
-        index for index, instruction in enumerate(program.instructions) if _instruction_line(instruction) == line
-    )
-    return matches[0] if len(matches) == 1 else None
-
-
-def _instruction_offset_after(program: OrderedEventProgram, line: int) -> int | None:
-    offset = _instruction_offset(program, line)
+def _instruction_offset_after(
+    index: OrderedStageProgramIndex,
+    program: OrderedEventProgram,
+    line: int,
+) -> int | None:
+    offset = index.instruction_offset(program, line)
     return None if offset is None else offset + 1
 
 
 def _find_program_for_line(
     index: OrderedStageProgramIndex,
-    path: SymbolicEventPath,
-    root_program: OrderedEventProgram,
     *,
     line: int,
     source_entity_index: int,
 ) -> OrderedEventProgram | None:
-    node_ids = [root_program.node.node_id]
-    node_ids.extend(dispatch.source_node_id for dispatch in path.nested_dispatches)
-    node_ids.extend(
-        dispatch.target_node_id for dispatch in path.nested_dispatches if dispatch.target_node_id is not None
-    )
-    node_ids.extend(dispatch.source_node_id for dispatch in path.death_dispatches)
-    node_ids.extend(dispatch.target_node_id for dispatch in path.death_dispatches)
-    seen: set[str] = set()
-    candidates: list[OrderedEventProgram] = []
-    for node_id in reversed(node_ids):
-        if node_id in seen:
-            continue
-        seen.add(node_id)
-        candidates.append(index.program(node_id))
-    candidates.extend(program for program in index.programs if program.node.node_id not in seen)
     matches = [
         program
-        for program in candidates
+        for program in index.programs_for_instruction_line(line)
         if source_entity_index in program.source.lookup.selected_entity_indices
-        and _instruction_offset_after(program, line) is not None
+        and index.instruction_offset(program, line) is not None
     ]
     return matches[0] if len(matches) == 1 else None
 
 
 def _append_continuation(
+    index: OrderedStageProgramIndex,
     continuations: list[SymbolicFrontierContinuation],
     program: OrderedEventProgram,
     *,
@@ -1854,7 +1865,7 @@ def _append_continuation(
     line: int,
     origin: str,
 ) -> bool:
-    offset = _instruction_offset_after(program, line)
+    offset = _instruction_offset_after(index, program, line)
     if offset is None:
         return False
     continuation = SymbolicFrontierContinuation(program.node.node_id, source_entity_index, offset, origin)
@@ -1864,6 +1875,7 @@ def _append_continuation(
 
 
 def _append_continuation_from(
+    index: OrderedStageProgramIndex,
     continuations: list[SymbolicFrontierContinuation],
     program: OrderedEventProgram,
     *,
@@ -1871,7 +1883,7 @@ def _append_continuation_from(
     line: int,
     origin: str,
 ) -> bool:
-    offset = _instruction_offset(program, line)
+    offset = index.instruction_offset(program, line)
     if offset is None:
         return False
     continuation = SymbolicFrontierContinuation(program.node.node_id, source_entity_index, offset, origin)
@@ -1900,6 +1912,7 @@ def classify_symbolic_frontier(
         "kill_death_dispatch_projection_invalid",
         "nested_dispatch_depth_exhausted",
         "nested_dispatch_opaque_handler",
+        "nested_dispatch_resolved_without_handler",
         "nested_dispatch_runtime_dispatch",
         "nested_dispatch_target_identity_missing",
         "symbolic_path_budget_exhausted",
@@ -1921,15 +1934,13 @@ def classify_symbolic_frontier(
         temporal_line = path.temporal_boundary_lines[-1]
         target_program = _find_program_for_line(
             index,
-            path,
-            root_program,
             line=temporal_line,
             source_entity_index=path.blocker_entity_index,
         )
         if target_program is None:
             unknown_reasons.add("temporal_target_program_missing")
         else:
-            boundary_offset = _instruction_offset(target_program, temporal_line)
+            boundary_offset = index.instruction_offset(target_program, temporal_line)
             if boundary_offset is None:
                 unknown_reasons.add("temporal_boundary_instruction_missing")
             else:
@@ -1943,6 +1954,7 @@ def classify_symbolic_frontier(
                     domains.update(boundary_domains)
                     unknown_reasons.update(boundary_unknown_reasons)
             if not _append_continuation(
+                index,
                 continuations,
                 target_program,
                 source_entity_index=path.blocker_entity_index,
@@ -1962,6 +1974,7 @@ def classify_symbolic_frontier(
             if parent_dispatch is not None:
                 caller = index.program(parent_dispatch.source_node_id)
                 if not _append_continuation(
+                    index,
                     continuations,
                     caller,
                     source_entity_index=parent_dispatch.source_entity_index,
@@ -1994,6 +2007,7 @@ def classify_symbolic_frontier(
                 else:
                     caller = index.program(parent_death.source_node_id)
                     if not _append_continuation(
+                        index,
                         continuations,
                         caller,
                         source_entity_index=parent_death.source_entity_index,
@@ -2005,6 +2019,7 @@ def classify_symbolic_frontier(
         dispatch = path.nested_dispatches[-1]
         caller = index.program(dispatch.source_node_id)
         if not _append_continuation(
+            index,
             continuations,
             caller,
             source_entity_index=dispatch.source_entity_index,
@@ -2025,8 +2040,6 @@ def classify_symbolic_frontier(
     else:
         blocker_program = _find_program_for_line(
             index,
-            path,
-            root_program,
             line=path.blocker_line,
             source_entity_index=path.blocker_entity_index,
         )
@@ -2044,6 +2057,7 @@ def classify_symbolic_frontier(
                 else "program_suffix_after_frontier"
             )
             if not append(
+                index,
                 continuations,
                 blocker_program,
                 source_entity_index=path.blocker_entity_index,
@@ -2335,10 +2349,22 @@ def build_ordered_stage_program_index(
     w3_kinds_by_entity: dict[int, set[W3EntityKind]] = defaultdict(set)
     for reference in linked.references:
         w3_kinds_by_entity[reference.entity_index].add(reference.kind)
+    programs_by_instruction_line: dict[int, list[OrderedEventProgram]] = defaultdict(list)
+    instruction_offsets_by_node_line: dict[tuple[str, int], list[int]] = defaultdict(list)
+    for program in programs:
+        seen_lines: set[int] = set()
+        for offset, instruction in enumerate(program.instructions):
+            line = _instruction_line(instruction)
+            instruction_offsets_by_node_line[(program.node.node_id, line)].append(offset)
+            if line not in seen_lines:
+                programs_by_instruction_line[line].append(program)
+                seen_lines.add(line)
     return OrderedStageProgramIndex(
         programs,
         opaque_names,
         MappingProxyType(programs_by_node_id),
         MappingProxyType({name: tuple(handlers) for name, handlers in trigger_handlers_by_script.items()}),
         MappingProxyType({entity_index: frozenset(kinds) for entity_index, kinds in w3_kinds_by_entity.items()}),
+        MappingProxyType({line: tuple(line_programs) for line, line_programs in programs_by_instruction_line.items()}),
+        MappingProxyType({key: tuple(offsets) for key, offsets in instruction_offsets_by_node_line.items()}),
     )

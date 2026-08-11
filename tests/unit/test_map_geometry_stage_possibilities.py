@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 from pathlib import Path
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 
 import pytest
 
@@ -26,9 +26,11 @@ from website.backend.map_geometry.stage_possibilities import (
     StageSemanticDomain,
     SymbolicAccumulatorState,
     SymbolicDispatchResolution,
+    SymbolicFrontierContinuation,
     SymbolicIntegerDomain,
     SymbolicPathCompletion,
     TriggerInstruction,
+    _collect_continuation_relevance,
     build_ordered_stage_program_index,
     project_ordered_stage_programs,
     resolve_symbolic_nested_dispatch,
@@ -337,7 +339,7 @@ def test_kill_does_not_invent_a_death_dispatch_for_direct_remove_classes():
     assert paths[0].state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 0
 
 
-def test_kill_ignores_an_opaque_script_identity_on_a_direct_remove_class():
+def test_kill_directly_removes_a_func_static_even_when_its_script_block_is_defined():
     index = _program_index(
         b"""
         game_manager
@@ -453,6 +455,10 @@ def test_kill_blocks_an_unmodeled_constructible_runtime_event():
         ),
     )
 
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.targets[0].disposition is KillTargetDisposition.CONSTRUCTIBLE_RUNTIME_EVENT_NOT_MODELED
+
     paths = walk_symbolic_stage_program(
         index,
         index.programs[0],
@@ -463,6 +469,286 @@ def test_kill_blocks_an_unmodeled_constructible_runtime_event():
     assert len(paths) == 1
     assert paths[0].blocker_reason == "kill_constructible_runtime_event_not_modeled"
     assert _effect_states(paths[0]) == ()
+
+
+def test_kill_continues_for_a_script_mover_without_a_handled_death_event():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            spawn
+            {
+                wm_announce ready
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.targets[0].disposition is KillTargetDisposition.SCRIPT_MOVER_NO_HANDLED_DEATH_EVENT
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert _effect_states(paths[0]) == ("invisible",)
+
+
+def test_kill_blocks_an_opaque_script_mover_identity():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                setstate gate unsupported_state
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.targets[0].disposition is KillTargetDisposition.SCRIPT_IDENTITY_OPAQUE
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "kill_script_identity_opaque"
+    assert paths[0].frontier_relevance is not None
+    assert "frontier:kill_script_identity_opaque" in paths[0].frontier_relevance.unknown_reasons
+
+
+def test_kill_blocks_multiple_optional_death_dispatch_targets():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                accum 1 bitset 7
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert tuple(target.disposition for target in instruction.targets) == (
+        KillTargetDisposition.SCRIPT_MOVER_OPTIONAL_DEATH_EVENT,
+        KillTargetDisposition.SCRIPT_MOVER_OPTIONAL_DEATH_EVENT,
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "kill_multi_target_death_dispatch_not_modeled"
+    assert paths[0].frontier_relevance is not None
+    assert "frontier:kill_multi_target_death_dispatch_not_modeled" in paths[0].frontier_relevance.unknown_reasons
+
+
+def test_kill_without_a_target_fails_closed():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill
+                setstate gate invisible
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.targets == ()
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "kill_target_missing"
+    assert paths[0].frontier_relevance is not None
+    assert "frontier:kill_target_missing" in paths[0].frontier_relevance.unknown_reasons
+
+
+def test_frontier_continuation_fails_closed_when_the_entity_is_not_selected_by_the_handler():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+            }
+        }
+        victim
+        {
+            death
+            {
+                trigger helper go
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                wm_announce reached
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "script_mover", "scriptname": "helper"},
+        ),
+    )
+    victim_death = next(program for program in index.programs if program.node.entity_name == "victim")
+
+    domains, unknown_reasons = _collect_continuation_relevance(
+        index,
+        SymbolicFrontierContinuation(
+            victim_death.node.node_id,
+            2,
+            0,
+            "adversarial_kill_runtime_event",
+        ),
+    )
+
+    assert domains == set()
+    assert unknown_reasons == {"frontier_continuation_entity_not_selected"}
+
+
+def test_kill_death_dispatch_fails_closed_when_target_and_handler_selections_diverge():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                trigger helper go
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                wm_announce reached
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "script_mover", "scriptname": "helper"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    caller = index.programs[0]
+    instruction = caller.instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    mismatched_instruction = replace(
+        instruction,
+        targets=(replace(instruction.targets[0], entity_index=2),),
+    )
+    mismatched_caller = replace(caller, instructions=(mismatched_instruction, *caller.instructions[1:]))
+    programs = tuple(mismatched_caller if program is caller else program for program in index.programs)
+    mismatched_index = replace(
+        index,
+        programs=programs,
+        _programs_by_node_id=MappingProxyType({program.node.node_id: program for program in programs}),
+        _programs_by_instruction_line=MappingProxyType(
+            {
+                line: tuple(mismatched_caller if program is caller else program for program in line_programs)
+                for line, line_programs in index._programs_by_instruction_line.items()  # noqa: SLF001
+            }
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        mismatched_index,
+        mismatched_caller,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "kill_death_dispatch_projection_invalid"
+    assert paths[0].frontier_relevance is not None
+    assert paths[0].frontier_relevance.unknown_reasons == (
+        "frontier:kill_death_dispatch_projection_invalid",
+        "frontier_continuation_entity_not_selected",
+    )
 
 
 def test_kill_blocks_a_target_missing_from_the_effective_identity_source():
