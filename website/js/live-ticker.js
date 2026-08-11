@@ -101,6 +101,54 @@ export function liveRosterHasBots() {
 const _streak = new Map();
 let _roundScores = [];
 
+// Live win-pressure model (Live v2 phase B). tonight.js feeds the historical
+// hold curve + logical-side context; the ticker tracks the current round's
+// elapsed time (from ROUND_START) and nudges a momentum figure from live
+// objective events. All client-side — no new API calls.
+let _holdCurve = [];        // [{t, p}] historical ECDF for current map
+let _defenderSide = null;   // engine team defending this round (1/2) if known
+let _roundStartMs = null;   // level_ms of the live ROUND_START
+let _momentum = 50;         // 0..100, 100 = attackers dominating
+const _MOM_DECAY = 0.985;   // eases back toward 50 each poll
+
+/** tonight.js hands the ticker the round context each refresh. */
+export function setLiveRoundContext({ holdCurve, defenderSide } = {}) {
+    if (Array.isArray(holdCurve)) _holdCurve = holdCurve;
+    if (defenderSide === 1 || defenderSide === 2) _defenderSide = defenderSide;
+}
+
+function _interpHold(elapsedSec) {
+    if (!_holdCurve.length) return null;
+    if (elapsedSec <= _holdCurve[0].t) return _holdCurve[0].p;
+    for (let i = 1; i < _holdCurve.length; i++) {
+        if (elapsedSec <= _holdCurve[i].t) {
+            const a = _holdCurve[i - 1], b = _holdCurve[i];
+            const f = (elapsedSec - a.t) / Math.max(1, b.t - a.t);
+            return a.p + (b.p - a.p) * f;
+        }
+    }
+    return _holdCurve[_holdCurve.length - 1].p;
+}
+
+function _pressureApply(ev) {
+    // Objective momentum nudges. POPUP team is 'axis'/'allies'; a steal/plant
+    // favours the attacking side, a return/defuse the defence. Kills give a
+    // tiny push to the killer's side.
+    const toAttackers = (delta) => { _momentum = Math.max(0, Math.min(100, _momentum + delta)); };
+    if (ev.type === 'ROUND_START') { _roundStartMs = ev.level_ms; _momentum = 50; }
+    else if (ev.type === 'ROUND_END') { _roundStartMs = null; }
+    else if (ev.type === 'POPUP') {
+        if (ev.verb === 'stole' || ev.verb === 'planted') toAttackers(+12);
+        else if (ev.verb === 'returned' || ev.verb === 'defused') toAttackers(-12);
+    }
+    else if (ev.type === 'OBJECTIVE_DESTROYED') toAttackers(+18);
+    else if (ev.type === 'ANNOUNCE' && /captured|destroyed|secured/i.test(ev.text || '')) toAttackers(+10);
+    else if (ev.type === 'KILL' && !ev._teamkill) {
+        const kt = _slotTeam(ev.killer_slot);
+        if (kt != null && _defenderSide != null) toAttackers(kt === _defenderSide ? -1.5 : +1.5);
+    }
+}
+
 function _combatApply(ev) {
     if (ev.type === 'KILL') {
         const k = ev.killer_slot, v = ev.victim_slot;
@@ -158,6 +206,7 @@ async function _poll() {
         } else if (data && data.last_seq != null) {
             _cursor = data.last_seq;
         }
+        _momentum = 50 + (_momentum - 50) * _MOM_DECAY;
     } catch (e) {
         _lastFetchOk = false;
         console.warn('live ticker poll failed', e);
@@ -172,6 +221,11 @@ export function startLiveTicker() {
 
 export function stopLiveTicker() {
     if (_interval) { clearInterval(_interval); _interval = null; }
+}
+
+function _mmssLocal(sec) {
+    const s = Math.max(0, Math.round(sec));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 function _ago(receivedAt) {
@@ -274,6 +328,34 @@ export function renderLiveTicker() {
         : (fresh
             ? '<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse"></span> LIVE'
             : '<span class="w-2 h-2 rounded-full bg-slate-600 inline-block"></span> quiet');
+    // Live win-pressure strip: live hold% (elapsed vs historical curve) + a
+    // momentum bar nudged by objective events. Only while a round is live.
+    let pressureStrip = '';
+    if (_roundStartMs != null && _events.length) {
+        const nowMs = _events[_events.length - 1].level_ms;
+        const elapsed = nowMs != null ? Math.max(0, (nowMs - _roundStartMs) / 1000) : 0;
+        const hold = _interpHold(elapsed);
+        const momA = Math.round(_momentum);
+        const holdTxt = hold != null
+            ? `<span class="text-slate-300">Attack completed by now historically: <b class="text-white">${Math.round(hold)}%</b></span>`
+            : '';
+        pressureStrip = `
+        <div class="mb-3 p-2.5 rounded-lg bg-black/20">
+            <div class="flex items-center justify-between text-[11px] mb-1">
+                <span class="font-bold text-amber-300">⚡ LIVE PRESSURE</span>
+                <span class="text-slate-500">${_mmssLocal(elapsed)} in</span>
+            </div>
+            <div class="h-2 rounded-full overflow-hidden bg-slate-700 flex">
+                <div style="width:${momA}%; background:#f59e0b" title="attackers"></div>
+                <div style="width:${100 - momA}%; background:#3b82f6" title="defence"></div>
+            </div>
+            <div class="flex items-center justify-between text-[10px] mt-1">
+                <span class="text-amber-400 font-bold">Attack ${momA}%</span>
+                ${holdTxt}
+                <span class="text-blue-400 font-bold">Defence ${100 - momA}%</span>
+            </div>
+        </div>`;
+    }
     const visible = _events.filter(e => _filters[_TYPE_TO_CAT[e.type]] === true);
     const rows = visible.slice(-MAX_SHOWN).reverse().map(_line).filter(Boolean).join('');
     host.textContent = '';
@@ -283,6 +365,7 @@ export function renderLiveTicker() {
                 <div class="text-sm font-black text-white tracking-wide flex items-center gap-2">MATCH FEED ${botBadge}</div>
                 <div class="text-xs text-slate-400 flex items-center gap-1.5">${dot}</div>
             </div>
+            ${pressureStrip}
             <div class="flex flex-wrap gap-1.5 mb-2">${_filterChips()}</div>
             <div class="max-h-72 overflow-y-auto text-sm divide-y divide-white/5">
                 ${rows || '<div class="text-slate-500 text-sm py-3 text-center">No live events in the selected categories.</div>'}
