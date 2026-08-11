@@ -22,20 +22,46 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-# Tables carrying round_id + round_start_unix, i.e. the same "comparable"
-# sources L1's proximity_quality signal collector checks (has_round_id=True
-# entries in _SIGNAL_SOURCES, minus storytelling_kill_impact which has no
-# round_id of its own).
+# Every table carrying round_id plus the full four-column round identity
+# (map_name, round_number, round_start_unix, session_date) — the columns
+# this inventory's queries compare and its deterministic-target lookup keys
+# on. Originally this was only the subset L1's proximity_quality signal
+# collector checked (9 tables); FIX 9 (2026-08-11) widened it to the whole
+# identity-bearing set after ~28k orphan rows were measured in tables no
+# repair tool covered (proximity_team_cohesion alone: 21,170 on prod). The
+# schema coverage contract (tests/unit/test_round_id_coverage_contract.py)
+# now derives this set from tools/schema_postgresql.sql and fails when a
+# new round_id table is missing here.
 LINKAGE_INVENTORY_TABLES: tuple[str, ...] = (
     "combat_engagement",
     "player_track",
-    "proximity_kill_outcome",
-    "proximity_spawn_timing",
-    "proximity_team_push",
+    "proximity_aim_lock",
+    "proximity_carrier_event",
+    "proximity_carrier_kill",
+    "proximity_carrier_return",
+    "proximity_combat_position",
+    "proximity_comm_event",
+    "proximity_construction_event",
     "proximity_crossfire_opportunity",
-    "proximity_reaction_metric",
-    "proximity_shot_fired",
+    "proximity_escort_credit",
+    "proximity_focus_fire",
     "proximity_hit_region",
+    "proximity_kill_outcome",
+    "proximity_lua_trade_kill",
+    "proximity_objective_focus",
+    "proximity_objective_run",
+    "proximity_reaction_metric",
+    "proximity_revive",
+    "proximity_shot_fired",
+    "proximity_skill_snapshot",
+    "proximity_spawn_select",
+    "proximity_spawn_timing",
+    "proximity_support_summary",
+    "proximity_team_cohesion",
+    "proximity_team_push",
+    "proximity_trade_event",
+    "proximity_vehicle_progress",
+    "proximity_weapon_accuracy",
 )
 
 

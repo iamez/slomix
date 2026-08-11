@@ -2205,6 +2205,19 @@ class ProximityParserV4:
             parts = line.split(';')
             if len(parts) < 10:
                 return
+            # FIX 7 (push_quality unbounded): the Lua formula is
+            # `alignment * (avg_speed / 300)` with no upper bound, and
+            # sprint speed exceeds 300 ups — so ~5% of rows land above 1.0
+            # (observed max 2.158) while every sibling score field
+            # (alignment_score, path_efficiency, focus_score,
+            # spawn_timing_score) tops out at exactly 1.000. Clamp at the
+            # import boundary; the tracker Lua is a no-edit live-drift
+            # zone. NOTE: this fixes the SCALE only — the metric itself
+            # is measured as inverse to kills (kis-v5 removed its
+            # multiplier); clamping does not make it predictive.
+            # Bounded both ways: alignment and speed are non-negative, so
+            # a negative value is a mangled dump line — floor it at 0.
+            push_quality = max(0.0, min(float(parts[7]), 1.0))
             self.team_pushes.append(TeamPush(
                 start_time=int(parts[0]),
                 end_time=int(parts[1]),
@@ -2213,7 +2226,7 @@ class ProximityParserV4:
                 direction_x=float(parts[4]),
                 direction_y=float(parts[5]),
                 alignment_score=float(parts[6]),
-                push_quality=float(parts[7]),
+                push_quality=push_quality,
                 participant_count=int(parts[8]),
                 toward_objective=parts[9],
             ))
@@ -2265,13 +2278,45 @@ class ProximityParserV4:
             parts = line.split(';')
             if len(parts) < 8:
                 return
+            shots_fired = int(parts[4])
+            hits = int(parts[5])
+            # Corrupt-line guard (review on #641): the Lua counters only
+            # ever increment, so a negative value means a mangled dump
+            # line — and a pair like shots=-1/hits=-2 would slip past the
+            # hits > shots clamp below and still generate 200% accuracy.
+            if shots_fired < 0 or hits < 0:
+                self.logger.debug(
+                    "weapon_accuracy: dropping line with negative counts "
+                    "(shots=%d, hits=%d, weapon_id=%s, guid=%s)",
+                    shots_fired, hits, parts[3], parts[0],
+                )
+                return
+            # FIX 3 (accuracy_pct > 100%): the Lua tracker counts `shots`
+            # once per et_WeaponFire event but `hits` once per et_Damage
+            # VICTIM event, remapped through MOD_TO_WEAPON. Two asymmetries
+            # make hits exceed shots:
+            #   1. splash weapons (grenades/dynamite/mortar): one throw can
+            #      damage N enemies -> N hits for 1 shot;
+            #   2. weapons whose damage has no matching fire event under the
+            #      same weapon id (airstrike/arty damage vs. smoke-marker
+            #      fire; MOD fallback to the currently-held ps.weapon) ->
+            #      hits with shots_fired == 0.
+            # `accuracy_pct` is a GENERATED column (hits/shots*100), so the
+            # only place to keep it <= 100 for new rows is here, on import.
+            # The tracker Lua is intentionally NOT changed (live drift zone).
+            if hits > shots_fired:
+                self.logger.debug(
+                    "weapon_accuracy: clamping hits %d -> %d (weapon_id=%s, guid=%s)",
+                    hits, shots_fired, parts[3], parts[0],
+                )
+                hits = shots_fired
             self.weapon_accuracy.append(WeaponAccuracy(
                 player_guid=parts[0],
                 player_name=parts[1],
                 team=parts[2],
                 weapon_id=int(parts[3]),
-                shots_fired=int(parts[4]),
-                hits=int(parts[5]),
+                shots_fired=shots_fired,
+                hits=hits,
                 kills=int(parts[6]),
                 headshots=int(parts[7]),
             ))

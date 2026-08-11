@@ -68,7 +68,7 @@ def test_build_round_metadata_from_map_parses_and_normalizes_core_fields():
     assert out["round_number"] == 2
     assert out["winner_team"] == 2
     assert out["defender_team"] == 1
-    assert out["end_reason"] == "NORMAL"
+    assert out["end_reason"] == "OBJECTIVE"
     assert out["actual_duration_seconds"] == 600
     assert out["pause_count"] == 1
     assert out["total_pause_seconds"] == 15
