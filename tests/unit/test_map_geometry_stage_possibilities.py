@@ -23,6 +23,7 @@ from website.backend.map_geometry.stage_possibilities import (
     RuntimeActionControlDisposition,
     RuntimeActionInstruction,
     StageEffectInstruction,
+    StageSemanticDomain,
     SymbolicAccumulatorState,
     SymbolicDispatchResolution,
     SymbolicIntegerDomain,
@@ -117,7 +118,7 @@ def _model_and_linked():
     return model, link_w3_entity_catalog(identities, catalog)
 
 
-def _program_index(raw_script, raw_entities=None):
+def _program_index(raw_script, raw_entities=None, catalog=None):
     script = parse_map_script(raw_script, source="maps/test.script")
     model = _stage_model(script)
     identities = build_entity_identity_index(
@@ -129,8 +130,8 @@ def _program_index(raw_script, raw_entities=None):
         ),
         source="maps/test.bsp",
     )
-    catalog = MapEntityCatalog("test", "maps/test.bsp", (), (), (), ())
-    return build_ordered_stage_program_index(model, link_w3_entity_catalog(identities, catalog))
+    w3_catalog = catalog or MapEntityCatalog("test", "maps/test.bsp", (), (), (), ())
+    return build_ordered_stage_program_index(model, link_w3_entity_catalog(identities, w3_catalog))
 
 
 def _programs(raw_script, raw_entities=None):
@@ -1050,6 +1051,173 @@ def test_stage_walker_blocks_cross_entity_temporal_interleaving_but_keeps_the_im
     assert blocked.blocker_entity_index == 2
     assert _effect_states(blocked) == ("default",)
     assert blocked.temporal_boundary_entity_indices == (2,)
+
+
+def test_frontier_classifier_finds_each_domain_hidden_by_cross_entity_temporal_ordering():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper go
+                setautospawn "Major Spawn" 0
+                setstate gate invisible
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                wait 100
+                wm_objective_status 1 0 1
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "helper"},
+            {"classname": "func_door", "targetname": "gate"},
+            {"classname": "team_WOLF_objective", "description": "Major Spawn"},
+        ),
+        catalog=MapEntityCatalog(
+            "test",
+            "maps/test.bsp",
+            (),
+            (),
+            (),
+            (SimpleNamespace(entity_index=2, classname="func_door"),),
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    blocked = next(path for path in paths if path.blocker_reason == "cross_entity_temporal_interleaving_not_modeled")
+    relevance = blocked.frontier_relevance
+    assert relevance is not None
+    assert set(relevance.domains) == {
+        StageSemanticDomain.OBJECTIVE,
+        StageSemanticDomain.SPAWN,
+        StageSemanticDomain.DYNAMIC_ROUTE,
+    }
+    assert relevance.unknown_domain_relevance is False
+    assert relevance.unknown_reasons == ()
+    assert {continuation.origin for continuation in relevance.continuations} == {
+        "target_suffix_after_temporal_boundary",
+        "caller_suffix_after_concurrent_dispatch",
+    }
+
+
+def test_frontier_classifier_treats_a_missing_handler_as_no_target_effect_but_keeps_caller_suffix():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper absent
+                setautospawn "Major Spawn" 0
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "helper"},
+            {"classname": "team_WOLF_objective", "description": "Major Spawn"},
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    relevance = paths[0].frontier_relevance
+    assert relevance is not None
+    assert relevance.domains == (StageSemanticDomain.SPAWN,)
+    assert relevance.unknown_domain_relevance is False
+    assert relevance.unknown_reasons == ()
+    assert relevance.continuations[0].origin == "caller_suffix_after_nested_dispatch_frontier"
+
+
+def test_frontier_classifier_marks_missing_target_identity_unknown_without_losing_known_suffix():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper go
+                wm_objective_status 1 0 1
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                wm_announce unreachable_without_identity
+            }
+        }
+        """,
+        raw_entities=({"classname": "script_multiplayer"},),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "nested_dispatch_target_identity_missing"
+    relevance = paths[0].frontier_relevance
+    assert relevance is not None
+    assert relevance.domains == (StageSemanticDomain.OBJECTIVE,)
+    assert relevance.unknown_domain_relevance is True
+    assert relevance.unknown_reasons == ("frontier:nested_dispatch_target_identity_missing",)
+
+
+def test_frontier_classifier_keeps_known_suffix_after_non_exact_accumulator_mutation():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                accum 0 inc 1
+                setautospawn "Major Spawn" 0
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "team_WOLF_objective", "description": "Major Spawn"},
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.unknown(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "non_exact_accumulator_mutation"
+    relevance = paths[0].frontier_relevance
+    assert relevance is not None
+    assert relevance.domains == (StageSemanticDomain.SPAWN,)
+    assert relevance.unknown_domain_relevance is False
+    assert relevance.unknown_reasons == ()
 
 
 def test_stage_walker_blocks_both_temporal_hazards_in_a_shared_target_group():

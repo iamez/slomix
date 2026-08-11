@@ -17,6 +17,12 @@ from typing import Mapping, TypeAlias
 
 from website.backend.map_geometry.stage import (
     STAGE_EFFECT_COMMANDS,
+    AlertEntityEffect,
+    AutoSpawnEffect,
+    EntityStateEffect,
+    GotoMarkerEffect,
+    MainObjectiveEffect,
+    ObjectiveStatusEffect,
     ScriptAction,
     ScriptEvent,
     StageEventNode,
@@ -32,11 +38,18 @@ from website.backend.map_geometry.stage_semantics import (
     AccumulatorMutation,
     AccumulatorOperation,
     AccumulatorScope,
+    AutoSpawnEffectProjection,
     ControlProjectionIssue,
+    EffectProjectionIssue,
     EffectSourceIdentity,
     EntityIdentityLookup,
     EntityIdentityNamespace,
+    EntityTargetEffectProjection,
+    GotoMarkerEffectProjection,
+    MainObjectiveEffectProjection,
+    ObjectiveStatusEffectProjection,
     StageEffectProjection,
+    W3EntityKind,
     W3LinkedIdentityIndex,
     project_accumulator_action,
     project_stage_effect,
@@ -66,6 +79,12 @@ class KillTargetDisposition(StrEnum):
     CONSTRUCTIBLE_NO_HANDLED_EVENT = "constructible_no_handled_event"
     CONSTRUCTIBLE_RUNTIME_EVENT_NOT_MODELED = "constructible_runtime_event_not_modeled"
     SCRIPT_IDENTITY_OPAQUE = "script_identity_opaque"
+
+
+class StageSemanticDomain(StrEnum):
+    OBJECTIVE = "objective"
+    SPAWN = "spawn"
+    DYNAMIC_ROUTE = "dynamic_route"
 
 
 class SymbolicPathCompletion(StrEnum):
@@ -205,6 +224,7 @@ class KillTargetProjection:
     script_name: str | None
     disposition: KillTargetDisposition
     death_handler_node_id: str | None = None
+    runtime_event_node_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -221,6 +241,22 @@ class SymbolicDeathDispatch:
     target_entity_index: int
     target_node_id: str
     line: int
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicFrontierContinuation:
+    node_id: str
+    source_entity_index: int
+    instruction_offset: int
+    origin: str
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicFrontierRelevance:
+    domains: tuple[StageSemanticDomain, ...]
+    unknown_domain_relevance: bool
+    unknown_reasons: tuple[str, ...]
+    continuations: tuple[SymbolicFrontierContinuation, ...]
 
 
 OrderedEventInstruction: TypeAlias = (
@@ -250,6 +286,7 @@ class OrderedStageProgramIndex:
     opaque_script_names: frozenset[str]
     _programs_by_node_id: Mapping[str, OrderedEventProgram] = field(repr=False, compare=False)
     _trigger_handlers_by_script: Mapping[str, tuple[OrderedEventProgram, ...]] = field(repr=False, compare=False)
+    _w3_kinds_by_entity: Mapping[int, frozenset[W3EntityKind]] = field(repr=False, compare=False)
 
     def program(self, node_id: str) -> OrderedEventProgram:
         try:
@@ -274,6 +311,9 @@ class OrderedStageProgramIndex:
 
     def has_opaque_script(self, script_name: str) -> bool:
         return _ascii_fold(script_name) in self.opaque_script_names
+
+    def w3_kinds(self, entity_index: int) -> frozenset[W3EntityKind]:
+        return self._w3_kinds_by_entity.get(entity_index, frozenset())
 
 
 @dataclass(frozen=True, slots=True)
@@ -715,6 +755,7 @@ class SymbolicEventPath:
     blocker_reason: str | None = None
     blocker_line: int | None = None
     blocker_entity_index: int | None = None
+    frontier_relevance: SymbolicFrontierRelevance | None = None
 
 
 def _write_refined_domain(
@@ -1089,6 +1130,7 @@ def _merge_symbolic_segment(
         blocker_reason=segment.blocker_reason,
         blocker_line=segment.blocker_line,
         blocker_entity_index=segment.blocker_entity_index,
+        frontier_relevance=segment.frontier_relevance,
     )
 
 
@@ -1099,6 +1141,7 @@ def _resume_symbolic_path(path: SymbolicEventPath) -> SymbolicEventPath:
         blocker_reason=None,
         blocker_line=None,
         blocker_entity_index=None,
+        frontier_relevance=None,
     )
 
 
@@ -1115,6 +1158,7 @@ def _blocked_symbolic_path(
         blocker_reason=reason,
         blocker_line=line,
         blocker_entity_index=entity_index,
+        frontier_relevance=None,
     )
 
 
@@ -1585,6 +1629,412 @@ def _walk_symbolic_target_group(
     )
 
 
+_DYNAMIC_ROUTE_RUNTIME_ACTIONS = frozenset(
+    {
+        "attachtotag",
+        "changemodel",
+        "constructible_class",
+        "constructible_duration",
+        "constructible_health",
+        "constructible_weaponclass",
+        "faceangles",
+        "followspline",
+        "remove",
+        "set",
+        "setrotation",
+        "setspeed",
+        "stoprotation",
+    }
+)
+
+
+def _projection_domain_relevance(
+    index: OrderedStageProgramIndex,
+    projection: StageEffectProjection,
+    *,
+    source_entity_index: int,
+) -> tuple[set[StageSemanticDomain], set[str]]:
+    if isinstance(projection, (ObjectiveStatusEffectProjection, MainObjectiveEffectProjection)):
+        return {StageSemanticDomain.OBJECTIVE}, set()
+    if isinstance(projection, AutoSpawnEffectProjection):
+        return {StageSemanticDomain.SPAWN}, set()
+    if isinstance(projection, EntityTargetEffectProjection):
+        domains = {
+            StageSemanticDomain.DYNAMIC_ROUTE
+            for reference in projection.selected_w3_references
+            if reference.kind is W3EntityKind.COLLISION_ENTITY
+        }
+        reasons = {"effect_target_identity_missing"} if not projection.target_lookup.candidate_entity_indices else set()
+        return domains, reasons
+    if isinstance(projection, GotoMarkerEffectProjection):
+        references = projection.destination_w3_references + tuple(
+            reference for group in projection.relative_w3_references for reference in group
+        )
+        source_is_route = W3EntityKind.COLLISION_ENTITY in index.w3_kinds(source_entity_index)
+        target_is_route = any(reference.kind is W3EntityKind.COLLISION_ENTITY for reference in references)
+        reasons = {"gotomarker_route_identity_unproven"} if not source_is_route and not target_is_route else set()
+        return ({StageSemanticDomain.DYNAMIC_ROUTE} if source_is_route or target_is_route else set()), reasons
+    if isinstance(projection, EffectProjectionIssue):
+        if isinstance(projection.effect, (ObjectiveStatusEffect, MainObjectiveEffect)):
+            return {StageSemanticDomain.OBJECTIVE}, {"effect_projection_issue"}
+        if isinstance(projection.effect, AutoSpawnEffect):
+            return {StageSemanticDomain.SPAWN}, {"effect_projection_issue"}
+        if isinstance(projection.effect, (EntityStateEffect, AlertEntityEffect, GotoMarkerEffect)):
+            return set(), {"effect_projection_issue"}
+    return set(), set()
+
+
+def _runtime_instruction_domain_relevance(
+    index: OrderedStageProgramIndex,
+    instruction: RuntimeActionInstruction,
+    *,
+    source_entity_index: int,
+) -> tuple[set[StageSemanticDomain], set[str]]:
+    command = instruction.action.command
+    if command == "create":
+        return {StageSemanticDomain.DYNAMIC_ROUTE}, set()
+    if command not in _DYNAMIC_ROUTE_RUNTIME_ACTIONS:
+        reasons = (
+            {f"runtime_action_semantics_unclassified:{command}"}
+            if instruction.control_disposition is RuntimeActionControlDisposition.UNCLASSIFIED
+            else set()
+        )
+        return set(), reasons
+    source_is_route = W3EntityKind.COLLISION_ENTITY in index.w3_kinds(source_entity_index)
+    reasons = set() if source_is_route else {f"runtime_route_source_not_w3_linked:{command}"}
+    if instruction.control_disposition is RuntimeActionControlDisposition.MAY_REPLACE_SCRIPT_CONTEXT:
+        reasons.add("runtime_script_context_replacement")
+    return ({StageSemanticDomain.DYNAMIC_ROUTE} if source_is_route else set()), reasons
+
+
+def _collect_continuation_relevance(
+    index: OrderedStageProgramIndex,
+    continuation: SymbolicFrontierContinuation,
+    *,
+    active: frozenset[tuple[str, int, int]] = frozenset(),
+    depth: int = 0,
+) -> tuple[set[StageSemanticDomain], set[str]]:
+    program = index.program(continuation.node_id)
+    if not 0 <= continuation.instruction_offset <= len(program.instructions):
+        return set(), {"invalid_frontier_continuation_offset"}
+    key = (continuation.node_id, continuation.source_entity_index, continuation.instruction_offset)
+    if key in active:
+        return set(), set()
+    if depth >= 64:
+        return set(), {"frontier_relevance_depth_exhausted"}
+    active = active | {key}
+    domains: set[StageSemanticDomain] = set()
+    unknown_reasons: set[str] = set()
+
+    for instruction in program.instructions[continuation.instruction_offset :]:
+        if isinstance(instruction, StageEffectInstruction):
+            effect_domains, effect_unknown_reasons = _projection_domain_relevance(
+                index,
+                instruction.projection,
+                source_entity_index=continuation.source_entity_index,
+            )
+            domains.update(effect_domains)
+            unknown_reasons.update(effect_unknown_reasons)
+            continue
+        if isinstance(instruction, (TriggerInstruction, AccumulatorConditionalTrigger)):
+            dispatch = resolve_symbolic_nested_dispatch(
+                index,
+                program,
+                instruction,
+                source_entity_index=continuation.source_entity_index,
+            )
+            if dispatch.resolution is SymbolicDispatchResolution.RESOLVED and dispatch.target_node_id is not None:
+                for target_entity_index in dispatch.target_entity_indices:
+                    target_domains, target_unknown_reasons = _collect_continuation_relevance(
+                        index,
+                        SymbolicFrontierContinuation(
+                            dispatch.target_node_id,
+                            target_entity_index,
+                            0,
+                            "reachable_nested_dispatch",
+                        ),
+                        active=active,
+                        depth=depth + 1,
+                    )
+                    domains.update(target_domains)
+                    unknown_reasons.update(target_unknown_reasons)
+            elif dispatch.resolution not in {
+                SymbolicDispatchResolution.NO_OP,
+                SymbolicDispatchResolution.MISSING_HANDLER,
+            }:
+                unknown_reasons.add(f"nested_dispatch_{dispatch.resolution.value}")
+            continue
+        if isinstance(instruction, KillInstruction):
+            if not instruction.targets:
+                unknown_reasons.add("kill_target_identity_missing")
+            for target in instruction.targets:
+                if W3EntityKind.COLLISION_ENTITY in index.w3_kinds(target.entity_index):
+                    domains.add(StageSemanticDomain.DYNAMIC_ROUTE)
+                if target.disposition is KillTargetDisposition.SCRIPT_IDENTITY_OPAQUE:
+                    unknown_reasons.add("kill_script_identity_opaque")
+                for node_id in target.runtime_event_node_ids:
+                    target_domains, target_unknown_reasons = _collect_continuation_relevance(
+                        index,
+                        SymbolicFrontierContinuation(
+                            node_id,
+                            target.entity_index,
+                            0,
+                            "reachable_kill_runtime_event",
+                        ),
+                        active=active,
+                        depth=depth + 1,
+                    )
+                    domains.update(target_domains)
+                    unknown_reasons.update(target_unknown_reasons)
+            continue
+        if isinstance(instruction, RuntimeActionInstruction):
+            runtime_domains, runtime_unknown_reasons = _runtime_instruction_domain_relevance(
+                index,
+                instruction,
+                source_entity_index=continuation.source_entity_index,
+            )
+            domains.update(runtime_domains)
+            unknown_reasons.update(runtime_unknown_reasons)
+            continue
+        if isinstance(instruction, ControlProjectionIssue):
+            unknown_reasons.add("control_projection_issue")
+
+    return domains, unknown_reasons
+
+
+def _instruction_offset_after(program: OrderedEventProgram, line: int) -> int | None:
+    matches = tuple(
+        index for index, instruction in enumerate(program.instructions) if _instruction_line(instruction) == line
+    )
+    return matches[0] + 1 if len(matches) == 1 else None
+
+
+def _find_program_for_line(
+    index: OrderedStageProgramIndex,
+    path: SymbolicEventPath,
+    root_program: OrderedEventProgram,
+    *,
+    line: int,
+    source_entity_index: int,
+) -> OrderedEventProgram | None:
+    node_ids = [root_program.node.node_id]
+    node_ids.extend(dispatch.source_node_id for dispatch in path.nested_dispatches)
+    node_ids.extend(
+        dispatch.target_node_id for dispatch in path.nested_dispatches if dispatch.target_node_id is not None
+    )
+    node_ids.extend(dispatch.source_node_id for dispatch in path.death_dispatches)
+    node_ids.extend(dispatch.target_node_id for dispatch in path.death_dispatches)
+    seen: set[str] = set()
+    candidates: list[OrderedEventProgram] = []
+    for node_id in reversed(node_ids):
+        if node_id in seen:
+            continue
+        seen.add(node_id)
+        candidates.append(index.program(node_id))
+    candidates.extend(program for program in index.programs if program.node.node_id not in seen)
+    matches = [
+        program
+        for program in candidates
+        if source_entity_index in program.source.lookup.selected_entity_indices
+        and _instruction_offset_after(program, line) is not None
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _append_continuation(
+    continuations: list[SymbolicFrontierContinuation],
+    program: OrderedEventProgram,
+    *,
+    source_entity_index: int,
+    line: int,
+    origin: str,
+) -> bool:
+    offset = _instruction_offset_after(program, line)
+    if offset is None:
+        return False
+    continuation = SymbolicFrontierContinuation(program.node.node_id, source_entity_index, offset, origin)
+    if continuation not in continuations:
+        continuations.append(continuation)
+    return True
+
+
+def classify_symbolic_frontier(
+    index: OrderedStageProgramIndex,
+    root_program: OrderedEventProgram,
+    path: SymbolicEventPath,
+) -> SymbolicFrontierRelevance | None:
+    """Classify only the semantic domains hidden behind one explicit frontier."""
+
+    if path.completion is not SymbolicPathCompletion.BLOCKED or path.blocker_reason is None:
+        return None
+    if index.program(root_program.node.node_id) is not root_program:
+        raise ValueError(f"root program {root_program.node.node_id!r} does not belong to this ordered-program index")
+    continuations: list[SymbolicFrontierContinuation] = []
+    intrinsically_unknown_blockers = {
+        "kill_target_missing",
+        "kill_target_identity_missing",
+        "kill_script_identity_opaque",
+        "kill_multi_target_death_dispatch_not_modeled",
+        "kill_death_dispatch_projection_invalid",
+        "nested_dispatch_depth_exhausted",
+        "nested_dispatch_opaque_handler",
+        "nested_dispatch_runtime_dispatch",
+        "nested_dispatch_target_identity_missing",
+        "symbolic_path_budget_exhausted",
+    }
+    unknown_reasons = (
+        {f"frontier:{path.blocker_reason}"} if path.blocker_reason in intrinsically_unknown_blockers else set()
+    )
+
+    if path.blocker_line is None or path.blocker_entity_index is None:
+        unknown_reasons.add("frontier_provenance_missing")
+        return SymbolicFrontierRelevance((), True, tuple(sorted(unknown_reasons)), ())
+
+    temporal_reason = path.blocker_reason in {
+        "cross_entity_temporal_interleaving_not_modeled",
+        "same_entity_temporal_group_order_not_modeled",
+    }
+    if temporal_reason and path.temporal_boundary_lines:
+        temporal_line = path.temporal_boundary_lines[-1]
+        target_program = _find_program_for_line(
+            index,
+            path,
+            root_program,
+            line=temporal_line,
+            source_entity_index=path.blocker_entity_index,
+        )
+        if target_program is None:
+            unknown_reasons.add("temporal_target_program_missing")
+        else:
+            if not _append_continuation(
+                continuations,
+                target_program,
+                source_entity_index=path.blocker_entity_index,
+                line=temporal_line,
+                origin="target_suffix_after_temporal_boundary",
+            ):
+                unknown_reasons.add("temporal_target_continuation_missing")
+            parent_dispatch = next(
+                (
+                    dispatch
+                    for dispatch in reversed(path.nested_dispatches)
+                    if dispatch.target_node_id == target_program.node.node_id
+                    and path.blocker_entity_index in dispatch.target_entity_indices
+                ),
+                None,
+            )
+            if parent_dispatch is not None:
+                caller = index.program(parent_dispatch.source_node_id)
+                if not _append_continuation(
+                    continuations,
+                    caller,
+                    source_entity_index=parent_dispatch.source_entity_index,
+                    line=parent_dispatch.line,
+                    origin="caller_suffix_after_concurrent_dispatch",
+                ):
+                    unknown_reasons.add("temporal_caller_continuation_missing")
+                target_position = parent_dispatch.target_entity_indices.index(path.blocker_entity_index)
+                for remaining_target in parent_dispatch.target_entity_indices[target_position + 1 :]:
+                    continuation = SymbolicFrontierContinuation(
+                        target_program.node.node_id,
+                        remaining_target,
+                        0,
+                        "remaining_shared_dispatch_target",
+                    )
+                    if continuation not in continuations:
+                        continuations.append(continuation)
+            else:
+                parent_death = next(
+                    (
+                        dispatch
+                        for dispatch in reversed(path.death_dispatches)
+                        if dispatch.target_node_id == target_program.node.node_id
+                        and dispatch.target_entity_index == path.blocker_entity_index
+                    ),
+                    None,
+                )
+                if parent_death is None:
+                    unknown_reasons.add("temporal_parent_dispatch_missing")
+                else:
+                    caller = index.program(parent_death.source_node_id)
+                    if not _append_continuation(
+                        continuations,
+                        caller,
+                        source_entity_index=parent_death.source_entity_index,
+                        line=parent_death.line,
+                        origin="caller_suffix_after_concurrent_death_dispatch",
+                    ):
+                        unknown_reasons.add("temporal_death_caller_continuation_missing")
+    elif path.blocker_reason.startswith("nested_dispatch_") and path.nested_dispatches:
+        dispatch = path.nested_dispatches[-1]
+        caller = index.program(dispatch.source_node_id)
+        if not _append_continuation(
+            continuations,
+            caller,
+            source_entity_index=dispatch.source_entity_index,
+            line=dispatch.line,
+            origin="caller_suffix_after_nested_dispatch_frontier",
+        ):
+            unknown_reasons.add("nested_caller_continuation_missing")
+        if path.blocker_reason == "nested_dispatch_cycle" and dispatch.target_node_id is not None:
+            for target_entity_index in dispatch.target_entity_indices:
+                continuation = SymbolicFrontierContinuation(
+                    dispatch.target_node_id,
+                    target_entity_index,
+                    0,
+                    "cyclic_target_program",
+                )
+                if continuation not in continuations:
+                    continuations.append(continuation)
+    else:
+        blocker_program = _find_program_for_line(
+            index,
+            path,
+            root_program,
+            line=path.blocker_line,
+            source_entity_index=path.blocker_entity_index,
+        )
+        if blocker_program is None:
+            unknown_reasons.add("blocker_program_missing")
+        else:
+            if not _append_continuation(
+                continuations,
+                blocker_program,
+                source_entity_index=path.blocker_entity_index,
+                line=path.blocker_line,
+                origin="program_suffix_after_frontier",
+            ):
+                unknown_reasons.add("blocker_continuation_missing")
+            blocker_instruction = next(
+                instruction
+                for instruction in blocker_program.instructions
+                if _instruction_line(instruction) == path.blocker_line
+            )
+            if isinstance(blocker_instruction, KillInstruction):
+                for target in blocker_instruction.targets:
+                    for node_id in target.runtime_event_node_ids:
+                        continuation = SymbolicFrontierContinuation(
+                            node_id,
+                            target.entity_index,
+                            0,
+                            "unresolved_kill_runtime_event",
+                        )
+                        if continuation not in continuations:
+                            continuations.append(continuation)
+
+    domains: set[StageSemanticDomain] = set()
+    for continuation in continuations:
+        continuation_domains, continuation_unknown_reasons = _collect_continuation_relevance(index, continuation)
+        domains.update(continuation_domains)
+        unknown_reasons.update(continuation_unknown_reasons)
+    return SymbolicFrontierRelevance(
+        tuple(sorted(domains, key=str)),
+        bool(unknown_reasons),
+        tuple(sorted(unknown_reasons)),
+        tuple(continuations),
+    )
+
+
 def walk_symbolic_stage_program(
     index: OrderedStageProgramIndex,
     program: OrderedEventProgram,
@@ -1606,7 +2056,7 @@ def walk_symbolic_stage_program(
         raise ValueError("max_depth must be positive")
     root = SymbolicEventPath(source_entity_index, initial_state)
     budget = _SymbolicPathBudget(max_paths)
-    return _walk_symbolic_stage_from(
+    paths = _walk_symbolic_stage_from(
         index,
         program,
         current_entity_index=source_entity_index,
@@ -1618,6 +2068,7 @@ def walk_symbolic_stage_program(
         stop_at_temporal_boundary=False,
         budget=budget,
     )
+    return tuple(replace(path, frontier_relevance=classify_symbolic_frontier(index, program, path)) for path in paths)
 
 
 def _event_for_node(model: StaticStageModel, node: StageEventNode) -> ScriptEvent:
@@ -1673,17 +2124,21 @@ def _project_kill_action(
         if classname == "script_mover" and script_identity_opaque:
             disposition = KillTargetDisposition.SCRIPT_IDENTITY_OPAQUE
             death_handler_node_id = None
+            runtime_event_node_ids = ()
         elif classname == "script_mover":
             death_handler = next((node for node in nodes if node.event_name == "death"), None)
             if death_handler is None:
                 disposition = KillTargetDisposition.SCRIPT_MOVER_NO_HANDLED_DEATH_EVENT
                 death_handler_node_id = None
+                runtime_event_node_ids = ()
             else:
                 disposition = KillTargetDisposition.SCRIPT_MOVER_OPTIONAL_DEATH_EVENT
                 death_handler_node_id = death_handler.node_id
+                runtime_event_node_ids = (death_handler.node_id,)
         elif classname == "func_constructible" and script_identity_opaque:
             disposition = KillTargetDisposition.SCRIPT_IDENTITY_OPAQUE
             death_handler_node_id = None
+            runtime_event_node_ids = ()
         elif classname == "func_constructible":
             handled_runtime_events = tuple(
                 node
@@ -1700,9 +2155,11 @@ def _project_kill_action(
                 else KillTargetDisposition.CONSTRUCTIBLE_NO_HANDLED_EVENT
             )
             death_handler_node_id = None
+            runtime_event_node_ids = tuple(node.node_id for node in handled_runtime_events)
         else:
             disposition = KillTargetDisposition.DIRECT_REMOVE_NO_SCRIPT_EVENT
             death_handler_node_id = None
+            runtime_event_node_ids = ()
         targets.append(
             KillTargetProjection(
                 entity_index,
@@ -1710,6 +2167,7 @@ def _project_kill_action(
                 script_name,
                 disposition,
                 death_handler_node_id,
+                runtime_event_node_ids,
             )
         )
     return KillInstruction(action, lookup, tuple(targets))
@@ -1827,9 +2285,13 @@ def build_ordered_stage_program_index(
         for item in model.graph.opaque_entities
         if (folded := _ascii_fold(item.entity_name)) not in projected_names
     )
+    w3_kinds_by_entity: dict[int, set[W3EntityKind]] = defaultdict(set)
+    for reference in linked.references:
+        w3_kinds_by_entity[reference.entity_index].add(reference.kind)
     return OrderedStageProgramIndex(
         programs,
         opaque_names,
         MappingProxyType(programs_by_node_id),
         MappingProxyType({name: tuple(handlers) for name, handlers in trigger_handlers_by_script.items()}),
+        MappingProxyType({entity_index: frozenset(kinds) for entity_index, kinds in w3_kinds_by_entity.items()}),
     )
