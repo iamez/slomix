@@ -55,6 +55,14 @@ def test_other_fields_not_clamped():
     assert push.push_quality == 1.0
 
 
+def test_negative_quality_floored_to_zero():
+    """alignment and speed are non-negative, so a negative push_quality
+    is a mangled dump line — floored rather than stored."""
+    p = _parser()
+    p._parse_team_push_line(_line("-0.5"))
+    assert p.team_pushes[0].push_quality == 0.0
+
+
 def test_malformed_line_still_skipped():
     p = _parser()
     p._parse_team_push_line("too;few")
