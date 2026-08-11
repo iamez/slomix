@@ -595,8 +595,8 @@ machine-readable reason why it does not.
 ### Phase 4 - model guarded ordered possibilities
 
 Status: in progress. Every eligible action is retained in source order as a typed
-stage, accumulator, trigger, barrier or unclassified-runtime instruction. Guard
-splitting, accumulator state, nested dispatch and bounded cycle traversal remain
+stage, accumulator, trigger, barrier or source-classified runtime-control instruction.
+Guard splitting, accumulator state, nested dispatch and bounded cycle traversal remain
 pending; no path reachability is published yet.
 
 1. Represent per-entity accumulator and global-accumulator state symbolically.
