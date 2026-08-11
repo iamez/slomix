@@ -1,317 +1,364 @@
 # Known Issues
 
----
-
-## Data-Correctness Audit deferrals (2026-07-25)
-
-Open follow-ups from the full data-correctness audit (deep report is local:
-`docs/AUDIT_DATA_CORRECTNESS_2026-07-25.md`, gitignored by convention).
-
-Addressed by sibling PRs of the same program, **each still open at the time
-of writing** — anything below that references their migrations or behaviour
-only applies once that PR is merged: KIS gsid backfill + migration 064
-(#546), KIS v4 full recompute (#547), proximity serving-layer sweep (#548),
-revive/weapon-accuracy identity + dedup + migration 065 (#549).
-
-| Issue | Severity | Notes |
-|------|----------|-------|
-| **v1.27.x corrective release config MISSING** | **High — blocks deploy** | There is no release config for the corrective release this remediation requires. `scripts/release_configs/` stops at `v1.26.0.sh`, whose MIGRATIONS list is `060/061/062` — it knows nothing of `063`, `064` (#546) or `065` (#549). Deploying the merged stack against that config would run current code against a schema missing the KIS gsid column and the revive/weapon-accuracy identity columns. **Required before any deploy:** a NEW tag/config (do NOT move `v1.27.0`) listing the exact migration delta 063→065, the ledger reconciliation decision for 052–060, `TRUSTED_HOSTS`, plus a CI invariant tying release tag → matching config → exact migrations. Stage apply/`--validate` and a rollback rehearsal are mandatory. Tracked as REL-01 in `docs/research/PROJECT_AUDIT_2026-07-25/07_IMPLEMENTATION_QUEUE.md`. |
-| **Deployment drift (prod + puran)** | High | Prod VM runs v1.25.0 (`b29977c0`) — everything #495+ is not live. Puran runs a hand-edited `proximity_tracker.lua` based on #378 (flags flipped by hand, no #403 duration clamp) and webhook v1.7.0 (missing the #343 detect_pause Lua 5.4 crash fix). **Deploy prerequisites (owner-gated), in order:** (1) env flag `TRUSTED_HOSTS` must be set — `website/backend/main.py` resolves it at import time under the default `SESSION_HTTPS_ONLY=true` and `resolve_trusted_hosts` raises without it, so the web service will not start (value in `scripts/release_configs/v1.26.0.sh`); (2) migrations `060` + `061` + `062` per that same release config, plus `063` which current code needs — `apply_migrations.py` refuses a targeted run while unrelated ledger drift exists, so the whole set goes together; (3) migration `064` — ships with PR #546, NOT in this tree; (4) migration `065` — ships with PR #549, NOT in this tree. Steps 3–4 are only performable once those PRs merge; deploying code from a tree containing them without their migrations breaks the KIS gsid path. `shot_fired=true` on puran is INTENTIONAL — never blind-copy the repo file. |
-| **KIS v2 residue** | Medium | 1,812 `kis-v2` rows remain after the #547 full recompute: 88 from gsid 127 (scope resolver rejects it — no accepted rounds) + 1,724 identity-orphans whose round keys match no gsid-stamped round. Unattributable by design; revisit only if a session-level attribution source appears. |
-| **Proximity NULL-round_id orphans** | Medium | (Applies once PR #549 lands.) Rows imported before migration 065 with a NULL `round_id` carry no round identity (revive/weapon-accuracy) or only a date (other tables) and cannot be relinked or deduped against linked siblings — e.g. one etl_adlernest R2 (gsid 138) has its weapon-accuracy only in identity-less form. Serving keeps them (dropping would shrink long-standing totals). |
-| **Proximity is date-scoped, not gsid** (S7) | Medium | The /proximity/ routers still scope by `session_date`; a midnight-crossing session shows only its pre-midnight rounds when a date is selected (gsid 138: 2 rounds / 88 kills invisible). Storytelling already migrated (GamingSessionScope); proximity needs the same treatment. |
-| **`/skill/composite` + React `client.ts` single-date** | Medium | Last SS-D holdouts; `/skill/composite` also lacks `is_valid` and bot filters entirely. |
-| **skill_router SDS denied source** | Low | Still reads PCS `denied_playtime` (capped) — PR #541's own noted follow-up. |
-| **KIS `distance_multiplier` stub** | Low | Hardcoded `DISTANCE_NORMAL` (kis.py TODO) but stored/returned as a real per-kill field. Needs per-kill distance data. |
-| **`website/migrations/` has no ledger** | Low | The #545 drift guard cannot cover it (documented in that PR). |
-| **`storytelling/loaders.py` per-date only** | Low | Safe today only because `_load_context_for_dates` merges per-date; any future direct caller inherits the midnight bug. |
-| **Formula registry gaps** | Low | ⬇ (reduced by the contract test added with this PR — `pwc` and `power_rating` now carry owner constants; the remaining static entries are explicitly listed in `tests/unit/test_formula_registry_contract.py` so a NEW live formula cannot ship unversioned unnoticed.) |
-| **Formula registry gaps (detail)** | Low | `pwc` now registered (this PR) — its derived WIS/WAA/waa_bayes are described inside that entry rather than as separate formulas, since they are not independently versioned. Still missing entirely: archetypes, moments, synergy, momentum, gravity/space/enabler/lurker, objective_pressure, session_matrix, rivalries, season_awards. 15/20 versions are hand-typed with no verifying test. |
+> **Re-verified against code, database and live logs on 2026-08-11.**
+> Rule for this file: every OPEN entry carries a `Verify:` command that proves
+> the claim today. If the command stops reproducing the claim, the entry is
+> stale — remove it instead of letting it mislead the next session.
+> Closed entries are removed; the closure ledger at the bottom records what was
+> removed in the 2026-08-11 sweep and the proof of closure. Details live in git
+> history.
 
 ---
 
-## Planned: Lua Time Stats Overhaul (Feb 20, 2026) - Major Feature
+## Open — data pipeline
 
-**Summary**: Add comprehensive per-player time tracking to `stats_discord_webhook.lua`, replacing reliance on the c0rnp0rn Lua's buggy time stats. This is a multi-component upgrade covering **all time-related metrics**.
+### Dead-hours orphan mechanism (deterministic permanent orphans) — High
 
-**Background**:
-- `c0rnp0rn-testluawithtimetracking.lua` tracks `death_time_total` and `topshots[i][16]` (denied playtime) but has a **surrender timing bug** — surrender rounds report full map timelimit instead of actual duration.
-- `stats_discord_webhook.lua` already has accurate round timing (real-time hooks, pause-aware, surrender-correct) but currently only outputs round-level metadata, not per-player time stats.
-- The webhook's timing data is currently **debug-only** — not consumed by the bot or website.
-- Goal: move **all** time tracking into the webhook Lua so we have a single, accurate, pause-aware source of truth.
+Three constants disagree and together guarantee permanent proximity orphans for
+rounds played 02:00-05:00 CET on the SSH-poll path:
 
-**New Per-Player Time Stats to Track**:
+- `bot/services/monitor_tasks_mixin.py:112` — endstats monitor returns outright
+  during dead hours (02:00-11:00 CET), before any SSH work.
+- `bot/cogs/proximity_mixins/ingestion_mixin.py` — proximity ingestion loop is
+  NOT dead-hours gated, so proximity rows arrive with no `rounds` parent during
+  that window.
+- `bot/cogs/proximity_mixins/relinker_mixin.py:29` —
+  `_PERMANENT_ORPHAN_AGE_HOURS = 6` (deliberately lowered 48h→6h on 2026-06-09
+  for log-spam reasons) is SHORTER than the 9h dead-hours window, so those rows
+  age out of relinking before imports resume at 11:00.
 
-| Stat | Field | Description |
-|------|-------|-------------|
-| Time Played | `time_played_ms` | Total time the player was in the round (from first spawn to round end, minus disconnects) |
-| Time Alive | `time_alive_ms` | Time spent alive and active (time_played - time_dead) |
-| Time Dead | `time_dead_ms` | Total time spent dead waiting to respawn (pause-aware) |
-| Denied Playtime | `denied_play_time_ms` | Total enemy play time denied by this player's kills (pause-aware) |
-| Time in Pause (while dead) | `pause_while_dead_ms` | Pause time that overlapped with being dead (subtracted from dead time) |
-| Spawn Count | `spawn_count` | Number of times the player spawned this round |
-| Death Count (timed) | `death_count` | Number of deaths with timing data (for avg respawn time calculation) |
-| Avg Respawn Time | `avg_respawn_ms` | Average time between death and next spawn |
-| Longest Life | `longest_life_ms` | Longest single alive streak |
-| Longest Death | `longest_death_ms` | Longest single dead streak (longest wait for respawn) |
+Measured live 2026-08-11 (supervised bot test): 5 rounds → 8,810 dev orphans
+(`team_cohesion` 8,054, `reaction_metric` 492, `kill_outcome` 264); relinker ran
+5×, linked 0. Full evidence: `docs/research/FINDINGS_FOR_CODEX_2026-08-11.md` §1.
 
-**New Round-Level Time Stats**:
+Fix directions (pick one): unify the dead-hours policy across both loops, raise
+`_PERMANENT_ORPHAN_AGE_HOURS` above 10h (respecting why it was lowered), or make
+staleness dead-hours-aware.
 
-| Stat | Field | Description |
-|------|-------|-------------|
-| Round Duration | `round_duration_ms` | Actual round playtime (surrender-correct, pause-subtracted) |
-| Round Start | `round_start_unix` | Unix timestamp of round start (already tracked) |
-| Round End | `round_end_unix` | Unix timestamp of round end (already tracked) |
-| Total Pause Time | `total_pause_ms` | Total pause duration during round (already tracked) |
-| Pause Count | `pause_count` | Number of pauses (already tracked) |
-| Pause Events | `pause_events[]` | Array of {start, end, duration} per pause (already tracked) |
-| Warmup Duration | `warmup_ms` | Warmup phase duration (already tracked) |
-| End Reason | `end_reason` | `objective` / `surrender` / `time_expired` (already tracked) |
-
-**Lua Implementation Details**:
-- **On spawn** (`et_ClientSpawn`): Record spawn timestamp. If player was dead, finalize dead time (minus pause overlap) and credit killer with denied playtime. Track spawn count and alive streak start.
-- **On death** (`et_Obituary` / kill hook): Record death timestamp and killer ID. Finalize alive streak (for longest life). Increment death count.
-- **On pause start/end**: For each currently-dead player, track pause overlap so it can be subtracted from their dead time.
-- **On disconnect/team change**: Finalize any in-progress alive or dead time.
-- **On round end**: Finalize all in-progress timers. Calculate averages. Write file + send webhook.
-- **All times use `os.time()` (Unix seconds) for real-world accuracy**, not game tick timers.
-
-**Output: `-timestats.txt` File Format** (written to `gamestats/`):
-```
-# timestats v1.0
-# map: supply
-# round: 1
-# round_start_unix: 1740000000
-# round_end_unix: 1740001200
-# round_duration_ms: 1185000
-# total_pause_ms: 15000
-# pause_count: 1
-# warmup_ms: 5000
-# end_reason: objective
-# GUID	Name	Team	TimePlayedMS	TimeAliveMS	TimeDeadMS	DeniedPlaytimeMS	PauseWhileDeadMS	SpawnCount	DeathCount	AvgRespawnMS	LongestLifeMS	LongestDeathMS
-ABC123DEF456	Player1	1	1185000	953000	232000	45000	0	8	7	33142	180000	42000
-789GHI012JKL	Player2	2	1185000	870000	315000	12000	15000	11	10	31500	120000	55000
+Verify:
+```bash
+grep -n "2 <= hour < 11" bot/services/monitor_tasks_mixin.py        # gate exists
+grep -n "_PERMANENT_ORPHAN_AGE_HOURS = " bot/cogs/proximity_mixins/relinker_mixin.py  # still 6
+grep -n "dead" bot/cogs/proximity_mixins/ingestion_mixin.py         # no dead-hours gate
 ```
 
-**Implementation Plan**:
+### Re-linker inventory covers 7 of 27 proximity round_id tables — High
 
-| Step | Component | Description |
-|------|-----------|-------------|
-| 1 | **Lua** (`stats_discord_webhook.lua`) | Add all per-player time tracking (spawn/death/alive/dead/denied/pause-overlap/streaks) |
-| 2 | **Lua** (file output) | Write `-timestats.txt` files to `gamestats/` as local backup |
-| 3 | **Lua** (webhook) | Include full per-player time data in existing webhook JSON payload |
-| 4 | **Database** | Add new columns to `player_comprehensive_stats`: `time_played_ms`, `time_alive_ms`, `time_dead_ms`, `denied_playtime_ms`, `spawn_count`, `avg_respawn_ms`, `longest_life_ms`, `longest_death_ms` |
-| 5 | **Bot parser** | Add `TimeStatsParser` to read `-timestats.txt` files |
-| 6 | **Bot webhook handler** | Extract time data from webhook payload (instant path) |
-| 7 | **Bot SSH monitor** | Pick up `-timestats.txt` files as fallback |
-| 8 | **Bot commands/graphs** | Update `SessionGraphGenerator` and relevant Cogs to display new time stats |
-| 9 | **Website backend** | Update FastAPI endpoints to expose new time stats in JSON |
-| 10 | **Website frontend** | Update Chart.js visualizations to include new time stats |
+27 `proximity_*` tables carry a `round_id` column; `LINKAGE_INVENTORY_TABLES`
+(`bot/services/linkage_inventory_service.py:29-40`) lists 7 of them (plus
+`combat_engagement` and `player_track`). ~28,000 orphan rows sit in uncovered
+tables, outside every repair tool — largest: `proximity_team_cohesion` (21,170),
+`proximity_weapon_accuracy` (2,462), `proximity_aim_lock` (2,383),
+`proximity_revive` (1,088). `proximity_shot_fired` was not an exception, just
+the only instance anyone noticed. Additionally 4 round_id tables lack a
+`*_round_lookup_unlinked` partial index (`aim_lock`, `comm_event`,
+`skill_snapshot`, `spawn_select`).
 
-**Why This Is "Better" Than c0rnp0rn's Approach**:
-- Real Unix timestamps instead of game tick timers
-- Correct surrender handling (actual playtime, not timelimit)
-- Per-pause event tracking subtracted from dead time per player
-- Tracks alive streaks, respawn averages, longest life/death — stats c0rnp0rn doesn't have
-- Dual delivery: local file backup + instant webhook
-- SSH fallback if webhook fails
-- Single source of truth for all time data
+Fix is two-part (FIX 9 in `docs/research/FIX_ME_2026-08-11.md`): derive the list
+from the schema with a failing test, then run the re-linker over the expanded
+set with a dry-run report before `--apply`.
 
-**Existing Pipeline Files That Need Modification**:
+Verify:
+```bash
+PGPASSWORD=... psql -h 127.0.0.1 -U etlegacy_user -d etlegacy -tAc \
+  "SELECT COUNT(*) FROM information_schema.columns
+   WHERE column_name='round_id' AND table_schema='public' AND table_name LIKE 'proximity%'"
+# → 27; compare against LINKAGE_INVENTORY_TABLES in bot/services/linkage_inventory_service.py
+```
 
-| File | What Changes | Why |
-|------|-------------|-----|
-| **VPS: Lua Scripts** | | |
-| `vps_scripts/stats_discord_webhook.lua` | Add spawn/death/alive/dead/denied tracking per player, write `-timestats.txt`, include time data in webhook JSON | Core new functionality — this becomes the single source of truth for all time stats |
-| `c0rnp0rn3.lua` (game server) | No changes needed | Keeps generating stats files as before; time fields from it will be superseded by webhook data |
-| **Database** | | |
-| `tools/schema_postgresql.sql` | Add new columns: `time_played_ms`, `time_alive_ms`, `time_dead_ms`, `denied_playtime_ms`, `spawn_count`, `avg_respawn_ms`, `longest_life_ms`, `longest_death_ms` to `player_comprehensive_stats` | Store the new time stats |
-| `postgresql_database_manager.py` | Update INSERT/import queries to include new columns; update schema validation (53→61 columns) | Import pipeline must handle new fields |
-| **Bot: Parser & Import** | | |
-| `bot/community_stats_parser.py` | Add `TimeStatsParser` class or method to parse `-timestats.txt` files | New file format needs a dedicated parser |
-| `bot/ultimate_bot.py` | Update `endstats_monitor` task loop to also look for `-timestats.txt` files; merge time data with main stats import | Orchestration — must pick up new files alongside existing stats files |
-| `bot/automation/file_tracker.py` | Add `-timestats.txt` to tracked file patterns; update duplicate detection | SSH monitor must recognize and pull the new file type |
-| `bot/automation/ssh_handler.py` | Update file download patterns to include `-timestats.txt` | SSH fallback path for new files |
-| `bot/core/database_adapter.py` | Update any hardcoded column lists if present; ensure new columns work with async queries | Abstraction layer must support new fields |
-| **Bot: Commands & Display** | | |
-| `bot/services/session_graph_generator.py` | Update queries and graph generation to use new time fields (time_alive, longest_life, avg_respawn, etc.) | Graphs should show the new accurate time stats |
-| `bot/cogs/stats_cog.py` | Update `!stats`, `!compare` to include new time metrics | Player stats commands should expose new data |
-| `bot/cogs/last_session_cog.py` | Update session summary to show new time breakdown | Session view should use accurate time data |
-| `bot/cogs/session_cog.py` | Update session queries to include new time columns | Session detail commands |
-| `bot/cogs/leaderboard_cog.py` | Add leaderboards for new metrics (longest life, most denied playtime, etc.) | New leaderboard categories |
-| `bot/core/frag_potential.py` | Update `FragPotentialCalculator` to use accurate time_alive from webhook instead of calculated value | More accurate FragPotential with real alive time |
-| **Website: Backend** | | |
-| `website/backend/routers/api.py` | Update round/session/player endpoints to return new time fields | API must expose new data to frontend |
-| `website/backend/services/` | Update any stats aggregation services to include new columns | Backend logic |
-| **Website: Frontend** | | |
-| `website/js/retro-viz.js` | Add new Chart.js panels for time breakdown (alive/dead/denied) | Round visualizer should show new time charts |
-| `website/js/sessions.js` | Update session views to display new time stats | Session pages |
-| `website/js/player-profile.js` | Add time stats to player profile view | Player profile page |
-| `website/js/compare.js` | Add new time metrics to player comparison | Comparison charts |
+### round_number disagreement defeats the relinker on covered tables — Medium
 
-**Backward Compatibility Notes**:
-- Old stats files (without `-timestats.txt`) will continue to work — bot falls back to existing c0rnp0rn time fields
-- New columns should default to `NULL` so existing records aren't affected
-- Webhook handler should gracefully handle missing time data (bot was offline, webhook failed)
-- `-timestats.txt` and webhook provide the same data — bot should prefer webhook (instant) and use file as fallback
+Same physical round (te_escape2, `round_start_unix=1786418696`): the stats path
+recorded `round_number=2`, the proximity path `round_number=1` →
+`round_link_reason='no_rows_for_map_round'`, ~159 rows permanently unlinked even
+though the table has its lookup index. Historic scope on prod: 2 of 643 linkable
+rounds (0.31%); second recorded occurrence (first: mp_sillyctf 2026-06-08).
+Suggested direction: when `map_name` + `round_start_unix` (+`round_end_unix`)
+match exactly, trust the timestamps over `round_number` equality. Evidence:
+`docs/research/FINDINGS_FOR_CODEX_2026-08-11.md` §2.
 
-**Status**: Not started — planning phase
+Verify:
+```sql
+SELECT round_link_reason, COUNT(*) FROM proximity_combat_position
+WHERE round_id IS NULL GROUP BY 1;  -- 'no_rows_for_map_round' rows present
+```
 
----
+### Proximity NULL-round_id orphans predating migration 065 — Medium
 
-## Website UI Bugs (Feb 20, 2026) - Medium Priority
+Rows imported before migration 065 with a NULL `round_id` carry no round
+identity (revive/weapon-accuracy) or only a date (other tables) and cannot be
+relinked or deduped against linked siblings. Serving keeps them (dropping would
+shrink long-standing totals).
 
-### Availability Page - UI/UX Overhaul Needed
+Verify:
+```sql
+SELECT COUNT(*) FROM proximity_weapon_accuracy
+WHERE round_id IS NULL AND round_start_unix IS NULL;  -- > 0 identity-less rows
+```
 
-**Issue**: The Daily Availability page concept is solid but the UI feels empty and uninviting. Even with 2 players queued, the page looks deserted. Specific problems:
+### escort_credit / vehicle_progress: spatial capture is dead, time/count is live — Medium
 
-1. **Day cards are too small and sparse** — The "Upcoming days" cards (Sun, Mon, Tue) show tiny text with `Looking: 0, Available: 0, Maybe: 0, Not playing: 0` in a cramped box. There's no visual weight or energy — just lonely zeros.
-2. **No sense of momentum** — When 2 people are "Maybe" for today, it should feel like something is building. Instead, the "2 responses" label is buried, and the `Maybe: 2` box doesn't stand out enough. There's no excitement or call to action.
-3. **Calendar section is barren** — The "Open calendar" button leads to a secondary view, but the inline calendar preview shows nothing. It's dead space.
-4. **"Current queue" feels disconnected** — Shows "Queue is empty" and "Planning locked" with no context why. The threshold display (`Waiting for Looking threshold: 0/5`) is functional but not motivating.
-5. **Status buttons lack feedback** — After clicking "Maybe", the button highlights but there's no animated confirmation, no "You're in!" moment.
-6. **Notification Settings cramped at bottom** — Settings for Discord/Telegram/Signal notifications feel like an afterthought tacked onto the page.
+Not a "dead table": time/count dimensions ARE captured (`mounted_time_ms`
+2,500-48,500, `samples` 5-97, `max_health`/`destroyed_count`/`final_health`
+incl. the −999 sentinel), while ALL spatial dimensions are zero. The broken
+piece is the spatial capture path in the tracker. Note the live tracker on puran
+now emits a new `# VEHICLE_PROGRESS` file section the repo parser has never seen
+(`docs/research/FINDINGS_FOR_CODEX_2026-08-11.md` §3, §6). Owner decision
+pending (FIX 13): fix Lua capture vs remove the fields from API responses —
+serving zeros as data is worse than either.
 
-**The core problem**: The page is designed for data display (how many, which status) but not for social engagement (who's looking, are we close to a game, should I jump in?). It needs to feel like a lobby, not a spreadsheet.
-
-**Ideas for improvement**:
-- Larger, more prominent player count displays with visual indicators (progress bars toward threshold, color-coded urgency)
-- Show player names/avatars for each status (not just counts) — "carniel and Zlatorog are Maybe" is more compelling than "Maybe: 2"
-- Animated transitions when someone changes status
-- "Almost there!" notifications when queue is 1 player short
-- Consolidate day view — today/tomorrow should be the hero, upcoming days secondary
-- Make the queue threshold visual (e.g., 2/5 progress ring instead of text)
-
-**Status**: Open — design rethink needed
-
-### ~~Greatshot - Broken~~ — RESOLVED (Feb 21, 2026)
-
-**Issue**: Greatshot feature was reported as not working.
-**Investigation**: Code audit (Feb 21) confirmed the upload form IS fully wired — `initGreatshotModule()` registers the submit handler, `uploadDemo()` handles multi-file uploads with progress polling, and app.js routing correctly dispatches to `loadGreatshotView()`. The `skill_rating` optional column mechanism also works correctly with no bypass paths found.
-**Status**: Resolved — feature is functional. If issues persist, debug with browser DevTools Network tab.
-
-### ~~Demo Upload - Broken~~ — RESOLVED (Feb 21, 2026)
-
-**Issue**: Cannot upload demo files (`.dm_84`) through the website.
-**Investigation**: The upload form submit handler is properly bound at lines 954-978 in `greatshot.js`. Form element `demo-upload-form` exists in index.html with `data-bound` dedup guard.
-**Status**: Resolved — upload form is wired and functional.
-
-### ~~Clickable Cards / Expandable Boxes - Broken Across Multiple Views~~ — FIXED (Feb 21, 2026)
-
-**Issue**: Interactive cards and dropdown menu items not responding to clicks.
-**Root Cause**: Document-level `closeAll()` listener was firing before the action handler due to event bubbling. Menu items inside `[role="menu"]` had their click events swallowed.
-**Fix**: Added `event.stopPropagation()` for menu items in `inline-actions.js`, plus explicit menu close after action fires. Also fixed Sessions nav highlighting (`sessions` added to `statsViews` set, `viewToNav` mapping corrected).
-**Status**: Fixed — commit `9d45d3f`
-
-### ~~Sessions View - Unclickable Sessions~~ — FIXED (Feb 21, 2026)
-
-**Issue**: Sessions nav link not highlighting, Sessions not appearing as stats dropdown member.
-**Fix**: Added `'sessions'` to `statsViews` set in `app.js` and fixed nav ID mapping (`sessions` → `sessions-stats`).
-**Status**: Fixed — commit `9d80594`
-
-### Upload Library - "Watch" Button Broken
-
-**Issue**: Clicking the "Watch" button on an uploaded clip does nothing.
-**Expected**: Should open an inline video player or navigate to a watch page.
-**Investigation**: Code looks correct — calls `window.openVideoPlayer()` which creates a modal with a `<video>` element. Should work. Needs browser DevTools debugging.
-**Status**: RESOLVED (verified 2026-06-02 audit). Production serves **legacy JS** (`website/js/`, not the React build). In `website/js/uploads.js` the Watch button (`onclick=window.openVideoPlayer`) is wired and `openVideoPlayer` is defined + exposed on `window` → opens the `<video>` modal correctly. The entry above was stale.
-
-### Upload Library - "Download" Streams Instead of Downloading
-
-**Issue**: Clicking the "Download" button on a clip opens it fullscreen as a streaming video instead of triggering a file download.
-**Expected**: Should prompt a browser file download (`Content-Disposition: attachment`).
-**Root Cause**: Backend's download endpoint serves MP4s with `Content-Disposition: inline` (line 376 in `uploads.py`), which tells the browser to play it rather than download. Non-video files correctly use `Content-Disposition: attachment`.
-**Fix**: Add a `?force_download=true` query param or add the `download` attribute to the `<a>` tag.
-**Status**: RESOLVED in production (verified 2026-06-02 audit). The live **legacy JS** download link already uses `?force_download=true` + the `download` attribute (`website/js/uploads.js:400,645`), so it prompts a file download. The backend `inline` default is intentional (inline playback + Range seeking for Watch). Only the non-deployed React `UploadDetail.tsx` lacks the param — fix there if/when React ships. Entry above reflected the old legacy state.
-
-### Upload Library - "Share" Opens Video Player
-
-**Issue**: Clicking "Share" on a clip shows a popup with an embedded video player.
-**Expected**: Should copy share URL to clipboard or show share options.
-**Investigation**: Not a bug by design — the "Share" button navigates to `#/uploads/{id}`, which is the upload detail page. For videos, the detail page includes an embedded video player + metadata + copy-link button. Consider UX change: "Share" could directly copy the link instead.
-**Status**: Open — design decision needed
+Verify:
+```sql
+SELECT COUNT(*), COUNT(*) FILTER (WHERE total_escort_distance = 0 AND credit_distance = 0)
+FROM proximity_escort_credit;   -- both counts equal (256|256 on 2026-08-11)
+SELECT COUNT(*), COUNT(*) FILTER (WHERE total_distance = 0)
+FROM proximity_vehicle_progress; -- both counts equal (94|94 on 2026-08-11)
+```
 
 ---
 
-## Proximity - Spawn Reaction Time Inflated (Feb 20, 2026) - Fixed
+## Open — Lua / game server
 
-**Issue**: Spawn reaction times showed 2-6 seconds for players who actually react in 50-300ms.
-**Root Cause**: Lua tracker recorded `first_move_time` during warmup. Pre-round spawns had negative `spawn_time_ms`, so `first_move - spawn_time` spanned the zero boundary and inflated values by 4-6 seconds.
-**Fix**:
-- Lua: `et_ClientSpawn` gated on `gamestate == 0` (PLAYING only)
-- Lua: `first_move_time` detection requires `gamestate == 0` and `spawn_time >= 0`
-- API: Added `spawn_time_ms >= 0` filter to exclude pre-existing bad data
+### Lua drift repo ↔ puran (deploy owner-gated) — High
 
-**Status**: Fixed and deployed to game server (Feb 21, 2026). Proximity tracker v4.2 FULL with REACTION_METRICS deployed.
+Live SSH diff 2026-08-07: 4 of 5 scripts on puran differ from the repo
+(`c0rnp0rn8.lua`, `endstats.lua`, `stats_discord_webhook.lua`,
+`proximity_tracker.lua`; only `team-lock.lua` matches). The drift is
+**two-directional** — neither side is a superset:
+
+- Repo has UNDEPLOYED safety fixes: `proximity_tracker.lua` aim_lock duration
+  clamp + `last_seen` round-end flush, and the `c0rnp0rn8.lua` reinf-offset
+  `% 8` clamp (in the repo since #356, 2026-06-02 — the live copy predates it,
+  so `bit.rshift(...) >= 8` can still nil out `aReinfOffset` live and silently
+  kill wave-dependent metrics for a team).
+- Live tracker is AHEAD of the repo: `shot_fired=false` with an 8-line rationale
+  comment, and (new, 2026-08-11) a `# VEHICLE_PROGRESS` output section the repo
+  file does not have.
+
+Consequence already measured in data: `proximity_aim_lock` max duration
+220,000 ms (3 min 40 s, 78× above p99, ~15 rows > 5 s) from the missing clamp.
+
+**Never blind-copy in either direction.** Fix = per-file three-way merge →
+commit → `scp` → activation via full map load (never `lua_restart`), in an
+owner-scheduled window. Plan: `docs/research/BACKLOG_MASTER_2026-08-10.md` §1.2
++ §3b.
+
+Verify (documented, runs against the game server):
+```bash
+ssh et@puran.hehe.si -p 48101 'sha256sum legacy/luascripts/*.lua'  # compare vs repo sha256sum
+grep -n "% 8" vps_scripts/c0rnp0rn8.lua                            # repo clamp present (lines 193-194)
+```
+
+### full_selfkills semantics (owner decision) — Medium
+
+The 2026-05-15 complaint (superboyy/wajs) was not a software bug — DB, stats
+file and Lua all agree. It is a gap between metric semantics and player
+expectation: the `>= limbotime/1000 - 2` threshold yields ~7% hit rate; players
+expect ~50% ("every /kill that wasted a reinforcement"), which
+`>= limbotime/1000/2` would give. Changing it changes historical numbers —
+owner must choose: new separate field, or a clean cut with a date. (The related
+latent `bit.rshift` clamp bug is repo-fixed and tracked under Lua drift above.)
+
+Verify:
+```bash
+grep -n "limbotime" vps_scripts/c0rnp0rn8.lua   # threshold formula unchanged
+```
+
+### Planned: Lua Time Stats Overhaul — largest open plan
+
+Status: **Not started — planning phase** (since Feb 20, 2026). Add
+comprehensive per-player time tracking to `stats_discord_webhook.lua`
+(spawn/death/alive/dead/denied/pause-overlap/streaks), write `-timestats.txt`
+files, extend the webhook JSON, add 8 columns to `player_comprehensive_stats`,
+and switch consumers once the dual-source comparison proves out. This is the
+only **upstream** fix for the time-dead anomalies below; today's mitigation is
+read-time only.
+
+Phased plan (from `docs/research/BACKLOG_MASTER_2026-08-10.md` §2.1 — full
+original 10-step component table in this file's git history, pre-2026-08-11):
+
+| Phase | Content | Why this cut |
+|---|---|---|
+| A | Lua writes `-timestats.txt` + adds data to existing webhook JSON | Data starts flowing, nothing depends on it → zero risk |
+| B | Migration: 8 new nullable columns in `player_comprehensive_stats` | Write without read; old path keeps working |
+| C | `TimeStatsParser` + SSH monitor picks up new files | Dual source: compare new vs old on live data |
+| D | Switch consumers (bot commands, graphs, website) | Only once B/C prove agreement |
+
+Phase A shares the Lua deploy window with the drift merge above.
+
+Verify:
+```bash
+grep -rn "timestats" bot/ website/backend/ --include=*.py | wc -l   # 0 → still not started
+```
+
+### Time dead anomalies — mitigated, upstream fix pending — Low
+
+211-301 player-rows have `time_dead > time_played` (max overage ~573 min),
+caused by the server idling on a stale map + buggy c0rnp0rn Lua time stats.
+Mitigated read-time via `LEAST(time_dead, time_played)` (PR #350/#352) and the
+FM6 idle-map watchdog (PR #354); stored rows are intentionally untouched (owner
+decision — no backfill). True fix = Lua Time Stats Overhaul above.
+
+Verify:
+```sql
+SELECT COUNT(*) FROM player_comprehensive_stats
+WHERE time_dead_minutes > time_played_minutes;  -- still > 200 stored rows
+```
 
 ---
 
-## Time Dead Anomalies (Dec 16, 2025; re-measured 2026-06-02) - Mitigated
+## Open — website backend
 
-> **2026-06-02 update (deep audit, `docs/AUDIT_2026-05-29.md` RCA-1):** the real
-> magnitude is far larger than the original 13 records — **211-301 player-rows**
-> with `time_dead > time_played`, **max overage ~573 min (9.7 h)**. Root cause is
-> the game server sitting **idle on a stale map** after a session (engine keeps
-> accumulating time) + buggy c0rnp0rn Lua time stats. **Mitigated** at read-time:
-> all user-facing consumers now `LEAST(time_dead, time_played)` cap (PR #350, #352);
-> the idle-map root is addressed by the FM6 watchdog (PR #354, full `map` reload).
-> The true upstream fix remains the planned **Lua Time Stats Overhaul** (above).
-> No DB backfill (user decision) — stored rows untouched, capped on display.
+### Proximity is date-scoped, not gsid (S7) — Medium
 
-**Issue (original)**: 13 player records show `time_dead_minutes > time_played_minutes` by small margins (0.06 to 2.06 minutes).
+9 proximity routers still scope by `session_date` (`combat`, `player`,
+`dashboard`, `trades`, `movement`, `quality`, `support`, `events`, `journey`);
+a midnight-crossing session shows only its pre-midnight rounds (gsid 138:
+2 rounds / 88 kills invisible). Storytelling already migrated
+(`GamingSessionScope`); the infrastructure exists
+(`ProximityQueryBuilder.with_session_scope`,
+`website/backend/routers/proximity_helpers.py`). ⚠️ Coordinate with Codex after
+2026-08-15 — these are his redesign files (serving-scope vs UI, overlapping
+files, not content).
 
-**Investigation**:
-- Parser correctly uses round duration for stopwatch mode (design intent)
-- DPM calculations are correct (confirmed by user)
-- Database rebuild reduced corruption from 43 records (100+ min errors) to 13 records (0.06-2.06 min errors)
-- Field mappings verified correct: `tab_fields[22]` = time_played, `[25]` = time_dead_ratio, `[26]` = time_dead_minutes
+Verify:
+```bash
+grep -ln "session_date" website/backend/routers/proximity_{combat,player,dashboard,trades,movement,quality,support,events,journey}.py | wc -l  # 9
+```
 
-**Possible Causes**:
-1. Rounding differences between Lua (`roundNum(value, 1)`) and Python (`int(minutes * 60)`)
-2. Edge cases: players joining mid-round or disconnecting
-3. Potential Lua bug in `death_time_total` accumulation
-4. Acceptable tolerance given system complexity
+### `/skill/composite` single-date, no validity gate — Medium
 
-**Status**: Unsolved — low priority. System works well enough for production use.
-**Reference**: Investigation documented in `/home/samba/.claude/plans/sorted-wandering-horizon.md`
-**Note**: The planned Lua Time Stats Overhaul (above) may resolve this by providing more accurate dead time data directly from the webhook.
+`website/backend/routers/skill_router.py:349-373` accepts only `session_date`,
+falls back to `SELECT MAX(session_date) FROM proximity_kill_outcome`, and has
+neither `is_valid` nor bot filters — bot rounds count into the Comp Skill
+composite. Last SS-D holdout (together with React `client.ts` single-date).
+Fix pattern exists: storytelling routers + `_round_quality_gate_sql`
+(`proximity_helpers.py`).
+
+Verify:
+```bash
+sed -n '349,373p' website/backend/routers/skill_router.py  # no gaming_session_id, no is_valid
+```
+
+### skill_router SDS reads capped PCS `denied_playtime` — Low
+
+Still reads `pcs.denied_playtime` (capped) instead of `effective_denied_ms`
+from `kill_outcome` — PR #541's own noted follow-up.
+
+Verify:
+```bash
+grep -n "denied_playtime" website/backend/routers/skill_router.py  # PCS source still used
+```
+
+### KIS `distance_multiplier` stub — Low
+
+Hardcoded `DISTANCE_NORMAL` (`website/backend/services/storytelling/kis.py:568`)
+but stored/returned as a real per-kill field — falsely precise. Needs per-kill
+distance data, or removal from the response.
+
+Verify:
+```bash
+grep -n "dist_mult = DISTANCE_NORMAL" website/backend/services/storytelling/kis.py
+```
+
+### `website/migrations/` has no ledger — Low
+
+17 SQL files, no drift guard — the #545 ledger cannot cover it (documented in
+that PR). Same-guard adoption is the fix.
+
+Verify:
+```bash
+ls website/migrations/*.sql | wc -l; grep -rl "schema_migrations\|ledger" scripts/apply_migrations.py website/migrations/ | grep -c website  # 0 guard hits
+```
+
+### `storytelling/loaders.py` is per-date only — Low
+
+Safe today only because `_load_context_for_dates`
+(`website/backend/services/storytelling/kis.py:295`) merges per-date fragments;
+any future direct caller of the loaders inherits the midnight bug.
+
+Verify:
+```bash
+grep -n "session_date = \$1" website/backend/services/storytelling/loaders.py | head -3
+```
+
+### Formula registry gaps — Low
+
+23 entries registered. Still missing entirely: archetypes, moments, synergy,
+momentum, gravity/space/enabler/lurker, objective_pressure, session_matrix,
+rivalries, season_awards. Where a module lacks a `FORMULA_VERSION` constant,
+introduce one and have the registry import it (pattern: `_s_effort_version()`);
+`tests/unit/test_formula_registry_contract.py` guards registered entries.
+
+Verify:
+```bash
+grep -c '"name":' website/backend/services/formula_registry.py  # 23
+grep -c "archetype" website/backend/services/formula_registry.py  # 0
+```
 
 ---
 
-## VM Migration — Remaining Items (Feb 20, 2026) - Medium Priority
+## Open — website UX / infra (owner decisions)
 
-Full migration report: [docs/VM_MIGRATION_REPORT_2026-02-20.md](VM_MIGRATION_REPORT_2026-02-20.md)
+### Availability page UX overhaul — needs owner go/no-go
 
-9 issues were hit and resolved during migration. These items from the report's "Remaining Items" section are still open:
+The page works functionally; the complaint set (six items, Feb 2026) is
+cosmetic: built for data display, not social pull. Proposed direction (build in
+legacy JS — `website/js/availability.js` is the live implementation per
+`route-registry.js`): names instead of counts, progress ring to threshold,
+today/tomorrow as hero, status-click micro-confirmation, "1 player missing"
+nudge. Full diagnosis: `docs/research/BACKLOG_MASTER_2026-08-10.md` §1.5.
 
-| Item | Priority | Notes |
-|------|----------|-------|
-| **Samba bot duplication** | Medium | Both Samba and VM bots respond to Discord commands (double replies on `!ping`). Intentional — dev (Samba) + prod (VM). |
-| ~~**GitHub branch sync**~~ | ~~Medium~~ | ~~FIXED (Feb 21, 2026)~~ — All branches merged to main, pushed to GitHub. 38 stale branches deleted (62→24). |
-| **Prometheus monitoring** | Medium | Code scaffolding exists but `prometheus_client` not installed — uses noop counters. |
-| **HTTP → HTTPS redirect** | Low | `http://www.slomix.fyi` still hits Samba directly (bypasses Cloudflare). Shut down Samba web or configure redirect. |
-| **`slomix.fyi` apex domain** | Low | No A record — only `www.slomix.fyi` resolves. Could add CNAME flattening in Cloudflare. |
-| **matplotlib config** | Low | `/opt/slomix/.config` is read-only due to systemd sandboxing. Add `MPLCONFIGDIR=/tmp/matplotlib_cache` to `.env`. Requires VM SSH access. |
+Verify:
+```bash
+grep -n "availability" website/js/route-registry.js | head -3  # legacy JS is live
+```
+
+### Upload Library "Share" opens the detail page — design decision
+
+Not a bug: "Share" navigates to `#/uploads/{id}` (detail page with embedded
+player + copy-link button). UX question: should it copy the link directly?
+
+Verify:
+```bash
+grep -n "uploads/" website/js/uploads.js | head -3
+```
+
+### VM migration remainders — Low
+
+| Item | Status | Verify |
+|---|---|---|
+| `http://www.slomix.fyi` bypasses Cloudflare (hits Samba directly) | Open — shut down Samba web or redirect | `curl -sI http://www.slomix.fyi \| head -3` |
+| `slomix.fyi` apex has no A record | Open (re-verified 2026-08-11: `dig` returns nothing) | `dig +short slomix.fyi` → empty; `dig +short www.slomix.fyi` → Cloudflare IPs |
+| `MPLCONFIGDIR` not in prod `.env` (`/opt/slomix/.config` read-only under systemd sandbox) | Open — add `MPLCONFIGDIR=/tmp/matplotlib_cache` | `ssh slomix-vm 'grep MPLCONFIGDIR /opt/slomix/.env'` |
+
+Note: dual bot replies (Samba + VM answering `!ping`) are **intentional**
+(dev + prod share the guild) — not an issue, recorded here so it stops being
+rediscovered.
 
 ---
 
-## Website Debugging Audit Results (Feb 20, 2026)
+## Closure ledger — removed in the 2026-08-11 re-verification
 
-### API Health: ALL GREEN
+Every row was verified against code/DB before removal. Do not re-open without
+re-running the proof.
 
-| Endpoint | Status |
-|----------|--------|
-| `/api/status` | Online, DB ok |
-| `/health` | Ok |
-| `/api/stats/overview` | 1034 rounds, 10 players, 90 sessions |
-| `/api/sessions` | Returns session list correctly |
-| `/api/uploads` | Returns 3 uploads (covie.mp4, etconfig.cfg, decayflag.mp4) |
-| `/api/proximity/scopes` | 7 sessions with scope data |
-| `/api/proximity/summary` | 9129 engagements, 51 rounds |
-| `/api/hall-of-fame` | Full categories data |
-| `/auth/me` | 401 (expected, not logged in) |
-| `/auth/link/status` | Correct unauthenticated response |
-
-### API Issue
-
-**`/api/proximity/reactions`** returns `{"status":"prototype","ready":false}` — reports "Proximity pipeline not connected" even though other proximity endpoints work fine. Likely a feature flag or missing table. **Update (Feb 21)**: Proximity tracker v4.2 with REACTION_METRICS deployed to game server. Data should populate after next gaming session. The `proximity_reaction_metric` table exists but has 0 rows (awaiting first session with new tracker).
+| Removed claim | Proof of closure (2026-08-11) |
+|---|---|
+| REL-01: "no v1.27.x release config — **blocks deploy**" | `scripts/release_configs/` contains `v1.27.0.sh` … `v1.30.1.sh`; the config-per-release requirement is now a CI contract for EVERY release (`tests/unit/test_release_config_contract.py`, enforced in `.github/workflows/tests.yml` — release PR #630 failed on exactly this until #635 added the config) |
+| "Prod runs v1.25.0 (`b29977c0`), ~50 PR backlog" | Prod deployed to v1.30.0 on 2026-08-10 and to v1.30.1 on 2026-08-11 ~05:55 (`scripts/deploy_release.sh` + `v1.30.1.sh`); migration ledger 045-070 reconciled, `--validate` CLEAN |
+| "Prometheus: code exists, `prometheus_client` not installed" | `prometheus-client==0.24.1` + `prometheus-fastapi-instrumentator==8.1.0` in `requirements.txt:26-27` AND `website/requirements.txt:22-23` |
+| D2: "`proximity_shot_fired` not in the re-linker table list" | Present — `LINKAGE_INVENTORY_TABLES`, `bot/services/linkage_inventory_service.py:37` (coverage of OTHER tables is still open, see above) |
+| W4: "browser errors land nowhere" | `website/js/error-bootstrap.js`, `website/js/error-reporting.js`, `website/backend/routers/client_error_router.py`, `website/frontend/src/lib/errorReporting.ts` |
+| W5: "production builds have no source maps" | `website/frontend/vite.config.ts:39` → `sourcemap: 'hidden'` |
+| W7: "there is no Playwright in the project" | `website/frontend/package.json`: `@playwright/test ^1.62.0` + `test:e2e` script |
+| Webhook token live in the public repo | PR #634 (v1.7.2): `vps_scripts/stats_discord_webhook.lua` now carries `REPLACE_WITH_YOUR_WEBHOOK_URL`; token rotation remains owner-gated (git history) |
+| KIS v2 residue (1,812 `kis-v2` rows) | Closed as **won't-fix by design**: 88 rows from gsid 127 (scope resolver rejects it) + 1,724 identity-orphans matching no gsid-stamped round — unattributable; revisit only if a session-level attribution source appears |
+| Session scoring divergence (bot 2-4 vs BOX 3-7) | Resolved 2026-07-05; empirically 0/12 divergent sums |
+| `guid_canonical` columns not in migrations | Resolved by migrations 035/036, verified |
+| Feb-2026 audit deferral preamble (PRs #546-#549 "still open") | All merged; migrations 063/064/065 present in `migrations/` |
+| Spawn reaction time inflated (2-6 s) | Fixed + deployed Feb 21, 2026 (tracker v4.2, `gamestate == 0` gating) |
+| Greatshot / demo upload / clickable cards / sessions nav / Watch / Download entries | All verified fixed or resolved in prior audits (2026-02-21, 2026-06-02); details in git history |
+| "Website Debugging Audit Results (Feb 20)" snapshot incl. `/api/proximity/reactions` prototype | Stale point-in-time report, not an issue list; `proximity_reaction_metric` now holds 116,854 rows |
+| VM item "Prometheus monitoring" | Same as Prometheus row above |
+| VM item "Samba bot duplication" | Intentional (dev + prod), recorded as a note above, not an issue |
