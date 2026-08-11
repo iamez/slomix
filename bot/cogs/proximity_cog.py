@@ -153,6 +153,16 @@ class ProximityCog(
         # going back to 2026-05-19 — roughly one round per session, while
         # kill_outcome for those SAME rounds was linked fine.
         "proximity_shot_fired",
+        # aim_lock/comm_event/skill_snapshot/spawn_select joined the fanout
+        # 2026-08-11 (FIX 9) together with the detection legs — created by
+        # migration 058 with full round identity but present in no relinker
+        # list, the same hole as shot_fired above. The schema coverage
+        # contract (tests/unit/test_round_id_coverage_contract.py) now fails
+        # if a round_id table is missing from either list.
+        "proximity_aim_lock",
+        "proximity_comm_event",
+        "proximity_skill_snapshot",
+        "proximity_spawn_select",
         "proximity_spawn_timing",
         "proximity_support_summary",
         "proximity_team_cohesion",
