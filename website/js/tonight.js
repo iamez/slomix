@@ -8,7 +8,7 @@
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 import { initTonightBetting } from './bets.js?v=20260804-auth-dedupe';
-import { startLiveTicker, stopLiveTicker, renderLiveTicker, getLiveRoster, liveRosterHasBots } from './live-ticker.js?v=20260811-live3';
+import { startLiveTicker, stopLiveTicker, renderLiveTicker, getLiveRoster, liveRosterHasBots } from './live-ticker.js?v=20260812-live4';
 
 const POLL_MS = 8000;
 let _interval = null;
@@ -18,7 +18,7 @@ const A_COLOR = '#06b6d4';  // Team A — cyan
 const B_COLOR = '#8b5cf6';  // Team B — purple
 
 function _viewActive() {
-    const v = document.getElementById('view-tonight');
+    const v = document.getElementById('view-live');
     return v && v.classList.contains('active') && !v.classList.contains('hidden') && !document.hidden;
 }
 
@@ -374,7 +374,7 @@ export async function loadHomeTonightCard() {
                     <span class="text-xs text-slate-400">maps · on ${escapeHtml(cur.map || data.current_map || '—')}</span>
                     ${leadName ? `<span class="text-xs text-slate-500">(${escapeHtml(leadName)} lead)</span>` : ''}
                 </div>
-                <a href="#/tonight" class="text-xs font-bold text-rose-300 hover:text-white transition">Open Tonight →</a>
+                <a href="#/live" class="text-xs font-bold text-rose-300 hover:text-white transition">Open Live →</a>
             </div>
         </div>`);
 }
