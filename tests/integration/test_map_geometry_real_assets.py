@@ -108,6 +108,25 @@ def geometry_index() -> Pk3GeometryIndex:
     return Pk3GeometryIndex.scan(ETMAIN)
 
 
+def _has_temporal_control(instructions) -> bool:
+    return any(
+        isinstance(instruction, ControlBarrierInstruction)
+        or (
+            isinstance(instruction, RuntimeActionInstruction)
+            and instruction.control_disposition is RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE
+        )
+        for instruction in instructions
+    )
+
+
+def _nested_instructions(instructions):
+    return tuple(
+        instruction
+        for instruction in instructions
+        if isinstance(instruction, (TriggerInstruction, AccumulatorConditionalTrigger))
+    )
+
+
 def test_every_observed_played_map_has_geometry_or_an_explicit_missing_result(geometry_index):
     manifest = geometry_index.manifest(PLAYED_MAPS)
 
@@ -662,19 +681,8 @@ def test_w5b_resolves_nested_dispatch_to_concrete_static_targets(geometry_index)
         index = build_ordered_stage_program_index(model, linked)
 
         for program in index.programs:
-            direct_temporal = any(
-                isinstance(instruction, ControlBarrierInstruction)
-                or (
-                    isinstance(instruction, RuntimeActionInstruction)
-                    and instruction.control_disposition is RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE
-                )
-                for instruction in program.instructions
-            )
-            nested = tuple(
-                instruction
-                for instruction in program.instructions
-                if isinstance(instruction, (TriggerInstruction, AccumulatorConditionalTrigger))
-            )
+            direct_temporal = _has_temporal_control(program.instructions)
+            nested = _nested_instructions(program.instructions)
             program_shapes[(direct_temporal, bool(nested))] += 1
             for instruction in nested:
                 kind = "conditional" if isinstance(instruction, AccumulatorConditionalTrigger) else "plain"
@@ -696,19 +704,8 @@ def test_w5b_resolves_nested_dispatch_to_concrete_static_targets(geometry_index)
                     if dispatch.resolution is SymbolicDispatchResolution.RESOLVED:
                         assert dispatch.target_node_id is not None
                         target_program = index.program(dispatch.target_node_id)
-                        target_temporal = any(
-                            isinstance(target_instruction, ControlBarrierInstruction)
-                            or (
-                                isinstance(target_instruction, RuntimeActionInstruction)
-                                and target_instruction.control_disposition
-                                is RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE
-                            )
-                            for target_instruction in target_program.instructions
-                        )
-                        target_nested = any(
-                            isinstance(target_instruction, (TriggerInstruction, AccumulatorConditionalTrigger))
-                            for target_instruction in target_program.instructions
-                        )
+                        target_temporal = _has_temporal_control(target_program.instructions)
+                        target_nested = bool(_nested_instructions(target_program.instructions))
                         target_group_sizes[(kind, len(dispatch.target_entity_indices))] += 1
                         resolved_pairs[kind] += len(dispatch.target_entity_indices)
                         same_entity_pairs[kind] += sum(
@@ -803,6 +800,7 @@ def test_w5b_bounded_nested_executor_smokes_every_concrete_event_entry(geometry_
                 assert all(
                     len(path.caller_replacement_lines) == len(path.caller_replacement_entity_indices) for path in paths
                 )
+                assert sum(path.blocker_reason == "symbolic_path_budget_exhausted" for path in paths) <= 1
                 counts["entries_walked"] += 1
                 counts["paths"] += len(paths)
                 max_result_paths = max(max_result_paths, len(paths))
@@ -819,24 +817,24 @@ def test_w5b_bounded_nested_executor_smokes_every_concrete_event_entry(geometry_
     assert counts == {
         "entries_walked": 2790,
         "entries_missing_identity": 48,
-        "paths": 5583,
-        "effects": 14517,
-        "guard_decisions": 7760,
-        "nested_dispatches": 7762,
-        "temporal_boundaries": 3465,
-        "caller_replacements": 737,
-        ("completion", SymbolicPathCompletion.SYNCHRONOUS_COMPLETE.value): 2520,
-        ("completion", SymbolicPathCompletion.EVENTUAL_COMPLETE.value): 1314,
-        ("completion", SymbolicPathCompletion.ABORTED_BY_GUARD.value): 320,
-        ("completion", SymbolicPathCompletion.BLOCKED.value): 1429,
-        ("blocker", "cross_entity_temporal_interleaving_not_modeled"): 629,
+        "paths": 4641,
+        "effects": 7911,
+        "guard_decisions": 2187,
+        "nested_dispatches": 2782,
+        "temporal_boundaries": 2693,
+        "caller_replacements": 360,
+        ("completion", SymbolicPathCompletion.SYNCHRONOUS_COMPLETE.value): 2078,
+        ("completion", SymbolicPathCompletion.EVENTUAL_COMPLETE.value): 1155,
+        ("completion", SymbolicPathCompletion.ABORTED_BY_GUARD.value): 314,
+        ("completion", SymbolicPathCompletion.BLOCKED.value): 1094,
+        ("blocker", "cross_entity_temporal_interleaving_not_modeled"): 301,
         ("blocker", "may_dispatch_death_event"): 8,
-        ("blocker", "nested_dispatch_cycle"): 206,
-        ("blocker", "nested_dispatch_missing_handler"): 34,
+        ("blocker", "nested_dispatch_cycle"): 200,
+        ("blocker", "nested_dispatch_missing_handler"): 28,
         ("blocker", "nested_dispatch_target_identity_missing"): 3,
-        ("blocker", "non_exact_accumulator_mutation"): 500,
+        ("blocker", "non_exact_accumulator_mutation"): 447,
         ("blocker", "spawn_failure_frontier"): 4,
-        ("blocker", "symbolic_path_budget_exhausted"): 45,
+        ("blocker", "symbolic_path_budget_exhausted"): 103,
     }
     assert max_result_paths == 16
 

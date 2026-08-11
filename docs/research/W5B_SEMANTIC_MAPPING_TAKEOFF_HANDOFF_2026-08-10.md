@@ -589,7 +589,11 @@ The implementation therefore:
 - records concrete entity provenance parallel to every effect, guard decision,
   temporal boundary, caller replacement and blocker.
 
-The installed program/dispatch takeoff, before recursive execution, is:
+The installed program/dispatch takeoff, before recursive execution, is shown below.
+The four cells count 2,236 concrete resolved source-target **pairs**: one target
+program can contribute several pairs when a script name selects several entities.
+They therefore use a different denominator from the 2,153 eligible event programs
+classified in the following paragraph.
 
 | Direct target shape | Other entity pairs | Same entity pairs |
 |---|---:|---:|
@@ -604,27 +608,29 @@ nested dispatch. These counts classify direct syntax only; recursive outcomes ar
 executor's responsibility.
 
 A read-only smoke walks every concrete installed event entry from explicit
-`SymbolicAccumulatorState.unknown()` with a deliberately small 16-path cap. It is a
+`SymbolicAccumulatorState.unknown()` with a deliberately small 16-unit global
+symbolic-work budget. It is a
 runtime/invariant check, **not** a reachability or domain-coverage verdict:
 
 | Smoke result | Count |
 |---|---:|
 | Concrete entries walked | 2,790 |
 | Programs without a static source identity | 48 |
-| Result paths | 5,583 |
-| Synchronous / eventual / guard-aborted / blocked | 2,520 / 1,314 / 320 / 1,429 |
-| Effect occurrences with concrete provenance | 14,517 |
-| Guard decisions / nested dispatches | 7,760 / 7,762 |
-| Temporal boundaries / same-entity caller replacements | 3,465 / 737 |
-| Cross-entity temporal frontiers | 629 |
-| Active-frame cycle frontiers | 206 |
-| Unknown-entry non-exact mutation frontiers | 500 |
-| Path-budget frontiers at the 16-path smoke cap | 45 |
+| Result paths | 4,641 |
+| Synchronous / eventual / guard-aborted / blocked | 2,078 / 1,155 / 314 / 1,094 |
+| Effect occurrences with concrete provenance | 7,911 |
+| Guard decisions / nested dispatches | 2,187 / 2,782 |
+| Temporal boundaries / same-entity caller replacements | 2,693 / 360 |
+| Cross-entity temporal frontiers | 301 |
+| Active-frame cycle frontiers | 200 |
+| Unknown-entry non-exact mutation frontiers | 447 |
+| Global-work-budget frontiers at the 16-unit smoke budget | 103 |
 
-The other smoke blockers are eight unmodeled `kill` death dispatches, 34 missing
+The other smoke blockers are eight unmodeled `kill` death dispatches, 28 missing
 handlers, three targets without static identity and four possible `create` failures.
-The smaller smoke cap keeps the all-entry acceptance test practical; the public
-executor default remains 4,096 and focused tests cover both path and depth exhaustion.
+The smaller smoke budget keeps the all-entry acceptance test practical; the public
+executor default remains 4,096 and focused tests cover per-event path splitting,
+global recursive-work exhaustion and recursion-depth exhaustion.
 
 ## Proposed code boundary
 
@@ -1215,6 +1221,24 @@ and path plus depth budgets bound acyclic expansion. This deliberately leaves te
 scheduling explicit until real domain relevance proves that a more complex interleaving
 model is needed.
 
+### 2026-08-11 - make the path budget global recursive work
+
+Exact-head review found that bounding each recursive frame's returned paths did not
+bound aggregate work: every admitted parent path could independently invoke a child
+that again produced up to `max_paths` paths. The executor now shares one mutable budget
+across the entire root walk. Every non-empty ordered-program segment consumes one unit
+per symbolic result, the next segment receives only the remaining allowance, and the
+first exhaustion stops further recursion with exactly one
+`symbolic_path_budget_exhausted` frontier.
+
+An empty caller suffix is completion, not work. The first shared-budget draft charged
+that empty return and could reject a root trigger plus synchronous leaf callee even
+when two units admitted both real segments. A regression now freezes the correct
+two-unit completion as well as exhaustion before a third nested segment. The 16-unit
+real-asset smoke additionally asserts no concrete entry publishes more than one budget
+frontier. This budget is a deterministic analyzer safety boundary, not an engine timing
+model or a claim that exhausted paths are unreachable.
+
 ## Current handoff state
 
 Current step: finish exact-head review closure for the bounded nested executor. Guard
@@ -1264,8 +1288,8 @@ Current local verification (Python 3.13.14): the expanded 277-test W1/map-geomet
 unit suite passed without coverage tracing. The focused single-event/resolver/executor
 module contributes 83 passing tests. The expanded resolver-shape acceptance passed in
 57.25 seconds; after the final caller-replacement correction, the every-entry bounded
-executor smoke passed in 29.67 seconds. All 15 current opt-in real-asset tests then
-passed together in 221.86 seconds without
+executor smoke passed in 25.53 seconds with the shared global work budget. All 15
+current opt-in real-asset tests then passed together in 220.75 seconds without
 coverage tracing. On the reviewed resolver head, all 14 then-existing opt-in tests had
 passed in 193.48 seconds. The current acceptance proves no `.ent` override exists
 for any of the 20 indexed BSP maps, includes

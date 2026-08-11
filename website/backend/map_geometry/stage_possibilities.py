@@ -1074,6 +1074,12 @@ def _temporal_nested_outcome(
     )
 
 
+@dataclass(slots=True)
+class _SymbolicPathBudget:
+    remaining: int
+    exhausted: bool = False
+
+
 def _bounded_stage_paths(
     paths: list[SymbolicEventPath],
     *,
@@ -1106,7 +1112,30 @@ def _walk_symbolic_stage_from(
     max_paths: int,
     max_depth: int,
     stop_at_temporal_boundary: bool,
+    budget: _SymbolicPathBudget,
 ) -> tuple[SymbolicEventPath, ...]:
+    if instruction_offset > len(program.instructions):
+        raise RuntimeError(f"instruction offset {instruction_offset} exceeds the ordered program length")
+    if instruction_offset == len(program.instructions):
+        completion = (
+            SymbolicPathCompletion.EVENTUAL_COMPLETE
+            if prefix.temporal_boundary_lines
+            else SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+        )
+        return (replace(prefix, completion=completion),)
+
+    entry_line = _instruction_line(program.instructions[instruction_offset])
+    if budget.remaining < 1:
+        budget.exhausted = True
+        return (
+            _blocked_symbolic_path(
+                prefix,
+                reason="symbolic_path_budget_exhausted",
+                line=entry_line,
+                entity_index=current_entity_index,
+            ),
+        )
+
     nested_index = next(
         (
             position
@@ -1121,16 +1150,24 @@ def _walk_symbolic_stage_from(
         segment,
         source_entity_index=current_entity_index,
         initial_state=prefix.state,
-        max_paths=max_paths,
+        max_paths=budget.remaining,
         stop_at_temporal_boundary=stop_at_temporal_boundary,
     )
+    if len(segment_results) > budget.remaining:
+        raise RuntimeError("single-event walker exceeded the shared symbolic path budget")
+    budget.remaining -= len(segment_results)
     merged = [_merge_symbolic_segment(prefix, result) for result in segment_results]
+    budget_frontiers = [path for path in merged if path.blocker_reason == "symbolic_path_budget_exhausted"]
+    if budget_frontiers:
+        budget.exhausted = True
+        return (budget_frontiers[0],)
     if nested_index is None:
         line = _instruction_line(program.instructions[-1]) if program.instructions else program.node.line
         return _bounded_stage_paths(merged, max_paths=max_paths, line=line, entity_index=current_entity_index)
 
     instruction = program.instructions[nested_index]
-    assert isinstance(instruction, (TriggerInstruction, AccumulatorConditionalTrigger))
+    if not isinstance(instruction, (TriggerInstruction, AccumulatorConditionalTrigger)):
+        raise RuntimeError(f"nested instruction index {nested_index} does not identify a nested dispatch")
     dispatch_line = _instruction_line(instruction)
     expected_blocker = (
         "conditional_trigger_dispatch_not_modeled"
@@ -1161,8 +1198,11 @@ def _walk_symbolic_stage_from(
                         max_paths=max_paths,
                         max_depth=max_depth,
                         stop_at_temporal_boundary=stop_at_temporal_boundary,
+                        budget=budget,
                     )
                 )
+                if budget.exhausted:
+                    break
             else:
                 outcomes.append(path)
             continue
@@ -1186,8 +1226,11 @@ def _walk_symbolic_stage_from(
                     max_paths=max_paths,
                     max_depth=max_depth,
                     stop_at_temporal_boundary=stop_at_temporal_boundary,
+                    budget=budget,
                 )
             )
+            if budget.exhausted:
+                break
             continue
         if dispatch.resolution is not SymbolicDispatchResolution.RESOLVED:
             outcomes.append(
@@ -1200,7 +1243,16 @@ def _walk_symbolic_stage_from(
             )
             continue
 
-        assert dispatch.target_node_id is not None
+        if dispatch.target_node_id is None:
+            outcomes.append(
+                _blocked_symbolic_path(
+                    dispatched_path,
+                    reason="nested_dispatch_resolved_without_handler",
+                    line=dispatch_line,
+                    entity_index=current_entity_index,
+                )
+            )
+            continue
         target_program = index.program(dispatch.target_node_id)
         outcomes.extend(
             _walk_symbolic_target_group(
@@ -1217,8 +1269,11 @@ def _walk_symbolic_stage_from(
                 max_paths=max_paths,
                 max_depth=max_depth,
                 stop_at_temporal_boundary=stop_at_temporal_boundary,
+                budget=budget,
             )
         )
+        if budget.exhausted:
+            break
     return _bounded_stage_paths(
         outcomes,
         max_paths=max_paths,
@@ -1242,6 +1297,7 @@ def _walk_symbolic_target_group(
     max_paths: int,
     max_depth: int,
     stop_at_temporal_boundary: bool,
+    budget: _SymbolicPathBudget,
 ) -> tuple[SymbolicEventPath, ...]:
     target_entity_index = target_entity_indices[target_offset]
     target_frame = (target_entity_index, target_program.node.node_id)
@@ -1279,6 +1335,7 @@ def _walk_symbolic_target_group(
         max_paths=max_paths,
         max_depth=max_depth,
         stop_at_temporal_boundary=target_stop_at_temporal_boundary,
+        budget=budget,
     )
     outcomes: list[SymbolicEventPath] = []
     for path in target_results:
@@ -1293,6 +1350,8 @@ def _walk_symbolic_target_group(
                 if target_paused and target_entity_index == caller_entity_index and last_target
                 else path
             )
+            if budget.exhausted:
+                break
             continue
         if path.completion is SymbolicPathCompletion.TEMPORALLY_SUSPENDED:
             outcomes.append(
@@ -1334,8 +1393,11 @@ def _walk_symbolic_target_group(
                     max_paths=max_paths,
                     max_depth=max_depth,
                     stop_at_temporal_boundary=stop_at_temporal_boundary,
+                    budget=budget,
                 )
             )
+            if budget.exhausted:
+                break
         else:
             outcomes.extend(
                 _walk_symbolic_stage_from(
@@ -1348,8 +1410,11 @@ def _walk_symbolic_target_group(
                     max_paths=max_paths,
                     max_depth=max_depth,
                     stop_at_temporal_boundary=stop_at_temporal_boundary,
+                    budget=budget,
                 )
             )
+            if budget.exhausted:
+                break
     return _bounded_stage_paths(
         outcomes,
         max_paths=max_paths,
@@ -1367,7 +1432,7 @@ def walk_symbolic_stage_program(
     max_paths: int = _DEFAULT_SYMBOLIC_PATH_BUDGET,
     max_depth: int = 64,
 ) -> tuple[SymbolicEventPath, ...]:
-    """Walk statically resolved nested events with bounded fail-closed recursion."""
+    """Walk nested events with one fail-closed work budget across all frames."""
 
     if index.program(program.node.node_id) is not program:
         raise ValueError(f"source program {program.node.node_id!r} does not belong to this ordered-program index")
@@ -1378,6 +1443,7 @@ def walk_symbolic_stage_program(
     if max_depth < 1:
         raise ValueError("max_depth must be positive")
     root = SymbolicEventPath(source_entity_index, initial_state)
+    budget = _SymbolicPathBudget(max_paths)
     return _walk_symbolic_stage_from(
         index,
         program,
@@ -1388,6 +1454,7 @@ def walk_symbolic_stage_program(
         max_paths=max_paths,
         max_depth=max_depth,
         stop_at_temporal_boundary=False,
+        budget=budget,
     )
 
 
