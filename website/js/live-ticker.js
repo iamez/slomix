@@ -27,6 +27,7 @@ const CATEGORIES = {
     objectives: { label: 'Objectives', types: ['POPUP', 'ANNOUNCE', 'OBJECTIVE_DESTROYED', 'DYNAMITE', 'FLAG_PICKUP'], default: true },
     rounds:     { label: 'Rounds',     types: ['ROUND_START', 'ROUND_END', 'EXIT', 'MAP'], default: true },
     kills:      { label: 'Kills',      types: ['KILL'], default: false },
+    support:    { label: 'Support',    types: ['REVIVE', 'SHOVE', 'SUPPLY'], default: false },
     chat:       { label: 'Chat',       types: ['SAY'], default: false },
     votes:      { label: 'Votes',      types: ['CALLVOTE', 'VOTE_PASSED'], default: false },
 };
@@ -73,6 +74,50 @@ function _rosterApply(ev) {
     } else if (ev.type === 'DISCONNECT' && ev.slot != null) {
         _roster.delete(ev.slot);
         _rosterUpdatedAt = Date.now();
+    }
+}
+
+function _slotName(slot) {
+    const e = _roster.get(typeof slot === 'string' ? parseInt(slot, 10) : slot);
+    return e ? e.name : `#${slot}`;
+}
+
+function _slotTeam(slot) {
+    const e = _roster.get(typeof slot === 'string' ? parseInt(slot, 10) : slot);
+    return e ? e.team : null;
+}
+
+/** True when the live roster contains at least one Omni-bot name — the
+ * owner wants bot activity visually distinct from real matches. */
+export function liveRosterHasBots() {
+    for (const { name } of _roster.values()) {
+        if (name && name.startsWith('[BOT]')) return true;
+    }
+    return false;
+}
+
+// Kill streak per slot (consecutive kills without dying) + per-round
+// scoreline collection for the ROUND_END summary. Reset on round bounds.
+const _streak = new Map();
+let _roundScores = [];
+
+function _combatApply(ev) {
+    if (ev.type === 'KILL') {
+        const k = ev.killer_slot, v = ev.victim_slot;
+        if (k !== v) _streak.set(k, (_streak.get(k) || 0) + 1);
+        _streak.set(v, 0);
+        ev._streak = k !== v ? _streak.get(k) : 0;
+        const kt = _slotTeam(k), vt = _slotTeam(v);
+        ev._teamkill = k !== v && kt != null && kt === vt && kt !== 3;
+    } else if (ev.type === 'SCORELINE') {
+        _roundScores.push(ev);
+    } else if (ev.type === 'ROUND_END') {
+        ev._top = _roundScores.slice().sort((a, b) => (b.xp || 0) - (a.xp || 0)).slice(0, 3);
+        _roundScores = [];
+        _streak.clear();
+    } else if (ev.type === 'ROUND_START') {
+        _roundScores = [];
+        _streak.clear();
     }
 }
 
@@ -159,17 +204,37 @@ function _line(ev) {
             return wrap('💥', `Objective destroyed: ${escapeHtml(ev.detail || '')}`, 'text-orange-200');
         case 'DYNAMITE':
             return wrap(ev.action === 'plant' ? '🧨' : '✂️',
-                `Dynamite ${escapeHtml(ev.action || '')}: ${escapeHtml(ev.objective || '')}`, 'text-orange-200');
+                `<b>${escapeHtml(_slotName(ev.slot))}</b> ${ev.action === 'plant' ? 'planted dynamite at' : 'defused dynamite at'} <b>${escapeHtml(ev.objective || '')}</b>`,
+                'text-orange-200');
         case 'FLAG_PICKUP':
-            return wrap('🏳️', 'Objective carrier picked up the flag', 'text-amber-200');
-        case 'KILL':
+            return wrap('🏳️', `<b>${escapeHtml(_slotName(ev.slot))}</b> picked up the objective`, 'text-amber-200');
+        case 'REVIVE': {
+            const [rs, vs] = String(ev.slots || '').split(/\s+/);
+            return wrap('💉', `<b>${escapeHtml(_slotName(rs))}</b> revived <b>${escapeHtml(_slotName(vs))}</b>`, 'text-emerald-200');
+        }
+        case 'SHOVE': {
+            const [a, b] = String(ev.slots || '').split(/\s+/);
+            return wrap('🫸', `${escapeHtml(_slotName(a))} shoved ${escapeHtml(_slotName(b))}`, 'text-slate-400');
+        }
+        case 'SUPPLY': {
+            const [g] = String(ev.slots || '').split(/\s+/);
+            return wrap('🎒', `${escapeHtml(_slotName(g))} handed out supplies`, 'text-slate-400');
+        }
+        case 'KILL': {
+            const streak = ev._streak >= 3 ? ` <span class="text-amber-300 text-xs font-bold">🔥 ${ev._streak} streak</span>` : '';
+            const tk = ev._teamkill ? ` <span class="text-rose-400 text-xs font-black">TEAMKILL</span>` : '';
             return wrap('⚔️',
-                `<b>${escapeHtml(ev.killer || '?')}</b> <span class="text-slate-500">killed</span> ${escapeHtml(ev.victim || '?')} <span class="text-slate-500 text-xs">${escapeHtml((ev.mod || '').replace('MOD_', ''))}</span>`,
-                'text-slate-300');
+                `<b>${escapeHtml(ev.killer || '?')}</b> <span class="text-slate-500">killed</span> ${escapeHtml(ev.victim || '?')} <span class="text-slate-500 text-xs">${escapeHtml((ev.mod || '').replace('MOD_', ''))}</span>${streak}${tk}`,
+                ev._teamkill ? 'text-rose-200' : 'text-slate-300');
+        }
         case 'ROUND_START':
             return `<div class="py-1.5 my-1 text-center text-xs font-black tracking-widest text-emerald-300 border-y border-emerald-500/20">ROUND START</div>`;
-        case 'ROUND_END':
-            return `<div class="py-1.5 my-1 text-center text-xs font-black tracking-widest text-rose-300 border-y border-rose-500/20">ROUND END</div>`;
+        case 'ROUND_END': {
+            const top = (ev._top || [])
+                .map(sc => `${escapeHtml(sc.name || _slotName(sc.slot))} ${sc.xp} XP`)
+                .join(' · ');
+            return `<div class="py-1.5 my-1 text-center text-xs font-black tracking-widest text-rose-300 border-y border-rose-500/20">ROUND END${top ? `<div class="font-normal normal-case tracking-normal text-slate-400 mt-0.5">${top}</div>` : ''}</div>`;
+        }
         case 'EXIT':
             return wrap('🏁', escapeHtml(ev.reason || ''), 'text-rose-200');
         case 'MAP':
@@ -201,6 +266,9 @@ export function renderLiveTicker() {
     const fresh = _events.length
         ? (Date.now() / 1000 - (_events[_events.length - 1].received_at || 0)) < 120
         : false;
+    const botBadge = liveRosterHasBots()
+        ? '<span class="px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 text-[10px] font-black tracking-wider">BOT TEST</span>'
+        : '';
     const dot = _lastFetchOk === false
         ? '<span class="w-2 h-2 rounded-full bg-rose-500 inline-block"></span> feed error'
         : (fresh
@@ -212,7 +280,7 @@ export function renderLiveTicker() {
     safeInsertHTML(host, 'beforeend', `
         <div class="glass-panel rounded-xl p-4 mt-4">
             <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
-                <div class="text-sm font-black text-white tracking-wide">MATCH FEED</div>
+                <div class="text-sm font-black text-white tracking-wide flex items-center gap-2">MATCH FEED ${botBadge}</div>
                 <div class="text-xs text-slate-400 flex items-center gap-1.5">${dot}</div>
             </div>
             <div class="flex flex-wrap gap-1.5 mb-2">${_filterChips()}</div>
