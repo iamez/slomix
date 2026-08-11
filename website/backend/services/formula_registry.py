@@ -70,12 +70,15 @@ def get_registry() -> list[dict]:
     return [
         {
             "name": "et_rating",
-            "version": "v2.0",
+            "version": "v2.1",
             "status": "live",
             "module": "website/backend/services/skill_rating_service.py",
             "surface": "/api/skill/leaderboard, /api/skill/player/*, SkillRating page",
             "summary": "15 percentile-normalized metrics (9 PCS + 6 proximity), "
                        "constant 0.15; population is bot-free and is_valid-gated. "
+                       "v2.1 (FIX 8): published rating is Bayesian-shrunk toward "
+                       "the pool mean with K=40 pseudo-rounds, so small samples "
+                       "no longer outrank 1,000-round track records. "
                        "Known bias: mixes telemetry epochs and median ≈0.57 (not "
                        "0.50) — corrected in the et_performance_v3 shadow.",
         },
