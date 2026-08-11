@@ -139,7 +139,7 @@ function _saveFilters() {
 }
 
 function _viewActive() {
-    const v = document.getElementById('view-tonight');
+    const v = document.getElementById('view-live');
     return v && v.classList.contains('active') && !v.classList.contains('hidden') && !document.hidden;
 }
 
