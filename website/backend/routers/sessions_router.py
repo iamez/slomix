@@ -141,6 +141,11 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
     sessions, session_ids, session_ids_str, player_count = await service.fetch_session_data(
         latest_date
     )
+    if not sessions:
+        # Every round of the newest gaming session can be invalid (bot/test
+        # rounds are quarantined with is_valid = FALSE) — that is "no last
+        # session", not a server error.
+        raise HTTPException(status_code=404, detail="No valid sessions found")
     stats_service = SessionStatsAggregator(db)
 
     gaming_session_id = None
