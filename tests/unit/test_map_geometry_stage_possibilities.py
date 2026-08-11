@@ -884,6 +884,35 @@ def test_stage_walker_reports_a_concrete_active_frame_cycle():
 
 
 def test_stage_walker_enforces_nested_depth_and_global_path_budgets():
+    leaf_index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper go
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                setstate gate default
+            }
+        }
+        """
+    )
+    exact_budget_paths = walk_symbolic_stage_program(
+        leaf_index,
+        leaf_index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+        max_paths=2,
+    )
+    assert len(exact_budget_paths) == 1
+    assert exact_budget_paths[0].completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert _effect_states(exact_budget_paths[0]) == ("default",)
+
     depth_index = _program_index(
         b"""
         game_manager
@@ -924,6 +953,20 @@ def test_stage_walker_enforces_nested_depth_and_global_path_budgets():
     assert len(depth_paths) == 1
     assert depth_paths[0].blocker_reason == "nested_dispatch_depth_exhausted"
     assert depth_paths[0].blocker_entity_index == 2
+
+    recursive_budget_paths = walk_symbolic_stage_program(
+        depth_index,
+        depth_index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+        max_paths=2,
+    )
+    recursive_budget_frontiers = [
+        path for path in recursive_budget_paths if path.blocker_reason == "symbolic_path_budget_exhausted"
+    ]
+    assert len(recursive_budget_frontiers) == 1
+    assert recursive_budget_frontiers[0].blocker_entity_index == 2
+    assert len(recursive_budget_frontiers[0].nested_dispatches) == 2
 
     budget_index = _program_index(
         b"""
