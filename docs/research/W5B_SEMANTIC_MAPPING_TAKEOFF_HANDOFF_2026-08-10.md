@@ -1507,6 +1507,19 @@ Verification on Python 3.13.14 at this checkpoint:
   seconds;
 - Ruff, formatter check and `git diff --check` passed for every touched Python file.
 
+CodeRabbit's first PR #638 review exposed two defensive gaps and three test/evidence
+gaps. Substantive correction head `04e65133` now rejects a kill death-handler projection
+whose target entity is not selected by that handler, retains the named
+`frontier_continuation_entity_not_selected` unknown, treats a resolved nested dispatch
+without a handler as intrinsically unknown, and indexes instruction lines once per
+ordered-program index. Focused executor coverage is 105/105 and the expanded W1-W5b
+unit selection is 277/277. Documentation head `2aef9c40` then passed all 16 opt-in
+real-asset tests over the exact manifest above in 202.08 seconds. The complete repository
+suite passed 4,335 tests with 94 expected environment/fixture-gated skips in 53.03
+seconds; Ruff and `git diff --check` were also clean. This paragraph is a
+documentation-only record of those exact heads and cannot contain the hash of its own
+commit.
+
 ### Adjacent live-test handoff received 2026-08-11
 
 Fable left a read-only live-test report in
