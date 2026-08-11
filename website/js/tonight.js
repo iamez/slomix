@@ -8,6 +8,7 @@
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 import { initTonightBetting } from './bets.js?v=20260804-auth-dedupe';
+import { startLiveTicker, stopLiveTicker, renderLiveTicker } from './live-ticker.js?v=20260811-live';
 
 const POLL_MS = 8000;
 let _interval = null;
@@ -38,13 +39,15 @@ export async function loadTonightView() {
     if (!host) return;
     await _refresh();
     _startPolling();
+    startLiveTicker();
     // Fun-betting panel lives in its own container with its own refresh loop.
     initTonightBetting().catch(e => console.warn('tonight betting init failed', e));
     // Bind the visibility lifecycle once (loadTonightView runs on every entry).
     if (!_lifecycleBound) {
         _lifecycleBound = true;
         document.addEventListener('visibilitychange', () => {
-            if (_viewActive()) _startPolling(); else _stopPolling();
+            if (_viewActive()) { _startPolling(); startLiveTicker(); }
+            else { _stopPolling(); stopLiveTicker(); }
         });
     }
 }
@@ -136,7 +139,9 @@ async function _refresh() {
                 <div class="glass-panel p-8 rounded-xl text-center">
                     <div class="text-xl font-black text-white mb-1">Session warming up…</div>
                     <div class="text-slate-400">Rounds will appear here as they complete.</div>
-                </div>`);
+                </div>
+                <div id="live-ticker"></div>`);
+            renderLiveTicker();
             return;
         }
         _stopPolling();
@@ -233,6 +238,12 @@ async function _refresh() {
 
     _drawMomentum('tonight-momentum', data.momentum || []);
     _drawHoldProb('tonight-holdprob', (data.hold_probability && data.hold_probability.curve) || [], cur.beat_seconds);
+
+    // Live event ticker (S3): shell only — live-ticker.js owns state + poll.
+    if (!host.querySelector('#live-ticker')) {
+        safeInsertHTML(host, 'beforeend', '<div id="live-ticker"></div>');
+    }
+    renderLiveTicker();
 }
 
 function _drawMomentum(canvasId, momentum) {
