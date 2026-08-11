@@ -134,7 +134,15 @@ def _set_may_dispatch_spawn(action: ScriptAction) -> bool:
 
 
 def _followspline_has_wait(action: ScriptAction) -> bool:
-    return any(_ascii_fold(argument) == "wait" for argument in action.arguments)
+    direction = _ascii_fold(action.arguments[0]) if action.arguments else ""
+    option_index = 4 if direction in {"accum", "globalaccum"} else 3
+    while option_index < len(action.arguments):
+        option = _ascii_fold(action.arguments[option_index])
+        if option == "wait":
+            return True
+        # ET:Legacy consumes these values before it reads the next option.
+        option_index += {"length": 2, "roll": 3}.get(option, 1)
+    return False
 
 
 def runtime_action_control_disposition(action: ScriptAction) -> RuntimeActionControlDisposition:
