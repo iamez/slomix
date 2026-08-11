@@ -263,44 +263,30 @@ class _StatsImportMixin:
             if "next_timelimit_minutes" in self._rounds_columns:
                 insert_cols.append("next_timelimit_minutes")
                 insert_vals.append(stats_data.get("next_timelimit_minutes"))
+            # Bot/filler/orphan validity flags — the ONE shared derivation
+            # (round_contract.derive_round_validity), same as the production
+            # PostgreSQL import path, so the two importers can never drift
+            # (aligned on #640 review; the rationale for each rule lives in
+            # the helper's docstring: filler maps, ANY-bot participation
+            # [session-123 incident], orphan R2 through the central gate).
+            from bot.core.round_contract import derive_round_validity
+            validity = derive_round_validity(
+                stats_data,
+                stats_data.get("map_name"),
+                getattr(self.config, "excluded_maps", None) or set(),
+            )
             if "is_bot_round" in self._rounds_columns:
                 insert_cols.append("is_bot_round")
-                insert_vals.append(bool(stats_data.get("is_bot_round", False)))
+                insert_vals.append(validity["is_bot_round"])
             if "bot_player_count" in self._rounds_columns:
                 insert_cols.append("bot_player_count")
-                insert_vals.append(int(stats_data.get("bot_player_count", 0) or 0))
+                insert_vals.append(validity["bot_player_count"])
             if "human_player_count" in self._rounds_columns:
                 insert_cols.append("human_player_count")
-                insert_vals.append(int(stats_data.get("human_player_count", 0) or 0))
+                insert_vals.append(validity["human_player_count"])
             if "is_valid" in self._rounds_columns:
-                # Flag non-competitive rounds so every stats aggregate can
-                # exclude them with a single `AND is_valid` predicate:
-                # - filler maps (e.g. mp_sillyctf while waiting for a sub)
-                # - rounds with ANY Omni-bot participants (testmode sessions;
-                #   owner intent: bots never count for stats — the old
-                #   is_bot_round flag only caught 100%-bot rounds, so a human
-                #   joining the test session leaked it into stats, see the
-                #   2026-06-11 session-123 incident). Default TRUE.
-                # - orphan R2 (R1 not found → raw-cumulative inflated stats):
-                #   route it through the SAME central is_valid gate so every
-                #   aggregate that already filters is_valid excludes it too,
-                #   without each consumer adding a NOT EXISTS guard.
-                from bot.core.round_contract import is_filler_map, round_has_bots
-                excluded = getattr(self.config, "excluded_maps", set())
-                # Detect bots from the player list directly, NOT from
-                # bot_player_count alone: session 123 on prod was all-bots yet
-                # had bot_player_count=0 (the field isn't always populated on
-                # this import path).
-                has_bots = (
-                    int(stats_data.get("bot_player_count", 0) or 0) > 0
-                    or round_has_bots(stats_data.get("players"))
-                )
                 insert_cols.append("is_valid")
-                insert_vals.append(
-                    not is_filler_map(stats_data.get("map_name"), excluded)
-                    and not has_bots
-                    and not stats_data.get("is_orphan_r2")
-                )
+                insert_vals.append(validity["is_valid"])
 
             placeholders = ", ".join(["?"] * len(insert_cols))
             insert_round_query = f"""
