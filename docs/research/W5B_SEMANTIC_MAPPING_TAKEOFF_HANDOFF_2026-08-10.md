@@ -1461,9 +1461,11 @@ The 1,090 current blocked paths split as follows at the 16-unit smoke budget:
 | all three | 98 |
 
 Across overlapping sets, 703 blockers hide dynamic-route semantics, 325 hide objective
-semantics and 122 hide spawn semantics. Of all blockers, 357 have complete domain
-classification and 733 retain at least one named unknown reason. The dominant unknowns
-are 337 state-changing trigger cycles cut by the bounded analyzer, non-W3-linked runtime
+semantics and 122 hide spawn semantics. Of all blockers, 310 have complete domain
+classification and 780 retain at least one named unknown reason. The dominant unknowns
+are 435 nested accumulator-state flows that the relevance-only walk does not propagate
+back into its caller, 337 state-changing trigger cycles cut by the bounded analyzer,
+non-W3-linked runtime
 motion/lifecycle sources (`faceangles`, `stoprotation`, `remove`, `attachtotag`,
 `setrotation`, `setspeed`) and 101 missing typed effect targets. These are coverage
 facts, not permission to relabel the action as irrelevant.
@@ -1481,7 +1483,8 @@ frontiers:
 | all three | 4 |
 
 Only 57/301 have no currently identified required domain; 244/301 hide at least one.
-206/301 are completely classified and 95 retain named identity, route or stateful-cycle
+175/301 are completely classified and 126 retain named identity, route, accumulator-state
+or stateful-cycle
 uncertainty.
 Therefore a bounded suspended-continuation scheduler is required before Phase 5. It
 must model ordering alternatives explicitly; it may not merge delayed callee state into
@@ -1553,6 +1556,17 @@ direct regression passes within 110/110 focused tests, all 16 opt-in real-asset 
 passed in 456.51 seconds with 489,352 KiB peak RSS, and the complete repository passed
 4,340 tests with 94 skips and 30 warnings in 57.62 seconds. Ruff and `git diff --check`
 also passed.
+
+The final self-review found that a resolved nested handler can mutate `accum` or
+`globalaccum`, while the relevance-only traversal currently does not return that final
+state to the caller before scanning later guards. The classifier now retains
+`frontier_relevance_nested_accumulator_state_unpropagated` rather than publishing a
+complete verdict in that case. The installed corpus contains 435 such blocked paths,
+including 50 of the 301 cross-entity frontiers. Domain sets are unchanged, but complete
+classification drops from 357 to 310 overall and from 206 to 175 for cross-entity
+frontiers. Exact state propagation belongs in the W5c suspended-continuation executor;
+W5b must remain fail closed until then. Final exact-head verification is required after
+this correction.
 
 ### Adjacent live-test handoff received 2026-08-11
 
