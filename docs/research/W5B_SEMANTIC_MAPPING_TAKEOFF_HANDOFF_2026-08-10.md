@@ -391,11 +391,45 @@ real-asset accounting covers all 2,153 event nodes and all 10,057 actions:
 | Explicit control barrier | 794 |
 
 The barriers are 745 `wait`, 25 `resetscript` and 24 `halt` actions. The 3,413
-unclassified instructions span 38 command names and remain blockers, not pass-through
-actions, until their callback return/event-replacement behaviour is source-verified.
+runtime instructions span 38 command names. Their current-event control behavior is
+now source-classified; non-immediate categories remain blockers until the path walker
+models the corresponding temporal, lifecycle or nested-event behavior.
 The most common are `wm_teamvoiceannounce` (589), `setchargetimefactor` (420),
 `followspline` (302), `wm_announce` (274), `playsound` (241),
 `wm_addteamvoiceannounce` (239) and `wm_removeteamvoiceannounce` (222).
+
+| Current-event control disposition | Commands | Instructions |
+|---|---:|---:|
+| Immediate continue | 32 | 2,851 |
+| Conditional temporal pause (`followspline`, `faceangles`) | 2 | 445 |
+| Deferred source removal (`remove`) | 1 | 91 |
+| May dispatch a death event (`kill`) | 1 | 13 |
+| May replace script context through spawn (`set`) | 1 | 9 |
+| May stop on spawn failure (`create`) | 1 | 4 |
+
+The 38 command-to-callback bindings come from the pinned
+[`gScriptActions` registry](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script.c#L48-L151).
+The 32 immediate families were checked through their complete callback return paths in
+[`g_script_actions.c` lines 225-718](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L225-L718),
+[`992-1085`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L992-L1085),
+[`1859-2411`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L1859-L2411),
+[`3147-3942`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L3147-L3942)
+and
+[`4094-4500`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L4094-L4500).
+"Immediate" here describes only the current event's control result; every runtime
+instruction remains in the program because its game-state mutation may matter later.
+
+The special cases are pinned to ET:Legacy's
+[`followspline`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L730-L949),
+[`faceangles`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L2996-L3121),
+[`remove`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L3952-L3957),
+[`kill`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L1296-L1308),
+[`set`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L4872-L4963)
+and
+[`create`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L5127-L5182).
+`kill` is not treated as a plain `qtrue`: its target path reaches
+[`G_KillEnts`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_target.c#L841-L879),
+which can invoke mover death callbacks and therefore nested script events.
 
 The resolved plain-trigger graph has 21 cyclic strongly connected components across
 six maps. Every current component is a one-node self-loop and none of those 21 nodes
@@ -905,22 +939,21 @@ unproven rather than borrowing an index from the replaced BSP entity lump.
 
 ## Current handoff state
 
-Current step: classify the 38 retained runtime command families by callback control
-behaviour, then implement Phase 4 guard splitting and symbolic accumulator state over
-the now lossless ordered program. Phase 2's final public coverage surface remains
-intentionally deferred until these control-flow blockers are known.
+Current step: freeze fixtures for the six non-immediate runtime control families, then
+implement Phase 4 guard splitting and symbolic accumulator state over the now lossless
+ordered program. Phase 2's final public coverage surface remains intentionally deferred
+until these control-flow blockers are modeled.
 
-Next action: source-verify which runtime commands are immediate pass-through, temporal
-barriers, event replacement/termination or unsupported. Freeze fixtures for true and
-false abort branches, local versus global state, conditional and plain nested triggers,
-same-entity replacement and the 21 cycle frontiers before writing the path walker.
+Next action: freeze fixtures for true and false abort branches, local versus global
+state, conditional and plain nested triggers, same-entity replacement, deferred source
+removal and the 21 cycle frontiers before writing the path walker.
 
 Known blockers: none for read-only research and local implementation. Any required
 live-build inspection that changes or restarts a service becomes owner-gated; retain
 the affected semantic result as unverified and continue with independent domains.
 
-Current local verification (Python 3.13.14): the complete 198-test W1/map-geometry
-unit suite passed, and all 13 opt-in real-asset tests passed in 286.27 seconds under
+Current local verification (Python 3.13.14): the complete 206-test W1/map-geometry
+unit suite passed, and all 13 opt-in real-asset tests passed in 286.57 seconds under
 repo-wide coverage tracing. The current acceptance proves no `.ent` override exists
 for any of the 20 indexed BSP maps, includes
 all 2,929 typed effect projections and the blocker inventory above, and rechecks W1-W5a,

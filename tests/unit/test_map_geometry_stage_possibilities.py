@@ -10,10 +10,12 @@ from website.backend.map_geometry.stage import ObjectiveCatalog, compile_static_
 from website.backend.map_geometry.stage_possibilities import (
     ControlBarrierInstruction,
     ControlBarrierKind,
+    RuntimeActionControlDisposition,
     RuntimeActionInstruction,
     StageEffectInstruction,
     TriggerInstruction,
     project_ordered_stage_programs,
+    runtime_action_control_disposition,
 )
 from website.backend.map_geometry.stage_semantics import (
     AccumulatorAbortGuard,
@@ -103,7 +105,25 @@ def test_projects_event_actions_in_source_order_without_executing_paths():
     assert isinstance(first.instructions[6], ControlBarrierInstruction)
     assert first.instructions[6].kind is ControlBarrierKind.HALT
     assert isinstance(first.instructions[7], RuntimeActionInstruction)
-    assert first.instructions[7].blocker_reason == "control_semantics_not_classified"
+    assert first.instructions[7].control_disposition is RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
+    assert first.instructions[7].blocker_reason is None
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    (
+        ("wm_announce", RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE),
+        ("followspline", RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE),
+        ("faceangles", RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE),
+        ("remove", RuntimeActionControlDisposition.DEFERRED_SOURCE_REMOVAL),
+        ("kill", RuntimeActionControlDisposition.MAY_DISPATCH_DEATH_EVENT),
+        ("set", RuntimeActionControlDisposition.MAY_REPLACE_SCRIPT_CONTEXT),
+        ("create", RuntimeActionControlDisposition.MAY_STOP_ON_SPAWN_FAILURE),
+        ("future_command", RuntimeActionControlDisposition.UNCLASSIFIED),
+    ),
+)
+def test_runtime_control_dispositions_fail_closed(command, expected):
+    assert runtime_action_control_disposition(command) is expected
 
 
 def test_rejects_stage_and_geometry_models_from_different_maps():
@@ -165,6 +185,5 @@ def test_ent_override_projects_identity_effects_without_reusing_bsp_entity_indic
     assert projection.projection.target_lookup.selected_entity_indices == (1,)
     assert projection.projection.selected_w3_references == ()
     assert (
-        projection.projection.entity_index_link_disposition
-        is W3EntityIndexLinkDisposition.UNPROVEN_IDENTITY_OVERRIDE
+        projection.projection.entity_index_link_disposition is W3EntityIndexLinkDisposition.UNPROVEN_IDENTITY_OVERRIDE
     )

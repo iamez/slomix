@@ -109,10 +109,12 @@ from website.backend.map_geometry.stage_possibilities import (
     ControlBarrierInstruction,
     ControlBarrierKind,
     OrderedEventProgram,
+    RuntimeActionControlDisposition,
     RuntimeActionInstruction,
     StageEffectInstruction,
     TriggerInstruction,
     project_ordered_stage_programs,
+    runtime_action_control_disposition,
 )
 from website.backend.map_geometry.stage_semantics import (
     ETLEGACY_SEMANTICS_COMMIT,
@@ -273,6 +275,7 @@ __all__ = [
     "SURFACE_CLIP_EPSILON",
     "SurfaceType",
     "RuntimeActionInstruction",
+    "RuntimeActionControlDisposition",
     "RuntimeGeometryCoverage",
     "RoundEndEffect",
     "ScriptAction",
@@ -319,6 +322,7 @@ __all__ = [
     "parse_objdata",
     "project_accumulator_action",
     "project_ordered_stage_programs",
+    "runtime_action_control_disposition",
     "project_stage_effect",
     "player_eye_point",
     "target_body_points",

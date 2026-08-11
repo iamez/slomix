@@ -33,6 +33,7 @@ from website.backend.map_geometry import (
     ObjectiveWorldLinkDisposition,
     Pk3GeometryIndex,
     PlayerStance,
+    RuntimeActionControlDisposition,
     RuntimeActionInstruction,
     StageLoadStatus,
     SurfaceType,
@@ -550,6 +551,7 @@ def test_w5b_projects_every_eligible_action_into_an_ordered_nonexecuted_program(
     counts = Counter()
     barriers = Counter()
     runtime_commands = Counter()
+    runtime_controls = Counter()
 
     for map_name in geometry_index.map_names:
         bsp = geometry_index.load_bsp(map_name)
@@ -570,6 +572,7 @@ def test_w5b_projects_every_eligible_action_into_an_ordered_nonexecuted_program(
                     barriers[instruction.kind.value] += 1
                 elif isinstance(instruction, RuntimeActionInstruction):
                     runtime_commands[instruction.action.command] += 1
+                    runtime_controls[instruction.control_disposition.value] += 1
 
     assert counts == {
         "programs": 2153,
@@ -622,6 +625,14 @@ def test_w5b_projects_every_eligible_action_into_an_ordered_nonexecuted_program(
         "constructible_chargebarreq": 1,
         "constructible_weaponclass": 1,
         "constructible_duration": 1,
+    }
+    assert runtime_controls == {
+        RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE.value: 2851,
+        RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE.value: 445,
+        RuntimeActionControlDisposition.DEFERRED_SOURCE_REMOVAL.value: 91,
+        RuntimeActionControlDisposition.MAY_DISPATCH_DEATH_EVENT.value: 13,
+        RuntimeActionControlDisposition.MAY_REPLACE_SCRIPT_CONTEXT.value: 9,
+        RuntimeActionControlDisposition.MAY_STOP_ON_SPAWN_FAILURE.value: 4,
     }
 
 
