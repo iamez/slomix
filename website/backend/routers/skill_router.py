@@ -15,6 +15,7 @@ from website.backend.services.skill_rating_service import (
     CONSTANT,
     MIN_ROUNDS,
     PROXIMITY_METRICS,
+    SHRINKAGE_K,
     WEIGHTS,
     compute_and_store_ratings,
     compute_session_map_ratings,
@@ -114,7 +115,8 @@ async def get_skill_leaderboard(
             "min_rounds": MIN_ROUNDS,
             "weights": WEIGHTS,
             "constant": CONSTANT,
-            "version": "2.0",
+            "version": "2.1",
+            "shrinkage_k": SHRINKAGE_K,
         },
     }
 
@@ -283,18 +285,25 @@ async def get_skill_formula():
     """Return the current rating formula details (transparency)."""
     return {
         "status": "ok",
-        "version": "2.0",
+        "version": "2.1",
         "name": "ET Rating v2",
         "description": (
             "Individual performance rating combining PCS stats + proximity analytics. "
             "Inspired by HLTV 2.0, Valorant ACS, PandaSkill, TrueSkill2, and "
             "competitive ET stopwatch format (class-based, objective-sequential, respawn). "
-            "Format-agnostic: works in 3v3 (medic/engi/covy) and 6v6 (full roster)."
+            "Format-agnostic: works in 3v3 (medic/engi/covy) and 6v6 (full roster). "
+            "v2.1: published rating is sample-size shrunk toward the pool mean "
+            "(Bayesian pseudo-count prior), so a handful of hot rounds no longer "
+            "outranks a thousand-round track record."
         ),
-        "formula": "ET_Rating = constant + sum(weight_i * percentile(metric_i))",
+        "formula": (
+            "raw = constant + sum(weight_i * percentile(metric_i)); "
+            "ET_Rating = (n * raw + K * pool_mean) / (n + K)"
+        ),
         "constant": CONSTANT,
         "weights": WEIGHTS,
         "min_rounds": MIN_ROUNDS,
+        "shrinkage_k": SHRINKAGE_K,
         "metrics": {
             "dpm": "Damage per minute (alive time)",
             "kpr": "Kills per round",
