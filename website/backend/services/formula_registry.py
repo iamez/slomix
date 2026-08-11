@@ -74,7 +74,8 @@ def get_registry() -> list[dict]:
             "status": "live",
             "module": "website/backend/services/skill_rating_service.py",
             "surface": "/api/skill/leaderboard, /api/skill/player/*, SkillRating page",
-            "summary": "15 percentile-normalized metrics (9 PCS + 6 proximity), "
+            "summary": "15 percentile-normalized metrics (8 PCS + 7 proximity — "
+                       "denied_playtime_pm is proximity-sourced since 2026-07-23), "
                        "constant 0.15; population is bot-free and is_valid-gated. "
                        "v2.1 (FIX 8): published rating is Bayesian-shrunk toward "
                        "the pool mean with K=40 pseudo-rounds, so small samples "

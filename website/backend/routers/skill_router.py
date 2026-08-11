@@ -298,7 +298,7 @@ async def get_skill_formula():
         ),
         "formula": (
             "raw = constant + sum(weight_i * percentile(metric_i)); "
-            "ET_Rating = (n * raw + K * pool_mean) / (n + K)"
+            "ET_Rating = (n * raw + shrinkage_k * pool_mean) / (n + shrinkage_k)"
         ),
         "constant": CONSTANT,
         "weights": WEIGHTS,
