@@ -433,10 +433,12 @@ and
 `kill` is not treated as a plain `qtrue`: its target path reaches
 [`G_KillEnts`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_target.c#L841-L879),
 which can invoke mover death callbacks and therefore nested script events.
-All nine installed `set` actions change only `origin`, `contents` or `clipmask` and
-therefore continue immediately. The language-level `classname` form remains a blocker
-because `G_CallSpawn` can parse and dispatch a new `spawn` event on the same entity;
-`classname_nospawn` deliberately avoids that callback. All 91 installed `remove`
+Of the nine installed `set` actions, seven set only `origin` and two set both
+`contents` and `clipmask`; all nine therefore continue immediately. No installed form
+uses `scriptName`, `classname_nospawn` or `classname`. Synthetic source-contract
+fixtures prove that the first two supported-but-unobserved forms also continue, while
+an actual case-insensitive `classname` key remains a blocker because `G_CallSpawn` can
+parse and dispatch a new `spawn` event on the same entity. All 91 installed `remove`
 actions return `qtrue` and schedule source removal for the next frame, so the lifecycle
 effect is retained but does not block later instructions in the same event pass.
 
@@ -961,12 +963,13 @@ into one executable/blocked flag.
 
 Command names alone over-blocked all nine installed `set` actions even though none
 contains the `classname` key that can reach `G_CallSpawn`. Classification now consumes
-the parsed action: `origin`, `contents`, `clipmask`, `scriptName` and
-`classname_nospawn` forms continue the current event, while an actual case-insensitive
-`classname` key remains fail-closed. `remove` retains its deferred lifecycle effect but
-no longer publishes a current-pass blocker because the callback returns `qtrue` before
-the next-frame deletion. The real corpus moves exactly nine instructions from the
-spawn-context blocker to immediate continue; no installed semantic action is erased.
+the parsed action: the installed `origin` and `contents`/`clipmask` forms continue the
+current event, as do supported-but-unobserved `scriptName` and `classname_nospawn`
+forms, while an actual case-insensitive `classname` key remains fail-closed. `remove`
+retains its deferred lifecycle effect but no longer publishes a current-pass blocker
+because the callback returns `qtrue` before the next-frame deletion. The real corpus
+moves exactly nine instructions from the spawn-context blocker to immediate continue;
+no installed semantic action is erased.
 
 ## Current handoff state
 
