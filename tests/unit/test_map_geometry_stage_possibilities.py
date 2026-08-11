@@ -18,6 +18,8 @@ from website.backend.map_geometry.stage import (
 from website.backend.map_geometry.stage_possibilities import (
     ControlBarrierInstruction,
     ControlBarrierKind,
+    KillInstruction,
+    KillTargetDisposition,
     RuntimeActionControlDisposition,
     RuntimeActionInstruction,
     StageEffectInstruction,
@@ -240,6 +242,252 @@ def test_only_actual_current_event_blockers_publish_a_blocker_reason():
 
     assert remove.blocker_reason is None
     assert faceangles.blocker_reason == "conditional_temporal_pause"
+
+
+def test_stage_walker_preserves_optional_script_mover_death_dispatch_and_caller_continuation():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                accum 1 bitset 7
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.target_lookup.selected_entity_indices == (1,)
+    assert instruction.targets[0].disposition is KillTargetDisposition.SCRIPT_MOVER_OPTIONAL_DEATH_EVENT
+    assert instruction.targets[0].death_handler_node_id == index.programs[1].node.node_id
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 2
+    assert all(path.completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE for path in paths)
+    assert all(_effect_states(path) == ("invisible",) for path in paths)
+    no_event = next(path for path in paths if not path.death_dispatches)
+    death_event = next(path for path in paths if path.death_dispatches)
+    assert no_event.state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 0
+    assert death_event.state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 128
+    assert death_event.death_dispatches[0].target_entity_index == 1
+    assert death_event.death_dispatches[0].target_node_id == index.programs[1].node.node_id
+
+
+def test_kill_does_not_invent_a_death_dispatch_for_direct_remove_classes():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                accum 1 set 9
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "misc_mg42", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.targets[0].disposition is KillTargetDisposition.DIRECT_REMOVE_NO_SCRIPT_EVENT
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert _effect_states(paths[0]) == ("invisible",)
+    assert paths[0].death_dispatches == ()
+    assert paths[0].state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 0
+
+
+def test_kill_ignores_an_opaque_script_identity_on_a_direct_remove_class():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                future_action unsupported
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "func_static", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.targets[0].disposition is KillTargetDisposition.DIRECT_REMOVE_NO_SCRIPT_EVENT
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert _effect_states(paths[0]) == ("invisible",)
+
+
+def test_kill_continues_for_a_constructible_without_a_handled_runtime_event():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill construct_target
+                setstate gate invisible
+            }
+        }
+        construct
+        {
+            spawn
+            {
+                wm_announce ready
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {
+                "classname": "func_constructible",
+                "scriptname": "construct",
+                "targetname": "construct_target",
+            },
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.targets[0].disposition is KillTargetDisposition.CONSTRUCTIBLE_NO_HANDLED_EVENT
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert _effect_states(paths[0]) == ("invisible",)
+
+
+def test_kill_blocks_an_unmodeled_constructible_runtime_event():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill construct_target
+                setstate gate invisible
+            }
+        }
+        construct
+        {
+            destroyed final
+            {
+                accum 1 set 9
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {
+                "classname": "func_constructible",
+                "scriptname": "construct",
+                "targetname": "construct_target",
+            },
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "kill_constructible_runtime_event_not_modeled"
+    assert _effect_states(paths[0]) == ()
+
+
+def test_kill_blocks_a_target_missing_from_the_effective_identity_source():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill absent
+                setstate gate invisible
+            }
+        }
+        """
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "kill_target_identity_missing"
+    assert _effect_states(paths[0]) == ()
 
 
 def test_self_dispatch_selects_only_the_concrete_caller_from_a_script_group():
