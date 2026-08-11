@@ -1277,6 +1277,11 @@ Follow-up branch: `agent/map-geometry-w5b-frontier-classification`
 Follow-up base: `origin/main` at
 `e649b0493a1ca0ed9cb3b2a2935ebcd78f494202`
 
+Current substantive follow-up head:
+`f6699b8c` (`feat(map-geometry): classify blocked semantic frontiers`). The
+documentation-only verification commit that records this pointer cannot contain its
+own hash; query PR #638 before treating it as the final reviewed head.
+
 The next increment closes two evidence gaps before Phase 5: source-verified `kill`
 dispatch and per-domain classification of every remaining frontier. It still does not
 publish a runtime state, metric or rating. A frontier classification means only that
@@ -1454,9 +1459,16 @@ that the classifier proves relevant. Empty, fully classified frontiers do not ne
 state-space expansion. Unknown relevance remains fail-closed and is not a scheduling
 target until its identity/semantic reason is resolved.
 
-Focused verification at this checkpoint: 97/97 ordered-possibility unit tests,
-including adversarial temporal, missing-handler, missing-identity and non-exact-state
-cases, and the full 20-map bounded-executor evidence test passed on Python 3.13.
+Verification on Python 3.13.14 at this checkpoint:
+
+- 97/97 focused ordered-possibility unit tests passed, including adversarial temporal,
+  missing-handler, missing-identity and non-exact-state cases;
+- 272/272 expanded W1-W5b unit tests passed;
+- all 15 opt-in real-asset tests passed over the exact 20-map installed corpus in
+  202.06 seconds;
+- the complete repository suite passed 4,327 tests with 93 expected skips in 35.78
+  seconds;
+- Ruff, formatter check and `git diff --check` passed for every touched Python file.
 
 ### Adjacent live-test handoff received 2026-08-11
 
