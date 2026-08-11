@@ -2215,7 +2215,9 @@ class ProximityParserV4:
             # zone. NOTE: this fixes the SCALE only — the metric itself
             # is measured as inverse to kills (kis-v5 removed its
             # multiplier); clamping does not make it predictive.
-            push_quality = min(float(parts[7]), 1.0)
+            # Bounded both ways: alignment and speed are non-negative, so
+            # a negative value is a mangled dump line — floor it at 0.
+            push_quality = max(0.0, min(float(parts[7]), 1.0))
             self.team_pushes.append(TeamPush(
                 start_time=int(parts[0]),
                 end_time=int(parts[1]),
