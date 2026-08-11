@@ -61,3 +61,13 @@ def test_malformed_line_still_skipped():
     p._parse_weapon_accuracy_line("too;few;fields")
     p._parse_weapon_accuracy_line(f"{GUID};X;AXIS;a;b;c;d;e")
     assert p.weapon_accuracy == []
+
+
+def test_negative_counts_are_dropped():
+    """shots=-1/hits=-2 would slip past the clamp (-2 > -1 is false) and
+    still generate 200% accuracy — corrupt lines add no row at all."""
+    p = _parser()
+    p._parse_weapon_accuracy_line(f"{GUID};X;AXIS;3;-1;-2;0;0")
+    p._parse_weapon_accuracy_line(f"{GUID};X;AXIS;3;5;-1;0;0")
+    p._parse_weapon_accuracy_line(f"{GUID};X;AXIS;3;-5;1;0;0")
+    assert p.weapon_accuracy == []
