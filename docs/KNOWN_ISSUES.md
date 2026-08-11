@@ -91,9 +91,12 @@ identity (revive/weapon-accuracy) or only a date (other tables) and cannot be
 relinked or deduped against linked siblings. Serving keeps them (dropping would
 shrink long-standing totals).
 
-Verify:
+Verify (weapon_accuracy is the sentinel table — it is where the identity-less
+form was first proven; the same pre-065 population exists in `proximity_revive`):
 ```sql
 SELECT COUNT(*) FROM proximity_weapon_accuracy
+WHERE round_id IS NULL AND round_start_unix IS NULL;  -- > 0 identity-less rows
+SELECT COUNT(*) FROM proximity_revive
 WHERE round_id IS NULL AND round_start_unix IS NULL;  -- > 0 identity-less rows
 ```
 
@@ -187,14 +190,16 @@ original 10-step component table in this file's git history, pre-2026-08-11):
 
 Phase A shares the Lua deploy window with the drift merge above.
 
-Verify:
+Verify (covers the Lua producer side and the Python consumer side):
 ```bash
-grep -rn "timestats" bot/ website/backend/ --include=*.py | wc -l   # 0 → still not started
+grep -rn "timestats" bot/ website/backend/ vps_scripts/ --include='*.py' --include='*.lua' | wc -l  # 0 → still not started
 ```
 
 ### Time dead anomalies — mitigated, upstream fix pending — Low
 
-211-301 player-rows have `time_dead > time_played` (max overage ~573 min),
+Between 211 and 301 player-rows (explicit range — the count varies with the
+counting method, measured 2026-06-02) have `time_dead > time_played` (max
+overage ~573 min),
 caused by the server idling on a stale map + buggy c0rnp0rn Lua time stats.
 Mitigated read-time via `LEAST(time_dead, time_played)` (PR #350/#352) and the
 FM6 idle-map watchdog (PR #354); stored rows are intentionally untouched (owner
@@ -222,9 +227,10 @@ a midnight-crossing session shows only its pre-midnight rounds (gsid 138:
 2026-08-15 — these are his redesign files (serving-scope vs UI, overlapping
 files, not content).
 
-Verify:
+Verify (both directions: date predicate present, gsid scope absent):
 ```bash
 grep -ln "session_date" website/backend/routers/proximity_{combat,player,dashboard,trades,movement,quality,support,events,journey}.py | wc -l  # 9
+grep -ln "with_session_scope" website/backend/routers/proximity_{combat,player,dashboard,trades,movement,quality,support,events,journey}.py | wc -l  # 0
 ```
 
 ### `/skill/composite` single-date, no validity gate — Medium
@@ -268,9 +274,11 @@ grep -n "dist_mult = DISTANCE_NORMAL" website/backend/services/storytelling/kis.
 17 SQL files, no drift guard — the #545 ledger cannot cover it (documented in
 that PR). Same-guard adoption is the fix.
 
-Verify:
+Verify (the runner's ledger covers only the root `migrations/` directory):
 ```bash
-ls website/migrations/*.sql | wc -l; grep -rl "schema_migrations\|ledger" scripts/apply_migrations.py website/migrations/ | grep -c website  # 0 guard hits
+grep -n "MIGRATIONS_DIR" scripts/apply_migrations.py        # points at root migrations/ only
+grep -c "website/migrations" scripts/apply_migrations.py    # 0 — runner never sees them
+ls website/migrations/*.sql | wc -l                          # 17 unguarded files
 ```
 
 ### `storytelling/loaders.py` is per-date only — Low
@@ -292,10 +300,12 @@ rivalries, season_awards. Where a module lacks a `FORMULA_VERSION` constant,
 introduce one and have the registry import it (pattern: `_s_effort_version()`);
 `tests/unit/test_formula_registry_contract.py` guards registered entries.
 
-Verify:
+Verify (uses the registry contract, not source-line counts):
 ```bash
-grep -c '"name":' website/backend/services/formula_registry.py  # 23
-grep -c "archetype" website/backend/services/formula_registry.py  # 0
+python3 -c "
+from website.backend.services.formula_registry import get_registry
+names = [e['name'] for e in get_registry()]
+print(len(names), 'archetypes' in names)"   # → 23 False
 ```
 
 ---
@@ -360,7 +370,12 @@ re-running the proof.
 | `guid_canonical` columns not in migrations | Resolved by migrations 035/036, verified |
 | Feb-2026 audit deferral preamble (PRs #546-#549 "still open") | All merged; migrations 063/064/065 present in `migrations/` |
 | Spawn reaction time inflated (2-6 s) | Fixed + deployed Feb 21, 2026 (tracker v4.2, `gamestate == 0` gating) |
-| Greatshot / demo upload / clickable cards / sessions nav / Watch / Download entries | All verified fixed or resolved in prior audits (2026-02-21, 2026-06-02); details in git history |
+| Greatshot "broken" | Upload flow fully wired: `initGreatshotModule()` binds the submit handler on `demo-upload-form` and calls `uploadDemo` (`website/js/greatshot.js`, re-verified 2026-08-11) |
+| Demo upload "broken" | Same handler chain as Greatshot above — form binding + `uploadDemo` present in `website/js/greatshot.js` |
+| Clickable cards / dropdown items unresponsive | Fixed in commit `9d45d3fc` (`event.stopPropagation()` for `[role="menu"]` items in `website/js/inline-actions.js`) |
+| Sessions nav not highlighting | Fixed in commit `9d805940` (`'sessions'` added to `statsViews`, nav ID mapping corrected in `website/js/app.js`) |
+| Upload "Watch" button dead | `openVideoPlayer` defined and exposed on `window` in `website/js/uploads.js` (re-verified 2026-08-11: definition + `window.openVideoPlayer =` export both present) |
+| Upload "Download" streams instead of downloading | Download link uses `?force_download=true` + the `download` attribute in `website/js/uploads.js` (re-verified 2026-08-11); backend `inline` default is intentional for Watch's Range seeking |
 | "Website Debugging Audit Results (Feb 20)" snapshot incl. `/api/proximity/reactions` prototype | Stale point-in-time report, not an issue list; `proximity_reaction_metric` now holds 116,854 rows |
 | VM item "Prometheus monitoring" | Same as Prometheus row above |
 | VM item "Samba bot duplication" | Intentional (dev + prod), recorded as a note above, not an issue |
