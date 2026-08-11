@@ -83,6 +83,10 @@ def _post(url: str, secret: str, batch: list[dict]) -> bool:
         headers={
             "Content-Type": "application/json",
             "X-Internal-Token": secret,
+            # Cloudflare's Browser Integrity Check 403s the default
+            # Python-urllib UA at the edge (measured 2026-08-11); any
+            # honest custom UA passes.
+            "User-Agent": "slomix-liveview-tailer/1.0",
         },
     )
     for attempt in (1, 2):
