@@ -24,6 +24,8 @@ from website.backend.map_geometry import (
     EntityTargetEffectProjection,
     GlobalStageEffectProjection,
     GotoMarkerEffectProjection,
+    KillInstruction,
+    KillTargetDisposition,
     MainObjectiveEffect,
     MainObjectiveEffectProjection,
     MainObjectiveSelectorForm,
@@ -578,6 +580,7 @@ def test_w5b_projects_every_eligible_action_into_an_ordered_nonexecuted_program(
     barriers = Counter()
     runtime_commands = Counter()
     runtime_controls = Counter()
+    kill_dispositions = Counter()
 
     for map_name in geometry_index.map_names:
         bsp = geometry_index.load_bsp(map_name)
@@ -599,11 +602,14 @@ def test_w5b_projects_every_eligible_action_into_an_ordered_nonexecuted_program(
                 elif isinstance(instruction, RuntimeActionInstruction):
                     runtime_commands[instruction.action.command] += 1
                     runtime_controls[instruction.control_disposition.value] += 1
+                elif isinstance(instruction, KillInstruction):
+                    kill_dispositions.update(target.disposition for target in instruction.targets)
 
     assert counts == {
         "programs": 2153,
         "instructions": 10057,
-        "RuntimeActionInstruction": 3413,
+        "RuntimeActionInstruction": 3400,
+        "KillInstruction": 13,
         "StageEffectInstruction": 2929,
         "TriggerInstruction": 1315,
         "AccumulatorMutation": 994,
@@ -638,7 +644,6 @@ def test_w5b_projects_every_eligible_action_into_an_ordered_nonexecuted_program(
         "wm_number_of_objectives": 20,
         "wm_set_round_timelimit": 20,
         "wm_set_defending_team": 17,
-        "kill": 13,
         "stoprotation": 13,
         "setspeed": 10,
         "set": 9,
@@ -656,8 +661,12 @@ def test_w5b_projects_every_eligible_action_into_an_ordered_nonexecuted_program(
         RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE.value: 2860,
         RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE.value: 445,
         RuntimeActionControlDisposition.DEFERRED_SOURCE_REMOVAL.value: 91,
-        RuntimeActionControlDisposition.MAY_DISPATCH_DEATH_EVENT.value: 13,
         RuntimeActionControlDisposition.MAY_STOP_ON_SPAWN_FAILURE.value: 4,
+    }
+    assert kill_dispositions == {
+        KillTargetDisposition.DIRECT_REMOVE_NO_SCRIPT_EVENT: 8,
+        KillTargetDisposition.CONSTRUCTIBLE_NO_HANDLED_EVENT: 3,
+        KillTargetDisposition.SCRIPT_MOVER_OPTIONAL_DEATH_EVENT: 2,
     }
 
 
@@ -808,6 +817,7 @@ def test_w5b_bounded_nested_executor_smokes_every_concrete_event_entry(geometry_
                     counts["effects"] += len(path.effects)
                     counts["guard_decisions"] += len(path.guard_decisions)
                     counts["nested_dispatches"] += len(path.nested_dispatches)
+                    counts["death_dispatches"] += len(path.death_dispatches)
                     counts["temporal_boundaries"] += len(path.temporal_boundary_lines)
                     counts["caller_replacements"] += len(path.caller_replacement_lines)
                     counts[("completion", path.completion.value)] += 1
@@ -817,22 +827,22 @@ def test_w5b_bounded_nested_executor_smokes_every_concrete_event_entry(geometry_
     assert counts == {
         "entries_walked": 2790,
         "entries_missing_identity": 48,
-        "paths": 4641,
+        "paths": 4645,
         "effects": 7911,
         "guard_decisions": 2187,
         "nested_dispatches": 2782,
-        "temporal_boundaries": 2693,
+        "death_dispatches": 4,
+        "temporal_boundaries": 2695,
         "caller_replacements": 360,
-        ("completion", SymbolicPathCompletion.SYNCHRONOUS_COMPLETE.value): 2078,
-        ("completion", SymbolicPathCompletion.EVENTUAL_COMPLETE.value): 1155,
+        ("completion", SymbolicPathCompletion.SYNCHRONOUS_COMPLETE.value): 2084,
+        ("completion", SymbolicPathCompletion.EVENTUAL_COMPLETE.value): 1157,
         ("completion", SymbolicPathCompletion.ABORTED_BY_GUARD.value): 314,
-        ("completion", SymbolicPathCompletion.BLOCKED.value): 1094,
+        ("completion", SymbolicPathCompletion.BLOCKED.value): 1090,
         ("blocker", "cross_entity_temporal_interleaving_not_modeled"): 301,
-        ("blocker", "may_dispatch_death_event"): 8,
         ("blocker", "nested_dispatch_cycle"): 200,
         ("blocker", "nested_dispatch_missing_handler"): 28,
         ("blocker", "nested_dispatch_target_identity_missing"): 3,
-        ("blocker", "non_exact_accumulator_mutation"): 447,
+        ("blocker", "non_exact_accumulator_mutation"): 451,
         ("blocker", "spawn_failure_frontier"): 4,
         ("blocker", "symbolic_path_budget_exhausted"): 103,
     }

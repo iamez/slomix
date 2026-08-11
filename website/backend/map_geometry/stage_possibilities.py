@@ -34,6 +34,7 @@ from website.backend.map_geometry.stage_semantics import (
     AccumulatorScope,
     ControlProjectionIssue,
     EffectSourceIdentity,
+    EntityIdentityLookup,
     EntityIdentityNamespace,
     StageEffectProjection,
     W3LinkedIdentityIndex,
@@ -56,6 +57,15 @@ class RuntimeActionControlDisposition(StrEnum):
     MAY_REPLACE_SCRIPT_CONTEXT = "may_replace_script_context"
     MAY_STOP_ON_SPAWN_FAILURE = "may_stop_on_spawn_failure"
     UNCLASSIFIED = "unclassified"
+
+
+class KillTargetDisposition(StrEnum):
+    DIRECT_REMOVE_NO_SCRIPT_EVENT = "direct_remove_no_script_event"
+    SCRIPT_MOVER_NO_HANDLED_DEATH_EVENT = "script_mover_no_handled_death_event"
+    SCRIPT_MOVER_OPTIONAL_DEATH_EVENT = "script_mover_optional_death_event"
+    CONSTRUCTIBLE_NO_HANDLED_EVENT = "constructible_no_handled_event"
+    CONSTRUCTIBLE_RUNTIME_EVENT_NOT_MODELED = "constructible_runtime_event_not_modeled"
+    SCRIPT_IDENTITY_OPAQUE = "script_identity_opaque"
 
 
 class SymbolicPathCompletion(StrEnum):
@@ -188,6 +198,31 @@ class RuntimeActionInstruction:
         return self.control_disposition.value
 
 
+@dataclass(frozen=True, slots=True)
+class KillTargetProjection:
+    entity_index: int
+    classname: str
+    script_name: str | None
+    disposition: KillTargetDisposition
+    death_handler_node_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class KillInstruction:
+    action: ScriptAction
+    target_lookup: EntityIdentityLookup
+    targets: tuple[KillTargetProjection, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicDeathDispatch:
+    source_node_id: str
+    source_entity_index: int
+    target_entity_index: int
+    target_node_id: str
+    line: int
+
+
 OrderedEventInstruction: TypeAlias = (
     AccumulatorMutation
     | AccumulatorAbortGuard
@@ -196,6 +231,7 @@ OrderedEventInstruction: TypeAlias = (
     | StageEffectInstruction
     | TriggerInstruction
     | ControlBarrierInstruction
+    | KillInstruction
     | RuntimeActionInstruction
 )
 
@@ -672,6 +708,7 @@ class SymbolicEventPath:
     temporal_boundary_lines: tuple[int, ...] = ()
     temporal_boundary_entity_indices: tuple[int, ...] = ()
     nested_dispatches: tuple[SymbolicDispatchProjection, ...] = ()
+    death_dispatches: tuple[SymbolicDeathDispatch, ...] = ()
     caller_replacement_lines: tuple[int, ...] = ()
     caller_replacement_entity_indices: tuple[int, ...] = ()
     completion: SymbolicPathCompletion = SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
@@ -772,6 +809,28 @@ def _instruction_line(instruction: OrderedEventInstruction) -> int:
     if isinstance(instruction, TriggerInstruction):
         return instruction.edge.line
     return instruction.action.line
+
+
+def _kill_instruction_blocker_reason(instruction: KillInstruction) -> str | None:
+    if not instruction.action.arguments:
+        return "kill_target_missing"
+    if not instruction.targets:
+        return "kill_target_identity_missing"
+    dispositions = {target.disposition for target in instruction.targets}
+    if KillTargetDisposition.SCRIPT_IDENTITY_OPAQUE in dispositions:
+        return "kill_script_identity_opaque"
+    if KillTargetDisposition.CONSTRUCTIBLE_RUNTIME_EVENT_NOT_MODELED in dispositions:
+        return "kill_constructible_runtime_event_not_modeled"
+    dispatch_targets = tuple(
+        target
+        for target in instruction.targets
+        if target.disposition is KillTargetDisposition.SCRIPT_MOVER_OPTIONAL_DEATH_EVENT
+    )
+    if len(dispatch_targets) > 1:
+        return "kill_multi_target_death_dispatch_not_modeled"
+    if dispatch_targets:
+        return "kill_death_dispatch_not_modeled"
+    return None
 
 
 def walk_symbolic_event_program(
@@ -918,6 +977,21 @@ def walk_symbolic_event_program(
                     )
                 )
                 continue
+            if isinstance(instruction, KillInstruction):
+                blocker_reason = _kill_instruction_blocker_reason(instruction)
+                if blocker_reason is None:
+                    continuing.append(path)
+                else:
+                    finished.append(
+                        replace(
+                            path,
+                            completion=SymbolicPathCompletion.BLOCKED,
+                            blocker_reason=blocker_reason,
+                            blocker_line=instruction.action.line,
+                            blocker_entity_index=source_entity_index,
+                        )
+                    )
+                continue
             if isinstance(instruction, ControlProjectionIssue):
                 finished.append(
                     replace(
@@ -1006,6 +1080,7 @@ def _merge_symbolic_segment(
             prefix.temporal_boundary_entity_indices + segment.temporal_boundary_entity_indices
         ),
         nested_dispatches=prefix.nested_dispatches + segment.nested_dispatches,
+        death_dispatches=prefix.death_dispatches + segment.death_dispatches,
         caller_replacement_lines=prefix.caller_replacement_lines + segment.caller_replacement_lines,
         caller_replacement_entity_indices=(
             prefix.caller_replacement_entity_indices + segment.caller_replacement_entity_indices
@@ -1148,7 +1223,10 @@ def _walk_symbolic_stage_from(
         (
             position
             for position in range(instruction_offset, len(program.instructions))
-            if isinstance(program.instructions[position], (TriggerInstruction, AccumulatorConditionalTrigger))
+            if isinstance(
+                program.instructions[position],
+                (TriggerInstruction, AccumulatorConditionalTrigger, KillInstruction),
+            )
         ),
         None,
     )
@@ -1174,14 +1252,15 @@ def _walk_symbolic_stage_from(
         return _bounded_stage_paths(merged, max_paths=max_paths, line=line, entity_index=current_entity_index)
 
     instruction = program.instructions[nested_index]
-    if not isinstance(instruction, (TriggerInstruction, AccumulatorConditionalTrigger)):
+    if not isinstance(instruction, (TriggerInstruction, AccumulatorConditionalTrigger, KillInstruction)):
         raise RuntimeError(f"nested instruction index {nested_index} does not identify a nested dispatch")
     dispatch_line = _instruction_line(instruction)
-    expected_blocker = (
-        "conditional_trigger_dispatch_not_modeled"
-        if isinstance(instruction, AccumulatorConditionalTrigger)
-        else "trigger_dispatch_not_modeled"
-    )
+    if isinstance(instruction, AccumulatorConditionalTrigger):
+        expected_blocker = "conditional_trigger_dispatch_not_modeled"
+    elif isinstance(instruction, TriggerInstruction):
+        expected_blocker = "trigger_dispatch_not_modeled"
+    else:
+        expected_blocker = _kill_instruction_blocker_reason(instruction)
     outcomes: list[SymbolicEventPath] = []
     for path in merged:
         is_dispatch_branch = (
@@ -1213,6 +1292,81 @@ def _walk_symbolic_stage_from(
                     break
             else:
                 outcomes.append(path)
+            continue
+
+        if isinstance(instruction, KillInstruction):
+            if expected_blocker != "kill_death_dispatch_not_modeled":
+                outcomes.append(path)
+                continue
+            dispatch_targets = tuple(
+                target
+                for target in instruction.targets
+                if target.disposition is KillTargetDisposition.SCRIPT_MOVER_OPTIONAL_DEATH_EVENT
+            )
+            if len(dispatch_targets) != 1 or dispatch_targets[0].death_handler_node_id is None:
+                outcomes.append(
+                    _blocked_symbolic_path(
+                        path,
+                        reason="kill_death_dispatch_projection_invalid",
+                        line=dispatch_line,
+                        entity_index=current_entity_index,
+                    )
+                )
+                continue
+            target = dispatch_targets[0]
+
+            # ``script_mover_die`` clears ``die`` after use. Static W5b entry
+            # state cannot prove whether an earlier lifecycle transition has
+            # already done so, therefore both the no-event and event branches
+            # are legal possibilities.
+            outcomes.extend(
+                _walk_symbolic_stage_from(
+                    index,
+                    program,
+                    current_entity_index=current_entity_index,
+                    instruction_offset=nested_index + 1,
+                    prefix=_resume_symbolic_path(path),
+                    active_frames=active_frames,
+                    max_paths=max_paths,
+                    max_depth=max_depth,
+                    stop_at_temporal_boundary=stop_at_temporal_boundary,
+                    budget=budget,
+                )
+            )
+            if budget.exhausted:
+                break
+
+            death_dispatch = SymbolicDeathDispatch(
+                program.node.node_id,
+                current_entity_index,
+                target.entity_index,
+                target.death_handler_node_id,
+                dispatch_line,
+            )
+            dispatched_path = replace(
+                path,
+                death_dispatches=path.death_dispatches + (death_dispatch,),
+            )
+            outcomes.extend(
+                _walk_symbolic_target_group(
+                    index,
+                    caller_program=program,
+                    caller_entity_index=current_entity_index,
+                    caller_instruction_offset=nested_index + 1,
+                    target_program=index.program(target.death_handler_node_id),
+                    target_entity_indices=(target.entity_index,),
+                    target_offset=0,
+                    dispatch_line=dispatch_line,
+                    prefix=_resume_symbolic_path(dispatched_path),
+                    active_frames=active_frames,
+                    max_paths=max_paths,
+                    max_depth=max_depth,
+                    stop_at_temporal_boundary=stop_at_temporal_boundary,
+                    budget=budget,
+                )
+            )
+            if budget.exhausted:
+                break
             continue
 
         dispatch = resolve_symbolic_nested_dispatch(
@@ -1489,6 +1643,78 @@ def _take_line_item(items_by_line, line: int, *, kind: str, node_id: str):
     return items.pop(0)
 
 
+def _script_program_nodes(model: StaticStageModel, script_name: str) -> tuple[StageEventNode, ...]:
+    folded = _ascii_fold(script_name)
+    return tuple(node for node in model.graph.nodes if _ascii_fold(node.entity_name) == folded)
+
+
+def _has_only_opaque_script_identity(model: StaticStageModel, script_name: str) -> bool:
+    if _script_program_nodes(model, script_name):
+        return False
+    folded = _ascii_fold(script_name)
+    return any(_ascii_fold(item.entity_name) == folded for item in model.graph.opaque_entities)
+
+
+def _project_kill_action(
+    action: ScriptAction,
+    *,
+    model: StaticStageModel,
+    linked: W3LinkedIdentityIndex,
+) -> KillInstruction:
+    target_name = action.arguments[0] if action.arguments else ""
+    lookup = linked.identities.lookup_all(EntityIdentityNamespace.TARGET_NAME, target_name)
+    targets: list[KillTargetProjection] = []
+    for entity_index in lookup.selected_entity_indices:
+        identity = linked.identities.entities[entity_index]
+        classname = _ascii_fold(identity.classname)
+        script_name = identity.script_name
+        nodes = _script_program_nodes(model, script_name) if script_name else ()
+        script_identity_opaque = bool(script_name and _has_only_opaque_script_identity(model, script_name))
+        if classname == "script_mover" and script_identity_opaque:
+            disposition = KillTargetDisposition.SCRIPT_IDENTITY_OPAQUE
+            death_handler_node_id = None
+        elif classname == "script_mover":
+            death_handler = next((node for node in nodes if node.event_name == "death"), None)
+            if death_handler is None:
+                disposition = KillTargetDisposition.SCRIPT_MOVER_NO_HANDLED_DEATH_EVENT
+                death_handler_node_id = None
+            else:
+                disposition = KillTargetDisposition.SCRIPT_MOVER_OPTIONAL_DEATH_EVENT
+                death_handler_node_id = death_handler.node_id
+        elif classname == "func_constructible" and script_identity_opaque:
+            disposition = KillTargetDisposition.SCRIPT_IDENTITY_OPAQUE
+            death_handler_node_id = None
+        elif classname == "func_constructible":
+            handled_runtime_events = tuple(
+                node
+                for node in nodes
+                if node.event_name == "death"
+                or (
+                    node.event_name == "destroyed"
+                    and _ascii_fold(node.serialized_event_parameters) in {"final", "stage2", "stage3"}
+                )
+            )
+            disposition = (
+                KillTargetDisposition.CONSTRUCTIBLE_RUNTIME_EVENT_NOT_MODELED
+                if handled_runtime_events
+                else KillTargetDisposition.CONSTRUCTIBLE_NO_HANDLED_EVENT
+            )
+            death_handler_node_id = None
+        else:
+            disposition = KillTargetDisposition.DIRECT_REMOVE_NO_SCRIPT_EVENT
+            death_handler_node_id = None
+        targets.append(
+            KillTargetProjection(
+                entity_index,
+                identity.classname,
+                script_name,
+                disposition,
+                death_handler_node_id,
+            )
+        )
+    return KillInstruction(action, lookup, tuple(targets))
+
+
 def project_ordered_stage_programs(
     model: StaticStageModel,
     linked: W3LinkedIdentityIndex,
@@ -1541,6 +1767,9 @@ def project_ordered_stage_programs(
                     f"stage-effect action {action.command!r} at line {action.line} "
                     f"has no projection in stage node {node.node_id!r}"
                 )
+            if action.command == "kill":
+                instructions.append(_project_kill_action(action, model=model, linked=linked))
+                continue
             if action.command == "trigger":
                 edge = _take_line_item(
                     edges_by_line,

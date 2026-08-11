@@ -1366,6 +1366,41 @@ Before this increment can merge it must publish, for the exact installed asset h
 The PR starts as documentation-only. Code, corpus evidence and review corrections stay
 on this branch, and this section is updated with every substantive commit.
 
+#### Typed-kill implementation checkpoint
+
+The first follow-up implementation replaces all 13 generic runtime instructions with
+`KillInstruction`, an exact `targetname` lookup and per-target source disposition. The
+20-map corpus measures:
+
+| Result | Count |
+|---|---:|
+| Direct removal with no script event (`misc_mg42`, `func_static`) | 8 |
+| Constructible with no handled `death`/reachable `destroyed` event | 3 |
+| Script mover with an optional handled `death` event | 2 |
+| Generic `may_dispatch_death_event` instructions/blockers | 0 |
+
+At the existing 16-unit per-entry smoke budget, the two mover actions produce four
+reachable death-dispatch branches across all concrete event entries. The aggregate
+result changes from 4,641 to 4,645 paths: synchronous completions 2,078 to 2,084,
+eventual completions 1,155 to 1,157 and blocked paths 1,094 to 1,090. The old eight
+generic death blockers disappear. Four death-handler branches reach their entity-local
+`bitset` with unknown entry state and therefore move the existing
+`non_exact_accumulator_mutation` count from 447 to 451. W5b does not replace that
+unknown with zero; frontier relevance must classify the hidden continuation next.
+
+Focused verification at this checkpoint:
+
+- 93/93 ordered-possibility unit tests passed on Python 3.13;
+- the ordered-program and bounded-executor real-asset acceptance tests passed over all
+  installed indexed assets;
+- Ruff, formatter check and `git diff --check` passed for the touched files.
+
+This checkpoint deliberately leaves constructibles with a matching runtime
+`death`/`destroyed final|stage2|stage3` handler blocked. Their selected event depends on
+runtime destruction-stage fields, unlike the single `script_mover_die -> death ""`
+path. Installed targets have no such handler, so guessing that state would add
+complexity without changing current corpus coverage.
+
 ### Adjacent live-test handoff received 2026-08-11
 
 Fable left a read-only live-test report in
