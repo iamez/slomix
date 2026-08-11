@@ -2276,7 +2276,17 @@ def classify_symbolic_frontier(
                 for instruction in blocker_program.instructions
                 if _instruction_line(instruction) == path.blocker_line
             )
-            if isinstance(blocker_instruction, KillInstruction):
+            if isinstance(blocker_instruction, RuntimeActionInstruction):
+                blocker_domains, blocker_unknown_reasons = _runtime_instruction_domain_relevance(
+                    index,
+                    blocker_instruction,
+                    source_entity_index=path.blocker_entity_index,
+                )
+                domains.update(blocker_domains)
+                unknown_reasons.update(blocker_unknown_reasons)
+            elif isinstance(blocker_instruction, ControlProjectionIssue):
+                unknown_reasons.add("control_projection_issue")
+            elif isinstance(blocker_instruction, KillInstruction):
                 for target in blocker_instruction.targets:
                     if W3EntityKind.COLLISION_ENTITY in index.w3_kinds(target.entity_index):
                         domains.add(StageSemanticDomain.DYNAMIC_ROUTE)

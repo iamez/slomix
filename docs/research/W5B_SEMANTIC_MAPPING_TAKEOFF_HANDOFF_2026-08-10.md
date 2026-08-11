@@ -1455,12 +1455,12 @@ The 1,090 current blocked paths split as follows at the 16-unit smoke budget:
 | dynamic route only | 372 |
 | objective only | 15 |
 | spawn only | 1 |
-| objective + spawn | 2 |
+| objective + spawn | 1 |
 | dynamic route + objective | 211 |
 | dynamic route + spawn | 22 |
-| all three | 97 |
+| all three | 98 |
 
-Across overlapping sets, 702 blockers hide dynamic-route semantics, 325 hide objective
+Across overlapping sets, 703 blockers hide dynamic-route semantics, 325 hide objective
 semantics and 122 hide spawn semantics. Of all blockers, 357 have complete domain
 classification and 733 retain at least one named unknown reason. The dominant unknowns
 are 337 state-changing trigger cycles cut by the bounded analyzer, non-W3-linked runtime
@@ -1542,6 +1542,15 @@ and 30 warnings in 56.20 seconds. The real-asset suite is now about twice as slo
 pre-correction run. That is acceptable for this explicit offline acceptance gate, but
 not for a request-time API: W5c must precompute or cache this classification rather than
 repeat the corpus walk on a live request.
+
+A final previously hidden Codex P1 thread then identified that an ordinary blocking
+runtime action was omitted at its own frontier while only its suffix was classified.
+The correction classifies that boundary action before its suffix and keeps malformed
+control projections explicitly unknown. One installed frontier consequently moved from
+`objective + spawn` to `dynamic route + objective + spawn`; the 703/325/122 overlap and
+the tables above are the corrected denominators. The direct regression passes 110/110
+focused tests. Exact corpus and full-repository verification must be repeated on the
+resulting substantive head before closure.
 
 ### Adjacent live-test handoff received 2026-08-11
 
