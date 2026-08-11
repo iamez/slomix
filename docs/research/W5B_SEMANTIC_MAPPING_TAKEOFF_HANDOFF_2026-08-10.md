@@ -8,14 +8,17 @@ Status: implementation in progress. Engine identity, Phase 3 dispositions, the P
 lossless ordered program, the override boundary, runtime-control classification and the
 bounded single-event symbolic walker and isolated nested-dispatch resolver are locally
 and externally reviewed. The bounded nested executor, shared recursive-work budget and
-temporal/concurrency frontiers have also completed exact-head external review.
+temporal/concurrency frontiers have also completed exact-head external review. PR #633
+merged as `e649b0493a1ca0ed9cb3b2a2935ebcd78f494202`; the follow-up frontier-classification
+increment is now isolated on `agent/map-geometry-w5b-frontier-classification`.
 
-Branch: `agent/map-geometry-w5b-semantic-mapping`
+Current branch: `agent/map-geometry-w5b-frontier-classification`
 
-Base: `origin/main` at `8cb34d9975d1679417b782b3c05ef09bf008741c`
+Current base: `origin/main` at
+`e649b0493a1ca0ed9cb3b2a2935ebcd78f494202`
 
-Last substantive implementation head that completed the five-minute review quiet
-period and final refresh:
+PR #633's last substantive implementation head that completed its five-minute review
+quiet period and final refresh:
 `abb2ba947dc5c7234830929829cdb55f1af8033e`
 
 Earlier resolver review-closure documentation head:
@@ -1250,13 +1253,14 @@ model or a claim that exhausted paths are unreachable.
 
 ## Current handoff state
 
-Current step: classify every remaining frontier by objective, spawn and dynamic-route
-semantic relevance before designing a scheduler. Guard splitting, explicit local/global
+Current step: close review and measured evidence for the completed frontier
+classification before designing a scheduler. Guard splitting, explicit local/global
 accumulator state, effect suppression, concrete nested target selection, synchronous
 caller restoration, final same-entity temporal replacement, active-frame cycle
 detection, first-boundary temporal/concurrency frontiers and the shared work budget have
 completed exact-head implementation review. Phase 2's final public coverage surface
-remains intentionally deferred until blocker-relevance measurement is closed.
+remains intentionally deferred until the evidence PR is merged and the required
+suspended-continuation scheduler is implemented separately.
 
 Verify the target/write path for all 13 `kill` actions and model death dispatch only
 from that evidence. If cross-entity temporal frontiers block required domains
@@ -1267,6 +1271,304 @@ per-domain static-graph gate and deterministic evidence manifest.
 Known blockers: none for read-only research and local implementation. Any required
 live-build inspection that changes or restarts a service becomes owner-gated; retain
 the affected semantic result as unverified and continue with independent domains.
+
+### Post-#633 frontier-classification takeoff
+
+Follow-up branch: `agent/map-geometry-w5b-frontier-classification`
+
+Follow-up base: `origin/main` at
+`e649b0493a1ca0ed9cb3b2a2935ebcd78f494202`
+
+Current substantive follow-up head:
+`41741556` (`fix(map-geometry): expose nested state uncertainty`). The
+documentation-only verification commit that records this pointer cannot contain its
+own hash; query PR #638 before treating it as the final reviewed head.
+
+The next increment closes two evidence gaps before Phase 5: source-verified `kill`
+dispatch and per-domain classification of every remaining frontier. It still does not
+publish a runtime state, metric or rating. A frontier classification means only that
+an unresolved continuation **may** hide an objective, spawn or dynamic-route effect;
+it is not evidence that the effect occurred.
+
+#### Installed `kill` inventory
+
+A fresh read-only projection over all installed indexed assets found exactly 13
+actions. Every target lookup is a unique ET-style `targetname` lookup:
+
+| Map | Source event and line | Target | Concrete runtime class | Static death handler |
+|---|---|---|---|---|
+| `bremen_b3` | `truck_construct spawn`, 1066 | `truck` | entity 135 `script_mover`, spawnflags 58 | `truck death` |
+| `bremen_b3` | `truck trigger deathcheck`, 2003 | `truck_construct` | entity 123 `func_constructible`, spawnflags 10 | none |
+| `etl_beach` | `world_clip trigger load_mg42_1`, 659-660 | `mg42_1`, `mg42_1m` | entity 150 `misc_mg42`; entity 481 `func_static` | none |
+| `etl_beach` | `world_clip trigger load_mg42_2`, 668-669 | `mg42_2`, `mg42_2m` | entity 195 `misc_mg42`; entity 482 `func_static` | none |
+| `etl_beach` | `world_clip trigger load_mg42_3`, 677-678 | `mg42_3`, `mg42_3m` | entity 149 `misc_mg42`; entity 448 `func_static` | none |
+| `etl_beach` | `world_clip trigger load_mg42_4`, 686-687 | `mg42_4`, `mg42_4m` | entity 237 `misc_mg42`; entity 480 `func_static` | none |
+| `sw_goldrush_te` | `tank trigger deathcheck`, 1129 | `tank_construct` | entity 421 `func_constructible`, spawnflags 553 | none |
+| `sw_goldrush_te` | `tank_construct spawn`, 1229 | `tank` | entity 790 `script_mover`, spawnflags 190 | `tank death` |
+| `sw_goldrush_te` | `truck trigger deathcheck`, 2405 | `truck_construct` | entity 1 `func_constructible`, spawnflags 9 | none |
+
+Pinned ET:Legacy source narrows the control contract further:
+
+- `G_ScriptAction_Kill` parses one target and calls `G_KillEnts` before returning
+  `qtrue`;
+- `G_KillEnts` dispatches through `die` only for an eligible `script_mover` or
+  `ET_CONSTRUCTIBLE`; other targets are unlinked and scheduled for removal;
+- `script_mover_die` synchronously emits the target's `death ""` script event;
+- both installed target movers are created without the trigger-spawn bit, so their
+  initial `die = script_mover_die` assignment is source-supported;
+- the two installed mover death handlers contain only one entity-local accumulator
+  bit-set each and no temporal or stage effect;
+- the three targeted constructible script blocks expose no `death` or `destroyed`
+  handler, while the eight MG42/static targets cannot reach a script death callback
+  through `G_KillEnts`.
+
+The implementation must therefore replace the generic death-dispatch blocker with a
+typed target lookup. The 11 non-handled targets continue synchronously. The two mover
+targets retain both statically legal lifecycle alternatives: dispatch the proven
+`death ""` handler when `die` is installed, or continue without a handler when prior
+runtime lifecycle state may already have cleared it. W5b does not know that history.
+No synthetic death event may be attached to `misc_mg42`, `func_static` or a
+constructible merely because a same-named script block exists.
+
+The suffix probe also found no direct typed stage effect after a `kill`. Several
+constructible deathcheck suffixes do contain nested triggers, so relevance must be
+computed from the actual continuation graph rather than from the current instruction
+alone. This is the first acceptance case for the frontier classifier.
+
+#### Frontier-classification contract
+
+The classifier will report a deterministic set drawn from `objective`, `spawn` and
+`dynamic_route` for every blocked path. It must inspect only continuations that the
+current executor could not order:
+
+1. caller suffix after an unresolved dispatch or concurrent target;
+2. target suffix after the first temporal boundary;
+3. reachable nested programs until another explicit frontier;
+4. the selected typed W3 references of each stage effect, not its command spelling.
+
+`ObjectiveStatusEffectProjection` and `MainObjectiveEffectProjection` belong to the
+objective domain. `AutoSpawnEffectProjection` belongs to spawn. Collision-relevant
+`EntityTargetEffectProjection` candidates and source/destination collision references
+from `GotoMarkerEffectProjection` belong to dynamic route. Global round winner/end
+effects are published but are not silently relabelled as one of these three domains.
+Missing identity or an opaque program remains `unknown_domain_relevance` when the
+analyzer cannot enumerate the continuation; it must not be reported as irrelevant.
+
+First measure the real corpus with this conservative contract. Add a suspended-
+continuation scheduler only if cross-entity temporal frontiers materially hide a
+required domain. If their relevance is empty, the scheduler adds state-space and
+ordering assumptions without improving the Phase 5 verdict and remains deferred.
+
+#### Follow-up acceptance evidence
+
+Before this increment can merge it must publish, for the exact installed asset hashes:
+
+- all 13 `kill` actions by target class and dispatch disposition;
+- the count of death-handler branches and their downstream domains;
+- every existing blocker reason split by objective/spawn/dynamic-route/unknown
+  relevance;
+- the maps whose per-domain verdict changes after source-verified kill handling;
+- the deterministic manifest hash and exact test head.
+
+The PR starts as documentation-only. Code, corpus evidence and review corrections stay
+on this branch, and this section is updated with every substantive commit.
+
+The deterministic installed-asset manifest is the SHA-256 of canonical JSON for
+`Pk3GeometryIndex.manifest(index.map_names)["maps"]`, using sorted keys, compact
+separators and ASCII output. This deliberately excludes the machine-specific absolute
+`etmain_dir`, while retaining every selected/provider path, member index, size, CRC32
+and content SHA-256. For the exact 20-map installed corpus on substantive test head
+`41741556`, the manifest hash is:
+
+`86ddd0ec23b3c6120136195af34aa633ad249eb358ea0fb6cd6e490dd81b220d`
+
+The source-verified `kill` change removes a generic frontier that previously stopped
+the caller before its suffix. A per-action continuation probe on the same asset manifest
+found
+the following per-map domain deltas:
+
+| Map | Kill actions | Dynamic-route verdict delta | Objective delta | Spawn delta |
+|---|---:|---|---|---|
+| `bremen_b3` | 2 | blocked -> reachable for 2/2 suffixes | unchanged, none | unchanged, none |
+| `etl_beach` | 8 | blocked -> reachable for 4/8 suffixes | unchanged, none | unchanged, none |
+| `sw_goldrush_te` | 3 | blocked -> reachable for 2/3 suffixes | unchanged, none | unchanged, none |
+
+No other installed map contains a `kill`, so every other map is unchanged. This table
+is a delta in the static domain evidence that feeds Phase 5, not a claim that the
+transition occurred in a played round. Phase 5's final defensible/partial/unknown map
+verdict does not exist yet and therefore is not backfilled by inference here. The four
+optional mover death-handler branches themselves add no objective, spawn or route
+domain; they contain only the measured entity-local accumulator mutation.
+
+#### Typed-kill implementation checkpoint
+
+The first follow-up implementation replaces all 13 generic runtime instructions with
+`KillInstruction`, an exact `targetname` lookup and per-target source disposition. The
+20-map corpus measures:
+
+| Result | Count |
+|---|---:|
+| Direct removal with no script event (`misc_mg42`, `func_static`) | 8 |
+| Constructible with no handled `death`/reachable `destroyed` event | 3 |
+| Script mover with an optional handled `death` event | 2 |
+| Generic `may_dispatch_death_event` instructions/blockers | 0 |
+
+At the existing 16-unit per-entry smoke budget, the two mover actions produce four
+reachable death-dispatch branches across all concrete event entries. The aggregate
+result changes from 4,641 to 4,645 paths: synchronous completions 2,078 to 2,084,
+eventual completions 1,155 to 1,157 and blocked paths 1,094 to 1,090. The old eight
+generic death blockers disappear. Four death-handler branches reach their entity-local
+`bitset` with unknown entry state and therefore move the existing
+`non_exact_accumulator_mutation` count from 447 to 451. W5b does not replace that
+unknown with zero; frontier relevance must classify the hidden continuation next.
+
+Focused verification at this checkpoint:
+
+- 93/93 ordered-possibility unit tests passed on Python 3.13;
+- the ordered-program and bounded-executor real-asset acceptance tests passed over all
+  installed indexed assets;
+- Ruff, formatter check and `git diff --check` passed for the touched files.
+
+This checkpoint deliberately leaves constructibles with a matching runtime
+`death`/`destroyed final|stage2|stage3` handler blocked. Their selected event depends on
+runtime destruction-stage fields, unlike the single `script_mover_die -> death ""`
+path. Installed targets have no such handler, so guessing that state would add
+complexity without changing current corpus coverage.
+
+#### Frontier-classification checkpoint and scheduler decision
+
+The classifier records ordered continuation provenance when blocker line and entity
+index are available, a deterministic subset of `objective`, `spawn` and
+`dynamic_route`, an explicit `unknown_domain_relevance` flag and machine-readable
+unknown reasons. Missing blocker provenance produces an empty continuation tuple and
+the named `frontier_provenance_missing` reason. The classifier walks only statically
+reachable suffixes and nested programs. It treats a known missing handler as having no
+target effect while retaining the caller suffix; missing target identity, opaque script
+identity, budget exhaustion and unresolved route identity stay unknown rather than
+being reported as irrelevant.
+
+The 1,090 current blocked paths split as follows at the 16-unit smoke budget:
+
+| Hidden-domain set | Paths |
+|---|---:|
+| none | 370 |
+| dynamic route only | 372 |
+| objective only | 15 |
+| spawn only | 1 |
+| objective + spawn | 1 |
+| dynamic route + objective | 211 |
+| dynamic route + spawn | 22 |
+| all three | 98 |
+
+Across overlapping sets, 703 blockers hide dynamic-route semantics, 325 hide objective
+semantics and 122 hide spawn semantics. Of all blockers, 310 have complete domain
+classification and 780 retain at least one named unknown reason. The dominant unknowns
+are 435 nested accumulator-state flows that the relevance-only walk does not propagate
+back into its caller, 337 state-changing trigger cycles cut by the bounded analyzer,
+non-W3-linked runtime
+motion/lifecycle sources (`faceangles`, `stoprotation`, `remove`, `attachtotag`,
+`setrotation`, `setspeed`) and 101 missing typed effect targets. These are coverage
+facts, not permission to relabel the action as irrelevant.
+
+The scheduler decision is now evidence-driven. Among the 301 cross-entity temporal
+frontiers:
+
+| Hidden-domain set | Paths |
+|---|---:|
+| none | 57 |
+| dynamic route only | 171 |
+| objective only | 2 |
+| dynamic route + objective | 49 |
+| dynamic route + spawn | 18 |
+| all three | 4 |
+
+Only 57/301 have no currently identified required domain; 244/301 hide at least one.
+175/301 are completely classified and 126 retain named identity, route, accumulator-state
+or stateful-cycle
+uncertainty.
+Therefore a bounded suspended-continuation scheduler is required before Phase 5. It
+must model ordering alternatives explicitly; it may not merge delayed callee state into
+the immediate caller or erase the current concurrency frontier merely to raise
+coverage.
+
+The scheduler should be scoped to cross-entity and shared-target temporal continuations
+that the classifier proves relevant. Empty, fully classified frontiers do not need
+state-space expansion. Unknown relevance remains fail-closed and is not a scheduling
+target until its identity/semantic reason is resolved.
+
+Exact-head self-review corrected an initial undercount before review closure. A
+temporal frontier hides not only the suffix after `followspline`/`faceangles`, but also
+completion of that suspended route action itself. A work-budget frontier similarly
+points at the next unexecuted instruction, so relevance begins at that instruction,
+not after it. Regression tests freeze both boundaries. The corrected counts above
+replace the earlier exploratory 238-domain/63-empty temporal split.
+
+Verification on Python 3.13.14 at this checkpoint:
+
+- 99/99 focused ordered-possibility unit tests passed, including adversarial temporal,
+  missing-handler, missing-identity and non-exact-state cases;
+- 274/274 expanded W1-W5b unit tests passed;
+- all 15 opt-in real-asset tests passed over the exact 20-map installed corpus in
+  202.06 seconds;
+- the complete repository suite passed 4,329 tests with 93 expected skips in 30.38
+  seconds;
+- Ruff, formatter check and `git diff --check` passed for every touched Python file.
+
+CodeRabbit's first PR #638 review exposed two defensive gaps and three test/evidence
+gaps. Substantive correction head `04e65133` now rejects a kill death-handler projection
+whose target entity is not selected by that handler, retains the named
+`frontier_continuation_entity_not_selected` unknown, treats a resolved nested dispatch
+without a handler as intrinsically unknown, and indexes instruction lines once per
+ordered-program index. Focused executor coverage is 105/105 and the expanded W1-W5b
+unit selection is 277/277. Documentation head `2aef9c40` then passed all 16 opt-in
+real-asset tests over the exact manifest above in 202.08 seconds. The complete repository
+suite passed 4,335 tests with 94 expected environment/fixture-gated skips in 53.03
+seconds; Ruff and `git diff --check` were also clean. This paragraph is a
+documentation-only record of those exact heads and cannot contain the hash of its own
+commit.
+
+The subsequent GitHub Codex review found five more valid closure gaps. Substantive head
+`45f901bb` now preserves caller and remaining-target continuations when a nested callee
+blocks; follows exact accumulator mutations and proven abort guards; retains `.ent`
+override W3 linkage as unknown; bounds relevance traversal with one 8,192-unit work
+budget shared by every blocked path from a root walk; memoizes complete root
+continuations; and cuts state-changing cycles with the named
+`frontier_relevance_stateful_cycle_cut` reason. A target script block that can execute
+`set { scriptName ... }` now makes later kill dispatch explicitly unknown instead of
+selecting the original handler. The corrected corpus tables above supersede the earlier
+421-complete/669-unknown classification. Focused coverage passed 109/109, the expanded
+W1-W5b unit selection passed 281/281, and the exact bounded-executor corpus acceptance
+passed in 31.98 seconds without relevance depth or work-budget exhaustion. On final
+documentation head `d01390a2`, all 16 opt-in real-asset tests passed in 432.25 seconds
+with 496,084 KiB peak RSS, and the complete repository passed 4,339 tests with 94 skips
+and 30 warnings in 56.20 seconds. The real-asset suite is now about twice as slow as the
+pre-correction run. That is acceptable for this explicit offline acceptance gate, but
+not for a request-time API: W5c must precompute or cache this classification rather than
+repeat the corpus walk on a live request.
+
+A final previously hidden Codex P1 thread then identified that an ordinary blocking
+runtime action was omitted at its own frontier while only its suffix was classified.
+The correction classifies that boundary action before its suffix and keeps malformed
+control projections explicitly unknown. One installed frontier consequently moved from
+`objective + spawn` to `dynamic route + objective + spawn`; the 703/325/122 overlap and
+the tables above are the corrected denominators. On substantive head `e9fc55d3`, the
+direct regression passes within 110/110 focused tests, all 16 opt-in real-asset tests
+passed in 456.51 seconds with 489,352 KiB peak RSS, and the complete repository passed
+4,340 tests with 94 skips and 30 warnings in 57.62 seconds. Ruff and `git diff --check`
+also passed.
+
+The final self-review found that a resolved nested handler can mutate `accum` or
+`globalaccum`, while the relevance-only traversal currently does not return that final
+state to the caller before scanning later guards. The classifier now retains
+`frontier_relevance_nested_accumulator_state_unpropagated` rather than publishing a
+complete verdict in that case. The installed corpus contains 435 such blocked paths,
+including 50 of the 301 cross-entity frontiers. Domain sets are unchanged, but complete
+classification drops from 357 to 310 overall and from 206 to 175 for cross-entity
+frontiers. Exact state propagation belongs in the W5c suspended-continuation executor;
+W5b must remain fail closed until then. On substantive head `41741556`, 111/111
+focused tests passed, all 16 opt-in real-asset tests passed in 427.88 seconds with
+494,292 KiB peak RSS, and the complete repository passed 4,341 tests with 94 skips and
+30 warnings in 54.54 seconds. Ruff and `git diff --check` also passed.
 
 ### Adjacent live-test handoff received 2026-08-11
 
