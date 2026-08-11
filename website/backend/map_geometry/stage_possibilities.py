@@ -61,6 +61,7 @@ class RuntimeActionControlDisposition(StrEnum):
 class SymbolicPathCompletion(StrEnum):
     SYNCHRONOUS_COMPLETE = "synchronous_complete"
     EVENTUAL_COMPLETE = "eventual_complete"
+    TEMPORALLY_SUSPENDED = "temporally_suspended"
     ABORTED_BY_GUARD = "aborted_by_guard"
     BLOCKED = "blocked"
 
@@ -650,6 +651,7 @@ class SymbolicAccumulatorState:
 class SymbolicGuardDecision:
     instruction: AccumulatorAbortGuard | AccumulatorConditionalTrigger
     predicate_result: bool
+    source_entity_index: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -657,11 +659,17 @@ class SymbolicEventPath:
     source_entity_index: int
     state: SymbolicAccumulatorState
     effects: tuple[StageEffectProjection, ...] = ()
+    effect_entity_indices: tuple[int, ...] = ()
     guard_decisions: tuple[SymbolicGuardDecision, ...] = ()
     temporal_boundary_lines: tuple[int, ...] = ()
+    temporal_boundary_entity_indices: tuple[int, ...] = ()
+    nested_dispatches: tuple[SymbolicDispatchProjection, ...] = ()
+    caller_replacement_lines: tuple[int, ...] = ()
+    caller_replacement_entity_indices: tuple[int, ...] = ()
     completion: SymbolicPathCompletion = SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
     blocker_reason: str | None = None
     blocker_line: int | None = None
+    blocker_entity_index: int | None = None
 
 
 def _write_refined_domain(
@@ -696,6 +704,7 @@ def _apply_accumulator_mutation(
                 completion=SymbolicPathCompletion.BLOCKED,
                 blocker_reason="invalid_accumulator_operand",
                 blocker_line=instruction.line,
+                blocker_entity_index=path.source_entity_index,
             )
         value = SymbolicIntegerDomain.exact(instruction.operand)
     else:
@@ -706,6 +715,7 @@ def _apply_accumulator_mutation(
                 completion=SymbolicPathCompletion.BLOCKED,
                 blocker_reason="non_exact_accumulator_mutation",
                 blocker_line=instruction.line,
+                blocker_entity_index=path.source_entity_index,
             )
         if instruction.operation is AccumulatorOperation.INCREMENT:
             result = exact + instruction.operand
@@ -715,6 +725,7 @@ def _apply_accumulator_mutation(
                     completion=SymbolicPathCompletion.BLOCKED,
                     blocker_reason="signed_accumulator_overflow_unverified",
                     blocker_line=instruction.line,
+                    blocker_entity_index=path.source_entity_index,
                 )
             value = SymbolicIntegerDomain.exact(result)
         elif instruction.operation in {AccumulatorOperation.BIT_SET, AccumulatorOperation.BIT_RESET}:
@@ -724,6 +735,7 @@ def _apply_accumulator_mutation(
                     completion=SymbolicPathCompletion.BLOCKED,
                     blocker_reason="invalid_accumulator_bit_index",
                     blocker_line=instruction.line,
+                    blocker_entity_index=path.source_entity_index,
                 )
             bit = 1 << instruction.operand
             result = exact | bit if instruction.operation is AccumulatorOperation.BIT_SET else exact & ~bit
@@ -760,8 +772,9 @@ def walk_symbolic_event_program(
     source_entity_index: int,
     initial_state: SymbolicAccumulatorState,
     max_paths: int = _DEFAULT_SYMBOLIC_PATH_BUDGET,
+    stop_at_temporal_boundary: bool = False,
 ) -> tuple[SymbolicEventPath, ...]:
-    """Walk one event without guessing nested dispatch or unsupported runtime control."""
+    """Walk one event without guessing nested dispatch or temporal interleaving."""
 
     if source_entity_index not in program.source.lookup.selected_entity_indices:
         raise ValueError(f"entity {source_entity_index} is not selected by script block {program.node.entity_name!r}")
@@ -789,6 +802,7 @@ def walk_symbolic_event_program(
                             completion=SymbolicPathCompletion.BLOCKED,
                             blocker_reason="invalid_accumulator_guard_operand",
                             blocker_line=instruction.line,
+                            blocker_entity_index=source_entity_index,
                         )
                     )
                     continue
@@ -809,7 +823,7 @@ def walk_symbolic_event_program(
                     branch = replace(
                         branch,
                         guard_decisions=branch.guard_decisions
-                        + (SymbolicGuardDecision(instruction, predicate_result),),
+                        + (SymbolicGuardDecision(instruction, predicate_result, source_entity_index),),
                     )
                     if predicate_result:
                         finished.append(replace(branch, completion=SymbolicPathCompletion.ABORTED_BY_GUARD))
@@ -824,6 +838,7 @@ def walk_symbolic_event_program(
                             completion=SymbolicPathCompletion.BLOCKED,
                             blocker_reason="invalid_accumulator_guard_operand",
                             blocker_line=instruction.line,
+                            blocker_entity_index=source_entity_index,
                         )
                     )
                     continue
@@ -845,7 +860,7 @@ def walk_symbolic_event_program(
                     branch = replace(
                         branch,
                         guard_decisions=branch.guard_decisions
-                        + (SymbolicGuardDecision(instruction, predicate_result),),
+                        + (SymbolicGuardDecision(instruction, predicate_result, source_entity_index),),
                     )
                     if predicate_result:
                         finished.append(
@@ -854,25 +869,35 @@ def walk_symbolic_event_program(
                                 completion=SymbolicPathCompletion.BLOCKED,
                                 blocker_reason="conditional_trigger_dispatch_not_modeled",
                                 blocker_line=instruction.line,
+                                blocker_entity_index=source_entity_index,
                             )
                         )
                     else:
                         continuing.append(branch)
                 continue
             if isinstance(instruction, StageEffectInstruction):
-                continuing.append(replace(path, effects=path.effects + (instruction.projection,)))
+                continuing.append(
+                    replace(
+                        path,
+                        effects=path.effects + (instruction.projection,),
+                        effect_entity_indices=path.effect_entity_indices + (source_entity_index,),
+                    )
+                )
                 continue
             if isinstance(instruction, ControlBarrierInstruction):
                 if instruction.kind is ControlBarrierKind.WAIT:
                     # ET:Legacy skips waits during sudden death, so retain both
                     # the immediate and ordinary delayed continuations.
                     continuing.append(path)
-                continuing.append(
-                    replace(
-                        path,
-                        temporal_boundary_lines=path.temporal_boundary_lines + (instruction.action.line,),
-                    )
+                delayed = replace(
+                    path,
+                    temporal_boundary_lines=path.temporal_boundary_lines + (instruction.action.line,),
+                    temporal_boundary_entity_indices=path.temporal_boundary_entity_indices + (source_entity_index,),
                 )
+                if stop_at_temporal_boundary:
+                    finished.append(replace(delayed, completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED))
+                else:
+                    continuing.append(delayed)
                 continue
             if isinstance(instruction, TriggerInstruction):
                 finished.append(
@@ -881,6 +906,7 @@ def walk_symbolic_event_program(
                         completion=SymbolicPathCompletion.BLOCKED,
                         blocker_reason="trigger_dispatch_not_modeled",
                         blocker_line=instruction.edge.line,
+                        blocker_entity_index=source_entity_index,
                     )
                 )
                 continue
@@ -891,6 +917,7 @@ def walk_symbolic_event_program(
                         completion=SymbolicPathCompletion.BLOCKED,
                         blocker_reason=instruction.reason,
                         blocker_line=instruction.line,
+                        blocker_entity_index=source_entity_index,
                     )
                 )
                 continue
@@ -902,17 +929,21 @@ def walk_symbolic_event_program(
                         completion=SymbolicPathCompletion.BLOCKED,
                         blocker_reason="spawn_failure_frontier",
                         blocker_line=instruction.action.line,
+                        blocker_entity_index=source_entity_index,
                     )
                 )
             elif instruction.control_disposition is RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE:
                 if instruction.action.command == "followspline" and not _followspline_has_wait(instruction.action):
                     continuing.append(path)
-                continuing.append(
-                    replace(
-                        path,
-                        temporal_boundary_lines=path.temporal_boundary_lines + (instruction.action.line,),
-                    )
+                delayed = replace(
+                    path,
+                    temporal_boundary_lines=path.temporal_boundary_lines + (instruction.action.line,),
+                    temporal_boundary_entity_indices=path.temporal_boundary_entity_indices + (source_entity_index,),
                 )
+                if stop_at_temporal_boundary:
+                    finished.append(replace(delayed, completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED))
+                else:
+                    continuing.append(delayed)
             elif instruction.blocker_reason is None:
                 continuing.append(path)
             else:
@@ -922,6 +953,7 @@ def walk_symbolic_event_program(
                         completion=SymbolicPathCompletion.BLOCKED,
                         blocker_reason=instruction.blocker_reason,
                         blocker_line=instruction.action.line,
+                        blocker_entity_index=source_entity_index,
                     )
                 )
         if len(continuing) + len(finished) > max_paths:
@@ -931,6 +963,7 @@ def walk_symbolic_event_program(
                 completion=SymbolicPathCompletion.BLOCKED,
                 blocker_reason="symbolic_path_budget_exhausted",
                 blocker_line=_instruction_line(instruction),
+                blocker_entity_index=source_entity_index,
             )
             return tuple(finished[: max_paths - 1]) + (budget_frontier,)
         paths = continuing
@@ -944,6 +977,418 @@ def walk_symbolic_event_program(
         )
         finished.append(replace(path, completion=completion))
     return tuple(finished)
+
+
+def _merge_symbolic_segment(
+    prefix: SymbolicEventPath,
+    segment: SymbolicEventPath,
+) -> SymbolicEventPath:
+    temporal_lines = prefix.temporal_boundary_lines + segment.temporal_boundary_lines
+    completion = segment.completion
+    if completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE and temporal_lines:
+        completion = SymbolicPathCompletion.EVENTUAL_COMPLETE
+    return replace(
+        prefix,
+        state=segment.state,
+        effects=prefix.effects + segment.effects,
+        effect_entity_indices=prefix.effect_entity_indices + segment.effect_entity_indices,
+        guard_decisions=prefix.guard_decisions + segment.guard_decisions,
+        temporal_boundary_lines=temporal_lines,
+        temporal_boundary_entity_indices=(
+            prefix.temporal_boundary_entity_indices + segment.temporal_boundary_entity_indices
+        ),
+        nested_dispatches=prefix.nested_dispatches + segment.nested_dispatches,
+        caller_replacement_lines=prefix.caller_replacement_lines + segment.caller_replacement_lines,
+        caller_replacement_entity_indices=(
+            prefix.caller_replacement_entity_indices + segment.caller_replacement_entity_indices
+        ),
+        completion=completion,
+        blocker_reason=segment.blocker_reason,
+        blocker_line=segment.blocker_line,
+        blocker_entity_index=segment.blocker_entity_index,
+    )
+
+
+def _resume_symbolic_path(path: SymbolicEventPath) -> SymbolicEventPath:
+    return replace(
+        path,
+        completion=SymbolicPathCompletion.SYNCHRONOUS_COMPLETE,
+        blocker_reason=None,
+        blocker_line=None,
+        blocker_entity_index=None,
+    )
+
+
+def _blocked_symbolic_path(
+    path: SymbolicEventPath,
+    *,
+    reason: str,
+    line: int,
+    entity_index: int,
+) -> SymbolicEventPath:
+    return replace(
+        path,
+        completion=SymbolicPathCompletion.BLOCKED,
+        blocker_reason=reason,
+        blocker_line=line,
+        blocker_entity_index=entity_index,
+    )
+
+
+def _record_caller_replacement(
+    path: SymbolicEventPath,
+    *,
+    line: int,
+    entity_index: int,
+) -> SymbolicEventPath:
+    return replace(
+        path,
+        caller_replacement_lines=path.caller_replacement_lines + (line,),
+        caller_replacement_entity_indices=path.caller_replacement_entity_indices + (entity_index,),
+    )
+
+
+def _temporal_nested_outcome(
+    path: SymbolicEventPath,
+    *,
+    caller_entity_index: int,
+    target_entity_index: int,
+    last_target: bool,
+    dispatch_line: int,
+) -> SymbolicEventPath:
+    if target_entity_index == caller_entity_index and last_target:
+        return _record_caller_replacement(
+            path,
+            line=dispatch_line,
+            entity_index=target_entity_index,
+        )
+    return _blocked_symbolic_path(
+        path,
+        reason=(
+            "same_entity_temporal_group_order_not_modeled"
+            if target_entity_index == caller_entity_index
+            else "cross_entity_temporal_interleaving_not_modeled"
+        ),
+        line=dispatch_line,
+        entity_index=target_entity_index,
+    )
+
+
+def _bounded_stage_paths(
+    paths: list[SymbolicEventPath],
+    *,
+    max_paths: int,
+    line: int,
+    entity_index: int,
+) -> tuple[SymbolicEventPath, ...]:
+    budget_frontiers = [path for path in paths if path.blocker_reason == "symbolic_path_budget_exhausted"]
+    if len(paths) <= max_paths and len(budget_frontiers) <= 1:
+        return tuple(paths)
+    non_budget_paths = [path for path in paths if path.blocker_reason != "symbolic_path_budget_exhausted"]
+    exemplar = budget_frontiers[0] if budget_frontiers else paths[min(len(paths), max_paths) - 1]
+    frontier = _blocked_symbolic_path(
+        exemplar,
+        reason="symbolic_path_budget_exhausted",
+        line=line,
+        entity_index=entity_index,
+    )
+    return tuple(non_budget_paths[: max_paths - 1]) + (frontier,)
+
+
+def _walk_symbolic_stage_from(
+    index: OrderedStageProgramIndex,
+    program: OrderedEventProgram,
+    *,
+    current_entity_index: int,
+    instruction_offset: int,
+    prefix: SymbolicEventPath,
+    active_frames: tuple[tuple[int, str], ...],
+    max_paths: int,
+    max_depth: int,
+    stop_at_temporal_boundary: bool,
+) -> tuple[SymbolicEventPath, ...]:
+    nested_index = next(
+        (
+            position
+            for position in range(instruction_offset, len(program.instructions))
+            if isinstance(program.instructions[position], (TriggerInstruction, AccumulatorConditionalTrigger))
+        ),
+        None,
+    )
+    segment_end = len(program.instructions) if nested_index is None else nested_index + 1
+    segment = replace(program, instructions=program.instructions[instruction_offset:segment_end])
+    segment_results = walk_symbolic_event_program(
+        segment,
+        source_entity_index=current_entity_index,
+        initial_state=prefix.state,
+        max_paths=max_paths,
+        stop_at_temporal_boundary=stop_at_temporal_boundary,
+    )
+    merged = [_merge_symbolic_segment(prefix, result) for result in segment_results]
+    if nested_index is None:
+        line = _instruction_line(program.instructions[-1]) if program.instructions else program.node.line
+        return _bounded_stage_paths(merged, max_paths=max_paths, line=line, entity_index=current_entity_index)
+
+    instruction = program.instructions[nested_index]
+    assert isinstance(instruction, (TriggerInstruction, AccumulatorConditionalTrigger))
+    dispatch_line = _instruction_line(instruction)
+    expected_blocker = (
+        "conditional_trigger_dispatch_not_modeled"
+        if isinstance(instruction, AccumulatorConditionalTrigger)
+        else "trigger_dispatch_not_modeled"
+    )
+    outcomes: list[SymbolicEventPath] = []
+    for path in merged:
+        is_dispatch_branch = (
+            path.completion is SymbolicPathCompletion.BLOCKED
+            and path.blocker_reason == expected_blocker
+            and path.blocker_line == dispatch_line
+            and path.blocker_entity_index == current_entity_index
+        )
+        if not is_dispatch_branch:
+            if path.completion in {
+                SymbolicPathCompletion.SYNCHRONOUS_COMPLETE,
+                SymbolicPathCompletion.EVENTUAL_COMPLETE,
+            }:
+                outcomes.extend(
+                    _walk_symbolic_stage_from(
+                        index,
+                        program,
+                        current_entity_index=current_entity_index,
+                        instruction_offset=nested_index + 1,
+                        prefix=_resume_symbolic_path(path),
+                        active_frames=active_frames,
+                        max_paths=max_paths,
+                        max_depth=max_depth,
+                        stop_at_temporal_boundary=stop_at_temporal_boundary,
+                    )
+                )
+            else:
+                outcomes.append(path)
+            continue
+
+        dispatch = resolve_symbolic_nested_dispatch(
+            index,
+            program,
+            instruction,
+            source_entity_index=current_entity_index,
+        )
+        dispatched_path = replace(path, nested_dispatches=path.nested_dispatches + (dispatch,))
+        if dispatch.resolution is SymbolicDispatchResolution.NO_OP:
+            outcomes.extend(
+                _walk_symbolic_stage_from(
+                    index,
+                    program,
+                    current_entity_index=current_entity_index,
+                    instruction_offset=nested_index + 1,
+                    prefix=_resume_symbolic_path(dispatched_path),
+                    active_frames=active_frames,
+                    max_paths=max_paths,
+                    max_depth=max_depth,
+                    stop_at_temporal_boundary=stop_at_temporal_boundary,
+                )
+            )
+            continue
+        if dispatch.resolution is not SymbolicDispatchResolution.RESOLVED:
+            outcomes.append(
+                _blocked_symbolic_path(
+                    dispatched_path,
+                    reason=f"nested_dispatch_{dispatch.resolution.value}",
+                    line=dispatch_line,
+                    entity_index=current_entity_index,
+                )
+            )
+            continue
+
+        assert dispatch.target_node_id is not None
+        target_program = index.program(dispatch.target_node_id)
+        outcomes.extend(
+            _walk_symbolic_target_group(
+                index,
+                caller_program=program,
+                caller_entity_index=current_entity_index,
+                caller_instruction_offset=nested_index + 1,
+                target_program=target_program,
+                target_entity_indices=dispatch.target_entity_indices,
+                target_offset=0,
+                dispatch_line=dispatch_line,
+                prefix=_resume_symbolic_path(dispatched_path),
+                active_frames=active_frames,
+                max_paths=max_paths,
+                max_depth=max_depth,
+                stop_at_temporal_boundary=stop_at_temporal_boundary,
+            )
+        )
+    return _bounded_stage_paths(
+        outcomes,
+        max_paths=max_paths,
+        line=dispatch_line,
+        entity_index=current_entity_index,
+    )
+
+
+def _walk_symbolic_target_group(
+    index: OrderedStageProgramIndex,
+    *,
+    caller_program: OrderedEventProgram,
+    caller_entity_index: int,
+    caller_instruction_offset: int,
+    target_program: OrderedEventProgram,
+    target_entity_indices: tuple[int, ...],
+    target_offset: int,
+    dispatch_line: int,
+    prefix: SymbolicEventPath,
+    active_frames: tuple[tuple[int, str], ...],
+    max_paths: int,
+    max_depth: int,
+    stop_at_temporal_boundary: bool,
+) -> tuple[SymbolicEventPath, ...]:
+    target_entity_index = target_entity_indices[target_offset]
+    target_frame = (target_entity_index, target_program.node.node_id)
+    if target_frame in active_frames:
+        return (
+            _blocked_symbolic_path(
+                prefix,
+                reason="nested_dispatch_cycle",
+                line=dispatch_line,
+                entity_index=target_entity_index,
+            ),
+        )
+    if len(active_frames) >= max_depth:
+        return (
+            _blocked_symbolic_path(
+                prefix,
+                reason="nested_dispatch_depth_exhausted",
+                line=dispatch_line,
+                entity_index=target_entity_index,
+            ),
+        )
+
+    temporal_count = len(prefix.temporal_boundary_lines)
+    last_target = target_offset == len(target_entity_indices) - 1
+    target_stop_at_temporal_boundary = stop_at_temporal_boundary or (
+        target_entity_index != caller_entity_index or not last_target
+    )
+    target_results = _walk_symbolic_stage_from(
+        index,
+        target_program,
+        current_entity_index=target_entity_index,
+        instruction_offset=0,
+        prefix=prefix,
+        active_frames=active_frames + (target_frame,),
+        max_paths=max_paths,
+        max_depth=max_depth,
+        stop_at_temporal_boundary=target_stop_at_temporal_boundary,
+    )
+    outcomes: list[SymbolicEventPath] = []
+    for path in target_results:
+        target_paused = len(path.temporal_boundary_lines) > temporal_count
+        if path.completion is SymbolicPathCompletion.BLOCKED:
+            outcomes.append(
+                _record_caller_replacement(
+                    path,
+                    line=dispatch_line,
+                    entity_index=target_entity_index,
+                )
+                if target_paused and target_entity_index == caller_entity_index and last_target
+                else path
+            )
+            continue
+        if path.completion is SymbolicPathCompletion.TEMPORALLY_SUSPENDED:
+            outcomes.append(
+                _temporal_nested_outcome(
+                    path,
+                    caller_entity_index=caller_entity_index,
+                    target_entity_index=target_entity_index,
+                    last_target=last_target,
+                    dispatch_line=dispatch_line,
+                )
+            )
+            continue
+        if target_paused:
+            outcomes.append(
+                _temporal_nested_outcome(
+                    path,
+                    caller_entity_index=caller_entity_index,
+                    target_entity_index=target_entity_index,
+                    last_target=last_target,
+                    dispatch_line=dispatch_line,
+                )
+            )
+            continue
+
+        resumed = _resume_symbolic_path(path)
+        if not last_target:
+            outcomes.extend(
+                _walk_symbolic_target_group(
+                    index,
+                    caller_program=caller_program,
+                    caller_entity_index=caller_entity_index,
+                    caller_instruction_offset=caller_instruction_offset,
+                    target_program=target_program,
+                    target_entity_indices=target_entity_indices,
+                    target_offset=target_offset + 1,
+                    dispatch_line=dispatch_line,
+                    prefix=resumed,
+                    active_frames=active_frames,
+                    max_paths=max_paths,
+                    max_depth=max_depth,
+                    stop_at_temporal_boundary=stop_at_temporal_boundary,
+                )
+            )
+        else:
+            outcomes.extend(
+                _walk_symbolic_stage_from(
+                    index,
+                    caller_program,
+                    current_entity_index=caller_entity_index,
+                    instruction_offset=caller_instruction_offset,
+                    prefix=resumed,
+                    active_frames=active_frames,
+                    max_paths=max_paths,
+                    max_depth=max_depth,
+                    stop_at_temporal_boundary=stop_at_temporal_boundary,
+                )
+            )
+    return _bounded_stage_paths(
+        outcomes,
+        max_paths=max_paths,
+        line=dispatch_line,
+        entity_index=caller_entity_index,
+    )
+
+
+def walk_symbolic_stage_program(
+    index: OrderedStageProgramIndex,
+    program: OrderedEventProgram,
+    *,
+    source_entity_index: int,
+    initial_state: SymbolicAccumulatorState,
+    max_paths: int = _DEFAULT_SYMBOLIC_PATH_BUDGET,
+    max_depth: int = 64,
+) -> tuple[SymbolicEventPath, ...]:
+    """Walk statically resolved nested events with bounded fail-closed recursion."""
+
+    if index.program(program.node.node_id) is not program:
+        raise ValueError(f"source program {program.node.node_id!r} does not belong to this ordered-program index")
+    if source_entity_index not in program.source.lookup.selected_entity_indices:
+        raise ValueError(f"entity {source_entity_index} is not selected by script block {program.node.entity_name!r}")
+    if max_paths < 1:
+        raise ValueError("max_paths must be positive")
+    if max_depth < 1:
+        raise ValueError("max_depth must be positive")
+    root = SymbolicEventPath(source_entity_index, initial_state)
+    return _walk_symbolic_stage_from(
+        index,
+        program,
+        current_entity_index=source_entity_index,
+        instruction_offset=0,
+        prefix=root,
+        active_frames=((source_entity_index, program.node.node_id),),
+        max_paths=max_paths,
+        max_depth=max_depth,
+        stop_at_temporal_boundary=False,
+    )
 
 
 def _event_for_node(model: StaticStageModel, node: StageEventNode) -> ScriptEvent:

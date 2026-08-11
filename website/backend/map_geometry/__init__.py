@@ -126,6 +126,7 @@ from website.backend.map_geometry.stage_possibilities import (
     resolve_symbolic_nested_dispatch,
     runtime_action_control_disposition,
     walk_symbolic_event_program,
+    walk_symbolic_stage_program,
 )
 from website.backend.map_geometry.stage_semantics import (
     ETLEGACY_SEMANTICS_COMMIT,
@@ -345,6 +346,7 @@ __all__ = [
     "resolve_symbolic_nested_dispatch",
     "runtime_action_control_disposition",
     "walk_symbolic_event_program",
+    "walk_symbolic_stage_program",
     "project_stage_effect",
     "player_eye_point",
     "target_body_points",

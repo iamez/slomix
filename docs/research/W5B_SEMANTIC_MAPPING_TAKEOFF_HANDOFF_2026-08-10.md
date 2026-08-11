@@ -7,7 +7,8 @@ Last updated: 2026-08-11
 Status: implementation in progress. Engine identity, Phase 3 dispositions, the Phase 4
 lossless ordered program, the override boundary, runtime-control classification and the
 bounded single-event symbolic walker and isolated nested-dispatch resolver are locally
-and externally reviewed.
+and externally reviewed. The bounded nested executor is implemented and measured
+locally but has not yet completed exact-head external review.
 
 Branch: `agent/map-geometry-w5b-semantic-mapping`
 
@@ -550,6 +551,81 @@ caller actions. Treating either case as a generic recursive function call would 
 false ordering. The next executor increment must model those cases separately or
 return an explicit concurrency frontier.
 
+### Bounded nested-executor checkpoint
+
+The local executor now reuses the reviewed single-event walker over ordered program
+segments and invokes the reviewed resolver only on the trigger branch. It does not
+flatten scripts or treat a nested event as an ordinary Python function call.
+
+The pinned engine source establishes the rules implemented by this increment:
+
+- `G_Script_ScriptChange` restores the previous same-entity script status only when
+  the replacement `G_Script_ScriptRun` finishes synchronously without another script
+  id change;
+- accumulator abort predicates set the active stack head to the event end but the
+  accumulator callback still returns `qtrue`, so a synchronously aborted nested event
+  restores its caller;
+- script-name and conditional dispatch iterate every concrete target in entity order;
+  a same-entity replacement sets a termination flag but does not stop that target
+  loop early;
+- a different-entity callee may pause while its caller keeps running. Its continuation
+  can later interleave with caller actions and shared global accumulators, so it cannot
+  be merged into the caller's immediate state.
+
+The implementation therefore:
+
+- executes synchronous nested target groups in concrete engine order and resumes the
+  caller with shared global state plus entity-keyed local state;
+- treats a synchronous accumulator abort as callee completion, not a temporal pause;
+- preserves the sudden-death immediate alternative for `wait`;
+- stops a different-entity or non-final shared-target callee at its first temporal
+  boundary, before executing any later action, and publishes
+  `cross_entity_temporal_interleaving_not_modeled` or
+  `same_entity_temporal_group_order_not_modeled`;
+- permits a final same-entity temporal replacement to continue as the replacement
+  event while suppressing the abandoned caller suffix;
+- detects active `(entity_index, event_node_id)` cycles and enforces independent path
+  and recursion-depth budgets;
+- records concrete entity provenance parallel to every effect, guard decision,
+  temporal boundary, caller replacement and blocker.
+
+The installed program/dispatch takeoff, before recursive execution, is:
+
+| Direct target shape | Other entity pairs | Same entity pairs |
+|---|---:|---:|
+| Immediate leaf | 899 | 235 |
+| Immediate with another nested dispatch | 85 | 278 |
+| Temporal leaf | 214 | 28 |
+| Temporal with another nested dispatch | 80 | 417 |
+
+The 2,153 target programs themselves split into 926 immediate leaves, 304 immediate
+programs with nested dispatch, 459 temporal leaves and 464 temporal programs with
+nested dispatch. These counts classify direct syntax only; recursive outcomes are the
+executor's responsibility.
+
+A read-only smoke walks every concrete installed event entry from explicit
+`SymbolicAccumulatorState.unknown()` with a deliberately small 16-path cap. It is a
+runtime/invariant check, **not** a reachability or domain-coverage verdict:
+
+| Smoke result | Count |
+|---|---:|
+| Concrete entries walked | 2,790 |
+| Programs without a static source identity | 48 |
+| Result paths | 5,583 |
+| Synchronous / eventual / guard-aborted / blocked | 2,520 / 1,314 / 320 / 1,429 |
+| Effect occurrences with concrete provenance | 14,517 |
+| Guard decisions / nested dispatches | 7,760 / 7,762 |
+| Temporal boundaries / same-entity caller replacements | 3,465 / 737 |
+| Cross-entity temporal frontiers | 629 |
+| Active-frame cycle frontiers | 206 |
+| Unknown-entry non-exact mutation frontiers | 500 |
+| Path-budget frontiers at the 16-path smoke cap | 45 |
+
+The other smoke blockers are eight unmodeled `kill` death dispatches, 34 missing
+handlers, three targets without static identity and four possible `create` failures.
+The smaller smoke cap keeps the all-entry acceptance test practical; the public
+executor default remains 4,096 and focused tests cover both path and depth exhaustion.
+
 ## Proposed code boundary
 
 Prefer a new sibling module, tentatively
@@ -618,7 +694,8 @@ without relying on chat history.
 
 Status: in progress. Identity/action namespaces, installed accumulator operations,
 ordered runner and the current-pass behavior of wait/reset/halt are source-verified.
-Nested-event restoration, death dispatch and bounded cycle fixtures remain.
+Nested-event restoration and bounded cycle fixtures are implemented locally; death
+dispatch remains pending.
 
 Read current ET:Legacy primary source and pin exact source URLs/commit hashes for:
 
@@ -705,8 +782,9 @@ Status: in progress. Every eligible action is retained in source order as a type
 stage, accumulator, trigger, barrier or source-classified runtime-control instruction.
 Single-event accumulator state, guard splitting, effect suppression and temporal
 continuations are implemented locally. Static nested dispatch identity is implemented
-and locally measured. Nested execution and bounded cycle/concurrency traversal remain
-pending; no map-level path reachability is published yet.
+and externally reviewed. Bounded nested execution, same-entity restoration, active
+cycle detection and explicit temporal/concurrency frontiers are implemented locally
+and await exact-head review; no map-level path reachability is published yet.
 
 1. Represent per-entity accumulator and global-accumulator state symbolically.
 2. Apply mutations in script action order.
@@ -925,6 +1003,8 @@ changes, Python runtime replacement, force-push/history deletion and secret rota
 - [x] Complete Phase 3 objective/spawn/route semantic mappings.
 - [x] Resolve nested trigger handlers and concrete static target groups without
   executing them.
+- [ ] Complete review closure for the locally implemented bounded nested executor,
+  same-entity restoration and temporal/concurrency frontiers.
 - [ ] Complete Phase 4 accumulator and ordered-possibility modelling.
 - [ ] Complete Phase 5 static coverage analyzer and evidence report.
 - [ ] Complete all verification and review closure gates.
@@ -1119,37 +1199,75 @@ different-entity callee can coexist with the continuing caller and mutate shared
 global state later. The first executor version must preserve this distinction and
 publish a bounded cycle or concurrency frontier whenever it cannot prove an ordering.
 
+### 2026-08-11 - stop unsafe callees at the first temporal boundary
+
+The nested executor reuses the single-event walker in ordered segments instead of
+copying accumulator/effect logic into a second interpreter. Same-entity callees resume
+their caller only after a fully synchronous result; a synchronously triggered
+accumulator abort qualifies because the engine callback returns `qtrue`. A final
+same-entity callee that pauses replaces the caller and suppresses its suffix.
+
+Different-entity and non-final shared-target callees use a stricter mode: their delayed
+branch stops at the first temporal boundary before any later action is evaluated. The
+frontier therefore contains only the immediate prefix, not effects or global mutations
+from an invented future ordering. Active concrete event frames close recursive cycles,
+and path plus depth budgets bound acyclic expansion. This deliberately leaves temporal
+scheduling explicit until real domain relevance proves that a more complex interleaving
+model is needed.
+
 ## Current handoff state
 
-Current step: begin the bounded nested-executor increment. Guard splitting, explicit
-local/global accumulator state, effect suppression, runtime-dependent wait paths,
-temporal continuation, `create` failure, line-numbered fail-closed frontiers and
-concrete nested target selection have completed local and external review. Nested
-programs are not yet executed. Phase 2's final public coverage surface remains
-intentionally deferred until nested control-flow blockers are modeled.
+Current step: finish exact-head review closure for the bounded nested executor. Guard
+splitting, explicit local/global accumulator state, effect suppression, concrete
+nested target selection, synchronous caller restoration, final same-entity temporal
+replacement, active-frame cycle detection and first-boundary temporal/concurrency
+frontiers are implemented locally. Phase 2's final public coverage surface remains
+intentionally deferred until the executor review and blocker-relevance measurement are
+closed.
 
-Next action after resolver review: integrate resolved targets into the symbolic
-executor in a bounded increment. Model same-entity synchronous restoration versus
-temporal replacement first. For different entities, continue the caller only when the
-callee result can be represented without inventing a temporal ordering; otherwise
-publish an explicit concurrency frontier. Carry global state across targets, keep
-local state keyed by source index, and publish a bounded cycle frontier for the 21
-self-loop components instead of iterating forever or exactly once. Apply the same
-contract to the 13 `kill` death-event dispatches only after their target lookup is
-verified.
+Next action after executor review: classify every remaining frontier by objective,
+spawn and dynamic-route semantic relevance before designing a scheduler. Verify the
+target/write path for all 13 `kill` actions and model death dispatch only from that
+evidence. If cross-entity temporal frontiers block required domains materially, add an
+explicit suspended-continuation scheduler; do not merge eventual callee state into an
+immediate caller by convenience. Then define the Phase 5 per-domain static-graph gate
+and deterministic evidence manifest.
 
 Known blockers: none for read-only research and local implementation. Any required
 live-build inspection that changes or restarts a service becomes owner-gated; retain
 the affected semantic result as unverified and continue with independent domains.
 
-Current local verification (Python 3.13.14): the expanded 260-test W1/map-geometry
-unit suite passed without coverage tracing. The focused single-event/resolver module
-contributes 66 passing tests. All 14 current opt-in real-asset tests passed in 193.48
-seconds without coverage tracing. The nested-resolver acceptance test passed alone in
-24.40 seconds and covers all 2,153 event programs plus the exact dispatch denominators
-above. On the preceding reviewed head, all 13 then-existing opt-in real-asset tests
-passed in 286.38 seconds under repo-wide coverage tracing. The current acceptance
-proves no `.ent` override exists
+### Adjacent live-test handoff received 2026-08-11
+
+Fable left a read-only live-test report in
+`docs/research/FINDINGS_FOR_CODEX_2026-08-11.md` in the main worktree. That file was
+still untracked when reviewed and is therefore not copied into or claimed by this PR.
+Its two actionable proximity findings belong after the current W5b checkpoint:
+
+- the stats SSH monitor suppresses parent-round ingestion from 02:00 through 10:59
+  Europe/Paris, while proximity ingestion continues every two minutes and the relinker
+  declares orphans permanent after six hours; the constants and early-return mismatch
+  are present in the current source and require a separate measured relinker-policy
+  change;
+- a measured forced-map-change case has exact proximity/stats start and end timestamps
+  but disagrees on `round_number`, so future relinker work must evaluate an exact-time
+  identity path instead of requiring the engine round number unconditionally.
+
+The report's `VEHICLE_PROGRESS` observation is not a missing parser feature in the
+current repository: the Lua writer, parser, database import, relinker fanout and web
+serving paths already contain explicit vehicle-progress support. The live/repository
+hash drift still needs deployment provenance work, but it does not block or alter W5b
+stage-script execution. The report's bot-round and trade-window observations are owned
+by Fable and must not be folded into this branch.
+
+Current local verification (Python 3.13.14): the expanded 277-test W1/map-geometry
+unit suite passed without coverage tracing. The focused single-event/resolver/executor
+module contributes 83 passing tests. The expanded resolver-shape acceptance passed in
+57.25 seconds; after the final caller-replacement correction, the every-entry bounded
+executor smoke passed in 29.67 seconds. All 15 current opt-in real-asset tests then
+passed together in 221.86 seconds without
+coverage tracing. On the reviewed resolver head, all 14 then-existing opt-in tests had
+passed in 193.48 seconds. The current acceptance proves no `.ent` override exists
 for any of the 20 indexed BSP maps, includes
 all 2,929 typed effect projections and the blocker inventory above, and rechecks W1-W5a,
 patch collision and trace fail-closed baselines. An initial full-asset run exposed two

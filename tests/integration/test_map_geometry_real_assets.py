@@ -37,7 +37,9 @@ from website.backend.map_geometry import (
     RuntimeActionInstruction,
     StageLoadStatus,
     SurfaceType,
+    SymbolicAccumulatorState,
     SymbolicDispatchResolution,
+    SymbolicPathCompletion,
     TraceReason,
     TraceStatus,
     TriggerInstruction,
@@ -52,6 +54,7 @@ from website.backend.map_geometry import (
     project_ordered_stage_programs,
     project_stage_effect,
     resolve_symbolic_nested_dispatch,
+    walk_symbolic_stage_program,
 )
 
 ETMAIN = Path(os.environ.get("SLOMIX_ETMAIN_DIR", "/home/samba/share/etmain"))
@@ -645,6 +648,8 @@ def test_w5b_resolves_nested_dispatch_to_concrete_static_targets(geometry_index)
     target_group_sizes = Counter()
     resolved_pairs = Counter()
     same_entity_pairs = Counter()
+    program_shapes = Counter()
+    resolved_pair_shapes = Counter()
 
     for map_name in geometry_index.map_names:
         bsp = geometry_index.load_bsp(map_name)
@@ -657,11 +662,20 @@ def test_w5b_resolves_nested_dispatch_to_concrete_static_targets(geometry_index)
         index = build_ordered_stage_program_index(model, linked)
 
         for program in index.programs:
+            direct_temporal = any(
+                isinstance(instruction, ControlBarrierInstruction)
+                or (
+                    isinstance(instruction, RuntimeActionInstruction)
+                    and instruction.control_disposition is RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE
+                )
+                for instruction in program.instructions
+            )
             nested = tuple(
                 instruction
                 for instruction in program.instructions
                 if isinstance(instruction, (TriggerInstruction, AccumulatorConditionalTrigger))
             )
+            program_shapes[(direct_temporal, bool(nested))] += 1
             for instruction in nested:
                 kind = "conditional" if isinstance(instruction, AccumulatorConditionalTrigger) else "plain"
                 source_indices = program.source.lookup.selected_entity_indices
@@ -680,11 +694,34 @@ def test_w5b_resolves_nested_dispatch_to_concrete_static_targets(geometry_index)
                     resolutions.add(dispatch.resolution.value)
                     concrete_resolutions[(kind, dispatch.resolution.value)] += 1
                     if dispatch.resolution is SymbolicDispatchResolution.RESOLVED:
+                        assert dispatch.target_node_id is not None
+                        target_program = index.program(dispatch.target_node_id)
+                        target_temporal = any(
+                            isinstance(target_instruction, ControlBarrierInstruction)
+                            or (
+                                isinstance(target_instruction, RuntimeActionInstruction)
+                                and target_instruction.control_disposition
+                                is RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE
+                            )
+                            for target_instruction in target_program.instructions
+                        )
+                        target_nested = any(
+                            isinstance(target_instruction, (TriggerInstruction, AccumulatorConditionalTrigger))
+                            for target_instruction in target_program.instructions
+                        )
                         target_group_sizes[(kind, len(dispatch.target_entity_indices))] += 1
                         resolved_pairs[kind] += len(dispatch.target_entity_indices)
                         same_entity_pairs[kind] += sum(
                             target_index == source_index for target_index in dispatch.target_entity_indices
                         )
+                        for target_index in dispatch.target_entity_indices:
+                            resolved_pair_shapes[
+                                (
+                                    "same" if target_index == source_index else "other",
+                                    "temporal" if target_temporal else "immediate",
+                                    "nested" if target_nested else "leaf",
+                                )
+                            ] += 1
                 assert len(resolutions) == 1
                 instruction_resolutions[(kind, resolutions.pop())] += 1
 
@@ -713,6 +750,95 @@ def test_w5b_resolves_nested_dispatch_to_concrete_static_targets(geometry_index)
     }
     assert resolved_pairs == {"plain": 1937, "conditional": 299}
     assert same_entity_pairs == {"plain": 669, "conditional": 289}
+    assert program_shapes == {
+        (False, False): 926,
+        (False, True): 304,
+        (True, False): 459,
+        (True, True): 464,
+    }
+    assert resolved_pair_shapes == {
+        ("other", "immediate", "leaf"): 899,
+        ("other", "immediate", "nested"): 85,
+        ("other", "temporal", "leaf"): 214,
+        ("other", "temporal", "nested"): 80,
+        ("same", "immediate", "leaf"): 235,
+        ("same", "immediate", "nested"): 278,
+        ("same", "temporal", "leaf"): 28,
+        ("same", "temporal", "nested"): 417,
+    }
+
+
+@pytest.mark.timeout(120)
+def test_w5b_bounded_nested_executor_smokes_every_concrete_event_entry(geometry_index):
+    counts = Counter()
+    max_result_paths = 0
+
+    for map_name in geometry_index.map_names:
+        bsp = geometry_index.load_bsp(map_name)
+        linked = link_w3_entity_catalog(
+            build_indexed_entity_identity_index(geometry_index, map_name, bsp=bsp),
+            extract_entity_catalog(bsp, map_name),
+        )
+        model = load_static_stage(geometry_index, map_name).model
+        assert model is not None
+        index = build_ordered_stage_program_index(model, linked)
+
+        for program in index.programs:
+            if not program.source.lookup.selected_entity_indices:
+                counts["entries_missing_identity"] += 1
+                continue
+            for entity_index in program.source.lookup.selected_entity_indices:
+                paths = walk_symbolic_stage_program(
+                    index,
+                    program,
+                    source_entity_index=entity_index,
+                    initial_state=SymbolicAccumulatorState.unknown(),
+                    max_paths=16,
+                )
+                assert paths
+                assert all(len(path.effects) == len(path.effect_entity_indices) for path in paths)
+                assert all(
+                    len(path.temporal_boundary_lines) == len(path.temporal_boundary_entity_indices) for path in paths
+                )
+                assert all(
+                    len(path.caller_replacement_lines) == len(path.caller_replacement_entity_indices) for path in paths
+                )
+                counts["entries_walked"] += 1
+                counts["paths"] += len(paths)
+                max_result_paths = max(max_result_paths, len(paths))
+                for path in paths:
+                    counts["effects"] += len(path.effects)
+                    counts["guard_decisions"] += len(path.guard_decisions)
+                    counts["nested_dispatches"] += len(path.nested_dispatches)
+                    counts["temporal_boundaries"] += len(path.temporal_boundary_lines)
+                    counts["caller_replacements"] += len(path.caller_replacement_lines)
+                    counts[("completion", path.completion.value)] += 1
+                    if path.blocker_reason:
+                        counts[("blocker", path.blocker_reason)] += 1
+
+    assert counts == {
+        "entries_walked": 2790,
+        "entries_missing_identity": 48,
+        "paths": 5583,
+        "effects": 14517,
+        "guard_decisions": 7760,
+        "nested_dispatches": 7762,
+        "temporal_boundaries": 3465,
+        "caller_replacements": 737,
+        ("completion", SymbolicPathCompletion.SYNCHRONOUS_COMPLETE.value): 2520,
+        ("completion", SymbolicPathCompletion.EVENTUAL_COMPLETE.value): 1314,
+        ("completion", SymbolicPathCompletion.ABORTED_BY_GUARD.value): 320,
+        ("completion", SymbolicPathCompletion.BLOCKED.value): 1429,
+        ("blocker", "cross_entity_temporal_interleaving_not_modeled"): 629,
+        ("blocker", "may_dispatch_death_event"): 8,
+        ("blocker", "nested_dispatch_cycle"): 206,
+        ("blocker", "nested_dispatch_missing_handler"): 34,
+        ("blocker", "nested_dispatch_target_identity_missing"): 3,
+        ("blocker", "non_exact_accumulator_mutation"): 500,
+        ("blocker", "spawn_failure_frontier"): 4,
+        ("blocker", "symbolic_path_budget_exhausted"): 45,
+    }
+    assert max_result_paths == 16
 
 
 @pytest.mark.timeout(120)

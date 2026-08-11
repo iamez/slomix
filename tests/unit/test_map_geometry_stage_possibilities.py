@@ -31,6 +31,7 @@ from website.backend.map_geometry.stage_possibilities import (
     resolve_symbolic_nested_dispatch,
     runtime_action_control_disposition,
     walk_symbolic_event_program,
+    walk_symbolic_stage_program,
 )
 from website.backend.map_geometry.stage_semantics import (
     AccumulatorAbortGuard,
@@ -132,6 +133,12 @@ def _program_index(raw_script, raw_entities=None):
 
 def _programs(raw_script, raw_entities=None):
     return _program_index(raw_script, raw_entities).programs
+
+
+def _effect_states(path):
+    return tuple(
+        projection.effect.state for projection in path.effects if isinstance(projection, EntityTargetEffectProjection)
+    )
 
 
 def test_projects_event_actions_in_source_order_without_executing_paths():
@@ -533,6 +540,526 @@ def test_nested_dispatch_rejects_equal_artifacts_from_another_index():
         )
 
 
+def test_stage_walker_runs_a_synchronous_other_entity_callee_then_resumes_the_caller():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                accum 0 set 1
+                trigger helper go
+                accum 0 abort_if_not_equal 1
+                setstate gate invisible
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                accum 0 set 7
+                setstate gate default
+            }
+        }
+        """
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    path = paths[0]
+    assert path.completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert _effect_states(path) == ("default", "invisible")
+    assert path.effect_entity_indices == (2, 0)
+    assert path.state.read(AccumulatorScope.ENTITY, 0, source_entity_index=0).exact_value == 1
+    assert path.state.read(AccumulatorScope.ENTITY, 0, source_entity_index=2).exact_value == 7
+    assert path.guard_decisions[0].source_entity_index == 0
+    assert tuple(item.source_entity_index for item in path.nested_dispatches) == (0,)
+
+
+def test_stage_walker_restores_a_synchronously_completed_same_entity_callee():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                globalaccum 0 set 1
+                trigger self go
+                globalaccum 0 abort_if_not_equal 2
+                setstate gate invisible
+            }
+            trigger go
+            {
+                globalaccum 0 inc 1
+                setstate gate default
+            }
+        }
+        """
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    path = paths[0]
+    assert path.completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert _effect_states(path) == ("default", "invisible")
+    assert path.effect_entity_indices == (0, 0)
+    assert path.state.read(AccumulatorScope.GLOBAL, 0, source_entity_index=0).exact_value == 2
+    assert path.caller_replacement_lines == ()
+
+
+def test_stage_walker_restores_the_caller_after_a_nested_accumulator_abort():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger self go
+                setstate gate invisible
+            }
+            trigger go
+            {
+                accum 0 abort_if_equal 0
+                setstate gate default
+            }
+        }
+        """
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert _effect_states(paths[0]) == ("invisible",)
+    assert paths[0].guard_decisions[0].predicate_result is True
+    assert paths[0].guard_decisions[0].source_entity_index == 0
+
+
+def test_stage_walker_splits_a_conditional_dispatch_and_preserves_provenance():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                accum 0 trigger_if_equal 1 helper go
+                setstate gate invisible
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                setstate gate default
+            }
+        }
+        """
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.unknown(),
+    )
+
+    assert len(paths) == 2
+    by_predicate = {path.guard_decisions[0].predicate_result: path for path in paths}
+    assert _effect_states(by_predicate[True]) == ("default", "invisible")
+    assert by_predicate[True].effect_entity_indices == (2, 0)
+    assert len(by_predicate[True].nested_dispatches) == 1
+    assert _effect_states(by_predicate[False]) == ("invisible",)
+    assert by_predicate[False].effect_entity_indices == (0,)
+    assert by_predicate[False].nested_dispatches == ()
+
+
+def test_stage_walker_keeps_immediate_and_same_entity_replacement_wait_paths():
+    index = _program_index(
+        b"""
+        helper
+        {
+            spawn
+            {
+                trigger self go
+                setstate gate invisible
+            }
+            trigger go
+            {
+                wait 100
+                setstate gate default
+            }
+        }
+        """
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=2,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 2
+    synchronous = next(path for path in paths if not path.temporal_boundary_lines)
+    replacement = next(path for path in paths if path.temporal_boundary_lines)
+    assert synchronous.completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert _effect_states(synchronous) == ("default", "invisible")
+    assert replacement.completion is SymbolicPathCompletion.EVENTUAL_COMPLETE
+    assert _effect_states(replacement) == ("default",)
+    assert replacement.temporal_boundary_entity_indices == (2,)
+    assert len(replacement.caller_replacement_lines) == 1
+    assert replacement.caller_replacement_entity_indices == (2,)
+
+
+def test_stage_walker_retains_replacement_provenance_when_the_resumed_callee_blocks():
+    index = _program_index(
+        b"""
+        helper
+        {
+            spawn
+            {
+                trigger self go
+                setstate gate invisible
+            }
+            trigger go
+            {
+                wait 100
+                trigger absent missing
+                setstate gate default
+            }
+        }
+        """
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=2,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 2
+    assert all(path.blocker_reason == "nested_dispatch_missing_handler" for path in paths)
+    immediate = next(path for path in paths if not path.temporal_boundary_lines)
+    replacement = next(path for path in paths if path.temporal_boundary_lines)
+    assert immediate.caller_replacement_lines == ()
+    assert replacement.caller_replacement_entity_indices == (2,)
+    assert all(_effect_states(path) == () for path in paths)
+
+
+def test_stage_walker_blocks_cross_entity_temporal_interleaving_but_keeps_the_immediate_path():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper go
+                setstate gate invisible
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                setstate gate default
+                wait 100
+                setstate gate underconstruction
+            }
+        }
+        """
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 2
+    complete = next(path for path in paths if path.completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE)
+    blocked = next(path for path in paths if path.completion is SymbolicPathCompletion.BLOCKED)
+    assert _effect_states(complete) == ("default", "underconstruction", "invisible")
+    assert blocked.blocker_reason == "cross_entity_temporal_interleaving_not_modeled"
+    assert blocked.blocker_entity_index == 2
+    assert _effect_states(blocked) == ("default",)
+    assert blocked.temporal_boundary_entity_indices == (2,)
+
+
+def test_stage_walker_blocks_both_temporal_hazards_in_a_shared_target_group():
+    index = _program_index(
+        b"""
+        helper
+        {
+            spawn
+            {
+                trigger helper go
+                setstate gate invisible
+            }
+            trigger go
+            {
+                wait 100
+                setstate gate default
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "helper"},
+            {"classname": "script_mover", "scriptname": "helper"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 3
+    reasons = {path.blocker_reason for path in paths}
+    assert reasons == {
+        None,
+        "same_entity_temporal_group_order_not_modeled",
+        "cross_entity_temporal_interleaving_not_modeled",
+    }
+    complete = next(path for path in paths if path.blocker_reason is None)
+    assert _effect_states(complete) == ("default", "default", "invisible")
+    assert complete.effect_entity_indices == (0, 1, 0)
+    same_group = next(path for path in paths if path.blocker_reason == "same_entity_temporal_group_order_not_modeled")
+    assert _effect_states(same_group) == ()
+    cross_entity = next(
+        path for path in paths if path.blocker_reason == "cross_entity_temporal_interleaving_not_modeled"
+    )
+    assert _effect_states(cross_entity) == ("default",)
+
+
+def test_stage_walker_reports_a_concrete_active_frame_cycle():
+    index = _program_index(
+        b"""
+        helper
+        {
+            spawn
+            {
+                trigger self loop
+            }
+            trigger loop
+            {
+                trigger self loop
+            }
+        }
+        """
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=2,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "nested_dispatch_cycle"
+    assert paths[0].blocker_entity_index == 2
+    assert len(paths[0].nested_dispatches) == 2
+
+
+def test_stage_walker_enforces_nested_depth_and_global_path_budgets():
+    depth_index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper one
+            }
+        }
+        helper
+        {
+            trigger one
+            {
+                trigger third two
+            }
+        }
+        third
+        {
+            trigger two
+            {
+                wm_announce reached
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "helper"},
+            {"classname": "script_mover", "scriptname": "third"},
+        ),
+    )
+    depth_paths = walk_symbolic_stage_program(
+        depth_index,
+        depth_index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+        max_depth=2,
+    )
+    assert len(depth_paths) == 1
+    assert depth_paths[0].blocker_reason == "nested_dispatch_depth_exhausted"
+    assert depth_paths[0].blocker_entity_index == 2
+
+    budget_index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                accum 0 trigger_if_equal 1 helper go
+                setstate gate invisible
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                setstate gate default
+            }
+        }
+        """
+    )
+    budget_paths = walk_symbolic_stage_program(
+        budget_index,
+        budget_index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.unknown(),
+        max_paths=1,
+    )
+    assert len(budget_paths) == 1
+    assert budget_paths[0].blocker_reason == "symbolic_path_budget_exhausted"
+
+
+@pytest.mark.parametrize(("argument", "value"), (("max_paths", 0), ("max_depth", 0)))
+def test_stage_walker_rejects_non_positive_execution_bounds(argument, value):
+    script = b"""
+    game_manager
+    {
+        spawn
+        {
+            setstate gate default
+        }
+    }
+    """
+    index = _program_index(script)
+
+    with pytest.raises(ValueError, match=argument):
+        walk_symbolic_stage_program(
+            index,
+            index.programs[0],
+            source_entity_index=0,
+            initial_state=SymbolicAccumulatorState.zeroed(),
+            **{argument: value},
+        )
+
+
+def test_stage_walker_rejects_an_equal_program_artifact_from_another_index():
+    script = b"""
+    game_manager
+    {
+        spawn
+        {
+            setstate gate default
+        }
+    }
+    """
+    first = _program_index(script)
+    second = _program_index(script)
+
+    with pytest.raises(ValueError, match="does not belong"):
+        walk_symbolic_stage_program(
+            first,
+            second.programs[0],
+            source_entity_index=0,
+            initial_state=SymbolicAccumulatorState.zeroed(),
+        )
+
+
+@pytest.mark.parametrize(
+    ("target", "expected_reason"),
+    (
+        ("global", "nested_dispatch_runtime_dispatch"),
+        ("absent", "nested_dispatch_missing_handler"),
+    ),
+)
+def test_stage_walker_retains_unresolved_nested_dispatch_frontiers(target, expected_reason):
+    index = _program_index(
+        f"""
+        game_manager
+        {{
+            spawn
+            {{
+                trigger {target} go
+                setstate gate invisible
+            }}
+        }}
+        """.encode()
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == expected_reason
+    assert _effect_states(paths[0]) == ()
+
+
+def test_stage_walker_continues_after_an_activator_no_op():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger activator go
+                setstate gate invisible
+            }
+        }
+        """
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert _effect_states(paths[0]) == ("invisible",)
+    assert paths[0].nested_dispatches[0].resolution is SymbolicDispatchResolution.NO_OP
+
+
 def test_known_abort_guard_suppresses_a_later_stage_effect():
     program = _programs(
         b"""
@@ -729,6 +1256,36 @@ def test_wait_preserves_sudden_death_and_ordinary_temporal_paths():
     delayed = next(path for path in paths if path.completion is SymbolicPathCompletion.EVENTUAL_COMPLETE)
     assert immediate.temporal_boundary_lines == ()
     assert delayed.temporal_boundary_lines
+
+
+def test_event_walker_can_stop_before_actions_after_a_temporal_boundary():
+    program = _programs(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                setstate gate default
+                wait 100
+                setstate gate invisible
+            }
+        }
+        """
+    )[0]
+
+    paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+        stop_at_temporal_boundary=True,
+    )
+
+    assert len(paths) == 2
+    immediate = next(path for path in paths if path.completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE)
+    suspended = next(path for path in paths if path.completion is SymbolicPathCompletion.TEMPORALLY_SUSPENDED)
+    assert _effect_states(immediate) == ("default", "invisible")
+    assert _effect_states(suspended) == ("default",)
+    assert suspended.temporal_boundary_entity_indices == (0,)
 
 
 @pytest.mark.parametrize("command", ("resetscript", "halt"))
