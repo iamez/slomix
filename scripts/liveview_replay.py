@@ -14,14 +14,20 @@ Usage:
   --speed    replay pacing: 0 = instant dump (default); N = N× real time,
              derived from level-time deltas (map restarts reset the clock)
   --summary  per-round synthesis instead of the JSONL stream
+  --post URL POST parsed events to a live ingest endpoint (S1) in batches
+             instead of printing; reads the X-Internal-Token from the
+             INTERNAL_API_SECRET env var. Combine with --speed for a
+             realistic pacing demo.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
+import urllib.request
 from collections import Counter
 from pathlib import Path
 
@@ -36,9 +42,26 @@ def main() -> int:
     ap.add_argument("--types", default="")
     ap.add_argument("--speed", type=float, default=0.0)
     ap.add_argument("--summary", action="store_true")
+    ap.add_argument("--post", default="", help="live ingest URL (S1)")
+    ap.add_argument("--batch", type=int, default=25)
     args = ap.parse_args()
 
+    def _post_batch(batch: list[dict]) -> None:
+        if not args.post.startswith(("http://", "https://")):
+            raise SystemExit("--post mora biti http(s) URL")
+        req = urllib.request.Request(  # noqa: S310 — shema preverjena zgoraj
+            args.post,
+            data=json.dumps({"events": batch, "source": "replay"}).encode(),
+            headers={
+                "Content-Type": "application/json",
+                "X-Internal-Token": os.environ.get("INTERNAL_API_SECRET", ""),
+            },
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310 — operator-supplied URL
+            resp.read()
+
     wanted = {t.strip().upper() for t in args.types.split(",") if t.strip()}
+    pending: list[dict] = []
     rounds: list[Counter] = [Counter()]
     prev_ms: int | None = None
     total = 0
@@ -61,8 +84,18 @@ def main() -> int:
             if prev_ms is not None and ev.level_ms > prev_ms:
                 time.sleep(min((ev.level_ms - prev_ms) / 1000.0 / args.speed, 5.0))
             prev_ms = ev.level_ms
-        print(json.dumps({"type": ev.type, "level_ms": ev.level_ms, **ev.fields},
-                         ensure_ascii=False))
+        payload = {"type": ev.type, "level_ms": ev.level_ms, "fields": ev.fields}
+        if args.post:
+            pending.append(payload)
+            if len(pending) >= args.batch:
+                _post_batch(pending)
+                pending = []
+        else:
+            print(json.dumps({"type": ev.type, "level_ms": ev.level_ms, **ev.fields},
+                             ensure_ascii=False))
+
+    if args.post and pending:
+        _post_batch(pending)
 
     if args.summary:
         done = [r for r in rounds if r]
