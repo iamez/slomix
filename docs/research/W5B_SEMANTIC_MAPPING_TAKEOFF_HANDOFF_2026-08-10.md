@@ -1401,6 +1401,63 @@ runtime destruction-stage fields, unlike the single `script_mover_die -> death "
 path. Installed targets have no such handler, so guessing that state would add
 complexity without changing current corpus coverage.
 
+#### Frontier-classification checkpoint and scheduler decision
+
+Every blocked nested-executor path now carries ordered continuation provenance, a
+deterministic subset of `objective`, `spawn` and `dynamic_route`, an explicit
+`unknown_domain_relevance` flag and machine-readable unknown reasons. The classifier
+walks only statically reachable suffixes and nested programs. It treats a known missing
+handler as having no target effect while retaining the caller suffix; missing target
+identity, opaque script identity, budget exhaustion and unresolved route identity stay
+unknown rather than being reported as irrelevant.
+
+The 1,090 current blocked paths split as follows at the 16-unit smoke budget:
+
+| Hidden-domain set | Paths |
+|---|---:|
+| none | 432 |
+| dynamic route only | 277 |
+| objective only | 7 |
+| objective + spawn | 2 |
+| dynamic route + objective | 225 |
+| dynamic route + spawn | 18 |
+| all three | 129 |
+
+Across overlapping sets, 649 blockers hide dynamic-route semantics, 363 hide objective
+semantics and 149 hide spawn semantics. Of all blockers, 427 have complete domain
+classification and 663 retain at least one named unknown reason. The dominant unknowns
+are non-W3-linked runtime motion/lifecycle sources (`faceangles`, `stoprotation`,
+`remove`, `attachtotag`, `setrotation`, `setspeed`) and 130 missing typed effect targets;
+these are coverage facts, not permission to relabel the action as irrelevant.
+
+The scheduler decision is now evidence-driven. Among the 301 cross-entity temporal
+frontiers:
+
+| Hidden-domain set | Paths |
+|---|---:|
+| none | 63 |
+| dynamic route only | 166 |
+| objective only | 3 |
+| dynamic route + objective | 46 |
+| dynamic route + spawn | 18 |
+| all three | 5 |
+
+Only 63/301 have no currently identified required domain; 238/301 hide at least one.
+220/301 are completely classified and 81 retain named identity/route uncertainty.
+Therefore a bounded suspended-continuation scheduler is required before Phase 5. It
+must model ordering alternatives explicitly; it may not merge delayed callee state into
+the immediate caller or erase the current concurrency frontier merely to raise
+coverage.
+
+The scheduler should be scoped to cross-entity and shared-target temporal continuations
+that the classifier proves relevant. Empty, fully classified frontiers do not need
+state-space expansion. Unknown relevance remains fail-closed and is not a scheduling
+target until its identity/semantic reason is resolved.
+
+Focused verification at this checkpoint: 97/97 ordered-possibility unit tests,
+including adversarial temporal, missing-handler, missing-identity and non-exact-state
+cases, and the full 20-map bounded-executor evidence test passed on Python 3.13.
+
 ### Adjacent live-test handoff received 2026-08-11
 
 Fable left a read-only live-test report in

@@ -777,6 +777,8 @@ def test_w5b_resolves_nested_dispatch_to_concrete_static_targets(geometry_index)
 @pytest.mark.timeout(120)
 def test_w5b_bounded_nested_executor_smokes_every_concrete_event_entry(geometry_index):
     counts = Counter()
+    frontier_counts = Counter()
+    cross_frontier_counts = Counter()
     max_result_paths = 0
 
     for map_name in geometry_index.map_names:
@@ -823,6 +825,20 @@ def test_w5b_bounded_nested_executor_smokes_every_concrete_event_entry(geometry_
                     counts[("completion", path.completion.value)] += 1
                     if path.blocker_reason:
                         counts[("blocker", path.blocker_reason)] += 1
+                        assert path.frontier_relevance is not None
+                        relevance = path.frontier_relevance
+                        domain_values = tuple(domain.value for domain in relevance.domains)
+                        frontier_counts[("domain_set", domain_values)] += 1
+                        frontier_counts[("unknown", relevance.unknown_domain_relevance)] += 1
+                        for reason in relevance.unknown_reasons:
+                            frontier_counts[("unknown_reason", reason)] += 1
+                        if path.blocker_reason == "cross_entity_temporal_interleaving_not_modeled":
+                            cross_frontier_counts[("domain_set", domain_values)] += 1
+                            cross_frontier_counts[("unknown", relevance.unknown_domain_relevance)] += 1
+                            for reason in relevance.unknown_reasons:
+                                cross_frontier_counts[("unknown_reason", reason)] += 1
+                    else:
+                        assert path.frontier_relevance is None
 
     assert counts == {
         "entries_walked": 2790,
@@ -845,6 +861,46 @@ def test_w5b_bounded_nested_executor_smokes_every_concrete_event_entry(geometry_
         ("blocker", "non_exact_accumulator_mutation"): 451,
         ("blocker", "spawn_failure_frontier"): 4,
         ("blocker", "symbolic_path_budget_exhausted"): 103,
+    }
+    assert frontier_counts == {
+        ("domain_set", ()): 432,
+        ("domain_set", ("dynamic_route",)): 277,
+        ("domain_set", ("dynamic_route", "objective")): 225,
+        ("domain_set", ("dynamic_route", "objective", "spawn")): 129,
+        ("domain_set", ("dynamic_route", "spawn")): 18,
+        ("domain_set", ("objective",)): 7,
+        ("domain_set", ("objective", "spawn")): 2,
+        ("unknown", False): 427,
+        ("unknown", True): 663,
+        ("unknown_reason", "effect_target_identity_missing"): 130,
+        ("unknown_reason", "frontier:nested_dispatch_target_identity_missing"): 3,
+        ("unknown_reason", "frontier:symbolic_path_budget_exhausted"): 103,
+        ("unknown_reason", "gotomarker_route_identity_unproven"): 4,
+        ("unknown_reason", "nested_dispatch_target_identity_missing"): 2,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:attachtotag"): 108,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:faceangles"): 274,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:remove"): 130,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:setrotation"): 41,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:setspeed"): 24,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:stoprotation"): 215,
+    }
+    assert cross_frontier_counts == {
+        ("domain_set", ()): 63,
+        ("domain_set", ("dynamic_route",)): 166,
+        ("domain_set", ("dynamic_route", "objective")): 46,
+        ("domain_set", ("dynamic_route", "objective", "spawn")): 5,
+        ("domain_set", ("dynamic_route", "spawn")): 18,
+        ("domain_set", ("objective",)): 3,
+        ("unknown", False): 220,
+        ("unknown", True): 81,
+        ("unknown_reason", "effect_target_identity_missing"): 3,
+        ("unknown_reason", "gotomarker_route_identity_unproven"): 4,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:attachtotag"): 10,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:faceangles"): 16,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:remove"): 39,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:setrotation"): 1,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:setspeed"): 22,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:stoprotation"): 1,
     }
     assert max_result_paths == 16
 
