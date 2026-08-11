@@ -1280,7 +1280,7 @@ Follow-up base: `origin/main` at
 `e649b0493a1ca0ed9cb3b2a2935ebcd78f494202`
 
 Current substantive follow-up head:
-`04e65133` (`fix(map-geometry): close frontier review gaps`). The
+`45f901bb` (`fix(map-geometry): bound frontier relevance analysis`). The
 documentation-only verification commit that records this pointer cannot contain its
 own hash; query PR #638 before treating it as the final reviewed head.
 
@@ -1378,12 +1378,13 @@ The deterministic installed-asset manifest is the SHA-256 of canonical JSON for
 separators and ASCII output. This deliberately excludes the machine-specific absolute
 `etmain_dir`, while retaining every selected/provider path, member index, size, CRC32
 and content SHA-256. For the exact 20-map installed corpus on substantive test head
-`04e65133`, the manifest hash is:
+`45f901bb`, the manifest hash is:
 
 `86ddd0ec23b3c6120136195af34aa633ad249eb358ea0fb6cd6e490dd81b220d`
 
 The source-verified `kill` change removes a generic frontier that previously stopped
-the caller before its suffix. A per-action continuation probe on the same head found
+the caller before its suffix. A per-action continuation probe on the same asset manifest
+found
 the following per-map domain deltas:
 
 | Map | Kill actions | Dynamic-route verdict delta | Objective delta | Spawn delta |
@@ -1450,35 +1451,38 @@ The 1,090 current blocked paths split as follows at the 16-unit smoke budget:
 
 | Hidden-domain set | Paths |
 |---|---:|
-| none | 408 |
-| dynamic route only | 300 |
-| objective only | 7 |
+| none | 370 |
+| dynamic route only | 372 |
+| objective only | 15 |
+| spawn only | 1 |
 | objective + spawn | 2 |
-| dynamic route + objective | 226 |
-| dynamic route + spawn | 18 |
-| all three | 129 |
+| dynamic route + objective | 211 |
+| dynamic route + spawn | 22 |
+| all three | 97 |
 
-Across overlapping sets, 673 blockers hide dynamic-route semantics, 364 hide objective
-semantics and 149 hide spawn semantics. Of all blockers, 421 have complete domain
-classification and 669 retain at least one named unknown reason. The dominant unknowns
-are non-W3-linked runtime motion/lifecycle sources (`faceangles`, `stoprotation`,
-`remove`, `attachtotag`, `setrotation`, `setspeed`) and 130 missing typed effect targets;
-these are coverage facts, not permission to relabel the action as irrelevant.
+Across overlapping sets, 702 blockers hide dynamic-route semantics, 325 hide objective
+semantics and 122 hide spawn semantics. Of all blockers, 357 have complete domain
+classification and 733 retain at least one named unknown reason. The dominant unknowns
+are 337 state-changing trigger cycles cut by the bounded analyzer, non-W3-linked runtime
+motion/lifecycle sources (`faceangles`, `stoprotation`, `remove`, `attachtotag`,
+`setrotation`, `setspeed`) and 101 missing typed effect targets. These are coverage
+facts, not permission to relabel the action as irrelevant.
 
 The scheduler decision is now evidence-driven. Among the 301 cross-entity temporal
 frontiers:
 
 | Hidden-domain set | Paths |
 |---|---:|
-| none | 59 |
-| dynamic route only | 170 |
+| none | 57 |
+| dynamic route only | 171 |
 | objective only | 2 |
-| dynamic route + objective | 47 |
+| dynamic route + objective | 49 |
 | dynamic route + spawn | 18 |
-| all three | 5 |
+| all three | 4 |
 
-Only 59/301 have no currently identified required domain; 242/301 hide at least one.
-214/301 are completely classified and 87 retain named identity/route uncertainty.
+Only 57/301 have no currently identified required domain; 244/301 hide at least one.
+206/301 are completely classified and 95 retain named identity, route or stateful-cycle
+uncertainty.
 Therefore a bounded suspended-continuation scheduler is required before Phase 5. It
 must model ordering alternatives explicitly; it may not merge delayed callee state into
 the immediate caller or erase the current concurrency frontier merely to raise
@@ -1519,6 +1523,20 @@ suite passed 4,335 tests with 94 expected environment/fixture-gated skips in 53.
 seconds; Ruff and `git diff --check` were also clean. This paragraph is a
 documentation-only record of those exact heads and cannot contain the hash of its own
 commit.
+
+The subsequent GitHub Codex review found five more valid closure gaps. Substantive head
+`45f901bb` now preserves caller and remaining-target continuations when a nested callee
+blocks; follows exact accumulator mutations and proven abort guards; retains `.ent`
+override W3 linkage as unknown; bounds relevance traversal with one 8,192-unit work
+budget shared by every blocked path from a root walk; memoizes complete root
+continuations; and cuts state-changing cycles with the named
+`frontier_relevance_stateful_cycle_cut` reason. A target script block that can execute
+`set { scriptName ... }` now makes later kill dispatch explicitly unknown instead of
+selecting the original handler. The corrected corpus tables above supersede the earlier
+421-complete/669-unknown classification. Focused coverage passed 109/109, the expanded
+W1-W5b unit selection passed 281/281, and the exact bounded-executor corpus acceptance
+passed in 31.98 seconds without relevance depth or work-budget exhaustion. Full
+real-asset and repository verification remain required after this documentation update.
 
 ### Adjacent live-test handoff received 2026-08-11
 
