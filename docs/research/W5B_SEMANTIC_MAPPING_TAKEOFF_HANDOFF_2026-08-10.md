@@ -1280,7 +1280,7 @@ Follow-up base: `origin/main` at
 `e649b0493a1ca0ed9cb3b2a2935ebcd78f494202`
 
 Current substantive follow-up head:
-`e9fc55d3` (`fix(map-geometry): classify blocking frontier actions`). The
+`41741556` (`fix(map-geometry): expose nested state uncertainty`). The
 documentation-only verification commit that records this pointer cannot contain its
 own hash; query PR #638 before treating it as the final reviewed head.
 
@@ -1378,7 +1378,7 @@ The deterministic installed-asset manifest is the SHA-256 of canonical JSON for
 separators and ASCII output. This deliberately excludes the machine-specific absolute
 `etmain_dir`, while retaining every selected/provider path, member index, size, CRC32
 and content SHA-256. For the exact 20-map installed corpus on substantive test head
-`e9fc55d3`, the manifest hash is:
+`41741556`, the manifest hash is:
 
 `86ddd0ec23b3c6120136195af34aa633ad249eb358ea0fb6cd6e490dd81b220d`
 
@@ -1565,8 +1565,10 @@ complete verdict in that case. The installed corpus contains 435 such blocked pa
 including 50 of the 301 cross-entity frontiers. Domain sets are unchanged, but complete
 classification drops from 357 to 310 overall and from 206 to 175 for cross-entity
 frontiers. Exact state propagation belongs in the W5c suspended-continuation executor;
-W5b must remain fail closed until then. Final exact-head verification is required after
-this correction.
+W5b must remain fail closed until then. On substantive head `41741556`, 111/111
+focused tests passed, all 16 opt-in real-asset tests passed in 427.88 seconds with
+494,292 KiB peak RSS, and the complete repository passed 4,341 tests with 94 skips and
+30 warnings in 54.54 seconds. Ruff and `git diff --check` also passed.
 
 ### Adjacent live-test handoff received 2026-08-11
 
