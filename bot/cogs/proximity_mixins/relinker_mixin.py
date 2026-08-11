@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from discord.ext import tasks
 
+from bot.core.dead_hours import awake_cutoff
 from bot.services.lua_round_storage_mixin import _lua_exact_source_lock_key
 
 logger = logging.getLogger("bot.cogs.proximity")
@@ -26,6 +27,16 @@ logger = logging.getLogger("bot.cogs.proximity")
 # orphans like mp_sillyctf retrying for two days. Combined with quiet=True on
 # the resolve_round_id call below (relinker retries log at DEBUG, not WARNING),
 # this kills the `no_rows_for_map_round` log spam.
+#
+# Counted in importer-AWAKE hours, not wall hours (2026-08-11). The stats
+# importer sleeps 02:00–11:00 CET (dead_hours.py) while proximity ingestion
+# keeps landing rows, so a plain 6h wall clock wrote off every round played
+# 02:00–05:00 CET before the importer could possibly create its `rounds`
+# row (measured: 5 night-test rounds → 8,810 permanent orphans, relinker
+# linked 0). awake_cutoff() skips the dead window when aging, preserving
+# the #369 intent — 6h of *running importer* with nothing landing means the
+# file is never coming — with a worst-case wall horizon of 15h, still far
+# below the 48h that #369 lowered.
 _PERMANENT_ORPHAN_AGE_HOURS = 6
 
 
@@ -221,7 +232,9 @@ class _ProximityRelinkerMixin:
             # synthesizes one from round_start_unix for the UNION.
             tables_with_round_number = _DETECTION_TABLES
             now = datetime.now(timezone.utc)
-            cutoff = now - timedelta(hours=_PERMANENT_ORPHAN_AGE_HOURS)
+            # Dead-hours-aware: 6 importer-awake hours, not 6 wall hours
+            # (see _PERMANENT_ORPHAN_AGE_HOURS comment above).
+            cutoff = awake_cutoff(now, _PERMANENT_ORPHAN_AGE_HOURS)
             cutoff_unix = int(cutoff.timestamp())
             cutoff_date = cutoff.date()
             recent_source = (
@@ -283,8 +296,8 @@ class _ProximityRelinkerMixin:
             linked = 0
             failed = 0
             stale_skipped = 0
-            # Both `now` and `target_dt` are tz-aware UTC so the configured
-            # cutoff below isn't affected by the host's UTC offset.
+            # Both `cutoff` and `target_dt` are tz-aware UTC so the staleness
+            # comparison below isn't affected by the host's UTC offset.
             # Previously (P3 bug) `datetime.utcnow()` was compared against
             # `datetime.fromtimestamp(...)` which returns LOCAL naive —
             # the age calculation silently drifted by ±1–2h on the prod VPS.
@@ -294,7 +307,7 @@ class _ProximityRelinkerMixin:
                 round_start_unix = row[2] if isinstance(row, (list, tuple)) else row.get('round_start_unix') or row['round_start_unix']
                 session_date = row[3] if isinstance(row, (list, tuple)) else row.get('session_date') or row['session_date']
 
-                # tz-aware UTC to match `now` above and prevent drift.
+                # tz-aware UTC to match `cutoff` above and prevent drift.
                 target_dt = None
                 if round_start_unix:
                     try:
@@ -305,11 +318,12 @@ class _ProximityRelinkerMixin:
                 # Defensive boundary recheck. The discovery SQL already
                 # removes permanent orphans; this protects the sub-second
                 # edge between its integer cutoff and datetime comparison.
-                if target_dt is not None:
-                    age_hours = (now - target_dt).total_seconds() / 3600.0
-                    if age_hours > _PERMANENT_ORPHAN_AGE_HOURS:
-                        stale_skipped += 1
-                        continue
+                # Compares against the same dead-hours-aware cutoff as the
+                # discovery SQL — a plain wall-clock age here would undo
+                # the awake_cutoff fix for rounds played during dead hours.
+                if target_dt is not None and target_dt < cutoff:
+                    stale_skipped += 1
+                    continue
 
                 round_date_str = str(session_date) if session_date else None
 
@@ -483,7 +497,7 @@ class _ProximityRelinkerMixin:
             if linked > 0 or failed > 0 or stale_skipped > 0:
                 logger.info(
                     "🔗 Proximity re-linker: %d linked, %d unresolved, "
-                    "%d stale skipped (>%dh) — of %d total",
+                    "%d stale skipped (>%d awake-h) — of %d total",
                     linked, failed, stale_skipped,
                     _PERMANENT_ORPHAN_AGE_HOURS, len(unlinked),
                 )
