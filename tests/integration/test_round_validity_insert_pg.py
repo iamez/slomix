@@ -86,6 +86,9 @@ async def pg_schema(monkeypatch):
     await conn.execute(_ROUNDS_DDL)
 
     # Manager construction requires postgres mode; point it at the test DB.
+    # BOT_ENVIRONMENT is fail-closed with no default (environment-identity
+    # RCA) — CI has a live test DB, so load_config() actually runs here.
+    monkeypatch.setenv("BOT_ENVIRONMENT", "dev")
     monkeypatch.setenv("DATABASE_TYPE", "postgresql")
     for key, env in (
         ("host", "POSTGRES_HOST"),
