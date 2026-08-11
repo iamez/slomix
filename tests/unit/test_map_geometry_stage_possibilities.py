@@ -1501,6 +1501,44 @@ def test_frontier_classifier_includes_the_suspended_route_action_at_the_temporal
     assert relevance.unknown_reasons == ()
 
 
+def test_frontier_classifier_includes_a_blocking_runtime_route_action_before_its_suffix():
+    index = _program_index(
+        b"""
+        mover
+        {
+            spawn
+            {
+                set { classname script_mover }
+            }
+        }
+        """,
+        raw_entities=({"classname": "script_mover", "scriptname": "mover"},),
+        catalog=MapEntityCatalog(
+            "test",
+            "maps/test.bsp",
+            (),
+            (),
+            (),
+            (SimpleNamespace(entity_index=0, classname="script_mover"),),
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "may_replace_script_context"
+    relevance = paths[0].frontier_relevance
+    assert relevance is not None
+    assert relevance.domains == (StageSemanticDomain.DYNAMIC_ROUTE,)
+    assert relevance.unknown_domain_relevance is True
+    assert relevance.unknown_reasons == ("runtime_script_context_replacement",)
+
+
 def test_frontier_classifier_treats_a_missing_handler_as_no_target_effect_but_keeps_caller_suffix():
     index = _program_index(
         b"""
