@@ -32,6 +32,23 @@ def is_filler_map(map_name: str | None, excluded_maps: Iterable[str]) -> bool:
     return any(name == str(m).strip().lower() for m in excluded_maps)
 
 
+def is_bot_player(player: dict | None) -> bool:
+    """Single bot classifier for one parsed player.
+
+    Used for BOTH the bot/human counts and the validity gate so the two can
+    never disagree (review on #640: counting only the is_bot flag while the
+    gate also matched OMNIBOT guids let a guid-only bot yield is_valid=FALSE
+    with bot_player_count=0).
+    """
+    if not player:
+        return False
+    if player.get("is_bot"):
+        return True
+    if str(player.get("guid", "")).upper().startswith("OMNIBOT"):
+        return True
+    return str(player.get("name", "")).startswith("[BOT]")
+
+
 def round_has_bots(players: Iterable[dict] | None) -> bool:
     """Return True if any participant is an Omni-bot.
 
@@ -41,14 +58,65 @@ def round_has_bots(players: Iterable[dict] | None) -> bool:
     bot/testmode rounds never count for stats, so the importer flags them
     is_valid = FALSE. Pure + unit-testable; callers pass the players list.
     """
-    for p in players or []:
-        if p.get("is_bot"):
-            return True
-        if str(p.get("guid", "")).upper().startswith("OMNIBOT"):
-            return True
-        if str(p.get("name", "")).startswith("[BOT]"):
-            return True
-    return False
+    return any(is_bot_player(p) for p in players or [])
+
+
+def derive_round_validity(
+    parsed_data: dict[str, Any],
+    map_name: str | None,
+    excluded_maps: Iterable[str],
+) -> dict[str, Any]:
+    """Derive the round validity/bot flags the importer must persist.
+
+    Exists because the production import path (PostgreSQLDatabaseManager)
+    historically inserted rounds WITHOUT these columns, so is_bot_round was
+    never true and the is_valid bot/filler/orphan gates never fired in either
+    database's history — proven live by the 2026-08-11 Omni-bot test, whose
+    rounds landed is_valid=TRUE and had to be quarantined by hand.
+
+    This is the ONE shared implementation — stats_import_mixin calls it too
+    (aligned on #640 review), so both import paths persist identical flags:
+    - is_bot_round: majority rule (parser's value when present; recomputed
+      from the player list otherwise — bots-only OR strict bot majority).
+    - is_valid: FALSE when the map is a configured filler, when ANY bot
+      participated (stricter than the majority rule — owner intent: bots
+      never count for stats), or when the round is an orphan R2 (raw
+      cumulative stats, no R1 to subtract).
+
+    Pure and unit-testable; callers pass excluded_maps explicitly.
+    """
+    players = parsed_data.get("players") or []
+    bot_count = int(parsed_data.get("bot_player_count", 0) or 0)
+    human_count = int(parsed_data.get("human_player_count", 0) or 0)
+    if players and bot_count == 0 and human_count == 0:
+        # Counts absent on this path — recompute from the player list, the
+        # same defensive fallback the mixin grew after session 123 (all-bot
+        # session with bot_player_count=0). Uses the SAME classifier as the
+        # validity gate (is_bot_player) so counts and gate cannot disagree.
+        bot_count = sum(1 for p in players if is_bot_player(p))
+        human_count = max(0, len(players) - bot_count)
+
+    is_bot_round = bool(parsed_data.get("is_bot_round", False))
+    if not is_bot_round and bot_count > 0:
+        # Majority rule, kept in sync with
+        # community_stats_parser.is_bot_dominated_round (inlined to avoid a
+        # core -> parser import cycle).
+        is_bot_round = human_count == 0 or bot_count > human_count
+
+    has_bots = bot_count > 0 or round_has_bots(players)
+    is_orphan_r2 = bool(parsed_data.get("is_orphan_r2"))
+    is_valid = (
+        not is_filler_map(map_name, excluded_maps)
+        and not has_bots
+        and not is_orphan_r2
+    )
+    return {
+        "is_bot_round": is_bot_round,
+        "bot_player_count": bot_count,
+        "human_player_count": human_count,
+        "is_valid": is_valid,
+        "is_orphan_r2": is_orphan_r2,
+    }
 
 
 _SIDE_VALUE_MAP = {
