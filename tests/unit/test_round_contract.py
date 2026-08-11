@@ -30,7 +30,7 @@ def test_score_confidence_state_variants():
 
 def test_normalize_end_reason_to_enum():
     assert normalize_end_reason("surrender") == "SURRENDER"
-    assert normalize_end_reason("objective") == "NORMAL"
+    assert normalize_end_reason("objective") == "OBJECTIVE"
     assert normalize_end_reason("time_expired") == "NORMAL"
     assert normalize_end_reason("mapchange") == "MAP_CHANGE"
     assert normalize_end_reason("map_restart") == "MAP_RESTART"
@@ -59,3 +59,24 @@ def test_derive_end_reason_display_classification():
     assert derive_end_reason_display("server_restart", None) == "SERVER_RESTART_END"
     assert derive_end_reason_display("objective", "FULL_HOLD") == "FULL_HOLD"
     assert derive_end_reason_display("objective", "TIME_SET") == "TIME_SET"
+
+
+def test_objective_end_reason_survives_normalization():
+    """2026-08-11 bot test: Lua's 'objective' used to collapse into NORMAL,
+    erasing objective-vs-timeout everywhere downstream."""
+    assert normalize_end_reason("objective") == "OBJECTIVE"
+    assert normalize_end_reason("OBJECTIVE") == "OBJECTIVE"
+
+
+def test_objective_near_limit_is_time_set_not_full_hold():
+    """An objective taken in the final 30 s used to fall through the NORMAL
+    timing heuristic and get mislabeled FULL_HOLD."""
+    contract = derive_stopwatch_contract(
+        round_number=1,
+        time_limit_value="12:00",
+        actual_time_value="11:50",  # within the old 30 s hold threshold
+        end_reason="objective",
+    )
+    assert contract["round_stopwatch_state"] == "TIME_SET"
+    assert contract["time_to_beat_seconds"] == 710
+    assert contract["next_timelimit_minutes"] == 12
