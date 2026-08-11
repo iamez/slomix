@@ -1802,11 +1802,16 @@ def _collect_continuation_relevance(
     return domains, unknown_reasons
 
 
-def _instruction_offset_after(program: OrderedEventProgram, line: int) -> int | None:
+def _instruction_offset(program: OrderedEventProgram, line: int) -> int | None:
     matches = tuple(
         index for index, instruction in enumerate(program.instructions) if _instruction_line(instruction) == line
     )
-    return matches[0] + 1 if len(matches) == 1 else None
+    return matches[0] if len(matches) == 1 else None
+
+
+def _instruction_offset_after(program: OrderedEventProgram, line: int) -> int | None:
+    offset = _instruction_offset(program, line)
+    return None if offset is None else offset + 1
 
 
 def _find_program_for_line(
@@ -1858,6 +1863,23 @@ def _append_continuation(
     return True
 
 
+def _append_continuation_from(
+    continuations: list[SymbolicFrontierContinuation],
+    program: OrderedEventProgram,
+    *,
+    source_entity_index: int,
+    line: int,
+    origin: str,
+) -> bool:
+    offset = _instruction_offset(program, line)
+    if offset is None:
+        return False
+    continuation = SymbolicFrontierContinuation(program.node.node_id, source_entity_index, offset, origin)
+    if continuation not in continuations:
+        continuations.append(continuation)
+    return True
+
+
 def classify_symbolic_frontier(
     index: OrderedStageProgramIndex,
     root_program: OrderedEventProgram,
@@ -1885,6 +1907,7 @@ def classify_symbolic_frontier(
     unknown_reasons = (
         {f"frontier:{path.blocker_reason}"} if path.blocker_reason in intrinsically_unknown_blockers else set()
     )
+    domains: set[StageSemanticDomain] = set()
 
     if path.blocker_line is None or path.blocker_entity_index is None:
         unknown_reasons.add("frontier_provenance_missing")
@@ -1906,6 +1929,19 @@ def classify_symbolic_frontier(
         if target_program is None:
             unknown_reasons.add("temporal_target_program_missing")
         else:
+            boundary_offset = _instruction_offset(target_program, temporal_line)
+            if boundary_offset is None:
+                unknown_reasons.add("temporal_boundary_instruction_missing")
+            else:
+                boundary_instruction = target_program.instructions[boundary_offset]
+                if isinstance(boundary_instruction, RuntimeActionInstruction):
+                    boundary_domains, boundary_unknown_reasons = _runtime_instruction_domain_relevance(
+                        index,
+                        boundary_instruction,
+                        source_entity_index=path.blocker_entity_index,
+                    )
+                    domains.update(boundary_domains)
+                    unknown_reasons.update(boundary_unknown_reasons)
             if not _append_continuation(
                 continuations,
                 target_program,
@@ -1997,12 +2033,22 @@ def classify_symbolic_frontier(
         if blocker_program is None:
             unknown_reasons.add("blocker_program_missing")
         else:
-            if not _append_continuation(
+            append = (
+                _append_continuation_from
+                if path.blocker_reason == "symbolic_path_budget_exhausted"
+                else _append_continuation
+            )
+            origin = (
+                "program_from_budget_frontier"
+                if path.blocker_reason == "symbolic_path_budget_exhausted"
+                else "program_suffix_after_frontier"
+            )
+            if not append(
                 continuations,
                 blocker_program,
                 source_entity_index=path.blocker_entity_index,
                 line=path.blocker_line,
-                origin="program_suffix_after_frontier",
+                origin=origin,
             ):
                 unknown_reasons.add("blocker_continuation_missing")
             blocker_instruction = next(
@@ -2012,6 +2058,8 @@ def classify_symbolic_frontier(
             )
             if isinstance(blocker_instruction, KillInstruction):
                 for target in blocker_instruction.targets:
+                    if W3EntityKind.COLLISION_ENTITY in index.w3_kinds(target.entity_index):
+                        domains.add(StageSemanticDomain.DYNAMIC_ROUTE)
                     for node_id in target.runtime_event_node_ids:
                         continuation = SymbolicFrontierContinuation(
                             node_id,
@@ -2022,7 +2070,6 @@ def classify_symbolic_frontier(
                         if continuation not in continuations:
                             continuations.append(continuation)
 
-    domains: set[StageSemanticDomain] = set()
     for continuation in continuations:
         continuation_domains, continuation_unknown_reasons = _collect_continuation_relevance(index, continuation)
         domains.update(continuation_domains)

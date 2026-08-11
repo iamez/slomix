@@ -1420,17 +1420,17 @@ The 1,090 current blocked paths split as follows at the 16-unit smoke budget:
 
 | Hidden-domain set | Paths |
 |---|---:|
-| none | 432 |
-| dynamic route only | 277 |
+| none | 408 |
+| dynamic route only | 300 |
 | objective only | 7 |
 | objective + spawn | 2 |
-| dynamic route + objective | 225 |
+| dynamic route + objective | 226 |
 | dynamic route + spawn | 18 |
 | all three | 129 |
 
-Across overlapping sets, 649 blockers hide dynamic-route semantics, 363 hide objective
-semantics and 149 hide spawn semantics. Of all blockers, 427 have complete domain
-classification and 663 retain at least one named unknown reason. The dominant unknowns
+Across overlapping sets, 673 blockers hide dynamic-route semantics, 364 hide objective
+semantics and 149 hide spawn semantics. Of all blockers, 421 have complete domain
+classification and 669 retain at least one named unknown reason. The dominant unknowns
 are non-W3-linked runtime motion/lifecycle sources (`faceangles`, `stoprotation`,
 `remove`, `attachtotag`, `setrotation`, `setspeed`) and 130 missing typed effect targets;
 these are coverage facts, not permission to relabel the action as irrelevant.
@@ -1440,15 +1440,15 @@ frontiers:
 
 | Hidden-domain set | Paths |
 |---|---:|
-| none | 63 |
-| dynamic route only | 166 |
-| objective only | 3 |
-| dynamic route + objective | 46 |
+| none | 59 |
+| dynamic route only | 170 |
+| objective only | 2 |
+| dynamic route + objective | 47 |
 | dynamic route + spawn | 18 |
 | all three | 5 |
 
-Only 63/301 have no currently identified required domain; 238/301 hide at least one.
-220/301 are completely classified and 81 retain named identity/route uncertainty.
+Only 59/301 have no currently identified required domain; 242/301 hide at least one.
+214/301 are completely classified and 87 retain named identity/route uncertainty.
 Therefore a bounded suspended-continuation scheduler is required before Phase 5. It
 must model ordering alternatives explicitly; it may not merge delayed callee state into
 the immediate caller or erase the current concurrency frontier merely to raise
@@ -1459,14 +1459,21 @@ that the classifier proves relevant. Empty, fully classified frontiers do not ne
 state-space expansion. Unknown relevance remains fail-closed and is not a scheduling
 target until its identity/semantic reason is resolved.
 
+Exact-head self-review corrected an initial undercount before review closure. A
+temporal frontier hides not only the suffix after `followspline`/`faceangles`, but also
+completion of that suspended route action itself. A work-budget frontier similarly
+points at the next unexecuted instruction, so relevance begins at that instruction,
+not after it. Regression tests freeze both boundaries. The corrected counts above
+replace the earlier exploratory 238-domain/63-empty temporal split.
+
 Verification on Python 3.13.14 at this checkpoint:
 
-- 97/97 focused ordered-possibility unit tests passed, including adversarial temporal,
+- 99/99 focused ordered-possibility unit tests passed, including adversarial temporal,
   missing-handler, missing-identity and non-exact-state cases;
-- 272/272 expanded W1-W5b unit tests passed;
+- 274/274 expanded W1-W5b unit tests passed;
 - all 15 opt-in real-asset tests passed over the exact 20-map installed corpus in
   202.06 seconds;
-- the complete repository suite passed 4,327 tests with 93 expected skips in 35.78
+- the complete repository suite passed 4,329 tests with 93 expected skips in 30.38
   seconds;
 - Ruff, formatter check and `git diff --check` passed for every touched Python file.
 
