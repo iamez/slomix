@@ -154,7 +154,12 @@ async function _refresh() {
                     <a href="#/availability" class="px-4 py-2 rounded-lg text-sm font-bold bg-brand-cyan/20 text-brand-cyan">Next session</a>
                     <a href="#/sessions2" class="px-4 py-2 rounded-lg text-sm font-bold bg-white/10 text-slate-200">Last session</a>
                 </div>
-            </div>`);
+            </div>
+            <div id="live-ticker"></div>`);
+        // Idle still shows the match feed: live events (someone warming up,
+        // a replay demo, a session the score API hasn't classified yet)
+        // are exactly what tells a visitor the page is worth keeping open.
+        renderLiveTicker();
         return;
     }
 
