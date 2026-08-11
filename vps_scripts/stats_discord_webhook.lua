@@ -72,7 +72,7 @@
 ]]--
 
 local modname = "stats_discord_webhook"
-local version = "1.7.1"
+local version = "1.7.2"
 
 -- ============================================================================
 -- CONFIGURATION - EDIT THESE VALUES
@@ -81,7 +81,7 @@ local version = "1.7.1"
 local configuration = {
     -- Discord webhook URL - create one in your control channel
     -- Format: https://discord.com/api/webhooks/WEBHOOK_ID/WEBHOOK_TOKEN
-    discord_webhook_url = "https://discord.com/api/webhooks/1463967551049437356/TlHYbosz59fxmgXrkPiqZdwMmtqewqQM1GK6vQ8tC9Ui8yHCQssMoW6vfDSFOM0Q-bOv",
+    discord_webhook_url = "REPLACE_WITH_YOUR_WEBHOOK_URL",
 
     -- Enable/disable the webhook notifications
     enabled = true,
@@ -136,6 +136,121 @@ local configuration = {
     -- own wording is already human-readable.
     objective_live_ping_enabled = false,
 }
+
+-- ============================================================================
+-- LOCAL CONFIG OVERRIDES (secrets live OUTSIDE the repository)
+-- ============================================================================
+-- The webhook URL used to be hardcoded above, which put a live Discord token
+-- in the public repository (rotated 2026-08-10). Secrets now come from a
+-- separate stats_discord_webhook_config.lua deployed next to this script and
+-- never committed (vps_scripts/ is gitignored except for this file). The
+-- config file simply returns a table whose keys override `configuration`:
+--
+--   return { discord_webhook_url = "https://discord.com/api/webhooks/ID/TOKEN" }
+--
+-- If no config file is found the URL stays at its placeholder and the
+-- existing guards refuse to send + print a warning at init.
+--
+-- Applied from et_InitGame (not at file scope): candidate paths come from
+-- fs_homepath/fs_game cvars so the loader follows the engine's own layout
+-- instead of hardcoding one install (homepath wins over basepath — the
+-- same VFS rule that bit the 2026-08-10 shadow-copy deploy), and
+-- et.G_Print is reliably available there for the diagnostics below.
+local config_override_loaded_from = nil
+local config_override_warnings = {}
+
+local function config_override_candidates()
+    local candidates = {}
+    local filename = "stats_discord_webhook_config.lua"
+    local ok_home, homepath = pcall(et.trap_Cvar_Get, "fs_homepath")
+    local ok_base, basepath = pcall(et.trap_Cvar_Get, "fs_basepath")
+    local ok_game, game = pcall(et.trap_Cvar_Get, "fs_game")
+    local mod = (ok_game and game and game ~= "") and game or "legacy"
+    if ok_home and homepath and homepath ~= "" then
+        table.insert(candidates, homepath .. "/" .. mod .. "/luascripts/" .. filename)
+    end
+    if ok_base and basepath and basepath ~= "" then
+        table.insert(candidates, basepath .. "/" .. mod .. "/luascripts/" .. filename)
+    end
+    -- Hardcoded location ONLY when the engine gave us no paths at all —
+    -- with valid cvars it must never be probed, or a relocated/multi-
+    -- instance server could silently pick up another installation's
+    -- webhook (#634 review, round 2).
+    if #candidates == 0 then
+        table.insert(candidates, "/home/et/.etlegacy/legacy/luascripts/" .. filename)
+    end
+    return candidates
+end
+
+-- Distinguishes "missing" from "present but unreadable": io.open returns nil
+-- for both, but an unreadable higher-priority config (wrong owner next to the
+-- documented chmod 600) must BLOCK, not silently yield to a lower-priority
+-- candidate (#634 review, round 3). ENOENT is errno 2 on every platform this
+-- runs on; anything else is treated as an error.
+local function probe_config_file(path)
+    local f, err, code = io.open(path, "r")
+    if f then
+        f:close()
+        return "readable"
+    end
+    if code == 2 then
+        return "missing"
+    end
+    return "error", tostring(err)
+end
+
+local function apply_config_overrides()
+    config_override_warnings = {}
+    -- First EXISTING candidate wins outright: on a parse/run error we warn
+    -- and STOP rather than falling through to a lower-priority path — a
+    -- stale basepath copy must never silently take over from a broken
+    -- homepath one (#634 review, round 2). With no overrides applied the
+    -- placeholder guard keeps the module from sending anything (fail closed).
+    for _, path in ipairs(config_override_candidates()) do
+        local probe, probe_err = probe_config_file(path)
+        if probe == "error" then
+            table.insert(config_override_warnings,
+                string.format("override %s unreadable: %s — refusing to fall through", path, probe_err))
+            return
+        end
+        if probe == "readable" then
+            local chunk, load_err = loadfile(path)
+            if not chunk then
+                table.insert(config_override_warnings,
+                    string.format("override %s failed to parse: %s", path, tostring(load_err)))
+            else
+                local ok, overrides = pcall(chunk)
+                if not ok then
+                    table.insert(config_override_warnings,
+                        string.format("override %s failed to run: %s", path, tostring(overrides)))
+                elseif type(overrides) ~= "table" then
+                    table.insert(config_override_warnings,
+                        string.format("override %s returned %s, expected table", path, type(overrides)))
+                else
+                    -- Only keys that already exist in `configuration`, with a
+                    -- matching value type — a typo or a stringified boolean
+                    -- must be a loud warning, not a silent no-op (#634 review).
+                    for key, value in pairs(overrides) do
+                        if configuration[key] == nil then
+                            table.insert(config_override_warnings,
+                                string.format("override %s: unknown key '%s' ignored", path, tostring(key)))
+                        elseif type(configuration[key]) ~= type(value) then
+                            table.insert(config_override_warnings,
+                                string.format("override %s: key '%s' has type %s, expected %s — ignored",
+                                    path, tostring(key), type(value), type(configuration[key])))
+                        else
+                            configuration[key] = value
+                        end
+                    end
+                    config_override_loaded_from = path
+                end
+            end
+            -- Existing candidate fully handled (loaded or warned) — never
+            -- fall through to a lower-priority path.
+            return
+        end
+    end
+end
 
 -- ============================================================================
 -- STATE TRACKING
@@ -1359,8 +1474,15 @@ function et_InitGame(levelTime, randomSeed, restart)
 
     log_runtime_paths()
 
+    apply_config_overrides()
+    if config_override_loaded_from then
+        et.G_Print(string.format("[%s] Config overrides loaded from %s\n", modname, config_override_loaded_from))
+    end
+    for _, warning in ipairs(config_override_warnings) do
+        et.G_Print(string.format("[%s] WARNING: %s\n", modname, warning))
+    end
     if configuration.discord_webhook_url == "REPLACE_WITH_YOUR_WEBHOOK_URL" then
-        et.G_Print(string.format("[%s] WARNING: Webhook URL not configured!\n", modname))
+        et.G_Print(string.format("[%s] WARNING: Webhook URL not configured! Deploy stats_discord_webhook_config.lua next to this script.\n", modname))
     end
 end
 
