@@ -271,11 +271,80 @@ The first read of the complete pinned run path changes the initial scheduling mo
     non-waiting spline. The current W5b projection records its route effect but not any
     of these control branches.
 
+### S0 replacement and tag-parent inventory
+
+The complete pinned write path gives this replacement matrix for an event delivered to
+an entity that already owns a suspended script status:
+
+| Delivered-event result | Retained script status | Caller consequence |
+|---|---|---|
+| no matching handler | old suspended status unchanged | caller/group continues |
+| new handler completes synchronously with expected id | old status restored exactly | callee effects and accumulator mutations persist; caller/group continues |
+| new handler returns false | new handler status retained; old status discarded | different-entity caller/group continues |
+| new handler recursively changes script id | outer backup is not restored | deepest retained status follows the same rules |
+| same-entity action observes changed id | replacement status retained | replaced caller suffix is abandoned |
+
+This is not an optional interleaving: `G_Script_ScriptChange` owns the backup/restore
+decision and `trigger`, `accum trigger_if_equal` and `globalaccum trigger_if_equal`
+iterate concrete targets synchronously. Scheduler identity must therefore retain the
+current event owner per entity; a suspended frame cannot coexist with a replacement
+frame for the same entity unless source proves the older status was restored.
+
+Exact installed projection inventory contains 1,315 explicit `trigger` instructions,
+299 accumulator conditional triggers and 13 `kill` instructions. There is no installed
+`cvar trigger_if_equal` action. The existing unclassified-action gate remains correct
+for that absent surface.
+
+Pinned [`G_RunEntity`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_main.c#L4284-L4523)
+order is deterministic only when the frame-start `tagParent` relation is known: the
+child is marked run, its parent is recursively run first, and later ordinary visits
+return through `runthisframe`. The installed static surface is:
+
+| Tag-parent surface | Count |
+|---|---:|
+| `attachtotag` action occurrences | 43 |
+| Distinct child entities | 39 |
+| Distinct parent entities | 12 |
+| Distinct child-parent pairs | 39 |
+| Actions resolved by unique `targetname` | 43 |
+| Candidate-child programs | 103 |
+| Candidate-child programs with temporal control | 42 |
+| Resolved dispatch pairs targeting a candidate child | 53 |
+| Different-entity pairs targeting a candidate child | 41 |
+
+Those 42 temporal programs contain 47 `wait` and 13 `faceangles` instructions. All 43
+actions resolve statically; 37 action occurrences select a `script_mover` parent and 6
+select `misc_gamemodel`. However, an isolated event entry cannot prove whether an
+earlier event already executed a persistent attachment. The scheduler may use an exact
+relation established inside its own root schedule; otherwise it must retain typed
+`tag_parent_state_unknown` wake provenance. Raw entity index is not a valid fallback.
+
+### S0b alert-event gap
+
+Pinned [`alertentity`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L2242-L2292)
+calls each selected target's `use` callback synchronously. Exact-corpus inventory found
+136 alert actions. Two select the Goldrush tank/truck resurrectable `script_mover`
+entities. Their non-zero `health` initializes `count`, so
+[`script_mover_use`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script.c#L1054-L1073)
+must deliver `rebirth`; the tank handler contains a `wait`.
+
+The current `StageEffectInstruction` records those alerts only as target effects. It
+does not dispatch either `rebirth`, so scheduler state built on the current projection
+would still be incomplete. Two installed `target_relay` alert targets fan out only to
+speakers, and the other installed alert target chains contain no
+`target_script_trigger`; those are measured corpus facts, not a general claim about
+arbitrary maps.
+
+S0b must add a typed, ordered alert-dispatch contract for source-proven resurrectable
+script movers, fail closed on an alert/use chain whose script-event behavior is not
+proven, and regenerate the corpus denominator before S1 freezes canonical state.
+
 These findings prove caller-before-suspended-target-resume for a cross-entity trigger.
 They do **not** yet prove a closed global schedule because later caller actions or other
 entities can trigger a new event on the suspended target and replace its retained
-status. S0 must inventory that replacement surface and the installed tag-parent/runtime
-action cases before code freezes a canonical transition key.
+status. The replacement and tag-parent surfaces are now inventoried, but S0b alert
+dispatch and the adversarial replacement/tag-parent fixtures must close before code
+freezes a canonical transition key.
 
 ## Proposed scheduler model
 
@@ -611,6 +680,22 @@ adversarial test.
 Exit: focused source-contract tests pass, the 172-action/139-wait inventory is frozen,
 and the exact 20-map run publishes the corrected cross/same temporal frontier baseline.
 
+### S0b - close source-proven `alertentity` event dispatch
+
+1. Keep the alert effect and selected-target order in one instruction contract.
+2. Project `rebirth` only for a statically selected `script_mover` whose resurrectable
+   spawnflag and non-zero health prove the callback branch.
+3. Run the handler through the existing event resolver and preserve the same
+   synchronous/suspended/replacement rules as explicit trigger delivery.
+4. Fail closed for a target callback or target-chain script dispatch that is not
+   source-proven; do not infer safety from the installed corpus having no example.
+5. Freeze the 136-action target-class/chain inventory, both rebirth dispatches and the
+   regenerated exact executor denominator.
+
+Exit: focused tests distinguish no-handler, synchronous rebirth and waiting rebirth;
+the Goldrush tank case produces a real temporal frontier instead of an immediate-only
+effect; no general target-use chain is silently classified as harmless.
+
 ### S1 - immutable state and canonicalization
 
 1. Add scheduler-owned frame, continuation, state, decision and result types.
@@ -620,6 +705,10 @@ and the exact 20-map run publishes the corrected cross/same temporal frontier ba
 
 Exit: type/unit tests prove equal semantic states canonicalize equally, meaningful
 differences do not collide, and malformed ownership fails loudly.
+
+S1 must include current per-entity event ownership and typed tag-parent state in the
+canonical key. A relation is exact only if the root schedule established it or the
+entry contract supplied it; otherwise ordinary wake order remains unknown.
 
 ### S2 - one suspended cross-entity continuation
 
@@ -883,6 +972,8 @@ retained.
   tag-parent installed surfaces remain.
 - [x] Complete S0a typed `gotomarker` control/effect correction and regenerate the
   frontier denominator.
+- [ ] Complete S0b source-proven `alertentity` event dispatch and regenerate the
+  denominator.
 - [ ] Complete S1 immutable state/canonicalization.
 - [ ] Complete S2 single suspended continuation.
 - [ ] Complete S3 nested state/shared-target handling.
@@ -938,6 +1029,23 @@ retained.
 - Next item: close the remaining S0 replacement/tag-parent source gates, then begin S1
   immutable scheduler state and canonicalization after review of this corrected
   baseline.
+
+### 2026-08-11 - S0 replacement/tag-parent inventory
+
+- Pinned replacement source establishes one retained event owner per entity: a
+  synchronous replacement restores the old suspended status, while a suspended or
+  recursively replaced event discards it. Different-entity caller iteration continues;
+  a changed same-entity script id abandons the caller suffix.
+- Exact static dispatch surface: 1,315 explicit triggers, 299 accumulator conditional
+  triggers and 13 kills; no installed cvar conditional trigger.
+- Exact tag surface: 43 `attachtotag` actions, 39 distinct children, 12 parents and 39
+  child-parent pairs. Forty-two candidate-child programs contain temporal control and
+  41 different-entity dispatch pairs target a candidate child.
+- `alertentity` source review found an additional pre-S1 gap: two of 136 installed
+  alerts synchronously deliver `rebirth` to the Goldrush tank/truck; the tank handler
+  waits. The current projection omits both dispatches.
+- Next item: implement S0b typed alert dispatch, freeze its adversarial fixtures and
+  regenerate the exact denominator before S1.
 
 At every substantive commit, append:
 
