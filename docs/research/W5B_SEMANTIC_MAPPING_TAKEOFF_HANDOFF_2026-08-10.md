@@ -1088,12 +1088,14 @@ real-asset baseline.
 Ruff and `git diff --check` passed. The full repository suite remains required before
 merge.
 
-The bounded symbolic-walker implementation through `9eb59758` completed all 13
-exact-head CI checks, incremental external review, zero unresolved threads, the
-five-minute quiet period and a separate final refresh on 2026-08-11. Local, remote and
-PR head SHAs matched during that refresh. This documentation-only checkpoint advances
-the historical reviewed-head pointer; later implementation must still repeat the same
-closure cycle.
+The bounded symbolic-walker implementation through `9eb59758` passed 13/13 GitHub
+check-run gates attached to that exact head, including both Python versions, static and
+security analysis, frontend checks and the Docker build. It also completed incremental
+external review, zero unresolved threads, the five-minute quiet period and a separate
+final refresh on 2026-08-11. This is separate from the local real-asset scope recorded
+above; the full repository suite remains pending. Local, remote and PR head SHAs matched
+during that refresh. This documentation-only checkpoint advances the historical
+reviewed-head pointer; later implementation must still repeat the same closure cycle.
 
 ## Copy-paste handoff prompt
 
