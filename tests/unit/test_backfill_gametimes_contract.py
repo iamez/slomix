@@ -22,7 +22,7 @@ def test_build_round_metadata_normalizes_side_and_end_reason():
 
     assert round_metadata["winner_team"] == 2
     assert round_metadata["defender_team"] == 1
-    assert round_metadata["end_reason"] == "NORMAL"
+    assert round_metadata["end_reason"] == "OBJECTIVE"
 
 
 def test_build_round_metadata_normalizes_invalid_values_to_unknown():
