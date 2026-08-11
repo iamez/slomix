@@ -73,15 +73,25 @@ psql -d etlegacy -f tools/migrations/004_add_pause_events.sql
    scp vps_scripts/stats_discord_webhook.lua user@gameserver:/path/to/etlegacy/luascripts/
    ```
 
-2. Edit the script and configure the webhook URL:
-   ```lua
-   local configuration = {
+2. Create the secret config file NEXT TO the script (v1.7.2+ — the URL no
+   longer lives in the script itself; it was rotated out of the public repo
+   on 2026-08-10). The file returns a table whose keys override the
+   script's `configuration` defaults:
+   ```bash
+   # Create the file with restrictive permissions BEFORE writing the token
+   # into it — a permissive umask or an interrupted write must never leave
+   # the secret world-readable.
+   install -m 600 /dev/null /path/to/etlegacy/luascripts/stats_discord_webhook_config.lua
+   cat > /path/to/etlegacy/luascripts/stats_discord_webhook_config.lua <<'EOF'
+   return {
        discord_webhook_url = "https://discord.com/api/webhooks/YOUR_ID/YOUR_TOKEN",
-       enabled = true,
-       debug = false,
-       send_delay_seconds = 3
    }
+   EOF
    ```
+   The script resolves this file via the engine's own `fs_homepath` /
+   `fs_basepath` + `fs_game` cvars (homepath wins). NEVER commit this file —
+   it is explicitly gitignored. Without it the script starts, prints a
+   `Webhook URL not configured` warning at init, and refuses to send.
 
 3. Add the script to your server's Lua loading:
    - In `server.cfg`: `set lua_modules "stats_discord_webhook"`
@@ -129,7 +139,9 @@ psql -d etlegacy -f tools/migrations/004_add_pause_events.sql
 ## Troubleshooting
 
 ### Webhook not appearing in Discord
-- Check the Lua script has the correct webhook URL
+- Check `stats_discord_webhook_config.lua` (in the engine-resolved
+  `luascripts/` directory — homepath first, then basepath) contains the
+  correct webhook URL; the tracked script itself only has a placeholder
 - Check server console for `[stats_discord_webhook]` messages
 - Ensure `curl` is available on the game server
 - Enable debug mode in the Lua script: `debug = true`
