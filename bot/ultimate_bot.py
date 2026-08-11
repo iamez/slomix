@@ -130,7 +130,9 @@ class UltimateETLegacyBot(
         intents = discord.Intents.default()
         intents.message_content = True
         intents.members = True  # Required for voice channel member detection
-        super().__init__(command_prefix="!", intents=intents)
+        # help_command=None disables discord.py's built-in help so our
+        # categorized !help (bot/cogs/stats_cog.py) answers instead.
+        super().__init__(command_prefix="!", intents=intents, help_command=None)
 
         # 📊 Database Configuration - Load config and create adapter
 
@@ -2139,7 +2141,7 @@ class UltimateETLegacyBot(
                 return  # Don't respond to unknown commands - might be for another bot
 
             await ctx.send(
-                "❌ Command not found. Use `!help_command` for available commands."
+                "❌ Command not found. Use `!help` for available commands."
             )
         elif isinstance(error, commands.CommandOnCooldown):
             await ctx.send(
@@ -2148,7 +2150,7 @@ class UltimateETLegacyBot(
             )
         elif isinstance(error, commands.MissingRequiredArgument):
             await ctx.send(
-                f"❌ Missing argument: {error.param}. Use `!help_command` for usage."
+                f"❌ Missing argument: {error.param}. Use `!help` for usage."
             )
         elif isinstance(error, commands.CheckFailure):
             # For channel check failures, just send the custom message without extra error text

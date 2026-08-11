@@ -6,7 +6,7 @@ This cog handles:
 - !check_achievements - Achievement progress tracking
 - !compare - Visual comparison of two players with radar chart
 - !season_info - Current season details and champions
-- !help_command - Command help system
+- !help - Command help system
 
 Commands use the bot's StatsCache for performance and SeasonManager for
 season filtering. All commands support @mentions and linked accounts.
@@ -438,7 +438,7 @@ class StatsCog(
 
     @is_public_channel()
     @commands.cooldown(1, 5, commands.BucketType.user)
-    @commands.command(name="help_command", aliases=["commands", "cmds", "bothelp"])
+    @commands.command(name="help", aliases=["commands", "cmds", "bothelp", "help_command"])
     async def help_command(self, ctx, category: str = None):
         """📚 Show all available commands with examples
 
