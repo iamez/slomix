@@ -8,7 +8,9 @@ Status: implementation in progress. Engine identity, Phase 3 dispositions, the P
 lossless ordered program, the override boundary, runtime-control classification and the
 bounded single-event symbolic walker and isolated nested-dispatch resolver are locally
 and externally reviewed. The bounded nested executor, shared recursive-work budget and
-temporal/concurrency frontiers have also completed exact-head external review.
+temporal/concurrency frontiers have also completed exact-head external review. PR #633
+merged as `e649b0493a1ca0ed9cb3b2a2935ebcd78f494202`; the follow-up frontier-classification
+increment is now isolated on `agent/map-geometry-w5b-frontier-classification`.
 
 Branch: `agent/map-geometry-w5b-semantic-mapping`
 
@@ -1267,6 +1269,102 @@ per-domain static-graph gate and deterministic evidence manifest.
 Known blockers: none for read-only research and local implementation. Any required
 live-build inspection that changes or restarts a service becomes owner-gated; retain
 the affected semantic result as unverified and continue with independent domains.
+
+### Post-#633 frontier-classification takeoff
+
+Follow-up branch: `agent/map-geometry-w5b-frontier-classification`
+
+Follow-up base: `origin/main` at
+`e649b0493a1ca0ed9cb3b2a2935ebcd78f494202`
+
+The next increment closes two evidence gaps before Phase 5: source-verified `kill`
+dispatch and per-domain classification of every remaining frontier. It still does not
+publish a runtime state, metric or rating. A frontier classification means only that
+an unresolved continuation **may** hide an objective, spawn or dynamic-route effect;
+it is not evidence that the effect occurred.
+
+#### Installed `kill` inventory
+
+A fresh read-only projection over all installed indexed assets found exactly 13
+actions. Every target lookup is a unique ET-style `targetname` lookup:
+
+| Map | Source event and line | Target | Concrete runtime class | Static death handler |
+|---|---|---|---|---|
+| `bremen_b3` | `truck_construct spawn`, 1066 | `truck` | entity 135 `script_mover`, spawnflags 58 | `truck death` |
+| `bremen_b3` | `truck trigger deathcheck`, 2003 | `truck_construct` | entity 123 `func_constructible`, spawnflags 10 | none |
+| `etl_beach` | `world_clip trigger load_mg42_1`, 659-660 | `mg42_1`, `mg42_1m` | entity 150 `misc_mg42`; entity 481 `func_static` | none |
+| `etl_beach` | `world_clip trigger load_mg42_2`, 668-669 | `mg42_2`, `mg42_2m` | entity 195 `misc_mg42`; entity 482 `func_static` | none |
+| `etl_beach` | `world_clip trigger load_mg42_3`, 677-678 | `mg42_3`, `mg42_3m` | entity 149 `misc_mg42`; entity 448 `func_static` | none |
+| `etl_beach` | `world_clip trigger load_mg42_4`, 686-687 | `mg42_4`, `mg42_4m` | entity 237 `misc_mg42`; entity 480 `func_static` | none |
+| `sw_goldrush_te` | `tank trigger deathcheck`, 1129 | `tank_construct` | entity 421 `func_constructible`, spawnflags 553 | none |
+| `sw_goldrush_te` | `tank_construct spawn`, 1229 | `tank` | entity 790 `script_mover`, spawnflags 190 | `tank death` |
+| `sw_goldrush_te` | `truck trigger deathcheck`, 2405 | `truck_construct` | entity 1 `func_constructible`, spawnflags 9 | none |
+
+Pinned ET:Legacy source narrows the control contract further:
+
+- `G_ScriptAction_Kill` parses one target and calls `G_KillEnts` before returning
+  `qtrue`;
+- `G_KillEnts` dispatches through `die` only for an eligible `script_mover` or
+  `ET_CONSTRUCTIBLE`; other targets are unlinked and scheduled for removal;
+- `script_mover_die` synchronously emits the target's `death ""` script event;
+- both installed target movers are created without the trigger-spawn bit, so their
+  initial `die = script_mover_die` assignment is source-supported;
+- the two installed mover death handlers contain only one entity-local accumulator
+  bit-set each and no temporal or stage effect;
+- the three targeted constructible script blocks expose no `death` or `destroyed`
+  handler, while the eight MG42/static targets cannot reach a script death callback
+  through `G_KillEnts`.
+
+The implementation must therefore replace the generic death-dispatch blocker with a
+typed target lookup. The 11 non-handled targets continue synchronously. The two mover
+targets retain both statically legal lifecycle alternatives: dispatch the proven
+`death ""` handler when `die` is installed, or continue without a handler when prior
+runtime lifecycle state may already have cleared it. W5b does not know that history.
+No synthetic death event may be attached to `misc_mg42`, `func_static` or a
+constructible merely because a same-named script block exists.
+
+The suffix probe also found no direct typed stage effect after a `kill`. Several
+constructible deathcheck suffixes do contain nested triggers, so relevance must be
+computed from the actual continuation graph rather than from the current instruction
+alone. This is the first acceptance case for the frontier classifier.
+
+#### Frontier-classification contract
+
+The classifier will report a deterministic set drawn from `objective`, `spawn` and
+`dynamic_route` for every blocked path. It must inspect only continuations that the
+current executor could not order:
+
+1. caller suffix after an unresolved dispatch or concurrent target;
+2. target suffix after the first temporal boundary;
+3. reachable nested programs until another explicit frontier;
+4. the selected typed W3 references of each stage effect, not its command spelling.
+
+`ObjectiveStatusEffectProjection` and `MainObjectiveEffectProjection` belong to the
+objective domain. `AutoSpawnEffectProjection` belongs to spawn. Collision-relevant
+`EntityTargetEffectProjection` candidates and source/destination collision references
+from `GotoMarkerEffectProjection` belong to dynamic route. Global round winner/end
+effects are published but are not silently relabelled as one of these three domains.
+Missing identity or an opaque program remains `unknown_domain_relevance` when the
+analyzer cannot enumerate the continuation; it must not be reported as irrelevant.
+
+First measure the real corpus with this conservative contract. Add a suspended-
+continuation scheduler only if cross-entity temporal frontiers materially hide a
+required domain. If their relevance is empty, the scheduler adds state-space and
+ordering assumptions without improving the Phase 5 verdict and remains deferred.
+
+#### Follow-up acceptance evidence
+
+Before this increment can merge it must publish, for the exact installed asset hashes:
+
+- all 13 `kill` actions by target class and dispatch disposition;
+- the count of death-handler branches and their downstream domains;
+- every existing blocker reason split by objective/spawn/dynamic-route/unknown
+  relevance;
+- the maps whose per-domain verdict changes after source-verified kill handling;
+- the deterministic manifest hash and exact test head.
+
+The PR starts as documentation-only. Code, corpus evidence and review corrections stay
+on this branch, and this section is updated with every substantive commit.
 
 ### Adjacent live-test handoff received 2026-08-11
 
