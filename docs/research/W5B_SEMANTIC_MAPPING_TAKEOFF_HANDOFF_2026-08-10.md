@@ -12,12 +12,13 @@ temporal/concurrency frontiers have also completed exact-head external review. P
 merged as `e649b0493a1ca0ed9cb3b2a2935ebcd78f494202`; the follow-up frontier-classification
 increment is now isolated on `agent/map-geometry-w5b-frontier-classification`.
 
-Branch: `agent/map-geometry-w5b-semantic-mapping`
+Current branch: `agent/map-geometry-w5b-frontier-classification`
 
-Base: `origin/main` at `8cb34d9975d1679417b782b3c05ef09bf008741c`
+Current base: `origin/main` at
+`e649b0493a1ca0ed9cb3b2a2935ebcd78f494202`
 
-Last substantive implementation head that completed the five-minute review quiet
-period and final refresh:
+PR #633's last substantive implementation head that completed its five-minute review
+quiet period and final refresh:
 `abb2ba947dc5c7234830929829cdb55f1af8033e`
 
 Earlier resolver review-closure documentation head:
@@ -1252,13 +1253,14 @@ model or a claim that exhausted paths are unreachable.
 
 ## Current handoff state
 
-Current step: classify every remaining frontier by objective, spawn and dynamic-route
-semantic relevance before designing a scheduler. Guard splitting, explicit local/global
+Current step: close review and measured evidence for the completed frontier
+classification before designing a scheduler. Guard splitting, explicit local/global
 accumulator state, effect suppression, concrete nested target selection, synchronous
 caller restoration, final same-entity temporal replacement, active-frame cycle
 detection, first-boundary temporal/concurrency frontiers and the shared work budget have
 completed exact-head implementation review. Phase 2's final public coverage surface
-remains intentionally deferred until blocker-relevance measurement is closed.
+remains intentionally deferred until the evidence PR is merged and the required
+suspended-continuation scheduler is implemented separately.
 
 Verify the target/write path for all 13 `kill` actions and model death dispatch only
 from that evidence. If cross-entity temporal frontiers block required domains
@@ -1278,7 +1280,7 @@ Follow-up base: `origin/main` at
 `e649b0493a1ca0ed9cb3b2a2935ebcd78f494202`
 
 Current substantive follow-up head:
-`f6699b8c` (`feat(map-geometry): classify blocked semantic frontiers`). The
+`04e65133` (`fix(map-geometry): close frontier review gaps`). The
 documentation-only verification commit that records this pointer cannot contain its
 own hash; query PR #638 before treating it as the final reviewed head.
 
@@ -1371,6 +1373,32 @@ Before this increment can merge it must publish, for the exact installed asset h
 The PR starts as documentation-only. Code, corpus evidence and review corrections stay
 on this branch, and this section is updated with every substantive commit.
 
+The deterministic installed-asset manifest is the SHA-256 of canonical JSON for
+`Pk3GeometryIndex.manifest(index.map_names)["maps"]`, using sorted keys, compact
+separators and ASCII output. This deliberately excludes the machine-specific absolute
+`etmain_dir`, while retaining every selected/provider path, member index, size, CRC32
+and content SHA-256. For the exact 20-map installed corpus on substantive test head
+`04e65133`, the manifest hash is:
+
+`86ddd0ec23b3c6120136195af34aa633ad249eb358ea0fb6cd6e490dd81b220d`
+
+The source-verified `kill` change removes a generic frontier that previously stopped
+the caller before its suffix. A per-action continuation probe on the same head found
+the following per-map domain deltas:
+
+| Map | Kill actions | Dynamic-route verdict delta | Objective delta | Spawn delta |
+|---|---:|---|---|---|
+| `bremen_b3` | 2 | blocked -> reachable for 2/2 suffixes | unchanged, none | unchanged, none |
+| `etl_beach` | 8 | blocked -> reachable for 4/8 suffixes | unchanged, none | unchanged, none |
+| `sw_goldrush_te` | 3 | blocked -> reachable for 2/3 suffixes | unchanged, none | unchanged, none |
+
+No other installed map contains a `kill`, so every other map is unchanged. This table
+is a delta in the static domain evidence that feeds Phase 5, not a claim that the
+transition occurred in a played round. Phase 5's final defensible/partial/unknown map
+verdict does not exist yet and therefore is not backfilled by inference here. The four
+optional mover death-handler branches themselves add no objective, spawn or route
+domain; they contain only the measured entity-local accumulator mutation.
+
 #### Typed-kill implementation checkpoint
 
 The first follow-up implementation replaces all 13 generic runtime instructions with
@@ -1408,13 +1436,15 @@ complexity without changing current corpus coverage.
 
 #### Frontier-classification checkpoint and scheduler decision
 
-Every blocked nested-executor path now carries ordered continuation provenance, a
-deterministic subset of `objective`, `spawn` and `dynamic_route`, an explicit
-`unknown_domain_relevance` flag and machine-readable unknown reasons. The classifier
-walks only statically reachable suffixes and nested programs. It treats a known missing
-handler as having no target effect while retaining the caller suffix; missing target
-identity, opaque script identity, budget exhaustion and unresolved route identity stay
-unknown rather than being reported as irrelevant.
+The classifier records ordered continuation provenance when blocker line and entity
+index are available, a deterministic subset of `objective`, `spawn` and
+`dynamic_route`, an explicit `unknown_domain_relevance` flag and machine-readable
+unknown reasons. Missing blocker provenance produces an empty continuation tuple and
+the named `frontier_provenance_missing` reason. The classifier walks only statically
+reachable suffixes and nested programs. It treats a known missing handler as having no
+target effect while retaining the caller suffix; missing target identity, opaque script
+identity, budget exhaustion and unresolved route identity stay unknown rather than
+being reported as irrelevant.
 
 The 1,090 current blocked paths split as follows at the 16-unit smoke budget:
 
