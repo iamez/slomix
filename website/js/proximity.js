@@ -3045,7 +3045,7 @@ function renderAimLock(data) {
             '<div class="col-span-2 text-right">Lock time</div>' +
             '<div class="col-span-2 text-right">Locks</div>' +
             '<div class="col-span-2 text-right">Avg err°</div>' +
-            '<div class="col-span-2 text-right">Avg dist</div>' +
+            '<div class="col-span-2 text-right" title="Average distance to the locked target, in world units.">Avg dist</div>' +
         '</div>' +
         leaders.map((l, i) =>
             `<div class="grid grid-cols-12 gap-2 items-center text-sm text-slate-300 rounded-lg px-2 py-1.5 ${i % 2 ? 'bg-white/[0.02]' : ''}">
@@ -3066,8 +3066,11 @@ function renderCohesionTeam(summary) {
     el.innerHTML = summary.map(t => {
         const cls = t.avg_dispersion < 300 ? 'TIGHT' : t.avg_dispersion < 800 ? 'NORMAL' : t.avg_dispersion < 1500 ? 'LOOSE' : 'SCATTERED';
         return `<div class="glass-card p-3 rounded-lg border border-white/5 inline-block mr-3">
-            <strong>${t.team} — ${cls}</strong><br>
-            Dispersion: ${t.avg_dispersion} | Spread: ${t.avg_max_spread} | Stragglers: ${t.avg_stragglers} | Alive: ${t.avg_alive}
+            <strong title="Cohesion state from average dispersion: TIGHT < 300u, NORMAL < 800u, LOOSE < 1500u, SCATTERED at 1500u and above.">${t.team} — ${cls}</strong><br>
+            <span title="Average distance of alive players from their team's centre point, in world units.">Dispersion: ${t.avg_dispersion}u</span> |
+            <span title="Average widest gap across the team per sample, in world units.">Spread: ${t.avg_max_spread}u</span> |
+            <span title="Average number of players more than 800u away from the team's centre.">Stragglers: ${t.avg_stragglers}</span> |
+            <span title="Average players alive per sample.">Alive: ${t.avg_alive}</span>
         </div>`;
     }).join('');
 }
@@ -3152,8 +3155,12 @@ function renderTeamPushes(data) {
         const objPct = t.pushes > 0 ? (t.objective_pushes / t.pushes * 100).toFixed(0) : 0;
         return `<div class="glass-card p-3 rounded-lg border border-white/5 inline-block mr-3">
             <strong>${t.team}</strong><br>
-            Pushes: ${t.pushes} | Quality: ${t.avg_quality.toFixed(3)} | Alignment: ${t.avg_alignment.toFixed(3)}<br>
-            Avg speed: ${t.avg_speed} | Participants: ${t.avg_participants.toFixed(1)} | Obj-oriented: ${objPct}%
+            <span title="Coordinated multi-player advances detected in this scope.">Pushes: ${t.pushes}</span> |
+            <span title="Direction alignment × speed relative to sprint (~300 u/s). ≈1 means fully aligned at sprint speed; faster pushes can exceed 1.">Quality: ${t.avg_quality.toFixed(3)}</span> |
+            <span title="0–1: how closely teammates' movement directions match during the push (1 = everyone moving the same way).">Alignment: ${t.avg_alignment.toFixed(3)}</span><br>
+            <span title="Average movement speed during pushes, in world units per second.">Avg speed: ${t.avg_speed} u/s</span> |
+            <span title="Average of each push's peak concurrent movers (per-push maximum, then averaged).">Participants: ${t.avg_participants.toFixed(1)}</span> |
+            <span title="Share of pushes heading toward an objective.">Obj-oriented: ${objPct}%</span>
         </div>`;
     }).join('');
 }
