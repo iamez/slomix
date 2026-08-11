@@ -175,7 +175,7 @@ This document lists Discord bot commands declared in the repository (via `@comma
 | Command | Aliases | Description |
 |---|---|---|
 | `kick` | (none) | 👢 Kick a player from server (Admin channel only) |
-| `list_maps` | `map_list`, `listmaps` | 📋 List available maps on server |
+| `list_maps` | `map_list`, `listmaps` | 📋 List available maps on server (cached; SSH at most 1x/day) |
 | `map_add` | `addmap`, `upload_map` | ➕ Upload new map to server (Admin channel only) |
 | `map_change` | `changemap`, `map` | 🗺️ Change current map (Admin channel only) |
 | `map_delete` | `deletemap`, `remove_map` | 🗑️ Delete a map from server (Admin channel only) |
@@ -213,7 +213,7 @@ This document lists Discord bot commands declared in the repository (via `@comma
 | `badges` | `badge_legend`, `achievements_legend` | 🏅 Show achievement badge legend |
 | `check_achievements` | `check_achivements`, `check_achievement` | 🏆 Check your achievement progress |
 | `compare` | (none) | 📊 Compare two players with a visual radar chart |
-| `help_command` | `commands`, `cmds`, `bothelp` | 📚 Show all available commands with examples |
+| `help` | `commands`, `cmds`, `bothelp`, `help_command` | 📚 Show all available commands with examples |
 | `ping` | (none) | 🏓 Check bot status and performance |
 | `season_info` | `season`, `seasons` | 📅 Show current season information and champions |
 
