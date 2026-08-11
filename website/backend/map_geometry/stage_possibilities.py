@@ -91,16 +91,32 @@ _SPECIAL_RUNTIME_ACTIONS = {
     "followspline": RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE,
     "kill": RuntimeActionControlDisposition.MAY_DISPATCH_DEATH_EVENT,
     "remove": RuntimeActionControlDisposition.DEFERRED_SOURCE_REMOVAL,
-    "set": RuntimeActionControlDisposition.MAY_REPLACE_SCRIPT_CONTEXT,
 }
+_ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
 
 
-def runtime_action_control_disposition(command: str) -> RuntimeActionControlDisposition:
+def _ascii_fold(value: str) -> str:
+    return value.translate(_ASCII_LOWER)
+
+
+def _set_may_dispatch_spawn(action: ScriptAction) -> bool:
+    # etpro_ScriptAction_SetValues calls G_CallSpawn only for a changed
+    # ``classname`` key. Any ``classname_nospawn`` pair latches suppression
+    # for the complete callback, including another classname pair.
+    keys = {_ascii_fold(action.arguments[index]) for index in range(0, len(action.arguments), 2)}
+    return "classname" in keys and "classname_nospawn" not in keys
+
+
+def runtime_action_control_disposition(action: ScriptAction) -> RuntimeActionControlDisposition:
     """Return only source-verified current-event control behavior."""
 
-    if command in _IMMEDIATE_RUNTIME_ACTIONS:
+    if action.command in _IMMEDIATE_RUNTIME_ACTIONS:
         return RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
-    return _SPECIAL_RUNTIME_ACTIONS.get(command, RuntimeActionControlDisposition.UNCLASSIFIED)
+    if action.command == "set":
+        if _set_may_dispatch_spawn(action):
+            return RuntimeActionControlDisposition.MAY_REPLACE_SCRIPT_CONTEXT
+        return RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
+    return _SPECIAL_RUNTIME_ACTIONS.get(action.command, RuntimeActionControlDisposition.UNCLASSIFIED)
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,7 +142,10 @@ class RuntimeActionInstruction:
 
     @property
     def blocker_reason(self) -> str | None:
-        if self.control_disposition is RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE:
+        if self.control_disposition in {
+            RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE,
+            RuntimeActionControlDisposition.DEFERRED_SOURCE_REMOVAL,
+        }:
             return None
         return self.control_disposition.value
 
@@ -237,9 +256,7 @@ def project_ordered_stage_programs(
             try:
                 barrier_kind = ControlBarrierKind(action.command)
             except ValueError:
-                instructions.append(
-                    RuntimeActionInstruction(action, runtime_action_control_disposition(action.command))
-                )
+                instructions.append(RuntimeActionInstruction(action, runtime_action_control_disposition(action)))
             else:
                 instructions.append(ControlBarrierInstruction(barrier_kind, action))
 

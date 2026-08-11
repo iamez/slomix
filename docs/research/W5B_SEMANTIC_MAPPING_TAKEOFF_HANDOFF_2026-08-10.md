@@ -401,14 +401,14 @@ The most common are `wm_teamvoiceannounce` (589), `setchargetimefactor` (420),
 `followspline` (302), `wm_announce` (274), `playsound` (241),
 `wm_addteamvoiceannounce` (239) and `wm_removeteamvoiceannounce` (222).
 
-| Current-event control disposition | Commands | Instructions |
-|---|---:|---:|
-| Immediate continue | 32 | 2,851 |
-| Conditional temporal pause (`followspline`, `faceangles`) | 2 | 445 |
-| Deferred source removal (`remove`) | 1 | 91 |
-| May dispatch a death event (`kill`) | 1 | 13 |
-| May replace script context through spawn (`set`) | 1 | 9 |
-| May stop on spawn failure (`create`) | 1 | 4 |
+| Current-event control disposition | Installed families/forms | Instructions |
+|---|---|---:|
+| Immediate continue | 32 families + 9 safe `set` forms | 2,860 |
+| Conditional temporal pause | `followspline`, `faceangles` | 445 |
+| Deferred source removal | `remove` | 91 |
+| May dispatch a death event | `kill` | 13 |
+| May replace script context through spawn | no installed `set` form | 0 |
+| May stop on spawn failure | `create` | 4 |
 
 The 38 command-to-callback bindings come from the pinned
 [`gScriptActions` registry](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script.c#L48-L151).
@@ -433,6 +433,12 @@ and
 `kill` is not treated as a plain `qtrue`: its target path reaches
 [`G_KillEnts`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_target.c#L841-L879),
 which can invoke mover death callbacks and therefore nested script events.
+All nine installed `set` actions change only `origin`, `contents` or `clipmask` and
+therefore continue immediately. The language-level `classname` form remains a blocker
+because `G_CallSpawn` can parse and dispatch a new `spawn` event on the same entity;
+`classname_nospawn` deliberately avoids that callback. All 91 installed `remove`
+actions return `qtrue` and schedule source removal for the next frame, so the lifecycle
+effect is retained but does not block later instructions in the same event pass.
 
 The resolved plain-trigger graph has 21 cyclic strongly connected components across
 six maps. Every current component is a one-node self-loop and none of those 21 nodes
@@ -951,12 +957,24 @@ ordered program even when it is not a control blocker. Conversely, a temporal
 a later frame. The future walker must publish both facts instead of collapsing them
 into one executable/blocked flag.
 
+### 2026-08-11 - classify callback control from concrete arguments
+
+Command names alone over-blocked all nine installed `set` actions even though none
+contains the `classname` key that can reach `G_CallSpawn`. Classification now consumes
+the parsed action: `origin`, `contents`, `clipmask`, `scriptName` and
+`classname_nospawn` forms continue the current event, while an actual case-insensitive
+`classname` key remains fail-closed. `remove` retains its deferred lifecycle effect but
+no longer publishes a current-pass blocker because the callback returns `qtrue` before
+the next-frame deletion. The real corpus moves exactly nine instructions from the
+spawn-context blocker to immediate continue; no installed semantic action is erased.
+
 ## Current handoff state
 
-Current step: freeze fixtures for the six non-immediate runtime control families, then
-implement Phase 4 guard splitting and symbolic accumulator state over the now lossless
-ordered program. Phase 2's final public coverage surface remains intentionally deferred
-until these control-flow blockers are modeled.
+Current step: implement Phase 4 guard splitting and symbolic accumulator state over
+the now lossless ordered program. Fixtures cover all six special runtime control
+families and distinguish immediate current-pass continuation from deferred lifecycle
+effects. Phase 2's final public coverage surface remains intentionally deferred until
+these control-flow blockers are modeled.
 
 Next action: freeze fixtures for true and false abort branches, local versus global
 state, conditional and plain nested triggers, same-entity replacement, deferred source
@@ -966,8 +984,8 @@ Known blockers: none for read-only research and local implementation. Any requir
 live-build inspection that changes or restarts a service becomes owner-gated; retain
 the affected semantic result as unverified and continue with independent domains.
 
-Current local verification (Python 3.13.14): the complete 206-test W1/map-geometry
-unit suite passed, and all 13 opt-in real-asset tests passed in 286.57 seconds under
+Current local verification (Python 3.13.14): the complete 214-test W1/map-geometry
+unit suite passed, and all 13 opt-in real-asset tests passed in 286.38 seconds under
 repo-wide coverage tracing. The current acceptance proves no `.ent` override exists
 for any of the 20 indexed BSP maps, includes
 all 2,929 typed effect projections and the blocker inventory above, and rechecks W1-W5a,

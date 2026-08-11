@@ -6,7 +6,12 @@ from types import SimpleNamespace
 import pytest
 
 from website.backend.map_geometry.entities import MapEntityCatalog
-from website.backend.map_geometry.stage import ObjectiveCatalog, compile_static_stage_graph, parse_map_script
+from website.backend.map_geometry.stage import (
+    ObjectiveCatalog,
+    ScriptAction,
+    compile_static_stage_graph,
+    parse_map_script,
+)
 from website.backend.map_geometry.stage_possibilities import (
     ControlBarrierInstruction,
     ControlBarrierKind,
@@ -26,6 +31,10 @@ from website.backend.map_geometry.stage_semantics import (
     build_entity_identity_index,
     link_w3_entity_catalog,
 )
+
+
+def _action(command, *arguments):
+    return ScriptAction(command, arguments, "", 1)
 
 
 def _model_and_linked():
@@ -110,20 +119,67 @@ def test_projects_event_actions_in_source_order_without_executing_paths():
 
 
 @pytest.mark.parametrize(
-    ("command", "expected"),
+    ("action", "expected"),
     (
-        ("wm_announce", RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE),
-        ("followspline", RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE),
-        ("faceangles", RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE),
-        ("remove", RuntimeActionControlDisposition.DEFERRED_SOURCE_REMOVAL),
-        ("kill", RuntimeActionControlDisposition.MAY_DISPATCH_DEATH_EVENT),
-        ("set", RuntimeActionControlDisposition.MAY_REPLACE_SCRIPT_CONTEXT),
-        ("create", RuntimeActionControlDisposition.MAY_STOP_ON_SPAWN_FAILURE),
-        ("future_command", RuntimeActionControlDisposition.UNCLASSIFIED),
+        (_action("wm_announce"), RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE),
+        (
+            _action("followspline", "0", "path", "100", "wait"),
+            RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE,
+        ),
+        (
+            _action("followspline", "0", "path", "100"),
+            RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE,
+        ),
+        (
+            _action("faceangles", "0", "90", "0", "500"),
+            RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE,
+        ),
+        (_action("remove"), RuntimeActionControlDisposition.DEFERRED_SOURCE_REMOVAL),
+        (_action("kill", "target"), RuntimeActionControlDisposition.MAY_DISPATCH_DEATH_EVENT),
+        (
+            _action("set", "classname", "script_mover"),
+            RuntimeActionControlDisposition.MAY_REPLACE_SCRIPT_CONTEXT,
+        ),
+        (
+            _action("set", "ClassName", "script_mover"),
+            RuntimeActionControlDisposition.MAY_REPLACE_SCRIPT_CONTEXT,
+        ),
+        (_action("create", "classname", "func_fakebrush"), RuntimeActionControlDisposition.MAY_STOP_ON_SPAWN_FAILURE),
+        (_action("future_command"), RuntimeActionControlDisposition.UNCLASSIFIED),
     ),
 )
-def test_runtime_control_dispositions_fail_closed(command, expected):
-    assert runtime_action_control_disposition(command) is expected
+def test_runtime_control_dispositions_fail_closed(action, expected):
+    assert runtime_action_control_disposition(action) is expected
+
+
+@pytest.mark.parametrize(
+    "action",
+    (
+        _action("set", "origin", "1 2 3"),
+        _action("set", "contents", "32", "clipmask", "32"),
+        _action("set", "classname_nospawn", "script_mover"),
+        _action("set", "classname", "script_mover", "classname_nospawn", "script_mover"),
+        _action("set", "scriptName", "new_identity"),
+    ),
+)
+def test_set_without_a_spawn_dispatch_continues_the_current_event(action):
+    assert (
+        runtime_action_control_disposition(action) is RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
+    )
+
+
+def test_only_actual_current_event_blockers_publish_a_blocker_reason():
+    remove = RuntimeActionInstruction(
+        _action("remove"),
+        RuntimeActionControlDisposition.DEFERRED_SOURCE_REMOVAL,
+    )
+    faceangles = RuntimeActionInstruction(
+        _action("faceangles", "0", "90", "0", "500"),
+        RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE,
+    )
+
+    assert remove.blocker_reason is None
+    assert faceangles.blocker_reason == "conditional_temporal_pause"
 
 
 def test_rejects_stage_and_geometry_models_from_different_maps():

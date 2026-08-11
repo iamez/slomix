@@ -627,11 +627,10 @@ def test_w5b_projects_every_eligible_action_into_an_ordered_nonexecuted_program(
         "constructible_duration": 1,
     }
     assert runtime_controls == {
-        RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE.value: 2851,
+        RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE.value: 2860,
         RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE.value: 445,
         RuntimeActionControlDisposition.DEFERRED_SOURCE_REMOVAL.value: 91,
         RuntimeActionControlDisposition.MAY_DISPATCH_DEATH_EVENT.value: 13,
-        RuntimeActionControlDisposition.MAY_REPLACE_SCRIPT_CONTEXT.value: 9,
         RuntimeActionControlDisposition.MAY_STOP_ON_SPAWN_FAILURE.value: 4,
     }
 
