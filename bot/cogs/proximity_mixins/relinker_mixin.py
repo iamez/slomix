@@ -409,6 +409,27 @@ class _ProximityRelinkerMixin:
                             round_id = None
                     else:
                         round_id = None
+                    if round_id is None:
+                        # Fuzzy time fallback (2026-08-11, live evidence,
+                        # round 11184): a positive SOURCE unix used to
+                        # dead-end here whenever the TARGET rounds row has
+                        # NULL round_start_unix — the majority case, since
+                        # that column is backfilled by Lua metadata
+                        # enrichment, which is itself deferred exactly when
+                        # this path runs (only ~60% of rounds ever get it;
+                        # 1/11 on 2026-08-11). exact/relaxed-only matching
+                        # therefore made these orphans permanent. Same
+                        # resolver, window and never-guess semantics as the
+                        # no-unix branch below.
+                        round_id = await resolve_round_id(
+                            db,
+                            map_name,
+                            round_number,
+                            target_dt=target_dt,
+                            round_date=round_date_str,
+                            window_minutes=120,
+                            quiet=True,
+                        )
                 else:
                     round_id = await resolve_round_id(
                         db,
