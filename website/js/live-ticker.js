@@ -4,31 +4,62 @@
  * plants/defuses, map-script announces, round boundaries — seconds after
  * they happen on the server.
  *
- * Data path: legacy3.log → tailer on the game server → POST /api/live/events
- * → ring buffer → GET /api/live/feed?since=<seq> polled here every 3 s.
- * The ticker owns its own poll loop and state; tonight.js only renders the
- * shell (#live-ticker) and calls renderLiveTicker() after rebuilding its
- * DOM (its 8 s refresh wipes the container).
+ * Data path: legacy3.log → tailer on the game server (S2) → POST
+ * /api/live/events → ring buffer → GET /api/live/feed?since=<seq> polled
+ * here every 3 s. The ticker owns its own poll loop and state; tonight.js
+ * only renders the shell (#live-ticker) and calls renderLiveTicker() after
+ * rebuilding its DOM (its 8 s refresh wipes the container).
+ *
+ * Filtering (owner call, 2026-08-11): the feed is about OBJECTIVES by
+ * default — kills and joins drown the two events per minute that matter.
+ * Every event is buffered client-side regardless; the category checkboxes
+ * are a pure display filter (persisted in localStorage), so switching one
+ * on retroactively reveals the recent history too.
  * @module live-ticker
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 
 const POLL_MS = 3000;
-const MAX_SHOWN = 40;
+const MAX_BUFFER = 200;   // events kept client-side (all categories)
+const MAX_SHOWN = 40;     // rows rendered after filtering
 
-// Owner call (2026-08-11): the feed is about OBJECTIVES, not a killfeed —
-// kills/joins/team shuffles drown the two events per minute that matter.
-// The API still carries everything; this is a display choice.
-const SHOWN_TYPES = new Set([
-    'POPUP', 'ANNOUNCE', 'OBJECTIVE_DESTROYED', 'DYNAMITE',
-    'ROUND_START', 'ROUND_END', 'EXIT', 'MAP',
-    'SAY', 'CALLVOTE', 'VOTE_PASSED',
-]);
+const CATEGORIES = {
+    objectives: { label: 'Objectives', types: ['POPUP', 'ANNOUNCE', 'OBJECTIVE_DESTROYED', 'DYNAMITE', 'FLAG_PICKUP'], default: true },
+    rounds:     { label: 'Rounds',     types: ['ROUND_START', 'ROUND_END', 'EXIT', 'MAP'], default: true },
+    kills:      { label: 'Kills',      types: ['KILL'], default: false },
+    chat:       { label: 'Chat',       types: ['SAY'], default: false },
+    votes:      { label: 'Votes',      types: ['CALLVOTE', 'VOTE_PASSED'], default: false },
+};
+const _TYPE_TO_CAT = {};
+for (const [cat, def] of Object.entries(CATEGORIES)) {
+    for (const t of def.types) _TYPE_TO_CAT[t] = cat;
+}
 
+const FILTER_STORE_KEY = 'slomix.liveFeedFilters.v1';
+
+function _loadFilters() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(FILTER_STORE_KEY) || 'null');
+        if (raw && typeof raw === 'object') {
+            const out = {};
+            for (const cat of Object.keys(CATEGORIES)) {
+                out[cat] = typeof raw[cat] === 'boolean' ? raw[cat] : CATEGORIES[cat].default;
+            }
+            return out;
+        }
+    } catch { /* corrupted store → defaults */ }
+    return Object.fromEntries(Object.entries(CATEGORIES).map(([c, d]) => [c, d.default]));
+}
+
+let _filters = _loadFilters();
 let _cursor = 0;
-let _events = [];          // newest last
+let _events = [];          // newest last, ALL categories
 let _interval = null;
 let _lastFetchOk = null;   // null = never fetched, false = feed erroring
+
+function _saveFilters() {
+    try { localStorage.setItem(FILTER_STORE_KEY, JSON.stringify(_filters)); } catch { /* private mode */ }
+}
 
 function _viewActive() {
     const v = document.getElementById('view-tonight');
@@ -44,8 +75,7 @@ async function _poll() {
         );
         _lastFetchOk = true;
         if (data && Array.isArray(data.events) && data.events.length) {
-            const shown = data.events.filter(e => SHOWN_TYPES.has(e.type));
-            _events = _events.concat(shown).slice(-MAX_SHOWN);
+            _events = _events.concat(data.events).slice(-MAX_BUFFER);
             _cursor = data.last_seq || _cursor;
             renderLiveTicker();
         } else if (data && data.last_seq != null) {
@@ -98,6 +128,12 @@ function _line(ev) {
         case 'DYNAMITE':
             return wrap(ev.action === 'plant' ? '🧨' : '✂️',
                 `Dynamite ${escapeHtml(ev.action || '')}: ${escapeHtml(ev.objective || '')}`, 'text-orange-200');
+        case 'FLAG_PICKUP':
+            return wrap('🏳️', 'Objective carrier picked up the flag', 'text-amber-200');
+        case 'KILL':
+            return wrap('⚔️',
+                `<b>${escapeHtml(ev.killer || '?')}</b> <span class="text-slate-500">killed</span> ${escapeHtml(ev.victim || '?')} <span class="text-slate-500 text-xs">${escapeHtml((ev.mod || '').replace('MOD_', ''))}</span>`,
+                'text-slate-300');
         case 'ROUND_START':
             return `<div class="py-1.5 my-1 text-center text-xs font-black tracking-widest text-emerald-300 border-y border-emerald-500/20">ROUND START</div>`;
         case 'ROUND_END':
@@ -117,6 +153,15 @@ function _line(ev) {
     }
 }
 
+function _filterChips() {
+    return Object.entries(CATEGORIES).map(([cat, def]) => {
+        const on = !!_filters[cat];
+        return `<label class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg cursor-pointer select-none text-xs font-bold transition-colors ${on ? 'bg-brand-cyan/20 text-brand-cyan' : 'bg-white/5 text-slate-500 hover:text-slate-300'}">
+            <input type="checkbox" data-live-cat="${cat}" ${on ? 'checked' : ''} class="accent-cyan-400 w-3 h-3">${def.label}
+        </label>`;
+    }).join('');
+}
+
 /** Re-render into the #live-ticker shell if present (idempotent). */
 export function renderLiveTicker() {
     const host = document.getElementById('live-ticker');
@@ -129,16 +174,26 @@ export function renderLiveTicker() {
         : (fresh
             ? '<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse"></span> LIVE'
             : '<span class="w-2 h-2 rounded-full bg-slate-600 inline-block"></span> quiet');
-    const rows = _events.slice().reverse().map(_line).filter(Boolean).join('');
+    const visible = _events.filter(e => _filters[_TYPE_TO_CAT[e.type]] === true);
+    const rows = visible.slice(-MAX_SHOWN).reverse().map(_line).filter(Boolean).join('');
     host.textContent = '';
     safeInsertHTML(host, 'beforeend', `
         <div class="glass-panel rounded-xl p-4 mt-4">
-            <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
                 <div class="text-sm font-black text-white tracking-wide">MATCH FEED</div>
                 <div class="text-xs text-slate-400 flex items-center gap-1.5">${dot}</div>
             </div>
+            <div class="flex flex-wrap gap-1.5 mb-2">${_filterChips()}</div>
             <div class="max-h-72 overflow-y-auto text-sm divide-y divide-white/5">
-                ${rows || '<div class="text-slate-500 text-sm py-3 text-center">No live events yet — they appear seconds after they happen in game.</div>'}
+                ${rows || '<div class="text-slate-500 text-sm py-3 text-center">No live events in the selected categories.</div>'}
             </div>
         </div>`);
+    // Rebind after each render (the shell is rebuilt every time).
+    host.querySelectorAll('input[data-live-cat]').forEach(cb => {
+        cb.addEventListener('change', () => {
+            _filters[cb.dataset.liveCat] = cb.checked;
+            _saveFilters();
+            renderLiveTicker();
+        });
+    });
 }
