@@ -7,8 +7,8 @@ Last updated: 2026-08-11
 Status: implementation in progress. Engine identity, Phase 3 dispositions, the Phase 4
 lossless ordered program, the override boundary, runtime-control classification and the
 bounded single-event symbolic walker and isolated nested-dispatch resolver are locally
-and externally reviewed. The bounded nested executor is implemented and measured
-locally but has not yet completed exact-head external review.
+and externally reviewed. The bounded nested executor, shared recursive-work budget and
+temporal/concurrency frontiers have also completed exact-head external review.
 
 Branch: `agent/map-geometry-w5b-semantic-mapping`
 
@@ -16,9 +16,9 @@ Base: `origin/main` at `8cb34d9975d1679417b782b3c05ef09bf008741c`
 
 Last substantive implementation head that completed the five-minute review quiet
 period and final refresh:
-`fb1ab791ae1f373ef5e61b7eda018d272dba5aae`
+`89d2ac307d652de5e759c386e66d4a2abc08ef65`
 
-Review-closure documentation head that completed the same gate:
+Earlier resolver review-closure documentation head:
 `63c23e2b16269dc37a58b670e3154056cc9b5875`
 
 The documentation-only commit that advances this pointer cannot contain its own Git
@@ -1009,7 +1009,7 @@ changes, Python runtime replacement, force-push/history deletion and secret rota
 - [x] Complete Phase 3 objective/spawn/route semantic mappings.
 - [x] Resolve nested trigger handlers and concrete static target groups without
   executing them.
-- [ ] Complete review closure for the locally implemented bounded nested executor,
+- [x] Complete review closure for the bounded nested executor,
   same-entity restoration and temporal/concurrency frontiers.
 - [ ] Complete Phase 4 accumulator and ordered-possibility modelling.
 - [ ] Complete Phase 5 static coverage analyzer and evidence report.
@@ -1241,21 +1241,19 @@ model or a claim that exhausted paths are unreachable.
 
 ## Current handoff state
 
-Current step: finish exact-head review closure for the bounded nested executor. Guard
-splitting, explicit local/global accumulator state, effect suppression, concrete
-nested target selection, synchronous caller restoration, final same-entity temporal
-replacement, active-frame cycle detection and first-boundary temporal/concurrency
-frontiers are implemented locally. Phase 2's final public coverage surface remains
-intentionally deferred until the executor review and blocker-relevance measurement are
-closed.
+Current step: classify every remaining frontier by objective, spawn and dynamic-route
+semantic relevance before designing a scheduler. Guard splitting, explicit local/global
+accumulator state, effect suppression, concrete nested target selection, synchronous
+caller restoration, final same-entity temporal replacement, active-frame cycle
+detection, first-boundary temporal/concurrency frontiers and the shared work budget have
+completed exact-head implementation review. Phase 2's final public coverage surface
+remains intentionally deferred until blocker-relevance measurement is closed.
 
-Next action after executor review: classify every remaining frontier by objective,
-spawn and dynamic-route semantic relevance before designing a scheduler. Verify the
-target/write path for all 13 `kill` actions and model death dispatch only from that
-evidence. If cross-entity temporal frontiers block required domains materially, add an
-explicit suspended-continuation scheduler; do not merge eventual callee state into an
-immediate caller by convenience. Then define the Phase 5 per-domain static-graph gate
-and deterministic evidence manifest.
+Verify the target/write path for all 13 `kill` actions and model death dispatch only
+from that evidence. If cross-entity temporal frontiers block required domains
+materially, add an explicit suspended-continuation scheduler; do not merge eventual
+callee state into an immediate caller by convenience. Then define the Phase 5
+per-domain static-graph gate and deterministic evidence manifest.
 
 Known blockers: none for read-only research and local implementation. Any required
 live-build inspection that changes or restarts a service becomes owner-gated; retain
@@ -1309,6 +1307,18 @@ real-asset baseline.
 Ruff and `git diff --check` passed. The full repository suite remains required before
 merge.
 
+The bounded nested-executor implementation and review correction through `89d2ac30`
+passed 13/13 GitHub check-run gates on that exact SHA, including Python 3.11/3.13,
+Bandit, CodeQL, Codacy, frontend checks and the Docker build. Exact-head CodeRabbit
+review found the mixed target-pair/program denominator and the per-frame rather than
+global work budget; both were corrected. Its review-summary nitpick was also applied,
+and the two Codacy production-`assert` findings were replaced with explicit invariant
+handling. CodeRabbit completed the follow-up review without another finding, Codacy
+reported zero issues, all 16 review threads were resolved, the five-minute quiet period
+passed, and a separate final refresh found no new activity. Local, remote and PR heads
+all matched `89d2ac30`. The PR remains draft and behind moving `main`; no merge or
+history rewrite was attempted.
+
 The bounded symbolic-walker implementation through `9eb59758` passed 13/13 GitHub
 check-run gates attached to that exact head, including both Python versions, static and
 security analysis, frontend checks and the Docker build. It also completed incremental
@@ -1333,7 +1343,8 @@ moving `main`; no merge or history rewrite was attempted.
 > Work from branch `agent/map-geometry-w5b-semantic-mapping`. Read
 > `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md`,
 > `docs/research/W5A_STATIC_STAGE_ASSET_FOUNDATION_2026-08-08.md`, and this document
-> in full before changing code. Continue from the first unchecked checklist item.
+> in full before changing code. Continue from the explicit `Current handoff state`;
+> do not substitute the broad checklist order for its measured dependency order.
 > W5b maps W5a static effects to BSP/objective/spawn/route identities and publishes
 > defensible static-graph coverage; it does not replay historical state. Verify every
 > identity namespace and accumulator/order rule against ET:Legacy primary source,
