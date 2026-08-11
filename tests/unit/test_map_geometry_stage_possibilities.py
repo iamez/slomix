@@ -1385,6 +1385,52 @@ def test_nonwaiting_spline_preserves_immediate_and_prior_motion_pause_paths():
     assert all(len(path.effects) == 1 for path in paths)
 
 
+@pytest.mark.parametrize(
+    ("followspline_arguments", "expected_completions"),
+    (
+        (
+            "0 wait 100",
+            {SymbolicPathCompletion.SYNCHRONOUS_COMPLETE, SymbolicPathCompletion.TEMPORALLY_SUSPENDED},
+        ),
+        ("0 path 100 wait", {SymbolicPathCompletion.TEMPORALLY_SUSPENDED}),
+        (
+            "accum 0 wait 100",
+            {SymbolicPathCompletion.SYNCHRONOUS_COMPLETE, SymbolicPathCompletion.TEMPORALLY_SUSPENDED},
+        ),
+        ("globalaccum 0 path 100 wait", {SymbolicPathCompletion.TEMPORALLY_SUSPENDED}),
+    ),
+)
+def test_followspline_only_reads_wait_from_the_optional_argument_tail(
+    followspline_arguments,
+    expected_completions,
+):
+    program = _programs(
+        f"""
+        game_manager
+        {{
+            spawn
+            {{
+                followspline {followspline_arguments}
+                setstate gate invisible
+            }}
+        }}
+        """.encode()
+    )[0]
+
+    paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+        stop_at_temporal_boundary=True,
+    )
+
+    assert {path.completion for path in paths} == expected_completions
+    completed = [path for path in paths if path.completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE]
+    assert [len(path.effects) for path in completed] == ([1] if completed else [])
+    suspended = next(path for path in paths if path.completion is SymbolicPathCompletion.TEMPORALLY_SUSPENDED)
+    assert suspended.effects == ()
+
+
 def test_create_preserves_success_path_and_spawn_failure_frontier():
     program = _programs(
         b"""

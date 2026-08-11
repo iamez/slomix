@@ -25,6 +25,15 @@ The documentation-only commit that advances this pointer cannot contain its own 
 hash. Query PR #633 before relying on this historical checkpoint as current review
 state.
 
+Current review correction: after the branch was marked ready and refreshed from
+`main`, GitHub Codex found that the executor searched every `followspline` argument
+for `wait`. ET:Legacy only interprets `wait` in the optional tail after direction,
+spline and speed (and after the buffer index for `accum`/`globalaccum`). A spline
+whose target name is literally `wait` was therefore being classified as waiting and
+lost its legal immediate continuation. The correction and its exact-head review are
+pending; `89d2ac30` remains the last externally closed substantive checkpoint until
+that loop completes.
+
 Scope: read-only ET/ET:Legacy map assets; no database write, deploy, service restart,
 Lua change, production API integration, metric or rating change
 
@@ -1300,6 +1309,22 @@ The preceding fully timed run recorded its two largest corpus checks at 47.68 an
 measured materially less time. The opt-in
 real-asset module now has a measured 90-second hang guard; this is acceptance-test
 headroom, not a production performance claim or SLO change.
+
+The post-ready review correction for `followspline` was checked against
+ET:Legacy `G_ScriptAction_FollowSpline` at pinned engine commit
+`732518efb1c479dcd29b13361f30a2e92df1cf2a`. The engine consumes direction,
+target name and speed first; `accum` and `globalaccum` directions additionally
+consume a buffer index, while `length` and `roll` consume one and two option values.
+The corrected sequential scan therefore cannot mistake a spline target or option
+value named `wait` for the actual `wait` option. Local Python 3.13.14 verification
+passed 87/87 focused executor units and 281/281 expanded W1/map-geometry units. The
+exact every-entry executor acceptance passed in 26.60 seconds with all published
+counts unchanged, and all 15 opt-in real-asset tests passed together in 205.06
+seconds. The CI-equivalent dependency set then passed the complete local test suite:
+4,317 passed and 93 expected environment/fixture-gated tests skipped in 35.84
+seconds; the separately enabled real-asset suite covers its 15 default skips.
+Production-path Ruff and `git diff --check` also passed. Exact-head CI and external
+review remain pending until this correction is committed and pushed.
 The duplicate-field correction was followed by a direct scan of all 20 indexed maps;
 none contains a `team_WOLF_objective` whose first exact lowercase `description` is
 empty, so the synthetic empty-value compatibility fix does not alter the measured
