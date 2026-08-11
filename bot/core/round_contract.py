@@ -31,6 +31,23 @@ def is_filler_map(map_name: str | None, excluded_maps: Iterable[str]) -> bool:
     return any(name == str(m).strip().lower() for m in excluded_maps)
 
 
+def is_bot_player(player: dict | None) -> bool:
+    """Single bot classifier for one parsed player.
+
+    Used for BOTH the bot/human counts and the validity gate so the two can
+    never disagree (review on #640: counting only the is_bot flag while the
+    gate also matched OMNIBOT guids let a guid-only bot yield is_valid=FALSE
+    with bot_player_count=0).
+    """
+    if not player:
+        return False
+    if player.get("is_bot"):
+        return True
+    if str(player.get("guid", "")).upper().startswith("OMNIBOT"):
+        return True
+    return str(player.get("name", "")).startswith("[BOT]")
+
+
 def round_has_bots(players: Iterable[dict] | None) -> bool:
     """Return True if any participant is an Omni-bot.
 
@@ -40,14 +57,7 @@ def round_has_bots(players: Iterable[dict] | None) -> bool:
     bot/testmode rounds never count for stats, so the importer flags them
     is_valid = FALSE. Pure + unit-testable; callers pass the players list.
     """
-    for p in players or []:
-        if p.get("is_bot"):
-            return True
-        if str(p.get("guid", "")).upper().startswith("OMNIBOT"):
-            return True
-        if str(p.get("name", "")).startswith("[BOT]"):
-            return True
-    return False
+    return any(is_bot_player(p) for p in players or [])
 
 
 def derive_round_validity(
@@ -63,7 +73,8 @@ def derive_round_validity(
     database's history — proven live by the 2026-08-11 Omni-bot test, whose
     rounds landed is_valid=TRUE and had to be quarantined by hand.
 
-    Semantics mirror bot/services/stats_import_mixin exactly:
+    This is the ONE shared implementation — stats_import_mixin calls it too
+    (aligned on #640 review), so both import paths persist identical flags:
     - is_bot_round: majority rule (parser's value when present; recomputed
       from the player list otherwise — bots-only OR strict bot majority).
     - is_valid: FALSE when the map is a configured filler, when ANY bot
@@ -79,8 +90,9 @@ def derive_round_validity(
     if players and bot_count == 0 and human_count == 0:
         # Counts absent on this path — recompute from the player list, the
         # same defensive fallback the mixin grew after session 123 (all-bot
-        # session with bot_player_count=0).
-        bot_count = sum(1 for p in players if p.get("is_bot"))
+        # session with bot_player_count=0). Uses the SAME classifier as the
+        # validity gate (is_bot_player) so counts and gate cannot disagree.
+        bot_count = sum(1 for p in players if is_bot_player(p))
         human_count = max(0, len(players) - bot_count)
 
     is_bot_round = bool(parsed_data.get("is_bot_round", False))

@@ -66,9 +66,10 @@ def test_single_bot_minority_invalidates_but_not_bot_round():
     assert v["is_valid"] is False
 
 
-def test_guid_only_bot_detection_invalidates():
+def test_guid_only_bot_detection_counts_and_invalidates():
     # Defensive path: no is_bot flags, no counts — OMNIBOT guid prefix and
-    # [BOT] name still mark the round invalid via round_has_bots.
+    # [BOT] name are classified by the SAME is_bot_player() used by the
+    # validity gate, so the counts agree with the gate (#640 review).
     parsed = {
         "players": [
             {"name": "[BOT]lagger", "guid": "OMNIBOT0b4a883c4d3532f3f6d099b94"}
@@ -76,6 +77,9 @@ def test_guid_only_bot_detection_invalidates():
     }
     v = derive_round_validity(parsed, "supply", set())
     assert v["is_valid"] is False
+    assert v["bot_player_count"] == 1
+    assert v["human_player_count"] == 0
+    assert v["is_bot_round"] is True
 
 
 def test_filler_map_invalidates_clean_human_round():
