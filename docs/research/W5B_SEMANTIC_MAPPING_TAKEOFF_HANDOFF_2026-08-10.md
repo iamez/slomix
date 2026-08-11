@@ -457,7 +457,9 @@ The walker now:
 - stores entity accumulators by concrete BSP entity index and global accumulators in a
   shared level scope;
 - executes deterministic `set`, `inc`, `bitset` and `bitreset` mutations only when the
-  resulting signed 32-bit value is proven, otherwise publishing a blocker;
+  resulting signed 32-bit value is proven, otherwise publishing a blocker; bit index
+  31 remains rejected because the pinned callbacks use signed `1 << index`, whose
+  sign-bit shift is not a defined engine contract;
 - splits every one of the six installed abort predicates into satisfiable true and
   false domains, removes contradictory paths and suppresses later effects on the abort
   branch;
@@ -470,6 +472,9 @@ The walker now:
   explicit spawn-failure frontier for `create`;
 - records a machine-readable blocker reason and source line instead of stepping over a
   nested trigger, death dispatch, script-context replacement or malformed projection.
+- caps all live plus completed symbolic paths at 4,096 by default; exceeding a caller's
+  explicit positive budget returns a line-numbered `symbolic_path_budget_exhausted`
+  frontier rather than consuming unbounded memory or claiming complete coverage.
 
 This is not yet a map possibility graph. Plain and conditional nested triggers remain
 blocked on their dispatching branches; `kill`, same-entity event replacement and the 21
@@ -1024,6 +1029,22 @@ Nested trigger/death dispatch is deliberately still a blocker rather than an ass
 no-op; the next increment must model caller restoration and cycles before any corpus
 reachability denominator is meaningful.
 
+### 2026-08-11 - review hardening keeps undefined sign-bit shifts blocked
+
+Exact-head review correctly found that directly constructed typed instructions could
+bypass the parser's operand validation and raise inside the public walker. Mutations,
+abort guards and conditional guards now independently validate their runtime inputs and
+return line-numbered blockers; domain refinement returns no candidate for an invalid
+operand instead of raising.
+
+The suggested alternative of normalizing bit index 31 was rejected. Both checked
+ET:Legacy accumulator callbacks evaluate bit operations as signed `1 << Q_atoi(token)`.
+W5b cannot turn that undefined C sign-bit shift into a portable two's-complement rule.
+The shared approved maximum therefore remains bit 30, with synthetic index-31 fixtures
+proving both the projector and walker fail closed. The same review added a 4,096-path
+default budget and an explicit smaller-budget regression, preventing repeated waits or
+movement alternatives from growing the public analysis without bound.
+
 ## Current handoff state
 
 Current step: extend the local Phase 4 single-event walker into source-resolved nested
@@ -1045,10 +1066,10 @@ Known blockers: none for read-only research and local implementation. Any requir
 live-build inspection that changes or restarts a service becomes owner-gated; retain
 the affected semantic result as unverified and continue with independent domains.
 
-Current local verification (Python 3.13.14): the expanded 242-test W1/map-geometry
+Current local verification (Python 3.13.14): the expanded 250-test W1/map-geometry
 unit suite passed without coverage tracing. The focused single-event module contributes
-48 passing tests. The real-asset ordered-program projection passed independently in
-24.58 seconds and still covers all 2,153 event programs. On the preceding reviewed
+56 passing tests. The real-asset ordered-program projection passed independently in
+27.68 seconds and still covers all 2,153 event programs. On the preceding reviewed
 head, all 13 opt-in real-asset tests passed in 286.38 seconds under repo-wide coverage
 tracing. The current acceptance proves no `.ent` override exists
 for any of the 20 indexed BSP maps, includes

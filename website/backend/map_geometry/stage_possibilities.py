@@ -23,6 +23,7 @@ from website.backend.map_geometry.stage import (
     TriggerEdge,
 )
 from website.backend.map_geometry.stage_semantics import (
+    MAX_SIGNED_ACCUMULATOR_BIT_INDEX,
     AccumulatorAbortGuard,
     AccumulatorConditionalTrigger,
     AccumulatorMutation,
@@ -189,6 +190,25 @@ class OrderedEventProgram:
 _SIGNED_INT_MIN = -(2**31)
 _SIGNED_INT_MAX = 2**31 - 1
 _UNSIGNED_MODULUS = 2**32
+_DEFAULT_SYMBOLIC_PATH_BUDGET = 4096
+_SYMBOLIC_ABORT_GUARDS = {
+    AccumulatorOperation.ABORT_IF_LESS_THAN,
+    AccumulatorOperation.ABORT_IF_GREATER_THAN,
+    AccumulatorOperation.ABORT_IF_NOT_EQUAL,
+    AccumulatorOperation.ABORT_IF_EQUAL,
+    AccumulatorOperation.ABORT_IF_BIT_SET,
+    AccumulatorOperation.ABORT_IF_NOT_BIT_SET,
+}
+_SYMBOLIC_BIT_GUARDS = {
+    AccumulatorOperation.ABORT_IF_BIT_SET,
+    AccumulatorOperation.ABORT_IF_NOT_BIT_SET,
+}
+
+
+def _valid_symbolic_guard_operand(operation: AccumulatorOperation, operand: int) -> bool:
+    return _SIGNED_INT_MIN <= operand <= _SIGNED_INT_MAX and (
+        operation not in _SYMBOLIC_BIT_GUARDS or 0 <= operand <= MAX_SIGNED_ACCUMULATOR_BIT_INDEX
+    )
 
 
 def _minimum_masked_unsigned(
@@ -293,6 +313,8 @@ class SymbolicIntegerDomain:
         *,
         predicate_result: bool,
     ) -> SymbolicIntegerDomain | None:
+        if operation not in _SYMBOLIC_ABORT_GUARDS or not _valid_symbolic_guard_operand(operation, operand):
+            return None
         if operation is AccumulatorOperation.ABORT_IF_EQUAL:
             equal = predicate_result
         elif operation is AccumulatorOperation.ABORT_IF_NOT_EQUAL:
@@ -427,6 +449,13 @@ def _apply_accumulator_mutation(
         source_entity_index=path.source_entity_index,
     )
     if instruction.operation is AccumulatorOperation.SET:
+        if not _SIGNED_INT_MIN <= instruction.operand <= _SIGNED_INT_MAX:
+            return replace(
+                path,
+                completion=SymbolicPathCompletion.BLOCKED,
+                blocker_reason="invalid_accumulator_operand",
+                blocker_line=instruction.line,
+            )
         value = SymbolicIntegerDomain.exact(instruction.operand)
     else:
         exact = current.exact_value
@@ -447,10 +476,17 @@ def _apply_accumulator_mutation(
                     blocker_line=instruction.line,
                 )
             value = SymbolicIntegerDomain.exact(result)
-        elif instruction.operation is AccumulatorOperation.BIT_SET:
-            value = SymbolicIntegerDomain.exact(exact | (1 << instruction.operand))
-        elif instruction.operation is AccumulatorOperation.BIT_RESET:
-            value = SymbolicIntegerDomain.exact(exact & ~(1 << instruction.operand))
+        elif instruction.operation in {AccumulatorOperation.BIT_SET, AccumulatorOperation.BIT_RESET}:
+            if not 0 <= instruction.operand <= MAX_SIGNED_ACCUMULATOR_BIT_INDEX:
+                return replace(
+                    path,
+                    completion=SymbolicPathCompletion.BLOCKED,
+                    blocker_reason="invalid_accumulator_bit_index",
+                    blocker_line=instruction.line,
+                )
+            bit = 1 << instruction.operand
+            result = exact | bit if instruction.operation is AccumulatorOperation.BIT_SET else exact & ~bit
+            value = SymbolicIntegerDomain.exact(result)
         else:
             raise AssertionError(f"unsupported accumulator mutation: {instruction.operation}")
     return replace(
@@ -464,16 +500,32 @@ def _apply_accumulator_mutation(
     )
 
 
+def _instruction_line(instruction: OrderedEventInstruction) -> int:
+    if isinstance(
+        instruction,
+        (AccumulatorMutation, AccumulatorAbortGuard, AccumulatorConditionalTrigger, ControlProjectionIssue),
+    ):
+        return instruction.line
+    if isinstance(instruction, StageEffectInstruction):
+        return instruction.projection.effect.line
+    if isinstance(instruction, TriggerInstruction):
+        return instruction.edge.line
+    return instruction.action.line
+
+
 def walk_symbolic_event_program(
     program: OrderedEventProgram,
     *,
     source_entity_index: int,
     initial_state: SymbolicAccumulatorState,
+    max_paths: int = _DEFAULT_SYMBOLIC_PATH_BUDGET,
 ) -> tuple[SymbolicEventPath, ...]:
     """Walk one event without guessing nested dispatch or unsupported runtime control."""
 
     if source_entity_index not in program.source.lookup.selected_entity_indices:
         raise ValueError(f"entity {source_entity_index} is not selected by script block {program.node.entity_name!r}")
+    if max_paths < 1:
+        raise ValueError("max_paths must be positive")
     paths = [
         SymbolicEventPath(
             source_entity_index,
@@ -489,6 +541,16 @@ def walk_symbolic_event_program(
                 (finished if updated.completion is SymbolicPathCompletion.BLOCKED else continuing).append(updated)
                 continue
             if isinstance(instruction, AccumulatorAbortGuard):
+                if not _valid_symbolic_guard_operand(instruction.operation, instruction.operand):
+                    finished.append(
+                        replace(
+                            path,
+                            completion=SymbolicPathCompletion.BLOCKED,
+                            blocker_reason="invalid_accumulator_guard_operand",
+                            blocker_line=instruction.line,
+                        )
+                    )
+                    continue
                 current = path.state.read(
                     instruction.scope,
                     instruction.buffer_index,
@@ -514,6 +576,16 @@ def walk_symbolic_event_program(
                         continuing.append(branch)
                 continue
             if isinstance(instruction, AccumulatorConditionalTrigger):
+                if not _valid_symbolic_guard_operand(instruction.operation, instruction.operand):
+                    finished.append(
+                        replace(
+                            path,
+                            completion=SymbolicPathCompletion.BLOCKED,
+                            blocker_reason="invalid_accumulator_guard_operand",
+                            blocker_line=instruction.line,
+                        )
+                    )
+                    continue
                 current = path.state.read(
                     instruction.scope,
                     instruction.buffer_index,
@@ -611,6 +683,15 @@ def walk_symbolic_event_program(
                         blocker_line=instruction.action.line,
                     )
                 )
+        if len(continuing) + len(finished) > max_paths:
+            exemplar = continuing[0] if continuing else finished[-1]
+            budget_frontier = replace(
+                exemplar,
+                completion=SymbolicPathCompletion.BLOCKED,
+                blocker_reason="symbolic_path_budget_exhausted",
+                blocker_line=_instruction_line(instruction),
+            )
+            return tuple(finished[: max_paths - 1]) + (budget_frontier,)
         paths = continuing
         if not paths:
             break

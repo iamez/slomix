@@ -319,7 +319,7 @@ _BIT_OPERATIONS = {
     AccumulatorOperation.ABORT_IF_NOT_BIT_SET,
 }
 _MAX_ACCUMULATOR_BUFFERS = 10
-_MAX_SAFE_SIGNED_BIT_INDEX = 30
+MAX_SIGNED_ACCUMULATOR_BIT_INDEX = 30
 
 
 @dataclass(frozen=True, slots=True)
@@ -527,7 +527,7 @@ def project_accumulator_action(action: ScriptAction) -> AccumulatorProjection | 
     operand = _canonical_int(action.arguments[2])
     if operand is None:
         return _control_issue(action, operation.value, "operand must be a canonical signed 32-bit integer")
-    if operation in _BIT_OPERATIONS and not 0 <= operand <= _MAX_SAFE_SIGNED_BIT_INDEX:
+    if operation in _BIT_OPERATIONS and not 0 <= operand <= MAX_SIGNED_ACCUMULATOR_BIT_INDEX:
         return _control_issue(action, operation.value, "bit index must be in the defined signed-int range 0 to 30")
 
     if operation in _MUTATION_OPERATIONS:
