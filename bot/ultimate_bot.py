@@ -1505,18 +1505,32 @@ class UltimateETLegacyBot(
                 lua_duration = metadata.get('actual_duration_seconds', 0)
                 lua_winner = metadata.get('winner_team', 0)
 
-                # Log comparison (always to file, helpful for debugging)
+                # Log comparison (always to file, helpful for debugging).
+                # The label must follow the Lua end_reason, not the timing
+                # delta alone: stats files carry duration=0s on EVERY round
+                # (proven 5/5 on the 2026-08-11 bot test), so timing_diff
+                # always exceeds 60 s and the old delta-only condition
+                # printed "Surrender detected!" on every normal/objective
+                # round — the label carried no information.
+                from bot.core.round_contract import normalize_end_reason
+                normalized_end = normalize_end_reason(metadata.get('end_reason'))
+                is_surrender = normalized_end == 'SURRENDER'
                 timing_diff = abs(stats_file_duration - lua_duration)
+                if is_surrender and timing_diff > 60:
+                    timing_note = '⚠️ SURRENDER FIX APPLIED'
+                elif timing_diff > 60:
+                    timing_note = f'ℹ️ Lua duration used ({normalized_end})'
+                else:
+                    timing_note = '✓ within tolerance'
                 logger.info(
                     f"🔬 TIMING DEBUG [{filename}]:\n"
                     f"   Stats file: duration={stats_file_duration}s, limit={stats_file_limit}s, winner={stats_file_winner}\n"
                     f"   Lua webhook: duration={lua_duration}s, winner={lua_winner}, "
                     f"end_reason={metadata.get('end_reason', 'unknown')}\n"
-                    f"   Difference: {timing_diff}s {'⚠️ SURRENDER FIX APPLIED' if timing_diff > 60 else '✓ within tolerance'}"
+                    f"   Difference: {timing_diff}s {timing_note}"
                 )
 
-                # If there's a big difference, it's likely a surrender scenario
-                if timing_diff > 60:
+                if is_surrender and timing_diff > 60:
                     logger.info(
                         f"   📋 Surrender detected! Stats said {stats_file_duration}s, "
                         f"actual was {lua_duration}s (saved {timing_diff}s of fake time)"
