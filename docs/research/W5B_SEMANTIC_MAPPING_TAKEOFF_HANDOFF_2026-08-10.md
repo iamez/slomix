@@ -16,7 +16,7 @@ Base: `origin/main` at `8cb34d9975d1679417b782b3c05ef09bf008741c`
 
 Last substantive implementation head that completed the five-minute review quiet
 period and final refresh:
-`89d2ac307d652de5e759c386e66d4a2abc08ef65`
+`abb2ba947dc5c7234830929829cdb55f1af8033e`
 
 Earlier resolver review-closure documentation head:
 `63c23e2b16269dc37a58b670e3154056cc9b5875`
@@ -31,8 +31,8 @@ for `wait`. ET:Legacy only interprets `wait` in the optional tail after directio
 spline and speed (and after the buffer index for `accum`/`globalaccum`). A spline
 whose target name is literally `wait` was therefore being classified as waiting and
 lost its legal immediate continuation. The correction and its exact-head review are
-pending; `89d2ac30` remains the last externally closed substantive checkpoint until
-that loop completes.
+complete at `abb2ba94`; the documentation-only commit recording that closure must
+still pass its own exact-head checks before merge.
 
 Scope: read-only ET/ET:Legacy map assets; no database write, deploy, service restart,
 Lua change, production API integration, metric or rating change
@@ -1323,8 +1323,13 @@ counts unchanged, and all 15 opt-in real-asset tests passed together in 205.06
 seconds. The CI-equivalent dependency set then passed the complete local test suite:
 4,317 passed and 93 expected environment/fixture-gated tests skipped in 35.84
 seconds; the separately enabled real-asset suite covers its 15 default skips.
-Production-path Ruff and `git diff --check` also passed. Exact-head CI and external
-review remain pending until this correction is committed and pushed.
+Production-path Ruff and `git diff --check` also passed. On exact substantive head
+`abb2ba94`, all 13 GitHub check runs plus the CodeRabbit status passed, GitHub Codex
+reported no new issue, all 17 historical review threads were resolved, and the
+five-minute quiet period plus separate final refresh found no new activity. Local,
+remote and PR heads matched, and GitHub reported the PR clean and mergeable. This
+paragraph is the documentation-only closure record described at the top of the file;
+the PR remains authoritative for the status of this record's own commit.
 The duplicate-field correction was followed by a direct scan of all 20 indexed maps;
 none contains a `team_WOLF_objective` whose first exact lowercase `description` is
 empty, so the synthetic empty-value compatibility fix does not alter the measured
