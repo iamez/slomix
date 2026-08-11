@@ -239,8 +239,8 @@ class _ProximityRelinkerMixin:
             linked = 0
             failed = 0
             stale_skipped = 0
-            # Both `now` and `target_dt` are tz-aware UTC so the configured
-            # cutoff below isn't affected by the host's UTC offset.
+            # Both `cutoff` and `target_dt` are tz-aware UTC so the staleness
+            # comparison below isn't affected by the host's UTC offset.
             # Previously (P3 bug) `datetime.utcnow()` was compared against
             # `datetime.fromtimestamp(...)` which returns LOCAL naive —
             # the age calculation silently drifted by ±1–2h on the prod VPS.
@@ -250,7 +250,7 @@ class _ProximityRelinkerMixin:
                 round_start_unix = row[2] if isinstance(row, (list, tuple)) else row.get('round_start_unix') or row['round_start_unix']
                 session_date = row[3] if isinstance(row, (list, tuple)) else row.get('session_date') or row['session_date']
 
-                # tz-aware UTC to match `now` above and prevent drift.
+                # tz-aware UTC to match `cutoff` above and prevent drift.
                 target_dt = None
                 if round_start_unix:
                     try:
