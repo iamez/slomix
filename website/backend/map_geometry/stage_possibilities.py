@@ -97,6 +97,12 @@ class SymbolicPathCompletion(StrEnum):
     BLOCKED = "blocked"
 
 
+class SymbolicTemporalBoundaryState(StrEnum):
+    PRIOR_MOVEMENT_ACTIVE = "prior_movement_active"
+    CURRENT_ACTION_WAITING = "current_action_waiting"
+    NEXT_FRAME_REENTRY = "next_frame_reentry"
+
+
 class SymbolicDispatchResolution(StrEnum):
     RESOLVED = "resolved"
     MISSING_HANDLER = "missing_handler"
@@ -176,6 +182,17 @@ def _followspline_has_wait(action: ScriptAction) -> bool:
     return False
 
 
+def _gotomarker_has_wait(effect: GotoMarkerEffect) -> bool:
+    option_index = 1  # arguments[0] is speed
+    arguments = effect.arguments
+    while option_index < len(arguments):
+        option = _ascii_fold(arguments[option_index])
+        if option == "wait":
+            return True
+        option_index += 2 if option == "relative" else 1
+    return False
+
+
 def runtime_action_control_disposition(action: ScriptAction) -> RuntimeActionControlDisposition:
     """Return only source-verified current-event control behavior."""
 
@@ -191,6 +208,23 @@ def runtime_action_control_disposition(action: ScriptAction) -> RuntimeActionCon
 @dataclass(frozen=True, slots=True)
 class StageEffectInstruction:
     projection: StageEffectProjection
+    control_disposition: RuntimeActionControlDisposition = (
+        RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
+    )
+    waits_for_completion: bool = False
+
+    def __post_init__(self) -> None:
+        effect = self.projection.effect
+        is_gotomarker = isinstance(effect, GotoMarkerEffect)
+        expected_control = (
+            RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE
+            if is_gotomarker
+            else RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
+        )
+        if self.control_disposition is not expected_control:
+            raise ValueError("stage-effect control disposition does not match its source action")
+        if self.waits_for_completion != (is_gotomarker and _gotomarker_has_wait(effect)):
+            raise ValueError("stage-effect wait contract does not match its source arguments")
 
 
 @dataclass(frozen=True, slots=True)
@@ -766,6 +800,7 @@ class SymbolicEventPath:
     guard_decisions: tuple[SymbolicGuardDecision, ...] = ()
     temporal_boundary_lines: tuple[int, ...] = ()
     temporal_boundary_entity_indices: tuple[int, ...] = ()
+    temporal_boundary_states: tuple[SymbolicTemporalBoundaryState, ...] = ()
     nested_dispatches: tuple[SymbolicDispatchProjection, ...] = ()
     death_dispatches: tuple[SymbolicDeathDispatch, ...] = ()
     caller_replacement_lines: tuple[int, ...] = ()
@@ -791,6 +826,34 @@ def _write_refined_domain(
             domain,
             source_entity_index=path.source_entity_index,
         ),
+    )
+
+
+def _with_temporal_boundary(
+    path: SymbolicEventPath,
+    *,
+    line: int,
+    entity_index: int,
+    state: SymbolicTemporalBoundaryState,
+) -> SymbolicEventPath:
+    return replace(
+        path,
+        temporal_boundary_lines=path.temporal_boundary_lines + (line,),
+        temporal_boundary_entity_indices=path.temporal_boundary_entity_indices + (entity_index,),
+        temporal_boundary_states=path.temporal_boundary_states + (state,),
+    )
+
+
+def _with_stage_effect(
+    path: SymbolicEventPath,
+    instruction: StageEffectInstruction,
+    *,
+    source_entity_index: int,
+) -> SymbolicEventPath:
+    return replace(
+        path,
+        effects=path.effects + (instruction.projection,),
+        effect_entity_indices=path.effect_entity_indices + (source_entity_index,),
     )
 
 
@@ -1006,23 +1069,66 @@ def walk_symbolic_event_program(
                         continuing.append(branch)
                 continue
             if isinstance(instruction, StageEffectInstruction):
-                continuing.append(
-                    replace(
-                        path,
-                        effects=path.effects + (instruction.projection,),
-                        effect_entity_indices=path.effect_entity_indices + (source_entity_index,),
+                if (
+                    instruction.control_disposition
+                    is RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
+                ):
+                    continuing.append(
+                        _with_stage_effect(path, instruction, source_entity_index=source_entity_index)
                     )
+                    continue
+                if not isinstance(instruction.projection.effect, GotoMarkerEffect):
+                    raise RuntimeError("only gotomarker stage effects may carry temporal control")
+
+                line = instruction.projection.effect.line
+                prior_motion = _with_temporal_boundary(
+                    path,
+                    line=line,
+                    entity_index=source_entity_index,
+                    state=SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,
                 )
+                started = _with_stage_effect(path, instruction, source_entity_index=source_entity_index)
+                if instruction.waits_for_completion:
+                    started_wait = _with_temporal_boundary(
+                        started,
+                        line=line,
+                        entity_index=source_entity_index,
+                        state=SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,
+                    )
+                    if stop_at_temporal_boundary:
+                        finished.extend(
+                            (
+                                replace(prior_motion, completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED),
+                                replace(started_wait, completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED),
+                            )
+                        )
+                    else:
+                        # After a prior asynchronous move clears, ET re-enters with an old
+                        # stack-change time and completes this action without starting it.
+                        continuing.extend((prior_motion, started_wait))
+                else:
+                    continuing.append(started)
+                    if stop_at_temporal_boundary:
+                        finished.append(
+                            replace(prior_motion, completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED)
+                        )
+                    else:
+                        continuing.append(prior_motion)
                 continue
             if isinstance(instruction, ControlBarrierInstruction):
                 if instruction.kind is ControlBarrierKind.WAIT:
                     # ET:Legacy skips waits during sudden death, so retain both
                     # the immediate and ordinary delayed continuations.
                     continuing.append(path)
-                delayed = replace(
+                delayed = _with_temporal_boundary(
                     path,
-                    temporal_boundary_lines=path.temporal_boundary_lines + (instruction.action.line,),
-                    temporal_boundary_entity_indices=path.temporal_boundary_entity_indices + (source_entity_index,),
+                    line=instruction.action.line,
+                    entity_index=source_entity_index,
+                    state=(
+                        SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING
+                        if instruction.kind is ControlBarrierKind.WAIT
+                        else SymbolicTemporalBoundaryState.NEXT_FRAME_REENTRY
+                    ),
                 )
                 if stop_at_temporal_boundary:
                     finished.append(replace(delayed, completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED))
@@ -1078,17 +1184,62 @@ def walk_symbolic_event_program(
                     )
                 )
             elif instruction.control_disposition is RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE:
-                if instruction.action.command == "followspline" and not _followspline_has_wait(instruction.action):
-                    continuing.append(path)
-                delayed = replace(
-                    path,
-                    temporal_boundary_lines=path.temporal_boundary_lines + (instruction.action.line,),
-                    temporal_boundary_entity_indices=path.temporal_boundary_entity_indices + (source_entity_index,),
-                )
-                if stop_at_temporal_boundary:
-                    finished.append(replace(delayed, completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED))
+                line = instruction.action.line
+                if instruction.action.command == "followspline":
+                    prior_motion = _with_temporal_boundary(
+                        path,
+                        line=line,
+                        entity_index=source_entity_index,
+                        state=SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,
+                    )
+                    if _followspline_has_wait(instruction.action):
+                        current_wait = _with_temporal_boundary(
+                            path,
+                            line=line,
+                            entity_index=source_entity_index,
+                            state=SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,
+                        )
+                        if stop_at_temporal_boundary:
+                            finished.extend(
+                                (
+                                    replace(
+                                        prior_motion,
+                                        completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED,
+                                    ),
+                                    replace(
+                                        current_wait,
+                                        completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED,
+                                    ),
+                                )
+                            )
+                        else:
+                            # The prior-motion branch completes this action on re-entry;
+                            # only a first-call branch can start the waiting spline.
+                            continuing.extend((prior_motion, current_wait))
+                    else:
+                        continuing.append(path)
+                        if stop_at_temporal_boundary:
+                            finished.append(
+                                replace(
+                                    prior_motion,
+                                    completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED,
+                                )
+                            )
+                        else:
+                            continuing.append(prior_motion)
                 else:
-                    continuing.append(delayed)
+                    current_wait = _with_temporal_boundary(
+                        path,
+                        line=line,
+                        entity_index=source_entity_index,
+                        state=SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,
+                    )
+                    if stop_at_temporal_boundary:
+                        finished.append(
+                            replace(current_wait, completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED)
+                        )
+                    else:
+                        continuing.append(current_wait)
             elif instruction.blocker_reason is None:
                 continuing.append(path)
             else:
@@ -1142,6 +1293,7 @@ def _merge_symbolic_segment(
         temporal_boundary_entity_indices=(
             prefix.temporal_boundary_entity_indices + segment.temporal_boundary_entity_indices
         ),
+        temporal_boundary_states=prefix.temporal_boundary_states + segment.temporal_boundary_states,
         nested_dispatches=prefix.nested_dispatches + segment.nested_dispatches,
         death_dispatches=prefix.death_dispatches + segment.death_dispatches,
         caller_replacement_lines=prefix.caller_replacement_lines + segment.caller_replacement_lines,
@@ -2561,14 +2713,22 @@ def project_ordered_stage_programs(
                     kind="stage-effect",
                     node_id=node.node_id,
                 )
+                projection = project_stage_effect(
+                    effect,
+                    source_script_name=node.entity_name,
+                    linked=linked,
+                    objectives=model.objectives,
+                )
+                is_gotomarker = isinstance(effect, GotoMarkerEffect)
                 instructions.append(
                     StageEffectInstruction(
-                        project_stage_effect(
-                            effect,
-                            source_script_name=node.entity_name,
-                            linked=linked,
-                            objectives=model.objectives,
-                        )
+                        projection,
+                        (
+                            RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE
+                            if is_gotomarker
+                            else RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
+                        ),
+                        is_gotomarker and _gotomarker_has_wait(effect),
                     )
                 )
                 continue

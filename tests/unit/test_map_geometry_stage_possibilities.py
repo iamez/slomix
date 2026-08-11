@@ -29,6 +29,7 @@ from website.backend.map_geometry.stage_possibilities import (
     SymbolicFrontierContinuation,
     SymbolicIntegerDomain,
     SymbolicPathCompletion,
+    SymbolicTemporalBoundaryState,
     TriggerInstruction,
     _collect_continuation_relevance,
     _projection_domain_relevance,
@@ -47,6 +48,7 @@ from website.backend.map_geometry.stage_semantics import (
     AccumulatorScope,
     EntitySourceKind,
     EntityTargetEffectProjection,
+    GotoMarkerEffectProjection,
     W3EntityIndexLinkDisposition,
     build_entity_identity_index,
     link_w3_entity_catalog,
@@ -2357,6 +2359,285 @@ def test_event_walker_can_stop_before_actions_after_a_temporal_boundary():
     assert _effect_states(immediate) == ("default", "invisible")
     assert _effect_states(suspended) == ("default",)
     assert suspended.temporal_boundary_entity_indices == (0,)
+
+
+def test_gotomarker_projection_keeps_one_instruction_with_effect_and_control():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                gotomarker destination 100 wait
+                setstate gate invisible
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "path_corner_2", "targetname": "destination"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    program = index.programs[0]
+    instruction = program.instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert isinstance(instruction.projection, GotoMarkerEffectProjection)
+    assert instruction.control_disposition is RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE
+    assert instruction.waits_for_completion is True
+    assert index.instruction_offset(program, instruction.projection.effect.line) == 0
+    assert index.programs_for_instruction_line(instruction.projection.effect.line) == (program,)
+
+
+def test_gotomarker_instruction_rejects_a_control_contract_that_disagrees_with_source():
+    instruction = _programs(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                gotomarker destination 100 wait
+            }
+        }
+        """
+    )[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    with pytest.raises(ValueError, match="control disposition"):
+        replace(
+            instruction,
+            control_disposition=RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE,
+        )
+    with pytest.raises(ValueError, match="wait contract"):
+        replace(instruction, waits_for_completion=False)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "waits_for_completion"),
+    (
+        ("destination 100 relative wait", False),
+        ("destination 100 relative anchor wait", True),
+    ),
+)
+def test_gotomarker_only_reads_wait_as_an_option(arguments, waits_for_completion):
+    program = _programs(
+        f"""
+        game_manager
+        {{
+            spawn
+            {{
+                gotomarker {arguments}
+            }}
+        }}
+        """.encode()
+    )[0]
+    instruction = program.instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert instruction.waits_for_completion is waits_for_completion
+
+
+def test_waiting_gotomarker_distinguishes_prior_motion_from_started_effect():
+    program = _programs(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                gotomarker destination 100 wait
+                setstate gate invisible
+            }
+        }
+        """
+    )[0]
+
+    paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+        stop_at_temporal_boundary=True,
+    )
+
+    assert len(paths) == 2
+    by_state = {path.temporal_boundary_states[-1]: path for path in paths}
+    prior_motion = by_state[SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE]
+    current_wait = by_state[SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING]
+    assert prior_motion.completion is SymbolicPathCompletion.TEMPORALLY_SUSPENDED
+    assert prior_motion.effects == ()
+    assert current_wait.completion is SymbolicPathCompletion.TEMPORALLY_SUSPENDED
+    assert len(current_wait.effects) == 1
+    assert isinstance(current_wait.effects[0], GotoMarkerEffectProjection)
+    assert _effect_states(current_wait) == ()
+
+
+def test_waiting_gotomarker_does_not_start_after_a_prior_movement_finishes():
+    program = _programs(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                gotomarker destination 100 wait
+                setstate gate invisible
+            }
+        }
+        """
+    )[0]
+
+    paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 2
+    prior_motion = next(
+        path
+        for path in paths
+        if path.temporal_boundary_states == (SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,)
+    )
+    started_wait = next(
+        path
+        for path in paths
+        if path.temporal_boundary_states == (SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,)
+    )
+    assert prior_motion.effects and all(
+        not isinstance(effect, GotoMarkerEffectProjection) for effect in prior_motion.effects
+    )
+    assert _effect_states(prior_motion) == ("invisible",)
+    assert isinstance(started_wait.effects[0], GotoMarkerEffectProjection)
+    assert _effect_states(started_wait) == ("invisible",)
+
+
+def test_nonwaiting_gotomarker_advances_only_after_the_action_starts():
+    program = _programs(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                gotomarker destination 100
+                setstate gate invisible
+            }
+        }
+        """
+    )[0]
+
+    paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+        stop_at_temporal_boundary=True,
+    )
+
+    assert len(paths) == 2
+    immediate = next(path for path in paths if path.completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE)
+    prior_motion = next(
+        path for path in paths if path.completion is SymbolicPathCompletion.TEMPORALLY_SUSPENDED
+    )
+    assert isinstance(immediate.effects[0], GotoMarkerEffectProjection)
+    assert _effect_states(immediate) == ("invisible",)
+    assert prior_motion.effects == ()
+    assert prior_motion.temporal_boundary_states == (
+        SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,
+    )
+
+    eventual_paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+    delayed = next(
+        path
+        for path in eventual_paths
+        if path.temporal_boundary_states == (SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,)
+    )
+    assert all(not isinstance(effect, GotoMarkerEffectProjection) for effect in delayed.effects)
+    assert _effect_states(delayed) == ("invisible",)
+
+
+def test_waiting_followspline_distinguishes_prior_motion_from_current_wait():
+    program = _programs(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                followspline 0 route 100 wait
+            }
+        }
+        """
+    )[0]
+
+    paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+        stop_at_temporal_boundary=True,
+    )
+
+    assert len(paths) == 2
+    assert {path.temporal_boundary_states for path in paths} == {
+        (SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,),
+        (SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,),
+    }
+    assert all(path.completion is SymbolicPathCompletion.TEMPORALLY_SUSPENDED for path in paths)
+
+    eventual_paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+    assert {path.temporal_boundary_states for path in eventual_paths} == {
+        (SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,),
+        (SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,),
+    }
+
+
+def test_nested_waiting_gotomarker_is_a_typed_cross_entity_frontier():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper move
+                setstate gate invisible
+            }
+        }
+        helper
+        {
+            trigger move
+            {
+                gotomarker destination 100 wait
+                setstate gate default
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "helper"},
+            {"classname": "path_corner_2", "targetname": "destination"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 2
+    assert {path.blocker_reason for path in paths} == {"cross_entity_temporal_interleaving_not_modeled"}
+    assert {path.temporal_boundary_states[-1] for path in paths} == {
+        SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,
+        SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,
+    }
+    assert sorted(len(path.effects) for path in paths) == [0, 1]
+    assert all(path.frontier_relevance is not None for path in paths)
 
 
 @pytest.mark.parametrize("command", ("resetscript", "halt"))
