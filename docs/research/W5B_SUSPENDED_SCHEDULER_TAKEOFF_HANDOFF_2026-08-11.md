@@ -680,8 +680,8 @@ retained.
 - [x] Record the exact predecessor denominators and manifest.
 - [x] Define scope, non-goals, trade-offs, risks and owner gates.
 - [x] Define source-truth questions, transition model, tests and Definition of Done.
-- [ ] Commit and push the documentation-only takeoff.
-- [ ] Open the draft PR and record its URL/head here.
+- [x] Commit and push the documentation-only takeoff (`b9919eaa`).
+- [x] Open draft PR [#649](https://github.com/iamez/slomix/pull/649).
 - [ ] Complete S0 source verification.
 - [ ] Complete S1 immutable state/canonicalization.
 - [ ] Complete S2 single suspended continuation.
@@ -693,6 +693,15 @@ retained.
 - [ ] Complete all review and merge gates.
 
 ## Handoff record
+
+### 2026-08-11 - documentation-only takeoff
+
+- Contract commit: `b9919eaa`.
+- Draft PR: [#649](https://github.com/iamez/slomix/pull/649).
+- Scope: documentation only; no runtime or owner-gated operation.
+- Verification: `git diff --cached --check` passed; branch base matched
+  `origin/main` at `d6136cdd` before the commit.
+- Next item: S0 source verification of the engine update/resume path.
 
 At every substantive commit, append:
 
