@@ -1280,7 +1280,7 @@ Follow-up base: `origin/main` at
 `e649b0493a1ca0ed9cb3b2a2935ebcd78f494202`
 
 Current substantive follow-up head:
-`45f901bb` (`fix(map-geometry): bound frontier relevance analysis`). The
+`e9fc55d3` (`fix(map-geometry): classify blocking frontier actions`). The
 documentation-only verification commit that records this pointer cannot contain its
 own hash; query PR #638 before treating it as the final reviewed head.
 
@@ -1378,7 +1378,7 @@ The deterministic installed-asset manifest is the SHA-256 of canonical JSON for
 separators and ASCII output. This deliberately excludes the machine-specific absolute
 `etmain_dir`, while retaining every selected/provider path, member index, size, CRC32
 and content SHA-256. For the exact 20-map installed corpus on substantive test head
-`45f901bb`, the manifest hash is:
+`e9fc55d3`, the manifest hash is:
 
 `86ddd0ec23b3c6120136195af34aa633ad249eb358ea0fb6cd6e490dd81b220d`
 
@@ -1548,9 +1548,11 @@ runtime action was omitted at its own frontier while only its suffix was classif
 The correction classifies that boundary action before its suffix and keeps malformed
 control projections explicitly unknown. One installed frontier consequently moved from
 `objective + spawn` to `dynamic route + objective + spawn`; the 703/325/122 overlap and
-the tables above are the corrected denominators. The direct regression passes 110/110
-focused tests. Exact corpus and full-repository verification must be repeated on the
-resulting substantive head before closure.
+the tables above are the corrected denominators. On substantive head `e9fc55d3`, the
+direct regression passes within 110/110 focused tests, all 16 opt-in real-asset tests
+passed in 456.51 seconds with 489,352 KiB peak RSS, and the complete repository passed
+4,340 tests with 94 skips and 30 warnings in 57.62 seconds. Ruff and `git diff --check`
+also passed.
 
 ### Adjacent live-test handoff received 2026-08-11
 
