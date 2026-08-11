@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 from pathlib import Path
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 
 import pytest
 
@@ -18,14 +18,20 @@ from website.backend.map_geometry.stage import (
 from website.backend.map_geometry.stage_possibilities import (
     ControlBarrierInstruction,
     ControlBarrierKind,
+    KillInstruction,
+    KillTargetDisposition,
     RuntimeActionControlDisposition,
     RuntimeActionInstruction,
     StageEffectInstruction,
+    StageSemanticDomain,
     SymbolicAccumulatorState,
     SymbolicDispatchResolution,
+    SymbolicFrontierContinuation,
     SymbolicIntegerDomain,
     SymbolicPathCompletion,
     TriggerInstruction,
+    _collect_continuation_relevance,
+    _projection_domain_relevance,
     build_ordered_stage_program_index,
     project_ordered_stage_programs,
     resolve_symbolic_nested_dispatch,
@@ -115,7 +121,7 @@ def _model_and_linked():
     return model, link_w3_entity_catalog(identities, catalog)
 
 
-def _program_index(raw_script, raw_entities=None):
+def _program_index(raw_script, raw_entities=None, catalog=None):
     script = parse_map_script(raw_script, source="maps/test.script")
     model = _stage_model(script)
     identities = build_entity_identity_index(
@@ -127,8 +133,8 @@ def _program_index(raw_script, raw_entities=None):
         ),
         source="maps/test.bsp",
     )
-    catalog = MapEntityCatalog("test", "maps/test.bsp", (), (), (), ())
-    return build_ordered_stage_program_index(model, link_w3_entity_catalog(identities, catalog))
+    w3_catalog = catalog or MapEntityCatalog("test", "maps/test.bsp", (), (), (), ())
+    return build_ordered_stage_program_index(model, link_w3_entity_catalog(identities, w3_catalog))
 
 
 def _programs(raw_script, raw_entities=None):
@@ -240,6 +246,589 @@ def test_only_actual_current_event_blockers_publish_a_blocker_reason():
 
     assert remove.blocker_reason is None
     assert faceangles.blocker_reason == "conditional_temporal_pause"
+
+
+def test_stage_walker_preserves_optional_script_mover_death_dispatch_and_caller_continuation():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                accum 1 bitset 7
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.target_lookup.selected_entity_indices == (1,)
+    assert instruction.targets[0].disposition is KillTargetDisposition.SCRIPT_MOVER_OPTIONAL_DEATH_EVENT
+    assert instruction.targets[0].death_handler_node_id == index.programs[1].node.node_id
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 2
+    assert all(path.completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE for path in paths)
+    assert all(_effect_states(path) == ("invisible",) for path in paths)
+    no_event = next(path for path in paths if not path.death_dispatches)
+    death_event = next(path for path in paths if path.death_dispatches)
+    assert no_event.state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 0
+    assert death_event.state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 128
+    assert death_event.death_dispatches[0].target_entity_index == 1
+    assert death_event.death_dispatches[0].target_node_id == index.programs[1].node.node_id
+
+
+def test_kill_does_not_invent_a_death_dispatch_for_direct_remove_classes():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                accum 1 set 9
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "misc_mg42", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.targets[0].disposition is KillTargetDisposition.DIRECT_REMOVE_NO_SCRIPT_EVENT
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert _effect_states(paths[0]) == ("invisible",)
+    assert paths[0].death_dispatches == ()
+    assert paths[0].state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 0
+
+
+def test_kill_directly_removes_a_func_static_even_when_its_script_block_is_defined():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                future_action unsupported
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "func_static", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.targets[0].disposition is KillTargetDisposition.DIRECT_REMOVE_NO_SCRIPT_EVENT
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert _effect_states(paths[0]) == ("invisible",)
+
+
+def test_kill_continues_for_a_constructible_without_a_handled_runtime_event():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill construct_target
+                setstate gate invisible
+            }
+        }
+        construct
+        {
+            spawn
+            {
+                wm_announce ready
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {
+                "classname": "func_constructible",
+                "scriptname": "construct",
+                "targetname": "construct_target",
+            },
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.targets[0].disposition is KillTargetDisposition.CONSTRUCTIBLE_NO_HANDLED_EVENT
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert _effect_states(paths[0]) == ("invisible",)
+
+
+def test_kill_blocks_an_unmodeled_constructible_runtime_event():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill construct_target
+                setstate gate invisible
+            }
+        }
+        construct
+        {
+            destroyed final
+            {
+                accum 1 set 9
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {
+                "classname": "func_constructible",
+                "scriptname": "construct",
+                "targetname": "construct_target",
+            },
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.targets[0].disposition is KillTargetDisposition.CONSTRUCTIBLE_RUNTIME_EVENT_NOT_MODELED
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "kill_constructible_runtime_event_not_modeled"
+    assert _effect_states(paths[0]) == ()
+
+
+def test_kill_continues_for_a_script_mover_without_a_handled_death_event():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            spawn
+            {
+                wm_announce ready
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.targets[0].disposition is KillTargetDisposition.SCRIPT_MOVER_NO_HANDLED_DEATH_EVENT
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert _effect_states(paths[0]) == ("invisible",)
+
+
+def test_kill_blocks_an_opaque_script_mover_identity():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                setstate gate unsupported_state
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.targets[0].disposition is KillTargetDisposition.SCRIPT_IDENTITY_OPAQUE
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "kill_script_identity_opaque"
+    assert paths[0].frontier_relevance is not None
+    assert "frontier:kill_script_identity_opaque" in paths[0].frontier_relevance.unknown_reasons
+
+
+def test_kill_retains_unknown_dispatch_when_the_target_script_identity_can_change():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            spawn
+            {
+                set { scriptName replacement }
+            }
+            death
+            {
+                wm_announce original_handler
+            }
+        }
+        replacement
+        {
+            death
+            {
+                wm_announce replacement_handler
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.targets[0].disposition is KillTargetDisposition.SCRIPT_IDENTITY_RUNTIME_MUTABLE
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "kill_script_identity_runtime_mutable"
+    assert paths[0].frontier_relevance is not None
+    assert "frontier:kill_script_identity_runtime_mutable" in paths[0].frontier_relevance.unknown_reasons
+
+
+def test_kill_blocks_multiple_optional_death_dispatch_targets():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                accum 1 bitset 7
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert tuple(target.disposition for target in instruction.targets) == (
+        KillTargetDisposition.SCRIPT_MOVER_OPTIONAL_DEATH_EVENT,
+        KillTargetDisposition.SCRIPT_MOVER_OPTIONAL_DEATH_EVENT,
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "kill_multi_target_death_dispatch_not_modeled"
+    assert paths[0].frontier_relevance is not None
+    assert "frontier:kill_multi_target_death_dispatch_not_modeled" in paths[0].frontier_relevance.unknown_reasons
+
+
+def test_kill_without_a_target_fails_closed():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill
+                setstate gate invisible
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.targets == ()
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "kill_target_missing"
+    assert paths[0].frontier_relevance is not None
+    assert "frontier:kill_target_missing" in paths[0].frontier_relevance.unknown_reasons
+
+
+def test_frontier_continuation_fails_closed_when_the_entity_is_not_selected_by_the_handler():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+            }
+        }
+        victim
+        {
+            death
+            {
+                trigger helper go
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                wm_announce reached
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "script_mover", "scriptname": "helper"},
+        ),
+    )
+    victim_death = next(program for program in index.programs if program.node.entity_name == "victim")
+
+    domains, unknown_reasons = _collect_continuation_relevance(
+        index,
+        SymbolicFrontierContinuation(
+            victim_death.node.node_id,
+            2,
+            0,
+            "adversarial_kill_runtime_event",
+        ),
+    )
+
+    assert domains == set()
+    assert unknown_reasons == {"frontier_continuation_entity_not_selected"}
+
+
+def test_kill_death_dispatch_fails_closed_when_target_and_handler_selections_diverge():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                trigger helper go
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                wm_announce reached
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "script_mover", "scriptname": "helper"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    caller = index.programs[0]
+    instruction = caller.instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    mismatched_instruction = replace(
+        instruction,
+        targets=(replace(instruction.targets[0], entity_index=2),),
+    )
+    mismatched_caller = replace(caller, instructions=(mismatched_instruction, *caller.instructions[1:]))
+    programs = tuple(mismatched_caller if program is caller else program for program in index.programs)
+    mismatched_index = replace(
+        index,
+        programs=programs,
+        _programs_by_node_id=MappingProxyType({program.node.node_id: program for program in programs}),
+        _programs_by_instruction_line=MappingProxyType(
+            {
+                line: tuple(mismatched_caller if program is caller else program for program in line_programs)
+                for line, line_programs in index._programs_by_instruction_line.items()  # noqa: SLF001
+            }
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        mismatched_index,
+        mismatched_caller,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "kill_death_dispatch_projection_invalid"
+    assert paths[0].frontier_relevance is not None
+    assert paths[0].frontier_relevance.unknown_reasons == (
+        "frontier:kill_death_dispatch_projection_invalid",
+        "frontier_continuation_entity_not_selected",
+    )
+
+
+def test_kill_blocks_a_target_missing_from_the_effective_identity_source():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill absent
+                setstate gate invisible
+            }
+        }
+        """
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "kill_target_identity_missing"
+    assert _effect_states(paths[0]) == ()
 
 
 def test_self_dispatch_selects_only_the_concrete_caller_from_a_script_group():
@@ -802,6 +1391,445 @@ def test_stage_walker_blocks_cross_entity_temporal_interleaving_but_keeps_the_im
     assert blocked.blocker_entity_index == 2
     assert _effect_states(blocked) == ("default",)
     assert blocked.temporal_boundary_entity_indices == (2,)
+
+
+def test_frontier_classifier_finds_each_domain_hidden_by_cross_entity_temporal_ordering():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper go
+                setautospawn "Major Spawn" 0
+                setstate gate invisible
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                wait 100
+                wm_objective_status 1 0 1
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "helper"},
+            {"classname": "func_door", "targetname": "gate"},
+            {"classname": "team_WOLF_objective", "description": "Major Spawn"},
+        ),
+        catalog=MapEntityCatalog(
+            "test",
+            "maps/test.bsp",
+            (),
+            (),
+            (),
+            (SimpleNamespace(entity_index=2, classname="func_door"),),
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    blocked = next(path for path in paths if path.blocker_reason == "cross_entity_temporal_interleaving_not_modeled")
+    relevance = blocked.frontier_relevance
+    assert relevance is not None
+    assert set(relevance.domains) == {
+        StageSemanticDomain.OBJECTIVE,
+        StageSemanticDomain.SPAWN,
+        StageSemanticDomain.DYNAMIC_ROUTE,
+    }
+    assert relevance.unknown_domain_relevance is False
+    assert relevance.unknown_reasons == ()
+    assert {continuation.origin for continuation in relevance.continuations} == {
+        "target_suffix_after_temporal_boundary",
+        "caller_suffix_after_concurrent_dispatch",
+    }
+
+
+def test_frontier_classifier_includes_the_suspended_route_action_at_the_temporal_boundary():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger mover go
+            }
+        }
+        mover
+        {
+            trigger go
+            {
+                followspline 0 path 100 wait
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "mover"},
+            {"classname": "path_corner", "targetname": "path"},
+        ),
+        catalog=MapEntityCatalog(
+            "test",
+            "maps/test.bsp",
+            (),
+            (),
+            (),
+            (SimpleNamespace(entity_index=1, classname="script_mover"),),
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    blocked = next(path for path in paths if path.blocker_reason == "cross_entity_temporal_interleaving_not_modeled")
+    relevance = blocked.frontier_relevance
+    assert relevance is not None
+    assert relevance.domains == (StageSemanticDomain.DYNAMIC_ROUTE,)
+    assert relevance.unknown_domain_relevance is False
+    assert relevance.unknown_reasons == ()
+
+
+def test_frontier_classifier_includes_a_blocking_runtime_route_action_before_its_suffix():
+    index = _program_index(
+        b"""
+        mover
+        {
+            spawn
+            {
+                set { classname script_mover }
+            }
+        }
+        """,
+        raw_entities=({"classname": "script_mover", "scriptname": "mover"},),
+        catalog=MapEntityCatalog(
+            "test",
+            "maps/test.bsp",
+            (),
+            (),
+            (),
+            (SimpleNamespace(entity_index=0, classname="script_mover"),),
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "may_replace_script_context"
+    relevance = paths[0].frontier_relevance
+    assert relevance is not None
+    assert relevance.domains == (StageSemanticDomain.DYNAMIC_ROUTE,)
+    assert relevance.unknown_domain_relevance is True
+    assert relevance.unknown_reasons == ("runtime_script_context_replacement",)
+
+
+def test_frontier_classifier_treats_a_missing_handler_as_no_target_effect_but_keeps_caller_suffix():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper absent
+                setautospawn "Major Spawn" 0
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "helper"},
+            {"classname": "team_WOLF_objective", "description": "Major Spawn"},
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    relevance = paths[0].frontier_relevance
+    assert relevance is not None
+    assert relevance.domains == (StageSemanticDomain.SPAWN,)
+    assert relevance.unknown_domain_relevance is False
+    assert relevance.unknown_reasons == ()
+    assert relevance.continuations[0].origin == "caller_suffix_after_nested_dispatch_frontier"
+
+
+def test_frontier_classifier_keeps_outer_caller_suffix_when_a_nested_callee_blocks():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper go
+                wm_objective_status 1 0 1
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                accum 0 inc 1
+            }
+        }
+        """
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.unknown(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "non_exact_accumulator_mutation"
+    relevance = paths[0].frontier_relevance
+    assert relevance is not None
+    assert relevance.domains == (StageSemanticDomain.OBJECTIVE,)
+    assert any(
+        continuation.origin == "caller_suffix_after_blocked_nested_dispatch" for continuation in relevance.continuations
+    )
+
+
+def test_frontier_classifier_stops_at_a_proven_accumulator_abort():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger absent missing
+                accum 0 set 1
+                accum 0 abort_if_equal 1
+                wm_objective_status 1 0 1
+            }
+        }
+        """,
+        raw_entities=({"classname": "script_multiplayer"},),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "nested_dispatch_missing_handler"
+    relevance = paths[0].frontier_relevance
+    assert relevance is not None
+    assert relevance.domains == ()
+    assert relevance.unknown_domain_relevance is False
+
+
+def test_frontier_classifier_marks_nested_accumulator_state_flow_unknown():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger absent missing
+                trigger self setflag
+                accum 0 abort_if_equal 1
+                wm_objective_status 1 0 1
+            }
+            trigger setflag
+            {
+                accum 0 set 1
+            }
+        }
+        """,
+        raw_entities=({"classname": "script_multiplayer"},),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "nested_dispatch_missing_handler"
+    relevance = paths[0].frontier_relevance
+    assert relevance is not None
+    assert relevance.domains == (StageSemanticDomain.OBJECTIVE,)
+    assert relevance.unknown_domain_relevance is True
+    assert relevance.unknown_reasons == ("frontier_relevance_nested_accumulator_state_unpropagated",)
+
+
+def test_frontier_classifier_bounds_nested_relevance_work():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper go
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                wm_objective_status 1 0 1
+            }
+        }
+        """
+    )
+
+    domains, unknown_reasons = _collect_continuation_relevance(
+        index,
+        SymbolicFrontierContinuation(
+            index.programs[0].node.node_id,
+            0,
+            0,
+            "budget_test",
+        ),
+        state=SymbolicAccumulatorState.zeroed(),
+        max_work=1,
+    )
+
+    assert domains == set()
+    assert unknown_reasons == {"frontier_relevance_budget_exhausted"}
+
+
+def test_frontier_classifier_marks_missing_target_identity_unknown_without_losing_known_suffix():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper go
+                wm_objective_status 1 0 1
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                wm_announce unreachable_without_identity
+            }
+        }
+        """,
+        raw_entities=({"classname": "script_multiplayer"},),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "nested_dispatch_target_identity_missing"
+    relevance = paths[0].frontier_relevance
+    assert relevance is not None
+    assert relevance.domains == (StageSemanticDomain.OBJECTIVE,)
+    assert relevance.unknown_domain_relevance is True
+    assert relevance.unknown_reasons == ("frontier:nested_dispatch_target_identity_missing",)
+
+
+def test_frontier_classifier_keeps_known_suffix_after_non_exact_accumulator_mutation():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                accum 0 inc 1
+                setautospawn "Major Spawn" 0
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "team_WOLF_objective", "description": "Major Spawn"},
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.unknown(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "non_exact_accumulator_mutation"
+    relevance = paths[0].frontier_relevance
+    assert relevance is not None
+    assert relevance.domains == (StageSemanticDomain.SPAWN,)
+    assert relevance.unknown_domain_relevance is False
+    assert relevance.unknown_reasons == ()
+
+
+def test_frontier_classifier_starts_at_the_unexecuted_budget_instruction():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper go
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                setautospawn "Major Spawn" 0
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "helper"},
+            {"classname": "team_WOLF_objective", "description": "Major Spawn"},
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+        max_paths=1,
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "symbolic_path_budget_exhausted"
+    relevance = paths[0].frontier_relevance
+    assert relevance is not None
+    assert relevance.domains == (StageSemanticDomain.SPAWN,)
+    assert relevance.unknown_domain_relevance is True
+    assert relevance.unknown_reasons == ("frontier:symbolic_path_budget_exhausted",)
+    assert relevance.continuations[0].origin == "program_from_budget_frontier"
 
 
 def test_stage_walker_blocks_both_temporal_hazards_in_a_shared_target_group():
@@ -1782,7 +2810,8 @@ def test_ent_override_projects_identity_effects_without_reusing_bsp_entity_indic
     )
     context = link_w3_entity_catalog(identities, bsp_catalog)
 
-    programs = project_ordered_stage_programs(model, context)
+    index = build_ordered_stage_program_index(model, context)
+    programs = index.programs
     projection = programs[0].instructions[2]
 
     assert context.catalog is None
@@ -1795,3 +2824,10 @@ def test_ent_override_projects_identity_effects_without_reusing_bsp_entity_indic
     assert (
         projection.projection.entity_index_link_disposition is W3EntityIndexLinkDisposition.UNPROVEN_IDENTITY_OVERRIDE
     )
+    domains, unknown_reasons = _projection_domain_relevance(
+        index,
+        projection.projection,
+        source_entity_index=0,
+    )
+    assert domains == set()
+    assert unknown_reasons == {"effect_target_w3_link_unproven_identity_override"}
