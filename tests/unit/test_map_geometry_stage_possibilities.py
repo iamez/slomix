@@ -1644,6 +1644,43 @@ def test_frontier_classifier_stops_at_a_proven_accumulator_abort():
     assert relevance.unknown_domain_relevance is False
 
 
+def test_frontier_classifier_marks_nested_accumulator_state_flow_unknown():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger absent missing
+                trigger self setflag
+                accum 0 abort_if_equal 1
+                wm_objective_status 1 0 1
+            }
+            trigger setflag
+            {
+                accum 0 set 1
+            }
+        }
+        """,
+        raw_entities=({"classname": "script_multiplayer"},),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "nested_dispatch_missing_handler"
+    relevance = paths[0].frontier_relevance
+    assert relevance is not None
+    assert relevance.domains == (StageSemanticDomain.OBJECTIVE,)
+    assert relevance.unknown_domain_relevance is True
+    assert relevance.unknown_reasons == ("frontier_relevance_nested_accumulator_state_unpropagated",)
+
+
 def test_frontier_classifier_bounds_nested_relevance_work():
     index = _program_index(
         b"""

@@ -1794,9 +1794,10 @@ def _collect_continuation_relevance(
     budget: _FrontierRelevanceBudget | None = None,
     memo: dict[
         tuple[str, int, int, SymbolicAccumulatorState],
-        tuple[frozenset[StageSemanticDomain], frozenset[str]],
+        tuple[frozenset[StageSemanticDomain], frozenset[str], bool],
     ]
     | None = None,
+    mutation_observer: list[bool] | None = None,
 ) -> tuple[set[StageSemanticDomain], set[str]]:
     if max_work < 1:
         raise ValueError("frontier relevance work budget must be positive")
@@ -1819,6 +1820,8 @@ def _collect_continuation_relevance(
         state,
     )
     if depth == 0 and (cached := memo.get(key)):
+        if mutation_observer is not None and cached[2]:
+            mutation_observer[0] = True
         return set(cached[0]), set(cached[1])
     previous_frame = next((candidate for candidate in reversed(active) if candidate[:3] == key[:3]), None)
     if previous_frame is not None:
@@ -1832,11 +1835,14 @@ def _collect_continuation_relevance(
     active = active + (key,)
     domains: set[StageSemanticDomain] = set()
     unknown_reasons: set[str] = set()
+    mutates_accumulator_state = False
 
     def collect(
         nested_continuation: SymbolicFrontierContinuation,
         nested_state: SymbolicAccumulatorState,
     ) -> None:
+        nonlocal mutates_accumulator_state
+        nested_mutation = [False]
         nested_domains, nested_unknown_reasons = _collect_continuation_relevance(
             index,
             nested_continuation,
@@ -1846,15 +1852,20 @@ def _collect_continuation_relevance(
             max_work=max_work,
             budget=budget,
             memo=memo,
+            mutation_observer=nested_mutation,
         )
         domains.update(nested_domains)
         unknown_reasons.update(nested_unknown_reasons)
+        if nested_mutation[0]:
+            mutates_accumulator_state = True
+            unknown_reasons.add("frontier_relevance_nested_accumulator_state_unpropagated")
 
     current_state = state
     offset = continuation.instruction_offset
     while offset < len(program.instructions):
         instruction = program.instructions[offset]
         if isinstance(instruction, AccumulatorMutation):
+            mutates_accumulator_state = True
             mutation = _apply_accumulator_mutation(
                 SymbolicEventPath(continuation.source_entity_index, current_state),
                 instruction,
@@ -2024,9 +2035,11 @@ def _collect_continuation_relevance(
             unknown_reasons.add("control_projection_issue")
         offset += 1
 
-    result = (frozenset(domains), frozenset(unknown_reasons))
+    result = (frozenset(domains), frozenset(unknown_reasons), mutates_accumulator_state)
     if depth == 0 and not budget.exhausted:
         memo[key] = result
+    if mutation_observer is not None and mutates_accumulator_state:
+        mutation_observer[0] = True
     return set(result[0]), set(result[1])
 
 
@@ -2098,7 +2111,7 @@ def classify_symbolic_frontier(
     relevance_budget: _FrontierRelevanceBudget | None = None,
     relevance_memo: dict[
         tuple[str, int, int, SymbolicAccumulatorState],
-        tuple[frozenset[StageSemanticDomain], frozenset[str]],
+        tuple[frozenset[StageSemanticDomain], frozenset[str], bool],
     ]
     | None = None,
 ) -> SymbolicFrontierRelevance | None:
@@ -2362,7 +2375,7 @@ def walk_symbolic_stage_program(
     relevance_budget = _FrontierRelevanceBudget(_FRONTIER_RELEVANCE_WORK_BUDGET)
     relevance_memo: dict[
         tuple[str, int, int, SymbolicAccumulatorState],
-        tuple[frozenset[StageSemanticDomain], frozenset[str]],
+        tuple[frozenset[StageSemanticDomain], frozenset[str], bool],
     ] = {}
     return tuple(
         replace(
