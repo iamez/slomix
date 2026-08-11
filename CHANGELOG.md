@@ -6,6 +6,38 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.31.0](https://github.com/iamez/slomix/compare/v1.30.1...v1.31.0) (2026-08-11)
+
+
+### Features
+
+* **bot:** usage_report.py — consumption loop (FIX 2) ([#650](https://github.com/iamez/slomix/issues/650)) ([bfe6776](https://github.com/iamez/slomix/commit/bfe677616f8c8796d583ad11607acf9ae7f1fb1f))
+* **map-geometry:** build W5b static stage semantics ([#633](https://github.com/iamez/slomix/issues/633)) ([e649b04](https://github.com/iamez/slomix/commit/e649b0493a1ca0ed9cb3b2a2935ebcd78f494202))
+* **map-geometry:** classify W5b semantic frontiers ([#638](https://github.com/iamez/slomix/issues/638)) ([d6136cd](https://github.com/iamez/slomix/commit/d6136cdd994870fddf4e4d0ff1968eb91418e497))
+* **website:** live view S1–S3 — ingest/feed API, Tonight match feed, log tailer ([#658](https://github.com/iamez/slomix/issues/658)) ([93c0cb6](https://github.com/iamez/slomix/commit/93c0cb6b86aa9f2be6631ab63f73e6e8cb1d1f11))
+* **website:** live-view S0 — legacy3.log parser + replay harness ([#655](https://github.com/iamez/slomix/issues/655)) ([a7d56b6](https://github.com/iamez/slomix/commit/a7d56b65509929087e381427889821f68e3add6f))
+
+
+### Bug Fixes
+
+* **bot:** let objective end_reason survive canonicalization (new OBJECTIVE enum value) ([#644](https://github.com/iamez/slomix/issues/644)) ([3a4ae8b](https://github.com/iamez/slomix/commit/3a4ae8b14751bc23c327745892f4f69e0f91a3cf))
+* **bot:** make !help show our categorized help instead of discord.py's built-in ([#636](https://github.com/iamez/slomix/issues/636)) ([bff9060](https://github.com/iamez/slomix/commit/bff9060b85259bba3bd7ac775be73296614d51ad))
+* **bot:** persist bot/filler/orphan validity flags on the production import path ([#640](https://github.com/iamez/slomix/issues/640)) ([52c4a4b](https://github.com/iamez/slomix/commit/52c4a4b510bbb2f8e7a80de72a6e0e660e7f1493))
+* **lua:** backport the live c0rnp0rn8 from the game server — repo lagged production ([#657](https://github.com/iamez/slomix/issues/657)) ([b83a859](https://github.com/iamez/slomix/commit/b83a859dea694139661064ac2d3bbe2ca36773be))
+* **proximity:** age permanent orphans in importer-awake hours (T1) ([#652](https://github.com/iamez/slomix/issues/652)) ([7e1163b](https://github.com/iamez/slomix/commit/7e1163bbf675ece25d36359f4ee8ef453d182df6))
+* **proximity:** clamp team-push push_quality to 1.0 on import (FIX 7) ([#643](https://github.com/iamez/slomix/issues/643)) ([d2f2158](https://github.com/iamez/slomix/commit/d2f2158e82bc25f4c370b8e3d5c7865ae6abc0aa))
+* **proximity:** clamp weapon-accuracy hits to shots_fired on import (FIX 3) ([#641](https://github.com/iamez/slomix/issues/641)) ([12079f1](https://github.com/iamez/slomix/commit/12079f16130c21627d2f41d831a20c72b35e1d66))
+* **proximity:** derive relinker round_id coverage from the schema (FIX 9) ([#645](https://github.com/iamez/slomix/issues/645)) ([9136762](https://github.com/iamez/slomix/commit/913676289b83a422c38b63cac4e13cef4dd87818))
+* **proximity:** fall back to the time resolver when the target round has no round_start_unix (T6) ([#656](https://github.com/iamez/slomix/issues/656)) ([9efc819](https://github.com/iamez/slomix/commit/9efc8196841fc6b2a9b8c157c59bc99337adf991))
+* **proximity:** tolerate round_number disagreement on exact timestamp match ([#647](https://github.com/iamez/slomix/issues/647)) ([7fbccb7](https://github.com/iamez/slomix/commit/7fbccb7f1168d64e1616824fadc338fdaf0af516))
+* **website:** ET Rating sample-size shrinkage — Bayesian prior K=40 (FIX 8, owner-gated) ([#651](https://github.com/iamez/slomix/issues/651)) ([38cbb5c](https://github.com/iamez/slomix/commit/38cbb5c18ef30c395e9130a98453b2f28304ba5c))
+* **website:** last-session must skip quarantined sessions (500 → previous valid session) ([#659](https://github.com/iamez/slomix/issues/659)) ([ae1d43c](https://github.com/iamez/slomix/commit/ae1d43c6895e2298d3c1baae9bab02b27546b2a6))
+
+
+### Performance Improvements
+
+* **bot:** unblock event loop in !last_session graphs + add typing indicator ([#648](https://github.com/iamez/slomix/issues/648)) ([29b4e0e](https://github.com/iamez/slomix/commit/29b4e0edf2b549b0a47fd675674a39b871201fcf))
+
 ## [1.30.1](https://github.com/iamez/slomix/compare/v1.30.0...v1.30.1) (2026-08-11)
 
 
