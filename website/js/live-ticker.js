@@ -57,6 +57,38 @@ let _events = [];          // newest last, ALL categories
 let _interval = null;
 let _lastFetchOk = null;   // null = never fetched, false = feed erroring
 
+// Live roster derived from the feed: slot -> {name, team}. TEAM_CHANGE
+// carries the engine team (1=Axis, 2=Allies, 3=spectator); DISCONNECT
+// clears the slot. INIT_GAME does NOT clear — players re-announce
+// themselves via userinfo right after a map load, so clearing would blink.
+const _roster = new Map();
+let _rosterUpdatedAt = 0;
+
+function _rosterApply(ev) {
+    if (ev.type === 'TEAM_CHANGE' && ev.slot != null) {
+        if (ev.team === 1 || ev.team === 2 || ev.team === 3) {
+            _roster.set(ev.slot, { name: ev.name || `slot ${ev.slot}`, team: ev.team });
+        }
+        _rosterUpdatedAt = Date.now();
+    } else if (ev.type === 'DISCONNECT' && ev.slot != null) {
+        _roster.delete(ev.slot);
+        _rosterUpdatedAt = Date.now();
+    }
+}
+
+/** Current sides as seen by the live feed. fresh=false when the feed has
+ * not spoken recently — callers should fall back to the UDP player list. */
+export function getLiveRoster() {
+    const out = { axis: [], allies: [], spectators: [], fresh: false };
+    for (const { name, team } of _roster.values()) {
+        if (team === 1) out.axis.push(name);
+        else if (team === 2) out.allies.push(name);
+        else out.spectators.push(name);
+    }
+    out.fresh = _rosterUpdatedAt > 0 && (Date.now() - _rosterUpdatedAt) < 10 * 60 * 1000;
+    return out;
+}
+
 function _saveFilters() {
     try { localStorage.setItem(FILTER_STORE_KEY, JSON.stringify(_filters)); } catch { /* private mode */ }
 }
