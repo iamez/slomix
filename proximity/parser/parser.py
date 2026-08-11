@@ -2205,6 +2205,17 @@ class ProximityParserV4:
             parts = line.split(';')
             if len(parts) < 10:
                 return
+            # FIX 7 (push_quality unbounded): the Lua formula is
+            # `alignment * (avg_speed / 300)` with no upper bound, and
+            # sprint speed exceeds 300 ups — so ~5% of rows land above 1.0
+            # (observed max 2.158) while every sibling score field
+            # (alignment_score, path_efficiency, focus_score,
+            # spawn_timing_score) tops out at exactly 1.000. Clamp at the
+            # import boundary; the tracker Lua is a no-edit live-drift
+            # zone. NOTE: this fixes the SCALE only — the metric itself
+            # is measured as inverse to kills (kis-v5 removed its
+            # multiplier); clamping does not make it predictive.
+            push_quality = min(float(parts[7]), 1.0)
             self.team_pushes.append(TeamPush(
                 start_time=int(parts[0]),
                 end_time=int(parts[1]),
@@ -2213,7 +2224,7 @@ class ProximityParserV4:
                 direction_x=float(parts[4]),
                 direction_y=float(parts[5]),
                 alignment_score=float(parts[6]),
-                push_quality=float(parts[7]),
+                push_quality=push_quality,
                 participant_count=int(parts[8]),
                 toward_objective=parts[9],
             ))
