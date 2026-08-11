@@ -2,7 +2,7 @@
 
 Date: 2026-08-11
 
-Status: implementation contract; documentation-only takeoff
+Status: implementation in progress; S0a complete, remaining S0 source gates next
 
 Base: `origin/main` at `d6136cdd994870fddf4e4d0ff1968eb91418e497`
 
@@ -24,12 +24,12 @@ Pinned ET:Legacy reference:
 
 W5b needs one more static-analysis increment before its Phase 5 per-domain graph gate:
 a bounded scheduler for suspended cross-entity continuations. The current executor
-correctly refuses to combine a delayed callee with an immediate caller, but this leaves
-at least 301 cross-entity temporal frontiers. Measured frontier classification shows
-that 244 of those 301 frontiers hide at least one required objective, spawn or
-dynamic-route domain. S0 subsequently found that waiting `gotomarker` control was not
-projected into the executor, so 301 is a pre-correction minimum and must be recomputed.
-Deferring the class would therefore make the Phase 5 verdict knowingly incomplete.
+correctly refuses to combine a delayed callee with an immediate caller. The predecessor
+measured 301 cross-entity temporal frontiers; S0a then found and corrected omitted
+`gotomarker` control. The exact post-S0a baseline is 452 cross-entity temporal
+frontiers, 386 of which hide at least one required objective, spawn or dynamic-route
+domain. Deferring the class would therefore make the Phase 5 verdict knowingly
+incomplete.
 
 This scheduler remains **W5b**. It enumerates source-defensible static ordering
 possibilities; it does not decide which ordering happened in a played round. **W5c**
@@ -117,12 +117,11 @@ later caller guard.
 
 These are static possibility denominators, not played-round counts.
 
-### S0 denominator correction required
+### S0 denominator correction completed
 
 The pinned callback proves that `gotomarker` has control behavior in addition to its
-already typed dynamic-route effect. The current ordered projection emits only
-`StageEffectInstruction`, so the walker always continues immediately and never sees a
-waiting boundary.
+already typed dynamic-route effect. Before S0a, the ordered projection emitted only an
+immediate `StageEffectInstruction`, so the walker never saw its waiting boundary.
 
 Read-only installed-corpus inventory found:
 
@@ -134,10 +133,32 @@ Read-only installed-corpus inventory found:
 | Resolved cross-entity dispatch pairs targeting a waiting program | 133 |
 | Resolved same-entity dispatch pairs targeting a waiting program | 28 |
 
-These are instruction/pair counts, not the final symbolic-path delta. S0a must project
-the effect and control result together, then regenerate all path/frontier/domain tables.
-The 301/244 table remains valuable evidence for the scheduler decision but is no longer
-the final implementation starting denominator.
+S0a now projects the effect and control result in one instruction and distinguishes a
+prior asynchronous movement from a movement started by the current action. The exact
+20-map post-S0a denominator is:
+
+| Hidden-domain set | All blocked paths | Cross-entity temporal paths |
+|---|---:|---:|
+| none | 382 | 66 |
+| dynamic route only | 503 | 289 |
+| objective only | 23 | 10 |
+| spawn only | 1 | 0 |
+| objective + spawn | 2 | 2 |
+| dynamic route + objective | 214 | 55 |
+| dynamic route + spawn | 28 | 26 |
+| all three | 98 | 4 |
+| **Total** | **1,251** | **452** |
+
+The corrected run walks 2,790 concrete event entries into 5,174 paths. It records 7,754
+effects, 4,011 temporal boundaries and 473 caller replacements. Boundary state counts
+are 3,065 `current_action_waiting`, 701 `prior_movement_active` and 245
+`next_frame_reentry`. Of the 1,251 blocked paths, 400 have complete domain
+classification; of the 452 cross-entity temporal paths, 264 are complete and 188 retain
+named uncertainty.
+
+Cross-entity temporal paths split by boundary command into `wait` 190, `faceangles` 49,
+`gotomarker` 171, `followspline` 18, `halt` 22 and `resetscript` 2. The original 301/244
+table remains the pre-correction comparison, not the scheduler starting denominator.
 
 ## Existing contracts to preserve
 
@@ -579,8 +600,11 @@ adversarial test.
    started waiting movement and a newly started non-waiting movement.
 3. Record whether the effect has actually started on each branch. A prior-motion
    boundary must not claim that the new destination was already selected.
-4. Re-enter a waiting boundary at the same action; advance the non-waiting action while
-   retaining only asynchronous lifecycle provenance.
+4. Re-enter a waiting boundary at the same action. If a prior asynchronous movement
+   blocked the action, preserve that re-entry identity but do not invent a second route:
+   the pinned callback completes the current action after the old movement clears.
+   Advance a newly started non-waiting action while retaining only asynchronous
+   lifecycle provenance.
 5. Regenerate the complete corpus denominator and update every affected expectation
    before scheduler state types freeze.
 
@@ -857,7 +881,7 @@ retained.
 - [x] Open draft PR [#649](https://github.com/iamez/slomix/pull/649).
 - [ ] Complete S0 source verification; runner/action read is recorded, replacement and
   tag-parent installed surfaces remain.
-- [ ] Complete S0a typed `gotomarker` control/effect correction and regenerate the
+- [x] Complete S0a typed `gotomarker` control/effect correction and regenerate the
   frontier denominator.
 - [ ] Complete S1 immutable state/canonicalization.
 - [ ] Complete S2 single suspended continuation.
@@ -894,6 +918,26 @@ retained.
   waiting program. The current executor does not project that control result, so S0a
   now precedes scheduler implementation and all denominators must be regenerated.
 - No owner-gated operation was performed.
+
+### 2026-08-11 - S0a typed temporal-control correction
+
+- Code/test commit: `45025749`.
+- `gotomarker` remains one source-ordered instruction, now carrying both its route
+  projection and source-verified conditional control contract.
+- `prior_movement_active`, `current_action_waiting` and `next_frame_reentry` are typed
+  boundary states; effect evidence is emitted only after the current movement starts.
+- Exact source review corrected an initially over-broad local implementation: after an
+  older asynchronous movement clears, ET re-enters the blocked action with an old
+  stack-change time and completes it without starting the new route.
+- Verification: 120 focused possibility tests, 260 map-geometry unit tests, both exact
+  inventory/dispatch regressions and the exact 2,790-entry corpus executor passed. The
+  exact corpus numbers are frozen in the post-S0a table above and in the real-asset
+  regression test.
+- No production write, deploy, service restart or other owner-gated operation was
+  performed.
+- Next item: close the remaining S0 replacement/tag-parent source gates, then begin S1
+  immutable scheduler state and canonicalization after review of this corrected
+  baseline.
 
 At every substantive commit, append:
 
