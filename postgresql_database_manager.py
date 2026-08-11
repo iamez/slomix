@@ -2227,6 +2227,22 @@ class PostgreSQLDatabaseManager:
         defender = parsed_data.get('defender_team', 0)
         round_outcome = parsed_data.get('round_outcome', '')
 
+        # Bot/filler/orphan validity flags. This manager is the PRODUCTION
+        # import path (the gate logic in stats_import_mixin only runs on the
+        # SQLite fallback), and its INSERT historically omitted these columns
+        # entirely — which is why is_bot_round was never true and no bot or
+        # orphan round was ever auto-invalidated in either database's history
+        # (proven live by the 2026-08-11 Omni-bot test session, quarantined
+        # by hand). Semantics live in round_contract.derive_round_validity,
+        # shared with the mixin.
+        from bot.core.round_contract import derive_round_validity
+        validity = derive_round_validity(
+            parsed_data, map_name, getattr(self.config, "excluded_maps", None) or set()
+        )
+        round_status = 'orphan_r2' if (
+            validity['is_orphan_r2'] and not is_match_summary
+        ) else 'completed'
+
         # Generate match_id as date-time only (shared by R1+R2 of the same match)
         # For R2: use R1's timestamp (parser attaches r1_filename to R2 results)
         r1_fn = parsed_data.get('r1_filename')
@@ -2261,19 +2277,27 @@ class PostgreSQLDatabaseManager:
                 """
                 INSERT INTO rounds
                 (round_date, round_time, match_id, map_name, round_number,
-                 time_limit, actual_time, winner_team, defender_team, round_outcome, gaming_session_id, round_status, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                 time_limit, actual_time, winner_team, defender_team, round_outcome, gaming_session_id, round_status, created_at,
+                 is_bot_round, bot_player_count, human_player_count, is_valid)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
                 ON CONFLICT (match_id, round_number) DO UPDATE SET
                     round_date = EXCLUDED.round_date,
                     round_time = EXCLUDED.round_time,
                     gaming_session_id = EXCLUDED.gaming_session_id,
                     round_status = EXCLUDED.round_status,
                     winner_team = EXCLUDED.winner_team,
-                    defender_team = EXCLUDED.defender_team
+                    defender_team = EXCLUDED.defender_team,
+                    is_bot_round = EXCLUDED.is_bot_round,
+                    bot_player_count = EXCLUDED.bot_player_count,
+                    human_player_count = EXCLUDED.human_player_count,
+                    -- Re-import must never REVIVE a round a human or a later
+                    -- gate invalidated: AND keeps FALSE sticky.
+                    is_valid = rounds.is_valid AND EXCLUDED.is_valid
                 RETURNING id
                 """,
                 file_date, round_time, match_id, map_name, round_number,
-                time_limit, actual_time, winner, defender, round_outcome, gaming_session_id, 'completed', datetime.now()
+                time_limit, actual_time, winner, defender, round_outcome, gaming_session_id, round_status, datetime.now(),
+                validity['is_bot_round'], validity['bot_player_count'], validity['human_player_count'], validity['is_valid']
             )
 
             # 🆕 RESTART DETECTION: Check for earlier rounds that should be marked as cancelled/substitution
