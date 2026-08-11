@@ -49,6 +49,7 @@ from website.backend.map_geometry.stage_semantics import (
     MainObjectiveEffectProjection,
     ObjectiveStatusEffectProjection,
     StageEffectProjection,
+    W3EntityIndexLinkDisposition,
     W3EntityKind,
     W3LinkedIdentityIndex,
     project_accumulator_action,
@@ -79,6 +80,7 @@ class KillTargetDisposition(StrEnum):
     CONSTRUCTIBLE_NO_HANDLED_EVENT = "constructible_no_handled_event"
     CONSTRUCTIBLE_RUNTIME_EVENT_NOT_MODELED = "constructible_runtime_event_not_modeled"
     SCRIPT_IDENTITY_OPAQUE = "script_identity_opaque"
+    SCRIPT_IDENTITY_RUNTIME_MUTABLE = "script_identity_runtime_mutable"
 
 
 class StageSemanticDomain(StrEnum):
@@ -768,6 +770,7 @@ class SymbolicEventPath:
     death_dispatches: tuple[SymbolicDeathDispatch, ...] = ()
     caller_replacement_lines: tuple[int, ...] = ()
     caller_replacement_entity_indices: tuple[int, ...] = ()
+    frontier_continuations: tuple[SymbolicFrontierContinuation, ...] = ()
     completion: SymbolicPathCompletion = SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
     blocker_reason: str | None = None
     blocker_line: int | None = None
@@ -875,6 +878,8 @@ def _kill_instruction_blocker_reason(instruction: KillInstruction) -> str | None
     if not instruction.targets:
         return "kill_target_identity_missing"
     dispositions = {target.disposition for target in instruction.targets}
+    if KillTargetDisposition.SCRIPT_IDENTITY_RUNTIME_MUTABLE in dispositions:
+        return "kill_script_identity_runtime_mutable"
     if KillTargetDisposition.SCRIPT_IDENTITY_OPAQUE in dispositions:
         return "kill_script_identity_opaque"
     if KillTargetDisposition.CONSTRUCTIBLE_RUNTIME_EVENT_NOT_MODELED in dispositions:
@@ -1143,6 +1148,7 @@ def _merge_symbolic_segment(
         caller_replacement_entity_indices=(
             prefix.caller_replacement_entity_indices + segment.caller_replacement_entity_indices
         ),
+        frontier_continuations=prefix.frontier_continuations + segment.frontier_continuations,
         completion=completion,
         blocker_reason=segment.blocker_reason,
         blocker_line=segment.blocker_line,
@@ -1159,6 +1165,7 @@ def _resume_symbolic_path(path: SymbolicEventPath) -> SymbolicEventPath:
         blocker_line=None,
         blocker_entity_index=None,
         frontier_relevance=None,
+        frontier_continuations=(),
     )
 
 
@@ -1177,6 +1184,15 @@ def _blocked_symbolic_path(
         blocker_entity_index=entity_index,
         frontier_relevance=None,
     )
+
+
+def _with_frontier_continuations(
+    path: SymbolicEventPath,
+    continuations: tuple[SymbolicFrontierContinuation, ...],
+) -> SymbolicEventPath:
+    merged = list(path.frontier_continuations)
+    merged.extend(continuation for continuation in continuations if continuation not in merged)
+    return replace(path, frontier_continuations=tuple(merged))
 
 
 def _record_caller_replacement(
@@ -1575,15 +1591,36 @@ def _walk_symbolic_target_group(
     for path in target_results:
         target_paused = len(path.temporal_boundary_lines) > temporal_count
         if path.completion is SymbolicPathCompletion.BLOCKED:
-            outcomes.append(
+            caller_is_replaced = target_paused and target_entity_index == caller_entity_index and last_target
+            blocked_path = (
                 _record_caller_replacement(
                     path,
                     line=dispatch_line,
                     entity_index=target_entity_index,
                 )
-                if target_paused and target_entity_index == caller_entity_index and last_target
+                if caller_is_replaced
                 else path
             )
+            if not caller_is_replaced:
+                pending = [
+                    SymbolicFrontierContinuation(
+                        caller_program.node.node_id,
+                        caller_entity_index,
+                        caller_instruction_offset,
+                        "caller_suffix_after_blocked_nested_dispatch",
+                    )
+                ]
+                pending.extend(
+                    SymbolicFrontierContinuation(
+                        target_program.node.node_id,
+                        remaining_target,
+                        0,
+                        "remaining_target_after_blocked_shared_dispatch",
+                    )
+                    for remaining_target in target_entity_indices[target_offset + 1 :]
+                )
+                blocked_path = _with_frontier_continuations(blocked_path, tuple(pending))
+            outcomes.append(blocked_path)
             if budget.exhausted:
                 break
             continue
@@ -1693,6 +1730,8 @@ def _projection_domain_relevance(
             if reference.kind is W3EntityKind.COLLISION_ENTITY
         }
         reasons = {"effect_target_identity_missing"} if not projection.target_lookup.candidate_entity_indices else set()
+        if projection.entity_index_link_disposition is W3EntityIndexLinkDisposition.UNPROVEN_IDENTITY_OVERRIDE:
+            reasons.add("effect_target_w3_link_unproven_identity_override")
         return domains, reasons
     if isinstance(projection, GotoMarkerEffectProjection):
         references = projection.destination_w3_references + tuple(
@@ -1735,28 +1774,185 @@ def _runtime_instruction_domain_relevance(
     return ({StageSemanticDomain.DYNAMIC_ROUTE} if source_is_route else set()), reasons
 
 
+_FRONTIER_RELEVANCE_WORK_BUDGET = 8192
+
+
+@dataclass(slots=True)
+class _FrontierRelevanceBudget:
+    remaining: int
+    exhausted: bool = False
+
+
 def _collect_continuation_relevance(
     index: OrderedStageProgramIndex,
     continuation: SymbolicFrontierContinuation,
     *,
-    active: frozenset[tuple[str, int, int]] = frozenset(),
+    state: SymbolicAccumulatorState | None = None,
+    active: tuple[tuple[str, int, int, SymbolicAccumulatorState], ...] = (),
     depth: int = 0,
+    max_work: int = _FRONTIER_RELEVANCE_WORK_BUDGET,
+    budget: _FrontierRelevanceBudget | None = None,
+    memo: dict[
+        tuple[str, int, int, SymbolicAccumulatorState],
+        tuple[frozenset[StageSemanticDomain], frozenset[str]],
+    ]
+    | None = None,
 ) -> tuple[set[StageSemanticDomain], set[str]]:
+    if max_work < 1:
+        raise ValueError("frontier relevance work budget must be positive")
+    if state is None:
+        state = SymbolicAccumulatorState.unknown()
+    if budget is None:
+        budget = _FrontierRelevanceBudget(max_work)
+    if memo is None:
+        memo = {}
+
     program = index.program(continuation.node_id)
     if not 0 <= continuation.instruction_offset <= len(program.instructions):
         return set(), {"invalid_frontier_continuation_offset"}
     if continuation.source_entity_index not in program.source.lookup.selected_entity_indices:
         return set(), {"frontier_continuation_entity_not_selected"}
-    key = (continuation.node_id, continuation.source_entity_index, continuation.instruction_offset)
-    if key in active:
-        return set(), set()
+    key = (
+        continuation.node_id,
+        continuation.source_entity_index,
+        continuation.instruction_offset,
+        state,
+    )
+    if depth == 0 and (cached := memo.get(key)):
+        return set(cached[0]), set(cached[1])
+    previous_frame = next((candidate for candidate in reversed(active) if candidate[:3] == key[:3]), None)
+    if previous_frame is not None:
+        return (set(), set()) if previous_frame[3] == state else (set(), {"frontier_relevance_stateful_cycle_cut"})
     if depth >= 64:
         return set(), {"frontier_relevance_depth_exhausted"}
-    active = active | {key}
+    if budget.remaining < 1:
+        budget.exhausted = True
+        return set(), {"frontier_relevance_budget_exhausted"}
+    budget.remaining -= 1
+    active = active + (key,)
     domains: set[StageSemanticDomain] = set()
     unknown_reasons: set[str] = set()
 
-    for instruction in program.instructions[continuation.instruction_offset :]:
+    def collect(
+        nested_continuation: SymbolicFrontierContinuation,
+        nested_state: SymbolicAccumulatorState,
+    ) -> None:
+        nested_domains, nested_unknown_reasons = _collect_continuation_relevance(
+            index,
+            nested_continuation,
+            state=nested_state,
+            active=active,
+            depth=depth + 1,
+            max_work=max_work,
+            budget=budget,
+            memo=memo,
+        )
+        domains.update(nested_domains)
+        unknown_reasons.update(nested_unknown_reasons)
+
+    current_state = state
+    offset = continuation.instruction_offset
+    while offset < len(program.instructions):
+        instruction = program.instructions[offset]
+        if isinstance(instruction, AccumulatorMutation):
+            mutation = _apply_accumulator_mutation(
+                SymbolicEventPath(continuation.source_entity_index, current_state),
+                instruction,
+            )
+            if mutation.completion is SymbolicPathCompletion.BLOCKED:
+                if mutation.blocker_reason != "non_exact_accumulator_mutation":
+                    unknown_reasons.add(f"frontier_relevance_{mutation.blocker_reason}")
+                current_state = current_state.write(
+                    instruction.scope,
+                    instruction.buffer_index,
+                    _UNKNOWN_DOMAIN,
+                    source_entity_index=continuation.source_entity_index,
+                )
+            else:
+                current_state = mutation.state
+            offset += 1
+            continue
+        if isinstance(instruction, AccumulatorAbortGuard):
+            current = current_state.read(
+                instruction.scope,
+                instruction.buffer_index,
+                source_entity_index=continuation.source_entity_index,
+            )
+            if not _valid_symbolic_guard_operand(instruction.operation, instruction.operand):
+                unknown_reasons.add("frontier_relevance_invalid_accumulator_guard")
+                break
+            continuing_domain = current.refine_guard(
+                instruction.operation,
+                instruction.operand,
+                predicate_result=False,
+            )
+            if continuing_domain is None:
+                break
+            current_state = current_state.write(
+                instruction.scope,
+                instruction.buffer_index,
+                continuing_domain,
+                source_entity_index=continuation.source_entity_index,
+            )
+            offset += 1
+            continue
+        if isinstance(instruction, AccumulatorConditionalTrigger):
+            current = current_state.read(
+                instruction.scope,
+                instruction.buffer_index,
+                source_entity_index=continuation.source_entity_index,
+            )
+            dispatch = resolve_symbolic_nested_dispatch(
+                index,
+                program,
+                instruction,
+                source_entity_index=continuation.source_entity_index,
+            )
+            true_domain = current.refine_guard(
+                AccumulatorOperation.ABORT_IF_EQUAL,
+                instruction.operand,
+                predicate_result=True,
+            )
+            false_domain = current.refine_guard(
+                AccumulatorOperation.ABORT_IF_EQUAL,
+                instruction.operand,
+                predicate_result=False,
+            )
+            if true_domain is not None:
+                dispatch_state = current_state.write(
+                    instruction.scope,
+                    instruction.buffer_index,
+                    true_domain,
+                    source_entity_index=continuation.source_entity_index,
+                )
+                if dispatch.resolution is SymbolicDispatchResolution.RESOLVED and dispatch.target_node_id is not None:
+                    for target_entity_index in dispatch.target_entity_indices:
+                        collect(
+                            SymbolicFrontierContinuation(
+                                dispatch.target_node_id,
+                                target_entity_index,
+                                0,
+                                "reachable_conditional_dispatch",
+                            ),
+                            dispatch_state,
+                        )
+                elif dispatch.resolution not in {
+                    SymbolicDispatchResolution.NO_OP,
+                    SymbolicDispatchResolution.MISSING_HANDLER,
+                }:
+                    unknown_reasons.add(f"nested_dispatch_{dispatch.resolution.value}")
+            if true_domain is None and false_domain is None:
+                unknown_reasons.add("frontier_relevance_invalid_conditional_trigger_guard")
+                break
+            if true_domain is None or false_domain is None:
+                current_state = current_state.write(
+                    instruction.scope,
+                    instruction.buffer_index,
+                    true_domain or false_domain,
+                    source_entity_index=continuation.source_entity_index,
+                )
+            offset += 1
+            continue
         if isinstance(instruction, StageEffectInstruction):
             effect_domains, effect_unknown_reasons = _projection_domain_relevance(
                 index,
@@ -1765,8 +1961,9 @@ def _collect_continuation_relevance(
             )
             domains.update(effect_domains)
             unknown_reasons.update(effect_unknown_reasons)
+            offset += 1
             continue
-        if isinstance(instruction, (TriggerInstruction, AccumulatorConditionalTrigger)):
+        if isinstance(instruction, TriggerInstruction):
             dispatch = resolve_symbolic_nested_dispatch(
                 index,
                 program,
@@ -1775,24 +1972,21 @@ def _collect_continuation_relevance(
             )
             if dispatch.resolution is SymbolicDispatchResolution.RESOLVED and dispatch.target_node_id is not None:
                 for target_entity_index in dispatch.target_entity_indices:
-                    target_domains, target_unknown_reasons = _collect_continuation_relevance(
-                        index,
+                    collect(
                         SymbolicFrontierContinuation(
                             dispatch.target_node_id,
                             target_entity_index,
                             0,
                             "reachable_nested_dispatch",
                         ),
-                        active=active,
-                        depth=depth + 1,
+                        current_state,
                     )
-                    domains.update(target_domains)
-                    unknown_reasons.update(target_unknown_reasons)
             elif dispatch.resolution not in {
                 SymbolicDispatchResolution.NO_OP,
                 SymbolicDispatchResolution.MISSING_HANDLER,
             }:
                 unknown_reasons.add(f"nested_dispatch_{dispatch.resolution.value}")
+            offset += 1
             continue
         if isinstance(instruction, KillInstruction):
             if not instruction.targets:
@@ -1802,20 +1996,19 @@ def _collect_continuation_relevance(
                     domains.add(StageSemanticDomain.DYNAMIC_ROUTE)
                 if target.disposition is KillTargetDisposition.SCRIPT_IDENTITY_OPAQUE:
                     unknown_reasons.add("kill_script_identity_opaque")
+                if target.disposition is KillTargetDisposition.SCRIPT_IDENTITY_RUNTIME_MUTABLE:
+                    unknown_reasons.add("kill_script_identity_runtime_mutable")
                 for node_id in target.runtime_event_node_ids:
-                    target_domains, target_unknown_reasons = _collect_continuation_relevance(
-                        index,
+                    collect(
                         SymbolicFrontierContinuation(
                             node_id,
                             target.entity_index,
                             0,
                             "reachable_kill_runtime_event",
                         ),
-                        active=active,
-                        depth=depth + 1,
+                        current_state,
                     )
-                    domains.update(target_domains)
-                    unknown_reasons.update(target_unknown_reasons)
+            offset += 1
             continue
         if isinstance(instruction, RuntimeActionInstruction):
             runtime_domains, runtime_unknown_reasons = _runtime_instruction_domain_relevance(
@@ -1825,11 +2018,16 @@ def _collect_continuation_relevance(
             )
             domains.update(runtime_domains)
             unknown_reasons.update(runtime_unknown_reasons)
+            offset += 1
             continue
         if isinstance(instruction, ControlProjectionIssue):
             unknown_reasons.add("control_projection_issue")
+        offset += 1
 
-    return domains, unknown_reasons
+    result = (frozenset(domains), frozenset(unknown_reasons))
+    if depth == 0 and not budget.exhausted:
+        memo[key] = result
+    return set(result[0]), set(result[1])
 
 
 def _instruction_offset_after(
@@ -1896,6 +2094,13 @@ def classify_symbolic_frontier(
     index: OrderedStageProgramIndex,
     root_program: OrderedEventProgram,
     path: SymbolicEventPath,
+    *,
+    relevance_budget: _FrontierRelevanceBudget | None = None,
+    relevance_memo: dict[
+        tuple[str, int, int, SymbolicAccumulatorState],
+        tuple[frozenset[StageSemanticDomain], frozenset[str]],
+    ]
+    | None = None,
 ) -> SymbolicFrontierRelevance | None:
     """Classify only the semantic domains hidden behind one explicit frontier."""
 
@@ -1908,6 +2113,7 @@ def classify_symbolic_frontier(
         "kill_target_missing",
         "kill_target_identity_missing",
         "kill_script_identity_opaque",
+        "kill_script_identity_runtime_mutable",
         "kill_multi_target_death_dispatch_not_modeled",
         "kill_death_dispatch_projection_invalid",
         "nested_dispatch_depth_exhausted",
@@ -2084,8 +2290,22 @@ def classify_symbolic_frontier(
                         if continuation not in continuations:
                             continuations.append(continuation)
 
+    for continuation in path.frontier_continuations:
+        if continuation not in continuations:
+            continuations.append(continuation)
+
+    if relevance_budget is None:
+        relevance_budget = _FrontierRelevanceBudget(_FRONTIER_RELEVANCE_WORK_BUDGET)
+    if relevance_memo is None:
+        relevance_memo = {}
     for continuation in continuations:
-        continuation_domains, continuation_unknown_reasons = _collect_continuation_relevance(index, continuation)
+        continuation_domains, continuation_unknown_reasons = _collect_continuation_relevance(
+            index,
+            continuation,
+            state=path.state,
+            budget=relevance_budget,
+            memo=relevance_memo,
+        )
         domains.update(continuation_domains)
         unknown_reasons.update(continuation_unknown_reasons)
     return SymbolicFrontierRelevance(
@@ -2129,7 +2349,24 @@ def walk_symbolic_stage_program(
         stop_at_temporal_boundary=False,
         budget=budget,
     )
-    return tuple(replace(path, frontier_relevance=classify_symbolic_frontier(index, program, path)) for path in paths)
+    relevance_budget = _FrontierRelevanceBudget(_FRONTIER_RELEVANCE_WORK_BUDGET)
+    relevance_memo: dict[
+        tuple[str, int, int, SymbolicAccumulatorState],
+        tuple[frozenset[StageSemanticDomain], frozenset[str]],
+    ] = {}
+    return tuple(
+        replace(
+            path,
+            frontier_relevance=classify_symbolic_frontier(
+                index,
+                program,
+                path,
+                relevance_budget=relevance_budget,
+                relevance_memo=relevance_memo,
+            ),
+        )
+        for path in paths
+    )
 
 
 def _event_for_node(model: StaticStageModel, node: StageEventNode) -> ScriptEvent:
@@ -2167,6 +2404,20 @@ def _has_only_opaque_script_identity(model: StaticStageModel, script_name: str) 
     return any(_ascii_fold(item.entity_name) == folded for item in model.graph.opaque_entities)
 
 
+def _script_identity_may_change(model: StaticStageModel, script_name: str) -> bool:
+    folded = _ascii_fold(script_name)
+    entity = next(
+        (candidate for candidate in model.script.entities if _ascii_fold(candidate.name) == folded),
+        None,
+    )
+    return entity is not None and any(
+        action.command == "set"
+        and any(_ascii_fold(action.arguments[index]) == "scriptname" for index in range(0, len(action.arguments), 2))
+        for event in entity.events
+        for action in event.actions
+    )
+
+
 def _project_kill_action(
     action: ScriptAction,
     *,
@@ -2182,7 +2433,24 @@ def _project_kill_action(
         script_name = identity.script_name
         nodes = _script_program_nodes(model, script_name) if script_name else ()
         script_identity_opaque = bool(script_name and _has_only_opaque_script_identity(model, script_name))
-        if classname == "script_mover" and script_identity_opaque:
+        script_identity_runtime_mutable = bool(
+            classname in {"script_mover", "func_constructible"}
+            and script_name
+            and _script_identity_may_change(model, script_name)
+        )
+        if script_identity_runtime_mutable:
+            disposition = KillTargetDisposition.SCRIPT_IDENTITY_RUNTIME_MUTABLE
+            death_handler_node_id = None
+            runtime_event_node_ids = tuple(
+                node.node_id
+                for node in nodes
+                if node.event_name == "death"
+                or (
+                    node.event_name == "destroyed"
+                    and _ascii_fold(node.serialized_event_parameters) in {"final", "stage2", "stage3"}
+                )
+            )
+        elif classname == "script_mover" and script_identity_opaque:
             disposition = KillTargetDisposition.SCRIPT_IDENTITY_OPAQUE
             death_handler_node_id = None
             runtime_event_node_ids = ()
