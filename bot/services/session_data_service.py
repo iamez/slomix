@@ -51,6 +51,7 @@ class SessionDataService:
                 WHERE p.round_id = s.id
             )
             AND s.round_number IN (1, 2)
+            AND s.is_valid
             AND (s.round_status IN ('completed', 'cancelled', 'substitution') OR s.round_status IS NULL)
             ORDER BY
                 s.round_date DESC,
@@ -85,6 +86,7 @@ class SessionDataService:
             SELECT MAX(gaming_session_id)
             FROM rounds
             WHERE gaming_session_id IS NOT NULL
+              AND is_valid
             """
         )
 
