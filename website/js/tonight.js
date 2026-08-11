@@ -8,6 +8,7 @@
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 import { initTonightBetting } from './bets.js?v=20260804-auth-dedupe';
+import { startLiveTicker, stopLiveTicker, renderLiveTicker, getLiveRoster } from './live-ticker.js?v=20260811-live2';
 
 const POLL_MS = 8000;
 let _interval = null;
@@ -38,13 +39,15 @@ export async function loadTonightView() {
     if (!host) return;
     await _refresh();
     _startPolling();
+    startLiveTicker();
     // Fun-betting panel lives in its own container with its own refresh loop.
     initTonightBetting().catch(e => console.warn('tonight betting init failed', e));
     // Bind the visibility lifecycle once (loadTonightView runs on every entry).
     if (!_lifecycleBound) {
         _lifecycleBound = true;
         document.addEventListener('visibilitychange', () => {
-            if (_viewActive()) _startPolling(); else _stopPolling();
+            if (_viewActive()) { _startPolling(); startLiveTicker(); }
+            else { _stopPolling(); stopLiveTicker(); }
         });
     }
 }
@@ -106,6 +109,48 @@ function _teamPanel(team, maps, rounds, lead, side) {
     </div>`;
 }
 
+// Side scoreboard for the pre-first-round window: who is on which SIDE
+// right now (from the live feed's TEAM_CHANGE stream when fresh, else the
+// UDP player list without side info) plus an explicit score — 0:0 reads
+// as "match on!" where an empty panel read as "nothing happening".
+const AXIS_COLOR = '#ef4444', ALLIES_COLOR = '#3b82f6';
+
+function _sideColumn(label, color, names, alignRight) {
+    const list = names.length
+        ? names.map(n => `<div class="text-sm text-slate-200 leading-relaxed truncate">${escapeHtml(n)}</div>`).join('')
+        : '<div class="text-sm text-slate-600">—</div>';
+    return `<div class="flex-1 min-w-0 ${alignRight ? 'text-right' : ''}">
+        <div class="text-[10px] uppercase tracking-widest font-black mb-1.5" style="color:${color}">${label}</div>
+        ${list}
+    </div>`;
+}
+
+function _sideScoreboard(gs, data) {
+    const roster = getLiveRoster();
+    const score = (data && data.score) || {};
+    const a = score.a_maps ?? 0, b = score.b_maps ?? 0;
+    let axis = roster.axis, allies = roster.allies, specs = roster.spectators;
+    if (!roster.fresh) {
+        // Feed quiet -> UDP list only (no side info); show under one roof.
+        const flat = ((gs && gs.players) || []).map(pl => (pl && pl.name) || '').filter(Boolean);
+        axis = flat; allies = []; specs = [];
+    }
+    const specStrip = specs.length
+        ? `<div class="mt-3 pt-2 border-t border-white/5 text-[11px] text-slate-500 text-center truncate">👁 ${specs.map(n => escapeHtml(n)).join(' · ')}</div>`
+        : '';
+    return `<div class="glass-panel rounded-xl p-5">
+        <div class="flex items-start gap-4">
+            ${_sideColumn(roster.fresh ? 'Axis' : 'On server', AXIS_COLOR, axis, false)}
+            <div class="text-center shrink-0 px-2">
+                <div class="text-5xl font-black text-white leading-none tracking-tight">${a}<span class="text-slate-600 mx-1">:</span>${b}</div>
+                <div class="text-[10px] uppercase tracking-widest text-slate-500 mt-1">maps</div>
+            </div>
+            ${_sideColumn(roster.fresh ? 'Allies' : '', ALLIES_COLOR, roster.fresh ? allies : [], true)}
+        </div>
+        ${specStrip}
+    </div>`;
+}
+
 async function _refresh() {
     const host = document.getElementById('tonight-content');
     if (!host) return;
@@ -133,10 +178,13 @@ async function _refresh() {
         if (serverPlayers > 0) {
             host.textContent = '';
             safeInsertHTML(host, 'beforeend', _serverStrip(gs) + `
-                <div class="glass-panel p-8 rounded-xl text-center">
-                    <div class="text-xl font-black text-white mb-1">Session warming up…</div>
-                    <div class="text-slate-400">Rounds will appear here as they complete.</div>
-                </div>`);
+                <div class="text-center mb-3">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 text-amber-300 text-[11px] font-bold">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>WARMING UP — first round in progress
+                    </span>
+                </div>` + _sideScoreboard(gs, data) + `
+                <div id="live-ticker"></div>`);
+            renderLiveTicker();
             return;
         }
         _stopPolling();
@@ -149,7 +197,12 @@ async function _refresh() {
                     <a href="#/availability" class="px-4 py-2 rounded-lg text-sm font-bold bg-brand-cyan/20 text-brand-cyan">Next session</a>
                     <a href="#/sessions2" class="px-4 py-2 rounded-lg text-sm font-bold bg-white/10 text-slate-200">Last session</a>
                 </div>
-            </div>`);
+            </div>
+            <div id="live-ticker"></div>`);
+        // Idle still shows the match feed: live events (someone warming up,
+        // a replay demo, a session the score API hasn't classified yet)
+        // are exactly what tells a visitor the page is worth keeping open.
+        renderLiveTicker();
         return;
     }
 
@@ -233,6 +286,12 @@ async function _refresh() {
 
     _drawMomentum('tonight-momentum', data.momentum || []);
     _drawHoldProb('tonight-holdprob', (data.hold_probability && data.hold_probability.curve) || [], cur.beat_seconds);
+
+    // Live event ticker (S3): shell only — live-ticker.js owns state + poll.
+    if (!host.querySelector('#live-ticker')) {
+        safeInsertHTML(host, 'beforeend', '<div id="live-ticker"></div>');
+    }
+    renderLiveTicker();
 }
 
 function _drawMomentum(canvasId, momentum) {
