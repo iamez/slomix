@@ -39,6 +39,70 @@ class ControlBarrierKind(StrEnum):
     HALT = "halt"
 
 
+class RuntimeActionControlDisposition(StrEnum):
+    IMMEDIATE_CURRENT_EVENT_CONTINUE = "immediate_current_event_continue"
+    CONDITIONAL_TEMPORAL_PAUSE = "conditional_temporal_pause"
+    DEFERRED_SOURCE_REMOVAL = "deferred_source_removal"
+    MAY_DISPATCH_DEATH_EVENT = "may_dispatch_death_event"
+    MAY_REPLACE_SCRIPT_CONTEXT = "may_replace_script_context"
+    MAY_STOP_ON_SPAWN_FAILURE = "may_stop_on_spawn_failure"
+    UNCLASSIFIED = "unclassified"
+
+
+_IMMEDIATE_RUNTIME_ACTIONS = frozenset(
+    {
+        "attachtotag",
+        "changemodel",
+        "constructible_chargebarreq",
+        "constructible_class",
+        "constructible_constructxpbonus",
+        "constructible_destructxpbonus",
+        "constructible_duration",
+        "constructible_health",
+        "constructible_weaponclass",
+        "disablespeaker",
+        "enablespeaker",
+        "playsound",
+        "remapshader",
+        "remapshaderflush",
+        "repairmg42",
+        "setchargetimefactor",
+        "sethqstatus",
+        "setrotation",
+        "setspeed",
+        "startanimation",
+        "stoprotation",
+        "stopsound",
+        "togglespeaker",
+        "wm_addteamvoiceannounce",
+        "wm_allied_respawntime",
+        "wm_announce",
+        "wm_axis_respawntime",
+        "wm_number_of_objectives",
+        "wm_removeteamvoiceannounce",
+        "wm_set_defending_team",
+        "wm_set_round_timelimit",
+        "wm_teamvoiceannounce",
+    }
+)
+_SPECIAL_RUNTIME_ACTIONS = {
+    "create": RuntimeActionControlDisposition.MAY_STOP_ON_SPAWN_FAILURE,
+    "faceangles": RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE,
+    "followspline": RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE,
+    "kill": RuntimeActionControlDisposition.MAY_DISPATCH_DEATH_EVENT,
+    "remove": RuntimeActionControlDisposition.DEFERRED_SOURCE_REMOVAL,
+    "set": RuntimeActionControlDisposition.MAY_REPLACE_SCRIPT_CONTEXT,
+}
+
+
+def runtime_action_control_disposition(command: str) -> RuntimeActionControlDisposition:
+    """Return only source-verified current-event control behavior."""
+
+    if command in _IMMEDIATE_RUNTIME_ACTIONS:
+        return RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
+    return _SPECIAL_RUNTIME_ACTIONS.get(command, RuntimeActionControlDisposition.UNCLASSIFIED)
+
+
 @dataclass(frozen=True, slots=True)
 class StageEffectInstruction:
     projection: StageEffectProjection
@@ -58,7 +122,13 @@ class ControlBarrierInstruction:
 @dataclass(frozen=True, slots=True)
 class RuntimeActionInstruction:
     action: ScriptAction
-    blocker_reason: str = "control_semantics_not_classified"
+    control_disposition: RuntimeActionControlDisposition
+
+    @property
+    def blocker_reason(self) -> str | None:
+        if self.control_disposition is RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE:
+            return None
+        return self.control_disposition.value
 
 
 OrderedEventInstruction: TypeAlias = (
@@ -167,7 +237,9 @@ def project_ordered_stage_programs(
             try:
                 barrier_kind = ControlBarrierKind(action.command)
             except ValueError:
-                instructions.append(RuntimeActionInstruction(action))
+                instructions.append(
+                    RuntimeActionInstruction(action, runtime_action_control_disposition(action.command))
+                )
             else:
                 instructions.append(ControlBarrierInstruction(barrier_kind, action))
 
