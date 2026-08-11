@@ -9,6 +9,7 @@ This service generates 5 themed graph images:
 5. DPM Timeline - Performance evolution over rounds
 """
 
+import asyncio
 import io
 import logging
 
@@ -572,440 +573,452 @@ class SessionGraphGenerator(SessionTimingHelpersMixin):
             x = np.arange(n_players)
             bar_width = 0.35
 
-            # ═══════════════════════════════════════════════════════════════
-            # IMAGE 1: COMBAT STATS (OFFENSE) - 2x2 with grouped bars
-            # ═══════════════════════════════════════════════════════════════
-            fig1, axes1 = plt.subplots(2, 2, figsize=(14, 10))
-            fig1.patch.set_facecolor(self.COLORS['bg_dark'])
-            fig1.suptitle(
-                f"COMBAT STATS (OFFENSE)  -  {latest_date}",
-                fontsize=18, fontweight="bold", color='white', y=0.98
-            )
-
-            # Kills vs Deaths (grouped)
-            bars1 = axes1[0, 0].bar(x - bar_width/2, kills, bar_width,
-                                     color=self.COLORS['green'], label='Kills',
-                                     edgecolor='white', linewidth=0.5)
-            bars2 = axes1[0, 0].bar(x + bar_width/2, deaths, bar_width,
-                                     color=self.COLORS['red'], label='Deaths',
-                                     edgecolor='white', linewidth=0.5)
-            self._style_axis(axes1[0, 0], "KILLS vs DEATHS")
-            axes1[0, 0].set_xticks(x)
-            axes1[0, 0].set_xticklabels(display_names, rotation=45, ha="right")
-            axes1[0, 0].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
-                               edgecolor='white', labelcolor='white')
-            self._add_grouped_bar_labels(axes1[0, 0], bars1, bars2, kills, deaths)
-
-            # Damage Given vs Received (grouped)
-            bars1 = axes1[0, 1].bar(x - bar_width/2, damage_given, bar_width,
-                                     color=self.COLORS['blue'], label='Given',
-                                     edgecolor='white', linewidth=0.5)
-            bars2 = axes1[0, 1].bar(x + bar_width/2, damage_received, bar_width,
-                                     color=self.COLORS['orange'], label='Received',
-                                     edgecolor='white', linewidth=0.5)
-            self._style_axis(axes1[0, 1], "DAMAGE GIVEN vs RECEIVED")
-            axes1[0, 1].set_xticks(x)
-            axes1[0, 1].set_xticklabels(display_names, rotation=45, ha="right")
-            axes1[0, 1].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
-                               edgecolor='white', labelcolor='white')
-            self._add_grouped_bar_labels(axes1[0, 1], bars1, bars2,
-                                          damage_given, damage_received, "{:,.0f}")
-
-            # K/D Ratio
-            kd_colors = [
-                self.COLORS['green'] if kd >= 1.5
-                else self.COLORS['yellow'] if kd >= 1.0
-                else self.COLORS['red']
-                for kd in kd_ratios
-            ]
-            bars = axes1[1, 0].bar(x, kd_ratios, color=kd_colors,
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes1[1, 0], "K/D RATIO")
-            axes1[1, 0].axhline(y=1.0, color="white", linestyle="--",
-                                 alpha=0.5, linewidth=1)
-            axes1[1, 0].set_xticks(x)
-            axes1[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
-            self._add_bar_labels(axes1[1, 0], bars, kd_ratios, fmt="{:.2f}")
-
-            # DPM
-            bars = axes1[1, 1].bar(x, dpm, color=self.COLORS['cyan'],
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes1[1, 1], "DPM (Damage Per Minute)")
-            axes1[1, 1].set_xticks(x)
-            axes1[1, 1].set_xticklabels(display_names, rotation=45, ha="right")
-            self._add_bar_labels(axes1[1, 1], bars, dpm)
-
-            plt.tight_layout(rect=(0, 0, 1, 0.96))
-            buf1 = io.BytesIO()
-            plt.savefig(buf1, format="png", facecolor=self.COLORS['bg_dark'],
-                        dpi=120, bbox_inches="tight")
-            buf1.seek(0)
-            plt.close(fig1)
-
-            # ═══════════════════════════════════════════════════════════════
-            # IMAGE 2: COMBAT STATS (DEFENSE/SUPPORT) - 2x2 with grouped bars
-            # ═══════════════════════════════════════════════════════════════
-            fig2, axes2 = plt.subplots(2, 2, figsize=(14, 10))
-            fig2.patch.set_facecolor(self.COLORS['bg_dark'])
-            fig2.suptitle(
-                f"COMBAT STATS (DEFENSE/SUPPORT)  -  {latest_date}",
-                fontsize=18, fontweight="bold", color='white', y=0.98
-            )
-
-            # Revives Given vs Times Revived (grouped)
-            bars1 = axes2[0, 0].bar(x - bar_width/2, revives_given, bar_width,
-                                     color=self.COLORS['green'], label='Given',
-                                     edgecolor='white', linewidth=0.5)
-            bars2 = axes2[0, 0].bar(x + bar_width/2, times_revived, bar_width,
-                                     color=self.COLORS['teal'], label='Received',
-                                     edgecolor='white', linewidth=0.5)
-            self._style_axis(axes2[0, 0], "REVIVES GIVEN vs RECEIVED")
-            axes2[0, 0].set_xticks(x)
-            axes2[0, 0].set_xticklabels(display_names, rotation=45, ha="right")
-            axes2[0, 0].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
-                               edgecolor='white', labelcolor='white')
-            self._add_grouped_bar_labels(axes2[0, 0], bars1, bars2,
-                                          revives_given, times_revived)
-
-            if self.show_timing_dual:
-                bars1 = axes2[0, 1].bar(
-                    x - bar_width/2,
-                    time_dead_old_minutes,
-                    bar_width,
-                    color=self.COLORS['pink'],
-                    label='Dead (Old)',
-                    edgecolor='white',
-                    linewidth=0.5,
+            # Figures 1-4 are pure CPU (no awaits). Rendering them inline
+            # blocked the event loop for ~3.5s+ per call, freezing every
+            # other command and task loop, so render in a worker thread.
+            # Figure-scoped tight_layout/savefig avoid relying on pyplot's
+            # current-figure global state across threads (Agg backend).
+            def _render_static_figures() -> tuple[io.BytesIO, io.BytesIO, io.BytesIO, io.BytesIO]:
+                # ═══════════════════════════════════════════════════════════════
+                # IMAGE 1: COMBAT STATS (OFFENSE) - 2x2 with grouped bars
+                # ═══════════════════════════════════════════════════════════════
+                fig1, axes1 = plt.subplots(2, 2, figsize=(14, 10))
+                fig1.patch.set_facecolor(self.COLORS['bg_dark'])
+                fig1.suptitle(
+                    f"COMBAT STATS (OFFENSE)  -  {latest_date}",
+                    fontsize=18, fontweight="bold", color='white', y=0.98
                 )
-                bars2 = axes2[0, 1].bar(
-                    x + bar_width/2,
-                    time_dead_new_minutes,
-                    bar_width,
-                    color=self.COLORS['cyan'],
-                    label='Dead (New)',
-                    edgecolor='white',
-                    linewidth=0.5,
-                )
-                self._style_axis(axes2[0, 1], "TIME DEAD OLD vs NEW (minutes)")
-                axes2[0, 1].set_xticks(x)
-                axes2[0, 1].set_xticklabels(display_names, rotation=45, ha="right")
-                axes2[0, 1].legend(
-                    loc='upper right',
-                    facecolor=self.COLORS['bg_panel'],
-                    edgecolor='white',
-                    labelcolor='white',
-                )
-                self._add_grouped_bar_labels(
-                    axes2[0, 1],
-                    bars1,
-                    bars2,
-                    time_dead_old_minutes,
-                    time_dead_new_minutes,
-                    "{:.1f}",
-                )
-            else:
-                # Legacy graph behavior (flag off): Alive vs Dead
-                bars1 = axes2[0, 1].bar(x - bar_width/2, time_alive, bar_width,
-                                         color=self.COLORS['cyan'], label='Alive',
+
+                # Kills vs Deaths (grouped)
+                bars1 = axes1[0, 0].bar(x - bar_width/2, kills, bar_width,
+                                         color=self.COLORS['green'], label='Kills',
                                          edgecolor='white', linewidth=0.5)
-                bars2 = axes2[0, 1].bar(x + bar_width/2, time_dead, bar_width,
-                                         color=self.COLORS['pink'], label='Dead',
+                bars2 = axes1[0, 0].bar(x + bar_width/2, deaths, bar_width,
+                                         color=self.COLORS['red'], label='Deaths',
                                          edgecolor='white', linewidth=0.5)
-                self._style_axis(axes2[0, 1], "TIME ALIVE vs DEAD (minutes)")
-                axes2[0, 1].set_xticks(x)
-                axes2[0, 1].set_xticklabels(display_names, rotation=45, ha="right")
-                axes2[0, 1].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
+                self._style_axis(axes1[0, 0], "KILLS vs DEATHS")
+                axes1[0, 0].set_xticks(x)
+                axes1[0, 0].set_xticklabels(display_names, rotation=45, ha="right")
+                axes1[0, 0].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
                                    edgecolor='white', labelcolor='white')
-                self._add_grouped_bar_labels(axes2[0, 1], bars1, bars2,
-                                              time_alive, time_dead, "{:.1f}")
+                self._add_grouped_bar_labels(axes1[0, 0], bars1, bars2, kills, deaths)
 
-            # Gibs
-            bars = axes2[1, 0].bar(x, gibs, color=self.COLORS['red'],
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes2[1, 0], "GIBS")
-            axes2[1, 0].set_xticks(x)
-            axes2[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
-            self._add_bar_labels(axes2[1, 0], bars, gibs)
-
-            # Headshots
-            bars = axes2[1, 1].bar(x, headshots, color=self.COLORS['purple'],
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes2[1, 1], "HEADSHOTS")
-            axes2[1, 1].set_xticks(x)
-            axes2[1, 1].set_xticklabels(display_names, rotation=45, ha="right")
-            self._add_bar_labels(axes2[1, 1], bars, headshots)
-            if self.show_timing_dual and dual_shadow_note:
-                fig2.text(0.01, 0.01, f"Dual timing note: {dual_shadow_note}",
-                          color='#B0B0B0', fontsize=8)
-
-            plt.tight_layout(rect=(0, 0, 1, 0.96))
-            buf2 = io.BytesIO()
-            plt.savefig(buf2, format="png", facecolor=self.COLORS['bg_dark'],
-                        dpi=120, bbox_inches="tight")
-            buf2.seek(0)
-            plt.close(fig2)
-
-            # ═══════════════════════════════════════════════════════════════
-            # IMAGE 3: ADVANCED METRICS - 3x2
-            # ═══════════════════════════════════════════════════════════════
-            fig3, axes3 = plt.subplots(3, 2, figsize=(14, 14))
-            fig3.patch.set_facecolor(self.COLORS['bg_dark'])
-            fig3.suptitle(
-                f"ADVANCED METRICS  -  {latest_date}",
-                fontsize=18, fontweight="bold", color='white', y=0.98
-            )
-
-            # K/D Ratio
-            kd_values = [k / max(1, d) for k, d in zip(kills, deaths)]
-            kd_colors = [
-                self.COLORS['green'] if kd >= 2.0
-                else self.COLORS['yellow'] if kd >= 1.0
-                else self.COLORS['red']
-                for kd in kd_values
-            ]
-            bars = axes3[0, 0].bar(x, kd_values, color=kd_colors,
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes3[0, 0], "K/D RATIO")
-            axes3[0, 0].axhline(y=1.0, color="white", linestyle="--",
-                                 alpha=0.5, linewidth=1)
-            axes3[0, 0].set_xticks(x)
-            axes3[0, 0].set_xticklabels(display_names, rotation=45, ha="right")
-            self._add_bar_labels(axes3[0, 0], bars, kd_values, fmt="{:.2f}")
-
-            # Damage Efficiency
-            eff_colors = [
-                self.COLORS['green'] if e >= 1.5
-                else self.COLORS['yellow'] if e >= 1.0
-                else self.COLORS['red']
-                for e in dmg_eff
-            ]
-            bars = axes3[0, 1].bar(x, dmg_eff, color=eff_colors,
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes3[0, 1], "DAMAGE EFFICIENCY")
-            axes3[0, 1].axhline(y=1.0, color="white", linestyle="--",
-                                 alpha=0.5, linewidth=1)
-            axes3[0, 1].set_xticks(x)
-            axes3[0, 1].set_xticklabels(display_names, rotation=45, ha="right")
-            self._add_bar_labels(axes3[0, 1], bars, dmg_eff, fmt="{:.2f}x")
-
-            if self.show_timing_dual:
-                timing_bar_width = 0.35
-                bars1 = axes3[1, 0].bar(
-                    x - timing_bar_width/2,
-                    denied_per_min_old,
-                    timing_bar_width,
-                    color=self.COLORS['orange'],
-                    label='Old',
-                    edgecolor='white',
-                    linewidth=0.5,
-                )
-                bars2 = axes3[1, 0].bar(
-                    x + timing_bar_width/2,
-                    denied_per_min_new,
-                    timing_bar_width,
-                    color=self.COLORS['teal'],
-                    label='New',
-                    edgecolor='white',
-                    linewidth=0.5,
-                )
-                self._style_axis(axes3[1, 0], "DENIED/MIN (OLD vs NEW)")
-                max_denied = max(max(denied_per_min_old), max(denied_per_min_new), 1)
-                axes3[1, 0].set_ylim(0, max(10, max_denied * 1.2))
-                axes3[1, 0].set_xticks(x)
-                axes3[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
-                axes3[1, 0].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
+                # Damage Given vs Received (grouped)
+                bars1 = axes1[0, 1].bar(x - bar_width/2, damage_given, bar_width,
+                                         color=self.COLORS['blue'], label='Given',
+                                         edgecolor='white', linewidth=0.5)
+                bars2 = axes1[0, 1].bar(x + bar_width/2, damage_received, bar_width,
+                                         color=self.COLORS['orange'], label='Received',
+                                         edgecolor='white', linewidth=0.5)
+                self._style_axis(axes1[0, 1], "DAMAGE GIVEN vs RECEIVED")
+                axes1[0, 1].set_xticks(x)
+                axes1[0, 1].set_xticklabels(display_names, rotation=45, ha="right")
+                axes1[0, 1].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
                                    edgecolor='white', labelcolor='white')
-                self._add_grouped_bar_labels(
-                    axes3[1, 0],
-                    bars1,
-                    bars2,
-                    denied_per_min_old,
-                    denied_per_min_new,
-                    fmt="{:.1f}",
-                )
-            else:
-                # Denied Playtime (per-minute rate)
-                denied_colors = [
-                    self.COLORS['red'] if d >= 5
-                    else self.COLORS['orange'] if d >= 2
-                    else self.COLORS['green']
-                    for d in denied_per_min_old
-                ]
-                bars = axes3[1, 0].bar(x, denied_per_min_old, color=denied_colors,
-                                        edgecolor='white', linewidth=0.5)
-                self._style_axis(axes3[1, 0], "DENIED/MIN")
-                axes3[1, 0].set_ylim(0, max(10, max(denied_per_min_old) * 1.2))
-                axes3[1, 0].set_xticks(x)
-                axes3[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
-                self._add_bar_labels(axes3[1, 0], bars, denied_per_min_old,
-                                     fmt="{:.1f}")
+                self._add_grouped_bar_labels(axes1[0, 1], bars1, bars2,
+                                              damage_given, damage_received, "{:,.0f}")
 
-            if self.show_timing_dual:
-                timing_bar_width = 0.35
-                bars1 = axes3[1, 1].bar(
-                    x - timing_bar_width/2,
-                    survival_rate,
-                    timing_bar_width,
-                    color=self.COLORS['yellow'],
-                    label='Old',
-                    edgecolor='white',
-                    linewidth=0.5,
-                )
-                bars2 = axes3[1, 1].bar(
-                    x + timing_bar_width/2,
-                    survival_rate_new,
-                    timing_bar_width,
-                    color=self.COLORS['green'],
-                    label='New',
-                    edgecolor='white',
-                    linewidth=0.5,
-                )
-                self._style_axis(axes3[1, 1], "SURVIVAL RATE % (OLD vs NEW)")
-                axes3[1, 1].set_ylim(0, 100)
-                axes3[1, 1].axhline(y=50, color="white", linestyle="--",
-                                     alpha=0.5, linewidth=1)
-                axes3[1, 1].set_xticks(x)
-                axes3[1, 1].set_xticklabels(display_names, rotation=45, ha="right")
-                axes3[1, 1].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
-                                   edgecolor='white', labelcolor='white')
-                self._add_grouped_bar_labels(
-                    axes3[1, 1],
-                    bars1,
-                    bars2,
-                    survival_rate,
-                    survival_rate_new,
-                    fmt="{:.0f}%",
-                )
-            else:
-                # Survival Rate
-                surv_colors = [
-                    self.COLORS['green'] if s >= 70
-                    else self.COLORS['yellow'] if s >= 50
+                # K/D Ratio
+                kd_colors = [
+                    self.COLORS['green'] if kd >= 1.5
+                    else self.COLORS['yellow'] if kd >= 1.0
                     else self.COLORS['red']
-                    for s in survival_rate
+                    for kd in kd_ratios
                 ]
-                bars = axes3[1, 1].bar(x, survival_rate, color=surv_colors,
+                bars = axes1[1, 0].bar(x, kd_ratios, color=kd_colors,
                                         edgecolor='white', linewidth=0.5)
-                self._style_axis(axes3[1, 1], "SURVIVAL RATE (%)")
-                axes3[1, 1].set_ylim(0, 100)
-                axes3[1, 1].axhline(y=50, color="white", linestyle="--",
+                self._style_axis(axes1[1, 0], "K/D RATIO")
+                axes1[1, 0].axhline(y=1.0, color="white", linestyle="--",
                                      alpha=0.5, linewidth=1)
-                axes3[1, 1].set_xticks(x)
-                axes3[1, 1].set_xticklabels(display_names, rotation=45, ha="right")
-                self._add_bar_labels(axes3[1, 1], bars, survival_rate, fmt="{:.0f}%")
+                axes1[1, 0].set_xticks(x)
+                axes1[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
+                self._add_bar_labels(axes1[1, 0], bars, kd_ratios, fmt="{:.2f}")
 
-            # Useful Kills (UK)
-            bars = axes3[2, 0].bar(x, useful_kills, color=self.COLORS['teal'],
-                                    edgecolor='white', linewidth=0.5)
-            self._style_axis(axes3[2, 0], "USEFUL KILLS (UK)")
-            axes3[2, 0].set_xticks(x)
-            axes3[2, 0].set_xticklabels(display_names, rotation=45, ha="right")
-            self._add_bar_labels(axes3[2, 0], bars, useful_kills)
+                # DPM
+                bars = axes1[1, 1].bar(x, dpm, color=self.COLORS['cyan'],
+                                        edgecolor='white', linewidth=0.5)
+                self._style_axis(axes1[1, 1], "DPM (Damage Per Minute)")
+                axes1[1, 1].set_xticks(x)
+                axes1[1, 1].set_xticklabels(display_names, rotation=45, ha="right")
+                self._add_bar_labels(axes1[1, 1], bars, dpm)
 
-            # Self Kills vs Full Selfkills
-            bar_width = 0.35
-            bars1 = axes3[2, 1].bar(x - bar_width/2, self_kills, bar_width,
-                                     color=self.COLORS['gray'], label='Self Kills',
-                                     edgecolor='white', linewidth=0.5)
-            bars2 = axes3[2, 1].bar(x + bar_width/2, full_selfkills, bar_width,
-                                     color=self.COLORS['red'], label='Full Selfkills',
-                                     edgecolor='white', linewidth=0.5)
-            self._style_axis(axes3[2, 1], "SELF KILLS vs FULL SELFKILLS")
-            axes3[2, 1].set_xticks(x)
-            axes3[2, 1].set_xticklabels(display_names, rotation=45, ha="right")
-            axes3[2, 1].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
-                               edgecolor='white', labelcolor='white')
-            self._add_grouped_bar_labels(axes3[2, 1], bars1, bars2,
-                                         self_kills, full_selfkills)
-            if self.show_timing_dual and dual_shadow_note:
-                fig3.text(0.01, 0.01, f"Dual timing note: {dual_shadow_note}",
-                          color='#B0B0B0', fontsize=8)
+                fig1.tight_layout(rect=(0, 0, 1, 0.96))
+                buf1 = io.BytesIO()
+                fig1.savefig(buf1, format="png", facecolor=self.COLORS['bg_dark'],
+                            dpi=120, bbox_inches="tight")
+                buf1.seek(0)
+                plt.close(fig1)
 
-            plt.tight_layout(rect=(0, 0, 1, 0.96))
-            buf3 = io.BytesIO()
-            plt.savefig(buf3, format="png", facecolor=self.COLORS['bg_dark'],
-                        dpi=120, bbox_inches="tight")
-            buf3.seek(0)
-            plt.close(fig3)
+                # ═══════════════════════════════════════════════════════════════
+                # IMAGE 2: COMBAT STATS (DEFENSE/SUPPORT) - 2x2 with grouped bars
+                # ═══════════════════════════════════════════════════════════════
+                fig2, axes2 = plt.subplots(2, 2, figsize=(14, 10))
+                fig2.patch.set_facecolor(self.COLORS['bg_dark'])
+                fig2.suptitle(
+                    f"COMBAT STATS (DEFENSE/SUPPORT)  -  {latest_date}",
+                    fontsize=18, fontweight="bold", color='white', y=0.98
+                )
 
-            # ═══════════════════════════════════════════════════════════════
-            # IMAGE 4: PLAYSTYLE ANALYSIS - Full width bars + Legend
-            # ═══════════════════════════════════════════════════════════════
-            fig4, (ax4a, ax4b) = plt.subplots(1, 2, figsize=(16, 8),
-                                               gridspec_kw={'width_ratios': [2, 1]})
-            fig4.patch.set_facecolor(self.COLORS['bg_dark'])
-            fig4.suptitle(
-                f"PLAYSTYLE ANALYSIS  -  {latest_date}",
-                fontsize=18, fontweight="bold", color='white', y=0.98
-            )
+                # Revives Given vs Times Revived (grouped)
+                bars1 = axes2[0, 0].bar(x - bar_width/2, revives_given, bar_width,
+                                         color=self.COLORS['green'], label='Given',
+                                         edgecolor='white', linewidth=0.5)
+                bars2 = axes2[0, 0].bar(x + bar_width/2, times_revived, bar_width,
+                                         color=self.COLORS['teal'], label='Received',
+                                         edgecolor='white', linewidth=0.5)
+                self._style_axis(axes2[0, 0], "REVIVES GIVEN vs RECEIVED")
+                axes2[0, 0].set_xticks(x)
+                axes2[0, 0].set_xticklabels(display_names, rotation=45, ha="right")
+                axes2[0, 0].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
+                                   edgecolor='white', labelcolor='white')
+                self._add_grouped_bar_labels(axes2[0, 0], bars1, bars2,
+                                              revives_given, times_revived)
 
-            # Player Playstyles (horizontal bars using DPM)
-            style_colors = [s.color for s in playstyles]
-            y_pos = np.arange(n_players)
-            bars = ax4a.barh(y_pos, dpm, color=style_colors,
-                              edgecolor='white', linewidth=0.5)
-            ax4a.set_yticks(y_pos)
-            ax4a.set_yticklabels(display_names, color='white', fontsize=10)
-            ax4a.invert_yaxis()
-            ax4a.set_facecolor(self.COLORS['bg_panel'])
-            ax4a.set_title("PLAYER PLAYSTYLES", fontweight="bold",
-                           color='white', fontsize=14, pad=10)
-            ax4a.set_xlabel("DPM", color='white', fontsize=11)
-            ax4a.tick_params(colors='white')
-            for spine in ['bottom', 'left']:
-                ax4a.spines[spine].set_color('#404249')
-            for spine in ['top', 'right']:
-                ax4a.spines[spine].set_visible(False)
-            ax4a.grid(True, alpha=0.15, color='white', axis='x', linestyle='--')
+                if self.show_timing_dual:
+                    bars1 = axes2[0, 1].bar(
+                        x - bar_width/2,
+                        time_dead_old_minutes,
+                        bar_width,
+                        color=self.COLORS['pink'],
+                        label='Dead (Old)',
+                        edgecolor='white',
+                        linewidth=0.5,
+                    )
+                    bars2 = axes2[0, 1].bar(
+                        x + bar_width/2,
+                        time_dead_new_minutes,
+                        bar_width,
+                        color=self.COLORS['cyan'],
+                        label='Dead (New)',
+                        edgecolor='white',
+                        linewidth=0.5,
+                    )
+                    self._style_axis(axes2[0, 1], "TIME DEAD OLD vs NEW (minutes)")
+                    axes2[0, 1].set_xticks(x)
+                    axes2[0, 1].set_xticklabels(display_names, rotation=45, ha="right")
+                    axes2[0, 1].legend(
+                        loc='upper right',
+                        facecolor=self.COLORS['bg_panel'],
+                        edgecolor='white',
+                        labelcolor='white',
+                    )
+                    self._add_grouped_bar_labels(
+                        axes2[0, 1],
+                        bars1,
+                        bars2,
+                        time_dead_old_minutes,
+                        time_dead_new_minutes,
+                        "{:.1f}",
+                    )
+                else:
+                    # Legacy graph behavior (flag off): Alive vs Dead
+                    bars1 = axes2[0, 1].bar(x - bar_width/2, time_alive, bar_width,
+                                             color=self.COLORS['cyan'], label='Alive',
+                                             edgecolor='white', linewidth=0.5)
+                    bars2 = axes2[0, 1].bar(x + bar_width/2, time_dead, bar_width,
+                                             color=self.COLORS['pink'], label='Dead',
+                                             edgecolor='white', linewidth=0.5)
+                    self._style_axis(axes2[0, 1], "TIME ALIVE vs DEAD (minutes)")
+                    axes2[0, 1].set_xticks(x)
+                    axes2[0, 1].set_xticklabels(display_names, rotation=45, ha="right")
+                    axes2[0, 1].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
+                                       edgecolor='white', labelcolor='white')
+                    self._add_grouped_bar_labels(axes2[0, 1], bars1, bars2,
+                                                  time_alive, time_dead, "{:.1f}")
 
-            # Add playstyle labels
-            max_dpm = max(dpm) if dpm else 1
-            for bar, style, d in zip(bars, playstyles, dpm):
-                width = bar.get_width()
-                ax4a.text(width + (max_dpm * 0.02),
-                          bar.get_y() + bar.get_height() / 2,
-                          f"{style.name_display} ({int(d)})",
-                          va='center', color='white', fontsize=9, fontweight='bold')
+                # Gibs
+                bars = axes2[1, 0].bar(x, gibs, color=self.COLORS['red'],
+                                        edgecolor='white', linewidth=0.5)
+                self._style_axis(axes2[1, 0], "GIBS")
+                axes2[1, 0].set_xticks(x)
+                axes2[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
+                self._add_bar_labels(axes2[1, 0], bars, gibs)
 
-            # Playstyle Legend
-            ax4b.set_facecolor(self.COLORS['bg_panel'])
-            ax4b.axis('off')
-            ax4b.set_title("PLAYSTYLE LEGEND", fontweight="bold",
-                           color='white', fontsize=14, pad=10)
+                # Headshots
+                bars = axes2[1, 1].bar(x, headshots, color=self.COLORS['purple'],
+                                        edgecolor='white', linewidth=0.5)
+                self._style_axis(axes2[1, 1], "HEADSHOTS")
+                axes2[1, 1].set_xticks(x)
+                axes2[1, 1].set_xticklabels(display_names, rotation=45, ha="right")
+                self._add_bar_labels(axes2[1, 1], bars, headshots)
+                if self.show_timing_dual and dual_shadow_note:
+                    fig2.text(0.01, 0.01, f"Dual timing note: {dual_shadow_note}",
+                              color='#B0B0B0', fontsize=8)
 
-            legend_items = [
-                ("FRAGGER", "#E74C3C", "High K/D + High FragPotential"),
-                ("SLAYER", "#E91E63", "High kills, trades often"),
-                ("TANK", "#3498DB", "Survives, low death ratio"),
-                ("MEDIC", "#2ECC71", "High revives per round"),
-                ("SNIPER", "#9B59B6", "High headshot percentage"),
-                ("RUSHER", "#F39C12", "High FP, aggressive play"),
-                ("OBJECTIVE", "#1ABC9C", "Objective focused"),
-                ("BALANCED", "#95A5A6", "All-around player"),
-            ]
+                fig2.tight_layout(rect=(0, 0, 1, 0.96))
+                buf2 = io.BytesIO()
+                fig2.savefig(buf2, format="png", facecolor=self.COLORS['bg_dark'],
+                            dpi=120, bbox_inches="tight")
+                buf2.seek(0)
+                plt.close(fig2)
 
-            y_pos_legend = 0.92
-            for name, color, desc in legend_items:
-                ax4b.add_patch(mpatches.FancyBboxPatch(
-                    (0.05, y_pos_legend - 0.04), 0.08, 0.06,
-                    boxstyle="round,pad=0.01",
-                    facecolor=color, edgecolor='white', linewidth=0.5,
-                    transform=ax4b.transAxes
-                ))
-                ax4b.text(0.16, y_pos_legend, f"{name}",
-                          transform=ax4b.transAxes,
-                          color=color, fontsize=12, fontweight='bold', va='center')
-                ax4b.text(0.16, y_pos_legend - 0.04, desc,
-                          transform=ax4b.transAxes,
-                          color='#B0B0B0', fontsize=9, va='center')
-                y_pos_legend -= 0.11
+                # ═══════════════════════════════════════════════════════════════
+                # IMAGE 3: ADVANCED METRICS - 3x2
+                # ═══════════════════════════════════════════════════════════════
+                fig3, axes3 = plt.subplots(3, 2, figsize=(14, 14))
+                fig3.patch.set_facecolor(self.COLORS['bg_dark'])
+                fig3.suptitle(
+                    f"ADVANCED METRICS  -  {latest_date}",
+                    fontsize=18, fontweight="bold", color='white', y=0.98
+                )
 
-            plt.tight_layout(rect=(0, 0, 1, 0.96))
-            buf4 = io.BytesIO()
-            plt.savefig(buf4, format="png", facecolor=self.COLORS['bg_dark'],
-                        dpi=120, bbox_inches="tight")
-            buf4.seek(0)
-            plt.close(fig4)
+                # K/D Ratio
+                kd_values = [k / max(1, d) for k, d in zip(kills, deaths)]
+                kd_colors = [
+                    self.COLORS['green'] if kd >= 2.0
+                    else self.COLORS['yellow'] if kd >= 1.0
+                    else self.COLORS['red']
+                    for kd in kd_values
+                ]
+                bars = axes3[0, 0].bar(x, kd_values, color=kd_colors,
+                                        edgecolor='white', linewidth=0.5)
+                self._style_axis(axes3[0, 0], "K/D RATIO")
+                axes3[0, 0].axhline(y=1.0, color="white", linestyle="--",
+                                     alpha=0.5, linewidth=1)
+                axes3[0, 0].set_xticks(x)
+                axes3[0, 0].set_xticklabels(display_names, rotation=45, ha="right")
+                self._add_bar_labels(axes3[0, 0], bars, kd_values, fmt="{:.2f}")
+
+                # Damage Efficiency
+                eff_colors = [
+                    self.COLORS['green'] if e >= 1.5
+                    else self.COLORS['yellow'] if e >= 1.0
+                    else self.COLORS['red']
+                    for e in dmg_eff
+                ]
+                bars = axes3[0, 1].bar(x, dmg_eff, color=eff_colors,
+                                        edgecolor='white', linewidth=0.5)
+                self._style_axis(axes3[0, 1], "DAMAGE EFFICIENCY")
+                axes3[0, 1].axhline(y=1.0, color="white", linestyle="--",
+                                     alpha=0.5, linewidth=1)
+                axes3[0, 1].set_xticks(x)
+                axes3[0, 1].set_xticklabels(display_names, rotation=45, ha="right")
+                self._add_bar_labels(axes3[0, 1], bars, dmg_eff, fmt="{:.2f}x")
+
+                if self.show_timing_dual:
+                    timing_bar_width = 0.35
+                    bars1 = axes3[1, 0].bar(
+                        x - timing_bar_width/2,
+                        denied_per_min_old,
+                        timing_bar_width,
+                        color=self.COLORS['orange'],
+                        label='Old',
+                        edgecolor='white',
+                        linewidth=0.5,
+                    )
+                    bars2 = axes3[1, 0].bar(
+                        x + timing_bar_width/2,
+                        denied_per_min_new,
+                        timing_bar_width,
+                        color=self.COLORS['teal'],
+                        label='New',
+                        edgecolor='white',
+                        linewidth=0.5,
+                    )
+                    self._style_axis(axes3[1, 0], "DENIED/MIN (OLD vs NEW)")
+                    max_denied = max(max(denied_per_min_old), max(denied_per_min_new), 1)
+                    axes3[1, 0].set_ylim(0, max(10, max_denied * 1.2))
+                    axes3[1, 0].set_xticks(x)
+                    axes3[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
+                    axes3[1, 0].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
+                                       edgecolor='white', labelcolor='white')
+                    self._add_grouped_bar_labels(
+                        axes3[1, 0],
+                        bars1,
+                        bars2,
+                        denied_per_min_old,
+                        denied_per_min_new,
+                        fmt="{:.1f}",
+                    )
+                else:
+                    # Denied Playtime (per-minute rate)
+                    denied_colors = [
+                        self.COLORS['red'] if d >= 5
+                        else self.COLORS['orange'] if d >= 2
+                        else self.COLORS['green']
+                        for d in denied_per_min_old
+                    ]
+                    bars = axes3[1, 0].bar(x, denied_per_min_old, color=denied_colors,
+                                            edgecolor='white', linewidth=0.5)
+                    self._style_axis(axes3[1, 0], "DENIED/MIN")
+                    axes3[1, 0].set_ylim(0, max(10, max(denied_per_min_old) * 1.2))
+                    axes3[1, 0].set_xticks(x)
+                    axes3[1, 0].set_xticklabels(display_names, rotation=45, ha="right")
+                    self._add_bar_labels(axes3[1, 0], bars, denied_per_min_old,
+                                         fmt="{:.1f}")
+
+                if self.show_timing_dual:
+                    timing_bar_width = 0.35
+                    bars1 = axes3[1, 1].bar(
+                        x - timing_bar_width/2,
+                        survival_rate,
+                        timing_bar_width,
+                        color=self.COLORS['yellow'],
+                        label='Old',
+                        edgecolor='white',
+                        linewidth=0.5,
+                    )
+                    bars2 = axes3[1, 1].bar(
+                        x + timing_bar_width/2,
+                        survival_rate_new,
+                        timing_bar_width,
+                        color=self.COLORS['green'],
+                        label='New',
+                        edgecolor='white',
+                        linewidth=0.5,
+                    )
+                    self._style_axis(axes3[1, 1], "SURVIVAL RATE % (OLD vs NEW)")
+                    axes3[1, 1].set_ylim(0, 100)
+                    axes3[1, 1].axhline(y=50, color="white", linestyle="--",
+                                         alpha=0.5, linewidth=1)
+                    axes3[1, 1].set_xticks(x)
+                    axes3[1, 1].set_xticklabels(display_names, rotation=45, ha="right")
+                    axes3[1, 1].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
+                                       edgecolor='white', labelcolor='white')
+                    self._add_grouped_bar_labels(
+                        axes3[1, 1],
+                        bars1,
+                        bars2,
+                        survival_rate,
+                        survival_rate_new,
+                        fmt="{:.0f}%",
+                    )
+                else:
+                    # Survival Rate
+                    surv_colors = [
+                        self.COLORS['green'] if s >= 70
+                        else self.COLORS['yellow'] if s >= 50
+                        else self.COLORS['red']
+                        for s in survival_rate
+                    ]
+                    bars = axes3[1, 1].bar(x, survival_rate, color=surv_colors,
+                                            edgecolor='white', linewidth=0.5)
+                    self._style_axis(axes3[1, 1], "SURVIVAL RATE (%)")
+                    axes3[1, 1].set_ylim(0, 100)
+                    axes3[1, 1].axhline(y=50, color="white", linestyle="--",
+                                         alpha=0.5, linewidth=1)
+                    axes3[1, 1].set_xticks(x)
+                    axes3[1, 1].set_xticklabels(display_names, rotation=45, ha="right")
+                    self._add_bar_labels(axes3[1, 1], bars, survival_rate, fmt="{:.0f}%")
+
+                # Useful Kills (UK)
+                bars = axes3[2, 0].bar(x, useful_kills, color=self.COLORS['teal'],
+                                        edgecolor='white', linewidth=0.5)
+                self._style_axis(axes3[2, 0], "USEFUL KILLS (UK)")
+                axes3[2, 0].set_xticks(x)
+                axes3[2, 0].set_xticklabels(display_names, rotation=45, ha="right")
+                self._add_bar_labels(axes3[2, 0], bars, useful_kills)
+
+                # Self Kills vs Full Selfkills
+                # NB: named sk_bar_width (not bar_width) — reassigning bar_width
+                # here would make it closure-local and break the earlier reads.
+                sk_bar_width = 0.35
+                bars1 = axes3[2, 1].bar(x - sk_bar_width/2, self_kills, sk_bar_width,
+                                         color=self.COLORS['gray'], label='Self Kills',
+                                         edgecolor='white', linewidth=0.5)
+                bars2 = axes3[2, 1].bar(x + sk_bar_width/2, full_selfkills, sk_bar_width,
+                                         color=self.COLORS['red'], label='Full Selfkills',
+                                         edgecolor='white', linewidth=0.5)
+                self._style_axis(axes3[2, 1], "SELF KILLS vs FULL SELFKILLS")
+                axes3[2, 1].set_xticks(x)
+                axes3[2, 1].set_xticklabels(display_names, rotation=45, ha="right")
+                axes3[2, 1].legend(loc='upper right', facecolor=self.COLORS['bg_panel'],
+                                   edgecolor='white', labelcolor='white')
+                self._add_grouped_bar_labels(axes3[2, 1], bars1, bars2,
+                                             self_kills, full_selfkills)
+                if self.show_timing_dual and dual_shadow_note:
+                    fig3.text(0.01, 0.01, f"Dual timing note: {dual_shadow_note}",
+                              color='#B0B0B0', fontsize=8)
+
+                fig3.tight_layout(rect=(0, 0, 1, 0.96))
+                buf3 = io.BytesIO()
+                fig3.savefig(buf3, format="png", facecolor=self.COLORS['bg_dark'],
+                            dpi=120, bbox_inches="tight")
+                buf3.seek(0)
+                plt.close(fig3)
+
+                # ═══════════════════════════════════════════════════════════════
+                # IMAGE 4: PLAYSTYLE ANALYSIS - Full width bars + Legend
+                # ═══════════════════════════════════════════════════════════════
+                fig4, (ax4a, ax4b) = plt.subplots(1, 2, figsize=(16, 8),
+                                                   gridspec_kw={'width_ratios': [2, 1]})
+                fig4.patch.set_facecolor(self.COLORS['bg_dark'])
+                fig4.suptitle(
+                    f"PLAYSTYLE ANALYSIS  -  {latest_date}",
+                    fontsize=18, fontweight="bold", color='white', y=0.98
+                )
+
+                # Player Playstyles (horizontal bars using DPM)
+                style_colors = [s.color for s in playstyles]
+                y_pos = np.arange(n_players)
+                bars = ax4a.barh(y_pos, dpm, color=style_colors,
+                                  edgecolor='white', linewidth=0.5)
+                ax4a.set_yticks(y_pos)
+                ax4a.set_yticklabels(display_names, color='white', fontsize=10)
+                ax4a.invert_yaxis()
+                ax4a.set_facecolor(self.COLORS['bg_panel'])
+                ax4a.set_title("PLAYER PLAYSTYLES", fontweight="bold",
+                               color='white', fontsize=14, pad=10)
+                ax4a.set_xlabel("DPM", color='white', fontsize=11)
+                ax4a.tick_params(colors='white')
+                for spine in ['bottom', 'left']:
+                    ax4a.spines[spine].set_color('#404249')
+                for spine in ['top', 'right']:
+                    ax4a.spines[spine].set_visible(False)
+                ax4a.grid(True, alpha=0.15, color='white', axis='x', linestyle='--')
+
+                # Add playstyle labels
+                max_dpm = max(dpm) if dpm else 1
+                for bar, style, d in zip(bars, playstyles, dpm):
+                    width = bar.get_width()
+                    ax4a.text(width + (max_dpm * 0.02),
+                              bar.get_y() + bar.get_height() / 2,
+                              f"{style.name_display} ({int(d)})",
+                              va='center', color='white', fontsize=9, fontweight='bold')
+
+                # Playstyle Legend
+                ax4b.set_facecolor(self.COLORS['bg_panel'])
+                ax4b.axis('off')
+                ax4b.set_title("PLAYSTYLE LEGEND", fontweight="bold",
+                               color='white', fontsize=14, pad=10)
+
+                legend_items = [
+                    ("FRAGGER", "#E74C3C", "High K/D + High FragPotential"),
+                    ("SLAYER", "#E91E63", "High kills, trades often"),
+                    ("TANK", "#3498DB", "Survives, low death ratio"),
+                    ("MEDIC", "#2ECC71", "High revives per round"),
+                    ("SNIPER", "#9B59B6", "High headshot percentage"),
+                    ("RUSHER", "#F39C12", "High FP, aggressive play"),
+                    ("OBJECTIVE", "#1ABC9C", "Objective focused"),
+                    ("BALANCED", "#95A5A6", "All-around player"),
+                ]
+
+                y_pos_legend = 0.92
+                for name, color, desc in legend_items:
+                    ax4b.add_patch(mpatches.FancyBboxPatch(
+                        (0.05, y_pos_legend - 0.04), 0.08, 0.06,
+                        boxstyle="round,pad=0.01",
+                        facecolor=color, edgecolor='white', linewidth=0.5,
+                        transform=ax4b.transAxes
+                    ))
+                    ax4b.text(0.16, y_pos_legend, f"{name}",
+                              transform=ax4b.transAxes,
+                              color=color, fontsize=12, fontweight='bold', va='center')
+                    ax4b.text(0.16, y_pos_legend - 0.04, desc,
+                              transform=ax4b.transAxes,
+                              color='#B0B0B0', fontsize=9, va='center')
+                    y_pos_legend -= 0.11
+
+                fig4.tight_layout(rect=(0, 0, 1, 0.96))
+                buf4 = io.BytesIO()
+                fig4.savefig(buf4, format="png", facecolor=self.COLORS['bg_dark'],
+                            dpi=120, bbox_inches="tight")
+                buf4.seek(0)
+                plt.close(fig4)
+
+                return buf1, buf2, buf3, buf4
+
+            buf1, buf2, buf3, buf4 = await asyncio.to_thread(_render_static_figures)
 
             # ═══════════════════════════════════════════════════════════════
             # IMAGE 5: DPM TIMELINE
@@ -1103,131 +1116,136 @@ class SessionGraphGenerator(SessionTimingHelpersMixin):
                     dpm = 0
                 player_timelines[name][round_id] = dpm
 
-            # Create figure
-            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(18, 12),
-                                            gridspec_kw={'height_ratios': [3, 1]})
-            fig.patch.set_facecolor(self.COLORS['bg_dark'])
-            fig.suptitle(
-                f"DPM TIMELINE  -  {latest_date}",
-                fontsize=18, fontweight="bold", color='white', y=0.98
-            )
+            # Pure-CPU matplotlib rendering; run in a worker thread so it
+            # cannot stall the event loop (see generate_performance_graphs).
+            def _render_timeline() -> io.BytesIO:
+                # Create figure
+                fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(18, 12),
+                                                gridspec_kw={'height_ratios': [3, 1]})
+                fig.patch.set_facecolor(self.COLORS['bg_dark'])
+                fig.suptitle(
+                    f"DPM TIMELINE  -  {latest_date}",
+                    fontsize=18, fontweight="bold", color='white', y=0.98
+                )
 
-            # Color palette
-            player_colors = [
-                '#E74C3C', '#3498DB', '#2ECC71', '#F39C12',
-                '#9B59B6', '#1ABC9C', '#E91E63', '#FEE75C',
-                '#00BCD4', '#FF5722', '#8BC34A', '#607D8B',
-                '#FF6B6B', '#4ECDC4', '#C9B037', '#BA68C8'
-            ]
+                # Color palette
+                player_colors = [
+                    '#E74C3C', '#3498DB', '#2ECC71', '#F39C12',
+                    '#9B59B6', '#1ABC9C', '#E91E63', '#FEE75C',
+                    '#00BCD4', '#FF5722', '#8BC34A', '#607D8B',
+                    '#FF6B6B', '#4ECDC4', '#C9B037', '#BA68C8'
+                ]
 
-            x_positions = range(len(round_order))
-            peak_data = {}
-            trend_data = {}
+                x_positions = range(len(round_order))
+                peak_data = {}
+                trend_data = {}
 
-            for idx, name in enumerate(top_player_names):
-                timeline = player_timelines.get(name, {})
-                y_values = [timeline.get(rid) for rid in round_order]
+                for idx, name in enumerate(top_player_names):
+                    timeline = player_timelines.get(name, {})
+                    y_values = [timeline.get(rid) for rid in round_order]
 
-                valid_points = [(i, v) for i, v in enumerate(y_values) if v is not None]
-                if not valid_points:
-                    continue
+                    valid_points = [(i, v) for i, v in enumerate(y_values) if v is not None]
+                    if not valid_points:
+                        continue
 
-                x_valid = [p[0] for p in valid_points]
-                y_valid = [p[1] for p in valid_points]
+                    x_valid = [p[0] for p in valid_points]
+                    y_valid = [p[1] for p in valid_points]
 
-                color = player_colors[idx % len(player_colors)]
+                    color = player_colors[idx % len(player_colors)]
 
-                ax1.plot(x_valid, y_valid, color=color, linewidth=2.5,
-                         marker='o', markersize=6, label=name[:12], alpha=0.9)
+                    ax1.plot(x_valid, y_valid, color=color, linewidth=2.5,
+                             marker='o', markersize=6, label=name[:12], alpha=0.9)
 
-                if y_valid:
-                    peak_idx = y_valid.index(max(y_valid))
-                    peak_x = x_valid[peak_idx]
-                    peak_y = y_valid[peak_idx]
-                    ax1.scatter([peak_x], [peak_y], color=color, s=150,
-                                marker='*', zorder=5, edgecolors='white',
-                                linewidths=1)
-                    peak_data[name] = (peak_x, peak_y, round_labels[peak_x])
+                    if y_valid:
+                        peak_idx = y_valid.index(max(y_valid))
+                        peak_x = x_valid[peak_idx]
+                        peak_y = y_valid[peak_idx]
+                        ax1.scatter([peak_x], [peak_y], color=color, s=150,
+                                    marker='*', zorder=5, edgecolors='white',
+                                    linewidths=1)
+                        peak_data[name] = (peak_x, peak_y, round_labels[peak_x])
 
-                    if len(y_valid) >= 4:
-                        mid = len(y_valid) // 2
-                        first_half_avg = sum(y_valid[:mid]) / mid
-                        second_half_avg = sum(y_valid[mid:]) / (len(y_valid) - mid)
+                        if len(y_valid) >= 4:
+                            mid = len(y_valid) // 2
+                            first_half_avg = sum(y_valid[:mid]) / mid
+                            second_half_avg = sum(y_valid[mid:]) / (len(y_valid) - mid)
 
-                        avg_all = sum(y_valid) / len(y_valid)
-                        variance = sum((v - avg_all)**2 for v in y_valid) / len(y_valid)
-                        volatility = (variance ** 0.5) / max(1, avg_all) * 100
+                            avg_all = sum(y_valid) / len(y_valid)
+                            variance = sum((v - avg_all)**2 for v in y_valid) / len(y_valid)
+                            volatility = (variance ** 0.5) / max(1, avg_all) * 100
 
-                        if volatility > 40:
-                            trend_data[name] = ("VOLATILE", "🎢", self.COLORS['orange'])
-                        elif second_half_avg > first_half_avg * 1.15:
-                            trend_data[name] = ("RISING", "📈", self.COLORS['green'])
-                        elif first_half_avg > second_half_avg * 1.15:
-                            trend_data[name] = ("FADING", "📉", self.COLORS['red'])
+                            if volatility > 40:
+                                trend_data[name] = ("VOLATILE", "🎢", self.COLORS['orange'])
+                            elif second_half_avg > first_half_avg * 1.15:
+                                trend_data[name] = ("RISING", "📈", self.COLORS['green'])
+                            elif first_half_avg > second_half_avg * 1.15:
+                                trend_data[name] = ("FADING", "📉", self.COLORS['red'])
+                            else:
+                                trend_data[name] = ("STEADY", "➡️", self.COLORS['cyan'])
                         else:
-                            trend_data[name] = ("STEADY", "➡️", self.COLORS['cyan'])
-                    else:
-                        trend_data[name] = ("N/A", "❓", self.COLORS['gray'])
+                            trend_data[name] = ("N/A", "❓", self.COLORS['gray'])
 
-            # Style main graph
-            ax1.set_facecolor(self.COLORS['bg_panel'])
-            ax1.set_ylabel("DPM (Damage Per Minute)", color='white',
-                           fontsize=12, fontweight='bold')
-            ax1.tick_params(colors='white', labelsize=9)
-            ax1.set_xticks(x_positions)
-            ax1.set_xticklabels(round_labels, rotation=45, ha='right',
-                                fontsize=8, color='white')
-            ax1.grid(True, alpha=0.2, color='white', linestyle='--')
-            for spine in ['bottom', 'left']:
-                ax1.spines[spine].set_color('#404249')
-            for spine in ['top', 'right']:
-                ax1.spines[spine].set_visible(False)
+                # Style main graph
+                ax1.set_facecolor(self.COLORS['bg_panel'])
+                ax1.set_ylabel("DPM (Damage Per Minute)", color='white',
+                               fontsize=12, fontweight='bold')
+                ax1.tick_params(colors='white', labelsize=9)
+                ax1.set_xticks(x_positions)
+                ax1.set_xticklabels(round_labels, rotation=45, ha='right',
+                                    fontsize=8, color='white')
+                ax1.grid(True, alpha=0.2, color='white', linestyle='--')
+                for spine in ['bottom', 'left']:
+                    ax1.spines[spine].set_color('#404249')
+                for spine in ['top', 'right']:
+                    ax1.spines[spine].set_visible(False)
 
-            ax1.legend(loc='upper left', bbox_to_anchor=(1.01, 1),
-                       facecolor=self.COLORS['bg_panel'],
-                       edgecolor='white', labelcolor='white',
-                       fontsize=9, ncol=1, framealpha=0.9)
+                ax1.legend(loc='upper left', bbox_to_anchor=(1.01, 1),
+                           facecolor=self.COLORS['bg_panel'],
+                           edgecolor='white', labelcolor='white',
+                           fontsize=9, ncol=1, framealpha=0.9)
 
-            # Bottom panel: Form Summary
-            ax2.set_facecolor(self.COLORS['bg_panel'])
-            ax2.axis('off')
-            ax2.set_title("SESSION FORM ANALYSIS", fontweight="bold",
-                          color='white', fontsize=13, pad=10)
+                # Bottom panel: Form Summary
+                ax2.set_facecolor(self.COLORS['bg_panel'])
+                ax2.axis('off')
+                ax2.set_title("SESSION FORM ANALYSIS", fontweight="bold",
+                              color='white', fontsize=13, pad=10)
 
-            for idx, name in enumerate(top_player_names[:16]):
-                col = idx % 4
-                row = idx // 4
+                for idx, name in enumerate(top_player_names[:16]):
+                    col = idx % 4
+                    row = idx // 4
 
-                x_pos = 0.02 + col * 0.25
-                y_pos = 0.7 - row * 0.45
+                    x_pos = 0.02 + col * 0.25
+                    y_pos = 0.7 - row * 0.45
 
-                ax2.text(x_pos, y_pos, name[:12], transform=ax2.transAxes,
-                         color='white', fontsize=11, fontweight='bold', va='top')
+                    ax2.text(x_pos, y_pos, name[:12], transform=ax2.transAxes,
+                             color='white', fontsize=11, fontweight='bold', va='top')
 
-                if name in trend_data:
-                    trend_name, emoji, color = trend_data[name]
-                    ax2.text(x_pos, y_pos - 0.12, f"{trend_name}",
-                             transform=ax2.transAxes, color=color,
-                             fontsize=10, fontweight='bold', va='top')
+                    if name in trend_data:
+                        trend_name, emoji, color = trend_data[name]
+                        ax2.text(x_pos, y_pos - 0.12, f"{trend_name}",
+                                 transform=ax2.transAxes, color=color,
+                                 fontsize=10, fontweight='bold', va='top')
 
-                if name in peak_data:
-                    px, py, plabel = peak_data[name]
-                    clean_label = plabel.replace('\n', ' ')
-                    ax2.text(x_pos, y_pos - 0.24, f"Peak: {int(py)} DPM",
-                             transform=ax2.transAxes, color='#B0B0B0',
-                             fontsize=9, va='top')
-                    ax2.text(x_pos, y_pos - 0.34, f"@ {clean_label}",
-                             transform=ax2.transAxes, color='#808080',
-                             fontsize=8, va='top')
+                    if name in peak_data:
+                        px, py, plabel = peak_data[name]
+                        clean_label = plabel.replace('\n', ' ')
+                        ax2.text(x_pos, y_pos - 0.24, f"Peak: {int(py)} DPM",
+                                 transform=ax2.transAxes, color='#B0B0B0',
+                                 fontsize=9, va='top')
+                        ax2.text(x_pos, y_pos - 0.34, f"@ {clean_label}",
+                                 transform=ax2.transAxes, color='#808080',
+                                 fontsize=8, va='top')
 
-            plt.tight_layout(rect=(0, 0, 0.85, 0.96))
-            buf = io.BytesIO()
-            plt.savefig(buf, format="png", facecolor=self.COLORS['bg_dark'],
-                        dpi=120, bbox_inches="tight")
-            buf.seek(0)
-            plt.close(fig)
+                fig.tight_layout(rect=(0, 0, 0.85, 0.96))
+                buf = io.BytesIO()
+                fig.savefig(buf, format="png", facecolor=self.COLORS['bg_dark'],
+                            dpi=120, bbox_inches="tight")
+                buf.seek(0)
+                plt.close(fig)
 
-            return buf
+                return buf
+
+            return await asyncio.to_thread(_render_timeline)
 
         except Exception as e:
             logger.exception(f"Error generating timeline graph: {e}")
