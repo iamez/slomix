@@ -8,7 +8,7 @@
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 import { initTonightBetting } from './bets.js?v=20260804-auth-dedupe';
-import { startLiveTicker, stopLiveTicker, renderLiveTicker, getLiveRoster, liveRosterHasBots } from './live-ticker.js?v=20260812-live4';
+import { startLiveTicker, stopLiveTicker, renderLiveTicker, getLiveRoster, liveRosterHasBots, setLiveRoundContext } from './live-ticker.js?v=20260812-live5';
 
 const POLL_MS = 8000;
 let _interval = null;
@@ -290,6 +290,10 @@ async function _refresh() {
 
     _drawMomentum('tonight-momentum', data.momentum || []);
     _drawHoldProb('tonight-holdprob', (data.hold_probability && data.hold_probability.curve) || [], cur.beat_seconds);
+
+    // Hand the live ticker this round's historical hold curve so it can show
+    // a live win-pressure strip (elapsed vs curve + objective momentum).
+    setLiveRoundContext({ holdCurve: (data.hold_probability && data.hold_probability.curve) || [] });
 
     // Live event ticker (S3): shell only — live-ticker.js owns state + poll.
     if (!host.querySelector('#live-ticker')) {
