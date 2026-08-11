@@ -8,10 +8,12 @@ import pytest
 
 from website.backend.map_geometry.bsp import (
     BspFormatError,
+    EntityProperties,
     LumpType,
     SurfaceType,
     UnsupportedBspError,
     parse_bsp,
+    parse_entities,
 )
 
 HEADER_SIZE = 8 + (17 * 8)
@@ -133,6 +135,22 @@ def test_parse_bsp_decodes_every_w2_structure_and_raw_shader_flags():
     assert bsp.surfaces[0].surface_type is SurfaceType.PATCH
     assert bsp.surfaces[0].patch_width == 3
     assert bsp.surfaces[0].patch_height == 3
+
+
+def test_entity_properties_keep_duplicate_source_pairs_and_mapping_compatibility():
+    (entity,) = parse_entities(
+        '{ "message" "first" "shortname" "second" "message" "third" }',
+        source="duplicates.ent",
+    )
+
+    assert isinstance(entity, EntityProperties)
+    assert entity == {"message": "third", "shortname": "second"}
+    assert entity["message"] == "third"
+    assert entity.ordered_pairs == (
+        ("message", "first"),
+        ("shortname", "second"),
+        ("message", "third"),
+    )
 
 
 @pytest.mark.parametrize(
