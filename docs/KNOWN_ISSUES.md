@@ -17,12 +17,13 @@
 Three constants disagree and together guarantee permanent proximity orphans for
 rounds played 02:00-05:00 CET on the SSH-poll path:
 
-- `bot/services/monitor_tasks_mixin.py:112` — endstats monitor returns outright
-  during dead hours (02:00-11:00 CET), before any SSH work.
+- `bot/services/monitor_tasks_mixin.py` — the `if 2 <= hour < 11` gate makes
+  the endstats monitor return outright during dead hours (02:00-11:00 CET),
+  before any SSH work.
 - `bot/cogs/proximity_mixins/ingestion_mixin.py` — proximity ingestion loop is
   NOT dead-hours gated, so proximity rows arrive with no `rounds` parent during
   that window.
-- `bot/cogs/proximity_mixins/relinker_mixin.py:29` —
+- `bot/cogs/proximity_mixins/relinker_mixin.py` —
   `_PERMANENT_ORPHAN_AGE_HOURS = 6` (deliberately lowered 48h→6h on 2026-06-09
   for log-spam reasons) is SHORTER than the 9h dead-hours window, so those rows
   age out of relinking before imports resume at 11:00.
@@ -45,7 +46,7 @@ grep -n "dead" bot/cogs/proximity_mixins/ingestion_mixin.py         # no dead-ho
 ### Re-linker inventory covers 7 of 27 proximity round_id tables — High
 
 27 `proximity_*` tables carry a `round_id` column; `LINKAGE_INVENTORY_TABLES`
-(`bot/services/linkage_inventory_service.py:29-40`) lists 7 of them (plus
+(`bot/services/linkage_inventory_service.py`) lists 7 of them (plus
 `combat_engagement` and `player_track`). ~28,000 orphan rows sit in uncovered
 tables, outside every repair tool — largest: `proximity_team_cohesion` (21,170),
 `proximity_weapon_accuracy` (2,462), `proximity_aim_lock` (2,383),
@@ -228,7 +229,7 @@ grep -ln "session_date" website/backend/routers/proximity_{combat,player,dashboa
 
 ### `/skill/composite` single-date, no validity gate — Medium
 
-`website/backend/routers/skill_router.py:349-373` accepts only `session_date`,
+`get_composite_stats` in `website/backend/routers/skill_router.py` accepts only `session_date`,
 falls back to `SELECT MAX(session_date) FROM proximity_kill_outcome`, and has
 neither `is_valid` nor bot filters — bot rounds count into the Comp Skill
 composite. Last SS-D holdout (together with React `client.ts` single-date).
@@ -237,7 +238,7 @@ Fix pattern exists: storytelling routers + `_round_quality_gate_sql`
 
 Verify:
 ```bash
-sed -n '349,373p' website/backend/routers/skill_router.py  # no gaming_session_id, no is_valid
+sed -n '/def get_composite_stats/,/fetch_all/p' website/backend/routers/skill_router.py | grep -c "gaming_session_id\|is_valid"  # 0
 ```
 
 ### skill_router SDS reads capped PCS `denied_playtime` — Low
@@ -252,7 +253,8 @@ grep -n "denied_playtime" website/backend/routers/skill_router.py  # PCS source 
 
 ### KIS `distance_multiplier` stub — Low
 
-Hardcoded `DISTANCE_NORMAL` (`website/backend/services/storytelling/kis.py:568`)
+Hardcoded `DISTANCE_NORMAL` (`dist_mult` assignment in
+`website/backend/services/storytelling/kis.py`)
 but stored/returned as a real per-kill field — falsely precise. Needs per-kill
 distance data, or removal from the response.
 
@@ -274,7 +276,7 @@ ls website/migrations/*.sql | wc -l; grep -rl "schema_migrations\|ledger" script
 ### `storytelling/loaders.py` is per-date only — Low
 
 Safe today only because `_load_context_for_dates`
-(`website/backend/services/storytelling/kis.py:295`) merges per-date fragments;
+(`website/backend/services/storytelling/kis.py`) merges per-date fragments;
 any future direct caller of the loaders inherits the midnight bug.
 
 Verify:
