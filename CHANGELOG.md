@@ -6,6 +6,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.30.1](https://github.com/iamez/slomix/compare/v1.30.0...v1.30.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* **ci:** run ledger validate as DB owner role in deploy_release.sh ([#629](https://github.com/iamez/slomix/issues/629)) ([8510fb1](https://github.com/iamez/slomix/commit/8510fb19ad0743e4651e9b7c23fa6874e064f08e))
+* **proximity:** resolve crossfire duo names + explain team panel metrics (workstream C) ([#632](https://github.com/iamez/slomix/issues/632)) ([d9e4f16](https://github.com/iamez/slomix/commit/d9e4f162c81474e10291d3e81b957512467f0877))
+* **website:** guard combat heatmap against stale async renders ([#631](https://github.com/iamez/slomix/issues/631)) ([8cb34d9](https://github.com/iamez/slomix/commit/8cb34d9975d1679417b782b3c05ef09bf008741c))
+
 ## [1.30.0](https://github.com/iamez/slomix/compare/v1.29.0...v1.30.0) (2026-08-10)
 
 
