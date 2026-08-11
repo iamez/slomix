@@ -141,7 +141,7 @@ def test_normalize_side_value_strict_rejects_zero_text():
     ("",                "NORMAL"),
     ("unknown",         "NORMAL"),
     ("normal",          "NORMAL"),
-    ("objective",       "NORMAL"),
+    ("objective",       "OBJECTIVE"),
     ("time_expired",    "NORMAL"),
     ("timelimit",       "NORMAL"),
     ("time limit",      "NORMAL"),
@@ -160,7 +160,7 @@ def test_normalize_end_reason_aliases(raw, expected):
 
 
 def test_normalize_end_reason_case_insensitive():
-    assert normalize_end_reason("OBJECTIVE") == "NORMAL"
+    assert normalize_end_reason("OBJECTIVE") == "OBJECTIVE"
     assert normalize_end_reason("SURRENDER") == "SURRENDER"
     assert normalize_end_reason("Map_Change") == "MAP_CHANGE"
 
@@ -178,7 +178,7 @@ def test_normalize_end_reason_handles_none():
 def test_end_reason_enum_contains_all_canonical_values():
     """Pin the END_REASON_ENUM set so a future contract change is loud."""
     assert END_REASON_ENUM == {
-        "NORMAL", "SURRENDER", "MAP_CHANGE", "MAP_RESTART", "SERVER_RESTART",
+        "NORMAL", "OBJECTIVE", "SURRENDER", "MAP_CHANGE", "MAP_RESTART", "SERVER_RESTART",
     }
 
 
