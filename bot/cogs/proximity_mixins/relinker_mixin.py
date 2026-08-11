@@ -283,6 +283,59 @@ class _ProximityRelinkerMixin:
                             if isinstance(exact_row, (list, tuple))
                             else exact_row["id"]
                         )
+                    elif not exact_rows:
+                        # round_number disagreement fallback (2026-08-11, live
+                        # evidence): the engine's round counter can survive a
+                        # fresh `map` load issued right after a delivery R2
+                        # (stats/endstats/gametime all said R2) while
+                        # proximity_tracker resets to round 1 on the new map —
+                        # same physical round, two round_numbers. te_escape2,
+                        # rounds id 11180: round_start_unix AND round_end_unix
+                        # identical in both stores, yet the strict lookup above
+                        # returns nothing forever (~159 rows permanently
+                        # unlinked on a COVERED table; historically 2 of 643
+                        # linkable rounds, 0.31%).
+                        #
+                        # When map_name (normalized, same as the strict lookup)
+                        # + round_start_unix match EXACTLY — the existing exact
+                        # path's tolerance is zero, kept here — and exactly ONE
+                        # rounds row matches, the timestamps are trusted over
+                        # round_number: one game server cannot start two rounds
+                        # of the same map in the same second. Zero or multiple
+                        # candidates keep the old behaviour (never guess).
+                        relaxed_rows = await db.fetch_all(
+                            "SELECT id, round_number FROM rounds "
+                            "WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM($1)) "
+                            "  AND round_start_unix = $2 "
+                            "ORDER BY id LIMIT 2",
+                            (map_name, exact_start_unix),
+                        )
+                        if len(relaxed_rows) == 1:
+                            relaxed_row = relaxed_rows[0]
+                            round_id = int(
+                                relaxed_row[0]
+                                if isinstance(relaxed_row, (list, tuple))
+                                else relaxed_row["id"]
+                            )
+                            rounds_rn = (
+                                relaxed_row[1]
+                                if isinstance(relaxed_row, (list, tuple))
+                                else relaxed_row["round_number"]
+                            )
+                            # WARNING (not DEBUG): this is a real disagreement
+                            # between capture paths worth seeing — but it fires
+                            # once per affected round, because the fanout below
+                            # heals it in the same cycle.
+                            logger.warning(
+                                "Re-linker: round_number mismatch tolerated on "
+                                "exact map+round_start_unix match: map=%s "
+                                "source rn=%s, rounds rn=%s, unix=%d -> "
+                                "round_id=%d",
+                                map_name, round_number, rounds_rn,
+                                exact_start_unix, round_id,
+                            )
+                        else:
+                            round_id = None
                     else:
                         round_id = None
                 else:
