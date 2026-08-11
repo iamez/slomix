@@ -77,7 +77,7 @@ def _config() -> tuple[bool, str, str]:
 def _post(url: str, secret: str, batch: list[dict]) -> bool:
     if not url.startswith(("http://", "https://")):
         return False
-    req = urllib.request.Request(  # noqa: S310 — scheme checked above
+    req = urllib.request.Request(  # noqa: S310 # nosec B310 — https-only, scheme checked above
         url,
         data=json.dumps({"events": batch, "source": "tailer"}).encode(),
         headers={
@@ -87,7 +87,7 @@ def _post(url: str, secret: str, batch: list[dict]) -> bool:
     )
     for attempt in (1, 2):
         try:
-            with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310
+            with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310 # nosec B310 — operator config URL, scheme checked
                 resp.read()
             return True
         except Exception as exc:  # noqa: BLE001 — best-effort by design
