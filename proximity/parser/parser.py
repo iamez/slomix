@@ -2267,6 +2267,17 @@ class ProximityParserV4:
                 return
             shots_fired = int(parts[4])
             hits = int(parts[5])
+            # Corrupt-line guard (review on #641): the Lua counters only
+            # ever increment, so a negative value means a mangled dump
+            # line — and a pair like shots=-1/hits=-2 would slip past the
+            # hits > shots clamp below and still generate 200% accuracy.
+            if shots_fired < 0 or hits < 0:
+                self.logger.debug(
+                    "weapon_accuracy: dropping line with negative counts "
+                    "(shots=%d, hits=%d, weapon_id=%s, guid=%s)",
+                    shots_fired, hits, parts[3], parts[0],
+                )
+                return
             # FIX 3 (accuracy_pct > 100%): the Lua tracker counts `shots`
             # once per et_WeaponFire event but `hits` once per et_Damage
             # VICTIM event, remapped through MOD_TO_WEAPON. Two asymmetries
