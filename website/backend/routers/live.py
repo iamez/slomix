@@ -49,6 +49,9 @@ _ALLOWED_TYPES = frozenset({
     "MAP", "GAMETYPE", "GAMETIME", "INIT_GAME",
     "ROUND_START", "ROUND_END", "STATS_SAVED", "EXIT",
     "SCORELINE", "TEAM_XP", "CALLVOTE", "VOTE_PASSED", "SAY",
+    # LIVEX types from live_events.lua / slomix-live.log (design doc
+    # LIVE_EVENTS_LUA_DESIGN_2026-08-12). Inert until that module is deployed.
+    "LIVE_KILL", "LIVE_AGGREGATE", "LIVE_MOVEMENT", "LIVE_MAP",
 })
 
 _events: deque[dict[str, Any]] = deque(maxlen=_BUFFER_MAX)

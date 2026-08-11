@@ -26,7 +26,7 @@ const MAX_SHOWN = 40;     // rows rendered after filtering
 const CATEGORIES = {
     objectives: { label: 'Objectives', types: ['POPUP', 'ANNOUNCE', 'OBJECTIVE_DESTROYED', 'DYNAMITE', 'FLAG_PICKUP'], default: true },
     rounds:     { label: 'Rounds',     types: ['ROUND_START', 'ROUND_END', 'EXIT', 'MAP'], default: true },
-    kills:      { label: 'Kills',      types: ['KILL'], default: false },
+    kills:      { label: 'Kills',      types: ['KILL', 'LIVE_KILL'], default: false },
     support:    { label: 'Support',    types: ['REVIVE', 'SHOVE', 'SUPPLY'], default: false },
     chat:       { label: 'Chat',       types: ['SAY'], default: false },
     votes:      { label: 'Votes',      types: ['CALLVOTE', 'VOTE_PASSED'], default: false },
@@ -105,6 +105,16 @@ let _roundScores = [];
 // hold curve + logical-side context; the ticker tracks the current round's
 // elapsed time (from ROUND_START) and nudges a momentum figure from live
 // objective events. All client-side — no new API calls.
+// Live MVP model (Live v2 phase D groundwork). Running score per slot from
+// feed events + optional LIVE_AGGREGATE damage. Formula is versioned so the
+// owner can tune weights. Reset on round bounds.
+const MVP_WEIGHTS = { version: 1, kill: 1.0, obj: 1.5, revive: 0.5, death: -0.3, dmg100: 0.4 };
+const _mvp = new Map();  // slot -> score
+function _mvpAdd(slot, delta) {
+    if (slot == null) return;
+    _mvp.set(slot, (_mvp.get(slot) || 0) + delta);
+}
+
 let _holdCurve = [];        // [{t, p}] historical ECDF for current map
 let _defenderSide = null;   // engine team defending this round (1/2) if known
 let _roundStartMs = null;   // level_ms of the live ROUND_START
@@ -128,6 +138,40 @@ function _interpHold(elapsedSec) {
         }
     }
     return _holdCurve[_holdCurve.length - 1].p;
+}
+
+function _mvpApply(ev) {
+    switch (ev.type) {
+        case 'KILL':
+            if (!ev._teamkill) _mvpAdd(ev.killer_slot, MVP_WEIGHTS.kill);
+            _mvpAdd(ev.victim_slot, MVP_WEIGHTS.death);
+            break;
+        case 'DYNAMITE': case 'FLAG_PICKUP':
+            _mvpAdd(typeof ev.slot === 'string' ? parseInt(ev.slot, 10) : ev.slot, MVP_WEIGHTS.obj);
+            break;
+        case 'REVIVE': {
+            const rs = parseInt(String(ev.slots || '').split(/\s+/)[0], 10);
+            if (!Number.isNaN(rs)) _mvpAdd(rs, MVP_WEIGHTS.revive);
+            break;
+        }
+        case 'LIVE_AGGREGATE':
+            _mvpAdd(ev.slot, (ev.damage_given || 0) / 100 * MVP_WEIGHTS.dmg100);
+            break;
+        case 'ROUND_START': case 'ROUND_END':
+            _mvp.clear();
+            break;
+    }
+}
+
+/** Top live MVP right now: {name, score} or null. */
+export function getLiveMVP() {
+    let best = null;
+    for (const [slot, score] of _mvp.entries()) {
+        if (score > 0 && (!best || score > best.score)) {
+            best = { slot, score, name: _slotName(slot) };
+        }
+    }
+    return best;
 }
 
 function _pressureApply(ev) {
@@ -274,6 +318,13 @@ function _line(ev) {
             const [g] = String(ev.slots || '').split(/\s+/);
             return wrap('🎒', `${escapeHtml(_slotName(g))} handed out supplies`, 'text-slate-400');
         }
+        case 'LIVE_KILL': {
+            const dist = ev.distance != null && ev.distance >= 0 ? ` <span class="text-slate-500 text-xs">${ev.distance}u</span>` : '';
+            const hp = ev.killer_health != null && ev.killer_health >= 0 ? ` <span class="text-emerald-400 text-xs">${ev.killer_health}hp</span>` : '';
+            return wrap('🎯',
+                `<b>${escapeHtml(_slotName(ev.killer_slot))}</b> <span class="text-slate-500">→</span> ${escapeHtml(_slotName(ev.victim_slot))}${dist}${hp}`,
+                'text-slate-300');
+        }
         case 'KILL': {
             const streak = ev._streak >= 3 ? ` <span class="text-amber-300 text-xs font-bold">🔥 ${ev._streak} streak</span>` : '';
             const tk = ev._teamkill ? ` <span class="text-rose-400 text-xs font-black">TEAMKILL</span>` : '';
@@ -339,10 +390,15 @@ export function renderLiveTicker() {
         const holdTxt = hold != null
             ? `<span class="text-slate-300">Attack completed by now historically: <b class="text-white">${Math.round(hold)}%</b></span>`
             : '';
+        const mvp = getLiveMVP();
+        const mvpTxt = mvp
+            ? `<span class="text-[11px]">🏅 <b class="text-yellow-300">${escapeHtml(mvp.name)}</b> <span class="text-slate-500">MVP</span></span>`
+            : '';
         pressureStrip = `
         <div class="mb-3 p-2.5 rounded-lg bg-black/20">
             <div class="flex items-center justify-between text-[11px] mb-1">
                 <span class="font-bold text-amber-300">⚡ LIVE PRESSURE</span>
+                ${mvpTxt}
                 <span class="text-slate-500">${_mmssLocal(elapsed)} in</span>
             </div>
             <div class="h-2 rounded-full overflow-hidden bg-slate-700 flex">
