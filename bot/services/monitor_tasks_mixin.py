@@ -118,8 +118,11 @@ class _MonitorTasksMixin:
                 # Log once per hour instead of every 60s
                 if not hasattr(self, '_last_dead_hour_log') or self._last_dead_hour_log != hour:
                     self._last_dead_hour_log = hour
+                    # tzname() gives CET in winter / CEST in summer; the old
+                    # hardcoded "CET" label was wrong half the year.
+                    tz_label = now.tzname() or "local"
                     logger.info(
-                        f"⏸️ Dead hours ({hour:02d}:00 CET) - SSH checks paused "
+                        f"⏸️ Dead hours ({hour:02d}:00 {tz_label}) - SSH checks paused "
                         f"until {DEAD_HOURS_END:02d}:00"
                     )
                 return

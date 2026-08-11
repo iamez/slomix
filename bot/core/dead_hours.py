@@ -1,11 +1,14 @@
 """Single source of truth for the stats importer's dead-hours window.
 
 The endstats monitor (``bot/services/monitor_tasks_mixin.py``) pauses all
-SSH polling between 02:00 and 11:00 CET — nobody plays then, so no stats
-file can be imported and no ``rounds`` row created during that window on
-the SSH-poll path. Proximity ingestion is deliberately NOT gated (telemetry
-should land in real time), so any round played near the window's start has
-its proximity rows sitting parentless until the importer wakes.
+SSH polling between 02:00 and 11:00 CET. This is a deliberate operational
+gate (skip SSH churn during the low-activity window), NOT a guarantee that
+nobody plays then — bot tests and late gathers do produce rounds inside the
+window, and no stats file can be imported nor ``rounds`` row created for
+them on the SSH-poll path until the gate lifts. Proximity ingestion is
+deliberately NOT gated (telemetry should land in real time), so any round
+played inside the window has its proximity rows sitting parentless until
+the importer wakes.
 
 Historically the window lived as a bare ``2 <= hour < 11`` in the monitor
 while the proximity relinker aged orphans on a plain 6h wall clock
@@ -62,6 +65,8 @@ def awake_cutoff(now: datetime, awake_hours: float) -> datetime:
     """
     if now.tzinfo is None:
         raise ValueError("awake_cutoff requires a timezone-aware 'now'")
+    if awake_hours < 0:
+        raise ValueError(f"awake_hours must be >= 0, got {awake_hours!r}")
 
     tz = ZoneInfo(DEAD_HOURS_TZNAME)
     # Naive local wall clock: the window is defined in wall-clock hours,

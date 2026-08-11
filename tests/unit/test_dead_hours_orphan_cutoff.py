@@ -143,6 +143,12 @@ class TestAwakeCutoffArithmetic:
         with pytest.raises(ValueError):
             awake_cutoff(datetime(2026, 8, 11, 22, 0), 6)  # noqa: DTZ001 — intentionally naive to assert rejection
 
+    def test_negative_hours_rejected(self):
+        """Negative awake-hours has no meaning; silently returning `now`
+        (the pre-guard behavior) could hide a broken caller computation."""
+        with pytest.raises(ValueError):
+            awake_cutoff(local(11, 22, 0), -1)
+
 
 class TestCallSitesAligned:
     """Lock the alignment: both loops must consume the shared module.
@@ -168,8 +174,12 @@ class TestCallSitesAligned:
         from bot.services import monitor_tasks_mixin
 
         src = inspect.getsource(monitor_tasks_mixin)
-        assert "is_dead_hour(" in src and "DEAD_HOURS_END" in src, (
+        assert "is_dead_hour(hour)" in src, (
             "monitor dead-hours gate must use the shared window from "
             "bot.core.dead_hours"
         )
+        # The log message must render the constant, not a literal hour —
+        # a bare `"DEAD_HOURS_END" in src` would pass on an unused import.
+        assert "until {DEAD_HOURS_END:02d}:00" in src
         assert "2 <= hour < 11" not in src
+        assert "until 11:00" not in src
