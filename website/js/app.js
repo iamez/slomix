@@ -51,7 +51,7 @@ import { loadSeasonLeaders, loadActivityCalendar, loadSeasonSummary } from './se
 import { loadHallOfFameView } from './hall-of-fame.js';
 import { loadRecordBookView } from './record-book.js';
 import { openWrapped } from './wrapped.js';
-import { loadTonightView } from './tonight.js?v=20260811-live3';
+import { loadTonightView } from './tonight.js?v=20260812-live4';
 import { loadRetroVizView } from './retro-viz.js?v=20260513-v142-cf-bust';
 import { loadSessions2View } from './sessions2.js?v=20260513-v142-cf-bust';
 import { loadSessionDetailView } from './session-detail.js?v=20260720-ssd-gsid';
@@ -397,7 +397,8 @@ window.addEventListener('hashchange', () => {
         navigateTo('home');
         return;
     }
-    navigateTo(route.viewId, false, route.params);
+    // Aliased routes (#/tonight → live) rewrite the URL to the canonical hash.
+    navigateTo(route.viewId, !!route.aliased, route.params);
 });
 
 // ============================================================================
@@ -810,7 +811,7 @@ async function initApp() {
 
     const route = parseHashRoute();
     if (getRouteDefinition(route.viewId)) {
-        navigateTo(route.viewId, false, route.params);
+        navigateTo(route.viewId, !!route.aliased, route.params);
     } else {
         navigateTo('home', false, {});
     }
