@@ -8,7 +8,7 @@
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 import { initTonightBetting } from './bets.js?v=20260804-auth-dedupe';
-import { startLiveTicker, stopLiveTicker, renderLiveTicker, getLiveRoster } from './live-ticker.js?v=20260811-live2';
+import { startLiveTicker, stopLiveTicker, renderLiveTicker, getLiveRoster, liveRosterHasBots } from './live-ticker.js?v=20260811-live3';
 
 const POLL_MS = 8000;
 let _interval = null;
@@ -138,7 +138,11 @@ function _sideScoreboard(gs, data) {
     const specStrip = specs.length
         ? `<div class="mt-3 pt-2 border-t border-white/5 text-[11px] text-slate-500 text-center truncate">👁 ${specs.map(n => escapeHtml(n)).join(' · ')}</div>`
         : '';
-    return `<div class="glass-panel rounded-xl p-5">
+    const botBadge = liveRosterHasBots()
+        ? '<div class="text-center mb-2"><span class="px-2 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 text-[10px] font-black tracking-wider">BOT TEST — not part of the session</span></div>'
+        : '';
+    return `<div class="glass-panel rounded-xl p-5 ${liveRosterHasBots() ? 'opacity-80' : ''}">
+        ${botBadge}
         <div class="flex items-start gap-4">
             ${_sideColumn(roster.fresh ? 'Axis' : 'On server', AXIS_COLOR, axis, false)}
             <div class="text-center shrink-0 px-2">
