@@ -35,6 +35,10 @@ MIGRATIONS=(
   "068_add_relinker_unlinked_indexes.sql"
   "069_add_shot_fired_relinker_index.sql"
   "070_uploads_expires_at.sql"
+  # 071 landed after the v1.30.1 tag; listed here so the next release config
+  # (copied from this one) ships it, and so the no-orphan-migration contract
+  # test covers it. A checkout of the v1.30.1 TAG does not see this line.
+  "071_add_round_id_coverage_indexes.sql"
 )
 FLAGS=(
   "TRUSTED_HOSTS=www.slomix.fyi,slomix.fyi,localhost,127.0.0.1"
