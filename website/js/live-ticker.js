@@ -16,6 +16,15 @@ import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 const POLL_MS = 3000;
 const MAX_SHOWN = 40;
 
+// Owner call (2026-08-11): the feed is about OBJECTIVES, not a killfeed —
+// kills/joins/team shuffles drown the two events per minute that matter.
+// The API still carries everything; this is a display choice.
+const SHOWN_TYPES = new Set([
+    'POPUP', 'ANNOUNCE', 'OBJECTIVE_DESTROYED', 'DYNAMITE',
+    'ROUND_START', 'ROUND_END', 'EXIT', 'MAP',
+    'SAY', 'CALLVOTE', 'VOTE_PASSED',
+]);
+
 let _cursor = 0;
 let _events = [];          // newest last
 let _interval = null;
@@ -35,7 +44,8 @@ async function _poll() {
         );
         _lastFetchOk = true;
         if (data && Array.isArray(data.events) && data.events.length) {
-            _events = _events.concat(data.events).slice(-MAX_SHOWN);
+            const shown = data.events.filter(e => SHOWN_TYPES.has(e.type));
+            _events = _events.concat(shown).slice(-MAX_SHOWN);
             _cursor = data.last_seq || _cursor;
             renderLiveTicker();
         } else if (data && data.last_seq != null) {
@@ -88,10 +98,6 @@ function _line(ev) {
         case 'DYNAMITE':
             return wrap(ev.action === 'plant' ? '🧨' : '✂️',
                 `Dynamite ${escapeHtml(ev.action || '')}: ${escapeHtml(ev.objective || '')}`, 'text-orange-200');
-        case 'KILL':
-            return wrap('⚔️',
-                `<b>${escapeHtml(ev.killer || '?')}</b> <span class="text-slate-500">killed</span> ${escapeHtml(ev.victim || '?')} <span class="text-slate-500 text-xs">${escapeHtml((ev.mod || '').replace('MOD_', ''))}</span>`,
-                'text-slate-300');
         case 'ROUND_START':
             return `<div class="py-1.5 my-1 text-center text-xs font-black tracking-widest text-emerald-300 border-y border-emerald-500/20">ROUND START</div>`;
         case 'ROUND_END':
