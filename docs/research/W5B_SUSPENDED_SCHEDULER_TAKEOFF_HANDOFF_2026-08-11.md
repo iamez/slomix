@@ -8,6 +8,12 @@ Base: `origin/main` at `d6136cdd994870fddf4e4d0ff1968eb91418e497`
 
 Predecessor: `docs/research/W5B_SEMANTIC_MAPPING_TAKEOFF_HANDOFF_2026-08-10.md`
 
+Supersession: this document overrides only the predecessor's statement that exact
+nested-state propagation belongs to a "W5c suspended-continuation executor". The
+scheduler and exact static state propagation are W5b prerequisites for Phase 5. The
+rest of the predecessor remains authoritative unless this document explicitly says
+otherwise.
+
 Installed-asset manifest:
 `86ddd0ec23b3c6120136195af34aa633ad249eb358ea0fb6cd6e490dd81b220d`
 
@@ -19,9 +25,11 @@ Pinned ET:Legacy reference:
 W5b needs one more static-analysis increment before its Phase 5 per-domain graph gate:
 a bounded scheduler for suspended cross-entity continuations. The current executor
 correctly refuses to combine a delayed callee with an immediate caller, but this leaves
-301 cross-entity temporal frontiers. Measured frontier classification shows that 244 of
-those 301 frontiers hide at least one required objective, spawn or dynamic-route domain.
-Deferring all 301 would therefore make the Phase 5 verdict knowingly incomplete.
+at least 301 cross-entity temporal frontiers. Measured frontier classification shows
+that 244 of those 301 frontiers hide at least one required objective, spawn or
+dynamic-route domain. S0 subsequently found that waiting `gotomarker` control was not
+projected into the executor, so 301 is a pre-correction minimum and must be recomputed.
+Deferring the class would therefore make the Phase 5 verdict knowingly incomplete.
 
 This scheduler remains **W5b**. It enumerates source-defensible static ordering
 possibilities; it does not decide which ordering happened in a played round. **W5c**
@@ -44,8 +52,9 @@ not provide together:
 
 1. Preserve a delayed target event as a first-class suspended continuation instead of
    merging its eventual state into the caller.
-2. Enumerate only source-defensible order alternatives between runnable caller work and
-   relevant suspended work.
+2. Preserve source-defensible execution order between immediate caller work and
+   relevant suspended work, branching only where the static entry context cannot prove
+   the later entity-pass or event-replacement order.
 3. Carry exact entity-local and level-global accumulator exit states across synchronous
    and resumed frames, including nested handlers whose mutations control later guards.
 4. Produce deterministic, bounded inputs for W5b Phase 5's objective, spawn and
@@ -108,6 +117,28 @@ later caller guard.
 
 These are static possibility denominators, not played-round counts.
 
+### S0 denominator correction required
+
+The pinned callback proves that `gotomarker` has control behavior in addition to its
+already typed dynamic-route effect. The current ordered projection emits only
+`StageEffectInstruction`, so the walker always continues immediately and never sees a
+waiting boundary.
+
+Read-only installed-corpus inventory found:
+
+| `gotomarker` surface | Count |
+|---|---:|
+| Installed actions | 172 |
+| With `wait` | 139 |
+| Without `wait` | 33 |
+| Resolved cross-entity dispatch pairs targeting a waiting program | 133 |
+| Resolved same-entity dispatch pairs targeting a waiting program | 28 |
+
+These are instruction/pair counts, not the final symbolic-path delta. S0a must project
+the effect and control result together, then regenerate all path/frontier/domain tables.
+The 301/244 table remains valuable evidence for the scheduler decision but is no longer
+the final implementation starting denominator.
+
 ## Existing contracts to preserve
 
 The scheduler builds on the reviewed contracts in
@@ -126,6 +157,9 @@ The scheduler builds on the reviewed contracts in
 - `.ent` override identities remain usable for script dispatch but unproven for W3
   entity-index linkage.
 - unsupported or ambiguous states remain explicit frontiers.
+- `StageEffectInstruction`'s always-immediate treatment is not authoritative for
+  `gotomarker`; S0a must add its source-verified control contract without duplicating
+  the effect projection.
 
 The scheduler should be a sibling module, tentatively
 `website/backend/map_geometry/stage_scheduler.py`. It may extend public contracts only
@@ -172,18 +206,87 @@ Until each answer is verified through the actual write and resume path, label it
 `unverified`; do not encode it as a scheduler rule. A source comment alone is not
 sufficient evidence.
 
+### S0 pinned-source findings
+
+The first read of the complete pinned run path changes the initial scheduling model:
+
+1. `G_Script_ScriptChange` stores the old same-entity status, installs the target event
+   at stack head zero and immediately calls `G_Script_ScriptRun`. It restores the old
+   status only when that run completes synchronously with the expected script id.
+2. `G_Script_ScriptRun` re-invokes the current stack item after an action returns
+   `qfalse`. It advances `scriptStackHead` only after `qtrue`. A suspended continuation
+   therefore needs action-specific re-entry state, not only the following instruction
+   offset.
+3. `G_ScriptAction_Trigger` invokes every selected target synchronously in entity order.
+   A different-entity target may pause, but the trigger action still returns `qtrue` and
+   the caller suffix runs immediately. The scheduler must not publish a callee-resume-
+   before-caller-suffix alternative for this transition.
+4. [`G_RunFrame`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_main.c#L4561-L4682)
+   clears `runthisframe` and normally visits allocated entities in ascending entity
+   index. A target triggered before its ordinary turn can be called again later in the
+   same frame; a target whose turn has passed normally waits until the next frame.
+5. [`G_RunEntity`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_main.c#L4284-L4523)
+   can run a tag parent before the child and uses `runthisframe` to avoid the later
+   duplicate. Raw entity index alone is therefore insufficient to reconstruct every
+   normal-pass order when tag-parent dependencies are present.
+6. Non-client entities reach the script runner through `G_RunThink`; invisible entities
+   call it directly, movers update motion before `G_RunThink`, and item/missile paths
+   also call `G_RunThink`. Client script calls occur later through `ClientEndFrame` in
+   sorted-client order and remain outside statically selected W5b map-entity dispatch.
+7. A fixed `wait` returns false through its deadline and has a sudden-death immediate
+   branch. `resetscript` and `halt` return false on the first `level.time` and true on a
+   later frame; `halt` applies its stop-motion mutation only on the first call.
+8. A waiting `followspline` stays on the same stack item until trajectory completion.
+   A non-waiting `followspline` returns `qtrue`, advances the script immediately and
+   leaves only `SCFL_GOING_TO_MARKER` lifecycle work for later runner calls. That later
+   movement completion is not a suspended script suffix and must be represented
+   separately.
+9. `faceangles` initializes on the first call, remains on the same stack item and
+   advances only after trajectory completion.
+10. `gotomarker` was silently under-modeled. The callback can return false while prior
+    `SCFL_GOING_TO_MARKER` lifecycle work is active; a newly started action with `wait`
+    also remains on the same item until its trajectory completes. A newly started
+    non-waiting action returns true and leaves asynchronous lifecycle work, like a
+    non-waiting spline. The current W5b projection records its route effect but not any
+    of these control branches.
+
+These findings prove caller-before-suspended-target-resume for a cross-entity trigger.
+They do **not** yet prove a closed global schedule because later caller actions or other
+entities can trigger a new event on the suspended target and replace its retained
+status. S0 must inventory that replacement surface and the installed tag-parent/runtime
+action cases before code freezes a canonical transition key.
+
 ## Proposed scheduler model
 
 The following names communicate the required information. They are not frozen APIs
 until S0 proves the transition contract.
 
 ```python
+class SymbolicResumeMode(StrEnum):
+    REENTER_BOUNDARY_ACTION = "reenter_boundary_action"
+    ADVANCE_AFTER_ASYNC_LIFECYCLE = "advance_after_async_lifecycle"
+    RESUME_CALLER_SUFFIX = "resume_caller_suffix"
+    RESUME_TARGET_GROUP = "resume_target_group"
+
+
+@dataclass(frozen=True, slots=True)
+class PendingDispatchContext:
+    dispatch_node_id: str
+    dispatch_line: int
+    caller_node_id: str
+    caller_entity_index: int
+    caller_instruction_offset: int
+    ordered_target_entity_indices: tuple[int, ...]
+    target_cursor: int
+
+
 @dataclass(frozen=True, slots=True)
 class SymbolicFrame:
     node_id: str
     entity_index: int
     instruction_offset: int
     call_stack: tuple[tuple[int, str], ...]
+    pending_dispatch: PendingDispatchContext | None
     origin: str
 
 
@@ -192,6 +295,8 @@ class SuspendedContinuation:
     frame: SymbolicFrame
     boundary_command: str
     boundary_line: int
+    resume_mode: SymbolicResumeMode
+    boundary_state: tuple[str, ...]
     wake_constraint: str
     effect_footprint: tuple[str, ...]
 
@@ -211,6 +316,12 @@ Required properties:
 
 - Every frame identifies one concrete entity, one ordered program and one instruction
   offset.
+- Every pending group dispatch identifies the parent dispatch, caller-resume cursor,
+  complete ordered target list and current target cursor.
+- Every suspension says whether the current boundary action must be re-entered or the
+  script has already advanced while only asynchronous lifecycle work remains.
+- Action-specific boundary state is typed before implementation; a generic string
+  tuple in the sketch is not an approved representation.
 - A frame's call/replacement provenance cannot be reconstructed from line number alone.
 - Suspended continuations are separate tasks. Their state is not copied into an
   immediate caller result before they run.
@@ -219,6 +330,11 @@ Required properties:
 - Collections have a deterministic canonical order independent of Python set/dict
   iteration.
 - Unknown reasons are part of output identity, not log-only text.
+
+The canonical state key must include `pending_dispatch`, `resume_mode` and typed
+boundary state. Collision tests must differ only in parent dispatch, caller cursor,
+target cursor, selected target order, boundary action or resume mode and prove that
+none of those states are merged.
 
 `wake_constraint` must initially be a small enum or typed relation such as
 `AFTER_BOUNDARY_COMPLETION`, not a free-form timestamp. If S0 cannot distinguish two
@@ -256,16 +372,32 @@ reason may disappear only on paths where exact exit-state propagation succeeds.
 
 When a different-entity target reaches a proven temporal boundary:
 
-1. freeze its next legal continuation as `SuspendedContinuation`;
+1. freeze its current boundary action and source-proven re-entry mode as
+   `SuspendedContinuation`;
 2. keep its state at the boundary, without applying unexecuted mutations or effects;
-3. keep the caller suffix or remaining shared targets independently runnable where the
-   source contract permits;
-4. enumerate only the source-permitted choice of which runnable task advances next;
-5. record that choice in ordering provenance;
-6. resume the suspended task only through a source-proven wake transition.
+3. complete the remaining synchronously selected targets in engine order where the
+   source callback continues its loop;
+4. run the caller suffix immediately after the trigger returns `qtrue`;
+5. only after that immediate work, make the suspended task eligible for its ordinary
+   entity pass or a source-proven event replacement;
+6. record same-frame-later, next-frame, tag-parent-order-unknown or replacement
+   provenance explicitly;
+7. resume the suspended task only through a source-proven wake/re-entry transition.
 
 The scheduler must never implement this as `caller_state | eventual_callee_state` or as
-an unordered union of effects.
+an unordered union of effects. It must also never publish callee-resume before the
+caller suffix merely because both tasks exist in the symbolic state.
+
+### Non-waiting movement lifecycle
+
+A non-waiting `followspline` is not a suspended frame. Its action returns true, the
+script stack advances and the caller suffix executes while movement remains active.
+The scheduler must retain movement-completion relevance separately from a script
+continuation. It may not re-run the `followspline` source action or delay its suffix.
+
+Waiting `followspline` and `faceangles` remain action re-entry continuations. Their
+completion mutations occur before the stack advances and therefore belong to the
+resumed boundary transition.
 
 ### Same-entity replacement
 
@@ -363,6 +495,9 @@ Visited-state identity must include every field that can affect later semantics:
 
 - ordered runnable frames;
 - ordered suspended continuations and their wake constraints;
+- parent dispatch identity, ordered target group, target cursor and caller-resume
+  cursor;
+- boundary action, typed boundary state and resume mode;
 - local/global symbolic accumulator state;
 - same-entity replacement/call-stack state;
 - relevant lifecycle/identity uncertainty;
@@ -435,6 +570,23 @@ content-addressed caching or an equivalent explicit materialization boundary.
 Exit: reviewers can trace every scheduling rule to primary source and at least one
 adversarial test.
 
+### S0a - close the typed `gotomarker` control gap
+
+1. Represent `gotomarker` route effect and control behavior in one ordered instruction
+   contract; do not emit two same-line instructions that make line-to-offset identity
+   ambiguous.
+2. Preserve distinct paths for pre-existing movement blocking the action, a newly
+   started waiting movement and a newly started non-waiting movement.
+3. Record whether the effect has actually started on each branch. A prior-motion
+   boundary must not claim that the new destination was already selected.
+4. Re-enter a waiting boundary at the same action; advance the non-waiting action while
+   retaining only asynchronous lifecycle provenance.
+5. Regenerate the complete corpus denominator and update every affected expectation
+   before scheduler state types freeze.
+
+Exit: focused source-contract tests pass, the 172-action/139-wait inventory is frozen,
+and the exact 20-map run publishes the corrected cross/same temporal frontier baseline.
+
 ### S1 - immutable state and canonicalization
 
 1. Add scheduler-owned frame, continuation, state, decision and result types.
@@ -448,12 +600,16 @@ differences do not collide, and malformed ownership fails loudly.
 ### S2 - one suspended cross-entity continuation
 
 1. Run one caller and one different-entity target to the first temporal boundary.
-2. Preserve caller suffix and suspended target separately.
-3. Enumerate only source-permitted next-task alternatives.
-4. Resume the target with exact state and provenance.
+2. Preserve caller suffix, remaining target cursor and suspended target separately.
+3. Prove the immediate caller suffix executes before ordinary target resumption.
+4. Distinguish same-frame-later from next-frame resumption where static entity-pass
+   provenance is sufficient; retain a named unknown otherwise.
+5. Resume the target by re-entering the exact boundary action with exact state and
+   provenance.
 
-Exit: a synthetic map proves both legal orderings where permitted, suppresses an
-illegal ordering and retains a frontier where wake semantics are unverified.
+Exit: a synthetic map proves caller-before-resume, rejects the inverse ordering,
+distinguishes target cursor and caller cursor, and retains a frontier where ordinary
+entity-pass/wake semantics are unverified.
 
 ### S3 - nested state return and shared targets
 
@@ -480,7 +636,8 @@ or effect disappears merely due to task ordering.
 ### S5 - exact installed-corpus measurement
 
 1. Re-run all 20 maps against the exact asset manifest.
-2. Publish before/after tables for all 301 cross-entity temporal frontiers.
+2. Publish before/after tables for the regenerated post-S0a cross-entity temporal
+   frontier denominator, with the original 301 shown separately for traceability.
 3. Report domain resolution, remaining reasons, scheduler states, runtime and RSS.
 4. Verify that the 57 empty/complete frontiers are not expanded unless mutable-state
    evidence made them relevant.
@@ -504,9 +661,17 @@ separate from W5c historical truth.
 ### Unit/source-contract tests
 
 - one immediate caller plus one suspended different-entity callee;
-- caller suffix before callee wake where source permits it;
-- callee completion before later caller work where source permits it;
-- absence of an ordering the source does not permit;
+- caller suffix before an ordinary callee resume;
+- absence of callee-resume-before-caller-suffix;
+- same-frame-later versus next-frame resume based on entity-pass position;
+- tag-parent pass ordering retained as unknown when not represented;
+- later caller action replacing a suspended target event;
+- two states differing only by parent dispatch identity not canonicalizing together;
+- two states differing only by target cursor not canonicalizing together;
+- two states differing only by selected-target order not canonicalizing together;
+- two states differing only by caller-resume cursor not canonicalizing together;
+- two states differing only by action-specific boundary state or resume mode not
+  canonicalizing together;
 - synchronous nested local-accumulator mutation controlling a later caller guard;
 - cross-entity local accumulators remaining isolated;
 - suspended `globalaccum` mutation changing a later task's guard;
@@ -514,6 +679,14 @@ separate from W5c historical truth.
 - unknown entry state never becoming zero implicitly;
 - same-entity synchronous restoration;
 - same-entity temporal caller abandonment;
+- non-waiting `followspline` advancing its suffix while retaining asynchronous movement
+  lifecycle work;
+- waiting `followspline` re-entering its current action;
+- `gotomarker wait` starting its route effect and re-entering the same action;
+- `gotomarker` blocked by a prior movement without prematurely recording the new route
+  effect;
+- non-waiting `gotomarker` advancing its suffix while retaining asynchronous movement
+  lifecycle work;
 - shared-target continuation retaining every remaining concrete target;
 - multi-target identity and engine order;
 - optional kill death-dispatch event/no-event alternatives;
@@ -555,7 +728,7 @@ head:
 
 | Evidence | Required publication |
 |---|---|
-| Starting denominator | 301 cross-entity temporal frontiers; 244 domain-relevant |
+| Starting denominator | Pre-correction 301/244 plus a regenerated post-S0a baseline |
 | Result split | resolved, still blocked, skipped empty/complete, unknown not scheduled |
 | Domain split | objective, spawn, dynamic route and overlaps before/after |
 | State uncertainty | 435 overall and 50 cross-entity nested-state reasons before/after |
@@ -682,7 +855,10 @@ retained.
 - [x] Define source-truth questions, transition model, tests and Definition of Done.
 - [x] Commit and push the documentation-only takeoff (`b9919eaa`).
 - [x] Open draft PR [#649](https://github.com/iamez/slomix/pull/649).
-- [ ] Complete S0 source verification.
+- [ ] Complete S0 source verification; runner/action read is recorded, replacement and
+  tag-parent installed surfaces remain.
+- [ ] Complete S0a typed `gotomarker` control/effect correction and regenerate the
+  frontier denominator.
 - [ ] Complete S1 immutable state/canonicalization.
 - [ ] Complete S2 single suspended continuation.
 - [ ] Complete S3 nested state/shared-target handling.
@@ -702,6 +878,22 @@ retained.
 - Verification: `git diff --cached --check` passed; branch base matched
   `origin/main` at `d6136cdd` before the commit.
 - Next item: S0 source verification of the engine update/resume path.
+
+### 2026-08-11 - early review and S0 correction
+
+- CodeRabbit's rate-limited early contract review still reported two valid issues:
+  pending dispatch/resume identity was incomplete, and the predecessor's stale W5c
+  phase assignment needed explicit supersession. Both are corrected in this document.
+- Pinned source proves a different-entity target runs synchronously to its first false
+  return, remaining target iteration completes, and the caller suffix runs before the
+  target's ordinary later resume. The original free-order sketch was removed.
+- A read-only corpus probe splits the existing 301 frontiers into `wait` 231,
+  `faceangles` 49, waiting `followspline` 10, `halt` 9 and `resetscript` 2.
+- A separate read-only inventory found 172 `gotomarker` actions (139 waiting, 33
+  non-waiting) and 133 cross-entity plus 28 same-entity resolved pairs targeting a
+  waiting program. The current executor does not project that control result, so S0a
+  now precedes scheduler implementation and all denominators must be regenerated.
+- No owner-gated operation was performed.
 
 At every substantive commit, append:
 
