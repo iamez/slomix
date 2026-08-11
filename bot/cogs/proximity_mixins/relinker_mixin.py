@@ -61,7 +61,64 @@ _DETECTION_TABLES: tuple[str, ...] = (
     # fine and whose shot_fired did not, so no leg ever flagged that round.
     # It carries all four identity columns, so no special-casing is needed.
     "proximity_shot_fired",
+    # aim_lock/comm_event/skill_snapshot/spawn_select: added 2026-08-11
+    # (FIX 9). Created by migration 058 (proximity v7) with a round_id and
+    # all four identity columns, but never added to any relinker list — the
+    # same hole as shot_fired, this time found by the schema coverage
+    # contract (tests/unit/test_round_id_coverage_contract.py) rather than
+    # by an incident. Partial unlinked indexes: migration 071.
+    "proximity_aim_lock", "proximity_comm_event",
+    "proximity_skill_snapshot", "proximity_spawn_select",
 )
+
+
+# round_id tables handled by DEDICATED SQL rather than the generic legs and
+# templates above: lua_round_teams has no session_date column (it gets its
+# own synthesized-date detection legs and the _RELINK_LUA_TEAMS_* templates),
+# and lua_spawn_stats has neither round_start_unix nor session_date — it is
+# healed by propagation from lua_round_teams keyed on match_id
+# (_RELINK_LUA_SPAWN_FROM_TEAMS_TEMPLATE).
+_SPECIAL_CASE_TABLES: tuple[str, ...] = ("lua_round_teams", "lua_spawn_stats")
+
+
+# Tables that carry a round_id column but are DELIBERATELY outside both the
+# generic legs and the special cases. The schema coverage contract
+# (tests/unit/test_round_id_coverage_contract.py) derives the full set of
+# round_id-bearing tables from tools/schema_postgresql.sql and fails when a
+# table is neither detected, special-cased, nor listed here with a reason —
+# so the next shot_fired-shaped omission cannot happen silently. None of
+# these carries the four-column round identity the generic legs key on, and
+# the contract test rejects an exemption for any table that does.
+_DETECTION_EXEMPT_TABLES: dict[str, str] = {
+    "player_comprehensive_stats": (
+        "stats path: the importer assigns round_id while creating the rounds "
+        "row itself (0 NULLs on dev); no round_start_unix/session_date "
+        "columns for the generic leg shape"
+    ),
+    "weapon_comprehensive_stats": (
+        "stats path, same shape and lifecycle as player_comprehensive_stats"
+    ),
+    "round_awards": (
+        "stats path, same shape and lifecycle as player_comprehensive_stats"
+    ),
+    "round_vs_stats": (
+        "stats path, same shape and lifecycle as player_comprehensive_stats"
+    ),
+    "round_assembly_events": (
+        "assembly diagnostics ledger: rows describe the linking PROCESS and "
+        "may legitimately precede their rounds row; no round_start_unix"
+    ),
+    "player_skill_history": (
+        "derived rating history scoped by gaming session, not round "
+        "identity; round_id is optional provenance and has never been "
+        "populated (2,435/2,435 NULL on dev, 2026-08-11) — nothing "
+        "round-scoped reads it"
+    ),
+    "processed_endstats_files": (
+        "file-ingestion bookkeeping; round_id is best-effort provenance and "
+        "the row carries no map/round identity columns to relink by"
+    ),
+}
 
 
 # Relink SQL templates hoisted to module scope (audit P4). Previously
