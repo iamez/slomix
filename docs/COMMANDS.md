@@ -213,7 +213,7 @@ This document lists Discord bot commands declared in the repository (via `@comma
 | `badges` | `badge_legend`, `achievements_legend` | 🏅 Show achievement badge legend |
 | `check_achievements` | `check_achivements`, `check_achievement` | 🏆 Check your achievement progress |
 | `compare` | (none) | 📊 Compare two players with a visual radar chart |
-| `help_command` | `commands`, `cmds`, `bothelp` | 📚 Show all available commands with examples |
+| `help` | `commands`, `cmds`, `bothelp`, `help_command` | 📚 Show all available commands with examples |
 | `ping` | (none) | 🏓 Check bot status and performance |
 | `season_info` | `season`, `seasons` | 📅 Show current season information and champions |
 
