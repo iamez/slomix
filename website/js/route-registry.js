@@ -145,13 +145,13 @@ const ROUTE_DEFINITIONS = Object.freeze({
         buildHash: () => '#/record-book',
         load: ({ legacy, params }) => legacy.loadRecordBookView(params || {}),
     },
-    tonight: {
-        viewId: 'tonight',
-        label: 'Tonight',
+    live: {
+        viewId: 'live',
+        label: 'Live',
         mode: VIEW_MODE.LEGACY,
         surfaceType: 'read-heavy',
         migrationWave: 'A',
-        buildHash: () => '#/tonight',
+        buildHash: () => '#/live',
         load: ({ legacy }) => legacy.loadTonightView(),
     },
     awards: {
@@ -472,6 +472,12 @@ export function parseHashRoute(hashValue = window.location.hash) {
                 params,
             };
         }
+    }
+
+    // Legacy URL alias: the page shipped as #/tonight before the Live
+    // rename (2026-08-12); bookmarks and Discord links must keep working.
+    if (segments[0] === 'tonight') {
+        return { viewId: 'live', params: {}, aliased: true };
     }
 
     return { viewId: segments[0] || 'home', params: {} };

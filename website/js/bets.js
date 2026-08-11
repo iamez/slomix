@@ -28,7 +28,7 @@ const A_COLOR = '#06b6d4';  // Team A — cyan (matches tonight.js)
 const B_COLOR = '#8b5cf6';  // Team B — purple
 
 function _viewActive() {
-    const v = document.getElementById('view-tonight');
+    const v = document.getElementById('view-live');
     return v && v.classList.contains('active') && !v.classList.contains('hidden') && !document.hidden;
 }
 
@@ -214,7 +214,7 @@ export async function initTonightBetting() {
     // The renderers read getCurrentUser() synchronously (_renderMarket,
     // _renderWallet), so the identity has to be settled before the FIRST
     // render, not merely started. Since initApp() stopped awaiting the auth
-    // probe before routing, a logged-in visitor opening #/tonight directly
+    // probe before routing, a logged-in visitor opening #/live directly
     // would otherwise get disabled bet buttons and no wallet until the 12s
     // poll corrected it (Codex on #598). This joins the in-flight startup
     // probe rather than issuing another request.

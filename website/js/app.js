@@ -397,7 +397,8 @@ window.addEventListener('hashchange', () => {
         navigateTo('home');
         return;
     }
-    navigateTo(route.viewId, false, route.params);
+    // Aliased routes (#/tonight → live) rewrite the URL to the canonical hash.
+    navigateTo(route.viewId, !!route.aliased, route.params);
 });
 
 // ============================================================================
@@ -810,7 +811,7 @@ async function initApp() {
 
     const route = parseHashRoute();
     if (getRouteDefinition(route.viewId)) {
-        navigateTo(route.viewId, false, route.params);
+        navigateTo(route.viewId, !!route.aliased, route.params);
     } else {
         navigateTo('home', false, {});
     }
