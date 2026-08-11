@@ -31,6 +31,7 @@ from website.backend.map_geometry.stage_possibilities import (
     SymbolicPathCompletion,
     TriggerInstruction,
     _collect_continuation_relevance,
+    _projection_domain_relevance,
     build_ordered_stage_program_index,
     project_ordered_stage_programs,
     resolve_symbolic_nested_dispatch,
@@ -552,6 +553,59 @@ def test_kill_blocks_an_opaque_script_mover_identity():
     assert paths[0].blocker_reason == "kill_script_identity_opaque"
     assert paths[0].frontier_relevance is not None
     assert "frontier:kill_script_identity_opaque" in paths[0].frontier_relevance.unknown_reasons
+
+
+def test_kill_retains_unknown_dispatch_when_the_target_script_identity_can_change():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            spawn
+            {
+                set { scriptName replacement }
+            }
+            death
+            {
+                wm_announce original_handler
+            }
+        }
+        replacement
+        {
+            death
+            {
+                wm_announce replacement_handler
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+    assert isinstance(instruction, KillInstruction)
+    assert instruction.targets[0].disposition is KillTargetDisposition.SCRIPT_IDENTITY_RUNTIME_MUTABLE
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "kill_script_identity_runtime_mutable"
+    assert paths[0].frontier_relevance is not None
+    assert "frontier:kill_script_identity_runtime_mutable" in paths[0].frontier_relevance.unknown_reasons
 
 
 def test_kill_blocks_multiple_optional_death_dispatch_targets():
@@ -1480,6 +1534,112 @@ def test_frontier_classifier_treats_a_missing_handler_as_no_target_effect_but_ke
     assert relevance.unknown_domain_relevance is False
     assert relevance.unknown_reasons == ()
     assert relevance.continuations[0].origin == "caller_suffix_after_nested_dispatch_frontier"
+
+
+def test_frontier_classifier_keeps_outer_caller_suffix_when_a_nested_callee_blocks():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper go
+                wm_objective_status 1 0 1
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                accum 0 inc 1
+            }
+        }
+        """
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.unknown(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "non_exact_accumulator_mutation"
+    relevance = paths[0].frontier_relevance
+    assert relevance is not None
+    assert relevance.domains == (StageSemanticDomain.OBJECTIVE,)
+    assert any(
+        continuation.origin == "caller_suffix_after_blocked_nested_dispatch" for continuation in relevance.continuations
+    )
+
+
+def test_frontier_classifier_stops_at_a_proven_accumulator_abort():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger absent missing
+                accum 0 set 1
+                accum 0 abort_if_equal 1
+                wm_objective_status 1 0 1
+            }
+        }
+        """,
+        raw_entities=({"classname": "script_multiplayer"},),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "nested_dispatch_missing_handler"
+    relevance = paths[0].frontier_relevance
+    assert relevance is not None
+    assert relevance.domains == ()
+    assert relevance.unknown_domain_relevance is False
+
+
+def test_frontier_classifier_bounds_nested_relevance_work():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper go
+            }
+        }
+        helper
+        {
+            trigger go
+            {
+                wm_objective_status 1 0 1
+            }
+        }
+        """
+    )
+
+    domains, unknown_reasons = _collect_continuation_relevance(
+        index,
+        SymbolicFrontierContinuation(
+            index.programs[0].node.node_id,
+            0,
+            0,
+            "budget_test",
+        ),
+        state=SymbolicAccumulatorState.zeroed(),
+        max_work=1,
+    )
+
+    assert domains == set()
+    assert unknown_reasons == {"frontier_relevance_budget_exhausted"}
 
 
 def test_frontier_classifier_marks_missing_target_identity_unknown_without_losing_known_suffix():
@@ -2575,7 +2735,8 @@ def test_ent_override_projects_identity_effects_without_reusing_bsp_entity_indic
     )
     context = link_w3_entity_catalog(identities, bsp_catalog)
 
-    programs = project_ordered_stage_programs(model, context)
+    index = build_ordered_stage_program_index(model, context)
+    programs = index.programs
     projection = programs[0].instructions[2]
 
     assert context.catalog is None
@@ -2588,3 +2749,10 @@ def test_ent_override_projects_identity_effects_without_reusing_bsp_entity_indic
     assert (
         projection.projection.entity_index_link_disposition is W3EntityIndexLinkDisposition.UNPROVEN_IDENTITY_OVERRIDE
     )
+    domains, unknown_reasons = _projection_domain_relevance(
+        index,
+        projection.projection,
+        source_entity_index=0,
+    )
+    assert domains == set()
+    assert unknown_reasons == {"effect_target_w3_link_unproven_identity_override"}
