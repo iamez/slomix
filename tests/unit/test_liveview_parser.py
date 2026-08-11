@@ -14,7 +14,7 @@ from pathlib import Path
 
 from vps_scripts.liveview_parser import LiveEvent, parse_line, parse_lines, strip_colors
 
-FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "liveview" / "legacy3_bot_test_2026-08-11.log"
+FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "liveview" / "legacy3_bot_test_2026-08-11.txt"
 
 
 def _events() -> list[LiveEvent]:
