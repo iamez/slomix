@@ -2,8 +2,11 @@
 
 Date: 2026-08-10
 
+Last updated: 2026-08-11
+
 Status: implementation in progress; engine identity, Phase 3 dispositions and the
-Phase 4 lossless ordered-program/override boundary are locally and externally reviewed
+Phase 4 lossless ordered-program, override boundary and runtime-control classification
+are locally and externally reviewed
 
 Branch: `agent/map-geometry-w5b-semantic-mapping`
 
@@ -11,7 +14,7 @@ Base: `origin/main` at `8cb34d9975d1679417b782b3c05ef09bf008741c`
 
 Last substantive implementation head that completed the five-minute review quiet
 period and final refresh:
-`1d4f59d479f716ea0a8bae0d35c09bd006c7e969`
+`b6d1bc5ae63a4c46c6c5d14d1fc7abbaeeeb0d52`
 
 The documentation-only commit that advances this pointer cannot contain its own Git
 hash. Query PR #633 before relying on this historical checkpoint as current review
@@ -383,7 +386,7 @@ real-asset accounting covers all 2,153 event nodes and all 10,057 actions:
 | Instruction | Count |
 |---|---:|
 | Stage-effect projection | 2,929 |
-| Runtime action with unclassified control semantics | 3,413 |
+| Source-classified runtime action | 3,413 |
 | Plain trigger edge | 1,315 |
 | Accumulator mutation | 994 |
 | Accumulator abort guard | 313 |
@@ -937,6 +940,17 @@ The context now separates source-valid identity lookups from source-proven BSP i
 links: override projections proceed, but every W3 candidate remains empty and typed as
 unproven rather than borrowing an index from the replaced BSP entity lump.
 
+### 2026-08-11 - current-event control and runtime mutation are separate axes
+
+The 38 residual runtime command families were checked against their registered
+ET:Legacy callbacks. Thirty-two always continue the current event; six have temporal,
+lifecycle, nested-event, spawn or script-context consequences. An immediate return is
+not evidence that an action has no game-state effect, so every action stays in the
+ordered program even when it is not a control blocker. Conversely, a temporal
+`qfalse` is not a permanent path abort: the engine may resume the same instruction on
+a later frame. The future walker must publish both facts instead of collapsing them
+into one executable/blocked flag.
+
 ## Current handoff state
 
 Current step: freeze fixtures for the six non-immediate runtime control families, then
@@ -971,6 +985,12 @@ empty, so the synthetic empty-value compatibility fix does not alter the measure
 real-asset baseline.
 Ruff and `git diff --check` passed. The full repository suite remains required before
 merge.
+
+The runtime-control implementation head `b6d1bc5a` completed green exact-head CI,
+incremental external review with no new findings, a five-minute quiet period and a
+separate final refresh on 2026-08-11. The following documentation-only checkpoint
+advances that historical pointer and must complete its own review cycle before later
+implementation builds on it.
 
 ## Copy-paste handoff prompt
 
