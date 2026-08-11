@@ -497,8 +497,8 @@ W3 references and marking every affected entity-index surface
 
 ### Nested-dispatch resolution checkpoint
 
-The next isolated Phase 4 increment builds an index over the ordered programs and
-resolves one nested trigger without executing the target program. This separation is
+This isolated Phase 4 increment built an index over the ordered programs and resolves
+one nested trigger without executing the target program. This separation is
 intentional: dispatch identity can be proven independently, while caller replacement,
 temporal continuation and cross-entity interleaving still need different executor
 rules.
