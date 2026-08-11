@@ -6,9 +6,8 @@ Last updated: 2026-08-11
 
 Status: implementation in progress. Engine identity, Phase 3 dispositions, the Phase 4
 lossless ordered program, the override boundary, runtime-control classification and the
-bounded single-event symbolic walker are locally and externally reviewed. The isolated
-nested-dispatch resolver is implemented and locally measured, but has not yet completed
-exact-head external review.
+bounded single-event symbolic walker and isolated nested-dispatch resolver are locally
+and externally reviewed.
 
 Branch: `agent/map-geometry-w5b-semantic-mapping`
 
@@ -16,7 +15,10 @@ Base: `origin/main` at `8cb34d9975d1679417b782b3c05ef09bf008741c`
 
 Last substantive implementation head that completed the five-minute review quiet
 period and final refresh:
-`9eb5975838d7bd0b990c719620c265d6df1cff5c`
+`fb1ab791ae1f373ef5e61b7eda018d272dba5aae`
+
+Review-closure documentation head that completed the same gate:
+`63c23e2b16269dc37a58b670e3154056cc9b5875`
 
 The documentation-only commit that advances this pointer cannot contain its own Git
 hash. Query PR #633 before relying on this historical checkpoint as current review
@@ -1119,10 +1121,10 @@ publish a bounded cycle or concurrency frontier whenever it cannot prove an orde
 
 ## Current handoff state
 
-Current step: finish exact-head review closure for the isolated nested-dispatch
-resolver. Guard splitting, explicit local/global accumulator state, effect suppression,
-runtime-dependent wait paths, temporal continuation, `create` failure, line-numbered
-fail-closed frontiers and concrete nested target selection are implemented. Nested
+Current step: begin the bounded nested-executor increment. Guard splitting, explicit
+local/global accumulator state, effect suppression, runtime-dependent wait paths,
+temporal continuation, `create` failure, line-numbered fail-closed frontiers and
+concrete nested target selection have completed local and external review. Nested
 programs are not yet executed. Phase 2's final public coverage surface remains
 intentionally deferred until nested control-flow blockers are modeled.
 
@@ -1173,6 +1175,16 @@ final refresh on 2026-08-11. This is separate from the local real-asset scope re
 above; the full repository suite remains pending. Local, remote and PR head SHAs matched
 during that refresh. This documentation-only checkpoint advances the historical
 reviewed-head pointer; later implementation must still repeat the same closure cycle.
+
+The nested-dispatch resolver implementation through `fb1ab791` then passed 13/13
+GitHub check-run gates and external incremental review. Review found one inaccurate
+future-tense sentence in the handoff; `63c23e2b` corrected it, CodeRabbit explicitly
+confirmed the correction, and the follow-up head again passed 13/13 check-run gates.
+The resolver corpus proof remains 260/260 relevant units, 14/14 opt-in real-asset
+tests, exact dispatch denominators and zero unresolved threads. After the final review
+activity, the five-minute quiet period and a separate final refresh completed on
+2026-08-11 with matching local, remote and PR SHAs. The PR remains draft and behind a
+moving `main`; no merge or history rewrite was attempted.
 
 ## Copy-paste handoff prompt
 
