@@ -69,6 +69,18 @@ def _env(*names: str, default: str = "") -> str:
 async def _connect():
     if asyncpg is None:
         raise RuntimeError("asyncpg missing")
+    ssl_mode = _env("POSTGRES_SSL_MODE", default="disable")
+    ssl_arg: object = False
+    if ssl_mode and ssl_mode != "disable":
+        import ssl as _ssl
+
+        ctx = _ssl.create_default_context(
+            cafile=_env("POSTGRES_SSL_ROOT_CERT", default="") or None
+        )
+        if ssl_mode == "require":  # require = šifriranje brez verifikacije
+            ctx.check_hostname = False
+            ctx.verify_mode = _ssl.CERT_NONE
+        ssl_arg = ctx
     return await asyncpg.connect(
         host=_env("POSTGRES_HOST", "DB_HOST", default="127.0.0.1"),
         port=int(_env("POSTGRES_PORT", "DB_PORT", default="5432")),
@@ -76,6 +88,8 @@ async def _connect():
         user=_env("POSTGRES_USER", "DB_USER", default="etlegacy_user"),
         password=_env("POSTGRES_PASSWORD", "DB_PASSWORD", default=""),
         timeout=10,
+        command_timeout=120,
+        ssl=ssl_arg,
     )
 
 
@@ -87,7 +101,7 @@ def _section(title: str) -> None:
 # 1. commands: registered vs. called
 # --------------------------------------------------------------------------
 
-_CMD_DECORATOR = re.compile(r"commands?\.command")
+_CMD_DECORATOR = re.compile(r"^(?:commands?\.)?(?:command|group)$")
 
 
 def _registered_commands() -> dict[str, list[str]]:
@@ -105,7 +119,7 @@ def _registered_commands() -> dict[str, list[str]]:
             for deco in node.decorator_list:
                 if not isinstance(deco, ast.Call):
                     continue
-                if not _CMD_DECORATOR.search(ast.unparse(deco.func)):
+                if not _CMD_DECORATOR.match(ast.unparse(deco.func)):
                     continue
                 name = node.name
                 aliases: list[str] = []
@@ -125,9 +139,10 @@ def _registered_commands() -> dict[str, list[str]]:
 def report_commands(days: int) -> None:
     _section(f"1. BOT KOMANDE — registrirane vs. klicane (zadnjih {days} dni)")
     registered = _registered_commands()
-    log_path = ROOT / "logs" / "commands.log"
+    log_dir = Path(os.getenv("BOT_LOG_DIR") or (ROOT / "logs"))
+    log_path = log_dir / "commands.log"
     if not log_path.exists():
-        print("logs/commands.log ne obstaja — sekcija preskočena")
+        print(f"{log_path} ne obstaja — sekcija preskočena")
         return
 
     cutoff = datetime.now().astimezone() - timedelta(days=days)
@@ -170,14 +185,18 @@ def _registered_routes() -> set[str]:
     """Approximate route table: decorator paths joined with main.py prefixes.
     ⚠️ prefiks je obvezen del ključa — brez njega je primerjava nesmisel
     (pravilo §1.5 iz FIX_ME: to je napako že enkrat proizvedlo)."""
+    main_path = ROOT / "website" / "backend" / "main.py"
+    routers_dir = ROOT / "website" / "backend" / "routers"
+    if not main_path.exists() or not routers_dir.is_dir():
+        return set()
     prefixes: dict[str, str] = {}
-    main_py = (ROOT / "website" / "backend" / "main.py").read_text(encoding="utf-8")
+    main_py = main_path.read_text(encoding="utf-8")
     for m in _PREFIX_RE.finditer(main_py):
         module = m.group(1).split(".")[-1]
         prefixes[module] = m.group(2) or ""
 
     routes: set[str] = set()
-    for path in sorted((ROOT / "website" / "backend" / "routers").glob("*.py")):
+    for path in sorted(routers_dir.glob("*.py")):
         text = path.read_text(encoding="utf-8", errors="ignore")
         prefix = prefixes.get(path.stem, "/api")
         for m in _ROUTE_DECO.finditer(text):
@@ -200,6 +219,9 @@ def report_api() -> None:
         print("logs/access.log ne obstaja — sekcija preskočena")
         return
     routes = _registered_routes()
+    if not routes:
+        print("website/backend ni na voljo — sekcija preskočena")
+        return
     seen: Counter[str] = Counter()
     for line in log_path.read_text(encoding="utf-8", errors="ignore").splitlines():
         m = re.search(r"(?:GET|POST|PUT|DELETE|PATCH)\s+(/\S+)", line)
@@ -207,7 +229,7 @@ def report_api() -> None:
             seen[_normalize_api_path(m.group(1))] += 1
 
     def _match(route: str) -> int:
-        pattern = re.sub(r"\{[^}]+\}", r"[^/]+", route)
+        pattern = re.sub(r"\\\{[^}]+\\\}", "[^/]+", re.escape(route))
         rx = re.compile(f"^{pattern}$")
         return sum(c for p, c in seen.items() if rx.match(p))
 
@@ -251,7 +273,8 @@ async def report_bounds(conn) -> None:
         SELECT table_name, column_name
         FROM information_schema.columns
         WHERE table_schema = 'public'
-          AND data_type IN ('integer', 'real', 'double precision', 'numeric', 'bigint')
+          AND data_type IN ('smallint', 'integer', 'real', 'double precision', 'numeric', 'bigint')
+          AND column_name ~ '(_pct|_score|_quality|_efficiency|_ratio)$'
         ORDER BY table_name, column_name
         """
     )
@@ -289,7 +312,7 @@ async def report_deadfields(conn) -> None:
         WHERE c.table_schema = 'public'
           AND t.table_type = 'BASE TABLE'
           AND (c.table_name LIKE 'proximity_%' OR c.table_name = 'combat_engagement')
-          AND c.data_type IN ('integer', 'real', 'double precision', 'numeric', 'bigint')
+          AND c.data_type IN ('smallint', 'integer', 'real', 'double precision', 'numeric', 'bigint')
           AND c.column_name NOT IN ('id', 'round_id')
         """
     )
@@ -381,6 +404,8 @@ async def main() -> int:
         help="katere sekcije (privzeto vse)",
     )
     args = parser.parse_args()
+    if args.days < 0:
+        parser.error("--days ne sme biti negativen")
     wanted = {s.strip() for s in args.sections.split(",")}
 
     print(f"usage_report — {datetime.now().astimezone():%Y-%m-%d %H:%M} — potrošna zanka (FIX 2)")
