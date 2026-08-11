@@ -30,6 +30,18 @@ _MAX_ET_PARAMETER_LENGTH = 1023
 # ET:Legacy G_ScriptAction_ObjectiveStatus accepts objective numbers 1..8.
 _MAX_OBJECTIVES = 8
 _BLOCK_ACTIONS = frozenset({"create", "delete", "set"})
+STAGE_EFFECT_COMMANDS = frozenset(
+    {
+        "alertentity",
+        "gotomarker",
+        "setautospawn",
+        "setstate",
+        "wm_endround",
+        "wm_objective_status",
+        "wm_set_main_objective",
+        "wm_setwinner",
+    }
+)
 _ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
 _ET_WHITESPACE = "".join(chr(value) for value in range(33))
 _PC_PUNCTUATIONS = (
@@ -1203,21 +1215,14 @@ def _required_arguments(action: ScriptAction, arguments: tuple[str, ...], count:
 
 
 def _effect_for(action: ScriptAction, source: str) -> StageEffect | None:
+    if action.command not in STAGE_EFFECT_COMMANDS:
+        return None
     if action.command == "alertentity":
         if not action.serialized_parameters:
             raise StageParseError(f"{source}:{action.line}: alertentity requires a target")
         return AlertEntityEffect(action.serialized_parameters, action.line)
     if action.command == "wm_endround":
         return RoundEndEffect(action.line)
-    if action.command not in {
-        "gotomarker",
-        "setautospawn",
-        "setstate",
-        "wm_objective_status",
-        "wm_set_main_objective",
-        "wm_setwinner",
-    }:
-        return None
 
     arguments = _callback_arguments(action, source)
     if action.command == "wm_objective_status":

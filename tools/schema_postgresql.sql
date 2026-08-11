@@ -8967,3 +8967,18 @@ CREATE INDEX IF NOT EXISTS idx_proximity_vehicle_progress_round_lookup_unlinked
 CREATE INDEX IF NOT EXISTS idx_proximity_weapon_accuracy_round_lookup_unlinked
     ON proximity_weapon_accuracy (map_name, round_number, round_start_unix, session_date)
     WHERE round_id IS NULL;
+
+-- 071: the four v7 tables (058) joined the relinker's detection legs and
+-- fanout (FIX 9) — same partial-index shape as 068.
+CREATE INDEX IF NOT EXISTS idx_proximity_aim_lock_round_lookup_unlinked
+    ON proximity_aim_lock (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_comm_event_round_lookup_unlinked
+    ON proximity_comm_event (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_skill_snapshot_round_lookup_unlinked
+    ON proximity_skill_snapshot (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_spawn_select_round_lookup_unlinked
+    ON proximity_spawn_select (map_name, round_number, round_start_unix, session_date)
+    WHERE round_id IS NULL;

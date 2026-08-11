@@ -133,6 +133,57 @@ def test_each_asset_kind_resolves_independently(tmp_path):
     assert manifest["summary"]["asset_status_counts"]["script"]["ambiguous"] == 1
 
 
+def test_entity_override_indexes_pk3_and_loose_vfs_candidates_without_inventing_precedence(tmp_path):
+    pk3_content = b'{ "classname" "worldspawn" "source" "pk3" }'
+    loose_content = b'{ "classname" "worldspawn" "source" "loose" }'
+    _write_pk3(tmp_path / "entities.pk3", {"maps/duel.ent": pk3_content})
+    maps_dir = tmp_path / "maps"
+    maps_dir.mkdir()
+    loose_path = maps_dir / "duel.ent"
+    loose_path.write_bytes(loose_content)
+
+    index = Pk3GeometryIndex.scan(tmp_path)
+    resolution = index.resolve_asset("duel", MapAssetKind.ENTITY_OVERRIDE)
+
+    assert resolution.status == "ambiguous"
+    assert resolution.selected is None
+    assert len(resolution.providers) == 2
+    assert {provider.is_loose_file for provider in resolution.providers} == {False, True}
+    loose = next(provider for provider in resolution.providers if provider.is_loose_file)
+    assert loose.source == str(loose_path)
+    assert index.read_provider(loose) == loose_content
+
+
+def test_identical_loose_and_pk3_entity_overrides_are_content_resolved(tmp_path):
+    content = b'{ "classname" "worldspawn" }'
+    _write_pk3(tmp_path / "entities.pk3", {"maps/duel.ent": content})
+    maps_dir = tmp_path / "maps"
+    maps_dir.mkdir()
+    (maps_dir / "duel.ent").write_bytes(content)
+
+    index = Pk3GeometryIndex.scan(tmp_path)
+    resolution = index.resolve_asset("duel.ent", "ent")
+
+    assert resolution.status == "resolved"
+    assert resolution.selected is not None
+    assert len(resolution.providers) == 2
+    assert index.read_provider(resolution.selected) == content
+
+
+def test_read_provider_rejects_loose_entity_override_changed_after_scan(tmp_path):
+    maps_dir = tmp_path / "maps"
+    maps_dir.mkdir()
+    path = maps_dir / "duel.ent"
+    path.write_bytes(b"original")
+    index = Pk3GeometryIndex.scan(tmp_path)
+    selected = index.resolve_asset("duel", "ent").selected
+    assert selected is not None
+
+    path.write_bytes(b"changed!")
+    with pytest.raises(AssetContentChangedError, match="metadata changed|content changed"):
+        index.read_provider(selected)
+
+
 def test_missing_played_maps_and_assets_are_explicit_in_manifest(tmp_path):
     _write_pk3(tmp_path / "one.pk3", {"maps/adlernest.bsp": b"geometry"})
     index = Pk3GeometryIndex.scan(tmp_path)

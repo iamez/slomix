@@ -89,6 +89,45 @@ _PCS_SQL_COLUMNS = [
 # Minimum rounds to be rated (global). Per-session has no minimum.
 MIN_ROUNDS = 5
 
+# ── Bayesian sample-size shrinkage (FIX 8, 2026-08-11) ──────────────────────
+# games_rated spans 5 → 1,738 rounds (×348) in the rated pool, yet every
+# rating was published at face value — so an 8-round player sat above a
+# 979-round veteran on nothing but small-sample noise (the exact weakness we
+# documented in gibhub's UTRO: "22 rounds ranked above 741").
+#
+# Fix: shrink each raw rating toward the pool mean with a pseudo-count prior:
+#     shrunk = (n × rating + K × pool_mean) / (n + K)
+# A player with n = K rounds is trusted 50/50 against the pool; n >> K is
+# barely moved (1,700 rounds: < 0.005 shift); n << K starts near the middle
+# and earns their rating as evidence accumulates.
+#
+# K = 40, chosen empirically against the 2026-08-11 pool (29 players,
+# games_rated p25 = 10, median = 56, p75 = 885):
+#   - the FIX 8 canary (no <20-round player above a >500-round player unless
+#     raw diff > 2 SE) first passes at K ≈ 15 and stays clean for K ≥ 15;
+#   - ranks are IDENTICAL for K ∈ {30, 40, 50} on the live pool, so within
+#     the sensible band the exact value barely matters — 40 is the centre of
+#     the 30–50 band with ~2.5× margin over the empirical minimum;
+#   - 40 rounds ≈ 3–4 full gaming sessions: about how long the community
+#     needs to form its own opinion of a new player.
+# Same pattern as KROGT's min_lives evidence gate (proximity_scoring.py:771),
+# but soft: MIN_ROUNDS stays 5, low-n players are shown, just pulled to the
+# middle instead of being trusted or hidden.
+SHRINKAGE_K = 40
+
+
+def shrink_rating(rating: float, rounds: int, pool_mean: float,
+                  k: float = SHRINKAGE_K) -> float:
+    """Bayesian shrinkage of a raw rating toward the pool mean.
+
+    Returns (n × rating + k × pool_mean) / (n + k). With k <= 0 the raw
+    rating is returned unchanged (shrinkage disabled).
+    """
+    if k <= 0:
+        return rating
+    n = max(0, int(rounds))
+    return (n * rating + k * pool_mean) / (n + k)
+
 # Tier thresholds (must match frontend SkillRating.tsx getTier())
 TIERS = [
     (0.85, "elite"),
@@ -260,10 +299,13 @@ def calculate_et_rating(player_stats: dict, percentiles: dict,
 async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
                               min_rounds: int = MIN_ROUNDS) -> list[dict]:
     """
-    Compute ET_Rating for all players with enough rounds (v2.0).
+    Compute ET_Rating for all players with enough rounds (v2.1).
     Returns sorted list of player rating dicts.
     Single query: PCS aggregates + proximity LEFT JOINs, percentiles + ratings
-    computed from the same result set.
+    computed from the same result set. Published et_rating is sample-size
+    shrunk toward the cohort mean (SHRINKAGE_K pseudo-rounds, FIX 8); the
+    unshrunk value is kept as et_rating_raw. The v3 shadow path is unaffected:
+    it re-scores from raw_stats and never reads et_rating.
 
     epoch_start: when set (YYYY-MM-DD), only rounds on/after that date feed the
     aggregates — the ET Performance v3 shadow path passes a common telemetry
@@ -480,8 +522,25 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
             "raw_stats": stats,
         })
 
+    # Sample-size shrinkage (FIX 8): pull each raw rating toward the pool mean
+    # in proportion to how little evidence backs it. The pool mean is computed
+    # over the SAME cohort the percentiles came from, so the prior and the
+    # normalization share one population. et_rating_raw keeps the unshrunk
+    # value for transparency (PR pre/post table, owner review); components are
+    # deliberately NOT touched — the frontend sorts their entries by
+    # percentile and a meta entry would poison that sort.
+    pool_mean = sum(p["et_rating"] for p in results) / len(results)
+    for p in results:
+        p["et_rating_raw"] = p["et_rating"]
+        p["et_rating"] = round(
+            shrink_rating(p["et_rating"], p["rounds"], pool_mean), 4
+        )
+
     results.sort(key=lambda x: x["et_rating"], reverse=True)
-    logger.info("Computed v2 ratings for %d players (15 metrics)", len(results))
+    logger.info(
+        "Computed v2 ratings for %d players (15 metrics, shrinkage K=%d, pool mean %.4f)",
+        len(results), SHRINKAGE_K, pool_mean,
+    )
     return results
 
 

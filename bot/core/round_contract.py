@@ -9,6 +9,7 @@ from typing import Any, Iterable
 
 END_REASON_ENUM = {
     "NORMAL",
+    "OBJECTIVE",
     "SURRENDER",
     "MAP_CHANGE",
     "MAP_RESTART",
@@ -133,7 +134,12 @@ _END_REASON_MAP = {
     "": "NORMAL",
     "unknown": "NORMAL",
     "normal": "NORMAL",
-    "objective": "NORMAL",
+    # "objective" used to collapse into NORMAL, erasing the difference
+    # between "attackers completed the objective" and "the clock ran out"
+    # everywhere downstream — for stopwatch the single most valuable
+    # end-of-round signal. First observed live on the 2026-08-11 bot test
+    # (delivery R1, 529 s objective, stored as NORMAL).
+    "objective": "OBJECTIVE",
     "time_expired": "NORMAL",
     "timelimit": "NORMAL",
     "time limit": "NORMAL",
@@ -270,7 +276,13 @@ def derive_stopwatch_contract(
     normalized_end = normalize_end_reason(end_reason)
 
     state = None
-    if normalized_end == "NORMAL" and limit_seconds is not None and actual_seconds is not None:
+    if normalized_end == "OBJECTIVE":
+        # Attackers completed the objective — that IS a set time, no matter
+        # how close to the limit it happened. (Previously an objective taken
+        # in the final 30 s fell through the NORMAL timing heuristic below
+        # and was mislabeled FULL_HOLD.)
+        state = "TIME_SET"
+    elif normalized_end == "NORMAL" and limit_seconds is not None and actual_seconds is not None:
         # Treat near time-limit completion as a hold.
         hold_threshold = max(limit_seconds - 30, 0)
         state = "FULL_HOLD" if actual_seconds >= hold_threshold else "TIME_SET"
