@@ -116,6 +116,14 @@ local function is_active(clientnum)
     return safe_get(clientnum, "pers.connected") == 2
 end
 
+-- et_Damage / et_Obituary can fire with non-client entity ids (constructibles,
+-- tanks, the world, MOD sources > maxclients). Only real player slots
+-- [0, sv_maxclients) may enter the aggregate — otherwise entity id 578 with
+-- 99999 damage lands in the feed (caught in the 2026-08-12 bot test).
+local function is_client(id)
+    return type(id) == "number" and id >= 0 and id < maxclients()
+end
+
 local function pos_of(clientnum)
     local o = safe_get(clientnum, "ps.origin")
     if not o then return nil end
@@ -155,6 +163,7 @@ end
 -- c0rnp0rn8 signature: et_Obituary(victim, killer, mod)
 function et_Obituary(victim, killer, mod)
     if not config.enabled then return end
+    if not is_client(victim) then return end
     local lvl = et.trap_Milliseconds()
     -- combat aggregate
     agg[victim] = agg[victim] or { dg = 0, dr = 0, k = 0, d = 0 }
@@ -182,10 +191,14 @@ end
 function et_Damage(target, attacker, damage, _flags, _mod)
     if not config.enabled then return end
     local dmg = tonumber(damage) or 0
-    if dmg <= 0 then return end
-    agg[target] = agg[target] or { dg = 0, dr = 0, k = 0, d = 0 }
-    agg[target].dr = agg[target].dr + dmg
-    if attacker ~= target and attacker ~= 1022 and attacker ~= 1023 then
+    if dmg <= 0 then return 0 end
+    -- cap absurd single-hit values (world/telefrag) so one line can't skew MVP
+    if dmg > 1000 then dmg = 1000 end
+    if is_client(target) then
+        agg[target] = agg[target] or { dg = 0, dr = 0, k = 0, d = 0 }
+        agg[target].dr = agg[target].dr + dmg
+    end
+    if is_client(attacker) and attacker ~= target then
         agg[attacker] = agg[attacker] or { dg = 0, dr = 0, k = 0, d = 0 }
         agg[attacker].dg = agg[attacker].dg + dmg
     end
@@ -194,7 +207,7 @@ end
 
 local function flush_aggregate(levelTime)
     for slot, a in pairs(agg) do
-        if a.dg ~= 0 or a.dr ~= 0 or a.k ~= 0 or a.d ~= 0 then
+        if is_client(slot) and (a.dg ~= 0 or a.dr ~= 0 or a.k ~= 0 or a.d ~= 0) then
             write(string.format("A %d %d %d %d %d %d",
                 now_ms(levelTime), slot, a.dg, a.dr, a.k, a.d))
         end
