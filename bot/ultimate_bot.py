@@ -672,20 +672,26 @@ class UltimateETLegacyBot(
             logger.warning(f"⚠️  Could not load Server Control cog: {e}")
             logger.warning("Bot will continue without server control features")
 
-        # 🔮 COMPETITIVE ANALYTICS: Load prediction cogs (Phase 5)
-        try:
-            await self.load_extension("bot.cogs.predictions_cog")
-            logger.info("✅ Predictions cog loaded (!predictions, !prediction_stats, !my_predictions)")
-        except Exception as e:
-            logger.warning(f"⚠️  Could not load Predictions cog: {e}")
-            logger.warning("Bot will continue without prediction commands")
+        # 🔮 COMPETITIVE ANALYTICS: prediction cogs (12 commands). Hidden by
+        # default (C5 cull, 2026-08-12) — 6 months of prod command logs never
+        # recorded a prediction command, so they only clutter !help. Not
+        # deleted: set PREDICTIONS_ENABLED=true in .env to restore instantly.
+        if self.config.predictions_enabled:
+            try:
+                await self.load_extension("bot.cogs.predictions_cog")
+                logger.info("✅ Predictions cog loaded (!predictions, !prediction_stats, !my_predictions)")
+            except Exception as e:
+                logger.warning(f"⚠️  Could not load Predictions cog: {e}")
+                logger.warning("Bot will continue without prediction commands")
 
-        try:
-            await self.load_extension("bot.cogs.admin_predictions_cog")
-            logger.info("✅ Admin Predictions cog loaded (!admin_predictions, !update_prediction_outcome)")
-        except Exception as e:
-            logger.warning(f"⚠️  Could not load Admin Predictions cog: {e}")
-            logger.warning("Bot will continue without admin prediction commands")
+            try:
+                await self.load_extension("bot.cogs.admin_predictions_cog")
+                logger.info("✅ Admin Predictions cog loaded (!admin_predictions, !update_prediction_outcome)")
+            except Exception as e:
+                logger.warning(f"⚠️  Could not load Admin Predictions cog: {e}")
+                logger.warning("Bot will continue without admin prediction commands")
+        else:
+            logger.info("⏸️  Prediction cogs hidden (PREDICTIONS_ENABLED!=true) — 12 commands off")
 
         # 📊 AVAILABILITY POLL: Daily gaming availability tracking
         try:
