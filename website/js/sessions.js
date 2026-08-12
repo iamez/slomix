@@ -1217,6 +1217,13 @@ function initSessionsSearch() {
     input.value = '';
     if (clearBtn) clearBtn.classList.add('hidden');
 
+    // Bind listeners once per element lifetime. initSessionsSearch() runs on
+    // every entry into the Sessions view; without this guard each entry stacked
+    // another 'input'+'click' pair on the persistent nodes (leak +3/round,
+    // R²=1.0). Reset above still runs each time; binding below only once.
+    if (input.dataset.searchBound === '1') return;
+    input.dataset.searchBound = '1';
+
     input.addEventListener('input', () => {
         const val = input.value.trim();
         if (clearBtn) clearBtn.classList.toggle('hidden', val.length === 0);
