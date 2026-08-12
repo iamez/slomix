@@ -2551,7 +2551,14 @@ sampleVehiclePositions = function()
         local current_pos = {x = vx, y = vy, z = vz}
 
         local delta = distance3D(current_pos, veh.last_pos)
-        local is_moving = delta > config.vehicle.min_move_speed
+        -- Cap the per-sample delta. An entity read at map load before it spawns
+        -- can return a billions-large origin (seen: truck pos ~1.15e10); that
+        -- one garbage->real transition would otherwise inject an enormous
+        -- escort distance. Real ET movement is at most a few hundred units per
+        -- sample, so 10000 rejects garbage while allowing any genuine move —
+        -- last_pos still resyncs below so the next delta is sane.
+        local MAX_SANE_MOVE = 10000
+        local is_moving = delta > config.vehicle.min_move_speed and delta < MAX_SANE_MOVE
 
         if is_moving then
             veh.total_distance = veh.total_distance + delta
