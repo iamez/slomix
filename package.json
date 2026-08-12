@@ -9,6 +9,10 @@
   },
   "scripts": {
     "lint:js": "bash scripts/lint-js.sh",
-    "test:js": "bash scripts/lint-js.sh"
+    "test:js": "bash scripts/lint-js.sh",
+    "build:css": "tailwindcss -c website/tailwind.config.cjs -i website/css/tailwind.input.css -o website/css/tailwind.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
   }
 }
