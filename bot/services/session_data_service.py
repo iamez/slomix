@@ -305,55 +305,89 @@ class SessionDataService:
                     tuple(dates),
                 )
 
-            if not rows:
-                # Auto-detect teams if missing (best-effort)
-                try:
-                    from bot.core.team_manager import TeamManager
+            teams: dict | None = None
+            if rows:
+                teams = {}
+                for team_name, player_guids_json, player_names_json in rows:
+                    if team_name not in teams:
+                        if isinstance(player_guids_json, str):
+                            player_guids = json.loads(player_guids_json) if player_guids_json else []
+                        else:
+                            player_guids = player_guids_json or []
+                        if isinstance(player_names_json, str):
+                            player_names = json.loads(player_names_json) if player_names_json else []
+                        else:
+                            player_names = player_names_json or []
+                        teams[team_name] = {
+                            "guids": player_guids,
+                            "names": player_names,
+                        }
 
-                    meta = await self.db_adapter.fetch_one(
+                # Guard against a STALE roster. A session_teams row can outlive the
+                # session it was made for when a gaming_session_id is later reused by
+                # a different set of players — e.g. a morning bot-test left
+                # [BOT]/OMNIBOT teams on gsid 144, which a real evening match then
+                # inherited (2026-08-11). Applied to humans it never contained, every
+                # map fails R1 side attribution and the summary reads "0 - 0 TIE".
+                # If the stored roster shares NO GUID with the players who actually
+                # played, treat it as stale and fall through to auto-detection.
+                roster_guids = {g for t in teams.values() for g in (t.get("guids") or [])}
+                if roster_guids:
+                    played = await self.db_adapter.fetch_all(
                         f"""
-                        SELECT MIN(SUBSTR(round_date, 1, 10)) as session_date,
-                               MIN(gaming_session_id) as gaming_session_id
-                        FROM rounds
-                        WHERE id IN ({placeholders})
+                        SELECT DISTINCT player_guid
+                        FROM player_comprehensive_stats
+                        WHERE round_id IN ({placeholders})
                         """,  # nosec B608 - parameterized
                         tuple(session_ids),
                     )
-                    session_date = meta[0] if meta else (min(dates) if dates else None)
-                    auto_detect_session_id = meta[1] if meta else None
-                    if session_date:
-                        logger.info(
-                            f"⚠️ No session_teams found for {session_date}, "
-                            "attempting auto-detect..."
+                    played_guids = {row[0] for row in played if row and row[0]}
+                    if played_guids and not (roster_guids & played_guids):
+                        logger.warning(
+                            "session_teams roster for %s shares no GUID with the %d "
+                            "players who actually played — stale roster, auto-detecting",
+                            gaming_session_ids or dates or session_ids,
+                            len(played_guids),
                         )
-                        team_manager = TeamManager(self.db_adapter)
-                        detected = await team_manager.get_session_teams(
-                            session_date,
-                            auto_detect=True,
-                            gaming_session_id=auto_detect_session_id,
-                        )
-                        return detected if detected else None
-                except Exception as e:
-                    logger.debug(f"Auto-detect teams failed: {e}")
-                return None
+                        teams = None
 
-            teams = {}
-            for team_name, player_guids_json, player_names_json in rows:
-                if team_name not in teams:
-                    if isinstance(player_guids_json, str):
-                        player_guids = json.loads(player_guids_json) if player_guids_json else []
-                    else:
-                        player_guids = player_guids_json or []
-                    if isinstance(player_names_json, str):
-                        player_names = json.loads(player_names_json) if player_names_json else []
-                    else:
-                        player_names = player_names_json or []
-                    teams[team_name] = {
-                        "guids": player_guids,
-                        "names": player_names,
-                    }
+                if teams:
+                    return teams
 
-            return teams if teams else None
+            # No usable roster (missing or stale): auto-detect (best-effort)
+            try:
+                from bot.core.team_manager import TeamManager
+
+                meta = await self.db_adapter.fetch_one(
+                    f"""
+                    SELECT MIN(SUBSTR(round_date, 1, 10)) as session_date,
+                           MIN(gaming_session_id) as gaming_session_id
+                    FROM rounds
+                    WHERE id IN ({placeholders})
+                    """,  # nosec B608 - parameterized
+                    tuple(session_ids),
+                )
+                session_date = meta[0] if meta else (min(dates) if dates else None)
+                auto_detect_session_id = meta[1] if meta else None
+                if session_date:
+                    logger.info(
+                        f"⚠️ No usable session_teams for {session_date}, "
+                        "attempting auto-detect..."
+                    )
+                    team_manager = TeamManager(self.db_adapter)
+                    # detect_session_teams reads the round player data directly. Do
+                    # NOT call get_session_teams here: it re-reads the session_teams
+                    # row we just rejected as stale (its corruption check only fires
+                    # when BOTH teams are identical, which a two-team bot roster is
+                    # not) and would hand the bots straight back.
+                    detected = await team_manager.detect_session_teams(
+                        session_date,
+                        gaming_session_id=auto_detect_session_id,
+                    )
+                    return detected if detected else None
+            except Exception as e:
+                logger.debug(f"Auto-detect teams failed: {e}")
+            return None
 
         except Exception as e:
             logger.debug(f"No hardcoded teams found: {e}")
