@@ -144,6 +144,9 @@ async def test_restart_detector_still_cancels_quick_duplicate_rounds(db_manager)
         current_player_guids=None,
     )
 
+    # The match_id guard ran (queried for a completed counterpart) and, finding
+    # none (complete_pair=None), correctly let the cancellation proceed.
+    assert conn.fetchval_calls
     assert len(conn.execute_calls) == 1
     assert conn.execute_calls[0][1] == ("cancelled", 9882)
 
@@ -179,4 +182,5 @@ async def test_restart_detector_spares_completed_match_via_match_id(db_manager):
         current_player_guids=None,
     )
 
+    assert conn.fetchval_calls  # the match_id guard was consulted
     assert conn.execute_calls == []  # spared: not a restart, it's a finished map
