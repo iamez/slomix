@@ -57,15 +57,15 @@ export async function loadClips() {
             <p class="text-slate-400 max-w-md mx-auto">Share your best ET:Legacy moments! Clip submission and viewing will be available in a future update.</p>
             <div class="mt-8 flex justify-center gap-4">
                 <div class="glass-card p-4 rounded-xl text-center">
-                    <i data-lucide="video" class="w-8 h-8 text-slate-600 mx-auto mb-2"></i>
+                    <i data-lucide="video" class="w-8 h-8 text-slate-400 mx-auto mb-2"></i>
                     <span class="text-xs text-slate-500">Submit Clips</span>
                 </div>
                 <div class="glass-card p-4 rounded-xl text-center">
-                    <i data-lucide="heart" class="w-8 h-8 text-slate-600 mx-auto mb-2"></i>
+                    <i data-lucide="heart" class="w-8 h-8 text-slate-400 mx-auto mb-2"></i>
                     <span class="text-xs text-slate-500">Like & Vote</span>
                 </div>
                 <div class="glass-card p-4 rounded-xl text-center">
-                    <i data-lucide="trophy" class="w-8 h-8 text-slate-600 mx-auto mb-2"></i>
+                    <i data-lucide="trophy" class="w-8 h-8 text-slate-400 mx-auto mb-2"></i>
                     <span class="text-xs text-slate-500">Weekly Top 10</span>
                 </div>
             </div>
@@ -92,21 +92,21 @@ export async function loadConfigs() {
             <p class="text-slate-400 max-w-md mx-auto">Share your ET:Legacy configurations! Config upload and download will be available in a future update.</p>
             <div class="mt-8 space-y-3 max-w-sm mx-auto">
                 <div class="glass-panel p-4 rounded-xl flex items-center gap-4">
-                    <i data-lucide="file-code" class="w-6 h-6 text-slate-600"></i>
+                    <i data-lucide="file-code" class="w-6 h-6 text-slate-400"></i>
                     <div class="text-left">
                         <div class="text-sm font-bold text-slate-400">etconfig.cfg</div>
                         <div class="text-xs text-slate-500">Game settings, binds, scripts</div>
                     </div>
                 </div>
                 <div class="glass-panel p-4 rounded-xl flex items-center gap-4">
-                    <i data-lucide="palette" class="w-6 h-6 text-slate-600"></i>
+                    <i data-lucide="palette" class="w-6 h-6 text-slate-400"></i>
                     <div class="text-left">
                         <div class="text-sm font-bold text-slate-400">HUD Configurations</div>
                         <div class="text-xs text-slate-500">Custom HUD layouts</div>
                     </div>
                 </div>
                 <div class="glass-panel p-4 rounded-xl flex items-center gap-4">
-                    <i data-lucide="crosshair" class="w-6 h-6 text-slate-600"></i>
+                    <i data-lucide="crosshair" class="w-6 h-6 text-slate-400"></i>
                     <div class="text-left">
                         <div class="text-sm font-bold text-slate-400">Crosshair Packs</div>
                         <div class="text-xs text-slate-500">Custom crosshair settings</div>

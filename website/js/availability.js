@@ -977,11 +977,11 @@ function renderCalendar() {
 
         const toneClass = inMonth
             ? 'bg-slate-950/40 border-white/10 hover:border-brand-cyan/40'
-            : 'bg-slate-950/20 border-white/5 text-slate-600 hover:border-white/10';
+            : 'bg-slate-950/20 border-white/5 text-slate-400 hover:border-white/10';
         const selectedClass = isSelected ? 'ring-2 ring-brand-cyan/50 border-brand-cyan/50' : '';
         const todayClass = isToday ? 'shadow-[0_0_0_1px_rgba(16,185,129,0.45)]' : '';
 
-        const dayClass = inMonth ? 'text-slate-100' : 'text-slate-600';
+        const dayClass = inMonth ? 'text-slate-100' : 'text-slate-400';
 
         cells.push(`
             <button

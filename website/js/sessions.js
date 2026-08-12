@@ -1142,7 +1142,7 @@ export async function loadSessionMVP(sessionDate) {
         if (leaderboard.length === 0) {
             widget.innerHTML = `
                 <h3 class="font-bold text-white mb-2">Session MVP</h3>
-                <div class="w-20 h-20 rounded-full bg-slate-800 mx-auto flex items-center justify-center text-2xl font-black text-slate-600 mb-4">
+                <div class="w-20 h-20 rounded-full bg-slate-800 mx-auto flex items-center justify-center text-2xl font-black text-slate-400 mb-4">
                     ?
                 </div>
                 <p class="text-slate-500 text-xs">No MVP data</p>
@@ -1163,7 +1163,7 @@ export async function loadSessionMVP(sessionDate) {
             <p class="font-bold text-white mb-1 cursor-pointer hover:text-brand-gold transition" data-mvp-profile="1">${safeName}</p>
             <div class="flex items-center justify-center gap-3 text-xs">
                 <span class="text-slate-400">DPM: <span class="font-bold text-brand-emerald">${mvp.dpm}</span></span>
-                <span class="text-slate-600">•</span>
+                <span class="text-slate-400">•</span>
                 <span class="text-slate-400">K/D: <span class="font-bold text-white">${(mvp.kills / (mvp.deaths || 1)).toFixed(2)}</span></span>
             </div>
             <div class="mt-2 px-3 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-brand-gold text-[10px] font-bold uppercase">
@@ -1183,7 +1183,7 @@ export async function loadSessionMVP(sessionDate) {
         console.error('Failed to load MVP:', e);
         widget.innerHTML = `
             <h3 class="font-bold text-white mb-2">Session MVP</h3>
-            <div class="w-20 h-20 rounded-full bg-slate-800 mx-auto flex items-center justify-center text-2xl font-black text-slate-600 mb-4">
+            <div class="w-20 h-20 rounded-full bg-slate-800 mx-auto flex items-center justify-center text-2xl font-black text-slate-400 mb-4">
                 ?
             </div>
             <p class="text-red-500 text-xs">Failed to load</p>
@@ -1671,7 +1671,7 @@ async function loadSessionDetailsExpanded(date) {
                         </div>
                         <div class="flex items-center gap-3">
                             <span class="text-3xl font-black ${aWinning ? 'text-brand-emerald' : 'text-slate-400'}">${teamAScore}</span>
-                            <span class="text-lg text-slate-600 font-bold">:</span>
+                            <span class="text-lg text-slate-400 font-bold">:</span>
                             <span class="text-3xl font-black ${bWinning ? 'text-brand-emerald' : 'text-slate-400'}">${teamBScore}</span>
                         </div>
                         <div class="text-left flex-1">

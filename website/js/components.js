@@ -43,7 +43,7 @@ export function KpiTile({ label, value, sub, icon, accent = 'blue' }) {
     return `
         <div class="glass-panel rounded-xl p-4 group hover:border-${accentColor}/30 transition-colors">
             <div class="flex items-center justify-between mb-2">
-                <span class="text-[10px] uppercase tracking-widest text-slate-600 font-bold">${escapeHtml(label)}</span>
+                <span class="text-[10px] uppercase tracking-widest text-slate-400 font-bold">${escapeHtml(label)}</span>
                 ${icon ? `<span class="text-${accentColor}/60 group-hover:text-${accentColor} transition-colors">${icon}</span>` : ''}
             </div>
             <div class="text-xl font-bold font-mono text-white">${escapeHtml(String(value))}</div>
@@ -99,7 +99,7 @@ export function TableCard({ title, columns, rows, emptyText = 'No data available
 
     const headerCells = columns.map(col => {
         const align = col.align === 'right' ? 'text-right' : 'text-left';
-        return `<th class="px-4 py-3 ${align} text-[10px] uppercase tracking-widest text-slate-600 font-bold">${escapeHtml(col.label)}</th>`;
+        return `<th class="px-4 py-3 ${align} text-[10px] uppercase tracking-widest text-slate-400 font-bold">${escapeHtml(col.label)}</th>`;
     }).join('');
 
     const bodyRows = rows.map(row => {
@@ -213,7 +213,7 @@ export function ExpandableList({ items, limit = 5, escapeItems = true }) {
  * @returns {string} HTML string
  */
 export function EmptyState(message = 'No data available', icon) {
-    const defaultIcon = `<svg class="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m6 4.125l2.25 2.25m0 0l2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>`;
+    const defaultIcon = `<svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m6 4.125l2.25 2.25m0 0l2.25 2.25M12 13.875l2.25-2.25M12 13.875l-2.25 2.25M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>`;
     return `
         <div class="py-10 text-center">
             <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-800/80 flex items-center justify-center">
