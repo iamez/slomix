@@ -4988,8 +4988,35 @@
     </script>
 
     <!-- Mobile bottom nav (S5 — phones only; desktop unaffected via md:hidden) -->
+    <!-- Mobile "More" sheet (B8): the bottom bar only holds 4 tabs, so at 375px
+         16 of 20 destinations (Proximity, Greatshot, Uploads, #ETL, About, and
+         the whole Stats menu) were unreachable — no hamburger existed (Opus
+         DevTools audit). This sheet exposes them all. No new JS: the toggle
+         reuses initNavDropdowns (data-nav-menu-toggle + aria-controls →
+         open/close, outside-click, Escape); each link reuses inline-actions.js
+         (role=menu items run navigateTo and auto-close on click). -->
+    <div id="mobile-more-menu" role="menu"
+         class="hidden md:hidden fixed bottom-16 left-2 right-2 z-40 glass-panel border border-white/10 rounded-2xl p-3 shadow-2xl max-h-[70vh] overflow-y-auto">
+        <div class="grid grid-cols-3 gap-2">
+            <button role="menuitem" tabindex="-1" data-click-action="navigateTo('live')" class="flex flex-col items-center gap-1 py-3 rounded-xl bg-slate-900/40 hover:bg-slate-800/60 text-slate-300"><i data-lucide="radio" class="w-5 h-5"></i><span class="text-[11px] font-bold">Live</span></button>
+            <button role="menuitem" tabindex="-1" data-click-action="navigateTo('proximity')" class="flex flex-col items-center gap-1 py-3 rounded-xl bg-slate-900/40 hover:bg-slate-800/60 text-slate-300"><i data-lucide="radar" class="w-5 h-5"></i><span class="text-[11px] font-bold">Proximity</span></button>
+            <button role="menuitem" tabindex="-1" data-click-action="navigateTo('greatshot')" class="flex flex-col items-center gap-1 py-3 rounded-xl bg-slate-900/40 hover:bg-slate-800/60 text-slate-300"><i data-lucide="camera" class="w-5 h-5"></i><span class="text-[11px] font-bold">Greatshot</span></button>
+            <button role="menuitem" tabindex="-1" data-click-action="navigateTo('uploads')" class="flex flex-col items-center gap-1 py-3 rounded-xl bg-slate-900/40 hover:bg-slate-800/60 text-slate-300"><i data-lucide="upload" class="w-5 h-5"></i><span class="text-[11px] font-bold">Uploads</span></button>
+            <button role="menuitem" tabindex="-1" data-click-action="navigateTo('availability')" class="flex flex-col items-center gap-1 py-3 rounded-xl bg-slate-900/40 hover:bg-slate-800/60 text-slate-300"><i data-lucide="calendar" class="w-5 h-5"></i><span class="text-[11px] font-bold">#ETL</span></button>
+            <button role="menuitem" tabindex="-1" data-click-action="navigateTo('story')" class="flex flex-col items-center gap-1 py-3 rounded-xl bg-slate-900/40 hover:bg-slate-800/60 text-slate-300"><i data-lucide="sparkles" class="w-5 h-5"></i><span class="text-[11px] font-bold">Smart Stats</span></button>
+            <button role="menuitem" tabindex="-1" data-click-action="navigateTo('replay')" class="flex flex-col items-center gap-1 py-3 rounded-xl bg-slate-900/40 hover:bg-slate-800/60 text-slate-300"><i data-lucide="play-circle" class="w-5 h-5"></i><span class="text-[11px] font-bold">Replay</span></button>
+            <button role="menuitem" tabindex="-1" data-click-action="navigateTo('rivalries')" class="flex flex-col items-center gap-1 py-3 rounded-xl bg-slate-900/40 hover:bg-slate-800/60 text-slate-300"><i data-lucide="swords" class="w-5 h-5"></i><span class="text-[11px] font-bold">Rivalries</span></button>
+            <button role="menuitem" tabindex="-1" data-click-action="navigateTo('record-book')" class="flex flex-col items-center gap-1 py-3 rounded-xl bg-slate-900/40 hover:bg-slate-800/60 text-slate-300"><i data-lucide="book-open" class="w-5 h-5"></i><span class="text-[11px] font-bold">Records</span></button>
+            <button role="menuitem" tabindex="-1" data-click-action="navigateTo('skill-rating')" class="flex flex-col items-center gap-1 py-3 rounded-xl bg-slate-900/40 hover:bg-slate-800/60 text-slate-300"><i data-lucide="star" class="w-5 h-5"></i><span class="text-[11px] font-bold">ET Rating</span></button>
+            <button role="menuitem" tabindex="-1" data-click-action="navigateTo('form')" class="flex flex-col items-center gap-1 py-3 rounded-xl bg-slate-900/40 hover:bg-slate-800/60 text-slate-300"><i data-lucide="trending-up" class="w-5 h-5"></i><span class="text-[11px] font-bold">Form</span></button>
+            <button role="menuitem" tabindex="-1" data-click-action="navigateTo('maps')" class="flex flex-col items-center gap-1 py-3 rounded-xl bg-slate-900/40 hover:bg-slate-800/60 text-slate-300"><i data-lucide="map" class="w-5 h-5"></i><span class="text-[11px] font-bold">Maps</span></button>
+            <button role="menuitem" tabindex="-1" data-click-action="navigateTo('weapons')" class="flex flex-col items-center gap-1 py-3 rounded-xl bg-slate-900/40 hover:bg-slate-800/60 text-slate-300"><i data-lucide="crosshair" class="w-5 h-5"></i><span class="text-[11px] font-bold">Weapons</span></button>
+            <button role="menuitem" tabindex="-1" data-click-action="navigateTo('awards')" class="flex flex-col items-center gap-1 py-3 rounded-xl bg-slate-900/40 hover:bg-slate-800/60 text-slate-300"><i data-lucide="award" class="w-5 h-5"></i><span class="text-[11px] font-bold">Awards</span></button>
+            <button role="menuitem" tabindex="-1" data-click-action="navigateTo('admin')" class="flex flex-col items-center gap-1 py-3 rounded-xl bg-slate-900/40 hover:bg-slate-800/60 text-slate-300"><i data-lucide="info" class="w-5 h-5"></i><span class="text-[11px] font-bold">About</span></button>
+        </div>
+    </div>
     <nav id="mobile-bottom-nav"
-         class="fixed bottom-0 left-0 right-0 z-40 md:hidden glass-panel border-t border-white/10 grid grid-cols-4"
+         class="fixed bottom-0 left-0 right-0 z-40 md:hidden glass-panel border-t border-white/10 grid grid-cols-5"
          style="padding-bottom: env(safe-area-inset-bottom);">
         <button data-mnav="home" class="flex flex-col items-center gap-0.5 py-2 text-slate-400">
             <i data-lucide="home" class="w-5 h-5"></i><span class="text-[10px] font-bold">Home</span>
@@ -5002,6 +5029,11 @@
         </button>
         <button data-mnav="leaderboards" class="flex flex-col items-center gap-0.5 py-2 text-slate-400">
             <i data-lucide="trophy" class="w-5 h-5"></i><span class="text-[10px] font-bold">Boards</span>
+        </button>
+        <button id="mobile-more-toggle" data-nav-menu-toggle aria-haspopup="true"
+                aria-expanded="false" aria-controls="mobile-more-menu"
+                class="flex flex-col items-center gap-0.5 py-2 text-slate-400">
+            <i data-lucide="menu" class="w-5 h-5"></i><span class="text-[10px] font-bold">More</span>
         </button>
     </nav>
 
