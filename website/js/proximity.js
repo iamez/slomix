@@ -4643,13 +4643,21 @@ function bindV52PanelEvents() {
     // Leaderboard tabs
     renderLeaderboardTabs();
     loadLeaderboardData();
-    document.getElementById('leaderboard-tabs')?.addEventListener('click', (e) => {
-        const btn = e.target.closest('.lb-tab-btn');
-        if (!btn) return;
-        lbActiveTab = btn.dataset.tab;
-        renderLeaderboardTabs();
-        loadLeaderboardData();
-    });
+    // bindV52PanelEvents re-runs on every scoped load; guard the delegated
+    // click listener so it binds once per element lifetime (was leaking
+    // +1/scope change). renderLeaderboardTabs/loadLeaderboardData above still
+    // refresh the content each time.
+    const lbTabs = document.getElementById('leaderboard-tabs');
+    if (lbTabs && lbTabs.dataset.clickBound !== '1') {
+        lbTabs.dataset.clickBound = '1';
+        lbTabs.addEventListener('click', (e) => {
+            const btn = e.target.closest('.lb-tab-btn');
+            if (!btn) return;
+            lbActiveTab = btn.dataset.tab;
+            renderLeaderboardTabs();
+            loadLeaderboardData();
+        });
+    }
     document.querySelectorAll('.lb-range-btn').forEach(btn => {
         btn.onclick = () => {
             lbRangeDays = Number(btn.dataset.days);
