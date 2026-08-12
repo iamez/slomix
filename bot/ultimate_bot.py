@@ -676,7 +676,7 @@ class UltimateETLegacyBot(
         # default (C5 cull, 2026-08-12) — 6 months of prod command logs never
         # recorded a prediction command, so they only clutter !help. Not
         # deleted: set PREDICTIONS_ENABLED=true in .env to restore instantly.
-        if os.getenv("PREDICTIONS_ENABLED", "false").strip().lower() == "true":
+        if self.config.predictions_enabled:
             try:
                 await self.load_extension("bot.cogs.predictions_cog")
                 logger.info("✅ Predictions cog loaded (!predictions, !prediction_stats, !my_predictions)")
