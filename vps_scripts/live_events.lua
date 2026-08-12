@@ -11,7 +11,7 @@
  private FD sidesteps that entirely and never grows legacy3.log.
 
  Emits (see parser vps_scripts/liveview_parser.py, LIVEX grammar):
-   R <ms> start|end <round>              round boundary
+   I <ms> map <name>                     init/round-boundary marker
    K <ms> <ks> <vs> <mod> <kx,ky,kz> <vx,vy,vz> <khp> <dist>   enriched kill
    A <ms> <slot> <dg> <dr> <k> <d>       10s per-slot combat aggregate
    M <ms> <slot>:<x>,<y>[,<yaw>] ...     movement tick (0.5 Hz)

@@ -120,9 +120,13 @@ def _parse_livex(body: str) -> LiveEvent | None:
         return None
     kind, ms = tok[0], int(tok[1])
     if kind == "K" and len(tok) >= 9:
+        # killer/victim slots are the record's identity — reject if unparseable
+        # (a None slot would silently misattribute a kill).
+        if not (tok[2].lstrip("-").isdigit() and tok[3].lstrip("-").isdigit()):
+            return None
         return LiveEvent("LIVE_KILL", ms, {
-            "killer_slot": int(tok[2]) if tok[2].lstrip("-").isdigit() else None,
-            "victim_slot": int(tok[3]) if tok[3].lstrip("-").isdigit() else None,
+            "killer_slot": int(tok[2]),
+            "victim_slot": int(tok[3]),
             "mod_id": int(tok[4]) if tok[4].isdigit() else None,
             "killer_pos": _xyz(tok[5]),
             "victim_pos": _xyz(tok[6]),
@@ -130,7 +134,11 @@ def _parse_livex(body: str) -> LiveEvent | None:
             "distance": int(tok[8]) if tok[8].lstrip("-").isdigit() else None,
         }, raw=body)
     if kind == "A" and len(tok) >= 7:
-        nums = [int(t) if t.lstrip("-").isdigit() else 0 for t in tok[2:7]]
+        # slot is identity; the 4 counters must be numeric — reject otherwise
+        # so a bad slot can't get MVP-credited as slot 0.
+        if not all(t.lstrip("-").isdigit() for t in tok[2:7]):
+            return None
+        nums = [int(t) for t in tok[2:7]]
         return LiveEvent("LIVE_AGGREGATE", ms, {
             "slot": nums[0], "damage_given": nums[1],
             "damage_received": nums[2], "kills": nums[3], "deaths": nums[4],

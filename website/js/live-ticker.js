@@ -117,7 +117,8 @@ function _mvpAdd(slot, delta) {
 
 let _holdCurve = [];        // [{t, p}] historical ECDF for current map
 let _defenderSide = null;   // engine team defending this round (1/2) if known
-let _roundStartMs = null;   // level_ms of the live ROUND_START
+let _roundStartRecv = null; // server received_at of the live ROUND_START
+                            // (wall-clock: consistent across legacy level-ms and LIVEX epoch-ms)
 let _momentum = 50;         // 0..100, 100 = attackers dominating
 const _MOM_DECAY = 0.985;   // eases back toward 50 each poll
 
@@ -143,7 +144,12 @@ function _interpHold(elapsedSec) {
 function _mvpApply(ev) {
     switch (ev.type) {
         case 'KILL':
+            if (_liveKillActive) break;  // LIVE_KILL path counts instead
             if (!ev._teamkill) _mvpAdd(ev.killer_slot, MVP_WEIGHTS.kill);
+            _mvpAdd(ev.victim_slot, MVP_WEIGHTS.death);
+            break;
+        case 'LIVE_KILL':
+            if (ev.killer_slot !== ev.victim_slot) _mvpAdd(ev.killer_slot, MVP_WEIGHTS.kill);
             _mvpAdd(ev.victim_slot, MVP_WEIGHTS.death);
             break;
         case 'DYNAMITE': case 'FLAG_PICKUP':
@@ -179,8 +185,8 @@ function _pressureApply(ev) {
     // favours the attacking side, a return/defuse the defence. Kills give a
     // tiny push to the killer's side.
     const toAttackers = (delta) => { _momentum = Math.max(0, Math.min(100, _momentum + delta)); };
-    if (ev.type === 'ROUND_START') { _roundStartMs = ev.level_ms; _momentum = 50; }
-    else if (ev.type === 'ROUND_END') { _roundStartMs = null; }
+    if (ev.type === 'ROUND_START') { _roundStartRecv = ev.received_at || null; _momentum = 50; }
+    else if (ev.type === 'ROUND_END') { _roundStartRecv = null; }
     else if (ev.type === 'POPUP') {
         if (ev.verb === 'stole' || ev.verb === 'planted') toAttackers(+12);
         else if (ev.verb === 'returned' || ev.verb === 'defused') toAttackers(-12);
@@ -193,7 +199,15 @@ function _pressureApply(ev) {
     }
 }
 
+// When live_events.lua is deployed, BOTH the legacy tailer (Kill:) and
+// live_events (LIVE_KILL) fire for the same obituary. Once we see a
+// LIVE_KILL, treat it as the authority and drop legacy KILL rows from the
+// display (they still feed streak/MVP via _combatApply, so state is single-
+// counted below by keying off victim+killer only on LIVE_KILL when active).
+let _liveKillActive = false;
+
 function _combatApply(ev) {
+    if (ev.type === 'LIVE_KILL') { _liveKillActive = true; }
     if (ev.type === 'KILL') {
         const k = ev.killer_slot, v = ev.victim_slot;
         if (k !== v) _streak.set(k, (_streak.get(k) || 0) + 1);
@@ -244,6 +258,15 @@ async function _poll() {
         );
         _lastFetchOk = true;
         if (data && Array.isArray(data.events) && data.events.length) {
+            // Per-event state (roster/streaks/momentum/MVP) MUST be updated
+            // before buffering + render — this loop was lost in a rebase and
+            // its absence silently disabled attribution, pressure and MVP.
+            for (const ev of data.events) {
+                _rosterApply(ev);
+                _combatApply(ev);
+                _pressureApply(ev);
+                _mvpApply(ev);
+            }
             _events = _events.concat(data.events).slice(-MAX_BUFFER);
             _cursor = data.last_seq || _cursor;
             renderLiveTicker();
@@ -319,8 +342,10 @@ function _line(ev) {
             return wrap('🎒', `${escapeHtml(_slotName(g))} handed out supplies`, 'text-slate-400');
         }
         case 'LIVE_KILL': {
-            const dist = ev.distance != null && ev.distance >= 0 ? ` <span class="text-slate-500 text-xs">${ev.distance}u</span>` : '';
-            const hp = ev.killer_health != null && ev.killer_health >= 0 ? ` <span class="text-emerald-400 text-xs">${ev.killer_health}hp</span>` : '';
+            const distN = Number(ev.distance);
+            const hpN = Number(ev.killer_health);
+            const dist = Number.isFinite(distN) && distN >= 0 ? ` <span class="text-slate-500 text-xs">${distN}u</span>` : '';
+            const hp = Number.isFinite(hpN) && hpN >= 0 ? ` <span class="text-emerald-400 text-xs">${hpN}hp</span>` : '';
             return wrap('🎯',
                 `<b>${escapeHtml(_slotName(ev.killer_slot))}</b> <span class="text-slate-500">→</span> ${escapeHtml(_slotName(ev.victim_slot))}${dist}${hp}`,
                 'text-slate-300');
@@ -382,9 +407,11 @@ export function renderLiveTicker() {
     // Live win-pressure strip: live hold% (elapsed vs historical curve) + a
     // momentum bar nudged by objective events. Only while a round is live.
     let pressureStrip = '';
-    if (_roundStartMs != null && _events.length) {
-        const nowMs = _events[_events.length - 1].level_ms;
-        const elapsed = nowMs != null ? Math.max(0, (nowMs - _roundStartMs) / 1000) : 0;
+    if (_roundStartRecv != null && _events.length) {
+        // Wall-clock elapsed from server timestamps — never level_ms, which
+        // mixes legacy monotonic ms and LIVEX epoch-ms (review: two tailers).
+        const nowRecv = _events[_events.length - 1].received_at || (Date.now() / 1000);
+        const elapsed = Math.max(0, nowRecv - _roundStartRecv);
         const hold = _interpHold(elapsed);
         const momA = Math.round(_momentum);
         const holdTxt = hold != null
@@ -412,7 +439,9 @@ export function renderLiveTicker() {
             </div>
         </div>`;
     }
-    const visible = _events.filter(e => _filters[_TYPE_TO_CAT[e.type]] === true);
+    const visible = _events.filter(e =>
+        _filters[_TYPE_TO_CAT[e.type]] === true
+        && !(e.type === 'KILL' && _liveKillActive));  // LIVE_KILL supersedes legacy
     const rows = visible.slice(-MAX_SHOWN).reverse().map(_line).filter(Boolean).join('');
     host.textContent = '';
     safeInsertHTML(host, 'beforeend', `
