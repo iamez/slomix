@@ -79,3 +79,28 @@ def test_status_reports_freshness(client):
     s1 = client.get("/api/live/status").json()
     assert s1["buffered"] == 1
     assert s1["newest_age_seconds"] is not None and s1["newest_age_seconds"] < 5
+
+
+
+def test_livex_types_ingest_and_feed_through(client):
+    """LIVEX events (from live_events.lua via slomix-live.log) must survive
+    ingest and appear in the feed — the two-tailer path end to end."""
+    r = _post(client, [
+        {"type": "LIVE_KILL", "level_ms": 1786480915000, "fields": {
+            "killer_slot": 3, "victim_slot": 5, "mod_id": 34,
+            "killer_pos": {"x": 1024, "y": -512, "z": 64}, "distance": 137}},
+        {"type": "LIVE_AGGREGATE", "level_ms": 1786480920000, "fields": {
+            "slot": 3, "damage_given": 640, "damage_received": 120,
+            "kills": 2, "deaths": 0}},
+        {"type": "LIVE_MOVEMENT", "level_ms": 1786480920000, "fields": {
+            "players": [{"slot": 3, "x": 1024, "y": -512}]}},
+        {"type": "LIVE_MAP", "level_ms": 1786480914000, "fields": {"map_name": "supply"}},
+        # a legacy KILL alongside, as the two-tailer setup produces
+        {"type": "KILL", "level_ms": 1, "fields": {"killer": "vid", "victim": "lgz", "mod": "MOD_MP40"}},
+    ])
+    assert r.status_code == 200 and r.json()["accepted"] == 5
+    types = [e["type"] for e in client.get("/api/live/feed").json()["events"]]
+    assert types == ["LIVE_KILL", "LIVE_AGGREGATE", "LIVE_MOVEMENT", "LIVE_MAP", "KILL"]
+    # LIVE_KILL carries its enriched fields through unchanged
+    lk = client.get("/api/live/feed").json()["events"][0]
+    assert lk["distance"] == 137 and lk["killer_slot"] == 3

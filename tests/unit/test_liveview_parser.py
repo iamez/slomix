@@ -92,3 +92,42 @@ def test_coverage_no_dominant_unparsed_class():
     for key, n in unparsed.items():
         if n > 50:
             assert key == "Endstats", f"nemodelirana množična vrsta: {key} ×{n}"
+
+
+
+# ---- LIVEX grammar (live_events.lua → slomix-live.log) --------------------
+
+def test_livex_enriched_kill():
+    ev = parse_line("K 1786480914123 3 5 34 1024,-512,64 900,-480,64 88 137")
+    assert ev is not None and ev.type == "LIVE_KILL"
+    assert ev.fields["killer_slot"] == 3 and ev.fields["victim_slot"] == 5
+    assert ev.fields["mod_id"] == 34
+    assert ev.fields["killer_pos"] == {"x": 1024, "y": -512, "z": 64}
+    assert ev.fields["victim_pos"]["y"] == -480
+    assert ev.fields["killer_health"] == 88 and ev.fields["distance"] == 137
+
+
+def test_livex_aggregate():
+    ev = parse_line("A 1786480914123 5 640 210 2 1")
+    assert ev is not None and ev.type == "LIVE_AGGREGATE"
+    assert ev.fields == {"slot": 5, "damage_given": 640,
+                         "damage_received": 210, "kills": 2, "deaths": 1}
+
+
+def test_livex_movement_with_and_without_yaw():
+    ev = parse_line("M 1786480914123 3:1024,-512,270 5:900,-480")
+    assert ev is not None and ev.type == "LIVE_MOVEMENT"
+    p0, p1 = ev.fields["players"]
+    assert p0 == {"slot": 3, "x": 1024, "y": -512, "yaw": 270}
+    assert p1 == {"slot": 5, "x": 900, "y": -480} and "yaw" not in p1
+
+
+def test_livex_map():
+    ev = parse_line("I 1786480914123 map supply")
+    assert ev is not None and ev.type == "LIVE_MAP" and ev.fields["map_name"] == "supply"
+
+
+def test_livex_malformed_returns_none():
+    assert parse_line("K 123 3") is None           # too few fields
+    assert parse_line("Z 123 whatever") is None     # unknown kind
+    assert parse_line("K notanumber 3 5") is None   # non-numeric ms
