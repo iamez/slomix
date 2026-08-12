@@ -6,6 +6,24 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.32.0](https://github.com/iamez/slomix/compare/v1.31.0...v1.32.0) (2026-08-12)
+
+
+### Features
+
+* **website:** live feed attribution and richer context (Live v2 phase A) ([#662](https://github.com/iamez/slomix/issues/662)) ([c8f7b9a](https://github.com/iamez/slomix/commit/c8f7b9ab8b0a62cfb12122462f49eccef1c5fea2))
+* **website:** live win-pressure strip — momentum + hold%% during the round (Live v2 phase B) ([#665](https://github.com/iamez/slomix/issues/665)) ([3ed2b3c](https://github.com/iamez/slomix/commit/3ed2b3c645859cc58eda6985698e26329c95edcc))
+* **website:** live_events.lua + LIVEX pipeline (Live v2 phase D, dev-only, inert) ([#667](https://github.com/iamez/slomix/issues/667)) ([423a3c2](https://github.com/iamez/slomix/commit/423a3c24c01d871c92f6afbe8c7c093b7a6753de))
+* **website:** rename Tonight → Live with #/tonight alias (Live v2 C2) ([#664](https://github.com/iamez/slomix/issues/664)) ([3fcc531](https://github.com/iamez/slomix/commit/3fcc531e5498f9a976d116cce6aed00b26de1475))
+
+
+### Bug Fixes
+
+* **lua:** live_events only aggregates real client slots (bot-test finding) ([#669](https://github.com/iamez/slomix/issues/669)) ([8572040](https://github.com/iamez/slomix/commit/857204071957252908d8ca41fe0e5f273075f2d7))
+* **lua:** tailer needs an honest User-Agent — Cloudflare 403s Python-urllib ([#660](https://github.com/iamez/slomix/issues/660)) ([4cec383](https://github.com/iamez/slomix/commit/4cec383d4803cb489083d45db98351859b4d8448))
+* **website:** resolve objective/support slots to names via the kill feed ([#666](https://github.com/iamez/slomix/issues/666)) ([fb5314a](https://github.com/iamez/slomix/commit/fb5314a44195de0551569da7239ac88296df0bd7))
+* **website:** Tonight roster must filter bot identities (Live v2 C1) ([#663](https://github.com/iamez/slomix/issues/663)) ([1c4b901](https://github.com/iamez/slomix/commit/1c4b9012c0277803cd2cf2fcb09b9c81ef29c8ac))
+
 ## [1.31.0](https://github.com/iamez/slomix/compare/v1.30.1...v1.31.0) (2026-08-11)
 
 
