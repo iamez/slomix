@@ -6,6 +6,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.34.0](https://github.com/iamez/slomix/compare/v1.33.1...v1.34.0) (2026-08-12)
+
+
+### Features
+
+* **greatshot:** revive headshot detector via xpgain hit regions (G2/G3) ([#693](https://github.com/iamez/slomix/issues/693)) ([a290be0](https://github.com/iamez/slomix/commit/a290be0661c3e494982a147906a4c49cb52a9a22))
+* **proximity:** deterministic relinker for combat_engagement/player_track orphans (C2) ([#694](https://github.com/iamez/slomix/issues/694)) ([d23474c](https://github.com/iamez/slomix/commit/d23474cf7b1f6355333ed764cd7d477a210e8dae))
+* **website:** attribute live objective actions to the acting player (A4) ([#691](https://github.com/iamez/slomix/issues/691)) ([6fe9b81](https://github.com/iamez/slomix/commit/6fe9b811f7f3c44b9903a3b9e9ac2ea92a51752b))
+
+
+### Bug Fixes
+
+* **proximity:** read vehicle origin as whole vector — escort distance was always 0 (C4) ([#695](https://github.com/iamez/slomix/issues/695)) ([8f1f3c2](https://github.com/iamez/slomix/commit/8f1f3c23a57a6de7e8c7e11ac030edd47668b4ee))
+* **website:** clear stale roster when live stream goes idle ([#697](https://github.com/iamez/slomix/issues/697)) ([6261c38](https://github.com/iamez/slomix/commit/6261c3888592777273120646a03f994a034c887d))
+
 ## [1.33.1](https://github.com/iamez/slomix/compare/v1.33.0...v1.33.1) (2026-08-12)
 
 
