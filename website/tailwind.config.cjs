@@ -31,16 +31,18 @@ module.exports = {
   ],
   safelist: [
     {
-      // dynamic color utilities: text-/bg-/border-/ring-/from-/to- with any
-      // shade and the opacity steps the code uses
+      // dynamic color utilities the legacy JS interpolates (text-${c}-400,
+      // bg-${c}-500, border-${c}, …). Scoped to the prefixes/shades actually
+      // used — kept tight so the compiled sheet stays under the repo's 500 KB
+      // large-file gate while still covering every dynamic badge/accent.
       pattern: new RegExp(
-        `^(text|bg|border|ring|from|to|via|fill|stroke)-(${COLORS.join('|')})(-(300|400|500|600|700))?$`,
+        `^(text|bg|border|ring)-(${COLORS.join('|')})(-(400|500|600))?$`,
       ),
-      variants: ['hover', 'group-hover', 'focus'],
+      variants: ['hover', 'group-hover'],
     },
     {
       pattern: new RegExp(
-        `^(text|bg|border|ring)-(${COLORS.join('|')})(-(300|400|500|600))?/(10|20|30|40|50|60|70|80|90)$`,
+        `^(text|bg|border|ring)-(${COLORS.join('|')})(-(400|500))?/(10|20|30|40|50|60)$`,
       ),
       variants: ['hover', 'group-hover'],
     },
