@@ -51,7 +51,19 @@ async def get_records(
         "dyna_defused": {"col": "dynamites_defused", "label": "Dynamites Defused"},
     }
 
-    base_where = "WHERE round_number IN (1, 2) AND time_played_seconds > 0"
+    # Records are the all-time Hall of Fame — bot/test rounds must never
+    # enter it. is_valid on the round is the primary gate (bot rounds are
+    # flagged is_valid = FALSE by the importer); the [BOT]/OMNIBOT identity
+    # filter is defence in depth for any historical round that predates the
+    # validity flag. (Owner saw [BOT]vid holding the kills record.)
+    base_where = (
+        "WHERE round_number IN (1, 2) AND time_played_seconds > 0 "
+        "AND player_name NOT LIKE '[BOT]%' "
+        "AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') "
+        "AND NOT EXISTS (SELECT 1 FROM rounds r "
+        "                WHERE r.id = player_comprehensive_stats.round_id "
+        "                  AND r.is_valid IS FALSE)"
+    )
     if map_name:
         base_where += " AND map_name = $1"
 
@@ -134,7 +146,12 @@ async def get_awards_leaderboard(
         award_type: Filter to specific award type
     """
     params = []
-    where_clauses = []
+    where_clauses = [
+        # Award records exclude bots (identity-level; round_awards has no
+        # validity flag). Owner: Record Book showed bot award holders.
+        "ra.player_name NOT LIKE '[BOT]%'",
+        "(ra.player_guid IS NULL OR ra.player_guid NOT LIKE 'OMNIBOT%')",
+    ]
     param_idx = 1
 
     if days > 0:
@@ -433,7 +450,12 @@ async def list_awards(
         days: Filter to last N days
     """
     params = []
-    where_clauses = []
+    where_clauses = [
+        # Award records exclude bots (identity-level; round_awards has no
+        # validity flag). Owner: Record Book showed bot award holders.
+        "ra.player_name NOT LIKE '[BOT]%'",
+        "(ra.player_guid IS NULL OR ra.player_guid NOT LIKE 'OMNIBOT%')",
+    ]
     param_idx = 1
 
     resolved_player_guid = None
