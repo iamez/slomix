@@ -6,6 +6,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.33.1](https://github.com/iamez/slomix/compare/v1.33.0...v1.33.1) (2026-08-12)
+
+
+### Bug Fixes
+
+* **bot:** don't cancel completed-match rounds as restarts (brewdog miscount) ([#689](https://github.com/iamez/slomix/issues/689)) ([66e29a1](https://github.com/iamez/slomix/commit/66e29a10f77858e1df774d58e3f81ff7e63a7cfc))
+* **website:** bump text-slate-600 to -400 for WCAG AA contrast ([#684](https://github.com/iamez/slomix/issues/684)) ([79bb32c](https://github.com/iamez/slomix/commit/79bb32cedaf7bd61c418830588848cc53862ec72))
+* **website:** mobile 'More' sheet exposes all nav destinations (B8) ([#686](https://github.com/iamez/slomix/issues/686)) ([68cd1dc](https://github.com/iamez/slomix/commit/68cd1dc606dff962f451db5f1791df26e3271739))
+
+
+### Performance Improvements
+
+* **website:** compile Tailwind at build time, drop runtime CDN (B7) ([#687](https://github.com/iamez/slomix/issues/687)) ([dcef6a8](https://github.com/iamez/slomix/commit/dcef6a827625c4c1dc226d4dbd9d7c1f9a06664f))
+
 ## [1.33.0](https://github.com/iamez/slomix/compare/v1.32.0...v1.33.0) (2026-08-12)
 
 
