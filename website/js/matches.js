@@ -55,11 +55,11 @@ export async function loadMatchesView(filter = 'all') {
 
             const team1Html = (match.team1_players || [])
                 .map(p => `<span class="text-slate-300">${escapeHtml(p)}</span>`)
-                .join(' <span class="text-slate-600">-</span> ');
+                .join(' <span class="text-slate-400">-</span> ');
 
             const team2Html = (match.team2_players || [])
                 .map(p => `<span class="text-slate-300">${escapeHtml(p)}</span>`)
-                .join(' <span class="text-slate-600">-</span> ');
+                .join(' <span class="text-slate-400">-</span> ');
 
             const html = `
             <div class="glass-panel rounded-xl hover:bg-white/5 transition cursor-pointer group border-l-4 ${team1Win ? 'border-l-brand-blue' : team2Win ? 'border-l-brand-rose' : 'border-l-slate-600'}"
