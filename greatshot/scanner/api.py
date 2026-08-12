@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import bisect
+import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable
@@ -138,10 +140,47 @@ def _normalize_players(
     return normalized
 
 
+_XPGAIN_HITREGION_RE = re.compile(
+    r'xpgain\s+\d+\s+[\d.]+\s+"(head|body|arm|leg)shot kill"', re.IGNORECASE
+)
+_HITREGION_MATCH_WINDOW_MS = 1500
+
+
+def _coerce_ms(value: Any) -> int | None:
+    """serverTime → int ms, or None when missing/non-numeric. Guarding this is
+    load-bearing: a missing timestamp defaulted to 0 would enrich an unrelated
+    kill at t=0, and a non-numeric one would raise and abort the whole scan."""
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_hitregion_xpgain(
+    raw_commands: Iterable[dict[str, Any]],
+) -> list[tuple[int, str]]:
+    """Extract (serverTime_ms, hit_region) from `xpgain … "<region>shot kill"`.
+
+    hit_region is the real per-kill data the engine emits; causeOfDeath carries
+    only the weapon and fills hit_region just for the rare weapon whose MOD name
+    literally contains HEAD, so in practice the detector read 0/613. xpgain is
+    POV-only — every row belongs to the demo's recording player — so a
+    nearest-timestamp match to a kill is unambiguous enough to revive it.
+    Commands with a missing or non-numeric serverTime are skipped.
+    """
+    return [
+        (t_ms, m.group(1).lower())
+        for cmd in raw_commands or []
+        if (m := _XPGAIN_HITREGION_RE.search(str(cmd.get("rawCommand", ""))))
+        and (t_ms := _coerce_ms(cmd.get("serverTime"))) is not None
+    ]
+
+
 def _normalize_timeline(
     raw_chat: Iterable[dict[str, Any]],
     raw_obits: Iterable[dict[str, Any]],
     profile,
+    raw_commands: Iterable[dict[str, Any]] = (),
 ) -> list[DemoEvent]:
     timeline: list[DemoEvent] = []
 
@@ -188,6 +227,24 @@ def _normalize_timeline(
                 },
             )
         )
+
+    # Revive hit_region on kills from xpgain "<region>shot kill" (G3). The
+    # obituary loop above leaves it None because causeOfDeath is weapon-only;
+    # match each xpgain to the nearest kill within the window and stamp it.
+    kills = sorted((e for e in timeline if e.type == "kill"), key=lambda e: e.t_ms)
+    if kills:
+        kill_times = [e.t_ms for e in kills]
+        for t_ms, region in _parse_hitregion_xpgain(raw_commands):
+            idx = bisect.bisect_left(kill_times, t_ms)
+            best: tuple[int, DemoEvent] | None = None
+            for k in (idx - 1, idx):
+                if 0 <= k < len(kills):
+                    dt = abs(kill_times[k] - t_ms)
+                    if best is None or dt < best[0]:
+                        best = (dt, kills[k])
+            if best and best[0] <= _HITREGION_MATCH_WINDOW_MS and best[1].hit_region is None:
+                best[1].hit_region = region
+                best[1].meta["hit_region_source"] = "xpgain"
 
     timeline.sort(
         key=lambda event: (
@@ -418,7 +475,9 @@ def analyze_demo(
         profile=profile,
     )
 
-    timeline = _normalize_timeline(chat, obituaries, profile)
+    timeline = _normalize_timeline(
+        chat, obituaries, profile, raw.get("rawCommands", []) or []
+    )
     warnings: list[str] = []
     if len(timeline) > max_events:
         warnings.append(
