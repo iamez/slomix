@@ -246,7 +246,8 @@ class StopwatchScoringService:
                            round_start_unix, map_play_seq
                     FROM rounds
                     WHERE id IN ({placeholders})
-                    AND round_status = 'completed'
+                    AND (round_status IN ('completed', 'cancelled', 'substitution')
+                         OR round_status IS NULL)
                     AND is_valid
                     AND round_number IN (1, 2)
                     ORDER BY gaming_session_id,
@@ -263,7 +264,8 @@ class StopwatchScoringService:
                            round_start_unix, map_play_seq
                     FROM rounds
                     WHERE SUBSTRING(round_date, 1, 10) = $1
-                    AND round_status = 'completed'
+                    AND (round_status IN ('completed', 'cancelled', 'substitution')
+                         OR round_status IS NULL)
                     AND is_valid
                     AND round_number IN (1, 2)
                     ORDER BY gaming_session_id,
@@ -731,7 +733,15 @@ class StopwatchScoringService:
                        r.round_start_unix, r.map_play_seq
                 FROM rounds r
                 WHERE r.id IN ({placeholders})
-                AND r.round_status = 'completed'
+                -- 'cancelled'/'substitution' rounds carry valid player stats
+                -- (same set SessionDataService counts), so they must count for
+                -- map scoring too. Filtering to 'completed' alone silently
+                -- dropped a legitimately-played round — e.g. gsid 144's first
+                -- et_brewdog R2 was marked 'cancelled', so the whole map fell
+                -- out and the tally read 5-1 instead of the true 5-2 (7 maps,
+                -- matching supastats). is_valid below still excludes real junk.
+                AND (r.round_status IN ('completed', 'cancelled', 'substitution')
+                     OR r.round_status IS NULL)
                 AND r.is_valid
                 AND r.round_number IN (1, 2)
                 ORDER BY r.gaming_session_id,
