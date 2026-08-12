@@ -34,8 +34,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from website.backend.dependencies import require_internal_secret
+from website.backend.services.live_state import LiveStateReducer
 
 router = APIRouter()
+
+# Current-state snapshot (Live-view A0). The event ring is the play-by-play
+# log; this reducer is the authoritative "right now" state (roster, map,
+# game state) so the page renders correctly on load instead of replaying a
+# stale ring. See services/live_state.py.
+_state = LiveStateReducer()
 
 _BUFFER_MAX = 1000
 _POST_MAX_EVENTS = 200
@@ -84,13 +91,15 @@ async def ingest_events(batch: LiveEventBatch) -> dict[str, Any]:
             if etype not in _ALLOWED_TYPES:
                 continue
             _seq += 1
-            _events.append({
+            record = {
                 "seq": _seq,
                 "type": etype,
                 "level_ms": ev.level_ms,
                 "received_at": now,
                 **ev.fields,
-            })
+            }
+            _events.append(record)
+            _state.apply(record)  # fold into the current-state snapshot
             accepted += 1
     return {"status": "ok", "accepted": accepted, "last_seq": _seq}
 
@@ -111,6 +120,16 @@ async def feed(
         "last_seq": last_seq,
         "server_time": time.time(),
     }
+
+
+@router.get("/state")
+async def state() -> dict[str, Any]:
+    """Authoritative current-state snapshot (roster by side, current/previous
+    map, game state, timers, recent objectives). The client reads this on
+    load so the page shows the real "right now" instead of replaying stale
+    events from the ring."""
+    async with _lock:
+        return _state.snapshot()
 
 
 @router.get("/status")
