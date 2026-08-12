@@ -1,4 +1,4 @@
-# Release config for v1.34.0 — restart-detector match_id guard + migration 072
+# Release config for v1.33.1 — restart-detector match_id guard + migration 072
 # roster guard) + website perf/correctness batch (webp thumbnails, defer,
 # listener-leak guard, Record Book bot filter, midnight range, CSP) + live
 # state reducer/roster panel (A0/A1). No new migrations vs v1.32.0 — Python
