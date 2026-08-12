@@ -277,7 +277,7 @@ function renderPlayerRivalries(panel, data) {
             cardsGrid.appendChild(_el('div', 'glass-panel rounded-xl border border-white/10 p-4 opacity-50',
                 _el('div', 'text-xs text-slate-500 uppercase tracking-wider mb-1', c.title),
                 _el('div', 'text-sm text-slate-400', `No ${c.title.toLowerCase()} found`),
-                _el('div', 'text-[10px] text-slate-600 mt-1', c.subtitle)
+                _el('div', 'text-[10px] text-slate-400 mt-1', c.subtitle)
             ));
             return;
         }
@@ -293,7 +293,7 @@ function renderPlayerRivalries(panel, data) {
         const statsRow = _el('div', 'flex items-center gap-3 mt-3');
         const scoreDiv = _el('div', 'text-sm',
             _el('span', 'text-emerald-400 font-mono', String(c.pair.kills_by_player)),
-            _el('span', 'text-slate-600 mx-1', '-'),
+            _el('span', 'text-slate-400 mx-1', '-'),
             _el('span', 'text-red-400 font-mono', String(c.pair.kills_on_player))
         );
         statsRow.appendChild(scoreDiv);

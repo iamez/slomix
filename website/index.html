@@ -1659,7 +1659,7 @@
                 <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center gap-3">
                         <h2 class="text-sm font-bold text-white uppercase tracking-wider">Community Insights</h2>
-                        <span class="text-[10px] text-slate-600 uppercase tracking-widest">Trends</span>
+                        <span class="text-[10px] text-slate-400 uppercase tracking-widest">Trends</span>
                     </div>
                     <div id="insights-timeframe-btns" class="flex gap-1">
                         <button data-click-action="window.loadInsightsCharts(14)" class="insights-tf-btn px-2.5 py-1 rounded text-xs font-bold bg-brand-blue/20 text-brand-blue transition active" data-days="14">14d</button>
@@ -1678,7 +1678,7 @@
                             <canvas id="insights-rounds-chart"></canvas>
                             <div id="insights-rounds-empty" class="hidden absolute inset-0 flex items-center justify-center">
                                 <div class="text-center">
-                                    <i data-lucide="bar-chart-2" class="w-6 h-6 text-slate-600 mx-auto mb-2"></i>
+                                    <i data-lucide="bar-chart-2" class="w-6 h-6 text-slate-400 mx-auto mb-2"></i>
                                     <p class="text-xs text-slate-500">Insights coming soon</p>
                                 </div>
                             </div>
@@ -1694,7 +1694,7 @@
                             <canvas id="insights-players-chart"></canvas>
                             <div id="insights-players-empty" class="hidden absolute inset-0 flex items-center justify-center">
                                 <div class="text-center">
-                                    <i data-lucide="users" class="w-6 h-6 text-slate-600 mx-auto mb-2"></i>
+                                    <i data-lucide="users" class="w-6 h-6 text-slate-400 mx-auto mb-2"></i>
                                     <p class="text-xs text-slate-500">Insights coming soon</p>
                                 </div>
                             </div>
@@ -1710,7 +1710,7 @@
                             <canvas id="insights-maps-chart"></canvas>
                             <div id="insights-maps-empty" class="hidden absolute inset-0 flex items-center justify-center">
                                 <div class="text-center">
-                                    <i data-lucide="map" class="w-6 h-6 text-slate-600 mx-auto mb-2"></i>
+                                    <i data-lucide="map" class="w-6 h-6 text-slate-400 mx-auto mb-2"></i>
                                     <p class="text-xs text-slate-500">Insights coming soon</p>
                                 </div>
                             </div>
@@ -2302,22 +2302,22 @@
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                             <div>
                                 <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Share of alive time spent under enemy attention (engagement duration weighted by attackers). Drawing heat creates space for teammates.">Gravity</div>
-                                <div class="text-[10px] text-slate-600 mb-2">who pulls enemy attention</div>
+                                <div class="text-[10px] text-slate-400 mb-2">who pulls enemy attention</div>
                                 <div id="proximity-invisible-gravity" class="space-y-1"></div>
                             </div>
                             <div>
                                 <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Share of deaths where teammates capitalized within 10s — productive deaths vs wasted deaths.">Space Created</div>
-                                <div class="text-[10px] text-slate-600 mb-2">whose deaths the team converts</div>
+                                <div class="text-[10px] text-slate-400 mb-2">whose deaths the team converts</div>
                                 <div id="proximity-invisible-space" class="space-y-1"></div>
                             </div>
                             <div>
                                 <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Teammate kills enabled per minute alive — nearby kills (±5s, ≤500u) plus trades.">Enabler</div>
-                                <div class="text-[10px] text-slate-600 mb-2">who creates kills for others</div>
+                                <div class="text-[10px] text-slate-400 mb-2">who creates kills for others</div>
                                 <div id="proximity-invisible-enabler" class="space-y-1"></div>
                             </div>
                             <div>
                                 <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Share of alive time spent 500+ units from the nearest teammate.">Lurker</div>
-                                <div class="text-[10px] text-slate-600 mb-2">who operates alone</div>
+                                <div class="text-[10px] text-slate-400 mb-2">who operates alone</div>
                                 <div id="proximity-invisible-lurker" class="space-y-1"></div>
                             </div>
                         </div>
@@ -2387,34 +2387,34 @@
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
                         <div>
                             <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Stagger kill = the victim loses 80%+ of their spawn wave. The costliest kill in stopwatch.">Stagger Leaders</div>
-                            <div class="text-[10px] text-slate-600 mb-2">kills that erase a whole enemy wave</div>
+                            <div class="text-[10px] text-slate-400 mb-2">kills that erase a whole enemy wave</div>
                             <div id="proximity-competitive-stagger" class="space-y-1"></div>
                         </div>
                         <div>
                             <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Who draws first blood — and how often their team converts it into the round win.">First Blood</div>
-                            <div class="text-[10px] text-slate-600 mb-2">opening picks per player (picks / first deaths)</div>
+                            <div class="text-[10px] text-slate-400 mb-2">opening picks per player (picks / first deaths)</div>
                             <div id="proximity-competitive-firstblood" class="space-y-1"></div>
                         </div>
                         <div>
                             <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="New personal records set in this session, vs the player's own history.">Personal Bests</div>
-                            <div class="text-[10px] text-slate-600 mb-2">records broken this session</div>
+                            <div class="text-[10px] text-slate-400 mb-2">records broken this session</div>
                             <div id="proximity-competitive-pbs" class="space-y-2"></div>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-5 mt-5 pt-5 border-t border-white/5">
                         <div>
                             <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Whenever a team has more players alive: how often the edge is pressed into a further kill before it evens out.">Man-Advantage Conversion</div>
-                            <div class="text-[10px] text-slate-600 mb-2">who cashes in a numbers edge</div>
+                            <div class="text-[10px] text-slate-400 mb-2">who cashes in a numbers edge</div>
                             <div id="proximity-competitive-manadv" class="space-y-1"></div>
                         </div>
                         <div>
                             <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Last player alive of their wave group vs 2+ enemies with 5s+ to the friendly wave. Won = a kill + survive to the wave, or trade up.">Clutch 1vN</div>
-                            <div class="text-[10px] text-slate-600 mb-2">held the fort (wins / situations)</div>
+                            <div class="text-[10px] text-slate-400 mb-2">held the fort (wins / situations)</div>
                             <div id="proximity-competitive-clutch" class="space-y-1"></div>
                         </div>
                         <div>
                             <div class="text-[11px] font-bold text-slate-500 uppercase mb-1" title="Kills per minute actually played on each side (side from the round's defender). Defense KPM is naturally higher — compare players, not sides.">Attack / Defense Splits</div>
-                            <div class="text-[10px] text-slate-600 mb-2">kpm by side — attack vs defense</div>
+                            <div class="text-[10px] text-slate-400 mb-2">kpm by side — attack vs defense</div>
                             <div id="proximity-competitive-sides" class="space-y-1"></div>
                         </div>
                     </div>
@@ -2489,9 +2489,9 @@
                             <canvas id="proximity-heatmap" class="absolute inset-0 w-full h-full"></canvas>
                             <div id="proximity-heatmap-empty" class="absolute inset-0 flex items-center justify-center text-slate-500">
                                 <div class="text-center">
-                                    <i data-lucide="map" class="w-8 h-8 mx-auto mb-2 text-slate-600"></i>
+                                    <i data-lucide="map" class="w-8 h-8 mx-auto mb-2 text-slate-400"></i>
                                     <div class="text-sm font-bold text-slate-400">Heatmap offline</div>
-                                    <div class="text-xs text-slate-600">Spatial aggregation pending</div>
+                                    <div class="text-xs text-slate-400">Spatial aggregation pending</div>
                                 </div>
                             </div>
                         </div>
@@ -2632,7 +2632,7 @@
                             <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-emerald/10 text-brand-emerald">Prototype</span>
                         </div>
                         <div id="proximity-trade-events" class="space-y-2 text-sm text-slate-400">
-                            <div class="text-xs text-slate-600">No trade events yet.</div>
+                            <div class="text-xs text-slate-400">No trade events yet.</div>
                         </div>
                     </div>
                 </div>
@@ -2644,7 +2644,7 @@
                             <span class="text-[10px] font-bold px-2 py-1 rounded bg-brand-cyan/10 text-brand-cyan">Live</span>
                         </div>
                         <div id="proximity-event-list" class="space-y-2 text-sm text-slate-400">
-                            <div class="text-xs text-slate-600">No events loaded yet.</div>
+                            <div class="text-xs text-slate-400">No events loaded yet.</div>
                         </div>
                     </div>
 
@@ -2657,9 +2657,9 @@
                             <canvas id="proximity-event-canvas" class="absolute inset-0 w-full h-full"></canvas>
                             <div id="proximity-event-empty" class="absolute inset-0 flex items-center justify-center text-slate-500">
                                 <div class="text-center">
-                                    <i data-lucide="crosshair" class="w-8 h-8 mx-auto mb-2 text-slate-600"></i>
+                                    <i data-lucide="crosshair" class="w-8 h-8 mx-auto mb-2 text-slate-400"></i>
                                     <div class="text-sm font-bold text-slate-400">Select an engagement</div>
-                                    <div class="text-xs text-slate-600">We will draw the movement path</div>
+                                    <div class="text-xs text-slate-400">We will draw the movement path</div>
                                 </div>
                             </div>
                         </div>
@@ -3588,7 +3588,7 @@
                             <h1 class="text-3xl md:text-4xl font-black text-white tracking-tight">Upload Library</h1>
                             <p class="text-sm text-slate-400 max-w-xl">
                                 Share configs, HUDs, archives, and clips with the community.
-                                <span class="text-slate-600 text-xs ml-1">Clips up to 500MB, configs up to 2MB.</span>
+                                <span class="text-slate-400 text-xs ml-1">Clips up to 500MB, configs up to 2MB.</span>
                             </p>
                         </div>
                         <div id="upload-auth-actions"></div>
@@ -3607,7 +3607,7 @@
                                     <svg class="w-6 h-6 text-brand-blue" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
                                 </div>
                                 <p class="text-sm font-medium text-slate-300">Drop files here or click to browse</p>
-                                <p class="text-[11px] text-slate-600 mt-1">.cfg .hud .zip .rar .mp4 .avi .mkv</p>
+                                <p class="text-[11px] text-slate-400 mt-1">.cfg .hud .zip .rar .mp4 .avi .mkv</p>
                                 <div id="upload-drop-filename" class="hidden mt-2 text-xs font-bold text-brand-cyan font-mono"></div>
                                 <!-- sr-only, not hidden: hidden (display:none) removes it from the tab order
                                      entirely, which is what made this unreachable by keyboard in the first place. -->
@@ -3617,22 +3617,22 @@
                             <!-- Fields row -->
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 <div>
-                                    <label class="block text-[10px] uppercase tracking-widest font-bold text-slate-600 mb-1.5">Title</label>
+                                    <label class="block text-[10px] uppercase tracking-widest font-bold text-slate-400 mb-1.5">Title</label>
                                     <input type="text" id="upload-title-input" maxlength="200" placeholder="Optional title..."
-                                        class="w-full bg-slate-900/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-brand-blue/40 focus:outline-none transition">
+                                        class="w-full bg-slate-900/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-400 focus:border-brand-blue/40 focus:outline-none transition">
                                 </div>
                                 <div>
-                                    <label class="block text-[10px] uppercase tracking-widest font-bold text-slate-600 mb-1.5">Description</label>
+                                    <label class="block text-[10px] uppercase tracking-widest font-bold text-slate-400 mb-1.5">Description</label>
                                     <input type="text" id="upload-desc-input" maxlength="2000" placeholder="Optional description..."
-                                        class="w-full bg-slate-900/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-brand-blue/40 focus:outline-none transition">
+                                        class="w-full bg-slate-900/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-400 focus:border-brand-blue/40 focus:outline-none transition">
                                 </div>
                                 <div>
-                                    <label class="block text-[10px] uppercase tracking-widest font-bold text-slate-600 mb-1.5">Tags</label>
+                                    <label class="block text-[10px] uppercase tracking-widest font-bold text-slate-400 mb-1.5">Tags</label>
                                     <input type="text" id="upload-tags-input" maxlength="200" placeholder="etpro, competitive..."
-                                        class="w-full bg-slate-900/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-brand-blue/40 focus:outline-none transition">
+                                        class="w-full bg-slate-900/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-400 focus:border-brand-blue/40 focus:outline-none transition">
                                 </div>
                                 <div>
-                                    <label for="upload-retention-select" class="block text-[10px] uppercase tracking-widest font-bold text-slate-600 mb-1.5">Keep for</label>
+                                    <label for="upload-retention-select" class="block text-[10px] uppercase tracking-widest font-bold text-slate-400 mb-1.5">Keep for</label>
                                     <select id="upload-retention-select"
                                         class="w-full bg-slate-900/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-brand-blue/40 focus:outline-none transition">
                                         <option value="">Forever</option>
@@ -3646,7 +3646,7 @@
                             <!-- Progress bar -->
                             <div id="upload-progress-wrap" class="hidden">
                                 <div class="flex items-center justify-between mb-1.5">
-                                    <span class="text-[10px] uppercase tracking-widest font-bold text-slate-600">Uploading</span>
+                                    <span class="text-[10px] uppercase tracking-widest font-bold text-slate-400">Uploading</span>
                                     <span id="upload-progress-text" class="text-xs font-bold text-brand-blue font-mono">0%</span>
                                 </div>
                                 <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
@@ -3694,9 +3694,9 @@
                             <option value="title">Title A–Z</option>
                         </select>
                         <div class="relative">
-                            <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+                            <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
                             <input type="text" id="upload-search-input" placeholder="Search..."
-                                class="bg-slate-900/50 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder:text-slate-600 w-44 focus:border-brand-blue/40 focus:outline-none transition">
+                                class="bg-slate-900/50 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder:text-slate-400 w-44 focus:border-brand-blue/40 focus:outline-none transition">
                         </div>
                     </div>
 
@@ -4343,7 +4343,7 @@
                         Code on <a href="https://github.com/iamez/slomix" target="_blank" rel="noopener noreferrer"
                                    class="text-emerald-400 hover:underline">GitHub</a> · MIT licensed.
                     </div>
-                    <div class="mt-2 font-mono text-[10px] text-slate-600">
+                    <div class="mt-2 font-mono text-[10px] text-slate-400">
                         <span id="about-build-info">page rev: about-1.0</span>
                     </div>
                 </section>
