@@ -96,18 +96,27 @@ function _column(icon, label, color, members, alignRight) {
     </div>`;
 }
 
-const _TEAM_LABEL = { 1: 'Axis', 2: 'Allies' };
 const _OBJ_ICON = {
     grabbed: '🚩', plant: '💣', planted: '💣', defuse: '🧨', defused: '🧨',
     stole: '📦', returned: '↩️',
 };
 const _OBJ_VERB = { grabbed: 'grabbed', plant: 'planted', defuse: 'defused' };
 
+/** POPUP carries the side as a lowercased string ("axis"/"allies"), not the
+ * 1/2 engine int the roster uses — accept both so POPUP objectives aren't
+ * flattened to "Someone" (Copilot). */
+function _teamLabel(t) {
+    if (t === 1 || t === '1') return 'Axis';
+    if (t === 2 || t === '2') return 'Allies';
+    const s = t == null ? '' : String(t);
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : null;
+}
+
 /** One recent objective action → "🚩 vid grabbed Gold Documents". Names the
  * actor when the source event carried a slot (flag/dynamite); POPUP stays
  * team-level. A4. */
 function _objLine(o) {
-    const who = o.player ? escapeHtml(o.player) : (_TEAM_LABEL[o.team] || 'Someone');
+    const who = escapeHtml(o.player || _teamLabel(o.team) || 'Someone');
     const verb = _OBJ_VERB[o.verb] || o.verb || 'took';
     const what = o.objective ? ` <span class="text-slate-400">${escapeHtml(o.objective)}</span>` : '';
     return `${_OBJ_ICON[o.verb] || '⚑'} <span class="text-slate-200">${who}</span> ${verb}${what}`;
