@@ -555,6 +555,14 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
         mp.update({"winner": winner, "a_points": a_pts, "b_points": b_pts})
         map_list.append(mp)
 
+    # Every today-row can be a bot round that the identity filter above
+    # dropped (map_number never advanced, maps stays empty) while `rows`
+    # itself is non-empty — that must read as "no live session", not a 500.
+    if not maps or map_number not in maps:
+        return {"status": "ok", "active": False, "teams": {}, "maps": [],
+                "momentum": [], "score": {}, "current": None, "director": None,
+                "hold_probability": None}
+
     last_unix = int(rows[-1][10] or 0)
     now_unix = int(datetime.now(timezone.utc).timestamp())
     age = max(0, now_unix - last_unix)
