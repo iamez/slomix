@@ -1249,8 +1249,13 @@ async def get_stats_sessions(
                 r.gaming_session_id,
                 MIN(r.round_date) as first_date,
                 MAX(r.round_date) as last_date,
-                MIN(r.round_time) as first_time,
-                MAX(r.round_time) as last_time,
+                -- Take the time of the chronologically first/last ROUND, not
+                -- the global MIN/MAX of the time-of-day column. A session
+                -- crossing midnight (21:56 → 00:23) otherwise renders as
+                -- "00:23 — 23:57". round_date::text (YYYY-MM-DD, 10 chars) ||
+                -- round_time sorts chronologically; the time is chars 11+.
+                SUBSTRING(MIN(r.round_date::text || r.round_time) FROM 11) as first_time,
+                SUBSTRING(MAX(r.round_date::text || r.round_time) FROM 11) as last_time,
                 COUNT(r.id) as round_count,
                 STRING_AGG(DISTINCT r.map_name, ', ' ORDER BY r.map_name) as maps_played,
                 -- winner_team 1 = Axis, 2 = Allies (TEAM_AXIS=1). Aliases were inverted.
