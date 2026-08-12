@@ -196,6 +196,18 @@ function _pressureApply(ev) {
 function _combatApply(ev) {
     if (ev.type === 'KILL') {
         const k = ev.killer_slot, v = ev.victim_slot;
+        // Kill lines carry slot AND name for both parties — the densest
+        // slot->name source we have. Learn from them so objective/support
+        // events (slot only) resolve to names even before a TEAM_CHANGE for
+        // that slot arrives (the '#6 planted' problem after a fresh buffer).
+        if (k != null && ev.killer && !String(ev.killer).startsWith('#')) {
+            const e = _roster.get(k) || {};
+            _roster.set(k, { name: ev.killer, team: e.team ?? null });
+        }
+        if (v != null && ev.victim && !String(ev.victim).startsWith('#')) {
+            const e = _roster.get(v) || {};
+            _roster.set(v, { name: ev.victim, team: e.team ?? null });
+        }
         if (k !== v) _streak.set(k, (_streak.get(k) || 0) + 1);
         _streak.set(v, 0);
         ev._streak = k !== v ? _streak.get(k) : 0;
