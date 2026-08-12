@@ -24,8 +24,6 @@
  viewangles attempted (fail-closed), NOT deployed to the gameserver today.
 ============================================================================]]
 
-local M = {}
-
 -- ---- config ---------------------------------------------------------------
 local config = {
     enabled = false,            -- master flag; overridden by config file below
@@ -85,6 +83,10 @@ local function safe_get(clientnum, field, index)
     return nil
 end
 
+local function maxclients()
+    return tonumber(et.trap_Cvar_Get("sv_maxclients")) or 64
+end
+
 local function now_ms(levelTime)
     -- Prefer the real epoch (offset captured at InitGame); levelTime is the
     -- fallback and is monotonic per map, which the parser also tolerates.
@@ -137,13 +139,9 @@ local function yaw_of(clientnum)
     return tonumber(a[2])  -- [pitch, yaw, roll]
 end
 
-local function maxclients()
-    local n = tonumber(et.trap_Cvar_Get("sv_maxclients")) or 64
-    return n
-end
-
 -- ---- callbacks ------------------------------------------------------------
 function et_InitGame(levelTime, _randomSeed, _restart)
+    et.RegisterModname("live_events 1.0")
     load_overrides()
     epoch_offset_ms = (os.time() * 1000) - levelTime
     if config.enabled then
@@ -160,6 +158,14 @@ function et_ShutdownGame(_restart)
     if log_fd then pcall(function() log_fd:close() end); log_fd = nil end
 end
 
+-- et_Obituary(target, attacker, meansOfDeath) — signature per the official
+-- ET:Legacy Lua docs (callbacks.html), matches c0rnp0rn8. During the
+-- 2026-08-12 bot test it did not fire, but that test was warmup-heavy
+-- (repeated `map` reloads): the engine only raises et_Obituary for scored
+-- kills in GS_PLAYING, not warmup, so the likely cause is test contamination,
+-- NOT a code fault. Validate on a real GS_PLAYING game before assuming
+-- broken. If it truly never fires, derive kill positions client-side by
+-- joining LIVE_MOVEMENT with the legacy KILL by slot.
 -- c0rnp0rn8 signature: et_Obituary(victim, killer, mod)
 function et_Obituary(victim, killer, mod)
     if not config.enabled then return end
@@ -249,4 +255,3 @@ function et_RunFrame(levelTime)
     end
 end
 
-return M
