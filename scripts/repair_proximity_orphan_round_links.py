@@ -130,14 +130,13 @@ def main() -> int:
 
     total = 0
     per_table: dict[str, int] = {}
-    with _connect() as conn:
-        with conn.cursor() as cur:
-            for table in _TABLES:
-                cur.execute(_PREVIEW_SQL.format(table=table))
-                rows, identities = cur.fetchone()
-                per_table[table] = rows
-                total += rows
-                print(f"  {table:<20} {rows:>6,} rows  ({identities} round identities)")
+    with _connect() as conn, conn.cursor() as cur:
+        for table in _TABLES:
+            cur.execute(_PREVIEW_SQL.format(table=table))
+            rows, identities = cur.fetchone()
+            per_table[table] = rows
+            total += rows
+            print(f"  {table:<20} {rows:>6,} rows  ({identities} round identities)")
     print(f"\nDeterministically relinkable: {total:,} rows")
 
     if not args.apply:
