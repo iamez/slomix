@@ -6,6 +6,32 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.33.0](https://github.com/iamez/slomix/compare/v1.32.0...v1.33.0) (2026-08-12)
+
+
+### Features
+
+* **website:** live current-state reducer + GET /api/live/state (A0) ([#673](https://github.com/iamez/slomix/issues/673)) ([4df874f](https://github.com/iamez/slomix/commit/4df874f174840b3cd074c16acfc17d256a9b2832))
+* **website:** live roster panel from the state snapshot (A1) ([#674](https://github.com/iamez/slomix/issues/674)) ([597f980](https://github.com/iamez/slomix/commit/597f980c865c1f321d9301a1768bff85ac4393ee))
+
+
+### Bug Fixes
+
+* **bot:** reject stale session_teams roster so real matches don't read 0-0 TIE ([#682](https://github.com/iamez/slomix/issues/682)) ([b3a24b5](https://github.com/iamez/slomix/commit/b3a24b594fcd9b8f6fc85237eee8c27a83a9d74d))
+* **lua:** live_events RegisterModname + guards; document et_Obituary quirk ([#672](https://github.com/iamez/slomix/issues/672)) ([78b8d40](https://github.com/iamez/slomix/commit/78b8d406c7929b7b8ff7dac89b3c89a5c000582f))
+* **website:** allow Cloudflare Insights in CSP (silences console violation) ([#680](https://github.com/iamez/slomix/issues/680)) ([08e81fb](https://github.com/iamez/slomix/commit/08e81fb791ab39c517c6516660eebc8e63881499))
+* **website:** guard re-entrant listener binds (leak +3/round) ([#679](https://github.com/iamez/slomix/issues/679)) ([4cab039](https://github.com/iamez/slomix/commit/4cab039ebf4a5181039ceaa0ab529f6976df9cfa))
+* **website:** narrative shows 'Session ?' after bot-session decoupling ([#671](https://github.com/iamez/slomix/issues/671)) ([beea344](https://github.com/iamez/slomix/commit/beea344188c53d820f7c712beb2e60a0a7235df9))
+* **website:** Record Book / awards must exclude bots (Opus DevTools audit B4) ([#676](https://github.com/iamez/slomix/issues/676)) ([6cac3c3](https://github.com/iamez/slomix/commit/6cac3c3f5236e084f962a756ecf1206cf817d903))
+* **website:** session time range wrong across midnight (Opus audit B5) ([#677](https://github.com/iamez/slomix/issues/677)) ([a8ddc00](https://github.com/iamez/slomix/commit/a8ddc002c9923024b798eaf97a17d6fdb336becf))
+* **website:** tonight endpoint 500s when every today-row is a bot round ([#670](https://github.com/iamez/slomix/issues/670)) ([3eb3455](https://github.com/iamez/slomix/commit/3eb3455c0129cb7f66fb77ae970c79c702116b32))
+
+
+### Performance Improvements
+
+* **website:** defer lucide + chart.js scripts (LCP -124ms) ([#678](https://github.com/iamez/slomix/issues/678)) ([67fdcee](https://github.com/iamez/slomix/commit/67fdcee05ff6b68f64334977b903868594b1438c))
+* **website:** serve 320px webp map thumbnails on session cards ([#681](https://github.com/iamez/slomix/issues/681)) ([2ebc7aa](https://github.com/iamez/slomix/commit/2ebc7aa27b2f78b31ad73ba51001a8c476c449a4))
+
 ## [1.32.0](https://github.com/iamez/slomix/compare/v1.31.0...v1.32.0) (2026-08-12)
 
 
