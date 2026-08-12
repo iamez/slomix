@@ -8,7 +8,8 @@
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 import { initTonightBetting } from './bets.js?v=20260804-auth-dedupe';
-import { startLiveTicker, stopLiveTicker, renderLiveTicker, getLiveRoster, liveRosterHasBots, setLiveRoundContext } from './live-ticker.js?v=20260812-live6';
+import { startLiveTicker, stopLiveTicker, renderLiveTicker, setLiveRoundContext } from './live-ticker.js?v=20260812-live6';
+import { startLiveState, stopLiveState, renderLiveState } from './live-state.js?v=20260812-a1';
 
 const POLL_MS = 8000;
 let _interval = null;
@@ -40,14 +41,15 @@ export async function loadTonightView() {
     await _refresh();
     _startPolling();
     startLiveTicker();
+    startLiveState();
     // Fun-betting panel lives in its own container with its own refresh loop.
     initTonightBetting().catch(e => console.warn('tonight betting init failed', e));
     // Bind the visibility lifecycle once (loadTonightView runs on every entry).
     if (!_lifecycleBound) {
         _lifecycleBound = true;
         document.addEventListener('visibilitychange', () => {
-            if (_viewActive()) { _startPolling(); startLiveTicker(); }
-            else { _stopPolling(); stopLiveTicker(); }
+            if (_viewActive()) { _startPolling(); startLiveTicker(); startLiveState(); }
+            else { _stopPolling(); stopLiveTicker(); stopLiveState(); }
         });
     }
 }
@@ -56,29 +58,6 @@ function _mmss(sec) {
     if (sec == null) return '—';
     const s = Math.max(0, Math.round(sec));
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-
-// Live server pulse from the UDP query (/live-status) — the actual "right now"
-// state, which the lua feed (round-end only) can't show. Empty string when the
-// server is offline so the strip simply doesn't render.
-function _serverStrip(gs) {
-    if (!gs || !gs.online) return '';
-    const map = escapeHtml(gs.map || '—');
-    const pc = gs.player_count || 0, mx = gs.max_players || 0;
-    const hostname = escapeHtml(gs.hostname || 'server');
-    const names = (gs.players || [])
-        .map(p => escapeHtml((p && p.name) || ''))
-        .filter(Boolean)
-        .join(' · ');
-    return `<div class="glass-panel p-4 rounded-xl mb-6 flex items-center justify-between flex-wrap gap-2">
-        <div class="flex items-center gap-2">
-            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-bold">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>SERVER LIVE
-            </span>
-            <span class="text-sm text-slate-300">${hostname} · <span class="text-white font-bold">${map}</span></span>
-        </div>
-        <span class="text-xs text-slate-400">${pc}/${mx} on server${names ? ` — ${names}` : ''}</span>
-    </div>`;
 }
 
 // One round's outcome as a small team-coloured pill (R1 · winner · time).
@@ -109,51 +88,9 @@ function _teamPanel(team, maps, rounds, lead, side) {
     </div>`;
 }
 
-// Side scoreboard for the pre-first-round window: who is on which SIDE
-// right now (from the live feed's TEAM_CHANGE stream when fresh, else the
-// UDP player list without side info) plus an explicit score — 0:0 reads
-// as "match on!" where an empty panel read as "nothing happening".
-const AXIS_COLOR = '#ef4444', ALLIES_COLOR = '#3b82f6';
-
-function _sideColumn(label, color, names, alignRight) {
-    const list = names.length
-        ? names.map(n => `<div class="text-sm text-slate-200 leading-relaxed truncate">${escapeHtml(n)}</div>`).join('')
-        : '<div class="text-sm text-slate-600">—</div>';
-    return `<div class="flex-1 min-w-0 ${alignRight ? 'text-right' : ''}">
-        <div class="text-[10px] uppercase tracking-widest font-black mb-1.5" style="color:${color}">${label}</div>
-        ${list}
-    </div>`;
-}
-
-function _sideScoreboard(gs, data) {
-    const roster = getLiveRoster();
-    const score = (data && data.score) || {};
-    const a = score.a_maps ?? 0, b = score.b_maps ?? 0;
-    let axis = roster.axis, allies = roster.allies, specs = roster.spectators;
-    if (!roster.fresh) {
-        // Feed quiet -> UDP list only (no side info); show under one roof.
-        const flat = ((gs && gs.players) || []).map(pl => (pl && pl.name) || '').filter(Boolean);
-        axis = flat; allies = []; specs = [];
-    }
-    const specStrip = specs.length
-        ? `<div class="mt-3 pt-2 border-t border-white/5 text-[11px] text-slate-500 text-center truncate">👁 ${specs.map(n => escapeHtml(n)).join(' · ')}</div>`
-        : '';
-    const botBadge = liveRosterHasBots()
-        ? '<div class="text-center mb-2"><span class="px-2 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 text-[10px] font-black tracking-wider">BOT TEST — not part of the session</span></div>'
-        : '';
-    return `<div class="glass-panel rounded-xl p-5 ${liveRosterHasBots() ? 'opacity-80' : ''}">
-        ${botBadge}
-        <div class="flex items-start gap-4">
-            ${_sideColumn(roster.fresh ? 'Axis' : 'On server', AXIS_COLOR, axis, false)}
-            <div class="text-center shrink-0 px-2">
-                <div class="text-5xl font-black text-white leading-none tracking-tight">${a}<span class="text-slate-600 mx-1">:</span>${b}</div>
-                <div class="text-[10px] uppercase tracking-widest text-slate-500 mt-1">maps</div>
-            </div>
-            ${_sideColumn(roster.fresh ? 'Allies' : '', ALLIES_COLOR, roster.fresh ? allies : [], true)}
-        </div>
-        ${specStrip}
-    </div>`;
-}
+// Who's on the server, by side, now lives in the authoritative #live-state
+// panel (live-state.js, fed by GET /api/live/state) — it replaced the old
+// feed-derived _sideScoreboard / _serverStrip here.
 
 async function _refresh() {
     const host = document.getElementById('tonight-content');
@@ -181,19 +118,15 @@ async function _refresh() {
         // results strip will fill in as rounds land. Otherwise truly idle.
         if (serverPlayers > 0) {
             host.textContent = '';
-            safeInsertHTML(host, 'beforeend', _serverStrip(gs) + `
-                <div class="text-center mb-3">
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 text-amber-300 text-[11px] font-bold">
-                        <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>WARMING UP — first round in progress
-                    </span>
-                </div>` + _sideScoreboard(gs, data) + `
-                <div id="live-ticker"></div>`);
+            safeInsertHTML(host, 'beforeend',
+                '<div id="live-state"></div><div id="live-ticker"></div>');
+            renderLiveState();
             renderLiveTicker();
             return;
         }
         _stopPolling();
         host.textContent = '';
-        safeInsertHTML(host, 'beforeend', (serverOnline ? _serverStrip(gs) : '') + `
+        safeInsertHTML(host, 'beforeend', '<div id="live-state"></div>' + `
             <div class="glass-panel p-8 rounded-xl text-center">
                 <div class="text-2xl font-black text-white mb-2">No session live right now</div>
                 <div class="text-slate-400 mb-4">Come back when the games are on.</div>
@@ -203,9 +136,10 @@ async function _refresh() {
                 </div>
             </div>
             <div id="live-ticker"></div>`);
-        // Idle still shows the match feed: live events (someone warming up,
-        // a replay demo, a session the score API hasn't classified yet)
-        // are exactly what tells a visitor the page is worth keeping open.
+        // Idle still shows the current-state panel (who's on the server, even
+        // between sessions) and the match feed — that tells a visitor the
+        // page is worth keeping open.
+        renderLiveState();
         renderLiveTicker();
         return;
     }
@@ -243,7 +177,7 @@ async function _refresh() {
     // DOM rebuild (otherwise it snaps back to the left every refresh).
     const prevScroll = host.querySelector('[data-maps-strip]')?.scrollLeft || 0;
     host.textContent = '';
-    safeInsertHTML(host, 'beforeend', _serverStrip(gs) + `
+    safeInsertHTML(host, 'beforeend', '<div id="live-state"></div>' + `
         <div class="glass-panel p-6 rounded-xl mb-6">
             <div class="flex items-center justify-between flex-wrap gap-3 mb-5">
                 <div class="flex items-center gap-3">
@@ -299,6 +233,7 @@ async function _refresh() {
     if (!host.querySelector('#live-ticker')) {
         safeInsertHTML(host, 'beforeend', '<div id="live-ticker"></div>');
     }
+    renderLiveState();
     renderLiveTicker();
 }
 
