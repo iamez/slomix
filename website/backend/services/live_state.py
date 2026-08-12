@@ -185,6 +185,14 @@ class LiveStateReducer:
             else:
                 spectators.append(member)
 
+        # A quiet stream (no event within the live window) means the game ended
+        # or the server went away. Disconnects don't arrive on a server restart,
+        # so the roster would otherwise freeze the final line-up on screen — an
+        # idle snapshot must show no players, matching game_state=idle.
+        if not is_live:
+            axis, allies, spectators = [], [], []
+            session_start = None
+
         recent_objectives = [
             o for o in self._objectives
             if (now - o["at"]) <= _OBJECTIVE_WINDOW_SECONDS

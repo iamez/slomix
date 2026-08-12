@@ -118,3 +118,21 @@ def test_dynamite_attributed_and_unknown_slot_is_none():
     assert objs[0]["verb"] == "plant"
     assert objs[1]["player"] is None  # slot 9 never connected
     assert objs[1]["verb"] == "defuse"
+
+
+def test_idle_snapshot_clears_stale_roster():
+    """A server restart sends no DISCONNECTs, so the roster would freeze the
+    final line-up. Once the stream goes quiet (is_live False), the snapshot
+    must show no players — not 6 stale bots as if a match were still on."""
+    old = time.time() - 3600  # an hour ago → well past the live window
+    r = LiveStateReducer()
+    r.apply(_ev("TEAM_CHANGE", old, slot=1, name="[BOT]vid", team=1))
+    r.apply(_ev("TEAM_CHANGE", old, slot=2, name="[BOT]lgz", team=2))
+    snap = r.snapshot()
+    assert snap["is_live"] is False
+    assert snap["game_state"] == "idle"
+    assert snap["roster"]["axis"] == []
+    assert snap["roster"]["allies"] == []
+    assert snap["roster"]["player_count"] == 0
+    assert snap["roster"]["has_bots"] is False
+    assert snap["session_start_seconds"] is None
