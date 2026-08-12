@@ -88,3 +88,33 @@ def test_bot_flag_and_objectives():
     snap = r.snapshot()
     assert snap["roster"]["has_bots"] is True
     assert snap["recent_objectives"][-1]["objective"] == "Gold"
+
+
+def test_flag_pickup_attributed_to_roster_player():
+    """A4: FLAG_PICKUP carries a slot, so the reducer names the actor from the
+    current roster — 'vid grabbed <flag>' rather than an anonymous team line."""
+    now = time.time()
+    r = LiveStateReducer()
+    r.apply(_ev("TEAM_CHANGE", now, slot=3, name="vid", team=1))
+    r.apply(_ev("FLAG_PICKUP", now, slot=3, flag="Gold Documents"))
+    objs = r.snapshot()["recent_objectives"]
+    assert len(objs) == 1
+    assert objs[0]["type"] == "flag"
+    assert objs[0]["player"] == "vid"
+    assert objs[0]["verb"] == "grabbed"
+    assert objs[0]["objective"] == "Gold Documents"
+
+
+def test_dynamite_attributed_and_unknown_slot_is_none():
+    """A4: DYNAMITE plant/defuse is named from the roster; a slot with no
+    CONNECT yet resolves to player=None instead of crashing."""
+    now = time.time()
+    r = LiveStateReducer()
+    r.apply(_ev("TEAM_CHANGE", now, slot=5, name=".lgz", team=2))
+    r.apply(_ev("DYNAMITE", now, slot=5, action="plant", objective="Main Entrance"))
+    r.apply(_ev("DYNAMITE", now, slot=9, action="defuse", objective="Side Wall"))
+    objs = r.snapshot()["recent_objectives"]
+    assert objs[0]["player"] == ".lgz"
+    assert objs[0]["verb"] == "plant"
+    assert objs[1]["player"] is None  # slot 9 never connected
+    assert objs[1]["verb"] == "defuse"
