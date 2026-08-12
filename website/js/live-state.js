@@ -87,7 +87,7 @@ function _member(m, alignRight) {
 function _column(icon, label, color, members, alignRight) {
     const rows = members.length
         ? members.map(m => _member(m, alignRight)).join('')
-        : '<div class="text-sm text-slate-600">—</div>';
+        : '<div class="text-sm text-slate-400">—</div>';
     return `<div class="flex-1 min-w-0 ${alignRight ? 'text-right' : ''}">
         <div class="text-[10px] uppercase tracking-widest font-black mb-1.5" style="color:${color}">
             ${alignRight ? `${label} ${icon}` : `${icon} ${label}`}
@@ -136,7 +136,7 @@ export function renderLiveState() {
             </div>
             <div class="flex items-start gap-4">
                 ${_column('🔴', 'Axis', AXIS_COLOR, r.axis || [], false)}
-                <div class="text-center shrink-0 px-2 text-slate-600 self-center">
+                <div class="text-center shrink-0 px-2 text-slate-400 self-center">
                     <div class="text-lg font-black text-slate-500">${(r.axis || []).length}<span class="text-slate-700 mx-0.5">v</span>${(r.allies || []).length}</div>
                 </div>
                 ${_column('🔵', 'Allies', ALLIES_COLOR, r.allies || [], true)}

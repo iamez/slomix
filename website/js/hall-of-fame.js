@@ -287,7 +287,7 @@ function renderListRow(entry, isDpm, deltaWindow) {
     return `
         <div class="flex items-center justify-between py-1.5 px-2 rounded hover:bg-white/5 transition">
             <div class="flex items-center gap-2.5 min-w-0">
-                <span class="text-[11px] font-mono text-slate-600 w-5 text-right shrink-0">${escapeHtml(String(entry.rank))}</span>
+                <span class="text-[11px] font-mono text-slate-400 w-5 text-right shrink-0">${escapeHtml(String(entry.rank))}</span>
                 ${nameHtml}
                 ${_deltaBadge(entry, deltaWindow)}
             </div>

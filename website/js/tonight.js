@@ -191,7 +191,7 @@ async function _refresh() {
             ${data.director ? `<div class="text-center text-[15px] font-semibold text-slate-100 mb-5 px-2 leading-snug">${escapeHtml(data.director)}</div>` : ''}
             <div class="flex items-stretch gap-4">
                 ${_teamPanel(teams.a || {}, aMaps, score.a_rounds || 0, aLead, 'a')}
-                <div class="flex items-center text-slate-600 text-xl font-black">vs</div>
+                <div class="flex items-center text-slate-400 text-xl font-black">vs</div>
                 ${_teamPanel(teams.b || {}, bMaps, score.b_rounds || 0, !aLead, 'b')}
             </div>
             <div class="text-center text-xs text-slate-500 mt-3">${score.maps_completed || 0} maps completed tonight</div>

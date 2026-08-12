@@ -68,7 +68,7 @@ export async function loadLiveStatus() {
                         <span class="text-brand-cyan">${mapName}</span>
                         <span class="text-slate-500 mx-1">·</span>
                         <span class="text-slate-400">${playerNames}</span>
-                        ${pingDisplay ? `<span class="text-slate-600 ml-2 text-xs">(${pingDisplay})</span>` : ''}
+                        ${pingDisplay ? `<span class="text-slate-400 ml-2 text-xs">(${pingDisplay})</span>` : ''}
                     `;
                     if (serverPlayerCount) {
                         serverPlayerCount.classList.remove('hidden');
@@ -82,7 +82,7 @@ export async function loadLiveStatus() {
                         <span class="text-brand-cyan">${mapName}</span>
                         <span class="text-slate-500 mx-1">·</span>
                         <span class="text-slate-500">${playerCount} players</span>
-                        ${pingDisplay ? `<span class="text-slate-600 ml-2 text-xs">(${pingDisplay})</span>` : ''}
+                        ${pingDisplay ? `<span class="text-slate-400 ml-2 text-xs">(${pingDisplay})</span>` : ''}
                     `;
                     if (serverPlayerCount) serverPlayerCount.classList.add('hidden');
                 }
@@ -606,7 +606,7 @@ export async function loadCurrentVoiceMembers() {
                 nameEl.className = 'text-xs font-bold text-slate-400 uppercase';
                 nameEl.textContent = String(channel?.name || '');
                 const countEl = document.createElement('span');
-                countEl.className = 'text-xs text-slate-600';
+                countEl.className = 'text-xs text-slate-400';
                 countEl.textContent = `(${Array.isArray(channel?.members) ? channel.members.length : 0})`;
                 header.appendChild(nameEl);
                 header.appendChild(countEl);
