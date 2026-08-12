@@ -235,6 +235,9 @@ class BotConfig:
         # Auto-posted recap embed after a session ends. OFF by default —
         # owner enables on prod once content is validated.
         self.session_digest_enabled: bool = self._get_config('SESSION_DIGEST_ENABLED', 'false').lower() == 'true'
+        # Prediction commands (12) hidden by default — 0 prod calls in 6 months
+        # (C5). Routed through BotConfig so bot_config.json can enable them too.
+        self.predictions_enabled: bool = self._get_config('PREDICTIONS_ENABLED', 'false').lower() == 'true'
         # Website API used for KIS MVP / PB enrichment (digest degrades
         # gracefully if unreachable). Prod runs the web on port 7000.
         self.website_api_base: str = self._get_config('WEBSITE_API_BASE', 'http://127.0.0.1:8000/api').rstrip('/')
