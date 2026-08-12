@@ -79,7 +79,7 @@ export async function comparePlayers() {
                         <div class="font-bold text-white">${escapeHtml(player1Name)}</div>
                     </div>
                     <div class="flex items-center justify-center">
-                        <div class="text-3xl font-black text-slate-600">VS</div>
+                        <div class="text-3xl font-black text-slate-400">VS</div>
                     </div>
                     <div>
                         <div class="w-16 h-16 rounded-full bg-brand-rose/20 flex items-center justify-center text-2xl font-black text-brand-rose mx-auto mb-2">

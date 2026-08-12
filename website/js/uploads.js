@@ -359,7 +359,7 @@ function renderEmptyState() {
         <div class="col-span-full">
             <div class="glass-card rounded-xl p-12 text-center">
                 <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-800/80 flex items-center justify-center">
-                    <svg class="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+                    <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
                 </div>
                 <h3 class="text-base font-bold text-slate-300 mb-1">No uploads found</h3>
                 <p class="text-xs text-slate-500 max-w-xs mx-auto">Try adjusting your filters or search, or be the first to upload something.</p>
@@ -398,12 +398,12 @@ function renderUploadCard(item, index = 0) {
                 <!-- Meta row -->
                 <div class="flex items-center justify-between text-[11px] text-slate-500">
                     <span class="flex items-center gap-1.5">
-                        <svg class="w-3 h-3 text-slate-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0"/></svg>
+                        <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0"/></svg>
                         ${escapeHtml(item.uploader_name || 'Anonymous')}
                     </span>
                     <span>${sizeStr}</span>
                 </div>
-                <div class="flex items-center justify-between text-[11px] text-slate-600">
+                <div class="flex items-center justify-between text-[11px] text-slate-400">
                     <span>${item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}</span>
                     <span class="flex items-center gap-1">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
@@ -451,7 +451,7 @@ function renderPagination(total) {
         container.textContent = '';
         if (total > 0) {
             const info = document.createElement('div');
-            info.className = 'text-[11px] text-slate-600';
+            info.className = 'text-[11px] text-slate-400';
             info.textContent = rangeText;
             container.appendChild(info);
         }
@@ -482,7 +482,7 @@ function renderPagination(total) {
     }
 
     html += '</div>';
-    html += `<div class="text-[11px] text-slate-600">${rangeText}</div>`;
+    html += `<div class="text-[11px] text-slate-400">${rangeText}</div>`;
 
     container.innerHTML = html;
 }
@@ -512,7 +512,7 @@ async function loadPopularTags() {
             `<button onclick="window.filterUploadsByTag('${escapeJsString(t.tag)}')"
                 class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold text-slate-400 border border-white/10 hover:border-brand-cyan/40 hover:text-brand-cyan hover:bg-brand-cyan/5 transition-all duration-200">
                 <span class="opacity-60">#</span>${escapeHtml(t.tag)}
-                <span class="text-slate-600 ml-0.5">${t.count}</span>
+                <span class="text-slate-400 ml-0.5">${t.count}</span>
             </button>`
         ).join('');
     } catch (err) {
@@ -557,7 +557,7 @@ function filterUploadsByTag(tag) {
                     <div class="col-span-full">
                         <div class="glass-card rounded-xl p-10 text-center">
                             <div class="text-sm font-bold text-slate-400 mb-1">No uploads tagged "${escapeHtml(tag)}"</div>
-                            <div class="text-xs text-slate-600">Try a different tag or browse all uploads</div>
+                            <div class="text-xs text-slate-400">Try a different tag or browse all uploads</div>
                         </div>
                     </div>`;
             } else {
@@ -728,26 +728,26 @@ export async function loadUploadDetail(uploadId) {
                         ${cat.icon.replace('w-5 h-5', 'w-10 h-10')}
                     </div>
                     <div class="text-sm text-slate-400">${escapeHtml(data.filename)}</div>
-                    <div class="text-xs text-slate-600 mt-1">${sizeStr}</div>
+                    <div class="text-xs text-slate-400 mt-1">${sizeStr}</div>
                 </div>
                 `}
 
                 <!-- Metadata Grid -->
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div class="glass-panel rounded-xl p-4 text-center group hover:border-brand-cyan/30 transition-colors">
-                        <div class="text-[10px] uppercase tracking-widest text-slate-600 mb-1.5 font-bold">Uploaded by</div>
+                        <div class="text-[10px] uppercase tracking-widest text-slate-400 mb-1.5 font-bold">Uploaded by</div>
                         <div class="text-sm font-bold text-white">${escapeHtml(data.uploader_name || 'Anonymous')}</div>
                     </div>
                     <div class="glass-panel rounded-xl p-4 text-center group hover:border-brand-purple/30 transition-colors">
-                        <div class="text-[10px] uppercase tracking-widest text-slate-600 mb-1.5 font-bold">Size</div>
+                        <div class="text-[10px] uppercase tracking-widest text-slate-400 mb-1.5 font-bold">Size</div>
                         <div class="text-sm font-bold text-white">${sizeStr}</div>
                     </div>
                     <div class="glass-panel rounded-xl p-4 text-center group hover:border-brand-blue/30 transition-colors">
-                        <div class="text-[10px] uppercase tracking-widest text-slate-600 mb-1.5 font-bold">Downloads</div>
+                        <div class="text-[10px] uppercase tracking-widest text-slate-400 mb-1.5 font-bold">Downloads</div>
                         <div class="text-sm font-bold text-white">${data.download_count || 0}</div>
                     </div>
                     <div class="glass-panel rounded-xl p-4 text-center group hover:border-brand-amber/30 transition-colors">
-                        <div class="text-[10px] uppercase tracking-widest text-slate-600 mb-1.5 font-bold">Uploaded</div>
+                        <div class="text-[10px] uppercase tracking-widest text-slate-400 mb-1.5 font-bold">Uploaded</div>
                         <div class="text-sm font-bold text-white">${data.created_at ? new Date(data.created_at).toLocaleDateString() : 'Unknown'}</div>
                     </div>
                 </div>
@@ -775,7 +775,7 @@ export async function loadUploadDetail(uploadId) {
 
                 <!-- Share URL -->
                 <div class="glass-panel rounded-xl p-4">
-                    <div class="text-[10px] uppercase tracking-widest text-slate-600 font-bold mb-2">Shareable Link</div>
+                    <div class="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-2">Shareable Link</div>
                     <div class="flex items-center gap-2">
                         <input type="text" id="share-url-input" readonly value="${escapeHtml(shareUrl)}"
                             class="flex-1 bg-slate-900/50 border border-white/5 rounded-lg px-3 py-2 text-xs text-slate-300 font-mono outline-none focus:border-brand-purple/30 transition"
