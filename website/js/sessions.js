@@ -129,9 +129,20 @@ function mapImageFor(mapName) {
     return "assets/maps/map_generic.svg";
 }
 
+// Small card thumbnails (~64px) don't need the 1024px proximity minimaps
+// (~2 MB each, 18 MB total). thumbs/*.webp are 320px derivatives (~12 KB,
+// 1.8% of the PNGs) generated from the same images; the full-res PNGs stay
+// for the large proximity heatmap backgrounds. Non-proximity paths (the
+// generic svg fallback) pass through unchanged.
+function mapThumbFor(mapName) {
+    const full = mapImageFor(mapName);
+    const m = full.match(/^assets\/maps\/proximity\/(.+)\.png$/);
+    return m ? `assets/maps/proximity/thumbs/${m[1]}.webp` : full;
+}
+
 function mapTile(mapName) {
     const safeMapName = escapeHtml(mapLabel(mapName));
-    const mapImg = mapImageFor(mapName);
+    const mapImg = mapThumbFor(mapName);
     const isFallbackMap = mapImg.includes('map_generic');
 
     if (isFallbackMap) {
@@ -715,7 +726,7 @@ export function renderSessionDetails(data) {
             const statusText = counted ? 'Counted' : (note || 'Not counted');
             const statusClass = counted ? 'text-slate-400' : 'text-amber-300';
             const rowOpacity = counted ? '' : 'opacity-70';
-            const mapImg = mapImageFor(m.map || '');
+            const mapImg = mapThumbFor(m.map || '');
             const isFallbackMap = mapImg.includes('map_generic');
             const winnerSide = Number(m.winner_side || 0);
             const winnerIcon = winnerSide === 1 ? AXIS_ICON : winnerSide === 2 ? ALLIES_ICON : null;
@@ -1681,7 +1692,7 @@ async function loadSessionDetailsExpanded(date) {
         const matchesHtml = matchSource.map(mapMatch => {
             const displayMapName = mapLabel(mapMatch.map_name || 'Unknown');
             const safeMapName = escapeHtml(displayMapName);
-            const mapImg = mapImageFor(mapMatch.map_name || '');
+            const mapImg = mapThumbFor(mapMatch.map_name || '');
             const isFallbackMap = mapImg.includes('map_generic');
             const mapThumb = isFallbackMap
                 ? `
