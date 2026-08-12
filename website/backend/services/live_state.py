@@ -63,6 +63,19 @@ class LiveStateReducer:
             return int(v)
         return None
 
+    def _name_for_slot(self, slot: int | None) -> str | None:
+        """Resolve an engine slot to the current roster name (None if unknown —
+        e.g. the objective event arrived before the player's CONNECT)."""
+        if slot is None:
+            return None
+        entry = self._roster.get(slot)
+        return entry["name"] if entry else None
+
+    def _push_objective(self, entry: dict[str, Any]) -> None:
+        """Append a recent-objective action, capped at the last 10."""
+        self._objectives.append(entry)
+        self._objectives = self._objectives[-10:]
+
     # -- reduce -------------------------------------------------------------
     def apply(self, ev: dict[str, Any]) -> None:
         """Fold one accepted event into the state."""
@@ -126,11 +139,27 @@ class LiveStateReducer:
         elif etype == "POPUP":
             verb = ev.get("verb")
             if verb in ("stole", "returned", "planted", "defused"):
-                self._objectives.append({
-                    "team": ev.get("team"), "verb": verb,
-                    "objective": ev.get("objective"), "at": at,
+                # POPUP carries the team but no slot, so it stays team-level
+                # (player=None). FLAG_PICKUP/DYNAMITE below name the actor.
+                self._push_objective({
+                    "type": "popup", "team": ev.get("team"), "verb": verb,
+                    "player": None, "objective": ev.get("objective"), "at": at,
                 })
-                self._objectives = self._objectives[-10:]
+
+        elif etype == "FLAG_PICKUP":
+            actor = self._name_for_slot(self._slot(ev))
+            self._push_objective({
+                "type": "flag", "team": None, "verb": "grabbed",
+                "player": actor, "objective": ev.get("flag"), "at": at,
+            })
+
+        elif etype == "DYNAMITE":
+            actor = self._name_for_slot(self._slot(ev))
+            self._push_objective({
+                "type": "dynamite", "team": None,
+                "verb": ev.get("action"),  # plant | defuse
+                "player": actor, "objective": ev.get("objective"), "at": at,
+            })
 
     # -- snapshot -----------------------------------------------------------
     def snapshot(self) -> dict[str, Any]:
