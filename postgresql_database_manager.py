@@ -2489,6 +2489,36 @@ class PostgreSQLDatabaseManager:
                     )
                     continue
 
+                # Deterministic complete-match guard (PR #370 match_id pairer):
+                # if the earlier round already has a COMPLETED counterpart sharing
+                # its match_id, it is a finished map — not a restart false start —
+                # no matter how soon the next same-map round arrived. Two fast
+                # back-to-back plays of one map land their R2s <5 min apart, which
+                # the QUICK_RESTART path below (it skips the timing counterpart
+                # check) otherwise miscancels: gsid 144's first et_brewdog R2 was
+                # wrongly cancelled though its match was complete, dropping the
+                # whole map from scoring. This match_id signal is authoritative
+                # and gap-independent, so it runs before the timing heuristics.
+                if earlier_match_id:
+                    other_round_number = 2 if round_number == 1 else 1
+                    complete_pair = await conn.fetchval(
+                        """
+                        SELECT 1 FROM rounds
+                        WHERE match_id = $1
+                          AND round_number = $2
+                          AND round_status = 'completed'
+                        LIMIT 1
+                        """,
+                        earlier_match_id, other_round_number,
+                    )
+                    if complete_pair:
+                        logger.debug(
+                            "Skipping restart check for round %s: belongs to "
+                            "complete match %s (completed counterpart exists)",
+                            earlier_id, earlier_match_id,
+                        )
+                        continue
+
                 # For slower duplicates (5-15 min), keep valid completed map pairs and
                 # only treat unpaired rounds as restart candidates.
                 if time_diff_minutes > QUICK_RESTART_MINUTES:
