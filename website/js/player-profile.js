@@ -675,7 +675,7 @@ async function loadPlayerForm(root, guid) {
                 const bTxt = bFlat ? '±0' : `${bUp ? '+' : '-'}${Math.abs(b.delta_pct)}`;
                 return `<span class="${bCls}">${SHORT[b.metric] || b.metric} ${bTxt}%</span>`;
             })
-            .join('<span class="text-slate-600"> · </span>');
+            .join('<span class="text-slate-400"> · </span>');
         headline = `
             <div class="mb-3 pb-3 border-b border-white/10">
                 <div class="flex items-center justify-between gap-3">
@@ -700,7 +700,7 @@ async function loadPlayerForm(root, guid) {
         const deltaTxt = !hasDelta ? '—'
             : flat ? '±0%' : `${up ? '▲ +' : '▼ '}${Math.abs(m.delta_pct)}%`;
         const spark = sparklineSVG(m.series, { up: (hasDelta && !flat) ? up : null, width: 72, height: 20 });
-        const base = m.baseline != null ? `${m.latest} <span class="text-slate-600">vs</span> ${m.baseline} <span class="text-slate-600">${escapeHtml(m.unit || '')}</span>` : `${m.latest}`;
+        const base = m.baseline != null ? `${m.latest} <span class="text-slate-400">vs</span> ${m.baseline} <span class="text-slate-400">${escapeHtml(m.unit || '')}</span>` : `${m.latest}`;
         return `<div class="flex items-center justify-between gap-3 py-2 border-b border-white/5">
             <span class="text-slate-400 text-xs font-bold uppercase tracking-wide w-28">${escapeHtml(m.label || k)}</span>
             <div class="flex items-center gap-3">
@@ -929,7 +929,7 @@ async function loadReactionsCard(root, guid) {
     ].join('');
     const html = _panel('Reactions & Readiness', 'zap', `
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">${cells}</div>
-        <p class="text-[10px] text-slate-600 mt-2">Group-relative medians (~200ms telemetry grid).
+        <p class="text-[10px] text-slate-400 mt-2">Group-relative medians (~200ms telemetry grid).
         Raw times mix crosshair placement, ping and hardware — compare ranks, not milliseconds.</p>
     `, 'timing');
     safeInsertHTML(root, 'beforeend', html);

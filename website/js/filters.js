@@ -204,7 +204,7 @@ export function GlobalFilterBar(options = {}) {
         <div data-filter-daterange class="flex items-center gap-2 ${customVisible}">
             <input type="date" data-filter-from value="${escapeHtml(_state.dateFrom)}"
                 class="bg-slate-900/50 border border-white/5 rounded-lg px-3 py-1.5 text-xs text-slate-300 font-mono outline-none focus:border-brand-purple/30 transition">
-            <span class="text-slate-600 text-xs">to</span>
+            <span class="text-slate-400 text-xs">to</span>
             <input type="date" data-filter-to value="${escapeHtml(_state.dateTo)}"
                 class="bg-slate-900/50 border border-white/5 rounded-lg px-3 py-1.5 text-xs text-slate-300 font-mono outline-none focus:border-brand-purple/30 transition">
         </div>`;

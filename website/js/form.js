@@ -49,7 +49,7 @@ function _breakdownChips(breakdown) {
             const txt = flat ? '±0' : `${bUp ? '+' : '-'}${Math.abs(b.delta_pct)}`;
             return `<span class="${cls}">${short} ${txt}%</span>`;
         })
-        .join('<span class="text-slate-600"> · </span>');
+        .join('<span class="text-slate-400"> · </span>');
     return chips ? `<div class="text-[11px] font-mono mt-1">${chips}</div>` : '';
 }
 
@@ -66,10 +66,10 @@ function _moverRow(m) {
             : `${up ? '▲ +' : '▼ '}${Math.abs(m.delta_pct)}%`;
     let baseline;
     if (overall) {
-        baseline = (m.latest != null) ? `${m.latest}% <span class="text-slate-600">vs</span> 100%` : '';
+        baseline = (m.latest != null) ? `${m.latest}% <span class="text-slate-400">vs</span> 100%` : '';
     } else {
         baseline = (m.latest != null && m.baseline != null)
-            ? `${m.latest} <span class="text-slate-600">vs</span> ${m.baseline}`
+            ? `${m.latest} <span class="text-slate-400">vs</span> ${m.baseline}`
             : (m.latest != null ? `${m.latest}` : '');
     }
     const spark = sparklineSVG(m.series, { up: (isNew || flat) ? null : up });

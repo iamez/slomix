@@ -47,7 +47,7 @@ function _shell(host) {
     _set(host, `
         <div class="glass-panel p-5 rounded-xl mb-6" aria-label="Session betting">
             <div class="flex items-center justify-between mb-1">
-                <div class="text-xs uppercase tracking-widest text-slate-500 font-bold">🎲 Session bets <span class="text-slate-600 normal-case tracking-normal">· fun points, no money</span></div>
+                <div class="text-xs uppercase tracking-widest text-slate-500 font-bold">🎲 Session bets <span class="text-slate-400 normal-case tracking-normal">· fun points, no money</span></div>
                 <div id="bets-wallet" class="text-xs text-slate-400"></div>
             </div>
             <div id="bets-body" class="mt-3 text-sm text-slate-500">Loading…</div>
@@ -152,7 +152,7 @@ async function _renderLeaderboard(el) {
             <div class="space-y-1">${players.map((p, i) => `
                 <div class="flex items-center justify-between text-xs">
                     <span class="text-slate-300">${i + 1}. ${escapeHtml(p.name || 'Player')}</span>
-                    <span class="text-slate-400">${p.balance} pts <span class="text-slate-600">(${p.lifetime_earned >= 0 ? '+' : ''}${p.lifetime_earned})</span></span>
+                    <span class="text-slate-400">${p.balance} pts <span class="text-slate-400">(${p.lifetime_earned >= 0 ? '+' : ''}${p.lifetime_earned})</span></span>
                 </div>`).join('')}</div>`);
     } catch (_e) {
         el.textContent = '';
