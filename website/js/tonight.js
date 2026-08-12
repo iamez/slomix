@@ -9,7 +9,7 @@
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 import { initTonightBetting } from './bets.js?v=20260804-auth-dedupe';
 import { startLiveTicker, stopLiveTicker, renderLiveTicker, setLiveRoundContext } from './live-ticker.js?v=20260812-live6';
-import { startLiveState, stopLiveState, renderLiveState } from './live-state.js?v=20260812-a1';
+import { startLiveState, stopLiveState, renderLiveState } from './live-state.js?v=20260812-a4b';
 
 const POLL_MS = 8000;
 let _interval = null;
