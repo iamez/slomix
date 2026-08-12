@@ -58,3 +58,15 @@ def test_far_xpgain_does_not_match():
 def test_no_xpgain_leaves_hit_region_none():
     tl = _normalize_timeline([], [_obit(10_000)], _Profile(), [])
     assert all(e.hit_region is None for e in tl if e.type == "kill")
+
+
+def test_invalid_servertime_is_skipped_not_crashed():
+    """Missing/non-numeric serverTime must be dropped, never defaulted to 0
+    (would enrich a t=0 kill) or raised (would abort the whole demo scan)."""
+    rows = _parse_hitregion_xpgain([
+        {"serverTime": None, "rawCommand": 'xpgain 4 3.0 "headshot kill"\n'},
+        {"serverTime": "NaN", "rawCommand": 'xpgain 4 3.0 "bodyshot kill"\n'},
+        {"rawCommand": 'xpgain 4 3.0 "armshot kill"\n'},  # key absent
+        {"serverTime": 500, "rawCommand": 'xpgain 4 3.0 "legshot kill"\n'},
+    ])
+    assert rows == [(500, "leg")]

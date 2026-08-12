@@ -146,21 +146,33 @@ _XPGAIN_HITREGION_RE = re.compile(
 _HITREGION_MATCH_WINDOW_MS = 1500
 
 
+def _coerce_ms(value: Any) -> int | None:
+    """serverTime → int ms, or None when missing/non-numeric. Guarding this is
+    load-bearing: a missing timestamp defaulted to 0 would enrich an unrelated
+    kill at t=0, and a non-numeric one would raise and abort the whole scan."""
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
 def _parse_hitregion_xpgain(
     raw_commands: Iterable[dict[str, Any]],
 ) -> list[tuple[int, str]]:
     """Extract (serverTime_ms, hit_region) from `xpgain … "<region>shot kill"`.
 
     hit_region is the real per-kill data the engine emits; causeOfDeath carries
-    only the weapon, so the obituary-only path can never fill it (the headshot
-    detector read 0/613). xpgain is POV-only — every row belongs to the demo's
-    recording player — so a nearest-timestamp match to a kill is unambiguous
-    enough to revive the detector.
+    only the weapon and fills hit_region just for the rare weapon whose MOD name
+    literally contains HEAD, so in practice the detector read 0/613. xpgain is
+    POV-only — every row belongs to the demo's recording player — so a
+    nearest-timestamp match to a kill is unambiguous enough to revive it.
+    Commands with a missing or non-numeric serverTime are skipped.
     """
     return [
-        (int(cmd.get("serverTime") or 0), m.group(1).lower())
+        (t_ms, m.group(1).lower())
         for cmd in raw_commands or []
         if (m := _XPGAIN_HITREGION_RE.search(str(cmd.get("rawCommand", ""))))
+        and (t_ms := _coerce_ms(cmd.get("serverTime"))) is not None
     ]
 
 
