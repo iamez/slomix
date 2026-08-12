@@ -16,14 +16,14 @@ import { checkLoginStatus, initSearchListeners, setLoadPlayerProfile } from './a
 import { initLivePolling, initLiveStatusPolling, updateLiveSession } from './live-status.js';
 import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchDetails } from './player-profile.js?v=20260608-aimv2';
 import { loadLeaderboard, loadQuickLeaders, loadRecentMatches, setNavigateTo as setLeaderboardNavigateTo, initLeaderboardDefaults } from './leaderboard.js';
-import { loadSeasonInfo, loadLastSession, loadSessionsView, loadSessionMVP, toggleSeasonDetails } from './sessions.js';
+import { loadSeasonInfo, loadLastSession, loadSessionsView, loadSessionMVP, toggleSeasonDetails } from './sessions.js?v=20260812-b3';
 import { loadHomePulseCards } from './home.js';
 import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from './matches.js?v=20260804-auth-dedupe';
 import { loadFormView } from './form.js';
 
 import { loadRecordsView } from './records.js';
 import { loadAwardsView } from './awards.js';
-import { loadProximityView } from './proximity.js?v=20260623-aimlock';
+import { loadProximityView } from './proximity.js?v=20260812-b3';
 import { loadStoryView } from './story.js?v=20260720-ssd-gsid';
 import { loadReplayView } from './replay.js';
 import { loadRivalriesView } from './rivalries.js';
