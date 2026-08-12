@@ -129,12 +129,10 @@ def main() -> int:
         return 1
 
     total = 0
-    per_table: dict[str, int] = {}
     with _connect() as conn, conn.cursor() as cur:
         for table in _TABLES:
             cur.execute(_PREVIEW_SQL.format(table=table))
             rows, identities = cur.fetchone()
-            per_table[table] = rows
             total += rows
             print(f"  {table:<20} {rows:>6,} rows  ({identities} round identities)")
     print(f"\nDeterministically relinkable: {total:,} rows")
@@ -151,13 +149,22 @@ def main() -> int:
         return 1
 
     written = 0
-    with _connect() as conn:
-        with conn.cursor() as cur:
-            for table in _TABLES:
-                cur.execute(_APPLY_SQL.format(table=table))
-                n = cur.rowcount
-                written += n
-                print(f"  {table:<20} linked {n:,} rows")
+    with _connect() as conn, conn.cursor() as cur:
+        for table in _TABLES:
+            cur.execute(_APPLY_SQL.format(table=table))
+            n = cur.rowcount
+            written += n
+            print(f"  {table:<20} linked {n:,} rows")
+        # The UPDATE predicate is the same as the preview's, but assert it —
+        # if the row count drifted mid-transaction, roll back rather than
+        # commit a write the operator never reviewed.
+        if written != total:
+            conn.rollback()
+            print(
+                f"\nABORT: updated {written:,} rows but the preview counted "
+                f"{total:,} — rolled back, nothing committed."
+            )
+            return 1
         conn.commit()
     print(f"\nApplied — {written:,} rows linked to their round.")
     return 0
