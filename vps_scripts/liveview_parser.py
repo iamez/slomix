@@ -96,15 +96,88 @@ def _userinfo_get(info: str, key: str) -> str | None:
     return None
 
 
+def _xyz(token: str) -> dict:
+    parts = token.split(",")
+    out = {}
+    for key, val in zip(("x", "y", "z"), parts):
+        out[key] = int(val) if val.lstrip("-").isdigit() else None
+    return out
+
+
+def _parse_livex(body: str) -> LiveEvent | None:
+    """Parse a line from live_events.lua's slomix-live.log (LIVEX grammar).
+
+    Grammar (design doc LIVE_EVENTS_LUA_DESIGN_2026-08-12):
+      I <ms> map <name>
+      K <ms> <ks> <vs> <mod> <kx,ky,kz> <vx,vy,vz> <khp> <dist>
+      A <ms> <slot> <dg> <dr> <k> <d>
+      M <ms> <slot>:<x>,<y>[,<yaw>] ...
+    Timestamps are absolute epoch-ms (or level-ms fallback); stored as
+    level_ms so the existing pipeline treats them uniformly.
+    """
+    tok = body.split()
+    if len(tok) < 2 or not tok[1].isdigit():
+        return None
+    kind, ms = tok[0], int(tok[1])
+    if kind == "K" and len(tok) >= 9:
+        # killer/victim slots are the record's identity — reject if unparseable
+        # (a None slot would silently misattribute a kill).
+        if not (tok[2].lstrip("-").isdigit() and tok[3].lstrip("-").isdigit()):
+            return None
+        return LiveEvent("LIVE_KILL", ms, {
+            "killer_slot": int(tok[2]),
+            "victim_slot": int(tok[3]),
+            "mod_id": int(tok[4]) if tok[4].isdigit() else None,
+            "killer_pos": _xyz(tok[5]),
+            "victim_pos": _xyz(tok[6]),
+            "killer_health": int(tok[7]) if tok[7].lstrip("-").isdigit() else None,
+            "distance": int(tok[8]) if tok[8].lstrip("-").isdigit() else None,
+        }, raw=body)
+    if kind == "A" and len(tok) >= 7:
+        # slot is identity; the 4 counters must be numeric — reject otherwise
+        # so a bad slot can't get MVP-credited as slot 0.
+        if not all(t.lstrip("-").isdigit() for t in tok[2:7]):
+            return None
+        nums = [int(t) for t in tok[2:7]]
+        return LiveEvent("LIVE_AGGREGATE", ms, {
+            "slot": nums[0], "damage_given": nums[1],
+            "damage_received": nums[2], "kills": nums[3], "deaths": nums[4],
+        }, raw=body)
+    if kind == "M" and len(tok) >= 3:
+        players = []
+        for t in tok[2:]:
+            if ":" not in t:
+                continue
+            slot, _, coords = t.partition(":")
+            c = coords.split(",")
+            if not slot.isdigit() or len(c) < 2:
+                continue
+            entry = {"slot": int(slot),
+                     "x": int(c[0]) if c[0].lstrip("-").isdigit() else None,
+                     "y": int(c[1]) if c[1].lstrip("-").isdigit() else None}
+            if len(c) >= 3 and c[2].lstrip("-").isdigit():
+                entry["yaw"] = int(c[2])
+            players.append(entry)
+        return LiveEvent("LIVE_MOVEMENT", ms, {"players": players}, raw=body)
+    if kind == "I" and len(tok) >= 4 and tok[2] == "map":
+        return LiveEvent("LIVE_MAP", ms, {"map_name": tok[3]}, raw=body)
+    return None
+
+
 def parse_line(line: str) -> LiveEvent | None:
     """Parse one ``legacy3.log`` line; None when the line carries no event
     we model (Endstats table art, empty lines, vote tallies mid-line...)."""
     m = _LINE_RE.match(line.rstrip("\n"))
     if not m:
-        # continuation lines (e.g. "         Vote Passed: (Y:4-N:0)")
         stripped = line.strip()
+        # continuation lines (e.g. "         Vote Passed: (Y:4-N:0)")
         if stripped.startswith("Vote Passed:"):
             return LiveEvent("VOTE_PASSED", None, {"detail": stripped}, raw=line)
+        # LIVEX lines from live_events.lua's own slomix-live.log start with a
+        # single type letter, not a level-time digit, so they land here.
+        livex = _parse_livex(stripped)
+        if livex is not None:
+            return livex
         return None
     level_ms = int(m.group(1))
     body = m.group(2)
