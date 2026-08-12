@@ -10,7 +10,7 @@
          load. It is served as a real header by add_security_headers() in
          website/backend/main.py, next to X-Frame-Options. -->
     <meta http-equiv="Content-Security-Policy"
-          content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+          content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'">
     <meta name="slomix-admin-discord-ids" content="231165917604741121">
     <title>Slomix | The Ultimate ET:Legacy Platform</title>
 
@@ -37,9 +37,11 @@
          first, which is the whole problem. -->
     <script src="js/error-bootstrap.js?v=20260731-head-first"></script>
 
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-    <script src="js/tailwind-config.js"></script>
+    <!-- Tailwind CSS — build-time compiled (was the runtime Play CDN
+         cdn.tailwindcss.com, whose in-browser JIT dominated the main thread).
+         Regenerate with `npm run build:css` (config: website/tailwind.config.cjs,
+         which mirrors the old js/tailwind-config.js theme). -->
+    <link rel="stylesheet" href="css/tailwind.css?v=20260812-b7">
 
     <style>
         body {
