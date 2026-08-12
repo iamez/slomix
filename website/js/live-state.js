@@ -96,6 +96,32 @@ function _column(icon, label, color, members, alignRight) {
     </div>`;
 }
 
+const _OBJ_ICON = {
+    grabbed: '🚩', plant: '💣', planted: '💣', defuse: '🧨', defused: '🧨',
+    stole: '📦', returned: '↩️',
+};
+const _OBJ_VERB = { grabbed: 'grabbed', plant: 'planted', defuse: 'defused' };
+
+/** POPUP carries the side as a lowercased string ("axis"/"allies"), not the
+ * 1/2 engine int the roster uses — accept both so POPUP objectives aren't
+ * flattened to "Someone" (Copilot). */
+function _teamLabel(t) {
+    if (t === 1 || t === '1') return 'Axis';
+    if (t === 2 || t === '2') return 'Allies';
+    const s = t == null ? '' : String(t);
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : null;
+}
+
+/** One recent objective action → "🚩 vid grabbed Gold Documents". Names the
+ * actor when the source event carried a slot (flag/dynamite); POPUP stays
+ * team-level. A4. */
+function _objLine(o) {
+    const who = escapeHtml(o.player || _teamLabel(o.team) || 'Someone');
+    const verb = _OBJ_VERB[o.verb] || o.verb || 'took';
+    const what = o.objective ? ` <span class="text-slate-400">${escapeHtml(o.objective)}</span>` : '';
+    return `${_OBJ_ICON[o.verb] || '⚑'} <span class="text-slate-200">${who}</span> ${verb}${what}`;
+}
+
 /** Render the current-state panel into the #live-state shell if present. */
 export function renderLiveState() {
     const host = document.getElementById('live-state');
@@ -117,6 +143,10 @@ export function renderLiveState() {
         ? '<span class="px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 text-[10px] font-black tracking-wider">BOT TEST</span>' : '';
     const specStrip = (r.spectators && r.spectators.length)
         ? `<div class="mt-3 pt-2 border-t border-white/5 text-[11px] text-slate-500 text-center truncate">👁 spectating: ${r.spectators.map(m => escapeHtml(m.name)).join(' · ')}</div>` : '';
+    const objStrip = (s.recent_objectives && s.recent_objectives.length)
+        ? `<div class="mt-3 pt-2 border-t border-white/5 text-[11px] text-slate-400 space-y-0.5">
+            ${s.recent_objectives.slice(-4).map(o => `<div class="truncate">${_objLine(o)}</div>`).join('')}
+           </div>` : '';
     const staleWarn = _lastOk === false
         ? '<span class="text-rose-400 text-xs">state unavailable</span>' : '';
 
@@ -141,6 +171,7 @@ export function renderLiveState() {
                 </div>
                 ${_column('🔵', 'Allies', ALLIES_COLOR, r.allies || [], true)}
             </div>
+            ${objStrip}
             ${specStrip}
         </div>`);
 }
