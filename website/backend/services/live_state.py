@@ -34,6 +34,11 @@ from typing import Any
 _LIVE_WINDOW_SECONDS = 90
 # How long a recent objective action stays surfaced in the snapshot.
 _OBJECTIVE_WINDOW_SECONDS = 20
+# A gap this long between events is a session boundary (server down + restart),
+# not a quiet stretch of one match — the first event after it resets the roster.
+# Deliberately much longer than _LIVE_WINDOW_SECONDS so a sparse warmup can't
+# wipe a live line-up.
+_IDLE_RESET_SECONDS = 600
 
 
 class LiveStateReducer:
@@ -81,6 +86,19 @@ class LiveStateReducer:
         """Fold one accepted event into the state."""
         etype = ev.get("type")
         at = ev.get("received_at") or time.time()
+
+        # A fresh event after a long quiet gap is a new session: the previous
+        # roster is stale (a server that went away sends no DISCONNECTs). Reset
+        # here too, not just in the snapshot — otherwise a reused slot's
+        # CONNECT/BEGIN would be ignored (slot still present) and the old
+        # player/team/timestamps would reappear once is_live flips true again.
+        if (self._last_event_at is not None
+                and (at - self._last_event_at) > _IDLE_RESET_SECONDS):
+            self._roster.clear()
+            self._objectives.clear()
+            self._round_number = None
+            self._round_started_at = None
+
         self._last_event_at = at
 
         if etype == "TEAM_CHANGE":

@@ -123,7 +123,7 @@ def test_dynamite_attributed_and_unknown_slot_is_none():
 def test_idle_snapshot_clears_stale_roster():
     """A server restart sends no DISCONNECTs, so the roster would freeze the
     final line-up. Once the stream goes quiet (is_live False), the snapshot
-    must show no players — not 6 stale bots as if a match were still on."""
+    must show no players — not the stale line-up as if a match were still on."""
     old = time.time() - 3600  # an hour ago → well past the live window
     r = LiveStateReducer()
     r.apply(_ev("TEAM_CHANGE", old, slot=1, name="[BOT]vid", team=1))
@@ -136,3 +136,23 @@ def test_idle_snapshot_clears_stale_roster():
     assert snap["roster"]["player_count"] == 0
     assert snap["roster"]["has_bots"] is False
     assert snap["session_start_seconds"] is None
+
+
+def test_resume_after_idle_gap_resets_internal_roster():
+    """The snapshot clear alone leaves self._roster populated, so a reused slot
+    after a restart would be ignored and the stale player could reappear once
+    is_live flips true. The first event after an idle gap must reset the roster
+    so the new session starts clean."""
+    now = time.time()
+    r = LiveStateReducer()
+    # Old session, then a long quiet gap.
+    r.apply(_ev("TEAM_CHANGE", now - 3600, slot=1, name="[BOT]old_vid", team=1))
+    r.apply(_ev("TEAM_CHANGE", now - 3600, slot=2, name="[BOT]old_lgz", team=2))
+    # New session reuses slot 1 for a different, real player.
+    r.apply(_ev("TEAM_CHANGE", now, slot=1, name="realvid", team=2))
+    snap = r.snapshot()
+    assert snap["is_live"] is True
+    names = [m["name"] for m in snap["roster"]["allies"]]
+    assert names == ["realvid"]          # the reused slot took the new name
+    assert snap["roster"]["axis"] == []  # old_vid did not survive the gap
+    assert snap["roster"]["player_count"] == 1
