@@ -6,6 +6,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.35.0](https://github.com/iamez/slomix/compare/v1.34.1...v1.35.0) (2026-08-13)
+
+
+### Features
+
+* **bot:** !bolniska self-service sick-leave command — Phase 2 ([b331c9d](https://github.com/iamez/slomix/commit/b331c9d41d4976a4a2c50928fe7eecc00e1629f4))
+* **website:** sick-leave (bolniška) identity attribution — Phase 1 ([42fe781](https://github.com/iamez/slomix/commit/42fe7819860a7f4c1eaed8637c74463041355a18))
+* **website:** sick-leave (bolniška) identity attribution — Phase 1 ([9387756](https://github.com/iamez/slomix/commit/9387756361784827a790ae7efabd36b530d60734))
+
+
+### Bug Fixes
+
+* **bot:** address coderabbit on !bolniska — placeholders, channel/cooldown, ownership, messages ([1c512d7](https://github.com/iamez/slomix/commit/1c512d7b507686e8c26811571fae30d383a25403))
+* **db:** make 073 grants role-conditional + add v1.35.0 release config ([f8a9b35](https://github.com/iamez/slomix/commit/f8a9b358c7b69f4af80db931280ff7fe7af734cd))
+* **website:** address coderabbit review on sick-leave PR ([03dc128](https://github.com/iamez/slomix/commit/03dc128db115da85daa73b7b866f8082f33e06d4))
+* **website:** audit follow-ups — bot leakage (proximity/leaderboard/weapons) + brand-slate invisible bars ([2c18ffd](https://github.com/iamez/slomix/commit/2c18ffd43dd54d277b893ccdef180675ef73c89e))
+* **website:** audit follow-ups — bot leakage + brand-slate invisible bars ([e08b6fd](https://github.com/iamez/slomix/commit/e08b6fdcfdcd63dc1415bd33d295b7e88bdc445e))
+* **website:** harden bot filter per coderabbit — case + [BOT] anywhere ([c9215e5](https://github.com/iamez/slomix/commit/c9215e5a68431ac5bb4ab8a3665e97785a4c7931))
+
 ## [1.34.1](https://github.com/iamez/slomix/compare/v1.34.0...v1.34.1) (2026-08-13)
 
 
