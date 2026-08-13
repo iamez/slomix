@@ -1,0 +1,557 @@
+"""Immutable state contracts for bounded ET script scheduling.
+
+This module deliberately contains no transition runner yet.  It owns the state that
+later W5b scheduler waves will transition, validates every program cursor against one
+ordered-program index and provides deterministic visited-state identity.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import StrEnum
+from typing import TypeAlias
+
+from website.backend.map_geometry.stage_possibilities import (
+    OrderedStageProgramIndex,
+    StageEffectInstruction,
+    SymbolicAccumulatorState,
+    SymbolicTemporalBoundaryState,
+    TriggerInstruction,
+)
+from website.backend.map_geometry.stage_semantics import AccumulatorConditionalTrigger, StageEffectProjection
+
+_STATE_CREATION_TOKEN = object()
+
+
+class SymbolicFrameOrigin(StrEnum):
+    ROOT_EVENT = "root_event"
+    NESTED_DISPATCH = "nested_dispatch"
+    CALLER_SUFFIX = "caller_suffix"
+    TARGET_GROUP_RESUME = "target_group_resume"
+    BOUNDARY_RESUME = "boundary_resume"
+    EVENT_REPLACEMENT = "event_replacement"
+
+
+class SymbolicResumeMode(StrEnum):
+    REENTER_BOUNDARY_ACTION = "reenter_boundary_action"
+    ADVANCE_AFTER_ASYNC_LIFECYCLE = "advance_after_async_lifecycle"
+    RESUME_CALLER_SUFFIX = "resume_caller_suffix"
+    RESUME_TARGET_GROUP = "resume_target_group"
+
+
+class SymbolicWakeConstraint(StrEnum):
+    AFTER_BOUNDARY_COMPLETION = "after_boundary_completion"
+    SAME_FRAME_LATER = "same_frame_later"
+    NEXT_FRAME = "next_frame"
+    TAG_PARENT_ORDER_UNKNOWN = "tag_parent_order_unknown"
+
+
+class SymbolicTagParentDisposition(StrEnum):
+    PROVEN_UNATTACHED = "proven_unattached"
+    ATTACHED = "attached"
+    UNKNOWN = "unknown"
+
+
+class SymbolicWaitBranch(StrEnum):
+    SUSPENDED_FALSE_RETURN = "suspended_false_return"
+
+
+class SymbolicNextFrameCommand(StrEnum):
+    RESET_SCRIPT = "resetscript"
+    HALT = "halt"
+
+
+class SymbolicMovementCommand(StrEnum):
+    GOTO_MARKER = "gotomarker"
+    FOLLOW_SPLINE = "followspline"
+    FACE_ANGLES = "faceangles"
+
+
+class SymbolicScheduleDecisionKind(StrEnum):
+    RUNNABLE = "runnable"
+    SUSPENDED = "suspended"
+    COMPLETE = "complete"
+    BLOCKED = "blocked"
+    WORK_BUDGET_EXHAUSTED = "work_budget_exhausted"
+
+
+class SymbolicScheduleExhaustion(StrEnum):
+    WORK_BUDGET_EXHAUSTED = "symbolic_schedule_work_budget_exhausted"
+
+
+@dataclass(frozen=True, slots=True, order=True)
+class SymbolicProgramCursor:
+    node_id: str
+    entity_index: int
+    instruction_offset: int
+
+    def __post_init__(self) -> None:
+        if not self.node_id:
+            raise ValueError("symbolic program cursor requires a node id")
+        if self.entity_index < 0:
+            raise ValueError("symbolic program cursor entity index must be non-negative")
+        if self.instruction_offset < 0:
+            raise ValueError("symbolic program cursor instruction offset must be non-negative")
+
+    def validate(
+        self,
+        index: OrderedStageProgramIndex,
+        *,
+        allow_complete: bool = False,
+    ) -> None:
+        program = index.program(self.node_id)
+        if self.entity_index not in program.source.lookup.selected_entity_indices:
+            raise ValueError(f"entity {self.entity_index} is not selected by ordered program {self.node_id!r}")
+        upper_bound = len(program.instructions) if allow_complete else len(program.instructions) - 1
+        if self.instruction_offset > upper_bound:
+            suffix = " or its completion cursor" if allow_complete else ""
+            raise ValueError(
+                f"instruction offset {self.instruction_offset} does not belong to ordered program "
+                f"{self.node_id!r}{suffix}"
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicInvocationStep:
+    dispatch_cursor: SymbolicProgramCursor
+    target_ordinal: int
+
+    def __post_init__(self) -> None:
+        if self.target_ordinal < 0:
+            raise ValueError("symbolic invocation target ordinal must be non-negative")
+
+    def validate(self, index: OrderedStageProgramIndex) -> None:
+        self.dispatch_cursor.validate(index)
+
+
+@dataclass(frozen=True, slots=True)
+class PendingDispatchContext:
+    dispatch_cursor: SymbolicProgramCursor
+    caller_resume_cursor: SymbolicProgramCursor
+    target_node_id: str
+    ordered_target_entity_indices: tuple[int, ...]
+    target_cursor: int
+
+    def __post_init__(self) -> None:
+        if not self.target_node_id:
+            raise ValueError("pending dispatch requires a target node id")
+        if not self.ordered_target_entity_indices:
+            raise ValueError("pending dispatch requires at least one selected target")
+        if any(entity_index < 0 for entity_index in self.ordered_target_entity_indices):
+            raise ValueError("pending dispatch target indices must be non-negative")
+        if len(set(self.ordered_target_entity_indices)) != len(self.ordered_target_entity_indices):
+            raise ValueError("pending dispatch target order must not contain duplicate entities")
+        if not 0 <= self.target_cursor < len(self.ordered_target_entity_indices):
+            raise ValueError("pending dispatch target cursor must select an unexecuted target")
+
+    def validate(self, index: OrderedStageProgramIndex) -> None:
+        self.dispatch_cursor.validate(index)
+        self.caller_resume_cursor.validate(index, allow_complete=True)
+        if (
+            self.caller_resume_cursor.node_id != self.dispatch_cursor.node_id
+            or self.caller_resume_cursor.entity_index != self.dispatch_cursor.entity_index
+        ):
+            raise ValueError("pending dispatch caller resume cursor does not belong to its dispatch frame")
+        if self.caller_resume_cursor.instruction_offset <= self.dispatch_cursor.instruction_offset:
+            raise ValueError("pending dispatch caller must resume after its dispatch instruction")
+        source = index.program(self.dispatch_cursor.node_id)
+        instruction = source.instructions[self.dispatch_cursor.instruction_offset]
+        if isinstance(instruction, TriggerInstruction):
+            candidate_node_ids = instruction.edge.candidate_node_ids
+        elif isinstance(instruction, AccumulatorConditionalTrigger):
+            handler = index.first_trigger_handler(
+                instruction.target_script_name,
+                instruction.target_trigger,
+            )
+            candidate_node_ids = () if handler is None else (handler.node.node_id,)
+        elif isinstance(instruction, StageEffectInstruction):
+            candidate_node_ids = tuple(
+                target.event_handler_node_id
+                for target in instruction.alert_targets
+                if target.event_handler_node_id is not None
+            )
+        else:
+            raise ValueError("pending dispatch cursor does not identify a dispatch instruction")
+        if self.target_node_id not in candidate_node_ids:
+            raise ValueError("pending dispatch target program does not match its dispatch instruction")
+        target = index.program(self.target_node_id)
+        selected = target.source.lookup.selected_entity_indices
+        if set(self.ordered_target_entity_indices) != set(selected):
+            raise ValueError(
+                f"pending dispatch targets do not match the complete target group for {self.target_node_id!r}"
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicFrame:
+    cursor: SymbolicProgramCursor
+    invocation_path: tuple[SymbolicInvocationStep, ...] = ()
+    call_stack: tuple[SymbolicProgramCursor, ...] = ()
+    pending_dispatch: PendingDispatchContext | None = None
+    origin: SymbolicFrameOrigin = SymbolicFrameOrigin.ROOT_EVENT
+
+    def validate(self, index: OrderedStageProgramIndex) -> None:
+        self.cursor.validate(index)
+        for step in self.invocation_path:
+            step.validate(index)
+        for cursor in self.call_stack:
+            cursor.validate(index, allow_complete=True)
+        if self.pending_dispatch is not None:
+            self.pending_dispatch.validate(index)
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicWaitBoundaryState:
+    duration_milliseconds: int
+    branch: SymbolicWaitBranch = SymbolicWaitBranch.SUSPENDED_FALSE_RETURN
+
+    def __post_init__(self) -> None:
+        if self.duration_milliseconds < 0:
+            raise ValueError("wait duration must be non-negative")
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicMovementBoundaryState:
+    command: SymbolicMovementCommand
+    temporal_state: SymbolicTemporalBoundaryState
+    waits_for_completion: bool
+    effect_started: bool
+
+    def __post_init__(self) -> None:
+        if self.temporal_state is SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE:
+            if self.effect_started:
+                raise ValueError("a prior-movement boundary cannot claim the new route started")
+            return
+        if not self.effect_started:
+            raise ValueError("a current-action movement boundary must record its started effect")
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicNextFrameBoundaryState:
+    command: SymbolicNextFrameCommand
+
+
+SymbolicBoundaryState: TypeAlias = (
+    SymbolicWaitBoundaryState | SymbolicMovementBoundaryState | SymbolicNextFrameBoundaryState
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SuspendedContinuation:
+    frame: SymbolicFrame
+    boundary_line: int
+    resume_mode: SymbolicResumeMode
+    boundary_state: SymbolicBoundaryState
+    wake_constraint: SymbolicWakeConstraint
+    effect_footprint: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.boundary_line <= 0:
+            raise ValueError("suspended continuation boundary line must be positive")
+        if any(not item for item in self.effect_footprint):
+            raise ValueError("suspended continuation effect footprint entries must not be empty")
+
+    def validate(self, index: OrderedStageProgramIndex) -> None:
+        self.frame.validate(index)
+        program = index.program(self.frame.cursor.node_id)
+        action = program.event.actions[self.frame.cursor.instruction_offset]
+        if self.resume_mode is SymbolicResumeMode.REENTER_BOUNDARY_ACTION:
+            if self.boundary_line != action.line:
+                raise ValueError("re-entered boundary line does not match the frame instruction cursor")
+            if isinstance(self.boundary_state, SymbolicWaitBoundaryState):
+                expected_command = "wait"
+            elif isinstance(self.boundary_state, SymbolicMovementBoundaryState):
+                expected_command = self.boundary_state.command.value
+            else:
+                expected_command = self.boundary_state.command.value
+            if action.command != expected_command:
+                raise ValueError("typed boundary state does not match the frame instruction action")
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicEventOwner:
+    entity_index: int
+    event_node_id: str
+    invocation_path: tuple[SymbolicInvocationStep, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.entity_index < 0:
+            raise ValueError("event owner entity index must be non-negative")
+        if not self.event_node_id:
+            raise ValueError("event owner requires a node id")
+
+    @classmethod
+    def from_frame(cls, frame: SymbolicFrame) -> SymbolicEventOwner:
+        return cls(frame.cursor.entity_index, frame.cursor.node_id, frame.invocation_path)
+
+    def validate(self, index: OrderedStageProgramIndex) -> None:
+        program = index.program(self.event_node_id)
+        if self.entity_index not in program.source.lookup.selected_entity_indices:
+            raise ValueError(f"event owner does not belong to ordered program {self.event_node_id!r}")
+        for step in self.invocation_path:
+            step.validate(index)
+
+
+@dataclass(frozen=True, slots=True, order=True)
+class SymbolicTagParentState:
+    child_entity_index: int
+    disposition: SymbolicTagParentDisposition
+    parent_entity_index: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.child_entity_index < 0:
+            raise ValueError("tag-parent child entity index must be non-negative")
+        if self.disposition is SymbolicTagParentDisposition.ATTACHED:
+            if self.parent_entity_index is None or self.parent_entity_index < 0:
+                raise ValueError("attached tag-parent state requires a non-negative parent index")
+            if self.parent_entity_index == self.child_entity_index:
+                raise ValueError("tag-parent child and parent must be different entities")
+        elif self.parent_entity_index is not None:
+            raise ValueError("only attached tag-parent state may name a parent entity")
+
+
+def _canonical_accumulator_state(state: SymbolicAccumulatorState) -> SymbolicAccumulatorState:
+    entity_values = {}
+    for entity_index, buffer_index, value in state.entity_values:
+        if entity_index < 0 or not 0 <= buffer_index < 10:
+            raise ValueError("symbolic entity accumulator key is outside ET bounds")
+        key = (entity_index, buffer_index)
+        if key in entity_values and entity_values[key] != value:
+            raise ValueError("symbolic entity accumulator has conflicting duplicate values")
+        entity_values[key] = value
+
+    global_values = {}
+    for buffer_index, value in state.global_values:
+        if not 0 <= buffer_index < 10:
+            raise ValueError("symbolic global accumulator key is outside ET bounds")
+        if buffer_index in global_values and global_values[buffer_index] != value:
+            raise ValueError("symbolic global accumulator has conflicting duplicate values")
+        global_values[buffer_index] = value
+
+    return SymbolicAccumulatorState(
+        tuple(
+            (entity_index, buffer_index, value)
+            for (entity_index, buffer_index), value in sorted(entity_values.items())
+            if value != state.default_domain
+        ),
+        tuple(
+            (buffer_index, value)
+            for buffer_index, value in sorted(global_values.items())
+            if value != state.default_domain
+        ),
+        state.default_domain,
+    )
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class SymbolicScheduleState:
+    program_identity: tuple[object, ...]
+    accumulator_state: SymbolicAccumulatorState
+    runnable: tuple[SymbolicFrame, ...]
+    suspended: tuple[SuspendedContinuation, ...]
+    event_owners: tuple[SymbolicEventOwner, ...]
+    tag_parent_states: tuple[SymbolicTagParentState, ...] = ()
+    effects: tuple[StageEffectProjection, ...] = ()
+    provenance: tuple[str, ...] = ()
+    ordering_decisions: tuple[str, ...] = ()
+    unknown_reasons: tuple[str, ...] = ()
+
+    def __init__(
+        self,
+        program_identity: tuple[object, ...],
+        accumulator_state: SymbolicAccumulatorState,
+        runnable: tuple[SymbolicFrame, ...],
+        suspended: tuple[SuspendedContinuation, ...],
+        event_owners: tuple[SymbolicEventOwner, ...],
+        tag_parent_states: tuple[SymbolicTagParentState, ...],
+        effects: tuple[StageEffectProjection, ...],
+        provenance: tuple[str, ...],
+        ordering_decisions: tuple[str, ...],
+        unknown_reasons: tuple[str, ...],
+        *,
+        _creation_token: object,
+    ) -> None:
+        if _creation_token is not _STATE_CREATION_TOKEN:
+            raise TypeError("use SymbolicScheduleState.create() to validate scheduler state")
+        object.__setattr__(self, "program_identity", program_identity)
+        object.__setattr__(self, "accumulator_state", accumulator_state)
+        object.__setattr__(self, "runnable", runnable)
+        object.__setattr__(self, "suspended", suspended)
+        object.__setattr__(self, "event_owners", event_owners)
+        object.__setattr__(self, "tag_parent_states", tag_parent_states)
+        object.__setattr__(self, "effects", effects)
+        object.__setattr__(self, "provenance", provenance)
+        object.__setattr__(self, "ordering_decisions", ordering_decisions)
+        object.__setattr__(self, "unknown_reasons", unknown_reasons)
+
+    @classmethod
+    def create(
+        cls,
+        index: OrderedStageProgramIndex,
+        *,
+        accumulator_state: SymbolicAccumulatorState,
+        runnable: tuple[SymbolicFrame, ...] = (),
+        suspended: tuple[SuspendedContinuation, ...] = (),
+        event_owners: tuple[SymbolicEventOwner, ...] = (),
+        tag_parent_states: tuple[SymbolicTagParentState, ...] = (),
+        effects: tuple[StageEffectProjection, ...] = (),
+        provenance: tuple[str, ...] = (),
+        ordering_decisions: tuple[str, ...] = (),
+        unknown_reasons: tuple[str, ...] = (),
+    ) -> SymbolicScheduleState:
+        for frame in runnable:
+            frame.validate(index)
+        for continuation in suspended:
+            continuation.validate(index)
+        for owner in event_owners:
+            owner.validate(index)
+
+        active_frames = tuple(runnable) + tuple(item.frame for item in suspended)
+        active_entities = [frame.cursor.entity_index for frame in active_frames]
+        if len(set(active_entities)) != len(active_entities):
+            raise ValueError("a symbolic entity cannot own multiple active scheduler tasks")
+
+        owners_by_entity = {owner.entity_index: owner for owner in event_owners}
+        if len(owners_by_entity) != len(event_owners):
+            raise ValueError("symbolic schedule has duplicate event owners")
+        expected_owners = {frame.cursor.entity_index: SymbolicEventOwner.from_frame(frame) for frame in active_frames}
+        if owners_by_entity != expected_owners:
+            raise ValueError("symbolic event owners must exactly match active scheduler frames")
+
+        tag_states_by_child = {state.child_entity_index: state for state in tag_parent_states}
+        if len(tag_states_by_child) != len(tag_parent_states):
+            raise ValueError("symbolic schedule has duplicate tag-parent states")
+        for collection_name, values in (
+            ("provenance", provenance),
+            ("ordering decision", ordering_decisions),
+            ("unknown reason", unknown_reasons),
+        ):
+            if any(not value for value in values):
+                raise ValueError(f"symbolic schedule {collection_name} entries must not be empty")
+
+        return cls(
+            (index.programs, tuple(sorted(index.opaque_script_names))),
+            _canonical_accumulator_state(accumulator_state),
+            tuple(runnable),
+            tuple(sorted(suspended, key=_continuation_sort_key)),
+            tuple(sorted(event_owners, key=lambda owner: owner.entity_index)),
+            tuple(sorted(tag_parent_states, key=lambda state: state.child_entity_index)),
+            tuple(effects),
+            tuple(provenance),
+            tuple(ordering_decisions),
+            tuple(sorted(set(unknown_reasons))),
+            _creation_token=_STATE_CREATION_TOKEN,
+        )
+
+    @property
+    def canonical_key(self) -> tuple[object, ...]:
+        return (
+            self.program_identity,
+            self.accumulator_state,
+            self.runnable,
+            self.suspended,
+            self.event_owners,
+            self.tag_parent_states,
+            self.effects,
+            self.provenance,
+            self.ordering_decisions,
+            self.unknown_reasons,
+        )
+
+
+def _continuation_sort_key(continuation: SuspendedContinuation) -> tuple[object, ...]:
+    frame = continuation.frame
+    invocation_path = tuple(
+        (
+            step.dispatch_cursor.node_id,
+            step.dispatch_cursor.entity_index,
+            step.dispatch_cursor.instruction_offset,
+            step.target_ordinal,
+        )
+        for step in frame.invocation_path
+    )
+    pending = frame.pending_dispatch
+    pending_key: tuple[object, ...] = (
+        (0,)
+        if pending is None
+        else (
+            1,
+            pending.dispatch_cursor,
+            pending.caller_resume_cursor,
+            pending.target_node_id,
+            pending.ordered_target_entity_indices,
+            pending.target_cursor,
+        )
+    )
+    return (
+        continuation.wake_constraint.value,
+        frame.cursor.entity_index,
+        frame.cursor.node_id,
+        frame.cursor.instruction_offset,
+        continuation.boundary_line,
+        continuation.resume_mode.value,
+        repr(continuation.boundary_state),
+        invocation_path,
+        tuple((cursor.node_id, cursor.entity_index, cursor.instruction_offset) for cursor in frame.call_stack),
+        pending_key,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicScheduleDecision:
+    kind: SymbolicScheduleDecisionKind
+    state: SymbolicScheduleState | None = None
+    reason: str | None = None
+
+    def __post_init__(self) -> None:
+        needs_reason = self.kind in {
+            SymbolicScheduleDecisionKind.BLOCKED,
+            SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED,
+        }
+        if needs_reason != (self.reason is not None):
+            raise ValueError("symbolic schedule decision reason does not match its kind")
+        if self.reason == "":
+            raise ValueError("symbolic schedule decision reason must not be empty")
+        if self.kind is not SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED and self.state is None:
+            raise ValueError("non-exhaustion scheduler decisions require their resulting state")
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicScheduleResult:
+    decisions: tuple[SymbolicScheduleDecision, ...]
+    work_consumed: int
+    work_limit: int
+    exhaustion: SymbolicScheduleExhaustion | None = None
+
+    def __post_init__(self) -> None:
+        if self.work_limit <= 0:
+            raise ValueError("symbolic schedule work limit must be positive")
+        if not 0 <= self.work_consumed <= self.work_limit:
+            raise ValueError("symbolic schedule work consumption is outside its global budget")
+        has_exhausted_decision = any(
+            decision.kind is SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED for decision in self.decisions
+        )
+        if has_exhausted_decision != (self.exhaustion is not None):
+            raise ValueError("symbolic schedule exhaustion metadata does not match its decisions")
+        if self.exhaustion is not None and self.work_consumed != self.work_limit:
+            raise ValueError("symbolic schedule can exhaust only after consuming its global budget")
+
+
+@dataclass(slots=True)
+class SymbolicScheduleWorkBudget:
+    limit: int
+    consumed: int = field(default=0, init=False)
+
+    def __post_init__(self) -> None:
+        if self.limit <= 0:
+            raise ValueError("symbolic schedule work budget must be positive")
+
+    @property
+    def remaining(self) -> int:
+        return self.limit - self.consumed
+
+    def consume(self) -> SymbolicScheduleExhaustion | None:
+        if self.consumed >= self.limit:
+            return SymbolicScheduleExhaustion.WORK_BUDGET_EXHAUSTED
+        self.consumed += 1
+        return None
