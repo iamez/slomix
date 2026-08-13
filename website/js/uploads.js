@@ -371,6 +371,7 @@ function renderUploadCard(item, index = 0) {
     const cat = CATEGORIES[item.category] || { label: item.category, color: 'text-slate-400 border-white/10 bg-white/5', glow: 'rgba(255,255,255,0.05)', icon: '' };
     const sizeStr = formatFileSize(item.file_size_bytes || 0);
     const isVideo = isVideoFile(item.extension);
+    const canPlay = isBrowserPlayable(item.extension);
     const delay = Math.min(index * 0.05, 0.3);
 
     return `
@@ -415,12 +416,17 @@ function renderUploadCard(item, index = 0) {
 
                 <!-- Actions -->
                 <div class="mt-auto flex gap-2 pt-1">
-                    ${isVideo ? `
+                    ${canPlay ? `
                     <button onclick="window.openVideoPlayer('${escapeJsString(item.id)}', '${escapeJsString(item.title || item.filename)}')"
                         class="flex-1 inline-flex items-center justify-center gap-1.5 bg-brand-emerald/15 hover:bg-brand-emerald/25 text-brand-emerald text-xs font-bold px-3 py-2 rounded-lg transition-all duration-200 hover:shadow-[0_0_12px_rgba(16,185,129,0.2)]">
                         <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                         Watch
-                    </button>` : ''}
+                    </button>` : (isVideo ? `
+                    <span title="${escapeHtml(item.extension)} isn't playable in the browser — download to watch"
+                        class="flex-1 inline-flex items-center justify-center gap-1.5 bg-white/[0.03] text-slate-500 text-xs font-semibold px-3 py-2 rounded-lg cursor-default">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+                        DL only
+                    </span>` : '')}
                     <a href="#/uploads/${encodeURIComponent(item.id)}"
                         class="flex-1 inline-flex items-center justify-center gap-1.5 bg-brand-purple/15 hover:bg-brand-purple/25 text-brand-purple text-xs font-bold px-3 py-2 rounded-lg transition-all duration-200 hover:shadow-[0_0_12px_rgba(139,92,246,0.2)]">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.54a4.5 4.5 0 00-6.364-6.364L4.5 8.25"/></svg>
@@ -584,34 +590,65 @@ function isVideoFile(ext) {
     return ['.mp4', '.avi', '.mkv'].includes(ext.toLowerCase());
 }
 
+// Browsers reliably play .mp4 (H.264/AAC); .avi/.mkv are NOT natively playable,
+// so they stay download-only with a clear hint until a server-side .mp4
+// transcode is added — the owner's future option 3 (see
+// docs/UPLOADS_MEDIA_NOTES.md). isVideoFile() still recognises them as videos;
+// only isBrowserPlayable() gates inline playback.
+function isBrowserPlayable(ext) {
+    return (ext || '').toLowerCase() === '.mp4';
+}
+
+const _PLAYBACK_SPEEDS = [0.5, 1, 1.25, 1.5, 2];
+let _lastFocusedBeforeModal = null;
+let _volumeSaveHandler = null;
+
 function openVideoPlayer(uploadId, title) {
     const existing = document.getElementById('video-player-modal');
     if (existing) existing.remove();
 
+    _lastFocusedBeforeModal = document.activeElement;
     const videoUrl = `${API_BASE}/uploads/${encodeURIComponent(uploadId)}/download`;
 
     const modal = document.createElement('div');
     modal.id = 'video-player-modal';
     modal.className = 'fixed inset-0 z-50 flex items-center justify-center';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', `Video player: ${title}`);
     modal.style.cssText = 'background: rgba(0,0,0,0); transition: background 0.3s ease;';
     modal.innerHTML = `
         <div class="absolute inset-0 backdrop-blur-md"></div>
         <div class="relative w-full max-w-5xl mx-4" style="transform: scale(0.95); opacity: 0; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">
-            <div class="flex items-center justify-between mb-3 px-1">
-                <h3 class="text-sm font-bold text-white truncate pr-4 flex items-center gap-2">
+            <div class="flex items-center justify-between mb-3 px-1 gap-2">
+                <h3 class="text-sm font-bold text-white truncate pr-2 flex items-center gap-2 min-w-0">
                     <svg class="w-4 h-4 text-brand-emerald shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                    ${escapeHtml(title)}
+                    <span class="truncate">${escapeHtml(title)}</span>
                 </h3>
-                <button onclick="window.closeVideoPlayer()" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                </button>
+                <div class="flex items-center gap-1.5 shrink-0">
+                    <select id="video-speed-select" aria-label="Playback speed"
+                        class="h-8 rounded-lg bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-semibold px-2 outline-none border border-white/10 cursor-pointer">
+                        ${_PLAYBACK_SPEEDS.map(s => `<option value="${s}"${s === 1 ? ' selected' : ''}>${s}×</option>`).join('')}
+                    </select>
+                    <button id="video-pip-btn" title="Picture-in-picture (P)" aria-label="Picture-in-picture"
+                        class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="6" rx="1" fill="currentColor" stroke="none"/></svg>
+                    </button>
+                    <button onclick="window.closeVideoPlayer()" title="Close (Esc)" aria-label="Close video"
+                        class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
             </div>
             <div class="rounded-xl overflow-hidden shadow-[0_25px_60px_-12px_rgba(0,0,0,0.8)] ring-1 ring-white/10">
-                <video id="video-player-element" controls autoplay
+                <video id="video-player-element" controls autoplay playsinline
                     class="w-full bg-black" style="max-height: 80vh;">
                     <source src="${videoUrl}" type="video/mp4">
                     Your browser does not support video playback.
                 </video>
+            </div>
+            <div class="mt-2 px-1 text-[11px] text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5">
+                <span>Space play/pause</span><span>&larr; &rarr; seek</span><span>&uarr; &darr; volume</span><span>F fullscreen</span><span>M mute</span><span>P picture-in-picture</span>
             </div>
         </div>
     `;
@@ -621,6 +658,22 @@ function openVideoPlayer(uploadId, title) {
     });
 
     document.body.appendChild(modal);
+
+    const video = modal.querySelector('video');
+    // Restore the viewer's last volume (persisted across sessions).
+    const savedVol = parseFloat(localStorage.getItem('slomix-video-volume'));
+    if (!Number.isNaN(savedVol)) video.volume = Math.min(1, Math.max(0, savedVol));
+    _volumeSaveHandler = () => localStorage.setItem('slomix-video-volume', String(video.volume));
+    video.addEventListener('volumechange', _volumeSaveHandler);
+
+    const speedSel = modal.querySelector('#video-speed-select');
+    if (speedSel) speedSel.addEventListener('change', () => { video.playbackRate = parseFloat(speedSel.value) || 1; });
+
+    const pipBtn = modal.querySelector('#video-pip-btn');
+    if (pipBtn) {
+        if (!document.pictureInPictureEnabled) pipBtn.style.display = 'none';
+        else pipBtn.addEventListener('click', () => _togglePip(video));
+    }
 
     // Animate in
     requestAnimationFrame(() => {
@@ -632,18 +685,74 @@ function openVideoPlayer(uploadId, title) {
         }
     });
 
-    document.addEventListener('keydown', handleVideoEscape);
+    // Capture phase so our shortcuts win before the video's native handling,
+    // and so Tab is trapped inside the modal.
+    document.addEventListener('keydown', handleVideoKeydown, true);
+    video.focus({ preventScroll: true });
 }
 
-function handleVideoEscape(e) {
-    if (e.key === 'Escape') closeVideoPlayer();
+async function _togglePip(video) {
+    try {
+        if (document.pictureInPictureElement) await document.exitPictureInPicture();
+        else if (video) await video.requestPictureInPicture();
+    } catch { /* PiP can be blocked by the browser; ignore */ }
+}
+
+function _toggleFullscreen(el) {
+    try {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else if (el && el.requestFullscreen) el.requestFullscreen();
+    } catch { /* ignore */ }
+}
+
+function handleVideoKeydown(e) {
+    const modal = document.getElementById('video-player-modal');
+    if (!modal) return;
+
+    // Focus trap: keep Tab within the modal (accessibility).
+    if (e.key === 'Tab') {
+        const focusables = modal.querySelectorAll('button, select, video, [tabindex]:not([tabindex="-1"])');
+        if (focusables.length) {
+            const first = focusables[0];
+            const last = focusables[focusables.length - 1];
+            if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+        return;
+    }
+
+    // Never hijack typing in the speed <select>.
+    if (e.target && e.target.tagName === 'SELECT') return;
+    const video = modal.querySelector('video');
+    if (!video) return;
+
+    switch (e.key) {
+        case 'Escape': closeVideoPlayer(); break;
+        case ' ': case 'k': e.preventDefault(); if (video.paused) { video.play(); } else { video.pause(); } break;
+        case 'ArrowLeft': e.preventDefault(); video.currentTime = Math.max(0, video.currentTime - 5); break;
+        case 'ArrowRight': e.preventDefault(); video.currentTime = Math.min(video.duration || Infinity, video.currentTime + 5); break;
+        case 'ArrowUp': e.preventDefault(); video.volume = Math.min(1, video.volume + 0.1); break;
+        case 'ArrowDown': e.preventDefault(); video.volume = Math.max(0, video.volume - 0.1); break;
+        case 'f': case 'F': e.preventDefault(); _toggleFullscreen(modal.querySelector('.relative') || video); break;
+        case 'm': case 'M': e.preventDefault(); video.muted = !video.muted; break;
+        case 'p': case 'P': e.preventDefault(); _togglePip(video); break;
+        default: break;
+    }
 }
 
 function closeVideoPlayer() {
     const modal = document.getElementById('video-player-modal');
     if (modal) {
         const video = modal.querySelector('video');
-        if (video) video.pause();
+        if (video) {
+            if (_volumeSaveHandler) video.removeEventListener('volumechange', _volumeSaveHandler);
+            // Pause AND release the stream (clear src + load) so closing frees the
+            // buffered download, not just pauses it.
+            video.pause();
+            video.querySelectorAll('source').forEach((s) => s.removeAttribute('src'));
+            video.removeAttribute('src');
+            try { video.load(); } catch { /* ignore */ }
+        }
         const inner = modal.querySelector('.relative');
         if (inner) {
             inner.style.transform = 'scale(0.95)';
@@ -652,7 +761,13 @@ function closeVideoPlayer() {
         modal.style.background = 'rgba(0,0,0,0)';
         setTimeout(() => modal.remove(), 300);
     }
-    document.removeEventListener('keydown', handleVideoEscape);
+    document.removeEventListener('keydown', handleVideoKeydown, true);
+    _volumeSaveHandler = null;
+    // Restore focus to whatever opened the modal (accessibility).
+    if (_lastFocusedBeforeModal && typeof _lastFocusedBeforeModal.focus === 'function') {
+        try { _lastFocusedBeforeModal.focus({ preventScroll: true }); } catch { /* ignore */ }
+    }
+    _lastFocusedBeforeModal = null;
 }
 
 function formatFileSize(bytes) {
@@ -685,9 +800,13 @@ export async function loadUploadDetail(uploadId) {
         const data = await fetchJSON(`${API_BASE}/uploads/${encodeURIComponent(uploadId)}`);
 
         const sizeStr = formatFileSize(data.file_size_bytes || 0);
-        const isVideo = data.is_playable || isVideoFile(data.extension);
+        const canPlay = isBrowserPlayable(data.extension);
+        const isVideoNotPlayable = isVideoFile(data.extension) && !canPlay;  // .avi/.mkv
         const shareUrl = `${window.location.origin}${window.location.pathname}#/uploads/${encodeURIComponent(data.id)}`;
         const downloadUrl = `${API_BASE}/uploads/${encodeURIComponent(data.id)}/download?force_download=true`;
+        // Inline playback streams from the non-force URL (the backend serves .mp4
+        // inline there); force_download is only for the explicit Download button.
+        const streamUrl = `${API_BASE}/uploads/${encodeURIComponent(data.id)}/download`;
         const cat = CATEGORIES[data.category] || { label: data.category, color: 'text-slate-400 border-white/10 bg-white/5', icon: '' };
 
         container.innerHTML = `
@@ -715,12 +834,20 @@ export async function loadUploadDetail(uploadId) {
                 ` : ''}
 
                 <!-- Video Player -->
-                ${isVideo ? `
+                ${canPlay ? `
                 <div class="rounded-xl overflow-hidden shadow-[0_20px_50px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/10">
-                    <video controls class="w-full bg-black" style="max-height: 70vh;">
-                        <source src="${downloadUrl}" type="video/mp4">
+                    <video controls playsinline class="w-full bg-black" style="max-height: 70vh;">
+                        <source src="${streamUrl}" type="video/mp4">
                         Your browser does not support video playback.
                     </video>
+                </div>
+                ` : isVideoNotPlayable ? `
+                <div class="glass-panel rounded-xl p-12 text-center">
+                    <div class="w-20 h-20 mx-auto mb-4 rounded-2xl flex items-center justify-center border border-amber-500/30 bg-amber-500/10 text-amber-300">
+                        <svg class="w-10 h-10" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"/></svg>
+                    </div>
+                    <div class="text-sm text-slate-200 font-semibold">${escapeHtml(data.extension)} isn't playable in the browser</div>
+                    <div class="text-xs text-slate-400 mt-1">Download it to watch (${sizeStr}). In-browser playback for .avi/.mkv is coming with a future .mp4 transcode.</div>
                 </div>
                 ` : `
                 <div class="glass-panel rounded-xl p-12 text-center">
