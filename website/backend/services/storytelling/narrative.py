@@ -97,6 +97,24 @@ _SYNERGY_LEADS = (
     "{winner} pulled ahead in coordination {win_score}–{lose_score}, {tip}",
 )
 
+# Human thread — the story BEHIND the numbers. When a roster player is on an
+# active sick-leave link (a fresh guid taken on purpose so an injury/off-form run
+# doesn't stain the career record — the carniee/ownator case that motivated the
+# feature), the narrative names it. {subject} is composed below (name-aware so it
+# reads whether the alt kept the same handle or not); {stat} anchors it in a
+# metric we trust (KIS rank).
+_HUMAN_INJURY_LEADS = (
+    "{subject} — a fresh guid taken on purpose while an injury heals, keeping the comeback off the old record, and {stat}",
+    "{subject}, easing back from injury on a separate line so the recovery grind wouldn't stain the career stats — {stat}",
+    "Worth a nod: {subject} is an injury comeback on a clean guid, and {stat}",
+)
+
+_HUMAN_SEPARATE_LEADS = (
+    "{subject} — a separate guid kept deliberately apart from the main record, and {stat}",
+    "{subject}, running under a distinct line by choice, and {stat}",
+    "Worth a nod: {subject} runs on its own guid, kept apart on purpose, and {stat}",
+)
+
 _AXIS_PHRASING = {
     "crossfire": "set up by tighter crossfire angles",
     "trade": "carried by quicker trades",
@@ -144,6 +162,63 @@ def _format_group_label(group_data: dict, fallback: str) -> str:
 
 class _NarrativeMixin:
     """Narrative methods for StorytellingService."""
+
+    async def _collect_human_thread(self, kis_board: list, seed: int) -> str:
+        """The story behind the numbers: name an active sick-leave/injury comeback.
+
+        Picks the highest-KIS roster player on an ACTIVE sick-leave identity link
+        (a fresh guid taken on purpose so an injury/off-form run doesn't stain the
+        career record — the carniee/ownator case that motivated the feature) and
+        returns one human sentence, anchored on a metric we trust (their KIS
+        rank). Empty string when no one on the roster is on such a link.
+
+        Best-effort: the identity table can be absent mid-migration and the
+        lookup is a non-critical add-on, so ANY failure returns "" and the
+        narrative renders exactly as before.
+        """
+        if not kis_board:
+            return ""
+        # player_identity_links stores the 8-char UPPER stats guid (EF561EAA),
+        # but the KIS board carries the 32-char proximity guid
+        # (EF561EAA92BE…) — normalise to the 8-char key both here and at lookup,
+        # or nothing ever matches.
+        def _short(g: str | None) -> str:
+            return (g or "").upper()[:8]
+
+        try:
+            from website.backend.routers.api_helpers import fetch_identity_links
+            guids = sorted({_short(e.get("guid")) for e in kis_board if e.get("guid")})
+            links = await fetch_identity_links(self.db, guids)
+        except Exception:  # noqa: BLE001 — human thread must never break the recap
+            return ""
+        if not links:
+            return ""
+        # kis_board is KIS-descending; surface the STRONGEST player who is an alt.
+        for rank, e in enumerate(kis_board, start=1):
+            link = links.get(_short(e.get("guid")))
+            if not link or link.get("role") != "alt" or not link.get("active"):
+                continue
+            alt_name = strip_et_colors(e.get("name") or "")
+            primary_name = strip_et_colors(link.get("primary_name") or "")
+            if not alt_name:
+                continue
+            # Subject is name-aware: the same handle on both guids (ownator on
+            # ownator) reads differently from a genuine rename, and neither
+            # version mentions "guid" — the lead template supplies that.
+            same = bool(primary_name) and primary_name.strip().lower() == alt_name.strip().lower()
+            subject = (
+                f"the '{alt_name}' line is {primary_name}"
+                if primary_name and not same
+                else f"{alt_name}'s run this session"
+            )
+            # Anchor on KIS standing — always meaningful, always a trusted number.
+            stat = (
+                "they still topped the session's Kill-Impact board" if rank == 1
+                else f"they still ranked #{rank} by Kill-Impact"
+            )
+            leads = _HUMAN_INJURY_LEADS if link.get("reason") == "injury" else _HUMAN_SEPARATE_LEADS
+            return _pick_variant(leads, seed).format(subject=subject, stat=stat)
+        return ""
 
     async def generate_narrative(
         self,
@@ -347,6 +422,13 @@ class _NarrativeMixin:
             parts.append(" " + _pick_variant(_MOMENT_LEADS, seed + 2).format(
                 when=top_moment_when, what=top_moment_what,
             ) + ".")
+
+        # Human thread — the story behind the numbers (sick-leave/injury comeback).
+        # Sits after the moment so the recap has established the session before it
+        # turns to the person; empty for sessions with no one on a sick-leave link.
+        human_thread = await self._collect_human_thread(kis_board, seed + 4)
+        if human_thread:
+            parts.append(" " + human_thread + ".")
 
         if winner_label and loser_label and win_score > 0 and axis_tip:
             parts.append(" " + _pick_variant(_SYNERGY_LEADS, seed + 3).format(
