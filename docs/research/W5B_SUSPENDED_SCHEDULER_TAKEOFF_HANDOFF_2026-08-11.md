@@ -2,9 +2,13 @@
 
 Date: 2026-08-11
 
-Status: implementation in progress; S0a complete, remaining S0 source gates next
+Last reverified: 2026-08-13
 
-Base: `origin/main` at `d6136cdd994870fddf4e4d0ff1968eb91418e497`
+Status: implementation in progress; S0a/S0b complete, remaining S0 adversarial gates next
+
+Current base: `origin/main` at `f51edc8813ac16adcdb2ae6801efa1a79800600a`
+
+Original branch base: `origin/main` at `d6136cdd994870fddf4e4d0ff1968eb91418e497`
 
 Predecessor: `docs/research/W5B_SEMANTIC_MAPPING_TAKEOFF_HANDOFF_2026-08-10.md`
 
@@ -160,6 +164,36 @@ Cross-entity temporal paths split by boundary command into `wait` 190, `faceangl
 `gotomarker` 171, `followspline` 18, `halt` 22 and `resetscript` 2. The original 301/244
 table remains the pre-correction comparison, not the scheduler starting denominator.
 
+### S0b alert-dispatch correction completed
+
+S0b keeps the alert effect and its selected targets in one ordered instruction, then
+dispatches only source-proven `death`/`rebirth` handlers through the existing nested
+event walker. Arbitrary callbacks, script-producing use chains, malformed numeric
+properties, `func_explosive` lifecycle ambiguity and a possible
+`trigger_objective_info` parent death all remain named fail-closed paths.
+
+The exact installed surface is 136 alert actions selecting 1,688 static targets:
+
+| Alert target disposition | Count |
+|---|---:|
+| Proven no script event | 1,675 |
+| `death` handler missing | 11 |
+| Resolved script-event dispatch | 2 |
+
+The two resolved dispatches are one Adlernest `func_explosive death` and one Goldrush
+tank `script_mover rebirth`. The latter handler waits. The Goldrush truck is not a
+dispatch: although its resurrectable bit and handler exist, its zero initial
+`health`/`count` makes the callback a no-event path. `TRIGGERSPAWN` is also checked
+because ET returns before copying static health into count on that initialization path.
+
+The exact post-S0b executor still walks 2,790 concrete entries into 5,174 paths, but it
+now records 7,755 effects and two typed runtime event dispatches. Blocked paths rise
+from 1,251 to 1,252 because the Goldrush rebirth reaches a previously omitted
+non-exact accumulator mutation; dynamic-route-only blocked paths rise from 503 to 504,
+and complete-domain counts remain 400. Cross-entity temporal counts remain 452 because
+the new blocked path is classified by the existing non-exact-state frontier rather
+than the temporal-interleaving frontier.
+
 ## Existing contracts to preserve
 
 The scheduler builds on the reviewed contracts in
@@ -178,9 +212,9 @@ The scheduler builds on the reviewed contracts in
 - `.ent` override identities remain usable for script dispatch but unproven for W3
   entity-index linkage.
 - unsupported or ambiguous states remain explicit frontiers.
-- `StageEffectInstruction`'s always-immediate treatment is not authoritative for
-  `gotomarker`; S0a must add its source-verified control contract without duplicating
-  the effect projection.
+- `StageEffectInstruction`'s default immediate treatment is not authoritative for
+  `gotomarker`; the implemented S0a contract already carries its source-verified
+  control result without duplicating the effect projection.
 
 The scheduler should be a sibling module, tentatively
 `website/backend/map_geometry/stage_scheduler.py`. It may extend public contracts only
@@ -319,25 +353,28 @@ earlier event already executed a persistent attachment. The scheduler may use an
 relation established inside its own root schedule; otherwise it must retain typed
 `tag_parent_state_unknown` wake provenance. Raw entity index is not a valid fallback.
 
-### S0b alert-event gap
+### S0b alert-event correction
 
 Pinned [`alertentity`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script_actions.c#L2242-L2292)
 calls each selected target's `use` callback synchronously. Exact-corpus inventory found
 136 alert actions. Two select the Goldrush tank/truck resurrectable `script_mover`
-entities. Their non-zero `health` initializes `count`, so
+entities, but only the tank has non-zero `health`, which initializes `count`, so
 [`script_mover_use`](https://github.com/etlegacy/etlegacy/blob/732518efb1c479dcd29b13361f30a2e92df1cf2a/src/game/g_script.c#L1054-L1073)
-must deliver `rebirth`; the tank handler contains a `wait`.
+must deliver `rebirth` only for the tank; its handler contains a `wait`. The truck's
+zero `count` makes its callback a proven no-event path despite the handler existing.
 
-The current `StageEffectInstruction` records those alerts only as target effects. It
-does not dispatch either `rebirth`, so scheduler state built on the current projection
-would still be incomplete. Two installed `target_relay` alert targets fan out only to
+Before S0b, `StageEffectInstruction` recorded those alerts only as target effects and
+did not dispatch the tank `rebirth`, so scheduler state built on that projection was
+incomplete. `func_explosive_use` also delivers `death`: 12 installed
+alert targets reach that callback, 11 have no handler and one Adlernest target resolves
+an immediate handler. Two installed `target_relay` alert targets fan out only to
 speakers, and the other installed alert target chains contain no
 `target_script_trigger`; those are measured corpus facts, not a general claim about
 arbitrary maps.
 
-S0b must add a typed, ordered alert-dispatch contract for source-proven resurrectable
-script movers, fail closed on an alert/use chain whose script-event behavior is not
-proven, and regenerate the corpus denominator before S1 freezes canonical state.
+S0b now adds the typed, ordered alert-dispatch contract for source-proven callbacks,
+fails closed on alert/use paths whose script-event behavior is not proven, and freezes
+the corrected corpus denominator before S1 canonical state.
 
 These findings prove caller-before-suspended-target-resume for a cross-entity trigger.
 They do **not** yet prove a closed global schedule because later caller actions or other
@@ -689,7 +726,7 @@ and the exact 20-map run publishes the corrected cross/same temporal frontier ba
    synchronous/suspended/replacement rules as explicit trigger delivery.
 4. Fail closed for a target callback or target-chain script dispatch that is not
    source-proven; do not infer safety from the installed corpus having no example.
-5. Freeze the 136-action target-class/chain inventory, both rebirth dispatches and the
+5. Freeze the 136-action target-class/chain inventory, both resolved event dispatches and the
    regenerated exact executor denominator.
 
 Exit: focused tests distinguish no-handler, synchronous rebirth and waiting rebirth;
@@ -968,11 +1005,11 @@ retained.
 - [x] Define source-truth questions, transition model, tests and Definition of Done.
 - [x] Commit and push the documentation-only takeoff (`b9919eaa`).
 - [x] Open draft PR [#649](https://github.com/iamez/slomix/pull/649).
-- [ ] Complete S0 source verification; runner/action read is recorded, replacement and
-  tag-parent installed surfaces remain.
+- [ ] Complete S0 source verification; runner/action reads and installed surfaces are
+  recorded, while adversarial replacement/tag-parent fixtures remain.
 - [x] Complete S0a typed `gotomarker` control/effect correction and regenerate the
   frontier denominator.
-- [ ] Complete S0b source-proven `alertentity` event dispatch and regenerate the
+- [x] Complete S0b source-proven `alertentity` event dispatch and regenerate the
   denominator.
 - [ ] Complete S1 immutable state/canonicalization.
 - [ ] Complete S2 single suspended continuation.
@@ -1006,8 +1043,8 @@ retained.
   `faceangles` 49, waiting `followspline` 10, `halt` 9 and `resetscript` 2.
 - A separate read-only inventory found 172 `gotomarker` actions (139 waiting, 33
   non-waiting) and 133 cross-entity plus 28 same-entity resolved pairs targeting a
-  waiting program. The current executor does not project that control result, so S0a
-  now precedes scheduler implementation and all denominators must be regenerated.
+  waiting program. The executor at that head did not project that control result, so
+  S0a had to precede scheduler implementation and regenerate all denominators.
 - No owner-gated operation was performed.
 
 ### 2026-08-11 - S0a typed temporal-control correction
@@ -1041,11 +1078,41 @@ retained.
 - Exact tag surface: 43 `attachtotag` actions, 39 distinct children, 12 parents and 39
   child-parent pairs. Forty-two candidate-child programs contain temporal control and
   41 different-entity dispatch pairs target a candidate child.
-- `alertentity` source review found an additional pre-S1 gap: two of 136 installed
-  alerts synchronously deliver `rebirth` to the Goldrush tank/truck; the tank handler
-  waits. The current projection omits both dispatches.
+- `alertentity` source review found an additional pre-S1 gap: one of 136 installed
+  alerts synchronously delivers a waiting `rebirth` to the Goldrush tank. The truck has
+  the handler and resurrectable bit but no health/count, so its callback delivers no
+  event. One Adlernest `func_explosive death` handler is also reachable immediately.
 - Next item: implement S0b typed alert dispatch, freeze its adversarial fixtures and
   regenerate the exact denominator before S1.
+
+### 2026-08-13 - current-main sync and S0b alert dispatch
+
+- Main sync commit: `62e69a3d`; code/test commit: `fc6a889b`.
+- The branch was 74 main commits behind after the pause. `origin/main` at `f51edc88`
+  touched CI and broader runtime dependencies but none of the W5b source/test/doc
+  paths. It was merged normally to preserve published history; no force-push occurred.
+- Pinned source review added three conditions beyond the initial corpus observation:
+  `TRIGGERSPAWN` prevents static health from initializing `script_mover.count`, a
+  `trigger_objective_info` can make `func_explosive_use` dispatch parent `death`, and
+  malformed numeric BSP properties must not silently become zero.
+- S0b preserves selected-target order, records typed runtime dispatch provenance,
+  executes exactly one source-proven handler through the existing nested walker and
+  fails closed for multi-handler groups or any unresolved callback/lifecycle/parent
+  path.
+- Exact installed inventory: 136 alert actions, 1,688 selected targets, 1,675 proven
+  no-event targets, 11 missing `death` handlers and two resolved dispatches (`death`
+  and `rebirth`). No installed alert target has the possible parent-death condition.
+- Exact executor: 2,790 entries, 5,174 paths, 7,755 effects, two runtime event
+  dispatches, 1,252 blocked paths and 452 cross-entity temporal paths. The only new
+  blocker is one previously hidden `non_exact_accumulator_mutation` reached from the
+  Goldrush rebirth handler.
+- Verification on the synced base: 131 focused tests, Ruff and `git diff --check`
+  passed; the exact alert inventory and full 20-map executor acceptance tests passed.
+  No owner-gated operation was performed.
+- The valid CodeRabbit wording finding is corrected: S0a is described as already
+  implemented, not as future work. Review/CI must run again after push.
+- Next item: add the remaining adversarial replacement/tag-parent source fixtures;
+  S1 must not start until those S0 gates and review are closed.
 
 At every substantive commit, append:
 
