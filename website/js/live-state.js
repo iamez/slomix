@@ -40,7 +40,11 @@ function _dur(sec) {
 // M:SS / H:MM:SS clock for the round timer — a scoreboard always shows seconds,
 // so this ticks visibly every second (unlike _dur, which rolls to whole minutes).
 function _clock(sec) {
-    const s = Math.max(0, Math.round(sec));
+    // floor, not round: an elapsed timer shows the COMPLETED second (a stopwatch
+    // reads 0:45 through the 46th second). round would let a tick that fires
+    // slightly early/late cross the .5 boundary and show the same second twice
+    // or skip one (Copilot).
+    const s = Math.max(0, Math.floor(sec));
     const h = Math.floor(s / 3600);
     const mm = String(Math.floor((s % 3600) / 60)).padStart(h ? 2 : 1, '0');
     const ss = String(s % 60).padStart(2, '0');
