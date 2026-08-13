@@ -320,9 +320,10 @@ export const api = {
   },
 
   // Proximity Composite Scores
-  getProxScores: (rangeDays = 30, playerGuid?: string, limit = 50) => {
+  getProxScores: (rangeDays = 30, playerGuid?: string, limit = 50, sessionDate?: string) => {
     const q = new URLSearchParams({ range_days: String(rangeDays), limit: String(limit) });
     if (playerGuid) q.set('player_guid', playerGuid);
+    if (sessionDate) q.set('session_date', sessionDate);
     return get<import('./types').ProxScoresResponse>(`/proximity/prox-scores?${q.toString()}`);
   },
   getProxFormula: () =>
@@ -353,11 +354,6 @@ export const api = {
   getProximityLeaderboards: (category = 'power', rangeDays = 30, limit = 10) =>
     get<import('./types').ProximityLeaderboardResponse>(
       `/proximity/leaderboards?category=${category}&range_days=${rangeDays}&limit=${limit}`,
-    ),
-
-  getProximitySessionScores: (sessionDate?: string) =>
-    get<import('./types').ProximitySessionScoresResponse>(
-      `/proximity/session-scores${sessionDate ? `?session_date=${sessionDate}` : ''}`,
     ),
 
   // Weapon Accuracy

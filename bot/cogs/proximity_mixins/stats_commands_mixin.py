@@ -392,12 +392,12 @@ class _ProximityStatsCommandsMixin:
         """
         try:
             if not session_date:
-                from bot.services.proximity_session_score_service import (
-                    ProximitySessionScoreService,
+                # Latest proximity session (inlined from the retired v1
+                # ProximitySessionScoreService — scoring itself is v3.0 via HTTP).
+                row = await self.bot.db_adapter.fetch_one(
+                    "SELECT MAX(session_date)::TEXT FROM combat_engagement"
                 )
-                session_date = await ProximitySessionScoreService(
-                    self.bot.db_adapter
-                ).get_latest_session_date()
+                session_date = row[0] if row and row[0] else None
             if not session_date:
                 await ctx.send("No proximity data found.")
                 return
