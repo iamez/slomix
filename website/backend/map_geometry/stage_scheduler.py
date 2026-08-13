@@ -2574,6 +2574,8 @@ def _source_ordered_suspended_index(
         first.ordered_target_entity_indices,
         first.occurrence_id,
         continuations[0].frame.invocation_path[:-1],
+        continuations[0].caller_suffix_completed,
+        continuations[0].caller_suffix_abandoned,
     )
     for continuation, context in zip(continuations, pending, strict=True):
         if context is None:
@@ -2589,6 +2591,8 @@ def _source_ordered_suspended_index(
             context.ordered_target_entity_indices,
             context.occurrence_id,
             continuation.frame.invocation_path[:-1],
+            continuation.caller_suffix_completed,
+            continuation.caller_suffix_abandoned,
         ) != shared_identity:
             return None
 
