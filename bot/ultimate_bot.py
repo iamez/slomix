@@ -558,6 +558,14 @@ class UltimateETLegacyBot(
         except Exception as e:
             logger.error(f"❌ Failed to load Link Cog: {e}", exc_info=True)
 
+        # 🩹 Load Bolniška Cog (sick-leave identity attribution — TOK F)
+        try:
+            from bot.cogs.bolniska_cog import BolniskaCog
+            await self.add_cog(BolniskaCog(self))
+            logger.info("✅ Bolniška Cog loaded (bolniska start/end/merge/set)")
+        except Exception as e:
+            logger.error(f"❌ Failed to load Bolniška Cog: {e}", exc_info=True)
+
         # �📊 Load Stats Cog (general statistics, comparisons, achievements, seasons)
         try:
             from bot.cogs.stats_cog import StatsCog

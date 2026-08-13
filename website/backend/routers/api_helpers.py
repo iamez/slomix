@@ -434,6 +434,85 @@ async def batch_resolve_display_names(
     return _finalize()
 
 
+async def fetch_identity_links(
+    db: DatabaseAdapter,
+    guids: list[str],
+) -> dict[str, dict]:
+    """Batch sick-leave / identity-link attribution for a set of GUIDs.
+
+    Reads ``player_identity_links`` (migration 073) and returns, per requested
+    guid that participates, either:
+      - as an ALT (on sick leave / renamed under a primary):
+        ``{"role": "alt", "link_type", "reason", "primary_guid",
+           "primary_name", "active": bool, "since": date|None}``
+      - as a PRIMARY that has alts:
+        ``{"role": "primary", "alts": [{"alt_guid", "alt_name", "link_type",
+           "reason", "active", "since"}, ...]}``
+
+    A guid on sick leave stays SEPARATE in every stats aggregate — this only
+    powers the "🩹 <primary> · on sick leave" attribution badge on the profile,
+    leaderboards and movers, so a fresh cl_guid is never mistaken for a genuine
+    newcomer. Best-effort: an absent table or query error yields ``{}``.
+    """
+    wanted = list({g for g in (guids or []) if g})
+    if not wanted:
+        return {}
+    # Best-effort: attribution must never break the profile/movers. Both the
+    # player_identity_links read (absent during a partial migration → asyncpg
+    # UndefinedTableError, a PostgresError not caught by OSError/RuntimeError)
+    # and the name-resolution fan-out are wrapped so any failure yields {}.
+    try:
+        rows = await db.fetch_all(
+            "SELECT primary_guid, alt_guid, link_type, reason, period_start, period_end "
+            "FROM player_identity_links "
+            "WHERE alt_guid = ANY($1) OR primary_guid = ANY($1)",
+            (wanted,),
+        )
+        if not rows:
+            return {}
+        # Resolve display names for every guid referenced (primary + alt) at once.
+        ref_guids = set()
+        for r in rows:
+            ref_guids.add(r[0])
+            ref_guids.add(r[1])
+        names = await batch_resolve_display_names(db, [(g, g) for g in ref_guids])
+    except Exception:  # noqa: BLE001 — attribution is a non-critical add-on
+        logger.debug("identity-link attribution failed", exc_info=True)
+        return {}
+
+    wanted_set = set(wanted)
+    out: dict[str, dict] = {}
+    for r in rows:
+        primary_guid, alt_guid, link_type, reason, p_start, p_end = (
+            r[0], r[1], r[2], r[3], r[4], r[5],
+        )
+        active = p_end is None
+        since = str(p_start) if p_start else None
+        # The alt guid: attribute it to its primary (the badge case).
+        if alt_guid in wanted_set:
+            out[alt_guid] = {
+                "role": "alt",
+                "link_type": link_type,
+                "reason": reason,
+                "primary_guid": primary_guid,
+                "primary_name": names.get(primary_guid, primary_guid),
+                "active": active,
+                "since": since,
+            }
+        # The primary guid: list its alts (profile "currently on sick leave as…").
+        if primary_guid in wanted_set:
+            entry = out.setdefault(primary_guid, {"role": "primary", "alts": []})
+            entry.setdefault("alts", []).append({
+                "alt_guid": alt_guid,
+                "alt_name": names.get(alt_guid, alt_guid),
+                "link_type": link_type,
+                "reason": reason,
+                "active": active,
+                "since": since,
+            })
+    return out
+
+
 async def resolve_alias_guid_map(
     db: DatabaseAdapter,
     names: list[str],
