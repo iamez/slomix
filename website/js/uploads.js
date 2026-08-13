@@ -131,6 +131,11 @@ const _EXT_CATEGORY = {
 };
 const _SIZE_LIMIT_MB = { config: 2, archive: 50, clip: 500 };  // backend SIZE_LIMITS
 
+// True while an upload is in flight. The submit button must stay disabled for the
+// whole duration, so a file-select event mid-upload can't re-enable it and let a
+// second upload start (CodeRabbit #719).
+let _uploading = false;
+
 // Reflect a just-chosen file in the inline feedback strip: detected category +
 // size when valid, a clear reason when not, and disable the submit button on an
 // invalid file so it can't be sent. Returns whether the file is acceptable.
@@ -181,7 +186,8 @@ function _updateFileFeedback(file) {
         fb.className = 'rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300 px-3 py-2 text-xs';
         fb.textContent = msg;
     }
-    if (submitBtn) submitBtn.disabled = !ok;
+    // Never re-enable submit while an upload is running, even for a valid file.
+    if (submitBtn) submitBtn.disabled = _uploading || !ok;
     return ok;
 }
 
@@ -362,6 +368,7 @@ async function handleUpload(e) {
         return;
     }
 
+    _uploading = true;
     submitBtn.disabled = true;
     submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
     if (progressWrap) progressWrap.classList.remove('hidden');
@@ -435,9 +442,12 @@ async function handleUpload(e) {
     } catch (err) {
         showToast(err.message, 'error');
     } finally {
-        submitBtn.disabled = false;
+        _uploading = false;
         submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
         if (progressWrap) progressWrap.classList.add('hidden');
+        // Re-enable only if the currently-selected file is still valid (a failed
+        // upload keeps the file). A success already cleared it via _onFileSelected.
+        _updateFileFeedback(fileInput.files.length ? fileInput.files[0] : null);
     }
 }
 

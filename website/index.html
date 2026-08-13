@@ -3617,8 +3617,9 @@
                             </label>
 
                             <!-- Inline file feedback: detected category, size and validity, filled by
-                                 uploads.js the moment a file is chosen (before submit). -->
-                            <div id="upload-file-feedback" class="hidden"></div>
+                                 uploads.js the moment a file is chosen (before submit). role=status +
+                                 aria-live announce the result to assistive technology. -->
+                            <div id="upload-file-feedback" class="hidden" role="status" aria-live="polite"></div>
 
                             <!-- Fields row -->
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
