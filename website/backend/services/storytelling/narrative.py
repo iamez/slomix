@@ -225,9 +225,12 @@ class _NarrativeMixin:
             shape = classify_session_arc(completed, winner_side, ws, ls)
             if not shape:
                 return None
+            # Name the winner from OUR completed-maps winner_side via the stable
+            # side labels — NOT data["winner_name"], which BOX derives from all
+            # maps (provisional included) and could name the other side in a live
+            # session where a provisional map flips the standings (Copilot #715).
             winner_name = strip_et_colors(
-                data.get("winner_name")
-                or (data.get("alpha_team") if winner_side == "alpha" else data.get("beta_team"))
+                (data.get("alpha_team") if winner_side == "alpha" else data.get("beta_team"))
                 or "The winners"
             )
             sentence = _pick_variant(_ARC_LEADS[shape], seed).format(
