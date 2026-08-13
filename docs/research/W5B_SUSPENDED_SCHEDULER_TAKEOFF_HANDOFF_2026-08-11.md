@@ -4,7 +4,8 @@ Date: 2026-08-11
 
 Last reverified: 2026-08-13
 
-Status: implementation in progress; S0-S3 closed, S4 is the next implementation wave
+Status: implementation in progress; S3 code/evidence closed at `f781525b`; the
+documentation checkpoint gate must pass before S4 starts
 
 Current base: `origin/main` at `5f4ebc0ed65f38268ecafa8c45fb01f6fbc84576` (`v1.36.0`)
 
@@ -1404,7 +1405,7 @@ retained.
   other owner-gated operation was performed. Exact-head CI, fresh review, zero-thread
   and quiet-window gates remained open at this code/test commit; S4 had not started.
 
-### 2026-08-13 - S3 exact-head gate closed
+### 2026-08-13 - S3 code/evidence head gate closed
 
 - Closure head: `f781525b`, based on current `origin/main` `5f4ebc0e` (`v1.36.0`).
   Local and remote branch heads matched, the PR base matched current main, GitHub
@@ -1421,9 +1422,16 @@ retained.
   and then resolved. The final GraphQL refresh reported 28 total resolved threads and
   zero unresolved threads. No new issue or review comment appeared between the last
   review activity at 13:15:25 Europe/Ljubljana and the final refresh at 13:20:51.
-- S3 is closed. The next permitted work is S4 canonical visited-state search, exact
-  cycle/budget frontiers and only footprint-proven partial-order reduction. S5 corpus
-  measurement and S6 graph verdicts remain blocked until S4 passes the same gate.
+- This closes the S3 implementation and evidence at `f781525b`; it does not
+  self-attest a later documentation commit. The documentation-only checkpoint at
+  `303aa86b` still requires its own exact-head CI, review/comment/thread refresh and
+  five-minute quiet window. S4 must not start until that external gate passes. Passing
+  it does not require another closure commit, which would merely create a new
+  unverified documentation head.
+- After that checkpoint gate passes, the next permitted work is S4 canonical
+  visited-state search, exact cycle/budget frontiers and only footprint-proven
+  partial-order reduction. S5 corpus measurement and S6 graph verdicts remain blocked
+  until S4 passes the same gate.
 
 At every substantive commit, append:
 
