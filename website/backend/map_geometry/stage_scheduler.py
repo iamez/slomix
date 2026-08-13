@@ -1,8 +1,8 @@
 """Immutable state contracts for bounded ET script scheduling.
 
-The module owns validated state identity and the deliberately narrow S2 transition
-runner. Later waves extend shared-target, replacement and bounded-search behavior
-without weakening these construction boundaries.
+The module owns validated state identity and the S3 transition runner. Bounded
+multi-task search remains a later wave and must not weaken these construction
+boundaries.
 """
 
 from __future__ import annotations
@@ -18,11 +18,15 @@ from website.backend.map_geometry.stage import (
     TriggerResolution,
 )
 from website.backend.map_geometry.stage_possibilities import (
+    AlertTargetDisposition,
     ControlBarrierInstruction,
+    KillInstruction,
+    KillTargetDisposition,
     OrderedEventProgram,
     OrderedStageProgramIndex,
     StageEffectInstruction,
     SymbolicAccumulatorState,
+    SymbolicDispatchResolution,
     SymbolicEventPath,
     SymbolicIntegerDomain,
     SymbolicPathCompletion,
@@ -30,7 +34,9 @@ from website.backend.map_geometry.stage_possibilities import (
     TriggerInstruction,
     followspline_waits_for_completion,
     gotomarker_waits_for_completion,
+    resolve_symbolic_nested_dispatch,
     walk_symbolic_event_program,
+    walk_symbolic_stage_program,
 )
 from website.backend.map_geometry.stage_semantics import AccumulatorConditionalTrigger, StageEffectProjection
 
@@ -77,6 +83,16 @@ def _dispatch_target_group(
         if not targets:
             raise ValueError("dispatch target program does not match its alert instruction")
         return targets
+    if isinstance(instruction, KillInstruction):
+        dispatch_targets = tuple(
+            target
+            for target in instruction.targets
+            if target.disposition is KillTargetDisposition.SCRIPT_MOVER_OPTIONAL_DEATH_EVENT
+            and target.death_handler_node_id
+        )
+        if len(dispatch_targets) != 1 or dispatch_targets[0].death_handler_node_id != target_node_id:
+            raise ValueError("dispatch target program does not match its optional death instruction")
+        return (dispatch_targets[0].entity_index,)
     raise ValueError("dispatch cursor does not identify a dispatch instruction")
 
 
@@ -263,12 +279,17 @@ class SymbolicFrame:
     invocation_path: tuple[SymbolicInvocationStep, ...] = ()
     call_stack: tuple[SymbolicProgramCursor, ...] = ()
     pending_dispatch: PendingDispatchContext | None = None
+    caller_dispatches: tuple[PendingDispatchContext, ...] = ()
     origin: SymbolicFrameOrigin = SymbolicFrameOrigin.ROOT_EVENT
 
     def validate(self, index: OrderedStageProgramIndex) -> None:
         self.cursor.validate(index)
         if self.pending_dispatch is not None:
             self.pending_dispatch.validate(index)
+        for caller_dispatch in self.caller_dispatches:
+            caller_dispatch.validate(index)
+        if len(set(self.caller_dispatches)) != len(self.caller_dispatches):
+            raise ValueError("caller dispatch stack must not contain duplicate contexts")
         _validate_invocation_path(
             index,
             self.invocation_path,
@@ -286,11 +307,27 @@ class SymbolicFrame:
             SymbolicFrameOrigin.TARGET_GROUP_RESUME,
         } and not self.invocation_path:
             raise ValueError("nested frame origin requires invocation ancestry")
+        if self.pending_dispatch is not None and self.caller_dispatches:
+            raise ValueError("a frame cannot be both a dispatch target and its caller suffix")
+        if self.caller_dispatches:
+            if self.origin is not SymbolicFrameOrigin.CALLER_SUFFIX:
+                raise ValueError("caller dispatch context requires a caller-suffix frame")
+            for caller_dispatch in self.caller_dispatches:
+                resume = caller_dispatch.caller_resume_cursor
+                if (
+                    self.cursor.node_id != resume.node_id
+                    or self.cursor.entity_index != resume.entity_index
+                    or self.cursor.instruction_offset < resume.instruction_offset
+                ):
+                    raise ValueError("caller suffix cursor precedes a completed dispatch resume point")
+                if caller_dispatch.target_cursor != len(caller_dispatch.ordered_target_entity_indices) - 1:
+                    raise ValueError("caller suffix may resume only after the complete target group")
         if self.pending_dispatch is not None:
             if self.origin not in {
                 SymbolicFrameOrigin.NESTED_DISPATCH,
                 SymbolicFrameOrigin.TARGET_GROUP_RESUME,
                 SymbolicFrameOrigin.BOUNDARY_RESUME,
+                SymbolicFrameOrigin.EVENT_REPLACEMENT,
             }:
                 raise ValueError("pending dispatch context requires a nested-target frame origin")
             if not self.invocation_path:
@@ -397,6 +434,7 @@ class SuspendedContinuation:
     wake_constraint: SymbolicWakeConstraint
     effect_footprint: tuple[str, ...] = ()
     caller_suffix_completed: bool = False
+    caller_suffix_abandoned: bool = False
 
     def __post_init__(self) -> None:
         if self.boundary_line <= 0:
@@ -408,6 +446,10 @@ class SuspendedContinuation:
         self.frame.validate(index)
         if self.caller_suffix_completed and self.frame.pending_dispatch is None:
             raise ValueError("only a nested dispatch continuation may record caller suffix completion")
+        if self.caller_suffix_abandoned and self.frame.pending_dispatch is None:
+            raise ValueError("only a nested dispatch continuation may record caller suffix abandonment")
+        if self.caller_suffix_completed and self.caller_suffix_abandoned:
+            raise ValueError("a caller suffix cannot be both completed and abandoned")
         program = index.program(self.frame.cursor.node_id)
         action = program.event.actions[self.frame.cursor.instruction_offset]
         if self.resume_mode is not SymbolicResumeMode.REENTER_BOUNDARY_ACTION:
@@ -656,10 +698,17 @@ class SymbolicScheduleState:
             if (
                 continuation.frame.cursor.entity_index in lifecycle_entity_set
                 and isinstance(continuation.boundary_state, SymbolicMovementBoundaryState)
+                and continuation.boundary_state.command
+                in {
+                    SymbolicMovementCommand.GOTO_MARKER,
+                    SymbolicMovementCommand.FOLLOW_SPLINE,
+                }
                 and continuation.boundary_state.temporal_state
                 is not SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE
             ):
-                raise ValueError("a suspended movement cannot start while the entity has an active movement lifecycle")
+                raise ValueError(
+                    "a suspended translational movement cannot start while the entity has an active movement lifecycle"
+                )
             if (
                 isinstance(continuation.boundary_state, SymbolicMovementBoundaryState)
                 and continuation.boundary_state.command is SymbolicMovementCommand.GOTO_MARKER
@@ -749,6 +798,16 @@ def _continuation_sort_key(continuation: SuspendedContinuation) -> tuple[object,
             pending.target_cursor,
         )
     )
+    caller_dispatch_key = tuple(
+        (
+            caller_dispatch.dispatch_cursor,
+            caller_dispatch.caller_resume_cursor,
+            caller_dispatch.target_node_id,
+            caller_dispatch.ordered_target_entity_indices,
+            caller_dispatch.target_cursor,
+        )
+        for caller_dispatch in frame.caller_dispatches
+    )
     return (
         continuation.wake_constraint.value,
         frame.cursor.entity_index,
@@ -760,7 +819,9 @@ def _continuation_sort_key(continuation: SuspendedContinuation) -> tuple[object,
         invocation_path,
         tuple((cursor.node_id, cursor.entity_index, cursor.instruction_offset) for cursor in frame.call_stack),
         pending_key,
+        caller_dispatch_key,
         continuation.caller_suffix_completed,
+        continuation.caller_suffix_abandoned,
     )
 
 
@@ -878,6 +939,7 @@ def _rebuild_schedule_state(
     accumulator_state: SymbolicAccumulatorState | None = None,
     runnable: tuple[SymbolicFrame, ...] | None = None,
     suspended: tuple[SuspendedContinuation, ...] | None = None,
+    async_lifecycles: tuple[SymbolicAsyncMovementLifecycle, ...] | None = None,
     effects: tuple[SymbolicEffectRecord, ...] | None = None,
     provenance: tuple[str, ...] | None = None,
     ordering_decisions: tuple[str, ...] | None = None,
@@ -891,7 +953,9 @@ def _rebuild_schedule_state(
         accumulator_state=state.accumulator_state if accumulator_state is None else accumulator_state,
         runnable=next_runnable,
         suspended=next_suspended,
-        async_lifecycles=state.async_lifecycles,
+        async_lifecycles=(
+            state.async_lifecycles if async_lifecycles is None else async_lifecycles
+        ),
         event_owners=tuple(SymbolicEventOwner.from_frame(frame) for frame in active_frames),
         tag_parent_states=state.tag_parent_states,
         effects=state.effects if effects is None else effects,
@@ -958,6 +1022,123 @@ def _path_effect_records(
         )
         search_offset = matched_offset + 1
     return tuple(records)
+
+
+def _nested_path_effect_records(
+    index: OrderedStageProgramIndex,
+    *,
+    projections: tuple[StageEffectProjection, ...],
+    effect_entity_indices: tuple[int, ...],
+) -> tuple[SymbolicEffectRecord, ...]:
+    if len(projections) != len(effect_entity_indices):
+        raise RuntimeError("symbolic path effect provenance is internally inconsistent")
+    records: list[SymbolicEffectRecord] = []
+    for projection, entity_index in zip(projections, effect_entity_indices, strict=True):
+        line = projection.effect.line
+        matches = tuple(
+            SymbolicEffectRecord(
+                projection,
+                SymbolicProgramCursor(program.node.node_id, entity_index, offset),
+            )
+            for program in index.programs_for_instruction_line(line)
+            if entity_index in program.source.lookup.selected_entity_indices
+            for offset, instruction in enumerate(program.instructions)
+            if isinstance(instruction, StageEffectInstruction)
+            and instruction.projection == projection
+        )
+        if len(matches) != 1:
+            raise RuntimeError("nested symbolic effect does not resolve to one source instruction")
+        records.append(matches[0])
+    return tuple(records)
+
+
+def _path_async_lifecycles(
+    index: OrderedStageProgramIndex,
+    *,
+    path: SymbolicEventPath,
+    effects: tuple[SymbolicEffectRecord, ...],
+    existing: tuple[SymbolicAsyncMovementLifecycle, ...],
+) -> tuple[SymbolicAsyncMovementLifecycle, ...]:
+    next_lifecycles = list(existing)
+    for start in path.async_movement_starts:
+        matches = tuple(
+            SymbolicProgramCursor(program.node.node_id, start.source_entity_index, offset)
+            for program in index.programs_for_instruction_line(start.line)
+            if start.source_entity_index in program.source.lookup.selected_entity_indices
+            for offset, action in enumerate(program.event.actions)
+            if action.line == start.line
+            and action.command == start.command
+            and action.arguments == start.arguments
+        )
+        if len(matches) != 1:
+            raise RuntimeError("asynchronous movement start does not resolve to one source instruction")
+        cursor = matches[0]
+        command = SymbolicMovementCommand(start.command)
+        effect_index = None
+        if command is SymbolicMovementCommand.GOTO_MARKER:
+            effect_index = next(
+                (
+                    index_value
+                    for index_value in range(len(effects) - 1, -1, -1)
+                    if effects[index_value].source_cursor == cursor
+                ),
+                None,
+            )
+            if effect_index is None:
+                raise RuntimeError("non-waiting gotomarker lost its route-effect record")
+        lifecycle = SymbolicAsyncMovementLifecycle(
+            cursor,
+            command,
+            start.arguments,
+            effect_record_index=effect_index,
+        )
+        next_lifecycles = [
+            item
+            for item in next_lifecycles
+            if item.source_cursor.entity_index != start.source_entity_index
+        ]
+        next_lifecycles.append(lifecycle)
+    return tuple(next_lifecycles)
+
+
+def _async_start_sequence_is_feasible(
+    path: SymbolicEventPath,
+    existing: tuple[SymbolicAsyncMovementLifecycle, ...],
+) -> bool:
+    active_entities = {item.source_cursor.entity_index for item in existing}
+    for start in path.async_movement_starts:
+        if start.source_entity_index in active_entities:
+            return False
+        active_entities.add(start.source_entity_index)
+    return True
+
+
+def _temporal_boundary_matches_lifecycle_state(
+    index: OrderedStageProgramIndex,
+    program: OrderedEventProgram,
+    *,
+    source_entity_index: int,
+    path: SymbolicEventPath,
+    lifecycles: tuple[SymbolicAsyncMovementLifecycle, ...],
+) -> bool:
+    boundary_line = path.temporal_boundary_lines[0]
+    boundary_offset = index.instruction_offset(program, boundary_line)
+    if boundary_offset is None:
+        return False
+    boundary_state = path.temporal_boundary_states[0]
+    has_active_movement = any(
+        lifecycle.source_cursor.entity_index == source_entity_index
+        for lifecycle in lifecycles
+    )
+    if boundary_state is SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE:
+        return has_active_movement
+    action = program.event.actions[boundary_offset]
+    if action.command in {
+        SymbolicMovementCommand.GOTO_MARKER.value,
+        SymbolicMovementCommand.FOLLOW_SPLINE.value,
+    }:
+        return not has_active_movement
+    return True
 
 
 def _path_frontier_offset(
@@ -1066,7 +1247,482 @@ def _suspended_boundary(
     )
 
 
-def _start_s2_cross_entity_dispatch(
+def _dispatch_target(
+    index: OrderedStageProgramIndex,
+    caller_program: OrderedEventProgram,
+    caller_cursor: SymbolicProgramCursor,
+) -> tuple[str, tuple[int, ...]] | SymbolicDispatchResolution:
+    instruction = caller_program.instructions[caller_cursor.instruction_offset]
+    if isinstance(instruction, (TriggerInstruction, AccumulatorConditionalTrigger)):
+        dispatch = resolve_symbolic_nested_dispatch(
+            index,
+            caller_program,
+            instruction,
+            source_entity_index=caller_cursor.entity_index,
+        )
+        if dispatch.resolution is not SymbolicDispatchResolution.RESOLVED:
+            return dispatch.resolution
+        if dispatch.target_node_id is None:
+            raise RuntimeError("resolved scheduler dispatch lost its target program")
+        return dispatch.target_node_id, dispatch.target_entity_indices
+    if isinstance(instruction, StageEffectInstruction):
+        dispatch_targets = tuple(
+            target
+            for target in instruction.alert_targets
+            if target.disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
+            and target.event_handler_node_id
+        )
+        node_ids = {target.event_handler_node_id for target in dispatch_targets}
+        if not dispatch_targets or len(node_ids) != 1:
+            return SymbolicDispatchResolution.RUNTIME_DISPATCH
+        target_node_id = next(iter(node_ids))
+        if target_node_id is None:
+            raise AssertionError("filtered alert dispatch lost its handler node")
+        return target_node_id, tuple(target.entity_index for target in dispatch_targets)
+    if isinstance(instruction, KillInstruction):
+        dispatch_targets = tuple(
+            target
+            for target in instruction.targets
+            if target.disposition is KillTargetDisposition.SCRIPT_MOVER_OPTIONAL_DEATH_EVENT
+            and target.death_handler_node_id
+        )
+        if len(dispatch_targets) != 1:
+            return SymbolicDispatchResolution.RUNTIME_DISPATCH
+        target = dispatch_targets[0]
+        if target.death_handler_node_id is None:
+            raise AssertionError("filtered death dispatch lost its handler node")
+        return target.death_handler_node_id, (target.entity_index,)
+    return SymbolicDispatchResolution.RUNTIME_DISPATCH
+
+
+def _dispatch_blocker_reason(instruction: object) -> str | None:
+    if isinstance(instruction, TriggerInstruction):
+        return "trigger_dispatch_not_modeled"
+    if isinstance(instruction, AccumulatorConditionalTrigger):
+        return "conditional_trigger_dispatch_not_modeled"
+    if isinstance(instruction, StageEffectInstruction):
+        if any(
+            target.disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
+            for target in instruction.alert_targets
+        ):
+            return "alertentity_dispatch_not_modeled"
+        return None
+    if isinstance(instruction, KillInstruction):
+        optional_targets = tuple(
+            target.disposition is KillTargetDisposition.SCRIPT_MOVER_OPTIONAL_DEATH_EVENT
+            for target in instruction.targets
+        )
+        if optional_targets.count(True) == 1:
+            return "kill_death_dispatch_not_modeled"
+        return None
+    return None
+
+
+def _continuation_belongs_to_dispatch(
+    continuation: SuspendedContinuation,
+    caller_frame: SymbolicFrame,
+    dispatch: PendingDispatchContext,
+) -> bool:
+    pending = continuation.frame.pending_dispatch
+    if pending is None or not continuation.frame.invocation_path:
+        return False
+    return (
+        pending.dispatch_cursor == dispatch.dispatch_cursor
+        and pending.caller_resume_cursor == dispatch.caller_resume_cursor
+        and pending.target_node_id == dispatch.target_node_id
+        and pending.ordered_target_entity_indices == dispatch.ordered_target_entity_indices
+        and continuation.frame.invocation_path[:-1] == caller_frame.invocation_path
+    )
+
+
+def _mark_dispatch_continuations(
+    suspended: tuple[SuspendedContinuation, ...],
+    caller_frame: SymbolicFrame,
+    dispatch: PendingDispatchContext,
+    *,
+    completed: bool = False,
+    abandoned: bool = False,
+) -> tuple[SuspendedContinuation, ...]:
+    return tuple(
+        replace(
+            continuation,
+            caller_suffix_completed=completed,
+            caller_suffix_abandoned=abandoned,
+        )
+        if _continuation_belongs_to_dispatch(continuation, caller_frame, dispatch)
+        else continuation
+        for continuation in suspended
+    )
+
+
+def _mark_dispatch_stack(
+    suspended: tuple[SuspendedContinuation, ...],
+    caller_frame: SymbolicFrame,
+    dispatches: tuple[PendingDispatchContext, ...],
+    *,
+    completed: bool = False,
+    abandoned: bool = False,
+) -> tuple[SuspendedContinuation, ...]:
+    retained = suspended
+    for dispatch in dispatches:
+        retained = _mark_dispatch_continuations(
+            retained,
+            caller_frame,
+            dispatch,
+            completed=completed,
+            abandoned=abandoned,
+        )
+    return retained
+
+
+def _continue_caller_without_dispatch(
+    index: OrderedStageProgramIndex,
+    state: SymbolicScheduleState,
+    caller_frame: SymbolicFrame,
+    *,
+    accumulator_state: SymbolicAccumulatorState,
+    effects: tuple[SymbolicEffectRecord, ...],
+    provenance: tuple[str, ...],
+) -> SymbolicScheduleDecision:
+    caller_program = index.program(caller_frame.cursor.node_id)
+    resume_offset = caller_frame.cursor.instruction_offset + 1
+    if resume_offset >= len(caller_program.instructions):
+        retained = _mark_dispatch_stack(
+            state.suspended,
+            caller_frame,
+            caller_frame.caller_dispatches,
+            completed=True,
+        )
+        completed = _rebuild_schedule_state(
+            index,
+            state,
+            accumulator_state=accumulator_state,
+            runnable=(),
+            suspended=retained,
+            effects=effects,
+            provenance=provenance,
+            ordering_decisions=(
+                state.ordering_decisions
+                if not caller_frame.caller_dispatches
+                else state.ordering_decisions + ("caller_suffix_completed_before_target_resume",)
+            ),
+        )
+        kind = (
+            SymbolicScheduleDecisionKind.SUSPENDED
+            if completed.suspended
+            else SymbolicScheduleDecisionKind.COMPLETE
+        )
+        return SymbolicScheduleDecision(kind, completed)
+    suffix = replace(
+        caller_frame,
+        cursor=replace(caller_frame.cursor, instruction_offset=resume_offset),
+        pending_dispatch=None,
+        origin=SymbolicFrameOrigin.CALLER_SUFFIX,
+    )
+    next_state = _rebuild_schedule_state(
+        index,
+        state,
+        accumulator_state=accumulator_state,
+        runnable=(suffix,),
+        effects=effects,
+        provenance=provenance,
+    )
+    return SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, next_state)
+
+
+def _finish_s3_target_group(
+    index: OrderedStageProgramIndex,
+    state: SymbolicScheduleState,
+    caller_frame: SymbolicFrame,
+    dispatch: PendingDispatchContext,
+    *,
+    accumulator_state: SymbolicAccumulatorState,
+    suspended: tuple[SuspendedContinuation, ...],
+    async_lifecycles: tuple[SymbolicAsyncMovementLifecycle, ...],
+    effects: tuple[SymbolicEffectRecord, ...],
+    caller_abandoned: bool,
+    provenance: tuple[str, ...],
+    ordering_decisions: tuple[str, ...],
+    unknown_reasons: tuple[str, ...],
+) -> SymbolicScheduleDecision:
+    completed_dispatch = replace(
+        dispatch,
+        target_cursor=len(dispatch.ordered_target_entity_indices) - 1,
+    )
+    dispatch_stack = caller_frame.caller_dispatches + (completed_dispatch,)
+    if caller_abandoned:
+        retained = _mark_dispatch_stack(
+            suspended,
+            caller_frame,
+            dispatch_stack,
+            abandoned=True,
+        )
+        next_state = _rebuild_schedule_state(
+            index,
+            state,
+            accumulator_state=accumulator_state,
+            runnable=(),
+            suspended=retained,
+            async_lifecycles=async_lifecycles,
+            effects=effects,
+            provenance=provenance + ("same_entity_caller_abandoned",),
+            ordering_decisions=ordering_decisions + ("remaining_targets_before_caller_abandonment",),
+            unknown_reasons=unknown_reasons,
+        )
+        kind = SymbolicScheduleDecisionKind.SUSPENDED if retained else SymbolicScheduleDecisionKind.COMPLETE
+        return SymbolicScheduleDecision(kind, next_state)
+
+    caller_program = index.program(caller_frame.cursor.node_id)
+    if completed_dispatch.caller_resume_cursor.instruction_offset >= len(caller_program.instructions):
+        retained = _mark_dispatch_stack(
+            suspended,
+            caller_frame,
+            dispatch_stack,
+            completed=True,
+        )
+        next_state = _rebuild_schedule_state(
+            index,
+            state,
+            accumulator_state=accumulator_state,
+            runnable=(),
+            suspended=retained,
+            async_lifecycles=async_lifecycles,
+            effects=effects,
+            provenance=provenance + ("caller_suffix_completed",),
+            ordering_decisions=ordering_decisions + ("caller_suffix_completed_before_target_resume",),
+            unknown_reasons=unknown_reasons,
+        )
+        kind = SymbolicScheduleDecisionKind.SUSPENDED if retained else SymbolicScheduleDecisionKind.COMPLETE
+        return SymbolicScheduleDecision(kind, next_state)
+
+    caller_suffix = replace(
+        caller_frame,
+        cursor=completed_dispatch.caller_resume_cursor,
+        pending_dispatch=None,
+        caller_dispatches=caller_frame.caller_dispatches + (completed_dispatch,),
+        origin=SymbolicFrameOrigin.CALLER_SUFFIX,
+    )
+    next_state = _rebuild_schedule_state(
+        index,
+        state,
+        accumulator_state=accumulator_state,
+        runnable=(caller_suffix,),
+        suspended=suspended,
+        async_lifecycles=async_lifecycles,
+        effects=effects,
+        provenance=provenance,
+        ordering_decisions=ordering_decisions + ("target_group_completed_before_caller_suffix",),
+        unknown_reasons=unknown_reasons,
+    )
+    return SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, next_state)
+
+
+def _run_s3_target_group(
+    index: OrderedStageProgramIndex,
+    state: SymbolicScheduleState,
+    caller_frame: SymbolicFrame,
+    dispatch: PendingDispatchContext,
+    *,
+    target_cursor: int,
+    accumulator_state: SymbolicAccumulatorState,
+    suspended: tuple[SuspendedContinuation, ...],
+    async_lifecycles: tuple[SymbolicAsyncMovementLifecycle, ...],
+    effects: tuple[SymbolicEffectRecord, ...],
+    caller_abandoned: bool,
+    provenance: tuple[str, ...],
+    ordering_decisions: tuple[str, ...],
+    unknown_reasons: tuple[str, ...],
+) -> list[SymbolicScheduleDecision]:
+    pending = replace(dispatch, target_cursor=target_cursor)
+    target_entity_index = pending.ordered_target_entity_indices[target_cursor]
+    target_program = index.program(pending.target_node_id)
+    invocation = SymbolicInvocationStep(pending.dispatch_cursor, pending.target_node_id, target_cursor)
+    same_entity = target_entity_index == caller_frame.cursor.entity_index
+    target_frame = SymbolicFrame(
+        SymbolicProgramCursor(pending.target_node_id, target_entity_index, 0),
+        invocation_path=caller_frame.invocation_path + (invocation,),
+        pending_dispatch=pending,
+        origin=(
+            SymbolicFrameOrigin.EVENT_REPLACEMENT
+            if same_entity
+            else SymbolicFrameOrigin.NESTED_DISPATCH
+        ),
+    )
+    target_paths = walk_symbolic_stage_program(
+        index,
+        target_program,
+        source_entity_index=target_entity_index,
+        initial_state=accumulator_state,
+        stop_at_temporal_boundary=True,
+    )
+    decisions: list[SymbolicScheduleDecision] = []
+    existing_target = next(
+        (item for item in suspended if item.frame.cursor.entity_index == target_entity_index),
+        None,
+    )
+    without_existing = tuple(
+        item for item in suspended if item.frame.cursor.entity_index != target_entity_index
+    )
+    last_target = target_cursor == len(pending.ordered_target_entity_indices) - 1
+
+    for path in target_paths:
+        if not _async_start_sequence_is_feasible(path, async_lifecycles):
+            continue
+        added_effects = _nested_path_effect_records(
+            index,
+            projections=path.effects,
+            effect_entity_indices=path.effect_entity_indices,
+        )
+        next_effects = effects + added_effects
+        next_lifecycles = _path_async_lifecycles(
+            index,
+            path=path,
+            effects=next_effects,
+            existing=async_lifecycles,
+        )
+        next_provenance = provenance + (f"dispatch_target_{target_cursor}_executed",)
+        next_ordering = ordering_decisions + (f"dispatch_target_{target_cursor}_in_entity_order",)
+        if path.completion in {
+            SymbolicPathCompletion.SYNCHRONOUS_COMPLETE,
+            SymbolicPathCompletion.ABORTED_BY_GUARD,
+        }:
+            next_suspended = suspended if existing_target is not None else without_existing
+            if last_target:
+                decisions.append(
+                    _finish_s3_target_group(
+                        index,
+                        state,
+                        caller_frame,
+                        pending,
+                        accumulator_state=path.state,
+                        suspended=next_suspended,
+                        async_lifecycles=next_lifecycles,
+                        effects=next_effects,
+                        caller_abandoned=caller_abandoned,
+                        provenance=next_provenance + ("synchronous_target_state_returned",),
+                        ordering_decisions=next_ordering,
+                        unknown_reasons=unknown_reasons,
+                    )
+                )
+            else:
+                decisions.extend(
+                    _run_s3_target_group(
+                        index,
+                        state,
+                        caller_frame,
+                        dispatch,
+                        target_cursor=target_cursor + 1,
+                        accumulator_state=path.state,
+                        suspended=next_suspended,
+                        async_lifecycles=next_lifecycles,
+                        effects=next_effects,
+                        caller_abandoned=caller_abandoned,
+                        provenance=next_provenance + ("synchronous_target_state_returned",),
+                        ordering_decisions=next_ordering,
+                        unknown_reasons=unknown_reasons,
+                    )
+                )
+            continue
+
+        if path.completion is SymbolicPathCompletion.TEMPORALLY_SUSPENDED:
+            direct_boundary = (
+                len(path.temporal_boundary_lines) == 1
+                and len(path.temporal_boundary_states) == 1
+                and path.temporal_boundary_entity_indices == (target_entity_index,)
+                and index.instruction_offset(target_program, path.temporal_boundary_lines[0]) is not None
+                and not path.caller_replacement_lines
+            )
+            if direct_boundary:
+                if not _temporal_boundary_matches_lifecycle_state(
+                    index,
+                    target_program,
+                    source_entity_index=target_entity_index,
+                    path=path,
+                    lifecycles=next_lifecycles,
+                ):
+                    continue
+                continuation, wake_reason = _suspended_boundary(
+                    index,
+                    state,
+                    target_frame=target_frame,
+                    caller_entity_index=caller_frame.cursor.entity_index,
+                    temporal_state=path.temporal_boundary_states[0],
+                    boundary_line=path.temporal_boundary_lines[0],
+                    effects=next_effects,
+                )
+                if same_entity:
+                    continuation = replace(continuation, caller_suffix_abandoned=True)
+                next_suspended = without_existing + (continuation,)
+                next_unknowns = (
+                    unknown_reasons
+                    if wake_reason is None
+                    else unknown_reasons + (wake_reason,)
+                )
+                if last_target:
+                    decisions.append(
+                        _finish_s3_target_group(
+                            index,
+                            state,
+                            caller_frame,
+                            pending,
+                            accumulator_state=path.state,
+                            suspended=next_suspended,
+                            async_lifecycles=next_lifecycles,
+                            effects=next_effects,
+                            caller_abandoned=caller_abandoned or same_entity,
+                            provenance=next_provenance + ("dispatch_target_suspended",),
+                            ordering_decisions=next_ordering,
+                            unknown_reasons=next_unknowns,
+                        )
+                    )
+                else:
+                    decisions.extend(
+                        _run_s3_target_group(
+                            index,
+                            state,
+                            caller_frame,
+                            dispatch,
+                            target_cursor=target_cursor + 1,
+                            accumulator_state=path.state,
+                            suspended=next_suspended,
+                            async_lifecycles=next_lifecycles,
+                            effects=next_effects,
+                            caller_abandoned=caller_abandoned or same_entity,
+                            provenance=next_provenance + ("dispatch_target_suspended",),
+                            ordering_decisions=next_ordering,
+                            unknown_reasons=next_unknowns,
+                        )
+                    )
+                continue
+
+        reason = path.blocker_reason or "s3_nested_temporal_replacement_not_modeled"
+        retained = without_existing
+        blocker_offset = (
+            index.instruction_offset(target_program, path.blocker_line)
+            if path.blocker_line is not None and path.blocker_entity_index == target_entity_index
+            else None
+        )
+        frontier_frame = replace(
+            target_frame,
+            cursor=replace(target_frame.cursor, instruction_offset=blocker_offset or 0),
+        )
+        blocked = _rebuild_schedule_state(
+            index,
+            state,
+            accumulator_state=path.state,
+            runnable=(frontier_frame,),
+            suspended=retained,
+            async_lifecycles=next_lifecycles,
+            effects=next_effects,
+            provenance=next_provenance,
+            ordering_decisions=next_ordering,
+            unknown_reasons=unknown_reasons + (reason,),
+        )
+        decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.BLOCKED, blocked, reason))
+    return decisions
+
+
+def _start_s3_dispatch(
     index: OrderedStageProgramIndex,
     state: SymbolicScheduleState,
     caller_frame: SymbolicFrame,
@@ -1074,108 +1730,136 @@ def _start_s2_cross_entity_dispatch(
     caller_cursor = caller_frame.cursor
     caller_program = index.program(caller_cursor.node_id)
     instruction = caller_program.instructions[caller_cursor.instruction_offset]
-    if not isinstance(instruction, TriggerInstruction):
-        return _blocked_transition(index, state, "s2_runnable_frame_is_not_a_trigger_dispatch")
-    if (
-        instruction.edge.resolution is not TriggerResolution.RESOLVED
-        or len(instruction.edge.candidate_node_ids) != 1
-    ):
-        return _blocked_transition(index, state, "s2_trigger_dispatch_is_not_statically_resolved")
+    expected_blocker = _dispatch_blocker_reason(instruction)
+    if expected_blocker is None:
+        return _blocked_transition(index, state, "s3_runnable_frame_is_not_a_dispatch")
 
-    target_node_id = instruction.edge.candidate_node_ids[0]
-    target_entities = _dispatch_target_group(index, caller_cursor, target_node_id)
-    if len(target_entities) != 1:
-        return _blocked_transition(index, state, "s2_shared_target_group_deferred_to_s3")
-    target_entity_index = target_entities[0]
-    if target_entity_index == caller_cursor.entity_index:
-        return _blocked_transition(index, state, "s2_same_entity_replacement_deferred_to_s3")
     caller_resume_offset = caller_cursor.instruction_offset + 1
-    if caller_resume_offset >= len(caller_program.instructions):
-        return _blocked_transition(index, state, "s2_dispatch_requires_an_executable_caller_suffix")
-
-    target_program = index.program(target_node_id)
-    pending = PendingDispatchContext(
-        caller_cursor,
-        SymbolicProgramCursor(
-            caller_cursor.node_id,
-            caller_cursor.entity_index,
-            caller_resume_offset,
-        ),
-        target_node_id,
-        target_entities,
-        0,
-    )
-    invocation = SymbolicInvocationStep(caller_cursor, target_node_id, 0)
-    target_frame = SymbolicFrame(
-        SymbolicProgramCursor(target_node_id, target_entity_index, 0),
-        invocation_path=caller_frame.invocation_path + (invocation,),
-        pending_dispatch=pending,
-        origin=SymbolicFrameOrigin.NESTED_DISPATCH,
-    )
-    caller_suffix = replace(
-        caller_frame,
-        cursor=pending.caller_resume_cursor,
-        pending_dispatch=None,
-        origin=SymbolicFrameOrigin.CALLER_SUFFIX,
-    )
-    paths = walk_symbolic_event_program(
-        target_program,
-        source_entity_index=target_entity_index,
+    segment = replace(caller_program, instructions=(instruction,))
+    entry_paths = walk_symbolic_event_program(
+        segment,
+        source_entity_index=caller_cursor.entity_index,
         initial_state=state.accumulator_state,
         stop_at_temporal_boundary=True,
     )
     decisions: list[SymbolicScheduleDecision] = []
-    for path in paths:
+    for path in entry_paths:
         added_effects = _path_effect_records(
-            target_program,
-            instruction_offset=0,
-            source_entity_index=target_entity_index,
+            caller_program,
+            instruction_offset=caller_cursor.instruction_offset,
+            source_entity_index=caller_cursor.entity_index,
             projections=path.effects,
             effect_entity_indices=path.effect_entity_indices,
         )
         effects = state.effects + added_effects
-        if path.completion is SymbolicPathCompletion.TEMPORALLY_SUSPENDED:
-            if not (
-                len(path.temporal_boundary_lines) == 1
-                and len(path.temporal_boundary_states) == 1
-                and path.temporal_boundary_entity_indices == (target_entity_index,)
-            ):
-                raise RuntimeError("S2 target segment produced an ambiguous temporal boundary")
-            continuation, wake_reason = _suspended_boundary(
-                index,
-                state,
-                target_frame=target_frame,
-                caller_entity_index=caller_cursor.entity_index,
-                temporal_state=path.temporal_boundary_states[0],
-                boundary_line=path.temporal_boundary_lines[0],
-                effects=effects,
-            )
-            next_state = _rebuild_schedule_state(
-                index,
-                state,
-                accumulator_state=path.state,
-                runnable=(caller_suffix,),
-                suspended=(continuation,),
-                effects=effects,
-                provenance=state.provenance + ("cross_entity_target_suspended",),
-                ordering_decisions=state.ordering_decisions + ("caller_suffix_before_target_resume",),
-                unknown_reasons=(
-                    state.unknown_reasons if wake_reason is None else state.unknown_reasons + (wake_reason,)
-                ),
-            )
-            decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, next_state))
-            continue
-
-        reason = (
-            path.blocker_reason
-            if path.completion is SymbolicPathCompletion.BLOCKED and path.blocker_reason
-            else "s2_synchronous_target_completion_deferred_to_s3"
+        is_dispatch = (
+            path.completion is SymbolicPathCompletion.BLOCKED
+            and path.blocker_reason == expected_blocker
+            and path.blocker_line
+            == caller_program.event.actions[caller_cursor.instruction_offset].line
         )
+        if is_dispatch:
+            if isinstance(instruction, KillInstruction):
+                decisions.append(
+                    _continue_caller_without_dispatch(
+                        index,
+                        state,
+                        caller_frame,
+                        accumulator_state=path.state,
+                        effects=effects,
+                        provenance=state.provenance
+                        + ("optional_death_dispatch_not_delivered",),
+                    )
+                )
+            target = _dispatch_target(index, caller_program, caller_cursor)
+            if target is SymbolicDispatchResolution.NO_OP:
+                decisions.append(
+                    _continue_caller_without_dispatch(
+                        index,
+                        state,
+                        caller_frame,
+                        accumulator_state=path.state,
+                        effects=effects,
+                        provenance=state.provenance + ("dispatch_resolved_no_op",),
+                    )
+                )
+                continue
+            if isinstance(target, SymbolicDispatchResolution):
+                reason = f"s3_nested_dispatch_{target.value}"
+                blocked = _rebuild_schedule_state(
+                    index,
+                    state,
+                    accumulator_state=path.state,
+                    effects=effects,
+                    unknown_reasons=state.unknown_reasons + (reason,),
+                )
+                decisions.append(
+                    SymbolicScheduleDecision(SymbolicScheduleDecisionKind.BLOCKED, blocked, reason)
+                )
+                continue
+            target_node_id, target_entities = target
+            if not target_entities:
+                reason = "s3_dispatch_has_no_concrete_targets"
+                blocked = _rebuild_schedule_state(
+                    index,
+                    state,
+                    accumulator_state=path.state,
+                    effects=effects,
+                    unknown_reasons=state.unknown_reasons + (reason,),
+                )
+                decisions.append(
+                    SymbolicScheduleDecision(SymbolicScheduleDecisionKind.BLOCKED, blocked, reason)
+                )
+                continue
+            pending = PendingDispatchContext(
+                caller_cursor,
+                SymbolicProgramCursor(
+                    caller_cursor.node_id,
+                    caller_cursor.entity_index,
+                    caller_resume_offset,
+                ),
+                target_node_id,
+                target_entities,
+                0,
+            )
+            decisions.extend(
+                _run_s3_target_group(
+                    index,
+                    state,
+                    caller_frame,
+                    pending,
+                    target_cursor=0,
+                    accumulator_state=path.state,
+                    suspended=state.suspended,
+                    async_lifecycles=state.async_lifecycles,
+                    effects=effects,
+                    caller_abandoned=False,
+                    provenance=state.provenance + ("dispatch_group_started",),
+                    ordering_decisions=state.ordering_decisions,
+                    unknown_reasons=state.unknown_reasons,
+                )
+            )
+            continue
+        if path.completion in {
+            SymbolicPathCompletion.SYNCHRONOUS_COMPLETE,
+            SymbolicPathCompletion.ABORTED_BY_GUARD,
+        }:
+            decisions.append(
+                _continue_caller_without_dispatch(
+                    index,
+                    state,
+                    caller_frame,
+                    accumulator_state=path.state,
+                    effects=effects,
+                    provenance=state.provenance + ("conditional_dispatch_not_taken",),
+                )
+            )
+            continue
+        reason = path.blocker_reason or "s3_dispatch_entry_not_modeled"
         blocked = _rebuild_schedule_state(
             index,
             state,
             accumulator_state=path.state,
-            runnable=(caller_suffix,),
             effects=effects,
             unknown_reasons=state.unknown_reasons + (reason,),
         )
@@ -1183,46 +1867,87 @@ def _start_s2_cross_entity_dispatch(
     return SymbolicScheduleResult(tuple(decisions), 1, 1)
 
 
-def _complete_s2_caller_suffix(
+def _complete_s3_caller_suffix(
     index: OrderedStageProgramIndex,
     state: SymbolicScheduleState,
     caller_frame: SymbolicFrame,
 ) -> SymbolicScheduleResult:
-    if len(state.suspended) != 1 or state.suspended[0].frame.pending_dispatch is None:
-        return _blocked_transition(index, state, "s2_caller_suffix_requires_one_pending_target")
-    continuation = state.suspended[0]
-    if continuation.caller_suffix_completed:
-        return _blocked_transition(index, state, "s2_caller_suffix_already_completed")
-    pending = continuation.frame.pending_dispatch
-    if caller_frame.cursor != pending.caller_resume_cursor:
-        return _blocked_transition(index, state, "s2_caller_suffix_cursor_mismatch")
+    dispatches = caller_frame.caller_dispatches
+    group_continuations = tuple(
+        continuation
+        for continuation in state.suspended
+        if any(
+            _continuation_belongs_to_dispatch(continuation, caller_frame, dispatch)
+            for dispatch in dispatches
+        )
+    )
+    if any(
+        continuation.caller_suffix_completed or continuation.caller_suffix_abandoned
+        for continuation in group_continuations
+    ):
+        return _blocked_transition(index, state, "s3_caller_suffix_already_disposed")
 
     caller_program = index.program(caller_frame.cursor.node_id)
+    next_dispatch_offset = next(
+        (
+            offset
+            for offset in range(caller_frame.cursor.instruction_offset, len(caller_program.instructions))
+            if _dispatch_blocker_reason(caller_program.instructions[offset]) is not None
+        ),
+        None,
+    )
+    segment_end = len(caller_program.instructions) if next_dispatch_offset is None else next_dispatch_offset
+    segment = replace(
+        caller_program,
+        instructions=caller_program.instructions[caller_frame.cursor.instruction_offset:segment_end],
+    )
     paths = walk_symbolic_event_program(
-        _program_suffix(caller_program, caller_frame.cursor.instruction_offset),
+        segment,
         source_entity_index=caller_frame.cursor.entity_index,
         initial_state=state.accumulator_state,
         stop_at_temporal_boundary=True,
     )
     decisions: list[SymbolicScheduleDecision] = []
     for path in paths:
+        if not _async_start_sequence_is_feasible(path, state.async_lifecycles):
+            continue
         if path.completion not in {
             SymbolicPathCompletion.SYNCHRONOUS_COMPLETE,
             SymbolicPathCompletion.ABORTED_BY_GUARD,
         }:
-            reason = path.blocker_reason or "s2_caller_suffix_is_not_synchronously_complete"
-            added_effects = _path_effect_records(
-                caller_program,
-                instruction_offset=caller_frame.cursor.instruction_offset,
-                source_entity_index=caller_frame.cursor.entity_index,
+            reason = path.blocker_reason or "s3_caller_suffix_temporal_interleaving_deferred_to_s4"
+            added_effects = _nested_path_effect_records(
+                index,
                 projections=path.effects,
                 effect_entity_indices=path.effect_entity_indices,
             )
+            next_effects = state.effects + added_effects
+            next_lifecycles = _path_async_lifecycles(
+                index,
+                path=path,
+                effects=next_effects,
+                existing=state.async_lifecycles,
+            )
+            frontier_offset = (
+                index.instruction_offset(caller_program, path.blocker_line)
+                if path.blocker_line is not None
+                and path.blocker_entity_index == caller_frame.cursor.entity_index
+                else None
+            )
+            if frontier_offset is None and path.temporal_boundary_lines:
+                frontier_offset = index.instruction_offset(
+                    caller_program,
+                    path.temporal_boundary_lines[-1],
+                )
             frontier_frame = replace(
                 caller_frame,
                 cursor=replace(
                     caller_frame.cursor,
-                    instruction_offset=_path_frontier_offset(index, caller_program, path),
+                    instruction_offset=(
+                        caller_frame.cursor.instruction_offset
+                        if frontier_offset is None
+                        else frontier_offset
+                    ),
                 ),
             )
             blocked = _rebuild_schedule_state(
@@ -1230,40 +1955,87 @@ def _complete_s2_caller_suffix(
                 state,
                 accumulator_state=path.state,
                 runnable=(frontier_frame,),
-                effects=state.effects + added_effects,
+                async_lifecycles=next_lifecycles,
+                effects=next_effects,
                 unknown_reasons=state.unknown_reasons + (reason,),
             )
             decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.BLOCKED, blocked, reason))
             continue
-        added_effects = _path_effect_records(
-            caller_program,
-            instruction_offset=caller_frame.cursor.instruction_offset,
-            source_entity_index=caller_frame.cursor.entity_index,
+        added_effects = _nested_path_effect_records(
+            index,
             projections=path.effects,
             effect_entity_indices=path.effect_entity_indices,
         )
-        completed = replace(continuation, caller_suffix_completed=True)
+        next_effects = state.effects + added_effects
+        next_lifecycles = _path_async_lifecycles(
+            index,
+            path=path,
+            effects=next_effects,
+            existing=state.async_lifecycles,
+        )
+        if (
+            path.completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+            and next_dispatch_offset is not None
+        ):
+            dispatch_frame = replace(
+                caller_frame,
+                cursor=replace(caller_frame.cursor, instruction_offset=next_dispatch_offset),
+            )
+            next_state = _rebuild_schedule_state(
+                index,
+                state,
+                accumulator_state=path.state,
+                runnable=(dispatch_frame,),
+                async_lifecycles=next_lifecycles,
+                effects=next_effects,
+                provenance=state.provenance + ("caller_suffix_reached_nested_dispatch",),
+            )
+            decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, next_state))
+            continue
+        completed_suspended = (
+            state.suspended
+            if not dispatches
+            else _mark_dispatch_stack(
+                state.suspended,
+                caller_frame,
+                dispatches,
+                completed=True,
+            )
+        )
         next_state = _rebuild_schedule_state(
             index,
             state,
             accumulator_state=path.state,
             runnable=(),
-            suspended=(completed,),
-            effects=state.effects + added_effects,
+            suspended=completed_suspended,
+            async_lifecycles=next_lifecycles,
+            effects=next_effects,
             provenance=state.provenance + ("caller_suffix_completed",),
             ordering_decisions=state.ordering_decisions + ("caller_suffix_completed_before_target_resume",),
         )
-        decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.SUSPENDED, next_state))
+        kind = (
+            SymbolicScheduleDecisionKind.SUSPENDED
+            if next_state.suspended
+            else SymbolicScheduleDecisionKind.COMPLETE
+        )
+        decisions.append(SymbolicScheduleDecision(kind, next_state))
     return SymbolicScheduleResult(tuple(decisions), 1, 1)
 
 
-def _resume_s2_continuation(
+def _resume_s3_continuation(
     index: OrderedStageProgramIndex,
     state: SymbolicScheduleState,
     continuation: SuspendedContinuation,
 ) -> SymbolicScheduleResult:
-    if continuation.frame.pending_dispatch is None or not continuation.caller_suffix_completed:
+    if continuation.frame.pending_dispatch is None or not (
+        continuation.caller_suffix_completed or continuation.caller_suffix_abandoned
+    ):
         return _blocked_transition(index, state, "s2_target_resume_before_caller_suffix")
+    ordering_reason = (
+        "target_reentered_after_caller_abandonment"
+        if continuation.caller_suffix_abandoned
+        else "target_reentered_after_caller_suffix"
+    )
     if continuation.wake_constraint is SymbolicWakeConstraint.TAG_PARENT_ORDER_UNKNOWN:
         return _blocked_transition(index, state, "wake_semantics_unverified")
     if isinstance(continuation.boundary_state, SymbolicWaitBoundaryState):
@@ -1277,7 +2049,7 @@ def _resume_s2_continuation(
                 state,
                 suspended=(delayed,),
                 provenance=state.provenance + ("boundary_action_reentered_same_frame",),
-                ordering_decisions=state.ordering_decisions + ("target_reentered_after_caller_suffix",),
+                ordering_decisions=state.ordering_decisions + (ordering_reason,),
             )
             return SymbolicScheduleResult(
                 (SymbolicScheduleDecision(SymbolicScheduleDecisionKind.SUSPENDED, next_state),),
@@ -1298,7 +2070,7 @@ def _resume_s2_continuation(
             runnable=(),
             suspended=(),
             provenance=state.provenance + ("target_boundary_reentered",),
-            ordering_decisions=state.ordering_decisions + ("target_reentered_after_caller_suffix",),
+            ordering_decisions=state.ordering_decisions + (ordering_reason,),
         )
         return SymbolicScheduleResult(
             (SymbolicScheduleDecision(SymbolicScheduleDecisionKind.COMPLETE, completed),),
@@ -1319,6 +2091,8 @@ def _resume_s2_continuation(
     )
     decisions: list[SymbolicScheduleDecision] = []
     for path in paths:
+        if not _async_start_sequence_is_feasible(path, state.async_lifecycles):
+            continue
         if path.completion not in {
             SymbolicPathCompletion.SYNCHRONOUS_COMPLETE,
             SymbolicPathCompletion.ABORTED_BY_GUARD,
@@ -1330,6 +2104,13 @@ def _resume_s2_continuation(
                 source_entity_index=suffix_frame.cursor.entity_index,
                 projections=path.effects,
                 effect_entity_indices=path.effect_entity_indices,
+            )
+            next_effects = state.effects + added_effects
+            next_lifecycles = _path_async_lifecycles(
+                index,
+                path=path,
+                effects=next_effects,
+                existing=state.async_lifecycles,
             )
             frontier_frame = replace(
                 suffix_frame,
@@ -1344,9 +2125,10 @@ def _resume_s2_continuation(
                 accumulator_state=path.state,
                 runnable=(frontier_frame,),
                 suspended=(),
-                effects=state.effects + added_effects,
+                async_lifecycles=next_lifecycles,
+                effects=next_effects,
                 provenance=state.provenance + ("target_boundary_reentered",),
-                ordering_decisions=state.ordering_decisions + ("target_reentered_after_caller_suffix",),
+                ordering_decisions=state.ordering_decisions + (ordering_reason,),
                 unknown_reasons=state.unknown_reasons + (reason,),
             )
             decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.BLOCKED, blocked, reason))
@@ -1358,15 +2140,23 @@ def _resume_s2_continuation(
             projections=path.effects,
             effect_entity_indices=path.effect_entity_indices,
         )
+        next_effects = state.effects + added_effects
+        next_lifecycles = _path_async_lifecycles(
+            index,
+            path=path,
+            effects=next_effects,
+            existing=state.async_lifecycles,
+        )
         completed = _rebuild_schedule_state(
             index,
             state,
             accumulator_state=path.state,
             runnable=(),
             suspended=(),
-            effects=state.effects + added_effects,
+            async_lifecycles=next_lifecycles,
+            effects=next_effects,
             provenance=state.provenance + ("target_boundary_reentered", "target_suffix_completed"),
-            ordering_decisions=state.ordering_decisions + ("target_reentered_after_caller_suffix",),
+            ordering_decisions=state.ordering_decisions + (ordering_reason,),
         )
         decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.COMPLETE, completed))
     return SymbolicScheduleResult(tuple(decisions), 1, 1)
@@ -1376,11 +2166,11 @@ def step_symbolic_schedule(
     index: OrderedStageProgramIndex,
     state: SymbolicScheduleState,
 ) -> SymbolicScheduleResult:
-    """Execute one source-ordered S2 scheduler transition.
+    """Execute one source-ordered S3 scheduler transition.
 
-    S2 intentionally supports one resolved, one-target cross-entity trigger. Shared
-    targets, same-entity replacement, nested synchronous state return and bounded
-    search remain explicit S3-S4 frontiers.
+    S3 adds exact synchronous nested-state return, concrete shared-target iteration
+    and same-entity replacement. Multi-task wake selection and bounded search remain
+    explicit S4 frontiers.
     """
 
     _state_for_index(index, state)
@@ -1388,17 +2178,18 @@ def step_symbolic_schedule(
         return _blocked_transition(index, state, "s2_multiple_runnable_frames_deferred_to_s4")
     if state.runnable:
         frame = state.runnable[0]
+        instruction = index.program(frame.cursor.node_id).instructions[frame.cursor.instruction_offset]
+        if _dispatch_blocker_reason(instruction) is not None:
+            return _start_s3_dispatch(index, state, frame)
         if frame.origin is SymbolicFrameOrigin.CALLER_SUFFIX:
-            return _complete_s2_caller_suffix(index, state, frame)
-        if frame.origin is SymbolicFrameOrigin.ROOT_EVENT and not state.suspended:
-            return _start_s2_cross_entity_dispatch(index, state, frame)
-        return _blocked_transition(index, state, "s2_runnable_transition_not_modeled")
+            return _complete_s3_caller_suffix(index, state, frame)
+        return _blocked_transition(index, state, "s3_runnable_transition_not_modeled")
     if len(state.suspended) == 1:
-        return _resume_s2_continuation(index, state, state.suspended[0])
+        return _resume_s3_continuation(index, state, state.suspended[0])
     if not state.suspended:
         return SymbolicScheduleResult(
             (SymbolicScheduleDecision(SymbolicScheduleDecisionKind.COMPLETE, state),),
             0,
             1,
         )
-    return _blocked_transition(index, state, "s2_multiple_suspended_frames_deferred_to_s4")
+    return _blocked_transition(index, state, "s3_multiple_suspended_frames_deferred_to_s4")

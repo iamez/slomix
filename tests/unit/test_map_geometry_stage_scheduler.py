@@ -8,12 +8,14 @@ import pytest
 from website.backend.map_geometry.entities import MapEntityCatalog
 from website.backend.map_geometry.pk3_index import MapAssetKind, MapAssetProvider
 from website.backend.map_geometry.stage import (
+    EntityStateEffect,
     ObjectiveCatalog,
     StaticStageModel,
     compile_static_stage_graph,
     parse_map_script,
 )
 from website.backend.map_geometry.stage_possibilities import (
+    StageEffectInstruction,
     SymbolicAccumulatorState,
     SymbolicIntegerDomain,
     SymbolicTemporalBoundaryState,
@@ -1133,14 +1135,37 @@ def _s2_program_index(
     return index, state, caller_entity_index, target_entity_index
 
 
+def _scheduler_program_index(script_source: str, raw_entities: tuple[dict[str, str], ...]):
+    script = parse_map_script(script_source.encode(), source="maps/test.script")
+    model = StaticStageModel(
+        "test",
+        ObjectiveCatalog((), (), ()),
+        script,
+        compile_static_stage_graph(script, source="maps/test.script"),
+        _asset_provider(MapAssetKind.SCRIPT),
+        _asset_provider(MapAssetKind.OBJDATA),
+    )
+    identities = build_entity_identity_index(raw_entities, source="maps/test.bsp")
+    catalog = MapEntityCatalog("test", "maps/test.bsp", (), (), (), ())
+    return build_ordered_stage_program_index(model, link_w3_entity_catalog(identities, catalog))
+
+
 def _decision(result, kind):
     return next(decision for decision in result.decisions if decision.kind is kind)
+
+
+def _decision_with_suspended(result, kind):
+    return next(
+        decision
+        for decision in result.decisions
+        if decision.kind is kind and decision.state is not None and decision.state.suspended
+    )
 
 
 def test_s2_cross_entity_boundary_runs_caller_suffix_before_target_resume():
     index, initial, caller_entity_index, target_entity_index = _s2_program_index()
 
-    dispatched = _decision(
+    dispatched = _decision_with_suspended(
         step_symbolic_schedule(index, initial),
         SymbolicScheduleDecisionKind.RUNNABLE,
     ).state
@@ -1179,7 +1204,7 @@ def test_s2_cross_entity_boundary_runs_caller_suffix_before_target_resume():
 
 def test_s2_rejects_target_resume_before_caller_suffix_completion():
     index, initial, _, _ = _s2_program_index()
-    dispatched = _decision(
+    dispatched = _decision_with_suspended(
         step_symbolic_schedule(index, initial),
         SymbolicScheduleDecisionKind.RUNNABLE,
     ).state
@@ -1212,7 +1237,7 @@ def test_s2_rejects_target_resume_before_caller_suffix_completion():
 )
 def test_s2_wait_wake_uses_proven_ordinary_entity_pass_order(caller_first, expected_wake):
     index, initial, _, _ = _s2_program_index(caller_first=caller_first, boundary_command="wait 100")
-    dispatched = _decision(
+    dispatched = _decision_with_suspended(
         step_symbolic_schedule(index, initial),
         SymbolicScheduleDecisionKind.RUNNABLE,
     ).state
@@ -1247,7 +1272,7 @@ def test_s2_unknown_tag_parent_order_retains_named_wake_frontier():
             SymbolicTagParentState(target_entity_index, SymbolicTagParentDisposition.UNKNOWN),
         ),
     )
-    dispatched = _decision(
+    dispatched = _decision_with_suspended(
         step_symbolic_schedule(index, unknown_entry),
         SymbolicScheduleDecisionKind.RUNNABLE,
     ).state
@@ -1342,3 +1367,771 @@ def test_s2_resumed_target_blocker_retains_executed_prefix_effects_and_cursor():
     )
     target_program = _program(index, "target", "long")
     assert blocked.state.runnable[0].cursor.instruction_offset == len(target_program.instructions) - 1
+
+
+def test_s3_synchronous_target_state_returns_with_local_isolation_and_shared_global_state():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger worker mutate
+                accum 0 abort_if_not_equal 3
+                globalaccum 0 abort_if_not_equal 7
+                setstate success invisible
+            }
+        }
+        worker
+        {
+            trigger mutate
+            {
+                accum 0 set 9
+                globalaccum 0 set 7
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "worker"},
+            {"classname": "func_door", "targetname": "success"},
+        ),
+    )
+    caller = _program(index, "caller")
+    initial_accumulators = SymbolicAccumulatorState.zeroed().write(
+        AccumulatorScope.ENTITY,
+        0,
+        SymbolicIntegerDomain.exact(3),
+        source_entity_index=0,
+    )
+    initial = _state(
+        index,
+        _frame(caller.node.node_id, 0, 0),
+        accumulator_state=initial_accumulators,
+    )
+
+    returned = _decision(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert returned is not None
+    assert returned.accumulator_state.read(
+        AccumulatorScope.ENTITY,
+        0,
+        source_entity_index=0,
+    ).exact_value == 3
+    assert returned.accumulator_state.read(
+        AccumulatorScope.ENTITY,
+        0,
+        source_entity_index=1,
+    ).exact_value == 9
+    assert returned.accumulator_state.read(
+        AccumulatorScope.GLOBAL,
+        0,
+        source_entity_index=0,
+    ).exact_value == 7
+
+    completed = _decision(
+        step_symbolic_schedule(index, returned),
+        SymbolicScheduleDecisionKind.COMPLETE,
+    ).state
+    assert completed is not None
+    assert tuple(record.projection.effect.target for record in completed.effects) == ("success",)
+
+
+def test_s3_same_entity_synchronous_replacement_restores_caller_with_exit_state():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger caller mutate
+                accum 0 abort_if_not_equal 7
+                setstate restored invisible
+            }
+            trigger mutate
+            {
+                accum 0 set 7
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "func_door", "targetname": "restored"},
+        ),
+    )
+    caller = _program(index, "caller")
+    initial = _state(index, _frame(caller.node.node_id, 0, 0))
+
+    restored = _decision(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert restored is not None
+    assert restored.suspended == ()
+    assert restored.accumulator_state.read(
+        AccumulatorScope.ENTITY,
+        0,
+        source_entity_index=0,
+    ).exact_value == 7
+
+    completed = _decision(
+        step_symbolic_schedule(index, restored),
+        SymbolicScheduleDecisionKind.COMPLETE,
+    ).state
+    assert completed is not None
+    assert tuple(record.projection.effect.target for record in completed.effects) == ("restored",)
+
+
+def test_s3_same_entity_temporal_replacement_abandons_caller_suffix():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger caller replace
+                setstate abandoned invisible
+            }
+            trigger replace
+            {
+                resetscript
+                setstate replacement invisible
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "func_door", "targetname": "abandoned"},
+            {"classname": "func_door", "targetname": "replacement"},
+        ),
+    )
+    caller = _program(index, "caller")
+    initial = _state(index, _frame(caller.node.node_id, 0, 0))
+
+    replaced = _decision(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.SUSPENDED,
+    ).state
+    assert replaced is not None
+    assert replaced.runnable == ()
+    assert len(replaced.suspended) == 1
+    assert replaced.suspended[0].caller_suffix_abandoned is True
+    assert replaced.effects == ()
+
+    completed = _decision(
+        step_symbolic_schedule(index, replaced),
+        SymbolicScheduleDecisionKind.COMPLETE,
+    ).state
+    assert completed is not None
+    assert tuple(record.projection.effect.target for record in completed.effects) == ("replacement",)
+    assert "target_reentered_after_caller_abandonment" in completed.ordering_decisions
+
+
+def test_s3_shared_target_group_retains_concrete_order_and_every_suspension():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger shared pause
+                setstate caller_done invisible
+            }
+        }
+        shared
+        {
+            trigger pause
+            {
+                globalaccum 0 inc 1
+                resetscript
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "shared"},
+            {"classname": "script_mover", "scriptname": "shared"},
+            {"classname": "func_door", "targetname": "caller_done"},
+        ),
+    )
+    caller = _program(index, "caller")
+    initial = _state(index, _frame(caller.node.node_id, 0, 0))
+
+    dispatched = next(
+        decision.state
+        for decision in step_symbolic_schedule(index, initial).decisions
+        if decision.kind is SymbolicScheduleDecisionKind.RUNNABLE
+        and decision.state is not None
+        and len(decision.state.suspended) == 2
+    )
+    assert dispatched.accumulator_state.read(
+        AccumulatorScope.GLOBAL,
+        0,
+        source_entity_index=0,
+    ).exact_value == 2
+    by_target = sorted(
+        (
+            continuation.frame.cursor.entity_index,
+            continuation.frame.pending_dispatch.target_cursor,
+            continuation.frame.pending_dispatch.ordered_target_entity_indices,
+        )
+        for continuation in dispatched.suspended
+        if continuation.frame.pending_dispatch is not None
+    )
+    assert by_target == [(1, 0, (1, 2)), (2, 1, (1, 2))]
+    assert dispatched.ordering_decisions[:2] == (
+        "dispatch_target_0_in_entity_order",
+        "dispatch_target_1_in_entity_order",
+    )
+
+    caller_completed = _decision(
+        step_symbolic_schedule(index, dispatched),
+        SymbolicScheduleDecisionKind.SUSPENDED,
+    ).state
+    assert caller_completed is not None
+    assert all(item.caller_suffix_completed for item in caller_completed.suspended)
+    assert tuple(record.projection.effect.target for record in caller_completed.effects) == ("caller_done",)
+
+
+@pytest.mark.parametrize(("replacement_body", "expected_event", "expected_global"), (
+    ("globalaccum 0 set 7", "long", 7),
+    ("globalaccum 0 set 9\nresetscript", "replacement", 9),
+))
+def test_s3_replacement_of_suspended_target_restores_or_replaces_exact_owner(
+    replacement_body,
+    expected_event,
+    expected_global,
+):
+    index = _scheduler_program_index(
+        f"""
+        caller
+        {{
+            spawn
+            {{
+                trigger target long
+                trigger target replacement
+                setstate caller_done invisible
+            }}
+        }}
+        target
+        {{
+            trigger long
+            {{
+                resetscript
+            }}
+            trigger replacement
+            {{
+                {replacement_body}
+            }}
+        }}
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "target"},
+            {"classname": "func_door", "targetname": "caller_done"},
+        ),
+    )
+    caller = _program(index, "caller")
+    initial = _state(index, _frame(caller.node.node_id, 0, 0))
+    long_suspended = _decision_with_suspended(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert long_suspended is not None
+
+    replaced = _decision_with_suspended(
+        step_symbolic_schedule(index, long_suspended),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert replaced is not None
+    assert len(replaced.suspended) == 1
+    retained_program = index.program(replaced.suspended[0].frame.cursor.node_id)
+    assert retained_program.node.serialized_event_parameters == expected_event
+    assert replaced.accumulator_state.read(
+        AccumulatorScope.GLOBAL,
+        0,
+        source_entity_index=0,
+    ).exact_value == expected_global
+
+
+def test_s3_optional_death_dispatch_keeps_event_and_no_event_branches():
+    index = _scheduler_program_index(
+        """
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                globalaccum 0 set 7
+            }
+        }
+        """,
+        (
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    caller = _program(index, "game_manager")
+    initial = _state(index, _frame(caller.node.node_id, 0, 0))
+
+    branches = tuple(
+        decision.state
+        for decision in step_symbolic_schedule(index, initial).decisions
+        if decision.kind is SymbolicScheduleDecisionKind.RUNNABLE and decision.state is not None
+    )
+    assert {
+        branch.accumulator_state.read(
+            AccumulatorScope.GLOBAL,
+            0,
+            source_entity_index=0,
+        ).exact_value
+        for branch in branches
+    } == {0, 7}
+
+
+def test_s3_optional_death_no_event_branch_cannot_bypass_fatal_sibling_target():
+    index = _scheduler_program_index(
+        """
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                globalaccum 0 set 7
+            }
+        }
+        """,
+        (
+            {"classname": "script_multiplayer"},
+            {
+                "classname": "script_mover",
+                "scriptname": "victim",
+                "targetname": "victim_target",
+            },
+            {
+                "classname": "func_constructible",
+                "scriptname": "victim",
+                "targetname": "victim_target",
+            },
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    caller = _program(index, "game_manager")
+    initial = _state(index, _frame(caller.node.node_id, 0, 0))
+
+    result = step_symbolic_schedule(index, initial)
+    assert tuple(decision.kind for decision in result.decisions) == (
+        SymbolicScheduleDecisionKind.BLOCKED,
+    )
+    assert result.decisions[0].reason == "kill_constructible_runtime_event_not_modeled"
+
+
+def test_s3_conditional_dispatch_keeps_refined_taken_and_not_taken_states():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                accum 0 trigger_if_equal 1 worker mutate
+                setstate gate invisible
+            }
+        }
+        worker
+        {
+            trigger mutate
+            {
+                globalaccum 0 set 7
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "worker"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    caller = _program(index, "caller")
+    initial = _state(
+        index,
+        _frame(caller.node.node_id, 0, 0),
+        accumulator_state=SymbolicAccumulatorState.unknown(),
+    )
+
+    branches = tuple(
+        decision.state
+        for decision in step_symbolic_schedule(index, initial).decisions
+        if decision.kind is SymbolicScheduleDecisionKind.RUNNABLE and decision.state is not None
+    )
+    assert len(branches) == 2
+    taken = next(
+        branch
+        for branch in branches
+        if branch.accumulator_state.read(
+            AccumulatorScope.GLOBAL,
+            0,
+            source_entity_index=0,
+        ).exact_value
+        == 7
+    )
+    not_taken = next(branch for branch in branches if branch is not taken)
+    assert taken.accumulator_state.read(
+        AccumulatorScope.ENTITY,
+        0,
+        source_entity_index=0,
+    ).exact_value == 1
+    assert not not_taken.accumulator_state.read(
+        AccumulatorScope.ENTITY,
+        0,
+        source_entity_index=0,
+    ).contains(1)
+
+
+def test_s3_source_proven_alert_dispatch_enters_waiting_handler():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                alertentity vehicle
+                setstate gate invisible
+            }
+        }
+        vehicle
+        {
+            rebirth
+            {
+                wait 100
+                accum 1 set 7
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {
+                "classname": "script_mover",
+                "scriptname": "vehicle",
+                "targetname": "vehicle",
+                "spawnflags": "8",
+                "health": "100",
+            },
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    caller = _program(index, "caller")
+    initial = _state(
+        index,
+        _frame(caller.node.node_id, 0, 0),
+        tag_parent_states=(
+            SymbolicTagParentState(1, SymbolicTagParentDisposition.PROVEN_UNATTACHED),
+        ),
+    )
+
+    dispatched = _decision_with_suspended(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert dispatched is not None
+    assert dispatched.suspended[0].frame.cursor.entity_index == 1
+    assert dispatched.suspended[0].frame.pending_dispatch is not None
+    assert dispatched.suspended[0].frame.pending_dispatch.ordered_target_entity_indices == (1,)
+    assert tuple(record.source_cursor.entity_index for record in dispatched.effects) == (0,)
+
+
+@pytest.mark.parametrize(
+    ("movement", "expected_command"),
+    (
+        ("gotomarker route 100", SymbolicMovementCommand.GOTO_MARKER),
+        ("followspline 0 route 100", SymbolicMovementCommand.FOLLOW_SPLINE),
+    ),
+)
+def test_s3_non_waiting_movement_advances_script_and_retains_async_lifecycle(
+    movement,
+    expected_command,
+):
+    index = _scheduler_program_index(
+        f"""
+        caller
+        {{
+            spawn
+            {{
+                trigger target move
+                setstate caller_done invisible
+            }}
+        }}
+        target
+        {{
+            trigger move
+            {{
+                {movement}
+                setstate target_done invisible
+            }}
+        }}
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "target"},
+            {"classname": "path_corner_2", "targetname": "route"},
+            {"classname": "func_door", "targetname": "caller_done"},
+            {"classname": "func_door", "targetname": "target_done"},
+        ),
+    )
+    caller = _program(index, "caller")
+    initial = _state(index, _frame(caller.node.node_id, 0, 0))
+
+    advanced = next(
+        decision.state
+        for decision in step_symbolic_schedule(index, initial).decisions
+        if decision.kind is SymbolicScheduleDecisionKind.RUNNABLE
+        and decision.state is not None
+        and not decision.state.suspended
+    )
+    assert len(advanced.async_lifecycles) == 1
+    lifecycle = advanced.async_lifecycles[0]
+    assert lifecycle.source_cursor.entity_index == 1
+    assert lifecycle.command is expected_command
+    assert tuple(
+        record.projection.effect.target
+        for record in advanced.effects
+        if isinstance(record.projection.effect, EntityStateEffect)
+    ) == ("target_done",)
+
+
+def test_s3_waiting_gotomarker_without_active_movement_keeps_only_started_branch():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger target move
+                setstate caller_done invisible
+            }
+        }
+        target
+        {
+            trigger move
+            {
+                gotomarker route 100 wait
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "target"},
+            {"classname": "path_corner_2", "targetname": "route"},
+            {"classname": "func_door", "targetname": "caller_done"},
+        ),
+    )
+    caller = _program(index, "caller")
+    initial = _state(index, _frame(caller.node.node_id, 0, 0))
+
+    branches = tuple(
+        decision.state
+        for decision in step_symbolic_schedule(index, initial).decisions
+        if decision.state is not None and decision.state.suspended
+    )
+    assert len(branches) == 1
+    continuation = branches[0].suspended[0]
+    assert isinstance(continuation.boundary_state, SymbolicMovementBoundaryState)
+    assert (
+        continuation.boundary_state.temporal_state
+        is SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING
+    )
+    assert continuation.boundary_state.effect_started is True
+    assert len(branches[0].effects) == 1
+
+
+def test_s3_active_movement_keeps_only_prior_motion_branch_without_new_route_effect():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger target replace
+                setstate caller_done invisible
+            }
+        }
+        target
+        {
+            trigger old
+            {
+                gotomarker old_route 100
+            }
+            trigger replace
+            {
+                gotomarker new_route 100 wait
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "target"},
+            {"classname": "path_corner_2", "targetname": "old_route"},
+            {"classname": "path_corner_2", "targetname": "new_route"},
+            {"classname": "func_door", "targetname": "caller_done"},
+        ),
+    )
+    caller = _program(index, "caller")
+    old = _program(index, "target", "old")
+    old_cursor = SymbolicProgramCursor(old.node.node_id, 1, 0)
+    old_instruction = old.instructions[0]
+    assert isinstance(old_instruction, StageEffectInstruction)
+    old_effect = SymbolicEffectRecord(old_instruction.projection, old_cursor)
+    lifecycle = SymbolicAsyncMovementLifecycle(
+        old_cursor,
+        SymbolicMovementCommand.GOTO_MARKER,
+        old.event.actions[0].arguments,
+        effect_record_index=0,
+    )
+    initial = _state(
+        index,
+        _frame(caller.node.node_id, 0, 0),
+        async_lifecycles=(lifecycle,),
+        effects=(old_effect,),
+    )
+
+    branches = tuple(
+        decision.state
+        for decision in step_symbolic_schedule(index, initial).decisions
+        if decision.state is not None and decision.state.suspended
+    )
+    assert len(branches) == 1
+    continuation = branches[0].suspended[0]
+    assert isinstance(continuation.boundary_state, SymbolicMovementBoundaryState)
+    assert (
+        continuation.boundary_state.temporal_state
+        is SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE
+    )
+    assert continuation.boundary_state.effect_started is False
+    assert branches[0].async_lifecycles == (lifecycle,)
+    assert branches[0].effects == (old_effect,)
+
+
+def test_s3_resumed_target_suffix_retains_new_async_movement_lifecycle():
+    index, initial, _, target_entity_index = _s2_program_index(
+        target_suffix="followspline 0 route 100",
+    )
+    dispatched = _decision_with_suspended(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert dispatched is not None
+    caller_completed = _decision(
+        step_symbolic_schedule(index, dispatched),
+        SymbolicScheduleDecisionKind.SUSPENDED,
+    ).state
+    assert caller_completed is not None
+
+    completed = _decision(
+        step_symbolic_schedule(index, caller_completed),
+        SymbolicScheduleDecisionKind.COMPLETE,
+    ).state
+    assert completed is not None
+    assert len(completed.async_lifecycles) == 1
+    assert completed.async_lifecycles[0].source_cursor.entity_index == target_entity_index
+    assert completed.async_lifecycles[0].command is SymbolicMovementCommand.FOLLOW_SPLINE
+
+
+def test_s3_nested_non_waiting_movement_retains_concrete_callee_lifecycle():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger target outer
+            }
+        }
+        target
+        {
+            trigger outer
+            {
+                trigger worker move
+            }
+        }
+        worker
+        {
+            trigger move
+            {
+                followspline 0 route 100
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "target"},
+            {"classname": "script_mover", "scriptname": "worker"},
+        ),
+    )
+    caller = _program(index, "caller")
+    initial = _state(index, _frame(caller.node.node_id, 0, 0))
+
+    completed = _decision(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.COMPLETE,
+    ).state
+    assert completed is not None
+    assert len(completed.async_lifecycles) == 1
+    assert completed.async_lifecycles[0].source_cursor.entity_index == 2
+    assert completed.async_lifecycles[0].command is SymbolicMovementCommand.FOLLOW_SPLINE
+
+
+def test_s3_faceangles_can_suspend_while_nonwaiting_translation_remains_active():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger target move
+            }
+        }
+        target
+        {
+            trigger move
+            {
+                followspline 0 route 100
+                faceangles 0 90 0 100
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "target"},
+        ),
+    )
+    caller = _program(index, "caller")
+    initial = _state(index, _frame(caller.node.node_id, 0, 0))
+
+    dispatched = _decision_with_suspended(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.SUSPENDED,
+    ).state
+    assert dispatched is not None
+    assert len(dispatched.async_lifecycles) == 1
+    assert dispatched.async_lifecycles[0].command is SymbolicMovementCommand.FOLLOW_SPLINE
+    assert len(dispatched.suspended) == 1
+    boundary = dispatched.suspended[0].boundary_state
+    assert isinstance(boundary, SymbolicMovementBoundaryState)
+    assert boundary.command is SymbolicMovementCommand.FACE_ANGLES
+    assert boundary.temporal_state is SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING
