@@ -16,6 +16,7 @@ from website.backend.map_geometry.stage import (
     parse_map_script,
 )
 from website.backend.map_geometry.stage_possibilities import (
+    AlertTargetDisposition,
     ControlBarrierInstruction,
     ControlBarrierKind,
     KillInstruction,
@@ -2638,6 +2639,423 @@ def test_nested_waiting_gotomarker_is_a_typed_cross_entity_frontier():
     }
     assert sorted(len(path.effects) for path in paths) == [0, 1]
     assert all(path.frontier_relevance is not None for path in paths)
+
+
+def test_alertentity_projects_and_runs_a_source_proven_death_handler():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death ignored_parameters
+            {
+                accum 1 set 9
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {
+                "classname": "func_explosive",
+                "scriptname": "victim",
+                "targetname": "victim_target",
+                "spawnflags": "4",
+            },
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert tuple(target.disposition for target in instruction.alert_targets) == (
+        AlertTargetDisposition.SCRIPT_EVENT_DISPATCH,
+    )
+    assert instruction.alert_targets[0].event_name == "death"
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    path = paths[0]
+    assert path.completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert path.state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 9
+    assert len(path.runtime_event_dispatches) == 1
+    assert path.runtime_event_dispatches[0].event_name == "death"
+    assert path.runtime_event_dispatches[0].target_entity_index == 1
+    assert len(path.effects) == 2
+
+
+def test_alertentity_missing_event_handler_is_a_proven_no_op_for_script_status():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity victim_target
+                setstate gate invisible
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {
+                "classname": "func_explosive",
+                "scriptname": "victim",
+                "targetname": "victim_target",
+                "spawnflags": "4",
+            },
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert instruction.alert_targets[0].disposition is AlertTargetDisposition.SCRIPT_EVENT_HANDLER_MISSING
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert paths[0].runtime_event_dispatches == ()
+    assert len(paths[0].effects) == 2
+
+
+def test_alertentity_waiting_rebirth_creates_a_real_cross_entity_frontier():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity vehicle
+                setstate gate invisible
+            }
+        }
+        vehicle
+        {
+            rebirth
+            {
+                wait 100
+                accum 1 set 7
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {
+                "classname": "script_mover",
+                "scriptname": "vehicle",
+                "targetname": "vehicle",
+                "spawnflags": "8",
+                "health": "100",
+            },
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert instruction.alert_targets[0].disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
+    assert instruction.alert_targets[0].event_name == "rebirth"
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 2
+    completed = next(path for path in paths if path.blocker_reason is None)
+    blocked = next(path for path in paths if path.blocker_reason is not None)
+    assert completed.state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 7
+    assert blocked.blocker_reason == "cross_entity_temporal_interleaving_not_modeled"
+    assert blocked.temporal_boundary_states == (SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,)
+    assert all(path.runtime_event_dispatches[0].event_name == "rebirth" for path in paths)
+    assert blocked.frontier_relevance is not None
+
+
+def test_alertentity_trigger_spawn_script_mover_cannot_rebirth_from_static_health():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity vehicle
+                setstate gate invisible
+            }
+        }
+        vehicle
+        {
+            rebirth
+            {
+                accum 1 set 7
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {
+                "classname": "script_mover",
+                "scriptname": "vehicle",
+                "targetname": "vehicle",
+                "spawnflags": "9",
+                "health": "100",
+            },
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert instruction.alert_targets[0].disposition is AlertTargetDisposition.PROVEN_NO_SCRIPT_EVENT
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].runtime_event_dispatches == ()
+    assert paths[0].state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 0
+    assert len(paths[0].effects) == 2
+
+
+@pytest.mark.parametrize(
+    ("raw_target", "expected_reason"),
+    (
+        (
+            {"classname": "unknown_use", "targetname": "alert_target"},
+            "alertentity_use_callback_not_modeled",
+        ),
+        (
+            {"classname": "func_explosive", "targetname": "alert_target", "spawnflags": "1"},
+            "alertentity_use_lifecycle_not_modeled",
+        ),
+        (
+            {"classname": "func_explosive", "targetname": "alert_target", "spawnflags": "invalid"},
+            "alertentity_static_property_invalid",
+        ),
+        (
+            {
+                "classname": "script_mover",
+                "targetname": "alert_target",
+                "spawnflags": "8",
+                "health": "invalid",
+            },
+            "alertentity_static_property_invalid",
+        ),
+    ),
+)
+def test_alertentity_fails_closed_for_unmodeled_target_callbacks(raw_target, expected_reason):
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity alert_target
+                setstate gate invisible
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            raw_target,
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == expected_reason
+    assert len(paths[0].effects) == 1
+    assert paths[0].frontier_relevance is not None
+
+
+def test_alertentity_fails_closed_for_func_explosive_parent_death_dispatch():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                accum 1 set 9
+            }
+        }
+        objective_parent
+        {
+            death
+            {
+                wait 100
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {
+                "classname": "func_explosive",
+                "scriptname": "victim",
+                "targetname": "victim_target",
+                "spawnflags": "4",
+            },
+            {
+                "classname": "trigger_objective_info",
+                "scriptname": "objective_parent",
+                "target": "victim_target",
+                "spawnflags": "1",
+            },
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert (
+        instruction.alert_targets[0].disposition
+        is AlertTargetDisposition.USE_PARENT_SCRIPT_EVENT_NOT_MODELED
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "alertentity_use_parent_script_event_not_modeled"
+    assert paths[0].state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 0
+    assert len(paths[0].effects) == 1
+
+
+def test_alertentity_preserves_target_order_and_fails_closed_for_multiple_event_dispatches():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity shared_target
+            }
+        }
+        victim_a
+        {
+            death
+            {
+                accum 1 set 1
+            }
+        }
+        victim_b
+        {
+            death
+            {
+                accum 1 set 2
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {
+                "classname": "func_explosive",
+                "scriptname": "victim_a",
+                "targetname": "shared_target",
+                "spawnflags": "4",
+            },
+            {
+                "classname": "func_explosive",
+                "scriptname": "victim_b",
+                "targetname": "shared_target",
+                "spawnflags": "4",
+            },
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert tuple(target.entity_index for target in instruction.alert_targets) == (1, 2)
+    assert all(
+        target.disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
+        for target in instruction.alert_targets
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "alertentity_multi_event_dispatch_not_modeled"
+    assert paths[0].runtime_event_dispatches == ()
+    assert len(paths[0].effects) == 1
+
+
+def test_alertentity_fails_closed_when_a_use_chain_can_deliver_a_script_event():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity relay
+                setstate gate invisible
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "target_relay", "targetname": "relay", "target": "script_target"},
+            {"classname": "target_script_trigger", "targetname": "script_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "alertentity_use_chain_script_event_not_modeled"
+    assert len(paths[0].effects) == 1
 
 
 @pytest.mark.parametrize("command", ("resetscript", "halt"))

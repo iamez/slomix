@@ -83,6 +83,19 @@ class KillTargetDisposition(StrEnum):
     SCRIPT_IDENTITY_RUNTIME_MUTABLE = "script_identity_runtime_mutable"
 
 
+class AlertTargetDisposition(StrEnum):
+    PROVEN_NO_SCRIPT_EVENT = "proven_no_script_event"
+    SCRIPT_EVENT_HANDLER_MISSING = "script_event_handler_missing"
+    SCRIPT_EVENT_DISPATCH = "script_event_dispatch"
+    SCRIPT_IDENTITY_OPAQUE = "script_identity_opaque"
+    SCRIPT_IDENTITY_RUNTIME_MUTABLE = "script_identity_runtime_mutable"
+    STATIC_PROPERTY_INVALID = "static_property_invalid"
+    USE_CALLBACK_NOT_MODELED = "use_callback_not_modeled"
+    USE_CHAIN_SCRIPT_EVENT_NOT_MODELED = "use_chain_script_event_not_modeled"
+    USE_LIFECYCLE_NOT_MODELED = "use_lifecycle_not_modeled"
+    USE_PARENT_SCRIPT_EVENT_NOT_MODELED = "use_parent_script_event_not_modeled"
+
+
 class StageSemanticDomain(StrEnum):
     OBJECTIVE = "objective"
     SPAWN = "spawn"
@@ -212,6 +225,7 @@ class StageEffectInstruction:
         RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
     )
     waits_for_completion: bool = False
+    alert_targets: tuple[AlertTargetProjection, ...] = ()
 
     def __post_init__(self) -> None:
         effect = self.projection.effect
@@ -225,6 +239,17 @@ class StageEffectInstruction:
             raise ValueError("stage-effect control disposition does not match its source action")
         if self.waits_for_completion != (is_gotomarker and _gotomarker_has_wait(effect)):
             raise ValueError("stage-effect wait contract does not match its source arguments")
+        is_alert = isinstance(effect, AlertEntityEffect)
+        if self.alert_targets and not is_alert:
+            raise ValueError("only alertentity effects may carry alert target contracts")
+        if is_alert:
+            if not isinstance(self.projection, EntityTargetEffectProjection):
+                if self.alert_targets:
+                    raise ValueError("unresolved alertentity effects cannot carry alert target contracts")
+            elif tuple(target.entity_index for target in self.alert_targets) != (
+                self.projection.target_lookup.selected_entity_indices
+            ):
+                raise ValueError("alert target contracts do not match the projected target order")
 
 
 @dataclass(frozen=True, slots=True)
@@ -254,6 +279,21 @@ class RuntimeActionInstruction:
 
 
 @dataclass(frozen=True, slots=True)
+class AlertTargetProjection:
+    entity_index: int
+    classname: str
+    script_name: str | None
+    event_name: str | None
+    disposition: AlertTargetDisposition
+    event_handler_node_id: str | None = None
+
+    def __post_init__(self) -> None:
+        has_dispatch = self.disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
+        if has_dispatch != bool(self.event_name and self.event_handler_node_id):
+            raise ValueError("alert target dispatch metadata does not match its disposition")
+
+
+@dataclass(frozen=True, slots=True)
 class KillTargetProjection:
     entity_index: int
     classname: str
@@ -277,6 +317,17 @@ class SymbolicDeathDispatch:
     target_entity_index: int
     target_node_id: str
     line: int
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicRuntimeEventDispatch:
+    source_node_id: str
+    source_entity_index: int
+    target_entity_index: int
+    event_name: str
+    target_node_id: str
+    line: int
+    origin: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -803,6 +854,7 @@ class SymbolicEventPath:
     temporal_boundary_states: tuple[SymbolicTemporalBoundaryState, ...] = ()
     nested_dispatches: tuple[SymbolicDispatchProjection, ...] = ()
     death_dispatches: tuple[SymbolicDeathDispatch, ...] = ()
+    runtime_event_dispatches: tuple[SymbolicRuntimeEventDispatch, ...] = ()
     caller_replacement_lines: tuple[int, ...] = ()
     caller_replacement_entity_indices: tuple[int, ...] = ()
     frontier_continuations: tuple[SymbolicFrontierContinuation, ...] = ()
@@ -959,6 +1011,36 @@ def _kill_instruction_blocker_reason(instruction: KillInstruction) -> str | None
     return None
 
 
+def _alert_instruction_blocker_reason(instruction: StageEffectInstruction) -> str | None:
+    if not isinstance(instruction.projection.effect, AlertEntityEffect):
+        return None
+    if not isinstance(instruction.projection, EntityTargetEffectProjection):
+        return "alertentity_projection_unresolved"
+    if not instruction.projection.target_lookup.selected_entity_indices:
+        return "alertentity_target_missing"
+    blocking = next(
+        (
+            target.disposition
+            for target in instruction.alert_targets
+            if target.disposition
+            not in {
+                AlertTargetDisposition.PROVEN_NO_SCRIPT_EVENT,
+                AlertTargetDisposition.SCRIPT_EVENT_HANDLER_MISSING,
+                AlertTargetDisposition.SCRIPT_EVENT_DISPATCH,
+            }
+        ),
+        None,
+    )
+    if blocking is not None:
+        return f"alertentity_{blocking.value}"
+    if any(
+        target.disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
+        for target in instruction.alert_targets
+    ):
+        return "alertentity_dispatch_not_modeled"
+    return None
+
+
 def walk_symbolic_event_program(
     program: OrderedEventProgram,
     *,
@@ -1069,13 +1151,22 @@ def walk_symbolic_event_program(
                         continuing.append(branch)
                 continue
             if isinstance(instruction, StageEffectInstruction):
+                effected = _with_stage_effect(path, instruction, source_entity_index=source_entity_index)
+                if alert_blocker := _alert_instruction_blocker_reason(instruction):
+                    finished.append(
+                        _blocked_symbolic_path(
+                            effected,
+                            reason=alert_blocker,
+                            line=instruction.projection.effect.line,
+                            entity_index=source_entity_index,
+                        )
+                    )
+                    continue
                 if (
                     instruction.control_disposition
                     is RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
                 ):
-                    continuing.append(
-                        _with_stage_effect(path, instruction, source_entity_index=source_entity_index)
-                    )
+                    continuing.append(effected)
                     continue
                 if not isinstance(instruction.projection.effect, GotoMarkerEffect):
                     raise RuntimeError("only gotomarker stage effects may carry temporal control")
@@ -1087,7 +1178,7 @@ def walk_symbolic_event_program(
                     entity_index=source_entity_index,
                     state=SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,
                 )
-                started = _with_stage_effect(path, instruction, source_entity_index=source_entity_index)
+                started = effected
                 if instruction.waits_for_completion:
                     started_wait = _with_temporal_boundary(
                         started,
@@ -1296,6 +1387,7 @@ def _merge_symbolic_segment(
         temporal_boundary_states=prefix.temporal_boundary_states + segment.temporal_boundary_states,
         nested_dispatches=prefix.nested_dispatches + segment.nested_dispatches,
         death_dispatches=prefix.death_dispatches + segment.death_dispatches,
+        runtime_event_dispatches=prefix.runtime_event_dispatches + segment.runtime_event_dispatches,
         caller_replacement_lines=prefix.caller_replacement_lines + segment.caller_replacement_lines,
         caller_replacement_entity_indices=(
             prefix.caller_replacement_entity_indices + segment.caller_replacement_entity_indices
@@ -1456,6 +1548,10 @@ def _walk_symbolic_stage_from(
                 program.instructions[position],
                 (TriggerInstruction, AccumulatorConditionalTrigger, KillInstruction),
             )
+            or (
+                isinstance(program.instructions[position], StageEffectInstruction)
+                and _alert_instruction_blocker_reason(program.instructions[position]) is not None
+            )
         ),
         None,
     )
@@ -1481,13 +1577,18 @@ def _walk_symbolic_stage_from(
         return _bounded_stage_paths(merged, max_paths=max_paths, line=line, entity_index=current_entity_index)
 
     instruction = program.instructions[nested_index]
-    if not isinstance(instruction, (TriggerInstruction, AccumulatorConditionalTrigger, KillInstruction)):
+    if not isinstance(
+        instruction,
+        (TriggerInstruction, AccumulatorConditionalTrigger, KillInstruction, StageEffectInstruction),
+    ):
         raise RuntimeError(f"nested instruction index {nested_index} does not identify a nested dispatch")
     dispatch_line = _instruction_line(instruction)
     if isinstance(instruction, AccumulatorConditionalTrigger):
         expected_blocker = "conditional_trigger_dispatch_not_modeled"
     elif isinstance(instruction, TriggerInstruction):
         expected_blocker = "trigger_dispatch_not_modeled"
+    elif isinstance(instruction, StageEffectInstruction):
+        expected_blocker = _alert_instruction_blocker_reason(instruction)
     else:
         expected_blocker = _kill_instruction_blocker_reason(instruction)
     outcomes: list[SymbolicEventPath] = []
@@ -1521,6 +1622,72 @@ def _walk_symbolic_stage_from(
                     break
             else:
                 outcomes.append(path)
+            continue
+
+        if isinstance(instruction, StageEffectInstruction):
+            if expected_blocker != "alertentity_dispatch_not_modeled":
+                outcomes.append(path)
+                continue
+            dispatch_targets = tuple(
+                target
+                for target in instruction.alert_targets
+                if target.disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
+            )
+            if len(dispatch_targets) != 1 or dispatch_targets[0].event_handler_node_id is None:
+                outcomes.append(
+                    _blocked_symbolic_path(
+                        path,
+                        reason="alertentity_multi_event_dispatch_not_modeled",
+                        line=dispatch_line,
+                        entity_index=current_entity_index,
+                    )
+                )
+                continue
+            target = dispatch_targets[0]
+            target_program = index.program(target.event_handler_node_id)
+            if target.entity_index not in target_program.source.lookup.selected_entity_indices:
+                outcomes.append(
+                    _blocked_symbolic_path(
+                        path,
+                        reason="alertentity_dispatch_projection_invalid",
+                        line=dispatch_line,
+                        entity_index=current_entity_index,
+                    )
+                )
+                continue
+            runtime_dispatch = SymbolicRuntimeEventDispatch(
+                program.node.node_id,
+                current_entity_index,
+                target.entity_index,
+                target.event_name or "",
+                target.event_handler_node_id,
+                dispatch_line,
+                "alertentity_use_callback",
+            )
+            dispatched_path = replace(
+                path,
+                runtime_event_dispatches=path.runtime_event_dispatches + (runtime_dispatch,),
+            )
+            outcomes.extend(
+                _walk_symbolic_target_group(
+                    index,
+                    caller_program=program,
+                    caller_entity_index=current_entity_index,
+                    caller_instruction_offset=nested_index + 1,
+                    target_program=target_program,
+                    target_entity_indices=(target.entity_index,),
+                    target_offset=0,
+                    dispatch_line=dispatch_line,
+                    prefix=_resume_symbolic_path(dispatched_path),
+                    active_frames=active_frames,
+                    max_paths=max_paths,
+                    max_depth=max_depth,
+                    stop_at_temporal_boundary=stop_at_temporal_boundary,
+                    budget=budget,
+                )
+            )
+            if budget.exhausted:
+                break
             continue
 
         if isinstance(instruction, KillInstruction):
@@ -2124,6 +2291,25 @@ def _collect_continuation_relevance(
             )
             domains.update(effect_domains)
             unknown_reasons.update(effect_unknown_reasons)
+            for target in instruction.alert_targets:
+                if (
+                    target.disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
+                    and target.event_handler_node_id is not None
+                ):
+                    collect(
+                        SymbolicFrontierContinuation(
+                            target.event_handler_node_id,
+                            target.entity_index,
+                            0,
+                            "reachable_alertentity_runtime_event",
+                        ),
+                        current_state,
+                    )
+                elif target.disposition not in {
+                    AlertTargetDisposition.PROVEN_NO_SCRIPT_EVENT,
+                    AlertTargetDisposition.SCRIPT_EVENT_HANDLER_MISSING,
+                }:
+                    unknown_reasons.add(f"alertentity_{target.disposition.value}")
             offset += 1
             continue
         if isinstance(instruction, TriggerInstruction):
@@ -2677,6 +2863,274 @@ def _project_kill_action(
     return KillInstruction(action, lookup, tuple(targets))
 
 
+_ALERT_PROVEN_NO_EVENT_USE_CLASSES = frozenset(
+    {
+        "dlight",
+        "func_static",
+        "target_smoke",
+        "target_speaker",
+        "team_ctf_blueflag",
+        "team_ctf_bluespawn",
+        "team_ctf_redflag",
+        "team_ctf_redspawn",
+        "team_wolf_objective",
+    }
+)
+_ALERT_CHAIN_USE_CLASSES = frozenset({"target_effect", "target_explosion", "target_relay"})
+
+
+def _identity_property(identity, name: str) -> str | None:
+    folded = _ascii_fold(name)
+    return next((value for key, value in identity.properties if _ascii_fold(key) == folded), None)
+
+
+def _identity_int_property(identity, name: str, default: int = 0) -> int | None:
+    value = _identity_property(identity, name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
+def _func_explosive_has_possible_script_parent(
+    linked: W3LinkedIdentityIndex,
+    entity_index: int,
+) -> bool:
+    identity = linked.identities.entities[entity_index]
+    if not identity.target_name:
+        return False
+    first_target = linked.identities.lookup_first(
+        EntityIdentityNamespace.TARGET_NAME,
+        identity.target_name,
+    )
+    if first_target.selected_entity_indices != (entity_index,):
+        return False
+    for candidate in linked.identities.entities:
+        if (
+            _ascii_fold(candidate.classname) != "trigger_objective_info"
+            or not candidate.target
+            or _ascii_fold(candidate.target) != _ascii_fold(identity.target_name)
+        ):
+            continue
+        spawnflags = _identity_int_property(candidate, "spawnflags")
+        if spawnflags is None or spawnflags & 3:
+            return True
+    return False
+
+
+def _alert_use_chain_blocker(
+    linked: W3LinkedIdentityIndex,
+    target_name: str | None,
+    *,
+    active: frozenset[int] = frozenset(),
+) -> str | None:
+    if not target_name:
+        return None
+    lookup = linked.identities.lookup_all(EntityIdentityNamespace.TARGET_NAME, target_name)
+    for entity_index in lookup.selected_entity_indices:
+        if entity_index in active:
+            return "alertentity_use_chain_cycle_not_modeled"
+        identity = linked.identities.entities[entity_index]
+        classname = _ascii_fold(identity.classname)
+        if classname in _ALERT_PROVEN_NO_EVENT_USE_CLASSES:
+            continue
+        if classname in _ALERT_CHAIN_USE_CLASSES:
+            blocker = _alert_use_chain_blocker(
+                linked,
+                identity.target,
+                active=active | {entity_index},
+            )
+            if blocker is not None:
+                return blocker
+            continue
+        if classname in {"func_explosive", "script_mover", "target_script_trigger"}:
+            return "alertentity_use_chain_script_event_not_modeled"
+        return "alertentity_use_callback_not_modeled"
+    return None
+
+
+def _alert_event_target(
+    *,
+    model: StaticStageModel,
+    linked: W3LinkedIdentityIndex,
+    entity_index: int,
+    event_name: str,
+) -> AlertTargetProjection:
+    identity = linked.identities.entities[entity_index]
+    script_name = identity.script_name
+    if script_name and _script_identity_may_change(model, script_name):
+        return AlertTargetProjection(
+            entity_index,
+            identity.classname,
+            script_name,
+            None,
+            AlertTargetDisposition.SCRIPT_IDENTITY_RUNTIME_MUTABLE,
+        )
+    if script_name and _has_only_opaque_script_identity(model, script_name):
+        return AlertTargetProjection(
+            entity_index,
+            identity.classname,
+            script_name,
+            None,
+            AlertTargetDisposition.SCRIPT_IDENTITY_OPAQUE,
+        )
+    handler = next(
+        (
+            node
+            for node in _script_program_nodes(model, script_name or "")
+            if node.event_name == event_name
+        ),
+        None,
+    )
+    if handler is None:
+        return AlertTargetProjection(
+            entity_index,
+            identity.classname,
+            script_name,
+            event_name,
+            AlertTargetDisposition.SCRIPT_EVENT_HANDLER_MISSING,
+        )
+    return AlertTargetProjection(
+        entity_index,
+        identity.classname,
+        script_name,
+        event_name,
+        AlertTargetDisposition.SCRIPT_EVENT_DISPATCH,
+        handler.node_id,
+    )
+
+
+def _project_alert_targets(
+    projection: StageEffectProjection,
+    *,
+    model: StaticStageModel,
+    linked: W3LinkedIdentityIndex,
+) -> tuple[AlertTargetProjection, ...]:
+    if not isinstance(projection, EntityTargetEffectProjection) or not isinstance(
+        projection.effect,
+        AlertEntityEffect,
+    ):
+        return ()
+    targets: list[AlertTargetProjection] = []
+    for entity_index in projection.target_lookup.selected_entity_indices:
+        identity = linked.identities.entities[entity_index]
+        classname = _ascii_fold(identity.classname)
+        chain_blocker = (
+            _alert_use_chain_blocker(linked, identity.target, active=frozenset({entity_index}))
+            if classname in _ALERT_CHAIN_USE_CLASSES or classname == "func_explosive"
+            else None
+        )
+        if chain_blocker is not None:
+            targets.append(
+                AlertTargetProjection(
+                    entity_index,
+                    identity.classname,
+                    identity.script_name,
+                    None,
+                    AlertTargetDisposition.USE_CHAIN_SCRIPT_EVENT_NOT_MODELED,
+                )
+            )
+            continue
+        if classname == "func_explosive":
+            spawnflags = _identity_int_property(identity, "spawnflags")
+            if spawnflags is None:
+                targets.append(
+                    AlertTargetProjection(
+                        entity_index,
+                        identity.classname,
+                        identity.script_name,
+                        None,
+                        AlertTargetDisposition.STATIC_PROPERTY_INVALID,
+                    )
+                )
+            elif spawnflags & 1:
+                targets.append(
+                    AlertTargetProjection(
+                        entity_index,
+                        identity.classname,
+                        identity.script_name,
+                        None,
+                        AlertTargetDisposition.USE_LIFECYCLE_NOT_MODELED,
+                    )
+                )
+            elif _func_explosive_has_possible_script_parent(linked, entity_index):
+                targets.append(
+                    AlertTargetProjection(
+                        entity_index,
+                        identity.classname,
+                        identity.script_name,
+                        None,
+                        AlertTargetDisposition.USE_PARENT_SCRIPT_EVENT_NOT_MODELED,
+                    )
+                )
+            else:
+                targets.append(
+                    _alert_event_target(
+                        model=model,
+                        linked=linked,
+                        entity_index=entity_index,
+                        event_name="death",
+                    )
+                )
+            continue
+        if classname == "script_mover":
+            spawnflags = _identity_int_property(identity, "spawnflags")
+            health = _identity_int_property(identity, "health")
+            if spawnflags is None or health is None:
+                targets.append(
+                    AlertTargetProjection(
+                        entity_index,
+                        identity.classname,
+                        identity.script_name,
+                        None,
+                        AlertTargetDisposition.STATIC_PROPERTY_INVALID,
+                    )
+                )
+            elif spawnflags & 8 and not spawnflags & 1 and health != 0:
+                targets.append(
+                    _alert_event_target(
+                        model=model,
+                        linked=linked,
+                        entity_index=entity_index,
+                        event_name="rebirth",
+                    )
+                )
+            else:
+                targets.append(
+                    AlertTargetProjection(
+                        entity_index,
+                        identity.classname,
+                        identity.script_name,
+                        None,
+                        AlertTargetDisposition.PROVEN_NO_SCRIPT_EVENT,
+                    )
+                )
+            continue
+        if classname in _ALERT_PROVEN_NO_EVENT_USE_CLASSES or classname in _ALERT_CHAIN_USE_CLASSES:
+            targets.append(
+                AlertTargetProjection(
+                    entity_index,
+                    identity.classname,
+                    identity.script_name,
+                    None,
+                    AlertTargetDisposition.PROVEN_NO_SCRIPT_EVENT,
+                )
+            )
+            continue
+        targets.append(
+            AlertTargetProjection(
+                entity_index,
+                identity.classname,
+                identity.script_name,
+                None,
+                AlertTargetDisposition.USE_CALLBACK_NOT_MODELED,
+            )
+        )
+    return tuple(targets)
+
+
 def project_ordered_stage_programs(
     model: StaticStageModel,
     linked: W3LinkedIdentityIndex,
@@ -2720,6 +3174,7 @@ def project_ordered_stage_programs(
                     objectives=model.objectives,
                 )
                 is_gotomarker = isinstance(effect, GotoMarkerEffect)
+                alert_targets = _project_alert_targets(projection, model=model, linked=linked)
                 instructions.append(
                     StageEffectInstruction(
                         projection,
@@ -2729,6 +3184,7 @@ def project_ordered_stage_programs(
                             else RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
                         ),
                         is_gotomarker and _gotomarker_has_wait(effect),
+                        alert_targets,
                     )
                 )
                 continue
