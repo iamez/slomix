@@ -19,6 +19,8 @@ const AXIS_COLOR = '#ef4444', ALLIES_COLOR = '#3b82f6';
 
 let _snapshot = null;
 let _interval = null;
+let _ticker = null;
+let _snapshotAt = 0;  // Date.now() when the current snapshot arrived
 let _lastOk = null;
 
 function _viewActive() {
@@ -35,11 +37,22 @@ function _dur(sec) {
     return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
 }
 
+// M:SS / H:MM:SS clock for the round timer — a scoreboard always shows seconds,
+// so this ticks visibly every second (unlike _dur, which rolls to whole minutes).
+function _clock(sec) {
+    const s = Math.max(0, Math.round(sec));
+    const h = Math.floor(s / 3600);
+    const mm = String(Math.floor((s % 3600) / 60)).padStart(h ? 2 : 1, '0');
+    const ss = String(s % 60).padStart(2, '0');
+    return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
 async function _poll() {
     if (!_viewActive()) { stopLiveState(); return; }
     try {
         _snapshot = await fetchJSON(`${API_BASE}/live/state`,
             { cachePolicy: 'no-store', credentials: 'same-origin' });
+        _snapshotAt = Date.now();
         _lastOk = true;
         renderLiveState();
     } catch (e) {
@@ -48,14 +61,34 @@ async function _poll() {
     }
 }
 
+// Between 4 s polls the round + session timers would sit frozen, then jump —
+// the opposite of a live scoreboard. A 1 s tick interpolates them from the last
+// snapshot (base + wall-time since it arrived), so the HUD-critical round timer
+// counts up smoothly. Only the two prominent timers tick; per-player times
+// refresh on the poll.
+function _tick() {
+    if (!_snapshot || !_snapshotAt) return;
+    const elapsed = (Date.now() - _snapshotAt) / 1000;
+    if (_snapshot.game_state === 'live' && _snapshot.round_elapsed_seconds != null) {
+        const rt = document.getElementById('live-round-elapsed');
+        if (rt) rt.textContent = _clock(_snapshot.round_elapsed_seconds + elapsed);
+    }
+    if (_snapshot.session_start_seconds != null) {
+        const st = document.getElementById('live-session-elapsed');
+        if (st) st.textContent = _dur(_snapshot.session_start_seconds + elapsed);
+    }
+}
+
 export function startLiveState() {
     if (_interval) return;
     _poll();
     _interval = setInterval(_poll, POLL_MS);
+    _ticker = setInterval(_tick, 1000);
 }
 
 export function stopLiveState() {
     if (_interval) { clearInterval(_interval); _interval = null; }
+    if (_ticker) { clearInterval(_ticker); _ticker = null; }
 }
 
 /** Latest snapshot (or null) — lets other modules reuse the authoritative
@@ -136,9 +169,9 @@ export function renderLiveState() {
             s.previous_map ? `<span class="text-slate-500 text-xs"> · prev ${escapeHtml(s.previous_map)}</span>` : ''}`
         : '<span class="text-slate-500">no map</span>';
     const roundTimer = s.round_elapsed_seconds != null
-        ? `<span class="text-slate-400 text-xs ml-2">R${s.round_number || '?'} · ${_dur(s.round_elapsed_seconds)}</span>` : '';
+        ? `<span class="text-slate-400 text-xs ml-2">R${s.round_number || '?'} · <span id="live-round-elapsed">${_clock(s.round_elapsed_seconds)}</span></span>` : '';
     const sessionLine = s.session_start_seconds != null
-        ? `<span class="text-slate-500 text-xs">session ${_dur(s.session_start_seconds)}</span>` : '';
+        ? `<span class="text-slate-500 text-xs">session <span id="live-session-elapsed">${_dur(s.session_start_seconds)}</span></span>` : '';
     const botBadge = r.has_bots
         ? '<span class="px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 text-[10px] font-black tracking-wider">BOT TEST</span>' : '';
     const specStrip = (r.spectators && r.spectators.length)
