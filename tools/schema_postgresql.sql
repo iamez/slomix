@@ -8982,3 +8982,23 @@ CREATE INDEX IF NOT EXISTS idx_proximity_skill_snapshot_round_lookup_unlinked
 CREATE INDEX IF NOT EXISTS idx_proximity_spawn_select_round_lookup_unlinked
     ON proximity_spawn_select (map_name, round_number, round_start_unix, session_date)
     WHERE round_id IS NULL;
+
+-- 073: player_identity_links — sick-leave (bolniška) / guid-change identity
+-- attribution (maps an alt cl_guid to a primary identity). Migration 073 creates
+-- it; mirrored here so a fresh bootstrap matches the ledger (dump ≡ migrations).
+CREATE TABLE IF NOT EXISTS player_identity_links (
+    id            SERIAL PRIMARY KEY,
+    primary_guid  TEXT NOT NULL,
+    alt_guid      TEXT NOT NULL UNIQUE,
+    link_type     TEXT NOT NULL DEFAULT 'sick_leave'
+                  CHECK (link_type IN ('sick_leave', 'merged', 'alias')),
+    reason        TEXT,
+    period_start  DATE,
+    period_end    DATE,
+    created_by    BIGINT,
+    created_at    TIMESTAMP NOT NULL DEFAULT NOW(),
+    notes         TEXT,
+    CONSTRAINT player_identity_links_no_self CHECK (primary_guid <> alt_guid)
+);
+CREATE INDEX IF NOT EXISTS idx_player_identity_links_primary
+    ON player_identity_links (primary_guid);

@@ -64,11 +64,19 @@ function _lastSessionCard(sessions) {
 
 function _moverRow(m, kind) {
     const spark = sparklineSVG(m.series, { up: kind === 'up' ? true : kind === 'down' ? false : null, width: 56, height: 16 });
-    const right = kind === 'new'
+    // A guid on sick leave (bolniška) is a known player under a fresh cl_guid,
+    // not a genuine newcomer — badge it as such instead of "FIRST NIGHT".
+    const onLeave = m.sick_leave && m.sick_leave.active;
+    const right = onLeave
+        ? '<span class="text-cyan-300 font-mono text-xs" title="On sick leave — stats kept separate from their main record">🩹 sick leave</span>'
+        : kind === 'new'
         ? '<span class="text-amber-400 font-mono text-xs">FIRST NIGHT</span>'
         : `<span class="${kind === 'up' ? 'text-emerald-400' : 'text-rose-400'} font-mono">${kind === 'up' ? '▲ +' : '▼ '}${Math.abs(m.delta_pct)}%</span>`;
+    const href = onLeave
+        ? `#/profile/${encodeURIComponent(m.sick_leave.primary_guid)}`
+        : `#/profile/${encodeURIComponent(m.guid)}`;
     return `<div class="flex items-center justify-between text-sm gap-2">
-        <a class="text-slate-300 hover:text-brand-cyan transition truncate max-w-[7rem]" href="#/profile/${encodeURIComponent(m.guid)}">${escapeHtml(m.name)}</a>
+        <a class="text-slate-300 hover:text-brand-cyan transition truncate max-w-[7rem]" href="${href}">${escapeHtml(m.name)}</a>
         <div class="flex items-center gap-2">${spark}${right}</div></div>`;
 }
 
