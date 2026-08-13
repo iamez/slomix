@@ -81,6 +81,14 @@ class ProximitySessionScoreService:
             guid, name, total, escapes = r[0], r[1], int(r[2] or 0), int(r[3] or 0)
             if not guid:
                 continue
+            # Bots (OMNIBOT* guids / [BOT] names) are test artifacts, not real
+            # players. Skip them at this roster chokepoint: every category below
+            # gates on `guid in guid_set`, so excluding them here drops them from
+            # the whole composite in one place. (Audit 2026-08-13 — a bot test
+            # sharing a session_date leaked [BOT]… rows into the proximity view,
+            # the same class of bug as /skill/composite.)
+            if guid.upper().startswith("OMNIBOT") or "[BOT]" in (name or ""):
+                continue
             guid_set.add(guid)
             ensure(guid, name)
             escape_rate = (escapes / max(total, 1)) * 100
