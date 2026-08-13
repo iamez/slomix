@@ -243,6 +243,8 @@ class PendingDispatchContext:
     target_node_id: str
     ordered_target_entity_indices: tuple[int, ...]
     target_cursor: int
+    occurrence_id: int = 0
+    displaced_continuation: SuspendedContinuation | None = None
 
     def __post_init__(self) -> None:
         if not self.target_node_id:
@@ -255,6 +257,8 @@ class PendingDispatchContext:
             raise ValueError("pending dispatch target order must not contain duplicate entities")
         if not 0 <= self.target_cursor < len(self.ordered_target_entity_indices):
             raise ValueError("pending dispatch target cursor must select an unexecuted target")
+        if self.occurrence_id < 0:
+            raise ValueError("pending dispatch occurrence id must be non-negative")
 
     def validate(self, index: OrderedStageProgramIndex) -> None:
         self.dispatch_cursor.validate(index)
@@ -271,6 +275,12 @@ class PendingDispatchContext:
             raise ValueError(
                 f"pending dispatch target order does not match the resolved group for {self.target_node_id!r}"
             )
+        if self.displaced_continuation is not None:
+            self.displaced_continuation.validate(index)
+            displaced_entity_index = self.displaced_continuation.frame.cursor.entity_index
+            active_entity_index = self.ordered_target_entity_indices[self.target_cursor]
+            if displaced_entity_index != active_entity_index:
+                raise ValueError("saved displaced continuation does not belong to the active dispatch target")
 
 
 @dataclass(frozen=True, slots=True)
@@ -796,6 +806,8 @@ def _continuation_sort_key(continuation: SuspendedContinuation) -> tuple[object,
             pending.target_node_id,
             pending.ordered_target_entity_indices,
             pending.target_cursor,
+            pending.occurrence_id,
+            repr(pending.displaced_continuation),
         )
     )
     caller_dispatch_key = tuple(
@@ -805,6 +817,8 @@ def _continuation_sort_key(continuation: SuspendedContinuation) -> tuple[object,
             caller_dispatch.target_node_id,
             caller_dispatch.ordered_target_entity_indices,
             caller_dispatch.target_cursor,
+            caller_dispatch.occurrence_id,
+            repr(caller_dispatch.displaced_continuation),
         )
         for caller_dispatch in frame.caller_dispatches
     )
@@ -1353,6 +1367,7 @@ def _continuation_belongs_to_dispatch(
         and pending.caller_resume_cursor == dispatch.caller_resume_cursor
         and pending.target_node_id == dispatch.target_node_id
         and pending.ordered_target_entity_indices == dispatch.ordered_target_entity_indices
+        and pending.occurrence_id == dispatch.occurrence_id
         and continuation.frame.invocation_path[:-1] == caller_frame.invocation_path
     )
 
@@ -1395,6 +1410,34 @@ def _mark_dispatch_stack(
             abandoned=abandoned,
         )
     return retained
+
+
+def _frame_dispatch_contexts(
+    frame: SymbolicFrame,
+) -> tuple[tuple[PendingDispatchContext, tuple[SymbolicInvocationStep, ...]], ...]:
+    contexts: list[tuple[PendingDispatchContext, tuple[SymbolicInvocationStep, ...]]] = []
+    if frame.pending_dispatch is not None:
+        contexts.append((frame.pending_dispatch, frame.invocation_path[:-1]))
+        if frame.pending_dispatch.displaced_continuation is not None:
+            contexts.extend(
+                _frame_dispatch_contexts(frame.pending_dispatch.displaced_continuation.frame)
+            )
+    contexts.extend((context, frame.invocation_path) for context in frame.caller_dispatches)
+    return tuple(contexts)
+
+
+def _next_dispatch_occurrence_id(
+    state: SymbolicScheduleState,
+    caller_frame: SymbolicFrame,
+) -> int:
+    occurrence_ids = tuple(
+        context.occurrence_id
+        for frame in state.runnable + tuple(item.frame for item in state.suspended)
+        for context, caller_invocation_path in _frame_dispatch_contexts(frame)
+        if context.dispatch_cursor == caller_frame.cursor
+        and caller_invocation_path == caller_frame.invocation_path
+    )
+    return max(occurrence_ids, default=-1) + 1
 
 
 def _continue_caller_without_dispatch(
@@ -1548,6 +1591,7 @@ def _blocked_s3_target_frames(
     blocker_line: int | None,
     blocker_entity_index: int | None,
     caller_abandoned: bool,
+    displaced_continuation: SuspendedContinuation | None,
 ) -> tuple[tuple[SymbolicFrame, ...], bool]:
     target_program = index.program(dispatch.target_node_id)
     frames: list[SymbolicFrame] = []
@@ -1560,7 +1604,13 @@ def _blocked_s3_target_frames(
     )
     blocker_identity_unresolved = blocker_offset is None
     for ordinal in range(target_cursor, len(dispatch.ordered_target_entity_indices)):
-        pending = replace(dispatch, target_cursor=ordinal)
+        pending = replace(
+            dispatch,
+            target_cursor=ordinal,
+            displaced_continuation=(
+                displaced_continuation if ordinal == target_cursor else None
+            ),
+        )
         entity_index = pending.ordered_target_entity_indices[ordinal]
         offset = 0
         if ordinal == target_cursor and blocker_offset is not None:
@@ -1794,6 +1844,7 @@ def _run_s3_target_group(
             blocker_line=path.blocker_line,
             blocker_entity_index=path.blocker_entity_index,
             caller_abandoned=caller_abandoned or same_entity,
+            displaced_continuation=existing_target,
         )
         next_unknown_reasons = unknown_reasons + (reason,)
         if blocker_identity_unresolved:
@@ -1913,6 +1964,7 @@ def _start_s3_dispatch(
                 target_node_id,
                 target_entities,
                 0,
+                occurrence_id=_next_dispatch_occurrence_id(state, caller_frame),
             )
             decisions.extend(
                 _run_s3_target_group(
