@@ -1163,13 +1163,35 @@ def _tag_parent_wake_constraint(
     caller_entity_index: int,
     target_entity_index: int,
 ) -> tuple[SymbolicWakeConstraint, str | None]:
-    tag_state = next(
-        (item for item in state.tag_parent_states if item.child_entity_index == target_entity_index),
-        None,
-    )
-    if tag_state is None or tag_state.disposition is SymbolicTagParentDisposition.UNKNOWN:
+    by_child = {item.child_entity_index: item for item in state.tag_parent_states}
+    current = caller_entity_index
+    visited: set[int] = set()
+    while current not in visited:
+        visited.add(current)
+        caller_relation = by_child.get(current)
+        if (
+            caller_relation is None
+            or caller_relation.disposition is SymbolicTagParentDisposition.UNKNOWN
+        ):
+            return SymbolicWakeConstraint.TAG_PARENT_ORDER_UNKNOWN, "caller_tag_parent_state_unknown"
+        if caller_relation.disposition is SymbolicTagParentDisposition.PROVEN_UNATTACHED:
+            break
+        parent = caller_relation.parent_entity_index
+        if parent is None:
+            raise AssertionError("validated attached tag-parent state lost its parent")
+        if parent == target_entity_index:
+            return SymbolicWakeConstraint.NEXT_FRAME, None
+        current = parent
+    else:
+        return SymbolicWakeConstraint.TAG_PARENT_ORDER_UNKNOWN, "tag_parent_cycle_not_modeled"
+
+    target_relation = by_child.get(target_entity_index)
+    if (
+        target_relation is None
+        or target_relation.disposition is SymbolicTagParentDisposition.UNKNOWN
+    ):
         return SymbolicWakeConstraint.TAG_PARENT_ORDER_UNKNOWN, "tag_parent_state_unknown"
-    if tag_state.disposition is SymbolicTagParentDisposition.ATTACHED:
+    if target_relation.disposition is SymbolicTagParentDisposition.ATTACHED:
         return SymbolicWakeConstraint.TAG_PARENT_ORDER_UNKNOWN, "tag_parent_order_not_modeled"
     if target_entity_index > caller_entity_index:
         return SymbolicWakeConstraint.SAME_FRAME_LATER, None
@@ -1517,6 +1539,73 @@ def _finish_s3_target_group(
     return SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, next_state)
 
 
+def _blocked_s3_target_frames(
+    index: OrderedStageProgramIndex,
+    caller_frame: SymbolicFrame,
+    dispatch: PendingDispatchContext,
+    *,
+    target_cursor: int,
+    blocker_line: int | None,
+    blocker_entity_index: int | None,
+    caller_abandoned: bool,
+) -> tuple[tuple[SymbolicFrame, ...], bool]:
+    target_program = index.program(dispatch.target_node_id)
+    frames: list[SymbolicFrame] = []
+    active_target_entity_index = dispatch.ordered_target_entity_indices[target_cursor]
+    blocker_offset = (
+        index.instruction_offset(target_program, blocker_line)
+        if blocker_line is not None
+        and blocker_entity_index == active_target_entity_index
+        else None
+    )
+    blocker_identity_unresolved = blocker_offset is None
+    for ordinal in range(target_cursor, len(dispatch.ordered_target_entity_indices)):
+        pending = replace(dispatch, target_cursor=ordinal)
+        entity_index = pending.ordered_target_entity_indices[ordinal]
+        offset = 0
+        if ordinal == target_cursor and blocker_offset is not None:
+            offset = blocker_offset
+        invocation = SymbolicInvocationStep(
+            pending.dispatch_cursor,
+            pending.target_node_id,
+            ordinal,
+        )
+        frames.append(
+            SymbolicFrame(
+                SymbolicProgramCursor(pending.target_node_id, entity_index, offset),
+                invocation_path=caller_frame.invocation_path + (invocation,),
+                pending_dispatch=pending,
+                origin=(
+                    SymbolicFrameOrigin.EVENT_REPLACEMENT
+                    if entity_index == caller_frame.cursor.entity_index
+                    else (
+                        SymbolicFrameOrigin.NESTED_DISPATCH
+                        if ordinal == target_cursor
+                        else SymbolicFrameOrigin.TARGET_GROUP_RESUME
+                    )
+                ),
+            )
+        )
+
+    caller_program = index.program(caller_frame.cursor.node_id)
+    resume = dispatch.caller_resume_cursor
+    active_entities = {frame.cursor.entity_index for frame in frames}
+    if (
+        not caller_abandoned
+        and resume.instruction_offset < len(caller_program.instructions)
+        and resume.entity_index not in active_entities
+    ):
+        frames.append(
+            replace(
+                caller_frame,
+                cursor=resume,
+                pending_dispatch=None,
+                origin=SymbolicFrameOrigin.CALLER_SUFFIX,
+            )
+        )
+    return tuple(frames), blocker_identity_unresolved
+
+
 def _run_s3_target_group(
     index: OrderedStageProgramIndex,
     state: SymbolicScheduleState,
@@ -1697,26 +1786,29 @@ def _run_s3_target_group(
 
         reason = path.blocker_reason or "s3_nested_temporal_replacement_not_modeled"
         retained = without_existing
-        blocker_offset = (
-            index.instruction_offset(target_program, path.blocker_line)
-            if path.blocker_line is not None and path.blocker_entity_index == target_entity_index
-            else None
+        frontier_frames, blocker_identity_unresolved = _blocked_s3_target_frames(
+            index,
+            caller_frame,
+            dispatch,
+            target_cursor=target_cursor,
+            blocker_line=path.blocker_line,
+            blocker_entity_index=path.blocker_entity_index,
+            caller_abandoned=caller_abandoned or same_entity,
         )
-        frontier_frame = replace(
-            target_frame,
-            cursor=replace(target_frame.cursor, instruction_offset=blocker_offset or 0),
-        )
+        next_unknown_reasons = unknown_reasons + (reason,)
+        if blocker_identity_unresolved:
+            next_unknown_reasons += ("s3_blocker_frontier_identity_unresolved",)
         blocked = _rebuild_schedule_state(
             index,
             state,
             accumulator_state=path.state,
-            runnable=(frontier_frame,),
+            runnable=frontier_frames,
             suspended=retained,
             async_lifecycles=next_lifecycles,
             effects=next_effects,
             provenance=next_provenance,
             ordering_decisions=next_ordering,
-            unknown_reasons=unknown_reasons + (reason,),
+            unknown_reasons=next_unknown_reasons,
         )
         decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.BLOCKED, blocked, reason))
     return decisions

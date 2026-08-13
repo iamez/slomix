@@ -1127,6 +1127,10 @@ def _s2_program_index(
         frame,
         tag_parent_states=(
             SymbolicTagParentState(
+                caller_entity_index,
+                SymbolicTagParentDisposition.PROVEN_UNATTACHED,
+            ),
+            SymbolicTagParentState(
                 target_entity_index,
                 SymbolicTagParentDisposition.PROVEN_UNATTACHED,
             ),
@@ -1262,13 +1266,19 @@ def test_s2_wait_wake_uses_proven_ordinary_entity_pass_order(caller_first, expec
 
 
 def test_s2_unknown_tag_parent_order_retains_named_wake_frontier():
-    index, initial, _, target_entity_index = _s2_program_index(boundary_command="wait 100")
+    index, initial, caller_entity_index, target_entity_index = _s2_program_index(
+        boundary_command="wait 100"
+    )
     unknown_entry = SymbolicScheduleState.create(
         index,
         accumulator_state=initial.accumulator_state,
         runnable=initial.runnable,
         event_owners=initial.event_owners,
         tag_parent_states=(
+            SymbolicTagParentState(
+                caller_entity_index,
+                SymbolicTagParentDisposition.PROVEN_UNATTACHED,
+            ),
             SymbolicTagParentState(target_entity_index, SymbolicTagParentDisposition.UNKNOWN),
         ),
     )
@@ -1289,6 +1299,96 @@ def test_s2_unknown_tag_parent_order_retains_named_wake_frontier():
     )
     assert blocked.reason == "wake_semantics_unverified"
     assert "tag_parent_state_unknown" in blocked.state.unknown_reasons
+
+
+def test_s2_caller_parent_was_already_run_before_raw_later_target_index():
+    index, initial, caller_entity_index, target_entity_index = _s2_program_index(
+        boundary_command="wait 100",
+    )
+    attached_entry = SymbolicScheduleState.create(
+        index,
+        accumulator_state=initial.accumulator_state,
+        runnable=initial.runnable,
+        event_owners=initial.event_owners,
+        tag_parent_states=(
+            SymbolicTagParentState(
+                caller_entity_index,
+                SymbolicTagParentDisposition.ATTACHED,
+                target_entity_index,
+            ),
+            SymbolicTagParentState(
+                target_entity_index,
+                SymbolicTagParentDisposition.PROVEN_UNATTACHED,
+            ),
+        ),
+    )
+
+    dispatched = _decision_with_suspended(
+        step_symbolic_schedule(index, attached_entry),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert dispatched is not None
+    assert dispatched.suspended[0].wake_constraint is SymbolicWakeConstraint.NEXT_FRAME
+
+
+def test_s2_transitive_caller_parent_was_already_run_before_later_target():
+    index, initial, caller_entity_index, target_entity_index = _s2_program_index(
+        boundary_command="wait 100",
+    )
+    intermediate_parent = 99
+    attached_entry = SymbolicScheduleState.create(
+        index,
+        accumulator_state=initial.accumulator_state,
+        runnable=initial.runnable,
+        event_owners=initial.event_owners,
+        tag_parent_states=(
+            SymbolicTagParentState(
+                caller_entity_index,
+                SymbolicTagParentDisposition.ATTACHED,
+                intermediate_parent,
+            ),
+            SymbolicTagParentState(
+                intermediate_parent,
+                SymbolicTagParentDisposition.ATTACHED,
+                target_entity_index,
+            ),
+            SymbolicTagParentState(
+                target_entity_index,
+                SymbolicTagParentDisposition.PROVEN_UNATTACHED,
+            ),
+        ),
+    )
+
+    dispatched = _decision_with_suspended(
+        step_symbolic_schedule(index, attached_entry),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert dispatched is not None
+    assert dispatched.suspended[0].wake_constraint is SymbolicWakeConstraint.NEXT_FRAME
+
+
+def test_s2_missing_caller_tag_parent_state_does_not_fall_back_to_raw_order():
+    index, initial, _, target_entity_index = _s2_program_index(boundary_command="wait 100")
+    unknown_caller = SymbolicScheduleState.create(
+        index,
+        accumulator_state=initial.accumulator_state,
+        runnable=initial.runnable,
+        event_owners=initial.event_owners,
+        tag_parent_states=(
+            SymbolicTagParentState(
+                target_entity_index,
+                SymbolicTagParentDisposition.PROVEN_UNATTACHED,
+            ),
+        ),
+    )
+
+    dispatched = _decision_with_suspended(
+        step_symbolic_schedule(index, unknown_caller),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert dispatched is not None
+    assert dispatched.suspended[0].wake_constraint is SymbolicWakeConstraint.TAG_PARENT_ORDER_UNKNOWN
+    assert "caller_tag_parent_state_unknown" in dispatched.unknown_reasons
 
 
 def test_s2_caller_suffix_blocker_retains_executed_prefix_effects_and_cursor():
@@ -1326,6 +1426,62 @@ def test_s2_caller_suffix_blocker_retains_executed_prefix_effects_and_cursor():
     )
     caller_program = _program(index, "caller")
     assert blocked.state.runnable[0].cursor.instruction_offset == len(caller_program.instructions) - 1
+
+
+def test_s3_nested_blocker_retains_group_with_named_inexact_active_frontier():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger shared outer
+                setstate caller_done invisible
+            }
+        }
+        shared
+        {
+            trigger outer
+            {
+                trigger helper inner
+            }
+        }
+        helper
+        {
+            trigger inner
+            {
+                accum 0 set 7
+                trigger missing absent
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "shared"},
+            {"classname": "script_mover", "scriptname": "shared"},
+            {"classname": "script_mover", "scriptname": "helper"},
+            {"classname": "func_door", "targetname": "caller_done"},
+        ),
+    )
+    caller = _program(index, "caller")
+    initial = _state(index, _frame(caller.node.node_id, 0, 0))
+
+    blocked = _decision(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.BLOCKED,
+    )
+    assert blocked.reason == "nested_dispatch_missing_handler"
+    assert blocked.state is not None
+    assert tuple(frame.cursor.entity_index for frame in blocked.state.runnable) == (1, 2, 0)
+    assert "s3_blocker_frontier_identity_unresolved" in blocked.state.unknown_reasons
+    assert (
+        blocked.state.accumulator_state.read(
+            AccumulatorScope.ENTITY,
+            0,
+            source_entity_index=3,
+        ).exact_value
+        == 7
+    )
 
 
 def test_s2_resumed_target_blocker_retains_executed_prefix_effects_and_cursor():
@@ -1593,6 +1749,102 @@ def test_s3_shared_target_group_retains_concrete_order_and_every_suspension():
     assert caller_completed is not None
     assert all(item.caller_suffix_completed for item in caller_completed.suspended)
     assert tuple(record.projection.effect.target for record in caller_completed.effects) == ("caller_done",)
+
+
+def test_s3_blocked_target_retains_target_group_and_caller_frontiers():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger shared outer
+                setstate caller_done invisible
+            }
+        }
+        shared
+        {
+            trigger outer
+            {
+                accum 0 set 7
+                trigger missing inner
+                setstate target_done invisible
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "shared"},
+            {"classname": "script_mover", "scriptname": "shared"},
+            {"classname": "func_door", "targetname": "caller_done"},
+            {"classname": "func_door", "targetname": "target_done"},
+        ),
+    )
+    caller = _program(index, "caller")
+    target = _program(index, "shared", "outer")
+    initial = _state(index, _frame(caller.node.node_id, 0, 0))
+
+    blocked = _decision(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.BLOCKED,
+    )
+    assert blocked.reason == "nested_dispatch_missing_handler"
+    assert blocked.state is not None
+    assert tuple(frame.cursor.entity_index for frame in blocked.state.runnable) == (1, 2, 0)
+    assert tuple(frame.cursor.instruction_offset for frame in blocked.state.runnable) == (1, 0, 1)
+    assert blocked.state.runnable[0].cursor.node_id == target.node.node_id
+    assert blocked.state.runnable[1].cursor.node_id == target.node.node_id
+    assert blocked.state.runnable[2].cursor.node_id == caller.node.node_id
+    assert tuple(
+        frame.pending_dispatch.target_cursor
+        for frame in blocked.state.runnable[:2]
+        if frame.pending_dispatch is not None
+    ) == (0, 1)
+    assert (
+        blocked.state.accumulator_state.read(
+            AccumulatorScope.ENTITY,
+            0,
+            source_entity_index=1,
+        ).exact_value
+        == 7
+    )
+    assert "s3_blocker_frontier_identity_unresolved" not in blocked.state.unknown_reasons
+
+
+def test_s3_final_trigger_marks_suspended_target_caller_suffix_complete():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger target pause
+            }
+        }
+        target
+        {
+            trigger pause
+            {
+                resetscript
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "target"},
+        ),
+    )
+    caller = _program(index, "caller")
+    initial = _state(index, _frame(caller.node.node_id, 0, 0))
+
+    suspended = _decision(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.SUSPENDED,
+    ).state
+    assert suspended is not None
+    assert suspended.runnable == ()
+    assert len(suspended.suspended) == 1
+    assert suspended.suspended[0].caller_suffix_completed is True
 
 
 @pytest.mark.parametrize(("replacement_body", "expected_event", "expected_global"), (
