@@ -4,9 +4,9 @@ Date: 2026-08-11
 
 Last reverified: 2026-08-13
 
-Status: implementation in progress; S0 complete, S1 under local verification
+Status: implementation in progress; S0-S1 complete, S2 pending exact-head gate
 
-Current base: `origin/main` at `f51edc8813ac16adcdb2ae6801efa1a79800600a`
+Current base: `origin/main` at `2c18ffd43dd54d277b893ccdef180675ef73c89e`
 
 Original branch base: `origin/main` at `d6136cdd994870fddf4e4d0ff1968eb91418e497`
 
@@ -1052,7 +1052,7 @@ retained.
   frontier denominator.
 - [x] Complete S0b source-proven `alertentity` event dispatch and regenerate the
   denominator.
-- [ ] Complete S1 immutable state/canonicalization.
+- [x] Complete S1 immutable state/canonicalization.
 - [ ] Complete S2 single suspended continuation.
 - [ ] Complete S3 nested state/shared-target handling.
 - [ ] Complete S4 bounded search/reduction.
@@ -1164,6 +1164,46 @@ retained.
   request remains pending at this record point.
 - Next item: begin S1 immutable state and canonicalization only after exact-head S0
   review is clean.
+
+### 2026-08-13 - S1 immutable state and canonicalization
+
+- Main sync commit: `15b873bc`; S1 code/review commits: `4f53c782`, `3ad4d981`,
+  `08928faf`, `b45bfd0c` and `1df54390`. The branch base is current
+  `origin/main` at `2c18ffd4`; main is an ancestor and there are no unmerged main
+  commits at this record point.
+- `SymbolicScheduleState.create()` is the sole validated construction boundary. Its
+  canonical identity includes program identity, accumulator state, ordered runnable
+  frames, order-independent suspended continuations, asynchronous movement
+  lifecycles, current event owners, three-valued tag-parent disposition, ordered
+  effects and provenance, accumulated ordering constraints and named unknowns.
+- Dispatch identity is bound to the concrete caller frame, target program cursor,
+  selected-target ordinal and invocation ordinal. Construction rejects reordered or
+  out-of-range dispatches, terminal mismatches and a pending target cursor that does
+  not match its invocation.
+- The only legal suspended resume is re-entry at the boundary action. Non-waiting
+  movement is represented separately as `SymbolicAsyncMovementLifecycle`, because its
+  script frame has already advanced; waiting movement cannot use that lifecycle.
+- The R1 fixture proves distinct canonical ownership for synchronous completion versus
+  a suspended replacement. The T1 fixture proves attached, proven-unattached and
+  unknown tag-parent states remain distinct. Transition-order behavior remains S2-S3
+  scope.
+- Exact-head local evidence at `1df54390`: 17 scheduler tests, 149 scheduler plus
+  possibility tests and all 289 map-geometry unit tests passed; Ruff and
+  `git diff --check` passed. No corpus denominator changes in S1 because this wave
+  introduces state identity, not traversal.
+- Review found and closed five construction-boundary defect classes: stale S0 wording,
+  missing executable adversaries, incomplete tag-parent state, dispatch ordinal not
+  bound to the active frame, and pending target cursor not bound to the invocation.
+  A final review then found the suspended/async lifecycle conflation; `1df54390`
+  removed the invalid resume variants and separated the lifecycle types.
+- All exact-head CI checks passed and all five review threads were resolved.
+  CodeRabbit independently reviewed exact head `1df54390` and reported no open issue.
+  A final documentation-only evidence commit must receive a fresh exact-head gate
+  before S2 starts.
+- No production write, deploy, service restart, Python replacement, Lua change or
+  other owner-gated operation was performed.
+- Next item: pass the exact-head documentation gate, then implement S2 as one suspended
+  cross-entity continuation without starting S3 behavior.
 
 At every substantive commit, append:
 
