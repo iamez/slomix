@@ -2944,6 +2944,27 @@ def test_s4_shared_next_frame_group_uses_exact_entity_and_tag_parent_order():
     blocked = search_symbolic_schedule(index, unknown_order, work_limit=4)
     assert blocked.decisions[0].reason == "schedule_independence_unproven"
 
+    mixed_disposition = SymbolicScheduleState.create(
+        index,
+        accumulator_state=suspended.accumulator_state,
+        suspended=(
+            replace(
+                suspended.suspended[0],
+                caller_suffix_completed=False,
+                caller_suffix_abandoned=True,
+            ),
+        )
+        + suspended.suspended[1:],
+        event_owners=suspended.event_owners,
+        tag_parent_states=tag_states,
+        effects=suspended.effects,
+        provenance=suspended.provenance,
+        ordering_decisions=suspended.ordering_decisions,
+        unknown_reasons=suspended.unknown_reasons,
+    )
+    mixed_blocked = search_symbolic_schedule(index, mixed_disposition, work_limit=4)
+    assert mixed_blocked.decisions[0].reason == "schedule_independence_unproven"
+
 
 def test_s4_exponential_branching_truncates_deterministically(monkeypatch):
     index, initial, _, _ = _s2_program_index()
