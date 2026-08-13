@@ -912,7 +912,7 @@ async def get_movers(
     links = await fetch_identity_links(db, [m["guid"] for m in movers])
     for m in movers:
         link = links.get(m["guid"])
-        if link and link.get("role") == "alt":
+        if link and link.get("role") == "alt" and link.get("link_type") == "sick_leave":
             m["sick_leave"] = {
                 "primary_guid": link["primary_guid"],
                 "primary_name": link["primary_name"],
