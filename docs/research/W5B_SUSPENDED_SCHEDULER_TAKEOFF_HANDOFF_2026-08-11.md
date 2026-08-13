@@ -1433,6 +1433,49 @@ retained.
   partial-order reduction. S5 corpus measurement and S6 graph verdicts remain blocked
   until S4 passes the same gate.
 
+### 2026-08-13 - pause checkpoint during S4 exact-head review
+
+- S4 code/test head: `d2303b2b`, normally based on current `origin/main`
+  `ef6f30fb`. Local and remote branch heads matched when this checkpoint was written;
+  the worktree was clean before this documentation-only update. No history was
+  rewritten.
+- `search_symbolic_schedule()` now uses one global positive work budget, canonical
+  visited-state detection, path-local exact cycle frontiers, deterministic budget
+  frontiers and stable state/task metrics. Multiple runnable tasks and task groups
+  without a source-proven order remain `schedule_independence_unproven`. Footprint
+  reductions intentionally remain zero because the current free-form footprints do
+  not prove the complete commutation contract.
+- A shared suspended dispatch group advances only when dispatch cursor, caller-resume
+  cursor, target program/order, occurrence identity, invocation ancestry, caller
+  completion/abandonment disposition and wake phase all agree. Complete known
+  tag-parent state then determines ET's parent-before-child entity pass. Missing or
+  cyclic parent evidence, unrelated dispatches and mixed caller dispositions remain
+  named unknown frontiers.
+- The first S4 implementation incorrectly treated independent next-frame tasks as
+  freely permutable. That claim and fixture were withdrawn before closure. Commit
+  `ef7a1244` replaced them with exact ET entity-pass fixtures and a synthetic binary
+  branch tree for boundedness. Commit `c9e9b719` added caller-disposition identity.
+- CodeRabbit's exact-head review of `d4b8f62b` found one further P1: a shared group
+  containing both `SAME_FRAME_LATER` and `NEXT_FRAME` still advanced its same-frame
+  subset. Commit `d2303b2b` now requires one uniform wake phase before applying entity
+  order. Its regression constructs a real shared dispatch with targets on both sides
+  of the caller's entity index, proves the mixed phases are constructible and verifies
+  that no continuation or effect advances.
+- Exact focused evidence at `d2303b2b`: 73/73 scheduler tests; Ruff and
+  `git diff --check` passed. The predecessor `d4b8f62b` passed 399 focused tests with
+  two PostgreSQL environment skips and the full repository at 4,626 passed / 99
+  environment or opt-in skips / 30 warnings. Do not attribute those full-suite or CI
+  results to `d2303b2b`; its exact-head full suite and GitHub CI were still pending at
+  this pause.
+- Before `d2303b2b`, GitHub reported all checks green and 28/28 review threads
+  resolved. Codex's GitHub reviewer continued to report a separate review-usage limit.
+  The CodeRabbit P1 was a conversation-level finding, not a new inline thread. The next
+  agent must request and read a fresh exact-head review, refresh thread state, rerun the
+  complete suite and enforce the five-minute quiet window. S4 is **not closed** and S5
+  must not start until those gates pass.
+- No corpus denominator was changed. No production write, deploy, service restart,
+  Python replacement, Lua change or other owner-gated operation was performed.
+
 At every substantive commit, append:
 
 - commit SHA and whether it changes contract, code, tests or evidence;
