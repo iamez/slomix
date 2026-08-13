@@ -32,6 +32,7 @@ async def test_scopes_applies_bot_round_gate_to_both_queries():
     combat_q = next((q for q in db.queries if "FROM combat_engagement" in q), None)
     assert combat_q is not None, "scopes never queried combat_engagement"
     assert "is_bot_round IS DISTINCT FROM TRUE" in combat_q
+    assert "is_valid IS DISTINCT FROM FALSE" in combat_q  # rejected rounds gated too
     assert "round_id IS NULL OR EXISTS" in combat_q  # orphan-keeping gate shape
 
     # The canonical maps-played query (rounds) must exclude bot rounds too, so a
