@@ -174,13 +174,13 @@ async def _fetch_most_active(db: DatabaseAdapter, start_date_str: str) -> tuple:
     active_overall = await _safe_one(
         db,
         """
-        SELECT player_guid,
+        SELECT canonical_guid(player_guid) as player_guid,
                MAX(player_name) as player_name,
                COUNT(DISTINCT round_id) as rounds_played
         FROM player_comprehensive_stats
         WHERE round_number IN (1, 2)
           AND time_played_seconds > 0
-        GROUP BY player_guid
+        GROUP BY canonical_guid(player_guid)
         ORDER BY rounds_played DESC
         LIMIT 1
         """,
@@ -189,14 +189,14 @@ async def _fetch_most_active(db: DatabaseAdapter, start_date_str: str) -> tuple:
     active_recent = await _safe_one(
         db,
         """
-        SELECT player_guid,
+        SELECT canonical_guid(player_guid) as player_guid,
                MAX(player_name) as player_name,
                COUNT(DISTINCT round_id) as rounds_played
         FROM player_comprehensive_stats
         WHERE round_number IN (1, 2)
           AND time_played_seconds > 0
           AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-        GROUP BY player_guid
+        GROUP BY canonical_guid(player_guid)
         ORDER BY rounds_played DESC
         LIMIT 1
         """,
