@@ -5,10 +5,9 @@ Date: 2026-08-11
 Last reverified: 2026-08-13
 
 Status: S4 implementation and local verification complete at `986c506b`; closure is
-pending the exact-head documentation review and five-minute quiet-window gate; S5 is
-blocked
+pending a renewed exact-head gate after the current-main merge; S5 is blocked
 
-Current base: `origin/main` at `2bd2ebf2315ec77d1627be85cbe9b40b03b40fd2`
+Current base: `origin/main` at `d6b01a9db3b216befcffb9ed53fbcb284d89c9b4`
 
 Original branch base: `origin/main` at `d6136cdd994870fddf4e4d0ff1968eb91418e497`
 
@@ -1512,6 +1511,18 @@ retained.
 - No S5 corpus traversal was run and no installed-corpus denominator changed. No
   production write, deploy, service restart, Python replacement, Lua change or other
   owner-gated operation was performed.
+
+### 2026-08-13 - S4 final refresh caught a newer main
+
+- The final refresh after the documentation head's quiet window found that
+  `origin/main` had advanced from `2bd2ebf` to `d6b01a9d` through PR #722. The new
+  commit changes only the Live HUD reducer, backend service, JavaScript and its unit
+  test; it does not overlap the seven W5b scheduler, test or handoff paths.
+- The branch incorporates that commit through a normal, conflict-free merge. No
+  rebase, force-push or history rewrite occurred.
+- Discovery at the final refresh correctly prevented S4 closure. Exact-head local
+  tests, CI, reviews, thread state and a new quiet window must all pass again before
+  S4 is formally closed. S5 remains blocked and no S5 corpus traversal was started.
 
 At every substantive commit, append:
 
