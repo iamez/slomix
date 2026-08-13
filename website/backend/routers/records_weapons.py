@@ -190,7 +190,7 @@ async def get_weapon_hall_of_fame(
     weapon_key_expr = "REPLACE(REPLACE(LOWER(weapon_name), 'ws_', ''), ' ', '')"
     # Exclude bots (OMNIBOT* guids / [BOT] names) — test artifacts must not hold
     # weapon records or appear in per-player weapon stats (audit 2026-08-13).
-    where_clause = "WHERE weapon_name IS NOT NULL AND player_guid NOT LIKE 'OMNIBOT%' AND player_name NOT LIKE '[BOT]%'"
+    where_clause = "WHERE weapon_name IS NOT NULL AND UPPER(player_guid) NOT LIKE 'OMNIBOT%' AND player_name NOT LIKE '%[BOT]%'"
     params = []
     param_idx = 1
 
@@ -285,7 +285,7 @@ async def get_weapon_stats_by_player(
     """
     # Exclude bots (OMNIBOT* guids / [BOT] names) — test artifacts must not hold
     # weapon records or appear in per-player weapon stats (audit 2026-08-13).
-    where_clause = "WHERE weapon_name IS NOT NULL AND player_guid NOT LIKE 'OMNIBOT%' AND player_name NOT LIKE '[BOT]%'"
+    where_clause = "WHERE weapon_name IS NOT NULL AND UPPER(player_guid) NOT LIKE 'OMNIBOT%' AND player_name NOT LIKE '%[BOT]%'"
     params: list[Any] = []
     param_idx = 1
 

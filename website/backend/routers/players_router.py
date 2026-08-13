@@ -981,7 +981,7 @@ async def get_leaderboard(
     # Exclude bots (OMNIBOT* guids / [BOT] names): test artifacts must not
     # appear on all-time leaderboards (audit 2026-08-13). Shared by every metric
     # branch below via {where_clause}, so one gate covers them all.
-    where_clause = "WHERE round_number IN (1, 2) AND time_played_seconds > 0 AND player_guid NOT LIKE 'OMNIBOT%' AND player_name NOT LIKE '[BOT]%' AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)"
+    where_clause = "WHERE round_number IN (1, 2) AND time_played_seconds > 0 AND UPPER(player_guid) NOT LIKE 'OMNIBOT%' AND player_name NOT LIKE '%[BOT]%' AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)"
     name_select = "MAX(player_name) as player_name"
     guid_select = "player_guid"
     group_by = "GROUP BY player_guid"
