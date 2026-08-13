@@ -437,6 +437,19 @@ async def compute_prox_scores(db, range_days: int = 30, player_guid: str | None 
         map_name=map_name, round_number=round_number, round_start_unix=round_start_unix,
     )
 
+    # Bots are test artifacts, never rankable players. The source queries carry
+    # no round-quality gate, so an omni-bot test date returned an all-bot
+    # "ranking", and on a mixed date (bot test + real gather) the bots sat in
+    # the percentile pool DISTORTING every real player's rank. Filter by
+    # identity (guid prefix + [BOT]-tagged name, colour codes stripped) — the
+    # same policy the rest of the platform applies (hard gate, no flag).
+    from website.backend.utils.et_constants import strip_et_colors
+    raw_data = {
+        g: d for g, d in raw_data.items()
+        if not str(g).upper().startswith("OMNIBOT")
+        and "[BOT]" not in strip_et_colors(str(d.get("name") or "")).upper()
+    }
+
     # AUD-008: a failed source poisons the whole percentile pool — withhold.
     # Scoped to sources that actually feed a scored metric (#556): a failure
     # in descriptive-only telemetry drops those rows from the response but
