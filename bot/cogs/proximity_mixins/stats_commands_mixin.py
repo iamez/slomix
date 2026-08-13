@@ -8,10 +8,26 @@ from __future__ import annotations
 
 import logging
 
+import aiohttp
 import discord
 from discord.ext import commands
 
+from bot.core.utils import normalize_player_name
+
 logger = logging.getLogger("bot.cogs.proximity")
+
+
+def _is_bot_row(player: dict) -> bool:
+    """A prox-scores row for a test bot ([BOT] name / OMNIBOT guid). Normalize the
+    name (drop ET colour codes that could split "[B^7OT]") and case-fold both
+    fields before matching — a raw check misses coloured names and lowercase
+    guids (mirrors the v1 service's ``guid.upper()`` filter)."""
+    name = normalize_player_name(player.get("name") or "").upper()
+    guid = (player.get("guid") or "").upper()
+    return "[BOT]" in name or guid.startswith("OMNIBOT")
+
+# Budget for the bot→web prox-scores fetch (mirrors session_digest_service).
+_HTTP_TIMEOUT_S = 10
 
 
 class _ProximityStatsCommandsMixin:
@@ -340,56 +356,96 @@ class _ProximityStatsCommandsMixin:
             logger.error(f"pushes error: {e}", exc_info=True)
             await ctx.send(f"Error: {e}")
 
+    async def _fetch_prox_scores(self, session_date, limit: int = 12):
+        """Fetch v3.0 proximity composite scores from the website API.
+
+        Single source of truth: the website computes prox_score v3.0 once
+        (``compute_prox_scores`` → ``/proximity/prox-scores``); the bot consumes
+        the result instead of re-implementing the formula. Mirrors the resilient
+        pattern in ``session_digest_service`` — bounded timeout, graceful None on
+        any failure. The v3.0 engagement threshold is enforced server-side, so we
+        pass only the scope (session_date) + limit, never ``min_engagements``.
+        Returns the decoded JSON dict, or None if the web is unreachable / errors.
+        """
+        url = f"{self.bot.config.website_api_base}/proximity/prox-scores"
+        try:
+            timeout = aiohttp.ClientTimeout(total=_HTTP_TIMEOUT_S)
+            async with aiohttp.ClientSession(timeout=timeout) as http, http.get(
+                url, params={"session_date": str(session_date), "limit": limit}
+            ) as resp:
+                if resp.status != 200:
+                    logger.info("psession: prox-scores HTTP %s — skipping", resp.status)
+                    return None
+                return await resp.json()
+        except Exception as e:
+            logger.info("psession: prox-scores unreachable (%s)", e)
+            return None
+
     @commands.command(name="proximity_session", aliases=["psession", "pscore"])
     async def proximity_session_scores(self, ctx, session_date: str = None):
-        """Per-session proximity combat scores.
+        """Per-session proximity composite scores (v3.0).
 
         Usage: !psession [YYYY-MM-DD]
-        Shows composite score (0-100) from 7 categories:
-        Kill Timing, Crossfire, Focus Fire, Trades, Survivability, Movement, Reactions
+        Composite score (0-100) from 3 percentile-ranked categories:
+        Combat (.40), Team (.35), Gamesense (.25). Same v3.0 formula the website
+        shows — fetched from the site so Discord and the web never disagree.
         """
         try:
-            from bot.services.proximity_session_score_service import ProximitySessionScoreService
-            svc = ProximitySessionScoreService(self.bot.db_adapter)
-
             if not session_date:
-                session_date = await svc.get_latest_session_date()
+                from bot.services.proximity_session_score_service import (
+                    ProximitySessionScoreService,
+                )
+                session_date = await ProximitySessionScoreService(
+                    self.bot.db_adapter
+                ).get_latest_session_date()
             if not session_date:
                 await ctx.send("No proximity data found.")
                 return
 
-            results = await svc.compute_session_scores(session_date)
-            if not results:
-                await ctx.send(f"No proximity data for session {session_date} (min {3} engagements required).")
+            data = await self._fetch_prox_scores(session_date)
+            if data is None:
+                await ctx.send(
+                    "Proximity scores are temporarily unavailable "
+                    "(is the website up?). Try again shortly."
+                )
+                return
+            if data.get("status") == "degraded":
+                await ctx.send(
+                    f"Not enough proximity data to score session {session_date} yet."
+                )
+                return
+
+            # Drop bot-test rounds so a headless testmode session can't headline
+            # (mirrors session_digest_service's [BOT]/OMNIBOT filter).
+            players = [p for p in (data.get("players") or []) if not _is_bot_row(p)]
+            if not players:
+                await ctx.send(f"No proximity data for session {session_date}.")
                 return
 
             embed = discord.Embed(
                 title=f"Proximity Session Score — {session_date}",
-                description="Composite combat performance from proximity analytics",
+                description="Composite combat performance (v3.0: Combat · Team · Gamesense)",
                 color=discord.Color.teal(),
             )
 
+            # Response is already sorted by prox_overall desc.
             medal = ["🥇", "🥈", "🥉"]
-            for i, p in enumerate(results[:12]):
-                cat = p["categories"]
+            for i, p in enumerate(players[:12]):
                 prefix = medal[i] if i < 3 else f"{i+1}."
+                name = normalize_player_name(p.get("name") or "?") or "?"
                 embed.add_field(
-                    name=f"{prefix} {p['name']} — **{p['total_score']:.1f}** / 100",
+                    name=f"{prefix} {name} — **{p.get('prox_overall', 0):.1f}** / 100",
                     value=(
-                        f"⏱ Tim: {cat['kill_timing']['weighted']:.0f} "
-                        f"✕ XF: {cat['crossfire']['weighted']:.0f} "
-                        f"🎯 FF: {cat['focus_fire']['weighted']:.0f} "
-                        f"⚔ Trd: {cat['trades']['weighted']:.0f}\n"
-                        f"🛡 Srv: {cat['survivability']['weighted']:.0f} "
-                        f"💨 Mov: {cat['movement']['weighted']:.0f} "
-                        f"⚡ Rct: {cat['reactions']['weighted']:.0f} "
-                        f"({p['engagement_count']} eng)"
+                        f"⚔ Combat {p.get('prox_combat', 0):.0f} · "
+                        f"🤝 Team {p.get('prox_team', 0):.0f} · "
+                        f"🧠 Gamesense {p.get('prox_gamesense', 0):.0f} "
+                        f"({p.get('engagements', 0)} eng)"
                     ),
                     inline=False,
                 )
 
-            total_eng = sum(p["engagement_count"] for p in results)
-            embed.set_footer(text=f"{len(results)} players, {total_eng} total engagements")
+            total_eng = sum(int(p.get("engagements", 0)) for p in players)
+            embed.set_footer(text=f"{len(players)} players, {total_eng} total engagements · v3.0")
             await ctx.send(embed=embed)
 
         except Exception as e:

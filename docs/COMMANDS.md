@@ -171,7 +171,7 @@ This document lists Discord bot commands declared in the repository (via `@comma
 | `proximity_objectives` | (none) | Show which maps have objective coordinates configured |
 | `proximity_pushes` | `ppu` | Team push quality comparison - Axis vs Allies (v5) |
 | `proximity_scan` | (none) | Force scan for new engagement files (admin only) |
-| `proximity_session` | `psession`, `pscore` | Per-session proximity combat scores |
+| `proximity_session` | `psession`, `pscore` | Per-session proximity composite scores (v3.0) |
 | `proximity_spawn_efficiency` | `pse` | Top 10 players by spawn timing efficiency (v5) |
 | `proximity_status` | (none) | Show proximity tracker status (admin only) |
 | `proximity_trades_lua` | `ptl` | Lua-detected trade kill leaderboard (v5) |
