@@ -4,9 +4,9 @@ Date: 2026-08-11
 
 Last reverified: 2026-08-13
 
-Status: implementation in progress; S0-S2 implementation complete, S2 closure pending handoff-only exact-head gate
+Status: implementation in progress; S0-S3 implementation complete, S3 closure pending exact-head review/CI gate
 
-Current base: `origin/main` at `42fe7819860a7f4c1eaed8637c74463041355a18`
+Current base: `origin/main` at `d1c891424979634d63605b89cceef60c2a81ce74` (`v1.35.0`)
 
 Original branch base: `origin/main` at `d6136cdd994870fddf4e4d0ff1968eb91418e497`
 
@@ -1054,7 +1054,7 @@ retained.
   denominator.
 - [x] Complete S1 immutable state/canonicalization.
 - [x] Complete S2 single suspended continuation.
-- [ ] Complete S3 nested state/shared-target handling.
+- [x] Complete S3 nested state/shared-target handling.
 - [ ] Complete S4 bounded search/reduction.
 - [ ] Complete S5 exact corpus evidence.
 - [ ] Complete S6 Phase 5 static graph gate, or split it into a successor PR with an
@@ -1270,6 +1270,58 @@ retained.
   other owner-gated operation was performed.
 - Next item: pass this exact-head evidence gate, then implement S3 nested state return,
   shared concrete target order and same-entity replacement without opening S4 early.
+
+### 2026-08-13 - S3 exact nested dispatch and shared-target state return
+
+- Main sync commit: `c5d6d878`; S3 code/test commit: `9ebb1e2c`. The pause-time
+  change from the prior base to `origin/main` at `d1c89142` was the `v1.35.0`
+  release metadata merge only. It did not overlap the W5b implementation, tests or
+  handoff paths; the branch was merged normally and no history was rewritten.
+- `step_symbolic_schedule()` now propagates exact synchronous callee exit state into
+  remaining concrete targets and caller guards. Entity-local `accum` values remain
+  isolated by concrete entity while `globalaccum` mutations are shared in source
+  order. The scheduler preserves every selected target, its ordinal, pending-dispatch
+  cursor and invocation ancestry.
+- Same-entity delivery follows the pinned `G_Script_ScriptChange` contract:
+  synchronous completion restores the caller, temporal completion replaces it and
+  abandons its suffix, and a replacement of an already suspended target retains only
+  the old or new owner according to the exact sync-versus-false-return result. The
+  trigger loop still visits later shared targets before reporting same-entity
+  termination.
+- Source-proven `alertentity` handlers and optional `kill` death handlers use the same
+  transition path. Optional death delivery retains exact event/no-event alternatives;
+  the no-event branch is emitted only after the complete kill projection reaches the
+  expected dispatch frontier, so a fatal sibling target cannot be bypassed.
+- Non-waiting `gotomarker` and `followspline` starts are now explicit path evidence,
+  then become `SymbolicAsyncMovementLifecycle` state without delaying the script
+  suffix. This fixed nested and resumed-suffix lifecycle loss. State-aware filtering
+  removes the impossible prior-motion branch when no lifecycle exists and removes the
+  impossible new-translation branch while one is active.
+- A direct pinned-callback re-read corrected an over-broad S1 invariant:
+  `gotomarker` and `followspline` reject a new translation while
+  `SCFL_GOING_TO_MARKER` is set, but `faceangles` does not inspect that flag. A waiting
+  `faceangles` continuation may therefore coexist with one asynchronous positional
+  lifecycle; the regression distinguishes it from the two translational commands.
+- Focused regressions cover synchronous local/global return, conditional taken and
+  not-taken refinement, same-entity sync restoration and temporal abandonment, R1
+  replacement ownership, concrete shared-target order, alert and optional-death
+  dispatch, mixed fatal kill targets, direct/nested/resumed asynchronous movement,
+  state-filtered prior/current movement and the `faceangles` source distinction.
+- Local evidence at `9ebb1e2c`: 182 scheduler plus possibility tests passed before
+  the final source corrections; the final scheduler suite passed 54/54, all 328
+  map-geometry unit tests passed, Ruff and `git diff --check` passed, and the complete
+  repository suite passed 4,549 tests with 97 environment or opt-in skips and 30
+  warnings. The opt-in real-asset executor passed separately in 32.24 seconds.
+- The frozen real-asset assertions remain unchanged: 2,790 entries, 5,174 paths,
+  7,755 effects, 4,011 temporal boundaries, 473 caller replacements and the existing
+  452 cross-entity temporal frontiers. S3 adds scheduler transitions and does not claim
+  an S5 denominator reduction before exact bounded-search measurement.
+- No production write, deploy, service restart, Python replacement, Lua change or
+  other owner-gated operation was performed. Exact-head GitHub CI, external/self
+  review, zero-thread and quiet-window gates remain open for this documentation head.
+- Next item: pass the S3 exact-head gate, then implement S4 canonical visited-state
+  search, cycle/budget frontiers and only footprint-proven reductions. Do not begin S5
+  measurement or S6 graph verdicts early.
 
 At every substantive commit, append:
 
