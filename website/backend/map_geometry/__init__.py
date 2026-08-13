@@ -163,6 +163,8 @@ from website.backend.map_geometry.stage_scheduler import (
     SymbolicScheduleDecisionKind,
     SymbolicScheduleExhaustion,
     SymbolicScheduleResult,
+    SymbolicScheduleSearchMetrics,
+    SymbolicScheduleSearchResult,
     SymbolicScheduleState,
     SymbolicScheduleWorkBudget,
     SymbolicTagParentDisposition,
@@ -170,6 +172,7 @@ from website.backend.map_geometry.stage_scheduler import (
     SymbolicWaitBoundaryState,
     SymbolicWaitBranch,
     SymbolicWakeConstraint,
+    search_symbolic_schedule,
     step_symbolic_schedule,
 )
 from website.backend.map_geometry.stage_semantics import (
@@ -382,6 +385,8 @@ __all__ = [
     "SymbolicScheduleDecisionKind",
     "SymbolicScheduleExhaustion",
     "SymbolicScheduleResult",
+    "SymbolicScheduleSearchMetrics",
+    "SymbolicScheduleSearchResult",
     "SymbolicScheduleState",
     "SymbolicScheduleWorkBudget",
     "SymbolicTagParentDisposition",
@@ -390,6 +395,7 @@ __all__ = [
     "SymbolicWaitBoundaryState",
     "SymbolicWaitBranch",
     "SymbolicWakeConstraint",
+    "search_symbolic_schedule",
     "step_symbolic_schedule",
     "StageParseError",
     "StaticStageGraph",

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import website.backend.map_geometry.stage_scheduler as scheduler_module
 from website.backend.map_geometry.entities import MapEntityCatalog
 from website.backend.map_geometry.pk3_index import MapAssetKind, MapAssetProvider
 from website.backend.map_geometry.stage import (
@@ -40,6 +41,8 @@ from website.backend.map_geometry.stage_scheduler import (
     SymbolicScheduleDecisionKind,
     SymbolicScheduleExhaustion,
     SymbolicScheduleResult,
+    SymbolicScheduleSearchMetrics,
+    SymbolicScheduleSearchResult,
     SymbolicScheduleState,
     SymbolicScheduleWorkBudget,
     SymbolicTagParentDisposition,
@@ -47,6 +50,7 @@ from website.backend.map_geometry.stage_scheduler import (
     SymbolicWaitBoundaryState,
     SymbolicWaitBranch,
     SymbolicWakeConstraint,
+    search_symbolic_schedule,
     step_symbolic_schedule,
 )
 from website.backend.map_geometry.stage_semantics import (
@@ -2542,3 +2546,339 @@ def test_s3_faceangles_can_suspend_while_nonwaiting_translation_remains_active()
     assert isinstance(boundary, SymbolicMovementBoundaryState)
     assert boundary.command is SymbolicMovementCommand.FACE_ANGLES
     assert boundary.temporal_state is SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING
+
+
+def test_s4_bounded_search_runs_one_schedule_to_completion():
+    index, initial, caller_entity_index, target_entity_index = _s2_program_index()
+
+    result = search_symbolic_schedule(index, initial, work_limit=8)
+
+    assert result.exhaustion is None
+    assert result.metrics == SymbolicScheduleSearchMetrics(
+        states_created=4,
+        transitions_evaluated=3,
+        maximum_runnable_tasks=1,
+        maximum_suspended_tasks=1,
+        maximum_frame_depth=2,
+        deduplicated_states=0,
+        cycle_frontiers=0,
+        budget_frontiers=0,
+    )
+    assert len(result.decisions) == 1
+    completed = result.decisions[0]
+    assert completed.kind is SymbolicScheduleDecisionKind.COMPLETE
+    assert completed.state is not None
+    assert tuple(effect.source_cursor.entity_index for effect in completed.state.effects) == (
+        caller_entity_index,
+        target_entity_index,
+    )
+
+
+def test_s4_global_budget_retains_the_unexpanded_frontier():
+    index, initial, _, _ = _s2_program_index()
+
+    result = search_symbolic_schedule(index, initial, work_limit=1)
+
+    assert result.exhaustion is SymbolicScheduleExhaustion.WORK_BUDGET_EXHAUSTED
+    assert result.metrics.transitions_evaluated == 1
+    assert result.metrics.budget_frontiers == 1
+    assert len(result.decisions) == 1
+    exhausted = result.decisions[0]
+    assert exhausted.kind is SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED
+    assert exhausted.reason == SymbolicScheduleExhaustion.WORK_BUDGET_EXHAUSTED.value
+    assert exhausted.state is not None
+    assert exhausted.state.runnable
+    assert exhausted.state.suspended
+
+
+def test_s4_exact_repeated_schedule_state_becomes_a_cycle_frontier(monkeypatch):
+    index, initial, _, _ = _s2_program_index()
+
+    def repeat_state(_index, state):
+        return SymbolicScheduleResult(
+            (SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, state),),
+            1,
+            1,
+        )
+
+    monkeypatch.setattr(scheduler_module, "step_symbolic_schedule", repeat_state)
+    result = search_symbolic_schedule(index, initial, work_limit=2)
+
+    assert result.exhaustion is None
+    assert result.metrics.transitions_evaluated == 1
+    assert result.metrics.cycle_frontiers == 1
+    assert len(result.decisions) == 1
+    assert result.decisions[0].kind is SymbolicScheduleDecisionKind.BLOCKED
+    assert result.decisions[0].reason == "symbolic_schedule_cycle"
+
+
+def test_s4_same_frame_with_different_state_is_not_a_cycle(monkeypatch):
+    index, initial, _, _ = _s2_program_index()
+
+    def advance_state(_index, state):
+        if not state.provenance:
+            advanced = SymbolicScheduleState.create(
+                index,
+                accumulator_state=state.accumulator_state,
+                runnable=state.runnable,
+                suspended=state.suspended,
+                async_lifecycles=state.async_lifecycles,
+                event_owners=state.event_owners,
+                tag_parent_states=state.tag_parent_states,
+                effects=state.effects,
+                provenance=("same_frame_state_changed",),
+                ordering_decisions=state.ordering_decisions,
+                unknown_reasons=state.unknown_reasons,
+            )
+            return SymbolicScheduleResult(
+                (SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, advanced),),
+                1,
+                1,
+            )
+        completed = SymbolicScheduleState.create(
+            index,
+            accumulator_state=state.accumulator_state,
+            async_lifecycles=state.async_lifecycles,
+            tag_parent_states=state.tag_parent_states,
+            effects=state.effects,
+            provenance=state.provenance,
+            ordering_decisions=state.ordering_decisions,
+            unknown_reasons=state.unknown_reasons,
+        )
+        return SymbolicScheduleResult(
+            (SymbolicScheduleDecision(SymbolicScheduleDecisionKind.COMPLETE, completed),),
+            1,
+            1,
+        )
+
+    monkeypatch.setattr(scheduler_module, "step_symbolic_schedule", advance_state)
+    result = search_symbolic_schedule(index, initial, work_limit=2)
+
+    assert result.metrics.transitions_evaluated == 2
+    assert result.metrics.cycle_frontiers == 0
+    assert result.decisions[0].kind is SymbolicScheduleDecisionKind.COMPLETE
+
+
+def test_s4_canonical_visited_state_deduplicates_convergent_branches(monkeypatch):
+    index, initial, _, _ = _s2_program_index()
+
+    def with_provenance(state, provenance, *, complete=False):
+        runnable = () if complete else state.runnable
+        return SymbolicScheduleState.create(
+            index,
+            accumulator_state=state.accumulator_state,
+            runnable=runnable,
+            suspended=state.suspended,
+            async_lifecycles=state.async_lifecycles,
+            event_owners=(state.event_owners if runnable else ()),
+            tag_parent_states=state.tag_parent_states,
+            effects=state.effects,
+            provenance=provenance,
+            ordering_decisions=state.ordering_decisions,
+            unknown_reasons=state.unknown_reasons,
+        )
+
+    def converge(_index, state):
+        if not state.provenance:
+            branches = tuple(
+                SymbolicScheduleDecision(
+                    SymbolicScheduleDecisionKind.RUNNABLE,
+                    with_provenance(state, (branch,)),
+                )
+                for branch in ("left", "right")
+            )
+            return SymbolicScheduleResult(branches, 1, 1)
+        if state.provenance != ("joined",):
+            joined = with_provenance(state, ("joined",))
+            return SymbolicScheduleResult(
+                (SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, joined),),
+                1,
+                1,
+            )
+        completed = with_provenance(state, state.provenance, complete=True)
+        return SymbolicScheduleResult(
+            (SymbolicScheduleDecision(SymbolicScheduleDecisionKind.COMPLETE, completed),),
+            1,
+            1,
+        )
+
+    monkeypatch.setattr(scheduler_module, "step_symbolic_schedule", converge)
+    result = search_symbolic_schedule(index, initial, work_limit=4)
+
+    assert result.exhaustion is None
+    assert result.metrics.transitions_evaluated == 4
+    assert result.metrics.deduplicated_states == 1
+    assert result.metrics.cycle_frontiers == 0
+    assert len(result.decisions) == 1
+    assert result.decisions[0].kind is SymbolicScheduleDecisionKind.COMPLETE
+
+
+def test_s4_multiple_runnable_frames_retain_unproven_independence():
+    index = _program_index()
+    target = _program(index, "target", "long")
+    frames = (
+        _frame(target.node.node_id, 1, 0),
+        _frame(target.node.node_id, 3, 0),
+    )
+    state = SymbolicScheduleState.create(
+        index,
+        accumulator_state=SymbolicAccumulatorState.zeroed(),
+        runnable=frames,
+        event_owners=tuple(SymbolicEventOwner.from_frame(frame) for frame in frames),
+    )
+
+    result = search_symbolic_schedule(index, state, work_limit=4)
+
+    assert result.metrics.maximum_runnable_tasks == 2
+    assert result.metrics.independence_reductions == 0
+    assert len(result.decisions) == 1
+    assert result.decisions[0].kind is SymbolicScheduleDecisionKind.BLOCKED
+    assert result.decisions[0].reason == "schedule_independence_unproven"
+
+
+def test_s4_multiple_suspended_tasks_preserve_all_effect_orders_and_truncate_deterministically():
+    index = _scheduler_program_index(
+        """
+        caller_a
+        {
+            spawn
+            {
+                trigger target_a run
+            }
+        }
+        target_a
+        {
+            trigger run
+            {
+                resetscript
+                setstate marker_a invisible
+            }
+        }
+        caller_b
+        {
+            spawn
+            {
+                trigger target_b run
+            }
+        }
+        target_b
+        {
+            trigger run
+            {
+                resetscript
+                setstate marker_b invisible
+            }
+        }
+        caller_c
+        {
+            spawn
+            {
+                trigger target_c run
+            }
+        }
+        target_c
+        {
+            trigger run
+            {
+                resetscript
+                setstate marker_c invisible
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller_a"},
+            {"classname": "script_mover", "scriptname": "target_a"},
+            {"classname": "script_mover", "scriptname": "caller_b"},
+            {"classname": "script_mover", "scriptname": "target_b"},
+            {"classname": "script_mover", "scriptname": "caller_c"},
+            {"classname": "script_mover", "scriptname": "target_c"},
+            {"classname": "func_door", "targetname": "marker_a"},
+            {"classname": "func_door", "targetname": "marker_b"},
+            {"classname": "func_door", "targetname": "marker_c"},
+        ),
+    )
+
+    continuations = []
+    for caller_name, caller_entity_index in (
+        ("caller_a", 0),
+        ("caller_b", 2),
+        ("caller_c", 4),
+    ):
+        caller = _program(index, caller_name)
+        initial = _state(index, _frame(caller.node.node_id, caller_entity_index, 0))
+        suspended = _decision(
+            step_symbolic_schedule(index, initial),
+            SymbolicScheduleDecisionKind.SUSPENDED,
+        ).state
+        assert suspended is not None
+        continuations.append(suspended.suspended[0])
+
+    combined = SymbolicScheduleState.create(
+        index,
+        accumulator_state=SymbolicAccumulatorState.zeroed(),
+        suspended=tuple(continuations),
+        event_owners=tuple(
+            SymbolicEventOwner.from_frame(continuation.frame)
+            for continuation in continuations
+        ),
+    )
+
+    reversed_combined = SymbolicScheduleState.create(
+        index,
+        accumulator_state=SymbolicAccumulatorState.zeroed(),
+        suspended=tuple(reversed(continuations)),
+        event_owners=tuple(
+            SymbolicEventOwner.from_frame(continuation.frame)
+            for continuation in reversed(continuations)
+        ),
+    )
+    left = search_symbolic_schedule(index, combined, work_limit=20)
+    right = search_symbolic_schedule(index, reversed_combined, work_limit=20)
+
+    assert left == right
+    assert left.exhaustion is None
+    assert left.metrics.transitions_evaluated == 15
+    assert left.metrics.maximum_suspended_tasks == 3
+    assert left.metrics.independence_reductions == 0
+    assert len(left.decisions) == 6
+    effect_orders = {
+        tuple(effect.source_cursor.entity_index for effect in decision.state.effects)
+        for decision in left.decisions
+        if decision.state is not None
+    }
+    assert effect_orders == {
+        (1, 3, 5),
+        (1, 5, 3),
+        (3, 1, 5),
+        (3, 5, 1),
+        (5, 1, 3),
+        (5, 3, 1),
+    }
+
+    limited_left = search_symbolic_schedule(index, combined, work_limit=4)
+    limited_right = search_symbolic_schedule(index, reversed_combined, work_limit=4)
+    assert limited_left == limited_right
+    assert limited_left.exhaustion is SymbolicScheduleExhaustion.WORK_BUDGET_EXHAUSTED
+    assert limited_left.metrics.transitions_evaluated == 4
+    assert limited_left.metrics.budget_frontiers > 0
+
+
+def test_s4_search_result_rejects_nonterminal_or_mismatched_metrics():
+    index, initial, _, _ = _s2_program_index()
+    metrics = SymbolicScheduleSearchMetrics(1, 0, 1, 0, 1, 0, 0, 0)
+    runnable = SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, initial)
+
+    with pytest.raises(ValueError, match="only terminal"):
+        SymbolicScheduleSearchResult((runnable,), 1, metrics)
+
+    exhaustion = _decision(
+        search_symbolic_schedule(index, initial, work_limit=1),
+        SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED,
+    )
+    with pytest.raises(ValueError, match="budget metric"):
+        SymbolicScheduleSearchResult(
+            (exhaustion,),
+            1,
+            metrics,
+            SymbolicScheduleExhaustion.WORK_BUDGET_EXHAUSTED,
+        )
