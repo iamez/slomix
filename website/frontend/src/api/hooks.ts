@@ -310,13 +310,6 @@ export const useProximityLeaderboards = (category = 'power', rangeDays = 30, lim
     staleTime: 60_000,
   });
 
-export const useProximitySessionScores = (sessionDate?: string) =>
-  useQuery({
-    queryKey: ['proximity-session-scores', sessionDate],
-    queryFn: () => api.getProximitySessionScores(sessionDate),
-    staleTime: 60_000,
-  });
-
 export const useProximityWeaponAccuracy = (params?: { player_guid?: string; map_name?: string; limit?: number }) =>
   useQuery({
     queryKey: ['proximity-weapon-accuracy', params],
@@ -573,10 +566,10 @@ export const usePlayerHitRegions = (playerGuid: string, params?: ProximityScope)
   });
 
 // Proximity Composite Scores
-export const useProxScores = (rangeDays = 30, playerGuid?: string, limit = 50) =>
+export const useProxScores = (rangeDays = 30, playerGuid?: string, limit = 50, sessionDate?: string) =>
   useQuery({
-    queryKey: ['prox-scores', rangeDays, playerGuid, limit],
-    queryFn: () => api.getProxScores(rangeDays, playerGuid, limit),
+    queryKey: ['prox-scores', rangeDays, playerGuid, limit, sessionDate],
+    queryFn: () => api.getProxScores(rangeDays, playerGuid, limit, sessionDate),
     staleTime: 60_000,
   });
 

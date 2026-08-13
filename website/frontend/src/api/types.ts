@@ -1024,25 +1024,6 @@ export interface ProximityLeaderboardResponse {
   entries: ProximityLeaderboardEntry[];
 }
 
-// Proximity Session Scores
-export interface SessionScoreCategory {
-  raw: number;
-  weighted: number;
-  detail?: string;
-}
-export interface SessionScoreEntry {
-  guid: string;
-  name: string;
-  total_score: number;
-  categories: Record<string, SessionScoreCategory>;
-  engagement_count: number;
-}
-export interface ProximitySessionScoresResponse {
-  status: string;
-  session_date: string | null;
-  players: SessionScoreEntry[];
-}
-
 // VS Stats (Easiest Preys / Worst Enemies)
 export interface VsStatsEntry {
   opponent_name: string;

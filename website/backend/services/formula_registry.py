@@ -221,13 +221,15 @@ def get_registry() -> list[dict]:
         },
         {
             "name": "prox_score_bot",
-            "version": "v1",
-            "status": "live",
-            "module": "bot/services/proximity_session_score_service.py",
-            "surface": "Discord session summaries",
-            "summary": "7-weight session proximity score, min 3 engagements. "
-                       "NOTE: intentionally different from prox_score_web; "
-                       "registry exists to keep that visible.",
+            "version": "v3.0 (unified)",
+            "status": "retired",
+            "module": "bot/cogs/proximity_mixins/stats_commands_mixin.py (HTTP consumer)",
+            "surface": "Discord !psession",
+            "summary": "v1 (7-weight, min 3 engagements) retired 2026-08-13: "
+                       "~35% of its weight sat on metrics #556 invalidated. "
+                       "The bot now consumes prox_score_web v3.0 over HTTP "
+                       "(/proximity/prox-scores) — one formula, two surfaces; "
+                       "the divergence this entry existed to flag is gone.",
         },
         {
             "name": "good_night_index",
