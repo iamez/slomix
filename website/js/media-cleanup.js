@@ -38,12 +38,21 @@ function _releaseVideo(video) {
  * navigation, including when nothing is playing.
  */
 export function closeAllMedia() {
-    const modal = document.getElementById('video-player-modal');
-    if (modal) {
-        _releaseVideo(modal.querySelector('video'));
-        modal.remove();
+    // Prefer the uploads modal's OWN teardown when present: it removes the
+    // document keydown listener, releases the video, and restores focus — doing
+    // it here by hand would leave that listener attached and leak one per
+    // open-then-navigate-away cycle (CodeRabbit/Copilot #717). It's a window
+    // global set by uploads.js, so this is a no-op if uploads never loaded.
+    if (typeof window !== 'undefined' && typeof window.closeVideoPlayer === 'function') {
+        window.closeVideoPlayer();
+    } else {
+        const modal = document.getElementById('video-player-modal');
+        if (modal) {
+            _releaseVideo(modal.querySelector('video'));
+            modal.remove();
+        }
     }
+    // Release any other <video> (e.g. the inline detail-page player in a section
+    // the router only hides). Idempotent with the modal teardown above.
     document.querySelectorAll('video').forEach(_releaseVideo);
-    // Any keydown handler the modal registered is removed when the modal is gone;
-    // uploads.js also detaches it in closeVideoPlayer for the button/Escape path.
 }

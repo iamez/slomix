@@ -699,10 +699,16 @@ async function _togglePip(video) {
 }
 
 function _toggleFullscreen(el) {
+    // requestFullscreen/exitFullscreen return Promises; a rejection (fullscreen
+    // blocked by the browser/permissions) is async and NOT caught by try/catch,
+    // so swallow it on the promise itself to avoid an unhandled rejection
+    // (CodeRabbit #717).
     try {
-        if (document.fullscreenElement) document.exitFullscreen();
-        else if (el && el.requestFullscreen) el.requestFullscreen();
-    } catch { /* ignore */ }
+        const p = document.fullscreenElement
+            ? document.exitFullscreen()
+            : (el && el.requestFullscreen ? el.requestFullscreen() : null);
+        if (p && typeof p.catch === 'function') p.catch(() => { /* fullscreen denied; ignore */ });
+    } catch { /* synchronous failure (unsupported); ignore */ }
 }
 
 function handleVideoKeydown(e) {
