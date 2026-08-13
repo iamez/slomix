@@ -31,6 +31,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.routers.api_helpers import (
+    fetch_identity_links,
     resolve_display_name,
     resolve_player_guid,
 )
@@ -123,6 +124,11 @@ async def _fetch_identity(db, guid8: str, fallback: str) -> dict:
             "SELECT 1 FROM player_links WHERE player_guid = $1 LIMIT 1", (guid8,),
         )
         discord_linked = bool(link)
+    # Sick-leave / identity-link attribution (migration 073): if this guid is on
+    # sick leave under a primary, or is a primary with alts, surface it so the
+    # profile can badge "🩹 <primary> · on sick leave" and link the identities.
+    # Stats stay separate — this is attribution only.
+    identity_link = (await fetch_identity_links(db, [guid8])).get(guid8)
     return {
         "available": True,
         "guid": guid8,
@@ -134,6 +140,7 @@ async def _fetch_identity(db, guid8: str, fallback: str) -> dict:
         "discord_linked": discord_linked,
         "country": country,   # {flag, country, locale} or None (locale≠verified country)
         "twitch": twitch,     # {login, url} or None (live status = future, needs Helix creds)
+        "identity_link": identity_link,  # sick-leave attribution or None
     }
 
 
