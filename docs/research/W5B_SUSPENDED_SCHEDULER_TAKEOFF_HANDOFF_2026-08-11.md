@@ -4,7 +4,7 @@ Date: 2026-08-11
 
 Last reverified: 2026-08-13
 
-Status: implementation in progress; S0-S3 implementation complete, S3 closure pending exact-head review/CI gate
+Status: implementation in progress; S0-S3 closed, S4 is the next implementation wave
 
 Current base: `origin/main` at `5f4ebc0ed65f38268ecafa8c45fb01f6fbc84576` (`v1.36.0`)
 
@@ -1402,7 +1402,28 @@ retained.
   denominator changed, and S5 still owns scheduler corpus measurement.
 - No production write, deploy, service restart, Python replacement, Lua change or
   other owner-gated operation was performed. Exact-head CI, fresh review, zero-thread
-  and quiet-window gates remain open; S4 has not started.
+  and quiet-window gates remained open at this code/test commit; S4 had not started.
+
+### 2026-08-13 - S3 exact-head gate closed
+
+- Closure head: `f781525b`, based on current `origin/main` `5f4ebc0e` (`v1.36.0`).
+  Local and remote branch heads matched, the PR base matched current main, GitHub
+  reported the draft PR mergeable with `mergeable_state=clean`, and no force-push or
+  history rewrite occurred.
+- All exact-head checks passed: Python lint/tests on 3.11 and 3.13, Python and
+  JavaScript CodeQL, Codacy, security, Docker build, React typecheck/tests, JavaScript
+  lint, ShellCheck, file checks and workflow lint.
+- CodeRabbit reviewed exact head `f781525b` and found no remaining blocker in the
+  requested S2/S3 ownership and identity scope. The Codex bot request reached its
+  usage limit; the local exact-head self-review therefore remained the second review
+  path, as allowed by the documented protocol.
+- All seven late actionable threads were answered only after their fixes were pushed
+  and then resolved. The final GraphQL refresh reported 28 total resolved threads and
+  zero unresolved threads. No new issue or review comment appeared between the last
+  review activity at 13:15:25 Europe/Ljubljana and the final refresh at 13:20:51.
+- S3 is closed. The next permitted work is S4 canonical visited-state search, exact
+  cycle/budget frontiers and only footprint-proven partial-order reduction. S5 corpus
+  measurement and S6 graph verdicts remain blocked until S4 passes the same gate.
 
 At every substantive commit, append:
 
