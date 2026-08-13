@@ -267,7 +267,21 @@ class BOXScoringService:
             if round_num == 2:
                 current_has_r2 = True
 
-            is_fullhold = round_outcome.lower() == "fullhold" if round_outcome else False
+            # Fullhold = the defenders held = the defending side won the round.
+            # Derive it from winner/defender when both are known: the stored
+            # round_outcome text is a parser TIME heuristic (map_time -
+            # actual_time <= 30s → "Fullhold", community_stats_parser.
+            # determine_round_outcome), so any objective completed in the last
+            # 30 seconds is mislabeled "Fullhold" — which scored a real map win
+            # as a 1-1 "double fullhold" draw here while the stopwatch scorer
+            # (winner/header-driven) scored it 2-0, a live cross-page
+            # divergence on 3 of 10 recent sessions (e.g. gsid 141 supply:
+            # R1 completed at 11:57 of 12:00). The text stays as fallback for
+            # rounds whose sides never parsed.
+            if winner_team > 0 and defender_team > 0:
+                is_fullhold = winner_team == defender_team
+            else:
+                is_fullhold = round_outcome.lower() == "fullhold" if round_outcome else False
 
             results.append(RoundResult(
                 map_number=map_number,
