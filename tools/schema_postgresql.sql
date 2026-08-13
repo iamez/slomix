@@ -9002,3 +9002,20 @@ CREATE TABLE IF NOT EXISTS player_identity_links (
 );
 CREATE INDEX IF NOT EXISTS idx_player_identity_links_primary
     ON player_identity_links (primary_guid);
+
+-- 075: canonical_guid(guid) — Phase 3 identity-merge resolution. Folds a chain
+-- of 'merged' alt→primary links to its root; a guid with no merged link resolves
+-- to itself. Mirrored here so a fresh bootstrap has the function the leaderboard
+-- (and other merge-aware aggregations) call. Kept in sync with migration 075.
+CREATE OR REPLACE FUNCTION canonical_guid(p_guid TEXT) RETURNS TEXT AS $$
+  WITH RECURSIVE chain(guid, depth) AS (
+    SELECT p_guid, 0
+    UNION ALL
+    SELECT l.primary_guid, c.depth + 1
+    FROM chain c
+    JOIN player_identity_links l
+      ON l.alt_guid = c.guid AND l.link_type = 'merged'
+    WHERE c.depth < 16
+  )
+  SELECT guid FROM chain ORDER BY depth DESC LIMIT 1;
+$$ LANGUAGE sql STABLE;
