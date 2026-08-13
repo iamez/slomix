@@ -4,7 +4,7 @@ Date: 2026-08-11
 
 Last reverified: 2026-08-13
 
-Status: implementation in progress; S0-S1 complete, S2 pending handoff-only exact-head gate
+Status: implementation in progress; S0-S2 implementation complete, S2 closure pending handoff-only exact-head gate
 
 Current base: `origin/main` at `42fe7819860a7f4c1eaed8637c74463041355a18`
 
