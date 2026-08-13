@@ -2221,11 +2221,24 @@ class PostgreSQLDatabaseManager:
             round_number = parsed_data.get('round_num', parsed_data.get('round_number', 1))
             logger.debug(f"🔧 Using parser round_number: {round_number}")
 
-        time_limit = parsed_data.get('time_limit', '0')
+        # Parser emits the map/next time limit under 'map_time' — reading the
+        # non-existent 'time_limit' key stored the literal '0' on 1777/2048
+        # historical rows (audit 2026-08-14), silently breaking every
+        # DB-side time computation (e.g. stopwatch_scoring_service's time
+        # fallback). 'time_limit' kept as second choice for old callers.
+        time_limit = parsed_data.get('map_time', parsed_data.get('time_limit', '0'))
         actual_time = parsed_data.get('actual_time', '0')
         winner = parsed_data.get('winner_team', 0)
         defender = parsed_data.get('defender_team', 0)
         round_outcome = parsed_data.get('round_outcome', '')
+        # Round-contract columns (migration 012) the production INSERT never
+        # wrote — 0/3029 populated before 2026-08-14. The parser computes all
+        # four; persisting them makes side-parse trust auditable (backfill
+        # gates) and the stopwatch state queryable.
+        score_confidence = parsed_data.get('score_confidence')
+        round_stopwatch_state = parsed_data.get('round_stopwatch_state')
+        time_to_beat_seconds = parsed_data.get('time_to_beat_seconds')
+        next_timelimit_minutes = parsed_data.get('next_timelimit_minutes')
 
         # Bot/filler/orphan validity flags. This manager is the PRODUCTION
         # import path (the gate logic in stats_import_mixin only runs on the
@@ -2278,8 +2291,10 @@ class PostgreSQLDatabaseManager:
                 INSERT INTO rounds
                 (round_date, round_time, match_id, map_name, round_number,
                  time_limit, actual_time, winner_team, defender_team, round_outcome, gaming_session_id, round_status, created_at,
-                 is_bot_round, bot_player_count, human_player_count, is_valid)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                 is_bot_round, bot_player_count, human_player_count, is_valid,
+                 score_confidence, round_stopwatch_state, time_to_beat_seconds, next_timelimit_minutes)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+                        $18, $19, $20, $21)
                 ON CONFLICT (match_id, round_number) DO UPDATE SET
                     round_date = EXCLUDED.round_date,
                     round_time = EXCLUDED.round_time,
@@ -2287,6 +2302,16 @@ class PostgreSQLDatabaseManager:
                     round_status = EXCLUDED.round_status,
                     winner_team = EXCLUDED.winner_team,
                     defender_team = EXCLUDED.defender_team,
+                    -- round_outcome/time_limit/contract columns update on
+                    -- re-import too (previously omitted — M-IMPORT-004 — so a
+                    -- re-import could never repair a mislabeled outcome).
+                    round_outcome = EXCLUDED.round_outcome,
+                    time_limit = EXCLUDED.time_limit,
+                    actual_time = EXCLUDED.actual_time,
+                    score_confidence = EXCLUDED.score_confidence,
+                    round_stopwatch_state = EXCLUDED.round_stopwatch_state,
+                    time_to_beat_seconds = EXCLUDED.time_to_beat_seconds,
+                    next_timelimit_minutes = EXCLUDED.next_timelimit_minutes,
                     is_bot_round = EXCLUDED.is_bot_round,
                     bot_player_count = EXCLUDED.bot_player_count,
                     human_player_count = EXCLUDED.human_player_count,
@@ -2297,7 +2322,8 @@ class PostgreSQLDatabaseManager:
                 """,
                 file_date, round_time, match_id, map_name, round_number,
                 time_limit, actual_time, winner, defender, round_outcome, gaming_session_id, round_status, datetime.now(),
-                validity['is_bot_round'], validity['bot_player_count'], validity['human_player_count'], validity['is_valid']
+                validity['is_bot_round'], validity['bot_player_count'], validity['human_player_count'], validity['is_valid'],
+                score_confidence, round_stopwatch_state, time_to_beat_seconds, next_timelimit_minutes
             )
 
             # 🆕 RESTART DETECTION: Check for earlier rounds that should be marked as cancelled/substitution
