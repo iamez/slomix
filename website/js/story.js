@@ -269,6 +269,9 @@ async function loadStoryData() {
         }
 
         storyState.players = Array.isArray(data?.players) ? data.players : [];
+        // Session's REAL total kills (backend now sends the player_comprehensive_stats
+        // count, not the KIS-tracked subset the per-player rows carry).
+        storyState.totalKills = Number.isFinite(data?.total_kills) ? data.total_kills : null;
 
         if (storyState.players.length === 0) {
             renderEmpty('No kill impact data for this session');
@@ -411,7 +414,12 @@ function renderStoryHero(sessionDate, players) {
     const statsRow = document.getElementById('story-stats-row');
 
     const totalKIS = players.reduce((s, p) => s + (p.total_kis || 0), 0);
-    const totalKills = players.reduce((s, p) => s + (p.kills || 0), 0);
+    // Prefer the backend's real session total; fall back to the KIS-kill sum only
+    // if it's missing (per-player p.kills is the proximity-tracked subset, so the
+    // sum reads far below the session's actual kill count).
+    const totalKills = (storyState.totalKills != null)
+        ? storyState.totalKills
+        : players.reduce((s, p) => s + (p.kills || 0), 0);
     const topPlayer = players[0];
 
     if (title) title.textContent = `Session ${sessionDate}`;
@@ -430,6 +438,17 @@ function renderStoryHero(sessionDate, players) {
     }
 }
 
+// Session-arc badge palette. Every class here is one already emitted elsewhere in
+// this file, so the build-time Tailwind scan keeps them (the /70,/80 safelist
+// lesson) — do not introduce a new opacity/border variant without checking.
+const ARC_SHAPE_META = {
+    statement:  { label: 'Statement',  cls: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' },
+    comeback:   { label: 'Comeback',   cls: 'bg-amber-500/15 text-amber-300 border border-amber-500/30' },
+    nail_biter: { label: 'Nail-biter', cls: 'bg-rose-500/15 text-rose-300 border border-rose-500/30' },
+    trade_fest: { label: 'Trade-fest', cls: 'bg-blue-500/15 text-blue-400 border border-blue-500/30' },
+    decisive:   { label: 'Decisive',   cls: 'bg-slate-500/20 text-slate-300' },
+};
+
 function renderNarrative(data) {
     const container = document.getElementById('story-narrative');
     if (!container) return;
@@ -439,6 +458,24 @@ function renderNarrative(data) {
     if (!text) return;
 
     const card = _el('div', 'rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4');
+
+    // Session arc — glanceable shape-of-the-night pill above the prose, so the
+    // story's shape reads at a glance and not only buried in the paragraph.
+    const arc = data?.session_arc;
+    const meta = arc && arc.shape ? ARC_SHAPE_META[arc.shape] : null;
+    if (meta) {
+        const row = _el('div', 'mb-3 flex items-center gap-2 flex-wrap');
+        const pill = _el('span',
+            `inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${meta.cls}`,
+            meta.label);
+        row.appendChild(pill);
+        if (arc.winner != null && arc.ws != null && arc.ls != null) {
+            row.appendChild(_el('span', 'text-xs text-slate-400',
+                `${arc.winner} · ${arc.ws}–${arc.ls}`));
+        }
+        card.appendChild(row);
+    }
+
     const content = _el('div', 'text-sm text-slate-400 italic leading-relaxed', text);
     content.style.opacity = '0.8';
     card.appendChild(content);
