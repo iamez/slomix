@@ -4,11 +4,16 @@ Handles file storage, retrieval, and metadata for community uploads.
 Follows the GreatshotStorageService pattern.
 """
 
+import fcntl
 import hashlib
+import json
 import os
+import re
 import shutil
+import time
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
@@ -33,6 +38,15 @@ UPLOAD_CHUNK_SIZE = 1024 * 1024  # 1MB chunks
 # upload.
 POSTER_MAX_BYTES = 1024 * 1024  # 1 MB is ample for a thumbnail JPEG
 _JPEG_MAGIC = b"\xff\xd8\xff"
+
+# Resumable uploads (Faza 3b). A large clip (up to 500 MB) survives a dropped
+# connection by uploading in chunks to a .part file under _incoming/, tracked by
+# a JSON sidecar (no schema migration), and finalised — validated, hashed, moved
+# — only when the byte count matches the declared size. A sweep reclaims
+# sessions abandoned mid-upload.
+_INCOMING_DIR = "_incoming"
+RESUMABLE_CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB suggested client chunk
+_SESSION_ID_RE = re.compile(r"[0-9a-f]{32}\Z")
 
 
 @dataclass
@@ -287,6 +301,203 @@ class UploadStorageService:
         except Exception:  # noqa: BLE001 — poster is decorative; never fatal
             logger.warning("poster save failed for %s", upload_id, exc_info=True)
             return None
+
+    # ── Resumable uploads (Faza 3b) ────────────────────────────────────────
+
+    def _incoming_root(self) -> Path:
+        return self.root / _INCOMING_DIR
+
+    def _session_paths(self, session_id: str) -> tuple[Path, Path]:
+        """(.part, .json) paths for a session, after validating the id shape.
+
+        session_id is our own uuid4().hex, so a value that is not 32 hex chars
+        is malformed input — reject it before it ever forms a filesystem path.
+        """
+        if not _SESSION_ID_RE.match(session_id or ""):
+            raise HTTPException(status_code=400, detail="Invalid upload session id")
+        base = self._incoming_root() / session_id
+        return base.with_suffix(".part"), base.with_suffix(".json")
+
+    @staticmethod
+    def _write_session(meta_path: Path, session: dict) -> None:
+        """Write the JSON sidecar ATOMICALLY: a temp file + os.replace, so a crash
+        mid-write can never leave a truncated/corrupt session record."""
+        tmp = meta_path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(session))
+        os.replace(tmp, meta_path)
+
+    def create_resumable_session(
+        self, *, filename: str, category: str, size: int, uploader_discord_id: int,
+        title: str, description: str, tags: str, retention_days: int | None,
+    ) -> dict:
+        """Open a resumable session: validate the declared file, reserve nothing
+        but check disk headroom, and write an empty .part + a JSON sidecar."""
+        try:
+            extension = validate_extension(filename, category)
+        except ValueError as e:
+            # A filename whose extension doesn't fit the category is bad input,
+            # not a server fault — surface it as 400, like the single-shot path.
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        limit = get_size_limit(category)
+        if size <= 0 or size > limit:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Declared size {size} bytes is out of range (1..{limit} for {category}).",
+            )
+        self.ensure_storage_tree()
+        inc = self._incoming_root()
+        inc.mkdir(parents=True, exist_ok=True)
+        try:
+            # 0o700 = owner-only (rwx for us, nothing for group/other) — the most
+            # restrictive useful mode, matching the storage root. nosec: the
+            # scanner reads any explicit chmod as "permissive"; this is the opposite.
+            os.chmod(inc, 0o700)  # nosec B103
+        except OSError as e:
+            logger.debug("Could not chmod incoming dir: %s", e)
+        # Require headroom for the whole declared file before accepting any bytes.
+        self._check_disk_space(required_bytes=size)
+
+        session_id = uuid.uuid4().hex
+        part, meta = self._session_paths(session_id)
+        part.touch()
+        session = {
+            "session_id": session_id,
+            "filename": Path(filename).name,
+            "category": category,
+            "extension": extension,
+            "size": int(size),
+            "offset": 0,
+            "uploader_discord_id": int(uploader_discord_id),
+            "title": title,
+            "description": description,
+            "tags": tags,
+            "retention_days": retention_days,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._write_session(meta, session)
+        return session
+
+    def get_resumable_session(self, session_id: str) -> dict | None:
+        _, meta = self._session_paths(session_id)
+        if not meta.is_file():
+            return None
+        try:
+            return json.loads(meta.read_text())
+        except (OSError, ValueError):
+            return None
+
+    def append_chunk(self, session_id: str, offset: int, data: bytes) -> int:
+        """Append one chunk at the expected offset; return the new offset.
+
+        The client's offset must equal the server's current offset (409 with the
+        authoritative offset otherwise, so a client that lost track can resync),
+        and the running total can never exceed the declared size.
+        """
+        part, meta = self._session_paths(session_id)
+        session = self.get_resumable_session(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Unknown or expired upload session")
+        size = int(session["size"])
+        # Hold an exclusive lock on the .part for the WHOLE offset-check-and-write
+        # so two concurrent PATCHes on one session can't both pass the size check
+        # at offset N and interleave their appends (TOCTOU — Copilot). The .part
+        # size under the lock is the authoritative offset; the JSON is only a hint
+        # a crash could leave stale.
+        with part.open("ab") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                current = part.stat().st_size
+                if offset != current:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Offset mismatch: server is at {current}",
+                        headers={"Upload-Offset": str(current)},
+                    )
+                if current + len(data) > size:
+                    raise HTTPException(status_code=413, detail="Chunk would exceed the declared size")
+                handle.write(data)
+                handle.flush()
+                new_offset = current + len(data)
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        session["offset"] = new_offset
+        self._write_session(meta, session)
+        return new_offset
+
+    def finalize_resumable(self, session_id: str) -> tuple[SavedUpload, dict]:
+        """Validate a completed session and move it into the library.
+
+        Verifies the byte count matches the declaration, re-checks magic bytes on
+        the assembled file (never trust per-chunk), hashes it, and atomically
+        moves the .part into {category}/{upload_id}/. Returns (SavedUpload,
+        session-metadata) so the router can INSERT the row exactly as the
+        single-shot path does. The session sidecar is removed on success.
+        """
+        session = self.get_resumable_session(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Unknown or expired upload session")
+        part, meta = self._session_paths(session_id)
+        size = int(session["size"])
+        if int(session["offset"]) != size or not part.is_file() or part.stat().st_size != size:
+            raise HTTPException(status_code=409, detail="Upload is incomplete")
+
+        category = session["category"]
+        extension = session["extension"]
+        with part.open("rb") as handle:
+            header = handle.read(512)
+        try:
+            validate_magic_bytes(header, extension)
+        except ValueError as e:
+            # The assembled bytes are not what the extension claims — discard the
+            # session so the bad .part isn't left for the sweep to reclaim later.
+            self.abort_resumable(session_id)
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+        digest = hashlib.sha256()
+        with part.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(UPLOAD_CHUNK_SIZE), b""):
+                digest.update(chunk)
+
+        upload_id = uuid.uuid4().hex
+        upload_dir = self.root / category / upload_id
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        final_path = upload_dir / f"original{extension}"
+        part.replace(final_path)  # atomic within the same storage filesystem
+        meta.unlink(missing_ok=True)
+
+        saved = SavedUpload(
+            upload_id=upload_id,
+            original_filename=sanitize_filename(session["filename"]),
+            extension=extension,
+            stored_path=f"{category}/{upload_id}/original{extension}",
+            file_size_bytes=size,
+            content_hash_sha256=digest.hexdigest(),
+            category=category,
+        )
+        return saved, session
+
+    def abort_resumable(self, session_id: str) -> None:
+        part, meta = self._session_paths(session_id)
+        part.unlink(missing_ok=True)
+        meta.unlink(missing_ok=True)
+
+    def sweep_stale_resumable(self, max_age_hours: int = 24) -> int:
+        """Remove sessions abandoned mid-upload (their .part is older than the
+        cutoff). Returns how many were reclaimed."""
+        inc = self._incoming_root()
+        if not inc.is_dir():
+            return 0
+        cutoff = time.time() - max_age_hours * 3600
+        removed = 0
+        for part in inc.glob("*.part"):
+            try:
+                if part.stat().st_mtime < cutoff:
+                    part.unlink(missing_ok=True)
+                    part.with_suffix(".json").unlink(missing_ok=True)
+                    removed += 1
+            except OSError:
+                continue
+        return removed
 
     def _cleanup_failed_upload(self, file_path: Path) -> None:
         """

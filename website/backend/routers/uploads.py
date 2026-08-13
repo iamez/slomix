@@ -8,8 +8,20 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel, Field
 
 from website.backend.dependencies import _configured_admin_ids, get_db, require_admin_user
 from website.backend.logging_config import get_app_logger
@@ -52,6 +64,97 @@ _UPLOAD_ID_RE = re.compile(r"[0-9a-f]{32}\Z")
 def _require_valid_upload_id(upload_id: str) -> None:
     if not _UPLOAD_ID_RE.match(upload_id or ""):
         raise HTTPException(status_code=400, detail="Invalid upload id")
+
+
+async def _persist_upload(
+    db, storage, saved, *, discord_id, username, title, description, tags,
+    retention_days, poster_rel,
+):
+    """Insert the DB row + tags for a stored file and build the response.
+
+    Shared by the single-shot POST and the resumable finalize so both persist
+    identically (one INSERT contract, one tag-normalisation, one rollback). On a
+    DB failure the on-disk file (and poster) are removed so nothing is orphaned.
+    """
+    v = _get_validators()
+    safe_title = (title.strip() or v.sanitize_filename(saved.original_filename, max_len=100))[:200]
+    safe_desc = (description.strip())[:2000] if description else None
+
+    try:
+        await db.execute(
+            """
+            INSERT INTO uploads
+                (id, uploader_discord_id, uploader_name, category, title, description,
+                 original_filename, stored_path, extension, file_size_bytes,
+                 content_hash_sha256, mime_type, poster_path, status, expires_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$14,'active',
+                    CASE WHEN $13::int IS NULL THEN NULL
+                         ELSE CURRENT_TIMESTAMP + ($13::int * INTERVAL '1 day') END)
+            """,
+            (
+                saved.upload_id, discord_id, username, saved.category, safe_title,
+                safe_desc, saved.original_filename, saved.stored_path, saved.extension,
+                saved.file_size_bytes, saved.content_hash_sha256,
+                v.get_content_type(saved.extension), retention_days, poster_rel,
+            ),
+        )
+    except Exception as e:
+        # Rollback files on DB failure. Poster FIRST: delete_upload() rmdir's the
+        # upload directory after the original, which a leftover poster.jpg blocks.
+        if poster_rel:
+            try:
+                storage.delete_upload(poster_rel)
+            except Exception as poster_err:
+                logger.warning("⚠️ Poster rollback failed (orphaned poster): %s", poster_err)
+        try:
+            storage.delete_upload(saved.stored_path)
+        except Exception as cleanup_err:
+            logger.warning("⚠️ File rollback also failed (orphaned file): %s", cleanup_err)
+        logger.error("Upload DB insert failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to save upload metadata") from e
+
+    # Insert tags (normalise unicode, strip non-alphanumeric).
+    failed_tags: list[str] = []
+    tag_list: list[str] = []
+    if tags.strip():
+        import unicodedata
+        raw_tags = [t.strip().lower() for t in tags.split(",") if t.strip()]
+        for t in raw_tags:
+            t = unicodedata.normalize("NFKC", t)
+            t = re.sub(r"[^\w\-\s]", "", t).strip()[:50]
+            if t and t not in tag_list:
+                tag_list.append(t)
+            if len(tag_list) >= 10:
+                break
+        for tag in tag_list:
+            try:
+                await db.execute(
+                    "INSERT INTO upload_tags (upload_id, tag) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    (saved.upload_id, tag),
+                )
+            except Exception as e:
+                logger.warning("Tag insert failed for upload %s, tag '%s': %s", saved.upload_id, tag, e)
+                failed_tags.append(tag)
+
+    if failed_tags:
+        logger.warning("Upload %s: %d/%d tags failed to save: %s",
+                       saved.upload_id, len(failed_tags), len(tag_list), failed_tags)
+
+    logger.info("File uploaded: id=%s user=%s category=%s size=%d",
+                saved.upload_id, discord_id, saved.category, saved.file_size_bytes)
+
+    response = {
+        "upload_id": saved.upload_id,
+        "filename": saved.original_filename,
+        "title": safe_title,
+        "category": saved.category,
+        "file_size_bytes": saved.file_size_bytes,
+        "share_url": f"/share/{saved.upload_id}",
+    }
+    if failed_tags:
+        response["failed_tags"] = failed_tags
+        response["warning"] = f"{len(failed_tags)} tag(s) failed to save: {', '.join(failed_tags)}"
+    return response
 
 
 def _may_delete(request: Request, uploader_discord_id: int | None) -> bool:
@@ -184,112 +287,173 @@ async def upload_file(
         logger.error("Upload save failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Upload failed") from e
 
-    safe_title = (title.strip() or v.sanitize_filename(saved.original_filename, max_len=100))[:200]
-    safe_desc = (description.strip())[:2000] if description else None
-
     # Store the poster only for browser-playable clips (.mp4); best-effort, so a
     # bad poster leaves poster_path NULL and the card falls back to the icon.
     poster_rel = None
     if poster is not None and saved.extension == ".mp4":
         poster_rel = await storage.save_poster(saved.upload_id, saved.category, poster)
 
-    # Insert metadata into DB
-    try:
-        await db.execute(
-            """
-            INSERT INTO uploads
-                (id, uploader_discord_id, uploader_name, category, title, description,
-                 original_filename, stored_path, extension, file_size_bytes,
-                 content_hash_sha256, mime_type, poster_path, status, expires_at)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$14,'active',
-                    CASE WHEN $13::int IS NULL THEN NULL
-                         ELSE CURRENT_TIMESTAMP + ($13::int * INTERVAL '1 day') END)
-            """,
-            (
-                saved.upload_id,
-                discord_id,
-                username,
-                saved.category,
-                safe_title,
-                safe_desc,
-                saved.original_filename,
-                saved.stored_path,
-                saved.extension,
-                saved.file_size_bytes,
-                saved.content_hash_sha256,
-                v.get_content_type(saved.extension),
-                retention_days,
-                poster_rel,
-            ),
-        )
-    except Exception as e:
-        # Rollback files on DB failure. Delete the poster FIRST: delete_upload()
-        # rmdir's the upload directory after removing the original, which a
-        # leftover poster.jpg would block — orphaning the whole directory.
-        if poster_rel:
-            try:
-                storage.delete_upload(poster_rel)
-            except Exception as poster_err:
-                logger.warning("⚠️ Poster rollback failed (orphaned poster): %s", poster_err)
-        try:
-            storage.delete_upload(saved.stored_path)
-        except Exception as cleanup_err:
-            logger.warning("⚠️ File rollback also failed (orphaned file): %s", cleanup_err)
-        logger.error("Upload DB insert failed: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to save upload metadata") from e
-
-    # Insert tags (normalize unicode, strip non-alphanumeric)
-    failed_tags: list[str] = []
-    if tags.strip():
-        import re
-        import unicodedata
-        raw_tags = [t.strip().lower() for t in tags.split(",") if t.strip()]
-        tag_list = []
-        for t in raw_tags:
-            t = unicodedata.normalize('NFKC', t)
-            t = re.sub(r'[^\w\-\s]', '', t).strip()[:50]
-            if t and t not in tag_list:
-                tag_list.append(t)
-            if len(tag_list) >= 10:
-                break
-        for tag in tag_list:
-            try:
-                await db.execute(
-                    "INSERT INTO upload_tags (upload_id, tag) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-                    (saved.upload_id, tag),
-                )
-            except Exception as e:
-                logger.warning(
-                    "Tag insert failed for upload %s, tag '%s': %s",
-                    saved.upload_id, tag, e,
-                )
-                failed_tags.append(tag)
-
-    if failed_tags:
-        logger.warning(
-            "Upload %s: %d/%d tags failed to save: %s",
-            saved.upload_id, len(failed_tags), len(tag_list), failed_tags,
-        )
-
-    logger.info(
-        "File uploaded: id=%s user=%s category=%s size=%d",
-        saved.upload_id, discord_id, saved.category, saved.file_size_bytes,
+    return await _persist_upload(
+        db, storage, saved,
+        discord_id=discord_id, username=username,
+        title=title, description=description, tags=tags,
+        retention_days=retention_days, poster_rel=poster_rel,
     )
 
-    response = {
-        "upload_id": saved.upload_id,
-        "filename": saved.original_filename,
-        "title": safe_title,
-        "category": saved.category,
-        "file_size_bytes": saved.file_size_bytes,
-        "share_url": f"/share/{saved.upload_id}",
-    }
 
-    if failed_tags:
-        response["failed_tags"] = failed_tags
-        response["warning"] = f"{len(failed_tags)} tag(s) failed to save: {', '.join(failed_tags)}"
+# ---------------------------------------------------------------------------
+# Resumable uploads (Faza 3b) — init / head / patch / finalize / abort
+#
+# A large clip survives a dropped connection: the client opens a session, PATCHes
+# the file in chunks at a tracked offset, and finalises when complete. A minimal
+# offset protocol (tus-inspired) — no external dependency. Every step is CSRF-
+# gated, owner-scoped, and bounded; validation (magic bytes, hash) happens at
+# finalize on the assembled file, never per chunk.
+# ---------------------------------------------------------------------------
 
-    return response
+# Hard cap on a single PATCH body so a malicious Content-Length can't be read
+# into memory. Generous vs the 8 MB suggested chunk.
+_MAX_PATCH_BYTES = 32 * 1024 * 1024
+
+
+class ResumableInit(BaseModel):
+    # Bounds mirror the single-shot limits so malformed/oversized metadata is
+    # rejected at the schema before any session is opened. size is only sanity-
+    # bounded here (1 byte .. 1 GB); the real per-category cap is enforced in
+    # create_resumable_session.
+    filename: str = Field(min_length=1, max_length=255)
+    size: int = Field(gt=0, le=1024 * 1024 * 1024)
+    title: str = Field(default="", max_length=200)
+    description: str = Field(default="", max_length=2000)
+    tags: str = Field(default="", max_length=200)
+    retention_days: int | None = None
+
+
+def _require_session_owner(session: dict, discord_id: int) -> None:
+    if int(session.get("uploader_discord_id", -1)) != discord_id:
+        raise HTTPException(status_code=403, detail="Not your upload session")
+
+
+@router.post("/resumable")
+async def init_resumable_upload(request: Request, payload: ResumableInit):
+    """Open a resumable session; returns the session id, current offset and the
+    suggested chunk size."""
+    require_ajax_csrf_header(request)
+    user = _require_user(request)
+    discord_id = int(user["id"])
+    _check_rate_limit(discord_id)
+
+    if payload.retention_days is not None and payload.retention_days not in _RETENTION_DAYS:
+        raise HTTPException(status_code=400, detail=f"Invalid retention_days. Allowed: {sorted(_RETENTION_DAYS)}, or omit.")
+
+    v = _get_validators()
+    ext = Path(payload.filename or "").suffix.lower()
+    category = v.detect_category(ext)
+    if not category:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type '{ext}'. Allowed: .cfg .hud .zip .rar .mp4 .avi .mkv")
+
+    storage = _get_storage()
+    # Opportunistically reclaim sessions abandoned long ago.
+    try:
+        storage.sweep_stale_resumable()
+    except Exception:
+        logger.debug("stale-session sweep failed", exc_info=True)
+
+    session = storage.create_resumable_session(
+        filename=payload.filename, category=category, size=payload.size,
+        uploader_discord_id=discord_id, title=payload.title,
+        description=payload.description, tags=payload.tags,
+        retention_days=payload.retention_days,
+    )
+    from website.backend.services.upload_store import RESUMABLE_CHUNK_SIZE
+    return {"session_id": session["session_id"], "offset": 0,
+            "chunk_size": RESUMABLE_CHUNK_SIZE, "category": category}
+
+
+@router.head("/resumable/{session_id}")
+async def resumable_offset(session_id: str, request: Request):
+    """Report the server's current offset so a reconnecting client resumes from
+    exactly where it left off."""
+    user = _require_user(request)
+    storage = _get_storage()
+    session = storage.get_resumable_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Unknown or expired upload session")
+    _require_session_owner(session, int(user["id"]))
+    return Response(status_code=200, headers={
+        "Upload-Offset": str(session["offset"]),
+        "Upload-Length": str(session["size"]),
+    })
+
+
+@router.patch("/resumable/{session_id}")
+async def resumable_patch(session_id: str, request: Request,
+                          upload_offset: int = Header(...)):
+    """Append one chunk at the expected offset; returns the new offset."""
+    require_ajax_csrf_header(request)
+    user = _require_user(request)
+    storage = _get_storage()
+    session = storage.get_resumable_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Unknown or expired upload session")
+    _require_session_owner(session, int(user["id"]))
+
+    # Fast pre-check on the declared length, then enforce the cap WHILE streaming
+    # — a client can lie about Content-Length or omit it (chunked encoding), so
+    # request.body() would otherwise buffer an unbounded body into memory.
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > _MAX_PATCH_BYTES:
+        raise HTTPException(status_code=413, detail="Chunk too large")
+    buf = bytearray()
+    async for part in request.stream():
+        buf.extend(part)
+        if len(buf) > _MAX_PATCH_BYTES:
+            raise HTTPException(status_code=413, detail="Chunk too large")
+
+    new_offset = storage.append_chunk(session_id, upload_offset, bytes(buf))
+    return Response(status_code=204, headers={"Upload-Offset": str(new_offset)})
+
+
+@router.post("/resumable/{session_id}/finalize")
+async def finalize_resumable_upload(session_id: str, request: Request, db=Depends(get_db)):
+    """Validate + persist a completed session, exactly like the single-shot path."""
+    require_ajax_csrf_header(request)
+    user = _require_user(request)
+    discord_id = int(user["id"])
+    storage = _get_storage()
+    session = storage.get_resumable_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Unknown or expired upload session")
+    _require_session_owner(session, discord_id)
+
+    saved, meta = storage.finalize_resumable(session_id)  # validates completeness + magic bytes
+    try:
+        return await _persist_upload(
+            db, storage, saved,
+            discord_id=discord_id, username=user.get("username", "Unknown"),
+            title=meta.get("title", ""), description=meta.get("description", ""),
+            tags=meta.get("tags", ""), retention_days=meta.get("retention_days"),
+            poster_rel=None,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Resumable finalize persist failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to finalize upload") from e
+
+
+@router.delete("/resumable/{session_id}")
+async def abort_resumable_upload(session_id: str, request: Request):
+    """Discard an in-progress session (user cancelled)."""
+    require_ajax_csrf_header(request)
+    user = _require_user(request)
+    storage = _get_storage()
+    session = storage.get_resumable_session(session_id)
+    if session is None:
+        return {"success": True}  # already gone
+    _require_session_owner(session, int(user["id"]))
+    storage.abort_resumable(session_id)
+    return {"success": True}
 
 
 # ---------------------------------------------------------------------------
