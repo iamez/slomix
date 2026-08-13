@@ -6,7 +6,7 @@ Last reverified: 2026-08-13
 
 Status: implementation in progress; S0-S3 implementation complete, S3 closure pending exact-head review/CI gate
 
-Current base: `origin/main` at `66567ed82cb06f6f7068e1dc755a85507b78fdee`
+Current base: `origin/main` at `5f4ebc0ed65f38268ecafa8c45fb01f6fbc84576` (`v1.36.0`)
 
 Original branch base: `origin/main` at `d6136cdd994870fddf4e4d0ff1968eb91418e497`
 
@@ -1328,11 +1328,12 @@ retained.
 - Code/test commit: `2cf41622`. A late Codex review against the earlier S2 evidence
   head produced five still-actionable findings even though their original diff anchors
   were outdated. They were treated as blockers rather than dismissed as stale.
-- Main sync commit: `05feb195`. While this follow-up was being verified,
+- Main sync commits: `05feb195` and `e8de37c1`. While this follow-up was being verified,
   `origin/main` advanced from `d1c89142` to `66567ed8` through identity-merge Phase 3,
-  the KIS modal fix and `v1.36.0` release configuration. None of the ten changed main
-  paths overlapped the scheduler, its tests or this handoff; main was merged normally
-  and no history was rewritten.
+  the KIS modal fix and `v1.36.0` release configuration, then to the tagged
+  `5f4ebc0e` release-metadata merge. None of the 17 changed main paths overlapped the
+  scheduler, its tests or this handoff; main was merged normally and no history was
+  rewritten.
 - The scheduler now walks the caller's complete known tag-parent ancestor chain before
   using raw entity order. A direct or transitive target ancestor has already run and
   therefore wakes only on `NEXT_FRAME`; an absent/unknown caller relation or a cycle
