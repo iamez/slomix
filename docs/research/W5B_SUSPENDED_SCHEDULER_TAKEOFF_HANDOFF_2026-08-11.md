@@ -1053,7 +1053,7 @@ retained.
 - [x] Complete S0b source-proven `alertentity` event dispatch and regenerate the
   denominator.
 - [x] Complete S1 immutable state/canonicalization.
-- [ ] Complete S2 single suspended continuation.
+- [x] Complete S2 single suspended continuation.
 - [ ] Complete S3 nested state/shared-target handling.
 - [ ] Complete S4 bounded search/reduction.
 - [ ] Complete S5 exact corpus evidence.
@@ -1220,6 +1220,57 @@ retained.
 - Next item: pass the exact-head documentation gate, then implement S2 as one suspended
   cross-entity continuation without starting S3 behavior.
 
+### 2026-08-13 - S2 single suspended cross-entity continuation
+
+- S2 code commits: `7695bb7a` and `fcf14726`; the latter is the reviewed substantive
+  head. `step_symbolic_schedule()` executes one source-ordered transition and remains
+  deliberately narrower than the S3 shared-target/replacement runner and S4 bounded
+  search.
+- The accepted entry is one statically resolved `trigger`, one concrete selected
+  target and different caller/target entities. The first transition runs the target
+  through the existing single-event walker to its first temporal boundary, stores the
+  exact boundary cursor/state and keeps the caller suffix runnable. Shared groups and
+  same-entity replacement remain named S3 frontiers; multiple runnable or suspended
+  tasks remain named S4 frontiers.
+- `SuspendedContinuation.caller_suffix_completed` is canonical state identity. The
+  target cannot re-enter while it is false. The next transition runs the exact caller
+  suffix and only then sets it true; a direct premature-resume regression proves the
+  inverse ordering is rejected.
+- A `resetscript`/`halt` next-frame boundary re-enters its exact action and then runs
+  the target suffix. The synthetic fixture proves caller-then-target effect order and
+  reaches a task-empty `COMPLETE` state. Fixed waits use ordinary entity-pass order
+  only when the target is explicitly proven unattached: a later entity gets
+  `SAME_FRAME_LATER`, an already visited entity gets `NEXT_FRAME`, and a same-frame
+  false re-entry advances only the wake constraint, not the script cursor. Completion
+  time remains `wait_completion_time_unverified`, not an invented clock value.
+- Missing/unknown tag-parent entry state produces `TAG_PARENT_ORDER_UNKNOWN` plus
+  `tag_parent_state_unknown`; an attached relation outside S2 produces
+  `tag_parent_order_not_modeled`. Movement completion remains
+  `movement_completion_time_unverified`. None of these paths falls back to raw entity
+  order or silently resolves an unknown.
+- Review found one P1 at `7695bb7a`: deferred caller or resumed-target suffixes kept
+  the blocker but discarded already executed prefix state. `fcf14726` retains
+  `path.state`, appends source-bound effect records and places the terminal evidence
+  frame at the exact later instruction. Regressions prove caller local accumulator 0
+  remains 7, target local accumulator 1 remains 9, both `setstate` effects remain in
+  source order and both terminal cursors identify the later wait.
+- Exact local evidence at `fcf14726`: 171/171 scheduler plus possibility tests,
+  311/311 map-geometry unit tests with one unrelated existing skip, and the complete
+  repository suite at 4,532 passed / 97 environment or opt-in skips / 30 warnings.
+  Ruff and `git diff --check` passed. Exact-head GitHub CI passed on Python 3.11 and
+  3.13, CodeQL, Codacy, security, Docker, JavaScript/React and shell checks.
+- CodeRabbit reviewed exact head `fcf14726`, confirmed the P1 closure and reported no
+  remaining S2 blocker. All 21 existing review threads remained resolved. The Codex
+  exact-head request had not returned at this record point; this documentation-only
+  checkpoint must receive a fresh complete review/thread/CI/quiet-window gate before
+  S3 starts.
+- No installed-corpus denominator changes are claimed in S2. S5 still owns the exact
+  20-map before/after measurement; no unknown disappeared from a denominator here.
+- No production write, deploy, service restart, Python replacement, Lua change or
+  other owner-gated operation was performed.
+- Next item: pass this exact-head evidence gate, then implement S3 nested state return,
+  shared concrete target order and same-entity replacement without opening S4 early.
+
 At every substantive commit, append:
 
 - commit SHA and whether it changes contract, code, tests or evidence;
@@ -1230,5 +1281,6 @@ At every substantive commit, append:
 - the next incomplete checklist item;
 - any owner-gated operation prepared but not executed.
 
-The next agent must begin at S0 and re-run source verification. Chat history is not a
-substitute for the pinned source, tests and measured artifacts recorded here.
+The next agent must begin at the first unchecked implementation wave and re-run every
+source verification relevant to that wave. Chat history is not a substitute for the
+pinned source, tests and measured artifacts recorded here.
