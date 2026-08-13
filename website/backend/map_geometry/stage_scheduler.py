@@ -170,6 +170,34 @@ class SymbolicInvocationStep:
         if self.target_ordinal >= len(targets):
             raise ValueError("symbolic invocation target ordinal is outside its dispatch target group")
 
+    def target_entity_index(self, index: OrderedStageProgramIndex) -> int:
+        self.validate(index)
+        return _dispatch_target_group(index, self.dispatch_cursor, self.target_node_id)[self.target_ordinal]
+
+
+def _validate_invocation_path(
+    index: OrderedStageProgramIndex,
+    invocation_path: tuple[SymbolicInvocationStep, ...],
+    *,
+    terminal_node_id: str,
+    terminal_entity_index: int,
+) -> None:
+    for step in invocation_path:
+        step.validate(index)
+    for parent, child in zip(invocation_path, invocation_path[1:], strict=False):
+        if (
+            child.dispatch_cursor.node_id != parent.target_node_id
+            or child.dispatch_cursor.entity_index != parent.target_entity_index(index)
+        ):
+            raise ValueError("symbolic invocation path contains a disconnected dispatch step")
+    if invocation_path:
+        final = invocation_path[-1]
+        if (
+            final.target_node_id != terminal_node_id
+            or final.target_entity_index(index) != terminal_entity_index
+        ):
+            raise ValueError("symbolic invocation path does not terminate at its current event owner")
+
 
 @dataclass(frozen=True, slots=True)
 class PendingDispatchContext:
@@ -199,8 +227,8 @@ class PendingDispatchContext:
             or self.caller_resume_cursor.entity_index != self.dispatch_cursor.entity_index
         ):
             raise ValueError("pending dispatch caller resume cursor does not belong to its dispatch frame")
-        if self.caller_resume_cursor.instruction_offset <= self.dispatch_cursor.instruction_offset:
-            raise ValueError("pending dispatch caller must resume after its dispatch instruction")
+        if self.caller_resume_cursor.instruction_offset != self.dispatch_cursor.instruction_offset + 1:
+            raise ValueError("pending dispatch caller must resume immediately after its dispatch instruction")
         expected_targets = _dispatch_target_group(index, self.dispatch_cursor, self.target_node_id)
         if self.ordered_target_entity_indices != expected_targets:
             raise ValueError(
@@ -218,8 +246,12 @@ class SymbolicFrame:
 
     def validate(self, index: OrderedStageProgramIndex) -> None:
         self.cursor.validate(index)
-        for step in self.invocation_path:
-            step.validate(index)
+        _validate_invocation_path(
+            index,
+            self.invocation_path,
+            terminal_node_id=self.cursor.node_id,
+            terminal_entity_index=self.cursor.entity_index,
+        )
         for cursor in self.call_stack:
             cursor.validate(index, allow_complete=True)
         if self.pending_dispatch is not None:
@@ -314,8 +346,12 @@ class SymbolicEventOwner:
         program = index.program(self.event_node_id)
         if self.entity_index not in program.source.lookup.selected_entity_indices:
             raise ValueError(f"event owner does not belong to ordered program {self.event_node_id!r}")
-        for step in self.invocation_path:
-            step.validate(index)
+        _validate_invocation_path(
+            index,
+            self.invocation_path,
+            terminal_node_id=self.event_node_id,
+            terminal_entity_index=self.entity_index,
+        )
 
 
 @dataclass(frozen=True, slots=True, order=True)
