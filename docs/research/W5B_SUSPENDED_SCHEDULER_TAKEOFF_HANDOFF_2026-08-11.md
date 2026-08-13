@@ -1152,6 +1152,10 @@ retained.
   unknown tag-parent ordering as adversarial fixture contracts. Their executable
   canonicalization/transition assertions remain S1-S3 work because the required state
   types do not exist yet.
+- CodeRabbit's exact-head `876de54d` source review independently traced the
+  `script_mover` flags/health/count path, target order, fail-closed dispositions,
+  nested dispatch and corpus arithmetic and reported no defect. The Codex review
+  request remains pending at this record point.
 - Next item: begin S1 immutable state and canonicalization only after exact-head S0
   review is clean.
 
