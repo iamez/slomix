@@ -7,7 +7,7 @@ ordered-program index and provides deterministic visited-state identity.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import TypeAlias
 
@@ -65,11 +65,10 @@ def _dispatch_target_group(
             raise ValueError("dispatch target program does not match its conditional trigger")
         return handler.source.lookup.selected_entity_indices
     if isinstance(instruction, StageEffectInstruction):
-        targets = tuple(
-            target.entity_index
-            for target in instruction.alert_targets
-            if target.event_handler_node_id == target_node_id
-        )
+        dispatch_targets = tuple(target for target in instruction.alert_targets if target.event_handler_node_id)
+        if any(target.event_handler_node_id != target_node_id for target in dispatch_targets):
+            raise ValueError("heterogeneous alert dispatch order cannot be represented by one pending group")
+        targets = tuple(target.entity_index for target in dispatch_targets)
         if not targets:
             raise ValueError("dispatch target program does not match its alert instruction")
         return targets
@@ -321,10 +320,18 @@ class SymbolicMovementBoundaryState:
     temporal_state: SymbolicTemporalBoundaryState
     waits_for_completion: bool
     effect_started: bool
+    effect_record_index: int | None = None
 
     def __post_init__(self) -> None:
         if not self.arguments or any(not argument for argument in self.arguments):
             raise ValueError("movement boundary requires its non-empty source arguments")
+        if self.effect_record_index is not None and self.effect_record_index < 0:
+            raise ValueError("movement boundary effect record index must be non-negative")
+        if self.command is SymbolicMovementCommand.GOTO_MARKER:
+            if self.effect_started != (self.effect_record_index is not None):
+                raise ValueError("gotomarker start state requires its current effect record index")
+        elif self.effect_record_index is not None:
+            raise ValueError("only gotomarker movement may reference a stage effect record")
         if self.temporal_state is SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE:
             if self.effect_started:
                 raise ValueError("a prior-movement boundary cannot claim the new route started")
@@ -348,6 +355,7 @@ class SymbolicAsyncMovementLifecycle:
     source_cursor: SymbolicProgramCursor
     command: SymbolicMovementCommand
     arguments: tuple[str, ...]
+    effect_record_index: int | None = None
     effect_footprint: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -355,6 +363,13 @@ class SymbolicAsyncMovementLifecycle:
             raise ValueError("asynchronous movement lifecycle requires its source arguments")
         if any(not item for item in self.effect_footprint):
             raise ValueError("asynchronous movement effect footprint entries must not be empty")
+        if self.effect_record_index is not None and self.effect_record_index < 0:
+            raise ValueError("asynchronous movement effect record index must be non-negative")
+        if self.command is SymbolicMovementCommand.GOTO_MARKER:
+            if self.effect_record_index is None:
+                raise ValueError("started gotomarker lifecycle requires its current effect record index")
+        elif self.effect_record_index is not None:
+            raise ValueError("only gotomarker lifecycle may reference a stage effect record")
 
     def validate(self, index: OrderedStageProgramIndex) -> None:
         self.source_cursor.validate(index)
@@ -398,6 +413,8 @@ class SuspendedContinuation:
         if isinstance(self.boundary_state, SymbolicNextFrameBoundaryState):
             if action.command != self.boundary_state.command.value:
                 raise ValueError("next-frame boundary state does not match its source action")
+            if self.wake_constraint is not SymbolicWakeConstraint.NEXT_FRAME:
+                raise ValueError("next-frame boundary requires a next-frame wake constraint")
             return
         if action.command != self.boundary_state.command.value or action.arguments != self.boundary_state.arguments:
             raise ValueError("movement boundary state does not match its source action")
@@ -490,13 +507,28 @@ def _validate_accumulator_domain(domain: SymbolicIntegerDomain, *, label: str) -
         raise ValueError(f"{label} has no possible value")
 
 
+def _canonical_accumulator_domain(domain: SymbolicIntegerDomain, *, label: str) -> SymbolicIntegerDomain:
+    _validate_accumulator_domain(domain, label=label)
+    relevant_exclusions = frozenset(
+        value
+        for value in domain.excluded
+        if domain.lower <= value <= domain.upper
+        and value & domain.required_set_bits == domain.required_set_bits
+        and not value & domain.required_clear_bits
+    )
+    return replace(domain, excluded=relevant_exclusions)
+
+
 def _canonical_accumulator_state(state: SymbolicAccumulatorState) -> SymbolicAccumulatorState:
-    _validate_accumulator_domain(state.default_domain, label="symbolic accumulator default domain")
+    default_domain = _canonical_accumulator_domain(
+        state.default_domain,
+        label="symbolic accumulator default domain",
+    )
     entity_values = {}
     for entity_index, buffer_index, value in state.entity_values:
         if entity_index < 0 or not 0 <= buffer_index < 10:
             raise ValueError("symbolic entity accumulator key is outside ET bounds")
-        _validate_accumulator_domain(value, label="symbolic entity accumulator domain")
+        value = _canonical_accumulator_domain(value, label="symbolic entity accumulator domain")
         key = (entity_index, buffer_index)
         if key in entity_values and entity_values[key] != value:
             raise ValueError("symbolic entity accumulator has conflicting duplicate values")
@@ -506,7 +538,7 @@ def _canonical_accumulator_state(state: SymbolicAccumulatorState) -> SymbolicAcc
     for buffer_index, value in state.global_values:
         if not 0 <= buffer_index < 10:
             raise ValueError("symbolic global accumulator key is outside ET bounds")
-        _validate_accumulator_domain(value, label="symbolic global accumulator domain")
+        value = _canonical_accumulator_domain(value, label="symbolic global accumulator domain")
         if buffer_index in global_values and global_values[buffer_index] != value:
             raise ValueError("symbolic global accumulator has conflicting duplicate values")
         global_values[buffer_index] = value
@@ -515,14 +547,14 @@ def _canonical_accumulator_state(state: SymbolicAccumulatorState) -> SymbolicAcc
         tuple(
             (entity_index, buffer_index, value)
             for (entity_index, buffer_index), value in sorted(entity_values.items())
-            if value != state.default_domain
+            if value != default_domain
         ),
         tuple(
             (buffer_index, value)
             for buffer_index, value in sorted(global_values.items())
-            if value != state.default_domain
+            if value != default_domain
         ),
-        state.default_domain,
+        default_domain,
     )
 
 
@@ -596,7 +628,13 @@ class SymbolicScheduleState:
             owner.validate(index)
         for effect in effects:
             effect.validate(index)
-        effect_source_cursors = {effect.source_cursor for effect in effects}
+        def effect_at(index_value: int, *, source_cursor: SymbolicProgramCursor) -> SymbolicEffectRecord:
+            if index_value >= len(effects):
+                raise ValueError("movement effect record index is outside scheduler effect history")
+            effect = effects[index_value]
+            if effect.source_cursor != source_cursor:
+                raise ValueError("movement effect record does not match its current source cursor")
+            return effect
 
         active_frames = tuple(runnable) + tuple(item.frame for item in suspended)
         active_entities = [frame.cursor.entity_index for frame in active_frames]
@@ -618,15 +656,15 @@ class SymbolicScheduleState:
                 isinstance(continuation.boundary_state, SymbolicMovementBoundaryState)
                 and continuation.boundary_state.command is SymbolicMovementCommand.GOTO_MARKER
             ):
-                has_route_effect = continuation.frame.cursor in effect_source_cursors
-                if continuation.boundary_state.effect_started != has_route_effect:
-                    raise ValueError("gotomarker boundary effect record does not match whether its route started")
+                effect_index = continuation.boundary_state.effect_record_index
+                if effect_index is not None:
+                    effect_at(effect_index, source_cursor=continuation.frame.cursor)
         for lifecycle in async_lifecycles:
-            if (
-                lifecycle.command is SymbolicMovementCommand.GOTO_MARKER
-                and lifecycle.source_cursor not in effect_source_cursors
-            ):
-                raise ValueError("started gotomarker lifecycle must retain its route effect record")
+            if lifecycle.command is SymbolicMovementCommand.GOTO_MARKER:
+                effect_index = lifecycle.effect_record_index
+                if effect_index is None:
+                    raise AssertionError("validated gotomarker lifecycle lost its effect record index")
+                effect_at(effect_index, source_cursor=lifecycle.source_cursor)
 
         owners_by_entity = {owner.entity_index: owner for owner in event_owners}
         if len(owners_by_entity) != len(event_owners):
@@ -725,6 +763,7 @@ def _lifecycle_sort_key(lifecycle: SymbolicAsyncMovementLifecycle) -> tuple[obje
         cursor.instruction_offset,
         lifecycle.command.value,
         lifecycle.arguments,
+        lifecycle.effect_record_index,
         lifecycle.effect_footprint,
     )
 
@@ -744,10 +783,8 @@ class SymbolicScheduleDecision:
             raise ValueError("symbolic schedule decision reason does not match its kind")
         if self.reason == "":
             raise ValueError("symbolic schedule decision reason must not be empty")
-        if self.kind is not SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED and self.state is None:
-            raise ValueError("non-exhaustion scheduler decisions require their resulting state")
         if self.state is None:
-            return
+            raise ValueError("scheduler decisions require their resulting frontier state")
         if self.kind is SymbolicScheduleDecisionKind.RUNNABLE and not self.state.runnable:
             raise ValueError("runnable scheduler decision requires runnable work")
         if self.kind is SymbolicScheduleDecisionKind.SUSPENDED and (
@@ -768,6 +805,8 @@ class SymbolicScheduleResult:
     exhaustion: SymbolicScheduleExhaustion | None = None
 
     def __post_init__(self) -> None:
+        if not self.decisions:
+            raise ValueError("symbolic schedule result requires at least one decision")
         if self.work_limit <= 0:
             raise ValueError("symbolic schedule work limit must be positive")
         if not 0 <= self.work_consumed <= self.work_limit:
@@ -785,6 +824,16 @@ class SymbolicScheduleResult:
             if decision.kind is SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED
         ):
             raise ValueError("symbolic schedule exhaustion decision reason does not match result metadata")
+        ordered = tuple(sorted(set(self.decisions), key=_decision_sort_key))
+        object.__setattr__(self, "decisions", ordered)
+
+
+def _decision_sort_key(decision: SymbolicScheduleDecision) -> tuple[str, str, str]:
+    return (
+        decision.kind.value,
+        decision.reason or "",
+        repr(decision.state.canonical_key),
+    )
 
 
 @dataclass(slots=True)
