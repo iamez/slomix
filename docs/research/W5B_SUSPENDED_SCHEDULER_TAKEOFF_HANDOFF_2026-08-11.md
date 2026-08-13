@@ -4,7 +4,7 @@ Date: 2026-08-11
 
 Last reverified: 2026-08-13
 
-Status: implementation in progress; S0-S1 complete, S2 pending exact-head gate
+Status: implementation in progress; S0-S1 complete, S2 pending handoff-only exact-head gate
 
 Current base: `origin/main` at `42fe7819860a7f4c1eaed8637c74463041355a18`
 
@@ -1168,7 +1168,7 @@ retained.
 ### 2026-08-13 - S1 immutable state and canonicalization
 
 - Main sync commits: `15b873bc` and `efbf89f9`; S1 code/review commits: `4f53c782`, `3ad4d981`,
-  `08928faf`, `b45bfd0c` and `1df54390`. The branch base is current
+  `08928faf`, `b45bfd0c`, `1df54390`, `076856bc` and `c5623426`. The branch base is current
   `origin/main` at `42fe7819`; main is an ancestor and there are no unmerged main
   commits at this record point.
 - The second sync integrated eight sick-leave/identity commits after the exact-head
@@ -1192,18 +1192,24 @@ retained.
   a suspended replacement. The T1 fixture proves attached, proven-unattached and
   unknown tag-parent states remain distinct. Transition-order behavior remains S2-S3
   scope.
-- Exact-head local evidence at `1df54390`: 17 scheduler tests, 149 scheduler plus
-  possibility tests and all 289 map-geometry unit tests passed; Ruff and
-  `git diff --check` passed. No corpus denominator changes in S1 because this wave
-  introduces state identity, not traversal.
+- Final S1 local evidence at `c5623426`: all 160 scheduler plus possibility tests and
+  all 300 map-geometry unit tests passed; Ruff and `git diff --check` passed. No corpus
+  denominator changes in S1 because this wave introduces state identity, not traversal.
 - Review found and closed five construction-boundary defect classes: stale S0 wording,
   missing executable adversaries, incomplete tag-parent state, dispatch ordinal not
   bound to the active frame, and pending target cursor not bound to the invocation.
   A final review then found the suspended/async lifecycle conflation; `1df54390`
   removed the invalid resume variants and separated the lifecycle types.
-- All exact-head CI checks passed and all five review threads were resolved.
-  CodeRabbit independently reviewed exact head `1df54390` and reported no open issue.
-  A final documentation-only evidence commit must receive a fresh exact-head gate
+- Two later full-boundary reviews found and closed ten more malformed-state classes:
+  concrete effect ownership, same-entity movement conflict, cross-entity saved stacks,
+  empty/out-of-range accumulator domains, non-ET numeric syntax, missing invocation
+  ancestry, missing `gotomarker` route evidence, decision/task-shape mismatch and
+  inconsistent exhaustion reasons. Each has a focused negative regression; valid
+  prior-motion, runnable, suspended and complete shapes have positive regressions.
+- All exact-head CI checks passed, all 15 review threads were resolved and CodeRabbit
+  independently reviewed exact head `c5623426` with no remaining S1 construction-
+  boundary issue. The PR was current with `main` and `clean` after the required quiet
+  window. This handoff-only evidence commit must receive one fresh exact-head gate
   before S2 starts.
 - No production write, deploy, service restart, Python replacement, Lua change or
   other owner-gated operation was performed.
