@@ -991,8 +991,11 @@ async def get_leaderboard(
     # branch below via {where_clause}, so one gate covers them all.
     where_clause = "WHERE round_number IN (1, 2) AND time_played_seconds > 0 AND UPPER(player_guid) NOT LIKE 'OMNIBOT%' AND player_name NOT LIKE '%[BOT]%' AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)"
     name_select = "MAX(player_name) as player_name"
-    guid_select = "player_guid"
-    group_by = "GROUP BY player_guid"
+    # Phase 3 identity merge: fold a player's 'merged' alt guids into their main
+    # identity so a post-guid-change history counts as one row. canonical_guid()
+    # is the identity for everyone else, so nothing else moves (migration 075).
+    guid_select = "canonical_guid(player_guid)"
+    group_by = "GROUP BY canonical_guid(player_guid)"
     # Removed session count filter - table doesn't track sessions, only rounds/dates
     having = ""  # No HAVING clause needed for basic leaderboard
 

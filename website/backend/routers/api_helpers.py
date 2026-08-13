@@ -513,6 +513,42 @@ async def fetch_identity_links(
     return out
 
 
+async def resolve_identity_guids(
+    db: DatabaseAdapter,
+    guid: str,
+) -> list[str]:
+    """Phase 3 identity merge (index-friendly): the set of guids that belong to
+    the same MERGED identity as ``guid``.
+
+    For a plain guid (no merge) this is just ``[guid]``. For a guid that is part
+    of a ``link_type='merged'`` group (either the primary or one of its merged
+    alts) it returns every member, so a single-player query can use
+    ``WHERE player_guid = ANY($1)`` — which keeps the player_guid index, unlike
+    ``WHERE canonical_guid(player_guid) = …`` (a function on the column defeats
+    the index). Best-effort: any failure degrades to ``[guid]``.
+    """
+    if not guid:
+        return []
+    try:
+        # canonical: if guid is a merged alt, its primary; else guid itself.
+        prim_row = await db.fetch_one(
+            "SELECT primary_guid FROM player_identity_links "
+            "WHERE alt_guid = $1 AND link_type = 'merged' LIMIT 1",
+            (guid,),
+        )
+        canonical = prim_row[0] if prim_row and prim_row[0] else guid
+        alt_rows = await db.fetch_all(
+            "SELECT alt_guid FROM player_identity_links "
+            "WHERE primary_guid = $1 AND link_type = 'merged'",
+            (canonical,),
+        ) or []
+    except (OSError, RuntimeError):
+        return [guid]
+    members = {canonical, *(r[0] for r in alt_rows if r and r[0])}
+    members.add(guid)
+    return sorted(members)
+
+
 async def resolve_alias_guid_map(
     db: DatabaseAdapter,
     names: list[str],
