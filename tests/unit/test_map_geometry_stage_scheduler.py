@@ -45,6 +45,7 @@ from website.backend.map_geometry.stage_scheduler import (
     SymbolicWaitBoundaryState,
     SymbolicWaitBranch,
     SymbolicWakeConstraint,
+    step_symbolic_schedule,
 )
 from website.backend.map_geometry.stage_semantics import build_entity_identity_index, link_w3_entity_catalog
 
@@ -306,6 +307,42 @@ def test_pending_dispatch_identity_cannot_drop_parent_cursor_target_cursor_or_or
     )
     with pytest.raises(ValueError, match="active nested target frame"):
         _state(index, inconsistent_frame)
+
+
+def test_caller_suffix_completion_is_continuation_identity():
+    index = _program_index()
+    target = _program(index, "target", "long")
+    pending = _pending(index, targets=(1, 3, 4), target_cursor=0)
+    invocation = SymbolicInvocationStep(pending.dispatch_cursor, pending.target_node_id, 0)
+    frame = _frame(
+        target.node.node_id,
+        1,
+        0,
+        pending_dispatch=pending,
+        origin=SymbolicFrameOrigin.NESTED_DISPATCH,
+        invocation_path=(invocation,),
+    )
+    continuation = SuspendedContinuation(
+        frame,
+        boundary_line=target.event.actions[0].line,
+        resume_mode=SymbolicResumeMode.REENTER_BOUNDARY_ACTION,
+        boundary_state=SymbolicWaitBoundaryState(("100",)),
+        wake_constraint=SymbolicWakeConstraint.NEXT_FRAME,
+    )
+
+    before = _state(index, frame, runnable=(), suspended=(continuation,))
+    after = _state(
+        index,
+        frame,
+        runnable=(),
+        suspended=(replace(continuation, caller_suffix_completed=True),),
+    )
+    assert before.canonical_key != after.canonical_key
+
+    root = replace(frame, pending_dispatch=None, invocation_path=(), origin=SymbolicFrameOrigin.ROOT_EVENT)
+    invalid = replace(continuation, frame=root, caller_suffix_completed=True)
+    with pytest.raises(ValueError, match="nested dispatch continuation"):
+        _state(index, root, runnable=(), suspended=(invalid,))
 
 
 def test_invocation_ordinal_must_select_the_exact_dispatch_target_group():
@@ -1021,3 +1058,199 @@ def test_schedule_decision_kind_must_match_task_shape():
 def test_global_work_budget_must_be_positive(limit):
     with pytest.raises(ValueError, match="must be positive"):
         SymbolicScheduleWorkBudget(limit)
+
+
+def _s2_program_index(*, caller_first: bool = True, boundary_command: str = "resetscript"):
+    script = parse_map_script(
+        f"""
+        caller
+        {{
+            spawn
+            {{
+                trigger target long
+                setstate caller_marker invisible
+            }}
+        }}
+        target
+        {{
+            trigger long
+            {{
+                {boundary_command}
+                setstate target_marker invisible
+            }}
+        }}
+        """.encode(),
+        source="maps/test.script",
+    )
+    model = StaticStageModel(
+        "test",
+        ObjectiveCatalog((), (), ()),
+        script,
+        compile_static_stage_graph(script, source="maps/test.script"),
+        _asset_provider(MapAssetKind.SCRIPT),
+        _asset_provider(MapAssetKind.OBJDATA),
+    )
+    mover_entities = (
+        {"classname": "script_mover", "scriptname": "caller"},
+        {"classname": "script_mover", "scriptname": "target"},
+    )
+    if not caller_first:
+        mover_entities = tuple(reversed(mover_entities))
+    identities = build_entity_identity_index(
+        mover_entities
+        + (
+            {"classname": "func_door", "targetname": "caller_marker"},
+            {"classname": "func_door", "targetname": "target_marker"},
+        ),
+        source="maps/test.bsp",
+    )
+    catalog = MapEntityCatalog("test", "maps/test.bsp", (), (), (), ())
+    index = build_ordered_stage_program_index(model, link_w3_entity_catalog(identities, catalog))
+    caller_entity_index = 0 if caller_first else 1
+    target_entity_index = 1 if caller_first else 0
+    caller = _program(index, "caller")
+    frame = _frame(caller.node.node_id, caller_entity_index, 0)
+    state = _state(
+        index,
+        frame,
+        tag_parent_states=(
+            SymbolicTagParentState(
+                target_entity_index,
+                SymbolicTagParentDisposition.PROVEN_UNATTACHED,
+            ),
+        ),
+    )
+    return index, state, caller_entity_index, target_entity_index
+
+
+def _decision(result, kind):
+    return next(decision for decision in result.decisions if decision.kind is kind)
+
+
+def test_s2_cross_entity_boundary_runs_caller_suffix_before_target_resume():
+    index, initial, caller_entity_index, target_entity_index = _s2_program_index()
+
+    dispatched = _decision(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert dispatched is not None
+    assert tuple(frame.cursor.entity_index for frame in dispatched.runnable) == (caller_entity_index,)
+    assert tuple(item.frame.cursor.entity_index for item in dispatched.suspended) == (target_entity_index,)
+    assert dispatched.suspended[0].caller_suffix_completed is False
+    assert dispatched.effects == ()
+
+    caller_completed = _decision(
+        step_symbolic_schedule(index, dispatched),
+        SymbolicScheduleDecisionKind.SUSPENDED,
+    ).state
+    assert caller_completed is not None
+    assert caller_completed.suspended[0].caller_suffix_completed is True
+    assert tuple(effect.source_cursor.entity_index for effect in caller_completed.effects) == (
+        caller_entity_index,
+    )
+
+    completed = _decision(
+        step_symbolic_schedule(index, caller_completed),
+        SymbolicScheduleDecisionKind.COMPLETE,
+    ).state
+    assert completed is not None
+    assert completed.runnable == ()
+    assert completed.suspended == ()
+    assert tuple(effect.source_cursor.entity_index for effect in completed.effects) == (
+        caller_entity_index,
+        target_entity_index,
+    )
+    assert completed.ordering_decisions[-2:] == (
+        "caller_suffix_completed_before_target_resume",
+        "target_reentered_after_caller_suffix",
+    )
+
+
+def test_s2_rejects_target_resume_before_caller_suffix_completion():
+    index, initial, _, _ = _s2_program_index()
+    dispatched = _decision(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert dispatched is not None
+    premature = SymbolicScheduleState.create(
+        index,
+        accumulator_state=dispatched.accumulator_state,
+        suspended=dispatched.suspended,
+        event_owners=(SymbolicEventOwner.from_frame(dispatched.suspended[0].frame),),
+        tag_parent_states=dispatched.tag_parent_states,
+        effects=dispatched.effects,
+        provenance=dispatched.provenance,
+        ordering_decisions=dispatched.ordering_decisions,
+        unknown_reasons=dispatched.unknown_reasons,
+    )
+
+    blocked = _decision(
+        step_symbolic_schedule(index, premature),
+        SymbolicScheduleDecisionKind.BLOCKED,
+    )
+    assert blocked.reason == "s2_target_resume_before_caller_suffix"
+
+
+@pytest.mark.parametrize(
+    ("caller_first", "expected_wake"),
+    (
+        (True, SymbolicWakeConstraint.SAME_FRAME_LATER),
+        (False, SymbolicWakeConstraint.NEXT_FRAME),
+    ),
+)
+def test_s2_wait_wake_uses_proven_ordinary_entity_pass_order(caller_first, expected_wake):
+    index, initial, _, _ = _s2_program_index(caller_first=caller_first, boundary_command="wait 100")
+    dispatched = _decision(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert dispatched is not None
+    assert dispatched.suspended[0].wake_constraint is expected_wake
+
+    caller_completed = _decision(
+        step_symbolic_schedule(index, dispatched),
+        SymbolicScheduleDecisionKind.SUSPENDED,
+    ).state
+    assert caller_completed is not None
+    resumed = step_symbolic_schedule(index, caller_completed)
+    if expected_wake is SymbolicWakeConstraint.SAME_FRAME_LATER:
+        same_frame = _decision(resumed, SymbolicScheduleDecisionKind.SUSPENDED).state
+        assert same_frame is not None
+        assert same_frame.suspended[0].wake_constraint is SymbolicWakeConstraint.NEXT_FRAME
+        assert same_frame.provenance[-1] == "boundary_action_reentered_same_frame"
+    else:
+        assert _decision(resumed, SymbolicScheduleDecisionKind.BLOCKED).reason == (
+            "wait_completion_time_unverified"
+        )
+
+
+def test_s2_unknown_tag_parent_order_retains_named_wake_frontier():
+    index, initial, _, target_entity_index = _s2_program_index(boundary_command="wait 100")
+    unknown_entry = SymbolicScheduleState.create(
+        index,
+        accumulator_state=initial.accumulator_state,
+        runnable=initial.runnable,
+        event_owners=initial.event_owners,
+        tag_parent_states=(
+            SymbolicTagParentState(target_entity_index, SymbolicTagParentDisposition.UNKNOWN),
+        ),
+    )
+    dispatched = _decision(
+        step_symbolic_schedule(index, unknown_entry),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert dispatched is not None
+    assert dispatched.suspended[0].wake_constraint is SymbolicWakeConstraint.TAG_PARENT_ORDER_UNKNOWN
+    caller_completed = _decision(
+        step_symbolic_schedule(index, dispatched),
+        SymbolicScheduleDecisionKind.SUSPENDED,
+    ).state
+    assert caller_completed is not None
+    blocked = _decision(
+        step_symbolic_schedule(index, caller_completed),
+        SymbolicScheduleDecisionKind.BLOCKED,
+    )
+    assert blocked.reason == "wake_semantics_unverified"
+    assert "tag_parent_state_unknown" in blocked.state.unknown_reasons

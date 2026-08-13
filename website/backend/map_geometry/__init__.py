@@ -169,6 +169,7 @@ from website.backend.map_geometry.stage_scheduler import (
     SymbolicWaitBoundaryState,
     SymbolicWaitBranch,
     SymbolicWakeConstraint,
+    step_symbolic_schedule,
 )
 from website.backend.map_geometry.stage_semantics import (
     ETLEGACY_SEMANTICS_COMMIT,
@@ -387,6 +388,7 @@ __all__ = [
     "SymbolicWaitBoundaryState",
     "SymbolicWaitBranch",
     "SymbolicWakeConstraint",
+    "step_symbolic_schedule",
     "StageParseError",
     "StaticStageGraph",
     "StaticStageModel",
