@@ -189,9 +189,16 @@ function _updateFileFeedback(file) {
 // inline feedback in one place.
 function _onFileSelected(file) {
     const nameEl = document.getElementById('upload-drop-filename');
-    if (nameEl && file) {
-        nameEl.textContent = file.name;
-        nameEl.classList.remove('hidden');
+    if (nameEl) {
+        if (file) {
+            nameEl.textContent = file.name;
+            nameEl.classList.remove('hidden');
+        } else {
+            // Symmetric reset: no file → clear the shown name too, not just the
+            // feedback strip, so nothing stale lingers (Copilot #719).
+            nameEl.textContent = '';
+            nameEl.classList.add('hidden');
+        }
     }
     _updateFileFeedback(file);
 }
@@ -422,9 +429,7 @@ async function handleUpload(e) {
         // which is the one choice here a user cannot undo later (CodeRabbit
         // on #615).
         if (retentionSelect) retentionSelect.value = '';
-        const nameEl = document.getElementById('upload-drop-filename');
-        if (nameEl) { nameEl.textContent = ''; nameEl.classList.add('hidden'); }
-        _updateFileFeedback(null);  // clear the inline feedback + re-enable submit
+        _onFileSelected(null);  // clear the shown name + feedback, re-enable submit
 
         await loadUploadsList();
     } catch (err) {
