@@ -192,7 +192,7 @@ def test_equal_semantic_states_have_one_canonical_key():
     assert hash(left.canonical_key) == hash(right.canonical_key)
 
 
-def test_pending_dispatch_identity_cannot_drop_parent_cursor_target_cursor_order_or_caller_resume():
+def test_pending_dispatch_identity_cannot_drop_parent_cursor_target_cursor_or_order():
     index = _program_index()
     caller = _program(index, "caller")
 
@@ -210,7 +210,6 @@ def test_pending_dispatch_identity_cannot_drop_parent_cursor_target_cursor_order
     variants = (
         _pending(index, dispatch_offset=1, resume_offset=2, targets=(1, 3, 4), target_cursor=0),
         _pending(index, targets=(1, 3, 4), target_cursor=1),
-        _pending(index, resume_offset=2, targets=(1, 3, 4), target_cursor=0),
     )
 
     baseline_key = key(baseline)
@@ -219,6 +218,10 @@ def test_pending_dispatch_identity_cannot_drop_parent_cursor_target_cursor_order
     reordered = _pending(index, targets=(3, 1, 4), target_cursor=0)
     with pytest.raises(ValueError, match="target order does not match"):
         key(reordered)
+
+    skipped_caller_suffix = _pending(index, resume_offset=2, targets=(1, 3, 4), target_cursor=0)
+    with pytest.raises(ValueError, match="resume immediately after"):
+        key(skipped_caller_suffix)
 
 
 def test_invocation_ordinal_must_select_the_exact_dispatch_target_group():
@@ -232,6 +235,25 @@ def test_invocation_ordinal_must_select_the_exact_dispatch_target_group():
         2,
     )
     valid.validate(index)
+
+    matching_frame = _frame(
+        target.node.node_id,
+        4,
+        0,
+        invocation_path=(valid,),
+        origin=SymbolicFrameOrigin.NESTED_DISPATCH,
+    )
+    _state(index, matching_frame)
+
+    mismatched_frame = _frame(
+        target.node.node_id,
+        1,
+        0,
+        invocation_path=(valid,),
+        origin=SymbolicFrameOrigin.NESTED_DISPATCH,
+    )
+    with pytest.raises(ValueError, match="does not terminate"):
+        _state(index, mismatched_frame)
 
     with pytest.raises(ValueError, match="ordinal is outside"):
         SymbolicInvocationStep(
