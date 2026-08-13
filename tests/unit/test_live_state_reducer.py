@@ -156,3 +156,43 @@ def test_resume_after_idle_gap_resets_internal_roster():
     assert names == ["realvid"]          # the reused slot took the new name
     assert snap["roster"]["axis"] == []  # old_vid did not survive the gap
     assert snap["roster"]["player_count"] == 1
+
+
+# -- A3: roster-change (substitution) log ----------------------------------
+
+
+def test_roster_changes_log_join_switch_and_leave():
+    now = time.time()
+    r = LiveStateReducer()
+    r.apply(_ev("TEAM_CHANGE", now, slot=1, name="vid", team=1))       # joined Axis
+    r.apply(_ev("TEAM_CHANGE", now, slot=2, name="ownator", team=2))   # joined Allies
+    r.apply(_ev("TEAM_CHANGE", now, slot=1, team=2))                   # vid → Allies (switch)
+    r.apply(_ev("DISCONNECT", now, slot=2))                           # ownator left
+    changes = r.snapshot()["recent_roster_changes"]
+    assert [(c["name"], c["action"], c["side"]) for c in changes] == [
+        ("vid", "joined", "Axis"),
+        ("ownator", "joined", "Allies"),
+        ("vid", "switched", "Allies"),
+        ("ownator", "left", "Allies"),
+    ]
+    assert all(c["age_seconds"] >= 0 for c in changes)
+
+
+def test_roster_changes_ignore_unnamed_slots_and_spectators():
+    now = time.time()
+    r = LiveStateReducer()
+    r.apply(_ev("CONNECT", now, slot=5))       # bare slot, no name/side
+    r.apply(_ev("DISCONNECT", now, slot=5))    # not a named "left"
+    r.apply(_ev("TEAM_CHANGE", now, slot=6, name="ref", team=3))  # spectator, no "joined"
+    r.apply(_ev("TEAM_CHANGE", now, slot=7, name="", team=1))     # empty name → no "slot 7 joined"
+    r.apply(_ev("TEAM_CHANGE", now, slot=8, team=2))             # missing name → no join
+    assert r.snapshot()["recent_roster_changes"] == []
+
+
+def test_roster_changes_cleared_on_idle_reset():
+    now = time.time()
+    r = LiveStateReducer()
+    r.apply(_ev("TEAM_CHANGE", now - 3600, slot=1, name="vid", team=1))
+    r.apply(_ev("TEAM_CHANGE", now, slot=2, name="new", team=1))  # long gap → reset first
+    changes = r.snapshot()["recent_roster_changes"]
+    assert [c["name"] for c in changes] == ["new"]  # pre-gap join did not survive
