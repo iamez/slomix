@@ -73,6 +73,63 @@ class TestInvariantLogic:
         for res in evaluate(_clean_context()):
             assert res.passed, f"{res.invariant.key} unexpectedly failed: {res.violations}"
 
+    def test_box_score_totals_match_map_sum(self):
+        ctx = _clean_context()
+        ctx.panels["box_score"] = {
+            "alpha_score": 4, "beta_score": 2,
+            "maps": [
+                {"alpha_points": 2, "beta_points": 0},
+                {"alpha_points": 0, "beta_points": 2},
+                {"alpha_points": 2, "beta_points": 0},
+            ],
+        }
+        assert _results_by_key(ctx)["conservation_box_score"].passed
+
+    def test_box_score_total_drift_trips_conservation(self):
+        ctx = _clean_context()
+        ctx.panels["box_score"] = {
+            "alpha_score": 6, "beta_score": 2,  # alpha header says 6…
+            "maps": [
+                {"alpha_points": 2, "beta_points": 0},
+                {"alpha_points": 0, "beta_points": 2},
+                {"alpha_points": 2, "beta_points": 0},  # …but the maps sum to 4
+            ],
+        }
+        assert not _results_by_key(ctx)["conservation_box_score"].passed
+
+    def test_box_score_missing_total_with_maps_trips_conservation(self):
+        ctx = _clean_context()
+        ctx.panels["box_score"] = {  # maps present but alpha_score absent = malformed
+            "beta_score": 2,
+            "maps": [{"alpha_points": 2, "beta_points": 0},
+                     {"alpha_points": 0, "beta_points": 2}],
+        }
+        assert not _results_by_key(ctx)["conservation_box_score"].passed
+
+    def test_box_score_non_numeric_map_point_is_flagged_not_raised(self):
+        ctx = _clean_context()
+        ctx.panels["box_score"] = {
+            "alpha_score": 4, "beta_score": 0,
+            "maps": [{"alpha_points": 2, "beta_points": 0},
+                     {"alpha_points": "oops", "beta_points": 0}],  # malformed
+        }
+        # evaluate() must not raise; the invariant flags the bad point.
+        assert not _results_by_key(ctx)["conservation_box_score"].passed
+
+    def test_a_raising_invariant_becomes_a_violation_not_a_crash(self, monkeypatch):
+        # A check that blows up must surface as a violation, not abort the report.
+        import tests.contract.story_invariants as si
+
+        def _boom(_ctx):
+            raise RuntimeError("kaboom")
+
+        bad = si.Invariant("boom", "test", "always raises", _boom)
+        monkeypatch.setattr(si, "INVARIANTS", [bad])
+        results = si.evaluate(_clean_context())
+        assert len(results) == 1                # full verdict produced, no crash
+        assert not results[0].passed
+        assert "kaboom" in results[0].violations[0]
+
     def test_wrong_header_total_trips_conservation(self):
         ctx = _clean_context()
         ctx.panels["kill_impact"]["total_kills"] = 61  # the hero-KILLS bug

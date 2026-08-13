@@ -110,6 +110,14 @@ def _is_bot(row: dict) -> bool:
     return _guid(row).upper().startswith("OMNIBOT") or "[BOT]" in _name(row)
 
 
+def _is_number(value: Any) -> bool:
+    """True for a real, finite JSON number — bool is excluded (it subclasses int)
+    and NaN/Infinity are rejected."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return not (isinstance(value, float) and (math.isnan(value) or math.isinf(value)))
+
+
 def _numeric_fields(row: dict):
     """Yield (field, value) for real JSON numbers only (bool is not a number)."""
     for f, v in row.items():
@@ -201,6 +209,50 @@ def _inv_cross_panel_tracked_le_total(ctx: SessionContext) -> list[str]:
     return []
 
 
+def _inv_conservation_box_score(ctx: SessionContext) -> list[str]:
+    """BOX scoreboard totals equal the sum of their own per-map points.
+
+    Locks BOX internal consistency: calculate_session_score adds every map's
+    points into alpha_score/beta_score and appends every map, so the header must
+    equal the sum of the maps it is built from. A totaling drift (a map's points
+    dropped from or double-counted in the total) would desync the scoreboard
+    header from its own map breakdown — the same 'header disagrees with its
+    parts' family as the hero-KILLS bug, one panel over.
+    """
+    box = ctx.panels.get("box_score")
+    if not isinstance(box, dict):
+        return []
+    maps = box.get("maps")
+    if not isinstance(maps, list) or not maps:
+        return []
+    viol: list[str] = []
+    for side, total_key in (("alpha_points", "alpha_score"), ("beta_points", "beta_score")):
+        total = box.get(total_key)
+        # The real endpoint always returns numeric totals (default 0), so with
+        # maps present a missing/non-numeric total is a malformed payload — flag
+        # it rather than skipping (Copilot #716), or the check passes vacuously.
+        if not _is_number(total):
+            viol.append(f"box-score {total_key} missing or non-numeric ({total!r}) with {len(maps)} maps")
+            continue
+        # Validate every per-map point before summing — a malformed value (None,
+        # a string, a bool, NaN) must be flagged, never silently coerced to 0 or
+        # allowed to raise mid-aggregation (CodeRabbit #716).
+        summed = 0.0
+        malformed = False
+        for m in maps:
+            if not isinstance(m, dict):
+                continue
+            pt = m.get(side)
+            if not _is_number(pt):
+                viol.append(f"box-score map {side}={pt!r} is not a finite number")
+                malformed = True
+                continue
+            summed += pt
+        if not malformed and summed != total:
+            viol.append(f"box-score {total_key}={total} != sum of per-map {side}={summed}")
+    return viol
+
+
 def _inv_bounds_finite_nonneg(ctx: SessionContext) -> list[str]:
     """No NaN/Infinity anywhere; count fields are never negative (dbt-style bounds).
 
@@ -243,6 +295,11 @@ INVARIANTS: list[Invariant] = [
         _inv_cross_panel_tracked_le_total,
     ),
     Invariant(
+        "conservation_box_score", "conservation",
+        "BOX totals == sum of per-map points (scoreboard vs its breakdown)",
+        _inv_conservation_box_score,
+    ),
+    Invariant(
         "bounds_finite_nonneg", "bounds",
         "no NaN/Inf anywhere; counts never negative (dbt-style bounds)",
         _inv_bounds_finite_nonneg,
@@ -261,5 +318,18 @@ class InvariantResult:
 
 
 def evaluate(ctx: SessionContext) -> list[InvariantResult]:
-    """Run every invariant against a context; return one result each, in order."""
-    return [InvariantResult(inv, inv.check(ctx)) for inv in INVARIANTS]
+    """Run every invariant against a context; return one result each, in order.
+
+    A check that raises on malformed data becomes a violation for THAT invariant
+    rather than aborting the whole report — the gate must always produce a full
+    verdict, and an invariant blowing up is itself a failure worth surfacing
+    (CodeRabbit #716).
+    """
+    results: list[InvariantResult] = []
+    for inv in INVARIANTS:
+        try:
+            violations = inv.check(ctx)
+        except Exception as exc:  # noqa: BLE001 — a check must never crash the gate
+            violations = [f"invariant raised {type(exc).__name__}: {exc}"]
+        results.append(InvariantResult(inv, violations))
+    return results

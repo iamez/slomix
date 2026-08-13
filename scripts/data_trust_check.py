@@ -50,6 +50,7 @@ _PANELS = {
     "composite": "/api/skill/composite",
     "win_contribution": "/api/storytelling/win-contribution",
     "moments": "/api/storytelling/moments",
+    "box_score": "/api/storytelling/box-score",
 }
 
 
