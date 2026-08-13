@@ -85,7 +85,7 @@ This document lists Discord bot commands declared in the repository (via `@comma
 
 | Command | Aliases | Description |
 |---|---|---|
-| `bolniska` | `sickleave` | Show your current sick-leave status |
+| `bolniska` | `sickleave` | 🩹 Sick-leave attribution. No args: your status. Subcommands: `start <GUID>`, `end`, `merge <GUID>`; admin `set @user <PRIMARY> <ALT>` (Manage Server + admin channel) |
 
 ---
 

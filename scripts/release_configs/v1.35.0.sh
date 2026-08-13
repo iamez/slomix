@@ -1,8 +1,9 @@
-# Release config for v1.35.0 — sick-leave (bolniška) identity attribution (player_identity_links + !bolniska self-service). Adds migrations 073/074; website JS/API + bot cog.
-# roster guard) + website perf/correctness batch (webp thumbnails, defer,
-# listener-leak guard, Record Book bot filter, midnight range, CSP) + live
-# state reducer/roster panel (A0/A1). No new migrations vs v1.32.0 — Python
-# service logic + website JS/API only; full 045+ range kept for straight upgrades.
+# Release config for v1.35.0 — sick-leave (bolniška) identity attribution
+# (player_identity_links + !bolniska self-service) plus the audit bot-leakage /
+# brand-slate fixes. ADDS migrations 073 (player_identity_links) and 074 (seed
+# ownator's sick-leave link) on top of the 045+ range; otherwise website
+# JS/API + bot cog. Full 045+ range kept so straight upgrades from older tags
+# still apply everything.
 # shellcheck shell=bash
 # shellcheck disable=SC2034
 #
