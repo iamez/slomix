@@ -448,6 +448,15 @@ def _temporal_program_index():
                 followspline 0 path 100
                 setstate gate invisible
             }
+            trigger marker_wait
+            {
+                gotomarker destination 100 wait
+            }
+            trigger marker_async
+            {
+                gotomarker destination 100
+                setstate gate invisible
+            }
         }
         """,
         source="maps/test.script",
@@ -464,6 +473,7 @@ def _temporal_program_index():
         (
             {"classname": "script_mover", "scriptname": "temporal"},
             {"classname": "func_door", "targetname": "gate"},
+            {"classname": "path_corner_2", "targetname": "destination"},
         ),
         source="maps/test.bsp",
     )
@@ -615,6 +625,64 @@ def test_nonwaiting_movement_is_async_lifecycle_not_suspended_script():
     assert prior_motion_state.async_lifecycles == (lifecycle,)
 
 
+def test_started_gotomarker_state_requires_its_exact_route_effect_record():
+    index = _temporal_program_index()
+    waiting_program = _program(index, "temporal", "marker_wait")
+    waiting_frame = _frame(waiting_program.node.node_id, 0, 0)
+    waiting_projection = waiting_program.instructions[0].projection
+    waiting_effect = SymbolicEffectRecord(waiting_projection, waiting_frame.cursor)
+    waiting = SuspendedContinuation(
+        waiting_frame,
+        boundary_line=waiting_program.event.actions[0].line,
+        resume_mode=SymbolicResumeMode.REENTER_BOUNDARY_ACTION,
+        boundary_state=SymbolicMovementBoundaryState(
+            SymbolicMovementCommand.GOTO_MARKER,
+            ("destination", "100", "wait"),
+            SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,
+            True,
+            True,
+        ),
+        wake_constraint=SymbolicWakeConstraint.NEXT_FRAME,
+    )
+
+    with pytest.raises(ValueError, match="does not match whether"):
+        _state(index, waiting_frame, runnable=(), suspended=(waiting,))
+    started = _state(index, waiting_frame, runnable=(), suspended=(waiting,), effects=(waiting_effect,))
+    assert started.effects == (waiting_effect,)
+
+    prior_motion = replace(
+        waiting,
+        boundary_state=replace(
+            waiting.boundary_state,
+            temporal_state=SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,
+            effect_started=False,
+        ),
+    )
+    _state(index, waiting_frame, runnable=(), suspended=(prior_motion,))
+    with pytest.raises(ValueError, match="does not match whether"):
+        _state(
+            index,
+            waiting_frame,
+            runnable=(),
+            suspended=(prior_motion,),
+            effects=(waiting_effect,),
+        )
+
+    async_program = _program(index, "temporal", "marker_async")
+    async_cursor = SymbolicProgramCursor(async_program.node.node_id, 0, 0)
+    async_effect = SymbolicEffectRecord(async_program.instructions[0].projection, async_cursor)
+    lifecycle = SymbolicAsyncMovementLifecycle(
+        async_cursor,
+        SymbolicMovementCommand.GOTO_MARKER,
+        ("destination", "100"),
+    )
+    suffix = _frame(async_program.node.node_id, 0, 1, origin=SymbolicFrameOrigin.CALLER_SUFFIX)
+    with pytest.raises(ValueError, match="must retain"):
+        _state(index, suffix, async_lifecycles=(lifecycle,))
+    running = _state(index, suffix, async_lifecycles=(lifecycle,), effects=(async_effect,))
+    assert running.async_lifecycles == (lifecycle,)
+
+
 def test_r1_replacement_contract_keeps_exactly_one_deterministic_event_owner():
     index = _program_index()
     long_program = _program(index, "target", "long")
@@ -699,6 +767,21 @@ def test_malformed_cursor_and_event_ownership_fail_at_state_boundary():
     with pytest.raises(ValueError, match="active frame entity"):
         _state(index, cross_entity_stack)
 
+    caller = _program(index, "caller")
+    invocation = SymbolicInvocationStep(
+        SymbolicProgramCursor(caller.node.node_id, 0, 0),
+        target.node.node_id,
+        0,
+    )
+    for nested_origin in (
+        SymbolicFrameOrigin.NESTED_DISPATCH,
+        SymbolicFrameOrigin.TARGET_GROUP_RESUME,
+    ):
+        with pytest.raises(ValueError, match="requires invocation ancestry"):
+            _state(index, replace(valid, origin=nested_origin))
+    with pytest.raises(ValueError, match="root event frame"):
+        _state(index, replace(valid, invocation_path=(invocation,)))
+
     with pytest.raises(ValueError, match="exactly match"):
         _state(index, valid, event_owners=())
 
@@ -727,6 +810,9 @@ def test_malformed_cursor_and_event_ownership_fail_at_state_boundary():
             global_values=((0, SymbolicIntegerDomain(required_set_bits=1, required_clear_bits=1)),),
         ),
         SymbolicAccumulatorState(default_domain=SymbolicIntegerDomain(2, 1)),
+        SymbolicAccumulatorState(entity_values=((1, 0, SymbolicIntegerDomain(2**31, 2**31)),)),
+        SymbolicAccumulatorState(global_values=((0, SymbolicIntegerDomain(required_set_bits=1 << 40)),)),
+        SymbolicAccumulatorState(default_domain=SymbolicIntegerDomain(excluded=frozenset({2**31}))),
     ),
 )
 def test_impossible_accumulator_domains_fail_at_state_boundary(accumulator_state):
@@ -734,7 +820,7 @@ def test_impossible_accumulator_domains_fail_at_state_boundary(accumulator_state
     target = _program(index, "target", "long")
     frame = _frame(target.node.node_id, 1, 0)
 
-    with pytest.raises(ValueError, match="has no possible value"):
+    with pytest.raises(ValueError, match="(has no possible value|outside.*ET|outside ET accumulator bits)"):
         _state(index, frame, accumulator_state=accumulator_state)
 
 
@@ -754,6 +840,43 @@ def test_global_work_budget_reports_named_exhaustion_without_overconsumption():
     )
     result = SymbolicScheduleResult((decision,), 2, 2, exhaustion)
     assert result.exhaustion is exhaustion
+
+    mismatched = replace(decision, reason="unrelated_exhaustion")
+    with pytest.raises(ValueError, match="reason does not match"):
+        SymbolicScheduleResult((mismatched,), 2, 2, exhaustion)
+
+
+def test_schedule_decision_kind_must_match_task_shape():
+    index = _program_index()
+    target = _program(index, "target", "long")
+    frame = _frame(target.node.node_id, 1, 0)
+    runnable = _state(index, frame)
+    continuation = SuspendedContinuation(
+        frame,
+        boundary_line=target.event.actions[0].line,
+        resume_mode=SymbolicResumeMode.REENTER_BOUNDARY_ACTION,
+        boundary_state=SymbolicWaitBoundaryState(("100",)),
+        wake_constraint=SymbolicWakeConstraint.NEXT_FRAME,
+    )
+    suspended = _state(index, frame, runnable=(), suspended=(continuation,))
+    complete = SymbolicScheduleState.create(
+        index,
+        accumulator_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, runnable)
+    SymbolicScheduleDecision(SymbolicScheduleDecisionKind.SUSPENDED, suspended)
+    SymbolicScheduleDecision(SymbolicScheduleDecisionKind.COMPLETE, complete)
+    with pytest.raises(ValueError, match="requires runnable"):
+        SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, suspended)
+    with pytest.raises(ValueError, match="only suspended"):
+        SymbolicScheduleDecision(SymbolicScheduleDecisionKind.SUSPENDED, runnable)
+    with pytest.raises(ValueError, match="only suspended"):
+        SymbolicScheduleDecision(SymbolicScheduleDecisionKind.SUSPENDED, complete)
+    with pytest.raises(ValueError, match="cannot retain"):
+        SymbolicScheduleDecision(SymbolicScheduleDecisionKind.COMPLETE, runnable)
+    with pytest.raises(ValueError, match="cannot retain"):
+        SymbolicScheduleDecision(SymbolicScheduleDecisionKind.COMPLETE, suspended)
 
 
 @pytest.mark.parametrize("limit", [0, -1])
