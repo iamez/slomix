@@ -24,7 +24,7 @@ import { loadFormView } from './form.js';
 import { loadRecordsView } from './records.js';
 import { loadAwardsView } from './awards.js';
 import { loadProximityView } from './proximity.js?v=20260812-b3';
-import { loadStoryView } from './story.js?v=20260720-ssd-gsid';
+import { loadStoryView } from './story.js?v=20260813-gsid-composite';
 import { loadReplayView } from './replay.js';
 import { loadRivalriesView } from './rivalries.js';
 import { loadSmartStatsDiagView } from './smart-stats-diag.js?v=20260607-aim';
