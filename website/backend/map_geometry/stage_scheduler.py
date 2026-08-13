@@ -1,12 +1,8 @@
-"""Immutable state contracts for bounded ET script scheduling.
-
-The module owns validated state identity and the S3 transition runner. Bounded
-multi-task search remains a later wave and must not weaken these construction
-boundaries.
-"""
+"""Immutable state and bounded-search contracts for ET script scheduling."""
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import TypeAlias
@@ -938,6 +934,91 @@ class SymbolicScheduleWorkBudget:
             return SymbolicScheduleExhaustion.WORK_BUDGET_EXHAUSTED
         self.consumed += 1
         return None
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicScheduleSearchMetrics:
+    states_created: int
+    transitions_evaluated: int
+    maximum_runnable_tasks: int
+    maximum_suspended_tasks: int
+    maximum_frame_depth: int
+    deduplicated_states: int
+    cycle_frontiers: int
+    budget_frontiers: int
+    independence_reductions: int = 0
+
+    def __post_init__(self) -> None:
+        values = (
+            self.states_created,
+            self.transitions_evaluated,
+            self.maximum_runnable_tasks,
+            self.maximum_suspended_tasks,
+            self.maximum_frame_depth,
+            self.deduplicated_states,
+            self.cycle_frontiers,
+            self.budget_frontiers,
+            self.independence_reductions,
+        )
+        if any(value < 0 for value in values):
+            raise ValueError("symbolic schedule search metrics must be non-negative")
+        if self.states_created == 0:
+            raise ValueError("symbolic schedule search must count its root state")
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicScheduleSearchResult:
+    decisions: tuple[SymbolicScheduleDecision, ...]
+    work_limit: int
+    metrics: SymbolicScheduleSearchMetrics
+    exhaustion: SymbolicScheduleExhaustion | None = None
+
+    def __post_init__(self) -> None:
+        if not self.decisions:
+            raise ValueError("symbolic schedule search result requires a terminal decision")
+        if self.work_limit <= 0:
+            raise ValueError("symbolic schedule search work limit must be positive")
+        if self.metrics.transitions_evaluated > self.work_limit:
+            raise ValueError("symbolic schedule search exceeded its global work budget")
+        ordered = tuple(sorted(set(self.decisions), key=_decision_sort_key))
+        if any(
+            decision.kind
+            in {
+                SymbolicScheduleDecisionKind.RUNNABLE,
+                SymbolicScheduleDecisionKind.SUSPENDED,
+            }
+            for decision in ordered
+        ):
+            raise ValueError("symbolic schedule search result may contain only terminal decisions")
+        has_budget_frontier = any(
+            decision.kind is SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED
+            for decision in ordered
+        )
+        if has_budget_frontier != (self.exhaustion is not None):
+            raise ValueError("symbolic schedule search exhaustion does not match its decisions")
+        if self.metrics.budget_frontiers != sum(
+            decision.kind is SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED
+            for decision in ordered
+        ):
+            raise ValueError("symbolic schedule search budget metric does not match its decisions")
+        if self.metrics.cycle_frontiers != sum(
+            decision.kind is SymbolicScheduleDecisionKind.BLOCKED
+            and decision.reason == "symbolic_schedule_cycle"
+            for decision in ordered
+        ):
+            raise ValueError("symbolic schedule search cycle metric does not match its decisions")
+        if self.exhaustion is not None:
+            if self.exhaustion is not SymbolicScheduleExhaustion.WORK_BUDGET_EXHAUSTED:
+                raise ValueError("symbolic schedule search has an unknown exhaustion reason")
+            if self.metrics.transitions_evaluated != self.work_limit:
+                raise ValueError("symbolic schedule search can exhaust only at its work limit")
+            if any(
+                decision.reason != self.exhaustion.value
+                for decision in ordered
+                if decision.kind is SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED
+            ):
+                raise ValueError("symbolic schedule search exhaustion reason is inconsistent")
+        object.__setattr__(self, "decisions", ordered)
 
 
 def _state_for_index(index: OrderedStageProgramIndex, state: SymbolicScheduleState) -> None:
@@ -2337,3 +2418,245 @@ def step_symbolic_schedule(
             1,
         )
     return _blocked_transition(index, state, "s3_multiple_suspended_frames_deferred_to_s4")
+
+
+def _schedule_frame_depth(frame: SymbolicFrame) -> int:
+    depth = 1 + max(
+        len(frame.invocation_path),
+        len(frame.call_stack),
+        len(frame.caller_dispatches),
+    )
+    dispatches = (() if frame.pending_dispatch is None else (frame.pending_dispatch,)) + (
+        frame.caller_dispatches
+    )
+    for dispatch in dispatches:
+        if dispatch.displaced_continuation is not None:
+            depth = max(
+                depth,
+                1 + _schedule_frame_depth(dispatch.displaced_continuation.frame),
+            )
+    return depth
+
+
+def _schedule_state_frame_depth(state: SymbolicScheduleState) -> int:
+    frames = state.runnable + tuple(continuation.frame for continuation in state.suspended)
+    return max((_schedule_frame_depth(frame) for frame in frames), default=0)
+
+
+def _terminal_frontier_decision(
+    index: OrderedStageProgramIndex,
+    state: SymbolicScheduleState,
+    kind: SymbolicScheduleDecisionKind,
+    reason: str,
+) -> SymbolicScheduleDecision:
+    frontier = _rebuild_schedule_state(
+        index,
+        state,
+        unknown_reasons=state.unknown_reasons + (reason,),
+    )
+    return SymbolicScheduleDecision(kind, frontier, reason)
+
+
+def _decision_kind_for_active_state(
+    state: SymbolicScheduleState,
+) -> SymbolicScheduleDecisionKind:
+    if state.runnable:
+        return SymbolicScheduleDecisionKind.RUNNABLE
+    if state.suspended:
+        return SymbolicScheduleDecisionKind.SUSPENDED
+    return SymbolicScheduleDecisionKind.COMPLETE
+
+
+def _step_selected_suspended_continuation(
+    index: OrderedStageProgramIndex,
+    state: SymbolicScheduleState,
+    selected_index: int,
+) -> SymbolicScheduleResult:
+    if state.runnable:
+        raise ValueError("a suspended task cannot be selected while runnable work exists")
+    if not 0 <= selected_index < len(state.suspended):
+        raise ValueError("selected suspended task is outside the scheduler frontier")
+
+    selected = state.suspended[selected_index]
+    retained = state.suspended[:selected_index] + state.suspended[selected_index + 1 :]
+    raw = _resume_s3_continuation(index, state, selected)
+    decisions: list[SymbolicScheduleDecision] = []
+    for decision in raw.decisions:
+        result_state = decision.state
+        if result_state is None:
+            raise AssertionError("validated scheduler decision lost its frontier state")
+        active_entities = {
+            frame.cursor.entity_index
+            for frame in result_state.runnable
+            + tuple(continuation.frame for continuation in result_state.suspended)
+        }
+        missing = tuple(
+            continuation
+            for continuation in retained
+            if continuation.frame.cursor.entity_index not in active_entities
+        )
+        if missing:
+            result_state = _rebuild_schedule_state(
+                index,
+                result_state,
+                suspended=result_state.suspended + missing,
+            )
+        kind = decision.kind
+        if kind not in {
+            SymbolicScheduleDecisionKind.BLOCKED,
+            SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED,
+        }:
+            kind = _decision_kind_for_active_state(result_state)
+        decisions.append(SymbolicScheduleDecision(kind, result_state, decision.reason))
+    return SymbolicScheduleResult(tuple(decisions), raw.work_consumed, raw.work_limit, raw.exhaustion)
+
+
+def search_symbolic_schedule(
+    index: OrderedStageProgramIndex,
+    initial_state: SymbolicScheduleState,
+    *,
+    work_limit: int,
+) -> SymbolicScheduleSearchResult:
+    """Explore source-defensible scheduler alternatives under one global budget.
+
+    Suspended tasks are explored in every canonical order. Runnable frames do not yet
+    carry a typed footprint strong enough to prove commutation, so multiple runnable
+    frames retain ``schedule_independence_unproven`` instead of choosing an order.
+    """
+
+    _state_for_index(index, initial_state)
+    budget = SymbolicScheduleWorkBudget(work_limit)
+    initial_key = initial_state.canonical_key
+    queue: deque[
+        tuple[
+            SymbolicScheduleState,
+            frozenset[tuple[object, ...]],
+        ]
+    ] = deque(((initial_state, frozenset((initial_key,))),))
+    visited = {initial_key}
+    terminal: list[SymbolicScheduleDecision] = []
+    states_created = 1
+    deduplicated_states = 0
+    maximum_runnable_tasks = len(initial_state.runnable)
+    maximum_suspended_tasks = len(initial_state.suspended)
+    maximum_frame_depth = _schedule_state_frame_depth(initial_state)
+    exhausted = False
+
+    def observe(state: SymbolicScheduleState) -> None:
+        nonlocal maximum_runnable_tasks, maximum_suspended_tasks, maximum_frame_depth
+        maximum_runnable_tasks = max(maximum_runnable_tasks, len(state.runnable))
+        maximum_suspended_tasks = max(maximum_suspended_tasks, len(state.suspended))
+        maximum_frame_depth = max(maximum_frame_depth, _schedule_state_frame_depth(state))
+
+    def exhaust(frontier_state: SymbolicScheduleState) -> None:
+        nonlocal states_created, exhausted
+        pending = (frontier_state,) + tuple(item[0] for item in queue)
+        queue.clear()
+        for pending_state in pending:
+            decision = _terminal_frontier_decision(
+                index,
+                pending_state,
+                SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED,
+                SymbolicScheduleExhaustion.WORK_BUDGET_EXHAUSTED.value,
+            )
+            terminal.append(decision)
+            states_created += 1
+            observe(decision.state)
+        exhausted = True
+
+    while queue and not exhausted:
+        state, ancestry = queue.popleft()
+        if not state.runnable and not state.suspended:
+            terminal.append(
+                SymbolicScheduleDecision(SymbolicScheduleDecisionKind.COMPLETE, state)
+            )
+            continue
+
+        selected_suspended_indices: tuple[int | None, ...]
+        if state.runnable:
+            selected_suspended_indices = (None,)
+        else:
+            selected_suspended_indices = tuple(range(len(state.suspended)))
+
+        for selected_index in selected_suspended_indices:
+            exhaustion = budget.consume()
+            if exhaustion is not None:
+                exhaust(state)
+                break
+            if len(state.runnable) > 1:
+                transition = _blocked_transition(
+                    index,
+                    state,
+                    "schedule_independence_unproven",
+                )
+            elif state.runnable:
+                transition = step_symbolic_schedule(index, state)
+            else:
+                if selected_index is None:
+                    raise AssertionError("suspended scheduler task selection was lost")
+                transition = _step_selected_suspended_continuation(
+                    index,
+                    state,
+                    selected_index,
+                )
+
+            for decision in transition.decisions:
+                successor = decision.state
+                if successor is None:
+                    raise AssertionError("validated scheduler decision lost its frontier state")
+                states_created += 1
+                observe(successor)
+                if decision.kind not in {
+                    SymbolicScheduleDecisionKind.RUNNABLE,
+                    SymbolicScheduleDecisionKind.SUSPENDED,
+                }:
+                    terminal.append(decision)
+                    continue
+                successor_key = successor.canonical_key
+                if successor_key in ancestry:
+                    cycle = _terminal_frontier_decision(
+                        index,
+                        successor,
+                        SymbolicScheduleDecisionKind.BLOCKED,
+                        "symbolic_schedule_cycle",
+                    )
+                    terminal.append(cycle)
+                    states_created += 1
+                    observe(cycle.state)
+                    continue
+                if successor_key in visited:
+                    deduplicated_states += 1
+                    continue
+                visited.add(successor_key)
+                queue.append((successor, ancestry | {successor_key}))
+
+    ordered_terminal = tuple(sorted(set(terminal), key=_decision_sort_key))
+    budget_frontiers = sum(
+        decision.kind is SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED
+        for decision in ordered_terminal
+    )
+    cycle_frontiers = sum(
+        decision.kind is SymbolicScheduleDecisionKind.BLOCKED
+        and decision.reason == "symbolic_schedule_cycle"
+        for decision in ordered_terminal
+    )
+    metrics = SymbolicScheduleSearchMetrics(
+        states_created=states_created,
+        transitions_evaluated=budget.consumed,
+        maximum_runnable_tasks=maximum_runnable_tasks,
+        maximum_suspended_tasks=maximum_suspended_tasks,
+        maximum_frame_depth=maximum_frame_depth,
+        deduplicated_states=deduplicated_states,
+        cycle_frontiers=cycle_frontiers,
+        budget_frontiers=budget_frontiers,
+    )
+    return SymbolicScheduleSearchResult(
+        ordered_terminal,
+        work_limit,
+        metrics,
+        (
+            SymbolicScheduleExhaustion.WORK_BUDGET_EXHAUSTED
+            if budget_frontiers
+            else None
+        ),
+    )
