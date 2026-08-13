@@ -1,9 +1,9 @@
-# Release config for v1.37.0 — uploads modernisation: adds migration 076
-# Code-only over v1.36.0: story header Kills = real session total gated by round
-# validity (#709, was the KIS subset — 61 vs 507) + the Data Trust invariant gate
-# (#710, tests/scripts only). Migration set is IDENTICAL to v1.36.0 (073/074/075
-# already applied); the full 045+ range is kept so straight upgrades from older
-# tags still apply everything.
+# Release config for v1.37.0 — uploads modernisation.
+# ADDS migration 076 (uploads.poster_path) for client-captured clip poster
+# thumbnails, on top of the 073/074/075 already applied in v1.35.0/v1.36.0. Also
+# carries the uploads video-lifecycle fix + modern player and the Data Trust /
+# hero-KILLS work from v1.36.1 (code-only). The full 045+ range is kept so
+# straight upgrades from older tags still apply everything.
 # shellcheck shell=bash
 # shellcheck disable=SC2034
 #

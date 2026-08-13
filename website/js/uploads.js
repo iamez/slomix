@@ -428,9 +428,12 @@ function renderUploadCard(item, index = 0) {
             <div class="glass-card relative rounded-xl p-5 flex flex-col gap-3 h-full">
                 ${item.poster_url ? `
                 <!-- Poster thumbnail (lazy) with a play overlay for playable clips -->
-                <button ${canPlay ? `onclick="window.openVideoPlayer('${escapeJsString(item.id)}', '${escapeJsString(item.title || item.filename)}')"` : ''}
+                <button data-poster ${canPlay
+                    ? `onclick="window.openVideoPlayer('${escapeJsString(item.id)}', '${escapeJsString(item.title || item.filename)}')" aria-label="Play ${escapeHtml(item.title || item.filename)}"`
+                    : 'aria-hidden="true" tabindex="-1"'}
                     class="relative block w-full aspect-video rounded-lg overflow-hidden bg-black/40 ${canPlay ? 'cursor-pointer' : 'cursor-default'}">
                     <img loading="lazy" src="${escapeHtml(item.poster_url)}" alt=""
+                        onerror="this.closest('[data-poster]').remove()"
                         class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
                     ${canPlay ? `
                     <span class="absolute inset-0 flex items-center justify-center bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200">

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -41,6 +42,16 @@ _LIVE_U = _LIVE.replace("status", "u.status").replace("expires_at", "u.expires_a
 # not as a very large number of days — "forever" and "expires in 100 years" are
 # different promises and only one of them is true.
 _RETENTION_DAYS = {7, 30, 90}
+
+# Upload ids are uuid4().hex — exactly 32 lowercase hex chars. Validate before
+# touching the DB so a malformed id is a clean 400, not a 404 after a pointless
+# query (repo convention for router identifiers).
+_UPLOAD_ID_RE = re.compile(r"[0-9a-f]{32}\Z")
+
+
+def _require_valid_upload_id(upload_id: str) -> None:
+    if not _UPLOAD_ID_RE.match(upload_id or ""):
+        raise HTTPException(status_code=400, detail="Invalid upload id")
 
 
 def _may_delete(request: Request, uploader_discord_id: int | None) -> bool:
@@ -212,7 +223,14 @@ async def upload_file(
             ),
         )
     except Exception as e:
-        # Rollback file on DB failure
+        # Rollback files on DB failure. Delete the poster FIRST: delete_upload()
+        # rmdir's the upload directory after removing the original, which a
+        # leftover poster.jpg would block — orphaning the whole directory.
+        if poster_rel:
+            try:
+                storage.delete_upload(poster_rel)
+            except Exception as poster_err:
+                logger.warning("⚠️ Poster rollback failed (orphaned poster): %s", poster_err)
         try:
             storage.delete_upload(saved.stored_path)
         except Exception as cleanup_err:
@@ -565,6 +583,7 @@ async def get_upload_poster(upload_id: str, db=Depends(get_db)):
     icon. The image is content-addressed by upload id and never changes, so it
     is served with a long immutable cache.
     """
+    _require_valid_upload_id(upload_id)
     row = await db.fetch_one(
         f"SELECT poster_path FROM uploads WHERE id = $1 AND {_LIVE}",
         (upload_id,),
