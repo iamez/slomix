@@ -2865,6 +2865,15 @@ def test_alertentity_trigger_spawn_script_mover_cannot_rebirth_from_static_healt
             },
             "alertentity_static_property_invalid",
         ),
+        (
+            {
+                "classname": "script_mover",
+                "targetname": "alert_target",
+                "spawnflags": "0",
+                "health": "100",
+            },
+            "alertentity_use_callback_missing",
+        ),
     ),
 )
 def test_alertentity_fails_closed_for_unmodeled_target_callbacks(raw_target, expected_reason):

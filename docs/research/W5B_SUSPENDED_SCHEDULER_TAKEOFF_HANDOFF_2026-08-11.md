@@ -168,8 +168,8 @@ table remains the pre-correction comparison, not the scheduler starting denomina
 
 S0b keeps the alert effect and its selected targets in one ordered instruction, then
 dispatches only source-proven `death`/`rebirth` handlers through the existing nested
-event walker. Arbitrary callbacks, script-producing use chains, malformed numeric
-properties, `func_explosive` lifecycle ambiguity and a possible
+event walker. Missing or arbitrary callbacks, script-producing use chains, malformed
+numeric properties, `func_explosive` lifecycle ambiguity and a possible
 `trigger_objective_info` parent death all remain named fail-closed paths.
 
 The exact installed surface is 136 alert actions selecting 1,688 static targets:
@@ -1091,10 +1091,12 @@ retained.
 - The branch was 74 main commits behind after the pause. `origin/main` at `f51edc88`
   touched CI and broader runtime dependencies but none of the W5b source/test/doc
   paths. It was merged normally to preserve published history; no force-push occurred.
-- Pinned source review added three conditions beyond the initial corpus observation:
+- Pinned source review added four conditions beyond the initial corpus observation:
   `TRIGGERSPAWN` prevents static health from initializing `script_mover.count`, a
   `trigger_objective_info` can make `func_explosive_use` dispatch parent `death`, and
-  malformed numeric BSP properties must not silently become zero.
+  malformed numeric BSP properties must not silently become zero. A `script_mover`
+  without `RESURRECTABLE` or `TRIGGERSPAWN` has no `use` callback, so alerting it is a
+  fatal source path rather than an immediate no-event continuation.
 - S0b preserves selected-target order, records typed runtime dispatch provenance,
   executes exactly one source-proven handler through the existing nested walker and
   fails closed for multi-handler groups or any unresolved callback/lifecycle/parent
@@ -1106,7 +1108,7 @@ retained.
   dispatches, 1,252 blocked paths and 452 cross-entity temporal paths. The only new
   blocker is one previously hidden `non_exact_accumulator_mutation` reached from the
   Goldrush rebirth handler.
-- Verification on the synced base: 131 focused tests, Ruff and `git diff --check`
+- Verification on the synced base: 132 focused tests, Ruff and `git diff --check`
   passed; the exact alert inventory and full 20-map executor acceptance tests passed.
   No owner-gated operation was performed.
 - The valid CodeRabbit wording finding is corrected: S0a is described as already
