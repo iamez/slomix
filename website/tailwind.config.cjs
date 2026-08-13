@@ -42,7 +42,7 @@ module.exports = {
     },
     {
       pattern: new RegExp(
-        `^(text|bg|border|ring)-(${COLORS.join('|')})(-(400|500))?/(10|20|30|40|50|60)$`,
+        `^(text|bg|border|ring)-(${COLORS.join('|')})(-(400|500))?/(10|20|30|40|50|60|70|80)$`,
       ),
       variants: ['hover', 'group-hover'],
     },
