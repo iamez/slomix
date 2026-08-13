@@ -97,6 +97,15 @@ class TestInvariantLogic:
         }
         assert not _results_by_key(ctx)["conservation_box_score"].passed
 
+    def test_box_score_missing_total_with_maps_trips_conservation(self):
+        ctx = _clean_context()
+        ctx.panels["box_score"] = {  # maps present but alpha_score absent = malformed
+            "beta_score": 2,
+            "maps": [{"alpha_points": 2, "beta_points": 0},
+                     {"alpha_points": 0, "beta_points": 2}],
+        }
+        assert not _results_by_key(ctx)["conservation_box_score"].passed
+
     def test_wrong_header_total_trips_conservation(self):
         ctx = _clean_context()
         ctx.panels["kill_impact"]["total_kills"] = 61  # the hero-KILLS bug

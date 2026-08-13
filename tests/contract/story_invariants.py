@@ -220,7 +220,11 @@ def _inv_conservation_box_score(ctx: SessionContext) -> list[str]:
     viol: list[str] = []
     for side, total_key in (("alpha_points", "alpha_score"), ("beta_points", "beta_score")):
         total = box.get(total_key)
+        # The real endpoint always returns numeric totals (default 0), so with
+        # maps present a missing/non-numeric total is a malformed payload — flag
+        # it rather than skipping (Copilot #716), or the check passes vacuously.
         if not isinstance(total, (int, float)) or isinstance(total, bool):
+            viol.append(f"box-score {total_key} missing or non-numeric ({total!r}) with {len(maps)} maps")
             continue
         summed = sum(int(m.get(side, 0) or 0) for m in maps if isinstance(m, dict))
         if summed != total:
