@@ -2511,6 +2511,119 @@ def _step_selected_suspended_continuation(
     return SymbolicScheduleResult(tuple(decisions), raw.work_consumed, raw.work_limit, raw.exhaustion)
 
 
+def _exact_script_entity_pass_order(
+    index: OrderedStageProgramIndex,
+    state: SymbolicScheduleState,
+) -> tuple[int, ...] | None:
+    entity_indices = {
+        entity_index
+        for program in index.programs
+        for entity_index in program.source.lookup.selected_entity_indices
+    }
+    relations = {item.child_entity_index: item for item in state.tag_parent_states}
+    if any(
+        entity_index not in relations
+        or relations[entity_index].disposition is SymbolicTagParentDisposition.UNKNOWN
+        for entity_index in entity_indices
+    ):
+        return None
+
+    visiting: set[int] = set()
+    visited: set[int] = set()
+    order: list[int] = []
+
+    def visit(entity_index: int) -> bool:
+        if entity_index in visited:
+            return True
+        if entity_index in visiting:
+            return False
+        visiting.add(entity_index)
+        relation = relations[entity_index]
+        if relation.disposition is SymbolicTagParentDisposition.ATTACHED:
+            parent = relation.parent_entity_index
+            if parent is None or parent not in entity_indices or not visit(parent):
+                return False
+        visiting.remove(entity_index)
+        visited.add(entity_index)
+        order.append(entity_index)
+        return True
+
+    for entity_index in sorted(entity_indices):
+        if not visit(entity_index):
+            return None
+    return tuple(order)
+
+
+def _source_ordered_suspended_index(
+    index: OrderedStageProgramIndex,
+    state: SymbolicScheduleState,
+) -> int | None:
+    continuations = state.suspended
+    if len(continuations) == 1:
+        return 0
+    pending = tuple(continuation.frame.pending_dispatch for continuation in continuations)
+    if any(context is None for context in pending):
+        return None
+    first = pending[0]
+    if first is None:
+        raise AssertionError("validated pending dispatch selection was lost")
+    shared_identity = (
+        first.dispatch_cursor,
+        first.caller_resume_cursor,
+        first.target_node_id,
+        first.ordered_target_entity_indices,
+        first.occurrence_id,
+        continuations[0].frame.invocation_path[:-1],
+    )
+    for continuation, context in zip(continuations, pending, strict=True):
+        if context is None:
+            raise AssertionError("validated pending dispatch selection was lost")
+        if context.displaced_continuation is not None:
+            return None
+        if not (continuation.caller_suffix_completed or continuation.caller_suffix_abandoned):
+            return None
+        if (
+            context.dispatch_cursor,
+            context.caller_resume_cursor,
+            context.target_node_id,
+            context.ordered_target_entity_indices,
+            context.occurrence_id,
+            continuation.frame.invocation_path[:-1],
+        ) != shared_identity:
+            return None
+
+    same_frame = tuple(
+        index_value
+        for index_value, continuation in enumerate(continuations)
+        if continuation.wake_constraint is SymbolicWakeConstraint.SAME_FRAME_LATER
+    )
+    if same_frame:
+        candidates = same_frame
+    elif all(
+        continuation.wake_constraint is SymbolicWakeConstraint.NEXT_FRAME
+        for continuation in continuations
+    ):
+        candidates = tuple(range(len(continuations)))
+    else:
+        return None
+
+    entity_pass_order = _exact_script_entity_pass_order(index, state)
+    if entity_pass_order is None:
+        return None
+    candidate_by_entity = {
+        continuations[index_value].frame.cursor.entity_index: index_value
+        for index_value in candidates
+    }
+    return next(
+        (
+            candidate_by_entity[entity_index]
+            for entity_index in entity_pass_order
+            if entity_index in candidate_by_entity
+        ),
+        None,
+    )
+
+
 def search_symbolic_schedule(
     index: OrderedStageProgramIndex,
     initial_state: SymbolicScheduleState,
@@ -2519,9 +2632,9 @@ def search_symbolic_schedule(
 ) -> SymbolicScheduleSearchResult:
     """Explore source-defensible scheduler alternatives under one global budget.
 
-    Suspended tasks are explored in every canonical order. Runnable frames do not yet
-    carry a typed footprint strong enough to prove commutation, so multiple runnable
-    frames retain ``schedule_independence_unproven`` instead of choosing an order.
+    A shared-dispatch suspended group follows the exact ET entity pass only when the
+    wake phase and complete relevant tag-parent state prove it. Any other multi-task
+    order retains ``schedule_independence_unproven`` instead of inventing a schedule.
     """
 
     _state_for_index(index, initial_state)
@@ -2572,18 +2685,21 @@ def search_symbolic_schedule(
             )
             continue
 
+        unproven_task_order = len(state.runnable) > 1
         selected_suspended_indices: tuple[int | None, ...]
         if state.runnable:
             selected_suspended_indices = (None,)
         else:
-            selected_suspended_indices = tuple(range(len(state.suspended)))
+            selected_index = _source_ordered_suspended_index(index, state)
+            unproven_task_order = selected_index is None
+            selected_suspended_indices = (selected_index,)
 
         for selected_index in selected_suspended_indices:
             exhaustion = budget.consume()
             if exhaustion is not None:
                 exhaust(state)
                 break
-            if len(state.runnable) > 1:
+            if unproven_task_order:
                 transition = _blocked_transition(
                     index,
                     state,
