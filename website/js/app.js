@@ -29,7 +29,7 @@ import { loadReplayView } from './replay.js';
 import { loadRivalriesView } from './rivalries.js';
 import { loadSmartStatsDiagView } from './smart-stats-diag.js?v=20260607-aim';
 import { loadAdminPanelView } from './admin-panel.js';
-import { loadUploadsView, loadUploadDetail } from './uploads.js?v=20260813-poster';
+import { loadUploadsView, loadUploadDetail } from './uploads.js?v=20260813-ux';
 import { closeAllMedia } from './media-cleanup.js?v=20260813-mediaplayer';
 import { loadAvailabilityView } from './availability.js?v=20260804-auth-dedupe';
 import {

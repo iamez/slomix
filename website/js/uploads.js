@@ -117,6 +117,98 @@ export async function loadUploadsView() {
 // DRAG & DROP UPLOAD ZONE
 // ============================================================================
 
+// Extension → category + per-category size cap, mirroring the backend
+// (upload_validators: detect_category + SIZE_LIMITS). Used to give the uploader
+// immediate, inline feedback about how their file will be categorised and
+// whether it's within limits — before they submit.
+// Mirrors backend upload_validators.ALLOWED_EXTENSIONS EXACTLY: detect_category
+// puts .hud under 'config' (there is no separate 'hud' category), so the feedback
+// shows the category the backend will actually assign — not a guess that diverges.
+const _EXT_CATEGORY = {
+    '.cfg': 'config', '.hud': 'config',
+    '.zip': 'archive', '.rar': 'archive',
+    '.mp4': 'clip', '.avi': 'clip', '.mkv': 'clip',
+};
+const _SIZE_LIMIT_MB = { config: 2, archive: 50, clip: 500 };  // backend SIZE_LIMITS
+
+// True while an upload is in flight. The submit button must stay disabled for the
+// whole duration, so a file-select event mid-upload can't re-enable it and let a
+// second upload start (CodeRabbit #719).
+let _uploading = false;
+
+// Reflect a just-chosen file in the inline feedback strip: detected category +
+// size when valid, a clear reason when not, and disable the submit button on an
+// invalid file so it can't be sent. Returns whether the file is acceptable.
+function _updateFileFeedback(file) {
+    const fb = document.getElementById('upload-file-feedback');
+    const submitBtn = document.getElementById('upload-submit-btn');
+    if (!fb) return true;
+    if (!file) {
+        fb.className = 'hidden';
+        fb.textContent = '';
+        if (submitBtn) submitBtn.disabled = false;
+        return true;
+    }
+    const name = file.name.toLowerCase();
+    const ext = name.includes('.') ? '.' + name.split('.').pop() : '';
+    const cat = _EXT_CATEGORY[ext];
+    const sizeStr = formatFileSize(file.size);
+
+    let ok = true;
+    let msg = '';
+    if (!cat) {
+        ok = false;
+        msg = `Unsupported type ${ext || '(none)'} — allowed: .cfg .hud .zip .rar .mp4 .avi .mkv`;
+    } else {
+        const maxMB = _SIZE_LIMIT_MB[cat] || 50;
+        if (file.size > maxMB * 1024 * 1024) {
+            ok = false;
+            msg = `Too large: ${sizeStr} (max ${maxMB} MB for ${cat})`;
+        }
+    }
+
+    if (ok) {
+        const meta = CATEGORIES[cat] || { label: cat };
+        const note = (cat === 'clip' && !isBrowserPlayable(ext))
+            ? ' · not playable in the browser (download-only)' : '';
+        fb.className = 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 px-3 py-2 text-xs flex items-center gap-2 flex-wrap';
+        // Build with textContent (no innerHTML) — file.name is untrusted, and DOM
+        // text can never be reinterpreted as markup.
+        fb.textContent = '';
+        const label = document.createElement('span');
+        label.className = 'font-bold uppercase tracking-wider';
+        label.textContent = meta.label || cat;
+        const detail = document.createElement('span');
+        detail.className = 'text-slate-400';
+        detail.textContent = `${file.name} · ${sizeStr}${note}`;
+        fb.append(label, detail);
+    } else {
+        fb.className = 'rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300 px-3 py-2 text-xs';
+        fb.textContent = msg;
+    }
+    // Never re-enable submit while an upload is running, even for a valid file.
+    if (submitBtn) submitBtn.disabled = _uploading || !ok;
+    return ok;
+}
+
+// Shared handler for both drop and file-input change: show the name and the
+// inline feedback in one place.
+function _onFileSelected(file) {
+    const nameEl = document.getElementById('upload-drop-filename');
+    if (nameEl) {
+        if (file) {
+            nameEl.textContent = file.name;
+            nameEl.classList.remove('hidden');
+        } else {
+            // Symmetric reset: no file → clear the shown name too, not just the
+            // feedback strip, so nothing stale lingers (Copilot #719).
+            nameEl.textContent = '';
+            nameEl.classList.add('hidden');
+        }
+    }
+    _updateFileFeedback(file);
+}
+
 function setupDragDrop() {
     const zone = document.getElementById('upload-drop-zone');
     if (!zone) return;
@@ -149,23 +241,17 @@ function setupDragDrop() {
         zone.classList.remove('upload-drop-active');
         if (e.dataTransfer.files.length && fileInput) {
             fileInput.files = e.dataTransfer.files;
-            // Show selected file name
-            const nameEl = document.getElementById('upload-drop-filename');
-            if (nameEl) {
-                nameEl.textContent = e.dataTransfer.files[0].name;
-                nameEl.classList.remove('hidden');
-            }
+            _onFileSelected(e.dataTransfer.files[0]);
         }
     });
 
-    // Show filename on normal file select too
+    // Same feedback on a normal file-picker selection. Only act when a file is
+    // actually present: cancelling the picker fires no change on most browsers,
+    // but guarding here also keeps a spurious empty change from wiping the
+    // feedback for an already-chosen file (Copilot #719).
     if (fileInput) {
         fileInput.addEventListener('change', () => {
-            const nameEl = document.getElementById('upload-drop-filename');
-            if (nameEl && fileInput.files.length) {
-                nameEl.textContent = fileInput.files[0].name;
-                nameEl.classList.remove('hidden');
-            }
+            if (fileInput.files.length) _onFileSelected(fileInput.files[0]);
         });
     }
 }
@@ -282,6 +368,7 @@ async function handleUpload(e) {
         return;
     }
 
+    _uploading = true;
     submitBtn.disabled = true;
     submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
     if (progressWrap) progressWrap.classList.remove('hidden');
@@ -349,16 +436,18 @@ async function handleUpload(e) {
         // which is the one choice here a user cannot undo later (CodeRabbit
         // on #615).
         if (retentionSelect) retentionSelect.value = '';
-        const nameEl = document.getElementById('upload-drop-filename');
-        if (nameEl) { nameEl.textContent = ''; nameEl.classList.add('hidden'); }
+        _onFileSelected(null);  // clear the shown name + feedback, re-enable submit
 
         await loadUploadsList();
     } catch (err) {
         showToast(err.message, 'error');
     } finally {
-        submitBtn.disabled = false;
+        _uploading = false;
         submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
         if (progressWrap) progressWrap.classList.add('hidden');
+        // Re-enable only if the currently-selected file is still valid (a failed
+        // upload keeps the file). A success already cleared it via _onFileSelected.
+        _updateFileFeedback(fileInput.files.length ? fileInput.files[0] : null);
     }
 }
 
