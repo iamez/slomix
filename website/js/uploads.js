@@ -335,6 +335,64 @@ function _capturePoster(file) {
     });
 }
 
+// Files larger than this upload in resumable chunks (survives a dropped
+// connection); smaller ones use the simpler single-shot POST. Clips can reach
+// 500 MB, so this is where resume actually matters.
+const _RESUMABLE_THRESHOLD = 50 * 1024 * 1024;
+
+// Upload a large file in chunks via the resumable protocol, resuming from the
+// server's offset on a transient failure. onProgress(pct) drives the bar.
+// Returns the finalize response (same shape as the single-shot POST). No poster
+// is captured for resumable clips yet — the card falls back to the icon.
+async function _resumableUpload(file, meta, onProgress) {
+    const jsonErr = async (resp, fallback) => {
+        const body = await resp.json().catch(() => ({}));
+        return new Error(body.detail || fallback);
+    };
+    const initResp = await fetch(`${API_BASE}/uploads/resumable`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify({ filename: file.name, size: file.size, ...meta }),
+    });
+    if (!initResp.ok) throw await jsonErr(initResp, `Upload init failed (${initResp.status})`);
+    const init = await initResp.json();
+    const chunkSize = init.chunk_size || (8 * 1024 * 1024);
+    const url = `${API_BASE}/uploads/resumable/${encodeURIComponent(init.session_id)}`;
+
+    let offset = 0;
+    const maxRetries = 3;
+    while (offset < file.size) {
+        const blob = file.slice(offset, Math.min(offset + chunkSize, file.size));
+        let attempt = 0;
+        for (;;) {
+            try {
+                const r = await fetch(url, {
+                    method: 'PATCH', credentials: 'include',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Upload-Offset': String(offset) },
+                    body: blob,
+                });
+                if (r.status === 204 || r.status === 409) {
+                    // 409 carries the authoritative offset so we resync and go on.
+                    offset = parseInt(r.headers.get('Upload-Offset') || String(offset), 10);
+                    break;
+                }
+                throw await jsonErr(r, `Chunk failed (${r.status})`);
+            } catch (err) {
+                if (++attempt >= maxRetries) throw err;
+                await new Promise((res) => setTimeout(res, 500 * attempt));  // backoff, then resume
+            }
+        }
+        if (onProgress) onProgress(Math.round((offset / file.size) * 100));
+    }
+
+    const finResp = await fetch(`${url}/finalize`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    });
+    if (!finResp.ok) throw await jsonErr(finResp, `Finalize failed (${finResp.status})`);
+    return finResp.json();
+}
+
 async function handleUpload(e) {
     e.preventDefault();
 
@@ -375,54 +433,60 @@ async function handleUpload(e) {
     if (progressBar) progressBar.style.width = '0%';
     if (progressText) progressText.textContent = '0%';
 
-    const formData = new FormData();
-    formData.append('file', file);
-    if (titleInput.value.trim()) formData.append('title', titleInput.value.trim());
-    if (descInput.value.trim()) formData.append('description', descInput.value.trim());
-    if (tagsInput.value.trim()) formData.append('tags', tagsInput.value.trim());
-    // Empty value = keep forever, which is the default and the first option.
-    // Send nothing in that case: the backend treats an absent retention_days as
-    // lifetime, so "" would have to be parsed into None somewhere, and an empty
-    // string reaching an int field is a 422 waiting to happen.
+    // Empty value = keep forever (the default). Send nothing in that case: an
+    // empty string reaching an int field is a 422 waiting to happen.
     const retentionSelect = document.getElementById('upload-retention-select');
-    if (retentionSelect && retentionSelect.value) {
-        formData.append('retention_days', retentionSelect.value);
-    }
-
-    // Capture a poster thumbnail for playable clips (best-effort; never blocks
-    // the upload — a null poster just means the card shows the category icon).
-    if (fileName.endsWith('.mp4')) {
-        const posterBlob = await _capturePoster(file);
-        if (posterBlob) formData.append('poster', posterBlob, 'poster.jpg');
-    }
+    const retentionValue = retentionSelect && retentionSelect.value ? retentionSelect.value : null;
+    const setProgress = (pct) => {
+        if (progressBar) progressBar.style.width = `${pct}%`;
+        if (progressText) progressText.textContent = `${pct}%`;
+    };
 
     try {
-        const data = await new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.upload.addEventListener('progress', (ev) => {
-                if (ev.lengthComputable) {
-                    const pct = Math.round((ev.loaded / ev.total) * 100);
-                    if (progressBar) progressBar.style.width = `${pct}%`;
-                    if (progressText) progressText.textContent = `${pct}%`;
-                }
+        let data;
+        if (file.size > _RESUMABLE_THRESHOLD) {
+            // Large file → resumable chunked upload (survives a dropped connection).
+            data = await _resumableUpload(file, {
+                title: titleInput.value.trim(),
+                description: descInput.value.trim(),
+                tags: tagsInput.value.trim(),
+                retention_days: retentionValue ? parseInt(retentionValue, 10) : null,
+            }, setProgress);
+        } else {
+            // Small file → single-shot POST, with a client-captured poster for clips.
+            const formData = new FormData();
+            formData.append('file', file);
+            if (titleInput.value.trim()) formData.append('title', titleInput.value.trim());
+            if (descInput.value.trim()) formData.append('description', descInput.value.trim());
+            if (tagsInput.value.trim()) formData.append('tags', tagsInput.value.trim());
+            if (retentionValue) formData.append('retention_days', retentionValue);
+            if (fileName.endsWith('.mp4')) {
+                const posterBlob = await _capturePoster(file);
+                if (posterBlob) formData.append('poster', posterBlob, 'poster.jpg');
+            }
+            data = await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.upload.addEventListener('progress', (ev) => {
+                    if (ev.lengthComputable) setProgress(Math.round((ev.loaded / ev.total) * 100));
+                });
+                xhr.addEventListener('load', () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        resolve(JSON.parse(xhr.responseText));
+                    } else {
+                        try {
+                            const err = JSON.parse(xhr.responseText);
+                            reject(new Error(err.detail || `HTTP ${xhr.status}`));
+                        } catch { reject(new Error(`HTTP ${xhr.status}`)); }
+                    }
+                });
+                xhr.addEventListener('error', () => reject(new Error('Network error')));
+                xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
+                xhr.open('POST', `${API_BASE}/uploads`);
+                xhr.withCredentials = true;
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');  // CSRF
+                xhr.send(formData);
             });
-            xhr.addEventListener('load', () => {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    resolve(JSON.parse(xhr.responseText));
-                } else {
-                    try {
-                        const err = JSON.parse(xhr.responseText);
-                        reject(new Error(err.detail || `HTTP ${xhr.status}`));
-                    } catch { reject(new Error(`HTTP ${xhr.status}`)); }
-                }
-            });
-            xhr.addEventListener('error', () => reject(new Error('Network error')));
-            xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
-            xhr.open('POST', `${API_BASE}/uploads`);
-            xhr.withCredentials = true;
-            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');  // CSRF
-            xhr.send(formData);
-        });
+        }
 
         showToast(`Uploaded: ${data.filename}`, 'success');
 
