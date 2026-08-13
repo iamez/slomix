@@ -29,7 +29,8 @@ import { loadReplayView } from './replay.js';
 import { loadRivalriesView } from './rivalries.js';
 import { loadSmartStatsDiagView } from './smart-stats-diag.js?v=20260607-aim';
 import { loadAdminPanelView } from './admin-panel.js';
-import { loadUploadsView, loadUploadDetail } from './uploads.js?v=20260804-auth-dedupe';
+import { loadUploadsView, loadUploadDetail } from './uploads.js?v=20260813-mediaplayer';
+import { closeAllMedia } from './media-cleanup.js?v=20260813-mediaplayer';
 import { loadAvailabilityView } from './availability.js?v=20260804-auth-dedupe';
 import {
     initGreatshotModule,
@@ -203,6 +204,12 @@ async function dispatchRoute(viewId, params = {}) {
         console.warn(`Unknown route: ${viewId}. Falling back to home.`);
         return dispatchRoute('home', {});
     }
+
+    // Tear down any playing media BEFORE switching views. The uploads video
+    // modal lives on document.body and the detail <video> in a section the
+    // router only hides, so without this a clip kept playing (audio in the
+    // background) after navigating away — the exact reported bug.
+    closeAllMedia();
 
     const target = setActiveView(definition.viewId);
     if (!target) return;
