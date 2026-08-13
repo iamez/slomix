@@ -23,6 +23,7 @@ from website.backend.map_geometry.stage_scheduler import (
     PendingDispatchContext,
     SuspendedContinuation,
     SymbolicAsyncMovementLifecycle,
+    SymbolicEffectRecord,
     SymbolicEventOwner,
     SymbolicFrame,
     SymbolicFrameOrigin,
@@ -191,6 +192,62 @@ def test_equal_semantic_states_have_one_canonical_key():
     assert left == right
     assert left.canonical_key == right.canonical_key
     assert hash(left.canonical_key) == hash(right.canonical_key)
+
+
+def test_effect_identity_includes_concrete_source_entity_and_instruction():
+    script = parse_map_script(
+        b"""
+        shared
+        {
+            spawn
+            {
+                setstate gate invisible
+                wait 100
+            }
+        }
+        """,
+        source="maps/test.script",
+    )
+    model = StaticStageModel(
+        "test",
+        ObjectiveCatalog((), (), ()),
+        script,
+        compile_static_stage_graph(script, source="maps/test.script"),
+        _asset_provider(MapAssetKind.SCRIPT),
+        _asset_provider(MapAssetKind.OBJDATA),
+    )
+    identities = build_entity_identity_index(
+        (
+            {"classname": "script_mover", "scriptname": "shared"},
+            {"classname": "script_mover", "scriptname": "shared"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+        source="maps/test.bsp",
+    )
+    catalog = MapEntityCatalog("test", "maps/test.bsp", (), (), (), ())
+    index = build_ordered_stage_program_index(model, link_w3_entity_catalog(identities, catalog))
+    program = _program(index, "shared")
+    projection = program.instructions[0].projection
+    frame = _frame(program.node.node_id, 0, 1)
+
+    left = _state(
+        index,
+        frame,
+        effects=(SymbolicEffectRecord(projection, SymbolicProgramCursor(program.node.node_id, 0, 0)),),
+    )
+    right = _state(
+        index,
+        frame,
+        effects=(SymbolicEffectRecord(projection, SymbolicProgramCursor(program.node.node_id, 1, 0)),),
+    )
+
+    assert left.canonical_key != right.canonical_key
+    with pytest.raises(ValueError, match="does not identify a stage effect"):
+        _state(
+            index,
+            frame,
+            effects=(SymbolicEffectRecord(projection, SymbolicProgramCursor(program.node.node_id, 0, 1)),),
+        )
 
 
 def test_pending_dispatch_identity_cannot_drop_parent_cursor_target_cursor_or_order():
@@ -517,6 +574,46 @@ def test_nonwaiting_movement_is_async_lifecycle_not_suspended_script():
     with pytest.raises(ValueError, match="waiting movement cannot"):
         _state(index, suffix, async_lifecycles=(waiting,))
 
+    waiting_frame = _frame(waiting_program.node.node_id, 0, 0)
+    waiting_continuation = SuspendedContinuation(
+        waiting_frame,
+        boundary_line=waiting_program.event.actions[0].line,
+        resume_mode=SymbolicResumeMode.REENTER_BOUNDARY_ACTION,
+        boundary_state=SymbolicMovementBoundaryState(
+            SymbolicMovementCommand.FOLLOW_SPLINE,
+            ("0", "path", "100", "wait"),
+            SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,
+            True,
+            True,
+        ),
+        wake_constraint=SymbolicWakeConstraint.NEXT_FRAME,
+    )
+    with pytest.raises(ValueError, match="cannot start while"):
+        _state(
+            index,
+            waiting_frame,
+            runnable=(),
+            suspended=(waiting_continuation,),
+            async_lifecycles=(lifecycle,),
+        )
+
+    prior_motion_continuation = replace(
+        waiting_continuation,
+        boundary_state=replace(
+            waiting_continuation.boundary_state,
+            temporal_state=SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,
+            effect_started=False,
+        ),
+    )
+    prior_motion_state = _state(
+        index,
+        waiting_frame,
+        runnable=(),
+        suspended=(prior_motion_continuation,),
+        async_lifecycles=(lifecycle,),
+    )
+    assert prior_motion_state.async_lifecycles == (lifecycle,)
+
 
 def test_r1_replacement_contract_keeps_exactly_one_deterministic_event_owner():
     index = _program_index()
@@ -594,6 +691,14 @@ def test_malformed_cursor_and_event_ownership_fail_at_state_boundary():
         _state(index, past_end)
 
     valid = _frame(target.node.node_id, 1, 0)
+    cross_entity_stack = replace(
+        valid,
+        call_stack=(SymbolicProgramCursor(target.node.node_id, 3, len(target.instructions)),),
+        origin=SymbolicFrameOrigin.EVENT_REPLACEMENT,
+    )
+    with pytest.raises(ValueError, match="active frame entity"):
+        _state(index, cross_entity_stack)
+
     with pytest.raises(ValueError, match="exactly match"):
         _state(index, valid, event_owners=())
 
@@ -612,6 +717,25 @@ def test_malformed_cursor_and_event_ownership_fail_at_state_boundary():
             (),
             _creation_token=None,
         )
+
+
+@pytest.mark.parametrize(
+    "accumulator_state",
+    (
+        SymbolicAccumulatorState(entity_values=((1, 0, SymbolicIntegerDomain(2, 1)),)),
+        SymbolicAccumulatorState(
+            global_values=((0, SymbolicIntegerDomain(required_set_bits=1, required_clear_bits=1)),),
+        ),
+        SymbolicAccumulatorState(default_domain=SymbolicIntegerDomain(2, 1)),
+    ),
+)
+def test_impossible_accumulator_domains_fail_at_state_boundary(accumulator_state):
+    index = _program_index()
+    target = _program(index, "target", "long")
+    frame = _frame(target.node.node_id, 1, 0)
+
+    with pytest.raises(ValueError, match="has no possible value"):
+        _state(index, frame, accumulator_state=accumulator_state)
 
 
 def test_global_work_budget_reports_named_exhaustion_without_overconsumption():

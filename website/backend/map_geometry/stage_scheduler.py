@@ -269,6 +269,8 @@ class SymbolicFrame:
         )
         for cursor in self.call_stack:
             cursor.validate(index, allow_complete=True)
+            if cursor.entity_index != self.cursor.entity_index:
+                raise ValueError("saved call-stack cursors must belong to the active frame entity")
         if self.pending_dispatch is not None:
             if self.origin not in {
                 SymbolicFrameOrigin.NESTED_DISPATCH,
@@ -449,11 +451,30 @@ class SymbolicTagParentState:
             raise ValueError("only attached tag-parent state may name a parent entity")
 
 
+@dataclass(frozen=True, slots=True)
+class SymbolicEffectRecord:
+    projection: StageEffectProjection
+    source_cursor: SymbolicProgramCursor
+
+    def validate(self, index: OrderedStageProgramIndex) -> None:
+        self.source_cursor.validate(index)
+        program = index.program(self.source_cursor.node_id)
+        instruction = program.instructions[self.source_cursor.instruction_offset]
+        if not isinstance(instruction, StageEffectInstruction):
+            raise ValueError("symbolic effect source cursor does not identify a stage effect")
+        if instruction.projection != self.projection:
+            raise ValueError("symbolic effect projection does not match its source cursor")
+
+
 def _canonical_accumulator_state(state: SymbolicAccumulatorState) -> SymbolicAccumulatorState:
+    if not state.default_domain.has_candidate():
+        raise ValueError("symbolic accumulator default domain has no possible value")
     entity_values = {}
     for entity_index, buffer_index, value in state.entity_values:
         if entity_index < 0 or not 0 <= buffer_index < 10:
             raise ValueError("symbolic entity accumulator key is outside ET bounds")
+        if not value.has_candidate():
+            raise ValueError("symbolic entity accumulator domain has no possible value")
         key = (entity_index, buffer_index)
         if key in entity_values and entity_values[key] != value:
             raise ValueError("symbolic entity accumulator has conflicting duplicate values")
@@ -463,6 +484,8 @@ def _canonical_accumulator_state(state: SymbolicAccumulatorState) -> SymbolicAcc
     for buffer_index, value in state.global_values:
         if not 0 <= buffer_index < 10:
             raise ValueError("symbolic global accumulator key is outside ET bounds")
+        if not value.has_candidate():
+            raise ValueError("symbolic global accumulator domain has no possible value")
         if buffer_index in global_values and global_values[buffer_index] != value:
             raise ValueError("symbolic global accumulator has conflicting duplicate values")
         global_values[buffer_index] = value
@@ -491,7 +514,7 @@ class SymbolicScheduleState:
     async_lifecycles: tuple[SymbolicAsyncMovementLifecycle, ...]
     event_owners: tuple[SymbolicEventOwner, ...]
     tag_parent_states: tuple[SymbolicTagParentState, ...] = ()
-    effects: tuple[StageEffectProjection, ...] = ()
+    effects: tuple[SymbolicEffectRecord, ...] = ()
     provenance: tuple[str, ...] = ()
     ordering_decisions: tuple[str, ...] = ()
     unknown_reasons: tuple[str, ...] = ()
@@ -505,7 +528,7 @@ class SymbolicScheduleState:
         async_lifecycles: tuple[SymbolicAsyncMovementLifecycle, ...],
         event_owners: tuple[SymbolicEventOwner, ...],
         tag_parent_states: tuple[SymbolicTagParentState, ...],
-        effects: tuple[StageEffectProjection, ...],
+        effects: tuple[SymbolicEffectRecord, ...],
         provenance: tuple[str, ...],
         ordering_decisions: tuple[str, ...],
         unknown_reasons: tuple[str, ...],
@@ -537,7 +560,7 @@ class SymbolicScheduleState:
         async_lifecycles: tuple[SymbolicAsyncMovementLifecycle, ...] = (),
         event_owners: tuple[SymbolicEventOwner, ...] = (),
         tag_parent_states: tuple[SymbolicTagParentState, ...] = (),
-        effects: tuple[StageEffectProjection, ...] = (),
+        effects: tuple[SymbolicEffectRecord, ...] = (),
         provenance: tuple[str, ...] = (),
         ordering_decisions: tuple[str, ...] = (),
         unknown_reasons: tuple[str, ...] = (),
@@ -550,6 +573,8 @@ class SymbolicScheduleState:
             lifecycle.validate(index)
         for owner in event_owners:
             owner.validate(index)
+        for effect in effects:
+            effect.validate(index)
 
         active_frames = tuple(runnable) + tuple(item.frame for item in suspended)
         active_entities = [frame.cursor.entity_index for frame in active_frames]
@@ -558,6 +583,15 @@ class SymbolicScheduleState:
         lifecycle_entities = [lifecycle.source_cursor.entity_index for lifecycle in async_lifecycles]
         if len(set(lifecycle_entities)) != len(lifecycle_entities):
             raise ValueError("a symbolic entity cannot own multiple asynchronous movement lifecycles")
+        lifecycle_entity_set = set(lifecycle_entities)
+        for continuation in suspended:
+            if (
+                continuation.frame.cursor.entity_index in lifecycle_entity_set
+                and isinstance(continuation.boundary_state, SymbolicMovementBoundaryState)
+                and continuation.boundary_state.temporal_state
+                is not SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE
+            ):
+                raise ValueError("a suspended movement cannot start while the entity has an active movement lifecycle")
 
         owners_by_entity = {owner.entity_index: owner for owner in event_owners}
         if len(owners_by_entity) != len(event_owners):

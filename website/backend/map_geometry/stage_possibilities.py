@@ -2893,10 +2893,17 @@ def _identity_int_property(identity, name: str, default: int = 0) -> int | None:
     value = _identity_property(identity, name)
     if value is None:
         return default
+    # Q_atoi uses base-10 strtol. Require the complete property to be decimal;
+    # accepting only its prefix would not prove the static value is exact.
+    token = value.strip(" \t\r\n\v\f")
+    digits = token[1:] if token[:1] in {"+", "-"} else token
+    if not digits or any(character < "0" or character > "9" for character in digits):
+        return None
     try:
-        return int(value)
+        parsed = int(token, 10)
     except ValueError:
         return None
+    return parsed if _SIGNED_INT_MIN <= parsed <= _SIGNED_INT_MAX else None
 
 
 def _func_explosive_has_possible_script_parent(
