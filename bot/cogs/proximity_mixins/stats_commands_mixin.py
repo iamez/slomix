@@ -12,7 +12,19 @@ import aiohttp
 import discord
 from discord.ext import commands
 
+from bot.core.utils import normalize_player_name
+
 logger = logging.getLogger("bot.cogs.proximity")
+
+
+def _is_bot_row(player: dict) -> bool:
+    """A prox-scores row for a test bot ([BOT] name / OMNIBOT guid). Normalize the
+    name (drop ET colour codes that could split "[B^7OT]") and case-fold both
+    fields before matching — a raw check misses coloured names and lowercase
+    guids (mirrors the v1 service's ``guid.upper()`` filter)."""
+    name = normalize_player_name(player.get("name") or "").upper()
+    guid = (player.get("guid") or "").upper()
+    return "[BOT]" in name or guid.startswith("OMNIBOT")
 
 # Budget for the bot→web prox-scores fetch (mirrors session_digest_service).
 _HTTP_TIMEOUT_S = 10
@@ -405,11 +417,7 @@ class _ProximityStatsCommandsMixin:
 
             # Drop bot-test rounds so a headless testmode session can't headline
             # (mirrors session_digest_service's [BOT]/OMNIBOT filter).
-            players = [
-                p for p in (data.get("players") or [])
-                if "[BOT]" not in (p.get("name") or "")
-                and not (p.get("guid") or "").startswith("OMNIBOT")
-            ]
+            players = [p for p in (data.get("players") or []) if not _is_bot_row(p)]
             if not players:
                 await ctx.send(f"No proximity data for session {session_date}.")
                 return
@@ -421,7 +429,6 @@ class _ProximityStatsCommandsMixin:
             )
 
             # Response is already sorted by prox_overall desc.
-            from bot.core.utils import normalize_player_name
             medal = ["🥇", "🥈", "🥉"]
             for i, p in enumerate(players[:12]):
                 prefix = medal[i] if i < 3 else f"{i+1}."

@@ -140,9 +140,14 @@ async def test_command_no_players_after_bot_filter():
     cog = _cog()
     cog._fetch_prox_scores = AsyncMock(return_value={
         "status": "ok",
-        "players": [{"guid": "OMNIBOT_1", "name": "[BOT] x", "prox_overall": 50.0,
-                     "prox_combat": 50, "prox_team": 50, "prox_gamesense": 50,
-                     "engagements": 100}],
+        # Colour code inside [BOT] and a lowercase omnibot guid must both be
+        # caught (raw/case-sensitive checks would leak them through — CodeRabbit).
+        "players": [
+            {"guid": "G1", "name": "[B^7OT] sneaky", "prox_overall": 50.0,
+             "prox_combat": 50, "prox_team": 50, "prox_gamesense": 50, "engagements": 100},
+            {"guid": "omnibot_2", "name": "clean name", "prox_overall": 40.0,
+             "prox_combat": 40, "prox_team": 40, "prox_gamesense": 40, "engagements": 90},
+        ],
     })
     ctx = _ctx()
     await _run(cog, ctx)
