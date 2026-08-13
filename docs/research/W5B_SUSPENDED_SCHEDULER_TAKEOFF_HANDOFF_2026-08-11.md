@@ -1372,6 +1372,38 @@ retained.
   other owner-gated operation was performed. The new exact head still requires full
   GitHub CI, review, zero-thread and five-minute quiet-window gates before S4 begins.
 
+### 2026-08-13 - replacement ownership and dispatch occurrence follow-up
+
+- Code/test commit: `c750060e`. The next exact-head Codex review found two additional
+  P1 state-identity gaps; both were reproduced locally before implementation and remain
+  merge blockers until their pushed head passes review and CI.
+- A replacement handler that blocks before its synchronous-versus-temporal outcome is
+  known now saves the displaced `SuspendedContinuation` inside the active pending
+  dispatch context. The displaced owner is canonical evidence, not a second active
+  task for the same entity. A regression proves the replacement's executed prefix and
+  blocker remain active while the exact old continuation remains available for later
+  synchronous restoration.
+- `PendingDispatchContext.occurrence_id` now distinguishes repeated executions of the
+  same static dispatch cursor. Continuation lookup and caller completion require the
+  same occurrence, so a new caller cannot mark or reject an older continuation merely
+  because its source cursor, target group and invocation ancestry are otherwise equal.
+  Allocation is scoped to the same static dispatch and caller invocation ancestry;
+  independent tasks do not acquire artificial ordering merely from a global counter.
+- The repeated-dispatch regression retains an already completed old target
+  continuation, executes the same caller dispatch again with occurrence 1, takes its
+  synchronous branch, runs the new caller suffix and leaves occurrence 0 untouched.
+  A separate replacement-blocker regression proves the saved owner and local
+  accumulator prefix survive together.
+- Exact local evidence at `c750060e`: 62/62 scheduler tests, 336/336 map-geometry unit
+  tests and the complete repository suite at 4,559 passed / 97 environment or opt-in
+  skips / 30 warnings. Ruff, byte compilation and `git diff --check` passed.
+- The asset/projection suite recorded above does not execute the scheduler transition
+  runner, so it was not presented as evidence for these two fixes. No installed-asset
+  denominator changed, and S5 still owns scheduler corpus measurement.
+- No production write, deploy, service restart, Python replacement, Lua change or
+  other owner-gated operation was performed. Exact-head CI, fresh review, zero-thread
+  and quiet-window gates remain open; S4 has not started.
+
 At every substantive commit, append:
 
 - commit SHA and whether it changes contract, code, tests or evidence;
