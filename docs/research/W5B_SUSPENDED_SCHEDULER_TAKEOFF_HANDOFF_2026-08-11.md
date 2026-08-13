@@ -6,7 +6,7 @@ Last reverified: 2026-08-13
 
 Status: implementation in progress; S0-S1 complete, S2 pending exact-head gate
 
-Current base: `origin/main` at `2c18ffd43dd54d277b893ccdef180675ef73c89e`
+Current base: `origin/main` at `42fe7819860a7f4c1eaed8637c74463041355a18`
 
 Original branch base: `origin/main` at `d6136cdd994870fddf4e4d0ff1968eb91418e497`
 
@@ -1167,10 +1167,15 @@ retained.
 
 ### 2026-08-13 - S1 immutable state and canonicalization
 
-- Main sync commit: `15b873bc`; S1 code/review commits: `4f53c782`, `3ad4d981`,
+- Main sync commits: `15b873bc` and `efbf89f9`; S1 code/review commits: `4f53c782`, `3ad4d981`,
   `08928faf`, `b45bfd0c` and `1df54390`. The branch base is current
-  `origin/main` at `2c18ffd4`; main is an ancestor and there are no unmerged main
+  `origin/main` at `42fe7819`; main is an ancestor and there are no unmerged main
   commits at this record point.
+- The second sync integrated eight sick-leave/identity commits after the exact-head
+  evidence review. Their 14 changed paths do not overlap the W5b source, tests or
+  handoff; the normal merge completed without conflict. Post-merge verification passed
+  all 149 focused scheduler/possibility tests, all 289 map-geometry unit tests, Ruff and
+  `git diff --check`. The merged head still requires a new exact-head CI/review gate.
 - `SymbolicScheduleState.create()` is the sole validated construction boundary. Its
   canonical identity includes program identity, accumulator state, ordered runnable
   frames, order-independent suspended continuations, asynchronous movement
