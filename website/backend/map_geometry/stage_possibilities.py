@@ -848,11 +848,42 @@ class SymbolicGuardDecision:
 
 
 @dataclass(frozen=True, slots=True)
+class SymbolicAsyncMovementStart:
+    source_entity_index: int
+    command: str
+    arguments: tuple[str, ...]
+    line: int
+
+    def __post_init__(self) -> None:
+        if self.source_entity_index < 0:
+            raise ValueError("symbolic asynchronous movement entity index must be non-negative")
+        if self.line <= 0:
+            raise ValueError("symbolic asynchronous movement line must be positive")
+        if self.command == "gotomarker":
+            if len(self.arguments) < 2:
+                raise ValueError("symbolic gotomarker start is missing its target or speed")
+            effect = GotoMarkerEffect(
+                self.arguments[0],
+                self.arguments[1:],
+                self.line,
+            )
+            if gotomarker_waits_for_completion(effect):
+                raise ValueError("waiting gotomarker cannot be an asynchronous movement start")
+        elif self.command == "followspline":
+            action = ScriptAction(self.command, self.arguments, " ".join(self.arguments), self.line, False)
+            if followspline_waits_for_completion(action):
+                raise ValueError("waiting followspline cannot be an asynchronous movement start")
+        else:
+            raise ValueError("symbolic asynchronous movement start requires a movement action")
+
+
+@dataclass(frozen=True, slots=True)
 class SymbolicEventPath:
     source_entity_index: int
     state: SymbolicAccumulatorState
     effects: tuple[StageEffectProjection, ...] = ()
     effect_entity_indices: tuple[int, ...] = ()
+    async_movement_starts: tuple[SymbolicAsyncMovementStart, ...] = ()
     guard_decisions: tuple[SymbolicGuardDecision, ...] = ()
     temporal_boundary_lines: tuple[int, ...] = ()
     temporal_boundary_entity_indices: tuple[int, ...] = ()
@@ -911,6 +942,21 @@ def _with_stage_effect(
         path,
         effects=path.effects + (instruction.projection,),
         effect_entity_indices=path.effect_entity_indices + (source_entity_index,),
+    )
+
+
+def _with_async_movement_start(
+    path: SymbolicEventPath,
+    *,
+    source_entity_index: int,
+    command: str,
+    arguments: tuple[str, ...],
+    line: int,
+) -> SymbolicEventPath:
+    return replace(
+        path,
+        async_movement_starts=path.async_movement_starts
+        + (SymbolicAsyncMovementStart(source_entity_index, command, arguments, line),),
     )
 
 
@@ -1203,6 +1249,16 @@ def walk_symbolic_event_program(
                         # stack-change time and completes this action without starting it.
                         continuing.extend((prior_motion, started_wait))
                 else:
+                    started = _with_async_movement_start(
+                        started,
+                        source_entity_index=source_entity_index,
+                        command="gotomarker",
+                        arguments=(
+                            instruction.projection.effect.target,
+                            *instruction.projection.effect.arguments,
+                        ),
+                        line=line,
+                    )
                     continuing.append(started)
                     if stop_at_temporal_boundary:
                         finished.append(
@@ -1313,7 +1369,15 @@ def walk_symbolic_event_program(
                             # only a first-call branch can start the waiting spline.
                             continuing.extend((prior_motion, current_wait))
                     else:
-                        continuing.append(path)
+                        continuing.append(
+                            _with_async_movement_start(
+                                path,
+                                source_entity_index=source_entity_index,
+                                command=instruction.action.command,
+                                arguments=instruction.action.arguments,
+                                line=instruction.action.line,
+                            )
+                        )
                         if stop_at_temporal_boundary:
                             finished.append(
                                 replace(
@@ -1384,6 +1448,7 @@ def _merge_symbolic_segment(
         state=segment.state,
         effects=prefix.effects + segment.effects,
         effect_entity_indices=prefix.effect_entity_indices + segment.effect_entity_indices,
+        async_movement_starts=prefix.async_movement_starts + segment.async_movement_starts,
         guard_decisions=prefix.guard_decisions + segment.guard_decisions,
         temporal_boundary_lines=temporal_lines,
         temporal_boundary_entity_indices=(
@@ -2690,8 +2755,9 @@ def walk_symbolic_stage_program(
     initial_state: SymbolicAccumulatorState,
     max_paths: int = _DEFAULT_SYMBOLIC_PATH_BUDGET,
     max_depth: int = 64,
+    stop_at_temporal_boundary: bool = False,
 ) -> tuple[SymbolicEventPath, ...]:
-    """Walk nested events with one fail-closed work budget across all frames."""
+    """Walk a nested event segment with one fail-closed work budget."""
 
     if index.program(program.node.node_id) is not program:
         raise ValueError(f"source program {program.node.node_id!r} does not belong to this ordered-program index")
@@ -2712,7 +2778,7 @@ def walk_symbolic_stage_program(
         active_frames=((source_entity_index, program.node.node_id),),
         max_paths=max_paths,
         max_depth=max_depth,
-        stop_at_temporal_boundary=False,
+        stop_at_temporal_boundary=stop_at_temporal_boundary,
         budget=budget,
     )
     relevance_budget = _FrontierRelevanceBudget(_FRONTIER_RELEVANCE_WORK_BUDGET)
