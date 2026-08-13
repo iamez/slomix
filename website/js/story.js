@@ -1795,10 +1795,13 @@ async function openKisDetailsModal(playerGuid, playerName) {
         if (event.target === overlay) closeKisDetailsModal();
     });
 
-    const panel = _el('div', 'relative w-full max-w-6xl rounded-2xl border border-white/10 bg-slate-950 shadow-2xl my-4');
+    // max-h + flex column so a high-kill player (100+ per-kill rows) can't grow
+    // the panel past the viewport ("badly formed / too big"); the body scrolls
+    // internally instead, keeping the header and close button always reachable.
+    const panel = _el('div', 'relative w-full max-w-6xl max-h-[88vh] flex flex-col rounded-2xl border border-white/10 bg-slate-950 shadow-2xl my-4');
     overlay.appendChild(panel);
 
-    const headerRow = _el('div', 'flex items-center justify-between gap-4 px-6 py-4 border-b border-white/10');
+    const headerRow = _el('div', 'flex-none flex items-center justify-between gap-4 px-6 py-4 border-b border-white/10');
     headerRow.appendChild(_el('div', null,
         _el('div', 'text-xs uppercase tracking-wider text-slate-400', 'KIS izračun — per kill'),
         _el('h3', 'text-xl font-black text-white', playerName || playerGuid)
@@ -1810,7 +1813,7 @@ async function openKisDetailsModal(playerGuid, playerName) {
     headerRow.appendChild(closeBtn);
     panel.appendChild(headerRow);
 
-    const body = _el('div', 'p-6 space-y-4');
+    const body = _el('div', 'flex-1 min-h-0 overflow-y-auto p-6 space-y-4');
     body.appendChild(_el('div', 'text-sm text-slate-400', 'Nalagam podrobnosti...'));
     panel.appendChild(body);
 
