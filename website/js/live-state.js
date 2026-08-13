@@ -158,6 +158,18 @@ function _teamLabel(t) {
     return s ? s.charAt(0).toUpperCase() + s.slice(1) : null;
 }
 
+const _CHANGE_ICON = { joined: '➕', left: '➖', switched: '🔀' };
+
+/** One roster change → "➕ vid joined Axis" / "➖ ownator left" / "🔀 carniee
+ * switched to Allies". The "menjave" (substitutions) a spectator wants. A3. */
+function _changeLine(c) {
+    const icon = _CHANGE_ICON[c.action] || '•';
+    const verb = c.action === 'switched' ? 'switched to' : c.action;
+    const side = (c.action !== 'left' && c.side)
+        ? ` <span class="text-slate-500">${escapeHtml(c.side)}</span>` : '';
+    return `${icon} <span class="text-slate-300">${escapeHtml(c.name)}</span> ${verb}${side}`;
+}
+
 /** One recent objective action → "🚩 vid grabbed Gold Documents". Names the
  * actor when the source event carried a slot (flag/dynamite); POPUP stays
  * team-level. A4. */
@@ -193,6 +205,10 @@ export function renderLiveState() {
         ? `<div class="mt-3 pt-2 border-t border-white/5 text-[11px] text-slate-400 space-y-0.5">
             ${s.recent_objectives.slice(-4).map(o => `<div class="truncate">${_objLine(o)}</div>`).join('')}
            </div>` : '';
+    const changeStrip = (s.recent_roster_changes && s.recent_roster_changes.length)
+        ? `<div class="mt-3 pt-2 border-t border-white/5 text-[11px] text-slate-400 space-y-0.5">
+            ${s.recent_roster_changes.slice(-4).map(c => `<div class="truncate">${_changeLine(c)}</div>`).join('')}
+           </div>` : '';
     const staleWarn = _lastOk === false
         ? '<span class="text-rose-400 text-xs">state unavailable</span>' : '';
 
@@ -218,6 +234,7 @@ export function renderLiveState() {
                 ${_column('🔵', 'Allies', ALLIES_COLOR, r.allies || [], true)}
             </div>
             ${objStrip}
+            ${changeStrip}
             ${specStrip}
         </div>`);
 }
