@@ -279,11 +279,9 @@ async function loadStoryData() {
         renderPlayerCards(storyState.players);
         renderKISBreakdown(storyState.players);
 
-        // gsid-native query for every panel already converted (SS-C). A few
-        // panels (skill/composite) haven't been converted and still need a
-        // single session_date — see the dedicated `dateQ` fragment below.
+        // gsid-native query for every panel (SS-C). skill/composite is now
+        // converted too (accepts gaming_session_id), so all panels share `q`.
         const q = _storyScopeQuery();
-        const dateQ = `session_date=${encodeURIComponent(storyState.sessionDate)}`;
 
         // Fetch narrative, momentum, moments, synergy, win-contribution in parallel (non-blocking)
         fetchJSON(`${API_BASE}/storytelling/narrative?${q}`).then(narData => {
@@ -308,11 +306,13 @@ async function loadStoryData() {
 
         // Advanced metrics + Comp Skill board render into the SAME container,
         // sequentially (renderAdvancedMetrics clears it) — so fetch together.
-        // /skill/composite is outside this program's scope-resolver
-        // conversion (a different router) and still only accepts a single
-        // session_date.
+        // /skill/composite now accepts gaming_session_id (scope-resolver
+        // parity): `q` sends it when we have a gsid, so the panel is bound to
+        // THIS session's rounds. That fixes the date-scope bug where a bot
+        // test (gaming_session_id=NULL) sharing the calendar date leaked
+        // phantom [BOT]… players into the panel. Falls back to session_date.
         Promise.allSettled([
-            fetchJSON(`${API_BASE}/skill/composite?${dateQ}`),
+            fetchJSON(`${API_BASE}/skill/composite?${q}`),
             fetchJSON(`${API_BASE}/skill/ssr`),
         ]).then(([comp, ssr]) => {
             if (loadId !== storyLoadId) return;
