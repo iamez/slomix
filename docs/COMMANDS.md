@@ -2,7 +2,7 @@
 
 This document lists Discord bot commands declared in the repository (via `@commands.command(...)` and `@commands.group(...)`), with aliases and short descriptions. It is **auto-generated** from the source by `scripts/regen_commands_doc.py` — re-run that script after adding, renaming, or removing commands.
 
-**Coverage:** 107 visible commands across 20 cog files / cog-mixin groups.
+**Coverage:** 108 visible commands across 21 cog files / cog-mixin groups.
 
 > Hidden commands (`@commands.command(hidden=True)`) are intentionally excluded.
 > Slash commands (`@app_commands.command(...)`) are NOT in this list — none are currently declared in the repo.
@@ -78,6 +78,14 @@ This document lists Discord bot commands declared in the repository (via `@comma
 | `avail_unsubscribe` | (none) | Disable availability notifications for a channel type |
 | `poll_notify` | (none) | Toggle availability poll notifications |
 | `poll_status` | (none) | Show today's poll results |
+
+---
+
+## Bolniska cog (`bot/cogs/bolniska_cog.py`)
+
+| Command | Aliases | Description |
+|---|---|---|
+| `bolniska` | `sickleave` | Show your current sick-leave status |
 
 ---
 
