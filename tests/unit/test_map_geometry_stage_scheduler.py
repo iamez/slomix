@@ -22,6 +22,7 @@ from website.backend.map_geometry.stage_possibilities import (
 from website.backend.map_geometry.stage_scheduler import (
     PendingDispatchContext,
     SuspendedContinuation,
+    SymbolicAsyncMovementLifecycle,
     SymbolicEventOwner,
     SymbolicFrame,
     SymbolicFrameOrigin,
@@ -352,17 +353,169 @@ def test_boundary_state_and_resume_mode_do_not_canonicalize():
         )
         return _state(index, frame, runnable=(), suspended=(suspended,)).canonical_key
 
-    wait_100 = SymbolicWaitBoundaryState(100)
+    wait_100 = SymbolicWaitBoundaryState(("100",))
     assert wait_100.branch is SymbolicWaitBranch.SUSPENDED_FALSE_RETURN
-    assert key(wait_100) != key(SymbolicWaitBoundaryState(200))
-    assert key(wait_100) != key(wait_100, SymbolicResumeMode.RESUME_TARGET_GROUP)
+    with pytest.raises(ValueError, match="does not match its source action"):
+        key(SymbolicWaitBoundaryState(("200",)))
+    with pytest.raises(ValueError, match="must re-enter"):
+        key(wait_100, "resume_target_group")
     movement = SymbolicMovementBoundaryState(
         SymbolicMovementCommand.GOTO_MARKER,
+        ("destination", "100", "wait"),
         temporal_state=SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,
         waits_for_completion=True,
         effect_started=True,
     )
     assert movement.temporal_state is SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING
+
+
+def _temporal_program_index():
+    script = parse_map_script(
+        b"""
+        temporal
+        {
+            trigger wait_event
+            {
+                wait 100
+            }
+            trigger spline_wait
+            {
+                followspline 0 path 100 wait
+            }
+            trigger face_wait
+            {
+                faceangles 0 90 0 500
+            }
+            trigger spline_async
+            {
+                followspline 0 path 100
+                setstate gate invisible
+            }
+        }
+        """,
+        source="maps/test.script",
+    )
+    model = StaticStageModel(
+        "test",
+        ObjectiveCatalog((), (), ()),
+        script,
+        compile_static_stage_graph(script, source="maps/test.script"),
+        _asset_provider(MapAssetKind.SCRIPT),
+        _asset_provider(MapAssetKind.OBJDATA),
+    )
+    identities = build_entity_identity_index(
+        (
+            {"classname": "script_mover", "scriptname": "temporal"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+        source="maps/test.bsp",
+    )
+    catalog = MapEntityCatalog("test", "maps/test.bsp", (), (), (), ())
+    return build_ordered_stage_program_index(model, link_w3_entity_catalog(identities, catalog))
+
+
+def _suspended_temporal_state(index, event_name, boundary_state, resume_mode):
+    program = _program(index, "temporal", event_name)
+    frame = _frame(program.node.node_id, 0, 0)
+    continuation = SuspendedContinuation(
+        frame,
+        boundary_line=program.event.actions[0].line,
+        resume_mode=resume_mode,
+        boundary_state=boundary_state,
+        wake_constraint=SymbolicWakeConstraint.NEXT_FRAME,
+    )
+    return _state(index, frame, runnable=(), suspended=(continuation,))
+
+
+@pytest.mark.parametrize(
+    ("event_name", "boundary_state"),
+    (
+        ("wait_event", SymbolicWaitBoundaryState(("100",))),
+        (
+            "spline_wait",
+            SymbolicMovementBoundaryState(
+                SymbolicMovementCommand.FOLLOW_SPLINE,
+                ("0", "path", "100", "wait"),
+                SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,
+                True,
+                True,
+            ),
+        ),
+        (
+            "face_wait",
+            SymbolicMovementBoundaryState(
+                SymbolicMovementCommand.FACE_ANGLES,
+                ("0", "90", "0", "500"),
+                SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,
+                True,
+                True,
+            ),
+        ),
+    ),
+)
+def test_waiting_actions_reject_async_lifecycle_resume_mode(event_name, boundary_state):
+    index = _temporal_program_index()
+
+    with pytest.raises(ValueError, match="must re-enter"):
+        _suspended_temporal_state(
+            index,
+            event_name,
+            boundary_state,
+            "advance_after_async_lifecycle",
+        )
+
+
+@pytest.mark.parametrize(
+    "resume_mode",
+    ("resume_caller_suffix", "resume_target_group"),
+)
+def test_current_action_boundary_rejects_group_or_caller_resume_mode(resume_mode):
+    index = _temporal_program_index()
+
+    with pytest.raises(ValueError, match="must re-enter"):
+        _suspended_temporal_state(
+            index,
+            "wait_event",
+            SymbolicWaitBoundaryState(("100",)),
+            resume_mode,
+        )
+
+
+def test_nonwaiting_movement_is_async_lifecycle_not_suspended_script():
+    index = _temporal_program_index()
+    program = _program(index, "temporal", "spline_async")
+    movement = SymbolicMovementBoundaryState(
+        SymbolicMovementCommand.FOLLOW_SPLINE,
+        ("0", "path", "100"),
+        SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,
+        False,
+        True,
+    )
+    with pytest.raises(ValueError, match="cannot suspend after its action starts"):
+        _suspended_temporal_state(
+            index,
+            "spline_async",
+            movement,
+            SymbolicResumeMode.REENTER_BOUNDARY_ACTION,
+        )
+
+    lifecycle = SymbolicAsyncMovementLifecycle(
+        SymbolicProgramCursor(program.node.node_id, 0, 0),
+        SymbolicMovementCommand.FOLLOW_SPLINE,
+        ("0", "path", "100"),
+    )
+    suffix = _frame(program.node.node_id, 0, 1, origin=SymbolicFrameOrigin.CALLER_SUFFIX)
+    state = _state(index, suffix, async_lifecycles=(lifecycle,))
+    assert state.async_lifecycles == (lifecycle,)
+
+    waiting_program = _program(index, "temporal", "spline_wait")
+    waiting = SymbolicAsyncMovementLifecycle(
+        SymbolicProgramCursor(waiting_program.node.node_id, 0, 0),
+        SymbolicMovementCommand.FOLLOW_SPLINE,
+        ("0", "path", "100", "wait"),
+    )
+    with pytest.raises(ValueError, match="waiting movement cannot"):
+        _state(index, suffix, async_lifecycles=(waiting,))
 
 
 def test_r1_replacement_contract_keeps_exactly_one_deterministic_event_owner():
@@ -382,7 +535,7 @@ def test_r1_replacement_contract_keeps_exactly_one_deterministic_event_owner():
             frame,
             boundary_line=index.program(frame.cursor.node_id).event.actions[0].line,
             resume_mode=SymbolicResumeMode.REENTER_BOUNDARY_ACTION,
-            boundary_state=SymbolicWaitBoundaryState(duration),
+            boundary_state=SymbolicWaitBoundaryState((str(duration),)),
             wake_constraint=SymbolicWakeConstraint.NEXT_FRAME,
         )
         return _state(index, frame, runnable=(), suspended=(continuation,))
@@ -449,6 +602,7 @@ def test_malformed_cursor_and_event_ownership_fail_at_state_boundary():
             (),
             SymbolicAccumulatorState.zeroed(),
             (wrong_entity,),
+            (),
             (),
             (SymbolicEventOwner.from_frame(wrong_entity),),
             (),

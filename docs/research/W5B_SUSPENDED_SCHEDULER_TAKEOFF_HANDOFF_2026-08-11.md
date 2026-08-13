@@ -430,9 +430,6 @@ until S0 proves the transition contract.
 ```python
 class SymbolicResumeMode(StrEnum):
     REENTER_BOUNDARY_ACTION = "reenter_boundary_action"
-    ADVANCE_AFTER_ASYNC_LIFECYCLE = "advance_after_async_lifecycle"
-    RESUME_CALLER_SUFFIX = "resume_caller_suffix"
-    RESUME_TARGET_GROUP = "resume_target_group"
 
 
 @dataclass(frozen=True, slots=True)
@@ -472,6 +469,7 @@ class SymbolicScheduleState:
     accumulator_state: SymbolicAccumulatorState
     runnable: tuple[SymbolicFrame, ...]
     suspended: tuple[SuspendedContinuation, ...]
+    async_lifecycles: tuple[SymbolicAsyncMovementLifecycle, ...]
     effects: tuple[StageEffectProjection, ...]
     provenance: tuple[str, ...]
     ordering_decisions: tuple[str, ...]
@@ -484,13 +482,16 @@ Required properties:
   offset.
 - Every pending group dispatch identifies the parent dispatch, caller-resume cursor,
   complete ordered target list and current target cursor.
-- Every suspension says whether the current boundary action must be re-entered or the
-  script has already advanced while only asynchronous lifecycle work remains.
+- Every `SuspendedContinuation` re-enters its exact boundary action. When a non-waiting
+  movement action has already advanced the script while lifecycle work remains, S1
+  records it only as a separate `SymbolicAsyncMovementLifecycle`.
 - Action-specific boundary state is typed before implementation; a generic string
   tuple in the sketch is not an approved representation.
 - A frame's call/replacement provenance cannot be reconstructed from line number alone.
 - Suspended continuations are separate tasks. Their state is not copied into an
   immediate caller result before they run.
+- Caller-suffix and target-group continuation are runnable-frame origins, not alternate
+  resume modes for a suspended boundary action.
 - Accumulator state is shared exactly according to the existing local/global contract.
 - Effects preserve source entity and program provenance.
 - Collections have a deterministic canonical order independent of Python set/dict
