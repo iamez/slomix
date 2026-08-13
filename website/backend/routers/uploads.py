@@ -21,7 +21,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from website.backend.dependencies import _configured_admin_ids, get_db, require_admin_user
 from website.backend.logging_config import get_app_logger
@@ -317,11 +317,15 @@ _MAX_PATCH_BYTES = 32 * 1024 * 1024
 
 
 class ResumableInit(BaseModel):
-    filename: str
-    size: int
-    title: str = ""
-    description: str = ""
-    tags: str = ""
+    # Bounds mirror the single-shot limits so malformed/oversized metadata is
+    # rejected at the schema before any session is opened. size is only sanity-
+    # bounded here (1 byte .. 1 GB); the real per-category cap is enforced in
+    # create_resumable_session.
+    filename: str = Field(min_length=1, max_length=255)
+    size: int = Field(gt=0, le=1024 * 1024 * 1024)
+    title: str = Field(default="", max_length=200)
+    description: str = Field(default="", max_length=2000)
+    tags: str = Field(default="", max_length=200)
     retention_days: int | None = None
 
 

@@ -335,8 +335,8 @@ class UploadStorageService:
         inc.mkdir(parents=True, exist_ok=True)
         try:
             os.chmod(inc, 0o700)
-        except OSError:
-            pass
+        except OSError as e:
+            logger.debug("Could not chmod incoming dir: %s", e)
         # Require headroom for the whole declared file before accepting any bytes.
         self._check_disk_space(required_bytes=size)
 
@@ -380,7 +380,12 @@ class UploadStorageService:
         session = self.get_resumable_session(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Unknown or expired upload session")
-        current = int(session["offset"])
+        # The .part file size is the AUTHORITATIVE offset — an "ab" append always
+        # lands at end-of-file, and the JSON is only a hint that a crash between
+        # the write and the JSON update could leave stale. Reconciling against the
+        # real size makes a resync correct and keeps a concurrent PATCH from
+        # writing at the wrong position.
+        current = part.stat().st_size if part.is_file() else 0
         if offset != current:
             raise HTTPException(
                 status_code=409,
