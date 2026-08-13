@@ -208,13 +208,18 @@ class _NarrativeMixin:
             box = BOXScoringService(self.db)
             score = await box.calculate_session_score(gaming_session_id)
             data = box.to_api_response(score)
-            alpha_s = int(data.get("alpha_score") or 0)
-            beta_s = int(data.get("beta_score") or 0)
-            winner_side = data.get("winner")
-            if winner_side not in ("alpha", "beta") or alpha_s == beta_s:
+            # Only COMPLETED maps (R2 played) count — a provisional R1-only map
+            # would otherwise skew both the shown score and the arc. Recompute the
+            # totals + winner from the completed maps so the headline number the
+            # arc reports is exactly the one it classified over.
+            completed = [m for m in (data.get("maps") or []) if m.get("winner") != "provisional"]
+            alpha_s = sum(int(m.get("alpha_points", 0) or 0) for m in completed)
+            beta_s = sum(int(m.get("beta_points", 0) or 0) for m in completed)
+            if alpha_s == beta_s:
                 return ""
+            winner_side = "alpha" if alpha_s > beta_s else "beta"
             shape = classify_session_arc(
-                data.get("maps") or [], winner_side, max(alpha_s, beta_s), min(alpha_s, beta_s),
+                completed, winner_side, max(alpha_s, beta_s), min(alpha_s, beta_s),
             )
             if not shape:
                 return ""

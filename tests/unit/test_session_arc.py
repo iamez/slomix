@@ -80,6 +80,25 @@ def test_tie_returns_empty():
     assert classify_session_arc(maps, "alpha", 2, 2) == ""
 
 
+def test_provisional_maps_are_excluded():
+    # Two completed maps (4-0 statement) plus a provisional R1-only map that
+    # would shift the margin if counted — it must be dropped (BOX #714).
+    maps = [
+        {"alpha_points": 2, "beta_points": 0, "winner": "alpha"},
+        {"alpha_points": 2, "beta_points": 0, "winner": "alpha"},
+        {"alpha_points": 0, "beta_points": 1, "winner": "provisional"},
+    ]
+    assert classify_session_arc(maps, "alpha", 4, 0) == STATEMENT
+
+
+def test_all_provisional_is_unshapeable():
+    maps = [
+        {"alpha_points": 1, "beta_points": 0, "winner": "provisional"},
+        {"alpha_points": 1, "beta_points": 0, "winner": "provisional"},
+    ]
+    assert classify_session_arc(maps, "alpha", 2, 0) == ""
+
+
 def test_beta_winner_perspective_is_symmetric():
     # Mirror of the comeback case from beta's side.
     maps = _maps((2, 0), (2, 0), (0, 2), (0, 2), (0, 2))

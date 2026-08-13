@@ -45,7 +45,12 @@ def classify_session_arc(
     night" is the truer description of a chaotic session than a plain comeback.
     A single behind→ahead swing (one lead change) falls through to comeback.
     """
-    if not maps or len(maps) < 2 or winner_side not in ("alpha", "beta"):
+    # Drop provisional (R1-only, no R2) maps: BOXScoringService appends a map as
+    # soon as R1 exists and marks it winner="provisional", but only counts it in
+    # maps_completed once R2 lands. An in-progress map must not shape or skew the
+    # arc — only decided maps carry a story (CodeRabbit/Copilot #714).
+    maps = [m for m in (maps or []) if m.get("winner") != "provisional"]
+    if len(maps) < 2 or winner_side not in ("alpha", "beta"):
         return ""
     # winner_score must actually be the larger side — a caller that passed a
     # winner_side that lost (or a tie) has no shape to tell.
