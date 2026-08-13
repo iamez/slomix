@@ -201,6 +201,33 @@ def _inv_cross_panel_tracked_le_total(ctx: SessionContext) -> list[str]:
     return []
 
 
+def _inv_conservation_box_score(ctx: SessionContext) -> list[str]:
+    """BOX scoreboard totals equal the sum of their own per-map points.
+
+    Locks BOX internal consistency: calculate_session_score adds every map's
+    points into alpha_score/beta_score and appends every map, so the header must
+    equal the sum of the maps it is built from. A totaling drift (a map's points
+    dropped from or double-counted in the total) would desync the scoreboard
+    header from its own map breakdown — the same 'header disagrees with its
+    parts' family as the hero-KILLS bug, one panel over.
+    """
+    box = ctx.panels.get("box_score")
+    if not isinstance(box, dict):
+        return []
+    maps = box.get("maps")
+    if not isinstance(maps, list) or not maps:
+        return []
+    viol: list[str] = []
+    for side, total_key in (("alpha_points", "alpha_score"), ("beta_points", "beta_score")):
+        total = box.get(total_key)
+        if not isinstance(total, (int, float)) or isinstance(total, bool):
+            continue
+        summed = sum(int(m.get(side, 0) or 0) for m in maps if isinstance(m, dict))
+        if summed != total:
+            viol.append(f"box-score {total_key}={total} != sum of per-map {side}={summed}")
+    return viol
+
+
 def _inv_bounds_finite_nonneg(ctx: SessionContext) -> list[str]:
     """No NaN/Infinity anywhere; count fields are never negative (dbt-style bounds).
 
@@ -241,6 +268,11 @@ INVARIANTS: list[Invariant] = [
         "cross_panel_tracked_le_total", "cross_panel",
         "KIS-tracked kills <= total kills (tracked subset of total)",
         _inv_cross_panel_tracked_le_total,
+    ),
+    Invariant(
+        "conservation_box_score", "conservation",
+        "BOX totals == sum of per-map points (scoreboard vs its breakdown)",
+        _inv_conservation_box_score,
     ),
     Invariant(
         "bounds_finite_nonneg", "bounds",

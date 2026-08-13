@@ -73,6 +73,30 @@ class TestInvariantLogic:
         for res in evaluate(_clean_context()):
             assert res.passed, f"{res.invariant.key} unexpectedly failed: {res.violations}"
 
+    def test_box_score_totals_match_map_sum(self):
+        ctx = _clean_context()
+        ctx.panels["box_score"] = {
+            "alpha_score": 4, "beta_score": 2,
+            "maps": [
+                {"alpha_points": 2, "beta_points": 0},
+                {"alpha_points": 0, "beta_points": 2},
+                {"alpha_points": 2, "beta_points": 0},
+            ],
+        }
+        assert _results_by_key(ctx)["conservation_box_score"].passed
+
+    def test_box_score_total_drift_trips_conservation(self):
+        ctx = _clean_context()
+        ctx.panels["box_score"] = {
+            "alpha_score": 6, "beta_score": 2,  # alpha header says 6…
+            "maps": [
+                {"alpha_points": 2, "beta_points": 0},
+                {"alpha_points": 0, "beta_points": 2},
+                {"alpha_points": 2, "beta_points": 0},  # …but the maps sum to 4
+            ],
+        }
+        assert not _results_by_key(ctx)["conservation_box_score"].passed
+
     def test_wrong_header_total_trips_conservation(self):
         ctx = _clean_context()
         ctx.panels["kill_impact"]["total_kills"] = 61  # the hero-KILLS bug
