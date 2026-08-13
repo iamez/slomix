@@ -18,7 +18,7 @@ import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchD
 import { loadLeaderboard, loadQuickLeaders, loadRecentMatches, setNavigateTo as setLeaderboardNavigateTo, initLeaderboardDefaults } from './leaderboard.js';
 import { loadSeasonInfo, loadLastSession, loadSessionsView, loadSessionMVP, toggleSeasonDetails } from './sessions.js?v=20260812-b3';
 import { loadHomePulseCards } from './home.js';
-import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from './matches.js?v=20260804-auth-dedupe';
+import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from './matches.js?v=20260813-audit-brandslate';
 import { loadFormView } from './form.js';
 
 import { loadRecordsView } from './records.js';
