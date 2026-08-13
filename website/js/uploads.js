@@ -208,6 +208,47 @@ function setupUploadForm() {
     form.addEventListener('submit', handleUpload);
 }
 
+// Capture a poster thumbnail from the first ~1s of a video file, entirely in the
+// browser (no server ffmpeg). Best-effort: returns null on any failure so the
+// upload proceeds without a poster (the card falls back to the category icon).
+function _capturePoster(file) {
+    return new Promise((resolve) => {
+        let settled = false;
+        let timer = null;
+        // Single settle point: clear the give-up timer here so it never fires
+        // after the promise has resolved (whichever path resolves first).
+        const finish = (blob) => { if (settled) return; settled = true; clearTimeout(timer); resolve(blob); };
+        try {
+            const url = URL.createObjectURL(file);
+            const video = document.createElement('video');
+            video.muted = true;
+            video.preload = 'metadata';
+            const cleanup = () => { try { URL.revokeObjectURL(url); } catch { /* ignore */ } };
+            const fail = () => { cleanup(); finish(null); };
+            timer = setTimeout(fail, 8000);  // give up on a slow/corrupt file
+            video.addEventListener('error', fail, { once: true });
+            video.addEventListener('loadeddata', () => {
+                try { video.currentTime = Math.min(1, (video.duration || 2) / 2); }
+                catch { fail(); }
+            }, { once: true });
+            video.addEventListener('seeked', () => {
+                clearTimeout(timer);
+                try {
+                    const w = video.videoWidth, h = video.videoHeight;
+                    if (!w || !h) { fail(); return; }
+                    const scale = Math.min(1, 640 / w);  // cap poster width for a thumbnail
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.round(w * scale);
+                    canvas.height = Math.round(h * scale);
+                    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                    canvas.toBlob((blob) => { cleanup(); finish(blob); }, 'image/jpeg', 0.8);
+                } catch { fail(); }
+            }, { once: true });
+            video.src = url;
+        } catch { finish(null); }
+    });
+}
+
 async function handleUpload(e) {
     e.preventDefault();
 
@@ -259,6 +300,13 @@ async function handleUpload(e) {
     const retentionSelect = document.getElementById('upload-retention-select');
     if (retentionSelect && retentionSelect.value) {
         formData.append('retention_days', retentionSelect.value);
+    }
+
+    // Capture a poster thumbnail for playable clips (best-effort; never blocks
+    // the upload — a null poster just means the card shows the category icon).
+    if (fileName.endsWith('.mp4')) {
+        const posterBlob = await _capturePoster(file);
+        if (posterBlob) formData.append('poster', posterBlob, 'poster.jpg');
     }
 
     try {
@@ -381,6 +429,23 @@ function renderUploadCard(item, index = 0) {
                  style="background: linear-gradient(135deg, ${cat.glow}, transparent 60%);"></div>
 
             <div class="glass-card relative rounded-xl p-5 flex flex-col gap-3 h-full">
+                ${item.poster_url ? `
+                <!-- Poster thumbnail (lazy) with a play overlay for playable clips -->
+                <button data-poster ${canPlay
+                    ? `onclick="window.openVideoPlayer('${escapeJsString(item.id)}', '${escapeJsString(item.title || item.filename)}')" aria-label="Play ${escapeHtml(item.title || item.filename)}"`
+                    : 'aria-hidden="true" tabindex="-1"'}
+                    class="relative block w-full aspect-video rounded-lg overflow-hidden bg-black/40 ${canPlay ? 'cursor-pointer' : 'cursor-default'}">
+                    <img loading="lazy" src="${escapeHtml(item.poster_url)}" alt=""
+                        onerror="this.closest('[data-poster]').remove()"
+                        class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
+                    ${canPlay ? `
+                    <span class="absolute inset-0 flex items-center justify-center bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <span class="w-12 h-12 rounded-full bg-black/60 flex items-center justify-center ring-1 ring-white/20">
+                            <svg class="w-6 h-6 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                        </span>
+                    </span>` : ''}
+                </button>
+                ` : ''}
                 <!-- Header: icon + title + badge -->
                 <div class="flex items-start gap-3">
                     <div class="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center border ${cat.color}">
