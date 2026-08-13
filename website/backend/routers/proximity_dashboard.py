@@ -26,6 +26,7 @@ from website.backend.routers.proximity_helpers import (
     _load_scoped_guid_name_map,
     _parse_iso_date,
     _proximity_stub_meta,
+    _round_quality_gate_sql,
     _timed_section,
     logger,
 )
@@ -191,12 +192,19 @@ async def get_proximity_scopes(
     since = datetime.now(timezone.utc).replace(tzinfo=None).date() - timedelta(days=safe_range)
 
     try:
+        # Gate out bot-test / rejected rounds the SAME way every other proximity
+        # surface does (_round_quality_gate_sql, owner decision 2026-07-25). Without
+        # it the session dropdown listed bot-test dates (e.g. an all-OMNIBOT
+        # 2026-08-12) and, sorted newest-first, DEFAULTED the whole page to one —
+        # so the real last gather's proximity looked "missing". Orphans (round_id
+        # NULL) are kept, consistent with the gate's documented policy.
         rows = await db.fetch_all(
-            """
+            f"""
             SELECT session_date, map_name, round_number, round_start_unix, round_end_unix,
                    COUNT(*) AS engagements
             FROM combat_engagement
             WHERE session_date >= $1
+              AND {_round_quality_gate_sql("")}
             GROUP BY session_date, map_name, round_number, round_start_unix, round_end_unix
             ORDER BY session_date DESC, map_name ASC, round_number ASC, round_start_unix ASC
             """,
@@ -263,6 +271,7 @@ async def get_proximity_scopes(
                 "SELECT round_date, COUNT(*) FROM rounds "
                 "WHERE round_date >= $1 AND round_number = 1 "
                 "  AND is_valid AND round_status = 'completed' "
+                "  AND is_bot_round IS DISTINCT FROM TRUE "
                 "GROUP BY round_date",
                 (since.isoformat(),),
             )
