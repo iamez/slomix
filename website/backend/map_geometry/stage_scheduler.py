@@ -1,8 +1,8 @@
 """Immutable state contracts for bounded ET script scheduling.
 
-This module deliberately contains no transition runner yet.  It owns the state that
-later W5b scheduler waves will transition, validates every program cursor against one
-ordered-program index and provides deterministic visited-state identity.
+The module owns validated state identity and the deliberately narrow S2 transition
+runner. Later waves extend shared-target, replacement and bounded-search behavior
+without weakening these construction boundaries.
 """
 
 from __future__ import annotations
@@ -18,14 +18,18 @@ from website.backend.map_geometry.stage import (
     TriggerResolution,
 )
 from website.backend.map_geometry.stage_possibilities import (
+    ControlBarrierInstruction,
+    OrderedEventProgram,
     OrderedStageProgramIndex,
     StageEffectInstruction,
     SymbolicAccumulatorState,
     SymbolicIntegerDomain,
+    SymbolicPathCompletion,
     SymbolicTemporalBoundaryState,
     TriggerInstruction,
     followspline_waits_for_completion,
     gotomarker_waits_for_completion,
+    walk_symbolic_event_program,
 )
 from website.backend.map_geometry.stage_semantics import AccumulatorConditionalTrigger, StageEffectProjection
 
@@ -391,6 +395,7 @@ class SuspendedContinuation:
     boundary_state: SymbolicBoundaryState
     wake_constraint: SymbolicWakeConstraint
     effect_footprint: tuple[str, ...] = ()
+    caller_suffix_completed: bool = False
 
     def __post_init__(self) -> None:
         if self.boundary_line <= 0:
@@ -400,6 +405,8 @@ class SuspendedContinuation:
 
     def validate(self, index: OrderedStageProgramIndex) -> None:
         self.frame.validate(index)
+        if self.caller_suffix_completed and self.frame.pending_dispatch is None:
+            raise ValueError("only a nested dispatch continuation may record caller suffix completion")
         program = index.program(self.frame.cursor.node_id)
         action = program.event.actions[self.frame.cursor.instruction_offset]
         if self.resume_mode is not SymbolicResumeMode.REENTER_BOUNDARY_ACTION:
@@ -752,6 +759,7 @@ def _continuation_sort_key(continuation: SuspendedContinuation) -> tuple[object,
         invocation_path,
         tuple((cursor.node_id, cursor.entity_index, cursor.instruction_offset) for cursor in frame.call_stack),
         pending_key,
+        continuation.caller_suffix_completed,
     )
 
 
@@ -854,3 +862,489 @@ class SymbolicScheduleWorkBudget:
             return SymbolicScheduleExhaustion.WORK_BUDGET_EXHAUSTED
         self.consumed += 1
         return None
+
+
+def _state_for_index(index: OrderedStageProgramIndex, state: SymbolicScheduleState) -> None:
+    expected_identity = (index.programs, tuple(sorted(index.opaque_script_names)))
+    if state.program_identity != expected_identity:
+        raise ValueError("symbolic schedule state does not belong to this ordered-program index")
+
+
+def _rebuild_schedule_state(
+    index: OrderedStageProgramIndex,
+    state: SymbolicScheduleState,
+    *,
+    accumulator_state: SymbolicAccumulatorState | None = None,
+    runnable: tuple[SymbolicFrame, ...] | None = None,
+    suspended: tuple[SuspendedContinuation, ...] | None = None,
+    effects: tuple[SymbolicEffectRecord, ...] | None = None,
+    provenance: tuple[str, ...] | None = None,
+    ordering_decisions: tuple[str, ...] | None = None,
+    unknown_reasons: tuple[str, ...] | None = None,
+) -> SymbolicScheduleState:
+    next_runnable = state.runnable if runnable is None else runnable
+    next_suspended = state.suspended if suspended is None else suspended
+    active_frames = next_runnable + tuple(item.frame for item in next_suspended)
+    return SymbolicScheduleState.create(
+        index,
+        accumulator_state=state.accumulator_state if accumulator_state is None else accumulator_state,
+        runnable=next_runnable,
+        suspended=next_suspended,
+        async_lifecycles=state.async_lifecycles,
+        event_owners=tuple(SymbolicEventOwner.from_frame(frame) for frame in active_frames),
+        tag_parent_states=state.tag_parent_states,
+        effects=state.effects if effects is None else effects,
+        provenance=state.provenance if provenance is None else provenance,
+        ordering_decisions=(
+            state.ordering_decisions if ordering_decisions is None else ordering_decisions
+        ),
+        unknown_reasons=state.unknown_reasons if unknown_reasons is None else unknown_reasons,
+    )
+
+
+def _blocked_transition(
+    index: OrderedStageProgramIndex,
+    state: SymbolicScheduleState,
+    reason: str,
+) -> SymbolicScheduleResult:
+    blocked = _rebuild_schedule_state(
+        index,
+        state,
+        unknown_reasons=state.unknown_reasons + (reason,),
+    )
+    return SymbolicScheduleResult(
+        (SymbolicScheduleDecision(SymbolicScheduleDecisionKind.BLOCKED, blocked, reason),),
+        1,
+        1,
+    )
+
+
+def _program_suffix(program: OrderedEventProgram, instruction_offset: int) -> OrderedEventProgram:
+    return replace(program, instructions=program.instructions[instruction_offset:])
+
+
+def _path_effect_records(
+    program: OrderedEventProgram,
+    *,
+    instruction_offset: int,
+    source_entity_index: int,
+    projections: tuple[StageEffectProjection, ...],
+    effect_entity_indices: tuple[int, ...],
+) -> tuple[SymbolicEffectRecord, ...]:
+    if len(projections) != len(effect_entity_indices):
+        raise RuntimeError("symbolic path effect provenance is internally inconsistent")
+    records: list[SymbolicEffectRecord] = []
+    search_offset = instruction_offset
+    for projection, entity_index in zip(projections, effect_entity_indices, strict=True):
+        if entity_index != source_entity_index:
+            raise RuntimeError("single-frame scheduler segment produced an effect for another entity")
+        matched_offset = next(
+            (
+                offset
+                for offset in range(search_offset, len(program.instructions))
+                if isinstance(program.instructions[offset], StageEffectInstruction)
+                and program.instructions[offset].projection == projection
+            ),
+            None,
+        )
+        if matched_offset is None:
+            raise RuntimeError("symbolic path effect has no source instruction in its scheduler segment")
+        records.append(
+            SymbolicEffectRecord(
+                projection,
+                SymbolicProgramCursor(program.node.node_id, source_entity_index, matched_offset),
+            )
+        )
+        search_offset = matched_offset + 1
+    return tuple(records)
+
+
+def _tag_parent_wake_constraint(
+    state: SymbolicScheduleState,
+    *,
+    caller_entity_index: int,
+    target_entity_index: int,
+) -> tuple[SymbolicWakeConstraint, str | None]:
+    tag_state = next(
+        (item for item in state.tag_parent_states if item.child_entity_index == target_entity_index),
+        None,
+    )
+    if tag_state is None or tag_state.disposition is SymbolicTagParentDisposition.UNKNOWN:
+        return SymbolicWakeConstraint.TAG_PARENT_ORDER_UNKNOWN, "tag_parent_state_unknown"
+    if tag_state.disposition is SymbolicTagParentDisposition.ATTACHED:
+        return SymbolicWakeConstraint.TAG_PARENT_ORDER_UNKNOWN, "tag_parent_order_not_modeled"
+    if target_entity_index > caller_entity_index:
+        return SymbolicWakeConstraint.SAME_FRAME_LATER, None
+    return SymbolicWakeConstraint.NEXT_FRAME, None
+
+
+def _suspended_boundary(
+    index: OrderedStageProgramIndex,
+    state: SymbolicScheduleState,
+    *,
+    target_frame: SymbolicFrame,
+    caller_entity_index: int,
+    temporal_state: SymbolicTemporalBoundaryState,
+    boundary_line: int,
+    effects: tuple[SymbolicEffectRecord, ...],
+) -> tuple[SuspendedContinuation, str | None]:
+    program = index.program(target_frame.cursor.node_id)
+    boundary_offset = index.instruction_offset(program, boundary_line)
+    if boundary_offset is None:
+        raise RuntimeError("temporal boundary does not identify one ordered instruction")
+    boundary_cursor = replace(target_frame.cursor, instruction_offset=boundary_offset)
+    boundary_frame = replace(target_frame, cursor=boundary_cursor)
+    instruction = program.instructions[boundary_offset]
+    action = program.event.actions[boundary_offset]
+
+    if isinstance(instruction, ControlBarrierInstruction):
+        if instruction.action.command == "wait":
+            boundary_state: SymbolicBoundaryState = SymbolicWaitBoundaryState(instruction.action.arguments)
+            wake_constraint, wake_reason = _tag_parent_wake_constraint(
+                state,
+                caller_entity_index=caller_entity_index,
+                target_entity_index=target_frame.cursor.entity_index,
+            )
+        else:
+            boundary_state = SymbolicNextFrameBoundaryState(SymbolicNextFrameCommand(instruction.action.command))
+            wake_constraint = SymbolicWakeConstraint.NEXT_FRAME
+            wake_reason = None
+    elif action.command in {command.value for command in SymbolicMovementCommand}:
+        command = SymbolicMovementCommand(action.command)
+        effect_started = temporal_state is not SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE
+        effect_record_index = None
+        if command is SymbolicMovementCommand.GOTO_MARKER and effect_started:
+            effect_record_index = next(
+                (
+                    offset
+                    for offset in range(len(effects) - 1, -1, -1)
+                    if effects[offset].source_cursor == boundary_cursor
+                ),
+                None,
+            )
+            if effect_record_index is None:
+                raise RuntimeError("started gotomarker boundary lost its route-effect record")
+        boundary_state = SymbolicMovementBoundaryState(
+            command,
+            action.arguments,
+            temporal_state,
+            _movement_action_waits_for_completion(action),
+            effect_started,
+            effect_record_index,
+        )
+        wake_constraint = SymbolicWakeConstraint.AFTER_BOUNDARY_COMPLETION
+        wake_reason = None
+    else:
+        raise RuntimeError("temporal path does not stop on a supported boundary instruction")
+
+    return (
+        SuspendedContinuation(
+            boundary_frame,
+            boundary_line,
+            SymbolicResumeMode.REENTER_BOUNDARY_ACTION,
+            boundary_state,
+            wake_constraint,
+        ),
+        wake_reason,
+    )
+
+
+def _start_s2_cross_entity_dispatch(
+    index: OrderedStageProgramIndex,
+    state: SymbolicScheduleState,
+    caller_frame: SymbolicFrame,
+) -> SymbolicScheduleResult:
+    caller_cursor = caller_frame.cursor
+    caller_program = index.program(caller_cursor.node_id)
+    instruction = caller_program.instructions[caller_cursor.instruction_offset]
+    if not isinstance(instruction, TriggerInstruction):
+        return _blocked_transition(index, state, "s2_runnable_frame_is_not_a_trigger_dispatch")
+    if (
+        instruction.edge.resolution is not TriggerResolution.RESOLVED
+        or len(instruction.edge.candidate_node_ids) != 1
+    ):
+        return _blocked_transition(index, state, "s2_trigger_dispatch_is_not_statically_resolved")
+
+    target_node_id = instruction.edge.candidate_node_ids[0]
+    target_entities = _dispatch_target_group(index, caller_cursor, target_node_id)
+    if len(target_entities) != 1:
+        return _blocked_transition(index, state, "s2_shared_target_group_deferred_to_s3")
+    target_entity_index = target_entities[0]
+    if target_entity_index == caller_cursor.entity_index:
+        return _blocked_transition(index, state, "s2_same_entity_replacement_deferred_to_s3")
+    caller_resume_offset = caller_cursor.instruction_offset + 1
+    if caller_resume_offset >= len(caller_program.instructions):
+        return _blocked_transition(index, state, "s2_dispatch_requires_an_executable_caller_suffix")
+
+    target_program = index.program(target_node_id)
+    pending = PendingDispatchContext(
+        caller_cursor,
+        SymbolicProgramCursor(
+            caller_cursor.node_id,
+            caller_cursor.entity_index,
+            caller_resume_offset,
+        ),
+        target_node_id,
+        target_entities,
+        0,
+    )
+    invocation = SymbolicInvocationStep(caller_cursor, target_node_id, 0)
+    target_frame = SymbolicFrame(
+        SymbolicProgramCursor(target_node_id, target_entity_index, 0),
+        invocation_path=caller_frame.invocation_path + (invocation,),
+        pending_dispatch=pending,
+        origin=SymbolicFrameOrigin.NESTED_DISPATCH,
+    )
+    caller_suffix = replace(
+        caller_frame,
+        cursor=pending.caller_resume_cursor,
+        pending_dispatch=None,
+        origin=SymbolicFrameOrigin.CALLER_SUFFIX,
+    )
+    paths = walk_symbolic_event_program(
+        target_program,
+        source_entity_index=target_entity_index,
+        initial_state=state.accumulator_state,
+        stop_at_temporal_boundary=True,
+    )
+    decisions: list[SymbolicScheduleDecision] = []
+    for path in paths:
+        added_effects = _path_effect_records(
+            target_program,
+            instruction_offset=0,
+            source_entity_index=target_entity_index,
+            projections=path.effects,
+            effect_entity_indices=path.effect_entity_indices,
+        )
+        effects = state.effects + added_effects
+        if path.completion is SymbolicPathCompletion.TEMPORALLY_SUSPENDED:
+            if not (
+                len(path.temporal_boundary_lines) == 1
+                and len(path.temporal_boundary_states) == 1
+                and path.temporal_boundary_entity_indices == (target_entity_index,)
+            ):
+                raise RuntimeError("S2 target segment produced an ambiguous temporal boundary")
+            continuation, wake_reason = _suspended_boundary(
+                index,
+                state,
+                target_frame=target_frame,
+                caller_entity_index=caller_cursor.entity_index,
+                temporal_state=path.temporal_boundary_states[0],
+                boundary_line=path.temporal_boundary_lines[0],
+                effects=effects,
+            )
+            next_state = _rebuild_schedule_state(
+                index,
+                state,
+                accumulator_state=path.state,
+                runnable=(caller_suffix,),
+                suspended=(continuation,),
+                effects=effects,
+                provenance=state.provenance + ("cross_entity_target_suspended",),
+                ordering_decisions=state.ordering_decisions + ("caller_suffix_before_target_resume",),
+                unknown_reasons=(
+                    state.unknown_reasons if wake_reason is None else state.unknown_reasons + (wake_reason,)
+                ),
+            )
+            decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, next_state))
+            continue
+
+        reason = (
+            path.blocker_reason
+            if path.completion is SymbolicPathCompletion.BLOCKED and path.blocker_reason
+            else "s2_synchronous_target_completion_deferred_to_s3"
+        )
+        blocked = _rebuild_schedule_state(
+            index,
+            state,
+            accumulator_state=path.state,
+            runnable=(caller_suffix,),
+            effects=effects,
+            unknown_reasons=state.unknown_reasons + (reason,),
+        )
+        decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.BLOCKED, blocked, reason))
+    return SymbolicScheduleResult(tuple(decisions), 1, 1)
+
+
+def _complete_s2_caller_suffix(
+    index: OrderedStageProgramIndex,
+    state: SymbolicScheduleState,
+    caller_frame: SymbolicFrame,
+) -> SymbolicScheduleResult:
+    if len(state.suspended) != 1 or state.suspended[0].frame.pending_dispatch is None:
+        return _blocked_transition(index, state, "s2_caller_suffix_requires_one_pending_target")
+    continuation = state.suspended[0]
+    if continuation.caller_suffix_completed:
+        return _blocked_transition(index, state, "s2_caller_suffix_already_completed")
+    pending = continuation.frame.pending_dispatch
+    if caller_frame.cursor != pending.caller_resume_cursor:
+        return _blocked_transition(index, state, "s2_caller_suffix_cursor_mismatch")
+
+    caller_program = index.program(caller_frame.cursor.node_id)
+    paths = walk_symbolic_event_program(
+        _program_suffix(caller_program, caller_frame.cursor.instruction_offset),
+        source_entity_index=caller_frame.cursor.entity_index,
+        initial_state=state.accumulator_state,
+        stop_at_temporal_boundary=True,
+    )
+    decisions: list[SymbolicScheduleDecision] = []
+    for path in paths:
+        if path.completion not in {
+            SymbolicPathCompletion.SYNCHRONOUS_COMPLETE,
+            SymbolicPathCompletion.ABORTED_BY_GUARD,
+        }:
+            reason = path.blocker_reason or "s2_caller_suffix_is_not_synchronously_complete"
+            blocked = _rebuild_schedule_state(
+                index,
+                state,
+                unknown_reasons=state.unknown_reasons + (reason,),
+            )
+            decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.BLOCKED, blocked, reason))
+            continue
+        added_effects = _path_effect_records(
+            caller_program,
+            instruction_offset=caller_frame.cursor.instruction_offset,
+            source_entity_index=caller_frame.cursor.entity_index,
+            projections=path.effects,
+            effect_entity_indices=path.effect_entity_indices,
+        )
+        completed = replace(continuation, caller_suffix_completed=True)
+        next_state = _rebuild_schedule_state(
+            index,
+            state,
+            accumulator_state=path.state,
+            runnable=(),
+            suspended=(completed,),
+            effects=state.effects + added_effects,
+            provenance=state.provenance + ("caller_suffix_completed",),
+            ordering_decisions=state.ordering_decisions + ("caller_suffix_completed_before_target_resume",),
+        )
+        decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.SUSPENDED, next_state))
+    return SymbolicScheduleResult(tuple(decisions), 1, 1)
+
+
+def _resume_s2_continuation(
+    index: OrderedStageProgramIndex,
+    state: SymbolicScheduleState,
+    continuation: SuspendedContinuation,
+) -> SymbolicScheduleResult:
+    if continuation.frame.pending_dispatch is None or not continuation.caller_suffix_completed:
+        return _blocked_transition(index, state, "s2_target_resume_before_caller_suffix")
+    if continuation.wake_constraint is SymbolicWakeConstraint.TAG_PARENT_ORDER_UNKNOWN:
+        return _blocked_transition(index, state, "wake_semantics_unverified")
+    if isinstance(continuation.boundary_state, SymbolicWaitBoundaryState):
+        if continuation.wake_constraint is SymbolicWakeConstraint.SAME_FRAME_LATER:
+            delayed = replace(
+                continuation,
+                wake_constraint=SymbolicWakeConstraint.NEXT_FRAME,
+            )
+            next_state = _rebuild_schedule_state(
+                index,
+                state,
+                suspended=(delayed,),
+                provenance=state.provenance + ("boundary_action_reentered_same_frame",),
+                ordering_decisions=state.ordering_decisions + ("target_reentered_after_caller_suffix",),
+            )
+            return SymbolicScheduleResult(
+                (SymbolicScheduleDecision(SymbolicScheduleDecisionKind.SUSPENDED, next_state),),
+                1,
+                1,
+            )
+        return _blocked_transition(index, state, "wait_completion_time_unverified")
+    if not isinstance(continuation.boundary_state, SymbolicNextFrameBoundaryState):
+        return _blocked_transition(index, state, "movement_completion_time_unverified")
+
+    frame = continuation.frame
+    suffix_offset = frame.cursor.instruction_offset + 1
+    program = index.program(frame.cursor.node_id)
+    if suffix_offset >= len(program.instructions):
+        completed = _rebuild_schedule_state(
+            index,
+            state,
+            runnable=(),
+            suspended=(),
+            provenance=state.provenance + ("target_boundary_reentered",),
+            ordering_decisions=state.ordering_decisions + ("target_reentered_after_caller_suffix",),
+        )
+        return SymbolicScheduleResult(
+            (SymbolicScheduleDecision(SymbolicScheduleDecisionKind.COMPLETE, completed),),
+            1,
+            1,
+        )
+
+    suffix_frame = replace(
+        frame,
+        cursor=replace(frame.cursor, instruction_offset=suffix_offset),
+        origin=SymbolicFrameOrigin.BOUNDARY_RESUME,
+    )
+    paths = walk_symbolic_event_program(
+        _program_suffix(program, suffix_offset),
+        source_entity_index=frame.cursor.entity_index,
+        initial_state=state.accumulator_state,
+        stop_at_temporal_boundary=True,
+    )
+    decisions: list[SymbolicScheduleDecision] = []
+    for path in paths:
+        if path.completion not in {
+            SymbolicPathCompletion.SYNCHRONOUS_COMPLETE,
+            SymbolicPathCompletion.ABORTED_BY_GUARD,
+        }:
+            reason = path.blocker_reason or "s2_resumed_target_suffix_is_not_synchronously_complete"
+            blocked = _rebuild_schedule_state(
+                index,
+                state,
+                unknown_reasons=state.unknown_reasons + (reason,),
+            )
+            decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.BLOCKED, blocked, reason))
+            continue
+        added_effects = _path_effect_records(
+            program,
+            instruction_offset=suffix_offset,
+            source_entity_index=suffix_frame.cursor.entity_index,
+            projections=path.effects,
+            effect_entity_indices=path.effect_entity_indices,
+        )
+        completed = _rebuild_schedule_state(
+            index,
+            state,
+            accumulator_state=path.state,
+            runnable=(),
+            suspended=(),
+            effects=state.effects + added_effects,
+            provenance=state.provenance + ("target_boundary_reentered", "target_suffix_completed"),
+            ordering_decisions=state.ordering_decisions + ("target_reentered_after_caller_suffix",),
+        )
+        decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.COMPLETE, completed))
+    return SymbolicScheduleResult(tuple(decisions), 1, 1)
+
+
+def step_symbolic_schedule(
+    index: OrderedStageProgramIndex,
+    state: SymbolicScheduleState,
+) -> SymbolicScheduleResult:
+    """Execute one source-ordered S2 scheduler transition.
+
+    S2 intentionally supports one resolved, one-target cross-entity trigger. Shared
+    targets, same-entity replacement, nested synchronous state return and bounded
+    search remain explicit S3-S4 frontiers.
+    """
+
+    _state_for_index(index, state)
+    if len(state.runnable) > 1:
+        return _blocked_transition(index, state, "s2_multiple_runnable_frames_deferred_to_s4")
+    if state.runnable:
+        frame = state.runnable[0]
+        if frame.origin is SymbolicFrameOrigin.CALLER_SUFFIX:
+            return _complete_s2_caller_suffix(index, state, frame)
+        if frame.origin is SymbolicFrameOrigin.ROOT_EVENT and not state.suspended:
+            return _start_s2_cross_entity_dispatch(index, state, frame)
+        return _blocked_transition(index, state, "s2_runnable_transition_not_modeled")
+    if len(state.suspended) == 1:
+        return _resume_s2_continuation(index, state, state.suspended[0])
+    if not state.suspended:
+        return SymbolicScheduleResult(
+            (SymbolicScheduleDecision(SymbolicScheduleDecisionKind.COMPLETE, state),),
+            0,
+            1,
+        )
+    return _blocked_transition(index, state, "s2_multiple_suspended_frames_deferred_to_s4")
