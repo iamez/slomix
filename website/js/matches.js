@@ -359,7 +359,10 @@ const weaponCategories = {
 };
 
 const categoryColors = {
-    'Melee': 'brand-amber', 'Pistol': 'brand-slate', 'SMG': 'brand-blue',
+    // 'Pistol' was 'brand-slate' — no such colour in the brand palette, so
+    // text-/border-/bg-brand-slate compiled to nothing (invisible weapon-usage
+    // bar). 'slate-400' is a real, safelisted neutral (audit 2026-08-13).
+    'Melee': 'brand-amber', 'Pistol': 'slate-400', 'SMG': 'brand-blue',
     'Rifle': 'brand-purple', 'Heavy': 'brand-rose', 'Explosive': 'brand-gold',
     'Support': 'brand-emerald', 'Other': 'brand-cyan'
 };
