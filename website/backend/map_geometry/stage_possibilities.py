@@ -184,7 +184,9 @@ def _set_may_dispatch_spawn(action: ScriptAction) -> bool:
     return "classname" in keys and "classname_nospawn" not in keys
 
 
-def _followspline_has_wait(action: ScriptAction) -> bool:
+def followspline_waits_for_completion(action: ScriptAction) -> bool:
+    """Return the pinned callback's parsed wait-option disposition."""
+
     direction = _ascii_fold(action.arguments[0]) if action.arguments else ""
     option_index = 4 if direction in {"accum", "globalaccum"} else 3
     while option_index < len(action.arguments):
@@ -196,7 +198,9 @@ def _followspline_has_wait(action: ScriptAction) -> bool:
     return False
 
 
-def _gotomarker_has_wait(effect: GotoMarkerEffect) -> bool:
+def gotomarker_waits_for_completion(effect: GotoMarkerEffect) -> bool:
+    """Return the pinned callback's parsed wait-option disposition."""
+
     option_index = 1  # arguments[0] is speed
     arguments = effect.arguments
     while option_index < len(arguments):
@@ -238,7 +242,7 @@ class StageEffectInstruction:
         )
         if self.control_disposition is not expected_control:
             raise ValueError("stage-effect control disposition does not match its source action")
-        if self.waits_for_completion != (is_gotomarker and _gotomarker_has_wait(effect)):
+        if self.waits_for_completion != (is_gotomarker and gotomarker_waits_for_completion(effect)):
             raise ValueError("stage-effect wait contract does not match its source arguments")
         is_alert = isinstance(effect, AlertEntityEffect)
         if self.alert_targets and not is_alert:
@@ -1284,7 +1288,7 @@ def walk_symbolic_event_program(
                         entity_index=source_entity_index,
                         state=SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,
                     )
-                    if _followspline_has_wait(instruction.action):
+                    if followspline_waits_for_completion(instruction.action):
                         current_wait = _with_temporal_boundary(
                             path,
                             line=line,
@@ -3194,7 +3198,7 @@ def project_ordered_stage_programs(
                             if is_gotomarker
                             else RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
                         ),
-                        is_gotomarker and _gotomarker_has_wait(effect),
+                        is_gotomarker and gotomarker_waits_for_completion(effect),
                         alert_targets,
                     )
                 )

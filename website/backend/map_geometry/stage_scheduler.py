@@ -11,13 +11,20 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TypeAlias
 
-from website.backend.map_geometry.stage import TriggerDispatch, TriggerResolution
+from website.backend.map_geometry.stage import (
+    GotoMarkerEffect,
+    ScriptAction,
+    TriggerDispatch,
+    TriggerResolution,
+)
 from website.backend.map_geometry.stage_possibilities import (
     OrderedStageProgramIndex,
     StageEffectInstruction,
     SymbolicAccumulatorState,
     SymbolicTemporalBoundaryState,
     TriggerInstruction,
+    followspline_waits_for_completion,
+    gotomarker_waits_for_completion,
 )
 from website.backend.map_geometry.stage_semantics import AccumulatorConditionalTrigger, StageEffectProjection
 
@@ -76,9 +83,6 @@ class SymbolicFrameOrigin(StrEnum):
 
 class SymbolicResumeMode(StrEnum):
     REENTER_BOUNDARY_ACTION = "reenter_boundary_action"
-    ADVANCE_AFTER_ASYNC_LIFECYCLE = "advance_after_async_lifecycle"
-    RESUME_CALLER_SUFFIX = "resume_caller_suffix"
-    RESUME_TARGET_GROUP = "resume_target_group"
 
 
 class SymbolicWakeConstraint(StrEnum):
@@ -107,6 +111,18 @@ class SymbolicMovementCommand(StrEnum):
     GOTO_MARKER = "gotomarker"
     FOLLOW_SPLINE = "followspline"
     FACE_ANGLES = "faceangles"
+
+
+def _movement_action_waits_for_completion(action: ScriptAction) -> bool:
+    if action.command == SymbolicMovementCommand.GOTO_MARKER:
+        if len(action.arguments) < 2:
+            raise ValueError("gotomarker action is missing its target or speed")
+        return gotomarker_waits_for_completion(GotoMarkerEffect(action.arguments[0], action.arguments[1:], action.line))
+    if action.command == SymbolicMovementCommand.FOLLOW_SPLINE:
+        return followspline_waits_for_completion(action)
+    if action.command == SymbolicMovementCommand.FACE_ANGLES:
+        return True
+    raise ValueError("movement boundary cursor does not identify a movement action")
 
 
 class SymbolicScheduleDecisionKind(StrEnum):
@@ -192,10 +208,7 @@ def _validate_invocation_path(
             raise ValueError("symbolic invocation path contains a disconnected dispatch step")
     if invocation_path:
         final = invocation_path[-1]
-        if (
-            final.target_node_id != terminal_node_id
-            or final.target_entity_index(index) != terminal_entity_index
-        ):
+        if final.target_node_id != terminal_node_id or final.target_entity_index(index) != terminal_entity_index:
             raise ValueError("symbolic invocation path does not terminate at its current event owner")
 
 
@@ -280,22 +293,25 @@ class SymbolicFrame:
 
 @dataclass(frozen=True, slots=True)
 class SymbolicWaitBoundaryState:
-    duration_milliseconds: int
+    arguments: tuple[str, ...]
     branch: SymbolicWaitBranch = SymbolicWaitBranch.SUSPENDED_FALSE_RETURN
 
     def __post_init__(self) -> None:
-        if self.duration_milliseconds < 0:
-            raise ValueError("wait duration must be non-negative")
+        if not self.arguments or any(not argument for argument in self.arguments):
+            raise ValueError("wait boundary requires its non-empty source arguments")
 
 
 @dataclass(frozen=True, slots=True)
 class SymbolicMovementBoundaryState:
     command: SymbolicMovementCommand
+    arguments: tuple[str, ...]
     temporal_state: SymbolicTemporalBoundaryState
     waits_for_completion: bool
     effect_started: bool
 
     def __post_init__(self) -> None:
+        if not self.arguments or any(not argument for argument in self.arguments):
+            raise ValueError("movement boundary requires its non-empty source arguments")
         if self.temporal_state is SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE:
             if self.effect_started:
                 raise ValueError("a prior-movement boundary cannot claim the new route started")
@@ -312,6 +328,31 @@ class SymbolicNextFrameBoundaryState:
 SymbolicBoundaryState: TypeAlias = (
     SymbolicWaitBoundaryState | SymbolicMovementBoundaryState | SymbolicNextFrameBoundaryState
 )
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicAsyncMovementLifecycle:
+    source_cursor: SymbolicProgramCursor
+    command: SymbolicMovementCommand
+    arguments: tuple[str, ...]
+    effect_footprint: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.arguments or any(not argument for argument in self.arguments):
+            raise ValueError("asynchronous movement lifecycle requires its source arguments")
+        if any(not item for item in self.effect_footprint):
+            raise ValueError("asynchronous movement effect footprint entries must not be empty")
+
+    def validate(self, index: OrderedStageProgramIndex) -> None:
+        self.source_cursor.validate(index)
+        program = index.program(self.source_cursor.node_id)
+        action = program.event.actions[self.source_cursor.instruction_offset]
+        if action.command != self.command.value or action.arguments != self.arguments:
+            raise ValueError("asynchronous movement lifecycle does not match its source action")
+        if self.command is SymbolicMovementCommand.FACE_ANGLES:
+            raise ValueError("faceangles cannot advance while its movement lifecycle remains active")
+        if _movement_action_waits_for_completion(action):
+            raise ValueError("waiting movement cannot be represented as an asynchronous lifecycle")
 
 
 @dataclass(frozen=True, slots=True)
@@ -333,17 +374,33 @@ class SuspendedContinuation:
         self.frame.validate(index)
         program = index.program(self.frame.cursor.node_id)
         action = program.event.actions[self.frame.cursor.instruction_offset]
-        if self.resume_mode is SymbolicResumeMode.REENTER_BOUNDARY_ACTION:
-            if self.boundary_line != action.line:
-                raise ValueError("re-entered boundary line does not match the frame instruction cursor")
-            if isinstance(self.boundary_state, SymbolicWaitBoundaryState):
-                expected_command = "wait"
-            elif isinstance(self.boundary_state, SymbolicMovementBoundaryState):
-                expected_command = self.boundary_state.command.value
-            else:
-                expected_command = self.boundary_state.command.value
-            if action.command != expected_command:
-                raise ValueError("typed boundary state does not match the frame instruction action")
+        if self.resume_mode is not SymbolicResumeMode.REENTER_BOUNDARY_ACTION:
+            raise ValueError("suspended script continuation must re-enter its boundary action")
+        if self.boundary_line != action.line:
+            raise ValueError("re-entered boundary line does not match the frame instruction cursor")
+        if isinstance(self.boundary_state, SymbolicWaitBoundaryState):
+            if action.command != "wait" or action.arguments != self.boundary_state.arguments:
+                raise ValueError("wait boundary state does not match its source action")
+            return
+        if isinstance(self.boundary_state, SymbolicNextFrameBoundaryState):
+            if action.command != self.boundary_state.command.value:
+                raise ValueError("next-frame boundary state does not match its source action")
+            return
+        if action.command != self.boundary_state.command.value or action.arguments != self.boundary_state.arguments:
+            raise ValueError("movement boundary state does not match its source action")
+        waits_for_completion = _movement_action_waits_for_completion(action)
+        if self.boundary_state.waits_for_completion != waits_for_completion:
+            raise ValueError("movement boundary wait state does not match its source action")
+        if self.boundary_state.temporal_state is SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING:
+            if not waits_for_completion:
+                raise ValueError("non-waiting movement cannot suspend after its action starts")
+        elif self.boundary_state.temporal_state is not SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE:
+            raise ValueError("suspended movement has an invalid temporal boundary state")
+        if (
+            self.boundary_state.command is SymbolicMovementCommand.FACE_ANGLES
+            and self.boundary_state.temporal_state is not SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING
+        ):
+            raise ValueError("faceangles may suspend only on its current waiting action")
 
 
 @dataclass(frozen=True, slots=True)
@@ -431,6 +488,7 @@ class SymbolicScheduleState:
     accumulator_state: SymbolicAccumulatorState
     runnable: tuple[SymbolicFrame, ...]
     suspended: tuple[SuspendedContinuation, ...]
+    async_lifecycles: tuple[SymbolicAsyncMovementLifecycle, ...]
     event_owners: tuple[SymbolicEventOwner, ...]
     tag_parent_states: tuple[SymbolicTagParentState, ...] = ()
     effects: tuple[StageEffectProjection, ...] = ()
@@ -444,6 +502,7 @@ class SymbolicScheduleState:
         accumulator_state: SymbolicAccumulatorState,
         runnable: tuple[SymbolicFrame, ...],
         suspended: tuple[SuspendedContinuation, ...],
+        async_lifecycles: tuple[SymbolicAsyncMovementLifecycle, ...],
         event_owners: tuple[SymbolicEventOwner, ...],
         tag_parent_states: tuple[SymbolicTagParentState, ...],
         effects: tuple[StageEffectProjection, ...],
@@ -459,6 +518,7 @@ class SymbolicScheduleState:
         object.__setattr__(self, "accumulator_state", accumulator_state)
         object.__setattr__(self, "runnable", runnable)
         object.__setattr__(self, "suspended", suspended)
+        object.__setattr__(self, "async_lifecycles", async_lifecycles)
         object.__setattr__(self, "event_owners", event_owners)
         object.__setattr__(self, "tag_parent_states", tag_parent_states)
         object.__setattr__(self, "effects", effects)
@@ -474,6 +534,7 @@ class SymbolicScheduleState:
         accumulator_state: SymbolicAccumulatorState,
         runnable: tuple[SymbolicFrame, ...] = (),
         suspended: tuple[SuspendedContinuation, ...] = (),
+        async_lifecycles: tuple[SymbolicAsyncMovementLifecycle, ...] = (),
         event_owners: tuple[SymbolicEventOwner, ...] = (),
         tag_parent_states: tuple[SymbolicTagParentState, ...] = (),
         effects: tuple[StageEffectProjection, ...] = (),
@@ -485,6 +546,8 @@ class SymbolicScheduleState:
             frame.validate(index)
         for continuation in suspended:
             continuation.validate(index)
+        for lifecycle in async_lifecycles:
+            lifecycle.validate(index)
         for owner in event_owners:
             owner.validate(index)
 
@@ -492,6 +555,9 @@ class SymbolicScheduleState:
         active_entities = [frame.cursor.entity_index for frame in active_frames]
         if len(set(active_entities)) != len(active_entities):
             raise ValueError("a symbolic entity cannot own multiple active scheduler tasks")
+        lifecycle_entities = [lifecycle.source_cursor.entity_index for lifecycle in async_lifecycles]
+        if len(set(lifecycle_entities)) != len(lifecycle_entities):
+            raise ValueError("a symbolic entity cannot own multiple asynchronous movement lifecycles")
 
         owners_by_entity = {owner.entity_index: owner for owner in event_owners}
         if len(owners_by_entity) != len(event_owners):
@@ -516,6 +582,7 @@ class SymbolicScheduleState:
             _canonical_accumulator_state(accumulator_state),
             tuple(runnable),
             tuple(sorted(suspended, key=_continuation_sort_key)),
+            tuple(sorted(async_lifecycles, key=_lifecycle_sort_key)),
             tuple(sorted(event_owners, key=lambda owner: owner.entity_index)),
             tuple(sorted(tag_parent_states, key=lambda state: state.child_entity_index)),
             tuple(effects),
@@ -532,6 +599,7 @@ class SymbolicScheduleState:
             self.accumulator_state,
             self.runnable,
             self.suspended,
+            self.async_lifecycles,
             self.event_owners,
             self.tag_parent_states,
             self.effects,
@@ -577,6 +645,18 @@ def _continuation_sort_key(continuation: SuspendedContinuation) -> tuple[object,
         invocation_path,
         tuple((cursor.node_id, cursor.entity_index, cursor.instruction_offset) for cursor in frame.call_stack),
         pending_key,
+    )
+
+
+def _lifecycle_sort_key(lifecycle: SymbolicAsyncMovementLifecycle) -> tuple[object, ...]:
+    cursor = lifecycle.source_cursor
+    return (
+        cursor.entity_index,
+        cursor.node_id,
+        cursor.instruction_offset,
+        lifecycle.command.value,
+        lifecycle.arguments,
+        lifecycle.effect_footprint,
     )
 
 
