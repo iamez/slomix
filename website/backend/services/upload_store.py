@@ -317,13 +317,26 @@ class UploadStorageService:
         base = self._incoming_root() / session_id
         return base.with_suffix(".part"), base.with_suffix(".json")
 
+    @staticmethod
+    def _write_session(meta_path: Path, session: dict) -> None:
+        """Write the JSON sidecar ATOMICALLY: a temp file + os.replace, so a crash
+        mid-write can never leave a truncated/corrupt session record."""
+        tmp = meta_path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(session))
+        os.replace(tmp, meta_path)
+
     def create_resumable_session(
         self, *, filename: str, category: str, size: int, uploader_discord_id: int,
         title: str, description: str, tags: str, retention_days: int | None,
     ) -> dict:
         """Open a resumable session: validate the declared file, reserve nothing
         but check disk headroom, and write an empty .part + a JSON sidecar."""
-        extension = validate_extension(filename, category)  # raises 400
+        try:
+            extension = validate_extension(filename, category)
+        except ValueError as e:
+            # A filename whose extension doesn't fit the category is bad input,
+            # not a server fault — surface it as 400, like the single-shot path.
+            raise HTTPException(status_code=400, detail=str(e)) from e
         limit = get_size_limit(category)
         if size <= 0 or size > limit:
             raise HTTPException(
@@ -357,7 +370,7 @@ class UploadStorageService:
             "retention_days": retention_days,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        meta.write_text(json.dumps(session))
+        self._write_session(meta, session)
         return session
 
     def get_resumable_session(self, session_id: str) -> dict | None:
@@ -397,7 +410,7 @@ class UploadStorageService:
         with part.open("ab") as handle:
             handle.write(data)
         session["offset"] = current + len(data)
-        meta.write_text(json.dumps(session))
+        self._write_session(meta, session)
         return session["offset"]
 
     def finalize_resumable(self, session_id: str) -> tuple[SavedUpload, dict]:

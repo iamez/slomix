@@ -398,15 +398,19 @@ async def resumable_patch(session_id: str, request: Request,
         raise HTTPException(status_code=404, detail="Unknown or expired upload session")
     _require_session_owner(session, int(user["id"]))
 
-    # Refuse an over-large body before reading it into memory.
+    # Fast pre-check on the declared length, then enforce the cap WHILE streaming
+    # — a client can lie about Content-Length or omit it (chunked encoding), so
+    # request.body() would otherwise buffer an unbounded body into memory.
     declared = request.headers.get("content-length")
     if declared is not None and declared.isdigit() and int(declared) > _MAX_PATCH_BYTES:
         raise HTTPException(status_code=413, detail="Chunk too large")
-    data = await request.body()
-    if len(data) > _MAX_PATCH_BYTES:
-        raise HTTPException(status_code=413, detail="Chunk too large")
+    buf = bytearray()
+    async for part in request.stream():
+        buf.extend(part)
+        if len(buf) > _MAX_PATCH_BYTES:
+            raise HTTPException(status_code=413, detail="Chunk too large")
 
-    new_offset = storage.append_chunk(session_id, upload_offset, data)
+    new_offset = storage.append_chunk(session_id, upload_offset, bytes(buf))
     return Response(status_code=204, headers={"Upload-Offset": str(new_offset)})
 
 

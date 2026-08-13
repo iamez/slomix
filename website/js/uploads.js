@@ -361,7 +361,9 @@ async function _resumableUpload(file, meta, onProgress) {
 
     let offset = 0;
     const maxRetries = 3;
+    let stalled = 0;
     while (offset < file.size) {
+        const before = offset;
         const blob = file.slice(offset, Math.min(offset + chunkSize, file.size));
         let attempt = 0;
         for (;;) {
@@ -371,9 +373,17 @@ async function _resumableUpload(file, meta, onProgress) {
                     headers: { 'X-Requested-With': 'XMLHttpRequest', 'Upload-Offset': String(offset) },
                     body: blob,
                 });
-                if (r.status === 204 || r.status === 409) {
-                    // 409 carries the authoritative offset so we resync and go on.
-                    offset = parseInt(r.headers.get('Upload-Offset') || String(offset), 10);
+                const hdr = r.headers.get('Upload-Offset');
+                if (r.status === 204) {
+                    offset = parseInt(hdr || String(offset + blob.size), 10);
+                    break;
+                }
+                if (r.status === 409) {
+                    // Offset drifted — resync from the authoritative offset (header,
+                    // or the number in the error body if the header is absent).
+                    const body = await r.json().catch(() => ({}));
+                    const fromBody = (String(body.detail || '').match(/\d+/) || [])[0];
+                    offset = parseInt(hdr || fromBody || String(offset), 10);
                     break;
                 }
                 throw await jsonErr(r, `Chunk failed (${r.status})`);
@@ -381,6 +391,13 @@ async function _resumableUpload(file, meta, onProgress) {
                 if (++attempt >= maxRetries) throw err;
                 await new Promise((res) => setTimeout(res, 500 * attempt));  // backoff, then resume
             }
+        }
+        // Guard against an offset that never advances — otherwise a server stuck
+        // at the same offset would loop here forever.
+        if (offset <= before) {
+            if (++stalled >= 3) throw new Error('Upload stalled — server offset is not advancing');
+        } else {
+            stalled = 0;
         }
         if (onProgress) onProgress(Math.round((offset / file.size) * 100));
     }
