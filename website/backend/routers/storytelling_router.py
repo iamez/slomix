@@ -294,11 +294,21 @@ async def get_kill_impact_leaderboard(
     # to that sum only when the scope has no gaming_session_id to aggregate by.
     real_total_kills = None
     if scope.gaming_session_id is not None:
+        # Apply the SAME round-validity gate GamingSessionScope._ROUND_GATE_SQL
+        # uses (round_number IN (1,2) + is_valid IS DISTINCT FROM FALSE +
+        # round_status completed/substitution/NULL), qualified with r. because
+        # player_comprehensive_stats also has a round_number column (bare name is
+        # ambiguous across the join). This counts exactly the rounds the rest of
+        # the panel does — a cancelled/restarted round (brewdog miscount class) is
+        # excluded here too, instead of inflating the header (Copilot #709).
         row = await db.fetch_one(
             "SELECT COALESCE(SUM(pcs.kills), 0) "
             "FROM player_comprehensive_stats pcs "
             "JOIN rounds r ON r.id = pcs.round_id "
-            "WHERE r.gaming_session_id = $1 AND r.round_number IN (1, 2) "
+            "WHERE r.gaming_session_id = $1 "
+            "AND r.round_number IN (1, 2) "
+            "AND r.is_valid IS DISTINCT FROM FALSE "
+            "AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL) "
             "AND UPPER(pcs.player_guid) NOT LIKE 'OMNIBOT%' "
             "AND pcs.player_name NOT LIKE '%[BOT]%'",
             (scope.gaming_session_id,),
