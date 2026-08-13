@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TypeAlias
 
+from website.backend.map_geometry.stage import TriggerDispatch, TriggerResolution
 from website.backend.map_geometry.stage_possibilities import (
     OrderedStageProgramIndex,
     StageEffectInstruction,
@@ -21,6 +22,47 @@ from website.backend.map_geometry.stage_possibilities import (
 from website.backend.map_geometry.stage_semantics import AccumulatorConditionalTrigger, StageEffectProjection
 
 _STATE_CREATION_TOKEN = object()
+
+
+def _dispatch_target_group(
+    index: OrderedStageProgramIndex,
+    dispatch_cursor: SymbolicProgramCursor,
+    target_node_id: str,
+) -> tuple[int, ...]:
+    dispatch_cursor.validate(index)
+    source = index.program(dispatch_cursor.node_id)
+    instruction = source.instructions[dispatch_cursor.instruction_offset]
+    if isinstance(instruction, TriggerInstruction):
+        if (
+            instruction.edge.resolution is not TriggerResolution.RESOLVED
+            or len(instruction.edge.candidate_node_ids) != 1
+            or instruction.edge.candidate_node_ids[0] != target_node_id
+        ):
+            raise ValueError("dispatch target program does not match its trigger instruction")
+        target = index.program(target_node_id)
+        if instruction.edge.dispatch is TriggerDispatch.SELF:
+            if dispatch_cursor.entity_index not in target.source.lookup.selected_entity_indices:
+                raise ValueError("self dispatch target program does not select the concrete caller entity")
+            return (dispatch_cursor.entity_index,)
+        return target.source.lookup.selected_entity_indices
+    if isinstance(instruction, AccumulatorConditionalTrigger):
+        handler = index.first_trigger_handler(
+            instruction.target_script_name,
+            instruction.target_trigger,
+        )
+        if handler is None or handler.node.node_id != target_node_id:
+            raise ValueError("dispatch target program does not match its conditional trigger")
+        return handler.source.lookup.selected_entity_indices
+    if isinstance(instruction, StageEffectInstruction):
+        targets = tuple(
+            target.entity_index
+            for target in instruction.alert_targets
+            if target.event_handler_node_id == target_node_id
+        )
+        if not targets:
+            raise ValueError("dispatch target program does not match its alert instruction")
+        return targets
+    raise ValueError("dispatch cursor does not identify a dispatch instruction")
 
 
 class SymbolicFrameOrigin(StrEnum):
@@ -114,14 +156,19 @@ class SymbolicProgramCursor:
 @dataclass(frozen=True, slots=True)
 class SymbolicInvocationStep:
     dispatch_cursor: SymbolicProgramCursor
+    target_node_id: str
     target_ordinal: int
 
     def __post_init__(self) -> None:
+        if not self.target_node_id:
+            raise ValueError("symbolic invocation step requires a target node id")
         if self.target_ordinal < 0:
             raise ValueError("symbolic invocation target ordinal must be non-negative")
 
     def validate(self, index: OrderedStageProgramIndex) -> None:
-        self.dispatch_cursor.validate(index)
+        targets = _dispatch_target_group(index, self.dispatch_cursor, self.target_node_id)
+        if self.target_ordinal >= len(targets):
+            raise ValueError("symbolic invocation target ordinal is outside its dispatch target group")
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,31 +201,10 @@ class PendingDispatchContext:
             raise ValueError("pending dispatch caller resume cursor does not belong to its dispatch frame")
         if self.caller_resume_cursor.instruction_offset <= self.dispatch_cursor.instruction_offset:
             raise ValueError("pending dispatch caller must resume after its dispatch instruction")
-        source = index.program(self.dispatch_cursor.node_id)
-        instruction = source.instructions[self.dispatch_cursor.instruction_offset]
-        if isinstance(instruction, TriggerInstruction):
-            candidate_node_ids = instruction.edge.candidate_node_ids
-        elif isinstance(instruction, AccumulatorConditionalTrigger):
-            handler = index.first_trigger_handler(
-                instruction.target_script_name,
-                instruction.target_trigger,
-            )
-            candidate_node_ids = () if handler is None else (handler.node.node_id,)
-        elif isinstance(instruction, StageEffectInstruction):
-            candidate_node_ids = tuple(
-                target.event_handler_node_id
-                for target in instruction.alert_targets
-                if target.event_handler_node_id is not None
-            )
-        else:
-            raise ValueError("pending dispatch cursor does not identify a dispatch instruction")
-        if self.target_node_id not in candidate_node_ids:
-            raise ValueError("pending dispatch target program does not match its dispatch instruction")
-        target = index.program(self.target_node_id)
-        selected = target.source.lookup.selected_entity_indices
-        if set(self.ordered_target_entity_indices) != set(selected):
+        expected_targets = _dispatch_target_group(index, self.dispatch_cursor, self.target_node_id)
+        if self.ordered_target_entity_indices != expected_targets:
             raise ValueError(
-                f"pending dispatch targets do not match the complete target group for {self.target_node_id!r}"
+                f"pending dispatch target order does not match the resolved group for {self.target_node_id!r}"
             )
 
 
@@ -466,6 +492,7 @@ def _continuation_sort_key(continuation: SuspendedContinuation) -> tuple[object,
             step.dispatch_cursor.node_id,
             step.dispatch_cursor.entity_index,
             step.dispatch_cursor.instruction_offset,
+            step.target_node_id,
             step.target_ordinal,
         )
         for step in frame.invocation_path

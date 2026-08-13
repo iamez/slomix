@@ -1,5 +1,6 @@
 """S1 immutable scheduler-state and canonicalization contracts."""
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -209,12 +210,85 @@ def test_pending_dispatch_identity_cannot_drop_parent_cursor_target_cursor_order
     variants = (
         _pending(index, dispatch_offset=1, resume_offset=2, targets=(1, 3, 4), target_cursor=0),
         _pending(index, targets=(1, 3, 4), target_cursor=1),
-        _pending(index, targets=(3, 1, 4), target_cursor=0),
         _pending(index, resume_offset=2, targets=(1, 3, 4), target_cursor=0),
     )
 
     baseline_key = key(baseline)
     assert all(key(variant) != baseline_key for variant in variants)
+
+    reordered = _pending(index, targets=(3, 1, 4), target_cursor=0)
+    with pytest.raises(ValueError, match="target order does not match"):
+        key(reordered)
+
+
+def test_invocation_ordinal_must_select_the_exact_dispatch_target_group():
+    index = _program_index()
+    caller = _program(index, "caller")
+    target = _program(index, "target", "long")
+
+    valid = SymbolicInvocationStep(
+        SymbolicProgramCursor(caller.node.node_id, 0, 0),
+        target.node.node_id,
+        2,
+    )
+    valid.validate(index)
+
+    with pytest.raises(ValueError, match="ordinal is outside"):
+        SymbolicInvocationStep(
+            SymbolicProgramCursor(caller.node.node_id, 0, 0),
+            target.node.node_id,
+            3,
+        ).validate(index)
+
+
+def test_self_dispatch_target_group_contains_only_the_concrete_caller():
+    script = parse_map_script(
+        b"""
+        shared
+        {
+            spawn
+            {
+                trigger self go
+            }
+            trigger go
+            {
+                wait 100
+            }
+        }
+        """,
+        source="maps/test.script",
+    )
+    model = StaticStageModel(
+        "test",
+        ObjectiveCatalog((), (), ()),
+        script,
+        compile_static_stage_graph(script, source="maps/test.script"),
+        _asset_provider(MapAssetKind.SCRIPT),
+        _asset_provider(MapAssetKind.OBJDATA),
+    )
+    identities = build_entity_identity_index(
+        (
+            {"classname": "script_mover", "scriptname": "shared"},
+            {"classname": "script_mover", "scriptname": "shared"},
+        ),
+        source="maps/test.bsp",
+    )
+    catalog = MapEntityCatalog("test", "maps/test.bsp", (), (), (), ())
+    index = build_ordered_stage_program_index(model, link_w3_entity_catalog(identities, catalog))
+    spawn = _program(index, "shared")
+    target = _program(index, "shared", "go")
+    pending = PendingDispatchContext(
+        SymbolicProgramCursor(spawn.node.node_id, 1, 0),
+        SymbolicProgramCursor(spawn.node.node_id, 1, 1),
+        target.node.node_id,
+        (1,),
+        0,
+    )
+
+    pending.validate(index)
+    SymbolicInvocationStep(pending.dispatch_cursor, target.node.node_id, 0).validate(index)
+    with pytest.raises(ValueError, match="target order does not match"):
+        replace(pending, ordered_target_entity_indices=(0, 1)).validate(index)
 
 
 def test_boundary_state_and_resume_mode_do_not_canonicalize():
