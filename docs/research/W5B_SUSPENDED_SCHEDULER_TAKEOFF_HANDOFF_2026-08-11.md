@@ -1323,6 +1323,45 @@ retained.
   search, cycle/budget frontiers and only footprint-proven reductions. Do not begin S5
   measurement or S6 graph verdicts early.
 
+### 2026-08-13 - late S2/S3 review closure follow-up
+
+- Code/test commit: `2cf41622`. A late Codex review against the earlier S2 evidence
+  head produced five still-actionable findings even though their original diff anchors
+  were outdated. They were treated as blockers rather than dismissed as stale.
+- The scheduler now walks the caller's complete known tag-parent ancestor chain before
+  using raw entity order. A direct or transitive target ancestor has already run and
+  therefore wakes only on `NEXT_FRAME`; an absent/unknown caller relation or a cycle
+  remains `TAG_PARENT_ORDER_UNKNOWN` with a named reason. It no longer fabricates a
+  same-frame re-entry merely because the target has a later raw entity index.
+- A target blocked before its first temporal boundary now retains the current target
+  cursor, every remaining concrete target ordinal and the executable caller suffix,
+  together with already executed accumulator/effect state. A direct blocker in the
+  selected target event retains its exact instruction offset. If the blocker belongs
+  to a deeper nested owner that the current `SymbolicFrame` contract cannot encode
+  together with the outer pending dispatch, the state retains the complete outer
+  group and state but adds `s3_blocker_frontier_identity_unresolved`; it does not
+  silently label offset zero as exact. S4/S5 may not count that named frontier as
+  resolved without extending the frame identity.
+- The other three late findings were already substantively closed by `9ebb1e2c` and
+  now have explicit disposition evidence: impossible current movement-start branches
+  are filtered against active lifecycles; direct, nested and resumed non-waiting
+  movement starts create source-bound lifecycle state; and a final-instruction trigger
+  marks suspended target continuations with `caller_suffix_completed=True` rather than
+  rejecting an empty suffix. The final-trigger case gained a dedicated regression in
+  `2cf41622`.
+- Exact local evidence after this follow-up: 60/60 scheduler tests, 334/334 map-geometry
+  unit tests and the complete repository suite at 4,555 passed / 97 environment or
+  opt-in skips / 30 warnings. Ruff, byte compilation and `git diff --check` passed.
+  The skipped PostgreSQL and installed-asset cases remain environment/opt-in gates,
+  not test failures.
+- No frozen installed-asset denominator was changed or reinterpreted. The prior
+  2,790 entries, 5,174 paths, 7,755 effects, 4,011 temporal boundaries, 473 caller
+  replacements and 452 cross-entity temporal frontiers remain the last exact corpus
+  assertions. This follow-up changes scheduler transitions only.
+- No production write, deploy, service restart, Python replacement, Lua change or
+  other owner-gated operation was performed. The new exact head still requires full
+  GitHub CI, review, zero-thread and five-minute quiet-window gates before S4 begins.
+
 At every substantive commit, append:
 
 - commit SHA and whether it changes contract, code, tests or evidence;
