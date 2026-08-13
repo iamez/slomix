@@ -301,8 +301,13 @@ async def get_kill_impact_leaderboard(
         # ambiguous across the join). This counts exactly the rounds the rest of
         # the panel does — a cancelled/restarted round (brewdog miscount class) is
         # excluded here too, instead of inflating the header (Copilot #709).
+        # Bare SUM (no COALESCE): with zero matching rows SUM returns NULL, which
+        # we keep as None so the KIS-sum fallback below still engages. COALESCE
+        # would turn "no comprehensive stats" into a genuine-looking 0 that the
+        # frontend treats as authoritative, suppressing the fallback (CodeRabbit
+        # #709). A real session with rows sums to its true total.
         row = await db.fetch_one(
-            "SELECT COALESCE(SUM(pcs.kills), 0) "
+            "SELECT SUM(pcs.kills) "
             "FROM player_comprehensive_stats pcs "
             "JOIN rounds r ON r.id = pcs.round_id "
             "WHERE r.gaming_session_id = $1 "
