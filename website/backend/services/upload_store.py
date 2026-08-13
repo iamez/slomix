@@ -348,7 +348,10 @@ class UploadStorageService:
         inc = self._incoming_root()
         inc.mkdir(parents=True, exist_ok=True)
         try:
-            os.chmod(inc, 0o700)
+            # 0o700 = owner-only (rwx for us, nothing for group/other) — the most
+            # restrictive useful mode, matching the storage root. nosec: the
+            # scanner reads any explicit chmod as "permissive"; this is the opposite.
+            os.chmod(inc, 0o700)  # nosec B103
         except OSError as e:
             logger.debug("Could not chmod incoming dir: %s", e)
         # Require headroom for the whole declared file before accepting any bytes.

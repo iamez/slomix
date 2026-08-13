@@ -357,7 +357,12 @@ async function _resumableUpload(file, meta, onProgress) {
     if (!initResp.ok) throw await jsonErr(initResp, `Upload init failed (${initResp.status})`);
     const init = await initResp.json();
     const chunkSize = init.chunk_size || (8 * 1024 * 1024);
-    const url = `${API_BASE}/uploads/resumable/${encodeURIComponent(init.session_id)}`;
+    // The session id is server-generated (uuid4 hex); validate its shape before
+    // it goes into a URL so the chunk/finalize requests are provably same-origin
+    // calls to our own API with a fixed-format id (not a user-controlled URL).
+    const sessionId = String(init.session_id || '');
+    if (!/^[0-9a-f]{32}$/.test(sessionId)) throw new Error('Invalid upload session id from server');
+    const url = `${API_BASE}/uploads/resumable/${sessionId}`;
 
     let offset = 0;
     const maxRetries = 3;
