@@ -2596,13 +2596,11 @@ def _source_ordered_suspended_index(
         ) != shared_identity:
             return None
 
-    same_frame = tuple(
-        index_value
-        for index_value, continuation in enumerate(continuations)
-        if continuation.wake_constraint is SymbolicWakeConstraint.SAME_FRAME_LATER
-    )
-    if same_frame:
-        candidates = same_frame
+    if all(
+        continuation.wake_constraint is SymbolicWakeConstraint.SAME_FRAME_LATER
+        for continuation in continuations
+    ):
+        candidates = tuple(range(len(continuations)))
     elif all(
         continuation.wake_constraint is SymbolicWakeConstraint.NEXT_FRAME
         for continuation in continuations
