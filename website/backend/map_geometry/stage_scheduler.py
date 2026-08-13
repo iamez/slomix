@@ -246,6 +246,8 @@ class SymbolicFrame:
 
     def validate(self, index: OrderedStageProgramIndex) -> None:
         self.cursor.validate(index)
+        if self.pending_dispatch is not None:
+            self.pending_dispatch.validate(index)
         _validate_invocation_path(
             index,
             self.invocation_path,
@@ -255,7 +257,25 @@ class SymbolicFrame:
         for cursor in self.call_stack:
             cursor.validate(index, allow_complete=True)
         if self.pending_dispatch is not None:
-            self.pending_dispatch.validate(index)
+            if self.origin not in {
+                SymbolicFrameOrigin.NESTED_DISPATCH,
+                SymbolicFrameOrigin.TARGET_GROUP_RESUME,
+                SymbolicFrameOrigin.BOUNDARY_RESUME,
+            }:
+                raise ValueError("pending dispatch context requires a nested-target frame origin")
+            if not self.invocation_path:
+                raise ValueError("pending dispatch context requires its target invocation step")
+            terminal = self.invocation_path[-1]
+            pending = self.pending_dispatch
+            expected_entity = pending.ordered_target_entity_indices[pending.target_cursor]
+            if self.cursor.node_id != pending.target_node_id or self.cursor.entity_index != expected_entity:
+                raise ValueError("pending dispatch cursor does not identify the active nested target frame")
+            if (
+                terminal.dispatch_cursor != pending.dispatch_cursor
+                or terminal.target_node_id != pending.target_node_id
+                or terminal.target_ordinal != pending.target_cursor
+            ):
+                raise ValueError("pending dispatch context does not match its terminal invocation step")
 
 
 @dataclass(frozen=True, slots=True)

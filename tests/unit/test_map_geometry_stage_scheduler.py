@@ -194,15 +194,21 @@ def test_equal_semantic_states_have_one_canonical_key():
 
 def test_pending_dispatch_identity_cannot_drop_parent_cursor_target_cursor_or_order():
     index = _program_index()
-    caller = _program(index, "caller")
 
     def key(pending):
+        target_entity_index = pending.ordered_target_entity_indices[pending.target_cursor]
+        invocation = SymbolicInvocationStep(
+            pending.dispatch_cursor,
+            pending.target_node_id,
+            pending.target_cursor,
+        )
         frame = _frame(
-            caller.node.node_id,
+            pending.target_node_id,
+            target_entity_index,
             0,
-            pending.dispatch_cursor.instruction_offset,
             pending_dispatch=pending,
             origin=SymbolicFrameOrigin.NESTED_DISPATCH,
+            invocation_path=(invocation,),
         )
         return _state(index, frame).canonical_key
 
@@ -222,6 +228,24 @@ def test_pending_dispatch_identity_cannot_drop_parent_cursor_target_cursor_or_or
     skipped_caller_suffix = _pending(index, resume_offset=2, targets=(1, 3, 4), target_cursor=0)
     with pytest.raises(ValueError, match="resume immediately after"):
         key(skipped_caller_suffix)
+
+    mismatched_cursor = replace(baseline, target_cursor=2)
+    target = _program(index, "target", "long")
+    ordinal_zero = SymbolicInvocationStep(
+        baseline.dispatch_cursor,
+        target.node.node_id,
+        0,
+    )
+    inconsistent_frame = _frame(
+        target.node.node_id,
+        1,
+        0,
+        pending_dispatch=mismatched_cursor,
+        origin=SymbolicFrameOrigin.NESTED_DISPATCH,
+        invocation_path=(ordinal_zero,),
+    )
+    with pytest.raises(ValueError, match="active nested target frame"):
+        _state(index, inconsistent_frame)
 
 
 def test_invocation_ordinal_must_select_the_exact_dispatch_target_group():
