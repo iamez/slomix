@@ -1168,7 +1168,7 @@ retained.
 ### 2026-08-13 - S1 immutable state and canonicalization
 
 - Main sync commits: `15b873bc` and `efbf89f9`; S1 code/review commits: `4f53c782`, `3ad4d981`,
-  `08928faf`, `b45bfd0c`, `1df54390`, `076856bc` and `c5623426`. The branch base is current
+  `08928faf`, `b45bfd0c`, `1df54390`, `076856bc`, `c5623426` and `58ba5af0`. The branch base is current
   `origin/main` at `42fe7819`; main is an ancestor and there are no unmerged main
   commits at this record point.
 - The second sync integrated eight sick-leave/identity commits after the exact-head
@@ -1192,8 +1192,8 @@ retained.
   a suspended replacement. The T1 fixture proves attached, proven-unattached and
   unknown tag-parent states remain distinct. Transition-order behavior remains S2-S3
   scope.
-- Final S1 local evidence at `c5623426`: all 160 scheduler plus possibility tests and
-  all 300 map-geometry unit tests passed; Ruff and `git diff --check` passed. No corpus
+- Final S1 local evidence at `58ba5af0`: all 163 scheduler plus possibility tests and
+  all 303 map-geometry unit tests passed; Ruff and `git diff --check` passed. No corpus
   denominator changes in S1 because this wave introduces state identity, not traversal.
 - Review found and closed five construction-boundary defect classes: stale S0 wording,
   missing executable adversaries, incomplete tag-parent state, dispatch ordinal not
@@ -1206,11 +1206,15 @@ retained.
   ancestry, missing `gotomarker` route evidence, decision/task-shape mismatch and
   inconsistent exhaustion reasons. Each has a focused negative regression; valid
   prior-motion, runnable, suspended and complete shapes have positive regressions.
-- All exact-head CI checks passed, all 15 review threads were resolved and CodeRabbit
-  independently reviewed exact head `c5623426` with no remaining S1 construction-
-  boundary issue. The PR was current with `main` and `clean` after the required quiet
-  window. This handoff-only evidence commit must receive one fresh exact-head gate
-  before S2 starts.
+- A third full-boundary review closed six further gaps: current-attempt effect identity
+  no longer collides with historical `gotomarker` effects, redundant accumulator
+  exclusions canonicalize away, budget exhaustion retains its frontier, heterogeneous
+  alert handlers fail closed, next-frame commands require a next-frame wake, and result
+  alternatives are non-empty, deduplicated and permutation-invariant.
+- All 21 review threads on `58ba5af0` were resolved and CodeRabbit reported no remaining
+  S1 state-construction defect. Exact-head CI was still completing at this record point;
+  this handoff-only evidence commit must receive a fresh full CI/review gate and quiet-
+  window refresh before S2 starts.
 - No production write, deploy, service restart, Python replacement, Lua change or
   other owner-gated operation was performed.
 - Next item: pass the exact-head documentation gate, then implement S2 as one suspended
