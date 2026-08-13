@@ -4,6 +4,7 @@ Handles file storage, retrieval, and metadata for community uploads.
 Follows the GreatshotStorageService pattern.
 """
 
+import fcntl
 import hashlib
 import json
 import os
@@ -393,25 +394,32 @@ class UploadStorageService:
         session = self.get_resumable_session(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Unknown or expired upload session")
-        # The .part file size is the AUTHORITATIVE offset — an "ab" append always
-        # lands at end-of-file, and the JSON is only a hint that a crash between
-        # the write and the JSON update could leave stale. Reconciling against the
-        # real size makes a resync correct and keeps a concurrent PATCH from
-        # writing at the wrong position.
-        current = part.stat().st_size if part.is_file() else 0
-        if offset != current:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Offset mismatch: server is at {current}",
-                headers={"Upload-Offset": str(current)},
-            )
-        if current + len(data) > int(session["size"]):
-            raise HTTPException(status_code=413, detail="Chunk would exceed the declared size")
+        size = int(session["size"])
+        # Hold an exclusive lock on the .part for the WHOLE offset-check-and-write
+        # so two concurrent PATCHes on one session can't both pass the size check
+        # at offset N and interleave their appends (TOCTOU — Copilot). The .part
+        # size under the lock is the authoritative offset; the JSON is only a hint
+        # a crash could leave stale.
         with part.open("ab") as handle:
-            handle.write(data)
-        session["offset"] = current + len(data)
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                current = part.stat().st_size
+                if offset != current:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Offset mismatch: server is at {current}",
+                        headers={"Upload-Offset": str(current)},
+                    )
+                if current + len(data) > size:
+                    raise HTTPException(status_code=413, detail="Chunk would exceed the declared size")
+                handle.write(data)
+                handle.flush()
+                new_offset = current + len(data)
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        session["offset"] = new_offset
         self._write_session(meta, session)
-        return session["offset"]
+        return new_offset
 
     def finalize_resumable(self, session_id: str) -> tuple[SavedUpload, dict]:
         """Validate a completed session and move it into the library.
