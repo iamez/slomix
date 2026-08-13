@@ -4,7 +4,7 @@ Date: 2026-08-11
 
 Last reverified: 2026-08-13
 
-Status: implementation in progress; S0 complete, S1 pending exact-head review
+Status: implementation in progress; S0 complete, S1 under local verification
 
 Current base: `origin/main` at `f51edc8813ac16adcdb2ae6801efa1a79800600a`
 
@@ -355,13 +355,16 @@ relation established inside its own root schedule; otherwise it must retain type
 
 ### S0 adversarial fixture contracts
 
-The following fixture pairs freeze the source result before scheduler state types are
-introduced. Their executable assertions belong to S1-S3 because the current recursive
-walker intentionally stops at the first cross-entity temporal frontier.
+The following fixture pairs freeze the source result before scheduler transitions are
+introduced. S1 provides their executable state-identity assertions; transition-order
+assertions remain S2-S3 work because the current recursive walker intentionally stops
+at the first cross-entity temporal frontier.
 
 **R1 - replacement of an already suspended target**
 
-1. A caller triggers target event `long`, whose first action waits.
+1. A caller triggers target event `long`, whose first `wait 100` is explicitly fixed to
+   the ordinary false-return/suspended branch. The sudden-death immediate branch is not
+   part of R1.
 2. The different-entity caller continues and triggers `replacement` on the same target.
 3. Variant R1-sync makes `replacement` complete synchronously. ET restores the exact
    backed-up `long` status, so its boundary action remains the target's current owner;
@@ -383,9 +386,11 @@ and replacement continuations simultaneously is also invalid.
    schedule. An isolated entry with the same static entities cannot infer whether the
    persistent relation already exists and must retain `tag_parent_state_unknown`.
 
-T1's attached and unattached states must never canonicalize together. The attached
-variant must publish parent-before-child; the unknown isolated variant must not choose
-either order merely from entity indices.
+T1 has three distinct canonical states: source-proven attached, source-proven
+unattached and unknown persistent attachment. The attached variant must publish
+parent-before-child; the proven-unattached variant may use ordinary child-before-parent
+entity order; the unknown isolated variant must not choose either order merely from
+entity indices. No pair of these three states may canonicalize together.
 
 ### S0b alert-event correction
 
@@ -413,9 +418,9 @@ the corrected corpus denominator before S1 canonical state.
 These findings prove caller-before-suspended-target-resume for a cross-entity trigger.
 They do **not** yet prove a closed global schedule because later caller actions or other
 entities can trigger a new event on the suspended target and replace its retained
-status. The replacement and tag-parent surfaces are now inventoried, but S0b alert
-dispatch and the adversarial replacement/tag-parent fixtures must close before code
-freezes a canonical transition key.
+status. S0b alert dispatch is implemented, and executable S1 adversaries now freeze the
+R1 replacement owner and all three T1 tag-parent identities. Canonical state types may
+therefore proceed; transition behavior remains gated on S2-S3 tests.
 
 ## Proposed scheduler model
 
@@ -1040,8 +1045,8 @@ retained.
 - [x] Commit and push the documentation-only takeoff (`b9919eaa`).
 - [x] Open draft PR [#649](https://github.com/iamez/slomix/pull/649).
 - [x] Complete S0 source verification; runner/action reads, installed surfaces and
-  adversarial replacement/tag-parent fixture contracts are recorded. Their executable
-  scheduler assertions remain assigned to S1-S3.
+  adversarial replacement/tag-parent fixture contracts are recorded. S1 executes their
+  canonical identity assertions; transition ordering remains assigned to S2-S3.
 - [x] Complete S0a typed `gotomarker` control/effect correction and regenerate the
   frontier denominator.
 - [x] Complete S0b source-proven `alertentity` event dispatch and regenerate the
@@ -1148,10 +1153,10 @@ retained.
   No owner-gated operation was performed.
 - The valid CodeRabbit wording finding is corrected: S0a is described as already
   implemented, not as future work. Review/CI must run again after push.
-- S0 now freezes R1 sync-versus-wait replacement ownership and T1 attached-versus-
-  unknown tag-parent ordering as adversarial fixture contracts. Their executable
-  canonicalization/transition assertions remain S1-S3 work because the required state
-  types do not exist yet.
+- S0 freezes R1 sync-versus-wait replacement ownership and T1 attached, proven-
+  unattached and unknown tag-parent ordering as adversarial fixture contracts. S1 now
+  supplies executable canonicalization assertions; transition assertions remain S2-S3
+  work.
 - CodeRabbit's exact-head `876de54d` source review independently traced the
   `script_mover` flags/health/count path, target order, fail-closed dispositions,
   nested dispatch and corpus arithmetic and reported no defect. The Codex review
