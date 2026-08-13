@@ -67,7 +67,13 @@ except ImportError:  # pragma: no cover
 # both would receive the same summary winner and one of them would be wrong.
 # (match_id cannot serve as the join key here: pre-Lua summary rows carry a
 # filename-based match_id that matches their R2 row on only 44/278 candidates.)
-_W_FROM = """
+# NOTE (Codacy): every statement below is a hand-written LITERAL — no
+# f-string/.format composition, no variables, no external input ever reaches
+# cur.execute(). The W-candidate FROM block and the O WHERE block repeat
+# verbatim across statements; KEEP THEM IN SYNC when editing.
+
+_W_PREVIEW = """
+    SELECT substr(r2.round_date, 1, 7) AS era, COUNT(*)
     FROM rounds r2
     JOIN rounds s
       ON s.round_number = 0
@@ -93,27 +99,75 @@ _W_FROM = """
           AND r3.round_time = r2.round_time
           AND r3.map_name = r2.map_name
       ) = 1
+    GROUP BY 1 ORDER BY 1
 """
 
-_W_PREVIEW = f"SELECT substr(r2.round_date, 1, 7) AS era, COUNT(*) {_W_FROM} GROUP BY 1 ORDER BY 1"
-_W_APPLY = f"UPDATE rounds x SET winner_team = w.new_winner FROM (SELECT r2.id, s.winner_team AS new_winner {_W_FROM}) w WHERE x.id = w.id"
-
-# Phase O: derive the outcome from (post-W) winner/defender. Only rows where
-# both sides are known and a non-blank outcome disagrees with the derivation.
-_O_WHERE = """
-    WHERE round_number IN (1, 2)
-      AND winner_team IN (1, 2)
-      AND defender_team IN (1, 2)
-      AND COALESCE(round_outcome, '') <> ''
-      AND round_outcome IS DISTINCT FROM
-          (CASE WHEN winner_team = defender_team THEN 'Fullhold' ELSE 'Completed' END)
+_W_APPLY = """
+    UPDATE rounds x
+    SET winner_team = w.new_winner
+    FROM (
+        SELECT r2.id, s.winner_team AS new_winner
+    FROM rounds r2
+    JOIN rounds s
+      ON s.round_number = 0
+     AND s.round_date = r2.round_date
+     AND s.round_time = r2.round_time
+     AND s.map_name = r2.map_name
+    WHERE r2.round_number = 2
+      AND r2.round_date < '2026-02-01'
+      AND s.winner_team IN (1, 2)
+      AND r2.winner_team IS DISTINCT FROM s.winner_team
+      AND NOT EXISTS (SELECT 1 FROM lua_round_teams l WHERE l.round_id = r2.id)
+      AND (
+        SELECT COUNT(*) FROM rounds s2
+        WHERE s2.round_number = 0
+          AND s2.round_date = r2.round_date
+          AND s2.round_time = r2.round_time
+          AND s2.map_name = r2.map_name
+      ) = 1
+      AND (
+        SELECT COUNT(*) FROM rounds r3
+        WHERE r3.round_number = 2
+          AND r3.round_date = r2.round_date
+          AND r3.round_time = r2.round_time
+          AND r3.map_name = r2.map_name
+      ) = 1
+    ) w
+    WHERE x.id = w.id
 """
 
 # Dry-run must count Phase O AS IF Phase W had run (W changes winners, which
 # changes O's candidate set), so the simulated winner is COALESCE(summary fix,
 # stored value).
-_O_PREVIEW_SIMULATED = f"""
-    WITH w AS (SELECT r2.id, s.winner_team AS new_winner {_W_FROM})
+_O_PREVIEW_SIMULATED = """
+    WITH w AS (
+        SELECT r2.id, s.winner_team AS new_winner
+    FROM rounds r2
+    JOIN rounds s
+      ON s.round_number = 0
+     AND s.round_date = r2.round_date
+     AND s.round_time = r2.round_time
+     AND s.map_name = r2.map_name
+    WHERE r2.round_number = 2
+      AND r2.round_date < '2026-02-01'
+      AND s.winner_team IN (1, 2)
+      AND r2.winner_team IS DISTINCT FROM s.winner_team
+      AND NOT EXISTS (SELECT 1 FROM lua_round_teams l WHERE l.round_id = r2.id)
+      AND (
+        SELECT COUNT(*) FROM rounds s2
+        WHERE s2.round_number = 0
+          AND s2.round_date = r2.round_date
+          AND s2.round_time = r2.round_time
+          AND s2.map_name = r2.map_name
+      ) = 1
+      AND (
+        SELECT COUNT(*) FROM rounds r3
+        WHERE r3.round_number = 2
+          AND r3.round_date = r2.round_date
+          AND r3.round_time = r2.round_time
+          AND r3.map_name = r2.map_name
+      ) = 1
+    )
     SELECT substr(r.round_date, 1, 7) AS era,
            CASE WHEN COALESCE(w.new_winner, r.winner_team) = r.defender_team
                 THEN 'Fullhold' ELSE 'Completed' END AS derived,
@@ -130,16 +184,31 @@ _O_PREVIEW_SIMULATED = f"""
     GROUP BY 1, 2 ORDER BY 1, 2
 """
 
-_O_APPLY = f"""
+# Phase O: derive the outcome from (post-W) winner/defender. Only rows where
+# both sides are known and a non-blank outcome disagrees with the derivation.
+_O_APPLY = """
     UPDATE rounds
     SET round_outcome = CASE WHEN winner_team = defender_team
                              THEN 'Fullhold' ELSE 'Completed' END
-    {_O_WHERE}
+    WHERE round_number IN (1, 2)
+      AND winner_team IN (1, 2)
+      AND defender_team IN (1, 2)
+      AND COALESCE(round_outcome, '') <> ''
+      AND round_outcome IS DISTINCT FROM
+          (CASE WHEN winner_team = defender_team THEN 'Fullhold' ELSE 'Completed' END)
 """
 
 # Post-apply invariant: on the gated set (both sides known, non-blank outcome)
 # there must be zero remaining contradictions.
-_POST_CHECK = f"SELECT COUNT(*) FROM rounds {_O_WHERE}"
+_POST_CHECK = """
+    SELECT COUNT(*) FROM rounds
+    WHERE round_number IN (1, 2)
+      AND winner_team IN (1, 2)
+      AND defender_team IN (1, 2)
+      AND COALESCE(round_outcome, '') <> ''
+      AND round_outcome IS DISTINCT FROM
+          (CASE WHEN winner_team = defender_team THEN 'Fullhold' ELSE 'Completed' END)
+"""
 
 
 def _connect():
