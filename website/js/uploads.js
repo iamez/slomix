@@ -214,7 +214,10 @@ function setupUploadForm() {
 function _capturePoster(file) {
     return new Promise((resolve) => {
         let settled = false;
-        const finish = (blob) => { if (settled) return; settled = true; resolve(blob); };
+        let timer = null;
+        // Single settle point: clear the give-up timer here so it never fires
+        // after the promise has resolved (whichever path resolves first).
+        const finish = (blob) => { if (settled) return; settled = true; clearTimeout(timer); resolve(blob); };
         try {
             const url = URL.createObjectURL(file);
             const video = document.createElement('video');
@@ -222,7 +225,7 @@ function _capturePoster(file) {
             video.preload = 'metadata';
             const cleanup = () => { try { URL.revokeObjectURL(url); } catch { /* ignore */ } };
             const fail = () => { cleanup(); finish(null); };
-            const timer = setTimeout(fail, 8000);  // give up on a slow/corrupt file
+            timer = setTimeout(fail, 8000);  // give up on a slow/corrupt file
             video.addEventListener('error', fail, { once: true });
             video.addEventListener('loadeddata', () => {
                 try { video.currentTime = Math.min(1, (video.duration || 2) / 2); }
