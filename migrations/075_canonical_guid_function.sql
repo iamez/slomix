@@ -10,12 +10,21 @@
 
 BEGIN;
 
+-- Follows a chain of 'merged' links to its ROOT: A→B→C resolves to C for every
+-- guid in the chain, so aggregation stays consistent no matter which member is
+-- queried. Depth is capped (16) so a mistaken cycle (A→B→A) terminates instead
+-- of looping forever. A guid with no merged link resolves to itself (depth 0).
 CREATE OR REPLACE FUNCTION canonical_guid(p_guid TEXT) RETURNS TEXT AS $$
-  SELECT COALESCE(
-    (SELECT l.primary_guid FROM player_identity_links l
-     WHERE l.alt_guid = p_guid AND l.link_type = 'merged' LIMIT 1),
-    p_guid
-  );
+  WITH RECURSIVE chain(guid, depth) AS (
+    SELECT p_guid, 0
+    UNION ALL
+    SELECT l.primary_guid, c.depth + 1
+    FROM chain c
+    JOIN player_identity_links l
+      ON l.alt_guid = c.guid AND l.link_type = 'merged'
+    WHERE c.depth < 16
+  )
+  SELECT guid FROM chain ORDER BY depth DESC LIMIT 1;
 $$ LANGUAGE sql STABLE;
 
 -- Both roles execute it from their queries (grant only if the role exists, so a
