@@ -115,6 +115,32 @@ _HUMAN_SEPARATE_LEADS = (
     "Worth a nod: {subject} runs on its own guid, kept apart on purpose, and {stat}",
 )
 
+# Session story arc — the SHAPE of the night, opening the recap (Val H3). Keyed
+# by the shape slug arc.classify_session_arc returns; {winner}/{ws}/{ls} filled
+# from the BOX score. Two variants per shape to avoid back-to-back fatigue.
+_ARC_LEADS = {
+    "comeback": (
+        "It was a comeback — {winner} dug out of a hole to take it {ws}–{ls}",
+        "The night's story was resilience: {winner} climbed back to win {ws}–{ls}",
+    ),
+    "trade_fest": (
+        "The lead changed hands all night before {winner} pulled clear {ws}–{ls}",
+        "A back-and-forth slugfest, settled {ws}–{ls} in {winner}'s favour",
+    ),
+    "nail_biter": (
+        "It went down to the wire — {winner} edged it {ws}–{ls}",
+        "A nail-biter, decided late for {winner} {ws}–{ls}",
+    ),
+    "statement": (
+        "{winner} made a statement, never trailing on the way to a {ws}–{ls} win",
+        "A dominant night: {winner} led from the front, {ws}–{ls}",
+    ),
+    "decisive": (
+        "{winner} came out ahead {ws}–{ls}",
+        "{winner} took the session {ws}–{ls}",
+    ),
+}
+
 _AXIS_PHRASING = {
     "crossfire": "set up by tighter crossfire angles",
     "trade": "carried by quicker trades",
@@ -163,6 +189,51 @@ def _format_group_label(group_data: dict, fallback: str) -> str:
 class _NarrativeMixin:
     """Narrative methods for StorytellingService."""
 
+    async def _collect_session_arc(self, gaming_session_id: int | None, seed: int) -> str:
+        """One sentence naming the session's SHAPE (statement/comeback/nail-biter/
+        trade-fest), opening the recap. Sourced from the BOX score — a single team
+        vocabulary, so no cross-source mapping to get wrong. Empty string when the
+        session isn't shapeable (0/1 maps, a tie) or BOX is unavailable.
+
+        Best-effort: any failure returns "" and the recap opens as before.
+        """
+        if gaming_session_id is None:
+            return ""
+        # One guard around the WHOLE pipeline (fetch, conversion, classify, format)
+        # — the arc is a non-critical opener, so a failure anywhere must omit it,
+        # not break the recap.
+        try:
+            from website.backend.services.box_scoring_service import BOXScoringService
+            from website.backend.services.storytelling.arc import classify_session_arc
+            box = BOXScoringService(self.db)
+            score = await box.calculate_session_score(gaming_session_id)
+            data = box.to_api_response(score)
+            # Only COMPLETED maps (R2 played) count — a provisional R1-only map
+            # would otherwise skew both the shown score and the arc. Recompute the
+            # totals + winner from the completed maps so the headline number the
+            # arc reports is exactly the one it classified over.
+            completed = [m for m in (data.get("maps") or []) if m.get("winner") != "provisional"]
+            alpha_s = sum(int(m.get("alpha_points", 0) or 0) for m in completed)
+            beta_s = sum(int(m.get("beta_points", 0) or 0) for m in completed)
+            if alpha_s == beta_s:
+                return ""
+            winner_side = "alpha" if alpha_s > beta_s else "beta"
+            shape = classify_session_arc(
+                completed, winner_side, max(alpha_s, beta_s), min(alpha_s, beta_s),
+            )
+            if not shape:
+                return ""
+            winner_name = strip_et_colors(
+                data.get("winner_name")
+                or (data.get("alpha_team") if winner_side == "alpha" else data.get("beta_team"))
+                or "The winners"
+            )
+            return _pick_variant(_ARC_LEADS[shape], seed).format(
+                winner=winner_name, ws=max(alpha_s, beta_s), ls=min(alpha_s, beta_s),
+            )
+        except Exception:  # noqa: BLE001 — arc is a non-critical opener add-on
+            return ""
+
     async def _collect_human_thread(self, kis_board: list, seed: int) -> str:
         """The story behind the numbers: name an active sick-leave/injury comeback.
 
@@ -185,40 +256,44 @@ class _NarrativeMixin:
         def _short(g: str | None) -> str:
             return (g or "").upper()[:8]
 
+        # One guard around the whole pipeline (lookup + selection + formatting):
+        # the identity table can be absent mid-migration and this is a
+        # non-critical add-on, so ANY failure returns "" and the recap renders
+        # exactly as before.
         try:
             from website.backend.routers.api_helpers import fetch_identity_links
             guids = sorted({_short(e.get("guid")) for e in kis_board if e.get("guid")})
             links = await fetch_identity_links(self.db, guids)
+            if not links:
+                return ""
+            # kis_board is KIS-descending; surface the STRONGEST player who is an alt.
+            for rank, e in enumerate(kis_board, start=1):
+                link = links.get(_short(e.get("guid")))
+                if not link or link.get("role") != "alt" or not link.get("active"):
+                    continue
+                alt_name = strip_et_colors(e.get("name") or "")
+                primary_name = strip_et_colors(link.get("primary_name") or "")
+                if not alt_name:
+                    continue
+                # Subject is name-aware: the same handle on both guids (ownator on
+                # ownator) reads differently from a genuine rename, and neither
+                # version mentions "guid" — the lead template supplies that.
+                same = bool(primary_name) and primary_name.strip().lower() == alt_name.strip().lower()
+                subject = (
+                    f"the '{alt_name}' line is {primary_name}"
+                    if primary_name and not same
+                    else f"{alt_name}'s run this session"
+                )
+                # Anchor on KIS standing — always meaningful, always trusted.
+                stat = (
+                    "they still topped the session's Kill-Impact board" if rank == 1
+                    else f"they still ranked #{rank} by Kill-Impact"
+                )
+                leads = _HUMAN_INJURY_LEADS if link.get("reason") == "injury" else _HUMAN_SEPARATE_LEADS
+                return _pick_variant(leads, seed).format(subject=subject, stat=stat)
+            return ""
         except Exception:  # noqa: BLE001 — human thread must never break the recap
             return ""
-        if not links:
-            return ""
-        # kis_board is KIS-descending; surface the STRONGEST player who is an alt.
-        for rank, e in enumerate(kis_board, start=1):
-            link = links.get(_short(e.get("guid")))
-            if not link or link.get("role") != "alt" or not link.get("active"):
-                continue
-            alt_name = strip_et_colors(e.get("name") or "")
-            primary_name = strip_et_colors(link.get("primary_name") or "")
-            if not alt_name:
-                continue
-            # Subject is name-aware: the same handle on both guids (ownator on
-            # ownator) reads differently from a genuine rename, and neither
-            # version mentions "guid" — the lead template supplies that.
-            same = bool(primary_name) and primary_name.strip().lower() == alt_name.strip().lower()
-            subject = (
-                f"the '{alt_name}' line is {primary_name}"
-                if primary_name and not same
-                else f"{alt_name}'s run this session"
-            )
-            # Anchor on KIS standing — always meaningful, always a trusted number.
-            stat = (
-                "they still topped the session's Kill-Impact board" if rank == 1
-                else f"they still ranked #{rank} by Kill-Impact"
-            )
-            leads = _HUMAN_INJURY_LEADS if link.get("reason") == "injury" else _HUMAN_SEPARATE_LEADS
-            return _pick_variant(leads, seed).format(subject=subject, stat=stat)
-        return ""
 
     async def generate_narrative(
         self,
@@ -408,6 +483,13 @@ class _NarrativeMixin:
             opener = f"Session {session_label}."
 
         parts = [opener]
+
+        # Session arc — the SHAPE of the night, right after the opener so the
+        # recap leads with a story, not a stat. Empty for unshapeable sessions.
+        session_arc = await self._collect_session_arc(
+            getattr(scope, "gaming_session_id", None), seed + 5)
+        if session_arc:
+            parts.append(" " + session_arc + ".")
 
         parts.append(" " + _pick_variant(_MVP_LEADS, seed).format(
             name=mvp_name, archetype=mvp_archetype, dpm=mvp_dpm, kis=mvp_kis,
