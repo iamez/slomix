@@ -184,6 +184,8 @@ def test_roster_changes_ignore_unnamed_slots_and_spectators():
     r.apply(_ev("CONNECT", now, slot=5))       # bare slot, no name/side
     r.apply(_ev("DISCONNECT", now, slot=5))    # not a named "left"
     r.apply(_ev("TEAM_CHANGE", now, slot=6, name="ref", team=3))  # spectator, no "joined"
+    r.apply(_ev("TEAM_CHANGE", now, slot=7, name="", team=1))     # empty name → no "slot 7 joined"
+    r.apply(_ev("TEAM_CHANGE", now, slot=8, team=2))             # missing name → no join
     assert r.snapshot()["recent_roster_changes"] == []
 
 

@@ -41,6 +41,12 @@ _OBJECTIVE_WINDOW_SECONDS = 20
 _IDLE_RESET_SECONDS = 600
 
 
+def _is_named(name: Any) -> bool:
+    """True for a real player name — not a bare "slot N" placeholder (the reducer
+    invents that before userinfo arrives) and not empty."""
+    return bool(name) and not str(name).startswith("slot ")
+
+
 class LiveStateReducer:
     """Folds the live event stream into a current-state snapshot."""
 
@@ -130,8 +136,10 @@ class LiveStateReducer:
                 name = ev.get("name") or f"slot {slot}"
                 entry = {"name": name, "team": team, "connected_at": at, "team_since": at}
                 self._roster[slot] = entry
-                # First time this slot resolves to a real side = a join.
-                if self._side(team):
+                # First time this slot resolves to a real side = a join. Only log
+                # a named player: a nameless TEAM_CHANGE (empty userinfo) would
+                # otherwise surface "slot 7 joined Axis".
+                if self._side(team) and _is_named(name):
                     self._record_change(name, "joined", team, at)
             else:
                 if ev.get("name"):
@@ -141,8 +149,8 @@ class LiveStateReducer:
                     entry["team"] = team
                     entry["team_since"] = at
                     # A move onto a real side is a switch/join; leaving to spec is
-                    # not a "substitution" worth a line.
-                    if self._side(team):
+                    # not a "substitution" worth a line. Named players only.
+                    if self._side(team) and _is_named(entry["name"]):
                         self._record_change(entry["name"],
                                             "switched" if was_side else "joined", team, at)
 
@@ -158,7 +166,7 @@ class LiveStateReducer:
                 entry = self._roster.pop(slot, None)
                 # Only log a departure for a named player who was on a side —
                 # a bare CONNECT slot that never picked a team isn't a "left".
-                if entry and self._side(entry.get("team")) and not str(entry.get("name", "")).startswith("slot "):
+                if entry and self._side(entry.get("team")) and _is_named(entry.get("name")):
                     self._record_change(entry["name"], "left", entry.get("team"), at)
 
         elif etype in ("MAP", "LIVE_MAP"):
