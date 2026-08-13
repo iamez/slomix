@@ -2857,6 +2857,14 @@ def test_alertentity_trigger_spawn_script_mover_cannot_rebirth_from_static_healt
             "alertentity_static_property_invalid",
         ),
         (
+            {"classname": "func_explosive", "targetname": "alert_target", "spawnflags": "1_0"},
+            "alertentity_static_property_invalid",
+        ),
+        (
+            {"classname": "func_explosive", "targetname": "alert_target", "spawnflags": "2147483648"},
+            "alertentity_static_property_invalid",
+        ),
+        (
             {
                 "classname": "script_mover",
                 "targetname": "alert_target",
