@@ -41,6 +41,12 @@ _OBJECTIVE_WINDOW_SECONDS = 20
 _IDLE_RESET_SECONDS = 600
 
 
+def _is_named(name: Any) -> bool:
+    """True for a real player name — not a bare "slot N" placeholder (the reducer
+    invents that before userinfo arrives) and not empty."""
+    return bool(name) and not str(name).startswith("slot ")
+
+
 class LiveStateReducer:
     """Folds the live event stream into a current-state snapshot."""
 
@@ -55,6 +61,9 @@ class LiveStateReducer:
         self._last_event_at: float | None = None
         # recent objective actions (steal/return/plant/defuse), newest last
         self._objectives: list[dict[str, Any]] = []
+        # Recent roster changes (joined / left / switched side) — the "menjave"
+        # (substitutions) a spectator wants to see, newest last, capped small.
+        self._roster_changes: list[dict[str, Any]] = []
 
     # -- helpers ------------------------------------------------------------
     @staticmethod
@@ -81,6 +90,21 @@ class LiveStateReducer:
         self._objectives.append(entry)
         self._objectives = self._objectives[-10:]
 
+    @staticmethod
+    def _side(team: Any) -> str | None:
+        """Engine team int → side label (1 Axis, 2 Allies, else spectators)."""
+        if team == 1:
+            return "Axis"
+        if team == 2:
+            return "Allies"
+        return None
+
+    def _record_change(self, name: str, action: str, team: Any, at: float) -> None:
+        """Log one roster change (joined / left / switched), capped at the last 12."""
+        self._roster_changes.append({"name": name, "action": action,
+                                     "side": self._side(team), "at": at})
+        self._roster_changes = self._roster_changes[-12:]
+
     # -- reduce -------------------------------------------------------------
     def apply(self, ev: dict[str, Any]) -> None:
         """Fold one accepted event into the state."""
@@ -96,6 +120,7 @@ class LiveStateReducer:
                 and (at - self._last_event_at) > _IDLE_RESET_SECONDS):
             self._roster.clear()
             self._objectives.clear()
+            self._roster_changes.clear()
             self._round_number = None
             self._round_started_at = None
 
@@ -108,15 +133,26 @@ class LiveStateReducer:
             team = ev.get("team")
             entry = self._roster.get(slot)
             if entry is None:
-                entry = {"name": ev.get("name") or f"slot {slot}",
-                         "team": team, "connected_at": at, "team_since": at}
+                name = ev.get("name") or f"slot {slot}"
+                entry = {"name": name, "team": team, "connected_at": at, "team_since": at}
                 self._roster[slot] = entry
+                # First time this slot resolves to a real side = a join. Only log
+                # a named player: a nameless TEAM_CHANGE (empty userinfo) would
+                # otherwise surface "slot 7 joined Axis".
+                if self._side(team) and _is_named(name):
+                    self._record_change(name, "joined", team, at)
             else:
                 if ev.get("name"):
                     entry["name"] = ev["name"]
                 if team != entry.get("team"):
+                    was_side = self._side(entry.get("team"))
                     entry["team"] = team
                     entry["team_since"] = at
+                    # A move onto a real side is a switch/join; leaving to spec is
+                    # not a "substitution" worth a line. Named players only.
+                    if self._side(team) and _is_named(entry["name"]):
+                        self._record_change(entry["name"],
+                                            "switched" if was_side else "joined", team, at)
 
         elif etype in ("CONNECT", "BEGIN"):
             slot = self._slot(ev)
@@ -127,7 +163,11 @@ class LiveStateReducer:
         elif etype == "DISCONNECT":
             slot = self._slot(ev)
             if slot is not None:
-                self._roster.pop(slot, None)
+                entry = self._roster.pop(slot, None)
+                # Only log a departure for a named player who was on a side —
+                # a bare CONNECT slot that never picked a team isn't a "left".
+                if entry and self._side(entry.get("team")) and _is_named(entry.get("name")):
+                    self._record_change(entry["name"], "left", entry.get("team"), at)
 
         elif etype in ("MAP", "LIVE_MAP"):
             new_map = ev.get("map_name")
@@ -216,6 +256,13 @@ class LiveStateReducer:
             if (now - o["at"]) <= _OBJECTIVE_WINDOW_SECONDS
         ] if is_live else []
 
+        recent_roster_changes = [
+            {"name": c["name"], "action": c["action"], "side": c["side"],
+             "age_seconds": int(now - c["at"])}
+            for c in self._roster_changes
+            if (now - c["at"]) <= _OBJECTIVE_WINDOW_SECONDS
+        ] if is_live else []
+
         round_elapsed = (int(now - self._round_started_at)
                          if (is_live and self._game_state == "live"
                              and self._round_started_at) else None)
@@ -241,6 +288,7 @@ class LiveStateReducer:
             "session_start_seconds": (int(now - session_start)
                                       if (is_live and session_start) else None),
             "recent_objectives": recent_objectives,
+            "recent_roster_changes": recent_roster_changes,
             "last_event_age_seconds": (int(now - self._last_event_at)
                                        if self._last_event_at else None),
             "server_time": now,
