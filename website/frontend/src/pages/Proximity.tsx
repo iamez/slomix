@@ -7,8 +7,8 @@ import { Skeleton } from '../components/Skeleton';
 import { DataTable, type Column } from '../components/DataTable';
 import { InfoTip } from '../components/InfoTip';
 import { ProximityIntro } from '../components/ProximityIntro';
-import { useProximityLeaderboards, useProximitySessionScores, useProximityKillOutcomes, useProximityKillOutcomePlayerStats, useProximityHitRegions, useProximityHeadshotRates, useCombatHeatmap, usePlayerHeatmap, usePlayerAim, usePlayerHitRegions, useProximityPlayers, useKillLines, useDangerZones, useMovementStats, useProxScores, useProxFormula } from '../api/hooks';
-import type { ProximityLeaderboardEntry, SessionScoreEntry, HitRegionPlayer, HeadshotRateEntry, MovementStatsPlayer, ProxScorePlayer, ProximityScope, PlayerHeatmapMode, AimHotzone } from '../api/types';
+import { useProximityLeaderboards, useProximityKillOutcomes, useProximityKillOutcomePlayerStats, useProximityHitRegions, useProximityHeadshotRates, useCombatHeatmap, usePlayerHeatmap, usePlayerAim, usePlayerHitRegions, useProximityPlayers, useKillLines, useDangerZones, useMovementStats, useProxScores, useProxFormula } from '../api/hooks';
+import type { ProximityLeaderboardEntry, HitRegionPlayer, HeadshotRateEntry, MovementStatsPlayer, ProxScorePlayer, ProximityScope, PlayerHeatmapMode, AimHotzone } from '../api/types';
 import { METRICS, LEADERBOARD_HELP } from './proximity-glossary';
 
 const API = '/api';
@@ -1436,15 +1436,17 @@ function CombatHeatmapPanel({ mapName }: { mapName: string }) {
 // ── Session Score ────────────────────────────────────────────────────────────
 
 function SessionScorePanel({ sessionDate }: { sessionDate: string | null }) {
-  const { data, isLoading } = useProximitySessionScores(sessionDate ?? undefined);
+  // v3.0 unification: same /prox-scores composite the legacy page and the
+  // Discord bot show (prox_combat .40 / prox_team .35 / prox_gamesense .25,
+  // percentile-ranked) — the retired v1 7-category endpoint is gone.
+  const { data, isLoading } = useProxScores(30, undefined, 12, sessionDate ?? undefined);
 
   if (isLoading) return <Skeleton variant="card" count={1} />;
   if (!data?.players?.length) return null;
 
-  const cats = ['kill_timing', 'crossfire', 'focus_fire', 'trades', 'survivability', 'movement', 'reactions'] as const;
+  const cats = ['prox_combat', 'prox_team', 'prox_gamesense'] as const;
   const catLabels: Record<string, string> = {
-    kill_timing: 'Timing', crossfire: 'XFire', focus_fire: 'Focus',
-    trades: 'Trade', survivability: 'Survive', movement: 'Move', reactions: 'React',
+    prox_combat: 'Combat', prox_team: 'Team', prox_gamesense: 'Gamesense',
   };
 
   return (
@@ -1454,11 +1456,11 @@ function SessionScorePanel({ sessionDate }: { sessionDate: string | null }) {
           Session Combat Score
         </div>
         <div className="text-[10px] text-slate-500 mb-4">
-          Composite score (0-100) from 7 proximity categories for {data.session_date}
+          Composite v3.0 (0-100, percentile): Combat · Team · Gamesense{sessionDate ? ` for ${sessionDate}` : ''}
         </div>
         <div className="space-y-2">
           {data.players.map((p, i) => {
-            const pct = Math.min(p.total_score, 100);
+            const pct = Math.min(p.prox_overall, 100);
             return (
               <div key={p.guid} className="bg-slate-900/50 rounded-lg p-3 border border-white/5">
                 <div className="flex items-center justify-between mb-1.5">
@@ -1467,9 +1469,9 @@ function SessionScorePanel({ sessionDate }: { sessionDate: string | null }) {
                       #{i + 1}
                     </span>
                     <span className="text-white font-medium text-sm truncate">{stripColors(p.name)}</span>
-                    <span className="text-slate-600 text-[10px]">{p.engagement_count} eng</span>
+                    <span className="text-slate-600 text-[10px]">{p.engagements} eng</span>
                   </div>
-                  <span className="text-cyan-400 font-mono font-bold text-lg">{p.total_score.toFixed(1)}</span>
+                  <span className="text-cyan-400 font-mono font-bold text-lg">{p.prox_overall.toFixed(1)}</span>
                 </div>
                 <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mb-1.5">
                   <div
@@ -1479,8 +1481,8 @@ function SessionScorePanel({ sessionDate }: { sessionDate: string | null }) {
                 </div>
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-500">
                   {cats.map((c) => (
-                    <span key={c} title={p.categories[c]?.detail ?? ''}>
-                      {catLabels[c]}: <span className="text-slate-400">{(p.categories[c]?.weighted ?? 0).toFixed(0)}</span>
+                    <span key={c}>
+                      {catLabels[c]}: <span className="text-slate-400">{(p[c] ?? 0).toFixed(0)}</span>
                     </span>
                   ))}
                 </div>
