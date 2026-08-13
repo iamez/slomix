@@ -4,10 +4,11 @@ Date: 2026-08-11
 
 Last reverified: 2026-08-13
 
-Status: implementation in progress; S3 code/evidence closed at `f781525b`; the
-documentation checkpoint gate must pass before S4 starts
+Status: S4 implementation and local verification complete at `986c506b`; closure is
+pending the exact-head documentation review and five-minute quiet-window gate; S5 is
+blocked
 
-Current base: `origin/main` at `5f4ebc0ed65f38268ecafa8c45fb01f6fbc84576` (`v1.36.0`)
+Current base: `origin/main` at `2bd2ebf2315ec77d1627be85cbe9b40b03b40fd2`
 
 Original branch base: `origin/main` at `d6136cdd994870fddf4e4d0ff1968eb91418e497`
 
@@ -1056,7 +1057,8 @@ retained.
 - [x] Complete S1 immutable state/canonicalization.
 - [x] Complete S2 single suspended continuation.
 - [x] Complete S3 nested state/shared-target handling.
-- [ ] Complete S4 bounded search/reduction.
+- [x] Complete S4 bounded search/reduction (`986c506b` implementation/evidence head;
+  documentation-head gate pending).
 - [ ] Complete S5 exact corpus evidence.
 - [ ] Complete S6 Phase 5 static graph gate, or split it into a successor PR with an
   explicit handoff.
@@ -1475,6 +1477,41 @@ retained.
   must not start until those gates pass.
 - No corpus denominator was changed. No production write, deploy, service restart,
   Python replacement, Lua change or other owner-gated operation was performed.
+
+### 2026-08-13 - S4 implementation/evidence head verified
+
+- Implementation/evidence head: `986c506b`, which normally merges current
+  `origin/main` `2bd2ebf` into the reviewed S4 history. Main PR #721 changes only
+  `website/js/live-state.js` and `website/js/tonight.js`; neither overlaps the seven
+  W5b scheduler, test or handoff paths. No rebase, force-push or history rewrite
+  occurred.
+- Exact-head local evidence: 410 focused map-geometry/current-main contract tests
+  passed with two PostgreSQL-environment skips. The complete repository passed 4,627
+  tests with 99 existing environment or opt-in skips and 30 warnings. The complete
+  run took 103.11 seconds of pytest time, 1:47.04 wall time and 411,484 KiB peak RSS.
+  Ruff, map-geometry byte compilation and `git diff --check` passed.
+- All exact-head GitHub checks passed: Python lint/tests on 3.11 and 3.13, Python and
+  JavaScript CodeQL, Codacy, security, Docker build, React typecheck/tests, JavaScript
+  lint, ShellCheck, file checks and workflow lint. GitHub reported a clean, mergeable
+  draft PR with current main as an ancestor.
+- CodeRabbit reviewed `986c506b` and confirmed the main merge has no scheduler
+  interaction; uniform wake-phase gating, mixed-wake retention, complete tag-parent
+  validation, global budget, ancestry-local cycles, exact global deduplication,
+  deterministic terminal order and zero POR reductions remain correct. Its only
+  finding was the stale top-level handoff status/base, corrected by this documentation
+  commit. Codex's separate GitHub reviewer still reported its review-usage limit.
+- Thread-aware refresh found zero unresolved threads. Different clients reported 28
+  GraphQL threads versus 56 flattened/fetched entries, so only the invariant shared by
+  both views is asserted here: unresolved count zero. The final refresh must query raw
+  GraphQL again after the documentation head's five-minute quiet window.
+- This record closes the S4 implementation/evidence at `986c506b`; it does not
+  self-attest this later documentation head. S5 remains blocked until this
+  documentation-only head has green CI, fresh review, zero unresolved threads and five
+  quiet minutes followed by one final refresh. Passing that external gate requires no
+  further self-referential closure commit.
+- No S5 corpus traversal was run and no installed-corpus denominator changed. No
+  production write, deploy, service restart, Python replacement, Lua change or other
+  owner-gated operation was performed.
 
 At every substantive commit, append:
 
