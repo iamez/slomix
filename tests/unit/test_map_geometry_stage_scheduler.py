@@ -2965,6 +2965,67 @@ def test_s4_shared_next_frame_group_uses_exact_entity_and_tag_parent_order():
     mixed_blocked = search_symbolic_schedule(index, mixed_disposition, work_limit=4)
     assert mixed_blocked.decisions[0].reason == "schedule_independence_unproven"
 
+def test_s4_shared_dispatch_with_mixed_wake_phases_remains_unproven():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger target run
+            }
+        }
+        target
+        {
+            trigger run
+            {
+                wait 100
+                setstate marker invisible
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "target"},
+            {"classname": "script_mover", "scriptname": "target"},
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "target"},
+            {"classname": "func_door", "targetname": "marker"},
+        ),
+    )
+    caller = _program(index, "caller")
+    tag_states = tuple(
+        SymbolicTagParentState(
+            entity_index,
+            SymbolicTagParentDisposition.PROVEN_UNATTACHED,
+        )
+        for entity_index in range(4)
+    )
+    initial = _state(
+        index,
+        _frame(caller.node.node_id, 2, 0),
+        tag_parent_states=tag_states,
+    )
+    suspended = next(
+        decision.state
+        for decision in step_symbolic_schedule(index, initial).decisions
+        if decision.state is not None and len(decision.state.suspended) == 3
+    )
+    assert suspended is not None
+    assert {item.wake_constraint for item in suspended.suspended} == {
+        SymbolicWakeConstraint.SAME_FRAME_LATER,
+        SymbolicWakeConstraint.NEXT_FRAME,
+    }
+
+    blocked = search_symbolic_schedule(index, suspended, work_limit=4)
+
+    assert blocked.metrics.transitions_evaluated == 1
+    assert len(blocked.decisions) == 1
+    decision = blocked.decisions[0]
+    assert decision.reason == "schedule_independence_unproven"
+    assert decision.state is not None
+    assert decision.state.suspended == suspended.suspended
+    assert decision.state.effects == suspended.effects
+
 
 def test_s4_exponential_branching_truncates_deterministically(monkeypatch):
     index, initial, _, _ = _s2_program_index()
