@@ -304,11 +304,16 @@ class _NarrativeMixin:
         # derive a stable seed from the session_date string. Avoid Python's
         # built-in `hash()` because it's PYTHONHASHSEED-dependent and
         # would shuffle variant pickup across uvicorn restarts.
-        session_id_row = await self.db.fetch_one(
-            "SELECT gaming_session_id FROM rounds "
-            "WHERE round_date = $1 LIMIT 1",
-            (sd_str,))
-        raw_id = session_id_row[0] if session_id_row else None
+        # Prefer the scope's own gaming_session_id — a date-based LIMIT 1
+        # re-query can now pick a bot round whose gaming_session_id was
+        # detached to NULL (bot-session decoupling), rendering a bogus "?".
+        raw_id = getattr(scope, "gaming_session_id", None)
+        if raw_id is None:
+            session_id_row = await self.db.fetch_one(
+                "SELECT gaming_session_id FROM rounds "
+                "WHERE round_date = $1 AND gaming_session_id IS NOT NULL LIMIT 1",
+                (sd_str,))
+            raw_id = session_id_row[0] if session_id_row else None
         if isinstance(raw_id, int):
             session_label = str(raw_id)
             seed = raw_id

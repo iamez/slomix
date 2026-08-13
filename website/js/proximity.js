@@ -544,7 +544,7 @@ function renderLeaderList(containerId, rows, formatter, emptyLabel = 'No data ye
                 <span class="text-slate-500">${escapeHtml(label)}</span>
                 <span class="text-right">
                     <span class="text-slate-200 font-bold">${displayValue}</span>
-                    ${sampleMeta ? `<span class="block text-[10px] text-slate-600" title="${escapeHtml(confidenceTitle)}">${escapeHtml(sampleMeta)}</span>` : ''}
+                    ${sampleMeta ? `<span class="block text-[10px] text-slate-400" title="${escapeHtml(confidenceTitle)}">${escapeHtml(sampleMeta)}</span>` : ''}
                 </span>
             </div>
         `;
@@ -585,7 +585,7 @@ function renderTradeEvents(events) {
     const container = document.getElementById('proximity-trade-events');
     if (!container) return;
     if (!events || events.length === 0) {
-        container.innerHTML = `<div class="text-xs text-slate-600">No trade events yet.</div>`;
+        container.innerHTML = `<div class="text-xs text-slate-400">No trade events yet.</div>`;
         return;
     }
     container.innerHTML = events.map((e) => {
@@ -658,7 +658,7 @@ function renderDuos(duos) {
             <div class="glass-card p-4 rounded-lg text-center">
                 <div class="text-sm font-bold text-white">${escapeHtml(players)}</div>
                 <div class="text-[10px] text-slate-500 mt-2">${detail}</div>
-                ${confidenceMeta ? `<div class="text-[10px] text-slate-600 mt-1">${escapeHtml(confidenceMeta)}</div>` : ''}
+                ${confidenceMeta ? `<div class="text-[10px] text-slate-400 mt-1">${escapeHtml(confidenceMeta)}</div>` : ''}
             </div>
         `;
     }).join('');
@@ -672,9 +672,9 @@ function renderTimeline(buckets) {
         container.innerHTML = `
             <div class="h-full w-full flex items-center justify-center text-slate-500">
                 <div class="text-center">
-                    <i data-lucide="activity" class="w-8 h-8 mx-auto mb-2 text-slate-600"></i>
+                    <i data-lucide="activity" class="w-8 h-8 mx-auto mb-2 text-slate-400"></i>
                     <div class="text-sm font-bold text-slate-400">Timeline offline</div>
-                    <div class="text-xs text-slate-600">Awaiting proximity events stream</div>
+                    <div class="text-xs text-slate-400">Awaiting proximity events stream</div>
                 </div>
             </div>
         `;
@@ -1171,7 +1171,7 @@ function renderEventList(events) {
     if (!container) return;
 
     if (!events || events.length === 0) {
-        container.innerHTML = `<div class="text-xs text-slate-600">No events loaded yet.</div>`;
+        container.innerHTML = `<div class="text-xs text-slate-400">No events loaded yet.</div>`;
         return;
     }
 
@@ -2907,7 +2907,7 @@ function renderManAdvantage(manAdv) {
             <span class="${cls}">${label}</span>
             <span class="text-slate-500">${t.converted}/${t.windows} converted (${t.conversion_pct}%)</span>
         </div>
-        <div class="text-[10px] text-slate-600 mb-1">+1: ${t.by_size['1'].converted}/${t.by_size['1'].windows} • +2: ${t.by_size['2'].converted}/${t.by_size['2'].windows} • +3: ${t.by_size['3+'].converted}/${t.by_size['3+'].windows}</div>`;
+        <div class="text-[10px] text-slate-400 mb-1">+1: ${t.by_size['1'].converted}/${t.by_size['1'].windows} • +2: ${t.by_size['2'].converted}/${t.by_size['2'].windows} • +3: ${t.by_size['3+'].converted}/${t.by_size['3+'].windows}</div>`;
     const top = (manAdv.top_converters || []).slice(0, 5).map((c) => `
         <div class="flex items-center justify-between text-[11px] text-slate-300">
             <span>${escapeHtml(stripEtColors(c.name || ''))}</span>
@@ -2930,7 +2930,7 @@ function renderCompetitivePbs(pbs) {
         <div class="glass-card rounded-lg border border-brand-amber/30 p-2">
             <div class="text-[11px] font-bold text-slate-200">🏆 ${escapeHtml(c.name)}</div>
             <div class="text-[10px] text-slate-400">${escapeHtml(c.label)}: <span class="text-brand-amber font-bold">${escapeHtml(String(c.value))}</span>
-                <span class="text-slate-600">(prev ${escapeHtml(String(c.prev_best))} on ${escapeHtml(c.prev_best_date)})</span></div>
+                <span class="text-slate-400">(prev ${escapeHtml(String(c.prev_best))} on ${escapeHtml(c.prev_best_date)})</span></div>
         </div>`).join('');
 }
 
@@ -3002,7 +3002,7 @@ async function loadV7RoadmapPanel() {
                         ${c.live ? `${formatNumber(c.rows)} rows / ${formatNumber(c.rounds)} rounds` : 'awaiting deploy'}</span>
                 </div>
                 <div class="text-[10px] text-slate-400 mb-2">${escapeHtml(c.what)}</div>
-                <div class="text-[9px] text-slate-600 font-mono">${escapeHtml(c.api)}</div>
+                <div class="text-[9px] text-slate-400 font-mono">${escapeHtml(c.api)}</div>
             </div>`).join('');
     } catch (err) {
         console.warn('[proximity] v7 roadmap load failed', err);
@@ -3049,7 +3049,7 @@ function renderAimLock(data) {
         '</div>' +
         leaders.map((l, i) =>
             `<div class="grid grid-cols-12 gap-2 items-center text-sm text-slate-300 rounded-lg px-2 py-1.5 ${i % 2 ? 'bg-white/[0.02]' : ''}">
-                <div class="col-span-4 truncate"><span class="text-slate-600 mr-1">${i + 1}.</span><strong>${escapeHtml(stripEtColors(l.name))}</strong></div>
+                <div class="col-span-4 truncate"><span class="text-slate-400 mr-1">${i + 1}.</span><strong>${escapeHtml(stripEtColors(l.name))}</strong></div>
                 <div class="col-span-2 text-right text-brand-amber font-bold tabular-nums">${fmtSec(l.total_lock_ms)}</div>
                 <div class="col-span-2 text-right tabular-nums">${l.locks} <span class="text-slate-500">(${l.avg_lock_ms}ms)</span></div>
                 <div class="col-span-2 text-right tabular-nums">${l.avg_err_deg.toFixed(1)}°</div>
@@ -3587,7 +3587,7 @@ function renderProxScores(data, formula) {
     const rows = players.map(p => {
         const name = stripEtColors(p.name || '');
         return `<div class="flex items-center gap-1 text-[11px] px-1 py-1 rounded hover:bg-white/5 cursor-pointer prox-score-row" data-guid="${escapeHtml(p.guid)}">
-            <span class="w-6 text-slate-600 font-mono">${p.rank}</span>
+            <span class="w-6 text-slate-400 font-mono">${p.rank}</span>
             <span class="flex-1 truncate text-slate-200">${escapeHtml(name)}</span>
             <span class="w-14 text-right font-mono font-bold" style="color:${SCORE_COLORS.prox_combat}" title="Percentile rank (0-100) among qualifying players">${p.prox_combat.toFixed(1)}<span class="text-[9px] opacity-60">%ile</span></span>
             <span class="w-14 text-right font-mono font-bold" style="color:${SCORE_COLORS.prox_team}" title="Percentile rank (0-100) among qualifying players">${p.prox_team.toFixed(1)}<span class="text-[9px] opacity-60">%ile</span></span>
@@ -3618,7 +3618,7 @@ function renderProxScores(data, formula) {
                     }).join('')}
                 </div>`;
             }).join('')}</div>` : ''}
-            <div class="text-[10px] text-slate-600 mt-2">${p.engagements || 0} engagements, ${p.tracks || 0} tracks</div>
+            <div class="text-[10px] text-slate-400 mt-2">${p.engagements || 0} engagements, ${p.tracks || 0} tracks</div>
         </div>`;
     }).join('');
 
@@ -3644,12 +3644,12 @@ function renderProxScores(data, formula) {
                         <div class="text-[10px] text-slate-500 mb-1">${escapeHtml(cat.description || '')}</div>
                         ${Object.entries(cat.metrics).map(([, m]) => `<div class="flex items-center justify-between text-[10px]">
                             <span class="text-slate-400">${escapeHtml(m.label)}${m.invert ? ' *' : ''}</span>
-                            <span class="text-slate-600 font-mono">${(m.weight * 100).toFixed(0)}%</span>
+                            <span class="text-slate-400 font-mono">${(m.weight * 100).toFixed(0)}%</span>
                         </div>`).join('')}
                     </div>`;
                 }).join('')}
             </div>
-            <div class="text-[10px] text-slate-600 mt-2">* Inverted: lower = better (e.g. faster reaction scores higher)</div>`);
+            <div class="text-[10px] text-slate-400 mt-2">* Inverted: lower = better (e.g. faster reaction scores higher)</div>`);
     }
 }
 
@@ -4406,7 +4406,7 @@ function loadLeaderboardData() {
                 row.className = 'flex items-center justify-between text-[11px] text-slate-300 py-0.5';
                 const left = document.createElement('span');
                 const rank = document.createElement('span');
-                rank.className = 'text-slate-600 mr-2';
+                rank.className = 'text-slate-400 mr-2';
                 rank.textContent = `${i + 1}.`;
                 left.appendChild(rank);
                 left.appendChild(document.createTextNode(stripEtColors(p.name || p.player_guid)));
@@ -4473,7 +4473,7 @@ function loadLeaderboardData() {
             row.className = 'flex items-center justify-between text-[11px] text-slate-300 py-0.5';
             const left = document.createElement('span');
             const rank = document.createElement('span');
-            rank.className = `font-bold ${i < 3 ? 'text-brand-amber' : 'text-slate-600'} mr-2`;
+            rank.className = `font-bold ${i < 3 ? 'text-brand-amber' : 'text-slate-400'} mr-2`;
             rank.textContent = `#${i + 1}`;
             left.appendChild(rank);
             left.appendChild(document.createTextNode(name));
@@ -4643,13 +4643,21 @@ function bindV52PanelEvents() {
     // Leaderboard tabs
     renderLeaderboardTabs();
     loadLeaderboardData();
-    document.getElementById('leaderboard-tabs')?.addEventListener('click', (e) => {
-        const btn = e.target.closest('.lb-tab-btn');
-        if (!btn) return;
-        lbActiveTab = btn.dataset.tab;
-        renderLeaderboardTabs();
-        loadLeaderboardData();
-    });
+    // bindV52PanelEvents re-runs on every scoped load; guard the delegated
+    // click listener so it binds once per element lifetime (was leaking
+    // +1/scope change). renderLeaderboardTabs/loadLeaderboardData above still
+    // refresh the content each time.
+    const lbTabs = document.getElementById('leaderboard-tabs');
+    if (lbTabs && lbTabs.dataset.clickBound !== '1') {
+        lbTabs.dataset.clickBound = '1';
+        lbTabs.addEventListener('click', (e) => {
+            const btn = e.target.closest('.lb-tab-btn');
+            if (!btn) return;
+            lbActiveTab = btn.dataset.tab;
+            renderLeaderboardTabs();
+            loadLeaderboardData();
+        });
+    }
     document.querySelectorAll('.lb-range-btn').forEach(btn => {
         btn.onclick = () => {
             lbRangeDays = Number(btn.dataset.days);
@@ -4689,7 +4697,7 @@ function renderCarrierIntel(data) {
             const row = document.createElement('div');
             row.className = 'text-xs text-slate-300 py-0.5';
             const rank = document.createElement('span');
-            rank.className = `font-bold ${i < 3 ? 'text-brand-amber' : 'text-slate-600'}`;
+            rank.className = `font-bold ${i < 3 ? 'text-brand-amber' : 'text-slate-400'}`;
             rank.textContent = `#${i + 1}`;
             const name = stripEtColors(c.name || c.guid?.substring(0, 8) || '?');
             const secSpan = document.createElement('span');
@@ -4748,7 +4756,7 @@ function renderCarrierKillers(data) {
         const row = document.createElement('div');
         row.className = 'text-xs text-slate-300 py-0.5';
         const rank = document.createElement('span');
-        rank.className = `font-bold ${i < 3 ? 'text-brand-rose' : 'text-slate-600'}`;
+        rank.className = `font-bold ${i < 3 ? 'text-brand-rose' : 'text-slate-400'}`;
         rank.textContent = `#${i + 1}`;
         const kills = document.createElement('span');
         kills.className = 'text-brand-rose font-bold';
@@ -4884,7 +4892,7 @@ function renderObjectiveRuns(data) {
     const logEl = document.getElementById('objective-runs-log');
 
     if (!data || !data.summary) {
-        if (summaryEl) summaryEl.innerHTML = '<span class="text-slate-600">No objective run data available</span>';
+        if (summaryEl) summaryEl.innerHTML = '<span class="text-slate-400">No objective run data available</span>';
         if (leadersEl) leadersEl.innerHTML = '';
         if (logEl) logEl.innerHTML = '';
         return;
@@ -4942,7 +4950,7 @@ function renderObjectiveRuns(data) {
             </table>
         `;
     } else if (leadersEl) {
-        leadersEl.innerHTML = '<span class="text-slate-600">No runners yet</span>';
+        leadersEl.innerHTML = '<span class="text-slate-400">No runners yet</span>';
     }
 
     // Recent runs log
@@ -4977,14 +4985,14 @@ function renderObjectiveRuns(data) {
                     <div class="flex items-center gap-3">
                         <span class="text-xs ${color} font-medium">${r.run_type}</span>
                         ${kills > 0 ? `<span class="text-xs text-slate-500">${kills} kills</span>` : ''}
-                        <span class="text-xs text-slate-600">${eff}%</span>
+                        <span class="text-xs text-slate-400">${eff}%</span>
                     </div>
                 </div>
             `;
         }).join('');
         logEl.innerHTML = items;
     } else if (logEl) {
-        logEl.innerHTML = '<span class="text-slate-600">No runs recorded yet</span>';
+        logEl.innerHTML = '<span class="text-slate-400">No runs recorded yet</span>';
     }
 }
 
@@ -5037,7 +5045,7 @@ function renderFocusFire(data) {
             </div>`;
         }).join('');
     } else if (recentEl) {
-        recentEl.innerHTML = '<span class="text-slate-600">No events</span>';
+        recentEl.innerHTML = '<span class="text-slate-400">No events</span>';
     }
 }
 
@@ -5078,7 +5086,7 @@ function renderObjectiveFocus(data) {
             </div>`;
         }).join('');
     } else if (objEl) {
-        objEl.innerHTML = '<span class="text-slate-600">No objectives tracked</span>';
+        objEl.innerHTML = '<span class="text-slate-400">No objectives tracked</span>';
     }
 }
 
@@ -5111,7 +5119,7 @@ function renderSupportSummary(data) {
             </div>`;
         }).join('');
     } else if (mapsEl) {
-        mapsEl.innerHTML = '<span class="text-slate-600">No support data yet</span>';
+        mapsEl.innerHTML = '<span class="text-slate-400">No support data yet</span>';
     }
 }
 
@@ -5146,7 +5154,7 @@ function renderCombatPositionStats(data) {
             </div>`;
         }).join('');
     } else if (classEl) {
-        classEl.innerHTML = '<span class="text-slate-600">No class data</span>';
+        classEl.innerHTML = '<span class="text-slate-400">No class data</span>';
     }
 
     const mapEl = document.getElementById('combat-pos-map');
@@ -5161,6 +5169,6 @@ function renderCombatPositionStats(data) {
             </div>`;
         }).join('');
     } else if (mapEl) {
-        mapEl.innerHTML = '<span class="text-slate-600">No map data</span>';
+        mapEl.innerHTML = '<span class="text-slate-400">No map data</span>';
     }
 }

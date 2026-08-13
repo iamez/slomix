@@ -1,0 +1,1165 @@
+32861500 Endstats: ^7| Highest headshot accuracy           ^7| ^o[BOT]^7carniee ^7|           23.48 percent ^7|"
+32861500 Endstats: ^7| Most headshots                      ^7|     ^o[BOT]^7vid ^7|                      44 ^7|"
+32861500 Endstats: ^7| Most bullets fired                  ^7|     ^o[BOT]^7vid ^7|                     460 ^7|"
+32861500 Endstats: --------------------------------------------------------------------------------"
+32861500 Endstats: ---------------------------------"
+32861500 Endstats: ^7| Player       | Kills | Deaths |"
+32861500 Endstats: ---------------------------------"
+32861500 Endstats: ^7| ^o[BOT]^7bronze  ^7|     6 ^7|      7 ^7|"
+32861500 Endstats: ^7| ^o[BOT]^7endekk  ^7|     3 ^7|      5 ^7|"
+32861500 Endstats: ^7| ^o[BOT]^7carniee ^7|     3 ^7|      7 ^7|"
+32861500 Endstats: ---------------------------------"
+32861500 Endstats: --------------------------------"
+32861500 Endstats: ^7| Player      | Kills | Deaths |"
+32861500 Endstats: --------------------------------"
+32861500 Endstats: ^7| ^o[BOT]^7lagger ^7|     7 ^7|      3 ^7|"
+32861500 Endstats: ^7| ^o[BOT]^7wajs   ^7|     6 ^7|      7 ^7|"
+32861500 Endstats: ^7| ^o[BOT]^7vid    ^7|     4 ^7|      4 ^7|"
+32861500 Endstats: --------------------------------"
+32861500 Endstats: ---------------------------------"
+32861500 Endstats: ^7| Player       | Kills | Deaths |"
+32861500 Endstats: ---------------------------------"
+32861500 Endstats: ^7| ^o[BOT]^7endekk  ^7|     6 ^7|      8 ^7|"
+32861500 Endstats: ^7| ^o[BOT]^7bronze  ^7|     4 ^7|      8 ^7|"
+32861500 Endstats: ^7| ^o[BOT]^7carniee ^7|     4 ^7|      4 ^7|"
+32861500 Endstats: ---------------------------------"
+32861500 Endstats: --------------------------------"
+32861500 Endstats: ^7| Player      | Kills | Deaths |"
+32861500 Endstats: --------------------------------"
+32861500 Endstats: ^7| ^o[BOT]^7vid    ^7|     8 ^7|      6 ^7|"
+32861500 Endstats: ^7| ^o[BOT]^7wajs   ^7|     6 ^7|      2 ^7|"
+32861500 Endstats: ^7| ^o[BOT]^7lagger ^7|     5 ^7|      3 ^7|"
+32861500 Endstats: --------------------------------"
+32861500 Endstats: ---------------------------------"
+32861500 Endstats: ^7| Player       | Kills | Deaths |"
+32861500 Endstats: ---------------------------------"
+32861500 Endstats: ^7| ^o[BOT]^7carniee ^7|     7 ^7|      6 ^7|"
+32861500 Endstats: ^7| ^o[BOT]^7bronze  ^7|     6 ^7|      5 ^7|"
+32861500 Endstats: ^7| ^o[BOT]^7endekk  ^7|     2 ^7|      6 ^7|"
+32861500 Endstats: ---------------------------------"
+32861500 Endstats: --------------------------------"
+32861500 Endstats: ^7| Player      | Kills | Deaths |"
+32861500 Endstats: --------------------------------"
+32861500 Endstats: ^7| ^o[BOT]^7vid    ^7|     8 ^7|      4 ^7|"
+32861500 Endstats: ^7| ^o[BOT]^7lagger ^7|     7 ^7|      6 ^7|"
+32861500 Endstats: ^7| ^o[BOT]^7wajs   ^7|     5 ^7|      6 ^7|"
+32861500 Endstats: --------------------------------"
+32863150 LUA event: Stats saved!
+32873275 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+32875150 ExitLevel: executed
+32875150 ShutdownGame:
+32875150 ------------------------------------------------------------
+32875150 ------------------------------------------------------------
+32875150 InitGame: \c0\0\c1\-1\c2\-1\c3\-1\c4\-1\w0\0\w1\0\w2\0\w3\0\w4\1\w5\0\m\0
+32875150 map: etl_sp_delivery
+32875150 gametype: Stopwatch
+32875150 gametime: Tue Aug 11 05:08:47 2026
+32875150 LUA event: Round starting!
+32875650 ClientConnect: 1
+32875650 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+32875650 ClientConnect: 2
+32875650 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+32875650 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\2\c\2\lc\2\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+32875650 ClientBegin: 2
+32875650 ClientConnect: 3
+32875650 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\1\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\36\lsw\36
+32875650 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\1\c\2\lc\2\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\36\lsw\36
+32875650 ClientBegin: 3
+32875650 ClientConnect: 4
+32875650 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+32875650 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\2\c\1\lc\1\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+32875650 ClientBegin: 4
+32875650 ClientConnect: 5
+32875650 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\1\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+32875650 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\1\c\1\lc\1\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+32875650 ClientBegin: 5
+32875650 ClientConnect: 6
+32875650 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\2\c\4\lc\4\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\10\lw\10\sw\45\lsw\45
+32875650 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\2\c\4\lc\4\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\10\lw\10\sw\45\lsw\45
+32875650 ClientBegin: 6
+32875650 ClientConnect: 7
+32875650 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\1\c\4\lc\4\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\54\lw\54\sw\46\lsw\46
+32875650 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\1\c\4\lc\4\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\54\lw\54\sw\46\lsw\46
+32875650 ClientBegin: 7
+32881125 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+32881125 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+32881125 ClientBegin: 1
+32891175 ShutdownGame:
+32891175 ------------------------------------------------------------
+32891175 ------------------------------------------------------------
+32891175 InitGame: \c0\0\c1\-1\c2\-1\c3\-1\c4\-1\w0\0\w1\0\w2\0\w3\0\w4\1\w5\0\m\0
+32891175 map: etl_sp_delivery
+32891175 gametype: Stopwatch
+32891175 gametime: Tue Aug 11 05:09:02 2026
+32891675 ClientConnect: 1
+32891675 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+32891675 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+32891675 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+32891675 ClientBegin: 1
+32891675 ClientBegin: 1
+32891675 ClientConnect: 2
+32891675 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+32891675 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\2\c\2\lc\2\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+32891675 ClientBegin: 2
+32891675 ClientConnect: 3
+32891675 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\1\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\36\lsw\36
+32891675 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\1\c\2\lc\2\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\36\lsw\36
+32891675 ClientBegin: 3
+32891675 ClientConnect: 4
+32891675 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+32891675 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\2\c\1\lc\1\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+32891675 ClientBegin: 4
+32891675 ClientConnect: 5
+32891675 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\1\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+32891675 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\1\c\1\lc\1\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+32891675 ClientBegin: 5
+32891675 ClientConnect: 6
+32891675 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\2\c\4\lc\4\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\32\lw\32\sw\45\lsw\45
+32891675 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\2\c\4\lc\4\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\32\lw\32\sw\45\lsw\45
+32891675 ClientBegin: 6
+32891675 ClientConnect: 7
+32891675 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\1\c\4\lc\4\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\54\lw\54\sw\46\lsw\46
+32891675 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\1\c\4\lc\4\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\54\lw\54\sw\46\lsw\46
+32891675 ClientBegin: 7
+32895425 Item: 5 item_health
+32895425 Item: 4 item_health
+32913900 legacy popup: ^7allies^7 planted "the East Wall"
+32913900 Dynamite_Plant: 2 the East Wall
+32915300 Kill: 5 6 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7wajs^7 by MOD_MP40
+32919625 Kill: 7 4 66: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7vid^7 by MOD_MP34
+32922275 Dynamite_Diffuse: 3 the East Wall
+32922275 legacy popup: ^7axis^7 defused "the East Wall"
+32929550 Kill: 2 3 9: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7carniee^7 by MOD_THOMPSON
+32930200 Kill: 5 6 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7wajs^7 by MOD_MP40
+32933800 Kill: 5 2 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7lagger^7 by MOD_MP40
+32938175 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\2\c\3\lc\3\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+32938450 Medic_Revive: 5 3
+32940125 Item: 3 item_health
+32940125 Health_Pack: 5 3
+32941300 Item: 5 item_health
+32942125 Item: 3 item_health
+32942125 Health_Pack: 5 3
+32950275 Kill: 4 3 9: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7carniee^7 by MOD_THOMPSON
+32951175 Kill: 4 5 9: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7endekk^7 by MOD_THOMPSON
+32957400 Kill: 6 7 9: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7bronze^7 by MOD_THOMPSON
+32961075 legacy popup: ^7allies^7 planted "the East Wall"
+32961075 Dynamite_Plant: 2 the East Wall
+32965675 Item: 4 weapon_thompson
+32966850 Item: 4 weapon_thompson
+32970050 legacy announce: "^7Allies capture the Forward Bunker!"
+32970050 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+32970050 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\2\c\3\lc\3\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+32970050 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\24\lw\24\sw\35\lsw\35
+32970175 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\1\c\3\lc\3\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+32970900 Item: 6 item_health
+32970900 Health_Pack: 4 6
+32979075 Kill: 6 3 9: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7carniee^7 by MOD_THOMPSON
+32979975 Kill: 5 6 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7wajs^7 by MOD_MP40
+32980200 Kill: 4 4 33: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7vid^7 by MOD_SUICIDE
+32980625 Kill: 5 2 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7lagger^7 by MOD_MP40
+32989275 legacy announce: "^7Axis reclaim the Forward Bunker!"
+32989275 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\2\c\1\lc\1\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+32989275 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\2\c\3\lc\3\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+32989275 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\2\c\2\lc\2\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\24\lw\24\sw\35\lsw\35
+32991075 Objective_Destroyed: 2 the East Wall
+32991075 legacy announce: "^7Allies have damaged the East Wall!"
+32998900 Medic_Revive: 5 3
+33000625 Item: 3 item_health
+33000625 Health_Pack: 5 3
+33001700 Item: 3 item_health
+33001700 Health_Pack: 5 3
+33001850 Item: 4 item_health
+33008500 Kill: 6 7 9: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7bronze^7 by MOD_THOMPSON
+33012475 Kill: 6 3 9: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7carniee^7 by MOD_THOMPSON
+33015375 Kill: 5 6 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7wajs^7 by MOD_MP40
+33017325 Kill: 2 5 9: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7endekk^7 by MOD_THOMPSON
+33023950 Medic_Revive: 4 6
+33025050 legacy popup: ^7allies^7 planted "the West Wall"
+33025050 Dynamite_Plant: 2 the West Wall
+33025525 Item: 6 item_health
+33025525 Health_Pack: 4 6
+33026650 Item: 6 item_health
+33026650 Health_Pack: 4 6
+33033050 legacy announce: "^7Allies capture the Forward Bunker!"
+33033050 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33033050 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33033050 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\2\c\3\lc\3\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33039675 Kill: 3 4 8: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7vid^7 by MOD_MP40
+33039950 Kill: 6 3 9: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7carniee^7 by MOD_THOMPSON
+33040325 Kill: 5 2 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7lagger^7 by MOD_MP40
+33040400 Kill: 6 5 9: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7endekk^7 by MOD_THOMPSON
+33055050 Objective_Destroyed: 2 the West Wall
+33055050 legacy announce: "^7Allies have damaged the West Wall!"
+33062000 Kill: 2 7 9: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7bronze^7 by MOD_THOMPSON
+33065150 Item: 4 weapon_thompson
+33066900 Kill: 3 2 8: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7lagger^7 by MOD_MP40
+33067100 Kill: 5 4 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7vid^7 by MOD_MP40
+33067975 Item: 5 item_health
+33068925 Item: 5 item_health
+33071350 Item: 5 weapon_mp40
+33078925 Kill: 2 5 37: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7endekk^7 by MOD_CARBINE
+33080325 legacy announce: "^7Axis reclaim the Forward Bunker!"
+33080325 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\2\c\2\lc\2\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\24\lw\24\sw\35\lsw\35
+33080325 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\2\c\3\lc\3\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33080325 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\2\c\1\lc\1\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33082025 Kill: 2 3 37: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7carniee^7 by MOD_CARBINE
+33086150 legacy announce: "^7Allies capture the Forward Bunker!"
+33086150 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\24\lw\24\sw\35\lsw\35
+33086150 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33086150 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\2\c\3\lc\3\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33093925 Item: 5 item_health
+33094150 Item: 4 weapon_thompson
+33099350 legacy announce: "^7Allies have secured the forward bunker!"
+33099350 legacy announce: "^7The Door Controls have been constructed!"
+33099350 legacy announce: "^7The Vault is now open!"
+33099350 Repair: 2
+33103675 legacy announce: "^7The Loading Doors are opening!"
+33109400 Kill: 4 2 9: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7lagger^7 by MOD_THOMPSON
+33109775 Kill: 5 3 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7carniee^7 by MOD_MP40
+33110750 Kill: 4 5 9: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7endekk^7 by MOD_THOMPSON
+33111675 Item: 4 item_health
+33112675 Item: 4 item_health
+33115250 Item: 6 item_health
+33125325 Item: 2 team_CTF_redflag
+33125325 legacy announce: "^7The Allies have stolen the first gold crate!"
+33125325 legacy popup: ^7allies^7 stole "the Axis Gold"
+33125850 legacy announce: "^7The Loading Doors are closing!"
+33132100 Item: 3 weapon_kar98Rifle
+33137475 Kill: 6 3 9: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7carniee^7 by MOD_THOMPSON
+33140600 legacy announce: "^7The Loading Doors are opening!"
+33141725 Item: 2 weapon_M1CarbineRifle
+33143100 Kill: 5 4 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7vid^7 by MOD_MP40
+33143600 Kill: 6 5 9: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7endekk^7 by MOD_THOMPSON
+33154950 Kill: 2 7 37: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7bronze^7 by MOD_CARBINE
+33160425 legacy announce: "^7The Loading Doors are closing!"
+33160550 Kill: 5 2 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7lagger^7 by MOD_MP40
+33171725 Item: 6 team_CTF_redflag
+33171725 legacy popup: ^7allies^7 stole "the Axis Gold"
+33172200 Kill: 3 6 38: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7wajs^7 by MOD_KAR98
+33173175 Item: 4 team_CTF_redflag
+33173175 legacy popup: ^7allies^7 stole "the Axis Gold"
+33174375 Kill: 4 3 9: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7carniee^7 by MOD_THOMPSON
+33174525 Item: 4 weapon_thompson
+33176825 legacy announce: "^7The Loading Doors are opening!"
+33180175 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\1\c\4\lc\4\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\32\lw\32\sw\46\lsw\46
+33180525 Kill: 4 5 9: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7endekk^7 by MOD_THOMPSON
+33186175 Kill: 4 3 9: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7carniee^7 by MOD_THOMPSON
+33187725 Kill: 4 7 9: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7bronze^7 by MOD_THOMPSON
+33194625 Item: 2 weapon_thompson
+33205425 legacy announce: "^7The Allies have secured the first gold crate!"
+33216725 Item: 3 weapon_kar98Rifle
+33220275 legacy announce: "^7The Loading Doors are closing!"
+33221450 Kill: 5 2 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7lagger^7 by MOD_MP40
+33222875 Kill: 6 7 9: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7bronze^7 by MOD_THOMPSON
+33240175 Item: 4 team_CTF_redflag
+33240175 legacy announce: "^7The Allies have stolen the second gold crate!"
+33240175 legacy popup: ^7allies^7 stole "the Axis Gold"
+33252475 Kill: 5 6 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7wajs^7 by MOD_MP40
+33253800 Kill: 2 5 9: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7endekk^7 by MOD_THOMPSON
+33255225 Kill: 3 2 38: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7lagger^7 by MOD_KAR98
+33255725 Kill: 4 3 9: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7carniee^7 by MOD_THOMPSON
+33256675 Item: 4 weapon_thompson
+33258100 legacy announce: "^7The Loading Doors are opening!"
+33271750 Item: 4 weapon_thompson
+33273025 Item: 4 weapon_thompson
+33275325 legacy announce: "^7The Loading Doors are closing!"
+33276850 Kill: 2 7 37: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7bronze^7 by MOD_CARBINE
+33277750 Kill: 3 2 38: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7lagger^7 by MOD_KAR98
+33282050 Medic_Revive: 5 7
+33284125 Item: 7 item_health
+33284125 Health_Pack: 5 7
+33285200 Item: 7 item_health
+33285200 Health_Pack: 5 7
+33285825 Kill: 6 3 9: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7carniee^7 by MOD_THOMPSON
+33292125 Kill: 5 6 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7wajs^7 by MOD_MP40
+33294150 Item: 5 item_health
+33296250 Kill: 4 5 9: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7endekk^7 by MOD_THOMPSON
+33297125 legacy announce: "^7The Loading Doors are opening!"
+33299500 Kill: 2 7 9: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7bronze^7 by MOD_THOMPSON
+33300400 Medic_Revive: 4 6
+33302475 Item: 6 item_health
+33302475 Health_Pack: 4 6
+33303550 Item: 6 item_health
+33303550 Health_Pack: 4 6
+33306800 Kill: 2 3 9: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7carniee^7 by MOD_THOMPSON
+33307100 Kill: 5 2 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7lagger^7 by MOD_MP40
+33309125 Item: 5 item_health
+33309450 Item: 5 weapon_mp40
+33310900 legacy announce: "^7The Loading Doors are closing!"
+33316175 Medic_Revive: 5 3
+33317775 Item: 3 item_health
+33317775 Health_Pack: 5 3
+33318050 legacy announce: "^7The Loading Doors are opening!"
+33318975 Item: 3 item_health
+33318975 Health_Pack: 5 3
+33323250 legacy announce: "^7The Loading Doors are closing!"
+33327775 Kill: 7 6 13: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7wajs^7 by MOD_FG42
+33333075 Kill: 5 4 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7vid^7 by MOD_MP40
+33333550 Item: 5 team_CTF_redflag
+33333550 legacy announce: "^7The Axis have intercepted the stolen gold crate!"
+33333550 legacy popup: ^7axis^7 returned "the Axis Gold"
+33333700 Kill: 2 7 9: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7bronze^7 by MOD_THOMPSON
+33337250 Kill: 2 3 9: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7carniee^7 by MOD_THOMPSON
+33337550 Item: 2 weapon_thompson
+33337975 legacy announce: "^7The Loading Doors are opening!"
+33340300 Kill: 5 2 8: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7lagger^7 by MOD_MP40
+33341025 Medic_Revive: 5 7
+33345575 Item: 4 team_CTF_redflag
+33345575 legacy announce: "^7The Allies have stolen the second gold crate!"
+33345575 legacy popup: ^7allies^7 stole "the Axis Gold"
+33345600 legacy announce: "^7The Loading Doors are closing!"
+33348925 Medic_Revive: 5 3
+33351175 Item: 3 item_health
+33351175 Health_Pack: 5 3
+33352100 Item: 3 item_health
+33352100 Health_Pack: 5 3
+33360575 Kill: 4 7 9: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7bronze^7 by MOD_THOMPSON
+33361725 Item: 6 weapon_thompson
+33363000 Kill: 3 6 8: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7wajs^7 by MOD_MP40
+33363600 Kill: 3 4 8: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7vid^7 by MOD_MP40
+33363750 Item: 3 team_CTF_redflag
+33363750 legacy announce: "^7The Axis have intercepted the stolen gold crate!"
+33363750 legacy popup: ^7axis^7 returned "the Axis Gold"
+33370500 Medic_Revive: 5 7
+33373025 Kill: 2 5 9: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7endekk^7 by MOD_THOMPSON
+33373150 Kill: 7 2 13: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7lagger^7 by MOD_FG42
+33385575 Item: 4 team_CTF_redflag
+33385575 legacy announce: "^7The Allies have stolen the second gold crate!"
+33385575 legacy popup: ^7allies^7 stole "the Axis Gold"
+33394525 Kill: 2 7 9: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7bronze^7 by MOD_THOMPSON
+33396400 legacy announce: "^7The Loading Doors are opening!"
+33396850 Kill: 3 2 8: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7lagger^7 by MOD_MP40
+33399400 Item: 3 weapon_mp40
+33399600 Kill: 6 3 9: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7carniee^7 by MOD_THOMPSON
+33402850 Item: 6 weapon_thompson
+33403225 Kill: 4 5 9: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7endekk^7 by MOD_THOMPSON
+33404125 Item: 6 weapon_thompson
+33405075 Item: 6 weapon_thompson
+33421250 legacy announce: "^7Allies have escaped with the Gold!"
+33421250 Endstats: exit condition matched: Exit: Wolf EndRound. (kendofmap=false, eomap_done=false)
+33421250 Exit: Wolf EndRound.
+33421250 score: 146  ping: 0  client: 5 ^o[BOT]^7endekk
+33421250 score: 123  ping: 0  client: 4 ^o[BOT]^7vid
+33421250 score: 89  ping: 0  client: 2 ^o[BOT]^7lagger
+33421250 score: 72  ping: 0  client: 3 ^o[BOT]^7carniee
+33421250 score: 65  ping: 0  client: 6 ^o[BOT]^7wajs
+33421250 score: 27  ping: 0  client: 7 ^o[BOT]^7bronze
+33421250 axis:241  allies:262
+33421250 legacy announce: "^7The Allies have secured the second gold crate!"
+33421250 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+33421250 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+33421250 ClientBegin: 1
+33421275 LUA event: Round ended!
+33421575 WeaponStats: 5 0 138412084 2 3 0 0 0 78 137 16 0 15 0 0 0 10 0 0 0 0 1 0 7 7 0 0 0 1535 1737 36 18 0 2 0 1 0 69.3 21 44 38 64 0.00 0.00 0
+33421575 WeaponStats: 4 0 201326640 0 0 0 5 0 75 148 11 0 18 0 0 0 1 0 2 3 0 0 0 1550 1141 22 0 0 6 1 1 0 81.0 21 75 13 45 0.00 0.00 0
+33421575 WeaponStats: 2 0 12599472 0 0 0 9 0 57 93 10 0 13 0 0 0 1 0 0 3 0 0 0 11 26 4 0 0 0 0 0 2 0 1548 1390 0 40 0 5 0 0 0 74.9 19 10 27 52 0.00 0.00 0
+33421575 WeaponStats: 3 0 12582960 29 42 5 0 7 0 0 0 13 0 0 0 0 1 0 18 52 3 0 1 1231 1572 18 18 0 4 0 0 0 58.9 19 38 6 28 0.00 0.00 0
+33421575 WeaponStats: 6 0 25166000 0 0 0 7 0 58 96 11 0 15 0 20 0 1 0 0 0 0 1 0 0 3 0 0 0 1248 1041 18 0 0 3 0 0 0 84.3 17 28 37 0.00 0.00 0
+33421575 WeaponStats: 7 0 71303344 14 32 0 0 2 0 0 0 9 0 16 38 2 0 1 0 0 0 2 0 15 23 1 0 4 806 1037 0 18 0 2 0 0 0 66.7 17 16 11 0.00 0.00 0
+33423000 Endstats: -------------------------------------------------------------------"
+33423000 Endstats: ^7| Award                          | Player       | Value           |"
+33423000 Endstats: -------------------------------------------------------------------"
+33423000 Endstats: ^7| Most damage given              ^7|     ^o[BOT]^7vid ^7|            1550 ^7|"
+33423000 Endstats: ^7| Most damage received           ^7|  ^o[BOT]^7endekk ^7|            1737 ^7|"
+33423000 Endstats: ^7| Most team damage given         ^7|  ^o[BOT]^7endekk ^7|              36 ^7|"
+33423000 Endstats: ^7| Most team damage received      ^7|  ^o[BOT]^7lagger ^7|              40 ^7|"
+33423000 Endstats: ^7| Most deaths                    ^7| ^o[BOT]^7carniee ^7|              14 ^7|"
+33423000 Endstats: ^7| Most kills per minute          ^7|  ^o[BOT]^7endekk ^7|            1.81 ^7|"
+33423000 Endstats: ^7| Most light weapon kills        ^7|  ^o[BOT]^7endekk ^7|              16 ^7|"
+33423000 Endstats: ^7| Most rifle kills               ^7|  ^o[BOT]^7lagger ^7|               4 ^7|"
+33423000 Endstats: ^7| Most revives                   ^7|  ^o[BOT]^7endekk ^7|               7 ^7|"
+33423000 Endstats: ^7| Most revived                   ^7| ^o[BOT]^7carniee ^7|               4 ^7|"
+33423000 Endstats: ^7| Best K/D ratio                 ^7|     ^o[BOT]^7vid ^7| 1.8333333333333 ^7|"
+33423000 Endstats: ^7| Most dynamites planted         ^7|  ^o[BOT]^7lagger ^7|               3 ^7|"
+33423000 Endstats: ^7| Longest killing spree          ^7|     ^o[BOT]^7vid ^7|               6 ^7|"
+33423000 Endstats: ^7| Longest death spree            ^7|  ^o[BOT]^7bronze ^7|               8 ^7|"
+33423000 Endstats: ^7| Most kill assists              ^7|     ^o[BOT]^7vid ^7|               6 ^7|"
+33423000 Endstats: ^7| Most killsteals                ^7|  ^o[BOT]^7lagger ^7|               2 ^7|"
+33423000 Endstats: ^7| Most headshot kills            ^7|  ^o[BOT]^7endekk ^7|               8 ^7|"
+33423000 Endstats: ^7| Longest killing spree          ^7|     ^o[BOT]^7vid ^7|               6 ^7|"
+33423000 Endstats: ^7| Most playtime denied           ^7|  ^o[BOT]^7lagger ^7|     187 ^7seconds ^7|"
+33423000 Endstats: ^7| Highest light weapons accuracy ^7|  ^o[BOT]^7endekk ^7|   57.14 percent ^7|"
+33423000 Endstats: ^7| Highest headshot accuracy      ^7|     ^o[BOT]^7vid ^7|    24.0 percent ^7|"
+33423000 Endstats: ^7| Most headshots                 ^7|     ^o[BOT]^7vid ^7|              18 ^7|"
+33423000 Endstats: ^7| Most bullets fired             ^7|     ^o[BOT]^7vid ^7|             148 ^7|"
+33423000 Endstats: -------------------------------------------------------------------"
+33423000 Endstats: ---------------------------------"
+33423000 Endstats: ^7| Player       | Kills | Deaths |"
+33423000 Endstats: ---------------------------------"
+33423000 Endstats: ^7| ^o[BOT]^7bronze  ^7|     6 ^7|      1 ^7|"
+33423000 Endstats: ^7| ^o[BOT]^7endekk  ^7|     4 ^7|      7 ^7|"
+33423000 Endstats: ^7| ^o[BOT]^7carniee ^7|     4 ^7|      4 ^7|"
+33423000 Endstats: ---------------------------------"
+33423000 Endstats: --------------------------------"
+33423000 Endstats: ^7| Player      | Kills | Deaths |"
+33423000 Endstats: --------------------------------"
+33423000 Endstats: ^7| ^o[BOT]^7lagger ^7|     4 ^7|      4 ^7|"
+33423000 Endstats: ^7| ^o[BOT]^7wajs   ^7|     2 ^7|      6 ^7|"
+33423000 Endstats: ^7| ^o[BOT]^7vid    ^7|     2 ^7|      4 ^7|"
+33423000 Endstats: --------------------------------"
+33423000 Endstats: ---------------------------------"
+33423000 Endstats: ^7| Player       | Kills | Deaths |"
+33423000 Endstats: ---------------------------------"
+33423000 Endstats: ^7| ^o[BOT]^7endekk  ^7|     5 ^7|      3 ^7|"
+33423000 Endstats: ^7| ^o[BOT]^7carniee ^7|     4 ^7|      2 ^7|"
+33423000 Endstats: ^7| ^o[BOT]^7bronze  ^7|     2 ^7|      1 ^7|"
+33423000 Endstats: ---------------------------------"
+33423000 Endstats: --------------------------------"
+33423000 Endstats: ^7| Player      | Kills | Deaths |"
+33423000 Endstats: --------------------------------"
+33423000 Endstats: ^7| ^o[BOT]^7lagger ^7|     7 ^7|      4 ^7|"
+33423000 Endstats: ^7| ^o[BOT]^7wajs   ^7|     6 ^7|      2 ^7|"
+33423000 Endstats: ^7| ^o[BOT]^7vid    ^7|     3 ^7|      5 ^7|"
+33423000 Endstats: --------------------------------"
+33423000 Endstats: ---------------------------------"
+33423000 Endstats: ^7| Player       | Kills | Deaths |"
+33423000 Endstats: ---------------------------------"
+33423000 Endstats: ^7| ^o[BOT]^7carniee ^7|     6 ^7|      2 ^7|"
+33423000 Endstats: ^7| ^o[BOT]^7bronze  ^7|     3 ^7|      1 ^7|"
+33423000 Endstats: ^7| ^o[BOT]^7endekk  ^7|     2 ^7|      6 ^7|"
+33423000 Endstats: ---------------------------------"
+33423000 Endstats: --------------------------------"
+33423000 Endstats: ^7| Player      | Kills | Deaths |"
+33423000 Endstats: --------------------------------"
+33423000 Endstats: ^7| ^o[BOT]^7vid    ^7|     1 ^7|      2 ^7|"
+33423000 Endstats: ^7| ^o[BOT]^7wajs   ^7|     1 ^7|      3 ^7|"
+33423000 Endstats: ^7| ^o[BOT]^7lagger ^7|     1 ^7|      6 ^7|"
+33423000 Endstats: --------------------------------"
+33424275 LUA event: Stats saved!
+33436250 ExitLevel: executed
+33436250 ShutdownGame:
+33436250 ------------------------------------------------------------
+33436250 ------------------------------------------------------------
+33436250 InitGame: \c0\0\c1\-1\c2\-1\c3\-1\c4\-1\w0\0\w1\0\w2\0\w3\0\w4\1\w5\0\m\0
+33436250 map: etl_sp_delivery
+33436250 gametype: Stopwatch
+33436250 gametime: Tue Aug 11 05:18:06 2026
+33436250 LUA event: Round starting!
+33436750 ClientConnect: 1
+33436750 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+33436750 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+33436750 ClientBegin: 1
+33436750 ClientConnect: 2
+33436750 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33436750 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33436750 ClientBegin: 2
+33436750 ClientConnect: 3
+33436750 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33436750 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33436750 ClientBegin: 3
+33436750 ClientConnect: 4
+33436750 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33436750 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33436750 ClientBegin: 4
+33436750 ClientConnect: 5
+33436750 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33436750 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33436750 ClientBegin: 5
+33436750 ClientConnect: 6
+33436750 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33436750 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33436750 ClientBegin: 6
+33436750 ClientConnect: 7
+33436750 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\32\lw\32\sw\45\lsw\45
+33436750 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\32\lw\32\sw\45\lsw\45
+33436750 ClientBegin: 7
+33440800 Ammo_Pack: 6 2
+33443375 Ammo_Pack: 6 2
+33452275 ShutdownGame:
+33452275 ------------------------------------------------------------
+33452275 ------------------------------------------------------------
+33452275 InitGame: \c0\0\c1\-1\c2\-1\c3\-1\c4\-1\w0\0\w1\0\w2\0\w3\0\w4\1\w5\0\m\0
+33452275 map: etl_sp_delivery
+33452275 gametype: Stopwatch
+33452275 gametime: Tue Aug 11 05:18:21 2026
+33452775 ClientConnect: 1
+33452775 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+33452775 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+33452775 ClientBegin: 1
+33452775 ClientConnect: 2
+33452775 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33452775 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33452775 ClientBegin: 2
+33452775 ClientConnect: 3
+33452775 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33452775 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33452775 ClientBegin: 3
+33452775 ClientConnect: 4
+33452775 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33452775 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33452775 ClientBegin: 4
+33452775 ClientConnect: 5
+33452775 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33452775 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33452775 ClientBegin: 5
+33452775 ClientConnect: 6
+33452775 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33452775 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33452775 ClientBegin: 6
+33452775 ClientConnect: 7
+33452775 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\32\lw\32\sw\45\lsw\45
+33452775 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\32\lw\32\sw\45\lsw\45
+33452775 ClientBegin: 7
+33456475 Item: 5 item_health
+33456550 Item: 4 item_health
+33456875 Item: 2 weapon_magicammo
+33456875 Ammo_Pack: 6 2
+33457850 Item: 6 weapon_magicammo
+33459425 Item: 2 weapon_magicammo
+33459425 Ammo_Pack: 6 2
+33469875 Kill: 4 5 8: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7endekk^7 by MOD_MP40
+33474975 legacy popup: ^7allies^7 planted "the East Wall"
+33474975 Dynamite_Plant: 3 the East Wall
+33476025 Item: 4 item_health
+33477050 Item: 2 item_health
+33477050 Health_Pack: 4 2
+33477675 Kill: 2 3 8: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7carniee^7 by MOD_MP40
+33478125 Item: 2 item_health
+33478125 Health_Pack: 4 2
+33489825 Item: 4 weapon_thompson
+33489825 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\3\sw\36\lsw\36
+33499225 Kill: 6 7 26: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7bronze^7 by MOD_ARTY
+33502700 Kill: 3 6 37: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7wajs^7 by MOD_CARBINE
+33502825 Kill: 4 3 9: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7carniee^7 by MOD_THOMPSON
+33504500 Kill: 4 5 9: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7endekk^7 by MOD_THOMPSON
+33504975 Objective_Destroyed: 3 the East Wall
+33504975 legacy announce: "^7Allies have damaged the East Wall!"
+33514350 Item: 4 weapon_mp40
+33514350 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33518025 Kill: 3 4 9: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7vid^7 by MOD_THOMPSON
+33518300 Kill: 7 2 46: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7lagger^7 by MOD_GARAND_SCOPE
+33520350 Item: 5 item_health
+33521500 Item: 5 item_health
+33529050 legacy announce: "^7Allies capture the Forward Bunker!"
+33529050 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33529050 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\25\lw\25\sw\45\lsw\45
+33529050 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33529550 legacy popup: ^7allies^7 planted "the West Wall"
+33529550 Dynamite_Plant: 3 the West Wall
+33531600 Kill: 5 6 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7wajs^7 by MOD_THOMPSON
+33535325 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\4\w\25\lw\25\sw\45\lsw\45
+33548775 Kill: 2 7 38: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7bronze^7 by MOD_KAR98
+33550725 Kill: 3 6 9: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7wajs^7 by MOD_THOMPSON
+33551100 Kill: 5 4 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7vid^7 by MOD_THOMPSON
+33553575 Item: 5 item_health
+33554675 Item: 5 item_health
+33557975 Medic_Revive: 5 7
+33559550 Objective_Destroyed: 3 the West Wall
+33559550 legacy announce: "^7Allies have damaged the West Wall!"
+33559550 Item: 5 item_health
+33559625 legacy announce: "^7Axis reclaim the Forward Bunker!"
+33559625 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33559625 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33559625 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\25\lw\25\sw\45\lsw\45
+33560625 Item: 5 item_health
+33569200 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33569200 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33569200 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\25\lw\25\sw\45\lsw\45
+33569200 legacy announce: "^7Allies have secured the forward bunker!"
+33569200 legacy announce: "^7The Door Controls have been constructed!"
+33569200 legacy announce: "^7The Vault is now open!"
+33569200 Repair: 3
+33571375 Kill: 2 7 38: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7bronze^7 by MOD_KAR98
+33573250 legacy announce: "^7The Loading Doors are opening!"
+33581525 legacy announce: "^7The Loading Doors are closing!"
+33582550 Kill: 3 2 9: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7lagger^7 by MOD_THOMPSON
+33593450 Item: 7 team_CTF_redflag
+33593450 legacy announce: "^7The Allies have stolen the first gold crate!"
+33593450 legacy popup: ^7allies^7 stole "the Axis Gold"
+33593850 Kill: 6 5 8: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7endekk^7 by MOD_MP40
+33608925 Kill: 7 6 13: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7wajs^7 by MOD_FG42
+33612100 Kill: 2 3 8: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7carniee^7 by MOD_MP40
+33612950 legacy announce: "^7The Loading Doors are opening!"
+33614225 Kill: 2 7 8: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7bronze^7 by MOD_MP40
+33616075 Item: 2 team_CTF_redflag
+33616075 legacy announce: "^7The Axis have intercepted the stolen gold crate!"
+33616075 legacy popup: ^7axis^7 returned "the Axis Gold"
+33616900 legacy announce: "^7The Loading Doors are closing!"
+33625375 Item: 5 team_CTF_redflag
+33625375 legacy announce: "^7The Allies have stolen the first gold crate!"
+33625375 legacy popup: ^7allies^7 stole "the Axis Gold"
+33634500 Kill: 4 4 33: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7vid^7 by MOD_SUICIDE
+33641175 Kill: 6 5 8: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7endekk^7 by MOD_MP40
+33642225 Item: 7 team_CTF_redflag
+33642225 legacy popup: ^7allies^7 stole "the Axis Gold"
+33642675 Kill: 7 6 10: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7wajs^7 by MOD_STEN
+33644725 legacy announce: "^7The Loading Doors are opening!"
+33655175 Kill: 3 2 37: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7lagger^7 by MOD_CARBINE
+33662300 legacy announce: "^7The Allies have secured the first gold crate!"
+33662575 Item: 5 weapon_thompson
+33663950 Item: 4 item_health
+33666375 Item: 4 weapon_mp40
+33667425 Kill: 3 4 37: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7vid^7 by MOD_CARBINE
+33667850 Kill: 2 3 38: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7carniee^7 by MOD_KAR98
+33670375 Kill: 5 2 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7lagger^7 by MOD_THOMPSON
+33672500 Medic_Revive: 5 3
+33674700 Item: 3 item_health
+33674700 Health_Pack: 5 3
+33675675 Item: 3 item_health
+33675675 Health_Pack: 5 3
+33690175 legacy announce: "^7The Loading Doors are closing!"
+33693525 Item: 5 team_CTF_redflag
+33693525 legacy announce: "^7The Allies have stolen the second gold crate!"
+33693525 legacy popup: ^7allies^7 stole "the Axis Gold"
+33697850 Item: 2 weapon_mp40
+33710975 legacy announce: "^7The Loading Doors are opening!"
+33712050 Item: 5 item_health
+33712775 Item: 5 item_health
+33713025 Kill: 6 3 8: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7carniee^7 by MOD_MP40
+33714950 Kill: 6 7 8: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7bronze^7 by MOD_MP40
+33716425 Kill: 6 5 8: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7endekk^7 by MOD_MP40
+33720650 Item: 6 team_CTF_redflag
+33720650 legacy announce: "^7The Axis have intercepted the stolen gold crate!"
+33720650 legacy popup: ^7axis^7 returned "the Axis Gold"
+33721725 legacy announce: "^7The Loading Doors are closing!"
+33733975 Item: 7 team_CTF_redflag
+33733975 legacy announce: "^7The Allies have stolen the second gold crate!"
+33733975 legacy popup: ^7allies^7 stole "the Axis Gold"
+33742000 Kill: 4 3 8: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7carniee^7 by MOD_MP40
+33748650 Item: 5 weapon_thompson
+33748700 Kill: 4 5 8: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7endekk^7 by MOD_MP40
+33760750 Kill: 3 6 9: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7wajs^7 by MOD_THOMPSON
+33761600 Kill: 7 3 10: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7carniee^7 by MOD_STEN
+33762350 Kill: 7 4 10: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7vid^7 by MOD_STEN
+33764275 Kill: 2 7 8: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7bronze^7 by MOD_MP40
+33764800 Item: 2 team_CTF_redflag
+33764800 legacy announce: "^7The Axis have intercepted the stolen gold crate!"
+33764800 legacy popup: ^7axis^7 returned "the Axis Gold"
+33773675 Item: 3 team_CTF_redflag
+33773675 legacy announce: "^7The Allies have stolen the second gold crate!"
+33773675 legacy popup: ^7allies^7 stole "the Axis Gold"
+33780750 Kill: 5 2 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7lagger^7 by MOD_THOMPSON
+33784075 legacy announce: "^7The Loading Doors are opening!"
+33787700 Kill: 5 6 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7wajs^7 by MOD_THOMPSON
+33791500 Item: 4 weapon_mp40
+33792675 Kill: 5 4 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7vid^7 by MOD_THOMPSON
+33793725 Item: 5 item_health
+33816250 Kill: 2 5 38: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7endekk^7 by MOD_KAR98
+33816500 Item: 4 weapon_mp40
+33817150 Item: 4 item_health
+33817175 legacy announce: "^7Allies have escaped with the Gold!"
+33817175 Endstats: exit condition matched: Exit: Wolf EndRound. (kendofmap=false, eomap_done=false)
+33817175 Exit: Wolf EndRound.
+33817175 score: 79  ping: 0  client: 2 ^o[BOT]^7lagger
+33817175 score: 73  ping: 0  client: 3 ^o[BOT]^7carniee
+33817175 score: 66  ping: 0  client: 5 ^o[BOT]^7endekk
+33817175 score: 64  ping: 0  client: 6 ^o[BOT]^7wajs
+33817175 score: 53  ping: 0  client: 7 ^o[BOT]^7bronze
+33817175 score: 46  ping: 0  client: 4 ^o[BOT]^7vid
+33817175 axis:184  allies:185
+33817175 legacy announce: "^7The Allies have secured the second gold crate!"
+33817175 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+33817175 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+33817175 ClientBegin: 1
+33817200 LUA event: Round ended!
+33817500 WeaponStats: 3 1 12599344 29 42 5 4 7 13 30 4 14 3 0 2 0 0 0 9 25 3 1 2 18 52 3 1 1 1704 2293 18 52 0 6 0 0 0 69.7 19 27 27 29 0.00 0.00 0
+33817500 WeaponStats: 2 1 29376688 27 48 4 9 3 57 93 10 3 13 0 0 0 1 0 0 3 0 0 0 11 26 4 1 0 11 27 4 2 1 0 0 0 1 0 2285 1970 34 40 0 6 0 0 0 74.6 17 51 28 0.00 0.00 0
+33817500 WeaponStats: 5 1 146800700 2 3 0 0 0 4 9 0 0 1 78 137 16 5 15 47 110 6 11 13 0 0 0 1 0 0 0 0 1 0 9 9 0 0 0 2664 3070 36 18 0 4 0 1 0 74.6 21 36 10 20 0.00 0.00 0
+33817500 WeaponStats: 6 1 29425904 44 88 5 7 14 58 96 11 4 15 0 0 0 1 0 0 20 0 2 0 2 1 1 0 0 0 0 0 1 0 0 0 0 1 0 0 3 0 0 0 2328 1787 18 0 1 9 0 0 0 77.6 25 36 5 23 0.00 0.00 0
+33817500 WeaponStats: 7 1 96534770 0 2 0 0 0 14 32 0 3 2 0 0 0 9 0 8 10 2 0 2 27 130 3 0 2 0 0 0 1 0 0 0 0 2 0 0 0 0 2 0 5 17 1 0 0 15 23 1 0 4 1344 1712 34 18 1 4 0 1 0 74.0 81 34 11 8 0.00 0.00 0
+33817500 WeaponStats: 4 1 205521008 37 72 3 5 7 88 173 13 3 21 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 2 3 0 0 0 2462 1955 22 34 0 10 2 1 0 74.7 21 21 2 23 0.00 0.00 0
+33819000 Endstats: --------------------------------------------------------------------------------"
+33819000 Endstats: ^7| Award                               | Player       | Value                   |"
+33819000 Endstats: --------------------------------------------------------------------------------"
+33819000 Endstats: ^7| Most damage given                   ^7|  ^o[BOT]^7endekk ^7|                    2664 ^7|"
+33819000 Endstats: ^7| Most damage received                ^7|  ^o[BOT]^7endekk ^7|                    3070 ^7|"
+33819000 Endstats: ^7| Most team damage given              ^7|  ^o[BOT]^7endekk ^7|                      36 ^7|"
+33819000 Endstats: ^7| Most team damage received           ^7| ^o[BOT]^7carniee ^7|                      52 ^7|"
+33819000 Endstats: ^7| Most selfkills                      ^7|     ^o[BOT]^7vid ^7|                       2 ^7|"
+33819000 Endstats: ^7| Most deaths                         ^7| ^o[BOT]^7carniee ^7|                      20 ^7|"
+33819000 Endstats: ^7| Most kills per minute               ^7|  ^o[BOT]^7endekk ^7|                    1.48 ^7|"
+33819000 Endstats: ^7| Most multikills                     ^7|    ^o[BOT]^7wajs ^7|                       1 ^7|"
+33819000 Endstats: ^7| Quickest multikill w/ light weapons ^7|    ^o[BOT]^7wajs ^7|        3 ^7kills in 1.47s ^7|"
+33819000 Endstats: ^7| Most light weapon kills             ^7|  ^o[BOT]^7endekk ^7|                       6 ^7|"
+33819000 Endstats: ^7| Most rifle kills                    ^7|  ^o[BOT]^7lagger ^7|                       4 ^7|"
+33819000 Endstats: ^7| Most revives                        ^7|  ^o[BOT]^7endekk ^7|                       2 ^7|"
+33819000 Endstats: ^7| Best K/D ratio                      ^7|     ^o[BOT]^7vid ^7|         1.4545454545455 ^7|"
+33819000 Endstats: ^7| Most dynamites planted              ^7| ^o[BOT]^7carniee ^7|                       2 ^7|"
+33819000 Endstats: ^7| Longest killing spree               ^7| ^o[BOT]^7carniee ^7|                       3 ^7|"
+33819000 Endstats: ^7| Longest death spree                 ^7|     ^o[BOT]^7vid ^7|                       4 ^7|"
+33819000 Endstats: ^7| Most objectives returned            ^7|  ^o[BOT]^7lagger ^7|                       2 ^7|"
+33819000 Endstats: ^7| Most kill assists                   ^7|    ^o[BOT]^7wajs ^7|                       6 ^7|"
+33819000 Endstats: ^7| Most killsteals                     ^7|  ^o[BOT]^7lagger ^7|                       2 ^7|"
+33819000 Endstats: ^7| Most headshot kills                 ^7| ^o[BOT]^7carniee ^7|                       4 ^7|"
+33819000 Endstats: ^7| Longest killing spree               ^7| ^o[BOT]^7carniee ^7|                       3 ^7|"
+33819000 Endstats: ^7| Full respawn king                   ^7|     ^o[BOT]^7vid ^7| 14.02 ^7percent, 2.09 ^7min ^7|"
+33819000 Endstats: ^7| Least time dead (What spawn?)       ^7| ^o[BOT]^7carniee ^7|  5.92 ^7percent, 0.88 ^7min ^7|"
+33819000 Endstats: ^7| Most playtime denied                ^7|  ^o[BOT]^7endekk ^7|             117 ^7seconds ^7|"
+33819000 Endstats: ^7| Highest light weapons accuracy      ^7|  ^o[BOT]^7lagger ^7|           59.57 percent ^7|"
+33819000 Endstats: ^7| Highest headshot accuracy           ^7|    ^o[BOT]^7wajs ^7|           28.43 percent ^7|"
+33819000 Endstats: ^7| Most headshots                      ^7|  ^o[BOT]^7endekk ^7|                      29 ^7|"
+33819000 Endstats: ^7| Most bullets fired                  ^7|  ^o[BOT]^7endekk ^7|                     259 ^7|"
+33819000 Endstats: --------------------------------------------------------------------------------"
+33819000 Endstats: ---------------------------------"
+33819000 Endstats: ^7| Player       | Kills | Deaths |"
+33819000 Endstats: ---------------------------------"
+33819000 Endstats: ^7| ^o[BOT]^7bronze  ^7|     4 ^7|      1 ^7|"
+33819000 Endstats: ^7| ^o[BOT]^7carniee ^7|     3 ^7|      2 ^7|"
+33819000 Endstats: ^7| ^o[BOT]^7endekk  ^7|     1 ^7|      2 ^7|"
+33819000 Endstats: ---------------------------------"
+33819000 Endstats: --------------------------------"
+33819000 Endstats: ^7| Player      | Kills | Deaths |"
+33819000 Endstats: --------------------------------"
+33819000 Endstats: ^7| ^o[BOT]^7wajs   ^7|     3 ^7|      1 ^7|"
+33819000 Endstats: ^7| ^o[BOT]^7vid    ^7|     2 ^7|      2 ^7|"
+33819000 Endstats: ^7| ^o[BOT]^7lagger ^7|     2 ^7|      3 ^7|"
+33819000 Endstats: --------------------------------"
+33819000 Endstats: ---------------------------------"
+33819000 Endstats: ^7| Player       | Kills | Deaths |"
+33819000 Endstats: ---------------------------------"
+33819000 Endstats: ^7| ^o[BOT]^7endekk  ^7|     3 ^7|      2 ^7|"
+33819000 Endstats: ^7| ^o[BOT]^7carniee ^7|     2 ^7|      2 ^7|"
+33819000 Endstats: ^7| ^o[BOT]^7bronze  ^7|     0 ^7|      1 ^7|"
+33819000 Endstats: ---------------------------------"
+33819000 Endstats: --------------------------------"
+33819000 Endstats: ^7| Player      | Kills | Deaths |"
+33819000 Endstats: --------------------------------"
+33819000 Endstats: ^7| ^o[BOT]^7vid    ^7|     2 ^7|      3 ^7|"
+33819000 Endstats: ^7| ^o[BOT]^7wajs   ^7|     2 ^7|      3 ^7|"
+33819000 Endstats: ^7| ^o[BOT]^7lagger ^7|     2 ^7|      1 ^7|"
+33819000 Endstats: --------------------------------"
+33819000 Endstats: ---------------------------------"
+33819000 Endstats: ^7| Player       | Kills | Deaths |"
+33819000 Endstats: ---------------------------------"
+33819000 Endstats: ^7| ^o[BOT]^7endekk  ^7|     3 ^7|      2 ^7|"
+33819000 Endstats: ^7| ^o[BOT]^7bronze  ^7|     2 ^7|      2 ^7|"
+33819000 Endstats: ^7| ^o[BOT]^7carniee ^7|     1 ^7|      3 ^7|"
+33819000 Endstats: ---------------------------------"
+33819000 Endstats: --------------------------------"
+33819000 Endstats: ^7| Player      | Kills | Deaths |"
+33819000 Endstats: --------------------------------"
+33819000 Endstats: ^7| ^o[BOT]^7wajs   ^7|     2 ^7|      2 ^7|"
+33819000 Endstats: ^7| ^o[BOT]^7vid    ^7|     1 ^7|      0 ^7|"
+33819000 Endstats: ^7| ^o[BOT]^7lagger ^7|     1 ^7|      4 ^7|"
+33819000 Endstats: --------------------------------"
+33820200 LUA event: Stats saved!
+33832175 ExitLevel: executed
+33832175 ShutdownGame:
+33832175 ------------------------------------------------------------
+33832175 ------------------------------------------------------------
+33832175 InitGame: \c0\0\c1\-1\c2\-1\c3\-1\c4\-1\w0\0\w1\0\w2\0\w3\0\w4\1\w5\0\m\0
+33832175 map: te_escape2
+33832175 gametype: Stopwatch
+33832175 gametime: Tue Aug 11 05:24:41 2026
+33832175 LUA event: Round starting!
+33832675 ClientConnect: 1
+33832675 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+33832675 ClientConnect: 2
+33832675 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\36\lsw\36
+33832675 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\36\lsw\36
+33832675 ClientBegin: 2
+33832675 ClientConnect: 3
+33832675 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33832675 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33832675 ClientBegin: 3
+33832675 ClientConnect: 4
+33832675 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33832675 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33832675 ClientBegin: 4
+33832675 ClientConnect: 5
+33832675 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33832675 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33832675 ClientBegin: 5
+33832675 ClientConnect: 6
+33832675 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33832675 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33832675 ClientBegin: 6
+33832675 ClientConnect: 7
+33832675 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\32\lw\32\sw\45\lsw\45
+33832675 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\32\lw\32\sw\45\lsw\45
+33832675 ClientBegin: 7
+33837150 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+33837150 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+33837150 ClientBegin: 1
+33838925 Ammo_Pack: 6 4
+33848200 ShutdownGame:
+33848200 ------------------------------------------------------------
+33848200 ------------------------------------------------------------
+33848200 InitGame: \c0\0\c1\-1\c2\-1\c3\-1\c4\-1\w0\0\w1\0\w2\0\w3\0\w4\1\w5\0\m\0
+33848200 map: te_escape2
+33848200 gametype: Stopwatch
+33848200 gametime: Tue Aug 11 05:24:56 2026
+33848700 ClientConnect: 1
+33848700 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+33848700 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+33848700 ClientBegin: 1
+33848700 ClientConnect: 2
+33848700 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\36\lsw\36
+33848700 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\36\lsw\36
+33848700 ClientBegin: 2
+33848700 ClientConnect: 3
+33848700 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\24\lw\24\sw\35\lsw\35
+33848700 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\24\lw\24\sw\35\lsw\35
+33848700 ClientBegin: 3
+33848700 ClientConnect: 4
+33848700 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33848700 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33848700 ClientBegin: 4
+33848700 ClientConnect: 5
+33848700 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33848700 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33848700 ClientBegin: 5
+33848700 ClientConnect: 6
+33848700 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33848700 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33848700 ClientBegin: 6
+33848700 ClientConnect: 7
+33848700 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\32\lw\32\sw\45\lsw\45
+33848700 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\32\lw\32\sw\45\lsw\45
+33848700 ClientBegin: 7
+33852300 Item: 5 item_health
+33852475 Item: 4 item_health
+33852700 Item: 2 weapon_magicammo
+33852700 Ammo_Pack: 6 2
+33853775 Item: 6 weapon_magicammo
+33858925 Kill: 5 6 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7wajs^7 by MOD_THOMPSON
+33859300 Kill: 4 5 8: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7endekk^7 by MOD_MP40
+33863750 Item: 7 weapon_magicammo
+33864100 Kill: 4 7 8: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7bronze^7 by MOD_MP40
+33871200 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\4\lc\4\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\32\lw\32\sw\46\lsw\46
+33881200 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\3\lc\3\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+33882675 Kill: 5 6 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7wajs^7 by MOD_THOMPSON
+33884700 Kill: 2 5 38: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7endekk^7 by MOD_KAR98
+33887800 Kill: 3 2 37: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7lagger^7 by MOD_CARBINE
+33888775 Kill: 4 3 8: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7carniee^7 by MOD_MP40
+33889625 Medic_Revive: 4 6
+33891275 Kill: 7 4 9: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7vid^7 by MOD_THOMPSON
+33894000 Kill: 7 6 9: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7wajs^7 by MOD_THOMPSON
+33901200 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+33905200 Item: 6 weapon_mp40
+33906125 Kill: 2 7 38: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7bronze^7 by MOD_KAR98
+33910325 Kill: 5 2 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7lagger^7 by MOD_THOMPSON
+33912775 Kill: 3 4 37: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7vid^7 by MOD_CARBINE
+33913975 Item: 3 weapon_M1CarbineRifle
+33914250 Medic_Revive: 5 7
+33915825 Item: 7 item_health
+33915825 Health_Pack: 5 7
+33916900 Item: 7 item_health
+33916900 Health_Pack: 5 7
+33918550 Item: 5 weapon_thompson
+33926325 Kill: 6 7 8: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7bronze^7 by MOD_MP40
+33935625 legacy popup: ^7allies^7 planted "the Tunnel Door"
+33935625 Dynamite_Plant: 3 the Tunnel Door
+33936800 Kill: 5 3 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7carniee^7 by MOD_THOMPSON
+33937525 Medic_Revive: 5 3
+33939225 Item: 3 item_health
+33939225 Health_Pack: 5 3
+33940250 Item: 3 item_health
+33940250 Health_Pack: 5 3
+33941200 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\10\lw\10\sw\45\lsw\45
+33955400 Kill: 7 6 10: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7wajs^7 by MOD_STEN
+33956250 Kill: 5 2 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7lagger^7 by MOD_THOMPSON
+33961325 Kill: 4 7 8: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7bronze^7 by MOD_MP40
+33965625 Objective_Destroyed: 3 the Tunnel Door
+33965625 legacy announce: "^7Allies have destroyed the Tunnel Door!"
+33967000 Item: 6 weapon_mp40
+33969075 Kill: 4 5 8: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7endekk^7 by MOD_MP40
+33970350 legacy popup: ^7allies^7 planted "the Main Gate!"
+33970350 Dynamite_Plant: 3 the Main Gate!
+33977675 Kill: 2 3 38: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7carniee^7 by MOD_KAR98
+33984650 Dynamite_Diffuse: 2 the Main Gate!
+33984650 legacy popup: ^7axis^7 defused "the Main Gate!"
+33991450 Kill: 3 4 9: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7vid^7 by MOD_THOMPSON
+33995400 Kill: 3 2 9: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7lagger^7 by MOD_THOMPSON
+33997075 Item: 5 weapon_thompson
+34002350 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\2\w\10\lw\10\sw\45\lsw\45
+34005300 Item: 7 weapon_sten
+34009300 LUA event: Stats saved!
+34009300 ShutdownGame:
+34009300 ------------------------------------------------------------
+34009300 ------------------------------------------------------------
+34009300 InitGame: \c0\0\c1\-1\c2\-1\c3\-1\c4\-1\w0\0\w1\0\w2\0\w3\0\w4\1\w5\0\m\0
+34009300 map: supply
+34009300 gametype: Stopwatch
+34009300 gametime: Tue Aug 11 05:27:37 2026
+34009800 ClientConnect: 1
+34009800 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+34009800 ClientConnect: 2
+34009800 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\36\lsw\36
+34009800 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\36\lsw\36
+34009800 ClientBegin: 2
+34009800 ClientConnect: 3
+34009800 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+34009800 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+34009800 ClientBegin: 3
+34009800 ClientConnect: 4
+34009800 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+34009800 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+34009800 ClientBegin: 4
+34009800 ClientConnect: 5
+34009800 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+34009800 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+34009800 ClientBegin: 5
+34009800 ClientConnect: 6
+34009800 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+34009800 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+34009800 ClientBegin: 6
+34009800 ClientConnect: 7
+34009800 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\10\lw\10\sw\45\lsw\45
+34009800 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\10\lw\10\sw\45\lsw\45
+34009800 ClientBegin: 7
+34013725 ShutdownGame:
+34013725 ------------------------------------------------------------
+34013725 ------------------------------------------------------------
+34013725 InitGame: \c0\0\c1\-1\c2\-1\c3\-1\c4\-1\w0\0\w1\0\w2\0\w3\0\w4\1\w5\0\m\0
+34013725 map: supply
+34013725 gametype: Stopwatch
+34013725 gametime: Tue Aug 11 05:27:40 2026
+34014225 ClientConnect: 1
+34014225 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+34014225 ClientConnect: 2
+34014225 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\36\lsw\36
+34014225 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\36\lsw\36
+34014225 ClientBegin: 2
+34014225 ClientConnect: 3
+34014225 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+34014225 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+34014225 ClientBegin: 3
+34014225 ClientConnect: 4
+34014225 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+34014225 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+34014225 ClientBegin: 4
+34014225 ClientConnect: 5
+34014225 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+34014225 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+34014225 ClientBegin: 5
+34014225 ClientConnect: 6
+34014225 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+34014225 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+34014225 ClientBegin: 6
+34014225 ClientConnect: 7
+34014225 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\10\lw\10\sw\45\lsw\45
+34014225 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\10\lw\10\sw\45\lsw\45
+34014225 ClientBegin: 7
+34014325 ShutdownGame:
+34014325 ------------------------------------------------------------
+34014425 ------------------------------------------------------------
+34014425 InitGame: \c0\0\c1\-1\c2\-1\c3\-1\c4\-1\w0\0\w1\0\w2\0\w3\0\w4\1\w5\0\m\0
+34014425 map: supply
+34014425 gametype: Stopwatch
+34014425 gametime: Tue Aug 11 05:27:40 2026
+34014925 ClientConnect: 1
+34014925 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+34014925 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+34014925 ClientBegin: 1
+34014925 ClientConnect: 2
+34014925 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\36\lsw\36
+34014925 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\36\lsw\36
+34014925 ClientBegin: 2
+34014925 ClientConnect: 3
+34014925 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+34014925 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+34014925 ClientDisconnect: 7
+34014925 ClientBegin: 3
+34014925 ClientConnect: 4
+34014925 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+34014925 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\3\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+34014925 ClientBegin: 4
+34014925 ClientConnect: 5
+34014925 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+34014925 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+34014925 ClientDisconnect: 6
+34014925 ClientBegin: 5
+34015600 WeaponStats: 5 0 0 0 0.00 0.00 0
+34015600 ClientDisconnect: 5
+34015600 WeaponStats: 4 0 0 0 0.00 0.00 0
+34015600 ClientDisconnect: 4
+34015600 WeaponStats: 3 0 0 0 0.00 0.00 0
+34015600 ClientDisconnect: 3
+34015600 WeaponStats: 2 0 0 0 0.00 0.00 0
+34015600 ClientDisconnect: 2
+34019050 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\ref\1\u\194
+37854725 ClientDisconnect: 1
+54713450 ClientConnect: 1
+54713450 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\u\194
+54719150 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\u\194
+54719150 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\w\3\lw\3\u\194
+54719150 ClientBegin: 1
+54729875 ClientDisconnect: 1
+54740750 ShutdownGame:
+54740750 ------------------------------------------------------------
+       0 ------------------------------------------------------------
+       0 InitGame: \c0\-1\c1\-1\c2\-1\c3\-1\c4\-1\w0\-1\w1\-1\w2\-1\w3\-1\w4\-1\w5\10\m\0
+       0 map: supply
+       0 gametype: Stopwatch
+       0 gametime: Tue Aug 11 11:14:04 2026
+30063175 ClientConnect: 1
+30063175 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\u\194
+30069375 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\u\194
+30069375 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\w\3\lw\3\u\194
+30069375 ClientBegin: 1
+30208150 ShutdownGame:
+30208150 ------------------------------------------------------------
+30208150 ------------------------------------------------------------
+30208150 InitGame: \c0\0\c1\-1\c2\-1\c3\-1\c4\-1\w0\0\w1\0\w2\0\w3\0\w4\1\w5\0\m\0
+30208150 map: sw_goldrush_te
+30208150 gametype: Stopwatch
+30208150 gametime: Tue Aug 11 19:37:32 2026
+30208150 LUA event: Round starting!
+30208650 ClientConnect: 1
+30208650 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\u\194
+30212750 ClientConnect: 2
+30212750 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1
+30212750 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\lw\3\lsw\2
+30212750 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\lw\3\lsw\2
+30212750 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\w\3\lw\3\sw\2\lsw\2
+30212750 ClientBegin: 2
+30212800 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\w\23\lw\23\sw\2\lsw\2
+30213250 ClientConnect: 3
+30213250 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1
+30213250 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\lw\8\lsw\7
+30213250 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\0\lc\0\sp\2\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\lw\8\lsw\7
+30213250 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\0\lc\0\sp\2\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\w\8\lw\8\sw\7\lsw\7
+30213250 ClientBegin: 3
+30213300 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\2\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\w\8\lw\8\sw\7\lsw\7
+30213750 ClientConnect: 4
+30213750 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1
+30213750 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\lw\3\lsw\2
+30213750 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\lw\3\lsw\2
+30213750 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\w\3\lw\3\sw\2\lsw\2
+30213750 ClientBegin: 4
+30213800 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\w\3\lw\3\sw\2\lsw\2
+30213975 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\u\194
+30213975 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\u\194
+30213975 ClientBegin: 1
+30214250 ClientConnect: 5
+30214250 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1
+30214250 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\lw\8\lsw\7
+30214250 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\0\lc\0\sp\2\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\lw\8\lsw\7
+30214250 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\0\lc\0\sp\2\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\w\8\lw\8\sw\7\lsw\7
+30214250 ClientBegin: 5
+30214300 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\2\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\w\8\lw\8\sw\7\lsw\7
+30214750 ClientConnect: 6
+30214750 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1
+30214750 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\lw\3\lsw\2
+30214750 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\lw\3\lsw\2
+30214750 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\w\3\lw\3\sw\2\lsw\2
+30214750 ClientBegin: 6
+30214800 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\w\3\lw\3\sw\2\lsw\2
+30215250 ClientConnect: 7
+30215250 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1
+30215250 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\lw\8\lsw\7
+30215250 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\0\lc\0\sp\2\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\lw\8\lsw\7
+30215250 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\0\lc\0\sp\2\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\w\8\lw\8\sw\7\lsw\7
+30215250 ClientBegin: 7
+30215300 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\3\lc\3\sp\2\msp\-1\r\0\m\0000000\s\0000000\p\0\dn\-1\w\8\lw\8\sw\7\lsw\7
+30217550 Health_Pack: 4 2
+30224175 ShutdownGame:
+30224175 ------------------------------------------------------------
+30224175 ------------------------------------------------------------
+30224175 InitGame: \c0\0\c1\-1\c2\-1\c3\-1\c4\-1\w0\0\w1\0\w2\0\w3\0\w4\1\w5\0\m\0
+30224175 map: sw_goldrush_te
+30224175 gametype: Stopwatch
+30224175 gametime: Tue Aug 11 19:37:46 2026
+30224675 ClientConnect: 1
+30224675 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\u\194
+30224675 ClientUserinfoChanged: 1 n\^0imm^7a^>ko^4a^dl^fa\t\3\c\0\lc\0\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\u\194
+30224675 ClientBegin: 1
+30224675 ClientConnect: 2
+30224675 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\2\lsw\2
+30224675 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\2\lsw\2
+30224675 ClientBegin: 2
+30224675 ClientConnect: 3
+30224675 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\7\lsw\7
+30224675 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\7\lsw\7
+30224675 ClientBegin: 3
+30224675 ClientConnect: 4
+30224675 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\2\lsw\2
+30224675 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\2\lsw\2
+30224675 ClientBegin: 4
+30224675 ClientConnect: 5
+30224675 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\7\lsw\7
+30224675 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\7\lsw\7
+30224675 ClientBegin: 5
+30224675 ClientConnect: 6
+30224675 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\2\lsw\2
+30224675 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\2\lsw\2
+30224675 ClientBegin: 6
+30224675 ClientConnect: 7
+30224675 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\3\lc\3\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\7\lsw\7
+30224675 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\3\lc\3\sp\2\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\7\lsw\7
+30224675 ClientBegin: 7
+30228375 Item: 5 item_health
+30228400 Item: 4 item_health
+30239775 Kill: 6 5 23: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7endekk^7 by MOD_AIRSTRIKE
+30239775 Kill: 6 7 23: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7bronze^7 by MOD_AIRSTRIKE
+30245375 Kill: 4 3 8: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7carniee^7 by MOD_MP40
+30255125 legacy announce: "^7Tank Barrier #1 has been constructed."
+30255125 Repair: 2
+30255225 Item: 7 weapon_thompson
+30258225 Kill: 4 5 8: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7endekk^7 by MOD_MP40
+30259525 Kill: 7 4 9: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7vid^7 by MOD_THOMPSON
+30262075 Kill: 7 6 23: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7wajs^7 by MOD_AIRSTRIKE
+30264850 Item: 7 weapon_thompson
+30264925 Item: 7 weapon_thompson
+30280775 Kill: 7 6 9: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7wajs^7 by MOD_THOMPSON
+30280950 Kill: 4 5 8: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7endekk^7 by MOD_MP40
+30283025 legacy announce: "^7The Tank has been repaired!"
+30283025 Repair: 3
+30284575 Kill: 7 4 9: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7vid^7 by MOD_THOMPSON
+30285125 legacy announce: "^7Axis Command Post constructed. Charge speed increased!"
+30285125 Repair: 2
+30285625 legacy announce: "^7Allied team has stolen the Tank!"
+30285625 ClientUserinfoChanged: 2 n\^o[BOT]^7lagger\t\1\c\2\lc\2\sp\4\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\23\lw\23\sw\2\lsw\2
+30285625 ClientUserinfoChanged: 4 n\^o[BOT]^7vid\t\1\c\1\lc\1\sp\4\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+30285625 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\3\lc\3\sp\4\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\3\lw\3\sw\36\lsw\36
+30285625 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\3\lc\3\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+30285625 ClientUserinfoChanged: 3 n\^o[BOT]^7carniee\t\2\c\2\lc\2\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+30285625 ClientUserinfoChanged: 5 n\^o[BOT]^7endekk\t\2\c\1\lc\1\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+30295450 Kill: 2 7 38: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7bronze^7 by MOD_KAR98
+30305200 Item: 7 weapon_thompson
+30315350 Kill: 7 2 9: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7lagger^7 by MOD_THOMPSON
+30317550 Kill: 5 6 3: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7wajs^7 by MOD_MG42
+30323900 Kill: 7 4 9: ^7^o[BOT]^7bronze^7 killed ^o[BOT]^7vid^7 by MOD_THOMPSON
+30324275 legacy popup: ^7allies^7 planted "Tank Barrier"
+30324275 Dynamite_Plant: 3 Tank Barrier
+30336175 ClientUserinfoChanged: 6 n\^o[BOT]^7wajs\t\1\c\4\lc\4\sp\4\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\32\lw\32\sw\46\lsw\46
+30346650 Kill: 2 3 8: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7carniee^7 by MOD_MP40
+30347175 Kill: 4 7 8: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7bronze^7 by MOD_MP40
+30352325 Medic_Revive: 5 3
+30353425 Dynamite_Diffuse: 2 Tank Barrier
+30353425 legacy popup: ^7axis^7 defused "Tank Barrier"
+30355800 Kill: 5 4 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7vid^7 by MOD_THOMPSON
+30358750 Kill: 5 2 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7lagger^7 by MOD_THOMPSON
+30359400 Kill: 3 6 9: ^7^o[BOT]^7carniee^7 killed ^o[BOT]^7wajs^7 by MOD_THOMPSON
+30371050 legacy popup: ^7allies^7 planted "Tank Barrier"
+30371050 Dynamite_Plant: 3 Tank Barrier
+30377375 Kill: 4 3 8: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7carniee^7 by MOD_MP40
+30377400 Kill: 5 4 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7vid^7 by MOD_THOMPSON
+30377625 Kill: 2 7 38: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7bronze^7 by MOD_KAR98
+30377700 Kill: 5 2 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7lagger^7 by MOD_THOMPSON
+30378350 Item: 6 weapon_fg42
+30380175 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\4\lc\4\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\10\lw\10\sw\45\lsw\45
+30381500 Kill: 5 6 3: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7wajs^7 by MOD_MG42
+30382775 Item: 5 item_health
+30383775 Item: 5 item_health
+30386925 Item: 5 weapon_thompson
+30401050 legacy announce: "^7Tank Barrier #1 has been destroyed."
+30413300 Kill: 6 7 66: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7bronze^7 by MOD_MP34
+30416825 Kill: 5 6 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7wajs^7 by MOD_THOMPSON
+30418750 Kill: 5 4 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7vid^7 by MOD_THOMPSON
+30420600 Medic_Revive: 5 7
+30422000 Kill: 4 3 16: ^7^o[BOT]^7vid^7 killed ^o[BOT]^7carniee^7 by MOD_GRENADE_LAUNCHER
+30422325 legacy announce: "^7Truck Barrier #1 has been constructed."
+30422325 Repair: 2
+30422675 Item: 7 item_health
+30422675 Health_Pack: 5 7
+30423750 Item: 5 item_health
+30424750 Item: 7 item_health
+30424750 Health_Pack: 5 7
+30428450 Kill: 5 2 3: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7lagger^7 by MOD_MG42
+30435375 legacy announce: "^7Allied team has destroyed the Axis Command Post!"
+30439050 Kill: 5 4 3: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7vid^7 by MOD_MG42
+30441575 legacy announce: "^7Allied team has destroyed the Bank Doors!"
+30453875 Kill: 6 7 13: ^7^o[BOT]^7wajs^7 killed ^o[BOT]^7bronze^7 by MOD_FG42
+30456300 Kill: 5 6 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7wajs^7 by MOD_THOMPSON
+30459925 Kill: 2 3 38: ^7^o[BOT]^7lagger^7 killed ^o[BOT]^7carniee^7 by MOD_KAR98
+30460175 ClientUserinfoChanged: 7 n\^o[BOT]^7bronze\t\2\c\3\lc\3\sp\1\msp\-1\r\0\m\0000000\s\4444444\p\0\dn\-1\w\8\lw\8\sw\35\lsw\35
+30462250 Item: 5 team_CTF_redflag
+30462250 legacy popup: ^7allies^7 stole "The Gold Bars"
+30465250 Medic_Revive: 4 6
+30466825 Item: 4 item_health
+30467900 Item: 4 item_health
+30468900 Item: 4 item_health
+30469525 Kill: 5 4 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7vid^7 by MOD_THOMPSON
+30470275 Kill: 5 6 9: ^7^o[BOT]^7endekk^7 killed ^o[BOT]^7wajs^7 by MOD_THOMPSON

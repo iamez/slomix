@@ -80,6 +80,7 @@ from website.backend.routers import (
     diagnostics_router,
     greatshot,
     greatshot_topshots,
+    live,
     planning,
     players_profile_router,
     players_router,
@@ -364,6 +365,7 @@ app.include_router(greatshot_topshots.router, prefix="/api", tags=["Greatshot To
 app.include_router(uploads.router, prefix="/api/uploads", tags=["Uploads"])
 app.include_router(availability.router, prefix="/api/availability", tags=["Availability"])
 app.include_router(planning.router, prefix="/api/planning", tags=["Planning"])
+app.include_router(live.router, prefix="/api/live", tags=["Live"])
 app.include_router(challenges_router.router, prefix="/api", tags=["Challenges"])
 app.include_router(client_error_router.router, prefix="/api", tags=["Client Errors"])
 app.include_router(season_awards_router.router, prefix="/api", tags=["Season Awards"])

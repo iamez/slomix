@@ -257,6 +257,14 @@ async def get_hold_probability(map_name: str = Query(alias="map"),
     return {"status": "ok", "map": map_name, "curve": curve}
 
 
+def _is_bot_player(p: dict) -> bool:
+    """Identity-level bot check for lua payload players (guid OMNIBOT* or
+    name [BOT]*) — mirror of ssr_service._BOTS."""
+    guid = str(p.get("guid") or "")
+    name = str(p.get("name") or "")
+    return guid.upper().startswith("OMNIBOT") or name.startswith("[BOT]")
+
+
 def _lua_players(val) -> list[dict]:
     """Normalise the axis_players/allies_players jsonb (list of {guid, name})
     whether asyncpg hands it back as a parsed list or a JSON string."""
@@ -453,6 +461,17 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
         map_name, rnum, winner = r[0], int(r[1] or 0), r[2]
         axis_sc, allies_sc = int(r[4] or 0), int(r[5] or 0)
         axis_p, allies_p = _lua_players(r[6]), _lua_players(r[7])
+        # Bot rounds must never shape the public Tonight surface. The
+        # is_valid join above only covers LINKED rows (r.id IS NULL passes
+        # unlinked ones through, legitimately — a live round is unlinked for
+        # a few minutes), so filter by identity too, same patterns as
+        # ssr_service._BOTS. A fully-bot row is skipped BEFORE the
+        # map_number increment so bot rounds don't advance the logical
+        # side alternation of the real session either.
+        axis_p = [p for p in axis_p if not _is_bot_player(p)]
+        allies_p = [p for p in allies_p if not _is_bot_player(p)]
+        if not axis_p and not allies_p:
+            continue
         start_u, end_u = r[8], r[9]
         if r[11]:
             last_gsid = r[11]
@@ -535,6 +554,14 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
                 maps_completed += 1
         mp.update({"winner": winner, "a_points": a_pts, "b_points": b_pts})
         map_list.append(mp)
+
+    # Every today-row can be a bot round that the identity filter above
+    # dropped (map_number never advanced, maps stays empty) while `rows`
+    # itself is non-empty — that must read as "no live session", not a 500.
+    if not maps or map_number not in maps:
+        return {"status": "ok", "active": False, "teams": {}, "maps": [],
+                "momentum": [], "score": {}, "current": None, "director": None,
+                "hold_probability": None}
 
     last_unix = int(rows[-1][10] or 0)
     now_unix = int(datetime.now(timezone.utc).timestamp())
