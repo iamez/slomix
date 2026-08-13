@@ -42,12 +42,20 @@ CREATE INDEX IF NOT EXISTS idx_player_identity_links_primary
 
 -- Both roles need access: the website API reads (profile/leaderboard badge) and
 -- the web self-service flow writes; the bot (etlegacy_user) writes via the
--- !bolniska command (Phase 2). Whichever role owns the table (website_app on
--- dev, the owner role on prod) makes the grant to the OTHER a real GRANT and to
--- itself a harmless no-op, so listing both is environment-agnostic.
-GRANT SELECT, INSERT, UPDATE, DELETE ON player_identity_links TO website_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON player_identity_links TO etlegacy_user;
-GRANT USAGE, SELECT ON SEQUENCE player_identity_links_id_seq TO website_app;
-GRANT USAGE, SELECT ON SEQUENCE player_identity_links_id_seq TO etlegacy_user;
+-- !bolniska command (Phase 2). Grant each only if the role exists, so a fresh
+-- CI/test database (which has etlegacy_user but NOT website_app) applies cleanly,
+-- while dev/prod (which have both) get the real grants. The grant to whichever
+-- role owns the table is a harmless no-op.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'website_app') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON player_identity_links TO website_app;
+    GRANT USAGE, SELECT ON SEQUENCE player_identity_links_id_seq TO website_app;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'etlegacy_user') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON player_identity_links TO etlegacy_user;
+    GRANT USAGE, SELECT ON SEQUENCE player_identity_links_id_seq TO etlegacy_user;
+  END IF;
+END $$;
 
 COMMIT;
