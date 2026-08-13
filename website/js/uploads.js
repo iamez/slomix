@@ -121,12 +121,15 @@ export async function loadUploadsView() {
 // (upload_validators: detect_category + SIZE_LIMITS). Used to give the uploader
 // immediate, inline feedback about how their file will be categorised and
 // whether it's within limits — before they submit.
+// Mirrors backend upload_validators.ALLOWED_EXTENSIONS EXACTLY: detect_category
+// puts .hud under 'config' (there is no separate 'hud' category), so the feedback
+// shows the category the backend will actually assign — not a guess that diverges.
 const _EXT_CATEGORY = {
-    '.cfg': 'config', '.hud': 'hud',
+    '.cfg': 'config', '.hud': 'config',
     '.zip': 'archive', '.rar': 'archive',
     '.mp4': 'clip', '.avi': 'clip', '.mkv': 'clip',
 };
-const _SIZE_LIMIT_MB = { config: 2, hud: 2, archive: 50, clip: 500 };
+const _SIZE_LIMIT_MB = { config: 2, archive: 50, clip: 500 };  // backend SIZE_LIMITS
 
 // Reflect a just-chosen file in the inline feedback strip: detected category +
 // size when valid, a clear reason when not, and disable the submit button on an
@@ -162,10 +165,18 @@ function _updateFileFeedback(file) {
     if (ok) {
         const meta = CATEGORIES[cat] || { label: cat };
         const note = (cat === 'clip' && !isBrowserPlayable(ext))
-            ? ' &middot; not playable in the browser (download-only)' : '';
+            ? ' · not playable in the browser (download-only)' : '';
         fb.className = 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 px-3 py-2 text-xs flex items-center gap-2 flex-wrap';
-        fb.innerHTML = `<span class="font-bold uppercase tracking-wider">${escapeHtml(meta.label || cat)}</span>`
-            + `<span class="text-slate-400">${escapeHtml(file.name)} &middot; ${sizeStr}${note}</span>`;
+        // Build with textContent (no innerHTML) — file.name is untrusted, and DOM
+        // text can never be reinterpreted as markup.
+        fb.textContent = '';
+        const label = document.createElement('span');
+        label.className = 'font-bold uppercase tracking-wider';
+        label.textContent = meta.label || cat;
+        const detail = document.createElement('span');
+        detail.className = 'text-slate-400';
+        detail.textContent = `${file.name} · ${sizeStr}${note}`;
+        fb.append(label, detail);
     } else {
         fb.className = 'rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300 px-3 py-2 text-xs';
         fb.textContent = msg;
@@ -221,10 +232,13 @@ function setupDragDrop() {
         }
     });
 
-    // Same feedback on a normal file-picker selection.
+    // Same feedback on a normal file-picker selection. Only act when a file is
+    // actually present: cancelling the picker fires no change on most browsers,
+    // but guarding here also keeps a spurious empty change from wiping the
+    // feedback for an already-chosen file (Copilot #719).
     if (fileInput) {
         fileInput.addEventListener('change', () => {
-            _onFileSelected(fileInput.files.length ? fileInput.files[0] : null);
+            if (fileInput.files.length) _onFileSelected(fileInput.files[0]);
         });
     }
 }
