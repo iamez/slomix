@@ -155,7 +155,15 @@ def _state(index, frame: SymbolicFrame, **changes) -> SymbolicScheduleState:
     )
 
 
-def _pending(index, *, dispatch_offset=0, resume_offset=1, targets=(1,), target_cursor=0):
+def _pending(
+    index,
+    *,
+    dispatch_offset=0,
+    resume_offset=1,
+    targets=(1,),
+    target_cursor=0,
+    occurrence_id=0,
+):
     caller = _program(index, "caller")
     target = _program(index, "target", "long")
     return PendingDispatchContext(
@@ -164,6 +172,7 @@ def _pending(index, *, dispatch_offset=0, resume_offset=1, targets=(1,), target_
         target.node.node_id,
         targets,
         target_cursor,
+        occurrence_id,
     )
 
 
@@ -283,6 +292,7 @@ def test_pending_dispatch_identity_cannot_drop_parent_cursor_target_cursor_or_or
     variants = (
         _pending(index, dispatch_offset=1, resume_offset=2, targets=(1, 3, 4), target_cursor=0),
         _pending(index, targets=(1, 3, 4), target_cursor=1),
+        _pending(index, targets=(1, 3, 4), target_cursor=0, occurrence_id=1),
     )
 
     baseline_key = key(baseline)
@@ -295,6 +305,8 @@ def test_pending_dispatch_identity_cannot_drop_parent_cursor_target_cursor_or_or
     skipped_caller_suffix = _pending(index, resume_offset=2, targets=(1, 3, 4), target_cursor=0)
     with pytest.raises(ValueError, match="resume immediately after"):
         key(skipped_caller_suffix)
+    with pytest.raises(ValueError, match="occurrence id"):
+        replace(baseline, occurrence_id=-1)
 
     mismatched_cursor = replace(baseline, target_cursor=2)
     target = _program(index, "target", "long")
@@ -1906,6 +1918,149 @@ def test_s3_replacement_of_suspended_target_restores_or_replaces_exact_owner(
         0,
         source_entity_index=0,
     ).exact_value == expected_global
+
+
+def test_s3_blocked_replacement_saves_the_displaced_target_continuation():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger target long
+                trigger target replacement
+            }
+        }
+        target
+        {
+            trigger long
+            {
+                resetscript
+            }
+            trigger replacement
+            {
+                accum 0 set 7
+                trigger missing absent
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "target"},
+        ),
+    )
+    caller = _program(index, "caller")
+    initial = _state(index, _frame(caller.node.node_id, 0, 0))
+    first_delivery = _decision_with_suspended(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert first_delivery is not None
+    displaced = first_delivery.suspended[0]
+
+    blocked = _decision(
+        step_symbolic_schedule(index, first_delivery),
+        SymbolicScheduleDecisionKind.BLOCKED,
+    )
+    assert blocked.reason == "nested_dispatch_missing_handler"
+    assert blocked.state is not None
+    replacement_frame = blocked.state.runnable[0]
+    assert replacement_frame.pending_dispatch is not None
+    assert replacement_frame.pending_dispatch.displaced_continuation == displaced
+    assert all(
+        continuation.frame.cursor.entity_index != displaced.frame.cursor.entity_index
+        for continuation in blocked.state.suspended
+    )
+    assert (
+        blocked.state.accumulator_state.read(
+            AccumulatorScope.ENTITY,
+            0,
+            source_entity_index=1,
+        ).exact_value
+        == 7
+    )
+
+
+def test_s3_repeated_static_dispatch_uses_a_distinct_occurrence_identity():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger target pause
+                setstate caller_done invisible
+            }
+        }
+        target
+        {
+            trigger pause
+            {
+                accum 0 abort_if_equal 0
+                resetscript
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "target"},
+            {"classname": "func_door", "targetname": "caller_done"},
+        ),
+    )
+    caller = _program(index, "caller")
+    unknown = SymbolicAccumulatorState.unknown()
+    initial = _state(
+        index,
+        _frame(caller.node.node_id, 0, 0),
+        accumulator_state=unknown,
+    )
+    first_delivery = _decision_with_suspended(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert first_delivery is not None
+    first_completed = _decision(
+        step_symbolic_schedule(index, first_delivery),
+        SymbolicScheduleDecisionKind.SUSPENDED,
+    ).state
+    assert first_completed is not None
+    old_continuation = first_completed.suspended[0]
+    assert old_continuation.caller_suffix_completed is True
+    assert old_continuation.frame.pending_dispatch is not None
+    assert old_continuation.frame.pending_dispatch.occurrence_id == 0
+
+    repeated_frame = _frame(caller.node.node_id, 0, 0)
+    repeated_entry = SymbolicScheduleState.create(
+        index,
+        accumulator_state=unknown,
+        runnable=(repeated_frame,),
+        suspended=first_completed.suspended,
+        event_owners=(
+            SymbolicEventOwner.from_frame(repeated_frame),
+            SymbolicEventOwner.from_frame(old_continuation.frame),
+        ),
+        effects=first_completed.effects,
+        provenance=first_completed.provenance,
+        ordering_decisions=first_completed.ordering_decisions,
+        unknown_reasons=first_completed.unknown_reasons,
+    )
+    second_delivery = next(
+        decision.state
+        for decision in step_symbolic_schedule(index, repeated_entry).decisions
+        if decision.kind is SymbolicScheduleDecisionKind.RUNNABLE
+        and decision.state is not None
+        and decision.state.suspended == first_completed.suspended
+    )
+    caller_suffix = second_delivery.runnable[0]
+    assert caller_suffix.caller_dispatches[-1].occurrence_id == 1
+
+    completed = _decision(
+        step_symbolic_schedule(index, second_delivery),
+        SymbolicScheduleDecisionKind.SUSPENDED,
+    ).state
+    assert completed is not None
+    assert completed.suspended == first_completed.suspended
+    assert tuple(record.projection.effect.target for record in completed.effects)[-1] == "caller_done"
 
 
 def test_s3_optional_death_dispatch_keeps_event_and_no_event_branches():
