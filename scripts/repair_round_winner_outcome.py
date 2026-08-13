@@ -60,10 +60,13 @@ except ImportError:  # pragma: no cover
     except ImportError:  # pragma: no cover
         _pg = None  # type: ignore[assignment]
 
-# Phase W candidates: pre-Lua R2 rows whose summary row disagrees. The `= 1`
-# scalar guard mirrors the reference script: if two summary rows ever shared
-# the identity (they cannot — (match_id, round_number) is unique and the
-# summary inherits the R2 timestamp), the row is skipped, never guessed.
+# Phase W candidates: pre-Lua R2 rows whose summary row disagrees. BOTH sides
+# of the timestamp-tuple identity are `= 1`-guarded (CodeRabbit on #729): the
+# summary-side guard skips an ambiguous source, and the symmetric R2-side
+# guard skips the case where two R2 rows share (date, time, map) — otherwise
+# both would receive the same summary winner and one of them would be wrong.
+# (match_id cannot serve as the join key here: pre-Lua summary rows carry a
+# filename-based match_id that matches their R2 row on only 44/278 candidates.)
 _W_FROM = """
     FROM rounds r2
     JOIN rounds s
@@ -82,6 +85,13 @@ _W_FROM = """
           AND s2.round_date = r2.round_date
           AND s2.round_time = r2.round_time
           AND s2.map_name = r2.map_name
+      ) = 1
+      AND (
+        SELECT COUNT(*) FROM rounds r3
+        WHERE r3.round_number = 2
+          AND r3.round_date = r2.round_date
+          AND r3.round_time = r2.round_time
+          AND r3.map_name = r2.map_name
       ) = 1
 """
 
