@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.36.1](https://github.com/iamez/slomix/compare/v1.36.0...v1.36.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* **website:** story header Kills = real session total, not KIS subset ([#709](https://github.com/iamez/slomix/issues/709)) ([1c094b3](https://github.com/iamez/slomix/commit/1c094b303e73e34ab7a69f830747f69917dab34d))
+
 ## [1.36.0](https://github.com/iamez/slomix/compare/v1.35.0...v1.36.0) (2026-08-13)
 
 
