@@ -15,6 +15,8 @@ import discord
 
 from bot.core.guid_utils import short_guid
 from bot.core.round_contract import (
+    TRUSTED_SCORE_CONFIDENCE,
+    derive_round_outcome,
     derive_stopwatch_contract,
     normalize_side_value,
     score_confidence_state,
@@ -1113,13 +1115,19 @@ class C0RNP0RN3StatsParser:
             # Calculate MVP
             mvp = self.calculate_mvp(players)
 
-            # Determine round outcome
-            round_outcome = self.determine_round_outcome(map_time, actual_time, round_num)
+            # Determine round outcome. Confidence first: the winner-based rule
+            # (derive_round_outcome) may only run when the parsed sides are
+            # trusted — otherwise it falls back to the legacy time heuristic
+            # (see round_contract.derive_round_outcome for the full story).
             score_confidence = score_confidence_state(
                 defender_team,
                 winner_team,
                 reasons=side_parse_diagnostics.get('reasons', []),
                 fallback_used=False,
+            )
+            round_outcome = derive_round_outcome(
+                winner_team, defender_team, map_time, actual_time, round_num,
+                sides_trusted=score_confidence in TRUSTED_SCORE_CONFIDENCE,
             )
             stopwatch_contract = derive_stopwatch_contract(round_num, map_time, actual_time)
 
@@ -1391,33 +1399,21 @@ class C0RNP0RN3StatsParser:
         return best_player['name'] if best_player else None
 
     def determine_round_outcome(self, map_time: str, actual_time: str, round_num: int) -> str:
-        """Determine if round was fullhold based on time comparison
+        """Time-only outcome heuristic — now ONLY the fallback path.
 
-        NOTE: In Round 2, actual_time of "0:00" appears in 19.6% of files.
-        This likely indicates the g_nextTimeLimit cvar was reset/not set.
-        We treat this as "Unknown" to preserve data integrity.
-        See dev/TIME_FORMAT_ANALYSIS.md for details.
+        This is the legacy rule (map_time - actual_time <= 30s → "Fullhold")
+        that mislabels any objective completed in the final 30 seconds. The
+        live import derives the outcome from winner/defender via
+        round_contract.derive_round_outcome and reaches this heuristic only
+        when the parsed sides are untrusted. Kept as a method for the
+        existing heuristic tests; delegates so there is one implementation.
+
+        NOTE: In Round 2, actual_time of "0:00" (g_nextTimeLimit reset/not
+        set) yields "Unknown" to preserve data integrity.
         """
-        try:
-            map_seconds = self.parse_time_to_seconds(map_time)
-            actual_seconds = (
-                self.parse_time_to_seconds(actual_time) if actual_time != "Unknown" else 600
-            )
-
-            # Special case: Round 2 with 0:00 actual_time
-            # This appears in ~20% of Round 2 files, meaning unclear
-            if round_num == 2 and actual_time == "0:00":
-                return "Unknown"
-
-            time_diff = map_seconds - actual_seconds
-
-            if time_diff <= 30:  # Within 30 seconds = time ran out
-                return "Fullhold"
-            else:
-                return "Completed"
-
-        except (ValueError, TypeError):
-            return "Unknown"
+        return derive_round_outcome(
+            0, 0, map_time, actual_time, round_num, sides_trusted=False
+        )
 
     def _get_error_result(self, error_type: str) -> dict[str, Any]:
         """Return standardized error result"""

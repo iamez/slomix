@@ -55,6 +55,12 @@ _ROUNDS_DDL = """
         bot_player_count INTEGER DEFAULT 0,
         human_player_count INTEGER DEFAULT 0,
         is_valid BOOLEAN NOT NULL DEFAULT TRUE,
+        -- round-contract columns (migration 012) — the production INSERT
+        -- persists these since the 2026-08-14 source fix
+        score_confidence VARCHAR(32),
+        round_stopwatch_state VARCHAR(16),
+        time_to_beat_seconds INTEGER,
+        next_timelimit_minutes INTEGER,
         UNIQUE (match_id, round_number)
     )
 """

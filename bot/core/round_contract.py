@@ -258,6 +258,55 @@ def parse_time_to_seconds(value: Any) -> int | None:
         return None
 
 
+# score_confidence states under which the parsed winner/defender sides may be
+# used for outcome derivation. "ambiguous"/"missing" mean the header sides are
+# suspect (e.g. _parse_side_fields silently defaults defender to 1 when the
+# field is absent) — deriving an outcome from them would launder a guess.
+TRUSTED_SCORE_CONFIDENCE = ("verified_header", "time_fallback")
+
+
+def derive_round_outcome(
+    winner_team: Any,
+    defender_team: Any,
+    map_time: Any,
+    actual_time: Any,
+    round_number: Any,
+    sides_trusted: bool,
+) -> str:
+    """Canonical round outcome: 'Fullhold' | 'Completed' | 'Unknown'.
+
+    A fullhold IS "the defending side won the round", and the game reports the
+    winner in the endstats header — so when the parsed sides are trusted, the
+    outcome is derived from them directly. The old time-only heuristic
+    (map_time - actual_time <= 30s → "Fullhold") mislabeled every objective
+    completed in the final 30 seconds (31% of stored 'Fullhold' rows
+    contradicted their own winner_team; audit 2026-08-14, e.g. supply
+    2026-08-02 R1 completed at 11:57 of 12:00). It remains only as the
+    fallback for rounds whose sides never parsed.
+    """
+    winner = normalize_side_value(winner_team, allow_unknown=True)
+    defender = normalize_side_value(defender_team, allow_unknown=True)
+    if sides_trusted and winner in (1, 2) and defender in (1, 2):
+        return "Fullhold" if winner == defender else "Completed"
+
+    # --- legacy time-heuristic fallback (exact historical semantics) -------
+    try:
+        map_seconds = parse_time_to_seconds(map_time)
+        actual_seconds = (
+            parse_time_to_seconds(actual_time)
+            if actual_time != "Unknown" else 600
+        )
+        # R2 with a 0:00 actual_time means g_nextTimeLimit was reset/not set —
+        # the heuristic has nothing to compare, so it must not guess.
+        if int(round_number or 0) == 2 and actual_time == "0:00":
+            return "Unknown"
+        if map_seconds is None or actual_seconds is None:
+            return "Unknown"
+        return "Fullhold" if (map_seconds - actual_seconds) <= 30 else "Completed"
+    except (ValueError, TypeError):
+        return "Unknown"
+
+
 def derive_stopwatch_contract(
     round_number: Any,
     time_limit_value: Any,
