@@ -106,6 +106,30 @@ class TestInvariantLogic:
         }
         assert not _results_by_key(ctx)["conservation_box_score"].passed
 
+    def test_box_score_non_numeric_map_point_is_flagged_not_raised(self):
+        ctx = _clean_context()
+        ctx.panels["box_score"] = {
+            "alpha_score": 4, "beta_score": 0,
+            "maps": [{"alpha_points": 2, "beta_points": 0},
+                     {"alpha_points": "oops", "beta_points": 0}],  # malformed
+        }
+        # evaluate() must not raise; the invariant flags the bad point.
+        assert not _results_by_key(ctx)["conservation_box_score"].passed
+
+    def test_a_raising_invariant_becomes_a_violation_not_a_crash(self, monkeypatch):
+        # A check that blows up must surface as a violation, not abort the report.
+        import tests.contract.story_invariants as si
+
+        def _boom(_ctx):
+            raise RuntimeError("kaboom")
+
+        bad = si.Invariant("boom", "test", "always raises", _boom)
+        monkeypatch.setattr(si, "INVARIANTS", [bad])
+        results = si.evaluate(_clean_context())
+        assert len(results) == 1                # full verdict produced, no crash
+        assert not results[0].passed
+        assert "kaboom" in results[0].violations[0]
+
     def test_wrong_header_total_trips_conservation(self):
         ctx = _clean_context()
         ctx.panels["kill_impact"]["total_kills"] = 61  # the hero-KILLS bug
