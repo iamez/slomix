@@ -287,6 +287,24 @@ async def get_kill_impact_leaderboard(
         compute_result = await svc.compute_session_kis_for_gsid(scope.gaming_session_id)
     leaderboard = await svc.get_kis_leaderboard(scope, limit=limit)
 
+    # total_kills is the session's REAL kill count (player_comprehensive_stats),
+    # not the sum of per-player KIS kills. The KIS `kills` on each row is only the
+    # proximity-tracked subset that carries an impact score, so summing it gave a
+    # header "Kills" far below the session's actual total (~61 vs ~500). Fall back
+    # to that sum only when the scope has no gaming_session_id to aggregate by.
+    real_total_kills = None
+    if scope.gaming_session_id is not None:
+        row = await db.fetch_one(
+            "SELECT COALESCE(SUM(pcs.kills), 0) "
+            "FROM player_comprehensive_stats pcs "
+            "JOIN rounds r ON r.id = pcs.round_id "
+            "WHERE r.gaming_session_id = $1 AND r.round_number IN (1, 2) "
+            "AND UPPER(pcs.player_guid) NOT LIKE 'OMNIBOT%' "
+            "AND pcs.player_name NOT LIKE '%[BOT]%'",
+            (scope.gaming_session_id,),
+        )
+        real_total_kills = int(row[0]) if row and row[0] is not None else None
+
     return {
         "status": "ok",
         "session_date": scope.dates[0],
@@ -295,7 +313,8 @@ async def get_kill_impact_leaderboard(
         "players": leaderboard,
         "entries": leaderboard,
         "total": len(leaderboard),
-        "total_kills": sum(p.get("kills", 0) for p in leaderboard),
+        "total_kills": (real_total_kills if real_total_kills is not None
+                        else sum(p.get("kills", 0) for p in leaderboard)),
     }
 
 

@@ -269,6 +269,9 @@ async function loadStoryData() {
         }
 
         storyState.players = Array.isArray(data?.players) ? data.players : [];
+        // Session's REAL total kills (backend now sends the player_comprehensive_stats
+        // count, not the KIS-tracked subset the per-player rows carry).
+        storyState.totalKills = Number.isFinite(data?.total_kills) ? data.total_kills : null;
 
         if (storyState.players.length === 0) {
             renderEmpty('No kill impact data for this session');
@@ -411,7 +414,12 @@ function renderStoryHero(sessionDate, players) {
     const statsRow = document.getElementById('story-stats-row');
 
     const totalKIS = players.reduce((s, p) => s + (p.total_kis || 0), 0);
-    const totalKills = players.reduce((s, p) => s + (p.kills || 0), 0);
+    // Prefer the backend's real session total; fall back to the KIS-kill sum only
+    // if it's missing (per-player p.kills is the proximity-tracked subset, so the
+    // sum reads far below the session's actual kill count).
+    const totalKills = (storyState.totalKills != null)
+        ? storyState.totalKills
+        : players.reduce((s, p) => s + (p.kills || 0), 0);
     const topPlayer = players[0];
 
     if (title) title.textContent = `Session ${sessionDate}`;
