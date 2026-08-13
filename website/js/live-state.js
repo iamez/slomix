@@ -22,6 +22,7 @@ let _interval = null;
 let _ticker = null;
 let _snapshotAt = 0;  // Date.now() when the current snapshot arrived
 let _lastOk = null;
+let _pollSeq = 0;     // monotonic: a poll only commits if still the current one
 
 function _viewActive() {
     const v = document.getElementById('view-live');
@@ -53,13 +54,20 @@ function _clock(sec) {
 
 async function _poll() {
     if (!_viewActive()) { stopLiveState(); return; }
+    // Sequence guard: if a slow fetch resolves after a newer poll started (or
+    // after stopLiveState), it must NOT overwrite the fresher snapshot/timestamp
+    // — that would rewind _snapshotAt and glitch the timer (CodeRabbit).
+    const seq = ++_pollSeq;
     try {
-        _snapshot = await fetchJSON(`${API_BASE}/live/state`,
+        const snap = await fetchJSON(`${API_BASE}/live/state`,
             { cachePolicy: 'no-store', credentials: 'same-origin' });
+        if (seq !== _pollSeq) return;  // superseded — drop this stale response
+        _snapshot = snap;
         _snapshotAt = Date.now();
         _lastOk = true;
         renderLiveState();
     } catch (e) {
+        if (seq !== _pollSeq) return;
         _lastOk = false;
         console.warn('live state poll failed', e);
     }
@@ -91,6 +99,7 @@ export function startLiveState() {
 }
 
 export function stopLiveState() {
+    _pollSeq++;  // invalidate any in-flight poll so it can't commit after stop
     if (_interval) { clearInterval(_interval); _interval = null; }
     if (_ticker) { clearInterval(_ticker); _ticker = null; }
 }
