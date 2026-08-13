@@ -90,6 +90,7 @@ class AlertTargetDisposition(StrEnum):
     SCRIPT_IDENTITY_OPAQUE = "script_identity_opaque"
     SCRIPT_IDENTITY_RUNTIME_MUTABLE = "script_identity_runtime_mutable"
     STATIC_PROPERTY_INVALID = "static_property_invalid"
+    USE_CALLBACK_MISSING = "use_callback_missing"
     USE_CALLBACK_NOT_MODELED = "use_callback_not_modeled"
     USE_CHAIN_SCRIPT_EVENT_NOT_MODELED = "use_chain_script_event_not_modeled"
     USE_LIFECYCLE_NOT_MODELED = "use_lifecycle_not_modeled"
@@ -3086,6 +3087,16 @@ def _project_alert_targets(
                         identity.script_name,
                         None,
                         AlertTargetDisposition.STATIC_PROPERTY_INVALID,
+                    )
+                )
+            elif (spawnflags & 9) == 0:
+                targets.append(
+                    AlertTargetProjection(
+                        entity_index,
+                        identity.classname,
+                        identity.script_name,
+                        None,
+                        AlertTargetDisposition.USE_CALLBACK_MISSING,
                     )
                 )
             elif spawnflags & 8 and not spawnflags & 1 and health != 0:
