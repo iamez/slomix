@@ -106,6 +106,8 @@ from website.backend.map_geometry.stage import (
     parse_objdata,
 )
 from website.backend.map_geometry.stage_possibilities import (
+    AlertTargetDisposition,
+    AlertTargetProjection,
     ControlBarrierInstruction,
     ControlBarrierKind,
     KillInstruction,
@@ -127,6 +129,7 @@ from website.backend.map_geometry.stage_possibilities import (
     SymbolicGuardDecision,
     SymbolicIntegerDomain,
     SymbolicPathCompletion,
+    SymbolicRuntimeEventDispatch,
     SymbolicTemporalBoundaryState,
     TriggerInstruction,
     build_ordered_stage_program_index,
@@ -204,6 +207,8 @@ __all__ = [
     "AccumulatorScope",
     "AssetContentChangedError",
     "AlertEntityEffect",
+    "AlertTargetDisposition",
+    "AlertTargetProjection",
     "AssetCommand",
     "AutoSpawnEffect",
     "AutoSpawnEffectProjection",
@@ -324,6 +329,7 @@ __all__ = [
     "SymbolicGuardDecision",
     "SymbolicIntegerDomain",
     "SymbolicPathCompletion",
+    "SymbolicRuntimeEventDispatch",
     "SymbolicTemporalBoundaryState",
     "StageParseError",
     "StaticStageGraph",
