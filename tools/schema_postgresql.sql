@@ -4358,6 +4358,7 @@ CREATE TABLE public.uploads (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     expires_at timestamp without time zone,
+    poster_path text,
     CONSTRAINT uploads_category_check CHECK ((category = ANY (ARRAY['config'::text, 'hud'::text, 'archive'::text, 'clip'::text]))),
     CONSTRAINT uploads_status_check CHECK ((status = ANY (ARRAY['active'::text, 'quarantined'::text, 'deleted'::text])))
 );

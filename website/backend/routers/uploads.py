@@ -112,6 +112,9 @@ def _get_validators():
 async def upload_file(
     request: Request,
     file: UploadFile = File(...),
+    # Optional client-captured JPEG poster (first frame of a clip). Decorative —
+    # a missing/invalid poster never fails the upload (Faza 2).
+    poster: UploadFile | None = File(None),
     # Form(...), not bare defaults. A plain scalar on a POST is a QUERY
     # parameter to FastAPI, while the upload form sends multipart/form-data —
     # so these never arrived. Measured before the fix: of 5 uploads in the dev
@@ -173,6 +176,12 @@ async def upload_file(
     safe_title = (title.strip() or v.sanitize_filename(saved.original_filename, max_len=100))[:200]
     safe_desc = (description.strip())[:2000] if description else None
 
+    # Store the poster only for browser-playable clips (.mp4); best-effort, so a
+    # bad poster leaves poster_path NULL and the card falls back to the icon.
+    poster_rel = None
+    if poster is not None and saved.extension == ".mp4":
+        poster_rel = await storage.save_poster(saved.upload_id, saved.category, poster)
+
     # Insert metadata into DB
     try:
         await db.execute(
@@ -180,8 +189,8 @@ async def upload_file(
             INSERT INTO uploads
                 (id, uploader_discord_id, uploader_name, category, title, description,
                  original_filename, stored_path, extension, file_size_bytes,
-                 content_hash_sha256, mime_type, status, expires_at)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'active',
+                 content_hash_sha256, mime_type, poster_path, status, expires_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$14,'active',
                     CASE WHEN $13::int IS NULL THEN NULL
                          ELSE CURRENT_TIMESTAMP + ($13::int * INTERVAL '1 day') END)
             """,
@@ -199,6 +208,7 @@ async def upload_file(
                 saved.content_hash_sha256,
                 v.get_content_type(saved.extension),
                 retention_days,
+                poster_rel,
             ),
         )
     except Exception as e:
@@ -330,7 +340,7 @@ async def list_uploads(
         SELECT u.id, u.title, u.original_filename, u.category, u.extension,
                u.file_size_bytes, u.uploader_name, u.uploader_discord_id,
                u.download_count, u.created_at, LEFT(COALESCE(u.description, ''), 160),
-               u.expires_at
+               u.expires_at, u.poster_path
         FROM uploads u
         WHERE {where}
         ORDER BY {_UPLOAD_SORTS[sort]}
@@ -356,6 +366,9 @@ async def list_uploads(
             # default; a value is the deadline after which it stops appearing.
             "expires_at": str(r[11]) if r[11] else None,
             "share_url": f"/share/{r[0]}",
+            # Poster thumbnail URL when one was captured; None → card shows the
+            # category icon (older uploads, non-clips).
+            "poster_url": f"/api/uploads/{r[0]}/poster" if r[12] else None,
         }
         for r in rows
     ]
@@ -380,7 +393,8 @@ async def get_upload(upload_id: str, request: Request, db=Depends(get_db)):
         f"""
         SELECT id, title, description, original_filename, category, extension,
                file_size_bytes, mime_type, uploader_name, uploader_discord_id,
-               download_count, content_hash_sha256, created_at, expires_at
+               download_count, content_hash_sha256, created_at, expires_at,
+               poster_path
         FROM uploads
         WHERE id = $1 AND {_LIVE}
         """,
@@ -416,6 +430,7 @@ async def get_upload(upload_id: str, request: Request, db=Depends(get_db)):
         "share_url": f"/share/{row[0]}",
         "download_url": f"/api/uploads/{row[0]}/download",
         "is_playable": row[5] == ".mp4",
+        "poster_url": f"/api/uploads/{row[0]}/poster" if row[14] else None,
     }
 
 
@@ -534,6 +549,44 @@ async def download_upload(
             "X-Content-Type-Options": "nosniff",
             "Content-Security-Policy": "default-src 'none'",
             "X-Frame-Options": "DENY",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/uploads/{upload_id}/poster  —  Serve the clip's poster thumbnail
+# ---------------------------------------------------------------------------
+
+@router.get("/{upload_id}/poster")
+async def get_upload_poster(upload_id: str, db=Depends(get_db)):
+    """Serve the client-captured JPEG poster for a clip (Faza 2).
+
+    404 when the upload has no poster; the card then falls back to the category
+    icon. The image is content-addressed by upload id and never changes, so it
+    is served with a long immutable cache.
+    """
+    row = await db.fetch_one(
+        f"SELECT poster_path FROM uploads WHERE id = $1 AND {_LIVE}",
+        (upload_id,),
+    )
+    if not row or not row[0]:
+        raise HTTPException(status_code=404, detail="No poster for this upload")
+
+    storage = _get_storage()
+    try:
+        resolved = storage.resolve_download_path(row[0])
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=404, detail="Poster not found on disk")
+
+    return FileResponse(
+        path=str(resolved),
+        media_type="image/jpeg",
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; img-src 'self';",
         },
     )
 

@@ -27,6 +27,13 @@ logger = get_app_logger("upload.store")
 UPLOAD_STORAGE_ROOT_DEFAULT = "data/uploads"
 UPLOAD_CHUNK_SIZE = 1024 * 1024  # 1MB chunks
 
+# Poster thumbnails (Faza 2): a client captures the first frame of a clip as a
+# small JPEG and sends it with the upload. Bounded hard and never trusted — a
+# decorative thumbnail must never be able to fail or bloat an otherwise-valid
+# upload.
+POSTER_MAX_BYTES = 1024 * 1024  # 1 MB is ample for a thumbnail JPEG
+_JPEG_MAGIC = b"\xff\xd8\xff"
+
 
 @dataclass
 class SavedUpload:
@@ -255,6 +262,31 @@ class UploadStorageService:
             content_hash_sha256=content_hash,
             category=category,
         )
+
+    async def save_poster(self, upload_id: str, category: str, poster: UploadFile) -> str | None:
+        """Store a client-captured JPEG poster next to the upload's original file.
+
+        Returns the poster's path relative to the storage root, or None when the
+        poster is missing, oversized, or not a JPEG — the caller then stores no
+        poster and the card falls back to the category icon. NEVER raises: the
+        poster is decorative and must not fail an otherwise-valid upload.
+        """
+        if poster is None:
+            return None
+        upload_dir = self.root / category / upload_id
+        if not upload_dir.is_dir():
+            return None
+        try:
+            # Read one byte past the cap so an oversized poster is detected
+            # without slurping an arbitrarily large body into memory.
+            data = await poster.read(POSTER_MAX_BYTES + 1)
+            if not data or len(data) > POSTER_MAX_BYTES or not data.startswith(_JPEG_MAGIC):
+                return None
+            (upload_dir / "poster.jpg").write_bytes(data)
+            return f"{category}/{upload_id}/poster.jpg"
+        except Exception:  # noqa: BLE001 — poster is decorative; never fatal
+            logger.warning("poster save failed for %s", upload_id, exc_info=True)
+            return None
 
     def _cleanup_failed_upload(self, file_path: Path) -> None:
         """
