@@ -189,16 +189,19 @@ def _format_group_label(group_data: dict, fallback: str) -> str:
 class _NarrativeMixin:
     """Narrative methods for StorytellingService."""
 
-    async def _collect_session_arc(self, gaming_session_id: int | None, seed: int) -> str:
-        """One sentence naming the session's SHAPE (statement/comeback/nail-biter/
-        trade-fest), opening the recap. Sourced from the BOX score — a single team
-        vocabulary, so no cross-source mapping to get wrong. Empty string when the
-        session isn't shapeable (0/1 maps, a tie) or BOX is unavailable.
+    async def _collect_session_arc(self, gaming_session_id: int | None, seed: int) -> dict | None:
+        """Shape a session for the recap: the prose sentence PLUS the structured
+        fields the hero renders as a glanceable badge.
 
-        Best-effort: any failure returns "" and the recap opens as before.
+        Returns ``{"sentence", "shape", "winner", "ws", "ls"}`` — sentence opens
+        the paragraph, the rest drives the visual arc pill — or None when the
+        session isn't shapeable (0/1 completed maps, a tie) or BOX is unavailable.
+        Sourced from the BOX score alone (one team vocabulary, nothing to
+        misalign). Best-effort: any failure returns None and the recap opens as
+        before.
         """
         if gaming_session_id is None:
-            return ""
+            return None
         # One guard around the WHOLE pipeline (fetch, conversion, classify, format)
         # — the arc is a non-critical opener, so a failure anywhere must omit it,
         # not break the recap.
@@ -216,23 +219,24 @@ class _NarrativeMixin:
             alpha_s = sum(int(m.get("alpha_points", 0) or 0) for m in completed)
             beta_s = sum(int(m.get("beta_points", 0) or 0) for m in completed)
             if alpha_s == beta_s:
-                return ""
+                return None
             winner_side = "alpha" if alpha_s > beta_s else "beta"
-            shape = classify_session_arc(
-                completed, winner_side, max(alpha_s, beta_s), min(alpha_s, beta_s),
-            )
+            ws, ls = max(alpha_s, beta_s), min(alpha_s, beta_s)
+            shape = classify_session_arc(completed, winner_side, ws, ls)
             if not shape:
-                return ""
+                return None
             winner_name = strip_et_colors(
                 data.get("winner_name")
                 or (data.get("alpha_team") if winner_side == "alpha" else data.get("beta_team"))
                 or "The winners"
             )
-            return _pick_variant(_ARC_LEADS[shape], seed).format(
-                winner=winner_name, ws=max(alpha_s, beta_s), ls=min(alpha_s, beta_s),
+            sentence = _pick_variant(_ARC_LEADS[shape], seed).format(
+                winner=winner_name, ws=ws, ls=ls,
             )
+            return {"sentence": sentence, "shape": shape, "winner": winner_name,
+                    "ws": ws, "ls": ls}
         except Exception:  # noqa: BLE001 — arc is a non-critical opener add-on
-            return ""
+            return None
 
     async def _collect_human_thread(self, kis_board: list, seed: int) -> str:
         """The story behind the numbers: name an active sick-leave/injury comeback.
@@ -485,11 +489,11 @@ class _NarrativeMixin:
         parts = [opener]
 
         # Session arc — the SHAPE of the night, right after the opener so the
-        # recap leads with a story, not a stat. Empty for unshapeable sessions.
+        # recap leads with a story, not a stat. None for unshapeable sessions.
         session_arc = await self._collect_session_arc(
             getattr(scope, "gaming_session_id", None), seed + 5)
         if session_arc:
-            parts.append(" " + session_arc + ".")
+            parts.append(" " + session_arc["sentence"] + ".")
 
         parts.append(" " + _pick_variant(_MVP_LEADS, seed).format(
             name=mvp_name, archetype=mvp_archetype, dpm=mvp_dpm, kis=mvp_kis,
@@ -525,6 +529,15 @@ class _NarrativeMixin:
             "status": "ok",
             "session_date": sd_str,
             "narrative": narrative,
+            # Structured arc for the hero badge (None when unshapeable). The
+            # sentence is already inside `narrative`; these fields let the UI show
+            # the shape + score glanceably without re-parsing the prose.
+            "session_arc": None if session_arc is None else {
+                "shape": session_arc["shape"],
+                "winner": session_arc["winner"],
+                "ws": session_arc["ws"],
+                "ls": session_arc["ls"],
+            },
         }
 
     async def generate_player_narratives(
