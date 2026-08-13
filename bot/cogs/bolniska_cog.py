@@ -9,16 +9,19 @@ record. See TOK F / migration 073 (player_identity_links).
 
 Commands:
 - !bolniska                     — show your current sick-leave status
-- !bolniska start <GUID>        — mark <GUID> as your sick-leave alt (you must be linked)
+- !bolniska start <GUID>        — mark <GUID> (which you must have linked) as your
+                                  sick-leave alt, kept separate from your main stats
 - !bolniska end                 — close your open sick-leave period
 - !bolniska merge <GUID>        — opt in to folding <GUID> into your main identity (Phase 3)
-- !bolniska set @user <PRIMARY> <ALT>  — admin: set a link for anyone (Manage Server)
+- !bolniska set @user <PRIMARY> <ALT>  — admin: set a link for anyone (Manage Server + admin channel)
 """
 
 import logging
 
 import discord
 from discord.ext import commands
+
+from bot.core.checks import is_admin_channel, is_public_channel
 
 logger = logging.getLogger(__name__)
 
@@ -35,57 +38,77 @@ class BolniskaCog(commands.Cog, name="Bolniska"):
         self.bot = bot
         logger.info("🩹 BolniskaCog loaded")
 
-    # ── helpers ────────────────────────────────────────────────────────────
+    # ── helpers (all queries use ? placeholders — the adapter translates) ────
     async def _linked_guids(self, discord_id: int) -> list[str]:
         """Every guid linked to this Discord user (user_player_links, then the
-        legacy player_links)."""
+        legacy player_links). This is the ownership source of truth."""
         rows = await self.bot.db_adapter.fetch_all(
-            "SELECT player_guid FROM user_player_links WHERE user_id = $1",
+            "SELECT player_guid FROM user_player_links WHERE user_id = ?",
             (discord_id,),
         ) or []
         guids = [r[0] for r in rows if r[0]]
         if not guids:
             rows = await self.bot.db_adapter.fetch_all(
-                "SELECT player_guid FROM player_links WHERE discord_id = $1",
+                "SELECT player_guid FROM player_links WHERE discord_id = ?",
                 (discord_id,),
             ) or []
             guids = [r[0] for r in rows if r[0]]
         return guids
 
-    async def _main_guid(self, discord_id: int, exclude: str | None = None) -> str | None:
-        """The invoker's main guid: the linked guid with the most rounds
+    async def _main_guid(self, guids: list[str], exclude: str | None = None) -> str | None:
+        """The player's main guid among ``guids``: the one with the most rounds
         (excluding the candidate alt)."""
-        guids = [g for g in await self._linked_guids(discord_id) if g != exclude]
-        if not guids:
+        candidates = [g for g in guids if g != exclude]
+        if not candidates:
             return None
-        if len(guids) == 1:
-            return guids[0]
+        if len(candidates) == 1:
+            return candidates[0]
         row = await self.bot.db_adapter.fetch_one(
             "SELECT player_guid FROM player_comprehensive_stats "
-            "WHERE player_guid = ANY($1) GROUP BY player_guid "
+            "WHERE player_guid = ANY(?) GROUP BY player_guid "
             "ORDER BY COUNT(*) DESC LIMIT 1",
-            (guids,),
+            (candidates,),
         )
-        return row[0] if row else guids[0]
+        return row[0] if row else candidates[0]
 
     async def _existing_link(self, alt_guid: str):
         return await self.bot.db_adapter.fetch_one(
             "SELECT primary_guid, alt_guid, link_type, period_end "
-            "FROM player_identity_links WHERE alt_guid = $1",
+            "FROM player_identity_links WHERE alt_guid = ?",
             (alt_guid,),
         )
 
+    async def _linked_to_other(self, guid: str, discord_id: int) -> bool:
+        """True if ``guid`` is already linked to a DIFFERENT Discord account —
+        the ownership guard: you may attribute an unclaimed guid to yourself, but
+        not hijack a guid someone else has linked."""
+        row = await self.bot.db_adapter.fetch_one(
+            "SELECT user_id FROM user_player_links WHERE player_guid = ? "
+            "AND user_id <> ? LIMIT 1",
+            (guid, discord_id),
+        )
+        if row:
+            return True
+        row = await self.bot.db_adapter.fetch_one(
+            "SELECT discord_id FROM player_links WHERE player_guid = ? "
+            "AND discord_id <> ? LIMIT 1",
+            (guid, discord_id),
+        )
+        return row is not None
+
     async def _guid_seen(self, guid: str) -> bool:
         row = await self.bot.db_adapter.fetch_one(
-            "SELECT 1 FROM player_comprehensive_stats WHERE player_guid = $1 LIMIT 1",
+            "SELECT 1 FROM player_comprehensive_stats WHERE player_guid = ? LIMIT 1",
             (guid,),
         )
         return row is not None
 
-    # ── commands ───────────────────────────────────────────────────────────
+    # ── commands ─────────────────────────────────────────────────────────────
     @commands.group(name="bolniska", aliases=["sickleave"], invoke_without_command=True)
+    @is_public_channel()
+    @commands.cooldown(1, 5, commands.BucketType.user)
     async def bolniska(self, ctx):
-        """Show your current sick-leave status."""
+        """🩹 Sick-leave attribution. No args: your status. Subcommands: `start <GUID>`, `end`, `merge <GUID>`; admin `set @user <PRIMARY> <ALT>` (Manage Server + admin channel)."""
         guids = await self._linked_guids(ctx.author.id)
         if not guids:
             await ctx.send(
@@ -98,14 +121,14 @@ class BolniskaCog(commands.Cog, name="Bolniska"):
         rows = await self.bot.db_adapter.fetch_all(
             "SELECT primary_guid, alt_guid, link_type, reason, period_start, period_end "
             "FROM player_identity_links "
-            "WHERE primary_guid = ANY($1) OR alt_guid = ANY($1) "
+            "WHERE primary_guid = ANY(?) OR alt_guid = ANY(?) "
             "ORDER BY period_start DESC NULLS LAST",
-            (guids,),
+            (guids, guids),
         ) or []
         if not rows:
             await ctx.send(
                 "🩹 No sick-leave links on your account. Start one with "
-                "`!bolniska start <GUID>` (mark a new/injured cl_guid)."
+                "`!bolniska start <GUID>` (mark a new/injured cl_guid you've linked)."
             )
             return
         lines = []
@@ -120,25 +143,37 @@ class BolniskaCog(commands.Cog, name="Bolniska"):
         await ctx.send("🩹 **Your sick-leave links:**\n" + "\n".join(lines))
 
     @bolniska.command(name="start")
+    @is_public_channel()
+    @commands.cooldown(1, 10, commands.BucketType.user)
     async def bolniska_start(self, ctx, guid: str | None = None):
-        """Mark <GUID> as your sick-leave alt (kept separate from your main stats)."""
+        """Mark a GUID YOU'VE LINKED as your sick-leave alt (kept separate)."""
         if not _valid_guid(guid):
             await ctx.send("❌ Usage: `!bolniska start <GUID>` — GUID is 8 hex chars.")
             return
         guid = guid.upper()
-        primary = await self._main_guid(ctx.author.id, exclude=guid)
-        if not primary:
+        # Ownership (stats presence is NOT ownership):
+        #  1) the invoker must be a linked player — proves they're not anonymous;
+        #  2) the alt must not already be linked to a DIFFERENT account — you may
+        #     attribute an unclaimed new guid to yourself, but never hijack one
+        #     someone else has claimed. created_by is recorded for admin review.
+        linked = await self._linked_guids(ctx.author.id)
+        if not linked:
             await ctx.send(
-                "❌ You need a linked main identity first. Run `!link` to link your "
-                "primary guid, then `!bolniska start <GUID>`. (Admins can use "
-                "`!bolniska set @user <PRIMARY> <ALT>` for unlinked players.)"
+                "❌ Link your main identity first with `!link`, then "
+                f"`!bolniska start {guid}`. (Admins: `!bolniska set @user <PRIMARY> <ALT>`.)"
             )
             return
-        if primary == guid:
-            await ctx.send("❌ The sick-leave guid must differ from your main guid.")
+        primary = await self._main_guid(linked, exclude=guid)
+        if not primary:
+            await ctx.send("❌ The sick-leave guid must differ from your linked main guid.")
             return
         if not await self._guid_seen(guid):
             await ctx.send(f"❌ No stats found for `{guid}` — is that the right cl_guid?")
+            return
+        if await self._linked_to_other(guid, ctx.author.id):
+            await ctx.send(
+                f"❌ `{guid}` is linked to another account — ask an admin if that's a mistake."
+            )
             return
         existing = await self._existing_link(guid)
         if existing:
@@ -147,20 +182,26 @@ class BolniskaCog(commands.Cog, name="Bolniska"):
                 f"({existing[2]}). Use `!bolniska end` to close it, or ask an admin."
             )
             return
-        await self.bot.db_adapter.execute(
+        # INSERT ... RETURNING so a lost ON CONFLICT race is reported honestly.
+        row = await self.bot.db_adapter.fetch_one(
             "INSERT INTO player_identity_links "
             "(primary_guid, alt_guid, link_type, reason, period_start, created_by) "
-            "VALUES ($1, $2, 'sick_leave', 'injury', CURRENT_DATE, $3) "
-            "ON CONFLICT (alt_guid) DO NOTHING",
+            "VALUES (?, ?, 'sick_leave', 'injury', CURRENT_DATE, ?) "
+            "ON CONFLICT (alt_guid) DO NOTHING RETURNING id",
             (primary, guid, int(ctx.author.id)),
         )
+        if not row:
+            await ctx.send(f"⚠️ `{guid}` was just linked by another request — nothing to do.")
+            return
         await ctx.send(
             f"🩹 On sick leave — `{guid}` is now attributed to your main `{primary}`, "
-            "kept SEPARATE from your main stats. Close it with `!bolniska end` when "
-            "you're back, or `!bolniska merge {guid}` to fold it in."
+            f"kept SEPARATE from your main stats. Close it with `!bolniska end` when "
+            f"you're back, or `!bolniska merge {guid}` to fold it in."
         )
 
     @bolniska.command(name="end")
+    @is_public_channel()
+    @commands.cooldown(1, 10, commands.BucketType.user)
     async def bolniska_end(self, ctx):
         """Close your open sick-leave period."""
         guids = await self._linked_guids(ctx.author.id)
@@ -169,41 +210,51 @@ class BolniskaCog(commands.Cog, name="Bolniska"):
             return
         row = await self.bot.db_adapter.fetch_one(
             "SELECT alt_guid FROM player_identity_links "
-            "WHERE (primary_guid = ANY($1) OR alt_guid = ANY($1)) "
+            "WHERE (primary_guid = ANY(?) OR alt_guid = ANY(?)) "
             "AND link_type = 'sick_leave' AND period_end IS NULL "
             "ORDER BY period_start DESC LIMIT 1",
-            (guids,),
+            (guids, guids),
         )
         if not row:
             await ctx.send("🩹 You have no open sick-leave period.")
             return
+        alt = row[0]
         await self.bot.db_adapter.execute(
-            "UPDATE player_identity_links SET period_end = CURRENT_DATE WHERE alt_guid = $1",
-            (row[0],),
+            "UPDATE player_identity_links SET period_end = CURRENT_DATE WHERE alt_guid = ?",
+            (alt,),
         )
         await ctx.send(
-            f"🩹 Sick leave for `{row[0]}` closed. It stays a linked, separate "
-            "identity — use `!bolniska merge {guid}` if you want to fold it into your main."
+            f"🩹 Sick leave for `{alt}` closed. It stays a linked, separate "
+            f"identity — use `!bolniska merge {alt}` if you want to fold it into your main."
         )
 
     @bolniska.command(name="merge")
+    @is_public_channel()
+    @commands.cooldown(1, 10, commands.BucketType.user)
     async def bolniska_merge(self, ctx, guid: str | None = None):
-        """Opt in to folding <GUID>'s stats into your main identity (Phase 3)."""
+        """Opt in to folding a sick-leave GUID's stats into your main identity (Phase 3)."""
         if not _valid_guid(guid):
             await ctx.send("❌ Usage: `!bolniska merge <GUID>`.")
             return
         guid = guid.upper()
-        guids = await self._linked_guids(ctx.author.id)
+        guids = {g.upper() for g in await self._linked_guids(ctx.author.id)}
         existing = await self._existing_link(guid)
-        if not existing or (existing[0] not in guids and guid not in guids):
+        # Ownership + only convert an actual sick-leave link (never an alias).
+        if not existing or (existing[0].upper() not in guids and guid not in guids):
             await ctx.send(
                 f"❌ `{guid}` isn't one of your sick-leave links. Start it with "
                 "`!bolniska start <GUID>` first."
             )
             return
+        if existing[2] != "sick_leave":
+            await ctx.send(
+                f"❌ `{guid}` is a `{existing[2]}` link, not a sick-leave one — "
+                "nothing to merge."
+            )
+            return
         await self.bot.db_adapter.execute(
             "UPDATE player_identity_links SET link_type = 'merged', "
-            "period_end = COALESCE(period_end, CURRENT_DATE) WHERE alt_guid = $1",
+            "period_end = COALESCE(period_end, CURRENT_DATE) WHERE alt_guid = ?",
             (guid,),
         )
         await ctx.send(
@@ -212,7 +263,9 @@ class BolniskaCog(commands.Cog, name="Bolniska"):
         )
 
     @bolniska.command(name="set")
+    @is_admin_channel()
     @commands.has_permissions(manage_guild=True)
+    @commands.cooldown(1, 5, commands.BucketType.user)
     async def bolniska_set(self, ctx, target: discord.User | None = None,
                            primary: str | None = None, alt: str | None = None):
         """Admin: set a sick-leave link for anyone (e.g. an unlinked player)."""
@@ -227,14 +280,17 @@ class BolniskaCog(commands.Cog, name="Bolniska"):
         if existing:
             await ctx.send(f"⚠️ `{alt}` already links to `{existing[0]}` ({existing[2]}).")
             return
-        await self.bot.db_adapter.execute(
+        row = await self.bot.db_adapter.fetch_one(
             "INSERT INTO player_identity_links "
             "(primary_guid, alt_guid, link_type, reason, period_start, created_by, notes) "
-            "VALUES ($1, $2, 'sick_leave', 'injury', CURRENT_DATE, $3, $4) "
-            "ON CONFLICT (alt_guid) DO NOTHING",
+            "VALUES (?, ?, 'sick_leave', 'injury', CURRENT_DATE, ?, ?) "
+            "ON CONFLICT (alt_guid) DO NOTHING RETURNING id",
             (primary, alt, int(ctx.author.id),
              f"admin set by {ctx.author} for {target}" if target else f"admin set by {ctx.author}"),
         )
+        if not row:
+            await ctx.send(f"⚠️ `{alt}` was just linked by another request — nothing to do.")
+            return
         await ctx.send(f"🩹 Set sick-leave: `{alt}` → main `{primary}`.")
 
     @bolniska_set.error
