@@ -30,6 +30,8 @@ from website.backend.map_geometry.stage_scheduler import (
     SymbolicInvocationStep,
     SymbolicMovementBoundaryState,
     SymbolicMovementCommand,
+    SymbolicNextFrameBoundaryState,
+    SymbolicNextFrameCommand,
     SymbolicProgramCursor,
     SymbolicResumeMode,
     SymbolicScheduleDecision,
@@ -395,6 +397,76 @@ def test_self_dispatch_target_group_contains_only_the_concrete_caller():
         replace(pending, ordered_target_entity_indices=(0, 1)).validate(index)
 
 
+def test_heterogeneous_alert_dispatch_group_fails_closed():
+    script = parse_map_script(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity shared_target
+            }
+        }
+        victim
+        {
+            death
+            {
+                wait 100
+            }
+        }
+        vehicle
+        {
+            rebirth
+            {
+                wait 100
+            }
+        }
+        """,
+        source="maps/test.script",
+    )
+    model = StaticStageModel(
+        "test",
+        ObjectiveCatalog((), (), ()),
+        script,
+        compile_static_stage_graph(script, source="maps/test.script"),
+        _asset_provider(MapAssetKind.SCRIPT),
+        _asset_provider(MapAssetKind.OBJDATA),
+    )
+    identities = build_entity_identity_index(
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {
+                "classname": "func_explosive",
+                "scriptname": "victim",
+                "targetname": "shared_target",
+                "spawnflags": "4",
+            },
+            {
+                "classname": "script_mover",
+                "scriptname": "vehicle",
+                "targetname": "shared_target",
+                "spawnflags": "8",
+                "health": "100",
+            },
+        ),
+        source="maps/test.bsp",
+    )
+    catalog = MapEntityCatalog("test", "maps/test.bsp", (), (), (), ())
+    index = build_ordered_stage_program_index(model, link_w3_entity_catalog(identities, catalog))
+    caller = _program(index, "caller")
+    victim = _program(index, "victim")
+    pending = PendingDispatchContext(
+        SymbolicProgramCursor(caller.node.node_id, 0, 0),
+        SymbolicProgramCursor(caller.node.node_id, 0, 1),
+        victim.node.node_id,
+        (1,),
+        0,
+    )
+
+    with pytest.raises(ValueError, match="heterogeneous alert dispatch order"):
+        pending.validate(index)
+
+
 def test_boundary_state_and_resume_mode_do_not_canonicalize():
     index = _program_index()
     target = _program(index, "target", "long")
@@ -422,6 +494,7 @@ def test_boundary_state_and_resume_mode_do_not_canonicalize():
         temporal_state=SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,
         waits_for_completion=True,
         effect_started=True,
+        effect_record_index=0,
     )
     assert movement.temporal_state is SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING
 
@@ -456,6 +529,10 @@ def _temporal_program_index():
             {
                 gotomarker destination 100
                 setstate gate invisible
+            }
+            trigger reset_event
+            {
+                resetscript
             }
         }
         """,
@@ -641,11 +718,12 @@ def test_started_gotomarker_state_requires_its_exact_route_effect_record():
             SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,
             True,
             True,
+            0,
         ),
         wake_constraint=SymbolicWakeConstraint.NEXT_FRAME,
     )
 
-    with pytest.raises(ValueError, match="does not match whether"):
+    with pytest.raises(ValueError, match="outside scheduler effect history"):
         _state(index, waiting_frame, runnable=(), suspended=(waiting,))
     started = _state(index, waiting_frame, runnable=(), suspended=(waiting,), effects=(waiting_effect,))
     assert started.effects == (waiting_effect,)
@@ -656,17 +734,18 @@ def test_started_gotomarker_state_requires_its_exact_route_effect_record():
             waiting.boundary_state,
             temporal_state=SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,
             effect_started=False,
+            effect_record_index=None,
         ),
     )
     _state(index, waiting_frame, runnable=(), suspended=(prior_motion,))
-    with pytest.raises(ValueError, match="does not match whether"):
-        _state(
-            index,
-            waiting_frame,
-            runnable=(),
-            suspended=(prior_motion,),
-            effects=(waiting_effect,),
-        )
+    historical = _state(
+        index,
+        waiting_frame,
+        runnable=(),
+        suspended=(prior_motion,),
+        effects=(waiting_effect,),
+    )
+    assert historical.effects == (waiting_effect,)
 
     async_program = _program(index, "temporal", "marker_async")
     async_cursor = SymbolicProgramCursor(async_program.node.node_id, 0, 0)
@@ -675,12 +754,37 @@ def test_started_gotomarker_state_requires_its_exact_route_effect_record():
         async_cursor,
         SymbolicMovementCommand.GOTO_MARKER,
         ("destination", "100"),
+        0,
     )
     suffix = _frame(async_program.node.node_id, 0, 1, origin=SymbolicFrameOrigin.CALLER_SUFFIX)
-    with pytest.raises(ValueError, match="must retain"):
+    with pytest.raises(ValueError, match="outside scheduler effect history"):
         _state(index, suffix, async_lifecycles=(lifecycle,))
     running = _state(index, suffix, async_lifecycles=(lifecycle,), effects=(async_effect,))
     assert running.async_lifecycles == (lifecycle,)
+
+
+def test_next_frame_boundary_rejects_same_frame_wake():
+    index = _temporal_program_index()
+    program = _program(index, "temporal", "reset_event")
+    frame = _frame(program.node.node_id, 0, 0)
+
+    def continuation(wake_constraint):
+        return SuspendedContinuation(
+            frame,
+            boundary_line=program.event.actions[0].line,
+            resume_mode=SymbolicResumeMode.REENTER_BOUNDARY_ACTION,
+            boundary_state=SymbolicNextFrameBoundaryState(SymbolicNextFrameCommand.RESET_SCRIPT),
+            wake_constraint=wake_constraint,
+        )
+
+    _state(index, frame, runnable=(), suspended=(continuation(SymbolicWakeConstraint.NEXT_FRAME),))
+    with pytest.raises(ValueError, match="requires a next-frame wake"):
+        _state(
+            index,
+            frame,
+            runnable=(),
+            suspended=(continuation(SymbolicWakeConstraint.SAME_FRAME_LATER),),
+        )
 
 
 def test_r1_replacement_contract_keeps_exactly_one_deterministic_event_owner():
@@ -824,7 +928,27 @@ def test_impossible_accumulator_domains_fail_at_state_boundary(accumulator_state
         _state(index, frame, accumulator_state=accumulator_state)
 
 
+def test_redundant_accumulator_exclusions_canonicalize_away():
+    index = _program_index()
+    target = _program(index, "target", "long")
+    frame = _frame(target.node.node_id, 1, 0)
+    plain = SymbolicIntegerDomain(-10, -1)
+    redundant = replace(plain, excluded=frozenset({5}))
+
+    left = _state(index, frame, accumulator_state=SymbolicAccumulatorState(entity_values=((1, 0, plain),)))
+    right = _state(
+        index,
+        frame,
+        accumulator_state=SymbolicAccumulatorState(entity_values=((1, 0, redundant),)),
+    )
+
+    assert left.canonical_key == right.canonical_key
+
+
 def test_global_work_budget_reports_named_exhaustion_without_overconsumption():
+    index = _program_index()
+    target = _program(index, "target", "long")
+    frontier = _state(index, _frame(target.node.node_id, 1, 0))
     budget = SymbolicScheduleWorkBudget(2)
 
     assert budget.consume() is None
@@ -836,6 +960,7 @@ def test_global_work_budget_reports_named_exhaustion_without_overconsumption():
     assert budget.remaining == 0
     decision = SymbolicScheduleDecision(
         SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED,
+        frontier,
         reason=exhaustion.value,
     )
     result = SymbolicScheduleResult((decision,), 2, 2, exhaustion)
@@ -844,6 +969,11 @@ def test_global_work_budget_reports_named_exhaustion_without_overconsumption():
     mismatched = replace(decision, reason="unrelated_exhaustion")
     with pytest.raises(ValueError, match="reason does not match"):
         SymbolicScheduleResult((mismatched,), 2, 2, exhaustion)
+    with pytest.raises(ValueError, match="require their resulting frontier"):
+        SymbolicScheduleDecision(
+            SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED,
+            reason=exhaustion.value,
+        )
 
 
 def test_schedule_decision_kind_must_match_task_shape():
@@ -877,6 +1007,14 @@ def test_schedule_decision_kind_must_match_task_shape():
         SymbolicScheduleDecision(SymbolicScheduleDecisionKind.COMPLETE, runnable)
     with pytest.raises(ValueError, match="cannot retain"):
         SymbolicScheduleDecision(SymbolicScheduleDecisionKind.COMPLETE, suspended)
+
+    runnable_decision = SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, runnable)
+    complete_decision = SymbolicScheduleDecision(SymbolicScheduleDecisionKind.COMPLETE, complete)
+    left = SymbolicScheduleResult((runnable_decision, complete_decision), 1, 2)
+    right = SymbolicScheduleResult((complete_decision, runnable_decision, runnable_decision), 1, 2)
+    assert left.decisions == right.decisions
+    with pytest.raises(ValueError, match="at least one decision"):
+        SymbolicScheduleResult((), 0, 2)
 
 
 @pytest.mark.parametrize("limit", [0, -1])
