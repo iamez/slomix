@@ -4,7 +4,7 @@ Date: 2026-08-11
 
 Last reverified: 2026-08-13
 
-Status: implementation in progress; S0a/S0b complete, remaining S0 adversarial gates next
+Status: implementation in progress; S0 complete, S1 pending exact-head review
 
 Current base: `origin/main` at `f51edc8813ac16adcdb2ae6801efa1a79800600a`
 
@@ -352,6 +352,40 @@ select `misc_gamemodel`. However, an isolated event entry cannot prove whether a
 earlier event already executed a persistent attachment. The scheduler may use an exact
 relation established inside its own root schedule; otherwise it must retain typed
 `tag_parent_state_unknown` wake provenance. Raw entity index is not a valid fallback.
+
+### S0 adversarial fixture contracts
+
+The following fixture pairs freeze the source result before scheduler state types are
+introduced. Their executable assertions belong to S1-S3 because the current recursive
+walker intentionally stops at the first cross-entity temporal frontier.
+
+**R1 - replacement of an already suspended target**
+
+1. A caller triggers target event `long`, whose first action waits.
+2. The different-entity caller continues and triggers `replacement` on the same target.
+3. Variant R1-sync makes `replacement` complete synchronously. ET restores the exact
+   backed-up `long` status, so its boundary action remains the target's current owner;
+   replacement effects persist and the caller continues.
+4. Variant R1-wait makes `replacement` return false. ET does not restore `long`; the
+   replacement boundary becomes the only retained target status and the caller still
+   continues.
+
+R1-sync and R1-wait must never share a canonical state. A model that keeps both old
+and replacement continuations simultaneously is also invalid.
+
+**T1 - tag parent reverses raw entity order**
+
+1. Give child entity index `c` a lower value than parent index `p`.
+2. Without an established attachment, the ordinary pass visits `c` before `p`.
+3. With `c.tagParent = p`, `G_RunEntity(c)` recursively runs `p`, marks it
+   `runthisframe`, then runs `c`; the later ordinary visit of `p` is skipped.
+4. A root that executed `attachtotag` may establish that relation exactly for its later
+   schedule. An isolated entry with the same static entities cannot infer whether the
+   persistent relation already exists and must retain `tag_parent_state_unknown`.
+
+T1's attached and unattached states must never canonicalize together. The attached
+variant must publish parent-before-child; the unknown isolated variant must not choose
+either order merely from entity indices.
 
 ### S0b alert-event correction
 
@@ -1005,8 +1039,9 @@ retained.
 - [x] Define source-truth questions, transition model, tests and Definition of Done.
 - [x] Commit and push the documentation-only takeoff (`b9919eaa`).
 - [x] Open draft PR [#649](https://github.com/iamez/slomix/pull/649).
-- [ ] Complete S0 source verification; runner/action reads and installed surfaces are
-  recorded, while adversarial replacement/tag-parent fixtures remain.
+- [x] Complete S0 source verification; runner/action reads, installed surfaces and
+  adversarial replacement/tag-parent fixture contracts are recorded. Their executable
+  scheduler assertions remain assigned to S1-S3.
 - [x] Complete S0a typed `gotomarker` control/effect correction and regenerate the
   frontier denominator.
 - [x] Complete S0b source-proven `alertentity` event dispatch and regenerate the
@@ -1113,8 +1148,12 @@ retained.
   No owner-gated operation was performed.
 - The valid CodeRabbit wording finding is corrected: S0a is described as already
   implemented, not as future work. Review/CI must run again after push.
-- Next item: add the remaining adversarial replacement/tag-parent source fixtures;
-  S1 must not start until those S0 gates and review are closed.
+- S0 now freezes R1 sync-versus-wait replacement ownership and T1 attached-versus-
+  unknown tag-parent ordering as adversarial fixture contracts. Their executable
+  canonicalization/transition assertions remain S1-S3 work because the required state
+  types do not exist yet.
+- Next item: begin S1 immutable state and canonicalization only after exact-head S0
+  review is clean.
 
 At every substantive commit, append:
 
