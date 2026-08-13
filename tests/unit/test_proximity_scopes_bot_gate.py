@@ -34,6 +34,10 @@ async def test_scopes_applies_bot_round_gate_to_both_queries():
     assert "is_bot_round IS DISTINCT FROM TRUE" in combat_q
     assert "is_valid IS DISTINCT FROM FALSE" in combat_q  # rejected rounds gated too
     assert "round_id IS NULL OR EXISTS" in combat_q  # orphan-keeping gate shape
+    # Orphaned bot engagements (round_id NULL) slip past the round gate, so a
+    # bot's OMNIBOT guid must be excluded directly on both sides of the kill.
+    assert "killer_guid, '') NOT LIKE 'OMNIBOT%'" in combat_q
+    assert "target_guid, '') NOT LIKE 'OMNIBOT%'" in combat_q
 
     # The canonical maps-played query (rounds) must exclude bot rounds too, so a
     # mixed bot+real date can't inflate the map count.
