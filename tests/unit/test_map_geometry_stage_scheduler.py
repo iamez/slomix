@@ -47,7 +47,11 @@ from website.backend.map_geometry.stage_scheduler import (
     SymbolicWakeConstraint,
     step_symbolic_schedule,
 )
-from website.backend.map_geometry.stage_semantics import build_entity_identity_index, link_w3_entity_catalog
+from website.backend.map_geometry.stage_semantics import (
+    AccumulatorScope,
+    build_entity_identity_index,
+    link_w3_entity_catalog,
+)
 
 
 def _asset_provider(kind: MapAssetKind) -> MapAssetProvider:
@@ -1060,7 +1064,13 @@ def test_global_work_budget_must_be_positive(limit):
         SymbolicScheduleWorkBudget(limit)
 
 
-def _s2_program_index(*, caller_first: bool = True, boundary_command: str = "resetscript"):
+def _s2_program_index(
+    *,
+    caller_first: bool = True,
+    boundary_command: str = "resetscript",
+    caller_suffix: str = "setstate caller_marker invisible",
+    target_suffix: str = "setstate target_marker invisible",
+):
     script = parse_map_script(
         f"""
         caller
@@ -1068,7 +1078,7 @@ def _s2_program_index(*, caller_first: bool = True, boundary_command: str = "res
             spawn
             {{
                 trigger target long
-                setstate caller_marker invisible
+                {caller_suffix}
             }}
         }}
         target
@@ -1076,7 +1086,7 @@ def _s2_program_index(*, caller_first: bool = True, boundary_command: str = "res
             trigger long
             {{
                 {boundary_command}
-                setstate target_marker invisible
+                {target_suffix}
             }}
         }}
         """.encode(),
@@ -1254,3 +1264,81 @@ def test_s2_unknown_tag_parent_order_retains_named_wake_frontier():
     )
     assert blocked.reason == "wake_semantics_unverified"
     assert "tag_parent_state_unknown" in blocked.state.unknown_reasons
+
+
+def test_s2_caller_suffix_blocker_retains_executed_prefix_effects_and_cursor():
+    index, initial, caller_entity_index, target_entity_index = _s2_program_index(
+        caller_suffix="""
+                setstate caller_marker invisible
+                accum 0 set 7
+                wait 100
+        """,
+    )
+    dispatched = _decision(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert dispatched is not None
+    blocked = _decision(
+        step_symbolic_schedule(index, dispatched),
+        SymbolicScheduleDecisionKind.BLOCKED,
+    )
+    assert blocked.state is not None
+    assert tuple(effect.source_cursor.entity_index for effect in blocked.state.effects) == (
+        caller_entity_index,
+    )
+    assert tuple(frame.cursor.entity_index for frame in blocked.state.runnable) == (caller_entity_index,)
+    assert tuple(item.frame.cursor.entity_index for item in blocked.state.suspended) == (
+        target_entity_index,
+    )
+    assert (
+        blocked.state.accumulator_state.read(
+            AccumulatorScope.ENTITY,
+            0,
+            source_entity_index=caller_entity_index,
+        ).exact_value
+        == 7
+    )
+    caller_program = _program(index, "caller")
+    assert blocked.state.runnable[0].cursor.instruction_offset == len(caller_program.instructions) - 1
+
+
+def test_s2_resumed_target_blocker_retains_executed_prefix_effects_and_cursor():
+    index, initial, caller_entity_index, target_entity_index = _s2_program_index(
+        target_suffix="""
+                setstate target_marker invisible
+                accum 1 set 9
+                wait 100
+        """,
+    )
+    dispatched = _decision(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+    assert dispatched is not None
+    caller_completed = _decision(
+        step_symbolic_schedule(index, dispatched),
+        SymbolicScheduleDecisionKind.SUSPENDED,
+    ).state
+    assert caller_completed is not None
+    blocked = _decision(
+        step_symbolic_schedule(index, caller_completed),
+        SymbolicScheduleDecisionKind.BLOCKED,
+    )
+    assert blocked.state is not None
+    assert tuple(effect.source_cursor.entity_index for effect in blocked.state.effects) == (
+        caller_entity_index,
+        target_entity_index,
+    )
+    assert tuple(frame.cursor.entity_index for frame in blocked.state.runnable) == (target_entity_index,)
+    assert blocked.state.suspended == ()
+    assert (
+        blocked.state.accumulator_state.read(
+            AccumulatorScope.ENTITY,
+            1,
+            source_entity_index=target_entity_index,
+        ).exact_value
+        == 9
+    )
+    target_program = _program(index, "target", "long")
+    assert blocked.state.runnable[0].cursor.instruction_offset == len(target_program.instructions) - 1
