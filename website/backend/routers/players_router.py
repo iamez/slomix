@@ -21,6 +21,7 @@ from website.backend.rate_limit import limiter
 from website.backend.routers.api_helpers import (
     batch_resolve_display_names,
     calculate_player_achievements,
+    fetch_identity_links,
     resolve_display_name,
     resolve_player_guid,
 )
@@ -781,6 +782,12 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
         logger.error(f"Error checking Discord link for {player_name}: {e}")
         discord_linked = False
 
+    # Sick-leave (bolniška) attribution for the identity card — see migration 073.
+    identity_link = (
+        (await fetch_identity_links(db, [player_guid])).get(player_guid)
+        if player_guid else None
+    )
+
     return {
         "name": display_name,
         "guid": player_guid,
@@ -804,6 +811,7 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
         },
         "aliases": aliases,
         "discord_linked": discord_linked,
+        "identity_link": identity_link,  # sick-leave attribution or None
         "achievements": achievements,
     }
 

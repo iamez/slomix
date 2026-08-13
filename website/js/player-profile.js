@@ -208,16 +208,38 @@ export async function loadPlayerProfile(playerIdentifier) {
         if (highestDpm) highestDpm.textContent = stats.highest_dpm || '--';
         if (lowestDpm) lowestDpm.textContent = stats.lowest_dpm || '--';
 
+        // Sick-leave (bolniška) attribution — a fresh cl_guid played during an
+        // injury/off-form stretch, kept SEPARATE from the main record but linked
+        // here so it's clear it's the same person. Stats are not merged.
+        const leaveBadge = (() => {
+            const il = data.identity_link;
+            if (!il) return '';
+            const chip = (label, guid) =>
+                `<a href="#/profile/${encodeURIComponent(guid)}" class="inline-flex items-center gap-1 px-2 py-1 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-xs" title="On sick leave — stats kept separate from the main record">🩹 ${label}</a>`;
+            if (il.role === 'alt' && il.link_type === 'sick_leave') {
+                return chip(`On sick leave — main profile: ${escapeHtml(il.primary_name || 'main')}`, il.primary_guid);
+            }
+            if (il.role === 'primary' && Array.isArray(il.alts)) {
+                const active = il.alts.filter(a => a.active && a.link_type === 'sick_leave');
+                if (active.length) {
+                    return active.map(a => chip(`Currently on sick leave as ${escapeHtml(a.alt_name || 'alt')}`, a.alt_guid)).join(' ');
+                }
+            }
+            return '';
+        })();
+
         // Known aliases
         const aliasContainer = document.getElementById('profile-aliases');
         if (aliasContainer) {
+            let html = '';
             if (data.aliases && data.aliases.length > 0) {
-                aliasContainer.innerHTML = data.aliases
+                html = data.aliases
                     .map(a => `<span class="px-2 py-1 rounded bg-slate-700 text-slate-300 text-xs">${escapeHtml(a)}</span>`)
                     .join(' ');
             } else {
-                aliasContainer.innerHTML = '<span class="text-slate-500 text-sm">No other aliases</span>';
+                html = '<span class="text-slate-500 text-sm">No other aliases</span>';
             }
+            aliasContainer.innerHTML = leaveBadge ? `${leaveBadge} ${html}` : html;
         }
 
         // Discord status

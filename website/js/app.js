@@ -14,7 +14,7 @@ import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js?v=2026
 import { installErrorReporting } from './error-reporting.js';
 import { checkLoginStatus, initSearchListeners, setLoadPlayerProfile } from './auth.js?v=20260804-auth-dedupe';
 import { initLivePolling, initLiveStatusPolling, updateLiveSession } from './live-status.js';
-import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchDetails } from './player-profile.js?v=20260608-aimv2';
+import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchDetails } from './player-profile.js?v=20260813-sickleave';
 import { loadLeaderboard, loadQuickLeaders, loadRecentMatches, setNavigateTo as setLeaderboardNavigateTo, initLeaderboardDefaults } from './leaderboard.js';
 import { loadSeasonInfo, loadLastSession, loadSessionsView, loadSessionMVP, toggleSeasonDetails } from './sessions.js?v=20260812-b3';
 import { loadHomePulseCards } from './home.js';

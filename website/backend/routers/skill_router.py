@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from website.backend.dependencies import get_db, require_internal_secret
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
+from website.backend.routers.api_helpers import fetch_identity_links
 from website.backend.services.skill_rating_service import (
     CONSTANT,
     MIN_ROUNDS,
@@ -903,6 +904,21 @@ async def get_movers(
         if entry["delta_pct"] is None and not entry["is_new"]:
             continue
         movers.append(entry)
+
+    # Attribute known sick-leave / renamed guids (migration 073) so the UI can
+    # badge them "🩹 <primary> · on sick leave" rather than presenting a fresh
+    # cl_guid as a genuine newcomer (e.g. carniee playing as ownator after an
+    # injury). Stats stay separate; this only adds a label to the entry.
+    links = await fetch_identity_links(db, [m["guid"] for m in movers])
+    for m in movers:
+        link = links.get(m["guid"])
+        if link and link.get("role") == "alt":
+            m["sick_leave"] = {
+                "primary_guid": link["primary_guid"],
+                "primary_name": link["primary_name"],
+                "reason": link.get("reason"),
+                "active": link.get("active", True),
+            }
 
     ranked = sorted(
         (m for m in movers if m["delta_pct"] is not None),
