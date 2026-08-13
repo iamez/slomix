@@ -189,6 +189,7 @@ async def test_hardcoded_teams_parses_json_string_columns(service, db):
         [
             ("Puran", json.dumps(["guid1", "guid2"]), json.dumps(["a", "b"])),
         ],                                                                # session_teams rows
+        [("guid1",), ("guid2",)],                                        # players who played (roster matches → keep)
     ])
     out = await service.get_hardcoded_teams([101])
     assert out == {"Puran": {"guids": ["guid1", "guid2"], "names": ["a", "b"]}}
@@ -203,6 +204,7 @@ async def test_hardcoded_teams_passes_through_native_lists(service, db):
         [
             ("Sk", ["g1", "g2"], ["n1", "n2"]),
         ],
+        [("g1",), ("g2",)],                       # players who played (roster matches → keep)
     ])
     out = await service.get_hardcoded_teams([101])
     assert out["Sk"]["guids"] == ["g1", "g2"]
@@ -235,9 +237,31 @@ async def test_hardcoded_teams_dedupes_by_team_name(service, db):
             ("Puran", ["g1"], ["a"]),
             ("Puran", ["g2"], ["b"]),  # ignored
         ],
+        [("g1",)],                     # players who played (roster matches → keep)
     ])
     out = await service.get_hardcoded_teams([101])
     assert out["Puran"]["guids"] == ["g1"]
+
+
+@pytest.mark.asyncio
+async def test_hardcoded_teams_rejects_stale_roster(service, db):
+    """A session_teams roster that shares NO GUID with the players who
+    actually played is stale (e.g. a bot-test roster left on a
+    gaming_session_id later reused by a real match, 2026-08-11) and must
+    NOT be applied — every map would fail side attribution → "0 - 0 TIE".
+    Guard falls through to auto-detect; here the meta lookup yields no
+    date so it resolves to None rather than the bots."""
+    db.fetch_one = AsyncMock(return_value=(None, None))  # auto-detect meta: no date
+    db.fetch_all = AsyncMock(side_effect=[
+        [(144,)],                                        # gsid lookup
+        [
+            ("Team A", ["OMNIBOT_a", "OMNIBOT_b"], ["[BOT]x", "[BOT]y"]),
+            ("Team B", ["OMNIBOT_c", "OMNIBOT_d"], ["[BOT]z", "[BOT]w"]),
+        ],                                               # stale bot session_teams
+        [("REALGUID1",), ("REALGUID2",)],                # real players who played → no intersection
+    ])
+    out = await service.get_hardcoded_teams([201])
+    assert out is None  # stale roster rejected, auto-detect found nothing in this mock
 
 
 @pytest.mark.asyncio

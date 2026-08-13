@@ -53,4 +53,11 @@ export function initMobileNav(navigateTo) {
     });
     window.addEventListener('hashchange', _highlight);
     _highlight();
+
+    // The mobile bottom nav + "More" sheet live at the end of <body>, outside
+    // the app container the initial lucide.createIcons() pass walks, so their
+    // <i data-lucide> glyphs never became SVG (labels showed, icons didn't).
+    // Convert them here — createIcons only touches remaining [data-lucide]
+    // nodes, so this is safe to call after the global pass.
+    window.lucide?.createIcons?.();
 }

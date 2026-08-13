@@ -377,12 +377,12 @@ export async function loadRecentMatches() {
                         <span class="text-slate-500 truncate">${safeMapName}</span>
                         ${roundNumber ? `<span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-bold">${roundNumber}</span>` : ''}
                         <span class="px-1.5 py-0.5 rounded ${formatClass} font-bold">${safeFormat}</span>
-                        <span class="text-slate-600">${safeTimeAgo}</span>
+                        <span class="text-slate-400">${safeTimeAgo}</span>
                     </div>
                     ${scoreDisplay || outcomeText ? `
                     <div class="flex items-center gap-2 text-[10px] mt-1">
                         ${scoreDisplay ? `<span class="text-slate-400">${scoreDisplay}</span>` : ''}
-                        ${outcomeText ? `<span class="text-slate-600">${outcomeText}</span>` : ''}
+                        ${outcomeText ? `<span class="text-slate-400">${outcomeText}</span>` : ''}
                     </div>
                     ` : ''}
                     ${fallbackLine}

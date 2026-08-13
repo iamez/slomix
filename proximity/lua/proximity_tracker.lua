@@ -2487,9 +2487,25 @@ local function scanVehicleEntities()
             local ok_sn, script_name = pcall(et.gentity_get, i, "scriptName")
             local name = (ok_sn and script_name) or ""
             if known[name] then
-                local ox = tonumber(safe_gentity_get(i, "r.currentOrigin", 1)) or 0
-                local oy = tonumber(safe_gentity_get(i, "r.currentOrigin", 2)) or 0
-                local oz = tonumber(safe_gentity_get(i, "r.currentOrigin", 3)) or 0
+                -- Read the whole origin vector and index it in Lua, like
+                -- getPlayerPos does. The engine's per-component index is
+                -- 0-based (0/1/2), so the old "r.currentOrigin", 1/2/3 read
+                -- fetched y, z and an out-of-bounds 3 → a static/garbage
+                -- position, which made vehicle delta 0 forever and left every
+                -- escort_credit distance at 0 (C4).
+                local ox, oy, oz = 0, 0, 0
+                local vorigin = safe_gentity_get(i, "r.currentOrigin")
+                if vorigin then
+                    if vorigin[1] then
+                        ox = tonumber(vorigin[1]) or 0
+                        oy = tonumber(vorigin[2]) or 0
+                        oz = tonumber(vorigin[3]) or 0
+                    elseif vorigin.x then
+                        ox = tonumber(vorigin.x) or 0
+                        oy = tonumber(vorigin.y) or 0
+                        oz = tonumber(vorigin.z) or 0
+                    end
+                end
                 local health = tonumber(safe_gentity_get(i, "health")) or 0
                 tracker.vehicles.entities[i] = {
                     name = name,
@@ -2515,13 +2531,34 @@ sampleVehiclePositions = function()
     tracker.vehicles.last_check_time = now
 
     for entNum, veh in pairs(tracker.vehicles.entities) do
-        local vx = tonumber(safe_gentity_get(entNum, "r.currentOrigin", 1)) or 0
-        local vy = tonumber(safe_gentity_get(entNum, "r.currentOrigin", 2)) or 0
-        local vz = tonumber(safe_gentity_get(entNum, "r.currentOrigin", 3)) or 0
+        -- Whole-vector read (Lua 1-based index), matching getPlayerPos. The
+        -- old indexed read used engine 0-based semantics wrongly (1/2/3), so
+        -- current_pos never changed and is_moving stayed false → 0 escort
+        -- distance for every credit (C4).
+        local vx, vy, vz = 0, 0, 0
+        local vorigin = safe_gentity_get(entNum, "r.currentOrigin")
+        if vorigin then
+            if vorigin[1] then
+                vx = tonumber(vorigin[1]) or 0
+                vy = tonumber(vorigin[2]) or 0
+                vz = tonumber(vorigin[3]) or 0
+            elseif vorigin.x then
+                vx = tonumber(vorigin.x) or 0
+                vy = tonumber(vorigin.y) or 0
+                vz = tonumber(vorigin.z) or 0
+            end
+        end
         local current_pos = {x = vx, y = vy, z = vz}
 
         local delta = distance3D(current_pos, veh.last_pos)
-        local is_moving = delta > config.vehicle.min_move_speed
+        -- Cap the per-sample delta. An entity read at map load before it spawns
+        -- can return a billions-large origin (seen: truck pos ~1.15e10); that
+        -- one garbage->real transition would otherwise inject an enormous
+        -- escort distance. Real ET movement is at most a few hundred units per
+        -- sample, so 10000 rejects garbage while allowing any genuine move —
+        -- last_pos still resyncs below so the next delta is sane.
+        local MAX_SANE_MOVE = 10000
+        local is_moving = delta > config.vehicle.min_move_speed and delta < MAX_SANE_MOVE
 
         if is_moving then
             veh.total_distance = veh.total_distance + delta

@@ -622,7 +622,7 @@ async function _loadMomentsStrip() {
         return `
             <div class="flex flex-col gap-1 px-3 py-2 rounded-lg border border-slate-700/60 bg-slate-900/40 shrink-0 max-w-xs">
                 <span class="flex items-center gap-2">
-                    <span class="text-amber-400 text-xs tracking-tight">${'★'.repeat(stars)}<span class="text-slate-600">${'★'.repeat(5 - stars)}</span></span>
+                    <span class="text-amber-400 text-xs tracking-tight">${'★'.repeat(stars)}<span class="text-slate-400">${'★'.repeat(5 - stars)}</span></span>
                     <span class="text-[10px] font-black uppercase tracking-wide text-slate-400">${escapeHtml(typeLabel)}</span>
                 </span>
                 <span class="text-sm text-white leading-snug">${escapeHtml(m.narrative || '')}</span>
@@ -678,7 +678,7 @@ async function _loadObjectivePressure() {
         return `
             <a href="#/profile/${encodeURIComponent(p.guid || '')}"
                class="flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-slate-800/40 transition">
-                <span class="text-[11px] text-slate-600 w-4 shrink-0">${i + 1}</span>
+                <span class="text-[11px] text-slate-400 w-4 shrink-0">${i + 1}</span>
                 <span class="text-sm font-semibold ${nameCls} w-28 truncate shrink-0">${escapeHtml(p.name || '')}</span>
                 <span class="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
                     <span class="block h-full rounded-full bg-gradient-to-r from-brand-cyan to-emerald-400" style="width:${pct}%"></span>
@@ -998,7 +998,7 @@ function _renderShell(container) {
                     <span class="text-sm font-bold ${aWinning ? 'text-white' : 'text-slate-400'}">${escapeHtml(teamAName)}</span>
                     <div class="flex items-center gap-3">
                         <span class="text-4xl font-black ${aWinning ? 'text-brand-emerald' : 'text-slate-400'}">${teamAScore}</span>
-                        <span class="text-lg text-slate-600">:</span>
+                        <span class="text-lg text-slate-400">:</span>
                         <span class="text-4xl font-black ${bWinning ? 'text-brand-emerald' : 'text-slate-400'}">${teamBScore}</span>
                     </div>
                     <span class="text-sm font-bold ${bWinning ? 'text-white' : 'text-slate-400'}">${escapeHtml(teamBName)}</span>
@@ -1709,7 +1709,7 @@ function _renderTeamMatrixSection(matrix, matches) {
                 ? `onclick="sdToggleMatrixDrill('${escapeJsString(player.player_guid)}', ${i})"`
                 : '';
             const cursor = played ? 'cursor-pointer hover:bg-white/10' : '';
-            return `<td class="px-3 py-2 text-center tabular-nums ${played ? 'text-slate-200' : 'text-slate-600'} ${heatClass}${activeClass} ${cursor}" title="${escapeHtml(tooltip)}" ${clickAttr}>
+            return `<td class="px-3 py-2 text-center tabular-nums ${played ? 'text-slate-200' : 'text-slate-400'} ${heatClass}${activeClass} ${cursor}" title="${escapeHtml(tooltip)}" ${clickAttr}>
                 <div class="font-semibold text-sm">${escapeHtml(primary)}</div>
                 ${secondary ? `<div class="text-[10px] text-slate-500">${escapeHtml(secondary)}</div>` : ''}
             </td>`;
@@ -1759,7 +1759,7 @@ function _renderTeamMatrixSection(matrix, matches) {
                 const aWon = a > b, bWon = b > a;
                 return `<td class="px-3 py-2 text-center text-xs tabular-nums">
                     <span class="${aWon ? 'text-brand-blue font-bold' : 'text-slate-400'}">${a}</span>
-                    <span class="text-slate-600 mx-1">–</span>
+                    <span class="text-slate-400 mx-1">–</span>
                     <span class="${bWon ? 'text-brand-rose font-bold' : 'text-slate-400'}">${b}</span>
                 </td>`;
             }).join('')}
@@ -3091,14 +3091,14 @@ function _buildVsStatsHtml(vsStats) {
     if (!preys.length && !enemies.length) return '';
 
     function renderList(entries) {
-        if (!entries.length) return '<div class="text-slate-600 text-xs py-2">No data</div>';
+        if (!entries.length) return '<div class="text-slate-400 text-xs py-2">No data</div>';
         return entries.map((e, i) => {
             const name = escapeHtml(e.opponent_name || 'Unknown');
             const profileHash = `#/profile/${encodeURIComponent(e.opponent_name || '')}`;
             return `
                 <div class="flex items-center justify-between rounded-lg bg-slate-900/50 px-3 py-2 text-xs">
                     <div class="flex items-center gap-2 min-w-0">
-                        <span class="text-slate-600 font-mono w-4">${i + 1}</span>
+                        <span class="text-slate-400 font-mono w-4">${i + 1}</span>
                         <a href="${profileHash}" class="text-white font-semibold truncate hover:text-brand-cyan transition">${name}</a>
                     </div>
                     <div class="flex items-center gap-3 shrink-0 font-mono">
@@ -3205,7 +3205,7 @@ function _renderPlayerPanelContent(playerKey, panelId) {
         <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <div class="xl:col-span-1">
                 <div class="text-xs font-bold text-slate-400 uppercase mb-2">Trade Detail</div>
-                ${noTradeData ? '<div class="text-slate-600 text-xs">No trade data for this scope</div>' : `
+                ${noTradeData ? '<div class="text-slate-400 text-xs">No trade data for this scope</div>' : `
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center mb-3">
                     <div class="glass-card rounded p-2">
                         <div class="text-[10px] text-slate-500">Opps</div>
@@ -3251,14 +3251,14 @@ function _renderPlayerPanelContent(playerKey, panelId) {
                             <span class="px-2 py-1 rounded bg-white/5 border border-white/10">Avg ${num(timelineAvg).toFixed(1)} DPM</span>
                         </div>
                         <div style="height:140px;position:relative"><canvas id="${timelineId}"></canvas></div>`
-                    : '<div class="text-slate-600 text-xs">No DPM timeline data</div>'}
-                ` : '<div class="text-slate-600 text-xs">No playstyle data</div>'}
+                    : '<div class="text-slate-400 text-xs">No DPM timeline data</div>'}
+                ` : '<div class="text-slate-400 text-xs">No playstyle data</div>'}
             </div>
             <div class="xl:col-span-1">
                 <div class="text-xs font-bold text-slate-400 uppercase mb-2">Weapon Mastery ${weaponScopeLabel ? `<span class="normal-case text-slate-500">(${escapeHtml(weaponScopeLabel)})</span>` : ''}</div>
                 ${data.weaponError ? `<div class="text-amber-400 text-xs">Weapon details unavailable for this player${_activeRoundId ? '/round' : '/session'}.</div>` : ''}
                 ${!data.weaponError && !weapons.length
-        ? `<div class="text-slate-600 text-xs">${_activeRoundId ? 'Select a scoped round and player with GUID to load weapon mastery.' : 'No session-scoped weapon mastery data for this player.'}</div>`
+        ? `<div class="text-slate-400 text-xs">${_activeRoundId ? 'Select a scoped round and player with GUID to load weapon mastery.' : 'No session-scoped weapon mastery data for this player.'}</div>`
         : `
                     <div class="overflow-x-auto rounded-lg border border-white/10">
                         <table class="w-full text-xs">
@@ -3423,11 +3423,11 @@ async function _loadSignalsTab() {
                     <span>Avg Delay: <strong class="text-white">${delay}</strong></span>
                 </div>
             </div>`;
-    }).join('') || '<div class="text-slate-600 text-sm col-span-2">No duo data for this scope</div>';
+    }).join('') || '<div class="text-slate-400 text-sm col-span-2">No duo data for this scope</div>';
 
     const stripColors = (t) => t ? String(t).replace(/\^[0-9A-Za-z]/g, '') : '?';
     const makeTeamplayTable = (rows, label, valueKey, unit) => {
-        if (!rows || !rows.length) return `<div class="text-slate-600 text-xs">No ${label} data</div>`;
+        if (!rows || !rows.length) return `<div class="text-slate-400 text-xs">No ${label} data</div>`;
         return `<table class="w-full text-sm"><thead><tr class="text-xs text-slate-500 border-b border-white/5">
             <th class="py-1 text-left">Player</th><th class="py-1 text-right">${escapeHtml(label)}</th>
         </tr></thead><tbody>
@@ -3443,7 +3443,7 @@ async function _loadSignalsTab() {
     };
 
     const makeMoversCard = (rows, valueKey, unit) => {
-        if (!rows || !rows.length) return `<div class="text-slate-600 text-xs">No data</div>`;
+        if (!rows || !rows.length) return `<div class="text-slate-400 text-xs">No data</div>`;
         return rows.map(r => `
             <div class="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
                 <span class="text-sm text-white font-semibold">${escapeHtml(stripColors(r.name))}</span>
@@ -3519,13 +3519,13 @@ async function _loadSignalsTab() {
             </h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div><div class="text-xs text-slate-500 uppercase font-bold mb-2">Crossfire Kills</div>
-                    <div class="text-xs text-slate-600 mb-2">Kills assisted by nearby teammates</div>
+                    <div class="text-xs text-slate-400 mb-2">Kills assisted by nearby teammates</div>
                     ${makeTeamplayTable(tp.crossfire_kills, 'Kills', 'crossfire_kills')}</div>
                 <div><div class="text-xs text-slate-500 uppercase font-bold mb-2">Team Sync</div>
-                    <div class="text-xs text-slate-600 mb-2">Coordinated actions with team</div>
+                    <div class="text-xs text-slate-400 mb-2">Coordinated actions with team</div>
                     ${makeTeamplayTable(tp.sync, 'Participations', 'crossfire_participations')}</div>
                 <div><div class="text-xs text-slate-500 uppercase font-bold mb-2">Focus Survival</div>
-                    <div class="text-xs text-slate-600 mb-2">Survived being targeted by multiple enemies</div>
+                    <div class="text-xs text-slate-400 mb-2">Survived being targeted by multiple enemies</div>
                     ${makeTeamplayTable(tp.focus_survival, 'Survival %', 'survival_rate_pct', '%')}</div>
             </div>
         </div>` : ''}
@@ -3537,10 +3537,10 @@ async function _loadSignalsTab() {
             </h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div><div class="text-xs text-slate-500 uppercase font-bold mb-2">Total Distance Covered</div>
-                    <div class="text-xs text-slate-600 mb-2">Total map units traveled during the session</div>
+                    <div class="text-xs text-slate-400 mb-2">Total map units traveled during the session</div>
                     ${makeMoversCard(mv.distance, 'total_distance', 'u')}</div>
                 <div><div class="text-xs text-slate-500 uppercase font-bold mb-2">Sprint Time Ratio</div>
-                    <div class="text-xs text-slate-600 mb-2">% of movement time spent sprinting</div>
+                    <div class="text-xs text-slate-400 mb-2">% of movement time spent sprinting</div>
                     ${makeMoversCard(mv.sprint, 'sprint_pct', '%')}</div>
             </div>
         </div>` : ''}

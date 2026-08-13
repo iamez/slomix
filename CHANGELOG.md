@@ -6,6 +6,123 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.34.1](https://github.com/iamez/slomix/compare/v1.34.0...v1.34.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* **website:** bump story.js cache-buster for composite gsid scope ([1942a68](https://github.com/iamez/slomix/commit/1942a68663e9c7b189edfa129c6c796a343d3a99))
+* **website:** bump tailwind.css cache-buster for safelist rebuild ([f51e19d](https://github.com/iamez/slomix/commit/f51e19da72e11f1717044080725063de6aec305f))
+* **website:** safelist Tailwind opacity /70 /80 — story bars were invisible ([b91f137](https://github.com/iamez/slomix/commit/b91f137a28c59e172169e3476f887614a1e42838))
+* **website:** safelist Tailwind opacity /70 /80 — story bars were invisible ([5f4928a](https://github.com/iamez/slomix/commit/5f4928acab8ab59c0e6f673d2468fb7adc7e199c))
+* **website:** scope /skill/composite by gaming_session_id, not date ([57fc91a](https://github.com/iamez/slomix/commit/57fc91af89cd488b622a170b045315b190255308))
+* **website:** scope /skill/composite by gaming_session_id, not date ([8a73033](https://github.com/iamez/slomix/commit/8a73033426389e84f589db8a2118fc92d3c1996e))
+
+## [1.34.0](https://github.com/iamez/slomix/compare/v1.33.1...v1.34.0) (2026-08-12)
+
+
+### Features
+
+* **greatshot:** revive headshot detector via xpgain hit regions (G2/G3) ([#693](https://github.com/iamez/slomix/issues/693)) ([a290be0](https://github.com/iamez/slomix/commit/a290be0661c3e494982a147906a4c49cb52a9a22))
+* **proximity:** deterministic relinker for combat_engagement/player_track orphans (C2) ([#694](https://github.com/iamez/slomix/issues/694)) ([d23474c](https://github.com/iamez/slomix/commit/d23474cf7b1f6355333ed764cd7d477a210e8dae))
+* **website:** attribute live objective actions to the acting player (A4) ([#691](https://github.com/iamez/slomix/issues/691)) ([6fe9b81](https://github.com/iamez/slomix/commit/6fe9b811f7f3c44b9903a3b9e9ac2ea92a51752b))
+
+
+### Bug Fixes
+
+* **proximity:** read vehicle origin as whole vector — escort distance was always 0 (C4) ([#695](https://github.com/iamez/slomix/issues/695)) ([8f1f3c2](https://github.com/iamez/slomix/commit/8f1f3c23a57a6de7e8c7e11ac030edd47668b4ee))
+* **website:** clear stale roster when live stream goes idle ([#697](https://github.com/iamez/slomix/issues/697)) ([6261c38](https://github.com/iamez/slomix/commit/6261c3888592777273120646a03f994a034c887d))
+
+## [1.33.1](https://github.com/iamez/slomix/compare/v1.33.0...v1.33.1) (2026-08-12)
+
+
+### Bug Fixes
+
+* **bot:** don't cancel completed-match rounds as restarts (brewdog miscount) ([#689](https://github.com/iamez/slomix/issues/689)) ([66e29a1](https://github.com/iamez/slomix/commit/66e29a10f77858e1df774d58e3f81ff7e63a7cfc))
+* **website:** bump text-slate-600 to -400 for WCAG AA contrast ([#684](https://github.com/iamez/slomix/issues/684)) ([79bb32c](https://github.com/iamez/slomix/commit/79bb32cedaf7bd61c418830588848cc53862ec72))
+* **website:** mobile 'More' sheet exposes all nav destinations (B8) ([#686](https://github.com/iamez/slomix/issues/686)) ([68cd1dc](https://github.com/iamez/slomix/commit/68cd1dc606dff962f451db5f1791df26e3271739))
+
+
+### Performance Improvements
+
+* **website:** compile Tailwind at build time, drop runtime CDN (B7) ([#687](https://github.com/iamez/slomix/issues/687)) ([dcef6a8](https://github.com/iamez/slomix/commit/dcef6a827625c4c1dc226d4dbd9d7c1f9a06664f))
+
+## [1.33.0](https://github.com/iamez/slomix/compare/v1.32.0...v1.33.0) (2026-08-12)
+
+
+### Features
+
+* **website:** live current-state reducer + GET /api/live/state (A0) ([#673](https://github.com/iamez/slomix/issues/673)) ([4df874f](https://github.com/iamez/slomix/commit/4df874f174840b3cd074c16acfc17d256a9b2832))
+* **website:** live roster panel from the state snapshot (A1) ([#674](https://github.com/iamez/slomix/issues/674)) ([597f980](https://github.com/iamez/slomix/commit/597f980c865c1f321d9301a1768bff85ac4393ee))
+
+
+### Bug Fixes
+
+* **bot:** reject stale session_teams roster so real matches don't read 0-0 TIE ([#682](https://github.com/iamez/slomix/issues/682)) ([b3a24b5](https://github.com/iamez/slomix/commit/b3a24b594fcd9b8f6fc85237eee8c27a83a9d74d))
+* **lua:** live_events RegisterModname + guards; document et_Obituary quirk ([#672](https://github.com/iamez/slomix/issues/672)) ([78b8d40](https://github.com/iamez/slomix/commit/78b8d406c7929b7b8ff7dac89b3c89a5c000582f))
+* **website:** allow Cloudflare Insights in CSP (silences console violation) ([#680](https://github.com/iamez/slomix/issues/680)) ([08e81fb](https://github.com/iamez/slomix/commit/08e81fb791ab39c517c6516660eebc8e63881499))
+* **website:** guard re-entrant listener binds (leak +3/round) ([#679](https://github.com/iamez/slomix/issues/679)) ([4cab039](https://github.com/iamez/slomix/commit/4cab039ebf4a5181039ceaa0ab529f6976df9cfa))
+* **website:** narrative shows 'Session ?' after bot-session decoupling ([#671](https://github.com/iamez/slomix/issues/671)) ([beea344](https://github.com/iamez/slomix/commit/beea344188c53d820f7c712beb2e60a0a7235df9))
+* **website:** Record Book / awards must exclude bots (Opus DevTools audit B4) ([#676](https://github.com/iamez/slomix/issues/676)) ([6cac3c3](https://github.com/iamez/slomix/commit/6cac3c3f5236e084f962a756ecf1206cf817d903))
+* **website:** session time range wrong across midnight (Opus audit B5) ([#677](https://github.com/iamez/slomix/issues/677)) ([a8ddc00](https://github.com/iamez/slomix/commit/a8ddc002c9923024b798eaf97a17d6fdb336becf))
+* **website:** tonight endpoint 500s when every today-row is a bot round ([#670](https://github.com/iamez/slomix/issues/670)) ([3eb3455](https://github.com/iamez/slomix/commit/3eb3455c0129cb7f66fb77ae970c79c702116b32))
+
+
+### Performance Improvements
+
+* **website:** defer lucide + chart.js scripts (LCP -124ms) ([#678](https://github.com/iamez/slomix/issues/678)) ([67fdcee](https://github.com/iamez/slomix/commit/67fdcee05ff6b68f64334977b903868594b1438c))
+* **website:** serve 320px webp map thumbnails on session cards ([#681](https://github.com/iamez/slomix/issues/681)) ([2ebc7aa](https://github.com/iamez/slomix/commit/2ebc7aa27b2f78b31ad73ba51001a8c476c449a4))
+
+## [1.32.0](https://github.com/iamez/slomix/compare/v1.31.0...v1.32.0) (2026-08-12)
+
+
+### Features
+
+* **website:** live feed attribution and richer context (Live v2 phase A) ([#662](https://github.com/iamez/slomix/issues/662)) ([c8f7b9a](https://github.com/iamez/slomix/commit/c8f7b9ab8b0a62cfb12122462f49eccef1c5fea2))
+* **website:** live win-pressure strip — momentum + hold%% during the round (Live v2 phase B) ([#665](https://github.com/iamez/slomix/issues/665)) ([3ed2b3c](https://github.com/iamez/slomix/commit/3ed2b3c645859cc58eda6985698e26329c95edcc))
+* **website:** live_events.lua + LIVEX pipeline (Live v2 phase D, dev-only, inert) ([#667](https://github.com/iamez/slomix/issues/667)) ([423a3c2](https://github.com/iamez/slomix/commit/423a3c24c01d871c92f6afbe8c7c093b7a6753de))
+* **website:** rename Tonight → Live with #/tonight alias (Live v2 C2) ([#664](https://github.com/iamez/slomix/issues/664)) ([3fcc531](https://github.com/iamez/slomix/commit/3fcc531e5498f9a976d116cce6aed00b26de1475))
+
+
+### Bug Fixes
+
+* **lua:** live_events only aggregates real client slots (bot-test finding) ([#669](https://github.com/iamez/slomix/issues/669)) ([8572040](https://github.com/iamez/slomix/commit/857204071957252908d8ca41fe0e5f273075f2d7))
+* **lua:** tailer needs an honest User-Agent — Cloudflare 403s Python-urllib ([#660](https://github.com/iamez/slomix/issues/660)) ([4cec383](https://github.com/iamez/slomix/commit/4cec383d4803cb489083d45db98351859b4d8448))
+* **website:** resolve objective/support slots to names via the kill feed ([#666](https://github.com/iamez/slomix/issues/666)) ([fb5314a](https://github.com/iamez/slomix/commit/fb5314a44195de0551569da7239ac88296df0bd7))
+* **website:** Tonight roster must filter bot identities (Live v2 C1) ([#663](https://github.com/iamez/slomix/issues/663)) ([1c4b901](https://github.com/iamez/slomix/commit/1c4b9012c0277803cd2cf2fcb09b9c81ef29c8ac))
+
+## [1.31.0](https://github.com/iamez/slomix/compare/v1.30.1...v1.31.0) (2026-08-11)
+
+
+### Features
+
+* **bot:** usage_report.py — consumption loop (FIX 2) ([#650](https://github.com/iamez/slomix/issues/650)) ([bfe6776](https://github.com/iamez/slomix/commit/bfe677616f8c8796d583ad11607acf9ae7f1fb1f))
+* **map-geometry:** build W5b static stage semantics ([#633](https://github.com/iamez/slomix/issues/633)) ([e649b04](https://github.com/iamez/slomix/commit/e649b0493a1ca0ed9cb3b2a2935ebcd78f494202))
+* **map-geometry:** classify W5b semantic frontiers ([#638](https://github.com/iamez/slomix/issues/638)) ([d6136cd](https://github.com/iamez/slomix/commit/d6136cdd994870fddf4e4d0ff1968eb91418e497))
+* **website:** live view S1–S3 — ingest/feed API, Tonight match feed, log tailer ([#658](https://github.com/iamez/slomix/issues/658)) ([93c0cb6](https://github.com/iamez/slomix/commit/93c0cb6b86aa9f2be6631ab63f73e6e8cb1d1f11))
+* **website:** live-view S0 — legacy3.log parser + replay harness ([#655](https://github.com/iamez/slomix/issues/655)) ([a7d56b6](https://github.com/iamez/slomix/commit/a7d56b65509929087e381427889821f68e3add6f))
+
+
+### Bug Fixes
+
+* **bot:** let objective end_reason survive canonicalization (new OBJECTIVE enum value) ([#644](https://github.com/iamez/slomix/issues/644)) ([3a4ae8b](https://github.com/iamez/slomix/commit/3a4ae8b14751bc23c327745892f4f69e0f91a3cf))
+* **bot:** make !help show our categorized help instead of discord.py's built-in ([#636](https://github.com/iamez/slomix/issues/636)) ([bff9060](https://github.com/iamez/slomix/commit/bff9060b85259bba3bd7ac775be73296614d51ad))
+* **bot:** persist bot/filler/orphan validity flags on the production import path ([#640](https://github.com/iamez/slomix/issues/640)) ([52c4a4b](https://github.com/iamez/slomix/commit/52c4a4b510bbb2f8e7a80de72a6e0e660e7f1493))
+* **lua:** backport the live c0rnp0rn8 from the game server — repo lagged production ([#657](https://github.com/iamez/slomix/issues/657)) ([b83a859](https://github.com/iamez/slomix/commit/b83a859dea694139661064ac2d3bbe2ca36773be))
+* **proximity:** age permanent orphans in importer-awake hours (T1) ([#652](https://github.com/iamez/slomix/issues/652)) ([7e1163b](https://github.com/iamez/slomix/commit/7e1163bbf675ece25d36359f4ee8ef453d182df6))
+* **proximity:** clamp team-push push_quality to 1.0 on import (FIX 7) ([#643](https://github.com/iamez/slomix/issues/643)) ([d2f2158](https://github.com/iamez/slomix/commit/d2f2158e82bc25f4c370b8e3d5c7865ae6abc0aa))
+* **proximity:** clamp weapon-accuracy hits to shots_fired on import (FIX 3) ([#641](https://github.com/iamez/slomix/issues/641)) ([12079f1](https://github.com/iamez/slomix/commit/12079f16130c21627d2f41d831a20c72b35e1d66))
+* **proximity:** derive relinker round_id coverage from the schema (FIX 9) ([#645](https://github.com/iamez/slomix/issues/645)) ([9136762](https://github.com/iamez/slomix/commit/913676289b83a422c38b63cac4e13cef4dd87818))
+* **proximity:** fall back to the time resolver when the target round has no round_start_unix (T6) ([#656](https://github.com/iamez/slomix/issues/656)) ([9efc819](https://github.com/iamez/slomix/commit/9efc8196841fc6b2a9b8c157c59bc99337adf991))
+* **proximity:** tolerate round_number disagreement on exact timestamp match ([#647](https://github.com/iamez/slomix/issues/647)) ([7fbccb7](https://github.com/iamez/slomix/commit/7fbccb7f1168d64e1616824fadc338fdaf0af516))
+* **website:** ET Rating sample-size shrinkage — Bayesian prior K=40 (FIX 8, owner-gated) ([#651](https://github.com/iamez/slomix/issues/651)) ([38cbb5c](https://github.com/iamez/slomix/commit/38cbb5c18ef30c395e9130a98453b2f28304ba5c))
+* **website:** last-session must skip quarantined sessions (500 → previous valid session) ([#659](https://github.com/iamez/slomix/issues/659)) ([ae1d43c](https://github.com/iamez/slomix/commit/ae1d43c6895e2298d3c1baae9bab02b27546b2a6))
+
+
+### Performance Improvements
+
+* **bot:** unblock event loop in !last_session graphs + add typing indicator ([#648](https://github.com/iamez/slomix/issues/648)) ([29b4e0e](https://github.com/iamez/slomix/commit/29b4e0edf2b549b0a47fd675674a39b871201fcf))
+
 ## [1.30.1](https://github.com/iamez/slomix/compare/v1.30.0...v1.30.1) (2026-08-11)
 
 

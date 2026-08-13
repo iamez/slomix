@@ -15,6 +15,7 @@ from website.backend.services.skill_rating_service import (
     CONSTANT,
     MIN_ROUNDS,
     PROXIMITY_METRICS,
+    SHRINKAGE_K,
     WEIGHTS,
     compute_and_store_ratings,
     compute_session_map_ratings,
@@ -114,7 +115,8 @@ async def get_skill_leaderboard(
             "min_rounds": MIN_ROUNDS,
             "weights": WEIGHTS,
             "constant": CONSTANT,
-            "version": "2.0",
+            "version": "2.1",
+            "shrinkage_k": SHRINKAGE_K,
         },
     }
 
@@ -283,18 +285,25 @@ async def get_skill_formula():
     """Return the current rating formula details (transparency)."""
     return {
         "status": "ok",
-        "version": "2.0",
+        "version": "2.1",
         "name": "ET Rating v2",
         "description": (
             "Individual performance rating combining PCS stats + proximity analytics. "
             "Inspired by HLTV 2.0, Valorant ACS, PandaSkill, TrueSkill2, and "
             "competitive ET stopwatch format (class-based, objective-sequential, respawn). "
-            "Format-agnostic: works in 3v3 (medic/engi/covy) and 6v6 (full roster)."
+            "Format-agnostic: works in 3v3 (medic/engi/covy) and 6v6 (full roster). "
+            "v2.1: published rating is sample-size shrunk toward the pool mean "
+            "(Bayesian pseudo-count prior), so a handful of hot rounds no longer "
+            "outranks a thousand-round track record."
         ),
-        "formula": "ET_Rating = constant + sum(weight_i * percentile(metric_i))",
+        "formula": (
+            "raw = constant + sum(weight_i * percentile(metric_i)); "
+            "ET_Rating = (n * raw + shrinkage_k * pool_mean) / (n + shrinkage_k)"
+        ),
         "constant": CONSTANT,
         "weights": WEIGHTS,
         "min_rounds": MIN_ROUNDS,
+        "shrinkage_k": SHRINKAGE_K,
         "metrics": {
             "dpm": "Damage per minute (alive time)",
             "kpr": "Kills per round",
@@ -351,6 +360,7 @@ async def get_et_performance_v3_shadow(
 @router.get("/skill/composite")
 async def get_composite_stats(
     session_date: str | None = None,
+    gaming_session_id: int | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
@@ -362,46 +372,85 @@ async def get_composite_stats(
       - SDS: Spawn Denial Score (spawn timing + denied playtime)
       - CP:  Combat Presence (survival + focus escape + alive time)
 
-    Query: ?session_date=YYYY-MM-DD (defaults to latest proximity session)
+    Scope (prefer ?gaming_session_id — see below):
+      - ?gaming_session_id=N  → the ONE gaming session, the correct scope.
+        Every CTE is bound to that session's rounds (round_id / gsid), and bot
+        rounds are excluded. This is the fix for the date-scoping bug: two
+        sessions on the same calendar date (e.g. a real match + a bot test that
+        carries gaming_session_id=NULL) share a round_date, so ?session_date
+        merged BOTH — surfacing phantom [BOT]… players from the other session.
+      - ?session_date=YYYY-MM-DD → legacy date scope (kept for callers that
+        only have a date; still merges everything played that day).
+      - neither → latest proximity session_date.
     """
-    # Resolve session date
-    if not session_date:
-        row = await db.fetch_one(
-            "SELECT MAX(session_date) FROM proximity_kill_outcome"
-        )
-        if not row or not row[0]:
-            return {"status": "ok", "session_date": None, "players": []}
-        session_date = str(row[0])
+    # Scope resolution: gaming_session_id wins; else fall back to session_date.
+    if gaming_session_id is not None:
+        scope_param: object = gaming_session_id
+        # gsid-bound predicates. pcs joins rounds (no gsid column of its own);
+        # storytelling_kill_impact carries gaming_session_id directly; the
+        # proximity_* tables are round-keyed, so restrict to this session's
+        # round set. Bot rounds are dropped at the driving table (session_pcs
+        # LEFT-JOINs the rest, so excluding bots here removes them everywhere).
+        pcs_from = ("player_comprehensive_stats p "
+                    "JOIN rounds r ON r.id = p.round_id")
+        pcs_cols = ("p.player_guid, MAX(p.player_name) as player_name, "
+                    "SUM(p.kills) as kills, SUM(p.deaths) as deaths, "
+                    "SUM(p.gibs) as gibs")
+        pcs_where = ("WHERE r.gaming_session_id = $1 AND r.round_number > 0 "
+                     "AND p.player_guid NOT LIKE 'OMNIBOT%' "
+                     "AND p.player_name NOT LIKE '[BOT]%'")
+        pcs_group = "GROUP BY p.player_guid"
+        pcs_alias = "p."
+        ski_where = "WHERE gaming_session_id = $1"
+        round_set = "round_id IN (SELECT id FROM rounds WHERE gaming_session_id = $1)"
+    else:
+        if not session_date:
+            row = await db.fetch_one(
+                "SELECT MAX(session_date) FROM proximity_kill_outcome"
+            )
+            if not row or not row[0]:
+                return {"status": "ok", "session_date": None,
+                        "gaming_session_id": None, "players": []}
+            session_date = str(row[0])
+        scope_param = session_date
+        pcs_from = "player_comprehensive_stats"
+        pcs_cols = ("player_guid, MAX(player_name) as player_name, "
+                    "SUM(kills) as kills, SUM(deaths) as deaths, "
+                    "SUM(gibs) as gibs")
+        pcs_where = "WHERE round_date = $1 AND round_number > 0"
+        pcs_group = "GROUP BY player_guid"
+        pcs_alias = ""
+        ski_where = "WHERE session_date = $1::date"
+        round_set = "session_date = $1::date"
 
-    # Query per-player aggregates for this session from proximity + PCS
-    rows = await db.fetch_all("""
+    # Query per-player aggregates for this session from proximity + PCS. The
+    # scope fragments above are code-controlled (no user input) and the scope
+    # value always flows through the $1 bind parameter.
+    rows = await db.fetch_all(f"""
         WITH session_pcs AS (
-            SELECT player_guid, MAX(player_name) as player_name,
-                SUM(kills) as kills, SUM(deaths) as deaths,
-                SUM(gibs) as gibs,
-                AVG(CASE WHEN time_played_seconds > 0
-                    THEN (time_played_seconds - COALESCE(
-                        CASE WHEN time_dead_minutes > 0 THEN time_dead_minutes * 60 ELSE 0 END, 0
-                    ))::REAL / time_played_seconds ELSE 0 END) as survival_rate,
-                AVG(COALESCE(time_dead_ratio, 0)) as avg_time_dead_pct,
-                SUM(denied_playtime) as denied_playtime,
-                SUM(time_played_seconds) as time_played_seconds
-            FROM player_comprehensive_stats
-            WHERE round_date = $1
-              AND round_number > 0
-            GROUP BY player_guid
+            SELECT {pcs_cols},
+                AVG(CASE WHEN {pcs_alias}time_played_seconds > 0
+                    THEN ({pcs_alias}time_played_seconds - COALESCE(
+                        CASE WHEN {pcs_alias}time_dead_minutes > 0 THEN {pcs_alias}time_dead_minutes * 60 ELSE 0 END, 0
+                    ))::REAL / {pcs_alias}time_played_seconds ELSE 0 END) as survival_rate,
+                AVG(COALESCE({pcs_alias}time_dead_ratio, 0)) as avg_time_dead_pct,
+                SUM({pcs_alias}denied_playtime) as denied_playtime,
+                SUM({pcs_alias}time_played_seconds) as time_played_seconds
+            FROM {pcs_from}
+            {pcs_where}
+            {pcs_group}
         ),
         session_crossfire AS (
             SELECT killer_guid_canonical as guid_c,
                 COUNT(*) FILTER (WHERE is_crossfire = true) as crossfire_kills
             FROM storytelling_kill_impact
-            WHERE session_date = $1::date AND killer_guid_canonical IS NOT NULL
+            {ski_where} AND killer_guid_canonical IS NOT NULL
             GROUP BY killer_guid_canonical
         ),
         session_trades AS (
             SELECT trader_guid_canonical as guid_c, COUNT(*) as trade_kills
             FROM proximity_lua_trade_kill
-            WHERE session_date = $1::date AND trader_guid_canonical IS NOT NULL
+            WHERE {round_set} AND trader_guid_canonical IS NOT NULL
             GROUP BY trader_guid_canonical
         ),
         session_permanence AS (
@@ -409,7 +458,7 @@ async def get_composite_stats(
                 COUNT(*) as total_outcomes,
                 COUNT(*) FILTER (WHERE outcome = 'gibbed') as gibbed_count
             FROM proximity_kill_outcome
-            WHERE session_date = $1::date AND killer_guid_canonical IS NOT NULL
+            WHERE {round_set} AND killer_guid_canonical IS NOT NULL
             GROUP BY killer_guid_canonical
         ),
         session_clutch AS (
@@ -421,7 +470,7 @@ async def get_composite_stats(
                        OR (attacker_team = 'ALLIES' AND allies_alive < axis_alive)
                 ) as clutch_kills
             FROM proximity_combat_position
-            WHERE session_date = $1::date AND event_type = 'kill'
+            WHERE {round_set} AND event_type = 'kill'
               AND attacker_guid_canonical IS NOT NULL
             GROUP BY attacker_guid_canonical
         ),
@@ -429,7 +478,7 @@ async def get_composite_stats(
             SELECT killer_guid_canonical as guid_c,
                 AVG(spawn_timing_score) as avg_spawn_score
             FROM proximity_spawn_timing
-            WHERE session_date = $1::date AND killer_guid_canonical IS NOT NULL
+            WHERE {round_set} AND killer_guid_canonical IS NOT NULL
             GROUP BY killer_guid_canonical
         )
         SELECT
@@ -457,7 +506,7 @@ async def get_composite_stats(
         LEFT JOIN session_spawn sp ON sp.guid_c = pcs.player_guid
         WHERE pcs.kills > 0
         ORDER BY pcs.kills DESC
-    """, (session_date,))
+    """, (scope_param,))
 
     players = []
     for r in rows:
@@ -521,6 +570,7 @@ async def get_composite_stats(
     return {
         "status": "ok",
         "session_date": session_date,
+        "gaming_session_id": gaming_session_id,
         "players": players,
         "meta": {
             "metrics": {

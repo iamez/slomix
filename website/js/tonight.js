@@ -8,6 +8,8 @@
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 import { initTonightBetting } from './bets.js?v=20260804-auth-dedupe';
+import { startLiveTicker, stopLiveTicker, renderLiveTicker, setLiveRoundContext } from './live-ticker.js?v=20260812-live6';
+import { startLiveState, stopLiveState, renderLiveState } from './live-state.js?v=20260812-a4b';
 
 const POLL_MS = 8000;
 let _interval = null;
@@ -17,7 +19,7 @@ const A_COLOR = '#06b6d4';  // Team A — cyan
 const B_COLOR = '#8b5cf6';  // Team B — purple
 
 function _viewActive() {
-    const v = document.getElementById('view-tonight');
+    const v = document.getElementById('view-live');
     return v && v.classList.contains('active') && !v.classList.contains('hidden') && !document.hidden;
 }
 
@@ -38,13 +40,16 @@ export async function loadTonightView() {
     if (!host) return;
     await _refresh();
     _startPolling();
+    startLiveTicker();
+    startLiveState();
     // Fun-betting panel lives in its own container with its own refresh loop.
     initTonightBetting().catch(e => console.warn('tonight betting init failed', e));
     // Bind the visibility lifecycle once (loadTonightView runs on every entry).
     if (!_lifecycleBound) {
         _lifecycleBound = true;
         document.addEventListener('visibilitychange', () => {
-            if (_viewActive()) _startPolling(); else _stopPolling();
+            if (_viewActive()) { _startPolling(); startLiveTicker(); startLiveState(); }
+            else { _stopPolling(); stopLiveTicker(); stopLiveState(); }
         });
     }
 }
@@ -53,29 +58,6 @@ function _mmss(sec) {
     if (sec == null) return '—';
     const s = Math.max(0, Math.round(sec));
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-
-// Live server pulse from the UDP query (/live-status) — the actual "right now"
-// state, which the lua feed (round-end only) can't show. Empty string when the
-// server is offline so the strip simply doesn't render.
-function _serverStrip(gs) {
-    if (!gs || !gs.online) return '';
-    const map = escapeHtml(gs.map || '—');
-    const pc = gs.player_count || 0, mx = gs.max_players || 0;
-    const hostname = escapeHtml(gs.hostname || 'server');
-    const names = (gs.players || [])
-        .map(p => escapeHtml((p && p.name) || ''))
-        .filter(Boolean)
-        .join(' · ');
-    return `<div class="glass-panel p-4 rounded-xl mb-6 flex items-center justify-between flex-wrap gap-2">
-        <div class="flex items-center gap-2">
-            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-bold">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>SERVER LIVE
-            </span>
-            <span class="text-sm text-slate-300">${hostname} · <span class="text-white font-bold">${map}</span></span>
-        </div>
-        <span class="text-xs text-slate-400">${pc}/${mx} on server${names ? ` — ${names}` : ''}</span>
-    </div>`;
 }
 
 // One round's outcome as a small team-coloured pill (R1 · winner · time).
@@ -106,6 +88,10 @@ function _teamPanel(team, maps, rounds, lead, side) {
     </div>`;
 }
 
+// Who's on the server, by side, now lives in the authoritative #live-state
+// panel (live-state.js, fed by GET /api/live/state) — it replaced the old
+// feed-derived _sideScoreboard / _serverStrip here.
+
 async function _refresh() {
     const host = document.getElementById('tonight-content');
     if (!host) return;
@@ -132,16 +118,15 @@ async function _refresh() {
         // results strip will fill in as rounds land. Otherwise truly idle.
         if (serverPlayers > 0) {
             host.textContent = '';
-            safeInsertHTML(host, 'beforeend', _serverStrip(gs) + `
-                <div class="glass-panel p-8 rounded-xl text-center">
-                    <div class="text-xl font-black text-white mb-1">Session warming up…</div>
-                    <div class="text-slate-400">Rounds will appear here as they complete.</div>
-                </div>`);
+            safeInsertHTML(host, 'beforeend',
+                '<div id="live-state"></div><div id="live-ticker"></div>');
+            renderLiveState();
+            renderLiveTicker();
             return;
         }
         _stopPolling();
         host.textContent = '';
-        safeInsertHTML(host, 'beforeend', (serverOnline ? _serverStrip(gs) : '') + `
+        safeInsertHTML(host, 'beforeend', '<div id="live-state"></div>' + `
             <div class="glass-panel p-8 rounded-xl text-center">
                 <div class="text-2xl font-black text-white mb-2">No session live right now</div>
                 <div class="text-slate-400 mb-4">Come back when the games are on.</div>
@@ -149,7 +134,13 @@ async function _refresh() {
                     <a href="#/availability" class="px-4 py-2 rounded-lg text-sm font-bold bg-brand-cyan/20 text-brand-cyan">Next session</a>
                     <a href="#/sessions2" class="px-4 py-2 rounded-lg text-sm font-bold bg-white/10 text-slate-200">Last session</a>
                 </div>
-            </div>`);
+            </div>
+            <div id="live-ticker"></div>`);
+        // Idle still shows the current-state panel (who's on the server, even
+        // between sessions) and the match feed — that tells a visitor the
+        // page is worth keeping open.
+        renderLiveState();
+        renderLiveTicker();
         return;
     }
 
@@ -186,7 +177,7 @@ async function _refresh() {
     // DOM rebuild (otherwise it snaps back to the left every refresh).
     const prevScroll = host.querySelector('[data-maps-strip]')?.scrollLeft || 0;
     host.textContent = '';
-    safeInsertHTML(host, 'beforeend', _serverStrip(gs) + `
+    safeInsertHTML(host, 'beforeend', '<div id="live-state"></div>' + `
         <div class="glass-panel p-6 rounded-xl mb-6">
             <div class="flex items-center justify-between flex-wrap gap-3 mb-5">
                 <div class="flex items-center gap-3">
@@ -200,7 +191,7 @@ async function _refresh() {
             ${data.director ? `<div class="text-center text-[15px] font-semibold text-slate-100 mb-5 px-2 leading-snug">${escapeHtml(data.director)}</div>` : ''}
             <div class="flex items-stretch gap-4">
                 ${_teamPanel(teams.a || {}, aMaps, score.a_rounds || 0, aLead, 'a')}
-                <div class="flex items-center text-slate-600 text-xl font-black">vs</div>
+                <div class="flex items-center text-slate-400 text-xl font-black">vs</div>
                 ${_teamPanel(teams.b || {}, bMaps, score.b_rounds || 0, !aLead, 'b')}
             </div>
             <div class="text-center text-xs text-slate-500 mt-3">${score.maps_completed || 0} maps completed tonight</div>
@@ -233,6 +224,17 @@ async function _refresh() {
 
     _drawMomentum('tonight-momentum', data.momentum || []);
     _drawHoldProb('tonight-holdprob', (data.hold_probability && data.hold_probability.curve) || [], cur.beat_seconds);
+
+    // Hand the live ticker this round's historical hold curve so it can show
+    // a live win-pressure strip (elapsed vs curve + objective momentum).
+    setLiveRoundContext({ holdCurve: (data.hold_probability && data.hold_probability.curve) || [] });
+
+    // Live event ticker (S3): shell only — live-ticker.js owns state + poll.
+    if (!host.querySelector('#live-ticker')) {
+        safeInsertHTML(host, 'beforeend', '<div id="live-ticker"></div>');
+    }
+    renderLiveState();
+    renderLiveTicker();
 }
 
 function _drawMomentum(canvasId, momentum) {
@@ -311,7 +313,7 @@ export async function loadHomeTonightCard() {
                     <span class="text-xs text-slate-400">maps · on ${escapeHtml(cur.map || data.current_map || '—')}</span>
                     ${leadName ? `<span class="text-xs text-slate-500">(${escapeHtml(leadName)} lead)</span>` : ''}
                 </div>
-                <a href="#/tonight" class="text-xs font-bold text-rose-300 hover:text-white transition">Open Tonight →</a>
+                <a href="#/live" class="text-xs font-bold text-rose-300 hover:text-white transition">Open Live →</a>
             </div>
         </div>`);
 }

@@ -96,6 +96,14 @@ class LastSessionCog(commands.Cog):
         - !last_session time_raw → Raw Lua time export (CSV)
         """
         try:
+            # One-shot typing indicator: the command historically took seconds
+            # with zero feedback, which reads as "bot is dead" (FIX 4). The
+            # graphs branch keeps it alive with a typing context below.
+            try:
+                await ctx.typing()
+            except discord.HTTPException:
+                logger.debug("Could not send typing indicator", exc_info=True)
+
             # Setup database aliases
             try:
                 await ensure_player_name_alias(self.bot.db_adapter, self.bot.config)
@@ -152,10 +160,13 @@ class LastSessionCog(commands.Cog):
                 return
 
             if subcommand and subcommand.lower() in ("graphs", "graph", "charts"):
-                # Generate performance graphs (returns 5 images)
-                result = await self.graph_generator.generate_performance_graphs(
-                    latest_date, session_ids, session_ids_str
-                )
+                # Generate performance graphs (returns 5 images). Rendering
+                # takes seconds even off-loop, so keep the typing indicator
+                # alive for the whole generation.
+                async with ctx.typing():
+                    result = await self.graph_generator.generate_performance_graphs(
+                        latest_date, session_ids, session_ids_str
+                    )
                 offense_img, defense_img, metrics_img, playstyle_img, timeline_img = result
 
                 if offense_img and defense_img and metrics_img and playstyle_img:

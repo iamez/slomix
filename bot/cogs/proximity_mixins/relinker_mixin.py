@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from discord.ext import tasks
 
+from bot.core.dead_hours import awake_cutoff
 from bot.services.lua_round_storage_mixin import _lua_exact_source_lock_key
 
 logger = logging.getLogger("bot.cogs.proximity")
@@ -26,6 +27,16 @@ logger = logging.getLogger("bot.cogs.proximity")
 # orphans like mp_sillyctf retrying for two days. Combined with quiet=True on
 # the resolve_round_id call below (relinker retries log at DEBUG, not WARNING),
 # this kills the `no_rows_for_map_round` log spam.
+#
+# Counted in importer-AWAKE hours, not wall hours (2026-08-11). The stats
+# importer sleeps 02:00–11:00 CET (dead_hours.py) while proximity ingestion
+# keeps landing rows, so a plain 6h wall clock wrote off every round played
+# 02:00–05:00 CET before the importer could possibly create its `rounds`
+# row (measured: 5 night-test rounds → 8,810 permanent orphans, relinker
+# linked 0). awake_cutoff() skips the dead window when aging, preserving
+# the #369 intent — 6h of *running importer* with nothing landing means the
+# file is never coming — with a worst-case wall horizon of 15h, still far
+# below the 48h that #369 lowered.
 _PERMANENT_ORPHAN_AGE_HOURS = 6
 
 
@@ -61,7 +72,64 @@ _DETECTION_TABLES: tuple[str, ...] = (
     # fine and whose shot_fired did not, so no leg ever flagged that round.
     # It carries all four identity columns, so no special-casing is needed.
     "proximity_shot_fired",
+    # aim_lock/comm_event/skill_snapshot/spawn_select: added 2026-08-11
+    # (FIX 9). Created by migration 058 (proximity v7) with a round_id and
+    # all four identity columns, but never added to any relinker list — the
+    # same hole as shot_fired, this time found by the schema coverage
+    # contract (tests/unit/test_round_id_coverage_contract.py) rather than
+    # by an incident. Partial unlinked indexes: migration 071.
+    "proximity_aim_lock", "proximity_comm_event",
+    "proximity_skill_snapshot", "proximity_spawn_select",
 )
+
+
+# round_id tables handled by DEDICATED SQL rather than the generic legs and
+# templates above: lua_round_teams has no session_date column (it gets its
+# own synthesized-date detection legs and the _RELINK_LUA_TEAMS_* templates),
+# and lua_spawn_stats has neither round_start_unix nor session_date — it is
+# healed by propagation from lua_round_teams keyed on match_id
+# (_RELINK_LUA_SPAWN_FROM_TEAMS_TEMPLATE).
+_SPECIAL_CASE_TABLES: tuple[str, ...] = ("lua_round_teams", "lua_spawn_stats")
+
+
+# Tables that carry a round_id column but are DELIBERATELY outside both the
+# generic legs and the special cases. The schema coverage contract
+# (tests/unit/test_round_id_coverage_contract.py) derives the full set of
+# round_id-bearing tables from tools/schema_postgresql.sql and fails when a
+# table is neither detected, special-cased, nor listed here with a reason —
+# so the next shot_fired-shaped omission cannot happen silently. None of
+# these carries the four-column round identity the generic legs key on, and
+# the contract test rejects an exemption for any table that does.
+_DETECTION_EXEMPT_TABLES: dict[str, str] = {
+    "player_comprehensive_stats": (
+        "stats path: the importer assigns round_id while creating the rounds "
+        "row itself (0 NULLs on dev); no round_start_unix/session_date "
+        "columns for the generic leg shape"
+    ),
+    "weapon_comprehensive_stats": (
+        "stats path, same shape and lifecycle as player_comprehensive_stats"
+    ),
+    "round_awards": (
+        "stats path, same shape and lifecycle as player_comprehensive_stats"
+    ),
+    "round_vs_stats": (
+        "stats path, same shape and lifecycle as player_comprehensive_stats"
+    ),
+    "round_assembly_events": (
+        "assembly diagnostics ledger: rows describe the linking PROCESS and "
+        "may legitimately precede their rounds row; no round_start_unix"
+    ),
+    "player_skill_history": (
+        "derived rating history scoped by gaming session, not round "
+        "identity; round_id is optional provenance and has never been "
+        "populated (2,435/2,435 NULL on dev, 2026-08-11) — nothing "
+        "round-scoped reads it"
+    ),
+    "processed_endstats_files": (
+        "file-ingestion bookkeeping; round_id is best-effort provenance and "
+        "the row carries no map/round identity columns to relink by"
+    ),
+}
 
 
 # Relink SQL templates hoisted to module scope (audit P4). Previously
@@ -164,7 +232,9 @@ class _ProximityRelinkerMixin:
             # synthesizes one from round_start_unix for the UNION.
             tables_with_round_number = _DETECTION_TABLES
             now = datetime.now(timezone.utc)
-            cutoff = now - timedelta(hours=_PERMANENT_ORPHAN_AGE_HOURS)
+            # Dead-hours-aware: 6 importer-awake hours, not 6 wall hours
+            # (see _PERMANENT_ORPHAN_AGE_HOURS comment above).
+            cutoff = awake_cutoff(now, _PERMANENT_ORPHAN_AGE_HOURS)
             cutoff_unix = int(cutoff.timestamp())
             cutoff_date = cutoff.date()
             recent_source = (
@@ -226,8 +296,8 @@ class _ProximityRelinkerMixin:
             linked = 0
             failed = 0
             stale_skipped = 0
-            # Both `now` and `target_dt` are tz-aware UTC so the configured
-            # cutoff below isn't affected by the host's UTC offset.
+            # Both `cutoff` and `target_dt` are tz-aware UTC so the staleness
+            # comparison below isn't affected by the host's UTC offset.
             # Previously (P3 bug) `datetime.utcnow()` was compared against
             # `datetime.fromtimestamp(...)` which returns LOCAL naive —
             # the age calculation silently drifted by ±1–2h on the prod VPS.
@@ -237,7 +307,7 @@ class _ProximityRelinkerMixin:
                 round_start_unix = row[2] if isinstance(row, (list, tuple)) else row.get('round_start_unix') or row['round_start_unix']
                 session_date = row[3] if isinstance(row, (list, tuple)) else row.get('session_date') or row['session_date']
 
-                # tz-aware UTC to match `now` above and prevent drift.
+                # tz-aware UTC to match `cutoff` above and prevent drift.
                 target_dt = None
                 if round_start_unix:
                     try:
@@ -248,11 +318,12 @@ class _ProximityRelinkerMixin:
                 # Defensive boundary recheck. The discovery SQL already
                 # removes permanent orphans; this protects the sub-second
                 # edge between its integer cutoff and datetime comparison.
-                if target_dt is not None:
-                    age_hours = (now - target_dt).total_seconds() / 3600.0
-                    if age_hours > _PERMANENT_ORPHAN_AGE_HOURS:
-                        stale_skipped += 1
-                        continue
+                # Compares against the same dead-hours-aware cutoff as the
+                # discovery SQL — a plain wall-clock age here would undo
+                # the awake_cutoff fix for rounds played during dead hours.
+                if target_dt is not None and target_dt < cutoff:
+                    stale_skipped += 1
+                    continue
 
                 round_date_str = str(session_date) if session_date else None
 
@@ -283,8 +354,82 @@ class _ProximityRelinkerMixin:
                             if isinstance(exact_row, (list, tuple))
                             else exact_row["id"]
                         )
+                    elif not exact_rows:
+                        # round_number disagreement fallback (2026-08-11, live
+                        # evidence): the engine's round counter can survive a
+                        # fresh `map` load issued right after a delivery R2
+                        # (stats/endstats/gametime all said R2) while
+                        # proximity_tracker resets to round 1 on the new map —
+                        # same physical round, two round_numbers. te_escape2,
+                        # rounds id 11180: round_start_unix AND round_end_unix
+                        # identical in both stores, yet the strict lookup above
+                        # returns nothing forever (~159 rows permanently
+                        # unlinked on a COVERED table; historically 2 of 643
+                        # linkable rounds, 0.31%).
+                        #
+                        # When map_name (normalized, same as the strict lookup)
+                        # + round_start_unix match EXACTLY — the existing exact
+                        # path's tolerance is zero, kept here — and exactly ONE
+                        # rounds row matches, the timestamps are trusted over
+                        # round_number: one game server cannot start two rounds
+                        # of the same map in the same second. Zero or multiple
+                        # candidates keep the old behaviour (never guess).
+                        relaxed_rows = await db.fetch_all(
+                            "SELECT id, round_number FROM rounds "
+                            "WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM($1)) "
+                            "  AND round_start_unix = $2 "
+                            "ORDER BY id LIMIT 2",
+                            (map_name, exact_start_unix),
+                        )
+                        if len(relaxed_rows) == 1:
+                            relaxed_row = relaxed_rows[0]
+                            round_id = int(
+                                relaxed_row[0]
+                                if isinstance(relaxed_row, (list, tuple))
+                                else relaxed_row["id"]
+                            )
+                            rounds_rn = (
+                                relaxed_row[1]
+                                if isinstance(relaxed_row, (list, tuple))
+                                else relaxed_row["round_number"]
+                            )
+                            # WARNING (not DEBUG): this is a real disagreement
+                            # between capture paths worth seeing — but it fires
+                            # once per affected round, because the fanout below
+                            # heals it in the same cycle.
+                            logger.warning(
+                                "Re-linker: round_number mismatch tolerated on "
+                                "exact map+round_start_unix match: map=%s "
+                                "source rn=%s, rounds rn=%s, unix=%d -> "
+                                "round_id=%d",
+                                map_name, round_number, rounds_rn,
+                                exact_start_unix, round_id,
+                            )
+                        else:
+                            round_id = None
                     else:
                         round_id = None
+                    if round_id is None:
+                        # Fuzzy time fallback (2026-08-11, live evidence,
+                        # round 11184): a positive SOURCE unix used to
+                        # dead-end here whenever the TARGET rounds row has
+                        # NULL round_start_unix — the majority case, since
+                        # that column is backfilled by Lua metadata
+                        # enrichment, which is itself deferred exactly when
+                        # this path runs (only ~60% of rounds ever get it;
+                        # 1/11 on 2026-08-11). exact/relaxed-only matching
+                        # therefore made these orphans permanent. Same
+                        # resolver, window and never-guess semantics as the
+                        # no-unix branch below.
+                        round_id = await resolve_round_id(
+                            db,
+                            map_name,
+                            round_number,
+                            target_dt=target_dt,
+                            round_date=round_date_str,
+                            window_minutes=120,
+                            quiet=True,
+                        )
                 else:
                     round_id = await resolve_round_id(
                         db,
@@ -373,7 +518,7 @@ class _ProximityRelinkerMixin:
             if linked > 0 or failed > 0 or stale_skipped > 0:
                 logger.info(
                     "🔗 Proximity re-linker: %d linked, %d unresolved, "
-                    "%d stale skipped (>%dh) — of %d total",
+                    "%d stale skipped (>%d awake-h) — of %d total",
                     linked, failed, stale_skipped,
                     _PERMANENT_ORPHAN_AGE_HOURS, len(unlinked),
                 )

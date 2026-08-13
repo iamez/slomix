@@ -208,7 +208,7 @@ function renderAmbiguousSessionPicker(candidates) {
     if (players) {
         players.textContent = '';
         const wrap = _el('div', 'col-span-full flex flex-col items-center gap-3 py-12');
-        wrap.appendChild(_el('div', 'text-slate-600 text-4xl mb-1', '\u{1F553}'));
+        wrap.appendChild(_el('div', 'text-slate-400 text-4xl mb-1', '\u{1F553}'));
         (candidates || []).forEach(c => {
             const range = c.end_date && c.end_date !== c.start_date ? `${c.start_date} → ${c.end_date}` : c.start_date;
             const btn = _el('button',
@@ -279,11 +279,9 @@ async function loadStoryData() {
         renderPlayerCards(storyState.players);
         renderKISBreakdown(storyState.players);
 
-        // gsid-native query for every panel already converted (SS-C). A few
-        // panels (skill/composite) haven't been converted and still need a
-        // single session_date — see the dedicated `dateQ` fragment below.
+        // gsid-native query for every panel (SS-C). skill/composite is now
+        // converted too (accepts gaming_session_id), so all panels share `q`.
         const q = _storyScopeQuery();
-        const dateQ = `session_date=${encodeURIComponent(storyState.sessionDate)}`;
 
         // Fetch narrative, momentum, moments, synergy, win-contribution in parallel (non-blocking)
         fetchJSON(`${API_BASE}/storytelling/narrative?${q}`).then(narData => {
@@ -308,11 +306,13 @@ async function loadStoryData() {
 
         // Advanced metrics + Comp Skill board render into the SAME container,
         // sequentially (renderAdvancedMetrics clears it) — so fetch together.
-        // /skill/composite is outside this program's scope-resolver
-        // conversion (a different router) and still only accepts a single
-        // session_date.
+        // /skill/composite now accepts gaming_session_id (scope-resolver
+        // parity): `q` sends it when we have a gsid, so the panel is bound to
+        // THIS session's rounds. That fixes the date-scope bug where a bot
+        // test (gaming_session_id=NULL) sharing the calendar date leaked
+        // phantom [BOT]… players into the panel. Falls back to session_date.
         Promise.allSettled([
-            fetchJSON(`${API_BASE}/skill/composite?${dateQ}`),
+            fetchJSON(`${API_BASE}/skill/composite?${q}`),
             fetchJSON(`${API_BASE}/skill/ssr`),
         ]).then(([comp, ssr]) => {
             if (loadId !== storyLoadId) return;
@@ -395,7 +395,7 @@ function renderEmpty(message) {
     if (players) {
         players.textContent = '';
         players.appendChild(_el('div', 'col-span-full text-center py-16',
-            _el('div', 'text-slate-600 text-4xl mb-3', '\u{1F4CA}'),
+            _el('div', 'text-slate-400 text-4xl mb-3', '\u{1F4CA}'),
             _el('div', 'text-slate-400 text-sm', message)
         ));
     }
@@ -848,7 +848,7 @@ function renderPlayerCards(players) {
         if (oksiiRow.children.length > 0) card.appendChild(oksiiRow);
 
         // Footer
-        card.appendChild(_el('div', 'flex justify-between mt-1 text-[9px] text-slate-600',
+        card.appendChild(_el('div', 'flex justify-between mt-1 text-[9px] text-slate-400',
             _el('span', null, `Avg impact: ${(p.avg_impact ?? 0).toFixed(2)}`),
             _el('span', null, `Context: ${p.kills > 0 ? (((p.carrier_kills + p.push_kills + p.crossfire_kills) / p.kills) * 100).toFixed(0) : 0}%`)
         ));
@@ -1045,11 +1045,11 @@ function renderMoments(data) {
             m.kills.forEach(k => {
                 const killRow = _el('div', 'flex items-center gap-1',
                     _el('span', 'text-white', stripEtColors(k.killer || '')),
-                    _el('span', 'text-slate-600', '\u2192'),
+                    _el('span', 'text-slate-400', '\u2192'),
                     _el('span', 'text-red-400', stripEtColors(k.victim || ''))
                 );
                 if (k.weapon) {
-                    killRow.appendChild(_el('span', 'text-slate-600 ml-auto', k.weapon));
+                    killRow.appendChild(_el('span', 'text-slate-400 ml-auto', k.weapon));
                 }
                 if (k.time_formatted) {
                     killRow.appendChild(_el('span', 'text-slate-700 w-8 text-right', k.time_formatted));
@@ -1057,7 +1057,7 @@ function renderMoments(data) {
                 breakdown.appendChild(killRow);
             });
             if (m.duration_ms != null) {
-                breakdown.appendChild(_el('div', 'text-slate-600 mt-1', `Duration: ${(m.duration_ms / 1000).toFixed(1)}s`));
+                breakdown.appendChild(_el('div', 'text-slate-400 mt-1', `Duration: ${(m.duration_ms / 1000).toFixed(1)}s`));
             }
             card.appendChild(breakdown);
         }
@@ -1215,7 +1215,7 @@ function renderBoxScore(data) {
         _el('div', 'text-xs text-slate-400 uppercase', stripEtColors(alpha)),
         _el('div', 'text-2xl font-black text-cyan-400 tabular-nums', String(aScore))
     ));
-    scoreRow.appendChild(_el('div', 'text-slate-600 text-sm', 'vs'));
+    scoreRow.appendChild(_el('div', 'text-slate-400 text-sm', 'vs'));
     scoreRow.appendChild(_el('div', 'text-left',
         _el('div', 'text-xs text-slate-400 uppercase', stripEtColors(beta)),
         _el('div', 'text-2xl font-black text-rose-400 tabular-nums', String(bScore))
@@ -1226,10 +1226,10 @@ function renderBoxScore(data) {
     const mapList = _el('div', 'space-y-1.5');
     maps.forEach((m, i) => {
         const row = _el('div', 'flex items-center gap-3 rounded-lg bg-white/[0.02] px-3 py-2 hover:bg-white/[0.04] transition-colors');
-        row.appendChild(_el('span', 'text-[10px] text-slate-600 w-5', `#${m.map_number || i + 1}`));
+        row.appendChild(_el('span', 'text-[10px] text-slate-400 w-5', `#${m.map_number || i + 1}`));
         row.appendChild(_el('span', 'text-xs text-slate-300 flex-1 truncate', m.map_name || ''));
         row.appendChild(_el('span', 'text-xs font-bold text-cyan-400 tabular-nums w-4 text-right', String(m.alpha_points || 0)));
-        row.appendChild(_el('span', 'text-slate-600 text-[10px]', '-'));
+        row.appendChild(_el('span', 'text-slate-400 text-[10px]', '-'));
         row.appendChild(_el('span', 'text-xs font-bold text-rose-400 tabular-nums w-4', String(m.beta_points || 0)));
 
         // Round times
@@ -1430,7 +1430,7 @@ function renderCompSkillBoard(data) {
         row.appendChild(right);
         container.appendChild(row);
     });
-    container.appendChild(_el('p', 'text-[10px] text-slate-600 mt-1',
+    container.appendChild(_el('p', 'text-[10px] text-slate-400 mt-1',
         'Reaction medians ride a ~200ms telemetry grid and mix ping/hardware — compare ranks, not milliseconds.'));
 }
 
@@ -1488,7 +1488,7 @@ function renderWinContribution(data) {
     container.appendChild(legendRow);
 
     // Column headers
-    const header = _el('div', 'flex items-center gap-3 mb-2 text-[10px] text-slate-600 uppercase tracking-wider');
+    const header = _el('div', 'flex items-center gap-3 mb-2 text-[10px] text-slate-400 uppercase tracking-wider');
     header.appendChild(_el('div', 'w-5 text-right', '#'));
     header.appendChild(_el('div', 'w-24 text-right', 'Player'));
     header.appendChild(_el('div', 'flex-1', 'Contribution'));
@@ -1523,7 +1523,7 @@ function renderWinContribution(data) {
         };
 
         const row = _el('div', 'flex items-center gap-3 mb-2 group');
-        row.appendChild(_el('div', 'w-5 text-[10px] text-slate-600 text-right font-mono', String(rank)));
+        row.appendChild(_el('div', 'w-5 text-[10px] text-slate-400 text-right font-mono', String(rank)));
 
         const nameDiv = _el('div', 'w-24 text-xs text-slate-400 truncate text-right', safeName);
         nameDiv.title = safeName;

@@ -2227,6 +2227,22 @@ class PostgreSQLDatabaseManager:
         defender = parsed_data.get('defender_team', 0)
         round_outcome = parsed_data.get('round_outcome', '')
 
+        # Bot/filler/orphan validity flags. This manager is the PRODUCTION
+        # import path (the gate logic in stats_import_mixin only runs on the
+        # SQLite fallback), and its INSERT historically omitted these columns
+        # entirely — which is why is_bot_round was never true and no bot or
+        # orphan round was ever auto-invalidated in either database's history
+        # (proven live by the 2026-08-11 Omni-bot test session, quarantined
+        # by hand). Semantics live in round_contract.derive_round_validity,
+        # shared with the mixin.
+        from bot.core.round_contract import derive_round_validity
+        validity = derive_round_validity(
+            parsed_data, map_name, getattr(self.config, "excluded_maps", None) or set()
+        )
+        round_status = 'orphan_r2' if (
+            validity['is_orphan_r2'] and not is_match_summary
+        ) else 'completed'
+
         # Generate match_id as date-time only (shared by R1+R2 of the same match)
         # For R2: use R1's timestamp (parser attaches r1_filename to R2 results)
         r1_fn = parsed_data.get('r1_filename')
@@ -2261,19 +2277,27 @@ class PostgreSQLDatabaseManager:
                 """
                 INSERT INTO rounds
                 (round_date, round_time, match_id, map_name, round_number,
-                 time_limit, actual_time, winner_team, defender_team, round_outcome, gaming_session_id, round_status, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                 time_limit, actual_time, winner_team, defender_team, round_outcome, gaming_session_id, round_status, created_at,
+                 is_bot_round, bot_player_count, human_player_count, is_valid)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
                 ON CONFLICT (match_id, round_number) DO UPDATE SET
                     round_date = EXCLUDED.round_date,
                     round_time = EXCLUDED.round_time,
                     gaming_session_id = EXCLUDED.gaming_session_id,
                     round_status = EXCLUDED.round_status,
                     winner_team = EXCLUDED.winner_team,
-                    defender_team = EXCLUDED.defender_team
+                    defender_team = EXCLUDED.defender_team,
+                    is_bot_round = EXCLUDED.is_bot_round,
+                    bot_player_count = EXCLUDED.bot_player_count,
+                    human_player_count = EXCLUDED.human_player_count,
+                    -- Re-import must never REVIVE a round a human or a later
+                    -- gate invalidated: AND keeps FALSE sticky.
+                    is_valid = rounds.is_valid AND EXCLUDED.is_valid
                 RETURNING id
                 """,
                 file_date, round_time, match_id, map_name, round_number,
-                time_limit, actual_time, winner, defender, round_outcome, gaming_session_id, 'completed', datetime.now()
+                time_limit, actual_time, winner, defender, round_outcome, gaming_session_id, round_status, datetime.now(),
+                validity['is_bot_round'], validity['bot_player_count'], validity['human_player_count'], validity['is_valid']
             )
 
             # 🆕 RESTART DETECTION: Check for earlier rounds that should be marked as cancelled/substitution
@@ -2464,6 +2488,36 @@ class PostgreSQLDatabaseManager:
                         f"time gap {time_diff_minutes:.1f}min too large (likely map rotation replay)"
                     )
                     continue
+
+                # Deterministic complete-match guard (PR #370 match_id pairer):
+                # if the earlier round already has a COMPLETED counterpart sharing
+                # its match_id, it is a finished map — not a restart false start —
+                # no matter how soon the next same-map round arrived. Two fast
+                # back-to-back plays of one map land their R2s <5 min apart, which
+                # the QUICK_RESTART path below (it skips the timing counterpart
+                # check) otherwise miscancels: gsid 144's first et_brewdog R2 was
+                # wrongly cancelled though its match was complete, dropping the
+                # whole map from scoring. This match_id signal is authoritative
+                # and gap-independent, so it runs before the timing heuristics.
+                if earlier_match_id:
+                    other_round_number = 2 if round_number == 1 else 1
+                    complete_pair = await conn.fetchval(
+                        """
+                        SELECT 1 FROM rounds
+                        WHERE match_id = $1
+                          AND round_number = $2
+                          AND round_status = 'completed'
+                        LIMIT 1
+                        """,
+                        earlier_match_id, other_round_number,
+                    )
+                    if complete_pair:
+                        logger.debug(
+                            "Skipping restart check for round %s: belongs to "
+                            "complete match %s (completed counterpart exists)",
+                            earlier_id, earlier_match_id,
+                        )
+                        continue
 
                 # For slower duplicates (5-15 min), keep valid completed map pairs and
                 # only treat unpaired rounds as restart candidates.

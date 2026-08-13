@@ -28,7 +28,7 @@ const A_COLOR = '#06b6d4';  // Team A — cyan (matches tonight.js)
 const B_COLOR = '#8b5cf6';  // Team B — purple
 
 function _viewActive() {
-    const v = document.getElementById('view-tonight');
+    const v = document.getElementById('view-live');
     return v && v.classList.contains('active') && !v.classList.contains('hidden') && !document.hidden;
 }
 
@@ -47,7 +47,7 @@ function _shell(host) {
     _set(host, `
         <div class="glass-panel p-5 rounded-xl mb-6" aria-label="Session betting">
             <div class="flex items-center justify-between mb-1">
-                <div class="text-xs uppercase tracking-widest text-slate-500 font-bold">🎲 Session bets <span class="text-slate-600 normal-case tracking-normal">· fun points, no money</span></div>
+                <div class="text-xs uppercase tracking-widest text-slate-500 font-bold">🎲 Session bets <span class="text-slate-400 normal-case tracking-normal">· fun points, no money</span></div>
                 <div id="bets-wallet" class="text-xs text-slate-400"></div>
             </div>
             <div id="bets-body" class="mt-3 text-sm text-slate-500">Loading…</div>
@@ -152,7 +152,7 @@ async function _renderLeaderboard(el) {
             <div class="space-y-1">${players.map((p, i) => `
                 <div class="flex items-center justify-between text-xs">
                     <span class="text-slate-300">${i + 1}. ${escapeHtml(p.name || 'Player')}</span>
-                    <span class="text-slate-400">${p.balance} pts <span class="text-slate-600">(${p.lifetime_earned >= 0 ? '+' : ''}${p.lifetime_earned})</span></span>
+                    <span class="text-slate-400">${p.balance} pts <span class="text-slate-400">(${p.lifetime_earned >= 0 ? '+' : ''}${p.lifetime_earned})</span></span>
                 </div>`).join('')}</div>`);
     } catch (_e) {
         el.textContent = '';
@@ -214,7 +214,7 @@ export async function initTonightBetting() {
     // The renderers read getCurrentUser() synchronously (_renderMarket,
     // _renderWallet), so the identity has to be settled before the FIRST
     // render, not merely started. Since initApp() stopped awaiting the auth
-    // probe before routing, a logged-in visitor opening #/tonight directly
+    // probe before routing, a logged-in visitor opening #/live directly
     // would otherwise get disabled bet buttons and no wallet until the 12s
     // poll corrected it (Codex on #598). This joins the in-flight startup
     // probe rather than issuing another request.

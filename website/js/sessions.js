@@ -129,9 +129,20 @@ function mapImageFor(mapName) {
     return "assets/maps/map_generic.svg";
 }
 
+// Small card thumbnails (~64px) don't need the 1024px proximity minimaps
+// (~2 MB each, 18 MB total). thumbs/*.webp are 320px derivatives (~12 KB,
+// 1.8% of the PNGs) generated from the same images; the full-res PNGs stay
+// for the large proximity heatmap backgrounds. Non-proximity paths (the
+// generic svg fallback) pass through unchanged.
+function mapThumbFor(mapName) {
+    const full = mapImageFor(mapName);
+    const m = full.match(/^assets\/maps\/proximity\/(.+)\.png$/);
+    return m ? `assets/maps/proximity/thumbs/${m[1]}.webp` : full;
+}
+
 function mapTile(mapName) {
     const safeMapName = escapeHtml(mapLabel(mapName));
-    const mapImg = mapImageFor(mapName);
+    const mapImg = mapThumbFor(mapName);
     const isFallbackMap = mapImg.includes('map_generic');
 
     if (isFallbackMap) {
@@ -715,7 +726,7 @@ export function renderSessionDetails(data) {
             const statusText = counted ? 'Counted' : (note || 'Not counted');
             const statusClass = counted ? 'text-slate-400' : 'text-amber-300';
             const rowOpacity = counted ? '' : 'opacity-70';
-            const mapImg = mapImageFor(m.map || '');
+            const mapImg = mapThumbFor(m.map || '');
             const isFallbackMap = mapImg.includes('map_generic');
             const winnerSide = Number(m.winner_side || 0);
             const winnerIcon = winnerSide === 1 ? AXIS_ICON : winnerSide === 2 ? ALLIES_ICON : null;
@@ -1131,7 +1142,7 @@ export async function loadSessionMVP(sessionDate) {
         if (leaderboard.length === 0) {
             widget.innerHTML = `
                 <h3 class="font-bold text-white mb-2">Session MVP</h3>
-                <div class="w-20 h-20 rounded-full bg-slate-800 mx-auto flex items-center justify-center text-2xl font-black text-slate-600 mb-4">
+                <div class="w-20 h-20 rounded-full bg-slate-800 mx-auto flex items-center justify-center text-2xl font-black text-slate-400 mb-4">
                     ?
                 </div>
                 <p class="text-slate-500 text-xs">No MVP data</p>
@@ -1152,7 +1163,7 @@ export async function loadSessionMVP(sessionDate) {
             <p class="font-bold text-white mb-1 cursor-pointer hover:text-brand-gold transition" data-mvp-profile="1">${safeName}</p>
             <div class="flex items-center justify-center gap-3 text-xs">
                 <span class="text-slate-400">DPM: <span class="font-bold text-brand-emerald">${mvp.dpm}</span></span>
-                <span class="text-slate-600">•</span>
+                <span class="text-slate-400">•</span>
                 <span class="text-slate-400">K/D: <span class="font-bold text-white">${(mvp.kills / (mvp.deaths || 1)).toFixed(2)}</span></span>
             </div>
             <div class="mt-2 px-3 py-1 rounded-full bg-brand-gold/10 border border-brand-gold/20 text-brand-gold text-[10px] font-bold uppercase">
@@ -1172,7 +1183,7 @@ export async function loadSessionMVP(sessionDate) {
         console.error('Failed to load MVP:', e);
         widget.innerHTML = `
             <h3 class="font-bold text-white mb-2">Session MVP</h3>
-            <div class="w-20 h-20 rounded-full bg-slate-800 mx-auto flex items-center justify-center text-2xl font-black text-slate-600 mb-4">
+            <div class="w-20 h-20 rounded-full bg-slate-800 mx-auto flex items-center justify-center text-2xl font-black text-slate-400 mb-4">
                 ?
             </div>
             <p class="text-red-500 text-xs">Failed to load</p>
@@ -1205,6 +1216,13 @@ function initSessionsSearch() {
     // Reset input value
     input.value = '';
     if (clearBtn) clearBtn.classList.add('hidden');
+
+    // Bind listeners once per element lifetime. initSessionsSearch() runs on
+    // every entry into the Sessions view; without this guard each entry stacked
+    // another 'input'+'click' pair on the persistent nodes (leak +3/round,
+    // R²=1.0). Reset above still runs each time; binding below only once.
+    if (input.dataset.searchBound === '1') return;
+    input.dataset.searchBound = '1';
 
     input.addEventListener('input', () => {
         const val = input.value.trim();
@@ -1653,7 +1671,7 @@ async function loadSessionDetailsExpanded(date) {
                         </div>
                         <div class="flex items-center gap-3">
                             <span class="text-3xl font-black ${aWinning ? 'text-brand-emerald' : 'text-slate-400'}">${teamAScore}</span>
-                            <span class="text-lg text-slate-600 font-bold">:</span>
+                            <span class="text-lg text-slate-400 font-bold">:</span>
                             <span class="text-3xl font-black ${bWinning ? 'text-brand-emerald' : 'text-slate-400'}">${teamBScore}</span>
                         </div>
                         <div class="text-left flex-1">
@@ -1674,7 +1692,7 @@ async function loadSessionDetailsExpanded(date) {
         const matchesHtml = matchSource.map(mapMatch => {
             const displayMapName = mapLabel(mapMatch.map_name || 'Unknown');
             const safeMapName = escapeHtml(displayMapName);
-            const mapImg = mapImageFor(mapMatch.map_name || '');
+            const mapImg = mapThumbFor(mapMatch.map_name || '');
             const isFallbackMap = mapImg.includes('map_generic');
             const mapThumb = isFallbackMap
                 ? `

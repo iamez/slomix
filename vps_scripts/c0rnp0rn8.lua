@@ -150,8 +150,20 @@ end
 
 ensure_bit_compat()
 
-function et_InitGame()
+function et_InitGame(levelTime, randomSeed, restart)
 	et.RegisterModname(modname .. " " .. version)
+
+	-- Reset round state (Bug 24/26: prevents stale state if Lua VM persists between rounds)
+	saved_stats = false
+	round_started = false
+	round_warmup_countdown = false
+	roundStart = 0
+	roundEnd = 0
+	paused = false
+	pausedTime = {}
+	intermission = false
+	saveDelay = 0
+
 	parseReinforcementTimes()
 
 	max_clients = tonumber(et.trap_Cvar_Get("sv_maxClients"))
@@ -165,7 +177,7 @@ function et_InitGame()
 		death_sprees[i] = 0
 		topshots[i] = { [1]=0, [2]=0, [3]=0, [4]=0, [5]=0, [6]=0, [7]=0, [8]=0, [9]=0, [10]=0, [11]=0, [12]=0, [13]=0, [14]=0, [15]=0, [16]=0, [17]=0, [18]=0, [19]=0, [20]=0} -- [1]=killing spree, [2]=death spree, [3]=kill assists, [4]=kill steals, [5]=headshot kills, [6]=objectives stolen, [7]=objectives returned, [8]=dynamites planted, [9]=dynamites defused, [10]=number of times revived, [11]=bullets fired, [12]=DPM, [13]=tank/meatshield, [14]=time dead ratio, [15]=most useful kills, [16]=denied playtime, [17]=useless kills, [18]=full selfkills, [19]=repairs/constructions, [20]=revives
 		denies[i] = { [1]=false, [2]=-1, [3]=0 }
-		paused_death[i] = { [1]=0, [2]=0 }
+		paused_death[i] = { [1]=0, [2]=0, [3]=nil }
 		players[i] = nil
 		kmulti[i] = { [1]=0, [2]=0 }
 		multikills[i] = { [1]=0, [2]=0, [3]=0, [4]=0, [5]=0 } -- 2 kills, 3 kills, 4 kills, 5 kills, 6 kills
@@ -183,13 +195,9 @@ function parseReinforcementTimes()
         table.insert(reinfSeeds, tonumber(seed))
     end
 
+    if #reinfSeeds < 2 then return end -- Bug 17: guard against empty reinfSeeds
+
     local offsets = {}
-    -- FIX-8: clamp the 3-bit offset to 0-7 with `% 8`, matching
-    -- proximity_tracker.lua:1437-1438. Without the clamp a reinfSeed >= 64 yields
-    -- offset > 7, so the `j = 1..MAX_REINFSEEDS` loop below (j-1 maxes at 7) never
-    -- matches, aReinfOffset[team] stays nil, and calculateReinfTime() then errors on
-    -- nil arithmetic — silently breaking ALL wave-dependent metrics (spawn timing,
-    -- reinf, useful_kills) for that team.
     offsets[et.TEAM_ALLIES] = bit.rshift(reinfSeeds[1], REINF_BLUEDELT) % 8
     offsets[et.TEAM_AXIS]   = bit.rshift(reinfSeeds[2], REINF_REDDELT) % 8
 
@@ -305,14 +313,16 @@ function StoreStats()
 				timePlayed               = timeAxis + timeAllies == 0 and 0 or (100.0 * timePlayed / (timeAxis + timeAllies))
 				local kd = 0
 				local dpm = 0
-				if round == 0 then --round 2 intermission
-					if et.trap_Cvar_Get("round1_dmg" .. i) ~= nil and et.trap_Cvar_Get("round1_dmg" .. i) ~= "" then
-						dpm = (damageGiven-tonumber(et.trap_Cvar_Get("round1_dmg" .. i)))/((tp/1000)/60)
-					else
+				if tp > 0 then
+					if round == 0 then --round 2 intermission
+						if et.trap_Cvar_Get("round1_dmg" .. i) ~= nil and et.trap_Cvar_Get("round1_dmg" .. i) ~= "" then
+							dpm = (damageGiven-tonumber(et.trap_Cvar_Get("round1_dmg" .. i)))/((tp/1000)/60)
+						else
+							dpm = damageGiven/((tp/1000)/60)
+						end
+					elseif round == 1 then -- round 1 intermission
 						dpm = damageGiven/((tp/1000)/60)
 					end
-				elseif round == 1 then -- round 1 intermission
-					dpm = damageGiven/((tp/1000)/60)
 				end
 				topshots[i][12] = roundNum(dpm, 1)
 				if damageReceived > 1000 then
@@ -326,13 +336,19 @@ function StoreStats()
 						topshots[i][13] = roundNum(drdr, 1)
 					end
 				end
+				-- Use snapshot for ratio/output; do NOT modify death_time_total here
+				-- (et_ClientSpawn is the single authoritative accumulator)
+				local dt_snapshot = death_time_total[i]
 				if death_time[i] ~= 0 then
-					local diff = et.trap_Milliseconds() - death_time[i]
-					death_time_total[i] = death_time_total[i] + diff
+					local pause_adj = paused_death[i][1]
+					if paused_death[i][3] then
+						pause_adj = pause_adj + (et.trap_Milliseconds() - paused_death[i][3])
+					end
+					dt_snapshot = dt_snapshot + (et.trap_Milliseconds() - death_time[i]) - pause_adj
 				end
-				if tp > 120000 or tp == et.trap_Cvar_Get("timelimit") then
-					if (death_time_total[i] / tp) * 100 > 0 then
-						topshots[i][14] = roundNum((death_time_total[i] / tp) * 100, 1)
+				if tp > 120000 then
+					if (dt_snapshot / tp) * 100 > 0 then
+						topshots[i][14] = roundNum((dt_snapshot / tp) * 100, 1)
 					end
 				end
 				if deaths ~= 0 then
@@ -343,18 +359,17 @@ function StoreStats()
 				
 				wstats[guid] = string.format("%s\t%s\t%d\t%d\t%s\n", string.sub(guid, 1, 8), name, rounds, team, wstats_line)
 				stats[guid] = string.format("%s\\%s\\%d\\%d\\%d%s", string.sub(guid, 1, 8), name, rounds, team, dwWeaponMask, weaponStats)
-				stats[guid] = string.format("%s \t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%0.1f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%0.1f\t%0.1f\t%0.1f\t%0.1f\t%0.1f\t%0.1f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", stats[guid], damageGiven, damageReceived, teamDamageGiven, teamDamageReceived, gibs, selfkills, teamkills, teamgibs, timePlayed, xp, topshots[i][1], topshots[i][2], topshots[i][3], topshots[i][4], topshots[i][5], topshots[i][6], topshots[i][7], topshots[i][8], topshots[i][9], topshots[i][10], topshots[i][11], topshots[i][12], roundNum((tp/1000)/60, 1), topshots[i][13], topshots[i][14], roundNum((death_time_total[i] / 60000), 1), kd, topshots[i][15], math.floor(topshots[i][16]/1000), multikills[i][1], multikills[i][2], multikills[i][3], multikills[i][4], multikills[i][5], topshots[i][17], topshots[i][18], topshots[i][19], topshots[i][20])
+				stats[guid] = string.format("%s \t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%0.1f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%0.1f\t%0.1f\t%0.1f\t%0.1f\t%0.1f\t%0.1f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", stats[guid], damageGiven, damageReceived, teamDamageGiven, teamDamageReceived, gibs, selfkills, teamkills, teamgibs, timePlayed, xp, topshots[i][1], topshots[i][2], topshots[i][3], topshots[i][4], topshots[i][5], topshots[i][6], topshots[i][7], topshots[i][8], topshots[i][9], topshots[i][10], topshots[i][11], topshots[i][12], roundNum((tp/1000)/60, 1), topshots[i][13], topshots[i][14], roundNum((dt_snapshot / 60000), 1), kd, topshots[i][15], math.floor(topshots[i][16]/1000), multikills[i][1], multikills[i][2], multikills[i][3], multikills[i][4], multikills[i][5], topshots[i][17], topshots[i][18], topshots[i][19], topshots[i][20])
 			end
 		end
 	end
 end
 
 function SaveStats()
-	local statsPath = "/gamestats/"
 	local mapname      = et.Info_ValueForKey(et.trap_GetConfigstring(et.CS_SERVERINFO), "mapname")
-	local round        = tonumber(et.trap_Cvar_Get("g_currentRound")) == 0 and 2 or 1
-	local fileName     = string.format("gamestats\\%s%s-round-%d.txt", os.date('%Y-%m-%d-%H%M%S-'), mapname, round)
-	local fileName2     = string.format("gamestats\\%s%s-round-%d_ws.txt", os.date('%Y-%m-%d-%H%M%S-'), mapname, round)
+	local file_round   = tonumber(et.trap_Cvar_Get("g_currentRound")) == 0 and 2 or 1
+	local fileName     = string.format("gamestats/%s%s-round-%d.txt", os.date('%Y-%m-%d-%H%M%S-'), mapname, file_round)
+	local fileName2     = string.format("gamestats/%s%s-round-%d_ws.txt", os.date('%Y-%m-%d-%H%M%S-'), mapname, file_round)
 	
 	
 	-- header data
@@ -376,8 +391,7 @@ function SaveStats()
 		return string.format("%d:%02d", mins, secs)
 	end
 
-	if round == 2 and nextTimeLimit == "0:00" then
-		local mapSeconds = parseTimeToSeconds(timelimit)
+	if file_round == 2 and nextTimeLimit == "0:00" then
 		local times = {}
 
 		for i = 0, max_clients - 1 do
@@ -418,7 +432,7 @@ function SaveStats()
 		end
 	end
 
-	local header        = string.format("%s\\%s\\%s\\%d\\%d\\%d\\%s\\%s\\%s\n", servername, mapname, config, round, defenderteam, winnerteam, timelimit, nextTimeLimit, roundEnd-roundStart-(pausedTime[3] or 0))
+	local header        = string.format("%s\\%s\\%s\\%d\\%d\\%d\\%s\\%s\\%s\n", servername, mapname, config, file_round, defenderteam, winnerteam, timelimit, nextTimeLimit, roundEnd-roundStart-(pausedTime[3] or 0))
 
 
 	local fileHandle = et.trap_FS_FOpenFile(fileName, et.FS_WRITE)
@@ -477,7 +491,11 @@ function et_RunFrame(levelTime)
 					local team = et.gentity_get(i, "sess.sessionTeam")
 					if team == 1 or team == 2 then
 						if denies[i][1] == true then
-							topshots[denies[i][2]][16] = topshots[denies[i][2]][16] + (et.trap_Milliseconds() - denies[i][3] - (paused_death[i][2] - paused_death[i][1]))
+							local pause_adj = paused_death[i][1]
+							if paused_death[i][3] then
+								pause_adj = pause_adj + (et.trap_Milliseconds() - paused_death[i][3])
+							end
+							topshots[denies[i][2]][16] = topshots[denies[i][2]][16] + (et.trap_Milliseconds() - denies[i][3] - pause_adj)
 							denies[i] = { [1]=false, [2]=-1, [3]=0 }
 						end
 					end
@@ -546,7 +564,7 @@ function et_RunFrame(levelTime)
 		
 		local cs = tonumber(et.trap_GetConfigstring(et.CS_SERVERTOGGLES))
 		if paused == false then
-			if bit.band(bit.lshift(1, 4), cs) == 1 then
+			if bit.band(bit.lshift(1, 4), cs) ~= 0 then
 				paused = true
 				pausedTime[1] = et.trap_Milliseconds()
 				for i = 0, max_clients - 1 do
@@ -554,7 +572,7 @@ function et_RunFrame(levelTime)
 						local team = et.gentity_get(i, "sess.sessionTeam")
 						if team == 1 or team == 2 then
 							if denies[i][1] == true then
-								paused_death[i][1] = et.trap_Milliseconds()
+								paused_death[i][3] = et.trap_Milliseconds() -- mark pause start for this death
 							end
 						end
 					end
@@ -569,8 +587,10 @@ function et_RunFrame(levelTime)
 					if et.gentity_get(i, "pers.connected") == 2 then
 						local team = et.gentity_get(i, "sess.sessionTeam")
 						if team == 1 or team == 2 then
-							if denies[i][1] == true then
-								paused_death[i][2] = et.trap_Milliseconds()
+							if denies[i][1] == true and paused_death[i][3] then
+								-- Accumulate paused time during death (cumulative, not overwrite)
+								paused_death[i][1] = paused_death[i][1] + (et.trap_Milliseconds() - paused_death[i][3])
+								paused_death[i][3] = nil
 							end
 						end
 					end
@@ -630,6 +650,8 @@ function et_Obituary(victim, killer, mod)
 			if mod ~= 59 then -- switchteam
 				death_sprees[victim] = death_sprees[victim] + 1
 				death_time[victim] = et.trap_Milliseconds()
+			else
+				death_time[victim] = 0 -- Bug 15: explicit reset on switchteam
 			end
 			checkKSpreeEnd(victim)
 			killing_sprees[victim] = 0
@@ -649,19 +671,21 @@ function et_Obituary(victim, killer, mod)
 					killing_sprees[victim] = 0
 					death_sprees[killer] = 0
 					local nextRespawnTime = calculateReinfTime(v_teamid)
-					if v_teamid == 1 then
-						if nextRespawnTime >= (et.trap_Cvar_Get("g_redlimbotime")/1000)/2 and nextRespawnTime > 0 then
-							topshots[killer][15] = topshots[killer][15] + 1
-						end
-						if nextRespawnTime < 5 and nextRespawnTime > 0 then
-							topshots[killer][17] = topshots[killer][17] + 1
-						end
-					elseif v_teamid == 2 then
-						if nextRespawnTime >= (et.trap_Cvar_Get("g_bluelimbotime")/1000)/2 and nextRespawnTime > 0 then
-							topshots[killer][15] = topshots[killer][15] + 1
-						end
-						if nextRespawnTime < 5 and nextRespawnTime > 0 then
-							topshots[killer][17] = topshots[killer][17] + 1
+					if nextRespawnTime and nextRespawnTime > 0 then
+						if v_teamid == 1 then
+							if nextRespawnTime >= (tonumber(et.trap_Cvar_Get("g_redlimbotime")) or 0)/1000/2 then
+								topshots[killer][15] = topshots[killer][15] + 1
+							end
+							if nextRespawnTime < 5 then
+								topshots[killer][17] = topshots[killer][17] + 1
+							end
+						elseif v_teamid == 2 then
+							if nextRespawnTime >= (tonumber(et.trap_Cvar_Get("g_bluelimbotime")) or 0)/1000/2 then
+								topshots[killer][15] = topshots[killer][15] + 1
+							end
+							if nextRespawnTime < 5 then
+								topshots[killer][17] = topshots[killer][17] + 1
+							end
 						end
 					end
 					denies[victim] = { [1]=true, [2]=killer, [3]=et.trap_Milliseconds() }
@@ -676,18 +700,20 @@ function et_Obituary(victim, killer, mod)
 			local assist_dmg = {}
 			local last_assist_wpn = {}
 			local ms = et.trap_Milliseconds()
-			for m=ms, ms-1500, -1 do
-				if hitters[victim][m] then
-					if hitters[victim][m][1] == killer then
-						killer_dmg = killer_dmg + hitters[victim][m][2]
+			local cutoff = (ms - 1500) * 100
+			local ms_max = ms * 100 + 99
+			for m, hit in pairs(hitters[victim]) do
+				if type(m) == "number" and m >= cutoff and m <= ms_max then
+					if hit[1] == killer then
+						killer_dmg = killer_dmg + hit[2]
 					else
-						if assist_dmg[hitters[victim][m][1]] == nil then
-							assist_dmg[hitters[victim][m][1]] = hitters[victim][m][2]
+						if assist_dmg[hit[1]] == nil then
+							assist_dmg[hit[1]] = hit[2]
 						else
-							assist_dmg[hitters[victim][m][1]] = assist_dmg[hitters[victim][m][1]] + hitters[victim][m][2]
+							assist_dmg[hit[1]] = assist_dmg[hit[1]] + hit[2]
 						end
-						if not last_assist_wpn[hitters[victim][m][1]] then
-							last_assist_wpn[hitters[victim][m][1]] = hitters[victim][m][3]
+						if not last_assist_wpn[hit[1]] then
+							last_assist_wpn[hit[1]] = hit[3]
 						end
 					end
 				end
@@ -747,25 +773,29 @@ function hitType(clientNum)
 	return -1
 end
 
-function et_ClientSpawn(id, revived)
+function et_ClientSpawn(id, revived, teamChange, restoreHealth)
 	killing_sprees[id] = 0
 	local team = tonumber(et.gentity_get(id, "sess.sessionTeam"))
-	if revived ~= 1 then
-		local health = tonumber(et.gentity_get(id, "health"))
-		local team = tonumber(et.gentity_get(id, "sess.sessionTeam"))
-	end
 	hitters[id] = {nil, nil, nil, nil}
 	hitRegionsData[id] = getAllHitRegions(id)
 	if team == 1 or team == 2 then
 		if death_time[id] ~= 0 then
-			local diff = et.trap_Milliseconds() - death_time[id] - (paused_death[id][2] - paused_death[id][1])
+			local pause_adj = paused_death[id][1]
+			if paused_death[id][3] then
+				pause_adj = pause_adj + (et.trap_Milliseconds() - paused_death[id][3])
+			end
+			local diff = et.trap_Milliseconds() - death_time[id] - pause_adj
 			death_time_total[id] = death_time_total[id] + diff
 		end
 		if denies[id][1] == true then
-			topshots[denies[id][2]][16] = topshots[denies[id][2]][16] + (et.trap_Milliseconds() - denies[id][3] - (paused_death[id][2] - paused_death[id][1]))
+			local pause_adj = paused_death[id][1]
+			if paused_death[id][3] then
+				pause_adj = pause_adj + (et.trap_Milliseconds() - paused_death[id][3])
+			end
+			topshots[denies[id][2]][16] = topshots[denies[id][2]][16] + (et.trap_Milliseconds() - denies[id][3] - pause_adj)
 			denies[id] = { [1]=false, [2]=-1, [3]=0 }
 		end
-		paused_death[id] = { [1]=0, [2]=0 }
+		paused_death[id] = { [1]=0, [2]=0, [3]=nil }
 	end
 	death_time[id] = 0
 end
@@ -773,18 +803,24 @@ end
 function et_ClientDisconnect(id)
 	killing_sprees[id] = 0
 	death_sprees[id] = 0
-	topshots[id] = { [1]=0, [2]=0, [3]=0, [4]=0, [5]=0, [6]=0, [7]=0, [8]=0, [9]=0, [10]=0, [11]=0, [12]=0, [13]=0, [14]=0, [15]=0, [16]=0, [17]=0, [18]=0, [19]=0, [20]=0}
+	-- Bug 12: credit deny BEFORE resetting topshots (otherwise credit goes to dead slot)
 	if denies[id][1] == true then
-		topshots[denies[id][2]][16] = topshots[denies[id][2]][16] + (et.trap_Milliseconds() - denies[id][3])
+		local pause_adj = paused_death[id][1]
+		if paused_death[id][3] then
+			pause_adj = pause_adj + (et.trap_Milliseconds() - paused_death[id][3])
+		end
+		topshots[denies[id][2]][16] = topshots[denies[id][2]][16] + (et.trap_Milliseconds() - denies[id][3] - pause_adj)
 	end
+	topshots[id] = { [1]=0, [2]=0, [3]=0, [4]=0, [5]=0, [6]=0, [7]=0, [8]=0, [9]=0, [10]=0, [11]=0, [12]=0, [13]=0, [14]=0, [15]=0, [16]=0, [17]=0, [18]=0, [19]=0, [20]=0}
 	denies[id] = { [1]=false, [2]=-1, [3]=0 }
 	players[id] = nil
 	kmulti[id] = { [1]=0, [2]=0 }
 	multikills[id] = { [1]=0, [2]=0, [3]=0, [4]=0, [5]=0 }
+	wait_table[id] = nil -- Bug 13: clean wait_table on disconnect
 	hitters[id] = {nil, nil, nil, nil}
 	death_time[id] = 0
 	death_time_total[id] = 0
-	paused_death[id] = { [1]=0, [2]=0 }
+	paused_death[id] = { [1]=0, [2]=0, [3]=nil }
 end
 
 function et_ClientUserinfoChanged(id)
@@ -795,14 +831,22 @@ function et_ClientUserinfoChanged(id)
     if players[id] ~= team then
         if team == 3 then
        	if death_time[id] ~= 0 then
-				local diff = et.trap_Milliseconds() - death_time[id] - (paused_death[id][2] - paused_death[id][1])
+				local pause_adj = paused_death[id][1]
+				if paused_death[id][3] then
+					pause_adj = pause_adj + (et.trap_Milliseconds() - paused_death[id][3])
+				end
+				local diff = et.trap_Milliseconds() - death_time[id] - pause_adj
 				death_time_total[id] = death_time_total[id] + diff
 			end
             if denies[id][1] == true then
-				topshots[denies[id][2]][16] = topshots[denies[id][2]][16] + (et.trap_Milliseconds() - denies[id][3] - (paused_death[id][2] - paused_death[id][1]))
+				local pause_adj = paused_death[id][1]
+				if paused_death[id][3] then
+					pause_adj = pause_adj + (et.trap_Milliseconds() - paused_death[id][3])
+				end
+				topshots[denies[id][2]][16] = topshots[denies[id][2]][16] + (et.trap_Milliseconds() - denies[id][3] - pause_adj)
 			end
 			denies[id] = { [1]=false, [2]=-1, [3]=0 }
-			paused_death[id] = { [1]=0, [2]=0 }
+			paused_death[id] = { [1]=0, [2]=0, [3]=nil }
 			death_time[id] = 0 
         end
     end
@@ -810,15 +854,25 @@ function et_ClientUserinfoChanged(id)
 end
 
 function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
-	if target ~= attacker and attacker ~= 1022 and attacker ~= 1023 and not (tonumber(target) < 0) and not (tonumber(target) > tonumber(et.trap_Cvar_Get("sv_maxclients"))) then
+	if target ~= attacker and attacker ~= 1022 and attacker ~= 1023 and not (tonumber(target) < 0) and not (tonumber(target) >= tonumber(et.trap_Cvar_Get("sv_maxclients"))) then
 		if has_value(light_weapons, meansOfDeath) or has_value(explosives, meansOfDeath) then
 			local v_team = et.gentity_get(target, "sess.sessionTeam")
 			local k_team = et.gentity_get(attacker, "sess.sessionTeam")
 			local v_health = et.gentity_get(target, "health")
-			local hitType = hitType(attacker)
-			if hitType == HR_HEAD then
+			local hit_region = hitType(attacker) -- Bug 22: renamed from hitType to avoid shadowing
+			local ms = et.trap_Milliseconds()
+			-- Bug 6: use unique key to avoid same-ms collision
+			local hit_key = ms * 100 + attacker
+			-- Bug 5: prune stale hitters entries (older than 2s)
+			local cutoff = ms - 2000
+			for k, _ in pairs(hitters[target]) do
+				if type(k) == "number" and k < cutoff * 100 then
+					hitters[target][k] = nil
+				end
+			end
+			if hit_region == HR_HEAD then
 				if not has_value(explosives, meansOfDeath) then
-					hitters[target][et.trap_Milliseconds()] = {[1]=attacker, [2]=damage, [3]=meansOfDeath}
+					hitters[target][hit_key] = {[1]=attacker, [2]=damage, [3]=meansOfDeath}
 					if v_team ~= k_team then
 						if damage >= v_health then
 							topshots[attacker][5] = topshots[attacker][5] + 1 -- headshot kill
@@ -826,7 +880,7 @@ function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
 					end
 				end
 			else
-				hitters[target][et.trap_Milliseconds()] = {[1]=attacker, [2]=damage, [3]=meansOfDeath}
+				hitters[target][hit_key] = {[1]=attacker, [2]=damage, [3]=meansOfDeath}
 			end
 		end
 	end
@@ -835,51 +889,73 @@ end
 function et_Print(text)
 	if gamestate == 0 then
 		if string.find(text, "team_CTF_redflag") or string.find(text, "team_CTF_blueflag") then
-			local i, j = string.find(text, "%d+")   
-			local id = tonumber(string.sub(text, i, j))
-			if string.find(text, "team_CTF_redflag") then
-				local team = tonumber(et.gentity_get(id, "sess.sessionTeam"))
-				if team == 2 then
-					local red = et.gentity_get(id, "ps.powerups", 5)
-					if red ~= 0 then
-						topshots[id][6] = topshots[id][6] + 1
+			local i, j = string.find(text, "%d+")
+			if i then
+				local id = tonumber(string.sub(text, i, j))
+				if id and topshots[id] then
+					if string.find(text, "team_CTF_redflag") then
+						local team = tonumber(et.gentity_get(id, "sess.sessionTeam"))
+						if team == 2 then
+							local red = et.gentity_get(id, "ps.powerups", 5)
+							if red ~= 0 then
+								topshots[id][6] = topshots[id][6] + 1
+							end
+						elseif team == 1 then
+							topshots[id][7] = topshots[id][7] + 1
+						end
+					elseif string.find(text, "team_CTF_blueflag") then
+						local team = tonumber(et.gentity_get(id, "sess.sessionTeam"))
+						if team == 1 then
+							local blue = et.gentity_get(id, "ps.powerups", 6)
+							if blue ~= 0 then
+								topshots[id][6] = topshots[id][6] + 1
+							end
+						elseif team == 2 then
+							topshots[id][7] = topshots[id][7] + 1
+						end
 					end
-				elseif team == 1 then
-					topshots[id][7] = topshots[id][7] + 1
-				end
-			elseif string.find(text, "team_CTF_blueflag") then
-				local team = tonumber(et.gentity_get(id, "sess.sessionTeam"))
-				if team == 1 then
-					local blue = et.gentity_get(id, "ps.powerups", 6)
-					if blue ~= 0 then
-						topshots[id][6] = topshots[id][6] + 1
-					end
-				elseif team == 2 then
-					topshots[id][7] = topshots[id][7] + 1
 				end
 			end
 		end
 		if string.find(text, "Dynamite_Plant") then
-			local i, j = string.find(text, "%d+")   
-			local id = tonumber(string.sub(text, i, j))
-			topshots[id][8] = topshots[id][8] + 1
+			local i, j = string.find(text, "%d+")
+			if i then
+				local id = tonumber(string.sub(text, i, j))
+				if id and topshots[id] then
+					topshots[id][8] = topshots[id][8] + 1
+				end
+			end
 		end
 		if string.find(text, "Dynamite_Diffuse") then
-			local i, j = string.find(text, "%d+")   
-			local id = tonumber(string.sub(text, i, j))
-			topshots[id][9] = topshots[id][9] + 1
+			local i, j = string.find(text, "%d+")
+			if i then
+				local id = tonumber(string.sub(text, i, j))
+				if id and topshots[id] then
+					topshots[id][9] = topshots[id][9] + 1
+				end
+			end
 		end
 		if string.find(text, "Medic_Revive") then
 			local junk1,junk2,medic,revived = string.find(text, "^Medic_Revive:%s+(%d+)%s+(%d+)")
-			topshots[tonumber(revived)][10] = topshots[tonumber(revived)][10] + 1
-			topshots[tonumber(medic)][20] = topshots[tonumber(medic)][20] + 1
+			if medic and revived then
+				local medic_id = tonumber(medic)
+				local revived_id = tonumber(revived)
+				if medic_id and revived_id and topshots[revived_id] and topshots[medic_id] then
+					topshots[revived_id][10] = topshots[revived_id][10] + 1
+					topshots[medic_id][20] = topshots[medic_id][20] + 1
+				end
+			end
 		end
 		if string.find(text, "Repair") then
 			local junk1,junk2,engi = string.find(text, "Repair:%s+(%d+)")
-			topshots[tonumber(engi)][19] = topshots[tonumber(engi)][19] + 1
+			if engi then
+				local engi_id = tonumber(engi)
+				if engi_id and topshots[engi_id] then
+					topshots[engi_id][19] = topshots[engi_id][19] + 1
+				end
+			end
 		end
 	end
-
 
 	if text == "Exit: Timelimit hit.\n" or text == "Exit: Wolf EndRound.\n" then
 		for i = 0, max_clients-1 do
@@ -887,7 +963,7 @@ function et_Print(text)
 				checkKSpreeEnd(i)
 			end
 		end
-		return(nil)
+		return -- Bug 20: return without nil to not suppress engine log
 	end
 end
 
@@ -898,13 +974,15 @@ function et_ClientCommand(id, cmd)
 			local health = tonumber(et.gentity_get(id, "health"))
 			if health > 0 then
 				local nextRespawnTime = calculateReinfTime(team)
-				if team == 1 then
-					if nextRespawnTime >= (et.trap_Cvar_Get("g_redlimbotime")/1000)-2 then
-						topshots[id][18] = topshots[id][18] + 1
-					end
-				elseif team == 2 then
-					if nextRespawnTime >= (et.trap_Cvar_Get("g_bluelimbotime")/1000)-2 then
-						topshots[id][18] = topshots[id][18] + 1
+				if nextRespawnTime then
+					if team == 1 then
+						if nextRespawnTime >= (tonumber(et.trap_Cvar_Get("g_redlimbotime")) or 0)/1000-2 then
+							topshots[id][18] = topshots[id][18] + 1
+						end
+					elseif team == 2 then
+						if nextRespawnTime >= (tonumber(et.trap_Cvar_Get("g_bluelimbotime")) or 0)/1000-2 then
+							topshots[id][18] = topshots[id][18] + 1
+						end
 					end
 				end
 			end
