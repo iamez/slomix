@@ -47,7 +47,9 @@ def classify_session_arc(
     """
     if not maps or len(maps) < 2 or winner_side not in ("alpha", "beta"):
         return ""
-    if winner_score == loser_score:
+    # winner_score must actually be the larger side — a caller that passed a
+    # winner_side that lost (or a tie) has no shape to tell.
+    if winner_score <= loser_score:
         return ""
 
     winner_is_alpha = winner_side == "alpha"
@@ -83,6 +85,9 @@ def classify_session_arc(
     # final map decided it.
     if final_margin <= 2 or (len(running) >= 2 and abs(running[-2]) <= 1):
         return NAIL_BITER
-    if min_margin >= 0 and final_margin >= max(4, round(total_points * 0.4)):
+    # Reaching here, min_margin >= 0 already (the comeback branch returned on
+    # < 0), so the winner never trailed — a large final margin makes it a
+    # statement, anything smaller is merely decisive.
+    if final_margin >= max(4, round(total_points * 0.4)):
         return STATEMENT
     return DECISIVE

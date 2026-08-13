@@ -132,8 +132,8 @@ _ARC_LEADS = {
         "A nail-biter, decided late for {winner} {ws}–{ls}",
     ),
     "statement": (
-        "{winner} made a statement, leading wire-to-wire to a {ws}–{ls} win",
-        "A dominant night: {winner} controlled it start to finish, {ws}–{ls}",
+        "{winner} made a statement, never trailing on the way to a {ws}–{ls} win",
+        "A dominant night: {winner} led from the front, {ws}–{ls}",
     ),
     "decisive": (
         "{winner} came out ahead {ws}–{ls}",
@@ -199,32 +199,35 @@ class _NarrativeMixin:
         """
         if gaming_session_id is None:
             return ""
+        # One guard around the WHOLE pipeline (fetch, conversion, classify, format)
+        # — the arc is a non-critical opener, so a failure anywhere must omit it,
+        # not break the recap.
         try:
             from website.backend.services.box_scoring_service import BOXScoringService
             from website.backend.services.storytelling.arc import classify_session_arc
             box = BOXScoringService(self.db)
             score = await box.calculate_session_score(gaming_session_id)
             data = box.to_api_response(score)
+            alpha_s = int(data.get("alpha_score") or 0)
+            beta_s = int(data.get("beta_score") or 0)
+            winner_side = data.get("winner")
+            if winner_side not in ("alpha", "beta") or alpha_s == beta_s:
+                return ""
+            shape = classify_session_arc(
+                data.get("maps") or [], winner_side, max(alpha_s, beta_s), min(alpha_s, beta_s),
+            )
+            if not shape:
+                return ""
+            winner_name = strip_et_colors(
+                data.get("winner_name")
+                or (data.get("alpha_team") if winner_side == "alpha" else data.get("beta_team"))
+                or "The winners"
+            )
+            return _pick_variant(_ARC_LEADS[shape], seed).format(
+                winner=winner_name, ws=max(alpha_s, beta_s), ls=min(alpha_s, beta_s),
+            )
         except Exception:  # noqa: BLE001 — arc is a non-critical opener add-on
             return ""
-        alpha_s = int(data.get("alpha_score") or 0)
-        beta_s = int(data.get("beta_score") or 0)
-        winner_side = data.get("winner")
-        if winner_side not in ("alpha", "beta") or alpha_s == beta_s:
-            return ""
-        shape = classify_session_arc(
-            data.get("maps") or [], winner_side, max(alpha_s, beta_s), min(alpha_s, beta_s),
-        )
-        if not shape:
-            return ""
-        winner_name = strip_et_colors(
-            data.get("winner_name")
-            or (data.get("alpha_team") if winner_side == "alpha" else data.get("beta_team"))
-            or "The winners"
-        )
-        return _pick_variant(_ARC_LEADS[shape], seed).format(
-            winner=winner_name, ws=max(alpha_s, beta_s), ls=min(alpha_s, beta_s),
-        )
 
     async def _collect_human_thread(self, kis_board: list, seed: int) -> str:
         """The story behind the numbers: name an active sick-leave/injury comeback.
@@ -248,40 +251,44 @@ class _NarrativeMixin:
         def _short(g: str | None) -> str:
             return (g or "").upper()[:8]
 
+        # One guard around the whole pipeline (lookup + selection + formatting):
+        # the identity table can be absent mid-migration and this is a
+        # non-critical add-on, so ANY failure returns "" and the recap renders
+        # exactly as before.
         try:
             from website.backend.routers.api_helpers import fetch_identity_links
             guids = sorted({_short(e.get("guid")) for e in kis_board if e.get("guid")})
             links = await fetch_identity_links(self.db, guids)
+            if not links:
+                return ""
+            # kis_board is KIS-descending; surface the STRONGEST player who is an alt.
+            for rank, e in enumerate(kis_board, start=1):
+                link = links.get(_short(e.get("guid")))
+                if not link or link.get("role") != "alt" or not link.get("active"):
+                    continue
+                alt_name = strip_et_colors(e.get("name") or "")
+                primary_name = strip_et_colors(link.get("primary_name") or "")
+                if not alt_name:
+                    continue
+                # Subject is name-aware: the same handle on both guids (ownator on
+                # ownator) reads differently from a genuine rename, and neither
+                # version mentions "guid" — the lead template supplies that.
+                same = bool(primary_name) and primary_name.strip().lower() == alt_name.strip().lower()
+                subject = (
+                    f"the '{alt_name}' line is {primary_name}"
+                    if primary_name and not same
+                    else f"{alt_name}'s run this session"
+                )
+                # Anchor on KIS standing — always meaningful, always trusted.
+                stat = (
+                    "they still topped the session's Kill-Impact board" if rank == 1
+                    else f"they still ranked #{rank} by Kill-Impact"
+                )
+                leads = _HUMAN_INJURY_LEADS if link.get("reason") == "injury" else _HUMAN_SEPARATE_LEADS
+                return _pick_variant(leads, seed).format(subject=subject, stat=stat)
+            return ""
         except Exception:  # noqa: BLE001 — human thread must never break the recap
             return ""
-        if not links:
-            return ""
-        # kis_board is KIS-descending; surface the STRONGEST player who is an alt.
-        for rank, e in enumerate(kis_board, start=1):
-            link = links.get(_short(e.get("guid")))
-            if not link or link.get("role") != "alt" or not link.get("active"):
-                continue
-            alt_name = strip_et_colors(e.get("name") or "")
-            primary_name = strip_et_colors(link.get("primary_name") or "")
-            if not alt_name:
-                continue
-            # Subject is name-aware: the same handle on both guids (ownator on
-            # ownator) reads differently from a genuine rename, and neither
-            # version mentions "guid" — the lead template supplies that.
-            same = bool(primary_name) and primary_name.strip().lower() == alt_name.strip().lower()
-            subject = (
-                f"the '{alt_name}' line is {primary_name}"
-                if primary_name and not same
-                else f"{alt_name}'s run this session"
-            )
-            # Anchor on KIS standing — always meaningful, always a trusted number.
-            stat = (
-                "they still topped the session's Kill-Impact board" if rank == 1
-                else f"they still ranked #{rank} by Kill-Impact"
-            )
-            leads = _HUMAN_INJURY_LEADS if link.get("reason") == "injury" else _HUMAN_SEPARATE_LEADS
-            return _pick_variant(leads, seed).format(subject=subject, stat=stat)
-        return ""
 
     async def generate_narrative(
         self,
