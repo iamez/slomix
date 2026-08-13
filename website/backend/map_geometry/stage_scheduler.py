@@ -23,6 +23,7 @@ from website.backend.map_geometry.stage_possibilities import (
     OrderedStageProgramIndex,
     StageEffectInstruction,
     SymbolicAccumulatorState,
+    SymbolicEventPath,
     SymbolicIntegerDomain,
     SymbolicPathCompletion,
     SymbolicTemporalBoundaryState,
@@ -959,6 +960,22 @@ def _path_effect_records(
     return tuple(records)
 
 
+def _path_frontier_offset(
+    index: OrderedStageProgramIndex,
+    program: OrderedEventProgram,
+    path: SymbolicEventPath,
+) -> int:
+    frontier_line = path.blocker_line
+    if frontier_line is None and path.temporal_boundary_lines:
+        frontier_line = path.temporal_boundary_lines[-1]
+    if frontier_line is None:
+        raise RuntimeError("non-completing scheduler path has no source frontier")
+    frontier_offset = index.instruction_offset(program, frontier_line)
+    if frontier_offset is None:
+        raise RuntimeError("scheduler path frontier does not identify one ordered instruction")
+    return frontier_offset
+
+
 def _tag_parent_wake_constraint(
     state: SymbolicScheduleState,
     *,
@@ -1194,9 +1211,26 @@ def _complete_s2_caller_suffix(
             SymbolicPathCompletion.ABORTED_BY_GUARD,
         }:
             reason = path.blocker_reason or "s2_caller_suffix_is_not_synchronously_complete"
+            added_effects = _path_effect_records(
+                caller_program,
+                instruction_offset=caller_frame.cursor.instruction_offset,
+                source_entity_index=caller_frame.cursor.entity_index,
+                projections=path.effects,
+                effect_entity_indices=path.effect_entity_indices,
+            )
+            frontier_frame = replace(
+                caller_frame,
+                cursor=replace(
+                    caller_frame.cursor,
+                    instruction_offset=_path_frontier_offset(index, caller_program, path),
+                ),
+            )
             blocked = _rebuild_schedule_state(
                 index,
                 state,
+                accumulator_state=path.state,
+                runnable=(frontier_frame,),
+                effects=state.effects + added_effects,
                 unknown_reasons=state.unknown_reasons + (reason,),
             )
             decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.BLOCKED, blocked, reason))
@@ -1290,9 +1324,29 @@ def _resume_s2_continuation(
             SymbolicPathCompletion.ABORTED_BY_GUARD,
         }:
             reason = path.blocker_reason or "s2_resumed_target_suffix_is_not_synchronously_complete"
+            added_effects = _path_effect_records(
+                program,
+                instruction_offset=suffix_offset,
+                source_entity_index=suffix_frame.cursor.entity_index,
+                projections=path.effects,
+                effect_entity_indices=path.effect_entity_indices,
+            )
+            frontier_frame = replace(
+                suffix_frame,
+                cursor=replace(
+                    suffix_frame.cursor,
+                    instruction_offset=_path_frontier_offset(index, program, path),
+                ),
+            )
             blocked = _rebuild_schedule_state(
                 index,
                 state,
+                accumulator_state=path.state,
+                runnable=(frontier_frame,),
+                suspended=(),
+                effects=state.effects + added_effects,
+                provenance=state.provenance + ("target_boundary_reentered",),
+                ordering_decisions=state.ordering_decisions + ("target_reentered_after_caller_suffix",),
                 unknown_reasons=state.unknown_reasons + (reason,),
             )
             decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.BLOCKED, blocked, reason))
