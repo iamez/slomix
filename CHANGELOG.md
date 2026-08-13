@@ -6,6 +6,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.34.1](https://github.com/iamez/slomix/compare/v1.34.0...v1.34.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* **website:** bump story.js cache-buster for composite gsid scope ([1942a68](https://github.com/iamez/slomix/commit/1942a68663e9c7b189edfa129c6c796a343d3a99))
+* **website:** bump tailwind.css cache-buster for safelist rebuild ([f51e19d](https://github.com/iamez/slomix/commit/f51e19da72e11f1717044080725063de6aec305f))
+* **website:** safelist Tailwind opacity /70 /80 — story bars were invisible ([b91f137](https://github.com/iamez/slomix/commit/b91f137a28c59e172169e3476f887614a1e42838))
+* **website:** safelist Tailwind opacity /70 /80 — story bars were invisible ([5f4928a](https://github.com/iamez/slomix/commit/5f4928acab8ab59c0e6f673d2468fb7adc7e199c))
+* **website:** scope /skill/composite by gaming_session_id, not date ([57fc91a](https://github.com/iamez/slomix/commit/57fc91af89cd488b622a170b045315b190255308))
+* **website:** scope /skill/composite by gaming_session_id, not date ([8a73033](https://github.com/iamez/slomix/commit/8a73033426389e84f589db8a2118fc92d3c1996e))
+
 ## [1.34.0](https://github.com/iamez/slomix/compare/v1.33.1...v1.34.0) (2026-08-12)
 
 
