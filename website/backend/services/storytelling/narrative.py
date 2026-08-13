@@ -115,6 +115,32 @@ _HUMAN_SEPARATE_LEADS = (
     "Worth a nod: {subject} runs on its own guid, kept apart on purpose, and {stat}",
 )
 
+# Session story arc — the SHAPE of the night, opening the recap (Val H3). Keyed
+# by the shape slug arc.classify_session_arc returns; {winner}/{ws}/{ls} filled
+# from the BOX score. Two variants per shape to avoid back-to-back fatigue.
+_ARC_LEADS = {
+    "comeback": (
+        "It was a comeback — {winner} dug out of a hole to take it {ws}–{ls}",
+        "The night's story was resilience: {winner} climbed back to win {ws}–{ls}",
+    ),
+    "trade_fest": (
+        "The lead changed hands all night before {winner} pulled clear {ws}–{ls}",
+        "A back-and-forth slugfest, settled {ws}–{ls} in {winner}'s favour",
+    ),
+    "nail_biter": (
+        "It went down to the wire — {winner} edged it {ws}–{ls}",
+        "A nail-biter, decided late for {winner} {ws}–{ls}",
+    ),
+    "statement": (
+        "{winner} made a statement, leading wire-to-wire to a {ws}–{ls} win",
+        "A dominant night: {winner} controlled it start to finish, {ws}–{ls}",
+    ),
+    "decisive": (
+        "{winner} came out ahead {ws}–{ls}",
+        "{winner} took the session {ws}–{ls}",
+    ),
+}
+
 _AXIS_PHRASING = {
     "crossfire": "set up by tighter crossfire angles",
     "trade": "carried by quicker trades",
@@ -162,6 +188,43 @@ def _format_group_label(group_data: dict, fallback: str) -> str:
 
 class _NarrativeMixin:
     """Narrative methods for StorytellingService."""
+
+    async def _collect_session_arc(self, gaming_session_id: int | None, seed: int) -> str:
+        """One sentence naming the session's SHAPE (statement/comeback/nail-biter/
+        trade-fest), opening the recap. Sourced from the BOX score — a single team
+        vocabulary, so no cross-source mapping to get wrong. Empty string when the
+        session isn't shapeable (0/1 maps, a tie) or BOX is unavailable.
+
+        Best-effort: any failure returns "" and the recap opens as before.
+        """
+        if gaming_session_id is None:
+            return ""
+        try:
+            from website.backend.services.box_scoring_service import BOXScoringService
+            from website.backend.services.storytelling.arc import classify_session_arc
+            box = BOXScoringService(self.db)
+            score = await box.calculate_session_score(gaming_session_id)
+            data = box.to_api_response(score)
+        except Exception:  # noqa: BLE001 — arc is a non-critical opener add-on
+            return ""
+        alpha_s = int(data.get("alpha_score") or 0)
+        beta_s = int(data.get("beta_score") or 0)
+        winner_side = data.get("winner")
+        if winner_side not in ("alpha", "beta") or alpha_s == beta_s:
+            return ""
+        shape = classify_session_arc(
+            data.get("maps") or [], winner_side, max(alpha_s, beta_s), min(alpha_s, beta_s),
+        )
+        if not shape:
+            return ""
+        winner_name = strip_et_colors(
+            data.get("winner_name")
+            or (data.get("alpha_team") if winner_side == "alpha" else data.get("beta_team"))
+            or "The winners"
+        )
+        return _pick_variant(_ARC_LEADS[shape], seed).format(
+            winner=winner_name, ws=max(alpha_s, beta_s), ls=min(alpha_s, beta_s),
+        )
 
     async def _collect_human_thread(self, kis_board: list, seed: int) -> str:
         """The story behind the numbers: name an active sick-leave/injury comeback.
@@ -408,6 +471,13 @@ class _NarrativeMixin:
             opener = f"Session {session_label}."
 
         parts = [opener]
+
+        # Session arc — the SHAPE of the night, right after the opener so the
+        # recap leads with a story, not a stat. Empty for unshapeable sessions.
+        session_arc = await self._collect_session_arc(
+            getattr(scope, "gaming_session_id", None), seed + 5)
+        if session_arc:
+            parts.append(" " + session_arc + ".")
 
         parts.append(" " + _pick_variant(_MVP_LEADS, seed).format(
             name=mvp_name, archetype=mvp_archetype, dpm=mvp_dpm, kis=mvp_kis,
