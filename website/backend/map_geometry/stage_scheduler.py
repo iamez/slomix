@@ -21,6 +21,7 @@ from website.backend.map_geometry.stage_possibilities import (
     OrderedStageProgramIndex,
     StageEffectInstruction,
     SymbolicAccumulatorState,
+    SymbolicIntegerDomain,
     SymbolicTemporalBoundaryState,
     TriggerInstruction,
     followspline_waits_for_completion,
@@ -29,6 +30,9 @@ from website.backend.map_geometry.stage_possibilities import (
 from website.backend.map_geometry.stage_semantics import AccumulatorConditionalTrigger, StageEffectProjection
 
 _STATE_CREATION_TOKEN = object()
+_ET_SIGNED_INT_MIN = -(1 << 31)
+_ET_SIGNED_INT_MAX = (1 << 31) - 1
+_ET_ACCUMULATOR_BIT_MASK = (1 << 32) - 1
 
 
 def _dispatch_target_group(
@@ -271,6 +275,13 @@ class SymbolicFrame:
             cursor.validate(index, allow_complete=True)
             if cursor.entity_index != self.cursor.entity_index:
                 raise ValueError("saved call-stack cursors must belong to the active frame entity")
+        if self.origin is SymbolicFrameOrigin.ROOT_EVENT and self.invocation_path:
+            raise ValueError("root event frame cannot carry nested invocation ancestry")
+        if self.origin in {
+            SymbolicFrameOrigin.NESTED_DISPATCH,
+            SymbolicFrameOrigin.TARGET_GROUP_RESUME,
+        } and not self.invocation_path:
+            raise ValueError("nested frame origin requires invocation ancestry")
         if self.pending_dispatch is not None:
             if self.origin not in {
                 SymbolicFrameOrigin.NESTED_DISPATCH,
@@ -466,15 +477,26 @@ class SymbolicEffectRecord:
             raise ValueError("symbolic effect projection does not match its source cursor")
 
 
+def _validate_accumulator_domain(domain: SymbolicIntegerDomain, *, label: str) -> None:
+    if not _ET_SIGNED_INT_MIN <= domain.lower <= domain.upper <= _ET_SIGNED_INT_MAX:
+        raise ValueError(f"{label} is outside the signed 32-bit ET accumulator range")
+    if not 0 <= domain.required_set_bits <= _ET_ACCUMULATOR_BIT_MASK:
+        raise ValueError(f"{label} has a required-set mask outside ET accumulator bits")
+    if not 0 <= domain.required_clear_bits <= _ET_ACCUMULATOR_BIT_MASK:
+        raise ValueError(f"{label} has a required-clear mask outside ET accumulator bits")
+    if any(not _ET_SIGNED_INT_MIN <= value <= _ET_SIGNED_INT_MAX for value in domain.excluded):
+        raise ValueError(f"{label} excludes a value outside the ET accumulator range")
+    if not domain.has_candidate():
+        raise ValueError(f"{label} has no possible value")
+
+
 def _canonical_accumulator_state(state: SymbolicAccumulatorState) -> SymbolicAccumulatorState:
-    if not state.default_domain.has_candidate():
-        raise ValueError("symbolic accumulator default domain has no possible value")
+    _validate_accumulator_domain(state.default_domain, label="symbolic accumulator default domain")
     entity_values = {}
     for entity_index, buffer_index, value in state.entity_values:
         if entity_index < 0 or not 0 <= buffer_index < 10:
             raise ValueError("symbolic entity accumulator key is outside ET bounds")
-        if not value.has_candidate():
-            raise ValueError("symbolic entity accumulator domain has no possible value")
+        _validate_accumulator_domain(value, label="symbolic entity accumulator domain")
         key = (entity_index, buffer_index)
         if key in entity_values and entity_values[key] != value:
             raise ValueError("symbolic entity accumulator has conflicting duplicate values")
@@ -484,8 +506,7 @@ def _canonical_accumulator_state(state: SymbolicAccumulatorState) -> SymbolicAcc
     for buffer_index, value in state.global_values:
         if not 0 <= buffer_index < 10:
             raise ValueError("symbolic global accumulator key is outside ET bounds")
-        if not value.has_candidate():
-            raise ValueError("symbolic global accumulator domain has no possible value")
+        _validate_accumulator_domain(value, label="symbolic global accumulator domain")
         if buffer_index in global_values and global_values[buffer_index] != value:
             raise ValueError("symbolic global accumulator has conflicting duplicate values")
         global_values[buffer_index] = value
@@ -575,6 +596,7 @@ class SymbolicScheduleState:
             owner.validate(index)
         for effect in effects:
             effect.validate(index)
+        effect_source_cursors = {effect.source_cursor for effect in effects}
 
         active_frames = tuple(runnable) + tuple(item.frame for item in suspended)
         active_entities = [frame.cursor.entity_index for frame in active_frames]
@@ -592,6 +614,19 @@ class SymbolicScheduleState:
                 is not SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE
             ):
                 raise ValueError("a suspended movement cannot start while the entity has an active movement lifecycle")
+            if (
+                isinstance(continuation.boundary_state, SymbolicMovementBoundaryState)
+                and continuation.boundary_state.command is SymbolicMovementCommand.GOTO_MARKER
+            ):
+                has_route_effect = continuation.frame.cursor in effect_source_cursors
+                if continuation.boundary_state.effect_started != has_route_effect:
+                    raise ValueError("gotomarker boundary effect record does not match whether its route started")
+        for lifecycle in async_lifecycles:
+            if (
+                lifecycle.command is SymbolicMovementCommand.GOTO_MARKER
+                and lifecycle.source_cursor not in effect_source_cursors
+            ):
+                raise ValueError("started gotomarker lifecycle must retain its route effect record")
 
         owners_by_entity = {owner.entity_index: owner for owner in event_owners}
         if len(owners_by_entity) != len(event_owners):
@@ -711,6 +746,18 @@ class SymbolicScheduleDecision:
             raise ValueError("symbolic schedule decision reason must not be empty")
         if self.kind is not SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED and self.state is None:
             raise ValueError("non-exhaustion scheduler decisions require their resulting state")
+        if self.state is None:
+            return
+        if self.kind is SymbolicScheduleDecisionKind.RUNNABLE and not self.state.runnable:
+            raise ValueError("runnable scheduler decision requires runnable work")
+        if self.kind is SymbolicScheduleDecisionKind.SUSPENDED and (
+            self.state.runnable or not self.state.suspended
+        ):
+            raise ValueError("suspended scheduler decision requires only suspended script work")
+        if self.kind is SymbolicScheduleDecisionKind.COMPLETE and (
+            self.state.runnable or self.state.suspended
+        ):
+            raise ValueError("complete scheduler decision cannot retain runnable or suspended script work")
 
 
 @dataclass(frozen=True, slots=True)
@@ -732,6 +779,12 @@ class SymbolicScheduleResult:
             raise ValueError("symbolic schedule exhaustion metadata does not match its decisions")
         if self.exhaustion is not None and self.work_consumed != self.work_limit:
             raise ValueError("symbolic schedule can exhaust only after consuming its global budget")
+        if self.exhaustion is not None and any(
+            decision.reason != self.exhaustion.value
+            for decision in self.decisions
+            if decision.kind is SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED
+        ):
+            raise ValueError("symbolic schedule exhaustion decision reason does not match result metadata")
 
 
 @dataclass(slots=True)
