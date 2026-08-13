@@ -1442,12 +1442,23 @@ function SessionScorePanel({ sessionDate }: { sessionDate: string | null }) {
   const { data, isLoading } = useProxScores(30, undefined, 12, sessionDate ?? undefined);
 
   if (isLoading) return <Skeleton variant="card" count={1} />;
+  // A degraded response means a score-critical source failed — its rows must
+  // not render as a real ranking (AUD-008; same guard as the Discord command).
+  if (data?.status === 'degraded') {
+    return (
+      <div className="mt-8">
+        <GlassPanel>
+          <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">
+            Session Combat Score
+          </div>
+          <div className="text-[10px] text-slate-500">
+            Not enough proximity data to score this session yet.
+          </div>
+        </GlassPanel>
+      </div>
+    );
+  }
   if (!data?.players?.length) return null;
-
-  const cats = ['prox_combat', 'prox_team', 'prox_gamesense'] as const;
-  const catLabels: Record<string, string> = {
-    prox_combat: 'Combat', prox_team: 'Team', prox_gamesense: 'Gamesense',
-  };
 
   return (
     <div className="mt-8">
@@ -1480,9 +1491,15 @@ function SessionScorePanel({ sessionDate }: { sessionDate: string | null }) {
                   />
                 </div>
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-500">
-                  {cats.map((c) => (
-                    <span key={c}>
-                      {catLabels[c]}: <span className="text-slate-400">{(p[c] ?? 0).toFixed(0)}</span>
+                  {/* Static tuples, not dynamic p[key] indexing — keeps the
+                      fields type-checked and satisfies Codacy's injection rule. */}
+                  {([
+                    ['Combat', p.prox_combat],
+                    ['Team', p.prox_team],
+                    ['Gamesense', p.prox_gamesense],
+                  ] as const).map(([label, v]) => (
+                    <span key={label}>
+                      {label}: <span className="text-slate-400">{v.toFixed(0)}</span>
                     </span>
                   ))}
                 </div>
