@@ -6,6 +6,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.36.0](https://github.com/iamez/slomix/compare/v1.35.0...v1.36.0) (2026-08-13)
+
+
+### Features
+
+* **website:** identity merge (Phase 3) — canonical_guid + leaderboard ([66567ed](https://github.com/iamez/slomix/commit/66567ed86c669f10bfc589781b5fdf1c00269dd5))
+
+
+### Bug Fixes
+
+* **db:** address coderabbit — canonical_guid follows chains + in schema dump ([d55bc90](https://github.com/iamez/slomix/commit/d55bc908eeee53987f3a76f351ceff9ba03e915f))
+* **website:** bound the KIS-details modal — high-kill players overflowed ([43d33a5](https://github.com/iamez/slomix/commit/43d33a529457dd310c88accfc430b8c6c170a124))
+
 ## [1.35.0](https://github.com/iamez/slomix/compare/v1.34.1...v1.35.0) (2026-08-13)
 
 
