@@ -117,6 +117,74 @@ export async function loadUploadsView() {
 // DRAG & DROP UPLOAD ZONE
 // ============================================================================
 
+// Extension → category + per-category size cap, mirroring the backend
+// (upload_validators: detect_category + SIZE_LIMITS). Used to give the uploader
+// immediate, inline feedback about how their file will be categorised and
+// whether it's within limits — before they submit.
+const _EXT_CATEGORY = {
+    '.cfg': 'config', '.hud': 'hud',
+    '.zip': 'archive', '.rar': 'archive',
+    '.mp4': 'clip', '.avi': 'clip', '.mkv': 'clip',
+};
+const _SIZE_LIMIT_MB = { config: 2, hud: 2, archive: 50, clip: 500 };
+
+// Reflect a just-chosen file in the inline feedback strip: detected category +
+// size when valid, a clear reason when not, and disable the submit button on an
+// invalid file so it can't be sent. Returns whether the file is acceptable.
+function _updateFileFeedback(file) {
+    const fb = document.getElementById('upload-file-feedback');
+    const submitBtn = document.getElementById('upload-submit-btn');
+    if (!fb) return true;
+    if (!file) {
+        fb.className = 'hidden';
+        fb.textContent = '';
+        if (submitBtn) submitBtn.disabled = false;
+        return true;
+    }
+    const name = file.name.toLowerCase();
+    const ext = name.includes('.') ? '.' + name.split('.').pop() : '';
+    const cat = _EXT_CATEGORY[ext];
+    const sizeStr = formatFileSize(file.size);
+
+    let ok = true;
+    let msg = '';
+    if (!cat) {
+        ok = false;
+        msg = `Unsupported type ${ext || '(none)'} — allowed: .cfg .hud .zip .rar .mp4 .avi .mkv`;
+    } else {
+        const maxMB = _SIZE_LIMIT_MB[cat] || 50;
+        if (file.size > maxMB * 1024 * 1024) {
+            ok = false;
+            msg = `Too large: ${sizeStr} (max ${maxMB} MB for ${cat})`;
+        }
+    }
+
+    if (ok) {
+        const meta = CATEGORIES[cat] || { label: cat };
+        const note = (cat === 'clip' && !isBrowserPlayable(ext))
+            ? ' &middot; not playable in the browser (download-only)' : '';
+        fb.className = 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 px-3 py-2 text-xs flex items-center gap-2 flex-wrap';
+        fb.innerHTML = `<span class="font-bold uppercase tracking-wider">${escapeHtml(meta.label || cat)}</span>`
+            + `<span class="text-slate-400">${escapeHtml(file.name)} &middot; ${sizeStr}${note}</span>`;
+    } else {
+        fb.className = 'rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300 px-3 py-2 text-xs';
+        fb.textContent = msg;
+    }
+    if (submitBtn) submitBtn.disabled = !ok;
+    return ok;
+}
+
+// Shared handler for both drop and file-input change: show the name and the
+// inline feedback in one place.
+function _onFileSelected(file) {
+    const nameEl = document.getElementById('upload-drop-filename');
+    if (nameEl && file) {
+        nameEl.textContent = file.name;
+        nameEl.classList.remove('hidden');
+    }
+    _updateFileFeedback(file);
+}
+
 function setupDragDrop() {
     const zone = document.getElementById('upload-drop-zone');
     if (!zone) return;
@@ -149,23 +217,14 @@ function setupDragDrop() {
         zone.classList.remove('upload-drop-active');
         if (e.dataTransfer.files.length && fileInput) {
             fileInput.files = e.dataTransfer.files;
-            // Show selected file name
-            const nameEl = document.getElementById('upload-drop-filename');
-            if (nameEl) {
-                nameEl.textContent = e.dataTransfer.files[0].name;
-                nameEl.classList.remove('hidden');
-            }
+            _onFileSelected(e.dataTransfer.files[0]);
         }
     });
 
-    // Show filename on normal file select too
+    // Same feedback on a normal file-picker selection.
     if (fileInput) {
         fileInput.addEventListener('change', () => {
-            const nameEl = document.getElementById('upload-drop-filename');
-            if (nameEl && fileInput.files.length) {
-                nameEl.textContent = fileInput.files[0].name;
-                nameEl.classList.remove('hidden');
-            }
+            _onFileSelected(fileInput.files.length ? fileInput.files[0] : null);
         });
     }
 }
@@ -351,6 +410,7 @@ async function handleUpload(e) {
         if (retentionSelect) retentionSelect.value = '';
         const nameEl = document.getElementById('upload-drop-filename');
         if (nameEl) { nameEl.textContent = ''; nameEl.classList.add('hidden'); }
+        _updateFileFeedback(null);  // clear the inline feedback + re-enable submit
 
         await loadUploadsList();
     } catch (err) {
