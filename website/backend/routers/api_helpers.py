@@ -457,6 +457,10 @@ async def fetch_identity_links(
     wanted = list({g for g in (guids or []) if g})
     if not wanted:
         return {}
+    # Best-effort: attribution must never break the profile/movers. Both the
+    # player_identity_links read (absent during a partial migration → asyncpg
+    # UndefinedTableError, a PostgresError not caught by OSError/RuntimeError)
+    # and the name-resolution fan-out are wrapped so any failure yields {}.
     try:
         rows = await db.fetch_all(
             "SELECT primary_guid, alt_guid, link_type, reason, period_start, period_end "
@@ -464,18 +468,17 @@ async def fetch_identity_links(
             "WHERE alt_guid = ANY($1) OR primary_guid = ANY($1)",
             (wanted,),
         )
-    except (OSError, RuntimeError):
-        logger.debug("player_identity_links query failed")
+        if not rows:
+            return {}
+        # Resolve display names for every guid referenced (primary + alt) at once.
+        ref_guids = set()
+        for r in rows:
+            ref_guids.add(r[0])
+            ref_guids.add(r[1])
+        names = await batch_resolve_display_names(db, [(g, g) for g in ref_guids])
+    except Exception:  # noqa: BLE001 — attribution is a non-critical add-on
+        logger.debug("identity-link attribution failed", exc_info=True)
         return {}
-    if not rows:
-        return {}
-
-    # Resolve display names for every guid referenced (primary + alt) in one batch.
-    ref_guids = set()
-    for r in rows:
-        ref_guids.add(r[0])
-        ref_guids.add(r[1])
-    names = await batch_resolve_display_names(db, [(g, g) for g in ref_guids])
 
     wanted_set = set(wanted)
     out: dict[str, dict] = {}
