@@ -6,7 +6,7 @@ Last reverified: 2026-08-13
 
 Status: implementation in progress; S0-S3 implementation complete, S3 closure pending exact-head review/CI gate
 
-Current base: `origin/main` at `d1c891424979634d63605b89cceef60c2a81ce74` (`v1.35.0`)
+Current base: `origin/main` at `66567ed82cb06f6f7068e1dc755a85507b78fdee`
 
 Original branch base: `origin/main` at `d6136cdd994870fddf4e4d0ff1968eb91418e497`
 
@@ -1328,6 +1328,11 @@ retained.
 - Code/test commit: `2cf41622`. A late Codex review against the earlier S2 evidence
   head produced five still-actionable findings even though their original diff anchors
   were outdated. They were treated as blockers rather than dismissed as stale.
+- Main sync commit: `05feb195`. While this follow-up was being verified,
+  `origin/main` advanced from `d1c89142` to `66567ed8` through identity-merge Phase 3,
+  the KIS modal fix and `v1.36.0` release configuration. None of the ten changed main
+  paths overlapped the scheduler, its tests or this handoff; main was merged normally
+  and no history was rewritten.
 - The scheduler now walks the caller's complete known tag-parent ancestor chain before
   using raw entity order. A direct or transitive target ancestor has already run and
   therefore wakes only on `NEXT_FRAME`; an absent/unknown caller relation or a cycle
@@ -1349,11 +1354,15 @@ retained.
   marks suspended target continuations with `caller_suffix_completed=True` rather than
   rejecting an empty suffix. The final-trigger case gained a dedicated regression in
   `2cf41622`.
-- Exact local evidence after this follow-up: 60/60 scheduler tests, 334/334 map-geometry
-  unit tests and the complete repository suite at 4,555 passed / 97 environment or
+- Exact local evidence after this follow-up and main sync: 60/60 scheduler tests,
+  334/334 map-geometry unit tests and the complete repository suite at 4,557 passed /
+  97 environment or
   opt-in skips / 30 warnings. Ruff, byte compilation and `git diff --check` passed.
-  The skipped PostgreSQL and installed-asset cases remain environment/opt-in gates,
-  not test failures.
+  The full opt-in installed-asset suite passed 16/16 in 213.69 seconds with coverage
+  instrumentation disabled. With coverage enabled, one projection test exceeded the
+  generic 90-second timeout; its isolated no-coverage rerun passed in 24.06 seconds,
+  and the complete no-coverage asset rerun confirmed this was instrumentation cost,
+  not a semantic failure. PostgreSQL skips remain environment gates.
 - No frozen installed-asset denominator was changed or reinterpreted. The prior
   2,790 entries, 5,174 paths, 7,755 effects, 4,011 temporal boundaries, 473 caller
   replacements and 452 cross-entity temporal frontiers remain the last exact corpus
