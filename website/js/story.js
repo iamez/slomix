@@ -40,6 +40,9 @@ const storyState = {
     // Human-readable "2026-07-18" or "2026-07-18 → 2026-07-19" for the hero
     // heading / selector.
     sessionDateLabel: null,
+    // The resolved `scope` block of the current session (round count, maps,
+    // last_round_unix) — the hero's identity + freshness line reads it.
+    scope: null,
     players: [],
     loading: false,
 };
@@ -226,7 +229,11 @@ function renderAmbiguousSessionPicker(candidates) {
         });
         players.appendChild(wrap);
     }
-    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution', 'story-box-score', 'story-invisible-value']) {
+    // Includes the advanced-metrics pair: without them a session with no data
+    // left the PREVIOUS session's panel on screen (Korak 1 baseline, open item).
+    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown',
+                      'story-team-synergy', 'story-win-contribution', 'story-box-score',
+                      'story-invisible-value', 'story-advanced-metrics', 'story-comp-skill']) {
         const el = document.getElementById(id);
         if (el) el.textContent = '';
     }
@@ -261,6 +268,7 @@ async function loadStoryData() {
         // the gsid form so every fetch below (and the address bar) use the
         // canonical identity from here on.
         const scope = data?.scope;
+        storyState.scope = scope || null;
         if (scope?.gaming_session_id != null) {
             storyState.gamingSessionId = scope.gaming_session_id;
             storyState.sessionDate = (scope.dates && scope.dates[0]) || storyState.sessionDate;
@@ -340,9 +348,14 @@ async function loadStoryData() {
             renderCompSkillBoard(ssr.status === 'fulfilled' ? ssr.value : null);
         });
 
-        // Box Score
+        // Box Score — the panel AND the hero headline (the result is the first
+        // thing the page must answer, so it no longer waits a screen down).
         fetchJSON(`${API_BASE}/storytelling/box-score?${q}`)
-            .then(d => { if (loadId === storyLoadId) renderBoxScore(d); })
+            .then(d => {
+                if (loadId !== storyLoadId) return;
+                renderHeroResult(d);
+                renderBoxScore(d);
+            })
             .catch(() => renderBoxScore(null));
 
         // Invisible Value — 5 parallel fetches
@@ -370,13 +383,24 @@ async function loadStoryData() {
     }
 }
 
-function renderLoading() {
+/** Reset the hero back to "no result known yet" — every load path must go
+ * through this, or a stale score from the previous session survives the
+ * switch (the title is only overwritten once the NEXT box score lands). */
+function _resetHero(titleText) {
     const title = document.getElementById('story-title');
-    const subtitle = document.getElementById('story-subtitle');
-    const statsRow = document.getElementById('story-stats-row');
-    if (title) title.textContent = 'Loading...';
-    if (subtitle) subtitle.textContent = '';
-    if (statsRow) statsRow.textContent = '';
+    if (title) {
+        title.textContent = titleText;
+        delete title.dataset.hasResult;
+    }
+    for (const id of ['story-subtitle', 'story-stats-row', 'story-hero-arc',
+                      'story-hero-turning', 'story-hero-freshness']) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '';
+    }
+}
+
+function renderLoading() {
+    _resetHero('Loading...');
 
     const narrative = document.getElementById('story-narrative');
     if (narrative) narrative.textContent = '';
@@ -406,12 +430,9 @@ function renderLoading() {
 }
 
 function renderEmpty(message) {
-    const title = document.getElementById('story-title');
+    _resetHero('Smart Stats');
     const subtitle = document.getElementById('story-subtitle');
-    const statsRow = document.getElementById('story-stats-row');
-    if (title) title.textContent = 'Smart Stats';
     if (subtitle) subtitle.textContent = message;
-    if (statsRow) statsRow.textContent = '';
 
     const players = document.getElementById('story-players');
     if (players) {
@@ -421,16 +442,64 @@ function renderEmpty(message) {
             _el('div', 'text-slate-400 text-sm', message)
         ));
     }
-    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution', 'story-box-score', 'story-invisible-value']) {
+    // Includes the advanced-metrics pair: without them a session with no data
+    // left the PREVIOUS session's panel on screen (Korak 1 baseline, open item).
+    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown',
+                      'story-team-synergy', 'story-win-contribution', 'story-box-score',
+                      'story-invisible-value', 'story-advanced-metrics', 'story-comp-skill']) {
         const el = document.getElementById(id);
         if (el) el.textContent = '';
     }
+}
+
+/** "Last round 21:41 \u00b7 3 days ago" \u2014 the freshness stamp (Korak 3 / 4d).
+ * `last_round_unix` is the START of the session's last accepted round, which
+ * is what the scope carries; a session that is still being played therefore
+ * reads as very recent, and we say so out loud. */
+function _freshnessLabel(lastRoundUnix) {
+    const secs = Number(lastRoundUnix);
+    if (!Number.isFinite(secs) || secs <= 0) return '';
+
+    const when = new Date(secs * 1000);
+    if (Number.isNaN(when.getTime())) return '';
+    const clock = when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const ageMin = Math.floor((Date.now() - when.getTime()) / 60000);
+    let ago;
+    if (ageMin < 0) return `Last round ${clock}`;   // clock skew \u2014 don't invent an age
+    else if (ageMin < 60) ago = `${ageMin} min ago`;
+    else if (ageMin < 60 * 24) ago = `${Math.floor(ageMin / 60)} h ago`;
+    else ago = `${Math.floor(ageMin / 1440)} d ago`;
+
+    // Under two hours old, the evening may not be over \u2014 rounds can still land
+    // and every panel on this page would then be provisional.
+    const live = ageMin < 120 ? ' \u00b7 may still be running' : '';
+    return `Last round ${clock} \u00b7 ${ago}${live}`;
+}
+
+/** The session's own identity line: which session this is (matters at
+ * midnight, rule #730) and how much play it holds. */
+function _sessionIdentityLine(sessionDate, playerCount) {
+    const scope = storyState.scope;
+    const parts = [];
+    if (storyState.gamingSessionId != null) parts.push(`Session ${storyState.gamingSessionId}`);
+    if (sessionDate) parts.push(String(sessionDate));
+    const rounds = Number(scope?.accepted_round_count);
+    if (Number.isFinite(rounds) && rounds > 0) {
+        const maps = Array.isArray(scope?.distinct_map_names) ? scope.distinct_map_names.length : 0;
+        parts.push(maps > 0
+            ? `${rounds} rounds across ${maps} map${maps === 1 ? '' : 's'}`
+            : `${rounds} rounds`);
+    }
+    if (playerCount > 0) parts.push(`${playerCount} players`);
+    return parts.join(' \u00b7 ');
 }
 
 function renderStoryHero(sessionDate, players) {
     const title = document.getElementById('story-title');
     const subtitle = document.getElementById('story-subtitle');
     const statsRow = document.getElementById('story-stats-row');
+    const freshness = document.getElementById('story-hero-freshness');
 
     const totalKIS = players.reduce((s, p) => s + (p.total_kis || 0), 0);
     // Prefer the backend's real session total; fall back to the KIS-kill sum only
@@ -441,8 +510,12 @@ function renderStoryHero(sessionDate, players) {
         : players.reduce((s, p) => s + (p.kills || 0), 0);
     const topPlayer = players[0];
 
-    if (title) title.textContent = `Session ${sessionDate}`;
-    if (subtitle) subtitle.textContent = `${players.length} players \u2022 Kill Impact Score analysis`;
+    // The title is the RESULT slot \u2014 renderHeroResult() fills it once the BOX
+    // score lands. Until then it holds the session label, so the hero never
+    // renders headless.
+    if (title && !title.dataset.hasResult) title.textContent = `Session ${sessionDate}`;
+    if (subtitle) subtitle.textContent = _sessionIdentityLine(sessionDate, players.length);
+    if (freshness) freshness.textContent = _freshnessLabel(storyState.scope?.last_round_unix);
 
     if (statsRow) {
         statsRow.textContent = '';
@@ -454,6 +527,112 @@ function renderStoryHero(sessionDate, players) {
         statsRow.appendChild(stat('Kills', formatNumber(totalKills), 'text-white'));
         statsRow.appendChild(stat('Players', String(players.length), 'text-white'));
         statsRow.appendChild(stat('MVP', topPlayer ? stripEtColors(topPlayer.name) : '-', 'text-amber-400'));
+    }
+}
+
+/** Where the evening was actually decided, derived from the BOX map list the
+ * page already shows — no new data, no new computation on the server.
+ *
+ * A map "clinches" when the leader's margin exceeds every point still to be
+ * awarded after it; that is the honest definition of a turning point in a
+ * points-per-map format, and it is what a reader means by "when was it over".
+ */
+function _clinchSentence(data) {
+    const maps = Array.isArray(data?.maps) ? data.maps : [];
+    if (maps.length === 0) return '';
+
+    const pts = maps.map(m => ({
+        a: Number(m.alpha_points) || 0,
+        b: Number(m.beta_points) || 0,
+        name: m.map_name || '',
+        num: Number(m.map_number),
+    }));
+
+    // Points still on the table AFTER map i (walking backwards once).
+    const remainingAfter = new Array(pts.length).fill(0);
+    let tail = 0;
+    for (let i = pts.length - 1; i >= 0; i--) {
+        remainingAfter[i] = tail;
+        tail += pts[i].a + pts[i].b;
+    }
+
+    const alpha = stripEtColors(data.alpha_team || 'Alpha');
+    const beta = stripEtColors(data.beta_team || 'Beta');
+
+    let a = 0;
+    let b = 0;
+    for (let i = 0; i < pts.length; i++) {
+        a += pts[i].a;
+        b += pts[i].b;
+        const lead = Math.abs(a - b);
+        if (lead === 0 || lead <= remainingAfter[i]) continue;
+
+        const leader = a > b ? alpha : beta;
+        const mapNo = Number.isFinite(pts[i].num) ? pts[i].num : i + 1;
+        const where = pts[i].name ? `map ${mapNo} (${pts[i].name})` : `map ${mapNo}`;
+        const left = remainingAfter[i];
+        // Leader's score first: "Team B … at 6–12" would read as Team B's 6.
+        const hi = Math.max(a, b);
+        const lo = Math.min(a, b);
+        return left === 0
+            ? `${leader} sealed it on the last map, ${where} — ${hi}–${lo}.`
+            : `${leader} clinched it on ${where} at ${hi}–${lo}, with ${left} point${left === 1 ? '' : 's'} still to play.`;
+    }
+
+    return a === b ? `Level at ${a}–${b} after ${pts.length} maps.` : '';
+}
+
+/** Hero headline = the result (Korak 3). Called when the BOX score lands; the
+ * hero shows the session label until then. */
+function renderHeroResult(data) {
+    const title = document.getElementById('story-title');
+    const turning = document.getElementById('story-hero-turning');
+    if (turning) turning.textContent = '';
+    if (!title) return;
+
+    const maps = Array.isArray(data?.maps) ? data.maps : [];
+    if (maps.length === 0) return;   // nothing verified to claim — keep the label
+
+    const alpha = stripEtColors(data.alpha_team || 'Alpha');
+    const beta = stripEtColors(data.beta_team || 'Beta');
+    const aScore = Number(data.alpha_score) || 0;
+    const bScore = Number(data.beta_score) || 0;
+    const winner = data.winner;   // 'alpha' | 'beta' | null (BOX, #727/#728)
+
+    const alphaCls = winner === 'alpha' ? 'text-cyan-400' : 'text-slate-400';
+    const betaCls = winner === 'beta' ? 'text-rose-400' : 'text-slate-400';
+
+    title.textContent = '';
+    title.appendChild(_el('span', alphaCls, alpha));
+    title.appendChild(_el('span', 'text-white tabular-nums', ` ${aScore} `));
+    title.appendChild(_el('span', 'text-slate-500', '–'));
+    title.appendChild(_el('span', 'text-white tabular-nums', ` ${bScore} `));
+    title.appendChild(_el('span', betaCls, beta));
+    title.dataset.hasResult = '1';
+
+    if (turning) {
+        const sentence = _clinchSentence(data);
+        if (sentence) turning.textContent = sentence;
+    }
+}
+
+/** The shape-of-the-night pill, in the hero next to the result (it used to sit
+ * above the narrative prose, a screen below the score it describes). */
+function renderHeroArc(data) {
+    const row = document.getElementById('story-hero-arc');
+    if (!row) return;
+    row.textContent = '';
+
+    const arc = data?.session_arc;
+    const meta = arc && arc.shape ? ARC_SHAPE_META[arc.shape] : null;
+    if (!meta) return;
+
+    row.appendChild(_el('span',
+        `inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${meta.cls}`,
+        meta.label));
+    if (arc.winner != null && arc.ws != null && arc.ls != null) {
+        row.appendChild(_el('span', 'text-xs text-slate-400',
+            `${stripEtColors(String(arc.winner))} · ${arc.ws}–${arc.ls}`));
     }
 }
 
@@ -473,27 +652,13 @@ function renderNarrative(data) {
     if (!container) return;
     container.textContent = '';
 
+    // The arc pill belongs next to the score it describes — hero, not here.
+    renderHeroArc(data);
+
     const text = data?.narrative;
     if (!text) return;
 
     const card = _el('div', 'rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4');
-
-    // Session arc — glanceable shape-of-the-night pill above the prose, so the
-    // story's shape reads at a glance and not only buried in the paragraph.
-    const arc = data?.session_arc;
-    const meta = arc && arc.shape ? ARC_SHAPE_META[arc.shape] : null;
-    if (meta) {
-        const row = _el('div', 'mb-3 flex items-center gap-2 flex-wrap');
-        const pill = _el('span',
-            `inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${meta.cls}`,
-            meta.label);
-        row.appendChild(pill);
-        if (arc.winner != null && arc.ws != null && arc.ls != null) {
-            row.appendChild(_el('span', 'text-xs text-slate-400',
-                `${arc.winner} · ${arc.ws}–${arc.ls}`));
-        }
-        card.appendChild(row);
-    }
 
     const content = _el('div', 'text-sm text-slate-400 italic leading-relaxed', text);
     content.style.opacity = '0.8';
