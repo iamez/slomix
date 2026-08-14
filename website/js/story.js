@@ -324,8 +324,8 @@ async function loadStoryData() {
             if (loadId === storyLoadId) renderWinContribution(pwcData);
         }).catch(() => renderWinContribution(null));
 
-        // Advanced metrics + Comp Skill board render into the SAME container,
-        // sequentially (renderAdvancedMetrics clears it) — so fetch together.
+        // Advanced metrics + Comp Skill board share one card (own containers)
+        // and are rendered together so the card fills in one paint.
         // /skill/composite now accepts gaming_session_id (scope-resolver
         // parity): `q` sends it when we have a gsid, so the panel is bound to
         // THIS session's rounds. That fixes the date-scope bug where a bot
@@ -397,6 +397,8 @@ function renderLoading() {
     if (pwc) pwc.textContent = '';
     const adv = document.getElementById('story-advanced-metrics');
     if (adv) adv.textContent = '';
+    const compSkill = document.getElementById('story-comp-skill');
+    if (compSkill) compSkill.textContent = '';
     const boxScore = document.getElementById('story-box-score');
     if (boxScore) boxScore.textContent = '';
     const invisValue = document.getElementById('story-invisible-value');
@@ -1626,9 +1628,14 @@ const PWC_COMPONENTS = [
 function renderCompSkillBoard(data) {
     // Comp Skill (SSR v0) + reactions in Smart Stats (owner answer A3:
     // "bi rad videl tudi to v nekih statsih"). ALL-TIME and group-relative —
-    // appended below the per-session Advanced Metrics, clearly labeled.
-    const container = document.getElementById('story-advanced-metrics');
-    if (!container || !data?.players?.length) return;
+    // rendered below the per-session Advanced Metrics inside the same card,
+    // but in its OWN container: sharing #story-advanced-metrics made this
+    // panel's survival depend on being called after renderAdvancedMetrics
+    // (which clears its container).
+    const container = document.getElementById('story-comp-skill');
+    if (!container) return;
+    container.textContent = '';
+    if (!data?.players?.length) return;
 
     const header = _el('div', 'flex items-center gap-3 mb-4 mt-8');
     header.appendChild(_el('div', 'w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-rose-600 flex items-center justify-center text-white text-sm font-bold', 'CS'));
