@@ -133,6 +133,19 @@ class BotConfig:
         ]
         self.admin_channel_id: int = self.admin_channels[0] if self.admin_channels else 0
 
+        # supastats cross-check (DEV TOOL, off by default). Supa posts a
+        # screenshot of his sheet the morning after a gather; when enabled the
+        # bot reads it and DMs the owner how it compares with our numbers.
+        # Retire this once the numbers agree and the project leaves prototype.
+        self.supastats_check_enabled: bool = self._get_config(
+            'SUPASTATS_CHECK_ENABLED', 'false'
+        ).lower() == 'true'
+        self.supastats_channel_id: int = int(self._get_config('SUPASTATS_CHANNEL_ID', '0'))
+        supastats_authors_str = self._get_config('SUPASTATS_AUTHOR_IDS', '')
+        self.supastats_author_ids: list[int] = [
+            int(a.strip()) for a in supastats_authors_str.split(",") if a.strip().isdigit()
+        ]
+
         # Root User ID (for highest permission tier - user ID whitelist)
         self.owner_user_id: int = int(self._get_config('OWNER_USER_ID', '0'))
         if self.owner_user_id == 0:

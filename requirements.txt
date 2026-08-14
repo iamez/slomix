@@ -19,6 +19,10 @@ paramiko==5.0.0
 scp==0.15.0
 websockets==16.0
 Pillow==12.3.0
+# numpy arrived only transitively via matplotlib, yet bot/services imports it
+# directly (session_graph_generator, supastats_image_reader). Declare it so a
+# matplotlib change cannot silently remove it.
+numpy==2.2.6
 matplotlib==3.10.8
 watchdog==6.0.0
 trueskill==0.4.5
