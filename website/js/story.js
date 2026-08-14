@@ -196,16 +196,31 @@ async function _fetchWithAmbiguityDetection(url) {
     return { ambiguous: false, data: body };
 }
 
+/** Every panel container the story page fills, EXCEPT #story-players (whose
+ * callers replace it with their own placeholder). One list, so a panel added
+ * later cannot be cleared on one load path and left stale on another — the
+ * exact class of bug that left a previous session's advanced metrics on
+ * screen. */
+const STORY_PANEL_IDS = [
+    'story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown',
+    'story-team-synergy', 'story-win-contribution', 'story-box-score',
+    'story-invisible-value', 'story-advanced-metrics', 'story-comp-skill',
+];
+
+function _clearStoryPanels() {
+    for (const id of STORY_PANEL_IDS) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '';
+    }
+}
+
 /** A legacy #/story/date/<date> deep link hit a date shared by >1 gaming
  * session — let the user pick instead of guessing (Codex SS-D, same
  * "never guess" principle the backend resolver enforces server-side). */
 function renderAmbiguousSessionPicker(candidates) {
-    const title = document.getElementById('story-title');
+    _resetHero('Multiple sessions on this date');
     const subtitle = document.getElementById('story-subtitle');
-    const statsRow = document.getElementById('story-stats-row');
-    if (title) title.textContent = 'Multiple sessions on this date';
     if (subtitle) subtitle.textContent = 'This date has more than one gaming session — choose which one you meant:';
-    if (statsRow) statsRow.textContent = '';
 
     const players = document.getElementById('story-players');
     if (players) {
@@ -229,14 +244,7 @@ function renderAmbiguousSessionPicker(candidates) {
         });
         players.appendChild(wrap);
     }
-    // Includes the advanced-metrics pair: without them a session with no data
-    // left the PREVIOUS session's panel on screen (Korak 1 baseline, open item).
-    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown',
-                      'story-team-synergy', 'story-win-contribution', 'story-box-score',
-                      'story-invisible-value', 'story-advanced-metrics', 'story-comp-skill']) {
-        const el = document.getElementById(id);
-        if (el) el.textContent = '';
-    }
+    _clearStoryPanels();
 }
 
 async function loadStoryData() {
@@ -401,32 +409,13 @@ function _resetHero(titleText) {
 
 function renderLoading() {
     _resetHero('Loading...');
+    _clearStoryPanels();
 
-    const narrative = document.getElementById('story-narrative');
-    if (narrative) narrative.textContent = '';
-    const momentum = document.getElementById('story-momentum');
-    if (momentum) momentum.textContent = '';
-    const moments = document.getElementById('story-moments');
-    if (moments) moments.textContent = '';
     const players = document.getElementById('story-players');
     if (players) {
         players.textContent = '';
         players.appendChild(_el('div', 'col-span-full text-center text-slate-500 py-12', 'Loading kill impact data...'));
     }
-    const breakdown = document.getElementById('story-kis-breakdown');
-    if (breakdown) breakdown.textContent = '';
-    const synergy = document.getElementById('story-team-synergy');
-    if (synergy) synergy.textContent = '';
-    const pwc = document.getElementById('story-win-contribution');
-    if (pwc) pwc.textContent = '';
-    const adv = document.getElementById('story-advanced-metrics');
-    if (adv) adv.textContent = '';
-    const compSkill = document.getElementById('story-comp-skill');
-    if (compSkill) compSkill.textContent = '';
-    const boxScore = document.getElementById('story-box-score');
-    if (boxScore) boxScore.textContent = '';
-    const invisValue = document.getElementById('story-invisible-value');
-    if (invisValue) invisValue.textContent = '';
 }
 
 function renderEmpty(message) {
@@ -442,14 +431,7 @@ function renderEmpty(message) {
             _el('div', 'text-slate-400 text-sm', message)
         ));
     }
-    // Includes the advanced-metrics pair: without them a session with no data
-    // left the PREVIOUS session's panel on screen (Korak 1 baseline, open item).
-    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown',
-                      'story-team-synergy', 'story-win-contribution', 'story-box-score',
-                      'story-invisible-value', 'story-advanced-metrics', 'story-comp-skill']) {
-        const el = document.getElementById(id);
-        if (el) el.textContent = '';
-    }
+    _clearStoryPanels();
 }
 
 /** "Last round 21:41 \u00b7 3 days ago" \u2014 the freshness stamp (Korak 3 / 4d).
@@ -599,8 +581,12 @@ function renderHeroResult(data) {
     const bScore = Number(data.beta_score) || 0;
     const winner = data.winner;   // 'alpha' | 'beta' | null (BOX, #727/#728)
 
-    const alphaCls = winner === 'alpha' ? 'text-cyan-400' : 'text-slate-400';
-    const betaCls = winner === 'beta' ? 'text-rose-400' : 'text-slate-400';
+    // Dim the loser only when there IS a winner. A drawn night comes back as
+    // winner:'draw' (not null), and dimming both sides then reads as if both
+    // teams lost — so anything that isn't alpha/beta keeps both colours.
+    const decided = winner === 'alpha' || winner === 'beta';
+    const alphaCls = (!decided || winner === 'alpha') ? 'text-cyan-400' : 'text-slate-400';
+    const betaCls = (!decided || winner === 'beta') ? 'text-rose-400' : 'text-slate-400';
 
     title.textContent = '';
     title.appendChild(_el('span', alphaCls, alpha));
@@ -2290,6 +2276,12 @@ export async function loadStoryView({ date, gsid } = {}) {
     if (gsid != null) {
         storyState.gamingSessionId = gsid;
     } else if (date) {
+        // Drop the previously-resolved gsid: _storyScopeQuery() prefers it, so
+        // keeping it would silently ignore the date this link asked for and
+        // leave the hero describing the session the user just navigated away
+        // from (only reachable via an in-page hash change to the date form).
+        storyState.gamingSessionId = null;
+        storyState.sessionDateLabel = null;
         storyState.sessionDate = date;
     }
     await loadStoryScopes();
